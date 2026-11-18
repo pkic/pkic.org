@@ -1,12 +1,20 @@
 // @vitest-environment jsdom
-import { describe, expect, it, beforeEach } from "vitest";
-import { parseQueryContext, clearReferralSession, signInReturnPath } from "../../assets/ts/shared/query-context";
+import { afterEach, describe, expect, it, beforeEach, vi } from "vitest";
+import {
+  parseQueryContext,
+  clearReferralSession,
+  clearRememberedInvitation,
+  signInReturnPath,
+} from "../../assets/ts/shared/query-context";
 
 describe("query context", () => {
   beforeEach(() => {
     // Prevent referral and remembered-invitation state leaking between tests
     clearReferralSession();
     localStorage.clear();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("parses invite, referral, source and event values", () => {
@@ -58,6 +66,26 @@ describe("query context", () => {
   it("keeps a token without an invitation id out of the return path too, though it cannot be found again", () => {
     // Every emailed invitation carries its id; a hand-made link without one loses the invitation rather than leak it.
     expect(signInReturnPath("/events/toronto-2027/register?invite=secret-token")).toBe("/events/toronto-2027/register");
+    expect(localStorage.length).toBe(0);
+  });
+
+  it("forgets a remembered invitation after a day, and any old entry the next time one is kept", () => {
+    vi.useFakeTimers({ now: new Date("2026-11-18T09:00:00.000Z"), toFake: ["Date"] });
+    signInReturnPath("/events/toronto-2027/register?invite=old-token&id=inv-old");
+    localStorage.setItem("pkic_invite:inv-legacy", "bare-token");
+    vi.setSystemTime(new Date("2026-11-19T09:00:00.001Z"));
+
+    signInReturnPath("/events/toronto-2027/register?invite=new-token&id=inv-new");
+    expect(localStorage.getItem("pkic_invite:inv-old")).toBeNull();
+    expect(localStorage.getItem("pkic_invite:inv-legacy")).toBeNull();
+    expect(parseQueryContext("?id=inv-old").inviteToken).toBeNull();
+    expect(parseQueryContext("?id=inv-new").inviteToken).toBe("new-token");
+  });
+
+  it("forgets a remembered invitation once it is cleared", () => {
+    signInReturnPath("/events/toronto-2027/register?invite=secret-token&id=inv-1");
+    clearRememberedInvitation("inv-1");
+    expect(parseQueryContext("?id=inv-1").inviteToken).toBeNull();
     expect(localStorage.length).toBe(0);
   });
 });

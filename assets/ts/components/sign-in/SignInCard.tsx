@@ -23,13 +23,14 @@
  *     the sentence says it instead, inside the Alert's `role="status"`.
  */
 import type { ComponentChildren } from "preact";
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { browserSupportsWebAuthn } from "@simplewebauthn/browser";
 import { postJson } from "../../shared/api-client";
 import { authenticateWithPasskey } from "../../shared/passkey-authentication";
 import { MagicLinkSubmitButton, SignInError } from "../MagicLinkFeedback";
 import { useMagicLinkRequest } from "../../hooks/useMagicLinkRequest";
 import { useContractForm } from "../../hooks/useContractForm";
+import { CONSORTIUM_CONTACT_HREF } from "../../../shared/consortium-contact";
 import { successResponseSchema } from "../../../shared/schemas/api-common";
 import { userAuthRequestSchema, userSignUpRequestSchema } from "../../../shared/schemas/user-auth";
 import { EmailFirstStep } from "../EmailFirstStep";
@@ -106,9 +107,12 @@ export function SignInCard({
     let current = true;
     setDetail({});
     if (loadDetail && returnPath)
-      void loadDetail(returnPath).then((loaded) => {
-        if (current) setDetail(loaded);
-      });
+      void loadDetail(returnPath)
+        .then((loaded) => {
+          if (current) setDetail(loaded);
+        })
+        // Without its detail the card keeps its own title and lede.
+        .catch(() => {});
     return () => {
       current = false;
     };
@@ -128,10 +132,29 @@ export function SignInCard({
    */
   const emailShown = (emailOpen || !passkeysSupported) && !magicLink.sent;
 
+  /*
+   * Opening or closing a step removes the button that did it, so focus moves on with the reader once the
+   * step has rendered: into the email field that opened, or back to the first sign-in method.
+   */
+  const signInMethods = useRef<HTMLFieldSetElement>(null);
+  const createStep = useRef<HTMLDivElement>(null);
+  const pendingFocus = useRef<"sign-in-email" | "create-email" | "sign-in" | null>(null);
+  useEffect(() => {
+    const target = pendingFocus.current;
+    if (!target) return;
+    const scope = target === "create-email" ? createStep.current : signInMethods.current;
+    const selector = target === "sign-in" ? "button:not(:disabled), input:not(:disabled)" : 'input[name="email"]';
+    const control = scope?.querySelector<HTMLElement>(selector);
+    if (!control) return;
+    pendingFocus.current = null;
+    control.focus();
+  });
+
   function openEmail(): void {
     onAttempt?.();
     magicLink.clearFeedback();
     setEmailOpen(true);
+    pendingFocus.current = "sign-in-email";
   }
 
   async function handleSubmit(e?: Event): Promise<void> {
@@ -194,6 +217,7 @@ export function SignInCard({
             onClick={() => {
               magicLink.clearFeedback();
               setEmailOpen(false);
+              pendingFocus.current = "sign-in";
             }}
           >
             Back to passkey
@@ -234,6 +258,7 @@ export function SignInCard({
                 onAttempt?.();
                 magicLink.clearFeedback();
                 setCreateOpen(true);
+                pendingFocus.current = "create-email";
               }}
             >
               {destination?.startLabel ?? "Continue with your email"}
@@ -251,7 +276,7 @@ export function SignInCard({
           <ExternalLink href="/privacy/" external>
             privacy policy
           </ExternalLink>
-          . Trouble signing in? <a href="mailto:contact@pkic.org">Ask the secretariat</a>.
+          . Trouble signing in? <a href={CONSORTIUM_CONTACT_HREF}>Ask the secretariat</a>.
         </p>
       }
     >
@@ -260,29 +285,33 @@ export function SignInCard({
       {/* While the session check runs (`busy`) the sign-in actions stay disabled one by one, so the
           email disclosure still opens instead of swallowing the click. */}
       {createOpen && (
-        <div class="pk-login__controls pk-stack">
+        <div class="pk-login__controls pk-stack" ref={createStep}>
           {progress}
-          <EmailFirstStep
-            flow={embedded?.emailFlow ?? destination?.emailFlow ?? "representation"}
-            schema={userSignUpRequestSchema}
-            body={{ returnPath }}
-            email={email}
-            onEmailChange={setEmail}
-            individual={individual}
-            onIndividualChange={setIndividual}
-            onContinue={async (step) => {
-              // The answer is the same whether or not the address has an account: a link is on its way.
-              await postJson("/api/v1/auth/sign-up", step, successResponseSchema);
-              setCreateSentTo(step.email);
-            }}
-            sentTo={createSentTo}
-            onChangeEmail={() => setCreateSentTo(null)}
-          />
+          {/* The step's own send stays unavailable while the session check runs, like the sign-in methods. */}
+          <fieldset class="pk-fieldset" disabled={busy}>
+            <EmailFirstStep
+              flow={embedded?.emailFlow ?? destination?.emailFlow ?? "representation"}
+              schema={userSignUpRequestSchema}
+              body={{ returnPath }}
+              email={email}
+              onEmailChange={setEmail}
+              individual={individual}
+              onIndividualChange={setIndividual}
+              onContinue={async (step) => {
+                // The answer is the same whether or not the address has an account: a link is on its way.
+                await postJson("/api/v1/auth/sign-up", step, successResponseSchema);
+                setCreateSentTo(step.email);
+              }}
+              sentTo={createSentTo}
+              onChangeEmail={() => setCreateSentTo(null)}
+            />
+          </fieldset>
           <Button
             variant="ghost"
             onClick={() => {
               setCreateSentTo(null);
               setCreateOpen(false);
+              pendingFocus.current = "sign-in";
             }}
           >
             Back to sign in
@@ -290,6 +319,7 @@ export function SignInCard({
         </div>
       )}
       <fieldset
+        ref={signInMethods}
         class="pk-login__controls pk-stack"
         hidden={createOpen}
         disabled={passkeySubmitting || magicLink.submitting}

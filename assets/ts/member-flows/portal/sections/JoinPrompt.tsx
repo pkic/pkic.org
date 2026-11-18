@@ -18,25 +18,32 @@ import { usePortalHashLocation } from "../hash-location";
 import { fmtDate } from "../ui";
 import { portalSession } from "../state";
 
-type OrganizationApplication = z.infer<typeof organizationCurrentApplicationSchema> & { organizationName: string };
+type OrganizationApplication = z.infer<typeof organizationCurrentApplicationSchema> & {
+  organizationId: string;
+  organizationName: string;
+};
 
-/** The open application of each organization the person represents, so a colleague waits for it rather than applying. */
+/**
+ * The open application of each organization the person represents, so a colleague waits for it rather than applying.
+ * Each organization is asked once, and one that cannot answer leaves the others on screen.
+ */
 async function representedOrganizationApplications(
   identities: readonly SessionActingIdentity[],
 ): Promise<OrganizationApplication[]> {
-  const organizations = identities.filter((identity) => identity.organizationId);
-  const found = await Promise.all(
-    organizations.map(async (identity) => {
+  const organizations = new Map<string, string>();
+  for (const identity of identities)
+    if (identity.organizationId && !organizations.has(identity.organizationId))
+      organizations.set(identity.organizationId, identity.organizationName ?? "Your organization");
+  const found = await Promise.allSettled(
+    [...organizations].map(async ([organizationId, organizationName]) => {
       const { application } = await getJson(
-        `/api/v1/organizations/${encodeURIComponent(identity.organizationId!)}/applications/current`,
+        `/api/v1/organizations/${encodeURIComponent(organizationId)}/applications/current`,
         organizationCurrentApplicationResponseSchema,
       );
-      return application
-        ? { ...application, organizationName: identity.organizationName ?? "Your organization" }
-        : null;
+      return application ? { ...application, organizationId, organizationName } : null;
     }),
   );
-  return found.filter((application) => application !== null);
+  return found.flatMap((result) => (result.status === "fulfilled" && result.value ? [result.value] : []));
 }
 
 function OrganizationApplicationPanel({ application }: { application: OrganizationApplication }) {
@@ -110,7 +117,7 @@ function NonMemberJoinPrompt({ userId, identities }: { userId: string; identitie
     return (
       <>
         {colleagues.map((application) => (
-          <OrganizationApplicationPanel key={application.organizationName} application={application} />
+          <OrganizationApplicationPanel key={application.organizationId} application={application} />
         ))}
       </>
     );

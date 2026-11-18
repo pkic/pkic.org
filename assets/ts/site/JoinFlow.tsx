@@ -60,8 +60,8 @@ export function JoinFlow({ documents }: { documents: MembershipDocument[] }) {
       <div data-flow-status class="pk-alert pk-sr-only" role="alert" aria-live="polite" />
       <div data-join-sign-in class="pk-stack">
         <p class="pk-lede">
-          Sign in to apply for membership. New here? Start with your official work or organization email address, so we
-          can verify the relationship and keep organizational and IPR attribution clear.
+          We ask for your official work or organization email address so we can verify the relationship and keep
+          organizational and IPR attribution clear.
         </p>
         <div data-join-sign-in-card />
       </div>

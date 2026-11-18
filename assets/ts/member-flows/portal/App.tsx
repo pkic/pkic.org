@@ -237,14 +237,8 @@ export function App() {
             // verify route that is about to be replaced.
             const signedIn = await loadPortalSession(() => !cancelled);
             if (cancelled) return;
-            if (signedIn && portalSession.value && portalHashPath(window.location.hash) === "/verify") {
-              const next = portalMagicLinkReturnPath(window.location.hash);
-              const eventFlow = eventFlowReturnPath(next);
-              if (eventFlow) {
-                window.location.replace(eventFlow);
-                return;
-              }
-              history.replaceState({}, "", `/portal/#${next ?? portalDefaultPath(portalSession.value)}`);
+            if (signedIn && portalSession.value) {
+              if (!leaveVerifyRoute(portalSession.value)) return;
             } else if (!signedIn) {
               setVerifyError(
                 err instanceof ApiClientError ? err.message : "The link may have expired or already been used.",
@@ -333,7 +327,8 @@ export function App() {
     return <EmailVerificationConfirmation />;
   }
 
-  if (organizationStep && !isAuthed.value)
+  // A sign-up link opened beside a session this tab already holds still asks for its organization first.
+  if (organizationStep)
     return (
       <AccountOrganizationStep
         token={organizationStep.token}

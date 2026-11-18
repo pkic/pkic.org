@@ -518,7 +518,7 @@ describe("portal login", () => {
         // The invitation token stays in this browser; the emailed link carries only the invitation id.
         returnPath: "/events/pqc-2027/register?id=0b7e9d1c-5a4f-4c2e-9f3a-2d6b8e1c4a70",
       });
-      expect(localStorage.getItem("pkic_invite:0b7e9d1c-5a4f-4c2e-9f3a-2d6b8e1c4a70")).toBe("abc");
+      expect(JSON.parse(localStorage.getItem("pkic_invite:0b7e9d1c-5a4f-4c2e-9f3a-2d6b8e1c4a70")!).token).toBe("abc");
     } finally {
       window.location.hash = "";
     }
@@ -532,5 +532,30 @@ describe("portal login", () => {
     await act(() => buttonLabeled("Continue with your email").click());
     await act(() => buttonLabeled("Back to sign in").click());
     expect(buttonLabeled("Sign in with a passkey")).toBeTruthy();
+  });
+
+  it("moves focus into the step that opens and back to the sign-in methods when it closes", async () => {
+    browserSupportsWebAuthn.mockReturnValue(true);
+    await act(() => render(<Login onSignedIn={vi.fn()} />, container));
+
+    // The button that opened a step is gone, so focus must not fall back to the page.
+    await act(() => buttonLabeled("Sign in with an email link").click());
+    expect(document.activeElement).toBe(controlLabeled("Email"));
+    await act(() => buttonLabeled("Back to passkey").click());
+    expect(document.activeElement).toBe(buttonLabeled("Sign in with a passkey"));
+
+    await act(() => buttonLabeled("Continue with your email").click());
+    expect(document.activeElement).toBe(container.querySelector('input[name="email"]:not(fieldset[hidden] *)'));
+    expect(document.activeElement?.closest("fieldset[hidden]")).toBeNull();
+    await act(() => buttonLabeled("Back to sign in").click());
+    expect(document.activeElement).toBe(buttonLabeled("Sign in with a passkey"));
+  });
+
+  it("keeps the start step's send unavailable while the session check runs", async () => {
+    browserSupportsWebAuthn.mockReturnValue(true);
+    await act(() => render(<Login busy status="Checking your sign-in…" onSignedIn={vi.fn()} />, container));
+    await act(() => buttonLabeled("Continue with your email").click());
+    const emailStep = container.querySelector<HTMLInputElement>('input[name="email"]:not(fieldset[hidden] *)')!;
+    expect(emailStep.matches(":disabled")).toBe(true);
   });
 });

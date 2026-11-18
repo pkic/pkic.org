@@ -394,7 +394,7 @@ async function main(): Promise<void> {
       if (result.status === "organization_selection_required") {
         rememberJoinChoice({ unaffiliatedAttestation: choice.unaffiliatedAttestation });
         render(
-          choice.unaffiliatedAttestation ? (
+          result.canApplyAsIndividual ? (
             <JoinOrganizationChoice
               domain={result.domain}
               organizations={result.organizations}

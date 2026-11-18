@@ -40,7 +40,9 @@ export function AccountOrganizationStep({
 }) {
   const details = useRef<VerifiedOrganizationController>({});
   const [step, setStep] = useState(initialStep);
+  const [round, setRound] = useState(0);
   const [busy, setBusy] = useState(false);
+  const sending = useRef(false);
   const [error, setError] = useState("");
   const domain = step.affiliation.email.split("@")[1] ?? "";
 
@@ -61,28 +63,39 @@ export function AccountOrganizationStep({
     return step.affiliation;
   }
 
-  async function answer(body: VerifyBody) {
+  /** One answer at a time: state lags a render behind, so a double click would otherwise send two. */
+  async function send(work: () => Promise<void>) {
+    if (sending.current) return;
+    sending.current = true;
     setBusy(true);
     setError("");
     try {
-      const result = await verify(body);
-      if ("affiliation" in result) {
-        setStep(result);
-        setError(ACCOUNT_ORGANIZATION_COPY.stillRequired);
-      } else await onSignedIn(result);
+      await work();
     } catch (cause) {
       setError(cause instanceof ApiClientError ? cause.message : ACCOUNT_ORGANIZATION_COPY.failed);
     } finally {
+      sending.current = false;
       setBusy(false);
     }
   }
 
-  async function finish() {
-    if (!(await details.current.prepare?.())) return;
-    const selected = details.current.read?.();
-    if (!selected || "refused" in selected || !selected.contextToken) return;
-    await answer({ organization: { contextToken: selected.contextToken } });
+  async function answer(body: VerifyBody) {
+    const result = await verify(body);
+    if ("affiliation" in result) {
+      // The details start over from the step the server sent, so no earlier organization list or choice is resent.
+      setStep(result);
+      setRound((current) => current + 1);
+      setError(ACCOUNT_ORGANIZATION_COPY.stillRequired);
+    } else await onSignedIn(result);
   }
+
+  const finish = () =>
+    send(async () => {
+      if (!(await details.current.prepare?.())) return;
+      const selected = details.current.read?.();
+      if (!selected || "refused" in selected || !selected.contextToken) return;
+      await answer({ organization: { contextToken: selected.contextToken } });
+    });
 
   return (
     <LoginFrame
@@ -96,6 +109,7 @@ export function AccountOrganizationStep({
       busy={busy}
     >
       <VerifiedOrganizationDetails
+        key={round}
         confirmSole
         initial={step.affiliation}
         emailId={null}
@@ -111,7 +125,7 @@ export function AccountOrganizationStep({
           {ACCOUNT_ORGANIZATION_COPY.finish}
         </Button>
         {step.personalAllowed && (
-          <Button variant="secondary" onClick={() => void answer({ organization: { personal: true } })}>
+          <Button variant="secondary" onClick={() => void send(() => answer({ organization: { personal: true } }))}>
             {EMAIL_FIRST_ADVISORY_COPY.usePersonal}
           </Button>
         )}

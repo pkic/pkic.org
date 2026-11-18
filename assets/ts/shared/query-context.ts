@@ -51,18 +51,70 @@ export function clearReferralSession(): void {
  * is stored in the email outbox, and D1 holds no usable capability token. The
  * page keeps the token in this browser under the invitation id instead, so a
  * person who signs in from the emailed link lands back on their invitation.
+ * It is kept only as long as that round trip takes, and cleared once the
+ * invitation is used or refused.
  */
 const INVITATION_STORAGE_PREFIX = "pkic_invite:";
+
+/** Far longer than a sign-in link stays valid, so the person still lands back on their invitation. */
+const INVITATION_STORAGE_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** The remembered token, or null when it is missing, expired, or not in the current shape. */
+function readStoredInvitation(key: string, now: number): string | null {
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(key) ?? "null");
+    if (
+      stored &&
+      typeof stored === "object" &&
+      "token" in stored &&
+      "expiresAt" in stored &&
+      typeof stored.token === "string" &&
+      typeof stored.expiresAt === "number" &&
+      stored.expiresAt > now
+    )
+      return stored.token;
+  } catch {
+    // An unreadable entry is discarded below like an expired one.
+  }
+  localStorage.removeItem(key);
+  return null;
+}
+
+/** Drops every remembered invitation that has expired. */
+function discardExpiredInvitations(now: number): void {
+  const keys: string[] = [];
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+    if (key?.startsWith(INVITATION_STORAGE_PREFIX)) keys.push(key);
+  }
+  for (const key of keys) readStoredInvitation(key, now);
+}
 
 function rememberInvitation(inviteId: string | null, inviteToken: string | null): string | null {
   if (!inviteId) return inviteToken;
   try {
-    if (inviteToken) localStorage.setItem(`${INVITATION_STORAGE_PREFIX}${inviteId}`, inviteToken);
-    else return localStorage.getItem(`${INVITATION_STORAGE_PREFIX}${inviteId}`);
+    const now = Date.now();
+    discardExpiredInvitations(now);
+    const key = `${INVITATION_STORAGE_PREFIX}${inviteId}`;
+    if (!inviteToken) return readStoredInvitation(key, now);
+    localStorage.setItem(key, JSON.stringify({ token: inviteToken, expiresAt: now + INVITATION_STORAGE_TTL_MS }));
   } catch {
     // localStorage may be restricted; the token then stays in this page only.
   }
   return inviteToken;
+}
+
+/**
+ * Forgets the invitation token kept for a sign-in round trip. Call it once the
+ * invitation is used, by a registration or a proposal, or is refused.
+ */
+export function clearRememberedInvitation(inviteId: string | null): void {
+  if (!inviteId) return;
+  try {
+    localStorage.removeItem(`${INVITATION_STORAGE_PREFIX}${inviteId}`);
+  } catch {
+    // localStorage may be restricted; nothing was kept then.
+  }
 }
 
 /**
