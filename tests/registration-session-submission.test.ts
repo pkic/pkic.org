@@ -10,6 +10,7 @@ import { buildCreateIdentityStatement } from "../functions/_lib/services/members
 import { registrationCreateSchema, registrationSubmissionResponseSchema } from "../assets/shared/schemas/registration";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { createPendingRegistration } from "./helpers/registration-confirmation";
+import { createInvite } from "../functions/_lib/services/invites";
 
 const API = "/api/v1/events/pqc-2026/registrations";
 const consents = [
@@ -119,6 +120,45 @@ describe("registration continues with the signed-in session", () => {
       { invite_id: inviteId, status: "registered" },
     ]);
     expect(await queryAll(env.DB, "SELECT status FROM invites WHERE id=?", inviteId)).toEqual([{ status: "accepted" }]);
+  });
+
+  it("binds an invite-only invitation link to the invited person's account", async () => {
+    await env.DB.prepare("UPDATE events SET registration_mode='invite_only' WHERE slug='pqc-2026'").run();
+    const [{ id: eventId }] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM events WHERE slug='pqc-2026'");
+    const { invite, token } = await createInvite(env.DB, {
+      eventId: eventId!,
+      inviteeEmail: "invited.work@example.test",
+      inviteType: "attendee",
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+    });
+    const forwarded = await signInRegistrant(env.DB, "colleague@gmail.com", { firstName: "Cole", lastName: "Fixture" });
+    const refused = await submit(
+      registration("colleague@gmail.com", { unaffiliatedAttestation: true, inviteToken: token, inviteId: invite.id }),
+      forwarded.session,
+    );
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({ error: { code: "INVITE_FOR_ANOTHER_ADDRESS" } });
+
+    // The invited address added to another account counts once it is verified.
+    const owner = await signInRegistrant(env.DB, "owner.personal@gmail.com", { firstName: "Ola", lastName: "Fixture" });
+    await env.DB.prepare(
+      `INSERT INTO user_emails(id,user_id,email,normalized_email,verified_at,verification_method,created_at)
+       VALUES(?,?,'invited.work@example.test','invited.work@example.test','2026-01-01T00:00:00.000Z','magic_link','2026-01-01T00:00:00.000Z')`,
+    )
+      .bind(crypto.randomUUID(), owner.userId)
+      .run();
+    const accepted = await submit(
+      registration("owner.personal@gmail.com", {
+        unaffiliatedAttestation: true,
+        inviteToken: token,
+        inviteId: invite.id,
+      }),
+      owner.session,
+    );
+    expect(accepted.status, await accepted.clone().text()).toBe(200);
+    expect(await queryAll(env.DB, "SELECT status FROM invites WHERE id=?", invite.id)).toEqual([
+      { status: "accepted" },
+    ]);
   });
 
   it("confirms the signed-in person's earlier unconfirmed registration instead of refusing it", async () => {

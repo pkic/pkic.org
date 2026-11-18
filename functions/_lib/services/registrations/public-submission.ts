@@ -27,7 +27,11 @@ import { registrationManageCapability } from "./capability-urls";
 import { readRegistrationAffiliation } from "./selected-identity";
 import type { VerifiedRegistrationIdentityContext } from "./types";
 import { persistedUtcInstant } from "../../utils/time";
-import { prepareGroupEventRegistrationGuard, readRegistrationAccessEvidence } from "./authorization";
+import {
+  inviteSentToAccount,
+  prepareGroupEventRegistrationGuard,
+  readRegistrationAccessEvidence,
+} from "./authorization";
 import {
   eventTakesRegistrations,
   registrationAllowsPublicAccess,
@@ -71,6 +75,16 @@ export async function submitEventRegistration(
     linkedInvite = await findInviteByToken(db, body.inviteToken, metadata.signingSecret, body.inviteId);
     if (linkedInvite.event_id !== event.id || linkedInvite.invite_type !== "attendee") {
       throw new AppError(400, "INVITE_INVALID", "Invite token is not valid for attendee registration for this event");
+    }
+    // An invitation-only event admits only the invited person; on an open event a forwarded link is an ordinary registration.
+    if (!(await inviteSentToAccount(db, metadata.verifiedIdentity.userId, linkedInvite.invitee_email))) {
+      if (!registrationAllowsPublicAccess(event.registration_mode))
+        throw new AppError(
+          403,
+          "INVITE_FOR_ANOTHER_ADDRESS",
+          "This invitation was sent to another email address. Sign in with that address, or add it to your account.",
+        );
+      linkedInvite = null;
     }
   }
   let verifiedIdentity = metadata.verifiedIdentity;

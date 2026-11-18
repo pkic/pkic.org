@@ -578,7 +578,7 @@ describe("registration workflows", () => {
     expect(rows[0].invite_status).toBe("accepted");
   });
 
-  it("keeps the invite token as the source of truth when confirmation email matches a different invite", async () => {
+  it("on an open event, treats another address's forwarded link as an ordinary registration and uses the own invitation", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
     const tokenInvite = await createInvite(env.DB, {
@@ -628,9 +628,10 @@ describe("registration workflows", () => {
       [tokenInvite.invite.id, emailInvite.invite.id, createdPayload.registrationId],
     );
 
-    expect(rows[0].registration_invite_id).toBe(tokenInvite.invite.id);
-    expect(rows[0].token_invite_status).toBe("accepted");
-    expect(rows[0].email_invite_status).toBe("revoked");
+    // The forwarded invitation stays with the person it was sent to.
+    expect(rows[0].registration_invite_id).toBe(emailInvite.invite.id);
+    expect(rows[0].token_invite_status).toBe("sent");
+    expect(rows[0].email_invite_status).toBe("accepted");
   });
 
   it("enforces attendee invite abuse limits per attendee", async () => {
