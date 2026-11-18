@@ -16,8 +16,7 @@ import { liveOverlayLayoutChoices } from "../../../../../../../../shared/live-ov
 import { LiveOverlayPresentation } from "../../../../../../../live-session/LiveOverlayPresentation";
 import { Button } from "../../../../../../../ui/Button";
 import { Dialog } from "../../../../../../../ui/Dialog";
-import { IconMonitor, StrokeIcon } from "../../../../../../../ui/MediaIcons";
-import { formatNumber } from "../../../../../../../../shared/format-number";
+import { StrokeIcon } from "../../../../../../../ui/MediaIcons";
 import { Menu } from "../../../../../../../ui/Menu";
 import { SectionHeading } from "../../../../../../../ui/SectionHeading";
 import { LiveDeskStream } from "../LiveDeskStream";
@@ -40,6 +39,7 @@ import type { StudioChange } from "./useStudioLayout";
 import { setStudioLivestreamSound, studioLivestreamAudible } from "./studio-livestream-sound";
 import { liveTallyAttributes } from "../live-tally";
 import "../live-tally.css";
+import { SourceCount, SyncToggle } from "./MonitorOutputStatus";
 import "./MonitorPanel.css";
 
 /** The switcher's actions the Preview and Program monitors offer with their controls. */
@@ -274,74 +274,6 @@ function LayoutIcon() {
   );
 }
 
-/** A chain link, broken while the screen does not sync. */
-function SyncIcon({ synced }: { synced: boolean }) {
-  return (
-    <StrokeIcon>
-      <path d="M7 4.5l1.3-1.3a2.6 2.6 0 0 1 3.7 3.7L10.7 8.2M9 11.5l-1.3 1.3a2.6 2.6 0 0 1-3.7-3.7L5.3 7.8" />
-      <path d={synced ? "M6.5 9.5 9.5 6.5" : "M2 2l12 12"} />
-    </StrokeIcon>
-  );
-}
-
-/** What a room screen shows besides its own graphics, said for an operator who is unsure mid-show. */
-const SYNC_HINTS = {
-  on: "Sync on: shows what is live on Program, plus anything you put here. Click to show only what you put here.",
-  off: "Sync off: shows only what you put here. Click to also show what is live on Program.",
-} as const;
-
-/** Whether a room screen follows Program: on by default, a red PGM chip while on. */
-function SyncToggle({ output, context }: { output: LiveSyncedScreen; context: MonitorContext }) {
-  const { switcher, room } = context;
-  const synced = liveScreenSyncs(switcher.screenSync, room, output);
-  return (
-    <Button
-      variant="ghost"
-      class="pk-studio-monitor__sync"
-      data-tally="program"
-      aria-pressed={synced}
-      aria-label={`Sync ${studioOutputDetails(room, output).label} with Program`}
-      title={synced ? SYNC_HINTS.on : SYNC_HINTS.off}
-      disabled={switcher.disabled}
-      onClick={() => switcher.sync(output, !synced)}
-    >
-      <SyncIcon synced={synced} />
-      <span class="pk-studio-monitor__sync-text" aria-hidden="true">
-        PGM
-      </span>
-    </Button>
-  );
-}
-
-/**
- * How many browser sources and room screens draw this output now, so an
- * operator sees a feed that dropped. Program with none is the one to act on.
- */
-function SourceCount({ output, context }: { output: StudioOutput; context: MonitorContext }) {
-  const { sources, room } = context;
-  // Away from the room, the studio cannot know who is still connected, so it claims nothing.
-  if (output === "preview" || output === "livestream" || !sources.program || !sources.connected) return null;
-  const count = sources.program.sources[output] ?? 0;
-  const label = studioOutputDetails(room, output).label;
-  const sentence =
-    count === 0
-      ? `Nothing shows ${label} now. Check the browser source in your production software, or the screen in the room.`
-      : `${formatNumber(count)} ${count === 1 ? "browser source or screen shows" : "browser sources and screens show"} ${label} now.`;
-  // An icon and the number, as the header is narrow; the sentence is its name and tooltip.
-  return (
-    <span
-      class="pk-studio-monitor__sources"
-      role="img"
-      aria-label={sentence}
-      title={sentence}
-      data-tone={count === 0 && output === "program" ? "warn" : undefined}
-    >
-      <IconMonitor class="pk-studio-monitor__sources-icon" />
-      {formatNumber(count)}
-    </span>
-  );
-}
-
 /** What an operator does with one monitor's output, at the end of its header: its sync chip, then clear it, and full screen. */
 function MonitorActions({ output, context }: { output: StudioOutput; context: MonitorContext }) {
   const { panel, switcher, room } = context;
@@ -350,8 +282,8 @@ function MonitorActions({ output, context }: { output: StudioOutput; context: Mo
   return (
     <span class="pk-studio-monitor__controls">
       {/* The sync chip leads, so the count and the icons keep the same place on every monitor. */}
-      {role === "follow" || role === "speaker" ? <SyncToggle output={output} context={context} /> : null}
-      <SourceCount output={output} context={context} />
+      {role === "follow" || role === "speaker" ? <SyncToggle output={output} room={room} switcher={switcher} /> : null}
+      <SourceCount output={output} room={room} sources={context.sources} />
       {output === "livestream" ? (
         <LivestreamSoundToggle />
       ) : (
