@@ -27,11 +27,14 @@ import { openMyProfile, signInToPortal } from "./helpers/portal-auth";
 import { createMember } from "./helpers/member-provisioning";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
+import { ACCOUNT_ORGANIZATION_COPY } from "../../assets/shared/account-organization-copy";
 
 test("verified approved-domain registration affiliates once and an organization identity can be selected for the event", async ({
   page,
   browser,
 }, testInfo) => {
+  // Account setup, registration, the manage page and the badge render run in one journey.
+  test.setTimeout(180_000);
   await signInToPortal(page, e2eAdminEmail("portal-event-management"));
   const representative = await createMember(page, {
     organizationName: `Summit Trust Services ${crypto.randomUUID().slice(0, 6)}`,
@@ -105,10 +108,10 @@ test("verified approved-domain registration affiliates once and an organization 
       onContactReady: async (formPage) => {
         await expect(formPage.locator('[aria-invalid="true"]')).toHaveCount(0);
       },
-      // The domain belongs to a member organization: it is offered, never assumed.
+      // The domain belongs to a member organization: account setup offers it for the person to confirm.
       onOrganizationReady: async (formPage, dialog) => {
         const chooser = dialog.getByRole("combobox", { name: /^Organization/ });
-        await expect(chooser).toHaveValue("");
+        await expect(chooser).toHaveValue(ownerIdentity.organizationId!);
         await chooser.selectOption(ownerIdentity.organizationId!);
         await formPage.setViewportSize({ width: 1280, height: 900 });
         await formPage.screenshot({ path: testInfo.outputPath("public-organization-choice-desktop.png") });
@@ -210,7 +213,10 @@ test("verified approved-domain registration affiliates once and an organization 
     await attendee.unroute("**/api/v1/auth/session");
     await changeIdentity.getByRole("button", { name: "Retry", exact: true }).click();
     await changeIdentity.getByRole("combobox", { name: /^Representation/ }).click();
-    await attendee.getByRole("option").filter({ hasText: "Personal" }).click();
+    // A work address stays with an organization: only organization identities are offered.
+    await expect(attendee.getByRole("option").filter({ hasText: organizationName })).toBeVisible();
+    await expect(attendee.getByRole("option").filter({ hasText: "Personal" })).toHaveCount(0);
+    await attendee.getByRole("option").filter({ hasText: organizationName }).click();
     for (const [width, height, device] of [
       [1280, 900, "desktop"],
       [375, 812, "phone"],
@@ -231,11 +237,6 @@ test("verified approved-domain registration affiliates once and an organization 
       expect((await identitySaved).status()).toBe(200);
       await attendee.reload();
     };
-    await saveRepresentation();
-    await editRepresentation();
-    await expect(changeIdentity.getByRole("combobox", { name: /^Representation/ })).toContainText("Personal");
-    await changeIdentity.getByRole("combobox", { name: /^Representation/ }).click();
-    await attendee.getByRole("option").filter({ hasText: organizationName }).click();
     await saveRepresentation();
     // Profile edits preserve the independently selected registration representation.
     await expect(attendee.getByRole("definition").filter({ hasText: organizationName })).toBeVisible();
@@ -541,9 +542,10 @@ test("a pending membership domain can register while affiliation awaits review",
   const email = `attendee@${applicant.split("@")[1]}`;
   const registration = await registerInBrowser(page, email, undefined, undefined, {
     organization: name,
-    onOrganizationReady: async (contact, dialog) => {
-      const organization = dialog.getByRole("textbox", { name: /^Organization name/ });
-      await expect(organization).toHaveAccessibleDescription(/linked to .*pending application.*review/i);
+    // Account setup offers the organization whose application is still under review.
+    onOrganizationReady: async (contact, step) => {
+      const organization = step.getByRole("combobox", { name: /^Organization/ });
+      await expect(organization.locator("option:checked")).toHaveText(name);
       for (const [width, height, device] of [
         [1280, 900, "desktop"],
         [375, 812, "phone"],
@@ -558,7 +560,7 @@ test("a pending membership domain can register while affiliation awaits review",
   await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible();
 });
 
-test("a verified new work domain names its organization in the identity dialog of public registration", async ({
+test("a verified new work domain names its organization at account setup before public registration", async ({
   page,
 }, testInfo) => {
   const name = `New Domain Research ${Date.now()}`;
@@ -590,7 +592,7 @@ test("a verified new work domain names its organization in the identity dialog o
       await expect(dialog.getByRole("combobox", { name: /^Organization/ })).toHaveCount(0);
       await expect(dialog.getByRole("button", { name: "Add organization", exact: true })).toHaveCount(0);
       await organization.fill("");
-      await dialog.getByRole("button", { name: "Add representation", exact: true }).click();
+      await dialog.getByRole("button", { name: ACCOUNT_ORGANIZATION_COPY.finish, exact: true }).click();
       await expect(organization).toHaveAttribute("aria-invalid", "true");
       for (const [width, height, device] of [
         [1280, 900, "desktop"],

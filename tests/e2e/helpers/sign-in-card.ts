@@ -101,7 +101,8 @@ export async function signInThroughCard(
         if (await passkeyOffer.isVisible().catch(() => false))
           await passkeyOffer
             .getByRole("button", { name: "Continue without a passkey", exact: true })
-            .click()
+            // The offer may close as the page leaves; a click that waits for it would outlast the poll.
+            .click({ timeout: 2_000 })
             .catch(() => undefined);
         return returned();
       },

@@ -16,7 +16,10 @@ const REGISTRATION_API = "/api/v1/events/pqc-conference-amsterdam-nl/registratio
 export interface RegistrationOrganization {
   organization?: string;
   jobTitle?: string;
-  /** The identity dialog is asking which organization the signed-in address represents. */
+  /**
+   * The organization question is on screen: account setup's step for a new
+   * work address, or the identity dialog for a person already signed in.
+   */
   onOrganizationReady?: (page: Page, dialog: Locator) => Promise<void>;
   onContactReady?: (page: Page) => Promise<void>;
   onReviewReady?: (page: Page) => Promise<void>;
@@ -120,11 +123,20 @@ export async function continueRegistrationWithEmail(
     await page.reload();
     await expect(card).toBeVisible({ timeout: 30_000 });
   }
+  // A new work address names its organization at account setup, before it has a session.
+  const namesAtSetup = Boolean(values.organization && !values.individual && !values.returning);
   if (await card.isVisible())
     await signInThroughCard(page, values.email, {
       individual: values.individual,
       returning: values.returning,
       emailFlow: "registration",
+      organization: namesAtSetup
+        ? {
+            name: values.organization!,
+            jobTitle: values.jobTitle ?? "Conference attendee",
+            ready: values.onOrganizationReady && ((step) => values.onOrganizationReady!(page, step)),
+          }
+        : undefined,
     });
   await expect(details).toBeVisible({ timeout: 30_000 });
   await expect(contact).toContainText(values.email);

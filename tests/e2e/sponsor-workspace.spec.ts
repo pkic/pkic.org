@@ -17,6 +17,7 @@ import type { BrowserContext, Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { waitForCapturedEmail } from "./helpers/sendgrid";
 import { declinePasskeyOffer } from "./helpers/portal-auth";
+import { answerAccountOrganizationStep } from "./helpers/account-organization";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 import { endEventSponsor } from "./helpers/event-sponsor";
 import { ownDomainEmail, registerInBrowser } from "./helpers/registration";
@@ -76,7 +77,8 @@ test.describe("portal sponsor workspace", () => {
     browser,
   }, info) => {
     const stamp = Date.now();
-    const contactEmail = `sponsor-e2e-${stamp}@example.test`;
+    // The contact works on their own domain: a work address names its organization when it signs in.
+    const contactEmail = ownDomainEmail("sponsor-contact");
     const attendeeEmail = ownDomainEmail("sponsor-disclosure");
     const organizationName = `Synthetic Disclosure Services ${stamp}`;
     const personalEmail = `synthetic-sponsor-${stamp}@gmail.com`;
@@ -264,7 +266,14 @@ test.describe("portal sponsor workspace", () => {
     expect(resendUrl).not.toBe(portalUrl);
 
     await page.goto("/");
+    const verified = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/v1/auth/verify-link" && response.request().method() === "POST",
+    );
     await page.goto(resendUrl);
+    await answerAccountOrganizationStep(page, await verified, {
+      organization: { name: `Synthetic Sponsor Contact ${stamp}`, jobTitle: "Partnerships lead" },
+    });
     await declinePasskeyOffer(page);
     await expect(page.getByText(attendeeEmail)).toBeVisible({ timeout: 15_000 });
   });

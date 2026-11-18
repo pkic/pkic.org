@@ -24,6 +24,8 @@ export interface AccountOrganizationChoice {
      * or the "Add organization" dialog when the organization is new beside others.
      */
     inspect?: (scope: Locator) => Promise<void>;
+    /** Looks at the step as it opens, before anything is chosen or typed. */
+    ready?: (step: Locator) => Promise<void>;
   };
 }
 
@@ -60,6 +62,7 @@ export async function answerAccountOrganizationStep(
     await step.getByRole("button", { name: EMAIL_FIRST_ADVISORY_COPY.usePersonal, exact: true }).click();
     return answered;
   }
+  await organization.ready?.(step);
   const { organizations } = result.organizationRequired.affiliation;
   const listed = organizations.find((item) => item.name === organization.name);
   // A required field's label carries its marker, so labels are matched from their start.
