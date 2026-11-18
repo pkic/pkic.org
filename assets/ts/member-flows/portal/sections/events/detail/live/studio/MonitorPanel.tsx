@@ -548,7 +548,6 @@ export function monitorPanelView(
         </span>
       ),
       actions: <MonitorActions output={single} context={context} />,
-      // Preview shows the scenes under its picture; the operator can hide them.
       menu:
         single === "preview"
           ? [

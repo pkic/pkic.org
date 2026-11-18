@@ -8,12 +8,13 @@
  */
 
 import type { ComponentChildren } from "preact";
-import { useCallback, useEffect, useId, useRef, useState } from "preact/hooks";
+import { useCallback, useId, useRef, useState } from "preact/hooks";
 
 import { usePopupPlacement } from "../ui/popup-placement";
 import "../ui/Menu.css";
 import "./ReactionPicker.css";
 import { ReactionToolbar, type ReactionChoice } from "./ReactionToolbar";
+import { usePressOutside } from "../ui/use-press-outside";
 
 export type { ReactionChoice } from "./ReactionToolbar";
 
@@ -51,14 +52,8 @@ export function ReactionPicker({
 
   usePopupPlacement({ open, anchorRef: triggerRef, popupRef, align: "end", side: "top", topLayer: true });
 
-  useEffect(() => {
-    if (!open) return;
-    const outside = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) close(false);
-    };
-    document.addEventListener("pointerdown", outside, true);
-    return () => document.removeEventListener("pointerdown", outside, true);
-  }, [open, close]);
+  const closeOutside = useCallback(() => close(false), [close]);
+  usePressOutside(open, rootRef, closeOutside);
 
   return (
     <div class="pk-menu" ref={rootRef}>

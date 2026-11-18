@@ -33,6 +33,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from
 
 import { MenuLevel } from "./MenuLevel";
 import "./Menu.css";
+import { usePressOutside } from "./use-press-outside";
 
 interface MenuItemBase {
   id: string;
@@ -162,14 +163,8 @@ export function Menu({
     window.addEventListener("scroll", scroll, true);
     return () => window.removeEventListener("scroll", scroll, true);
   }, [open, anchorPoint, close]);
-  useEffect(() => {
-    if (!open) return;
-    const outside = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) close(false);
-    };
-    document.addEventListener("pointerdown", outside, true);
-    return () => document.removeEventListener("pointerdown", outside, true);
-  }, [open, close]);
+  const closeOutside = useCallback(() => close(false), [close]);
+  usePressOutside(open, rootRef, closeOutside);
   return (
     <div class="pk-menu" ref={rootRef}>
       <button
