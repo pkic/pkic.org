@@ -45,7 +45,8 @@ Vendor-neutral: never name a specific production tool.
 - **Preview**: the next composition, edited before it goes on air.
 - **Transition**: replace Program with Preview. It changes the overlay output, not the stream.
 - **Output**: a destination that renders a composition: Program, Projector (room screen), Stage preview, Stage display (both speaker-facing).
-- **Browser source**: the overlay page that production software loads for an output; its layout rides the query string.
+- **Browser source**: the overlay page that production software loads for an output; it can name a scene in its link.
+- **Scene**: an event's arrangement of graphics on an output: which show, where, and in what order. Scenes are shared by every room. Never "layout" in copy.
 - **Lower third**: the name and title graphic for the current speaker, taken from their identity.
 - **Ticker**: the scrolling message line.
 - **Switcher**: the production software, or the studio control that mirrors it.

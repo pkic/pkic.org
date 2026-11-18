@@ -52,6 +52,7 @@ function StageDisplay({
           output,
           layout: null,
           roomId: SCREEN_FIXTURE.roomId,
+          eventSlug: SCREEN_FIXTURE.eventSlug,
           state,
           marker,
         }}

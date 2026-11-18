@@ -195,6 +195,7 @@ export class LiveRoomControls {
   /**
    * Takes every graphic off Program in one write, at once: on air there is no
    * time to confirm. The room keeps what was there so any operator can undo it.
+   * Program keeps its scene: a clear takes the graphics off, not the arrangement.
    */
   clearProgram(operator: Operator, at: string): LiveControlOutcome {
     const previous = this.store.stage();
@@ -204,6 +205,7 @@ export class LiveRoomControls {
       questionChange: change,
       lowerThirdChange: change,
       pollChange: change,
+      scene: previous.scene,
     };
     const snapshotId = crypto.randomUUID();
     this.store.saveStage(stage);

@@ -42,6 +42,14 @@ export const LIVE_SCREEN_FOLLOWS: Record<LiveSyncedScreen, readonly LiveScreenGr
   "stage-display": ["question", "poll", "timerGraphics", "schedule"],
 };
 
+/** Graphics the stage display has no place for: they caption the stream or speak to the audience, not the speaker. */
+const OFF_STAGE_DISPLAY: readonly LiveScreenGraphic[] = [...STREAM_ONLY, "topQuestions", "chatFeed"];
+
+/** Whether a room screen can draw this graphic at all; the studio offers a screen only for graphics it draws. */
+export function liveScreenDraws(output: LiveSyncedScreen, graphic: LiveScreenGraphic): boolean {
+  return output !== "stage-display" || !OFF_STAGE_DISPLAY.includes(graphic);
+}
+
 /** Whether a screen holds a graphic of its own that it draws, so it takes the place of Program's. */
 function holds(output: LiveSyncedScreen, stage: LiveStage, graphic: LiveScreenGraphic, timers: readonly LiveTimer[]) {
   if (output === "stage-display" && graphic === "timerGraphics")

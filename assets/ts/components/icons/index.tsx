@@ -86,6 +86,16 @@ export function IconRefresh(props: SvgProps) {
   );
 }
 
+/** Help: the question mark that opens a screen's guided tour, the same on every screen that has one. */
+export function IconHelp(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <circle cx="8" cy="8" r="6" />
+      <path d="M6.5 5.5a1.5 1.5 0 0 1 3 0c0 1.5-1.5 1.5-1.5 3M8 11h.01" />
+    </StrokeIcon>
+  );
+}
+
 export function IconInfoCircle(props: SvgProps) {
   return (
     <StrokeIcon {...props}>

@@ -172,6 +172,11 @@ it("shows Program on the row edge, a screen it was put on as a dot on the menu, 
     item.textContent?.includes("Projector"),
   )!;
   expect(projector.getAttribute("aria-checked")).toBe("false");
+  // Each screen leads with its monitor's tally color; the stage display has no place for a lower third, so it is not offered.
+  expect(projector.querySelector('.pk-live-screen-dot[data-tally="projector"]')).not.toBeNull();
+  expect(
+    document.querySelector('[role="menuitemcheckbox"] .pk-live-screen-dot[data-tally="stage-display"]'),
+  ).toBeNull();
   await act(() => projector.click());
   const aux = liveRoomClientMessageSchema.parse(sendProgram.mock.calls.at(-1)![0]);
   expect(aux).toMatchObject({

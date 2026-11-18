@@ -1,6 +1,6 @@
 @layer components {
   /* The code's standard broadcast size; the output layout scales it to the element's box, larger or smaller. */
-  .pk-live-check-in {
+  .pk-live-qr-card {
     inline-size: 520px;
   }
   /*
@@ -9,7 +9,7 @@
    * theme's ground. On a transparent theme the quiet zone is clear, so the
    * picture behind it must stay calm and dark (or light) enough to scan.
    */
-  .pk-live-check-in .pk-check-in-qr {
+  .pk-live-qr-card .pk-qr-graphic {
     position: relative;
     overflow: hidden;
     border-radius: var(--graphic-radius);
@@ -18,7 +18,7 @@
     text-shadow: var(--graphic-halo);
   }
   /* The event theme's stripe along the card's foot, as under the lower third's name. */
-  .pk-live-check-in .pk-check-in-qr::after {
+  .pk-live-qr-card .pk-qr-graphic::after {
     content: "";
     position: absolute;
     inset-inline: 0;
@@ -26,14 +26,14 @@
     block-size: 8px;
     background: var(--graphic-stripe);
   }
-  .pk-live-check-in .pk-check-in-qr__ground {
+  .pk-live-qr-card .pk-qr-graphic__ground {
     fill: var(--graphic-ground);
   }
-  .pk-live-check-in .pk-check-in-qr__modules {
+  .pk-live-qr-card .pk-qr-graphic__modules {
     fill: var(--graphic-ink);
   }
   /* The words under the code read from across a room and on a corner of the stream. */
-  .pk-live-check-in .pk-check-in-qr__note {
+  .pk-live-qr-card .pk-qr-graphic__note {
     font-size: 6cqi;
     font-weight: 500;
   }
@@ -41,10 +41,10 @@
    * In the event's colors the card is the event's field and the code stays
    * black on white, its quiet zone included, so any phone camera reads it.
    */
-  .pk-live-check-in[data-graphic-theme="event"] .pk-check-in-qr__ground {
+  .pk-live-qr-card[data-graphic-theme="event"] .pk-qr-graphic__ground {
     fill: var(--pk-pqc-paper);
   }
-  .pk-live-check-in[data-graphic-theme="event"] .pk-check-in-qr__modules {
+  .pk-live-qr-card[data-graphic-theme="event"] .pk-qr-graphic__modules {
     fill: var(--pk-pqc-ink);
   }
 }

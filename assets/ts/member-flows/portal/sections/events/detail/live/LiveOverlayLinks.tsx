@@ -9,7 +9,7 @@ import { CopyLinkRow } from "../../../../../../shared/widgets/copy-link-row";
 import { Spinner } from "../../../../../../components/Spinner";
 
 /**
- * A physical room's browser sources for one layout: one compact row per
+ * A physical room's browser sources, drawing the scene on air or always one: one compact row per
  * output with its copy control. The room gives the same links each time, so
  * they load as soon as they show, until a day after its program ends.
  */
@@ -20,7 +20,8 @@ export function LiveOverlayLinks({
 }: {
   slug: string;
   roomId: string;
-  layout: { slug: string; name: string };
+  /** The scene every link always draws; null to draw the scene each output has on air. */
+  layout: string | null;
 }) {
   const [access, setAccess] = useState<{ token: string; expiresAt: string } | null>(null);
   const [error, setError] = useState<Error | null>(null);
@@ -65,7 +66,7 @@ export function LiveOverlayLinks({
             label={view.label}
             url={liveOverlayAddress(window.location.origin, {
               view: view.id,
-              layout: layout.slug,
+              layout,
               slug,
               roomId,
               token: access.token,

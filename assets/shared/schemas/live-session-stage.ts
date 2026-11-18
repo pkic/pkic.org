@@ -22,6 +22,7 @@ import {
   liveReactionsGraphicSchema,
   DEFAULT_LIVE_REACTIONS_GRAPHIC,
 } from "./live-session-graphic-settings";
+import { liveOverlayLayoutSlugSchema } from "./live-overlay-layout";
 
 export const livePanelistsSchema = z.object({ layout: z.enum(["panel", "list", "columns"]) }).strict();
 export type LivePanelists = z.infer<typeof livePanelistsSchema>;
@@ -75,6 +76,11 @@ export const liveStageSchema = z
     /** Viewers' reactions float up over the output while this is on. */
     reactions: z.boolean().default(false),
     reactionsGraphic: liveReactionsGraphicSchema.default(DEFAULT_LIVE_REACTIONS_GRAPHIC),
+    /**
+     * The scene the output draws its graphics in; null for the event's default.
+     * A Take carries it, so Program shows exactly what Preview did.
+     */
+    scene: liveOverlayLayoutSlugSchema.nullable().default(null),
   })
   .strict();
 export type LiveStage = z.infer<typeof liveStageSchema>;
@@ -97,6 +103,7 @@ export const EMPTY_LIVE_STAGE: LiveStage = {
   chatFeed: null,
   reactions: false,
   reactionsGraphic: DEFAULT_LIVE_REACTIONS_GRAPHIC,
+  scene: null,
 };
 
 export const liveAuxOutputSchema = z.enum(LIVE_AUX_OUTPUTS);

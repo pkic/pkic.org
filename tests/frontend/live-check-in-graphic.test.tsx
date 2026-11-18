@@ -141,14 +141,14 @@ describe("check-in code on live outputs", () => {
     const host = document.body.appendChild(document.createElement("div"));
     hosts.push(host);
     void act(() => render(<LiveCheckInOverlay checkIn={{ ...checkIn, theme }} />, host));
-    const graphic = host.querySelector<HTMLElement>(".pk-live-check-in")!;
+    const graphic = host.querySelector<HTMLElement>(".pk-live-qr-card")!;
     // The whole graphic, code included, takes the theme the operator chose.
     expect(graphic.dataset.graphicTheme).toBe(theme);
-    const code = host.querySelector("svg.pk-check-in-qr__code")!;
-    const ground = code.querySelector("rect.pk-check-in-qr__ground")!;
+    const code = host.querySelector("svg.pk-qr-graphic__code")!;
+    const ground = code.querySelector("rect.pk-qr-graphic__ground")!;
     // The ground spans the whole viewBox, so the four-module quiet zone stays clear of anything else.
     expect(ground.getAttribute("width")).toBe(code.getAttribute("viewBox")!.split(" ")[2]);
-    expect(code.querySelector("path.pk-check-in-qr__modules")?.getAttribute("d")).toMatch(/^M4 4h1/);
+    expect(code.querySelector("path.pk-qr-graphic__modules")?.getAttribute("d")).toMatch(/^M4 4h1/);
   });
 
   it("renders sections and sanitized inline Markdown without repeating session details", () => {
@@ -166,9 +166,9 @@ describe("check-in code on live outputs", () => {
         host,
       ),
     );
-    expect(host.querySelector(".pk-check-in-qr__label")).toBeNull();
-    expect(host.querySelector(".pk-check-in-qr__note strong")?.textContent).toBe("Scan");
-    expect(host.querySelector(".pk-check-in-qr__note em")?.textContent).toBe('<img src=x onerror="alert(1)">');
+    expect(host.querySelector(".pk-qr-graphic__label")).toBeNull();
+    expect(host.querySelector(".pk-qr-graphic__note strong")?.textContent).toBe("Scan");
+    expect(host.querySelector(".pk-qr-graphic__note em")?.textContent).toBe('<img src=x onerror="alert(1)">');
     expect(host.querySelector("img, script")).toBeNull();
   });
 
@@ -179,17 +179,14 @@ describe("check-in code on live outputs", () => {
     const host = document.body.appendChild(document.createElement("div"));
     hosts.push(host);
     void act(() => render(<LiveCheckInOverlay checkIn={{ ...checkIn, text }} />, host));
-    expect(host.querySelector(".pk-check-in-qr__caption")).toBeNull();
+    expect(host.querySelector(".pk-qr-graphic__caption")).toBeNull();
     expect(host.querySelector("svg")?.getAttribute("aria-label")).toBe(`Check-in code: ${checkIn.label}`);
   });
 
   it("keeps the code's own spacing in its own width, so it grows with its box", () => {
-    const css = readFileSync(
-      resolve(process.cwd(), "assets/ts/components/attendance-points/CheckInQrGraphic.css"),
-      "utf8",
-    );
+    const css = readFileSync(resolve(process.cwd(), "assets/ts/components/qr/QrGraphic.css"), "utf8");
     // Container units on the container itself would resolve against the broadcast frame.
-    const container = /\.pk-check-in-qr \{([^}]*)\}/u.exec(css)![1]!;
+    const container = /\.pk-qr-graphic \{([^}]*)\}/u.exec(css)![1]!;
     expect(container).toContain("container-type: inline-size");
     expect(container).not.toMatch(/cqi/u);
   });
@@ -215,16 +212,16 @@ describe("check-in code graphic options", () => {
 
   it("hides the point's name on request but keeps it in the code's accessible name", () => {
     const host = draw(<CheckInQrGraphic point={checkIn} showLabel={false} caption="Scan to check in" />);
-    expect(host.querySelector(".pk-check-in-qr__label")).toBeNull();
-    expect(host.querySelector(".pk-check-in-qr__note")?.textContent).toBe("Scan to check in");
+    expect(host.querySelector(".pk-qr-graphic__label")).toBeNull();
+    expect(host.querySelector(".pk-qr-graphic__note")?.textContent).toBe("Scan to check in");
     expect(host.querySelector("svg")?.getAttribute("aria-label")).toBe("Check-in code: Post-quantum migration");
   });
 
   it("hosts a rich caption and omits an empty caption container", () => {
     const rich = draw(<CheckInQrGraphic point={checkIn} caption={<strong>Scan now</strong>} />);
-    expect(rich.querySelector(".pk-check-in-qr__note strong")?.textContent).toBe("Scan now");
+    expect(rich.querySelector(".pk-qr-graphic__note strong")?.textContent).toBe("Scan now");
 
     const bare = draw(<CheckInQrGraphic point={checkIn} showLabel={false} caption="" />);
-    expect(bare.querySelector(".pk-check-in-qr__caption")).toBeNull();
+    expect(bare.querySelector(".pk-qr-graphic__caption")).toBeNull();
   });
 });

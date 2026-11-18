@@ -10,6 +10,7 @@ import { eventSlugParamsSchema, slugPattern, utcInstantSchema } from "./api-comm
 
 /** Every layer the overlay draws, in the order the editor lists them. */
 export const LIVE_OVERLAY_ELEMENTS = [
+  "background",
   "lowerThird",
   "question",
   "poll",
@@ -20,12 +21,14 @@ export const LIVE_OVERLAY_ELEMENTS = [
   "checkIn",
   "topQuestions",
   "chat",
+  "qrCode",
   "reactions",
   "stageDisplay",
   "stageMessage",
 ] as const;
 export type LiveOverlayElement = (typeof LIVE_OVERLAY_ELEMENTS)[number];
 export const LIVE_OVERLAY_ELEMENT_LABELS: Record<LiveOverlayElement, string> = {
+  background: "Background",
   lowerThird: "Lower third",
   question: "Question",
   poll: "Poll results",
@@ -36,6 +39,7 @@ export const LIVE_OVERLAY_ELEMENT_LABELS: Record<LiveOverlayElement, string> = {
   checkIn: "Check-in code",
   topQuestions: "Top questions",
   chat: "Chat",
+  qrCode: "QR code",
   reactions: "Reactions",
   stageDisplay: "Stage display",
   stageMessage: "Message to speaker",
@@ -44,6 +48,7 @@ export const LIVE_OVERLAY_ELEMENT_LABELS: Record<LiveOverlayElement, string> = {
 /** The two compositions an element can belong to: Program (and the outputs drawn like it), or the stage display. */
 export type LiveOverlayComposition = "program" | "stage-display";
 export const LIVE_OVERLAY_ELEMENT_COMPOSITIONS: Record<LiveOverlayElement, readonly LiveOverlayComposition[]> = {
+  background: ["program"],
   lowerThird: ["program"],
   question: ["program"],
   poll: ["program"],
@@ -54,6 +59,7 @@ export const LIVE_OVERLAY_ELEMENT_COMPOSITIONS: Record<LiveOverlayElement, reado
   checkIn: ["program", "stage-display"],
   topQuestions: ["program"],
   chat: ["program"],
+  qrCode: ["program"],
   reactions: ["program"],
   stageDisplay: ["stage-display"],
   stageMessage: ["stage-display"],
@@ -112,19 +118,30 @@ export function liveOverlayPixelBox(
 /**
  * Elements added after events began saving layouts, at their Full frame box.
  * A layout or set of shared positions saved before one existed reads it
- * there, shown and shared, so nothing an organizer saved stops reading.
+ * there, shared and shown (the background hidden), so nothing an organizer
+ * saved stops reading.
  */
 export const LIVE_OVERLAY_ADDED_ELEMENT_BOXES = {
   topQuestions: liveOverlayPixelBox(0, 0, 1920, 1080, { horizontal: "center", vertical: "middle" }),
   chat: liveOverlayPixelBox(0, 0, 1920, 1080, { horizontal: "center", vertical: "middle" }),
+  background: liveOverlayPixelBox(0, 0, 1920, 1080, { horizontal: "center", vertical: "middle" }),
+  // Bottom right, above the ticker and clear of the lower third.
+  qrCode: liveOverlayPixelBox(1512, 498, 360, 432, { horizontal: "right", vertical: "bottom" }),
 } satisfies Partial<Record<LiveOverlayElement, LiveOverlayElementBox>>;
+
+/**
+ * Added elements a saved layout reads hidden: the background would change how
+ * a saved scene looks, covering the camera beside a column of boards, so an
+ * organizer turns it on.
+ */
+const ADDED_HIDDEN: ReadonlySet<string> = new Set(["background", "qrCode"]);
 
 /** Saved elements with any element added since filled in; anything but an object is left for the schema to refuse. */
 function withAddedElements(value: unknown, placement: boolean): unknown {
   if (!value || typeof value !== "object" || Array.isArray(value)) return value;
   const added = Object.entries(LIVE_OVERLAY_ADDED_ELEMENT_BOXES).map(([element, box]) => [
     element,
-    placement ? { visible: true, shared: true, ...box } : box,
+    placement ? { visible: !ADDED_HIDDEN.has(element), shared: true, ...box } : box,
   ]);
   return { ...Object.fromEntries(added), ...value };
 }
@@ -133,10 +150,24 @@ function withAddedElements(value: unknown, placement: boolean): unknown {
  * Where one element sits on one layout: whether it shows, and its box. An
  * element `shared` with the event's other layouts takes the event's shared
  * position for it, so moving it once moves it on every layout that shares
- * it; a layout that places it differently keeps its own box.
+ * it; a layout that places it differently keeps its own box. `layer` is the
+ * graphic's place in this layout's stack, bottom first; without it the
+ * graphic keeps its built-in place (`live-overlay-stacking.ts`).
  */
 export const liveOverlayElementPlacementSchema = insideFrame(
-  z.object({ visible: z.boolean(), shared: z.boolean(), ...boxShape }).strict(),
+  z
+    .object({
+      visible: z.boolean(),
+      shared: z.boolean(),
+      layer: z
+        .number()
+        .int()
+        .min(0)
+        .max(LIVE_OVERLAY_ELEMENTS.length - 1)
+        .optional(),
+      ...boxShape,
+    })
+    .strict(),
 );
 export type LiveOverlayElementPlacement = z.infer<typeof liveOverlayElementPlacementSchema>;
 

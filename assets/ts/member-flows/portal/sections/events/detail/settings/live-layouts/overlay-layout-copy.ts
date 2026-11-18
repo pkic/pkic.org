@@ -18,13 +18,13 @@ export const LAYOUT_LAYER_LABEL: Record<LiveOverlayComposition, string> = {
 };
 
 /** Whether an element takes the event's shared position or this layout's own. */
-export const LAYOUT_SHARING_LABEL = { shared: "Shared position", own: "This layout only" } as const;
+export const LAYOUT_SHARING_LABEL = { shared: "Shared position", own: "This scene only" } as const;
 
 /** The inspector's note on a shared element: moving it here moves it wherever it is shared. */
 export function layoutSharingNote(layouts: number): string {
   return layouts > 1
-    ? `Shared with ${formatNumber(layouts)} layouts: moving it here moves it on all of them.`
-    : "Shared position: moving it here moves it on every layout that shares it.";
+    ? `Shared with ${formatNumber(layouts)} scenes: moving it here moves it on all of them.`
+    : "Shared position: moving it here moves it on every scene that shares it.";
 }
 
 export const LAYOUT_UNIT_LABEL: Record<LayoutUnit, string> = {

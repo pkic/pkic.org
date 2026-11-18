@@ -104,7 +104,12 @@ function Thumbnail({
           onClick={() => setTools(!tools)}
         >
           {projection ? (
-            <LiveOverlayPresentation view="program" projection={projection} roomId={sources.roomId} />
+            <LiveOverlayPresentation
+              view="program"
+              projection={projection}
+              roomId={sources.roomId}
+              eventSlug={sources.slug}
+            />
           ) : null}
         </button>
         {tools ? (

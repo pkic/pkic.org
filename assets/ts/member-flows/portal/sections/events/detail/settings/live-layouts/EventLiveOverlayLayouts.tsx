@@ -26,8 +26,8 @@ function describe(layout: LiveOverlayLayout): string {
 }
 
 /**
- * The event's broadcast overlay layouts: the list, the selected layout's
- * editor, and its browser sources. The selected layout follows the
+ * The event's scenes: the list, the selected scene's editor, and the
+ * rooms' browser sources. The selected layout follows the
  * address, so a bookmark opens the same one.
  */
 export function EventLiveOverlayLayouts({ slug }: { slug: string }) {
@@ -51,7 +51,7 @@ export function EventLiveOverlayLayouts({ slug }: { slug: string }) {
         </div>
       </div>
     );
-  if (!saved || !layouts) return <Spinner label="Loading layouts…" />;
+  if (!saved || !layouts) return <Spinner label="Loading scenes…" />;
   const current = layouts.find((layout) => layout.slug === chosen) ?? layouts[0]!;
   async function open(next: string) {
     if (next === current.slug) return;
@@ -59,7 +59,7 @@ export function EventLiveOverlayLayouts({ slug }: { slug: string }) {
       dirty &&
       !(await confirmAction({
         title: `Discard changes to ${current.name}?`,
-        body: "Your changes to this layout are not saved.",
+        body: "Your changes to this scene are not saved.",
         confirmLabel: "Discard changes",
         tone: "danger",
       }))
@@ -71,17 +71,17 @@ export function EventLiveOverlayLayouts({ slug }: { slug: string }) {
   return (
     <div class="pk-stack">
       <Panel>
-        <PanelHeader title="Overlay layouts">
-          <Button onClick={() => setCreating({ from: current, duplicate: false })}>New layout</Button>
+        <PanelHeader title="Scenes">
+          <Button onClick={() => setCreating({ from: current, duplicate: false })}>New scene</Button>
         </PanelHeader>
         <PanelBody class="pk-stack">
           <p class="pk-muted">
-            A layout decides which graphics a browser source shows and where. In your production software, add the same
-            output once per scene, each with its own layout.
+            A scene decides which graphics show and where. Take in the studio puts Preview's scene on Program, and a
+            browser source draws the scene on air unless its link names one.
           </p>
           <div class="pk-layout-shell">
             <div class="pk-layout-workspace">
-              <nav class="pk-layout-list" aria-label="Layouts">
+              <nav class="pk-layout-list" aria-label="Scenes">
                 <ul>
                   {layouts.map((layout) => (
                     <li key={layout.slug}>
@@ -117,9 +117,9 @@ export function EventLiveOverlayLayouts({ slug }: { slug: string }) {
         </PanelBody>
       </Panel>
       <Panel>
-        <PanelHeader title={`Browser sources for ${current.name}`} />
+        <PanelHeader title="Browser sources" />
         <PanelBody>
-          <EventLiveOverlaySources slug={slug} layout={current} />
+          <EventLiveOverlaySources slug={slug} layouts={layouts} />
         </PanelBody>
       </Panel>
       {creating ? (

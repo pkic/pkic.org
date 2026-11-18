@@ -4,22 +4,7 @@ import type {
   LiveOverlayElementPlacement,
   LiveOverlayLayoutElements,
 } from "./schemas/live-overlay-layout";
-
-/** Program's graphics, bottom to top: a later one draws over an earlier one where their boxes meet. */
-export const LIVE_PROGRAM_LAYER_ORDER = [
-  "panelists",
-  "schedule",
-  "checkIn",
-  "question",
-  "lowerThird",
-  "poll",
-  "topQuestions",
-  "chat",
-  "timer",
-  "ticker",
-  "reactions",
-] as const satisfies readonly LiveOverlayElement[];
-export type LiveProgramLayer = (typeof LIVE_PROGRAM_LAYER_ORDER)[number];
+import { liveOverlayClearOfTicker, liveProgramLayers, type LiveProgramLayer } from "./live-overlay-stacking";
 
 /** The boards: graphics on a solid field, which hide whatever sits under them. */
 const BOARDS: ReadonlySet<LiveProgramLayer> = new Set([
@@ -32,12 +17,28 @@ const BOARDS: ReadonlySet<LiveProgramLayer> = new Set([
   "chat",
 ]);
 
+/** The boards drawn on the conference field: while one is on air, the scene's background shows under it. */
+export const LIVE_FIELD_BOARDS: ReadonlySet<LiveProgramLayer> = new Set([
+  "question",
+  "poll",
+  "panelists",
+  "topQuestions",
+  "chat",
+]);
+
+/** Whether a graphic is a board drawn on the conference field. */
+export function isLiveFieldBoard(element: LiveOverlayElement): element is LiveProgramLayer {
+  return (LIVE_FIELD_BOARDS as ReadonlySet<string>).has(element);
+}
+
 /** How much of a graphic a board must cover before it reads as hidden. */
 const HIDDEN_SHARE = 0.6;
 
 /** Whether a composition has something for this graphic to draw. */
 export function liveOverlayDrawn(stage: LiveStage, layer: LiveProgramLayer): boolean {
   switch (layer) {
+    case "background":
+      return true;
     case "panelists":
       return stage.panelists !== null;
     case "schedule":
@@ -54,6 +55,8 @@ export function liveOverlayDrawn(stage: LiveStage, layer: LiveProgramLayer): boo
       return (stage.topQuestions?.questions.length ?? 0) > 0;
     case "chat":
       return (stage.chatFeed?.messages.length ?? 0) > 0;
+    case "qrCode":
+      return true;
     case "timer":
       return stage.timerGraphics.length > 0;
     case "ticker":
@@ -79,11 +82,14 @@ function coveredShare(under: LiveOverlayElementPlacement, over: LiveOverlayEleme
  */
 export function liveOverlayCoveredBy(
   stage: LiveStage,
-  elements: LiveOverlayLayoutElements,
+  scene: LiveOverlayLayoutElements,
   layer: LiveProgramLayer,
 ): LiveProgramLayer | null {
+  // Drawn as the outputs draw it: clear of the ticker while the ticker is on air.
+  const elements = liveOverlayClearOfTicker(scene, liveOverlayDrawn(stage, "ticker"));
   if (!elements[layer].visible || !liveOverlayDrawn(stage, layer)) return null;
-  const above = LIVE_PROGRAM_LAYER_ORDER.slice(LIVE_PROGRAM_LAYER_ORDER.indexOf(layer) + 1);
+  const stack = liveProgramLayers(elements);
+  const above = stack.slice(stack.indexOf(layer) + 1);
   return (
     above.find(
       (board) =>

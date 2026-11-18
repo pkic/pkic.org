@@ -55,11 +55,17 @@ const sources = {
   startAt: room.session.startAt,
 };
 
-const switcher = { clear: vi.fn(), screenSync: DEFAULT_LIVE_SCREEN_SYNC, sync: vi.fn(), disabled: false };
+const switcher = {
+  clear: vi.fn(),
+  screenSync: DEFAULT_LIVE_SCREEN_SYNC,
+  sync: vi.fn(),
+  previewScene: vi.fn(),
+  disabled: false,
+};
 
-function Harness({ panel = 0 }: { panel?: number }) {
+function Harness({ panel = 0, preview = room }: { panel?: number; preview?: typeof room }) {
   const layout = useStudioLayout();
-  const view = monitorPanelView(layout.panels[panel]!, sources, layout.change, switcher);
+  const view = monitorPanelView(layout.panels[panel]!, { ...sources, preview }, layout.change, switcher);
   return (
     <>
       {view.heading}
@@ -90,7 +96,7 @@ const menuItem = (label: string) =>
   )!;
 
 describe("studio monitor layouts", () => {
-  it("shows a tile in the layout an operator picks, and keeps the choice with the panel's outputs", () => {
+  it("loads a scene into Preview for every operator, and draws Preview and Program in their own scenes", () => {
     host = document.createElement("div");
     document.body.append(host);
     void act(() => render(<Harness />, host!));
@@ -98,31 +104,41 @@ describe("studio monitor layouts", () => {
     expect(screen().querySelector(".pk-live-overlay__question-text")?.textContent).toBe(
       "What about hybrid certificates?",
     );
-    const picker = host.querySelector<HTMLButtonElement>('button[aria-label="Layout on Preview: Full frame"]')!;
+    const picker = host.querySelector<HTMLButtonElement>('button[aria-label="Scene in Preview: Full frame"]')!;
+    expect(picker.textContent).toContain("Full frame");
     void act(() => picker.click());
     expect(menuItem("Keynote")).toBeDefined();
-    const lowerThird = () =>
-      screen().querySelector<HTMLElement>('[data-overlay-element="lowerThird"] > .pk-live-overlay__surface')!.style
-        .cssText;
-    const fullFrame = lowerThird();
-    void act(() => menuItem("Graphics on the left").click());
-    // The tile redraws in the chosen layout: the lower third moves to that layout's box.
-    expect(lowerThird()).not.toBe(fullFrame);
-    void act(() =>
-      host!.querySelector<HTMLButtonElement>('button[aria-label="Layout on Preview: Graphics on the left"]')!.click(),
-    );
     void act(() => menuItem("Lower third only").click());
+    // The choice goes to the room's shared Preview, not to this operator's monitor.
+    expect(switcher.previewScene).toHaveBeenLastCalledWith("lower-third");
+    expect(stored.get(STUDIO_LAYOUT_STORAGE_KEY) ?? "").not.toContain("lower-third");
+    // Preview draws the scene it holds: the lower third alone.
+    const inScene = { ...room, stage: { ...room.stage, scene: "lower-third" } };
+    void act(() => render(<Harness preview={inScene} />, host!));
     expect(screen().querySelector(".pk-live-overlay__question-text")).toBeNull();
     expect(screen().querySelector(".pk-live-overlay__name")).not.toBeNull();
-    const saved = studioLayoutsSchema.parse(JSON.parse(stored.get(STUDIO_LAYOUT_STORAGE_KEY)!)).show[0]!;
-    expect(saved).toMatchObject({ outputs: ["preview"], layouts: { preview: "lower-third" } });
+    expect(host.querySelector('button[aria-label="Scene in Preview: Lower third only"]')).not.toBeNull();
+  });
+
+  it("names Program's scene, and keeps a room screen's tile in the layout an operator picks", () => {
+    host = document.createElement("div");
+    document.body.append(host);
+    void act(() => render(<Harness panel={2} />, host!));
+    const tile = (label: string) =>
+      [...host!.querySelectorAll<HTMLElement>(".pk-studio-monitor__tile")].find(
+        (candidate) => candidate.querySelector(".pk-studio-monitor__label")?.getAttribute("title") === label,
+      )!;
+    expect(tile("Program").querySelector('[title="Scene on Program: Full frame"]')?.textContent).toBe("Full frame");
+    expect(tile("Program").querySelector('button[aria-label^="Layout on"]')).toBeNull();
     void act(() =>
-      host!.querySelector<HTMLButtonElement>('button[aria-label="Layout on Preview: Lower third only"]')!.click(),
+      tile("Projector")
+        .querySelector<HTMLButtonElement>('button[aria-label="Layout on Projector: Full frame"]')!
+        .click(),
     );
-    void act(() => menuItem("Full frame").click());
-    expect(
-      studioLayoutsSchema.parse(JSON.parse(stored.get(STUDIO_LAYOUT_STORAGE_KEY)!)).show[0]!.layouts,
-    ).toBeUndefined();
+    void act(() => menuItem("Lower third only").click());
+    expect(studioLayoutsSchema.parse(JSON.parse(stored.get(STUDIO_LAYOUT_STORAGE_KEY)!)).show[2]!.layouts).toEqual({
+      projector: "lower-third",
+    });
   });
 
   it("clears from each card's own header, and fills a free place with an output from the multiview", () => {

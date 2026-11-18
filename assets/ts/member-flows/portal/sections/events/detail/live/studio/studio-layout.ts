@@ -304,7 +304,9 @@ export function setStudioPanelLabeled(panels: readonly StudioPanel[], id: string
 }
 
 /** The overlay layout a monitor's tile draws for an output: the event's default unless the operator chose one. */
-export function studioOutputLayout(panel: StudioPanel, output: StudioOutput): string {
+export function studioOutputLayout(panel: StudioPanel, output: StudioOutput): string | null {
+  // Preview and Program draw the scene their composition carries, as the room's sources do.
+  if (output === "preview" || output === "program") return null;
   return panel.layouts?.[output] ?? LIVE_OVERLAY_DEFAULT_LAYOUT;
 }
 

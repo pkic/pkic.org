@@ -22,6 +22,7 @@ export const SCREEN_FIXTURE = {
   pairingCode: "HJKP4QRT",
   name: "Foyer, by registration",
   roomId: "30000000-0000-4000-8000-000000000001",
+  eventSlug: "pqc-2026",
   roomName: "Blue room",
   timeZone: "Europe/Amsterdam",
 } as const;

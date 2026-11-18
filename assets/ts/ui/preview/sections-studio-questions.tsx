@@ -218,7 +218,7 @@ export const studioQuestionSections: PreviewSection[] = [
   {
     id: "studio-tour",
     title: "Studio tour",
-    note: "From Studio tour in the layout row. Each step points at one control; steps for closed panels are left out.",
+    note: "From the help button (?) in the layout row. Each step points at one control; steps for closed panels are left out.",
     render: () => <TourSpecimen />,
   },
 ];

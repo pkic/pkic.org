@@ -194,11 +194,11 @@ export function liveLayerTargets(targets: LiveTargets, layer: LiveLayer) {
   return {
     preview: liveLayerShown(state.preview, layer),
     program,
-    /** The board that hides it on air in the event's default layout, the one a source draws unless it names another. */
+    /** The board that hides it on air in Program's scene, the one a source draws unless it names another. */
     coveredBy: program
       ? liveOverlayCoveredBy(
           state.stage,
-          resolveLiveOverlayLayout(state.overlayLayouts, null),
+          resolveLiveOverlayLayout(state.overlayLayouts, state.stage.scene),
           layer.kind === "chatFeed" ? "chat" : layer.kind,
         )
       : null,

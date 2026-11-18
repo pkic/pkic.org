@@ -30,6 +30,7 @@ import {
   compositionOf,
   type LayoutSharingAction,
 } from "./OverlayLayoutInspector";
+import { isLiveStackableLayer, moveLiveProgramLayer } from "../../../../../../../../shared/live-overlay-stacking";
 import {
   applyLayoutElementToAll,
   changeLayoutElement,
@@ -116,6 +117,9 @@ export function OverlayLayoutEditor({
     update(changeLayoutElement(drafts, element, patch));
   const place = (element: LiveOverlayElement, box: Box) => change(element, box);
   const share = (element: LiveOverlayElement, action: LayoutSharingAction) => update(SHARING[action](drafts, element));
+  const move = (element: LiveOverlayElement, direction: -1 | 1) =>
+    isLiveStackableLayer(element) &&
+    update({ ...drafts, elements: moveLiveProgramLayer(drafts.elements, element, direction) });
 
   async function save(event?: SubmitEvent) {
     event?.preventDefault();
@@ -147,7 +151,7 @@ export function OverlayLayoutEditor({
       form.reset();
       if (saved) onSaved(saved);
       onDirty(false);
-      setNotice({ tone: "ok", text: "Layout saved. Browser sources using it update within 30 seconds." });
+      setNotice({ tone: "ok", text: "Scene saved. Browser sources using it update within 30 seconds." });
     } catch (cause) {
       setNotice({ tone: "danger", text: form.refuse(cause) });
     } finally {
@@ -157,8 +161,8 @@ export function OverlayLayoutEditor({
   async function remove() {
     const confirmed = await confirmAction({
       title: `Delete ${layout.name}?`,
-      body: "Browser sources that use this layout switch to Full frame.",
-      confirmLabel: "Delete layout",
+      body: "Browser sources that use this scene switch to Full frame.",
+      confirmLabel: "Delete scene",
       tone: "danger",
     });
     if (!confirmed) return;
@@ -177,7 +181,7 @@ export function OverlayLayoutEditor({
   async function resetPositions() {
     const confirmed = await confirmAction({
       title: "Reset shared positions?",
-      body: "Every layout that shares an element's position moves it back to where Full frame places it.",
+      body: "Every scene that shares an element's position moves it back to where Full frame places it.",
       confirmLabel: "Reset positions",
       tone: "danger",
     });
@@ -203,7 +207,7 @@ export function OverlayLayoutEditor({
   return (
     <form noValidate class="pk-layout-editor" {...form.handlers} onSubmit={(event) => void save(event)}>
       <div class="pk-layout-editor__head">
-        <Field label="Layout name" help={`Browser sources name it “${layout.slug}”.`} {...form.of("name")}>
+        <Field label="Scene name" help={`Browser sources name it “${layout.slug}”.`} {...form.of("name")}>
           {(control) => (
             <TextInput
               {...control}
@@ -220,7 +224,7 @@ export function OverlayLayoutEditor({
         </Field>
         <div class="pk-cluster">
           <Button type="submit" loading={busy} disabled={!dirty}>
-            Save layout
+            Save scene
           </Button>
           {dirty ? (
             <Button variant="ghost" disabled={busy} onClick={discard}>
@@ -291,6 +295,7 @@ export function OverlayLayoutEditor({
           onSelect={setSelected}
           onChange={change}
           onSharing={share}
+          onMove={move}
         />
       </div>
     </form>

@@ -27,4 +27,12 @@
     background: transparent;
     box-shadow: inset 0 0 0 1px var(--tally);
   }
+  /* A screen's item in the menu leads with its tally dot, the color its monitor wears. */
+  .pk-live-screen-dot {
+    display: inline-block;
+    inline-size: 0.6rem;
+    block-size: 0.6rem;
+    border-radius: 50%;
+    background: var(--tally);
+  }
 }

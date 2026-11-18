@@ -34,7 +34,7 @@ import {
   liveCreditFieldsSchema,
   liveCreditSchema,
 } from "./live-session-credit";
-import { liveOverlayLayoutGeometriesSchema } from "./live-overlay-layout";
+import { liveOverlayLayoutGeometriesSchema, liveOverlayLayoutSlugSchema } from "./live-overlay-layout";
 import { z } from "zod";
 import { liveAuthorClientMessageSchemas, liveAuthorServerMessageSchemas } from "./live-session-author";
 import {
@@ -430,6 +430,8 @@ export const liveCompositionInputSchema = z
     chatFeed: liveChatFeedConfigSchema.nullable().default(null),
     reactions: z.boolean().default(false),
     reactionsGraphic: liveReactionsGraphicSchema.default(DEFAULT_LIVE_REACTIONS_GRAPHIC),
+    /** The scene to draw the composition in; null for the event's default. */
+    scene: liveOverlayLayoutSlugSchema.nullable().default(null),
   })
   .strict();
 export type LiveCompositionInput = z.infer<typeof liveCompositionInputSchema>;
@@ -456,6 +458,7 @@ export const livePreviewSetSchema = z
         chatFeed: liveChatFeedConfigSchema.nullable(),
         reactions: z.boolean(),
         reactionsGraphic: liveReactionsGraphicSchema,
+        scene: liveOverlayLayoutSlugSchema.nullable(),
       })
       .partial()
       .strict(),

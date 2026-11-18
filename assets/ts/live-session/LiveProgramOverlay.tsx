@@ -14,8 +14,8 @@ export function LiveProgramOverlay({
   createSocket,
 }: {
   view: LiveOverlayView;
-  /** The layout the source names. */
-  layout: string;
+  /** The scene the source names; null to draw the scene its output has on air. */
+  layout: string | null;
   slug: string;
   roomId: string;
   token: string;

@@ -15,8 +15,8 @@ export function LiveOverlay({
   createSocket,
 }: {
   view: LiveOverlayView;
-  /** The layout the source names; an unknown one draws the event's default. */
-  layout: string;
+  /** The scene the source names, null for the one on air; an unknown one draws the event's default. */
+  layout: string | null;
   slug: string;
   occurrenceId: string;
   token: string;
@@ -41,6 +41,7 @@ export function LiveOverlay({
         status={room.status}
         roomId={roomId}
         broadcast
+        eventSlug={slug}
         playsSounds
       />
     </main>

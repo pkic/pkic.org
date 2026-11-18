@@ -175,13 +175,11 @@
     color: var(--pk-accent-ink);
   }
 
-  .pk-menu__item--choice {
-    gap: 1.25rem;
-  }
-
+  /* A choice keeps the default gap after its icon; only its check stands off from the label. */
   .pk-menu__item--choice > .pk-menu__check {
     order: 2;
     margin-inline-start: auto;
+    padding-inline-start: 0.75rem;
     width: auto;
     text-align: end;
   }
@@ -237,6 +235,8 @@
 @layer components {
   .pk-menu__item-icon {
     display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex: none;
     width: 1rem;
     height: 1rem;

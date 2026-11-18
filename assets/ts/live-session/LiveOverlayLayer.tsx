@@ -18,6 +18,7 @@ export function LiveOverlayLayer({
   placement,
   dimmed = false,
   timerReserve = 0,
+  onGround = false,
   children,
 }: {
   element: LiveOverlayElement;
@@ -28,6 +29,8 @@ export function LiveOverlayLayer({
    * the timer carries the mark, and the board keeps that column clear. Zero when no timer sits there.
    */
   timerReserve?: number;
+  /** A board drawn on the scene's background: it leaves the field and the logo to the background. */
+  onGround?: boolean;
   placement: LiveOverlayElementPlacement;
   children: ComponentChildren;
 }) {
@@ -79,6 +82,7 @@ export function LiveOverlayLayer({
       data-overlay-element={element}
       data-dimmed={dimmed ? "" : undefined}
       data-logo-covered={timerReserve > 0 ? "" : undefined}
+      data-on-ground={onGround ? "" : undefined}
     >
       <div ref={surface} class="pk-live-overlay__surface" data-placed={transform.identity ? undefined : ""}>
         {children}

@@ -76,7 +76,7 @@ describe("live control room Transition", () => {
     expect(sent).toMatchObject({ type: "aux.set", output: "projector", composition: { creditKey: credit.key } });
   });
 
-  it("clears the shared Preview from its monitor", () => {
+  it("clears the shared Preview from its monitor and keeps its scene", () => {
     const { host, live } = mountDesk();
     const snapshot = liveSnapshot({ viewer: OPERATOR });
     void act(() =>
@@ -86,6 +86,7 @@ describe("live control room Transition", () => {
           ...snapshot.preview,
           lowerThird: snapshot.session.credits[0]!,
           timerGraphics: [defaultLiveTimerGraphic("session")],
+          scene: "side-by-side",
         },
       }),
     );
@@ -110,6 +111,7 @@ describe("live control room Transition", () => {
           chatFeed: null,
           reactions: false,
           reactionsGraphic: { showCount: false },
+          scene: "side-by-side",
         },
       },
     ]);

@@ -197,17 +197,18 @@ export function LiveSessionDesk({
   const clearProgram = () => sendProgram({ type: "program.clear" });
   const empty = liveCompositionInput(EMPTY_LIVE_STAGE);
   const switcher = {
-    // Program's clear is the room's one undoable clear; Preview and the screens are set empty.
+    // Program's clear is the room's one undoable clear; Preview and the screens are set empty, each keeping its scene.
     clear: (output: StudioOutput) =>
       output === "program"
         ? clearProgram()
         : output === "preview"
-          ? sendProgram({ type: "preview.set", composition: empty })
+          ? sendProgram({ type: "preview.set", composition: { ...empty, scene: preview.stage.scene } })
           : output === "livestream"
             ? undefined
-            : sendProgram({ type: "aux.set", output, composition: empty }),
+            : sendProgram({ type: "aux.set", output, composition: { ...empty, scene: state.outputs[output].scene } }),
     screenSync: state.screenSync,
     sync: (output: LiveSyncedScreen, sync: boolean) => sendProgram({ type: "screen.sync", output, sync }),
+    previewScene: (scene: string) => sendProgram({ type: "preview.set", composition: { scene } }),
     disabled,
   };
   const sources = {

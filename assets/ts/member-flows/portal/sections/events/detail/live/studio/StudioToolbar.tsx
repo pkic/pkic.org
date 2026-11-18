@@ -1,3 +1,4 @@
+import { IconHelp } from "../../../../../../../components/icons";
 import { Button } from "../../../../../../../ui/Button";
 import { buttonClasses } from "../../../../../../../ui/button-classes";
 import { StrokeIcon } from "../../../../../../../ui/MediaIcons";
@@ -67,13 +68,14 @@ export function StudioToolbar({
           Reset layout
         </Button>
         <Button
-          variant="ghost"
+          icon
           data-tour-trigger
           aria-expanded={touring}
-          title="A short tour of how the studio works"
+          aria-label="Studio help"
+          title="Studio help: a short tour of how the studio works"
           onClick={toggleTour}
         >
-          Studio tour
+          <IconHelp />
         </Button>
         <Button
           icon

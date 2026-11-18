@@ -73,6 +73,7 @@ export function previewLiveStage(
     next.chatFeed = message.chatFeed && { config: message.chatFeed, messages: stage.chatFeed?.messages ?? [] };
     next.reactions = message.reactions;
     next.reactionsGraphic = message.reactionsGraphic;
+    next.scene = message.scene;
   }
   if (message.type === "stage.timer")
     next.timerGraphics = updateLiveTimerGraphics(stage.timerGraphics, message.timer, message.visible);

@@ -6,6 +6,7 @@ import {
 import { liveStageDisplayGraphics } from "../../../../../../../shared/live-stage-display-plan";
 import {
   liveScreenComposition,
+  liveScreenDraws,
   liveScreenFollows,
   liveScreenSyncs,
   type LiveScreenGraphic,
@@ -101,16 +102,22 @@ function screenDescription(output: LiveSyncedScreen, on: boolean, following: boo
   return `Show it on ${screen}.`;
 }
 
-/** A switch per screen of the room, checked where the graphic was put, each saying what a click does. */
+/** A switch per screen of the room that can draw the graphic, in its tally color, checked where the graphic was put, each saying what a click does. */
 export function liveScreenItems(targets: LiveTargets, layer: LiveLayer): MenuItem[] {
   const { on, following } = liveScreens(targets, layer);
   const live = liveLayerTargets(targets, layer).program;
-  return LIVE_STUDIO_AUX_OUTPUTS.map((output) => {
+  // A screen that cannot draw the graphic is left out, unless it holds one already and needs a way to take it off.
+  const offered = LIVE_STUDIO_AUX_OUTPUTS.filter(
+    (output) => liveScreenDraws(output, graphicOf(layer)) || on.includes(output),
+  );
+  return offered.map((output) => {
     const put = on.includes(output);
     const kept = put && live && liveScreenSyncs(targets.state.screenSync, output) && followsKind(output, layer);
     return {
       id: `screen-${output}`,
       label: LIVE_AUX_OUTPUT_DETAILS[output].label,
+      // The screen's tally dot, so its name matches the monitor's color without looking up.
+      icon: <span class="pk-live-screen-dot" data-tally={output} />,
       description: screenDescription(output, put, following.includes(output), kept),
       checked: put,
       multiple: true,

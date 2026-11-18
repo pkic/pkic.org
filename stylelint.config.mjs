@@ -33,6 +33,7 @@ export default {
         "assets/ts/live-session/Live*Overlay.css",
         "assets/ts/live-session/LiveBoard.css",
         "assets/ts/live-session/LiveLowerThird.css",
+        "assets/ts/live-session/LiveQrCard.css",
         "assets/ts/live-session/LiveStageDisplay.css",
         "assets/ts/live-session/LiveTimerMark.css",
         "assets/ts/live-session/LiveTimerLookSample.css",

@@ -78,6 +78,7 @@ export function ScreenView({ screenId, display, now }: { screenId: ScreenId; dis
           projection={display.state}
           status={display.marker ? "offline" : "live"}
           roomId={display.roomId}
+          eventSlug={display.eventSlug}
           broadcast
           playsSounds
           stageAside={<ScreenMarker marker={display.marker} />}

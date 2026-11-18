@@ -53,7 +53,7 @@ async function drawn(
         <ScreenView
           screenId={SCREEN_FIXTURE.screenId}
           now={now}
-          display={{ kind: "output", output, layout: null, roomId: room.id, state, marker }}
+          display={{ kind: "output", output, layout: null, roomId: room.id, eventSlug: "pqc-2026", state, marker }}
         />
       </LiveClockContext.Provider>,
       host!,

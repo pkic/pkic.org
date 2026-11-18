@@ -364,6 +364,25 @@ describe("live room auxiliary outputs", () => {
     ).toBe("animated");
   });
 
+  it("takes Preview's scene to Program exactly, and keeps each output's scene when it is cleared", async () => {
+    const operator = await f.connect({ person: "operator" });
+    operator.send({ type: "preview.set", composition: { scene: "side-by-side" } });
+    expect((await operator.next("preview.changed", (m) => m.composition.scene !== null)).composition.scene).toBe(
+      "side-by-side",
+    );
+    operator.send({ type: "preview.take" });
+    expect((await operator.next("stage.changed", (m) => m.stage.scene !== null)).stage.scene).toBe("side-by-side");
+    // A graphic put straight on Program leaves its scene alone.
+    operator.send({ type: "stage.lowerThird", creditKey: null });
+    expect((await operator.next("stage.changed")).stage.scene).toBe("side-by-side");
+    operator.send({ type: "program.clear" });
+    await operator.next("program.cleared");
+    const rejoined = await (await f.connect({ person: "operator" })).next("room.snapshot");
+    expect(rejoined.stage.scene).toBe("side-by-side");
+    expect(rejoined.preview.scene).toBe("side-by-side");
+    expect(rejoined.outputs.projector.scene).toBeNull();
+  });
+
   it("refuses a source that names an output the room does not draw", async () => {
     const response = await f.upgrade({ overlay: await overlayToken(), output: "lobby" });
     expect(response.status).toBe(400);

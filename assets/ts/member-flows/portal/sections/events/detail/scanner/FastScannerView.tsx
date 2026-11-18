@@ -1,6 +1,7 @@
 import { ScannerCollectionAttendee } from "./ScannerCollectionAttendee";
 import { ScannerHelpTour } from "./ScannerHelpTour";
-import { IconScannerHelp, IconScannerSound } from "../../../../../../components/icons/scanner-controls";
+import { IconHelp } from "../../../../../../components/icons";
+import { IconScannerSound } from "../../../../../../components/icons/scanner-controls";
 import type { ScannerSound } from "./scanner-audio-feedback";
 import { scannerRole } from "./scanner-role";
 import { ScannerTaskNavigation, useScannerTaskSwipe } from "./ScannerTaskNavigation";
@@ -413,7 +414,7 @@ export function FastScannerView({
                 setHelpOpen(!helpOpen);
               }}
             >
-              <IconScannerHelp />
+              <IconHelp />
             </Button>
           )}
           <CloseButton variant="secondary" data-scanner-help="close" label="Close scanner" onClick={onExit} />

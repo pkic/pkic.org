@@ -1,4 +1,10 @@
 import { liveOverlayCoveredBy } from "../assets/shared/live-overlay-cover";
+import {
+  LIVE_PROGRAM_LAYER_ORDER,
+  liveOverlayClearOfTicker,
+  liveProgramLayers,
+  moveLiveProgramLayer,
+} from "../assets/shared/live-overlay-stacking";
 import { EMPTY_LIVE_STAGE, type LiveStage } from "../assets/shared/schemas/live-session-room";
 import { describe, expect, it } from "vitest";
 import { liveOverlayLayerTransform, placeOverlayGraphic } from "../assets/shared/live-overlay-geometry";
@@ -187,5 +193,57 @@ describe("a graphic a board covers", () => {
   it("keeps Up next and the check-in code clear of each other in Full frame", () => {
     const checkIn = { selection: {} } as unknown as LiveStage["checkIn"];
     expect(liveOverlayCoveredBy(onAir({ schedule, checkIn }), fullFrame, "schedule")).toBeNull();
+  });
+});
+
+describe("stacking a scene's graphics", () => {
+  it("keeps the built-in order until a scene orders them, and saves a move as the scene's own stack", () => {
+    expect(liveProgramLayers(FULL_FRAME)).toEqual([...LIVE_PROGRAM_LAYER_ORDER]);
+    // Up in the editor's front-first list: Up next draws in front of the check-in code.
+    const moved = moveLiveProgramLayer(FULL_FRAME, "schedule", -1);
+    const stack = liveProgramLayers(moved);
+    expect(stack.indexOf("schedule")).toBe(stack.indexOf("checkIn") + 1);
+    expect(liveOverlayLayoutElementsSchema.parse(moved).schedule.layer).toBe(stack.indexOf("schedule"));
+    // The front of the list cannot move further up.
+    expect(moveLiveProgramLayer(FULL_FRAME, "reactions", -1)).toBe(FULL_FRAME);
+  });
+
+  it("reads a scene saved before backgrounds with the background hidden, so it looks as it did", () => {
+    const { background: _added, ...saved } = FULL_FRAME;
+    const read = liveOverlayLayoutElementsSchema.parse(saved);
+    expect(read.background.visible).toBe(false);
+    expect(liveProgramLayers(read)[0]).toBe("background");
+    expect(moveLiveProgramLayer(read, "background", -1)).toBe(read);
+  });
+
+  it("lets a board drawn in front hide a graphic only from where the scene stacks it", () => {
+    const onAir = { ...EMPTY_LIVE_STAGE, schedule: { config: {} }, question: { id: "q1" } } as unknown as LiveStage;
+    const scheduleInFront = moveLiveProgramLayer(moveLiveProgramLayer(FULL_FRAME, "schedule", -1), "schedule", -1);
+    expect(liveOverlayCoveredBy(onAir, FULL_FRAME, "schedule")).toBe("question");
+    expect(liveOverlayCoveredBy(onAir, scheduleInFront, "schedule")).toBeNull();
+  });
+
+  it("keeps every graphic clear of the ticker while it is on air, boards flush and floating graphics with a gap, and gives the full height back once it is off", () => {
+    const scene = {
+      ...FULL_FRAME,
+      topQuestions: placement(px(0, 0, 1920, 1080)),
+      reactions: placement(px(0, 0, 1920, 1080)),
+    };
+    const clear = liveOverlayClearOfTicker(scene, true);
+    // A board that runs to the bottom edge meets the ticker flush, so its background has no seam.
+    expect(clear.topQuestions.y + clear.topQuestions.h).toBeCloseTo(scene.ticker.y);
+    // A floating graphic is pushed up, keeping its size, to a small gap above it.
+    expect(clear.lowerThird.y + clear.lowerThird.h).toBeCloseTo(scene.ticker.y - 24 / 1080);
+    expect(clear.lowerThird.h).toBe(scene.lowerThird.h);
+    // Reactions float over everything, the ticker included.
+    expect(clear.reactions).toEqual(scene.reactions);
+    // A graphic beside the ticker, not above it, keeps its box.
+    const beside = {
+      ...scene,
+      ticker: { ...scene.ticker, ...px(768, 954, 1152, 126) },
+      question: placement(px(0, 0, 768, 1080)),
+    };
+    expect(liveOverlayClearOfTicker(beside, true).question).toEqual(beside.question);
+    expect(liveOverlayClearOfTicker(scene, false)).toBe(scene);
   });
 });

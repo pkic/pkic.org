@@ -177,6 +177,7 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
       },
       reactions: true,
       reactionsGraphic: { showCount: true },
+      scene: null,
     },
     outputs: EMPTY_LIVE_OUTPUTS,
     speakerMessage: { text: "Please wrap up", tone: "warning", flash: false, change: null },

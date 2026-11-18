@@ -54,6 +54,7 @@ function boardColumn(side: "left" | "right"): Partial<LiveOverlayLayoutElements>
   });
   const camera = left ? BOARD_COLUMN_WIDTH : 0;
   return {
+    background: column,
     question: column,
     poll: column,
     panelists: column,
@@ -61,7 +62,7 @@ function boardColumn(side: "left" | "right"): Partial<LiveOverlayLayoutElements>
     chat: column,
     schedule: column,
     checkIn: column,
-    lowerThird: box(camera + 48, 738, 1056, 192, LEFT_BOTTOM),
+    lowerThird: box(camera + 48, 738, 1056, 288, LEFT_BOTTOM),
     timer: box(left ? 1536 : 1920 - BOARD_COLUMN_WIDTH - 384, 48, 336, 120, RIGHT_TOP),
     ticker: box(camera, 954, 1920 - BOARD_COLUMN_WIDTH, 126, CENTER_BOTTOM),
     reactions: box(left ? 1492 : 48, 48, 380, 760, left ? RIGHT_MIDDLE : LEFT_MIDDLE, false),
@@ -75,7 +76,10 @@ function boardColumn(side: "left" | "right"): Partial<LiveOverlayLayoutElements>
  * code the right side under it, Up next the left above the lower third.
  */
 const FULL_FRAME: LiveOverlayLayoutElements = {
-  lowerThird: box(48, 722, 1248, 208, LEFT_BOTTOM),
+  // The conference field under the boards: one background, one logo. Off here, so the camera shows until a scene puts it on.
+  background: { ...FILL, visible: false },
+  // Down to the title-safe line, bottom-aligned: it sits low with the ticker off, and above it while it is on air.
+  lowerThird: box(48, 722, 1248, 304, LEFT_BOTTOM),
   question: FILL,
   poll: FILL,
   timer: box(1536, 48, 336, 120, RIGHT_TOP),
@@ -86,6 +90,8 @@ const FULL_FRAME: LiveOverlayLayoutElements = {
   checkIn: box(1392, 216, 480, 648, RIGHT_MIDDLE),
   topQuestions: { visible: true, ...LIVE_OVERLAY_ADDED_ELEMENT_BOXES.topQuestions, shared: true },
   chat: { visible: true, ...LIVE_OVERLAY_ADDED_ELEMENT_BOXES.chat, shared: true },
+  // Off until an organizer puts it in a scene: it then shows whenever the scene is on air.
+  qrCode: { visible: false, ...LIVE_OVERLAY_ADDED_ELEMENT_BOXES.qrCode, shared: true },
   reactions: box(1492, 48, 380, 984, RIGHT_MIDDLE),
   stageDisplay: box(0, 0, 1920, 1080, CENTER),
   stageMessage: box(64, 24, 1792, 152, { horizontal: "center", vertical: "top" }),
@@ -147,7 +153,7 @@ const PRESETS: Record<LiveOverlayPreset, { name: string; elements: LiveOverlayLa
         question: box(0, 0, 1920, 540, { horizontal: "center", vertical: "top" }),
         timer: box(1512, 48, 360, 128, RIGHT_TOP),
       },
-      ["panelists", "question", "timer", "ticker", "stageDisplay", "stageMessage"],
+      ["background", "panelists", "question", "timer", "ticker", "stageDisplay", "stageMessage"],
     ),
   },
   "ticker-only": { name: "Ticker only", elements: only(FULL_FRAME, ["ticker"]) },

@@ -9,11 +9,9 @@
  * `attendancePointSelectionSchema`.
  */
 import type { ComponentChildren } from "preact";
-import { useMemo } from "preact/hooks";
 import type { AttendancePoint } from "../../../shared/schemas/event-attendance-points";
-import { qrModulePath } from "../../../shared/qr-modules";
 import { attendancePointUrl } from "./attendance-point-url";
-import "./CheckInQrGraphic.css";
+import { QrGraphic } from "../qr/QrGraphic";
 
 export interface CheckInQrGraphicProps {
   point: Pick<AttendancePoint, "label" | "path">;
@@ -34,31 +32,12 @@ export interface CheckInQrGraphicProps {
 }
 
 export function CheckInQrGraphic({ point, caption, showLabel = true, origin }: CheckInQrGraphicProps) {
-  const url = attendancePointUrl(point.path, origin);
-  const qr = useMemo(() => qrModulePath(url), [url]);
-  const hasCaption = caption !== undefined && caption !== null && caption !== false && caption !== "";
   return (
-    // The outer box is the size container; the plate inside is sized by it, so spacing grows with the
-    // graphic. Plain boxes, not figure and figcaption, which the public site's prose styles center and space.
-    <div class="pk-check-in-qr">
-      <div class="pk-check-in-qr__plate">
-        <svg
-          class="pk-check-in-qr__code"
-          viewBox={`0 0 ${qr.size} ${qr.size}`}
-          role="img"
-          aria-label={`Check-in code: ${point.label}`}
-          shape-rendering="crispEdges"
-        >
-          <rect width={qr.size} height={qr.size} class="pk-check-in-qr__ground" />
-          <path d={qr.path} class="pk-check-in-qr__modules" />
-        </svg>
-        {showLabel || hasCaption ? (
-          <div class="pk-check-in-qr__caption">
-            {showLabel ? <span class="pk-check-in-qr__label">{point.label}</span> : null}
-            {hasCaption ? <span class="pk-check-in-qr__note">{caption}</span> : null}
-          </div>
-        ) : null}
-      </div>
-    </div>
+    <QrGraphic
+      url={attendancePointUrl(point.path, origin)}
+      label={`Check-in code: ${point.label}`}
+      title={showLabel ? point.label : undefined}
+      caption={caption}
+    />
   );
 }

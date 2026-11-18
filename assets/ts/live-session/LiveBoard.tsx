@@ -36,12 +36,26 @@ export function liveBoardSize(box: Pick<OverlayRect, "width" | "height">): {
   };
 }
 
+/** The board's size and shape for its box, as custom properties for the stylesheet. */
+function useBoardGeometry(box: Pick<OverlayRect, "width" | "height">) {
+  const { width, height, shape } = liveBoardSize(box);
+  // Board pixels to one pixel of the frame, so the margins keep to the frame's graphics-safe area at any scale.
+  const framePixel = box.width > 0 ? width / box.width : 1;
+  const geometry = useNumericCssProperties({
+    "--board-width": width,
+    "--board-height": height,
+    "--board-frame-px": framePixel,
+  });
+  return { shape, geometry };
+}
+
 /**
  * The conference board every audience-facing graphic is drawn on: the
  * conference field, its dots and the mark, the white logo at the top, an eyebrow
  * that names what the board shows, then the graphic. It takes its box's shape,
  * so the same board fills the projector, a band of the stream or a column
- * beside the camera, and each graphic arranges itself for that shape.
+ * beside the camera, and each graphic arranges itself for that shape. On the
+ * scene's background (`LiveBoardGround`) it draws only its eyebrow and graphic.
  */
 export function LiveBoard({
   box,
@@ -56,14 +70,7 @@ export function LiveBoard({
   class: string;
   children: ComponentChildren;
 }) {
-  const { width, height, shape } = liveBoardSize(box);
-  // Board pixels to one pixel of the frame, so the margins keep to the frame's graphics-safe area at any scale.
-  const framePixel = box.width > 0 ? width / box.width : 1;
-  const geometry = useNumericCssProperties({
-    "--board-width": width,
-    "--board-height": height,
-    "--board-frame-px": framePixel,
-  });
+  const { shape, geometry } = useBoardGeometry(box);
   return (
     <section
       class={`pk-live-board ${className}`}
@@ -78,5 +85,28 @@ export function LiveBoard({
       </header>
       {children}
     </section>
+  );
+}
+
+/**
+ * The scene's background: the board's field, dots, mark and logo with nothing
+ * on it, drawn once under every board that sits on it, so boards side by side
+ * read as one composition with one logo.
+ */
+export function LiveBoardGround({ box }: { box: Pick<OverlayRect, "width" | "height"> }) {
+  const { shape, geometry } = useBoardGeometry(box);
+  return (
+    <div
+      class="pk-live-board pk-live-board--ground"
+      aria-hidden="true"
+      data-shape={shape}
+      data-numeric-css-properties={geometry}
+    >
+      <PkicMark class="pk-live-board__watermark" />
+      <div class="pk-live-board__head">
+        <span class="pk-live-board__eyebrow" />
+        <img class="pk-live-board__logo" src="/img/logo.svg" width="1256" height="324" alt="" />
+      </div>
+    </div>
   );
 }

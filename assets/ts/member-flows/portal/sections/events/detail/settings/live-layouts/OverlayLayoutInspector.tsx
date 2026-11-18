@@ -16,6 +16,8 @@ import { Field } from "../../../../../../../ui/Field";
 import { FormSection } from "../../../../../../../ui/FormSection";
 import { Select, TextInput } from "../../../../../../../ui/TextControl";
 import { Menu } from "../../../../../../../ui/Menu";
+import { Button } from "../../../../../../../ui/Button";
+import { isLiveStackableLayer, liveProgramLayers } from "../../../../../../../../shared/live-overlay-stacking";
 import { IconLink, IconUnlink } from "../../../../../../../components/icons";
 import {
   LAYOUT_COMPOSITION_LABEL,
@@ -61,7 +63,7 @@ function SharingMenu({
           ? [
               {
                 id: "unlink",
-                label: "Place differently on this layout",
+                label: "Place differently on this scene",
                 disabled,
                 onSelect: () => onSharing(element, "unlink"),
               },
@@ -70,7 +72,7 @@ function SharingMenu({
               { id: "relink", label: "Use shared position", disabled, onSelect: () => onSharing(element, "relink") },
               {
                 id: "apply",
-                label: "Apply this position to all layouts",
+                label: "Apply this position to all scenes",
                 disabled,
                 onSelect: () => onSharing(element, "apply"),
               },
@@ -87,9 +89,59 @@ export function compositionOf(element: LiveOverlayElement): LiveOverlayCompositi
   return LIVE_OVERLAY_ELEMENT_COMPOSITIONS[element][0]!;
 }
 
+/** The selected Program graphic's place in the stack: up draws it in front of the one above, down behind the one below. */
+function StackButtons({
+  element,
+  front,
+  back,
+  disabled,
+  onMove,
+}: {
+  element: LiveOverlayElement;
+  front: boolean;
+  back: boolean;
+  disabled: boolean;
+  onMove: (element: LiveOverlayElement, direction: -1 | 1) => void;
+}) {
+  const label = LIVE_OVERLAY_ELEMENT_LABELS[element];
+  return (
+    <span class="pk-cluster" data-density="compact">
+      <Button
+        icon
+        variant="ghost"
+        aria-label={`Move ${label} up`}
+        title="Move up: draw it in front"
+        disabled={disabled || front}
+        onClick={() => onMove(element, -1)}
+      >
+        <span aria-hidden="true">↑</span>
+      </Button>
+      <Button
+        icon
+        variant="ghost"
+        aria-label={`Move ${label} down`}
+        title="Move down: draw it behind"
+        disabled={disabled || back}
+        onClick={() => onMove(element, 1)}
+      >
+        <span aria-hidden="true">↓</span>
+      </Button>
+    </span>
+  );
+}
+
+/** A composition's elements as the list shows them: Program's front first, the stage display's in their fixed order. */
+function listed(elements: LiveOverlayLayoutElements, composition: LiveOverlayComposition): LiveOverlayElement[] {
+  return composition === "program"
+    ? liveProgramLayers(elements).reverse()
+    : LIVE_OVERLAY_ELEMENTS.filter((element) => compositionOf(element) === composition);
+}
+
 /**
  * The element list: picking one with the arrow keys selects its box on the
  * canvas, and each element's Show box decides whether this layout draws it.
+ * Program's graphics are listed front first; the selected one moves up or
+ * down the stack.
  */
 export function OverlayLayoutElementList({
   elements,
@@ -98,6 +150,7 @@ export function OverlayLayoutElementList({
   onSelect,
   onChange,
   onSharing,
+  onMove,
 }: {
   elements: LiveOverlayLayoutElements;
   selected: LiveOverlayElement;
@@ -105,19 +158,20 @@ export function OverlayLayoutElementList({
   onSelect: (element: LiveOverlayElement) => void;
   onChange: Change;
   onSharing: (element: LiveOverlayElement, action: LayoutSharingAction) => void;
+  onMove: (element: LiveOverlayElement, direction: -1 | 1) => void;
 }) {
   return (
     <Field
       label="Elements"
       group
-      help="Choose an element to place it on the canvas. A linked element moves on every layout that shares its position."
+      help="Choose an element to place it on the canvas. A linked element moves on every scene that shares its position. On Program, the top of the list is drawn in front."
     >
       {(control) => (
         <div class="pk-layout-elements" aria-describedby={control["aria-describedby"]}>
           {(["program", "stage-display"] as const).map((composition) => (
             <div key={composition} class="pk-layout-elements__group">
               <p class="pk-layout-elements__heading">{LAYOUT_COMPOSITION_LABEL[composition]}</p>
-              {LIVE_OVERLAY_ELEMENTS.filter((element) => compositionOf(element) === composition).map((element) => (
+              {listed(elements, composition).map((element, index, list) => (
                 <div
                   key={element}
                   class="pk-layout-elements__row"
@@ -131,6 +185,15 @@ export function OverlayLayoutElementList({
                     label={LIVE_OVERLAY_ELEMENT_LABELS[element]}
                     onChange={() => onSelect(element)}
                   />
+                  {element === selected && isLiveStackableLayer(element) ? (
+                    <StackButtons
+                      element={element}
+                      front={index === 0}
+                      back={index === list.length - 1}
+                      disabled={disabled}
+                      onMove={onMove}
+                    />
+                  ) : null}
                   <SharingMenu
                     element={element}
                     shared={elements[element].shared}
@@ -248,7 +311,7 @@ export function OverlayLayoutInspector({
       layout="stack"
       title={LIVE_OVERLAY_ELEMENT_LABELS[element]}
       description={`Shown on ${LAYOUT_COMPOSITION_LABEL[compositionOf(element)].toLowerCase()}. ${
-        placement.shared ? layoutSharingNote(sharing) : "Placed for this layout only."
+        placement.shared ? layoutSharingNote(sharing) : "Placed for this scene only."
       }`}
     >
       <Field label="Units" group>

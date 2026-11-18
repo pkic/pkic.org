@@ -298,6 +298,17 @@
     min-block-size: 1.5rem;
     color: var(--pk-ink-muted);
   }
+  /* Preview's scene by name, the menu's caret beside it; a long name shortens before the header's controls do. */
+  .pk-studio-monitor__scene {
+    min-inline-size: 0;
+    min-block-size: 1.5rem;
+    color: var(--pk-ink-muted);
+  }
+  .pk-studio-monitor__scene-name {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   /* Full screen, an output takes the whole window at 16:9, its title bar the only chrome. */
   .pk-dialog.pk-studio-monitor__viewer {
     max-inline-size: none;

@@ -58,6 +58,7 @@ const ON_STAGE = {
   chatFeed: null,
   reactions: false,
   reactionsGraphic: { showCount: false },
+  scene: null,
 };
 const SESSION_TIMER = liveSnapshot().timers[0]!;
 const FULL_FRAME = LIVE_OVERLAY_PRESET_LAYOUTS["full-frame"].elements;
@@ -185,6 +186,41 @@ describe("broadcast overlays", () => {
     void act(() => live.latest().deliver({ type: "stage.changed", stage: { ...ON_STAGE, lowerThird: null } }));
     expect(host.querySelector(".pk-live-overlay__name")).toBeNull();
     expect(host.querySelector(".pk-live-overlay__question-text")?.textContent).toBe("What about hybrid certificates?");
+  });
+
+  it("draws a scene's background whenever the scene shows it, with the boards on it sharing its field", () => {
+    const ground = (scope: HTMLElement) =>
+      scope.querySelector('[data-overlay-element="background"] .pk-live-board--ground');
+    const onGround = (scope: HTMLElement) =>
+      scope.querySelector('[data-overlay-element="question"]')?.hasAttribute("data-on-ground");
+    // Full frame leaves the background out, so the camera shows and a board keeps its own field.
+    const plain = mountOverlay("program");
+    expect(ground(plain.host)).toBeNull();
+    expect(onGround(plain.host)).toBe(false);
+    // A scene with the background draws it, the question on it, and keeps it with no board on air.
+    const boards = savedLayout("boards", ["background", "question", "lowerThird"], { x: 0, y: 0, w: 1, h: 1 });
+    const { host, live } = mountOverlay("program", "boards", [boards]);
+    expect(ground(host)).not.toBeNull();
+    expect(onGround(host)).toBe(true);
+    void act(() => live.latest().deliver({ type: "stage.changed", stage: { ...ON_STAGE, question: null } }));
+    expect(ground(host)).not.toBeNull();
+    // A background in a column elsewhere leaves a full-frame question its own field.
+    const aside = savedLayout("aside", ["background", "question", "lowerThird"], { x: 0.6, y: 0, w: 0.4, h: 1 });
+    const scene = mountOverlay("program", "aside", [aside]);
+    expect(onGround(scene.host)).toBe(false);
+    expect(scene.host.querySelector(".pk-live-overlay__question-text")).not.toBeNull();
+  });
+
+  it("draws a scene's QR code to this session in the event app", () => {
+    const holding = savedLayout("holding", ["lowerThird", "qrCode"]);
+    const { host } = mountOverlay("program", "holding", [holding]);
+    const code = host.querySelector('[data-overlay-element="qrCode"] svg[role="img"]');
+    expect(code?.getAttribute("aria-label")).toBe("Code to ask questions in the event app");
+    expect(host.querySelector('[data-overlay-element="qrCode"]')?.textContent).toContain(
+      "Scan to ask a question and vote",
+    );
+    // A built-in scene leaves the QR code out until an organizer adds it.
+    expect(mountOverlay("program").host.querySelector('[data-overlay-element="qrCode"]')).toBeNull();
   });
 
   it("places each element in its layout box, follows layout changes, and draws the default for an unknown name", () => {
@@ -491,7 +527,7 @@ describe("broadcast overlays", () => {
     expect(host.querySelector(".pk-live-stage-display__top")?.hasAttribute("data-covered")).toBe(false);
   });
 
-  it("keeps the whole address in the fragment, output and layout first", () => {
+  it("keeps the whole address in the fragment, output and scene first", () => {
     const address = liveOverlayAddress("https://pkic.org", {
       view: "program",
       layout: "lower-third",
@@ -511,10 +547,14 @@ describe("broadcast overlays", () => {
       token: "signed.overlay.access",
     });
     const fallback = new URL(address.replace("layout=lower-third", "layout=Not%20a%20name"));
-    expect(parseLiveOverlayAddress(fallback)?.layout).toBe("full-frame");
+    // A source that names no scene, or a malformed one, draws the scene its output has on air.
+    expect(parseLiveOverlayAddress(fallback)?.layout).toBeNull();
+    expect(
+      new URL(liveOverlayAddress("https://pkic.org", { ...parseLiveOverlayAddress(url)!, layout: null })).hash,
+    ).not.toContain("layout=");
     expect(
       new URL(liveOverlayAddress("https://pkic.org", { ...parseLiveOverlayAddress(url)!, layout: "full-frame" })).hash,
-    ).not.toContain("layout=");
+    ).toContain("layout=full-frame");
     expect(parseLiveOverlayAddress({ hash: url.hash.replace("view=program", "view=lower-third") })).toBeNull();
     expect(parseLiveOverlayAddress({ hash: "#view=program" })).toBeNull();
   });

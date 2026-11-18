@@ -162,6 +162,7 @@ export class LiveRoomGraphics {
       chatFeed: input.chatFeed && (await this.lists.chatFeed(input.chatFeed)),
       reactions: input.reactions,
       reactionsGraphic: input.reactionsGraphic,
+      scene: input.scene,
       ticker: await resolveLiveTicker(
         this.db,
         room.eventId,

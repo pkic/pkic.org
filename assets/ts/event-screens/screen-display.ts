@@ -56,6 +56,7 @@ export type ScreenDisplay =
       output: LiveOverlayView;
       layout: string | null;
       roomId: string;
+      eventSlug: string;
       state: LiveRoomState;
       marker: ScreenMarker;
     };
@@ -86,6 +87,7 @@ export function screenDisplay(situation: ScreenSituation): ScreenDisplay {
     output: assignment.output,
     layout: assignment.layout,
     roomId: assignment.roomId,
+    eventSlug: assignment.eventSlug,
   };
   const ended = live.state !== null && Date.parse(live.state.session.endAt) <= now;
   if (AUTO_OUTPUTS.has(assignment.output) && !live.connected && ended && situation.agenda) {

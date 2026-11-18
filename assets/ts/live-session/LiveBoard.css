@@ -87,6 +87,26 @@
     text-wrap: balance;
     overflow-wrap: anywhere;
   }
+  /* The scene's background fades in under the first board and stays put while boards come and go on it. */
+  .pk-live-board--ground {
+    animation-name: pk-live-ground-in;
+  }
+  /* A board on the scene's background draws only its eyebrow and graphic; the background carries the rest. */
+  .pk-live-overlay__layer[data-on-ground] .pk-live-board {
+    background: none;
+  }
+  .pk-live-overlay__layer[data-on-ground] .pk-live-board::before,
+  .pk-live-overlay__layer[data-on-ground] .pk-live-board__watermark {
+    display: none;
+  }
+  .pk-live-overlay__layer[data-on-ground] .pk-live-board__logo {
+    visibility: hidden;
+  }
+  @keyframes pk-live-ground-in {
+    from {
+      opacity: 0;
+    }
+  }
   @keyframes pk-live-board-in {
     from {
       opacity: 0;

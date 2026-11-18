@@ -23,12 +23,7 @@ it("loads the room's output links at once, one compact row per output, the link 
   vi.stubGlobal("fetch", fetch);
   host = document.createElement("div");
   document.body.append(host);
-  await act(async () =>
-    render(
-      <LiveOverlayLinks slug="pqc-2026" roomId="room-1" layout={{ slug: "full-frame", name: "Full frame" }} />,
-      host!,
-    ),
-  );
+  await act(async () => render(<LiveOverlayLinks slug="pqc-2026" roomId="room-1" layout={null} />, host!));
   await vi.waitFor(() => expect(document.querySelector("[data-copy-link-row]")).not.toBeNull());
   expect(fetch).toHaveBeenCalledTimes(1);
   const dialog = host!;
@@ -53,12 +48,7 @@ it("offers Try again when the links fail to load, and loads them on a retry", as
   vi.stubGlobal("fetch", fetch);
   host = document.createElement("div");
   document.body.append(host);
-  await act(async () =>
-    render(
-      <LiveOverlayLinks slug="pqc-2026" roomId="room-1" layout={{ slug: "full-frame", name: "Full frame" }} />,
-      host!,
-    ),
-  );
+  await act(async () => render(<LiveOverlayLinks slug="pqc-2026" roomId="room-1" layout={null} />, host!));
   const retry = await vi.waitFor(() => {
     const button = [...host!.querySelectorAll("button")].find((candidate) => candidate.textContent === "Try again");
     expect(button).toBeDefined();

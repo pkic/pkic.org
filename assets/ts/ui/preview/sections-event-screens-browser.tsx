@@ -70,6 +70,7 @@ export const eventScreenBrowserSections: PreviewSection[] = [
               output: "stage-display",
               layout: null,
               roomId: SCREEN_FIXTURE.roomId,
+              eventSlug: SCREEN_FIXTURE.eventSlug,
               state: screenStageRunningFixture,
               marker: null,
             }}

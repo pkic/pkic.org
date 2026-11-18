@@ -163,7 +163,7 @@ describe("overlay layout editor", () => {
           .click(),
       );
     };
-    await choose(link("Shared position"), "Place differently on this layout");
+    await choose(link("Shared position"), "Place differently on this scene");
     const lowerThird = box("lowerThird");
     pointer(lowerThird, "pointerdown", 100, 200);
     pointer(lowerThird, "pointermove", 340, 200, { altKey: true });
@@ -174,17 +174,17 @@ describe("overlay layout editor", () => {
     expect(written[0]!.body.elements.lowerThird).toMatchObject({ shared: false });
     expect(written[0]!.body.elements.lowerThird.x).toBeCloseTo(LOWER_THIRD.x + 0.25, 4);
 
-    await choose(link("This layout only"), "Apply this position to all layouts");
+    await choose(link("This scene only"), "Apply this position to all scenes");
     await save();
     expect(positioned[0]!.elements.lowerThird.x).toBeCloseTo(LOWER_THIRD.x + 0.25, 4);
     expect(written[1]!.body.elements.lowerThird.shared).toBe(true);
 
     // Placed elsewhere again, "Use shared position" brings it back to the shared one.
-    await choose(link("Shared position"), "Place differently on this layout");
+    await choose(link("Shared position"), "Place differently on this scene");
     pointer(box("lowerThird"), "pointerdown", 100, 200);
     pointer(box("lowerThird"), "pointermove", 200, 260, { altKey: true });
     pointer(box("lowerThird"), "pointerup", 200, 260, { altKey: true });
-    await choose(link("This layout only"), "Use shared position");
+    await choose(link("This scene only"), "Use shared position");
     expect(Number(controlFor(root!, "From left").value)).toBeCloseTo((LOWER_THIRD.x + 0.25) * 100, 1);
     expect(Number(controlFor(root!, "From top").value)).toBeCloseTo(LOWER_THIRD.y * 100, 1);
   });
@@ -283,6 +283,22 @@ describe("overlay layout editor", () => {
     expect(liveOverlayBoxOf(written[0]!.body.elements.lowerThird)).toEqual(shared);
   });
 
+  it("lists Program's graphics front first and saves a graphic moved up the stack as this scene's order", async () => {
+    await mount();
+    const rows = () =>
+      [...root!.querySelectorAll(".pk-layout-elements__group:first-child .pk-layout-elements__row")].map((row) =>
+        row.querySelector("input[type=radio]")!.getAttribute("value"),
+      );
+    expect(rows().slice(0, 3)).toEqual(["reactions", "ticker", "timer"]);
+    void act(() => box("lowerThird").click());
+    expect(root!.querySelector('button[aria-label="Move Question up"]')).toBeNull();
+    await act(() => root!.querySelector<HTMLButtonElement>('button[aria-label="Move Lower third up"]')!.click());
+    expect(rows().indexOf("lowerThird")).toBe(rows().indexOf("poll") - 1);
+    await save();
+    const { lowerThird, poll } = written[0]!.body.elements;
+    expect(lowerThird.layer!).toBeGreaterThan(poll.layer!);
+  });
+
   it("refuses a box that leaves the frame without sending it", async () => {
     await mount();
     void act(() => box("question").click());
@@ -295,11 +311,11 @@ describe("overlay layout editor", () => {
 
   it("creates a layout from the selected one under a source name taken from its name", async () => {
     await mount();
-    await act(() => [...root!.querySelectorAll("button")].find((b) => b.textContent === "New layout")!.click());
+    await act(() => [...root!.querySelectorAll("button")].find((b) => b.textContent === "New scene")!.click());
     const name = controlFor(document.body, "Name");
     await typeInto(name, "Keynote scene");
     await act(async () => {
-      [...document.querySelectorAll("button")].find((b) => b.textContent === "Create layout")!.click();
+      [...document.querySelectorAll("button")].find((b) => b.textContent === "Create scene")!.click();
     });
     await act(async () => {
       await Promise.resolve();

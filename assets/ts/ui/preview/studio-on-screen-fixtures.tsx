@@ -73,6 +73,7 @@ export function ProjectorScreen({ state, layout = null }: { state: LiveRoomState
           output: "projector",
           layout,
           roomId: SCREEN_FIXTURE.roomId,
+          eventSlug: SCREEN_FIXTURE.eventSlug,
           state,
           marker: null,
         }}
