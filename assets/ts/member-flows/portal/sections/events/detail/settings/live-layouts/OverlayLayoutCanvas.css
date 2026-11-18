@@ -152,7 +152,6 @@
     content: "";
     position: absolute;
     inset: 0.4375rem;
-    border-radius: 1px;
     background: var(--pk-accent);
   }
   .pk-layout-canvas__handle[data-handle="nw"] {
