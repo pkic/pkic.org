@@ -25,11 +25,11 @@ export function LiveOverlayLayer({
   /** Drawn faintly, behind the element the layout editor has selected. */
   dimmed?: boolean;
   /**
-   * The share of a board's width, from its end, that timers on its logo corner take: the logo steps aside, as
-   * the timer carries the mark, and the board keeps that column clear. Zero when no timer sits there.
+   * The share of a board's or the background's width, from its end, that timers on its top-right corner take:
+   * the background's logo steps aside, and a board keeps that column clear. Zero when no timer sits there.
    */
   timerReserve?: number;
-  /** A board drawn on the scene's background: it leaves the field and the logo to the background. */
+  /** Up next inside the scene's background: it reads on the background, without a plate of its own. */
   onGround?: boolean;
   placement: LiveOverlayElementPlacement;
   children: ComponentChildren;

@@ -5,9 +5,9 @@ import type {
 } from "../../shared/schemas/live-overlay-layout";
 
 /**
- * Where an output draws the conference field and how its boards meet the
- * timers on them: the geometry Program's presentation reads. Pure, in
- * fractions of the 1920 x 1080 frame.
+ * How an output's boards meet the timers over them and each other: the
+ * geometry Program's presentation reads. Pure, in fractions of the
+ * 1920 x 1080 frame.
  */
 
 const EDGE = 0.001;
@@ -27,7 +27,10 @@ export function meets(one: LiveOverlayElementPlacement, other: LiveOverlayElemen
   return one.x < other.x + other.w && one.x + one.w > other.x && one.y < other.y + other.h && one.y + one.h > other.y;
 }
 
-/** The boards and the background under them: each carries the logo in its top-right corner. */
+/**
+ * The background, the boards and the cards: each keeps the timers' column
+ * clear in its top-right corner, where the background carries the logo.
+ */
 export const BOARDS: ReadonlySet<LiveOverlayElement> = new Set([
   "background",
   "question",
@@ -58,63 +61,10 @@ export function timerReserve(board: LiveOverlayElementPlacement, timers: readonl
   return Math.min(0.4, Math.max(...covering.map((timer) => (end - timer.x) / board.w)));
 }
 
-/** Whether two boxes share a whole edge, so together they make one rectangle. */
-function adjoins(one: LiveOverlayElementPlacement, other: LiveOverlayElementPlacement) {
-  const near = (a: number, b: number) => Math.abs(a - b) <= EDGE;
-  const column = near(one.x, other.x) && near(one.w, other.w);
-  const row = near(one.y, other.y) && near(one.h, other.h);
-  return (
-    (column && (near(one.y + one.h, other.y) || near(other.y + other.h, one.y))) ||
-    (row && (near(one.x + one.w, other.x) || near(other.x + other.w, one.x)))
-  );
-}
-
-/** The one box two boxes fill together. */
-function joinBoxes(one: LiveOverlayElementPlacement, other: LiveOverlayElementPlacement): LiveOverlayElementPlacement {
-  const x = Math.min(one.x, other.x);
-  const y = Math.min(one.y, other.y);
-  const w = Math.max(one.x + one.w, other.x + other.w) - x;
-  const h = Math.max(one.y + one.h, other.y + other.h) - y;
-  return { ...one, x, y, w, h, horizontal: "center", vertical: "middle" };
-}
-
-/** A conference field an output draws: its box, and the graphics on air on it, the lowest first, which it draws under. */
-export type LiveOverlayField = { box: LiveOverlayElementPlacement; carries: LiveOverlayElement[] };
-
-/**
- * The conference fields an output draws, one under each run of graphics on
- * the field that are on air: boards in one place, side by side or stacked
- * read as one field with one logo, and a cleared Preview draws none. A
- * graphic inside the scene's background (`ground`) draws on it, and the
- * background draws only while one does.
- */
-export function liveOverlayFields(
-  ground: LiveOverlayElementPlacement | null,
-  onAir: ReadonlyArray<{ element: LiveOverlayElement; box: LiveOverlayElementPlacement; fielded: boolean }>,
-): { ground: LiveOverlayField | null; fields: LiveOverlayField[] } {
-  const scene: LiveOverlayField | null = ground ? { box: ground, carries: [] } : null;
-  const fields: LiveOverlayField[] = [];
-  for (const { element, box, fielded } of onAir) {
-    if (scene && within(box, scene.box) && (fielded || BOARDS.has(element))) {
-      scene.carries.push(element);
-      continue;
-    }
-    if (!fielded) continue;
-    const field = fields.find((each) => within(box, each.box) || adjoins(box, each.box));
-    if (!field) {
-      fields.push({ box, carries: [element] });
-      continue;
-    }
-    if (!within(box, field.box)) field.box = joinBoxes(field.box, box);
-    field.carries.push(element);
-  }
-  return { ground: scene?.carries.length ? scene : null, fields };
-}
-
 /**
  * The one box a layout's question and panelists fill together when it stacks
- * them, edge to edge at the same width, so both on air draw as one board with
- * one field and one logo. Null when they are apart, overlap or one is hidden.
+ * them, edge to edge at the same width, so both on air draw as one board.
+ * Null when they are apart, overlap or the scene leaves one out.
  */
 export function stackedPanelBox(elements: LiveOverlayLayoutElements): LiveOverlayElementPlacement | null {
   const { question, panelists } = elements;

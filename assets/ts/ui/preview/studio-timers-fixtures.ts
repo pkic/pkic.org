@@ -120,7 +120,6 @@ export function timersRoomState(
     stageDisplayNextVotes: null,
     stageDisplaySettings: DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS,
     screenSync: DEFAULT_LIVE_SCREEN_SYNC,
-    lockedGraphics: [],
     sources: NO_LIVE_ROOM_SOURCES,
     ...overrides,
   };

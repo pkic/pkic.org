@@ -1,7 +1,8 @@
 /**
- * The conference board on the livestream and the projector: the lower third,
- * the panelists at any size, and the question and poll boards, alone or
- * over the panel. Synthetic room, fixed clock.
+ * The boards on the livestream and the projector: the lower third, the
+ * panelists at any size, and the question and poll boards, alone or over
+ * the panel, each on its scene's background, and one in a scene without a
+ * background. Synthetic room, fixed clock.
  */
 import type { PreviewSection } from "./PreviewShell";
 import { EMPTY_LIVE_AUX_COMPOSITION, type LiveStage } from "../../../shared/schemas/live-session-room";
@@ -62,7 +63,12 @@ export const studioBoardSections: PreviewSection[] = [
     id: "onscreen-panelists-identities",
     title: "Panelists with a speaker's two identities",
     note: "A panelist with more than one identity rolls through them, as the lower third does.",
-    render: () => <LivestreamOverlay state={roomWith({}, { panelists: { layout: "panel" } })} />,
+    render: () => (
+      <LivestreamOverlay
+        state={roomWith({}, { panelists: { layout: "panel" } })}
+        elements={presetWith("full-board", ["background", "panelists"])}
+      />
+    ),
   },
   {
     id: "onscreen-panelists-two",
@@ -71,7 +77,7 @@ export const studioBoardSections: PreviewSection[] = [
     render: () => (
       <LivestreamOverlay
         state={{ ...sessionWith(2), stage: { ...EMPTY_LIVE_AUX_COMPOSITION, panelists: { layout: "panel" } } }}
-        elements={presetWith("full-board", ["panelists"])}
+        elements={presetWith("full-board", ["background", "panelists"])}
       />
     ),
   },
@@ -82,7 +88,7 @@ export const studioBoardSections: PreviewSection[] = [
     render: () => (
       <LivestreamOverlay
         state={{ ...sessionWith(6), stage: { ...EMPTY_LIVE_AUX_COMPOSITION, panelists: { layout: "panel" } } }}
-        elements={presetWith("full-board", ["panelists"])}
+        elements={presetWith("full-board", ["background", "panelists"])}
       />
     ),
   },
@@ -93,18 +99,40 @@ export const studioBoardSections: PreviewSection[] = [
     render: () => (
       <LivestreamOverlay
         state={{ ...sessionWith(6), stage: { ...EMPTY_LIVE_AUX_COMPOSITION, panelists: { layout: "panel" } } }}
-        elements={presetWith("check-in", ["panelists", "lowerThird"])}
+        elements={presetWith("check-in", ["background", "panelists", "lowerThird"])}
       />
     ),
   },
   {
     id: "onscreen-question-poll-board",
     title: "Question on the board",
-    note: "In Full board a board covers the whole frame; one board shows at a time.",
+    note: "In Full board the background covers the whole frame and a board draws on it; one board shows at a time.",
     render: () => (
       <LivestreamOverlay
         state={roomWith({}, { question: NAMED_QUESTION })}
-        elements={presetWith("full-board", ["question"])}
+        elements={presetWith("full-board", ["background", "question"])}
+      />
+    ),
+  },
+  {
+    id: "onscreen-board-no-background",
+    title: "A board in a scene without a background",
+    note: "Every built-in scene that places a board places it on a background. A scene of the event's own that places one without a background draws the board's eyebrow and content alone over the picture: only the background graphic draws the conference field and the logo.",
+    render: () => (
+      <LivestreamOverlay
+        state={roomWith({}, { question: NAMED_QUESTION })}
+        elements={presetWith("default", ["question"])}
+      />
+    ),
+  },
+  {
+    id: "onscreen-up-next-on-background",
+    title: "Up next on the Full board background",
+    note: "Inside the scene's background Up next reads on it, with no plate or stripe of its own; over the picture, outside a background, it keeps its card.",
+    render: () => (
+      <LivestreamOverlay
+        state={roomWith({}, { schedule: ROOM.stage.schedule })}
+        elements={presetWith("full-board", ["background", "schedule"])}
       />
     ),
   },
@@ -112,7 +140,9 @@ export const studioBoardSections: PreviewSection[] = [
     id: "onscreen-poll-side-by-side",
     title: "Poll beside the camera",
     note: "The same poll board, scaled into the Graphics on the left column.",
-    render: () => <LivestreamOverlay state={roomWith({}, ON_POLL)} elements={presetWith("check-in", ["poll"])} />,
+    render: () => (
+      <LivestreamOverlay state={roomWith({}, ON_POLL)} elements={presetWith("check-in", ["background", "poll"])} />
+    ),
   },
   {
     id: "onscreen-panel-question",
@@ -124,7 +154,7 @@ export const studioBoardSections: PreviewSection[] = [
           ...sessionWith(4),
           stage: { ...EMPTY_LIVE_AUX_COMPOSITION, panelists: { layout: "panel" }, question: NAMED_QUESTION },
         }}
-        elements={presetWith("panel", ["panelists", "question"])}
+        elements={presetWith("panel", ["background", "panelists", "question"])}
       />
     ),
   },

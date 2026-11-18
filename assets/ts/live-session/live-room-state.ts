@@ -102,8 +102,6 @@ export function applyLiveRoomMessage(
       return { ...state, stageDisplaySettings: message.settings };
     case "screen.sync.changed":
       return { ...state, screenSync: message.screenSync };
-    case "graphic.lock.changed":
-      return { ...state, lockedGraphics: message.lockedGraphics };
     case "sources.changed":
       return { ...state, sources: message.sources };
     case "program.cleared":

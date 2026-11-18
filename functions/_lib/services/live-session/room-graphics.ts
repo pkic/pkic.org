@@ -13,12 +13,15 @@ import type {
   LiveRoomSession,
   LiveRoomClientMessage,
   LiveCompositionInput,
+  LivePreviewPatch,
   LiveStage,
 } from "../../../../assets/shared/schemas/live-session-room";
 import type { LiveRoomControls, LiveControlOutcome } from "./room-controls";
 import type { LiveRoomOutputs } from "./room-outputs";
 import type { LiveRoomPreview } from "./room-preview";
 import { mergeLivePreview } from "../../../../assets/shared/live-room-preview";
+import { resolveLiveSceneElements } from "../../../../assets/shared/live-scene-elements";
+import { liveSceneFill } from "../../../../assets/shared/live-scene-fill";
 import type { ResolvedComposition } from "./room-composition";
 import type { LiveOverlayLayoutGeometry } from "../../../../assets/shared/schemas/live-overlay-layout";
 import type { DatabaseLike } from "../../types";
@@ -133,8 +136,20 @@ export class LiveRoomGraphics {
     message: Extract<LiveRoomClientMessage, { type: "preview.set" }>,
     at: string,
   ): Promise<LiveControlOutcome> {
-    const input = mergeLivePreview(this.store.preview(), message.composition);
-    return this.preview.set(actor, session, message.composition, await this.resolve(session, input, at), at);
+    const merged = mergeLivePreview(this.store.preview(), message.composition);
+    // Loading a scene switches on the graphics that come on with it, in the same one write.
+    const patch = { ...this.comesOn(session, message.composition, merged), ...message.composition };
+    return this.preview.set(actor, session, patch, await this.resolve(session, { ...merged, ...patch }, at), at);
+  }
+  /**
+   * What a change that loads a scene also switches on: the scene's comes-on
+   * graphics that are off, filled from the room. A layer the change itself
+   * names stays as the operator set it.
+   */
+  private comesOn(session: LiveRoomSession, change: LivePreviewPatch, input: LiveCompositionInput): LivePreviewPatch {
+    if (!("scene" in change)) return {};
+    const scene = resolveLiveSceneElements({ overlayLayouts: this.layouts }, input.scene);
+    return liveSceneFill(scene, input, { session, program: this.store.stage() });
   }
   async takePreview(actor: Actor, session: LiveRoomSession, at: string): Promise<LiveControlOutcome> {
     return this.preview.take(actor, session, await this.resolve(session, this.preview.sources(), at), at);

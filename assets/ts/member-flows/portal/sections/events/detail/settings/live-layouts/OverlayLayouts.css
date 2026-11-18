@@ -25,6 +25,10 @@
     align-items: start;
     min-inline-size: 0;
   }
+  /* Shown to someone who may not change the scenes: the canvas alone, no graphics column. */
+  .pk-scenes__editor[data-read-only] {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .pk-scenes__note {
     margin: 0;
     padding: var(--pk-3) var(--pk-4);
@@ -124,7 +128,7 @@
     color: var(--pk-ink-muted);
     font-size: var(--pk-text-sm);
   }
-  /* A graphic's place and whether it is on the conference field wrap rather than cut off. */
+  /* A graphic's place wraps rather than cut off. */
   .pk-scenes__graphics .pk-scenes__meta {
     white-space: normal;
   }

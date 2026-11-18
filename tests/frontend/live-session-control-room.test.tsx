@@ -131,7 +131,7 @@ describe("live control room Transition", () => {
     });
   });
 
-  it("clears the shared Preview from its monitor and keeps its scene", () => {
+  it("clears the shared Preview from its monitor to a blank frame in the Default scene", () => {
     const { host, live } = mountDesk();
     const snapshot = liveSnapshot({ viewer: OPERATOR });
     void act(() =>
@@ -144,6 +144,11 @@ describe("live control room Transition", () => {
           scene: "questions",
         },
       }),
+    );
+    // The hint says what a click does: everything off, and back to the scene that brings nothing on.
+    const clear = labeled(host, "Clear Preview");
+    expect(clear.dataset.tooltip ?? clear.getAttribute("title")).toBe(
+      "Clear Preview\nTake everything off Preview and go back to the Default scene.",
     );
     void act(() => labeled(host, "Clear Preview").click());
     expect(commands(live)).toEqual([
@@ -166,7 +171,8 @@ describe("live control room Transition", () => {
           chatFeed: null,
           reactions: false,
           reactionsGraphic: { showCount: false },
-          scene: "questions",
+          // No scene is the Default one: every graphic off, in the scene that brings nothing on.
+          scene: null,
         },
       },
     ]);
@@ -187,7 +193,6 @@ describe("live control room Transition", () => {
     const scenes = [...strip!.querySelectorAll<HTMLButtonElement>("button")];
     expect(scenes.map((scene) => scene.querySelector(".pk-studio-scene__name")?.textContent)).toEqual([
       "Default",
-      "Talk",
       "Q&A",
       "Panel",
       "Break",

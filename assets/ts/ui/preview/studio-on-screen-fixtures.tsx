@@ -44,15 +44,14 @@ export const ROOM_WITH_SCREENS: LiveRoomState = {
 
 /**
  * An organizer's layout for the room's projector during Q&A: top questions
- * large on the left, reactions up the right, every other element hidden. It
- * is sized in the event's layout settings like any other card.
+ * over the whole frame on the background, reactions up the right, every
+ * other element left out. It is sized in the event's layout settings like
+ * any other card.
  */
 const FULL_FRAME = LIVE_OVERLAY_STANDARD_ELEMENTS;
+const QA_SHOWN: readonly string[] = ["background", "topQuestions", "reactions"];
 const QA_ELEMENTS = Object.fromEntries(
-  LIVE_OVERLAY_ELEMENTS.map((element) => [
-    element,
-    { ...FULL_FRAME[element], visible: element === "topQuestions" || element === "reactions" },
-  ]),
+  LIVE_OVERLAY_ELEMENTS.map((element) => [element, { ...FULL_FRAME[element], visible: QA_SHOWN.includes(element) }]),
 ) as LiveOverlayLayoutElements;
 QA_ELEMENTS.topQuestions = {
   visible: true,
@@ -62,7 +61,7 @@ QA_ELEMENTS.topQuestions = {
 export const QA_LAYOUT: LiveOverlayLayout = {
   slug: "projector-qa",
   name: "Projector Q&A",
-  preset: "talk",
+  preset: null,
   builtIn: false,
   saved: true,
   elements: QA_ELEMENTS,

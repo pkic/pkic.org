@@ -9,7 +9,6 @@ import type {
 } from "../../../../assets/shared/schemas/live-session-room";
 import type { LiveStageDisplaySettingsPatch } from "../../../../assets/shared/schemas/live-stage-display-settings";
 import type { LiveSyncedScreen } from "../../../../assets/shared/schemas/live-screen-sync";
-import { withLiveGraphicLock, type LiveLockedGraphic } from "../../../../assets/shared/schemas/live-graphic-locks";
 import type { LiveControlOutcome } from "./room-controls";
 import { composeLiveStage, type ResolvedComposition } from "./room-composition";
 import type { LivePollStore } from "./room-poll-store";
@@ -93,14 +92,6 @@ export class LiveRoomOutputs {
     this.store.saveScreenSync(screenSync);
     this.store.recordStaffAction(operator.userId, "live_session.screen_sync", { output, sync }, at);
     return { messages: [{ type: "screen.sync.changed", screenSync }] };
-  }
-
-  /** Whether a graphic draws in every scene, on every output that has it on; it stays on or off as it was. */
-  setGraphicLock(operator: Operator, graphic: LiveLockedGraphic, locked: boolean, at: string): LiveControlOutcome {
-    const lockedGraphics = withLiveGraphicLock(this.store.lockedGraphics(), graphic, locked);
-    this.store.saveLockedGraphics(lockedGraphics);
-    this.store.recordStaffAction(operator.userId, "live_session.graphic_lock", { graphic, locked }, at);
-    return { messages: [{ type: "graphic.lock.changed", lockedGraphics }] };
   }
 
   /** A rewritten question already on an auxiliary output or Preview shows its new text there too. */

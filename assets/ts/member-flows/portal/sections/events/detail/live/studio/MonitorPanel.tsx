@@ -40,6 +40,8 @@ import { setStudioLivestreamSound, studioLivestreamAudible } from "./studio-live
 import { liveTallyAttributes } from "../live-tally";
 import "../live-tally.css";
 import { SourceCount, SyncToggle } from "./MonitorOutputStatus";
+import { liveSceneName } from "../live-layer-unseen";
+import { clearHint } from "./StudioSwitcher";
 import "./MonitorPanel.css";
 
 /** The switcher's actions the Preview and Program monitors offer with their controls. */
@@ -108,7 +110,6 @@ function samePicture(output: StudioOutput, left: LiveRoomState | null, right: Li
     left.polls === right.polls &&
     left.session === right.session &&
     left.overlayLayouts === right.overlayLayouts &&
-    left.lockedGraphics === right.lockedGraphics &&
     left.burst === right.burst &&
     left.speakerMessage === right.speakerMessage &&
     // A room screen that syncs also draws what is on Program, and the question lined up next.
@@ -293,11 +294,11 @@ function MonitorActions({ output, context }: { output: StudioOutput; context: Mo
           variant="ghost"
           disabled={switcher.disabled}
           aria-label={`Clear ${details.label}`}
-          title={
-            output === "program"
-              ? "Clear Program: remove every graphic at once. You can undo it for a few seconds."
-              : `Clear ${details.label}: remove every graphic`
-          }
+          title={clearHint(
+            output === "program" || output === "preview" ? output : "screen",
+            details.label,
+            liveSceneName(context.sources.preview, null),
+          )}
           onClick={() => switcher.clear(output)}
         >
           <ClearIcon />

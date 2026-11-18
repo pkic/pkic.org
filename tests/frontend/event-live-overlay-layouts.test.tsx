@@ -40,7 +40,7 @@ const LAYOUTS = eventLiveOverlayLayoutsResponseSchema.parse({
   positions: { elements: LIVE_OVERLAY_DEFAULT_POSITIONS, saved: false, updatedAt: null },
 });
 const POSITIONS_URL = "/api/v1/events/conference/settings/live/positions";
-const LOWER_THIRD = LIVE_OVERLAY_PRESET_LAYOUTS.talk.elements.lowerThird;
+const LOWER_THIRD = LIVE_OVERLAY_PRESET_LAYOUTS.default.elements.lowerThird;
 
 let root: HTMLElement | null = null;
 let written: Array<{ url: string; body: EventLiveOverlayLayoutPut }> = [];
@@ -105,10 +105,10 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function mount() {
+async function mount(canEdit = true) {
   root = document.createElement("div");
   document.body.append(root);
-  await act(async () => render(<EventLiveSettings slug="conference" />, root!));
+  await act(async () => render(<EventLiveSettings slug="conference" canEdit={canEdit} />, root!));
   await vi.waitFor(async () => {
     await act(async () => {
       await Promise.resolve();
@@ -238,7 +238,7 @@ describe("scene editor", () => {
   it("draws a labeled box for each graphic the scene shows and says where the selected one sits", async () => {
     await mount();
     const drawn = () => [...root!.querySelectorAll<HTMLElement>("button[data-element]")].map((b) => b.dataset.element);
-    // Talk leaves the QR code and the background out.
+    // Default leaves the QR code and the background out.
     expect(drawn()).not.toContain("qrCode");
     expect(drawn()).not.toContain("background");
     expect(drawn()).not.toContain("stageDisplay");
@@ -384,6 +384,8 @@ describe("scene editor", () => {
     const canvas = root!.querySelector(".pk-layout-canvas")!;
     expect(canvas.querySelector(".pk-live-overlay__frame")).not.toBeNull();
     expect(canvas.querySelector('[data-overlay-element="lowerThird"]')).not.toBeNull();
+    // Default holds no board: the sample's question is on, and the scene does not draw it.
+    expect(canvas.querySelector('[data-overlay-element="question"]')).toBeNull();
   });
 
   it("lists the scene's graphics front first and saves one moved up the stack as the scene's order", async () => {
@@ -504,6 +506,41 @@ describe("scene editor", () => {
     });
     expect(written[0]!.url).toBe("/api/v1/events/conference/settings/live/layouts/keynote-scene");
     expect(written[0]!.body).toMatchObject({ expectedUpdatedAt: null, name: "Keynote scene", preset: "default" });
+  });
+});
+
+describe("scenes for someone who may not change them", () => {
+  it("lists the scenes and draws the selected one, with nothing to change, save or delete", async () => {
+    await mount(false);
+    const scenes = [...root!.querySelectorAll(".pk-scenes__list .pk-scenes__name")].map((name) => name.textContent);
+    expect(scenes).toEqual(LAYOUTS.layouts.map((layout) => layout.name));
+    expect(root!.querySelector(".pk-layout-canvas .pk-live-overlay__frame")).not.toBeNull();
+    expect(root!.textContent).toContain("Show safe areas");
+
+    const labels = [...root!.querySelectorAll(".pk-scenes button")].map(
+      (control) => control.getAttribute("aria-label") ?? control.textContent!.trim(),
+    );
+    // Only the scene list is left to press.
+    expect(labels).toEqual(LAYOUTS.layouts.map((layout) => layout.name));
+    expect(root!.querySelector(".pk-scenes form")).toBeNull();
+    expect(root!.querySelector(".pk-scenes__graphics")).toBeNull();
+    expect(root!.querySelector(".pk-layout-inspector")).toBeNull();
+    expect(root!.querySelector(".pk-layout-canvas__boxes")).toBeNull();
+    expect(root!.querySelector("[role=alert], .pk-alert")).toBeNull();
+    for (const copy of ["New scene", "Save scene", "Add graphic", "drag to move"])
+      expect(root!.textContent).not.toContain(copy);
+  });
+
+  it("opens another scene from the list without writing anything", async () => {
+    await mount(false);
+    const other = LAYOUTS.layouts[1]!;
+    const pick = [...root!.querySelectorAll<HTMLButtonElement>(".pk-scenes__list .pk-scenes__pick")].find(
+      (candidate) => candidate.textContent === other.name,
+    )!;
+    await act(async () => pick.click());
+    expect(root!.querySelector(".pk-scenes__editor .pk-panel__title")!.textContent).toBe(other.name);
+    expect(root!.querySelector(".pk-scenes__editor")!.hasAttribute("data-read-only")).toBe(true);
+    expect([written, positioned, deleted]).toEqual([[], [], []]);
   });
 });
 

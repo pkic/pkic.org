@@ -1,12 +1,16 @@
 import type { LiveStage } from "./schemas/live-session-room";
-import type {
-  LiveOverlayElement,
-  LiveOverlayElementPlacement,
-  LiveOverlayLayoutElements,
+import {
+  liveOverlayElementAlwaysOn,
+  type LiveOverlayElementPlacement,
+  type LiveOverlayLayoutElements,
 } from "./schemas/live-overlay-layout";
 import { liveOverlayClearOfTicker, liveProgramLayers, type LiveProgramLayer } from "./live-overlay-stacking";
 
-/** The boards: graphics on a solid field, which hide whatever sits under them; the background too, moved in front. */
+/**
+ * The graphics that take a spot of the frame: the boards and the cards, and
+ * the background when a scene stacks it in front. Of two graphics in one
+ * spot, the front one that is on shows and the one behind it does not.
+ */
 const BOARDS: ReadonlySet<LiveProgramLayer> = new Set([
   "background",
   "panelists",
@@ -18,28 +22,13 @@ const BOARDS: ReadonlySet<LiveProgramLayer> = new Set([
   "chat",
 ]);
 
-/** The boards drawn on the conference field: while one is on air, the scene's background shows under it. */
-export const LIVE_FIELD_BOARDS: ReadonlySet<LiveProgramLayer> = new Set([
-  "question",
-  "poll",
-  "panelists",
-  "topQuestions",
-  "chat",
-]);
-
-/** Whether a graphic is a board drawn on the conference field. */
-export function isLiveFieldBoard(element: LiveOverlayElement): element is LiveProgramLayer {
-  return (LIVE_FIELD_BOARDS as ReadonlySet<string>).has(element);
-}
-
 /** How much of a graphic a board must cover before it reads as hidden. */
 const HIDDEN_SHARE = 0.6;
 
-/** Whether a composition has something for this graphic to draw. */
+/** Whether a composition has something for this graphic to draw; one without a switch always has. */
 export function liveOverlayDrawn(stage: LiveStage, layer: LiveProgramLayer): boolean {
+  if (liveOverlayElementAlwaysOn(layer)) return true;
   switch (layer) {
-    case "background":
-      return true;
     case "panelists":
       return stage.panelists !== null;
     case "schedule":
@@ -56,8 +45,6 @@ export function liveOverlayDrawn(stage: LiveStage, layer: LiveProgramLayer): boo
       return (stage.topQuestions?.questions.length ?? 0) > 0;
     case "chat":
       return (stage.chatFeed?.messages.length ?? 0) > 0;
-    case "qrCode":
-      return true;
     case "timer":
       return stage.timerGraphics.length > 0;
     case "ticker":
@@ -78,8 +65,8 @@ function coveredShare(under: LiveOverlayElementPlacement, over: LiveOverlayEleme
 /**
  * The board that hides a graphic on air in this layout: one drawn above it
  * that covers most of its box. Null when the graphic shows, or is not drawn.
- * An operator then sees that a graphic is on air but nobody sees it, such as
- * Up next behind a full-screen question.
+ * The outputs leave the hidden graphic out, and an operator sees that it is
+ * on air but nobody sees it, such as Up next behind a full-screen question.
  */
 export function liveOverlayCoveredBy(
   stage: LiveStage,

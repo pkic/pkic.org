@@ -50,12 +50,12 @@ function useBoardGeometry(box: Pick<OverlayRect, "width" | "height">) {
 }
 
 /**
- * The conference board every audience-facing graphic is drawn on: the
- * conference field, its dots and the mark, the white logo at the top, an eyebrow
- * that names what the board shows, then the graphic. It takes its box's shape,
- * so the same board fills the projector, a band of the stream or a column
- * beside the camera, and each graphic arranges itself for that shape. On the
- * scene's background (`LiveBoardGround`) it draws only its eyebrow and graphic.
+ * A board: an eyebrow that names what it shows, then the graphic, in white
+ * type. It draws no field, mark or logo of its own: those are the scene's
+ * background (`LiveBoardGround`), drawn once per frame, and a board inside
+ * the background's box reads on it. It takes its box's shape, so the same
+ * board fills the projector, a band of the stream or a column beside the
+ * camera, and each graphic arranges itself for that shape.
  */
 export function LiveBoard({
   box,
@@ -78,10 +78,8 @@ export function LiveBoard({
       data-shape={shape}
       data-numeric-css-properties={geometry}
     >
-      <PkicMark class="pk-live-board__watermark" />
       <header class="pk-live-board__head">
         <p class="pk-live-board__eyebrow">{eyebrow}</p>
-        <img class="pk-live-board__logo" src="/img/logo.svg" width="1256" height="324" alt="PKI Consortium" />
       </header>
       {children}
     </section>
@@ -89,9 +87,9 @@ export function LiveBoard({
 }
 
 /**
- * The scene's background: the board's field, dots, mark and logo with nothing
- * on it, drawn once under every board that sits on it, so boards side by side
- * read as one composition with one logo.
+ * The scene's background: the conference field, its dots, the mark and the
+ * white logo. A scene that includes it shows it whenever the scene is on,
+ * once, so the boards on it read as one composition with one logo.
  */
 export function LiveBoardGround({ box }: { box: Pick<OverlayRect, "width" | "height"> }) {
   const { shape, geometry } = useBoardGeometry(box);

@@ -107,7 +107,6 @@ export class LiveRoomBroadcast {
       stageDisplayNextVotes: seesStageDisplayNext(viewer) ? this.nextVotes() : null,
       stageDisplaySettings: this.store.stageDisplaySettings(),
       screenSync: this.store.screenSync(),
-      lockedGraphics: this.store.lockedGraphics(),
       sources: operator ? this.sources() : NO_LIVE_ROOM_SOURCES,
     });
   }

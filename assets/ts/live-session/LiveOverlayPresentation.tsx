@@ -16,7 +16,7 @@ import {
   type LiveOverlayGraphics,
 } from "./live-overlay-graphics";
 import { LiveOverlayLayer } from "./LiveOverlayLayer";
-import { BOARDS, liveOverlayFields, meets, stackedPanelBox, timerReserve, within } from "./live-overlay-fields";
+import { BOARDS, meets, stackedPanelBox, timerReserve, within } from "./live-overlay-fields";
 import { LivePanelistsOverlay } from "./LivePanelistsOverlay";
 import { LivePanelQuestionOverlay } from "./LivePanelQuestionOverlay";
 import { LivePollOverlay } from "./LivePollOverlay";
@@ -40,12 +40,7 @@ import { LiveLowerThird } from "./LiveLowerThird";
 import { LiveStageDisplay, LiveStageDisplayBanner } from "./LiveStageDisplay";
 import { isLiveAuxOutput, liveOutputProjection, liveOutputScene, liveOutputView } from "./live-output-projection";
 import "../../design/tokens.event.generated.css";
-import {
-  LIVE_FIELD_BOARDS,
-  isLiveFieldBoard,
-  liveOverlayCoveredBy,
-  liveOverlayDrawn,
-} from "../../shared/live-overlay-cover";
+import { liveOverlayCoveredBy, liveOverlayDrawn } from "../../shared/live-overlay-cover";
 import {
   LIVE_PROGRAM_LAYER_ORDER,
   isLiveProgramLayer,
@@ -232,7 +227,7 @@ const PROGRAM_LAYERS: ReadonlyMap<LiveProgramLayer, Layer> = new Map(
     [
       {
         element: "background",
-        // The conference field under the boards on it: drawn only while one of them is on air (see `liveOverlayFields`).
+        // The one field and logo of the frame: drawn whenever the scene includes it, with or without a board on it.
         draw: (_state, { placement }) => <LiveBoardGround box={overlayBoxPixels(placement)} />,
       },
       {
@@ -399,7 +394,7 @@ export function LiveOverlayPresentation({
   const animate = broadcast || !prefersReducedMotion();
   const state = projection && isLiveAuxOutput(requested) ? liveOutputProjection(projection, requested) : projection;
   const view = liveOutputView(requested);
-  // The scene with the graphics kept in every scene; a source drawing only some graphics leaves the others out,
+  // The scene decides what can draw and where; a source drawing only some graphics leaves the others out,
   // and while the ticker is on air, every other graphic keeps clear of it.
   const allowed = liveOverlayAllowedElements(
     draft ?? resolveLiveSceneElements(state, layout ?? liveOutputScene(state, requested)),
@@ -423,24 +418,15 @@ export function LiveOverlayPresentation({
   const timersShow = view === "stage-display" ? elements.stageDisplay.visible : elements.timer.visible;
   const panel =
     state?.stage.question && state.stage.panelists && view !== "stage-display" ? stackedPanelBox(elements) : null;
-  const drawnBoards = (kinds: ReadonlySet<LiveOverlayElement>) =>
-    state
-      ? LIVE_PROGRAM_LAYER_ORDER.filter(
-          (layer) => kinds.has(layer) && elements[layer].visible && liveOverlayDrawn(state.stage, layer),
-        ).map((layer) => (layer === "panelists" && panel ? panel : elements[layer]))
-      : [];
-  // The boards on the field drawn now, so a timer over one sets its time on the board instead of on a plate.
-  const boardBoxes = drawnBoards(LIVE_FIELD_BOARDS);
-  // A board inside the scene's background draws on it; one outside keeps a field of its own.
+  // The cards drawn now, which a timer never covers.
+  const cardBoxes = state
+    ? LIVE_PROGRAM_LAYER_ORDER.filter(
+        (layer) => CARD_BOARDS.has(layer) && elements[layer].visible && liveOverlayDrawn(state.stage, layer),
+      ).map((layer) => elements[layer])
+    : [];
+  // The scene's background: the frame's one field. No board draws a field of its own, inside it or outside, and
+  // Up next inside it drops its card's plate, so nothing reads as a card on a card.
   const ground = view !== "stage-display" && elements.background.visible ? elements.background : null;
-  const onGround = (box: LiveOverlayElementPlacement) => ground !== null && within(box, ground);
-  // A graphic the scene puts on the conference field carries it in its own box while it is on air.
-  const fielded = (element: LiveOverlayElement) =>
-    view !== "stage-display" &&
-    element !== "background" &&
-    elements[element].visible &&
-    elements[element].background === true;
-  const cardBoxes = drawnBoards(CARD_BOARDS);
   const timers =
     state && view !== "stage-display" && elements.timer.visible
       ? timerSlots(state.stage.timerGraphics, elements.timer, cardBoxes)
@@ -450,91 +436,55 @@ export function LiveOverlayPresentation({
     playsSounds && state && timersShow
       ? state.timers.filter((timer) => shown.some((graphic) => graphic.timerId === timer.id))
       : null;
-  // Each graphic as it draws now: its box (the panel's, when it joins the question) and its content, if it has any.
-  const drawn = state
-    ? layers.map(({ element, draw }) => {
-        const placement = elements[element];
-        const joined = element === "panelists" && panel !== null;
-        const box = joined ? panel : placement;
-        // On a field a board has none of its own to hide one behind it, so a hidden one is left out;
-        // the layout editor's selected element always draws.
-        const hidden =
-          !joined &&
-          element !== focus &&
-          isLiveFieldBoard(element) &&
-          (onGround(box) || fielded(element)) &&
-          liveOverlayCoveredBy(state.stage, elements, element) !== null;
-        const content =
-          element !== "background" && element !== "timer" && placement.visible && !hidden
-            ? draw(state, { placement, animate, panel, eventSlug })
-            : null;
-        const onAir =
-          element === "timer"
-            ? timers.length > 0
-            : content !== null && isLiveProgramLayer(element) && liveOverlayDrawn(state.stage, element);
-        return { element, draw, placement, box, joined, content, onAir };
-      })
-    : [];
-  // The conference fields under the graphics on air, one per area they fill together; none while nothing is on.
-  const { ground: groundField, fields } = liveOverlayFields(
-    ground,
-    drawn.filter(({ onAir }) => onAir).map(({ element, box }) => ({ element, box, fielded: fielded(element) })),
-  );
-  // A timer over a field sets its time on it, as on a board.
-  const fieldBoxes = [...(groundField ? [groundField.box] : []), ...fields.map((field) => field.box)];
-  const carried = (element: LiveOverlayElement) =>
-    groundField?.carries.includes(element) === true || fields.some((field) => field.carries.includes(element));
   return (
     <LiveOverlayFrame view={requested} status={status} crop={cropped ? elements[cropped] : null}>
       {sounding?.length && state ? <LiveTimerSounds timers={sounding} session={state.session} /> : null}
       {state
-        ? drawn.map(({ element, draw, placement, box, joined, content: drawnContent }) => {
+        ? layers.map(({ element, draw }) => {
             if (element === "timer")
-              return timers.map(({ graphic, slot, mark, tab }) => {
-                const onBoard = [...boardBoxes, ...fieldBoxes].some((board) => meets(board, slot));
-                return (
-                  <LiveOverlayLayer
-                    key={`timer:${graphic.timerId}`}
-                    element="timer"
-                    dimmed={focus !== null && focus !== "timer"}
-                    placement={slot}
-                  >
-                    <TimerOverlay graphic={graphic} state={state} mark={mark} tab={tab} onBoard={onBoard} />
-                  </LiveOverlayLayer>
-                );
-              });
-            // The scene's background draws under the boards on air on it; the layout editor's selected one always draws.
+              return timers.map(({ graphic, slot, mark, tab }) => (
+                <LiveOverlayLayer
+                  key={`timer:${graphic.timerId}`}
+                  element="timer"
+                  dimmed={focus !== null && focus !== "timer"}
+                  placement={slot}
+                >
+                  {/* A timer over the background sets its time on the field instead of on a plate. */}
+                  <TimerOverlay
+                    graphic={graphic}
+                    state={state}
+                    mark={mark}
+                    tab={tab}
+                    onBoard={ground !== null && meets(ground, slot)}
+                  />
+                </LiveOverlayLayer>
+              ));
+            const placement = elements[element];
+            const joined = element === "panelists" && panel !== null;
+            const box = joined ? panel : placement;
+            // Of two graphics in one spot the front one that is on shows; the one behind it is left out, as the
+            // studio's row says. The background always draws, and so does the layout editor's selected element.
+            const covered =
+              view !== "stage-display" &&
+              !joined &&
+              element !== focus &&
+              element !== "background" &&
+              isLiveProgramLayer(element) &&
+              liveOverlayCoveredBy(state.stage, elements, element) !== null;
             const content =
-              element === "background"
-                ? ground && (groundField || focus === "background")
-                  ? draw(state, { placement, animate, panel, eventSlug })
-                  : null
-                : drawnContent;
-            const under = fields.find((each) => each.carries[0] === element);
-            const field = under ? (
-              <LiveOverlayLayer
-                key={`${element}:field`}
-                element="background"
-                dimmed={focus !== null && !under.carries.includes(focus)}
-                timerReserve={timerReserve(under.box, timerBoxes)}
-                placement={under.box}
-              >
-                <LiveBoardGround box={overlayBoxPixels(under.box)} />
-              </LiveOverlayLayer>
-            ) : null;
-            const graphic = content ? (
+              placement.visible && !covered ? draw(state, { placement, animate, panel, eventSlug }) : null;
+            return content ? (
               <LiveOverlayLayer
                 key={joined ? "panel" : element}
                 element={element}
                 dimmed={focus !== null && focus !== element && !(joined && focus === "question")}
                 timerReserve={BOARDS.has(element) ? timerReserve(box, timerBoxes) : 0}
-                onGround={(element === "schedule" || isLiveFieldBoard(element)) && carried(element)}
+                onGround={element === "schedule" && ground !== null && within(box, ground)}
                 placement={box}
               >
                 {content}
               </LiveOverlayLayer>
             ) : null;
-            return field ? [field, graphic] : graphic;
           })
         : null}
       {children}

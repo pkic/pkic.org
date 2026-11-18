@@ -20,6 +20,7 @@ import { ListDetail } from "../../../../../../ui/ListDetail";
 import { Select, TextInput } from "../../../../../../ui/TextControl";
 import { Alert } from "../../../../../../ui/Alert";
 import { LiveGraphicRow } from "./LiveGraphicRow";
+import { LIVE_SETTINGS_NOT_SENT, useLiveGraphicSettings } from "./live-graphic-settings";
 import type { LiveTargets } from "./live-output-targets";
 import "./LiveTickerControls.css";
 
@@ -140,10 +141,14 @@ function nextMessageId(messages: readonly Message[]): string {
  */
 export function LiveTickerControls({ targets }: { targets: LiveTargets }) {
   const context = targets.state.tickerContext;
-  const [config, setConfig] = useState<LiveTickerConfig>(() => {
-    const saved = targets.state.preview.ticker ?? targets.state.stage.ticker;
-    return saved ? { style: saved.style, messages: saved.messages } : DEFAULT_LIVE_TICKER_CONFIG;
-  });
+  const shown = targets.state.preview.ticker ?? targets.state.stage.ticker;
+  // The row follows the ticker an output shows; saving its messages changes it there.
+  const { settings: config, save } = useLiveGraphicSettings<LiveTickerConfig>(
+    targets,
+    shown ? { style: shown.style, messages: shown.messages } : null,
+    DEFAULT_LIVE_TICKER_CONFIG,
+    (settings) => ({ kind: "ticker", config: settings }),
+  );
   const [draft, setDraft] = useState<LiveTickerConfig | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -183,11 +188,10 @@ export function LiveTickerControls({ targets }: { targets: LiveTargets }) {
           confirmLabel="Done"
           onConfirm={() => {
             const checked = form.submit();
-            if (checked.data) {
-              setConfig(checked.data);
-              setDraft(null);
-              setError(null);
-            } else setError(checked.formMessage);
+            if (!checked.data) return setError(checked.formMessage);
+            if (!save(checked.data)) return setError(LIVE_SETTINGS_NOT_SENT);
+            setDraft(null);
+            setError(null);
           }}
           onCancel={() => setDraft(null)}
         >

@@ -1,5 +1,6 @@
 import type { ComponentType } from "preact";
 import { formatClockInZone } from "../../../../../../../../shared/format-date";
+import { liveSessionHasPanel } from "../../../../../../../../shared/live-scene-fill";
 import { resolveUpcomingRooms } from "../../../../../../../../shared/live-session-schedule";
 import type { AgendaSnapshot } from "../../../../../../../../shared/schemas/event-agenda";
 import { DEFAULT_LIVE_SCHEDULE_CONFIG } from "../../../../../../../../shared/schemas/live-session-schedule";
@@ -45,8 +46,8 @@ export const LIVE_GRAPHICS: ReadonlyArray<{
 }> = [
   {
     id: "panel",
-    // A line-up of every speaker only means something when there is more than one.
-    applies: ({ targets }) => targets.state.session.credits.length > 1,
+    // The same rule a scene follows before it brings the panel on, so a panel that is on always has its row.
+    applies: ({ targets }) => liveSessionHasPanel(targets.state.session.credits.length),
     Row: ({ targets }) => <LivePanelistControls targets={targets} />,
   },
   { id: "ticker", Row: ({ targets }) => <LiveTickerControls targets={targets} /> },

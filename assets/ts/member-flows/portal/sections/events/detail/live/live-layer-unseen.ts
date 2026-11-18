@@ -9,8 +9,7 @@ import type { LiveRoomState } from "../../../../../../live-session/live-room-sta
 /**
  * Why a composition that holds a graphic does not show it: a board drawn
  * over it, such as Up next under a full-screen question, or a scene that
- * leaves it out. A graphic kept in every scene is never left out by one.
- * Named as the studio names them.
+ * leaves it out. Named as the studio names them.
  */
 export type LiveLayerUnseen = { reason: "covered"; by: string } | { reason: "scene"; scene: string };
 
@@ -22,7 +21,7 @@ export function liveSceneName(state: Pick<LiveRoomState, "overlayLayouts">, slug
 
 /** Why this composition, which holds the graphic, does not show it, as its scene draws it; null when it shows. */
 export function liveLayerUnseen(
-  state: Pick<LiveRoomState, "overlayLayouts" | "lockedGraphics">,
+  state: Pick<LiveRoomState, "overlayLayouts">,
   stage: LiveStage,
   layer: LiveProgramLayer,
 ): LiveLayerUnseen | null {

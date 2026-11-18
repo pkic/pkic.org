@@ -47,6 +47,7 @@ import { StudioPhone, useStudioPhone } from "./studio/StudioPhone";
 import { StudioPhoneHome } from "./studio/StudioPhoneHome";
 import { useStudioFullscreen } from "./studio/useStudioFullscreen";
 import { ProgramUndoToast, TransitionControl, useTakeShortcut } from "./studio/StudioSwitcher";
+import { liveSceneName } from "./live-layer-unseen";
 import { Dialog } from "../../../../../../ui/Dialog";
 import { useStudioLayout } from "./studio/useStudioLayout";
 import { useStudioScreens } from "./studio/useStudioScreens";
@@ -212,12 +213,13 @@ export function LiveSessionDesk({
   const clearProgram = () => sendProgram({ type: "program.clear" });
   const empty = liveCompositionInput(EMPTY_LIVE_STAGE);
   const switcher = {
-    // Program's clear is the room's one undoable clear; Preview and the screens are set empty, each keeping its scene.
+    // Program's clear is the room's one undoable clear. Program and Preview go back to the Default scene, a blank
+    // frame; a room screen is set empty and keeps its scene.
     clear: (output: StudioOutput) =>
       output === "program"
         ? clearProgram()
         : output === "preview"
-          ? sendProgram({ type: "preview.set", composition: { ...empty, scene: preview.stage.scene } })
+          ? sendProgram({ type: "preview.set", composition: empty })
           : output === "livestream"
             ? undefined
             : sendProgram({
@@ -474,6 +476,7 @@ export function LiveSessionDesk({
         {touring && !phone ? <StudioTour scope={studio} onClose={() => setTouring(false)} /> : null}
         <ProgramUndoToast
           undo={state.programUndo}
+          defaultScene={liveSceneName(state, null)}
           onUndo={(snapshotId) => sendProgram({ type: "program.restore", snapshotId })}
         />
         {fullscreen.confirmingExit ? (

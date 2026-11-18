@@ -10,7 +10,14 @@ import { DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS } from "../assets/shared/schemas/li
 import { DEFAULT_LIVE_SCREEN_SYNC } from "../assets/shared/schemas/live-screen-sync";
 import { EMPTY_LIVE_STAGE, liveRoomRefusalCloseCode } from "../assets/shared/schemas/live-session-room";
 import { liveCompositionInput } from "../assets/shared/live-room-preview";
+import { LIVE_OVERLAY_STANDARD_ELEMENTS } from "../assets/shared/live-overlay-layout-presets";
+import { DEFAULT_LIVE_TOP_QUESTIONS_CONFIG } from "../assets/shared/schemas/live-session-on-screen";
+import { DEFAULT_LIVE_SCHEDULE_CONFIG } from "../assets/shared/schemas/live-session-schedule";
+import { DEFAULT_LIVE_TICKER_CONFIG } from "../assets/shared/schemas/live-session-ticker";
+import { LIVE_OVERLAY_PRESETS } from "../assets/shared/schemas/live-overlay-layout";
 import { parseCapabilityToken } from "../functions/_lib/auth/capability-token";
+import { LiveRoomGraphicBasis } from "../functions/_lib/services/live-session/room-graphic-basis";
+import { LiveRoomSql } from "../functions/_lib/services/live-session/room-sql";
 import { callApi } from "./helpers/app";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
 
@@ -115,29 +122,6 @@ describe("live room auxiliary outputs", () => {
     expect(attendee.received.some((m) => m.type === "screen.sync.changed")).toBe(false);
     const rejoined = await f.connect({ person: "operator" });
     expect((await rejoined.next("room.snapshot")).screenSync).toEqual(changed);
-  });
-
-  it("keeps graphics in every scene for the session, for every viewer, set by operators only and never on air by itself", async () => {
-    const operator = await f.connect({ person: "operator" });
-    const attendee = await f.connect({ person: "attendee" });
-    const overlay = await f.connect({ overlay: await overlayToken() });
-    expect((await overlay.next("room.snapshot")).lockedGraphics).toEqual([]);
-    operator.send({ type: "graphic.lock", graphic: "reactions", locked: true });
-    operator.send({ type: "graphic.lock", graphic: "ticker", locked: true });
-    for (const viewer of [overlay, attendee])
-      expect((await viewer.next("graphic.lock.changed", (m) => m.lockedGraphics.length === 2)).lockedGraphics).toEqual([
-        "reactions",
-        "ticker",
-      ]);
-    // Keeping a graphic in every scene leaves what is on air as it was.
-    expect(operator.received.some((message) => message.type === "stage.changed")).toBe(false);
-    attendee.send({ type: "graphic.lock", graphic: "reactions", locked: false });
-    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
-    operator.send({ type: "graphic.lock", graphic: "reactions", locked: false });
-    const released = await overlay.next("graphic.lock.changed", (m) => !m.lockedGraphics.includes("reactions"));
-    expect(released.lockedGraphics).toEqual(["ticker"]);
-    const rejoined = await f.connect({ person: "operator" });
-    expect((await rejoined.next("room.snapshot")).lockedGraphics).toEqual(["ticker"]);
   });
 
   it("merges each stage display change into the room's copy, so quick changes never undo each other", async () => {
@@ -391,88 +375,176 @@ describe("live room auxiliary outputs", () => {
     ).toBe("animated");
   });
 
-  it("takes Preview's scene to Program exactly, and keeps each output's scene when it is cleared", async () => {
+  it("takes Preview to Program exactly, scene and comes-on graphics included, and a graphic put on Program leaves its scene alone", async () => {
     const operator = await f.connect({ person: "operator" });
-    operator.send({ type: "preview.set", composition: { scene: "questions" } });
-    expect((await operator.next("preview.changed", (m) => m.composition.scene !== null)).composition.scene).toBe(
-      "questions",
-    );
+    operator.send({ type: "preview.set", composition: { scene: "questions", creditKey: `user:${f.users.speaker}` } });
+    const preview = (await operator.next("preview.changed", (m) => m.composition.scene !== null)).composition;
+    expect(preview.scene).toBe("questions");
     operator.send({ type: "preview.take" });
-    expect((await operator.next("stage.changed", (m) => m.stage.scene !== null)).stage.scene).toBe("questions");
-    // A graphic put straight on Program leaves its scene alone.
+    const taken = (await operator.next("stage.changed", (m) => m.stage.scene !== null)).stage;
+    expect(taken).toMatchObject({
+      scene: "questions",
+      lowerThird: { name: "Sam Speaker" },
+      topQuestions: preview.topQuestions,
+    });
+    expect(liveCompositionInput(taken)).toEqual(liveCompositionInput(preview));
     operator.send({ type: "stage.lowerThird", creditKey: null });
-    expect((await operator.next("stage.changed")).stage.scene).toBe("questions");
-    operator.send({ type: "program.clear" });
-    await operator.next("program.cleared");
-    const rejoined = await (await f.connect({ person: "operator" })).next("room.snapshot");
-    expect(rejoined.stage.scene).toBe("questions");
-    expect(rejoined.preview.scene).toBe("questions");
-    expect(rejoined.outputs.projector.scene).toBeNull();
+    expect((await operator.next("stage.changed", (m) => m.stage.lowerThird === null)).stage.scene).toBe("questions");
   });
 
-  it("loads a scene on Preview as a layout only, and leaves every graphic on or off as it was", async () => {
+  it("clears Program to a blank frame in the Default scene, and an undo brings the scene back with the graphics", async () => {
+    const operator = await f.connect({ person: "operator" });
+    operator.send({ type: "preview.set", composition: { scene: "questions", creditKey: `user:${f.users.speaker}` } });
+    await operator.next("preview.changed", (m) => m.composition.scene === "questions");
+    operator.send({ type: "preview.take" });
+    await operator.next("stage.changed", (m) => m.stage.scene === "questions");
+    operator.send({ type: "program.clear" });
+    const cleared = await operator.next("program.cleared");
+    const blank = (await operator.next("stage.changed", (m) => m.stage.scene === null)).stage;
+    expect(liveCompositionInput(blank)).toEqual(liveCompositionInput(EMPTY_LIVE_STAGE));
+    // The clear is Program's alone: Preview keeps its shot, and a screen nobody composed has no scene.
+    const rejoined = await (await f.connect({ person: "operator" })).next("room.snapshot");
+    expect(rejoined.stage.scene).toBeNull();
+    expect(rejoined.preview).toMatchObject({ scene: "questions", lowerThird: { name: "Sam Speaker" } });
+    expect(rejoined.outputs.projector.scene).toBeNull();
+    operator.send({ type: "program.restore", snapshotId: cleared.snapshotId });
+    const restored = (await operator.next("stage.changed", (m) => m.stage.scene === "questions")).stage;
+    expect(restored.lowerThird?.name).toBe("Sam Speaker");
+    expect(restored.topQuestions).not.toBeNull();
+  });
+
+  it("switches on only a scene's comes-on graphics when it loads on Preview, and leaves every pick and studio switch as it was", async () => {
     const operator = await f.connect({ person: "operator" });
     operator.send({
       type: "preview.set",
-      composition: { creditKey: `user:${f.users.speaker}`, timerGraphics: [GRAPHIC], ticker: null, checkIn: null },
+      composition: { creditKey: `user:${f.users.speaker}`, timerGraphics: [GRAPHIC], reactions: true },
     });
     const set = (await operator.next("preview.changed", (m) => m.composition.lowerThird !== null)).composition;
 
+    // Q&A brings its top questions on, filled by the room; the lower third, the timer and reactions stay as set.
+    operator.send({ type: "preview.set", composition: { scene: "questions" } });
+    const questions = (await operator.next("preview.changed", (m) => m.composition.scene === "questions")).composition;
+    expect(questions).toEqual({
+      ...set,
+      scene: "questions",
+      topQuestions: { config: DEFAULT_LIVE_TOP_QUESTIONS_CONFIG, questions: [] },
+    });
+
+    // Break brings Up next on and switches nothing off: the top questions stay on for a scene that draws them.
+    operator.send({ type: "preview.set", composition: { scene: "break" } });
+    const pause = (await operator.next("preview.changed", (m) => m.composition.scene === "break")).composition;
+    expect(pause.schedule?.config).toEqual({ ...DEFAULT_LIVE_SCHEDULE_CONFIG, scope: "all-rooms" });
+    expect({ ...pause, schedule: null, scene: "questions" }).toEqual(questions);
+
+    // A panel needs more than one speaker, so Panel brings nothing on for this session.
     operator.send({ type: "preview.set", composition: { scene: "panel" } });
     const panel = (await operator.next("preview.changed", (m) => m.composition.scene === "panel")).composition;
-    expect(panel).toEqual({ ...set, scene: "panel" });
-    expect([panel.ticker, panel.checkIn, panel.topQuestions, panel.panelists, panel.schedule]).toEqual([
-      null,
-      null,
-      null,
-      null,
-      null,
-    ]);
-    expect(panel.timerGraphics).toEqual([GRAPHIC]);
+    expect(panel.panelists).toBeNull();
 
-    // A timer the operator took off stays off whatever scene loads next.
-    operator.send({ type: "preview.set", composition: { timerGraphics: [] } });
-    await operator.next("preview.changed", (m) => m.composition.timerGraphics.length === 0);
-    operator.send({ type: "preview.set", composition: { scene: "talk" } });
-    const talk = (await operator.next("preview.changed", (m) => m.composition.scene === "talk")).composition;
-    expect(talk.timerGraphics).toEqual([]);
-    expect(talk.ticker).toBeNull();
-    expect(talk.lowerThird?.name).toBe("Sam Speaker");
+    // What the operator switched off stays off in every scene that only places it; a retired scene reads as Default.
+    operator.send({ type: "preview.set", composition: { schedule: null, topQuestions: null, timerGraphics: [] } });
+    await operator.next("preview.changed", (m) => m.composition.schedule === null);
+    for (const scene of ["check-in", "full-board", "default", "talk"]) {
+      operator.send({ type: "preview.set", composition: { scene } });
+      const loaded = (await operator.next("preview.changed", (m) => m.composition.scene === scene)).composition;
+      expect(liveCompositionInput(loaded), scene).toEqual({
+        ...liveCompositionInput(EMPTY_LIVE_STAGE),
+        creditKey: `user:${f.users.speaker}`,
+        reactions: true,
+        scene,
+      });
+    }
+
+    // Loading its scene again brings a comes-on graphic back, with the timer the operator took off still off.
+    const before = operator.received.length;
+    operator.send({ type: "preview.set", composition: { scene: "questions" } });
+    const again = (
+      await operator.next("preview.changed", (m) => m.composition.scene === "questions", { after: before })
+    ).composition;
+    expect(again.topQuestions).not.toBeNull();
+    expect(again.timerGraphics).toEqual([]);
     // Program is untouched until a Take.
     expect(operator.received.some((message) => message.type === "stage.changed")).toBe(false);
   });
 
-  it("clears Preview and a room screen to empty, keeping each one's scene and bringing no graphic back", async () => {
+  it("brings on an event's own scene's comes-on graphics the same way, from the scene's own setting", async () => {
+    const elements = {
+      ...LIVE_OVERLAY_STANDARD_ELEMENTS,
+      ticker: { ...LIVE_OVERLAY_STANDARD_ELEMENTS.ticker, comesOn: true },
+      reactions: { ...LIVE_OVERLAY_STANDARD_ELEMENTS.reactions, comesOn: true },
+    };
+    const now = new Date().toISOString();
+    await env.DB.prepare(
+      "INSERT INTO event_live_overlay_layouts(event_id,slug,name,preset,elements_json,created_at,updated_at) VALUES(?,?,?,NULL,?,?,?)",
+    )
+      .bind(f.eventId, "keynote", "Keynote", JSON.stringify(elements), now, now)
+      .run();
+    const operator = await f.connect({ person: "operator" });
+    operator.send({ type: "preview.set", composition: { creditKey: `user:${f.users.speaker}` } });
+    await operator.next("preview.changed", (m) => m.composition.lowerThird !== null);
+    operator.send({ type: "preview.set", composition: { scene: "keynote" } });
+    const keynote = (await operator.next("preview.changed", (m) => m.composition.scene === "keynote")).composition;
+    expect(keynote.ticker).toMatchObject(DEFAULT_LIVE_TICKER_CONFIG);
+    expect(keynote.reactions).toBe(true);
+    expect(liveCompositionInput(keynote)).toEqual({
+      ...liveCompositionInput(EMPTY_LIVE_STAGE),
+      creditKey: `user:${f.users.speaker}`,
+      ticker: DEFAULT_LIVE_TICKER_CONFIG,
+      reactions: true,
+      scene: "keynote",
+    });
+  });
+
+  it("reads a room's saved scenes again from the event when they still hold a built-in scene retired since", async () => {
+    const operator = await f.connect({ person: "operator" });
+    await operator.next("room.snapshot");
+    await runInDurableObject(f.room(), (_room, state) => {
+      const sql = new LiveRoomSql(state.storage.sql);
+      const current = new LiveRoomGraphicBasis(sql).read();
+      expect(current.layouts.map((layout) => layout.slug)).toEqual([...LIVE_OVERLAY_PRESETS]);
+      // A room that hibernated before Talk was retired, and a board's own field flag with it.
+      const talk = {
+        slug: "talk",
+        name: "Talk",
+        preset: "talk",
+        elements: {
+          ...LIVE_OVERLAY_STANDARD_ELEMENTS,
+          question: { ...LIVE_OVERLAY_STANDARD_ELEMENTS.question, background: true },
+        },
+      };
+      state.storage.sql.exec(
+        "UPDATE room_controls SET value_json=? WHERE name='graphicBasis'",
+        JSON.stringify({ ...current, layouts: [...current.layouts, talk] }),
+      );
+      const stale = new LiveRoomGraphicBasis(sql);
+      expect(stale.read().layouts).toEqual([]);
+      // Not ready, so the room reads the event's scenes again on its next join.
+      expect(stale.ready).toBe(false);
+    });
+  });
+
+  it("clears Preview to a blank frame in the Default scene, and a room screen to empty in its own scene", async () => {
     const operator = await f.connect({ person: "operator" });
     const full = { creditKey: `user:${f.users.speaker}`, timerGraphics: [GRAPHIC] };
-    // The studio's Clear: the empty composition, naming the scene the monitor already shows.
-    const cleared = { ...liveCompositionInput(EMPTY_LIVE_STAGE), scene: "panel" };
-    const off = (composition: typeof EMPTY_LIVE_STAGE) => [
-      composition.lowerThird,
-      composition.question,
-      composition.poll,
-      composition.ticker,
-      composition.panelists,
-      composition.schedule,
-      composition.checkIn,
-      composition.topQuestions,
-      composition.timerGraphics,
-    ];
-    const empty = [null, null, null, null, null, null, null, null, []];
+    // The studio's Clear of Preview: the empty composition, which names no scene, so the Default one.
+    const cleared = liveCompositionInput(EMPTY_LIVE_STAGE);
 
-    operator.send({ type: "preview.set", composition: { ...full, scene: "panel" } });
-    await operator.next("preview.changed", (m) => m.composition.lowerThird !== null);
+    // Q&A's top questions came on with the scene; the clear takes them off and loads nothing back.
+    operator.send({ type: "preview.set", composition: { ...full, scene: "questions" } });
+    const loaded = (await operator.next("preview.changed", (m) => m.composition.lowerThird !== null)).composition;
+    expect(loaded.topQuestions).not.toBeNull();
     operator.send({ type: "preview.set", composition: cleared });
     const preview = (await operator.next("preview.changed", (m) => m.composition.lowerThird === null)).composition;
-    expect(preview.scene).toBe("panel");
-    expect(off(preview)).toEqual(empty);
+    expect(liveCompositionInput(preview)).toEqual(cleared);
+    expect(preview.scene).toBeNull();
 
-    operator.send({ type: "aux.set", output: "projector", composition: { ...cleared, ...full } });
+    // A room screen's clear is the studio's empty composition naming the screen's scene, which it keeps.
+    const screenCleared = { ...cleared, scene: "panel" };
+    operator.send({ type: "aux.set", output: "projector", composition: { ...screenCleared, ...full } });
     await operator.next("aux.changed", (m) => m.composition.lowerThird !== null);
-    operator.send({ type: "aux.set", output: "projector", composition: cleared });
+    operator.send({ type: "aux.set", output: "projector", composition: screenCleared });
     const screen = (await operator.next("aux.changed", (m) => m.composition.lowerThird === null)).composition;
-    expect(screen.scene).toBe("panel");
-    expect(off(screen)).toEqual(empty);
+    expect(liveCompositionInput(screen)).toEqual(screenCleared);
   });
 
   it("refuses a source that names an output the room does not draw", async () => {

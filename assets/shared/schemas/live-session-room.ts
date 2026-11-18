@@ -66,7 +66,6 @@ import {
 import { attendancePointSelectionSchema } from "../attendance-points";
 import * as stageDisplaySettings from "./live-stage-display-settings";
 import * as screenSync from "./live-screen-sync";
-import * as graphicLocks from "./live-graphic-locks";
 import * as roomSources from "./live-room-sources";
 import { LIVE_GRAPHIC_THEME_DEFAULTS, liveGraphicThemeSchema } from "../live-graphic-theme";
 import { DEFAULT_LIVE_LOWER_THIRD_MOTION } from "../live-lower-third";
@@ -341,8 +340,6 @@ export const liveRoomSnapshotSchema = z
     stageDisplaySettings: stageDisplaySettings.liveStageDisplaySettingsSnapshotSchema,
     /** Whether the projector and the stage display follow Program. */
     screenSync: screenSync.liveScreenSyncSnapshotSchema,
-    /** The graphics that draw in every scene, whatever the scene shows. */
-    lockedGraphics: graphicLocks.liveLockedGraphicsSnapshotSchema,
     /** How many sources draw each output now; operators only, zeros for everyone else. */
     sources: roomSources.liveRoomSourcesSnapshotSchema,
   })
@@ -387,7 +384,6 @@ export const liveRoomServerMessageSchema = z.discriminatedUnion("type", [
   stageDisplaySettings.liveStageDisplayNextChangedSchema(liveStageQuestionSchema),
   stageDisplaySettings.liveStageDisplaySettingsChangedSchema,
   screenSync.liveScreenSyncChangedSchema,
-  graphicLocks.liveGraphicLockChangedSchema,
   /** Operators only: a source of one of the room's outputs connected or dropped. */
   roomSources.liveRoomSourcesChangedSchema,
   /** Operators only: Program was cleared, and this snapshot restores it. */
@@ -537,7 +533,6 @@ export const liveRoomClientMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("overlay.mode"), mode: liveOverlayModeSchema }).strict(),
   stageDisplaySettings.liveStageDisplaySettingsCommandSchema,
   screenSync.liveScreenSyncCommandSchema,
-  graphicLocks.liveGraphicLockCommandSchema,
   ...liveChatClientMessageSchemas,
   ...liveModerationClientMessageSchemas,
   ...liveAuthorClientMessageSchemas,

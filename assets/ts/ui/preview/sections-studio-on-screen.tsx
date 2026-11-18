@@ -381,7 +381,7 @@ export const studioOnScreenSections: PreviewSection[] = [
     id: "onscreen-questions-projector",
     title: "Top questions on a projector screen",
     note: "The open questions with the most votes, most first; the room refills the list as votes and moderation change.",
-    render: () => <ProjectorScreen state={roomWith({ topQuestions: LISTS.topQuestions })} />,
+    render: () => <ProjectorScreen state={roomWith({ topQuestions: LISTS.topQuestions })} layout="full-board" />,
   },
   {
     id: "onscreen-questions-projector-large",
@@ -409,6 +409,25 @@ export const studioOnScreenSections: PreviewSection[] = [
         layout={QA_LAYOUT}
         layouts={[QA_LAYOUT]}
         positions={{ elements: LIVE_OVERLAY_DEFAULT_POSITIONS, saved: false, updatedAt: null }}
+        canEdit
+        onSaved={noCommand}
+        onDuplicate={noCommand}
+        onDirty={noCommand}
+      />
+    ),
+  },
+  {
+    id: "layout-editor-read-only",
+    title: "A scene shown to someone who may not change it",
+    note: "Room operators load the event's scenes but only the people who set up the live studio change them: the scene is drawn with sample content, with nothing to move, add, save or delete.",
+    render: () => (
+      <OverlayLayoutEditor
+        endpoint="/api/v1/events/pqc-conference-2026/overlays/layouts/projector-qa"
+        positionsEndpoint="/api/v1/events/pqc-conference-2026/overlays/positions"
+        layout={QA_LAYOUT}
+        layouts={[QA_LAYOUT]}
+        positions={{ elements: LIVE_OVERLAY_DEFAULT_POSITIONS, saved: false, updatedAt: null }}
+        canEdit={false}
         onSaved={noCommand}
         onDuplicate={noCommand}
         onDirty={noCommand}
@@ -419,13 +438,13 @@ export const studioOnScreenSections: PreviewSection[] = [
     id: "onscreen-chat-projector",
     title: "Chat on a projector screen",
     note: "The latest attendee messages the broadcast may show, newest at the bottom.",
-    render: () => <ProjectorScreen state={roomWith({ chatFeed: LISTS.chatFeed })} />,
+    render: () => <ProjectorScreen state={roomWith({ chatFeed: LISTS.chatFeed })} layout="full-board" />,
   },
   {
     id: "onscreen-chat-long",
     title: "Chat with long messages",
     note: "Each message shows up to three lines and is clamped at the end of a line; when they no longer fit, the oldest fade off the top.",
-    render: () => <ProjectorScreen state={roomWith({ chatFeed: CHAT_MIXED })} />,
+    render: () => <ProjectorScreen state={roomWith({ chatFeed: CHAT_MIXED })} layout="full-board" />,
   },
   {
     id: "onscreen-lists-overlay",
@@ -434,7 +453,7 @@ export const studioOnScreenSections: PreviewSection[] = [
     render: () => (
       <LivestreamOverlay
         state={roomWith({}, LISTS)}
-        elements={presetWith("check-in", ["topQuestions", "lowerThird"])}
+        elements={presetWith("check-in", ["background", "topQuestions", "lowerThird"])}
       />
     ),
   },
@@ -443,7 +462,10 @@ export const studioOnScreenSections: PreviewSection[] = [
     title: "Chat beside the camera, on the right",
     note: "Graphics on the right: the same column on the other side of the frame.",
     render: () => (
-      <LivestreamOverlay state={roomWith({}, { chatFeed: CHAT_MIXED })} elements={presetWith("questions", ["chat"])} />
+      <LivestreamOverlay
+        state={roomWith({}, { chatFeed: CHAT_MIXED })}
+        elements={presetWith("questions", ["background", "chat"])}
+      />
     ),
   },
   {
@@ -524,7 +546,7 @@ export const studioOnScreenSections: PreviewSection[] = [
     note: "Viewers' reactions float up the side while an operator has them on for this output.",
     render: () => (
       <Reacting state={roomWith({ reactions: true, topQuestions: LISTS.topQuestions })}>
-        {(state) => <ProjectorScreen state={state} />}
+        {(state) => <ProjectorScreen state={state} layout="full-board" />}
       </Reacting>
     ),
   },

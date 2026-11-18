@@ -34,6 +34,19 @@ function screenTransitionHint(screen: string, following: boolean): string {
 }
 
 /**
+ * What Clear does to an output, on hover: its name, then what a click does.
+ * Preview and Program end as a blank frame in the event's default scene; a
+ * room screen only loses what was put on it and keeps its scene.
+ */
+export function clearHint(output: "preview" | "program" | "screen", label: string, defaultScene: string): string {
+  if (output === "program")
+    return `Clear Program\nTake everything off air and go back to the ${defaultScene} scene. You can undo it for a few seconds.`;
+  if (output === "preview")
+    return `Clear Preview\nTake everything off Preview and go back to the ${defaultScene} scene.`;
+  return `Clear ${label}\nTake everything off ${label}. It keeps its scene.`;
+}
+
+/**
  * The switcher's Transition: one take button per output, stacked, each an arrow and that output's code in its tally
  * color. Program first; Space is its shortcut. In its own small panel on the
  * desk and between the two pictures on a phone. Labeled, the buttons say the
@@ -124,13 +137,16 @@ export function useTakeShortcut(take: () => void, enabled: boolean) {
 /**
  * The Undo after Program was cleared, for every operator, for a few seconds:
  * on air there is no time for a confirmation, so the clear is immediate and
- * this puts it back.
+ * this puts it back, scene included.
  */
 export function ProgramUndoToast({
   undo,
+  defaultScene,
   onUndo,
 }: {
   undo: LiveRoomState["programUndo"];
+  /** The name of the scene a cleared Program goes back to. */
+  defaultScene: string;
   onUndo: (snapshotId: string) => void;
 }) {
   const [shown, setShown] = useState<string | null>(null);
@@ -146,7 +162,7 @@ export function ProgramUndoToast({
     <div class="pk-studio__toast">
       <Toast
         tone="info"
-        message={`${undo.change.operatorName} took everything off air.`}
+        message={`${undo.change.operatorName} took everything off air. Program is in the ${defaultScene} scene.`}
         action={{
           label: "Undo",
           onSelect: () => {

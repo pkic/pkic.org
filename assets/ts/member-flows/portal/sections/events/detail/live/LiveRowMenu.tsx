@@ -20,10 +20,7 @@ import {
 } from "../../../../../../../shared/schemas/live-room-output-setup";
 import { liveOutputComposition, type LiveStage } from "../../../../../../../shared/schemas/live-session-room";
 import { Menu, type MenuItem } from "../../../../../../ui/Menu";
-import { StrokeIcon } from "../../../../../../ui/MediaIcons";
 import {
-  liveLayerElement,
-  liveLayerLocked,
   liveLayerShown,
   liveLayerTargets,
   sendLayerToggle,
@@ -119,32 +116,7 @@ function screenDescription(name: string, on: boolean, following: boolean, keptWh
   return `Show it on ${screen}.`;
 }
 
-/**
- * The switch that keeps a graphic in every scene: it then draws in each
- * scene at its standard place, over the scene's graphics, on every output
- * that has it on. It never puts the graphic on or takes it off.
- */
-export function liveSceneLockItem(targets: LiveTargets, layer: LiveLayer): MenuItem {
-  const locked = liveLayerLocked(targets.state, layer);
-  return {
-    id: "keep-in-every-scene",
-    label: "Keep in every scene",
-    description: locked
-      ? "In every scene while it is on. Click to let each scene decide."
-      : "Show it in every scene while it is on.",
-    checked: locked,
-    multiple: true,
-    separatorBefore: true,
-    disabled: targets.disabled,
-    onSelect: () => targets.sendProgram({ type: "graphic.lock", graphic: liveLayerElement(layer), locked: !locked }),
-  };
-}
-
-/**
- * A switch per screen of the room that can draw the graphic, in its tally
- * color, checked where the graphic was put, each saying what a click does;
- * then the switch that keeps it in every scene.
- */
+/** A switch per screen of the room that can draw the graphic, in its tally color, checked where the graphic was put, each saying what a click does. */
 export function liveScreenItems(targets: LiveTargets, layer: LiveLayer): MenuItem[] {
   const { on, following } = liveScreens(targets, layer);
   const live = liveLayerTargets(targets, layer).program;
@@ -153,7 +125,7 @@ export function liveScreenItems(targets: LiveTargets, layer: LiveLayer): MenuIte
   const offered = liveStudioOutputs(outputs).filter(
     (output) => liveScreenDraws(liveOutputRole(outputs, output), graphicOf(layer)) || on.includes(output),
   );
-  const screens = offered.map((output): MenuItem => {
+  return offered.map((output) => {
     const put = on.includes(output);
     const role = liveOutputRole(outputs, output);
     const kept = put && live && liveScreenSyncs(targets.state.screenSync, outputs, output) && followsKind(role, layer);
@@ -171,8 +143,6 @@ export function liveScreenItems(targets: LiveTargets, layer: LiveLayer): MenuIte
       onSelect: () => sendLayerToggle(targets, layer, output),
     };
   });
-  const lock = liveSceneLockItem(targets, layer);
-  return [...screens, screens.length ? lock : { ...lock, separatorBefore: false }];
 }
 
 /** The screens first, then the row's own actions after a separator. */
@@ -238,19 +208,6 @@ export function LiveScreenTags({ screens }: { screens: LiveScreens }) {
           </abbr>
         );
       })}
-    </span>
-  );
-}
-
-/** A row's mark for a graphic the room keeps in every scene, set from the row's ⋯ menu. */
-export function LiveSceneLockMark({ locked }: { locked: boolean }) {
-  if (!locked) return null;
-  return (
-    <span class="pk-live-scene-lock" role="img" aria-label="Kept in every scene" title="Kept in every scene">
-      <StrokeIcon>
-        <rect x="3.5" y="7" width="9" height="6.5" rx="1.5" />
-        <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" />
-      </StrokeIcon>
     </span>
   );
 }

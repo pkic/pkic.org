@@ -15,8 +15,8 @@ import type { Box } from "./overlay-layout-editing";
  * A scene's graphics as the editor lists them: the Program graphics the
  * scene shows, front first, and the ones it can still add. The background
  * (the conference field) is a graphic like the others, placed, sized and
- * stacked on its own; a graphic put on the conference field carries one in
- * its own box. Pure, so the list, the canvas and the menu agree.
+ * stacked on its own; no other graphic carries a field. Pure, so the list,
+ * the canvas and the menu agree.
  */
 
 /** The graphics this scene shows, front first: the top of the list draws in front. */

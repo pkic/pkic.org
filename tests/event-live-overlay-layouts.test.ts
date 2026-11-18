@@ -14,6 +14,7 @@ import {
   type EventLiveOverlayLayoutPut,
 } from "../assets/shared/schemas/live-overlay-layout";
 import { callApi } from "./helpers/app";
+import { createAdminSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
@@ -21,7 +22,8 @@ import type { DatabaseLike } from "../functions/_lib/types";
 
 const f = createLiveRoomFixture(),
   sockets: WebSocket[] = [];
-const TALK = LIVE_OVERLAY_PRESET_LAYOUTS["talk"].elements;
+/** Every graphic at its standard box: the Default scene, which a new scene starts from. */
+const BASE = LIVE_OVERLAY_PRESET_LAYOUTS.default.elements;
 const collection = () => `/api/v1/events/${f.eventSlug}/settings/live/layouts`;
 
 const positionsPath = () => `/api/v1/events/${f.eventSlug}/settings/live/positions`;
@@ -30,7 +32,7 @@ async function api(
   method: "GET" | "PUT" | "DELETE",
   slug: string | null,
   body?: unknown,
-  person: "operator" | "attendee" = "operator",
+  person: "operator" | "secondOperator" | "attendee" = "operator",
   db: DatabaseLike = env.DB,
   path = slug ? `${collection()}/${slug}` : collection(),
 ) {
@@ -54,8 +56,8 @@ const put = (overrides: Partial<EventLiveOverlayLayoutPut> = {}) =>
   eventLiveOverlayLayoutPutSchema.parse({
     expectedUpdatedAt: null,
     name: "Keynote",
-    preset: "talk",
-    elements: { ...TALK, ticker: { ...TALK.ticker, visible: false } },
+    preset: "break",
+    elements: { ...BASE, ticker: { ...BASE.ticker, visible: false } },
     ...overrides,
   });
 const positions = (method: "PUT" | "DELETE", body?: unknown) =>
@@ -66,6 +68,20 @@ async function current() {
 }
 const audits = () =>
   queryAll<{ action: string }>(env.DB, "SELECT action FROM audit_log WHERE entity_id=? ORDER BY created_at", f.eventId);
+
+/** Leaves the second operator with exactly these permissions on the event, in place of administrator access. */
+async function secondOperatorHolds(...permissions: Array<"agenda:live_moderate" | "agenda:live_setup">) {
+  const now = new Date().toISOString();
+  await env.DB.batch([
+    env.DB.prepare("UPDATE user_roles SET revoked_at=? WHERE user_id=?").bind(now, f.users.secondOperator),
+    ...permissions.map((permission) =>
+      env.DB.prepare(
+        "INSERT INTO permission_grants (id,user_id,permission,context_type,context_id,granted_by_user_id,created_at) VALUES (?,?,?,'event',?,?,?)",
+      ).bind(crypto.randomUUID(), f.users.secondOperator, permission, f.eventId, f.users.operator, now),
+    ),
+  ]);
+  f.tokens.secondOperator = await createAdminSession(env.DB, f.users.secondOperator, crypto.randomUUID());
+}
 
 beforeEach(async () => {
   await f.setup();
@@ -89,7 +105,7 @@ describe("event overlay layouts", () => {
     const saved = eventLiveOverlayLayoutsResponseSchema
       .parse(await created.json())
       .layouts.find((layout) => layout.slug === "keynote")!;
-    expect(saved).toMatchObject({ name: "Keynote", builtIn: false, saved: true, preset: "talk" });
+    expect(saved).toMatchObject({ name: "Keynote", builtIn: false, saved: true, preset: "break" });
     expect(saved.elements.ticker.visible).toBe(false);
     expect((await api("PUT", "keynote", put())).status).toBe(409);
     const renamed = await api("PUT", "keynote", put({ name: "Opening keynote", expectedUpdatedAt: saved.updatedAt }));
@@ -124,11 +140,19 @@ describe("event overlay layouts", () => {
     const insert = (slug: string, name: string, preset: string) =>
       env.DB.prepare(
         "INSERT INTO event_live_overlay_layouts(event_id,slug,name,preset,elements_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
-      ).bind(f.eventId, slug, name, preset, JSON.stringify(TALK), now, now);
-    await env.DB.batch([insert("full-frame", "Full frame", "full-frame"), insert("keynote", "Keynote", "talk")]);
-    const slugs = (await layouts()).map((layout) => layout.slug);
+      ).bind(f.eventId, slug, name, preset, JSON.stringify(BASE), now, now);
+    await env.DB.batch([
+      insert("full-frame", "Full frame", "full-frame"),
+      insert("talk", "Talk", "talk"),
+      insert("keynote", "Keynote", "talk"),
+    ]);
+    const listed = await layouts();
+    const slugs = listed.map((layout) => layout.slug);
     expect(slugs).not.toContain("full-frame");
-    expect(slugs).toContain("keynote");
+    // Talk is retired: its saved row is left out, so a room that still names it draws Default.
+    expect(slugs).not.toContain("talk");
+    // A scene of the event's own that started from Talk stays, started from no built-in scene.
+    expect(listed.find((layout) => layout.slug === "keynote")).toMatchObject({ builtIn: false, preset: null });
   });
 
   it("deletes the event's own layouts but never a built-in one or the default", async () => {
@@ -139,13 +163,13 @@ describe("event overlay layouts", () => {
       eventLiveOverlayLayoutsResponseSchema.parse(await removed.json()).layouts.some((l) => l.slug === "keynote"),
     ).toBe(false);
     expect((await api("DELETE", "keynote")).status).toBe(404);
-    await api("PUT", "talk", put({ name: "Talk" }));
-    for (const slug of ["talk", "panel"]) {
+    await api("PUT", "break", put({ name: "Break" }));
+    for (const slug of ["break", "panel"]) {
       const refused = await api("DELETE", slug);
       expect(refused.status).toBe(409);
       expect(((await refused.json()) as { error: { code: string } }).error.code).toBe("LIVE_OVERLAY_LAYOUT_BUILT_IN");
     }
-    expect((await layouts()).find((layout) => layout.slug === "talk")!.saved).toBe(true);
+    expect((await layouts()).find((layout) => layout.slug === "break")!.saved).toBe(true);
   });
 
   it("refuses attendees and invalid layouts without writing", async () => {
@@ -166,13 +190,73 @@ describe("event overlay layouts", () => {
     expect(await audits()).toEqual([]);
   });
 
+  it("lets a room operator load the layouts but change none of them or the shared positions", async () => {
+    const created = await api("PUT", "keynote", put());
+    expect(created.status).toBe(200);
+    const saved = eventLiveOverlayLayoutsResponseSchema.parse(await created.json());
+    const keynote = saved.layouts.find((layout) => layout.slug === "keynote")!;
+    await secondOperatorHolds("agenda:live_moderate");
+
+    const listed = await api("GET", null, undefined, "secondOperator");
+    expect(listed.status).toBe(200);
+    expect(eventLiveOverlayLayoutsResponseSchema.parse(await listed.json()).layouts.map(({ slug }) => slug)).toEqual([
+      ...LIVE_OVERLAY_PRESETS,
+      "keynote",
+    ]);
+    const asOperator = (method: "PUT" | "DELETE", slug: string | null, body?: unknown) =>
+      api(method, slug, body, "secondOperator", env.DB, slug ? undefined : positionsPath());
+    const refusals = [
+      // Create, save, reset a built-in one, delete, then the shared positions saved and reset.
+      await asOperator("PUT", "opening", put()),
+      await asOperator("PUT", "keynote", put({ name: "Renamed", expectedUpdatedAt: keynote.updatedAt })),
+      await asOperator("PUT", "break", put({ name: "Name only", preset: null })),
+      await asOperator("DELETE", "keynote"),
+      await asOperator("PUT", null, { expectedUpdatedAt: null, elements: saved.positions.elements }),
+      await asOperator("DELETE", null),
+    ];
+    expect(refusals.map((response) => response.status)).toEqual([403, 403, 403, 403, 403, 403]);
+    expect(await queryAll(env.DB, "SELECT slug,name FROM event_live_overlay_layouts")).toEqual([
+      { slug: "keynote", name: "Keynote" },
+    ]);
+    expect(await queryAll(env.DB, "SELECT event_id FROM event_live_overlay_positions")).toEqual([]);
+    expect((await audits()).map((row) => row.action)).toEqual(["live_overlay_layout_saved"]);
+  });
+
+  it("lets someone who sets up the live studio create, save, reset and delete layouts and shared positions", async () => {
+    await secondOperatorHolds("agenda:live_moderate", "agenda:live_setup");
+    const asSetup = (method: "PUT" | "DELETE", slug: string | null, body?: unknown) =>
+      api(method, slug, body, "secondOperator", env.DB, slug ? undefined : positionsPath());
+    const version = async (slug: string) =>
+      eventLiveOverlayLayoutsResponseSchema
+        .parse(await (await api("GET", null, undefined, "secondOperator")).json())
+        .layouts.find((layout) => layout.slug === slug)!.updatedAt;
+
+    expect((await asSetup("PUT", "keynote", put())).status).toBe(200);
+    expect(
+      (await asSetup("PUT", "keynote", put({ name: "Renamed", expectedUpdatedAt: await version("keynote") }))).status,
+    ).toBe(200);
+    expect((await asSetup("PUT", "break", put({ name: "Name only", preset: null }))).status).toBe(200);
+    expect((await asSetup("DELETE", "keynote")).status).toBe(200);
+    const positions = (await current()).positions;
+    expect((await asSetup("PUT", null, { expectedUpdatedAt: null, elements: positions.elements })).status).toBe(200);
+    expect((await asSetup("DELETE", null)).status).toBe(200);
+    expect((await audits()).map((row) => row.action)).toEqual([
+      "live_overlay_layout_saved",
+      "live_overlay_layout_saved",
+      "live_overlay_layout_saved",
+      "live_overlay_layout_deleted",
+      "live_overlay_positions_saved",
+      "live_overlay_positions_reset",
+    ]);
+  });
+
   it("keeps the saved layouts within the event's limit", async () => {
     const now = new Date().toISOString();
     await env.DB.batch(
       Array.from({ length: LIVE_OVERLAY_MAX_SAVED_LAYOUTS }, (_, index) =>
         env.DB.prepare(
           "INSERT INTO event_live_overlay_layouts(event_id,slug,name,preset,elements_json,created_at,updated_at) VALUES(?,?,?,NULL,?,?,?)",
-        ).bind(f.eventId, `scene-${index}`, `Scene ${index}`, JSON.stringify(TALK), now, now),
+        ).bind(f.eventId, `scene-${index}`, `Scene ${index}`, JSON.stringify(BASE), now, now),
       ),
     );
     const refused = await api("PUT", "one-more", put());
@@ -220,7 +304,7 @@ describe("event overlay layouts", () => {
       preset: body.preset,
       elements: { ...body.elements, lowerThird: { ...body.elements.lowerThird, ...moved } },
     });
-    expect(changed.find((layout) => layout.slug === "talk")!.elements.lowerThird.y).toBe(0.5);
+    expect(changed.find((layout) => layout.slug === "default")!.elements.lowerThird.y).toBe(0.5);
     const count = operator.received.filter((message) => message.type === "overlay.layouts.changed").length;
     await runDurableObjectAlarm(f.room());
     expect(operator.received.filter((message) => message.type === "overlay.layouts.changed")).toHaveLength(count);
@@ -241,13 +325,13 @@ describe("shared element positions", () => {
   it("starts from the built-in positions, and every layout that shares an element inherits a move", async () => {
     const start = await current();
     expect(start.positions).toEqual({ elements: LIVE_OVERLAY_DEFAULT_POSITIONS, saved: false, updatedAt: null });
-    // Built-in layouts share what they place where Talk does; Q&A places it itself.
+    // Built-in layouts share what they place where Default does; Q&A places it itself.
     expect(LIVE_OVERLAY_PRESET_LAYOUTS["break"].elements.ticker.shared).toBe(true);
     expect(LIVE_OVERLAY_PRESET_LAYOUTS["questions"].elements.lowerThird.shared).toBe(false);
     expect((await api("PUT", "keynote", put())).status).toBe(200);
     const moved = await moveShared(0.5);
     expect(moved.positions.saved).toBe(true);
-    for (const slug of ["talk", "break", "panel", "keynote"]) expect((await lowerThirdOf(slug)).y, slug).toBe(0.5);
+    for (const slug of ["default", "break", "panel", "keynote"]) expect((await lowerThirdOf(slug)).y, slug).toBe(0.5);
     expect(await lowerThirdOf("questions")).toEqual(
       liveOverlayBoxOf(LIVE_OVERLAY_PRESET_LAYOUTS["questions"].elements.lowerThird),
     );
@@ -258,12 +342,12 @@ describe("shared element positions", () => {
   });
 
   it("keeps a layout's own position once it is unlinked, and follows again once it uses the shared one", async () => {
-    const own = { ...TALK.lowerThird, shared: false, x: 0.3, y: 0.3 };
+    const own = { ...BASE.lowerThird, shared: false, x: 0.3, y: 0.3 };
     const keynote = put({ elements: { ...put().elements, lowerThird: own } });
     expect((await api("PUT", "keynote", keynote)).status).toBe(200);
     await moveShared(0.6);
     expect(await lowerThirdOf("keynote")).toEqual(liveOverlayBoxOf(own));
-    expect((await lowerThirdOf("talk")).y).toBe(0.6);
+    expect((await lowerThirdOf("default")).y).toBe(0.6);
     // "Use shared position": the layout shares the element again and takes the shared box.
     const saved = (await current()).layouts.find((layout) => layout.slug === "keynote")!;
     const relinked = put({
@@ -275,7 +359,7 @@ describe("shared element positions", () => {
   });
 
   it("applies one layout's position to every layout that shares it", async () => {
-    const own = { ...TALK.lowerThird, shared: false, x: 0.2, y: 0.25 };
+    const own = { ...BASE.lowerThird, shared: false, x: 0.2, y: 0.25 };
     expect((await api("PUT", "keynote", put({ elements: { ...put().elements, lowerThird: own } }))).status).toBe(200);
     // "Apply this position to all layouts": the shared position takes the box, and the layout shares it again.
     const before = (await current()).positions;
@@ -293,7 +377,7 @@ describe("shared element positions", () => {
         elements: { ...saved.elements, lowerThird: { ...own, shared: true } },
       }),
     );
-    for (const slug of ["talk", "break", "keynote"])
+    for (const slug of ["default", "break", "keynote"])
       expect(await lowerThirdOf(slug), slug).toEqual(liveOverlayBoxOf(own));
   });
 
@@ -314,7 +398,7 @@ describe("shared element positions", () => {
       saved: false,
       updatedAt: null,
     });
-    expect(await lowerThirdOf("talk")).toEqual(LIVE_OVERLAY_DEFAULT_POSITIONS.lowerThird);
+    expect(await lowerThirdOf("default")).toEqual(LIVE_OVERLAY_DEFAULT_POSITIONS.lowerThird);
     expect((await audits()).map((row) => row.action)).toEqual([
       "live_overlay_positions_saved",
       "live_overlay_positions_reset",

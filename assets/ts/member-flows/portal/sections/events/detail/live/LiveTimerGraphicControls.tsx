@@ -1,4 +1,3 @@
-import { useEffect, useState } from "preact/hooks";
 import {
   LIVE_TIMER_DIRECTIONS,
   LIVE_TIMER_FORMATS,
@@ -15,7 +14,8 @@ import { ChoiceCard, ChoiceCards } from "../../../../../../ui/ChoiceCard";
 import { LiveTimerLookSample } from "../../../../../../live-session/LiveTimerLookSample";
 import { Field } from "../../../../../../ui/Field";
 import { Select, TextInput } from "../../../../../../ui/TextControl";
-import { liveTimerGraphicReplacements, sendLivePrograms, type LiveTargets } from "./live-output-targets";
+import { useLiveGraphicSettings } from "./live-graphic-settings";
+import type { LiveTargets } from "./live-output-targets";
 
 const FORMAT_LABELS: Record<LiveTimerGraphic["format"], string> = {
   clock: "Clock (12:34, 1:02:34, 3d 4h 12m)",
@@ -244,17 +244,11 @@ export function useLiveTimerGraphic(targets: LiveTargets, timerId: string) {
           .map((composition) => on(composition.timerGraphics))
           .find(Boolean))
       : undefined);
-  const [graphic, setGraphic] = useState<LiveTimerGraphic>(shown ?? defaultLiveTimerGraphic(timerId));
-  // When another operator changes what an output shows, this desk follows it.
-  const shownKey = shown ? JSON.stringify(shown) : null;
-  useEffect(() => {
-    if (shownKey) setGraphic(JSON.parse(shownKey) as LiveTimerGraphic);
-  }, [shownKey]);
-  /** Whether every output that shows the timer took the new graphic; on failure nothing changes here. */
-  const save = (next: LiveTimerGraphic): boolean => {
-    if (!sendLivePrograms(targets, liveTimerGraphicReplacements(targets, graphic, next))) return false;
-    setGraphic(next);
-    return true;
-  };
-  return { graphic, save };
+  const { settings, save } = useLiveGraphicSettings<LiveTimerGraphic>(
+    targets,
+    shown ?? null,
+    defaultLiveTimerGraphic(timerId),
+    (graphic) => ({ kind: "timer", graphic }),
+  );
+  return { graphic: settings, save };
 }

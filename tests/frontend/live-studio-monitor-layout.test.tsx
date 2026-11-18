@@ -101,9 +101,10 @@ describe("studio monitor layouts", () => {
     document.body.append(host);
     void act(() => render(<Harness />, host!));
     const screen = () => host!.querySelector(".pk-studio-monitor__screen")!;
-    // A room that names no scene draws Default: the speaker's name, and no board.
+    // A room that names no scene draws Default: the speaker's name, and no board or background.
     expect(screen().querySelector(".pk-live-overlay__name")).not.toBeNull();
     expect(screen().querySelector(".pk-live-overlay__question-text")).toBeNull();
+    expect(screen().querySelector('[data-overlay-element="background"]')).toBeNull();
     const picker = host.querySelector<HTMLButtonElement>('button[aria-label="Scene in Preview: Default"]')!;
     expect(picker.textContent).toContain("Default");
     expect(picker.getAttribute("aria-haspopup")).toBe("dialog");
@@ -114,7 +115,6 @@ describe("studio monitor layouts", () => {
     const choices = [...popover.querySelectorAll<HTMLButtonElement>(".pk-studio-scene")];
     expect(choices.map((choice) => choice.querySelector(".pk-studio-scene__name")?.textContent)).toEqual([
       "Default",
-      "Talk",
       "Q&A",
       "Panel",
       "Break",
@@ -125,7 +125,7 @@ describe("studio monitor layouts", () => {
     expect(choices.every((choice) => choice.querySelector(".pk-studio-scene__picture .pk-live-overlay"))).toBe(true);
     expect(document.activeElement).toBe(choices[0]);
     expect(choices[0]!.getAttribute("aria-pressed")).toBe("true");
-    void act(() => choices[2]!.click());
+    void act(() => choices[1]!.click());
     // The choice goes to the room's shared Preview, not to this operator's monitor, and the popover closes.
     expect(switcher.previewScene).toHaveBeenLastCalledWith("questions");
     expect(stored.get(STUDIO_LAYOUT_STORAGE_KEY) ?? "").not.toContain("questions");
@@ -139,7 +139,7 @@ describe("studio monitor layouts", () => {
         .dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
     expect(document.querySelector('[role="dialog"]')).toBeNull();
-    // Preview draws the scene it holds: the panel scene has the question and no lower third.
+    // Preview draws the scene it holds: Panel places the question and no lower third, which stays on, undrawn.
     const inScene = { ...room, stage: { ...room.stage, scene: "panel" } };
     void act(() => render(<Harness preview={inScene} />, host!));
     expect(screen().querySelector(".pk-live-overlay__question-text")).not.toBeNull();
@@ -179,9 +179,13 @@ describe("studio monitor layouts", () => {
       [...scope.querySelectorAll("button")].find((button) => button.textContent?.trim() === name);
     const labeled = (scope: HTMLElement, label: string) =>
       scope.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
-    // Every output but the livestream clears from its own monitor; Program's clear says it can be undone.
+    // Every output but the livestream clears from its own monitor. Program's clear says where it ends and that it
+    // can be undone; a room screen's says it keeps its scene.
     expect(labeled(tile("Program"), "Clear Program")?.getAttribute("title")).toBe(
-      "Clear Program: remove every graphic at once. You can undo it for a few seconds.",
+      "Clear Program\nTake everything off air and go back to the Default scene. You can undo it for a few seconds.",
+    );
+    expect(labeled(tile("Projector"), "Clear Projector")?.getAttribute("title")).toBe(
+      "Clear Projector\nTake everything off Projector. It keeps its scene.",
     );
     void act(() => labeled(tile("Program"), "Clear Program")!.click());
     expect(switcher.clear).toHaveBeenCalledWith("program");

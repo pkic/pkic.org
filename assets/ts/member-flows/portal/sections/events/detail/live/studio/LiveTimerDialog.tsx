@@ -26,6 +26,7 @@ import { DurationInput, durationFieldOf } from "../../../../../../../ui/Duration
 import { Field } from "../../../../../../../ui/Field";
 import { FormSection } from "../../../../../../../ui/FormSection";
 import { Select, TextInput } from "../../../../../../../ui/TextControl";
+import { LIVE_SETTINGS_NOT_SENT } from "../live-graphic-settings";
 import { LiveTimerLookFields } from "../LiveTimerGraphicControls";
 import "./LiveTimerDialog.css";
 import { liveTimerNextInstant } from "./LiveTimerAddForm";
@@ -52,7 +53,6 @@ function mineOver<Value extends object>(opened: Value, mine: Value, current: Val
   const changed = Object.entries(mine).filter(([key, value]) => !same(value, opened[key as keyof Value]));
   return { ...current, ...Object.fromEntries(changed) };
 }
-const RECONNECTING = "The control room is reconnecting or busy. Try again when it is connected.";
 
 /**
  * One timer's settings in one place, in two columns on a wide screen: its
@@ -141,7 +141,7 @@ export function LiveTimerDialog({
       ...(next.edit.targetAt !== undefined ? { targetAt: next.edit.targetAt } : {}),
     };
     if (Object.keys(patch).length && !send({ type: "timer.edit", timerId: timer.id, edit: patch }))
-      return setError(RECONNECTING);
+      return setError(LIVE_SETTINGS_NOT_SENT);
     const settings = {
       atZero: mineOver(opened.timer.atZero, next.settings.atZero, timer.atZero),
       sound: mineOver(opened.timer.sound, next.settings.sound, timer.sound),
@@ -151,9 +151,9 @@ export function LiveTimerDialog({
       !same(settings, { atZero: timer.atZero, sound: timer.sound }) &&
       !send({ type: "timer.configure", timerId: timer.id, settings })
     )
-      return setError(RECONNECTING);
+      return setError(LIVE_SETTINGS_NOT_SENT);
     const shown = mineOver(opened.graphic, next.graphic, graphic);
-    if (!same(shown, graphic) && !saveGraphic(shown)) return setError(RECONNECTING);
+    if (!same(shown, graphic) && !saveGraphic(shown)) return setError(LIVE_SETTINGS_NOT_SENT);
     onClose();
   };
 

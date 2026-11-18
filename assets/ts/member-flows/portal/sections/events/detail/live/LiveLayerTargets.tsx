@@ -1,21 +1,15 @@
-import { LiveSceneLockMark, LiveScreenTags, liveScreens } from "./LiveRowMenu";
+import { LiveScreenTags, liveScreens } from "./LiveRowMenu";
 import { LiveTallyBands } from "./LiveTallyBands";
 import { OutputTargetControl } from "./OutputTargetControl";
 import { useLiveTogglePending } from "./live-toggle-pending";
-import {
-  liveLayerLocked,
-  liveLayerTargets,
-  sendLayerToggle,
-  type LiveLayer,
-  type LiveTargets,
-} from "./live-output-targets";
+import { liveLayerTargets, sendLayerToggle, type LiveLayer, type LiveTargets } from "./live-output-targets";
 import { livePresenceItem, useLivePresence } from "./presence/live-presence";
 import { LivePresenceTag } from "./presence/LivePresenceTag";
 
 /**
  * The output control for one graphic of this room: Preview and Program,
  * their tally edge on its row, the codes of the room's screens it was put
- * on, a lock while it is kept in every scene, and which other operators are on it. The screens' switches are in the
+ * on, and which other operators are on it. The screens' switches are in the
  * row's menu (LiveRowMenu). An integrated control
  * leaves the operators' chips to the card it sits on.
  */
@@ -41,7 +35,6 @@ export function LiveLayerTargets({
   return (
     <>
       {integrated ? null : <LivePresenceTag marks={marks} />}
-      <LiveSceneLockMark locked={liveLayerLocked(targets.state, layer)} />
       <LiveScreenTags screens={screens} />
       {/* The row this control sits in carries the Program and Preview edge. */}
       <LiveTallyBands where={where} />

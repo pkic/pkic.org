@@ -23,9 +23,9 @@ import {
 
 type Anchor = Pick<LiveOverlayElementPlacement, "horizontal" | "vertical">;
 
-/** A box from pixel edges, at its anchor, shown unless said otherwise. */
-function box(x: number, y: number, w: number, h: number, anchor: Anchor, visible = true): LiveOverlayElementPlacement {
-  return { visible, ...liveOverlayPixelBox(x, y, w, h, anchor), shared: true };
+/** A box from pixel edges, at its anchor, included in the scene until `only` leaves it out. */
+function box(x: number, y: number, w: number, h: number, anchor: Anchor): LiveOverlayElementPlacement {
+  return { visible: true, ...liveOverlayPixelBox(x, y, w, h, anchor), shared: true };
 }
 
 const LEFT_MIDDLE: Anchor = { horizontal: "left", vertical: "middle" };
@@ -64,19 +64,19 @@ function boardColumn(side: "left" | "right"): Partial<LiveOverlayLayoutElements>
     lowerThird: box(camera + 48, 738, 1056, 288, LEFT_BOTTOM),
     timer: box(left ? 1536 : 1920 - BOARD_COLUMN_WIDTH - 384, 48, 336, 120, RIGHT_TOP),
     ticker: box(camera, 954, 1920 - BOARD_COLUMN_WIDTH, 126, CENTER_BOTTOM),
-    reactions: box(left ? 1492 : 48, 48, 380, 760, left ? RIGHT_MIDDLE : LEFT_MIDDLE, false),
+    // Over the camera, at the side away from the column.
+    reactions: box(left ? 1492 : 48, 48, 380, 760, left ? RIGHT_MIDDLE : LEFT_MIDDLE),
   };
 }
 
 /**
  * Every graphic's standard box: the lower third, timer and ticker in the
- * title-safe area, and each board over the whole frame. The graphics an
- * operator puts on together never overlap: the timer keeps the top-right
- * corner, the check-in code the right side under it, Up next the left above
- * the lower third.
+ * title-safe area, and each board over the whole frame. The timer keeps the
+ * top-right corner, the check-in code the right side under it, Up next the
+ * left above the lower third. The background and the QR code have no switch,
+ * so they are left out here: a scene that includes one shows it all the time.
  */
 const FULL_FRAME: LiveOverlayLayoutElements = {
-  // The conference field over the whole frame, off: a scene with boards shows it where they sit, under them.
   background: { ...FILL, visible: false },
   // Down to the title-safe line, bottom-aligned: it sits low with the ticker off, and above it while it is on air.
   lowerThird: box(48, 722, 1248, 304, LEFT_BOTTOM),
@@ -90,18 +90,27 @@ const FULL_FRAME: LiveOverlayLayoutElements = {
   checkIn: box(1392, 216, 480, 648, RIGHT_MIDDLE),
   topQuestions: { visible: true, ...LIVE_OVERLAY_ADDED_ELEMENT_BOXES.topQuestions, shared: true },
   chat: { visible: true, ...LIVE_OVERLAY_ADDED_ELEMENT_BOXES.chat, shared: true },
-  // Off until an organizer puts it in a scene: it then shows whenever the scene is on air.
   qrCode: { visible: false, ...LIVE_OVERLAY_ADDED_ELEMENT_BOXES.qrCode, shared: true },
   reactions: box(1492, 48, 380, 984, RIGHT_MIDDLE),
   stageDisplay: box(0, 0, 1920, 1080, CENTER),
   stageMessage: box(64, 24, 1792, 152, { horizontal: "center", vertical: "top" }),
 };
 
-/** Shows only the listed elements; every other one stays where it is, hidden. */
+/** Includes only the listed elements; every other one stays where it is, left out of the scene. */
 function only(elements: LiveOverlayLayoutElements, shown: readonly LiveOverlayElement[]): LiveOverlayLayoutElements {
   return Object.fromEntries(
     LIVE_OVERLAY_ELEMENTS.map((element) => [element, { ...elements[element], visible: shown.includes(element) }]),
   ) as LiveOverlayLayoutElements;
+}
+
+/** The scene with these graphics coming on with it; each must be one that fills itself from the room. */
+function comingOn(
+  elements: LiveOverlayLayoutElements,
+  graphics: readonly LiveOverlayElement[],
+): LiveOverlayLayoutElements {
+  const next = { ...elements };
+  for (const graphic of graphics) next[graphic] = { ...elements[graphic], comesOn: true };
+  return next;
 }
 
 /** An element's box and alignment, without whether a layout shows or shares it. */
@@ -130,14 +139,18 @@ function sharing(elements: LiveOverlayLayoutElements): LiveOverlayLayoutElements
 
 /** What every scene keeps for the speaker: the stage display and its messages, never on the stream. */
 const STAGE: readonly LiveOverlayElement[] = ["stageDisplay", "stageMessage"];
-/** The graphics an operator can put on in every scene: the time and the news ticker. */
-const ALWAYS: readonly LiveOverlayElement[] = ["timer", "ticker", ...STAGE];
+/**
+ * What every built-in scene places and never brings on: the time, the news
+ * ticker and reactions are switched in the studio. So is the lower third,
+ * in the scenes with a camera picture to caption.
+ */
+const ALWAYS: readonly LiveOverlayElement[] = ["timer", "ticker", "reactions", ...STAGE];
 /** The boards a question round shows, one at a time in the same place. */
 const QUESTION_BOARDS: readonly LiveOverlayElement[] = ["question", "topQuestions", "poll"];
 /**
- * A column of boards at one side, the camera beside it, with the conference
- * field in the column under them. The ticker keeps the full width and the
- * boards keep clear of it.
+ * A column of boards at one side, the camera beside it, with the background
+ * in the column under them. The ticker keeps the full width and the boards
+ * keep clear of it.
  */
 const column = (side: "left" | "right"): LiveOverlayLayoutElements => ({
   ...FULL_FRAME,
@@ -146,54 +159,66 @@ const column = (side: "left" | "right"): LiveOverlayLayoutElements => ({
 });
 
 /**
- * The scenes every event starts with, in the studio's order. A scene is a
- * layout only: it says where each graphic it shows sits, and the operator
- * puts each one on or off. Every scene shows the timer and the ticker. A
- * scene with boards places the background, the conference field, where they
- * sit, under them; the outputs draw it only while a board on it is on air.
+ * The scenes every event starts with, in the studio's order. A scene says
+ * where each graphic it includes sits, and which of the graphics that fill
+ * themselves from the room come on with it; the operator switches the rest.
+ * A scene that includes the background shows it whenever the scene is on,
+ * and the boards inside it draw on it.
  */
 const PRESETS: Record<LiveOverlayPreset, { name: string; elements: LiveOverlayLayoutElements }> = {
   /**
-   * The event's default, drawn by an output that names no scene: every
-   * graphic that is not a board at its standard box, over the picture, with
-   * no field. A board shows in another scene.
+   * The empty scene, drawn by an output that names no scene and by one that
+   * was cleared: the graphics that sit over a camera picture, each at its
+   * standard box, with nothing coming on. It holds no board and no
+   * background: a board that is on shows in a scene that includes it.
    */
   default: {
     name: "Default",
-    elements: only(FULL_FRAME, ["lowerThird", "schedule", "checkIn", "reactions", ...ALWAYS]),
-  },
-  /** A talk: the speaker's name, the time, the ticker and reactions over the camera. */
-  talk: { name: "Talk", elements: only(FULL_FRAME, ["lowerThird", "reactions", ...ALWAYS]) },
-  /** Questions in a column on the right, the speaker's name and the time on the camera beside them. */
-  questions: {
-    name: "Q&A",
-    elements: only(column("right"), ["background", ...QUESTION_BOARDS, "lowerThird", ...ALWAYS]),
+    elements: only(FULL_FRAME, ["lowerThird", "schedule", "checkIn", ...ALWAYS]),
   },
   /**
-   * A panel on stage: the panelists across the lower half, the question in
-   * the upper half, edge to edge, on one background over the whole frame:
-   * one board with one logo while both are on. The time keeps its standard
-   * corner, and the field's logo steps aside for it.
+   * The top questions in a column on the right, on the background, coming on
+   * with the scene; a question or a poll takes their place when picked. The
+   * speaker's name, the time and the ticker sit on the camera beside them.
+   */
+  questions: {
+    name: "Q&A",
+    elements: comingOn(only(column("right"), ["background", ...QUESTION_BOARDS, "lowerThird", ...ALWAYS]), [
+      "topQuestions",
+    ]),
+  },
+  /**
+   * A panel on stage, coming on with the scene: the panelists across the
+   * lower half, a picked question in the upper half, edge to edge, on one
+   * background over the whole frame. The time keeps its standard corner, and
+   * the background's logo steps aside for it. The panel names its people, so
+   * the scene places no lower third.
    */
   panel: {
     name: "Panel",
-    elements: only(
-      {
-        ...FULL_FRAME,
-        panelists: box(0, 540, 1920, 540, CENTER_BOTTOM),
-        question: box(0, 0, 1920, 540, { horizontal: "center", vertical: "top" }),
-      },
-      ["background", "panelists", "question", ...ALWAYS],
+    elements: comingOn(
+      only(
+        {
+          ...FULL_FRAME,
+          panelists: box(0, 540, 1920, 540, CENTER_BOTTOM),
+          question: box(0, 0, 1920, 540, { horizontal: "center", vertical: "top" }),
+        },
+        ["background", "panelists", "question", ...ALWAYS],
+      ),
+      ["panelists"],
     ),
   },
   /**
-   * A break, over the sponsors' clips or a holding slide: the time until the
-   * program is back, large in the bottom-right corner above the ticker, and
-   * Up next at its standard place on the left, clear of it.
+   * A break, over the sponsors' clips or a holding slide: Up next at its
+   * standard place on the left, coming on with the scene, and the time until
+   * the program is back, large in the bottom-right corner above the ticker.
    */
   break: {
     name: "Break",
-    elements: only({ ...FULL_FRAME, timer: box(1392, 758, 480, 172, RIGHT_BOTTOM) }, ["schedule", ...ALWAYS]),
+    elements: comingOn(
+      only({ ...FULL_FRAME, timer: box(1392, 758, 480, 172, RIGHT_BOTTOM) }, ["schedule", "lowerThird", ...ALWAYS]),
+      ["schedule"],
+    ),
   },
   /**
    * The check-in code in a column on the left on the background, large
@@ -211,8 +236,9 @@ const PRESETS: Record<LiveOverlayPreset, { name: string; elements: LiveOverlayLa
     ]),
   },
   /**
-   * One board over the whole frame on the background: a question, the poll,
-   * the panel, the chat or Up next, with only the time and the ticker over it.
+   * One board over the whole frame on the background: a question, the top
+   * questions, the poll, the panel, the chat or Up next, one at a time. No
+   * camera picture shows, so the scene places no lower third.
    */
   "full-board": {
     name: "Full board",
@@ -228,8 +254,9 @@ const PRESETS: Record<LiveOverlayPreset, { name: string; elements: LiveOverlayLa
 };
 
 /**
- * Every graphic at its standard box, all shown: the base a scene starts
- * from, and what previews and tests place a graphic in on its own.
+ * Every graphic with a switch at its standard box, the boards included:
+ * what Add graphic and a new scene place a graphic at, and what previews and
+ * tests place one in on its own. Default includes only some of them.
  */
 export const LIVE_OVERLAY_STANDARD_ELEMENTS: LiveOverlayLayoutElements = sharing(FULL_FRAME);
 

@@ -14,6 +14,8 @@ import { LIVE_OVERLAY_DEFAULT_LAYOUT } from "../../../../../../../../shared/sche
 import { ClearIcon, ExpandIcon, StudioOutputScreen, type MonitorSources } from "./MonitorPanel";
 import type { StudioPanelView } from "./StudioGrid";
 import { SessionTiming, StudioNotice, type StudioNoticeContent } from "./StudioHeader";
+import { liveSceneName } from "../live-layer-unseen";
+import { clearHint } from "./StudioSwitcher";
 import { STUDIO_PANEL_LABELS, studioOutputDetails, type StudioPanelType } from "./studio-layout";
 import "../live-tally.css";
 import "./StudioPhone.css";
@@ -122,11 +124,7 @@ function Thumbnail({
               variant="ghost"
               disabled={clearDisabled}
               aria-label={`Clear ${label}`}
-              title={
-                tally === "program"
-                  ? "Remove every graphic. You can undo it for a few seconds."
-                  : "Remove every graphic"
-              }
+              title={clearHint(tally, label, liveSceneName(sources.preview, null))}
               onClick={() => onClear(tally)}
             >
               <ClearIcon />

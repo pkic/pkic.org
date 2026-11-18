@@ -53,11 +53,14 @@ export function applyLayoutElementToAll(drafts: LayoutDrafts, element: LiveOverl
   };
 }
 
-/** What the layout itself saves for an element: shared ones by their flag, visibility, place in the stack and background only. */
+/**
+ * What the layout itself saves for an element: a shared one only by its flag, whether the scene includes it, its
+ * place in the stack and whether it comes on with the scene.
+ */
 function ownedBy(placement: LiveOverlayElementPlacement) {
   return placement.shared
-    ? { visible: placement.visible, shared: true, layer: placement.layer, background: placement.background === true }
-    : { ...placement, background: placement.background === true };
+    ? { visible: placement.visible, shared: true, layer: placement.layer, comesOn: placement.comesOn === true }
+    : { ...placement, comesOn: placement.comesOn === true };
 }
 
 /** Whether the layout's own part changed; a shared element's move is the shared positions' change, not the layout's. */

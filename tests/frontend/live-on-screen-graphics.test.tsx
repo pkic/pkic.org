@@ -26,6 +26,7 @@ import {
   stageClockState,
   TIMERS_FIXTURE_NOW,
 } from "../../assets/ts/ui/preview/studio-timers-fixtures";
+import { controlFor } from "./helpers/labeled-control";
 import { liveSnapshot } from "./helpers/live-room-socket";
 
 let host: HTMLElement | undefined;
@@ -103,6 +104,63 @@ describe("reactions in the Graphics panel", () => {
     const row = await graphicsRow(LiveTopQuestionsControls, roomState());
     await row.press("Show top questions on air");
     expect(row.sent).toEqual([expect.objectContaining({ type: "stage.set", topQuestions: { count: 3 } })]);
+  });
+});
+
+describe("a graphic a scene or another operator put on", () => {
+  const pressed = (label: string) =>
+    host!.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)!.getAttribute("aria-pressed");
+  /** Preview with the top questions on as a scene brings them on, where this operator's row offers three. */
+  const broughtOn = (count: number) => {
+    const base = roomState();
+    return roomState({ preview: { ...base.preview, topQuestions: { config: { count }, questions: [] } } });
+  };
+
+  it("lights its row where it is on, whatever settings it is on with, and a press takes it off", async () => {
+    const row = await graphicsRow(LiveTopQuestionsControls, broughtOn(5));
+    expect(pressed("Show top questions in preview")).toBe("true");
+    expect(pressed("Show top questions on air")).toBe("false");
+    // The row names the settings on screen, not the ones it would have offered.
+    expect(host!.textContent).toContain("5 open");
+    await row.press("Show top questions in preview");
+    expect(row.sent).toEqual([{ type: "preview.set", composition: { topQuestions: null } }]);
+  });
+
+  it("follows the settings an output shows when they change under it", async () => {
+    const targets = (state: LiveRoomState): LiveTargets => ({
+      state,
+      programActive: true,
+      disabled: false,
+      sendProgram: () => true,
+    });
+    host = document.body.appendChild(document.createElement("div"));
+    await act(() => render(<LiveTopQuestionsControls targets={targets(roomState())} />, host!));
+    expect(host.textContent).toContain("3 open");
+    expect(pressed("Show top questions in preview")).toBe("false");
+    await act(() => render(<LiveTopQuestionsControls targets={targets(broughtOn(5))} />, host!));
+    expect(host.textContent).toContain("5 open");
+    expect(pressed("Show top questions in preview")).toBe("true");
+  });
+
+  it("changes the graphic where it is on when its settings are saved, and nowhere else", async () => {
+    const row = await graphicsRow(LiveTopQuestionsControls, broughtOn(5));
+    await row.press("Top questions actions");
+    const settings = [...document.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]')].find((item) =>
+      item.textContent?.includes("Top questions settings"),
+    )!;
+    await act(() => settings.click());
+    const count = controlFor<HTMLSelectElement>(document.body, "Questions to show");
+    await act(() => {
+      count.value = "2";
+      count.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const save = [...document.querySelectorAll<HTMLButtonElement>("dialog button")].find(
+      (button) => button.textContent?.trim() === "Save",
+    )!;
+    await act(() => save.click());
+    // It is on Preview only, so only Preview takes the new settings; Program is not touched.
+    expect(row.sent).toEqual([{ type: "preview.set", composition: { topQuestions: { count: 2 } } }]);
+    expect(host!.textContent).toContain("2 open");
   });
 });
 
@@ -193,9 +251,8 @@ describe("timers over a board", () => {
         .style.getPropertyValue("--overlay-timer-reserve"),
     );
 
-  async function draw(state: LiveRoomState) {
+  async function draw(state: LiveRoomState, elements = LIVE_OVERLAY_STANDARD_ELEMENTS) {
     host ??= document.body.appendChild(document.createElement("div"));
-    const elements = LIVE_OVERLAY_STANDARD_ELEMENTS;
     await act(() => render(<LiveOverlayPresentation view="program" elements={elements} projection={state} />, host!));
   }
 
@@ -210,12 +267,21 @@ describe("timers over a board", () => {
     expect(reserve()).toBe(0);
   });
 
-  it("sets digits on a plate over the camera and bare on a board, so no card sits on a card", async () => {
+  it("sets digits on a plate over the camera and bare on the scene's background, so no card sits on a card", async () => {
     await draw(stageClockState);
     const plate = () => host!.querySelector<HTMLElement>(".pk-live-overlay__timer")!;
     expect(plate().hasAttribute("data-on-board")).toBe(false);
-    await draw({ ...stageClockState, stage: { ...stageClockState.stage, topQuestions: questions } });
+    // A board has no field of its own: over the camera the timer keeps its plate, with or without a board under it.
+    const shown = { ...stageClockState, stage: { ...stageClockState.stage, topQuestions: questions } };
+    await draw(shown);
+    expect(plate().hasAttribute("data-on-board")).toBe(false);
+    const background = { ...LIVE_OVERLAY_STANDARD_ELEMENTS.background, visible: true };
+    await draw(shown, { ...LIVE_OVERLAY_STANDARD_ELEMENTS, background });
     expect(plate().hasAttribute("data-on-board")).toBe(true);
+    // The background's logo steps aside for the timer on its corner.
+    const ground = host!.querySelector<HTMLElement>('[data-overlay-element="background"]')!;
+    expect(ground.hasAttribute("data-logo-covered")).toBe(true);
+    expect(ground.querySelectorAll(".pk-live-board__logo")).toHaveLength(1);
   });
 
   it("draws a timer bare or as a tab from the frame's top edge, the next timer under the tab's plate", async () => {
