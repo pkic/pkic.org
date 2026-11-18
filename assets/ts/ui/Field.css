@@ -71,6 +71,16 @@
     min-width: 0;
   }
 
+  /*
+   * A one-line control is as wide as what goes in it, not as wide as the
+   * screen: a select's arrow, or a button beside the input, stays near the
+   * label. A textarea, a group of choices and a composite picker still fill
+   * the row.
+   */
+  .pk-field__control:has(> :is(input.pk-input, select.pk-input, .pk-input-group, .pk-input--trigger)) {
+    max-inline-size: var(--pk-field-measure);
+  }
+
   .pk-field__help {
     margin: 0;
     font-size: var(--pk-text-xs);

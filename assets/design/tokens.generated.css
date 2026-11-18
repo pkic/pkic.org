@@ -50,6 +50,7 @@
     --pk-text-display-lg: clamp(2.6rem, 5vw, 3.5rem);
     --pk-text-display-mobile: clamp(2rem, 10vw, 2.7rem);
     --pk-tracking-label: 0.12em;
+    --pk-field-measure: 32rem;
     --pk-radius-sm: 4px;
     --pk-radius: 6px;
     --pk-radius-lg: 10px;

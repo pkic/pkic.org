@@ -213,6 +213,9 @@ export const constants = {
   "7": "3rem",
   "8": "4rem",
 
+  // The widest a one-line form control grows: room for a long address or organization name.
+  "field-measure": "32rem",
+
   "radius-sm": "4px",
   radius: "6px",
   "radius-lg": "10px",
