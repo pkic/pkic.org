@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 export function publicationEnvironment() {
   const branch = process.env.WORKERS_CI_BRANCH;
   const environment =
-    process.env.CLOUDFLARE_ENV ?? (branch ? (branch.toLowerCase() === "main" ? "production" : "preview") : "local");
+    process.env.CLOUDFLARE_ENV ?? (branch ? (branch === "main" ? "production" : "preview") : "local");
   if (!["local", "preview", "production"].includes(environment)) throw new Error("Invalid publication environment");
   return environment;
 }
