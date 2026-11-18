@@ -106,11 +106,18 @@ describe("the scene's background on an output", () => {
   });
 
   it("shows the front one of two boards in the same spot, on the one background", () => {
+    const shared = (host: HTMLElement) =>
+      drawn(host).filter((element) => ["question", "topQuestions", "poll"].includes(element!));
     const host = draw({ view: "program", layout: "questions", projection: room("question", "topQuestions", "poll") });
-    expect(drawn(host).filter((element) => ["question", "topQuestions", "poll"].includes(element!))).toEqual([
+    expect(shared(host)).toEqual(["poll"]);
+    expect(fields(host)).toHaveLength(1);
+    // A question put on air takes the spot from the top questions, which are back once it goes off.
+    expect(
+      shared(draw({ view: "program", layout: "questions", projection: room("question", "topQuestions") })),
+    ).toEqual(["question"]);
+    expect(shared(draw({ view: "program", layout: "questions", projection: room("topQuestions") }))).toEqual([
       "topQuestions",
     ]);
-    expect(fields(host)).toHaveLength(1);
   });
 
   it("draws the panel's question and panelists as one board on the background, its logo beside the timer", () => {

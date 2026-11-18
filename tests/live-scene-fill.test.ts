@@ -9,6 +9,7 @@ import {
 import { liveCompositionInput } from "../assets/shared/live-room-preview";
 import { resolveLiveSceneElements } from "../assets/shared/live-scene-elements";
 import { liveSceneComesOn, liveSceneFill } from "../assets/shared/live-scene-fill";
+import { liveOverlayClearOfTicker, liveProgramLayers } from "../assets/shared/live-overlay-stacking";
 import {
   LIVE_OVERLAY_ELEMENTS,
   LIVE_OVERLAY_ELEMENT_SWITCHES,
@@ -218,6 +219,28 @@ describe("the built-in scenes", () => {
     );
     expect(timerOnBoard).toEqual(["panel", "full-board"]);
     for (const slug of timerOnBoard) expect(meets(preset(slug).timer, preset(slug).background), slug).toBe(true);
+  });
+
+  it("end Up next above the lower third as it sits over the news ticker, so the two show together", () => {
+    // The lower third draws about 230 px tall with its emblem, bottom-aligned in its box.
+    const drawn = 230 / 1080;
+    for (const slug of LIVE_OVERLAY_PRESETS) {
+      const elements = preset(slug);
+      if (!elements.schedule.visible || !elements.lowerThird.visible) continue;
+      if (!meets({ ...elements.lowerThird, y: 0, h: 1 }, elements.schedule)) continue;
+      const lowerThird = liveOverlayClearOfTicker(elements, true).lowerThird;
+      const top = lowerThird.y + lowerThird.h - drawn;
+      expect(elements.schedule.y + elements.schedule.h, slug).toBeLessThanOrEqual(top - 24 / 1080);
+    }
+  });
+
+  it("stack a question and a poll in front of the lists that fill themselves, so a pick takes the spot they share", () => {
+    for (const slug of LIVE_OVERLAY_PRESETS) {
+      const bottomUp = liveProgramLayers(preset(slug));
+      for (const pick of ["question", "poll"] as const)
+        for (const list of ["topQuestions", "chat"] as const)
+          expect(bottomUp.indexOf(pick), `${slug}: ${pick} over ${list}`).toBeGreaterThan(bottomUp.indexOf(list));
+    }
   });
 });
 

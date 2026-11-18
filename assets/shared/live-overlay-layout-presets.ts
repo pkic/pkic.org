@@ -84,8 +84,9 @@ const FULL_FRAME: LiveOverlayLayoutElements = {
   poll: FILL,
   timer: box(1536, 48, 336, 120, RIGHT_TOP),
   ticker: box(0, 954, 1920, 126, CENTER_BOTTOM),
-  // Up next on the left, above the lower third and clear of the check-in code, so the two can show together.
-  schedule: box(96, 168, 1248, 584, LEFT_MIDDLE),
+  // Up next on the left, clear of the check-in code and ending above the lower third as it sits over the ticker,
+  // so they can show together.
+  schedule: box(96, 168, 1248, 504, LEFT_MIDDLE),
   panelists: FILL,
   checkIn: box(1392, 216, 480, 648, RIGHT_MIDDLE),
   topQuestions: { visible: true, ...LIVE_OVERLAY_ADDED_ELEMENT_BOXES.topQuestions, shared: true },

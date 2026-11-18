@@ -11,17 +11,23 @@ import {
  * it is on air. Pure, so the outputs, the studio and the scene editor agree.
  */
 
-/** Program's graphics, bottom to top, as every scene stacks them until an organizer orders them. */
+/**
+ * Program's graphics, bottom to top, as every scene stacks them until an
+ * organizer orders them. The lists that fill themselves from the room (top
+ * questions, chat) sit behind the picks (question, poll): where they share a
+ * spot, a question or poll put on air takes it, and the list is back once
+ * the pick goes off.
+ */
 export const LIVE_PROGRAM_LAYER_ORDER = [
   "background",
   "panelists",
   "schedule",
   "checkIn",
+  "topQuestions",
+  "chat",
   "question",
   "lowerThird",
   "poll",
-  "topQuestions",
-  "chat",
   "qrCode",
   "timer",
   "ticker",

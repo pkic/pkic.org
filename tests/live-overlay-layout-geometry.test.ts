@@ -223,7 +223,8 @@ describe("stacking a scene's graphics", () => {
 
   it("lets a board drawn in front hide a graphic only from where the scene stacks it", () => {
     const onAir = { ...EMPTY_LIVE_STAGE, schedule: { config: {} }, question: { id: "q1" } } as unknown as LiveStage;
-    const scheduleInFront = moveLiveProgramLayer(moveLiveProgramLayer(STANDARD, "schedule", -1), "schedule", -1);
+    // Up next starts four places behind the question: the check-in code and the two lists sit between them.
+    const scheduleInFront = [1, 2, 3, 4].reduce((scene) => moveLiveProgramLayer(scene, "schedule", -1), STANDARD);
     expect(liveOverlayCoveredBy(onAir, STANDARD, "schedule")).toBe("question");
     expect(liveOverlayCoveredBy(onAir, scheduleInFront, "schedule")).toBeNull();
   });
