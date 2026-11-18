@@ -366,21 +366,50 @@ describe("live room auxiliary outputs", () => {
 
   it("takes Preview's scene to Program exactly, and keeps each output's scene when it is cleared", async () => {
     const operator = await f.connect({ person: "operator" });
-    operator.send({ type: "preview.set", composition: { scene: "side-by-side" } });
+    operator.send({ type: "preview.set", composition: { scene: "questions" } });
     expect((await operator.next("preview.changed", (m) => m.composition.scene !== null)).composition.scene).toBe(
-      "side-by-side",
+      "questions",
     );
     operator.send({ type: "preview.take" });
-    expect((await operator.next("stage.changed", (m) => m.stage.scene !== null)).stage.scene).toBe("side-by-side");
+    expect((await operator.next("stage.changed", (m) => m.stage.scene !== null)).stage.scene).toBe("questions");
     // A graphic put straight on Program leaves its scene alone.
     operator.send({ type: "stage.lowerThird", creditKey: null });
-    expect((await operator.next("stage.changed")).stage.scene).toBe("side-by-side");
+    expect((await operator.next("stage.changed")).stage.scene).toBe("questions");
     operator.send({ type: "program.clear" });
     await operator.next("program.cleared");
     const rejoined = await (await f.connect({ person: "operator" })).next("room.snapshot");
-    expect(rejoined.stage.scene).toBe("side-by-side");
-    expect(rejoined.preview.scene).toBe("side-by-side");
+    expect(rejoined.stage.scene).toBe("questions");
+    expect(rejoined.preview.scene).toBe("questions");
     expect(rejoined.outputs.projector.scene).toBeNull();
+  });
+
+  it("puts a scene's graphics on Preview with the room's content, and leaves what Preview already has on", async () => {
+    const operator = await f.connect({ person: "operator" });
+    const author = await f.connect({ person: "attendee" });
+    author.send({ type: "question.ask", text: "When does RSA retire?", anonymous: false });
+    const asked = await operator.next("question.changed");
+    operator.send({ type: "question.moderate", questionId: asked.question.id, status: "approved" });
+    await operator.next("question.changed", (m) => m.question.status === "approved");
+    operator.send({ type: "preview.set", composition: { creditKey: `user:${f.users.speaker}` } });
+    const named = await operator.next("preview.changed", (m) => m.composition.lowerThird !== null);
+
+    operator.send({ type: "preview.set", composition: { scene: "questions" } });
+    const loaded = (await operator.next("preview.changed", (m) => m.composition.scene === "questions")).composition;
+    expect(loaded.topQuestions?.questions.map((question) => question.id)).toEqual([asked.question.id]);
+    expect(loaded.timerGraphics).toEqual([GRAPHIC]);
+    expect(loaded.ticker?.style).toBe("gradient");
+    // The lower third the operator put on stays, as it was; Q&A brings on no other graphic.
+    expect(loaded.lowerThird?.name).toBe("Sam Speaker");
+    expect(loaded.lowerThirdChange).toEqual(named.composition.lowerThirdChange);
+    expect([loaded.question, loaded.poll, loaded.panelists, loaded.checkIn, loaded.schedule]).toEqual([
+      null,
+      null,
+      null,
+      null,
+      null,
+    ]);
+    // Program is untouched until a Take.
+    expect(operator.received.some((message) => message.type === "stage.changed")).toBe(false);
   });
 
   it("refuses a source that names an output the room does not draw", async () => {

@@ -31,6 +31,7 @@ import { resolveLiveCheckIn } from "../event-attendance-points/live-check-in";
 import type { AttendancePointSelection } from "../../../../assets/shared/attendance-points";
 import type { LiveGraphicTheme } from "../../../../assets/shared/live-graphic-theme";
 import type { LiveRoomOnScreenLists } from "./room-on-screen-lists";
+import { liveSceneFill, withoutLiveSceneCheckIn } from "./room-scene-graphics";
 
 /** A check-in code the room cannot show: its day, room or session is gone, or codes are unavailable. */
 const CHECK_IN_UNAVAILABLE = {
@@ -134,8 +135,17 @@ export class LiveRoomGraphics {
     message: Extract<LiveRoomClientMessage, { type: "preview.set" }>,
     at: string,
   ): Promise<LiveControlOutcome> {
-    const input = mergeLivePreview(this.store.preview(), message.composition);
-    return this.preview.set(actor, session, message.composition, await this.resolve(session, input, at), at);
+    const merged = mergeLivePreview(this.store.preview(), message.composition);
+    // Loading a scene puts its graphics on with the room's content, in the same one write.
+    const room = { session, program: this.store.stage(), timers: this.store.timers() };
+    const fill = liveSceneFill(room, this.layouts, message.composition, merged);
+    const resolved = await this.resolve(session, { ...merged, ...fill }, at);
+    // A check-in code the scene brought that the room cannot show stays off; the scene still loads.
+    if (fill.checkIn && resolved.checkIn && "code" in resolved.checkIn) {
+      const patch = { ...message.composition, ...withoutLiveSceneCheckIn(fill) };
+      return this.preview.set(actor, session, patch, { ...resolved, checkIn: null }, at);
+    }
+    return this.preview.set(actor, session, { ...message.composition, ...fill }, resolved, at);
   }
   async takePreview(actor: Actor, session: LiveRoomSession, at: string): Promise<LiveControlOutcome> {
     return this.preview.take(actor, session, await this.resolve(session, this.preview.sources(), at), at);

@@ -6,6 +6,7 @@ import { contentMediaPlugin } from "./scripts/lib/content-media-plugin.mjs";
 // tests away from the domain files they cover.
 export const NODE_UNIT_TEST_FILES = [
   "tests/site-publication-provider.test.ts",
+  "tests/live-scene-graphics.test.ts",
   "tests/access-control-role-id-contract.test.ts",
   "tests/access-control-schema.test.ts",
   "tests/admin-identity.test.ts",
