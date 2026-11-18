@@ -43,7 +43,7 @@ function mount(onScene = vi.fn()) {
   const host = document.createElement("div");
   document.body.append(host);
   hosts.push(host);
-  act(() => {
+  void act(() => {
     render(
       <StudioPhone
         state={room}
@@ -70,7 +70,7 @@ const button = (name: string) =>
 
 afterEach(() => {
   for (const host of hosts.splice(0)) {
-    act(() => render(null, host));
+    void act(() => render(null, host));
     host.remove();
   }
 });
@@ -80,10 +80,10 @@ describe("the studio on a phone", () => {
     const { host } = mount();
     const thumbnail = host.querySelector<HTMLElement>('.pk-studio-phone__thumb[data-tally="program"]')!;
     expect(drawn(thumbnail)).toContain("question");
-    act(() => {
+    void act(() => {
       button("Program").click();
     });
-    act(() => {
+    void act(() => {
       button("Full screen Program").click();
     });
     const large = document.querySelector<HTMLElement>(".pk-studio-monitor__viewer .pk-studio-monitor__screen")!;
@@ -94,13 +94,13 @@ describe("the studio on a phone", () => {
     const { host, onScene } = mount();
     const program = host.querySelector<HTMLElement>('.pk-studio-phone__thumb[data-tally="program"]')!;
     expect(program.querySelector(".pk-studio-phone__thumb-scene")?.textContent).toBe("Q&A");
-    act(() => {
+    void act(() => {
       button("Scene in Preview: Q&A").click();
     });
     const scenes = document.querySelector<HTMLElement>(".pk-studio-scene-popover")!;
     const names = [...scenes.querySelectorAll(".pk-studio-scene__name")].map((each) => each.textContent);
     expect(names).toEqual(["Default", "Q&A", "Panel", "Break", "Check-in", "Full board"]);
-    act(() => {
+    void act(() => {
       [...scenes.querySelectorAll("button")].find((each) => each.textContent?.includes("Break"))!.click();
     });
     expect(onScene).toHaveBeenCalledWith("break");
