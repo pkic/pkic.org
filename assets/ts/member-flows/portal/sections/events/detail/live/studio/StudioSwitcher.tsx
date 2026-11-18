@@ -51,7 +51,7 @@ function screenTransitionHint(screen: string, take: ScreenTake): string {
     shot: `Show Preview on ${screen}. Program stays as it is.`,
     scene: `Put Preview's scene on ${screen}, with what comes on with that scene. ${kept}`,
     "fixed-scene": `Start ${screen}'s own scene again, with what comes on with it. ${kept}`,
-    speaker: `Show Preview's scene on ${screen}. Its question and timer stay Program's.`,
+    speaker: `Show Preview on ${screen}. Its question and timer stay Program's.`,
   };
   return `Transition to ${screen}\n${does[take]}`;
 }
