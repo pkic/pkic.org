@@ -115,8 +115,8 @@ export function liveOverlayPixelBox(
  * there, shown and shared, so nothing an organizer saved stops reading.
  */
 export const LIVE_OVERLAY_ADDED_ELEMENT_BOXES = {
-  topQuestions: liveOverlayPixelBox(48, 176, 840, 728, { horizontal: "left", vertical: "top" }),
-  chat: liveOverlayPixelBox(1104, 176, 768, 728, { horizontal: "right", vertical: "bottom" }),
+  topQuestions: liveOverlayPixelBox(0, 0, 1920, 1080, { horizontal: "center", vertical: "middle" }),
+  chat: liveOverlayPixelBox(0, 0, 1920, 1080, { horizontal: "center", vertical: "middle" }),
 } satisfies Partial<Record<LiveOverlayElement, LiveOverlayElementBox>>;
 
 /** Saved elements with any element added since filled in; anything but an object is left for the schema to refuse. */
@@ -171,9 +171,11 @@ export const LIVE_OVERLAY_PRESETS = [
   "full-frame",
   "lower-third",
   "side-by-side",
+  "side-by-side-right",
   "close-up",
   "panel",
   "ticker-only",
+  "break",
 ] as const;
 export type LiveOverlayPreset = (typeof LIVE_OVERLAY_PRESETS)[number];
 /** The layout a browser source uses when it names none, or one the event does not have. */

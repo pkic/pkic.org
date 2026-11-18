@@ -15,6 +15,7 @@ import { ClearIcon, ExpandIcon, StudioOutputScreen, type MonitorSources } from "
 import type { StudioPanelView } from "./StudioGrid";
 import { SessionTiming, StudioNotice, type StudioNoticeContent } from "./StudioHeader";
 import { STUDIO_OUTPUT_DETAILS, STUDIO_PANEL_LABELS, type StudioPanelType } from "./studio-layout";
+import "../live-tally.css";
 import "./StudioPhone.css";
 
 /** The views a phone shows one at a time: the quick actions first, then the panels. */

@@ -37,7 +37,7 @@ function answerMenu(
     });
   const items: MenuItem[] = [
     answer.removal
-      ? { id: "show", label: "Show answer", description: "Shows it to everyone again.", onSelect: () => hide(false) }
+      ? { id: "show", label: "Show answer", tooltip: "Shows it to everyone again.", onSelect: () => hide(false) }
       : liveRemoveMenuItem("answer", (reason) => hide(true, reason), onError),
   ];
   items.push(

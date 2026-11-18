@@ -4,6 +4,7 @@
  * reads the same.
  */
 import { DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS } from "../../../shared/schemas/live-stage-display-settings";
+import { DEFAULT_LIVE_SCREEN_SYNC } from "../../../shared/schemas/live-screen-sync";
 import { sessionLiveTimer } from "../../../shared/live-timer-policy";
 import { DEFAULT_LIVE_TICKER_CONTEXT } from "../../../shared/schemas/live-session-ticker";
 import {
@@ -14,6 +15,7 @@ import {
 } from "../../../shared/schemas/live-session-room";
 import { defaultLiveTimerGraphic, type LiveTimerGraphic } from "../../../shared/schemas/live-session-timer";
 import { applyLiveRoomMessage, type LiveRoomState } from "../../live-session/live-room-state";
+import { NO_LIVE_ROOM_SOURCES } from "../../../shared/schemas/live-room-sources";
 
 /** The instant the specimens are drawn at. */
 export const TIMERS_FIXTURE_NOW = Date.parse("2026-11-12T10:00:00.000Z");
@@ -78,6 +80,12 @@ export const breakTimer: LiveTimer = {
   heldMs: 4 * MINUTE + 12_000,
 };
 
+/** The pitch as the stream draws it: its time in the mark. */
+export const pitchMarkGraphic = (timerId = pitchTimer.id): LiveTimerGraphic => ({
+  ...defaultLiveTimerGraphic(timerId),
+  presentation: "ring",
+});
+
 /** A room holding these timers, with these graphics on its stage display. */
 export function timersRoomState(
   timers: LiveTimer[],
@@ -94,13 +102,15 @@ export function timersRoomState(
     chat: [],
     questions: [],
     polls: [],
+    preparedQuestions: [],
+    preparedQuestionWindow: null,
     stage: { ...EMPTY_LIVE_AUX_COMPOSITION, timerGraphics: [defaultLiveTimerGraphic(base.id)] },
     outputs: {
       ...EMPTY_LIVE_OUTPUTS,
       "stage-display": { ...EMPTY_LIVE_AUX_COMPOSITION, timerGraphics: stageDisplay },
     },
     speakerMessage: null,
-    preview: { ...EMPTY_LIVE_AUX_COMPOSITION, timerGraphics: [defaultLiveTimerGraphic(pitchTimer.id)] },
+    preview: { ...EMPTY_LIVE_AUX_COMPOSITION, timerGraphics: [pitchMarkGraphic()] },
     timers,
     reactionTotals: {},
     queue: { question: [], "lower-third": [], poll: [], change: null },
@@ -109,6 +119,8 @@ export function timersRoomState(
     stageDisplayNext: null,
     stageDisplayNextVotes: null,
     stageDisplaySettings: DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS,
+    screenSync: DEFAULT_LIVE_SCREEN_SYNC,
+    sources: NO_LIVE_ROOM_SOURCES,
     ...overrides,
   };
   return applyLiveRoomMessage(null, snapshot)!;
@@ -124,11 +136,7 @@ export const stageDisplayWith = (timer: LiveTimer) =>
  */
 export const stageClockState = timersRoomState(
   [agendaSessionTimer, pitchTimer, clockTimer],
-  [
-    defaultLiveTimerGraphic(agendaSessionTimer.id),
-    defaultLiveTimerGraphic(pitchTimer.id),
-    defaultLiveTimerGraphic(clockTimer.id),
-  ],
+  [defaultLiveTimerGraphic(agendaSessionTimer.id), pitchMarkGraphic(), defaultLiveTimerGraphic(clockTimer.id)],
   {
     session: {
       ...TIMERS_FIXTURE_SESSION,

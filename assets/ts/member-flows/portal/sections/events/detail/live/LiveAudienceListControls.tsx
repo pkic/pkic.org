@@ -16,7 +16,6 @@ import { Dialog } from "../../../../../../ui/Dialog";
 import { Field } from "../../../../../../ui/Field";
 import { Select } from "../../../../../../ui/TextControl";
 import { LiveGraphicRow } from "./LiveGraphicRow";
-import { LiveLayerTargets } from "./LiveLayerTargets";
 import type { LiveLayer, LiveTargets } from "./live-output-targets";
 
 const range = ({ min, max }: { min: number; max: number }) =>
@@ -60,6 +59,7 @@ function AudienceListRow<Config extends { count: number }>({
     <LiveGraphicRow
       name={name}
       detail={detail(config)}
+      outputs={{ targets, subject, layer: layer(config) }}
       settings={{
         label: `${name} settings`,
         disabled: targets.disabled,
@@ -69,7 +69,6 @@ function AudienceListRow<Config extends { count: number }>({
         },
       }}
     >
-      <LiveLayerTargets targets={targets} subject={subject} layer={layer(config)} />
       {open && (
         <Dialog
           open
@@ -200,8 +199,10 @@ export function LiveChatFeedControls({ targets }: { targets: LiveTargets }) {
 /** Viewers' reactions floating up over an output; nothing to set, only where they show. */
 export function LiveReactionsControls({ targets }: { targets: LiveTargets }) {
   return (
-    <LiveGraphicRow name="Reactions" detail="Viewer reactions float up the side">
-      <LiveLayerTargets targets={targets} subject="reactions" layer={{ kind: "reactions" }} />
-    </LiveGraphicRow>
+    <LiveGraphicRow
+      name="Reactions"
+      detail="Viewer reactions float up the side"
+      outputs={{ targets, subject: "reactions", layer: { kind: "reactions" } }}
+    />
   );
 }

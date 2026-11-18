@@ -10,10 +10,18 @@ import {
   liveParticipationRestrictionSchema,
   liveRemovalSchema,
 } from "./live-session-moderation";
+import { liveCreditKeySchema } from "./live-session-credit";
 
 export const liveQuestionStatusSchema = z.enum(LIVE_QUESTION_STATUSES);
 
 const questionTextSchema = z.string().min(1).max(LIVE_ROOM_POLICY.questionMaxLength);
+
+/**
+ * Who a question is for: the key of one person credited on the session, as
+ * `session.credits` lists them, or null for everyone. Clients read the name
+ * from the credit; the question never carries a copy of it.
+ */
+export const liveQuestionAddresseeSchema = liveCreditKeySchema.nullable();
 
 export const liveQuestionSchema = z
   .object({
@@ -52,6 +60,10 @@ export const liveQuestionSchema = z
     done: liveChangeSchema.nullable().default(null),
     /** Moderators only: the author's block in force. */
     authorRestriction: liveParticipationRestrictionSchema.nullable().default(null),
+    /** The credited person the question is for; null when it is for everyone. */
+    addressedTo: liveQuestionAddresseeSchema.default(null),
+    /** Moderators only: operators prepared this question ahead; false for everyone else. */
+    prepared: z.boolean().default(false),
   })
   .strict();
 export type LiveQuestion = z.infer<typeof liveQuestionSchema>;
@@ -66,7 +78,9 @@ const questionBodySchema = z
   );
 
 /** The ask form's contract: the socket message carries exactly these fields. */
-export const liveQuestionAskSchema = z.object({ text: questionBodySchema, anonymous: z.boolean() }).strict();
+export const liveQuestionAskSchema = z
+  .object({ text: questionBodySchema, anonymous: z.boolean(), addressedTo: liveQuestionAddresseeSchema.default(null) })
+  .strict();
 
 /**
  * The rewrite editor's contract. The operator submits the text the room will

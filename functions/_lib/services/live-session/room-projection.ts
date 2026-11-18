@@ -19,7 +19,7 @@ import {
 } from "../../../../assets/shared/schemas/live-session-room";
 import type { LiveRoomParticipant } from "./room-admission";
 import type { LivePollRecord } from "./room-poll-store";
-import type { LiveQuestionRow } from "./room-store";
+import type { LiveQuestionRow } from "./room-question-rows";
 import type { LiveAuthorAffiliation } from "../../../../assets/shared/schemas/live-session-author";
 import type { LiveAuthorRole } from "../../../../assets/shared/live-author-roles";
 
@@ -91,6 +91,9 @@ export function projectLiveQuestion(
         : null,
     done: operator && row.done_at && row.done_by_name ? { operatorName: row.done_by_name, at: row.done_at } : null,
     authorRestriction: operator ? authorRestriction(row) : null,
+    addressedTo: row.addressed_to,
+    // Nobody but moderators can tell a prepared question from an asked one.
+    prepared: operator && row.prepared === 1,
   };
 }
 

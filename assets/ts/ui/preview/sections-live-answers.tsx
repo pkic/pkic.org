@@ -41,6 +41,8 @@ const question = (overrides: Partial<LiveQuestion> = {}): LiveQuestion => ({
   removal: null,
   done: null,
   authorRestriction: null,
+  addressedTo: null,
+  prepared: false,
   ...overrides,
 });
 

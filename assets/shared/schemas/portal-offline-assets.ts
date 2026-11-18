@@ -31,7 +31,8 @@ export const portalOfflineInventorySchema = z
   .object({
     version: z.literal(1),
     entrypoints: z.array(portalOfflineAssetPathSchema).min(1).max(32),
-    assets: z.array(portalOfflineAssetPathSchema).min(1).max(512),
+    // The portal shell eagerly links every route stylesheet; the byte limit below is the real bound.
+    assets: z.array(portalOfflineAssetPathSchema).min(1).max(1024),
   })
   .strict()
   .refine(

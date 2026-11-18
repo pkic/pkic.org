@@ -130,7 +130,11 @@ test("offline supporting scanner captures registered and unregistered attendance
     await expect(
       page.locator(index === 0 ? ".pk-event-scanner--eligible" : ".pk-event-scanner--warning"),
     ).toContainText(index === 0 ? "Registered" : "Known badge · not registered");
-    await expect(page.getByText(`${index + 1} scans awaiting upload`, { exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole("status", { name: "Scanner status", exact: true })
+        .getByText(new RegExp(`^${index + 1} awaiting upload(?: · syncing…)?$`)),
+    ).toBeVisible();
   }
   const captured = (await stored(page, "scans")).map((record) => queuedScanSchema.parse(record));
   expect(captured).toHaveLength(2);
@@ -154,7 +158,9 @@ test("offline supporting scanner captures registered and unregistered attendance
     window.location.hash = `#/events/${slug}/scanner`;
   }, slug);
   await expect(page.getByRole("tablist", { name: "Badge scanner views", exact: true })).toBeVisible();
-  await expect(page.getByText("2 scans awaiting upload", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("status", { name: "Scanner status", exact: true }).getByText(/^2 awaiting upload(?: · syncing…)?$/),
+  ).toBeVisible();
   const recovered = (await stored(page, "scans")).map((record) => queuedScanSchema.parse(record));
   expect(recovered.map(({ scan }) => scan).sort((a, b) => a.operationId.localeCompare(b.operationId))).toEqual(
     captured.map(({ scan }) => scan).sort((a, b) => a.operationId.localeCompare(b.operationId)),

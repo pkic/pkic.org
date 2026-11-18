@@ -20,13 +20,13 @@ export function liveDoneMenuItem(item: LiveModerationItem, done: boolean, send: 
     ? {
         id: "undone",
         label: "Back to the queue",
-        description: "Puts it back in the studio queue.",
+        tooltip: "Puts it back in the studio queue.",
         onSelect: () => send({ type: "moderation.done", item, done: false }),
       }
     : {
         id: "done",
         label: "Done",
-        description: "Clears it from the studio queue. Attendees still see it.",
+        tooltip: "Clears it from the studio queue. Attendees still see it.",
         onSelect: () => send({ type: "moderation.done", item, done: true }),
       };
 }
@@ -40,7 +40,7 @@ export function liveRemoveMenuItem(
   return {
     id: "remove",
     label: `Remove ${noun}…`,
-    description: "Hides it from everyone and records why. The author sees the reason.",
+    tooltip: "Hides it from everyone and records why. The author sees the reason.",
     danger: true,
     onSelect: () => {
       void askModerationReason({
@@ -88,7 +88,7 @@ export function liveParticipationMenuItems({
     items.push({
       id: "pause",
       label: "Pause for 10 minutes",
-      description: `${authorName} can't post, vote or react until ${formatClockInZone(livePauseEndsAt(new Date().toISOString()), timeZone)}. They can keep watching.`,
+      tooltip: `${authorName} can't post, vote or react until ${formatClockInZone(livePauseEndsAt(new Date().toISOString()), timeZone)}. They can keep watching.`,
       separatorBefore: true,
       onSelect: () =>
         sendOrReport({ type: "participation.block", item, block: "paused", reason: "conduct", removePosts: false }),
@@ -97,7 +97,7 @@ export function liveParticipationMenuItems({
     items.push({
       id: "block",
       label: "Block for this session…",
-      description: `${authorName} can't post, vote or react in this session until you lift the block. They can keep watching.`,
+      tooltip: `${authorName} can't post, vote or react in this session until you lift the block. They can keep watching.`,
       separatorBefore: !actions.has("pause"),
       danger: true,
       onSelect: block(
@@ -111,7 +111,7 @@ export function liveParticipationMenuItems({
     items.push({
       id: "block-event",
       label: "Block for this event…",
-      description: `${authorName} can't post, vote or react in any session of this event until an organizer lifts the block. They can keep watching.`,
+      tooltip: `${authorName} can't post, vote or react in any session of this event until an organizer lifts the block. They can keep watching.`,
       separatorBefore: !actions.has("pause") && !actions.has("block"),
       danger: true,
       onSelect: block(
@@ -125,7 +125,7 @@ export function liveParticipationMenuItems({
     items.push({
       id: "lift",
       label: "Lift block",
-      description: `${authorName} can post again. Removed posts stay removed.`,
+      tooltip: `${authorName} can post again. Removed posts stay removed.`,
       separatorBefore: true,
       onSelect: () => sendOrReport({ type: "participation.lift", item }),
     });

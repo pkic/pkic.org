@@ -114,6 +114,14 @@ describe("the lower third on screen", () => {
     return { draw, graphic, finish, name };
   }
 
+  it("draws the name bar alone for a speaker with no title or organization, not an empty field", () => {
+    const view = mount({ ...SAM, identity: { title: null, organization: null } } as LiveCredit);
+    expect(view.graphic()?.querySelector(".pk-live-overlay__lower-third-title-bar")).toBeNull();
+    expect(view.graphic()?.querySelector(".pk-live-overlay__title")).toBeNull();
+    void view.draw(SAM);
+    expect(view.graphic()?.querySelector(".pk-live-overlay__lower-third-title-bar")).not.toBeNull();
+  });
+
   it("shows what is on air when first drawn, and does not replay on a re-render", () => {
     const view = mount(SAM);
     expect(view.graphic()?.dataset.phase).toBe("shown");

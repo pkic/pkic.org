@@ -35,6 +35,7 @@ export function previewLiveStage(
           authorName: question.anonymous ? null : question.authorName,
           authorPhotoUrl: question.anonymous ? null : question.authorPhotoUrl,
           authorAffiliation: question.anonymous ? null : (question.authorAffiliation ?? null),
+          addressedTo: question.addressedTo,
         }
       : null;
     next.questionChange = null;

@@ -150,21 +150,24 @@ it("shows a person's card with a large portrait on focus and on a tap of their p
   expect(host.querySelector('[role="dialog"]')).toBeNull();
 });
 
-it("shows each destination's state on the row edge and toggles Program and an aux output on their own", async () => {
+it("shows Program on the row edge, a screen it was put on as a dot on the menu, and toggles Program and a screen on their own", async () => {
   const state = roomState();
   const credit = state.session.credits[0]!;
   state.stage = { ...state.stage, lowerThird: credit };
   const sendProgram = vi.fn((_message: LiveRoomClientMessage) => true);
   host = document.body.appendChild(document.createElement("div"));
   await act(() => render(<LiveSpeakerCards targets={liveTargets(state, { sendProgram })} />, host!));
-  expect(host.querySelector(".pk-live-person")!.getAttribute("data-on-air")).toBe("program");
+  const bands = host.querySelectorAll(".pk-live-person .pk-live-tally-bands > [data-tally]");
+  expect([...bands].map((band) => band.getAttribute("data-tally"))).toEqual(["program"]);
+  const menu = () => host!.querySelector<HTMLButtonElement>(`button[aria-label="${credit.name} actions"]`)!;
+  // The lower third captions the stream's camera, so a projector that syncs with Program does not copy it.
+  expect(menu().querySelector(".pk-live-screen-dots")).toBeNull();
+  expect(menu().getAttribute("title")).toBe("Room screens and more actions.");
   const program = host.querySelector<HTMLButtonElement>(`button[aria-label="Show ${credit.name} on air"]`)!;
   expect(program.getAttribute("aria-pressed")).toBe("true");
   program.click();
   expect(sendProgram).toHaveBeenLastCalledWith({ type: "stage.lowerThird", creditKey: null, motion: "animated" });
-  await act(() =>
-    host!.querySelector<HTMLButtonElement>(`button[aria-label="Send ${credit.name} to the room's screens"]`)!.click(),
-  );
+  await act(() => menu().click());
   const projector = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemcheckbox"]')].find((item) =>
     item.textContent?.includes("Projector"),
   )!;
@@ -177,6 +180,10 @@ it("shows each destination's state on the row edge and toggles Program and an au
     composition: { creditKey: credit.key, lowerThirdMotion: "animated" },
   });
   expect(sendProgram.mock.calls.some(([message]) => message.type === "preview.set")).toBe(false);
+  state.outputs = { ...state.outputs, projector: { ...EMPTY_LIVE_AUX_COMPOSITION, lowerThird: credit } };
+  await act(() => render(<LiveSpeakerCards targets={liveTargets(state, { sendProgram })} />, host!));
+  expect(menu().querySelector('.pk-live-screen-dots > [data-tally="projector"]:not([data-following])')).not.toBeNull();
+  expect(menu().getAttribute("title")).toBe("Room screens and more actions. On Projector.");
 });
 
 it("does not show Program as pressed while another session is on air, and puts the speaker on with the first press", async () => {
@@ -253,7 +260,10 @@ it("adds someone without an account by name alone, never a typed title, and remo
   expect(host.querySelector('[aria-label="Added for this session"]')?.textContent).toContain(
     "Engineer at Lattice Labs",
   );
-  host.querySelector<HTMLButtonElement>('button[aria-label="Remove Grace Guest"]')!.click();
+  await act(() => host!.querySelector<HTMLButtonElement>('button[aria-label="Grace Guest actions"]')!.click());
+  [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
+    .find((item) => item.textContent?.includes("Remove from this session"))!
+    .click();
   expect(liveRoomClientMessageSchema.parse(sendProgram.mock.calls.at(-1)![0])).toEqual({
     type: "credit.remove",
     creditKey: "added:1",

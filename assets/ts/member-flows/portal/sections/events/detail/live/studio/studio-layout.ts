@@ -56,6 +56,13 @@ export const STUDIO_PANEL_LABELS: Record<StudioPanelType, string> = {
 /** What a monitor can show: the two switcher buses, the stream viewers see, and every auxiliary output. */
 export const STUDIO_OUTPUTS = ["preview", "program", "livestream", ...LIVE_AUX_OUTPUTS] as const;
 export type StudioOutput = (typeof STUDIO_OUTPUTS)[number];
+/**
+ * The outputs a monitor offers. The stage preview follows the room on its
+ * own, so the studio offers it only on a monitor that already shows it.
+ */
+export function studioMonitorChoices(shown: readonly StudioOutput[]): StudioOutput[] {
+  return STUDIO_OUTPUTS.filter((output) => output !== "stage-preview" || shown.includes(output));
+}
 export const STUDIO_OUTPUT_DETAILS: Record<StudioOutput, { label: string; short: string; purpose: string }> = {
   preview: LIVE_PREVIEW_OUTPUT_DETAILS,
   program: LIVE_PROGRAM_OUTPUT_DETAILS,

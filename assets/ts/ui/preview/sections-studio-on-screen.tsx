@@ -8,36 +8,23 @@
 import type { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import type { PreviewSection } from "./PreviewShell";
-import {
-  EMPTY_LIVE_AUX_COMPOSITION,
-  EMPTY_LIVE_OUTPUTS,
-  type LiveStage,
-} from "../../../shared/schemas/live-session-room";
-import {
-  LIVE_OVERLAY_DEFAULT_POSITIONS,
-  LIVE_OVERLAY_PRESET_LAYOUTS,
-} from "../../../shared/live-overlay-layout-presets";
-import {
-  LIVE_OVERLAY_ELEMENTS,
-  liveOverlayPixelBox,
-  type LiveOverlayLayout,
-  type LiveOverlayLayoutElements,
-} from "../../../shared/schemas/live-overlay-layout";
+import type { LiveStage } from "../../../shared/schemas/live-session-room";
+import { DEFAULT_LIVE_SCREEN_SYNC } from "../../../shared/schemas/live-screen-sync";
+import { LIVE_OVERLAY_DEFAULT_POSITIONS } from "../../../shared/live-overlay-layout-presets";
 import { OverlayLayoutEditor } from "../../member-flows/portal/sections/events/detail/settings/live-layouts/OverlayLayoutEditor";
-import { ScreenView } from "../../event-screens/ScreenApp";
 import { LiveReactionBar } from "../../live-session/LiveReactionBar";
-import { LiveOverlayPresentation } from "../../live-session/LiveOverlayPresentation";
 import type { LiveRoomState } from "../../live-session/live-room-state";
+import { OutputTargetControl } from "../../member-flows/portal/sections/events/detail/live/OutputTargetControl";
+import { TransitionControl } from "../../member-flows/portal/sections/events/detail/live/studio/StudioSwitcher";
 import { LiveSpeakerCards } from "../../member-flows/portal/sections/events/detail/live/LiveSpeakerCards";
 import { GraphicsPanel } from "../../member-flows/portal/sections/events/detail/live/studio/GraphicsPanel";
 import { monitorPanelView } from "../../member-flows/portal/sections/events/detail/live/studio/MonitorPanel";
 import { StudioPanelFrame } from "../../member-flows/portal/sections/events/detail/live/studio/StudioPanelFrame";
 import type { StudioPanel } from "../../member-flows/portal/sections/events/detail/live/studio/studio-layout";
-import { sampleOverlayRoom } from "../../member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-sample";
 import "../../member-flows/portal/sections/events/detail/live/studio/StudioGrid.css";
 import "../../member-flows/portal/sections/events/detail/settings/live-layouts/OverlayLayouts.css";
 import { SCREEN_FIXTURE, SCREEN_FIXTURE_NOW } from "./event-screens-fixtures";
-import "./event-screens-preview.css";
+import { LivestreamOverlay, presetWith, ProjectorScreen, QA_LAYOUT, ROOM, roomWith } from "./studio-on-screen-fixtures";
 
 const noCommand = () => undefined;
 const noHandlers = {
@@ -48,7 +35,6 @@ const noHandlers = {
   onLostPointerCapture: noCommand,
 };
 
-const ROOM = sampleOverlayRoom(SCREEN_FIXTURE_NOW);
 const LISTS: Pick<LiveStage, "topQuestions" | "chatFeed"> = {
   topQuestions: {
     config: { count: 3 },
@@ -61,7 +47,7 @@ const LISTS: Pick<LiveStage, "topQuestions" | "chatFeed"> = {
       },
       {
         id: "40000000-0000-4000-8000-000000000002",
-        text: "Which algorithms should we pilot first in a private CA?",
+        text: "Which algorithms should we pilot first in a private CA, and how do we keep the relying parties that cannot verify them yet working while the pilot runs alongside our current hierarchy?",
         authorName: null,
         votes: 17,
       },
@@ -100,31 +86,33 @@ const LISTS: Pick<LiveStage, "topQuestions" | "chatFeed"> = {
   },
 };
 
-/**
- * An organizer's layout for the room's projector during Q&A: top questions
- * large on the left, reactions up the right, every other element hidden. It
- * is sized in the event's layout settings like any other card.
- */
-const FULL_FRAME = LIVE_OVERLAY_PRESET_LAYOUTS["full-frame"].elements;
-const QA_ELEMENTS = Object.fromEntries(
-  LIVE_OVERLAY_ELEMENTS.map((element) => [
-    element,
-    { ...FULL_FRAME[element], visible: element === "topQuestions" || element === "reactions" },
-  ]),
-) as LiveOverlayLayoutElements;
-QA_ELEMENTS.topQuestions = {
-  visible: true,
-  shared: false,
-  ...liveOverlayPixelBox(96, 96, 1400, 888, { horizontal: "left", vertical: "middle" }),
-};
-const QA_LAYOUT: LiveOverlayLayout = {
-  slug: "projector-qa",
-  name: "Projector Q&A",
-  preset: "full-frame",
-  builtIn: false,
-  saved: true,
-  elements: QA_ELEMENTS,
-  updatedAt: "2026-11-30T09:00:00.000Z",
+/** A busy chat: short greetings between messages longer than the board's three lines. */
+const CHAT_MIXED: LiveStage["chatFeed"] = {
+  config: { count: 6, delaySeconds: 10 },
+  messages: [
+    { id: "40000000-0000-4000-8000-000000000021", authorName: "Alex Example", text: "Good morning from Toronto!" },
+    {
+      id: "40000000-0000-4000-8000-000000000022",
+      authorName: "Casey Demo",
+      text: "We ran the inventory step last year and found almost twice the certificates we expected, most of them in internal services nobody had listed anywhere. The scan took three weeks, and keeping the list current turned out to be the harder part of the whole exercise.",
+    },
+    { id: "40000000-0000-4000-8000-000000000023", authorName: "Riley Sample", text: "Same here." },
+    {
+      id: "40000000-0000-4000-8000-000000000024",
+      authorName: "Jordan Placeholder",
+      text: "Does the maturity model say anything about code signing keys that live in a cloud HSM rather than on premises?",
+    },
+    {
+      id: "40000000-0000-4000-8000-000000000025",
+      authorName: "Pat Panelist",
+      text: "For anyone joining late: the slides are linked on the session page, and the recording follows tomorrow afternoon.",
+    },
+    {
+      id: "40000000-0000-4000-8000-000000000026",
+      authorName: "Morgan Moderator",
+      text: "Thanks everyone, we'll take two of these questions after the demo.",
+    },
+  ],
 };
 
 const QUESTIONS_FIVE = [
@@ -142,45 +130,6 @@ const QUESTIONS_FIVE = [
     votes: 4,
   },
 ];
-
-/** The room with only the audience graphics on: on the projector's own composition, and on Program. */
-function roomWith(projector: Partial<LiveStage>, program: Partial<LiveStage> = {}): LiveRoomState {
-  return {
-    ...ROOM,
-    overlayLayouts: [{ slug: QA_LAYOUT.slug, name: QA_LAYOUT.name, elements: QA_LAYOUT.elements }],
-    stage: { ...EMPTY_LIVE_AUX_COMPOSITION, ...program },
-    outputs: { ...EMPTY_LIVE_OUTPUTS, projector: { ...EMPTY_LIVE_AUX_COMPOSITION, ...projector } },
-  };
-}
-
-/** A projector screen at the venue, drawn through the screen's own display code. */
-function ProjectorScreen({ state, layout = null }: { state: LiveRoomState; layout?: string | null }) {
-  return (
-    <div class="pk-preview__screen">
-      <ScreenView
-        screenId={SCREEN_FIXTURE.screenId}
-        now={SCREEN_FIXTURE_NOW}
-        display={{
-          kind: "output",
-          output: "projector",
-          layout,
-          roomId: SCREEN_FIXTURE.roomId,
-          state,
-          marker: null,
-        }}
-      />
-    </div>
-  );
-}
-
-/** The livestream overlay over a stand-in for the camera, as the production software composes it. */
-function LivestreamOverlay({ state }: { state: LiveRoomState }) {
-  return (
-    <div class="pk-preview__screen pk-preview__camera">
-      <LiveOverlayPresentation view="program" projection={state} broadcast />
-    </div>
-  );
-}
 
 /** Viewers reacting all the time, so a still picture catches reactions on their way up. */
 function Reacting({ state, children }: { state: LiveRoomState; children: (state: LiveRoomState) => JSX.Element }) {
@@ -201,6 +150,7 @@ const LIVE_PANEL: StudioPanel = { id: "live-1", type: "monitor", x: 0, y: 0, w: 
 const MONITOR_SOURCES = {
   preview: ROOM,
   program: ROOM,
+  connected: true,
   slug: "pqc-conference-2026",
   roomId: SCREEN_FIXTURE.roomId,
   startAt: ROOM.session.startAt,
@@ -208,7 +158,12 @@ const MONITOR_SOURCES = {
 
 /** The LIVE monitor as an operator opens it; the box stands in for the YouTube player. */
 function LiveMonitor() {
-  const view = monitorPanelView(LIVE_PANEL, MONITOR_SOURCES, noCommand, { clear: noCommand, disabled: false });
+  const view = monitorPanelView(LIVE_PANEL, MONITOR_SOURCES, noCommand, {
+    clear: noCommand,
+    screenSync: DEFAULT_LIVE_SCREEN_SYNC,
+    sync: noCommand,
+    disabled: false,
+  });
   return (
     <div class="pk-studio-grid-frame" data-density="compact">
       <div class="pk-studio-grid">
@@ -225,12 +180,52 @@ function LiveMonitor() {
           resizeHandle={() => noHandlers}
         >
           <div class="pk-studio-monitor-frame">
-            <div class="pk-studio-monitor" data-single="" data-tally="stream">
+            <div class="pk-studio-monitor" data-single="" data-tally="livestream">
               <div class="pk-studio-monitor__screen">
                 <p class="pk-studio-monitor__idle">Livestream player, playing muted</p>
               </div>
             </div>
           </div>
+        </StudioPanelFrame>
+      </div>
+    </div>
+  );
+}
+
+const MULTIVIEW_PANEL: StudioPanel = {
+  id: "multiview-1",
+  type: "monitor",
+  x: 0,
+  y: 0,
+  w: 8,
+  h: 14,
+  outputs: ["preview", "program", "projector", "stage-display"],
+};
+
+/** A multiview of Preview, Program and the room's screens, each edged in its own tally color. */
+function Multiview() {
+  const view = monitorPanelView(MULTIVIEW_PANEL, MONITOR_SOURCES, noCommand, {
+    clear: noCommand,
+    screenSync: DEFAULT_LIVE_SCREEN_SYNC,
+    sync: noCommand,
+    disabled: false,
+  });
+  return (
+    <div class="pk-studio-grid-frame" data-density="compact">
+      <div class="pk-studio-grid">
+        <StudioPanelFrame
+          panel={MULTIVIEW_PANEL}
+          panels={[MULTIVIEW_PANEL]}
+          title={view.title}
+          heading={view.heading}
+          actions={view.actions}
+          change={noCommand}
+          defaultSize={{ w: 8, h: 14 }}
+          cell={noCommand}
+          dragHandle={noHandlers}
+          resizeHandle={() => noHandlers}
+        >
+          {view.body}
         </StudioPanelFrame>
       </div>
     </div>
@@ -309,7 +304,7 @@ export const studioOnScreenSections: PreviewSection[] = [
   {
     id: "studio-graphics-audience",
     title: "Graphics panel with the audience graphics",
-    note: "Top questions, Chat and Reactions sit with the other graphics, each with Preview, Program and Screens; the lists' settings choose how many lines show.",
+    note: "Top questions, Chat and Reactions sit with the other graphics, each with PVW and PGM; the row's menu holds the room's screens, shown as dots on it, and the settings.",
     render: () => <Graphics />,
   },
   {
@@ -321,7 +316,7 @@ export const studioOnScreenSections: PreviewSection[] = [
   {
     id: "onscreen-questions-projector-large",
     title: "Top questions sized for a projector",
-    note: "The screen shows the event's Projector Q&A layout, where an organizer made the Top questions box large in the layout settings.",
+    note: "The screen shows the event's Projector Q&A layout: Top questions fill the screen, with the reactions rising over them.",
     render: () => (
       <Reacting
         state={roomWith({
@@ -357,22 +352,32 @@ export const studioOnScreenSections: PreviewSection[] = [
     render: () => <ProjectorScreen state={roomWith({ chatFeed: LISTS.chatFeed })} />,
   },
   {
+    id: "onscreen-chat-long",
+    title: "Chat with long messages",
+    note: "Each message shows up to three lines and is clamped at the end of a line; when they no longer fit, the oldest fade off the top.",
+    render: () => <ProjectorScreen state={roomWith({ chatFeed: CHAT_MIXED })} />,
+  },
+  {
     id: "onscreen-lists-overlay",
-    title: "Top questions and chat on the livestream overlay",
-    note: "The same lists on Program, in their Full frame boxes beside the speaker.",
-    render: () => <LivestreamOverlay state={roomWith({}, LISTS)} />,
+    title: "Top questions beside the camera",
+    note: "Graphics on the left: the list fills a full-height column and the camera fills the rest. Each question shows up to three lines, clamped at the end of a line.",
+    render: () => (
+      <LivestreamOverlay
+        state={roomWith({}, LISTS)}
+        elements={presetWith("side-by-side", ["topQuestions", "lowerThird"])}
+      />
+    ),
   },
   {
-    id: "onscreen-lower-third-identities",
-    title: "Lower third for a speaker with two identities",
-    note: "The title line rolls up to each identity in turn; the conference stripe underlines the name bar.",
-    render: () => <LivestreamOverlay state={roomWith({}, { lowerThird: ROOM.session.credits[0]! })} />,
-  },
-  {
-    id: "onscreen-panelists-identities",
-    title: "Panelists with a speaker's two identities",
-    note: "A panelist with more than one identity rolls through them, as the lower third does.",
-    render: () => <LivestreamOverlay state={roomWith({}, { panelists: { layout: "panel" } })} />,
+    id: "onscreen-chat-side-right",
+    title: "Chat beside the camera, on the right",
+    note: "Graphics on the right: the same column on the other side of the frame.",
+    render: () => (
+      <LivestreamOverlay
+        state={roomWith({}, { chatFeed: CHAT_MIXED })}
+        elements={presetWith("side-by-side-right", ["chat"])}
+      />
+    ),
   },
   {
     id: "studio-speakers-identities",
@@ -380,6 +385,87 @@ export const studioOnScreenSections: PreviewSection[] = [
     note: "The row stays still: it shows the first identity and counts the rest.",
     render: () => (
       <LiveSpeakerCards targets={{ state: ROOM, programActive: true, disabled: false, sendProgram: () => true }} />
+    ),
+  },
+  {
+    id: "studio-speakers-added",
+    title: "Speakers in a studio panel, one added for this session",
+    note: "One row per person like every studio list: PVW, PGM and the menu at the end, which holds the screens and Remove for someone added.",
+    render: () => (
+      <div class="pk-preview__studio-panel">
+        <LiveSpeakerCards
+          targets={{
+            state: {
+              ...ROOM,
+              addedCredits: [{ ...ROOM.session.credits[0]!, key: "added:chris", name: "Chris Bailey" }],
+            },
+            programActive: true,
+            disabled: false,
+            sendProgram: () => true,
+          }}
+        />
+      </div>
+    ),
+  },
+  {
+    id: "studio-multiview",
+    title: "Multiview with each output in its own color",
+    note: "Program red, Preview green, the projector blue and the stage display amber, on the border and the dot.",
+    render: () => <Multiview />,
+  },
+  {
+    id: "studio-output-target-covered",
+    title: "On air, but covered",
+    note: "PGM stays lit while a graphic is on air; hatched when a full-screen board, such as the question, hides it. Its tooltip says which board.",
+    render: () => (
+      <div class="pk-cluster">
+        <OutputTargetControl
+          subject="Up next"
+          preview={false}
+          program={false}
+          disabled={false}
+          onToggle={() => undefined}
+        />
+        <OutputTargetControl subject="Up next" preview program disabled={false} onToggle={() => undefined} />
+        <OutputTargetControl
+          subject="Up next"
+          preview={false}
+          program
+          coveredBy="Question"
+          disabled={false}
+          onToggle={() => undefined}
+        />
+      </div>
+    ),
+  },
+  {
+    id: "studio-transition",
+    title: "Transition to Program or to a screen",
+    note: "Red to Program by default; the menu beside it sends Preview to a screen instead, in that screen's color.",
+    render: () => (
+      <div class="pk-cluster">
+        <TransitionControl
+          disabled={false}
+          transitioning={false}
+          target="program"
+          onTarget={() => undefined}
+          onTransition={() => undefined}
+        />
+        <TransitionControl
+          disabled={false}
+          transitioning={false}
+          target="projector"
+          onTarget={() => undefined}
+          onTransition={() => undefined}
+        />
+        <TransitionControl
+          disabled={false}
+          transitioning={false}
+          target="stage-display"
+          onTarget={() => undefined}
+          onTransition={() => undefined}
+        />
+      </div>
     ),
   },
   {

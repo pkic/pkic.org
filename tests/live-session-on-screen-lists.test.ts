@@ -2,6 +2,9 @@ import { runInDurableObject } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { liveRoomClientMessageSchema, type LiveRoomServerMessage } from "../assets/shared/schemas/live-session-room";
 import type { LiveRoomOnScreenLists } from "../functions/_lib/services/live-session/room-on-screen-lists";
+import { LIVE_CHAT_POLICY } from "../assets/shared/live-chat-policy";
+import type { LiveRoomChat } from "../functions/_lib/services/live-session/room-chat";
+import { liveChatTickerLines } from "../functions/_lib/services/live-session/room-ticker";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
 
 const f = createLiveRoomFixture();
@@ -163,6 +166,28 @@ describe("audience lists on an output", () => {
     for (const message of source.received)
       if (message.type === "aux.changed")
         expect(JSON.stringify(message.composition.chatFeed)).not.toContain("Crew only");
+  });
+
+  it("gives the chat graphic each message whole, and cuts only the ticker's line", async () => {
+    const attendee = await f.connect({ person: "attendee" });
+    const operator = await f.connect({ person: "operator" });
+    const long = await say(
+      attendee,
+      operator,
+      `We ran the inventory step last year ${"and found more. ".repeat(14)}`.trim(),
+    );
+    expect(long.text.length).toBeGreaterThan(LIVE_CHAT_POLICY.tickerMessageLength);
+    const [feed, ticker] = await runInDurableObject(f.room(), async (instance) => {
+      const room = lists(instance);
+      return [
+        await room.chatFeed({ count: 6, delaySeconds: 0 }),
+        await liveChatTickerLines(Reflect.get(room, "chat") as LiveRoomChat),
+      ] as const;
+    });
+    // The board clamps the message to whole lines itself; the ticker has no lines to clamp, so the room cuts it.
+    expect(feed.messages.at(-1)?.text).toBe(long.text);
+    expect(ticker.at(-1)).toHaveLength("Ada Attendee: ".length + LIVE_CHAT_POLICY.tickerMessageLength);
+    expect(ticker.at(-1)?.endsWith("…")).toBe(true);
   });
 
   it(

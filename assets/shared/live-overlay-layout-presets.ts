@@ -29,23 +29,60 @@ function box(x: number, y: number, w: number, h: number, anchor: Anchor, visible
   return { visible, ...liveOverlayPixelBox(x, y, w, h, anchor), shared: true };
 }
 
-const LEFT_TOP: Anchor = { horizontal: "left", vertical: "top" };
 const LEFT_MIDDLE: Anchor = { horizontal: "left", vertical: "middle" };
 const LEFT_BOTTOM: Anchor = { horizontal: "left", vertical: "bottom" };
 const CENTER: Anchor = { horizontal: "center", vertical: "middle" };
 const CENTER_BOTTOM: Anchor = { horizontal: "center", vertical: "bottom" };
 const RIGHT_TOP: Anchor = { horizontal: "right", vertical: "top" };
 const RIGHT_MIDDLE: Anchor = { horizontal: "right", vertical: "middle" };
+const RIGHT_BOTTOM: Anchor = { horizontal: "right", vertical: "bottom" };
 
-/** Today's broadcast: every graphic at its standard size in the title-safe area. */
+/**
+ * A board never floats in the frame: it fills the frame, or a full-height
+ * column at one side with the camera beside it, so no strip of the camera
+ * shows around it.
+ */
+const BOARD_COLUMN_WIDTH = 768;
+const FILL = box(0, 0, 1920, 1080, CENTER);
+
+/** A layout with every board in one full-height column at a side of the frame, the camera filling the rest. */
+function boardColumn(side: "left" | "right"): Partial<LiveOverlayLayoutElements> {
+  const left = side === "left";
+  const column = box(left ? 0 : 1920 - BOARD_COLUMN_WIDTH, 0, BOARD_COLUMN_WIDTH, 1080, {
+    horizontal: side,
+    vertical: "middle",
+  });
+  const camera = left ? BOARD_COLUMN_WIDTH : 0;
+  return {
+    question: column,
+    poll: column,
+    panelists: column,
+    topQuestions: column,
+    chat: column,
+    schedule: column,
+    checkIn: column,
+    lowerThird: box(camera + 48, 738, 1056, 192, LEFT_BOTTOM),
+    timer: box(left ? 1536 : 1920 - BOARD_COLUMN_WIDTH - 384, 48, 336, 120, RIGHT_TOP),
+    ticker: box(camera, 954, 1920 - BOARD_COLUMN_WIDTH, 126, CENTER_BOTTOM),
+    reactions: box(left ? 1492 : 48, 48, 380, 760, left ? RIGHT_MIDDLE : LEFT_MIDDLE, false),
+  };
+}
+
+/**
+ * Today's broadcast: the lower third, timer and ticker in the title-safe
+ * area, and each board over the whole frame. The graphics an operator puts on
+ * together never overlap: the timer keeps the top-right corner, the check-in
+ * code the right side under it, Up next the left above the lower third.
+ */
 const FULL_FRAME: LiveOverlayLayoutElements = {
-  lowerThird: box(48, 776, 1248, 208, LEFT_BOTTOM),
-  question: box(48, 256, 840, 568, LEFT_MIDDLE),
-  poll: box(1032, 256, 840, 568, RIGHT_MIDDLE),
+  lowerThird: box(48, 722, 1248, 208, LEFT_BOTTOM),
+  question: FILL,
+  poll: FILL,
   timer: box(1536, 48, 336, 120, RIGHT_TOP),
-  ticker: box(0, 1000, 1920, 80, CENTER_BOTTOM),
-  schedule: box(192, 108, 1536, 864, CENTER),
-  panelists: box(96, 108, 1728, 864, CENTER),
+  ticker: box(0, 954, 1920, 126, CENTER_BOTTOM),
+  // Up next on the left, above the lower third and clear of the check-in code, so the two can show together.
+  schedule: box(96, 168, 1248, 584, LEFT_MIDDLE),
+  panelists: FILL,
   checkIn: box(1392, 216, 480, 648, RIGHT_MIDDLE),
   topQuestions: { visible: true, ...LIVE_OVERLAY_ADDED_ELEMENT_BOXES.topQuestions, shared: true },
   chat: { visible: true, ...LIVE_OVERLAY_ADDED_ELEMENT_BOXES.chat, shared: true },
@@ -88,24 +125,10 @@ function sharing(elements: LiveOverlayLayoutElements): LiveOverlayLayoutElements
 const PRESETS: Record<LiveOverlayPreset, { name: string; elements: LiveOverlayLayoutElements }> = {
   "full-frame": { name: "Full frame", elements: FULL_FRAME },
   "lower-third": { name: "Lower third only", elements: only(FULL_FRAME, ["lowerThird"]) },
-  /** Camera or slides in a window at the top right; the graphics sit in the band below and the column beside it. */
-  "side-by-side": {
-    name: "Side by side",
-    elements: {
-      ...FULL_FRAME,
-      lowerThird: box(48, 856, 1152, 192, LEFT_BOTTOM),
-      question: box(48, 280, 560, 520, LEFT_MIDDLE),
-      poll: box(48, 280, 560, 520, LEFT_MIDDLE),
-      timer: box(48, 48, 336, 120, LEFT_TOP),
-      ticker: box(1248, 952, 624, 80, CENTER_BOTTOM),
-      schedule: box(48, 280, 560, 520, LEFT_MIDDLE),
-      panelists: box(48, 280, 560, 520, LEFT_MIDDLE),
-      checkIn: box(48, 280, 560, 520, LEFT_MIDDLE),
-      topQuestions: box(48, 280, 560, 520, LEFT_MIDDLE),
-      chat: box(48, 280, 560, 520, LEFT_MIDDLE),
-      reactions: box(48, 48, 560, 760, LEFT_BOTTOM, false),
-    },
-  },
+  /** The boards in a column on the left, the camera or slides beside them. */
+  "side-by-side": { name: "Graphics on the left", elements: { ...FULL_FRAME, ...boardColumn("left") } },
+  /** The boards in a column on the right, the camera or slides beside them. */
+  "side-by-side-right": { name: "Graphics on the right", elements: { ...FULL_FRAME, ...boardColumn("right") } },
   /** A speaker close-up: the name and the time, nothing over the face. */
   "close-up": {
     name: "Close-up",
@@ -114,20 +137,29 @@ const PRESETS: Record<LiveOverlayPreset, { name: string; elements: LiveOverlayLa
       ["lowerThird", "timer", "stageDisplay", "stageMessage"],
     ),
   },
-  /** A panel on stage: the panelists across the lower half, the question above them. */
+  /** A panel on stage: the panelists across the lower half, the question in the upper half, edge to edge. */
   panel: {
     name: "Panel",
     elements: only(
       {
         ...FULL_FRAME,
-        panelists: box(96, 520, 1728, 512, CENTER_BOTTOM),
-        question: box(240, 48, 1440, 440, { horizontal: "center", vertical: "top" }),
+        panelists: box(0, 540, 1920, 540, CENTER_BOTTOM),
+        question: box(0, 0, 1920, 540, { horizontal: "center", vertical: "top" }),
         timer: box(1512, 48, 360, 128, RIGHT_TOP),
       },
       ["panelists", "question", "timer", "ticker", "stageDisplay", "stageMessage"],
     ),
   },
   "ticker-only": { name: "Ticker only", elements: only(FULL_FRAME, ["ticker"]) },
+  /**
+   * A break, over the sponsors' clips or a holding slide: only the time until
+   * the program is back, large in the bottom-right corner above the ticker,
+   * so nothing covers the picture.
+   */
+  break: {
+    name: "Break",
+    elements: only({ ...FULL_FRAME, timer: box(1392, 758, 480, 172, RIGHT_BOTTOM) }, ["timer", "ticker"]),
+  },
 };
 
 export const LIVE_OVERLAY_PRESET_LAYOUTS = Object.fromEntries(

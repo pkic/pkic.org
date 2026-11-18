@@ -2,7 +2,8 @@ import type { ComponentChildren } from "preact";
 import type { LiveModerationReason } from "../../shared/live-moderation-policy";
 import { liveQuestionTransitions, type LiveQuestionStatus, type LiveRoomRole } from "../../shared/live-session-policy";
 import { formatNumber } from "../../shared/format-number";
-import type { LiveQuestion } from "../../shared/schemas/live-session-room";
+import { liveQuestionAddresseeName } from "../../shared/live-room-credits";
+import type { LiveCredit, LiveQuestion } from "../../shared/schemas/live-session-room";
 import { Menu, type MenuItem } from "../ui/Menu";
 import { Badge, type BadgeTone } from "../ui/Badge";
 import { Button } from "../ui/Button";
@@ -34,9 +35,14 @@ export function LiveQuestionTransitions({
   disabled,
   onMove,
   menuLabel,
+  menuTrigger,
+  menuTitle,
   additionalActions = [],
 }: {
   menuLabel?: string;
+  /** The menu trigger's content and tooltip, when the row marks something on it; a ⋯ otherwise. */
+  menuTrigger?: ComponentChildren;
+  menuTitle?: string;
   additionalActions?: readonly MenuItem[];
   question: LiveQuestion;
   role: LiveRoomRole;
@@ -55,6 +61,7 @@ export function LiveQuestionTransitions({
     return (
       <Menu
         label={menuLabel}
+        title={menuTitle}
         items={[
           ...additionalActions,
           ...transitions.map((status) =>
@@ -68,7 +75,9 @@ export function LiveQuestionTransitions({
                 },
           ),
         ]}
-      />
+      >
+        {menuTrigger}
+      </Menu>
     );
   if (!transitions.length) return null;
   return (
@@ -78,7 +87,7 @@ export function LiveQuestionTransitions({
           key={status}
           variant={status === "hidden" ? "danger-quiet" : status === "approved" ? "primary" : "secondary"}
           disabled={disabled}
-          title={status === "hidden" ? remove.description : undefined}
+          title={status === "hidden" ? remove.tooltip : undefined}
           onClick={() => (status === "hidden" ? remove.onSelect?.() : onMove(status))}
         >
           {question.status === "answered" && status === "approved" ? "Reopen" : TRANSITION_LABEL[status]}
@@ -97,12 +106,13 @@ export function LiveQuestionList({
   actions,
   thread,
   compact = false,
-  votesInline = false,
   photos = false,
+  credits = [],
 }: {
   questions: readonly LiveQuestion[];
+  /** The session's credits, which name the person a question is for. */
+  credits?: readonly LiveCredit[];
   compact?: boolean;
-  votesInline?: boolean;
   /** Shows the asker's photo beside their name, when they asked by name and have one. */
   photos?: boolean;
   emptyText: string;
@@ -114,25 +124,24 @@ export function LiveQuestionList({
   thread?: (question: LiveQuestion) => ComponentChildren;
 }) {
   if (!questions.length) return <p class="pk-live-questions__empty">{emptyText}</p>;
+  const addressee = (question: LiveQuestion) => liveQuestionAddresseeName(credits, question.addressedTo);
   return (
     <>
       <LiveModerationDialogHost />
       <ol class="pk-live-questions__list">
         {questions.map((question) => (
           <li key={question.id} class="pk-live-question" data-removed={question.removal ? "" : undefined}>
-            {!votesInline ? (
-              <button
-                type="button"
-                class="pk-live-question__vote"
-                aria-pressed={question.votedByMe}
-                aria-label={`${question.votedByMe ? "Remove your vote" : "Vote"}: ${formatNumber(question.votes)} ${question.votes === 1 ? "vote" : "votes"}`}
-                disabled={!onVote || question.status !== "approved"}
-                onClick={() => onVote?.(question)}
-              >
-                <span aria-hidden="true">▲</span>
-                <span>{formatNumber(question.votes)}</span>
-              </button>
-            ) : null}
+            <button
+              type="button"
+              class="pk-live-question__vote"
+              aria-pressed={question.votedByMe}
+              aria-label={`${question.votedByMe ? "Remove your vote" : "Vote"}: ${formatNumber(question.votes)} ${question.votes === 1 ? "vote" : "votes"}`}
+              disabled={!onVote || question.status !== "approved"}
+              onClick={() => onVote?.(question)}
+            >
+              <span aria-hidden="true">▲</span>
+              <span>{formatNumber(question.votes)}</span>
+            </button>
 
             <div class="pk-live-question__body">
               {question.removal ? (
@@ -153,7 +162,8 @@ export function LiveQuestionList({
                   affiliation={question.authorAffiliation}
                   roles={question.authorRoles}
                 />
-                {votesInline ? <span>{formatNumber(question.votes)} votes</span> : null}
+                {addressee(question) ? <span>For {addressee(question)}</span> : null}
+                {question.prepared ? <span>Prepared</span> : null}
                 {question.anonymous && question.authorName ? <span>Anonymous to attendees</span> : null}
                 {question.withdrawn ? (
                   <span>Withdrawn</span>

@@ -88,16 +88,20 @@ describe("session questions", () => {
     expect(live.latest().protocols).toEqual([LIVE_ROOM_PROTOCOL]);
   });
 
-  it("asks through the shared contract, optionally anonymous", () => {
+  it("asks through the shared contract, optionally anonymous and for a speaker", () => {
     const { host, live } = mount();
     connect(live);
     const text = host.querySelector<HTMLTextAreaElement>("textarea[name=text]")!;
     const anonymous = host.querySelector<HTMLInputElement>("input[name=anonymous]")!;
+    const addressee = host.querySelector<HTMLSelectElement>("select[name=addressedTo]")!;
+    expect([...addressee.options].map((option) => option.text)).toEqual(["Anyone", "Sam Speaker"]);
     void act(() => {
       text.value = "Which algorithms should we migrate first?";
       text.dispatchEvent(new Event("input", { bubbles: true }));
       anonymous.checked = true;
       anonymous.dispatchEvent(new Event("input", { bubbles: true }));
+      addressee.value = "user:speaker";
+      addressee.dispatchEvent(new Event("change", { bubbles: true }));
     });
     void act(() => {
       host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
@@ -107,6 +111,7 @@ describe("session questions", () => {
       type: "question.ask",
       text: "Which algorithms should we migrate first?",
       anonymous: true,
+      addressedTo: "user:speaker",
     });
     if (request.type !== "question.ask") throw new Error("Expected question request");
     expect(text.value).toBe(request.text);
@@ -119,6 +124,7 @@ describe("session questions", () => {
       live.latest().deliver({ type: "question.accepted", operationId: request.operationId, questionId: LIVE_QUESTION }),
     );
     expect(text.value).toBe("");
+    expect(addressee.value).toBe("");
     expect(text.disabled).toBe(false);
   });
 

@@ -2,9 +2,10 @@ import type { ComponentChildren } from "preact";
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { ClockZone } from "../../../../../../../shared/event-clock";
 import { liveCompositionInput } from "../../../../../../../shared/live-room-preview";
+import type { LiveTakeTarget } from "../../../../../../../shared/live-room-outputs";
 import type { AgendaSnapshot } from "../../../../../../../shared/schemas/event-agenda";
 import { EMPTY_LIVE_STAGE, type LiveRoomClientMessage } from "../../../../../../../shared/schemas/live-session-room";
-import { formatNumber } from "../../../../../../../shared/format-number";
+import type { LiveSyncedScreen } from "../../../../../../../shared/schemas/live-screen-sync";
 import { useBoundaryClock } from "../../../../../../hooks/useBoundaryClock";
 import { liveRoomOpenFailure } from "../../../../../../live-session/live-room-copy";
 import type { LiveRoomState } from "../../../../../../live-session/live-room-state";
@@ -14,7 +15,7 @@ import { Alert } from "../../../../../../ui/Alert";
 import { LiveChatPanel } from "./LiveChatPanel";
 
 import { LivePollsCreateAction, LivePollsPanel } from "./LivePollsPanel";
-import { LiveQuestionsPanel, openLiveQuestions } from "./LiveQuestionsPanel";
+import { LivePreparedQuestionTimes, LiveQuestionsHeader, LiveQuestionsPanel } from "./LiveQuestionsPanel";
 import { LiveLowerThirdSettings } from "./LiveLowerThirdSettings";
 import { LiveAddPersonAction, LiveSpeakerCards } from "./LiveSpeakerCards";
 import type { LiveTargets } from "./live-output-targets";
@@ -28,6 +29,7 @@ import { stageDisplaySettingsMenu } from "./studio/stage-display-settings-menu";
 import { StudioGrid, type StudioPanelView } from "./studio/StudioGrid";
 import { StudioHeader, type StudioNoticeContent } from "./studio/StudioHeader";
 import { StudioToolbar } from "./studio/StudioToolbar";
+import { StudioTour } from "./studio/StudioTour";
 import { LiveAddTimerAction, TimePanel } from "./studio/TimePanel";
 import {
   STUDIO_PANEL_LABELS,
@@ -52,6 +54,7 @@ function changesBroadcast(message: LiveRoomClientMessage): boolean {
     message.type === "program.clear" ||
     message.type === "program.restore" ||
     message.type === "aux.set" ||
+    message.type === "screen.sync" ||
     message.type === "speaker.message"
   );
 }
@@ -118,8 +121,13 @@ export function LiveSessionDesk({
     enabled: layout.panels.some((panel) => panel.type === "screens"),
   });
   const fullscreen = useStudioFullscreen();
+  const studio = useRef<HTMLDivElement>(null);
+  const [touring, setTouring] = useState(false);
   const [broadcasting, setBroadcasting] = useState(false);
   const [lowerThirdSettings, setLowerThirdSettings] = useState(false);
+  const [releaseTimes, setReleaseTimes] = useState(false);
+  // Where this operator's Transition goes: Program, or one of the room's screens.
+  const [takeTarget, setTakeTarget] = useState<LiveTakeTarget>("program");
   const runningBroadcast = useRef(false);
   const state = room.state;
   // Where the others were is unknown after a reconnect; they appear again as they move.
@@ -152,7 +160,17 @@ export function LiveSessionDesk({
     });
     return true;
   };
-  useTakeShortcut(() => sendProgram({ type: "preview.take" }), live && !broadcasting);
+  /** Program takes Preview through the room's Take; a screen is set to what Preview holds. */
+  const take = () => {
+    if (!room.state) return;
+    if (takeTarget === "program") return void sendProgram({ type: "preview.take" });
+    sendProgram({
+      type: "aux.set",
+      output: takeTarget,
+      composition: liveCompositionInput(previewProjection(room.state).stage),
+    });
+  };
+  useTakeShortcut(take, live && !broadcasting);
   const phone = useStudioPhone();
   if (!state)
     return room.admissionRefusal ? (
@@ -165,10 +183,17 @@ export function LiveSessionDesk({
   const programActive = activeOccurrenceId === occurrenceId;
   const disabled = !live || broadcasting;
   const targets: LiveTargets = { state, programActive, disabled, sendProgram, sendPrograms };
-  const take = () => sendProgram({ type: "preview.take" });
   const agenda = approvedAgenda ?? null;
   const preview = previewProjection(state);
-  const transition = <TransitionControl disabled={disabled} transitioning={broadcasting} onTransition={take} />;
+  const transition = (
+    <TransitionControl
+      disabled={disabled}
+      transitioning={broadcasting}
+      target={takeTarget}
+      onTarget={setTakeTarget}
+      onTransition={take}
+    />
+  );
   const clearProgram = () => sendProgram({ type: "program.clear" });
   const empty = liveCompositionInput(EMPTY_LIVE_STAGE);
   const switcher = {
@@ -181,11 +206,14 @@ export function LiveSessionDesk({
           : output === "livestream"
             ? undefined
             : sendProgram({ type: "aux.set", output, composition: empty }),
+    screenSync: state.screenSync,
+    sync: (output: LiveSyncedScreen, sync: boolean) => sendProgram({ type: "screen.sync", output, sync }),
     disabled,
   };
   const sources = {
     preview,
     program: programActive ? state : otherProgram && onAir.status === "live" ? onAir.state : null,
+    connected: live,
     slug,
     roomId,
     startAt: state.session.startAt,
@@ -224,6 +252,8 @@ export function LiveSessionDesk({
               disabled={disabled}
               transitioning={broadcasting}
               labeled={panel.labeled}
+              target={takeTarget}
+              onTarget={setTakeTarget}
               onTransition={take}
             />
           ),
@@ -266,21 +296,27 @@ export function LiveSessionDesk({
       case "questions":
         return {
           title,
-          actions: (
-            <span class="pk-studio-panel__meta">{formatNumber(openLiveQuestions(state.questions).length)} open</span>
+          actions: <LiveQuestionsHeader targets={targets} send={sendProgram} />,
+          menu: [{ id: "release-times", label: "Release times", disabled, onSelect: () => setReleaseTimes(true) }],
+          body: (
+            <>
+              <LiveQuestionsPanel targets={targets} clock={clock ?? state.session.timeZone} send={sendProgram} />
+              {releaseTimes ? (
+                <LivePreparedQuestionTimes
+                  targets={targets}
+                  clock={clock ?? state.session.timeZone}
+                  send={sendProgram}
+                  onClose={() => setReleaseTimes(false)}
+                />
+              ) : null}
+            </>
           ),
-          body: <LiveQuestionsPanel targets={targets} send={sendProgram} />,
         };
       case "time":
         return {
           title,
           actions: (
-            <LiveAddTimerAction
-              state={state}
-              clock={clock ?? state.session.timeZone}
-              send={sendProgram}
-              disabled={disabled}
-            />
+            <LiveAddTimerAction clock={clock ?? state.session.timeZone} send={sendProgram} disabled={disabled} />
           ),
           body: (
             <TimePanel
@@ -335,6 +371,7 @@ export function LiveSessionDesk({
   return (
     <LivePresenceContext.Provider value={presence}>
       <div
+        ref={studio}
         class="pk-studio"
         data-phone={phone ? "" : undefined}
         data-expanded={fullscreen.expanded ? "true" : undefined}
@@ -388,11 +425,14 @@ export function LiveSessionDesk({
             reset={layout.reset}
             expanded={fullscreen.expanded}
             toggleExpanded={fullscreen.toggle}
+            touring={touring}
+            toggleTour={() => setTouring(!touring)}
           />
         </div>
         {phone ? null : (
           <StudioGrid workspace={layout.workspace} panels={layout.panels} change={layout.change} render={render} />
         )}
+        {touring && !phone ? <StudioTour scope={studio} onClose={() => setTouring(false)} /> : null}
         <ProgramUndoToast
           undo={state.programUndo}
           onUndo={(snapshotId) => sendProgram({ type: "program.restore", snapshotId })}

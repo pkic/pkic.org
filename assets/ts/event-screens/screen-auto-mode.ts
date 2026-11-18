@@ -1,4 +1,5 @@
 import { DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS } from "../../shared/schemas/live-stage-display-settings";
+import { DEFAULT_LIVE_SCREEN_SYNC } from "../../shared/schemas/live-screen-sync";
 import type { ScreenAgendaSession } from "../../shared/schemas/event-screens";
 import { DEFAULT_LIVE_TICKER_CONTEXT } from "../../shared/schemas/live-session-ticker";
 import {
@@ -11,6 +12,7 @@ import { defaultLiveTimerGraphic } from "../../shared/schemas/live-session-timer
 import { LIVE_SESSION_TIMER_ID, sessionLiveTimer } from "../../shared/live-timer-policy";
 import { applyLiveRoomMessage, type LiveRoomState } from "../live-session/live-room-state";
 import type { ScreenCachedAgenda } from "./screen-cache";
+import { NO_LIVE_ROOM_SOURCES } from "../../shared/schemas/live-room-sources";
 
 /** Where the room is on its agenda at `now`: the session under way, else the next one, and the one after. */
 export function screenAgendaMoment(sessions: readonly ScreenAgendaSession[], now: number) {
@@ -50,11 +52,13 @@ function upNext(
 }
 
 /**
- * The stage display a screen runs on its own once the studio's session has
- * ended and the studio cannot be reached: the session under way, else the
- * next one, with its session timer following the agenda, so it reads the
- * time until the next session starts and then counts it down. Null when the
- * agenda holds nothing more for the room.
+ * The outputs a screen runs on its own once the studio's session has ended
+ * and the studio cannot be reached. The stage display: the session under
+ * way, else the next one, with its session timer following the agenda, so
+ * it reads the time until the next session starts and then counts it down.
+ * The projector, for the audience: the session coming up and the time until
+ * it starts, or during a session the one after it, without a countdown.
+ * Null when the agenda holds nothing more for the room.
  */
 export function screenAutoState(
   agenda: ScreenCachedAgenda,
@@ -70,6 +74,11 @@ export function screenAutoState(
     ...EMPTY_LIVE_AUX_COMPOSITION,
     schedule: upNext(after, agenda, room, now),
     timerGraphics: [graphic],
+  };
+  const projector = {
+    ...EMPTY_LIVE_AUX_COMPOSITION,
+    schedule: upNext(current ? next : shown, agenda, room, now),
+    timerGraphics: current ? [] : [graphic],
   };
   const snapshot: LiveRoomSnapshot = {
     type: "room.snapshot",
@@ -88,8 +97,10 @@ export function screenAutoState(
     chat: [],
     questions: [],
     polls: [],
+    preparedQuestions: [],
+    preparedQuestionWindow: null,
     stage: EMPTY_LIVE_AUX_COMPOSITION,
-    outputs: { ...EMPTY_LIVE_OUTPUTS, "stage-display": stageDisplay },
+    outputs: { ...EMPTY_LIVE_OUTPUTS, "stage-display": stageDisplay, projector },
     speakerMessage: null,
     preview: EMPTY_LIVE_AUX_COMPOSITION,
     timers: [timer],
@@ -100,6 +111,8 @@ export function screenAutoState(
     stageDisplayNext: null,
     stageDisplayNextVotes: null,
     stageDisplaySettings: DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS,
+    screenSync: DEFAULT_LIVE_SCREEN_SYNC,
+    sources: NO_LIVE_ROOM_SOURCES,
   };
   return applyLiveRoomMessage(null, snapshot);
 }

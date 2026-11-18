@@ -55,7 +55,6 @@ export function ScannerLaunchPanel({
             </Button>
           </div>
         )}
-        <p class="pk-muted pk-small">Scans save on this device and upload automatically.</p>
         {children}
       </PanelBody>
     </Panel>

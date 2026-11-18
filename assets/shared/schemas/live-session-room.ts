@@ -25,18 +25,9 @@ import {
   liveQuestionAnswersSchema,
   liveQuestionAnswerResultSchema,
 } from "./live-session-answer";
-import {
-  liveScheduleProjectionSchema,
-  liveScheduleConfigSchema,
-  liveScheduleCommandSchema,
-} from "./live-session-schedule";
-import {
-  liveTickerConfigSchema,
-  liveTickerSchema,
-  liveTickerContextSchema,
-  DEFAULT_LIVE_TICKER_CONTEXT,
-} from "./live-session-ticker";
-import { livePollPresentationSchema, DEFAULT_LIVE_POLL_PRESENTATION } from "./live-session-poll";
+import { liveScheduleConfigSchema, liveScheduleCommandSchema } from "./live-session-schedule";
+import { liveTickerConfigSchema, liveTickerContextSchema, DEFAULT_LIVE_TICKER_CONTEXT } from "./live-session-ticker";
+import { livePollPresentationSchema } from "./live-session-poll";
 import {
   liveAddedCreditInputSchema,
   liveAddedCreditsSchema,
@@ -45,12 +36,7 @@ import {
 } from "./live-session-credit";
 import { liveOverlayLayoutGeometriesSchema } from "./live-overlay-layout";
 import { z } from "zod";
-import { publicSessionPortraitUrlSchema } from "./event-session-history";
-import {
-  liveAuthorAffiliationSchema,
-  liveAuthorClientMessageSchemas,
-  liveAuthorServerMessageSchemas,
-} from "./live-session-author";
+import { liveAuthorClientMessageSchemas, liveAuthorServerMessageSchemas } from "./live-session-author";
 import {
   liveChatClientMessageSchemas,
   liveChatServerMessageSchemas,
@@ -61,14 +47,15 @@ import { eventSlugParamsSchema, utcInstantSchema } from "./api-common";
 import { LIVE_ROOM_POLICY, LIVE_STAGE_VIEWS } from "../live-session-policy";
 import { liveChangeSchema, livePersonNameSchema } from "./live-session-change";
 import { liveReactionBurstSchema, liveReactionCountsSchema, liveReactionSendSchema } from "./live-session-reaction";
-import {
-  liveChatFeedConfigSchema,
-  liveChatFeedOnAirSchema,
-  liveTopQuestionsConfigSchema,
-  liveTopQuestionsOnAirSchema,
-} from "./live-session-on-screen";
+import { liveChatFeedConfigSchema, liveTopQuestionsConfigSchema } from "./live-session-on-screen";
 import { LIVE_AUX_OUTPUTS, LIVE_SPEAKER_MESSAGE_MAX_LENGTH, LIVE_SPEAKER_MESSAGE_TONES } from "../live-room-outputs";
 import { livePollClientMessageSchemas, livePollSchema, livePollServerMessageSchemas } from "./live-session-poll";
+import {
+  livePreparedQuestionClientMessageSchemas,
+  livePreparedQuestionServerMessageSchemas,
+  livePreparedQuestionWindowSchema,
+  livePreparedQuestionsSchema,
+} from "./live-session-prepared-question";
 import {
   liveTimerCommandSchemas,
   liveTimerGraphicsSchema,
@@ -77,10 +64,11 @@ import {
 } from "./live-session-timer";
 import { attendancePointSelectionSchema } from "../attendance-points";
 import * as stageDisplaySettings from "./live-stage-display-settings";
+import * as screenSync from "./live-screen-sync";
+import * as roomSources from "./live-room-sources";
 import { LIVE_GRAPHIC_THEME_DEFAULTS, liveGraphicThemeSchema } from "../live-graphic-theme";
 import { DEFAULT_LIVE_LOWER_THIRD_MOTION } from "../live-lower-third";
 import {
-  liveCheckInOnAirSchema,
   liveLowerThirdMotionSchema,
   liveCheckInTextSchema,
   liveReactionsGraphicSchema,
@@ -178,98 +166,34 @@ export {
 export const liveTickerCommandSchema = z
   .object({ type: z.literal("stage.ticker"), ticker: liveTickerConfigSchema.nullable() })
   .strict();
-export const livePanelistsSchema = z.object({ layout: z.enum(["panel", "list", "columns"]) }).strict();
-export type LivePanelists = z.infer<typeof livePanelistsSchema>;
-export const livePanelistsCommandSchema = z
-  .object({ type: z.literal("stage.panelists"), panelists: livePanelistsSchema.nullable() })
-  .strict();
-
-/** A question as an output shows it; an anonymous author stays anonymous, photo and organization included. */
-export const liveStageQuestionSchema = z
-  .object({
-    id: databaseIdSchema,
-    text: z.string().min(1),
-    authorName: livePersonNameSchema.nullable(),
-    /** Shown beside the question only when the author asked by name and has a profile photo. */
-    authorPhotoUrl: publicSessionPortraitUrlSchema.nullable().default(null),
-    /** The capacity the author asked in, frozen with the question; null when anonymous or unaffiliated. */
-    authorAffiliation: liveAuthorAffiliationSchema.nullable().default(null),
-  })
-  .strict();
-export type LiveStageQuestion = z.infer<typeof liveStageQuestionSchema>;
-
-export const liveStageSchema = z
-  .object({
-    question: liveStageQuestionSchema.nullable(),
-    questionChange: liveChangeSchema.nullable(),
-    ticker: liveTickerSchema.nullable().default(null),
-    panelists: livePanelistsSchema.nullable().default(null),
-    schedule: liveScheduleProjectionSchema.nullable().default(null),
-    /** The attendee check-in code the output shows, resolved and signed by the room. */
-    checkIn: liveCheckInOnAirSchema.nullable().default(null),
-    lowerThird: liveCreditSchema.nullable(),
-    lowerThirdChange: liveChangeSchema.nullable(),
-    lowerThirdMotion: liveLowerThirdMotionSchema.default(DEFAULT_LIVE_LOWER_THIRD_MOTION),
-    /** The poll whose results the broadcast shows; the poll itself travels in the room's poll list. */
-    poll: z
-      .object({
-        id: databaseIdSchema,
-        presentation: livePollPresentationSchema.default(DEFAULT_LIVE_POLL_PRESENTATION),
-      })
-      .strict()
-      .nullable(),
-    pollChange: liveChangeSchema.nullable(),
-    /** The timer graphic: which of the room's timers, and how it looks. */
-    timerGraphics: liveTimerGraphicsSchema.default([]),
-    /** The open questions with the most votes, as the room last filled them. */
-    topQuestions: liveTopQuestionsOnAirSchema.nullable().default(null),
-    /** The latest attendee chat the broadcast may show, as the room last filled it. */
-    chatFeed: liveChatFeedOnAirSchema.nullable().default(null),
-    /** Viewers' reactions float up over the output while this is on. */
-    reactions: z.boolean().default(false),
-    reactionsGraphic: liveReactionsGraphicSchema.default(DEFAULT_LIVE_REACTIONS_GRAPHIC),
-  })
-  .strict();
-export type LiveStage = z.infer<typeof liveStageSchema>;
-
-/** A composition with nothing on it: how Program and every auxiliary output start. */
-export const EMPTY_LIVE_STAGE: LiveStage = {
-  schedule: null,
-  panelists: null,
-  checkIn: null,
-  ticker: null,
-  question: null,
-  questionChange: null,
-  lowerThird: null,
-  lowerThirdChange: null,
-  lowerThirdMotion: DEFAULT_LIVE_LOWER_THIRD_MOTION,
-  poll: null,
-  pollChange: null,
-  timerGraphics: [],
-  topQuestions: null,
-  chatFeed: null,
-  reactions: false,
-  reactionsGraphic: DEFAULT_LIVE_REACTIONS_GRAPHIC,
-};
-
-export const liveAuxOutputSchema = z.enum(LIVE_AUX_OUTPUTS);
-/** An auxiliary output, like the shared Preview, holds the same kind of composition as Program. */
-export const liveAuxCompositionSchema = liveStageSchema;
-export type LiveAuxComposition = LiveStage;
-export const EMPTY_LIVE_AUX_COMPOSITION: LiveAuxComposition = EMPTY_LIVE_STAGE;
-export const liveOutputsSchema = z
-  .object({
-    projector: liveAuxCompositionSchema,
-    "stage-preview": liveAuxCompositionSchema,
-    "stage-display": liveAuxCompositionSchema,
-  })
-  .strict();
-export type LiveOutputs = z.infer<typeof liveOutputsSchema>;
-export const EMPTY_LIVE_OUTPUTS: LiveOutputs = {
-  projector: EMPTY_LIVE_AUX_COMPOSITION,
-  "stage-preview": EMPTY_LIVE_AUX_COMPOSITION,
-  "stage-display": EMPTY_LIVE_AUX_COMPOSITION,
-};
+export {
+  livePanelistsSchema,
+  livePanelistsCommandSchema,
+  liveStageQuestionSchema,
+  liveStageSchema,
+  EMPTY_LIVE_STAGE,
+  liveAuxOutputSchema,
+  liveAuxCompositionSchema,
+  EMPTY_LIVE_AUX_COMPOSITION,
+  liveOutputsSchema,
+  EMPTY_LIVE_OUTPUTS,
+  type LivePanelists,
+  type LiveStageQuestion,
+  type LiveStage,
+  type LiveAuxComposition,
+  type LiveOutputs,
+} from "./live-session-stage";
+import {
+  livePanelistsCommandSchema,
+  livePanelistsSchema,
+  liveStageQuestionSchema,
+  liveStageSchema,
+  EMPTY_LIVE_AUX_COMPOSITION,
+  liveAuxOutputSchema,
+  liveAuxCompositionSchema,
+  liveOutputsSchema,
+  EMPTY_LIVE_OUTPUTS,
+} from "./live-session-stage";
 
 /** A short message an operator shows the speaker on the stage display. */
 export const liveSpeakerMessageTextSchema = z
@@ -372,6 +296,10 @@ export const liveRoomSnapshotSchema = z
     questions: z.array(liveQuestionSchema).max(LIVE_ROOM_POLICY.maxQuestionsPerRoom),
     /** In the order they were prepared; drafts for operators only, the poll on air only for overlays. */
     polls: z.array(livePollSchema),
+    /** Questions waiting for their release moment, soonest first; operators only, empty for everyone else. */
+    preparedQuestions: livePreparedQuestionsSchema.default([]),
+    /** The span prepared questions are released in; operators only, null for everyone else. */
+    preparedQuestionWindow: livePreparedQuestionWindowSchema.nullable().default(null),
     overlayMode: liveOverlayModeSchema.default("direct"),
     /** The event's saved overlay layouts; a browser source draws the one it names, else a built-in one. */
     overlayLayouts: liveOverlayLayoutGeometriesSchema.default([]),
@@ -402,6 +330,10 @@ export const liveRoomSnapshotSchema = z
     /** The votes of the question lined up next, so a stage display source shows them without the question list. */
     stageDisplayNextVotes: stageDisplaySettings.liveStageDisplayVotesSchema.default(null),
     stageDisplaySettings: stageDisplaySettings.liveStageDisplaySettingsSnapshotSchema,
+    /** Whether the projector and the stage display follow Program. */
+    screenSync: screenSync.liveScreenSyncSnapshotSchema,
+    /** How many sources draw each output now; operators only, zeros for everyone else. */
+    sources: roomSources.liveRoomSourcesSnapshotSchema,
   })
   .strict();
 export type LiveRoomSnapshot = z.infer<typeof liveRoomSnapshotSchema>;
@@ -422,6 +354,7 @@ export const liveRoomServerMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("question.accepted"), operationId: z.uuid(), questionId: databaseIdSchema }).strict(),
   z.object({ type: z.literal("question.removed"), questionId: databaseIdSchema }).strict(),
   ...livePollServerMessageSchemas,
+  ...livePreparedQuestionServerMessageSchemas,
   z.object({ type: z.literal("stage.changed"), stage: liveStageSchema }).strict(),
   z
     .object({ type: z.literal("aux.changed"), output: liveAuxOutputSchema, composition: liveAuxCompositionSchema })
@@ -442,6 +375,9 @@ export const liveRoomServerMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("overlay.mode.changed"), mode: liveOverlayModeSchema }).strict(),
   stageDisplaySettings.liveStageDisplayNextChangedSchema(liveStageQuestionSchema),
   stageDisplaySettings.liveStageDisplaySettingsChangedSchema,
+  screenSync.liveScreenSyncChangedSchema,
+  /** Operators only: a source of one of the room's outputs connected or dropped. */
+  roomSources.liveRoomSourcesChangedSchema,
   /** Operators only: Program was cleared, and this snapshot restores it. */
   z
     .object({
@@ -536,6 +472,7 @@ export const liveRoomClientMessageSchema = z.discriminatedUnion("type", [
   liveQuestionModerateSchema,
   liveQuestionRewriteSchema.extend({ type: z.literal("question.rewrite"), questionId: databaseIdSchema }),
   ...livePollClientMessageSchemas,
+  ...livePreparedQuestionClientMessageSchemas,
   z.object({ type: z.literal("stage.question"), questionId: databaseIdSchema.nullable() }).strict(),
   z
     .object({
@@ -584,6 +521,7 @@ export const liveRoomClientMessageSchema = z.discriminatedUnion("type", [
   ...liveTimerCommandSchemas,
   z.object({ type: z.literal("overlay.mode"), mode: liveOverlayModeSchema }).strict(),
   stageDisplaySettings.liveStageDisplaySettingsCommandSchema,
+  screenSync.liveScreenSyncCommandSchema,
   ...liveChatClientMessageSchemas,
   ...liveModerationClientMessageSchemas,
   ...liveAuthorClientMessageSchemas,

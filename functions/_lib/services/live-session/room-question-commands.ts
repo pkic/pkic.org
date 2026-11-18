@@ -44,14 +44,7 @@ export class LiveRoomQuestionCommands {
   ): Promise<LiveRefusal | void> {
     switch (message.type) {
       case "question.ask": {
-        const result = await this.questions.ask(
-          viewer,
-          actor,
-          message.text,
-          message.anonymous,
-          message.operationId,
-          open,
-        );
+        const result = await this.questions.ask(viewer, actor, message, message.operationId, open);
         if (!("questionId" in result)) return result;
         socket.send(
           serializeLiveRoomMessage({
