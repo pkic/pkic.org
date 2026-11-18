@@ -1,6 +1,7 @@
 import type { LiveStage } from "../../assets/shared/schemas/live-session-room";
 import type { UserSessionTokenClaims } from "./auth/user-session-token";
 import type { LiveProgramSelection, LiveProgramSelectResult } from "../../assets/shared/schemas/live-room-program";
+import type { LiveChatArchiveRow } from "./services/live-session/room-chat";
 import type { RateLimitBinding } from "./rate-limit";
 
 import type { DatabaseLike } from "./db/types";
@@ -38,6 +39,10 @@ export type R2BucketLike = R2Bucket;
 export interface LiveSessionRoomRpc extends Rpc.DurableObjectBranded {
   /** Removes an anonymized person's questions, votes and ballots from the room and ends their connections. */
   forgetParticipant(userId: string): Promise<void>;
+  /** The attendee chat the room still holds, oldest first, for the event's chat download. */
+  chatArchive(): Promise<LiveChatArchiveRow[]>;
+  /** Erases the room's chat once its session has closed; false while it is still open. */
+  eraseChat(): Promise<boolean>;
   endProgramSources(roomId: string): Promise<void>;
   readProgram(eventId: string, roomId: string): Promise<LiveProgramSelection>;
   /** The composition this session's room has on Program. */

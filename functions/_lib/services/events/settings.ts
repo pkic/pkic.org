@@ -34,6 +34,7 @@ function mergeEventSettings(
   assignNullable("promotionDesign", input.promotionDesign);
   assignNullable("virtualUrl", input.virtualUrl);
   assignNullable("attendance", input.attendance);
+  assignNullable("liveChat", input.liveChat);
   if (input.heroImageUrl !== undefined) {
     const heroImage =
       input.heroImageUrl === null

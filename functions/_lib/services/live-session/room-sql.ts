@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS room_chat_questions (message_id TEXT PRIMARY KEY,ques
 CREATE TABLE IF NOT EXISTS room_chat_restrictions (user_id TEXT PRIMARY KEY,restriction TEXT NOT NULL,by_name TEXT NOT NULL,at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS room_people (user_id TEXT PRIMARY KEY,handle TEXT,photo_url TEXT,staff INTEGER NOT NULL);
 CREATE UNIQUE INDEX IF NOT EXISTS room_people_handle ON room_people(handle);
+CREATE TABLE IF NOT EXISTS room_chat_totals (id INTEGER PRIMARY KEY,messages INTEGER NOT NULL,change_seq INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS room_chat_senders (user_id TEXT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS room_chat_authorship (message_id TEXT PRIMARY KEY,author_json TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS question_authorship (question_id TEXT PRIMARY KEY,author_json TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS room_access_erasures (user_id TEXT PRIMARY KEY);
@@ -192,6 +194,14 @@ export class LiveRoomSql {
       this.ready ||
       this.sql.exec("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'room_session'").toArray().length > 0
     );
+  }
+
+  /** Empties every table but `kept`, leaving the schema in place. Table names come from the schema itself. */
+  emptyExcept(kept: readonly string[]): void {
+    const tables = this.rows<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND substr(name, 1, 7) <> 'sqlite_' AND substr(name, 1, 4) <> '_cf_'",
+    );
+    for (const { name } of tables) if (!kept.includes(name)) this.exec(`DELETE FROM "${name}"`);
   }
 
   /** Forgets that the schema exists, after the room's storage was erased. */

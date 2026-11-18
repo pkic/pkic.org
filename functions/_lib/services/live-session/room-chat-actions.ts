@@ -78,6 +78,8 @@ export class LiveRoomChatActions {
       listed: () => void;
       /** A moderator acted or a question was created; the durable copy, with its audit rows, is due. */
       audited: () => Promise<void>;
+      /** An attendee message changed the chat counts; their durable copy is due. */
+      counted: () => Promise<void>;
     },
   ) {}
 
@@ -160,7 +162,9 @@ export class LiveRoomChatActions {
     if (!row) return REFUSALS.tooFast;
     this.authors.recordMessage(row.id, stamp);
     await this.deliver([row], { removeWhenHidden: false });
-    if (channel === "attendee") this.nudgeTicker();
+    if (channel !== "attendee") return;
+    this.nudgeTicker();
+    await this.hooks.counted();
   }
 
   private react(actor: Actor, row: LiveChatRow, reaction: LiveChatReactionId, on: boolean) {

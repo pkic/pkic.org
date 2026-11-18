@@ -1,6 +1,6 @@
 import { grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
-import { runDurableObjectAlarm } from "cloudflare:test";
+import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LIVE_ROOM_POLICY } from "../assets/shared/live-session-policy";
 import { LIVE_ROOM_PROTOCOL } from "../assets/shared/schemas/live-session-room";
@@ -443,6 +443,32 @@ describe("live session durable copy", () => {
       { status: "answered" },
     ]);
     expect(await auditActions()).toHaveLength(3);
+  });
+
+  it("copies how many attendee messages were sent and by how many people, never the messages", async () => {
+    const first = await f.connect({ person: "attendee" });
+    const second = await f.connect({ person: "secondAttendee" });
+    const operator = await f.connect({ person: "operator" });
+    for (const [socket, text] of [
+      [first, "Hello"],
+      [first, "Great slides"],
+      [second, "Agreed"],
+    ] as const) {
+      socket.send({ type: "chat.send", text });
+      await socket.next("chat.message", (message) => message.message.text === text);
+    }
+    operator.send({ type: "chat.send", text: "Staff only", channel: "operator" });
+    await operator.next("chat.message", (message) => message.message.text === "Staff only");
+    expect(await runDurableObjectAlarm(f.room())).toBe(true);
+    const totals = () =>
+      queryAll(env.DB, "SELECT messages,people FROM event_session_chat_totals WHERE event_id=? AND occurrence_id=?", [
+        f.eventId,
+        f.occurrenceId,
+      ]);
+    expect(await totals()).toEqual([{ messages: 3, people: 2 }]);
+    await runInDurableObject(f.room(), (room) => room.forgetParticipant(f.users.secondAttendee));
+    await runDurableObjectAlarm(f.room());
+    expect(await totals()).toEqual([{ messages: 3, people: 1 }]);
   });
 });
 

@@ -119,7 +119,7 @@ function preparePollCopy(db: DatabaseLike, copy: LiveRoomPendingCopy, poll: Live
 /**
  * Writes a room's changes since its last copy to D1 as one atomic batch:
  * the changed questions, opened or closed polls with their tallies (never who
- * voted for what), reaction totals, and the audit rows for the staff actions
+ * voted for what), reaction and chat totals (never message text), and the audit rows for the staff actions
  * taken meanwhile. Every statement is an upsert or an idempotent insert keyed
  * by the room's own sequence, so the room's alarm may retry a batch whose
  * outcome it never learned without duplicating anything.
@@ -138,6 +138,16 @@ export async function copyLiveRoomToD1(db: DatabaseLike, copy: LiveRoomPendingCo
         )
         .bind(copy.eventId, copy.occurrenceId, reaction.reaction, reaction.total, copiedAt),
     ),
+    ...(copy.chat
+      ? [
+          db
+            .prepare(
+              `INSERT INTO event_session_chat_totals(event_id,occurrence_id,messages,people,copied_at) VALUES(?,?,?,?,?)
+               ON CONFLICT(event_id,occurrence_id) DO UPDATE SET messages=excluded.messages,people=excluded.people,copied_at=excluded.copied_at`,
+            )
+            .bind(copy.eventId, copy.occurrenceId, copy.chat.messages, copy.chat.people, copiedAt),
+        ]
+      : []),
     ...copy.staffActions.map((action) =>
       prepareScopedAuditLog(
         db,

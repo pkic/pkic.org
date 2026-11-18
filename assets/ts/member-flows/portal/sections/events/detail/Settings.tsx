@@ -9,6 +9,7 @@ import { GroupEventScheduling } from "../../management/GroupEventScheduling";
 import { GeneralTab } from "./settings/GeneralTab";
 import { SeriesManagedNotice } from "./settings/SeriesManagedNotice";
 import { LazySponsorTiersTab } from "./settings/LazySponsorTiersTab";
+import { LiveChatRetentionSettings } from "./settings/LiveChatRetentionSettings";
 import { RawEvidenceRetentionPolicy } from "./settings/RawEvidenceRetentionPolicy";
 import { AttendanceSettings } from "./settings/AttendanceSettings";
 
@@ -99,7 +100,12 @@ export function Settings({
       {(tab === "location" || tab === "session-types" || tab === "registration") && (
         <GeneralTab event={event} section={tab} onUpdated={onUpdated} />
       )}
-      {tab === "retention" && <RawEvidenceRetentionPolicy event={event} />}
+      {tab === "retention" && (
+        <>
+          <LiveChatRetentionSettings slug={event.slug} canEdit={event.capabilities.includes("write")} />
+          <RawEvidenceRetentionPolicy event={event} />
+        </>
+      )}
       {tab === "cfp" && <ProposalCallSettings event={event} onUpdated={onUpdated} />}
       {tab === "attendance" && <AttendanceSettings event={event} onUpdated={onUpdated} />}
       {tab === "scheduling" && (

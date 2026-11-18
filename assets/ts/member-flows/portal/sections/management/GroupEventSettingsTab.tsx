@@ -33,6 +33,11 @@ const RawEvidenceRetentionPolicy = lazy(() =>
 const EventRecordings = lazy(() =>
   import("../events/detail/settings/EventRecordings").then((module) => ({ default: module.EventRecordings })),
 );
+const LiveChatRetentionSettings = lazy(() =>
+  import("../events/detail/settings/LiveChatRetentionSettings").then((module) => ({
+    default: module.LiveChatRetentionSettings,
+  })),
+);
 const EventLiveSettings = lazy(() =>
   import("../events/detail/settings/EventLiveSettings").then((module) => ({ default: module.EventLiveSettings })),
 );
@@ -192,7 +197,10 @@ export function GroupEventSettingsTab({
         />
       ) : detailId === "retention" && canManage ? (
         <Suspense fallback={<Spinner />}>
-          <RawEvidenceRetentionPolicy event={event} />
+          <div class="pk-stack">
+            <LiveChatRetentionSettings slug={event.slug} groupId={groupId} canEdit={canManage} />
+            <RawEvidenceRetentionPolicy event={event} />
+          </div>
         </Suspense>
       ) : detailId === "sponsors" && canManage ? (
         <LazySponsorTiersTab
