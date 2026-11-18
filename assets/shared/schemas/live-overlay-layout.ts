@@ -221,7 +221,7 @@ export const liveOverlayLayoutGeometrySchema = z
   .object({
     slug: liveOverlayLayoutSlugSchema,
     name: liveOverlayLayoutNameSchema,
-    /** The built-in scene it started from, so loading it brings on what that one does; absent for one of the event's own. */
+    /** The built-in scene it started from; null or absent for one of the event's own. A scene is a layout only: loading it switches no graphic on or off. */
     preset: z.enum(LIVE_OVERLAY_PRESETS).nullable().optional(),
     elements: liveOverlayLayoutElementsSchema,
   })

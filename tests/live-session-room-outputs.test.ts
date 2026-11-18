@@ -8,7 +8,8 @@ import { liveOverlayAccessResponseSchema } from "../assets/shared/schemas/live-o
 import { defaultLiveTimerGraphic } from "../assets/shared/schemas/live-session-timer";
 import { DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS } from "../assets/shared/schemas/live-stage-display-settings";
 import { DEFAULT_LIVE_SCREEN_SYNC } from "../assets/shared/schemas/live-screen-sync";
-import { liveRoomRefusalCloseCode } from "../assets/shared/schemas/live-session-room";
+import { EMPTY_LIVE_STAGE, liveRoomRefusalCloseCode } from "../assets/shared/schemas/live-session-room";
+import { liveCompositionInput } from "../assets/shared/live-room-preview";
 import { parseCapabilityToken } from "../functions/_lib/auth/capability-token";
 import { callApi } from "./helpers/app";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
@@ -386,33 +387,69 @@ describe("live room auxiliary outputs", () => {
     expect(rejoined.outputs.projector.scene).toBeNull();
   });
 
-  it("puts a scene's graphics on Preview with the room's content, and leaves what Preview already has on", async () => {
+  it("loads a scene on Preview as a layout only, and leaves every graphic on or off as it was", async () => {
     const operator = await f.connect({ person: "operator" });
-    const author = await f.connect({ person: "attendee" });
-    author.send({ type: "question.ask", text: "When does RSA retire?", anonymous: false });
-    const asked = await operator.next("question.changed");
-    operator.send({ type: "question.moderate", questionId: asked.question.id, status: "approved" });
-    await operator.next("question.changed", (m) => m.question.status === "approved");
-    operator.send({ type: "preview.set", composition: { creditKey: `user:${f.users.speaker}` } });
-    const named = await operator.next("preview.changed", (m) => m.composition.lowerThird !== null);
+    operator.send({
+      type: "preview.set",
+      composition: { creditKey: `user:${f.users.speaker}`, timerGraphics: [GRAPHIC], ticker: null, checkIn: null },
+    });
+    const set = (await operator.next("preview.changed", (m) => m.composition.lowerThird !== null)).composition;
 
-    operator.send({ type: "preview.set", composition: { scene: "questions" } });
-    const loaded = (await operator.next("preview.changed", (m) => m.composition.scene === "questions")).composition;
-    expect(loaded.topQuestions?.questions.map((question) => question.id)).toEqual([asked.question.id]);
-    expect(loaded.timerGraphics).toEqual([GRAPHIC]);
-    expect(loaded.ticker?.style).toBe("gradient");
-    // The lower third the operator put on stays, as it was; Q&A brings on no other graphic.
-    expect(loaded.lowerThird?.name).toBe("Sam Speaker");
-    expect(loaded.lowerThirdChange).toEqual(named.composition.lowerThirdChange);
-    expect([loaded.question, loaded.poll, loaded.panelists, loaded.checkIn, loaded.schedule]).toEqual([
+    operator.send({ type: "preview.set", composition: { scene: "panel" } });
+    const panel = (await operator.next("preview.changed", (m) => m.composition.scene === "panel")).composition;
+    expect(panel).toEqual({ ...set, scene: "panel" });
+    expect([panel.ticker, panel.checkIn, panel.topQuestions, panel.panelists, panel.schedule]).toEqual([
       null,
       null,
       null,
       null,
       null,
     ]);
+    expect(panel.timerGraphics).toEqual([GRAPHIC]);
+
+    // A timer the operator took off stays off whatever scene loads next.
+    operator.send({ type: "preview.set", composition: { timerGraphics: [] } });
+    await operator.next("preview.changed", (m) => m.composition.timerGraphics.length === 0);
+    operator.send({ type: "preview.set", composition: { scene: "talk" } });
+    const talk = (await operator.next("preview.changed", (m) => m.composition.scene === "talk")).composition;
+    expect(talk.timerGraphics).toEqual([]);
+    expect(talk.ticker).toBeNull();
+    expect(talk.lowerThird?.name).toBe("Sam Speaker");
     // Program is untouched until a Take.
     expect(operator.received.some((message) => message.type === "stage.changed")).toBe(false);
+  });
+
+  it("clears Preview and a room screen to empty, keeping each one's scene and bringing no graphic back", async () => {
+    const operator = await f.connect({ person: "operator" });
+    const full = { creditKey: `user:${f.users.speaker}`, timerGraphics: [GRAPHIC] };
+    // The studio's Clear: the empty composition, naming the scene the monitor already shows.
+    const cleared = { ...liveCompositionInput(EMPTY_LIVE_STAGE), scene: "panel" };
+    const off = (composition: typeof EMPTY_LIVE_STAGE) => [
+      composition.lowerThird,
+      composition.question,
+      composition.poll,
+      composition.ticker,
+      composition.panelists,
+      composition.schedule,
+      composition.checkIn,
+      composition.topQuestions,
+      composition.timerGraphics,
+    ];
+    const empty = [null, null, null, null, null, null, null, null, []];
+
+    operator.send({ type: "preview.set", composition: { ...full, scene: "panel" } });
+    await operator.next("preview.changed", (m) => m.composition.lowerThird !== null);
+    operator.send({ type: "preview.set", composition: cleared });
+    const preview = (await operator.next("preview.changed", (m) => m.composition.lowerThird === null)).composition;
+    expect(preview.scene).toBe("panel");
+    expect(off(preview)).toEqual(empty);
+
+    operator.send({ type: "aux.set", output: "projector", composition: { ...cleared, ...full } });
+    await operator.next("aux.changed", (m) => m.composition.lowerThird !== null);
+    operator.send({ type: "aux.set", output: "projector", composition: cleared });
+    const screen = (await operator.next("aux.changed", (m) => m.composition.lowerThird === null)).composition;
+    expect(screen.scene).toBe("panel");
+    expect(off(screen)).toEqual(empty);
   });
 
   it("refuses a source that names an output the room does not draw", async () => {
