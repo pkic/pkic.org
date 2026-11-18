@@ -86,11 +86,13 @@ function savedLayout(
 
 /** A saved scene that shows only the speaker's name, in the standard box. */
 const NAME_ONLY = savedLayout("name-only", ["lowerThird"], FULL_FRAME.lowerThird);
+/** A saved scene that shows every graphic in its standard box: the built-in scenes each show only some. */
+const EVERYTHING: LiveOverlayLayoutGeometry = { slug: "everything", name: "Everything", elements: FULL_FRAME };
 
 function mountOverlay(
   view: LiveOverlayView,
-  layout = "talk",
-  overlayLayouts: LiveOverlayLayoutGeometry[] = [],
+  layout = EVERYTHING.slug,
+  overlayLayouts: LiveOverlayLayoutGeometry[] = [EVERYTHING],
   graphics: LiveOverlayGraphics = ALL_LIVE_OVERLAY_GRAPHICS,
 ) {
   const live = fakeLiveSockets();
@@ -201,10 +203,18 @@ describe("broadcast overlays", () => {
   });
 
   it("draws only the graphics a source shows, or all but those it hides", () => {
-    const only = mountOverlay("program", "talk", [], { show: ["question"], hide: null, crop: false });
+    const only = mountOverlay("program", EVERYTHING.slug, [EVERYTHING], {
+      show: ["question"],
+      hide: null,
+      crop: false,
+    });
     expect(only.host.querySelector(".pk-live-overlay__question-text")).not.toBeNull();
     expect(only.host.querySelector(".pk-live-overlay__name")).toBeNull();
-    const except = mountOverlay("program", "talk", [], { show: null, hide: ["question"], crop: false });
+    const except = mountOverlay("program", EVERYTHING.slug, [EVERYTHING], {
+      show: null,
+      hide: ["question"],
+      crop: false,
+    });
     expect(except.host.querySelector(".pk-live-overlay__question-text")).toBeNull();
     expect(except.host.querySelector(".pk-live-overlay__name")?.textContent).toBe("Sam Speaker");
     expect(except.host.querySelector(".pk-live-overlay__frame")?.hasAttribute("data-crop")).toBe(false);
@@ -212,13 +222,17 @@ describe("broadcast overlays", () => {
 
   it("crops the page to the one graphic left, and ignores crop while several are", () => {
     const box = FULL_FRAME.lowerThird;
-    const cropped = mountOverlay("program", "talk", [], { show: ["lowerThird"], hide: null, crop: true });
+    const cropped = mountOverlay("program", EVERYTHING.slug, [EVERYTHING], {
+      show: ["lowerThird"],
+      hide: null,
+      crop: true,
+    });
     const frame = cropped.host.querySelector<HTMLElement>(".pk-live-overlay__frame")!;
     expect(frame.hasAttribute("data-crop")).toBe(true);
     expect(frame.style.getPropertyValue("--crop-w")).toBe(String(box.w));
     expect(frame.style.getPropertyValue("--crop-y")).toBe(String(box.y));
     expect(cropped.host.querySelector(".pk-live-overlay__name")?.textContent).toBe("Sam Speaker");
-    const several = mountOverlay("program", "talk", [], {
+    const several = mountOverlay("program", EVERYTHING.slug, [EVERYTHING], {
       show: ["lowerThird", "question"],
       hide: null,
       crop: true,
@@ -231,17 +245,17 @@ describe("broadcast overlays", () => {
       scope.querySelector('[data-overlay-element="background"] .pk-live-board--ground');
     const onGround = (scope: HTMLElement) =>
       scope.querySelector('[data-overlay-element="question"]')?.hasAttribute("data-on-ground");
-    // Talk leaves the background out, so the camera shows and a board keeps its own field.
+    // The standard boxes leave the background out, so the camera shows and a board keeps its own field.
     const plain = mountOverlay("program");
     expect(ground(plain.host)).toBeNull();
     expect(onGround(plain.host)).toBe(false);
-    // A scene with the background draws it, the question on it, and keeps it with no board on air.
+    // A scene with the background draws it under the question on air, and nothing once no board on it is.
     const boards = savedLayout("boards", ["background", "question", "lowerThird"], { x: 0, y: 0, w: 1, h: 1 });
     const { host, live } = mountOverlay("program", "boards", [boards]);
     expect(ground(host)).not.toBeNull();
     expect(onGround(host)).toBe(true);
     void act(() => live.latest().deliver({ type: "stage.changed", stage: { ...ON_STAGE, question: null } }));
-    expect(ground(host)).not.toBeNull();
+    expect(ground(host)).toBeNull();
     // A background in a column elsewhere leaves a full-frame question its own field.
     const aside = savedLayout("aside", ["background", "question", "lowerThird"], { x: 0.6, y: 0, w: 0.4, h: 1 });
     const scene = mountOverlay("program", "aside", [aside]);
@@ -258,7 +272,7 @@ describe("broadcast overlays", () => {
       "Scan to ask a question and vote",
     );
     // A built-in scene leaves the QR code out until an organizer adds it.
-    expect(mountOverlay("program").host.querySelector('[data-overlay-element="qrCode"]')).toBeNull();
+    expect(mountOverlay("program", "default", []).host.querySelector('[data-overlay-element="qrCode"]')).toBeNull();
   });
 
   it("places each element in its layout box, follows layout changes, and draws the default for an unknown name", () => {
@@ -282,8 +296,9 @@ describe("broadcast overlays", () => {
     expect(placed("--overlay-dx")).toBe("0px");
     expect(placed("--overlay-scale")).toBe("0.5");
     expect(host.querySelector(".pk-live-overlay__question-text")?.textContent).toBe("What about hybrid certificates?");
+    // Default puts no board on: the question waits for a scene that shows it.
     const unknown = mountOverlay("program", "no-such-scene", [keynote]);
-    expect(unknown.host.querySelector(".pk-live-overlay__question-text")).not.toBeNull();
+    expect(unknown.host.querySelector(".pk-live-overlay__question-text")).toBeNull();
     expect(unknown.host.querySelector(".pk-live-overlay__name")).not.toBeNull();
   });
 
@@ -502,10 +517,7 @@ describe("broadcast overlays", () => {
       addressedTo: null,
     };
     const shown = () => ({
-      tag:
-        host.querySelector(
-          ".pk-live-stage-display__questions :is(.pk-live-stage-display__tag, .pk-live-stage-display__next-label)",
-        )?.textContent ?? null,
+      tag: host.querySelector(".pk-live-stage-display__questions .pk-live-stage-display__tag")?.textContent ?? null,
       text: host.querySelector(".pk-live-stage-display__question-text")?.textContent ?? null,
       next: host.querySelector(".pk-live-stage-display__next-text")?.textContent ?? null,
     });

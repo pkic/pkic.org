@@ -2,7 +2,10 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { LIVE_OVERLAY_PRESET_LAYOUTS } from "../../assets/shared/live-overlay-layout-presets";
+import {
+  LIVE_OVERLAY_PRESET_LAYOUTS,
+  LIVE_OVERLAY_STANDARD_ELEMENTS,
+} from "../../assets/shared/live-overlay-layout-presets";
 import { liveOverlayLayoutElementsSchema } from "../../assets/shared/schemas/live-overlay-layout";
 import { liveCheckInOnAirSchema } from "../../assets/shared/schemas/live-session-graphic-settings";
 import {
@@ -10,7 +13,8 @@ import {
   liveRoomClientMessageSchema,
   type LiveRoomClientMessage,
 } from "../../assets/shared/schemas/live-session-room";
-import { LiveOverlayPresentation, stackedPanelBox } from "../../assets/ts/live-session/LiveOverlayPresentation";
+import { LiveOverlayPresentation } from "../../assets/ts/live-session/LiveOverlayPresentation";
+import { stackedPanelBox } from "../../assets/ts/live-session/live-overlay-fields";
 import { applyLiveRoomMessage, type LiveRoomState } from "../../assets/ts/live-session/live-room-state";
 import {
   LiveReactionsControls,
@@ -106,9 +110,13 @@ describe("audience graphics on an output", () => {
   const burst = { sequence: 1, counts: { applause: 2, thumbs_up: 1 }, people: { applause: 2, thumbs_up: 1 } };
   const floating = () => host!.querySelectorAll(".pk-live-overlay__reaction").length;
 
-  async function draw(state: LiveRoomState, view: "program" | "projector" = "program") {
+  async function draw(
+    state: LiveRoomState,
+    view: "program" | "projector" = "program",
+    elements?: typeof LIVE_OVERLAY_STANDARD_ELEMENTS,
+  ) {
     host ??= document.body.appendChild(document.createElement("div"));
-    await act(() => render(<LiveOverlayPresentation view={view} projection={state} />, host!));
+    await act(() => render(<LiveOverlayPresentation view={view} elements={elements} projection={state} />, host!));
   }
 
   it("floats reactions only on an output an operator turned them on for", async () => {
@@ -135,17 +143,21 @@ describe("audience graphics on an output", () => {
 
   it("draws the lists the room filled, and nothing for an empty one", async () => {
     const base = roomState();
-    await draw({
-      ...base,
-      stage: {
-        ...base.stage,
-        topQuestions: {
-          config: { count: 3 },
-          questions: [{ id: "q-1", text: "Which algorithms first?", authorName: null, votes: 4 }],
+    await draw(
+      {
+        ...base,
+        stage: {
+          ...base.stage,
+          topQuestions: {
+            config: { count: 3 },
+            questions: [{ id: "q-1", text: "Which algorithms first?", authorName: null, votes: 4 }],
+          },
+          chatFeed: { config: { count: 4, delaySeconds: 10 }, messages: [] },
         },
-        chatFeed: { config: { count: 4, delaySeconds: 10 }, messages: [] },
       },
-    });
+      "program",
+      LIVE_OVERLAY_STANDARD_ELEMENTS,
+    );
     const questions = host!.querySelector('[data-overlay-element="topQuestions"]');
     expect(questions?.textContent).toContain("Which algorithms first?");
     expect(questions?.textContent).toContain("Top questions");
@@ -156,14 +168,14 @@ describe("audience graphics on an output", () => {
     const panel = LIVE_OVERLAY_PRESET_LAYOUTS.panel.elements;
     expect(stackedPanelBox(panel)).toMatchObject({ x: 0, y: 0, w: 1, h: 1 });
     expect(stackedPanelBox({ ...panel, question: { ...panel.question, visible: false } })).toBeNull();
-    // Talk lays both over the whole frame: they overlap rather than stack.
-    expect(stackedPanelBox(LIVE_OVERLAY_PRESET_LAYOUTS["talk"].elements)).toBeNull();
+    // The standard boxes lay both over the whole frame: they overlap rather than stack.
+    expect(stackedPanelBox(LIVE_OVERLAY_STANDARD_ELEMENTS)).toBeNull();
   });
 
   it("reads a layout saved before the audience lists existed, with the lists at their usual place", () => {
     const { topQuestions: _questions, chat: _chat, ...saved } = LIVE_OVERLAY_PRESET_LAYOUTS["check-in"].elements;
     const read = liveOverlayLayoutElementsSchema.parse(saved);
-    expect(read.topQuestions).toEqual(LIVE_OVERLAY_PRESET_LAYOUTS["talk"].elements.topQuestions);
+    expect(read.topQuestions).toEqual(LIVE_OVERLAY_STANDARD_ELEMENTS.topQuestions);
     expect(read.chat).toMatchObject({ visible: true, shared: true });
   });
 });
@@ -183,11 +195,11 @@ describe("timers over a board", () => {
 
   async function draw(state: LiveRoomState) {
     host ??= document.body.appendChild(document.createElement("div"));
-    const elements = LIVE_OVERLAY_PRESET_LAYOUTS["talk"].elements;
+    const elements = LIVE_OVERLAY_STANDARD_ELEMENTS;
     await act(() => render(<LiveOverlayPresentation view="program" elements={elements} projection={state} />, host!));
   }
 
-  it("keeps the timers' column clear on a Talk board, and the whole board without them", async () => {
+  it("keeps the timers' column clear on a full-frame board, and the whole board without them", async () => {
     const shown = { ...stageClockState, stage: { ...stageClockState.stage, topQuestions: questions } };
     await draw(shown);
     expect(board().hasAttribute("data-logo-covered")).toBe(true);
@@ -219,7 +231,7 @@ describe("timers over a board", () => {
     const tab = timers()[0]!;
     expect(tab.dataset.look).toBe("tab");
     expect(tab.dataset.edge).toBe("top");
-    // The Talk timer box sits 48 px below the top: the tab runs those 48 px on to the edge.
+    // The standard timer box sits 48 px below the top: the tab runs those 48 px on to the edge.
     const rule = document.adoptedStyleSheets
       .flatMap((sheet) => [...sheet.cssRules].map((entry) => entry.cssText))
       .find((entry) => entry.includes(tab.dataset.numericCssProperties!));

@@ -101,11 +101,11 @@ describe("studio monitor layouts", () => {
     document.body.append(host);
     void act(() => render(<Harness />, host!));
     const screen = () => host!.querySelector(".pk-studio-monitor__screen")!;
-    expect(screen().querySelector(".pk-live-overlay__question-text")?.textContent).toBe(
-      "What about hybrid certificates?",
-    );
-    const picker = host.querySelector<HTMLButtonElement>('button[aria-label="Scene in Preview: Talk"]')!;
-    expect(picker.textContent).toContain("Talk");
+    // A room that names no scene draws Default: the speaker's name, and no board.
+    expect(screen().querySelector(".pk-live-overlay__name")).not.toBeNull();
+    expect(screen().querySelector(".pk-live-overlay__question-text")).toBeNull();
+    const picker = host.querySelector<HTMLButtonElement>('button[aria-label="Scene in Preview: Default"]')!;
+    expect(picker.textContent).toContain("Default");
     expect(picker.getAttribute("aria-haspopup")).toBe("dialog");
     void act(() => picker.click());
     // The scenes open as thumbnails, each named under its picture, the one in Preview pressed and focused.
@@ -113,6 +113,7 @@ describe("studio monitor layouts", () => {
     expect(popover.querySelector("h3")?.textContent).toBe("Load a scene into Preview");
     const choices = [...popover.querySelectorAll<HTMLButtonElement>(".pk-studio-scene")];
     expect(choices.map((choice) => choice.querySelector(".pk-studio-scene__name")?.textContent)).toEqual([
+      "Default",
       "Talk",
       "Q&A",
       "Panel",
@@ -124,7 +125,7 @@ describe("studio monitor layouts", () => {
     expect(choices.every((choice) => choice.querySelector(".pk-studio-scene__picture .pk-live-overlay"))).toBe(true);
     expect(document.activeElement).toBe(choices[0]);
     expect(choices[0]!.getAttribute("aria-pressed")).toBe("true");
-    void act(() => choices[1]!.click());
+    void act(() => choices[2]!.click());
     // The choice goes to the room's shared Preview, not to this operator's monitor, and the popover closes.
     expect(switcher.previewScene).toHaveBeenLastCalledWith("questions");
     expect(stored.get(STUDIO_LAYOUT_STORAGE_KEY) ?? "").not.toContain("questions");
@@ -151,13 +152,13 @@ describe("studio monitor layouts", () => {
     document.body.append(host);
     void act(() => render(<Harness panel={2} />, host!));
     const tile = (label: string) =>
-      [...host!.querySelectorAll<HTMLElement>(".pk-studio-monitor__tile")].find(
-        (candidate) => candidate.querySelector(".pk-studio-monitor__label")?.getAttribute("title") === label,
+      [...host!.querySelectorAll<HTMLElement>(".pk-studio-monitor__tile")].find((candidate) =>
+        candidate.querySelector(".pk-studio-monitor__label")?.getAttribute("title")?.includes(` · ${label}\n`),
       )!;
-    expect(tile("Program").querySelector('[title="Scene on Program: Talk"]')?.textContent).toBe("Talk");
+    expect(tile("Program").querySelector('[title^="Scene on Program: Default"]')?.textContent).toBe("Default");
     expect(tile("Program").querySelector('button[aria-label^="Layout on"]')).toBeNull();
     void act(() =>
-      tile("Projector").querySelector<HTMLButtonElement>('button[aria-label="Layout on Projector: Talk"]')!.click(),
+      tile("Projector").querySelector<HTMLButtonElement>('button[aria-label="Layout on Projector: Default"]')!.click(),
     );
     void act(() => menuItem("Break").click());
     expect(studioLayoutsSchema.parse(JSON.parse(stored.get(STUDIO_LAYOUT_STORAGE_KEY)!)).show[2]!.layouts).toEqual({
@@ -171,8 +172,8 @@ describe("studio monitor layouts", () => {
     // The Show workspace's second monitor, after the Transition, is the multiview: Program, Livestream, Stage display and Projector.
     void act(() => render(<Harness panel={2} />, host!));
     const tile = (label: string) =>
-      [...host!.querySelectorAll<HTMLElement>(".pk-studio-monitor__tile")].find(
-        (candidate) => candidate.querySelector(".pk-studio-monitor__label")?.getAttribute("title") === label,
+      [...host!.querySelectorAll<HTMLElement>(".pk-studio-monitor__tile")].find((candidate) =>
+        candidate.querySelector(".pk-studio-monitor__label")?.getAttribute("title")?.includes(` · ${label}\n`),
       )!;
     const named = (scope: HTMLElement, name: string) =>
       [...scope.querySelectorAll("button")].find((button) => button.textContent?.trim() === name);

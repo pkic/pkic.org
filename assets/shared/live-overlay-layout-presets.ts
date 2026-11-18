@@ -69,13 +69,14 @@ function boardColumn(side: "left" | "right"): Partial<LiveOverlayLayoutElements>
 }
 
 /**
- * Today's broadcast: the lower third, timer and ticker in the title-safe
- * area, and each board over the whole frame. The graphics an operator puts on
- * together never overlap: the timer keeps the top-right corner, the check-in
- * code the right side under it, Up next the left above the lower third.
+ * Every graphic's standard box: the lower third, timer and ticker in the
+ * title-safe area, and each board over the whole frame. The graphics an
+ * operator puts on together never overlap: the timer keeps the top-right
+ * corner, the check-in code the right side under it, Up next the left above
+ * the lower third.
  */
 const FULL_FRAME: LiveOverlayLayoutElements = {
-  // The conference field under the boards: one background, one logo. Off here, so the camera shows until a scene puts it on.
+  // The conference field over the whole frame, off: a scene with boards shows it where they sit, under them.
   background: { ...FILL, visible: false },
   // Down to the title-safe line, bottom-aligned: it sits low with the ticker off, and above it while it is on air.
   lowerThird: box(48, 722, 1248, 304, LEFT_BOTTOM),
@@ -127,99 +128,102 @@ function sharing(elements: LiveOverlayLayoutElements): LiveOverlayLayoutElements
   ) as LiveOverlayLayoutElements;
 }
 
-/** Puts the listed graphics on the conference field, each in its own box. */
-function grounded(
-  elements: LiveOverlayLayoutElements,
-  onField: readonly LiveOverlayElement[],
-): LiveOverlayLayoutElements {
-  return Object.fromEntries(
-    LIVE_OVERLAY_ELEMENTS.map((element) => [
-      element,
-      onField.includes(element) ? { ...elements[element], background: true } : elements[element],
-    ]),
-  ) as LiveOverlayLayoutElements;
-}
-
 /** What every scene keeps for the speaker: the stage display and its messages, never on the stream. */
 const STAGE: readonly LiveOverlayElement[] = ["stageDisplay", "stageMessage"];
+/** The graphics an operator can put on in every scene: the time and the news ticker. */
+const ALWAYS: readonly LiveOverlayElement[] = ["timer", "ticker", ...STAGE];
 /** The boards a question round shows, one at a time in the same place. */
 const QUESTION_BOARDS: readonly LiveOverlayElement[] = ["question", "topQuestions", "poll"];
 /**
- * A column of boards at one side, the camera beside it. The ticker keeps the
- * full width and the boards keep clear of it; there is no scene-wide
- * background, each board carries its own.
+ * A column of boards at one side, the camera beside it, with the conference
+ * field in the column under them. The ticker keeps the full width and the
+ * boards keep clear of it.
  */
 const column = (side: "left" | "right"): LiveOverlayLayoutElements => ({
   ...FULL_FRAME,
   ...boardColumn(side),
-  background: FULL_FRAME.background,
   ticker: FULL_FRAME.ticker,
 });
 
 /**
- * The scenes every event starts with, in the studio's order. Talk shows every
- * graphic; the others show only their own, the boards on the conference field.
+ * The scenes every event starts with, in the studio's order. A scene is a
+ * layout only: it says where each graphic it shows sits, and the operator
+ * puts each one on or off. Every scene shows the timer and the ticker. A
+ * scene with boards places the background, the conference field, where they
+ * sit, under them; the outputs draw it only while a board on it is on air.
  */
 const PRESETS: Record<LiveOverlayPreset, { name: string; elements: LiveOverlayLayoutElements }> = {
   /**
-   * A talk, and the event's default: every graphic at its standard box, so
-   * whatever an operator puts on shows. Loading it puts the speaker's name,
-   * the time and the ticker on.
+   * The event's default, drawn by an output that names no scene: every
+   * graphic that is not a board at its standard box, over the picture, with
+   * no field. A board shows in another scene.
    */
-  talk: { name: "Talk", elements: FULL_FRAME },
-  /** Questions in a column on the right, the camera beside them. */
+  default: {
+    name: "Default",
+    elements: only(FULL_FRAME, ["lowerThird", "schedule", "checkIn", "reactions", ...ALWAYS]),
+  },
+  /** A talk: the speaker's name, the time, the ticker and reactions over the camera. */
+  talk: { name: "Talk", elements: only(FULL_FRAME, ["lowerThird", "reactions", ...ALWAYS]) },
+  /** Questions in a column on the right, the speaker's name and the time on the camera beside them. */
   questions: {
     name: "Q&A",
-    elements: grounded(
-      only(column("right"), [...QUESTION_BOARDS, "lowerThird", "timer", "ticker", ...STAGE]),
-      QUESTION_BOARDS,
-    ),
+    elements: only(column("right"), ["background", ...QUESTION_BOARDS, "lowerThird", ...ALWAYS]),
   },
-  /** A panel on stage: the panelists across the lower half, the question in the upper half, edge to edge. */
+  /**
+   * A panel on stage: the panelists across the lower half, the question in
+   * the upper half, edge to edge, on one background over the whole frame:
+   * one board with one logo while both are on. The time keeps its standard
+   * corner, and the field's logo steps aside for it.
+   */
   panel: {
     name: "Panel",
-    elements: grounded(
-      only(
-        {
-          ...FULL_FRAME,
-          panelists: box(0, 540, 1920, 540, CENTER_BOTTOM),
-          question: box(0, 0, 1920, 540, { horizontal: "center", vertical: "top" }),
-          timer: box(1512, 48, 360, 128, RIGHT_TOP),
-        },
-        ["panelists", "question", "timer", "ticker", ...STAGE],
-      ),
-      ["panelists", "question"],
+    elements: only(
+      {
+        ...FULL_FRAME,
+        panelists: box(0, 540, 1920, 540, CENTER_BOTTOM),
+        question: box(0, 0, 1920, 540, { horizontal: "center", vertical: "top" }),
+      },
+      ["background", "panelists", "question", ...ALWAYS],
     ),
   },
   /**
-   * A break, over the sponsors' clips or a holding slide: only the time until
-   * the program is back, large in the bottom-right corner above the ticker,
-   * so nothing covers the picture.
+   * A break, over the sponsors' clips or a holding slide: the time until the
+   * program is back, large in the bottom-right corner above the ticker, and
+   * Up next at its standard place on the left, clear of it.
    */
   break: {
     name: "Break",
-    elements: only({ ...FULL_FRAME, timer: box(1392, 758, 480, 172, RIGHT_BOTTOM) }, ["timer", "ticker", ...STAGE]),
+    elements: only({ ...FULL_FRAME, timer: box(1392, 758, 480, 172, RIGHT_BOTTOM) }, ["schedule", ...ALWAYS]),
   },
-  /** The check-in code in a column on the left, large enough to scan from the room. */
+  /**
+   * The check-in code in a column on the left on the background, large
+   * enough to scan from the room, with Up next and the speaker's name on the
+   * camera beside it, above the lower third and under the time.
+   */
   "check-in": {
     name: "Check-in",
-    elements: grounded(only(column("left"), ["checkIn", "timer", "ticker", ...STAGE]), ["checkIn"]),
+    elements: only({ ...column("left"), schedule: box(816, 192, 1056, 432, LEFT_MIDDLE) }, [
+      "background",
+      "checkIn",
+      "schedule",
+      "lowerThird",
+      ...ALWAYS,
+    ]),
   },
-  /** One board over the whole frame on the conference field: a question, the poll, the panel or the schedule. */
+  /**
+   * One board over the whole frame on the background: a question, the poll,
+   * the panel, the chat or Up next, with only the time and the ticker over it.
+   */
   "full-board": {
     name: "Full board",
-    elements: grounded(
-      only({ ...FULL_FRAME, schedule: FILL }, [
-        ...QUESTION_BOARDS,
-        "panelists",
-        "chat",
-        "schedule",
-        "timer",
-        "ticker",
-        ...STAGE,
-      ]),
-      [...QUESTION_BOARDS, "panelists", "chat", "schedule"],
-    ),
+    elements: only({ ...FULL_FRAME, schedule: FILL }, [
+      "background",
+      ...QUESTION_BOARDS,
+      "panelists",
+      "chat",
+      "schedule",
+      ...ALWAYS,
+    ]),
   },
 };
 

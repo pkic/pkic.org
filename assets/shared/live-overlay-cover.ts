@@ -6,8 +6,9 @@ import type {
 } from "./schemas/live-overlay-layout";
 import { liveOverlayClearOfTicker, liveProgramLayers, type LiveProgramLayer } from "./live-overlay-stacking";
 
-/** The boards: graphics on a solid field, which hide whatever sits under them. */
+/** The boards: graphics on a solid field, which hide whatever sits under them; the background too, moved in front. */
 const BOARDS: ReadonlySet<LiveProgramLayer> = new Set([
+  "background",
   "panelists",
   "schedule",
   "checkIn",

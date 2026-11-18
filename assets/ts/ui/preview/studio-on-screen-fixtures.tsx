@@ -8,7 +8,10 @@ import {
   EMPTY_LIVE_OUTPUTS,
   type LiveStage,
 } from "../../../shared/schemas/live-session-room";
-import { LIVE_OVERLAY_PRESET_LAYOUTS } from "../../../shared/live-overlay-layout-presets";
+import {
+  LIVE_OVERLAY_PRESET_LAYOUTS,
+  LIVE_OVERLAY_STANDARD_ELEMENTS,
+} from "../../../shared/live-overlay-layout-presets";
 import type { LiveRoomOutput } from "../../../shared/schemas/live-room-output-setup";
 import {
   LIVE_OVERLAY_ELEMENTS,
@@ -44,7 +47,7 @@ export const ROOM_WITH_SCREENS: LiveRoomState = {
  * large on the left, reactions up the right, every other element hidden. It
  * is sized in the event's layout settings like any other card.
  */
-const FULL_FRAME = LIVE_OVERLAY_PRESET_LAYOUTS["talk"].elements;
+const FULL_FRAME = LIVE_OVERLAY_STANDARD_ELEMENTS;
 const QA_ELEMENTS = Object.fromEntries(
   LIVE_OVERLAY_ELEMENTS.map((element) => [
     element,

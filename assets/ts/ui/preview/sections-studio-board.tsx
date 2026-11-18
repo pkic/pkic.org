@@ -71,7 +71,7 @@ export const studioBoardSections: PreviewSection[] = [
     render: () => (
       <LivestreamOverlay
         state={{ ...sessionWith(2), stage: { ...EMPTY_LIVE_AUX_COMPOSITION, panelists: { layout: "panel" } } }}
-        elements={presetWith("talk", ["panelists"])}
+        elements={presetWith("full-board", ["panelists"])}
       />
     ),
   },
@@ -82,7 +82,7 @@ export const studioBoardSections: PreviewSection[] = [
     render: () => (
       <LivestreamOverlay
         state={{ ...sessionWith(6), stage: { ...EMPTY_LIVE_AUX_COMPOSITION, panelists: { layout: "panel" } } }}
-        elements={presetWith("talk", ["panelists"])}
+        elements={presetWith("full-board", ["panelists"])}
       />
     ),
   },
@@ -100,11 +100,11 @@ export const studioBoardSections: PreviewSection[] = [
   {
     id: "onscreen-question-poll-board",
     title: "Question on the board",
-    note: "In Talk a board covers the whole frame; one board shows at a time.",
+    note: "In Full board a board covers the whole frame; one board shows at a time.",
     render: () => (
       <LivestreamOverlay
         state={roomWith({}, { question: NAMED_QUESTION })}
-        elements={presetWith("talk", ["question"])}
+        elements={presetWith("full-board", ["question"])}
       />
     ),
   },

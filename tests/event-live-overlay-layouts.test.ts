@@ -80,7 +80,7 @@ describe("event overlay layouts", () => {
     const listed = await layouts();
     expect(listed.map((layout) => layout.slug)).toEqual([...LIVE_OVERLAY_PRESETS]);
     expect(listed.every((layout) => layout.builtIn && !layout.saved && layout.updatedAt === null)).toBe(true);
-    expect(listed[0]!.elements).toEqual(TALK);
+    expect(listed[0]!.elements).toEqual(LIVE_OVERLAY_PRESET_LAYOUTS.default.elements);
   });
 
   it("creates, replaces at the version it read, and refuses a duplicate or stale save", async () => {
