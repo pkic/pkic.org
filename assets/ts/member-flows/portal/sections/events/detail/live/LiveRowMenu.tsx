@@ -19,8 +19,11 @@ import {
   type LiveRoomOutputRole,
 } from "../../../../../../../shared/schemas/live-room-output-setup";
 import { liveOutputComposition, type LiveStage } from "../../../../../../../shared/schemas/live-session-room";
+import { resolveLiveSceneElements } from "../../../../../../../shared/live-scene-elements";
+import { liveOutputScene } from "../../../../../../live-session/live-output-projection";
 import { Menu, type MenuItem } from "../../../../../../ui/Menu";
 import {
+  liveLayerElement,
   liveLayerShown,
   liveLayerTargets,
   sendLayerToggle,
@@ -35,7 +38,7 @@ import "./LiveRowMenu.css";
  * Where a graphic is among the room's screens: the screens it was put on,
  * and the screens that show it anyway because it is on Program and they sync
  * with Program. A synced screen takes a graphic from Program wherever it has
- * none of its own of that kind.
+ * none of its own of that kind, and shows it when its own scene includes it.
  */
 export interface LiveScreens {
   on: readonly LiveAuxOutput[];
@@ -85,6 +88,9 @@ function followsProgram(
   const role = liveOutputRole(outputs, output);
   if (!where.program || where.aux(output) || !liveScreenSyncs(state.screenSync, outputs, output)) return false;
   if (!followsKind(role, layer)) return false;
+  // A screen that follows Program draws in its own scene: a graphic that scene leaves out does not show there.
+  const scene = resolveLiveSceneElements(state, liveOutputScene(state, output));
+  if (role === "follow" && !scene[liveLayerElement(layer)].visible) return false;
   const shown = liveScreenComposition(output, {
     own: liveOutputComposition(state.outputs, output),
     program: state.stage,

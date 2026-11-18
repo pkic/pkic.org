@@ -44,8 +44,8 @@ export const LIVE_ROOM_OUTPUT_ROLE_COPY: Record<LiveRoomOutputRole, { label: str
   },
   follow: {
     label: "Follow Program",
-    shows: "Same question and timer as Program",
-    hint: "Also shows the poll. A take brings the scene, names and ticker from Preview, never its timer or question.",
+    shows: "Shows what is on Program, in its own scene",
+    hint: "Its scene decides which graphics show, lower third and ticker included. A take changes its scene only.",
   },
   speaker: {
     label: "Speaker",
@@ -54,11 +54,8 @@ export const LIVE_ROOM_OUTPUT_ROLE_COPY: Record<LiveRoomOutputRole, { label: str
   },
 };
 
-/** What a screen draws when the room fixed no scene for it: Preview's for one you take to, Program's for one that follows. */
-export const LIVE_ROOM_OUTPUT_SCENE_DEFAULT: Record<Exclude<LiveRoomOutputRole, "speaker">, string> = {
-  exact: "From Preview",
-  follow: "From Program",
-};
+/** What a screen draws when the room fixed no scene for it: the scene last taken to it from Preview. */
+export const LIVE_ROOM_OUTPUT_SCENE_TAKEN = "From Preview";
 /** The speaker's screen draws its own layout, not a scene. */
 export const LIVE_SPEAKER_SCENE = "Fixed";
 
@@ -69,7 +66,12 @@ export function liveOutputSceneLabel(
 ): string {
   if (output.role === "speaker") return LIVE_SPEAKER_SCENE;
   const fixed = output.scene ? scenes.find((scene) => scene.slug === output.scene) : undefined;
-  return fixed?.name ?? LIVE_ROOM_OUTPUT_SCENE_DEFAULT[output.role];
+  return fixed?.name ?? LIVE_ROOM_OUTPUT_SCENE_TAKEN;
+}
+
+/** The scene the room fixed for one of its screens; null for a screen that draws the scene last taken to it. */
+export function liveOutputFixedScene(outputs: readonly LiveRoomOutput[], key: LiveAuxOutput): string | null {
+  return outputs.find((output) => output.key === key)?.scene ?? null;
 }
 
 /** An output's name, code and purpose; an output the room no longer lists keeps its built-in name. */
@@ -95,8 +97,8 @@ export function liveOutputRole(outputs: readonly LiveRoomOutput[], key: LiveAuxO
 
 /**
  * Where the studio's Transition puts Preview: Program, then each of the
- * room's screens in order. A screen that follows Program takes a shot too,
- * with its own layout, and keeps Program's graphics wherever the shot has none.
+ * room's screens in order. A screen that follows Program takes only
+ * Preview's scene, and keeps showing Program's graphics in it.
  */
 export type LiveTakeTarget = "program" | LiveAuxOutput;
 export function liveTakeTargets(outputs: readonly LiveRoomOutput[]): LiveTakeTarget[] {

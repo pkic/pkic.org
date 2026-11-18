@@ -3,7 +3,10 @@ import type { LiveRoomState } from "../../../../../../../live-session/live-room-
 import {
   LIVE_PROGRAM_OUTPUT_DETAILS,
   liveOutputDetails,
+  liveOutputFixedScene,
+  liveOutputRole,
   liveTakeTargets,
+  type LiveAuxOutput,
   type LiveTakeTarget,
 } from "../../../../../../../../shared/live-room-outputs";
 import type { LiveRoomOutput } from "../../../../../../../../shared/schemas/live-room-output-setup";
@@ -22,15 +25,35 @@ export const TAKE_SHORTCUT = "Space";
 /** What the Transition does, said on hover wherever it appears. */
 export const TRANSITION_HINT = "Replace Program with Preview. This changes the overlay output, not the stream.";
 
+/** How a take reaches a screen: a whole shot, only a scene for one that follows Program, or the speaker screen's own way. */
+type ScreenTake = "shot" | "scene" | "fixed-scene" | "speaker";
+
+function screenTake(
+  outputs: readonly LiveRoomOutput[],
+  screenSync: LiveScreenSync | null,
+  target: LiveAuxOutput,
+): ScreenTake {
+  if (screenSync === null || !liveScreenSyncs(screenSync, outputs, target)) return "shot";
+  if (liveOutputRole(outputs, target) === "speaker") return "speaker";
+  return liveOutputFixedScene(outputs, target) ? "fixed-scene" : "scene";
+}
+
 /**
- * What a Transition to a screen does, on hover: its name, then what changes.
- * A screen that follows Program takes Preview's scene and its own graphics,
- * and keeps taking the question, the poll and the timers from Program.
+ * What a Transition to a screen does, on hover: its name, then what a click
+ * does. A screen that follows Program takes only a scene, Preview's or the
+ * one its room fixed for it, with what comes on with that scene; everything
+ * else it shows stays Program's. The speaker's screen draws no scene and
+ * keeps taking its question and timers from Program.
  */
-function screenTransitionHint(screen: string, following: boolean): string {
-  return following
-    ? `Transition to ${screen}\nShow Preview's scene on ${screen}. Its question and timer stay Program's.`
-    : `Transition to ${screen}\nShow Preview on ${screen}. Program stays as it is.`;
+function screenTransitionHint(screen: string, take: ScreenTake): string {
+  const kept = "It keeps showing what is on Program; what you put on it yourself goes.";
+  const does: Record<ScreenTake, string> = {
+    shot: `Show Preview on ${screen}. Program stays as it is.`,
+    scene: `Put Preview's scene on ${screen}, with what comes on with that scene. ${kept}`,
+    "fixed-scene": `Start ${screen}'s own scene again, with what comes on with it. ${kept}`,
+    speaker: `Show Preview's scene on ${screen}. Its question and timer stay Program's.`,
+  };
+  return `Transition to ${screen}\n${does[take]}`;
 }
 
 /**
@@ -77,7 +100,7 @@ export function TransitionControl({
         const details = program ? LIVE_PROGRAM_OUTPUT_DETAILS : liveOutputDetails(outputs, target);
         const hint = program
           ? `Transition to ${details.label}\n${TRANSITION_HINT} Shortcut: ${TAKE_SHORTCUT}.`
-          : screenTransitionHint(details.label, screenSync !== null && liveScreenSyncs(screenSync, outputs, target));
+          : screenTransitionHint(details.label, screenTake(outputs, screenSync, target));
         return (
           <Button
             key={target}

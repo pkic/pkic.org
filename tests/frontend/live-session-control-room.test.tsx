@@ -86,15 +86,19 @@ describe("live control room Transition", () => {
     void act(() =>
       live.latest().deliver({ type: "preview.changed", composition: { ...snapshot.preview, lowerThird: credit } }),
     );
+    // A screen that shows what you take to it takes the whole shot, picks included.
     void act(() => take(host, "Foyer").click());
     const sent = liveRoomClientMessageSchema.parse(commands(live).at(-1));
     expect(sent).toMatchObject({ type: "aux.set", output: "foy", composition: { creditKey: credit.key } });
   });
 
-  it("takes Preview's scene to a screen that follows Program as a new shot, leaving the timer and question to Program", () => {
+  it("takes only Preview's scene to a screen that follows Program, and the whole shot once its sync is off", () => {
     const { host, live } = mountDesk();
     const snapshot = liveSnapshot({ viewer: OPERATOR });
-    // Program has no timer; the Panel scene and a timer wait on Preview only.
+    // A title just written is the current one; the tooltip layer moves it into the hint a moment later.
+    const hint = (output: string) => take(host, output).getAttribute("title") ?? take(host, output).dataset.tooltip;
+    const timer = defaultLiveTimerGraphic("session");
+    // The Panel scene, its panel, a question and a timer wait on Preview only.
     void act(() =>
       live.latest().deliver({
         type: "preview.changed",
@@ -110,24 +114,40 @@ describe("live control room Transition", () => {
             authorAffiliation: null,
             addressedTo: null,
           },
-          timerGraphics: [defaultLiveTimerGraphic("session")],
+          timerGraphics: [timer],
         },
       }),
     );
-    // A timer sent to the projector before goes too: a take is a new shot, so Program's timer shows.
-    void act(() =>
-      live.latest().deliver({
-        type: "aux.changed",
-        output: "projector",
-        composition: { ...snapshot.stage, timerGraphics: [defaultLiveTimerGraphic("session")] },
-      }),
+    // The take names the scene and nothing else: no pick and no switch, so those stay Program's.
+    expect(hint("Projector")).toBe(
+      "Transition to Projector\nPut Preview's scene on Projector, with what comes on with that scene. It keeps showing what is on Program; what you put on it yourself goes.",
     );
     void act(() => take(host, "Projector").click());
-    const sent = liveRoomClientMessageSchema.parse(commands(live).at(-1));
-    expect(sent).toMatchObject({
+    expect(liveRoomClientMessageSchema.parse(commands(live).at(-1))).toEqual({
+      type: "aux.scene",
+      output: "projector",
+      scene: "panel",
+    });
+    // The speaker's screen takes the shot as before, without the question and the timer it follows from Program.
+    void act(() => take(host, "Stage display").click());
+    expect(liveRoomClientMessageSchema.parse(commands(live).at(-1))).toMatchObject({
+      type: "aux.set",
+      output: "stage-display",
+      composition: { scene: "panel", panelists: { layout: "panel" }, questionId: null, timerGraphics: [] },
+    });
+    // With its sync off, the projector holds what it is given: the whole of Preview.
+    void act(() => live.latest().deliver({ type: "screen.sync.changed", screenSync: { projector: false } }));
+    expect(hint("Projector")).toBe("Transition to Projector\nShow Preview on Projector. Program stays as it is.");
+    void act(() => take(host, "Projector").click());
+    expect(liveRoomClientMessageSchema.parse(commands(live).at(-1))).toMatchObject({
       type: "aux.set",
       output: "projector",
-      composition: { scene: "panel", panelists: { layout: "panel" }, questionId: null, timerGraphics: [] },
+      composition: {
+        scene: "panel",
+        panelists: { layout: "panel" },
+        questionId: LIVE_QUESTION,
+        timerGraphics: [timer],
+      },
     });
   });
 
@@ -202,9 +222,15 @@ describe("live control room Transition", () => {
     expect(scenes.filter((scene) => scene.getAttribute("aria-pressed") === "true")).toHaveLength(1);
     // Each scene is drawn live, with the same renderer as the monitors.
     expect(scenes.every((scene) => scene.querySelector(".pk-studio-scene__picture .pk-live-overlay"))).toBe(true);
-    // A scene only lays out what Preview holds: an empty Preview draws no graphic, only the scene's faint boxes.
+    // A scene lays out what Preview holds and adds only what comes on with it: no scene picks a lower third,
+    // and Default, which brings nothing on, shows an empty Preview as its faint boxes.
     expect(scenes.some((scene) => scene.querySelector(".pk-live-overlay__name"))).toBe(false);
     expect(scenes[0]!.querySelector(".pk-studio-scene__outline rect")).not.toBeNull();
+    // Every output draws Default here, so Default carries a marker for each, Program's first.
+    expect(
+      [...scenes[0]!.querySelectorAll(".pk-studio-scene__marker")].map((marker) => marker.getAttribute("aria-label")),
+    ).toEqual(["On Program", "In Preview", "On Projector"]);
+    expect(scenes.slice(1).some((scene) => scene.querySelector(".pk-studio-scene__marker"))).toBe(false);
     expect(panel(host, "Preview").querySelector(".pk-studio-monitor__screen .pk-live-overlay__name")).toBeNull();
     const next = scenes.find((scene) => scene.getAttribute("aria-pressed") === "false")!;
     void act(() => next.click());

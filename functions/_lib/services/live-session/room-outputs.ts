@@ -50,6 +50,23 @@ export class LiveRoomOutputs {
     };
   }
 
+  /**
+   * Puts on an output a composition the room made itself, such as the scene
+   * its room fixed for it. No operator acted, so nothing is recorded; an
+   * output that changed since `from` was read keeps what it holds.
+   */
+  adopt(
+    output: LiveAuxOutput,
+    from: LiveAuxComposition,
+    composition: LiveAuxComposition,
+  ): LiveRoomServerMessage | null {
+    const held = this.store.auxOutputs();
+    if (!held.includes(output) && held.length >= LIVE_HELD_OUTPUTS_MAX) return null;
+    if (JSON.stringify(this.store.aux(output)) !== JSON.stringify(from)) return null;
+    this.store.saveAux(output, composition);
+    return { type: "aux.changed", output, composition: this.store.aux(output) };
+  }
+
   private setSpeakerMessage(
     operator: Operator,
     text: string | null,

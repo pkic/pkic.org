@@ -4,8 +4,8 @@ import { liveRoomOutputKeySchema } from "./live-room-output-setup";
 /**
  * Whether each of the room's screens follows Program: shows what is live,
  * plus whatever an operator put on that screen itself. On by default, so a
- * screen nobody touched shows the live question, poll and timers. Turned
- * off, a screen shows only what was put on it. The room keeps one copy.
+ * screen nobody touched shows what is live, in its own scene. Turned off, a
+ * screen shows only what was put on it. The room keeps one copy.
  */
 
 export const liveSyncedScreenSchema = liveRoomOutputKeySchema;

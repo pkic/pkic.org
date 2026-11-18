@@ -1,4 +1,4 @@
-import { liveRoomOutputs, type LiveAuxOutput } from "../../shared/live-room-outputs";
+import { liveOutputFixedScene, liveRoomOutputs, type LiveAuxOutput } from "../../shared/live-room-outputs";
 import { LIVE_SPEAKER_OUTPUT_KEY } from "../../shared/schemas/live-room-output-setup";
 import { liveOutputComposition } from "../../shared/schemas/live-session-stage";
 import type { LiveOverlayView } from "../../shared/schemas/live-session-room";
@@ -40,11 +40,13 @@ export function liveOutputView(view: LiveOverlayView): LiveOverlayView {
 }
 
 /**
- * The scene an output draws when its link names none: the one its room set
- * for it, else the one its composition was given (from Preview, or Program's).
+ * The scene an output draws when its link names none: for a room screen the
+ * one its room fixed for it, else the one last taken to it, which its own
+ * composition holds. A screen that follows Program still draws its own
+ * scene, never Program's.
  */
 export function liveOutputScene(state: LiveRoomState | null, view: LiveOverlayView): string | null {
   if (!state) return null;
-  const fixed = view === "program" ? null : liveRoomOutputs(state.session).find((output) => output.key === view)?.scene;
-  return fixed ?? state.stage.scene;
+  if (view === "program") return state.stage.scene;
+  return liveOutputFixedScene(liveRoomOutputs(state.session), view) ?? liveOutputComposition(state.outputs, view).scene;
 }

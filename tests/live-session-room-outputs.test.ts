@@ -19,6 +19,7 @@ import { parseCapabilityToken } from "../functions/_lib/auth/capability-token";
 import { LiveRoomGraphicBasis } from "../functions/_lib/services/live-session/room-graphic-basis";
 import { LiveRoomSql } from "../functions/_lib/services/live-session/room-sql";
 import { callApi } from "./helpers/app";
+import { installLiveRoomD1Profile, liveRoomD1Profile } from "./helpers/live-room-d1-profile";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
 
 const f = createLiveRoomFixture();
@@ -45,6 +46,15 @@ async function overlayToken() {
   });
   const issued = await callApi(env, f.programPath("/overlays"), { method: "POST", headers });
   return liveOverlayAccessResponseSchema.parse(await issued.json()).token;
+}
+
+type Client = Awaited<ReturnType<typeof f.connect>>;
+type ScreenCommand = Extract<Parameters<Client["send"]>[0], { type: "aux.set" | "aux.scene" }>;
+/** What a screen holds once the room answered this command: its next change, never an earlier one. */
+async function screenAfter(client: Client, message: ScreenCommand) {
+  const after = client.received.length;
+  client.send(message);
+  return (await client.next("aux.changed", (changed) => changed.output === message.output, { after })).composition;
 }
 
 describe("live room auxiliary outputs", () => {
@@ -545,6 +555,131 @@ describe("live room auxiliary outputs", () => {
     operator.send({ type: "aux.set", output: "projector", composition: screenCleared });
     const screen = (await operator.next("aux.changed", (m) => m.composition.lowerThird === null)).composition;
     expect(liveCompositionInput(screen)).toEqual(screenCleared);
+  });
+
+  it("starts a screen that follows Program again in the taken scene, with what comes on with it and none of its own", async () => {
+    const operator = await f.connect({ person: "operator" });
+    const attendee = await f.connect({ person: "attendee" });
+    const onProjector = (message: ScreenCommand) => screenAfter(operator, message);
+    // The operator put a lower third and a timer on the projector themselves, in the Break scene.
+    const own = await onProjector({
+      type: "aux.set",
+      output: "projector",
+      composition: {
+        ...EMPTY_COMPOSITION,
+        creditKey: `user:${f.users.speaker}`,
+        timerGraphics: [GRAPHIC],
+        scene: "break",
+      },
+    });
+    expect(own).toMatchObject({ lowerThird: { name: "Sam Speaker" }, timerGraphics: [GRAPHIC], scene: "break" });
+
+    // A take sends the scene alone: Q&A's top questions come on, filled by the room, and no pick or switch stays.
+    await installLiveRoomD1Profile(f.room(), 1000);
+    const taken = await onProjector({ type: "aux.scene", output: "projector", scene: "questions" });
+    // The room fills the scene from its own storage: the take never waits for the database.
+    expect((await liveRoomD1Profile(f.room())).roundTrips).toBe(0);
+    expect(taken.topQuestions).toEqual({ config: DEFAULT_LIVE_TOP_QUESTIONS_CONFIG, questions: [] });
+    expect(liveCompositionInput(taken)).toEqual({
+      ...liveCompositionInput(EMPTY_LIVE_STAGE),
+      topQuestions: DEFAULT_LIVE_TOP_QUESTIONS_CONFIG,
+      scene: "questions",
+    });
+
+    // What the operator switches off there stays off, until the scene is taken to the screen again.
+    const off = await onProjector({
+      type: "aux.set",
+      output: "projector",
+      composition: { ...EMPTY_COMPOSITION, scene: "questions" },
+    });
+    expect(off.topQuestions).toBeNull();
+    const again = await onProjector({ type: "aux.scene", output: "projector", scene: "questions" });
+    expect(again.topQuestions).not.toBeNull();
+
+    // The Default scene brings nothing on: the screen is left to Program's switches alone.
+    const blank = await onProjector({ type: "aux.scene", output: "projector", scene: null });
+    expect(liveCompositionInput(blank)).toEqual(liveCompositionInput(EMPTY_LIVE_STAGE));
+    // Program and Preview are never touched, and only an operator can take to a screen.
+    expect(operator.received.some((m) => m.type === "stage.changed" || m.type === "preview.changed")).toBe(false);
+    attendee.send({ type: "aux.scene", output: "projector", scene: "questions" });
+    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
+  });
+
+  it("loads the scene a room fixed for a screen that follows Program before anyone takes to it, once, and keeps it", async () => {
+    const now = new Date().toISOString();
+    const screens = [
+      ["projector", "Projector", "PRJ", "follow", "questions"],
+      ["stage-display", "Stage display", "DSP", "speaker", null],
+      ["foy", "Foyer", "FOY", "exact", "break"],
+    ] as const;
+    for (const [position, [key, name, code, role, scene]] of screens.entries())
+      await env.DB.prepare(
+        "INSERT INTO event_agenda_room_outputs(event_id,room_id,output_key,name,code,role,scene_slug,position,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
+      )
+        .bind(f.eventId, f.roomId, key, name, code, role, scene, position, now)
+        .run();
+
+    // Nobody took anything to the projector: it is in its Q&A scene with the top questions that come on with it.
+    const operator = await f.connect({ person: "operator" });
+    const first = await operator.next("room.snapshot");
+    expect(liveCompositionInput(first.outputs.projector)).toEqual({
+      ...liveCompositionInput(EMPTY_LIVE_STAGE),
+      topQuestions: DEFAULT_LIVE_TOP_QUESTIONS_CONFIG,
+      scene: "questions",
+    });
+    // A screen that shows what you take to it is left as it was: nothing comes on by itself there.
+    expect(first.outputs.foy).toBeUndefined();
+
+    // An operator switches the top questions off and puts a timer there: the next join loads nothing back.
+    const held = { ...EMPTY_COMPOSITION, timerGraphics: [GRAPHIC] };
+    const off = await screenAfter(operator, {
+      type: "aux.set",
+      output: "projector",
+      composition: { ...held, scene: "questions" },
+    });
+    expect(off).toMatchObject({ topQuestions: null, timerGraphics: [GRAPHIC] });
+    await f.connect({ person: "attendee" });
+    const rejoined = await (await f.connect({ person: "operator" })).next("room.snapshot");
+    expect(rejoined.outputs.projector).toEqual(off);
+
+    // A take names Preview's scene, yet the screen keeps the one its room fixed and starts again in it.
+    const taken = await screenAfter(operator, { type: "aux.scene", output: "projector", scene: "break" });
+    expect(taken).toMatchObject({ scene: "questions", schedule: null, timerGraphics: [] });
+    expect(taken.topQuestions).not.toBeNull();
+    // So does a whole shot, which a screen takes while its sync is off, and one taken to any screen with a fixed scene.
+    const shot = await screenAfter(operator, {
+      type: "aux.set",
+      output: "projector",
+      composition: { ...held, scene: "break" },
+    });
+    expect(shot).toMatchObject({ scene: "questions", topQuestions: null, schedule: null, timerGraphics: [GRAPHIC] });
+    const foyer = await screenAfter(operator, {
+      type: "aux.set",
+      output: "foy",
+      composition: { ...EMPTY_COMPOSITION, scene: "panel" },
+    });
+    expect(foyer.scene).toBe("break");
+    expect(foyer.schedule).toBeNull();
+
+    // The room's settings give the projector another scene: the next join loads it on what the screen holds,
+    // from the room's own storage.
+    await env.DB.prepare("UPDATE event_agenda_room_outputs SET scene_slug='break' WHERE room_id=? AND output_key=?")
+      .bind(f.roomId, "projector")
+      .run();
+    await installLiveRoomD1Profile(f.room(), 1000);
+    const after = operator.received.length;
+    await f.connect({ person: "attendee" });
+    const changed = (await operator.next("aux.changed", (m) => m.output === "projector", { after })).composition;
+    // The join reads the session, with the room's screens, in its one round trip; loading the scene adds none.
+    const profile = await liveRoomD1Profile(f.room());
+    expect(profile.queries.map(({ sql }) => sql)).toEqual([expect.stringContaining("event_agenda_room_outputs")]);
+    expect(profile.roundTrips).toBe(1);
+    expect(liveCompositionInput(changed)).toEqual({
+      ...liveCompositionInput(EMPTY_LIVE_STAGE),
+      timerGraphics: [GRAPHIC],
+      schedule: { ...DEFAULT_LIVE_SCHEDULE_CONFIG, scope: "all-rooms" },
+      scene: "break",
+    });
   });
 
   it("refuses a source that names an output the room does not draw", async () => {

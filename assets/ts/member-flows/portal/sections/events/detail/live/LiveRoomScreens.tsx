@@ -3,6 +3,7 @@ import { formatDateTime } from "../../../../../../../shared/format-date";
 import {
   LIVE_PROGRAM_OUTPUT_DETAILS,
   LIVE_ROOM_OUTPUT_ROLE_COPY,
+  LIVE_ROOM_OUTPUT_SCENE_TAKEN,
   liveOutputSceneLabel,
 } from "../../../../../../../shared/live-room-outputs";
 import {
@@ -127,7 +128,7 @@ export function LiveRoomScreens({
       id: "scene",
       header: "Scene",
       width: "fit",
-      cell: (row) => (row.builtIn ? "From Preview" : liveOutputSceneLabel(row, scenes)),
+      cell: (row) => (row.builtIn ? LIVE_ROOM_OUTPUT_SCENE_TAKEN : liveOutputSceneLabel(row, scenes)),
     },
     {
       id: "link",

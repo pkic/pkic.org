@@ -1,7 +1,7 @@
 import { useState } from "preact/hooks";
 import {
   LIVE_ROOM_OUTPUT_ROLE_COPY,
-  LIVE_ROOM_OUTPUT_SCENE_DEFAULT,
+  LIVE_ROOM_OUTPUT_SCENE_TAKEN,
 } from "../../../../../../../shared/live-room-outputs";
 import {
   LIVE_ROOM_OUTPUT_CODE_MAX,
@@ -159,9 +159,7 @@ export function LiveRoomScreenDialog({
                 value={draft.scene ?? ""}
                 onChange={(event) => change({ scene: event.currentTarget.value || null })}
               >
-                <option value="">
-                  {LIVE_ROOM_OUTPUT_SCENE_DEFAULT[draft.role as Exclude<LiveRoomOutputRole, "speaker">]}
-                </option>
+                <option value="">{LIVE_ROOM_OUTPUT_SCENE_TAKEN}</option>
                 {scenes.map((scene) => (
                   <option key={scene.slug} value={scene.slug}>
                     Always {scene.name}

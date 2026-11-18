@@ -61,6 +61,7 @@ function changesBroadcast(message: LiveRoomClientMessage): boolean {
     message.type === "program.clear" ||
     message.type === "program.restore" ||
     message.type === "aux.set" ||
+    message.type === "aux.scene" ||
     message.type === "screen.sync" ||
     message.type === "speaker.message"
   );
@@ -169,18 +170,19 @@ export function LiveSessionDesk({
     });
     return true;
   };
-  /** Program takes Preview through the room's Take; a screen takes Preview's shot, minus what it follows from Program. */
+  /** Program takes Preview through the room's Take; a screen that follows Program takes only Preview's scene, any other its whole shot. */
   const take = (target: LiveTakeTarget = "program") => {
     const current = room.state;
     if (!current) return;
     setTakenTo(target);
     if (target === "program") return void sendProgram({ type: "preview.take" });
-    const shot = liveScreenTake(target, {
-      shot: current.preview,
-      sync: current.screenSync,
-      outputs: liveRoomOutputs(current.session),
-    });
-    sendProgram({ type: "aux.set", output: target, composition: liveCompositionInput(shot) });
+    sendProgram(
+      liveScreenTake(target, {
+        shot: current.preview,
+        sync: current.screenSync,
+        outputs: liveRoomOutputs(current.session),
+      }),
+    );
   };
   useTakeShortcut(() => take("program"), live && !broadcasting);
   const phone = useStudioPhone();
@@ -243,6 +245,7 @@ export function LiveSessionDesk({
   const sources = {
     preview,
     program,
+    agenda,
     connected: live,
     slug,
     roomId,

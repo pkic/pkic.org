@@ -25,13 +25,13 @@ export const STUDIO_TOUR_STEPS: readonly GuidedTourStep[] = [
     id: "transition",
     target: panel("transition"),
     title: "Go live with your practice",
-    body: `Happy with the practice area? Press Transition, or the ${TAKE_SHORTCUT.toLowerCase()} bar, and it goes live in place of what was live before. The small arrow next to it sends it to a screen in the room instead.`,
+    body: `Happy with the practice area? Press Transition, or the ${TAKE_SHORTCUT.toLowerCase()} bar, and it goes live in place of what was live before. The small arrows next to it are for the screens in the room: a screen that follows what is live takes only the practice area’s scene, any other screen takes all of it.`,
   },
   {
     id: "sync",
     target: ".pk-studio-monitor__sync",
     title: "Screens follow what is live",
-    body: "The projector and the speaker’s screen show what is live by themselves: that is Sync, the red PGM button on their monitor. Click it to turn Sync off, and that screen shows only what you put on it. Click it again to turn Sync back on.",
+    body: "The projector and the speaker’s screen show what is live by themselves: that is Sync, the red PGM button on their monitor. The projector draws it in its own scene, and that scene decides which graphics show there. Click the button to turn Sync off, and that screen shows only what you put on it. Click it again to turn Sync back on.",
   },
   {
     id: "screens",

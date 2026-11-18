@@ -71,7 +71,9 @@ it("lists Program and the room's screens with their code, role, scene and a copy
   expect(program.textContent).toContain("From Preview");
   const projector = rowOf("Projector");
   expect(projector.textContent).toContain("Follow Program");
-  expect(projector.textContent).toContain("From Program");
+  // A screen that follows Program draws its own scene too: the one last taken to it, never Program's.
+  expect(projector.textContent).toContain("Shows what is on Program, in its own scene");
+  expect(projector.textContent).toContain("From Preview");
   expect(rowOf("Stage display").textContent).toContain("Fixed");
   // No long link fields until a copy fails.
   expect(host!.querySelector("[data-copy-link]")).toBeNull();

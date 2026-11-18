@@ -8,6 +8,7 @@ import {
   type LiveAuxOutput,
 } from "../../../../../../../../shared/live-room-outputs";
 import { liveScreenSyncs } from "../../../../../../../../shared/live-screen-sync";
+import type { AgendaSnapshot } from "../../../../../../../../shared/schemas/event-agenda";
 import type { LiveRoomOutput } from "../../../../../../../../shared/schemas/live-room-output-setup";
 import type { LiveScreenSync, LiveSyncedScreen } from "../../../../../../../../shared/schemas/live-screen-sync";
 import { liveOutputComposition } from "../../../../../../../../shared/schemas/live-session-stage";
@@ -61,6 +62,8 @@ export interface MonitorSources {
   preview: LiveRoomState;
   /** The session the physical room has on air, which may be another session; null when none is. */
   program: LiveRoomState | null;
+  /** The approved agenda, which the scene thumbnails fill Up next and the ticker from; null before the first approval. */
+  agenda: AgendaSnapshot | null;
   /** Whether the studio reaches the room now; while it does not, the monitors hold their last picture. */
   connected: boolean;
   slug: string;
@@ -334,7 +337,7 @@ function outputTag(output: StudioOutput, context: MonitorContext): { text: strin
     return liveScreenSyncs(switcher.screenSync, room, output)
       ? {
           text: "Follows PGM",
-          hint: "Shows the question, the poll and the timers on Program, plus what you send to it.",
+          hint: "Shows what is on Program, in this screen's own scene, plus what you send to it.",
         }
       : { text: "Sync off", hint: "Shows only what you send to it." };
   const scene = liveOutputScene(projectionOf(output, sources), output);

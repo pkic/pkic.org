@@ -1,21 +1,33 @@
 import { liveOutputRole, type LiveAuxOutput } from "./live-room-outputs";
+import { liveCompositionInput } from "./live-room-preview";
 import type { LiveRoomOutput, LiveRoomOutputRole } from "./schemas/live-room-output-setup";
 import { liveTimerCounts } from "./live-timer-policy";
-import { EMPTY_LIVE_STAGE, type LiveStage, type LiveTimer } from "./schemas/live-session-room";
+import {
+  EMPTY_LIVE_STAGE,
+  type LiveRoomClientMessage,
+  type LiveStage,
+  type LiveTimer,
+} from "./schemas/live-session-room";
 import type { LiveScreenSync } from "./schemas/live-screen-sync";
 
 /**
- * How a room screen follows Program, one rule for the projector and the
- * stage display: while it syncs, it shows what was put on it, and Program's
- * graphic wherever it has none of its own. Each screen follows only the
- * graphics that belong on it: the projector the boards and the timers the
- * room reads, not the stream's own graphics (the lower third, the ticker and
- * the panelists' names, which caption a camera picture the room does not
- * see); the stage display the question, the poll, the timers and the agenda
- * its footer reads. A
- * graphic a screen cannot draw does not take Program's place: the stage
- * display reads the time of day in its top row, so a clock of its own leaves
- * room for Program's countdowns.
+ * How a room screen follows Program, one rule for every screen that does:
+ * while it syncs, it shows what it holds itself, and Program's graphic
+ * wherever it holds none of its own. Whether a screen follows is the
+ * screen's own property, its role and its sync, never a scene's.
+ *
+ * A screen with the role `follow` takes every graphic from Program, each
+ * with its pick. It draws them in its own scene, the one its room fixed for
+ * it or the one last taken to it, so the scene alone decides which of them
+ * show there: one the scene leaves out is not drawn. A graphic that comes on
+ * with the screen's scene is one the screen holds itself, so it stays on
+ * whatever Program shows.
+ *
+ * The speaker's screen draws its own layout instead of a scene, so what it
+ * takes from Program is declared with its role: the question, the poll, the
+ * timers and the agenda its footer reads. A graphic a screen cannot draw
+ * does not take Program's place: the stage display reads the time of day in
+ * its top row, so a clock of its own leaves room for Program's countdowns.
  */
 
 /** A graphic of a composition, with the fields that travel with it. */
@@ -30,28 +42,33 @@ const GRAPHICS = {
   timerGraphics: ["timerGraphics"],
   topQuestions: ["topQuestions"],
   chatFeed: ["chatFeed"],
-  reactions: ["reactions"],
+  reactions: ["reactions", "reactionsGraphic"],
 } as const satisfies Record<string, ReadonlyArray<keyof LiveStage>>;
 export type LiveScreenGraphic = keyof typeof GRAPHICS;
-
-/** The stream's own graphics: they caption the camera picture, so a room screen never copies them. */
-const STREAM_ONLY: readonly LiveScreenGraphic[] = ["lowerThird", "ticker", "panelists"];
 
 /** The roles that follow Program while they sync; an output that shows what you take to it never does. */
 type LiveFollowingRole = Exclude<LiveRoomOutputRole, "exact">;
 
-/** The graphics each kind of screen takes from Program while it syncs. */
-export const LIVE_SCREEN_FOLLOWS: Record<LiveFollowingRole, readonly LiveScreenGraphic[]> = {
-  follow: (Object.keys(GRAPHICS) as LiveScreenGraphic[]).filter((graphic) => !STREAM_ONLY.includes(graphic)),
-  speaker: ["question", "poll", "timerGraphics", "schedule"],
-};
+/** Every graphic a composition holds: what a screen that follows Program takes from it. */
+const EVERY_GRAPHIC = Object.keys(GRAPHICS) as LiveScreenGraphic[];
 
-/** Graphics the speaker's screen has no place for: they caption the stream or speak to the audience, not the speaker. */
-const OFF_STAGE_DISPLAY: readonly LiveScreenGraphic[] = [...STREAM_ONLY, "topQuestions", "chatFeed"];
+/**
+ * The speaker's screen, which draws its own layout: the graphics it takes
+ * from Program while it syncs, and the ones it has no place for, which
+ * caption the stream or speak to the audience, not the speaker.
+ */
+const SPEAKER_SCREEN = {
+  follows: ["question", "poll", "timerGraphics", "schedule"],
+  neverDraws: ["lowerThird", "ticker", "panelists", "topQuestions", "chatFeed"],
+} as const satisfies Record<string, readonly LiveScreenGraphic[]>;
+
+/** The graphics a screen of each role takes from Program while it syncs. */
+const follows = (role: LiveFollowingRole): readonly LiveScreenGraphic[] =>
+  role === "speaker" ? SPEAKER_SCREEN.follows : EVERY_GRAPHIC;
 
 /** Whether an output can draw this graphic at all; the studio offers an output only for graphics it draws. */
 export function liveScreenDraws(role: LiveRoomOutputRole | null, graphic: LiveScreenGraphic): boolean {
-  return role !== "speaker" || !OFF_STAGE_DISPLAY.includes(graphic);
+  return role !== "speaker" || !(SPEAKER_SCREEN.neverDraws as readonly LiveScreenGraphic[]).includes(graphic);
 }
 
 /** Whether a screen holds a graphic of its own that it draws, so it takes the place of Program's. */
@@ -90,27 +107,32 @@ export function liveScreenSyncs(
 
 /** Whether an output of this role takes this graphic from Program while it syncs. */
 export function liveScreenFollows(role: LiveRoomOutputRole | null, graphic: LiveScreenGraphic): boolean {
-  return role !== null && role !== "exact" && LIVE_SCREEN_FOLLOWS[role].includes(graphic);
+  return role !== null && role !== "exact" && follows(role).includes(graphic);
 }
 
+/** What a take to a room screen sends: a whole shot, or only a scene. */
+export type LiveScreenTake = Extract<LiveRoomClientMessage, { type: "aux.set" | "aux.scene" }>;
+
 /**
- * What a take puts on a room screen: Preview's shot, a new shot in place of
- * the last. While a screen syncs, the graphics it follows are Program's, so
- * the shot brings its scene and the other graphics and leaves those empty:
- * none of Preview's shows before it is on Program, and none the screen held
- * of its own stays.
+ * What a take to a room screen sends. A screen that follows Program takes
+ * Preview's scene and nothing else: the room starts the screen again in that
+ * scene with the graphics that come on with it, and every other switch and
+ * pick stays Program's. A screen that shows what you take to it, or one
+ * whose sync is off, takes the whole shot. The speaker's screen takes the
+ * shot without the graphics it follows, so none of Preview's shows there
+ * before it is on Program.
  */
 export function liveScreenTake(
   output: LiveAuxOutput,
   room: { shot: LiveStage; sync: LiveScreenSync; outputs: readonly LiveRoomOutput[] },
-): LiveStage {
+): LiveScreenTake {
   const { shot, sync, outputs } = room;
   const role = followingRole(sync, outputs, output);
-  if (!role) return shot;
+  if (role === "follow") return { type: "aux.scene", output, scene: shot.scene };
   const taken: Record<string, unknown> = { ...shot };
-  for (const graphic of LIVE_SCREEN_FOLLOWS[role])
-    for (const field of GRAPHICS[graphic]) taken[field] = EMPTY_LIVE_STAGE[field];
-  return taken as LiveStage;
+  if (role)
+    for (const graphic of follows(role)) for (const field of GRAPHICS[graphic]) taken[field] = EMPTY_LIVE_STAGE[field];
+  return { type: "aux.set", output, composition: liveCompositionInput(taken as LiveStage) };
 }
 
 /**
@@ -131,7 +153,7 @@ export function liveScreenComposition(
   const role = followingRole(sync, outputs, output);
   if (!role) return own;
   const shown: Record<string, unknown> = { ...own };
-  for (const graphic of LIVE_SCREEN_FOLLOWS[role]) {
+  for (const graphic of follows(role)) {
     if (holds(role, own, graphic, timers)) continue;
     for (const field of GRAPHICS[graphic]) shown[field] = program[field];
   }

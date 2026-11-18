@@ -13,15 +13,17 @@ import type {
   LiveRoomSession,
   LiveRoomClientMessage,
   LiveCompositionInput,
-  LivePreviewPatch,
   LiveStage,
 } from "../../../../assets/shared/schemas/live-session-room";
 import type { LiveRoomControls, LiveControlOutcome } from "./room-controls";
 import type { LiveRoomOutputs } from "./room-outputs";
 import type { LiveRoomPreview } from "./room-preview";
-import { mergeLivePreview } from "../../../../assets/shared/live-room-preview";
+import { liveCompositionInput, mergeLivePreview } from "../../../../assets/shared/live-room-preview";
+import { liveOutputFixedScene, liveRoomOutputs } from "../../../../assets/shared/live-room-outputs";
+import { EMPTY_LIVE_STAGE } from "../../../../assets/shared/schemas/live-session-stage";
+import { nowIso } from "../../utils/time";
 import { resolveLiveSceneElements } from "../../../../assets/shared/live-scene-elements";
-import { liveSceneFill } from "../../../../assets/shared/live-scene-fill";
+import { liveSceneFill, type LiveSceneFill } from "../../../../assets/shared/live-scene-fill";
 import type { ResolvedComposition } from "./room-composition";
 import type { LiveOverlayLayoutGeometry } from "../../../../assets/shared/schemas/live-overlay-layout";
 import type { DatabaseLike } from "../../types";
@@ -127,8 +129,27 @@ export class LiveRoomGraphics {
     message: Extract<LiveRoomClientMessage, { type: "aux.set" }>,
     at: string,
   ): Promise<LiveControlOutcome> {
-    const { composition } = message;
+    // A screen its room fixed a scene for keeps that scene, whatever scene a shot names.
+    const scene = liveOutputFixedScene(liveRoomOutputs(session), message.output) ?? message.composition.scene;
+    const composition = { ...message.composition, scene };
     return this.outputs.setAux(actor, session, message.output, await this.resolve(session, composition, at), at);
+  }
+  /**
+   * A take to a screen that follows Program: the screen starts again in the
+   * scene, the one its room fixed for it or else the one taken, with the
+   * graphics that come on with that scene and nothing else of its own. Every
+   * other switch and pick it shows stays Program's.
+   */
+  async setAuxScene(
+    actor: Actor,
+    session: LiveRoomSession,
+    message: Extract<LiveRoomClientMessage, { type: "aux.scene" }>,
+    at: string,
+  ): Promise<LiveControlOutcome> {
+    const scene = liveOutputFixedScene(liveRoomOutputs(session), message.output) ?? message.scene;
+    const empty = { ...liveCompositionInput(EMPTY_LIVE_STAGE), scene };
+    const shot = { ...empty, ...this.comesOn(session, empty) };
+    return this.outputs.setAux(actor, session, message.output, await this.resolve(session, shot, at), at);
   }
   async setPreview(
     actor: Actor,
@@ -137,19 +158,44 @@ export class LiveRoomGraphics {
     at: string,
   ): Promise<LiveControlOutcome> {
     const merged = mergeLivePreview(this.store.preview(), message.composition);
-    // Loading a scene switches on the graphics that come on with it, in the same one write.
-    const patch = { ...this.comesOn(session, message.composition, merged), ...message.composition };
+    // Loading a scene switches on the graphics that come on with it, in the same one write. A layer the
+    // change itself names stays as the operator set it.
+    const loaded = "scene" in message.composition ? this.comesOn(session, merged) : {};
+    const patch = { ...loaded, ...message.composition };
     return this.preview.set(actor, session, patch, await this.resolve(session, { ...merged, ...patch }, at), at);
   }
   /**
-   * What a change that loads a scene also switches on: the scene's comes-on
-   * graphics that are off, filled from the room. A layer the change itself
-   * names stays as the operator set it.
+   * What loading its scene switches on for a composition, on Preview or a
+   * room screen alike: the scene's comes-on graphics that are off there,
+   * filled from the room.
    */
-  private comesOn(session: LiveRoomSession, change: LivePreviewPatch, input: LiveCompositionInput): LivePreviewPatch {
-    if (!("scene" in change)) return {};
+  private comesOn(session: LiveRoomSession, input: LiveCompositionInput): LiveSceneFill {
     const scene = resolveLiveSceneElements({ overlayLayouts: this.layouts }, input.scene);
     return liveSceneFill(scene, input, { session, program: this.store.stage() });
+  }
+  /**
+   * A screen that follows Program draws the scene its room fixed for it from
+   * the start, before anyone takes anything to it: the room loads that scene
+   * on the screen once, which switches on what comes on with it and leaves
+   * everything the screen holds. A screen already in its scene is left alone,
+   * so a graphic an operator switched off there stays off.
+   */
+  private async loadFixedScenes(): Promise<void> {
+    const room = this.store.session();
+    if (!room) return;
+    const at = nowIso();
+    for (const output of liveRoomOutputs(room.session)) {
+      if (output.role !== "follow" || !output.scene) continue;
+      const held = this.store.aux(output.key);
+      if (held.scene === output.scene) continue;
+      const input = { ...liveCompositionInput(held), scene: output.scene };
+      const fill = this.comesOn(room.session, input);
+      const resolved: Record<string, unknown> = await this.resolve(room.session, { ...input, ...fill }, at);
+      // Only what the scene switched on changes; the store reads the whole composition again before it saves.
+      const brought = Object.fromEntries(Object.keys(fill).map((graphic) => [graphic, resolved[graphic]]));
+      const message = this.outputs.adopt(output.key, held, { ...held, ...brought, scene: output.scene });
+      if (message) await this.broadcast.all(message);
+    }
   }
   async takePreview(actor: Actor, session: LiveRoomSession, at: string): Promise<LiveControlOutcome> {
     return this.preview.take(actor, session, await this.resolve(session, this.preview.sources(), at), at);
@@ -199,6 +245,7 @@ export class LiveRoomGraphics {
   async initialize(): Promise<void> {
     if (!this.basis.ready) await this.refresh();
     else await this.refreshLocal();
+    await this.loadFixedScenes();
   }
 
   async refresh(): Promise<void> {

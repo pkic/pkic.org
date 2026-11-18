@@ -12,9 +12,10 @@ import { authErrors, ok, requiresPermissions } from "./route-contract";
 
 /**
  * What an output shows. `exact`: only what an operator takes to it, from
- * Preview, with its own take button. `follow`: Program's question, poll and
- * timers, plus what an operator sends to it. `speaker`: the speaker's screen,
- * with the time, the next question and the messages to the speaker.
+ * Preview, with its own take button. `follow`: what is on Program, drawn in
+ * the output's own scene, plus what an operator sends to it. `speaker`: the
+ * speaker's screen, with the time, the next question and the messages to the
+ * speaker.
  */
 export const LIVE_ROOM_OUTPUT_ROLES = ["exact", "follow", "speaker"] as const;
 export type LiveRoomOutputRole = (typeof LIVE_ROOM_OUTPUT_ROLES)[number];
@@ -45,7 +46,7 @@ const outputFieldsSchema = z.object({
     .regex(/^[A-Z0-9]+( [A-Z0-9]+)?$/, "Use letters and numbers, with at most one space.")
     .max(LIVE_ROOM_OUTPUT_CODE_MAX, `Use at most ${LIVE_ROOM_OUTPUT_CODE_MAX} characters.`),
   role: z.enum(LIVE_ROOM_OUTPUT_ROLES),
-  /** The scene the output always draws; null for the scene it is given (from Preview, or Program's). */
+  /** The scene the output always draws; null for the scene last taken to it from Preview. */
   scene: liveOverlayLayoutSlugSchema.nullable(),
 });
 
