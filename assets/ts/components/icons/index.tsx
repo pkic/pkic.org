@@ -86,6 +86,16 @@ export function IconRefresh(props: SvgProps) {
   );
 }
 
+/** Reset layout: the panels turned back to where they started; one arrow, so it never reads as reloading. */
+export function IconLayoutReset(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <path d="M2 8a6 6 0 1 0 6-6 6.5 6.5 0 0 0-4.5 1.8L2 5.3M2 2v3.3h3.3M8 5.5v5" />
+      <rect x="5.5" y="5.5" width="5" height="5" rx=".5" />
+    </StrokeIcon>
+  );
+}
+
 /** Help: the question mark that opens a screen's guided tour, the same on every screen that has one. */
 export function IconHelp(props: SvgProps) {
   return (

@@ -1,4 +1,4 @@
-import { IconHelp, IconPlus, IconRefresh } from "../../../../../../../components/icons";
+import { IconHelp, IconLayoutReset, IconPlus } from "../../../../../../../components/icons";
 import { Button } from "../../../../../../../ui/Button";
 import { buttonClasses } from "../../../../../../../ui/button-classes";
 import { StrokeIcon } from "../../../../../../../ui/MediaIcons";
@@ -67,7 +67,7 @@ export function StudioToolbar({
           <IconPlus />
         </Menu>
         <Button icon aria-label="Reset layout" title="Reset layout: put this workspace's panels back" onClick={reset}>
-          <IconRefresh />
+          <IconLayoutReset />
         </Button>
         <Button
           icon
