@@ -253,7 +253,10 @@ describe("the submissions table", () => {
     expect(cleared.answerValue).toBeUndefined();
   });
 
-  it.each([false, true])("explains empty responses with active filters: %s", async (filtered) => {
+  it.each([
+    { name: "a caller scope alone", filtered: false, expected: "Nothing has been submitted through this form yet." },
+    { name: "a page-level filter", filtered: true, expected: "Try changing your search or filters." },
+  ])("explains empty responses with $name", async ({ filtered, expected }) => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => json({ submissions: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } })),
@@ -262,15 +265,48 @@ describe("the submissions table", () => {
       <FormSubmissionsTable
         fields={[field()]}
         endpoint="/api/v1/forms/f/submissions"
-        params={{ eventSlug: "pqc-2026", ...(filtered ? { status: "submitted" } : {}) }}
+        // Scope parameters the table does not know about never read as the reader's filters.
+        params={{ eventSlug: "pqc-2026", groupScope: "board", ...(filtered ? { status: "submitted" } : {}) }}
+        filtered={filtered}
         responseSchema={submissionsSchema}
         onOpen={vi.fn()}
       />,
     );
     await settle();
-    expect(page.textContent).toContain(
-      filtered ? "Try changing your search or filters." : "Nothing has been submitted through this form yet.",
+    expect(page.textContent).toContain(expected);
+  });
+
+  it("exports the remaining column when another column with the same label is hidden", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json({ submissions: [submission()], page: { limit: 50, offset: 0, total: 1, hasMore: false } }),
+      ),
     );
+    const notes = { fieldType: "text" as const, label: "Notes", options: null };
+    const page = mount(
+      <FormSubmissionsTable
+        fields={[
+          field({ ...notes, id: "90000000-0000-4000-8000-000000000002", key: "notes_a" }),
+          field({ ...notes, id: "90000000-0000-4000-8000-000000000003", key: "notes_b" }),
+        ]}
+        endpoint="/api/v1/events/pqc/forms/f/submissions"
+        exportEndpoint="/api/v1/events/pqc/forms/f/submissions/exports"
+        responseSchema={submissionsSchema}
+        onOpen={vi.fn()}
+      />,
+    );
+    await settle();
+    const trigger = page.querySelector<HTMLButtonElement>('button[aria-label="Notes column options"]')!;
+    await act(() => trigger.click());
+    const hide = [...document.querySelectorAll<HTMLButtonElement>('[role="menu"] button')].find(
+      (button) => button.textContent!.trim() === "Hide column",
+    )!;
+    await act(() => hide.click());
+    await settle();
+    const link = page.querySelector<HTMLAnchorElement>('a[aria-label="Download responses (CSV)"]')!;
+    const exported = formSubmissionsExportQuerySchema.parse(Object.fromEntries(new URL(link.href).searchParams));
+    expect(exported.columns).toEqual(["submitter", "answer:notes_b", "submitted_at", "status"]);
   });
 
   it("keeps a refused bookmarked query visible and disables its CSV download", async () => {

@@ -6,6 +6,7 @@ import { formFieldStatEntries } from "../../../../assets/shared/form-field-stati
 import type { DatabaseLike } from "../../types";
 import type { FieldRow, FieldStatPayload, GetFormSubmissionStatsParams, GetFormSubmissionStatsResult } from "./types";
 import { parseFormFieldOptionSource, resolveFormFieldOptionCatalogs } from "../forms/read";
+import { NORMALIZED_SUBMISSION_ANSWERS_CTE } from "./answer-query";
 import {
   countSubmissionPopulation,
   resolveFormSubmissionPopulation,
@@ -57,16 +58,12 @@ function buildFieldStatistics(
   });
 }
 
-const AGGREGATED_STATISTICS_SELECT = `expanded_raw AS (
+const AGGREGATED_STATISTICS_SELECT = `${NORMALIZED_SUBMISSION_ANSWERS_CTE},
+  expanded_raw AS (
     SELECT a.submission_id, a.field_key, value.type AS value_type, value.value AS value
     FROM normalized_answers a
-    JOIN merged m ON m.id = a.submission_id
     CROSS JOIN json_each(
-      CASE
-        WHEN json_valid(a.data_json) AND json_type(a.data_json) = 'array' THEN a.data_json
-        WHEN json_valid(a.data_json) THEN json_array(json(a.data_json))
-        ELSE json_array(a.data_json)
-      END
+      CASE WHEN json_type(a.data_json) = 'array' THEN a.data_json ELSE json_array(json(a.data_json)) END
     ) value
   ),
   labeled AS (

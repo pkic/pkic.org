@@ -152,6 +152,7 @@ export function FormManagementDetail({
   onChanged,
   notify,
   submissionParams,
+  submissionsFiltered,
   formEndpoint,
   exportEndpoint,
   showBack = true,
@@ -163,6 +164,8 @@ export function FormManagementDetail({
   onChanged?: () => void;
   notify?: (message: string, kind: "success" | "error") => void;
   submissionParams?: Record<string, string>;
+  /** `submissionParams` include a narrowing the reader chose on the page. */
+  submissionsFiltered?: boolean;
   formEndpoint?: string;
   exportEndpoint?: string;
   showBack?: boolean;
@@ -331,6 +334,7 @@ export function FormManagementDetail({
                   exportEndpoint={exportEndpoint}
                   responseSchema={formSubmissionsResponseSchema}
                   params={submissionParams}
+                  filtered={submissionsFiltered}
                   onOpen={(submission) => setResponseId(submission.id)}
                 />
               )}
@@ -527,6 +531,7 @@ export function EventFormResponses({ eventSlug, purpose }: { eventSlug: string; 
         responseTabLabel="Individual responses"
         onBack={() => undefined}
         submissionParams={submissionParams}
+        submissionsFiltered={Boolean(status || (purpose === "event_registration" && attendanceType))}
         formEndpoint={`/api/v1/events/${encodeURIComponent(eventSlug)}/forms/${encodeURIComponent(formKey)}`}
         exportEndpoint={`/api/v1/events/${encodeURIComponent(eventSlug)}/forms/${encodeURIComponent(formKey)}/submissions/exports`}
       />

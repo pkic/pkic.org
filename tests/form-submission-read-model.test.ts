@@ -10,7 +10,7 @@ import {
 } from "../functions/_lib/services/form-submissions/population-query";
 import {
   buildFormSubmissionsPageQuery,
-  readFormSubmissionsPage,
+  readFormSubmissionSnapshot,
 } from "../functions/_lib/services/form-submissions/submission-page";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import { getManagedFormWithFields } from "../functions/_lib/services/forms/read";
@@ -19,7 +19,6 @@ import { createAdminSession } from "./helpers/auth";
 import { callApi } from "./helpers/app";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
-import type { DatabaseLike } from "../functions/_lib/types";
 import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { resetDb } from "./helpers/reset-db";
 
@@ -528,6 +527,39 @@ describe("form-submission read-model population", () => {
     ]);
   });
 
+  it("keeps a native answer stored as bare text in statistics, filters, and exports", async () => {
+    const formId = await insertForm("bare-text-answer", "event_registration", "food", null, true);
+    const registrationId = await insertRegistration({
+      eventId,
+      userId: await insertUser("bare-text@example.test"),
+      status: "registered",
+      attendanceType: "in_person",
+      answer: "replaced",
+    });
+    await backfillSourceAnswer({
+      formId,
+      contextType: "registration",
+      contextRef: registrationId,
+      fieldKey: "food",
+      answer: "placeholder",
+    });
+    await env.DB.prepare("UPDATE form_submission_answers SET data_json = 'Vegan' WHERE field_key = 'food'").run();
+
+    const population = await readPopulation("bare-text-answer", { answerField: "food", answerValue: "Vegan" });
+    expect(population.list.page.total).toBe(1);
+    expect(population.stats.stats).toEqual([
+      expect.objectContaining({
+        fieldKey: "food",
+        totalAnswers: 1,
+        entries: [expect.objectContaining({ label: "Vegan" })],
+      }),
+    ]);
+    const csv = await adminGet(
+      "/api/v1/events/pqc-2026/forms/bare-text-answer/submissions/exports?columns=answer:food,status",
+    );
+    expect((await csv.text()).split("\r\n")).toEqual(["food label,Status", "Vegan,Registered"]);
+  });
+
   it("rejects an event slug that conflicts with an event-scoped form", async () => {
     await insertForm("event-scoped-population", "event_registration", "food", eventId);
     await insertEvent("unrelated-event");
@@ -688,12 +720,14 @@ describe("form-submission read-model population", () => {
       "/api/v1/events/pqc-2026/forms/dietary-responses/submissions/exports?columns=submitter,status",
     );
     expect(visible.status).toBe(200);
-    expect((await visible.text()).split("\r\n")[0]).toBe("Name,Status");
+    const visibleRows = (await visible.text()).split("\r\n");
+    expect(visibleRows[0]).toBe("Name,Status");
+    expect(visibleRows.slice(1).every((row) => row.endsWith(",Registered"))).toBe(true);
     const projected = profileD1Flow(env.DB);
     await exportEventFormResponses(projected.db, { ...exportParams, field: "food" }, { maxRows: 10, maxBytes: 10000 });
     expect(projected.summary().queries.some((query) => query.sql.startsWith("SELECT a.submission_id"))).toBe(false);
     expect(projected.summary().queries.find((query) => query.sql.includes("LIMIT ? OFFSET ?"))?.sql).toContain(
-      "a.field_key IN (SELECT value FROM json_each(?))",
+      "COALESCE(ff.key, a.field_key) IN (SELECT value FROM json_each(?))",
     );
     await expect(exportEventFormResponses(env.DB, exportParams, { maxRows: 10, maxBytes: 1 })).rejects.toMatchObject({
       code: "CSV_EXPORT_TOO_LARGE",
@@ -797,7 +831,7 @@ describe("form-submission read-model population", () => {
     },
   );
 
-  it("keeps projected native answers in the filter and sort snapshot when a response changes", async () => {
+  it("reads export rows and their selected native answers in one statement", async () => {
     const formKey = "projected-response";
     const formId = await insertForm(formKey, "event_registration", "food", null, true);
     const registrationId = await insertRegistration({
@@ -825,23 +859,12 @@ describe("form-submission read-model population", () => {
     };
     const population = await resolveFormSubmissionPopulation(env.DB, params);
     const profile = profileD1Flow(env.DB);
-    let changed = false;
-    const database: DatabaseLike = {
-      ...profile.db,
-      async batch(statements) {
-        const result = await profile.db.batch(statements);
-        await env.DB.prepare("UPDATE form_submission_answers SET data_json = ? WHERE field_key = 'food'")
-          .bind(JSON.stringify("vegetarian"))
-          .run();
-        changed = true;
-        return result;
-      },
-    };
-    const result = await readFormSubmissionsPage(database, population, params, ["food"]);
-    expect(changed).toBe(true);
-    expect(result.submissions).toHaveLength(1);
-    expect(result.submissions[0].answers.food).toBe("vegan");
-    expect(profile.summary().queries.some((query) => query.sql.startsWith("SELECT a.submission_id"))).toBe(false);
+    const submissions = await readFormSubmissionSnapshot(profile.db, population, params, ["food"], []);
+    expect(submissions).toHaveLength(1);
+    expect(submissions[0].answers).toEqual({ food: "vegan" });
+    // Rows and their answers come from one statement, so no later read can see a newer answer.
+    expect(profile.summary().queries).toHaveLength(1);
+    expect(profile.summary().queries[0].sql).toContain("json_group_object");
   });
 
   it("sorts and exports inactive catalog choices by their historical labels", async () => {

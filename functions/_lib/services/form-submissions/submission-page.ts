@@ -1,6 +1,7 @@
-import { resolveAnswerSortOptions, submissionAnswerSortSql } from "./answer-sort";
+import { selectedSubmissionAnswersSql } from "./answer-query";
+import { resolveAnswerSortOptions, submissionAnswerSortSql, type AnswerSortOption } from "./answer-sort";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
-import { queryPage, type OffsetPageQuery } from "../../db/pagination";
+import { buildOffsetPageSql, queryPage, type OffsetPageQuery } from "../../db/pagination";
 import { all } from "../../db/queries";
 import { resolveOrderBy } from "../../db/sort";
 import { parseJsonSafe } from "../../utils/json";
@@ -10,8 +11,9 @@ import {
   FORM_SUBMISSIONS_SORT_COLUMNS,
 } from "../../../../assets/shared/schemas/form-management";
 import type { DatabaseLike } from "../../types";
-import type { SubmissionPayload, ListFormSubmissionsParams, ListFormSubmissionsResult } from "./types";
+import type { FieldRow, SubmissionPayload, ListFormSubmissionsParams, ListFormSubmissionsResult } from "./types";
 import {
+  MERGED_SUBMISSION_BASE_COLUMNS,
   MERGED_SUBMISSION_COLUMNS,
   resolveFormSubmissionPopulation,
   selectFromSubmissionPopulation,
@@ -82,7 +84,7 @@ async function attachSubmissionAnswers(
 export function buildFormSubmissionsPageQuery(
   population: FormSubmissionPopulation,
   params: Pick<ListFormSubmissionsParams, "sort" | "limit" | "offset" | "responseId">,
-  options: { value: string; label: string }[] = [],
+  options: AnswerSortOption[] = [],
   answerKeys?: string[],
 ): OffsetPageQuery {
   let orderBy = resolveOrderBy(
@@ -96,19 +98,15 @@ export function buildFormSubmissionsPageQuery(
   if (answerSort) {
     orderBy = `ORDER BY answer_sort IS NULL ASC, answer_sort ${parsedSort?.desc ? "DESC" : "ASC"}, source ASC, source_id ASC`;
   }
-  const fieldFilter = answerKeys ? buildD1JsonMembershipFilter("a.field_key", answerKeys) : null;
-  const projection = fieldFilter
-    ? MERGED_SUBMISSION_COLUMNS.replace(
-        "answers_json",
-        `(SELECT json_group_object(a.field_key, json(a.data_json))
-        FROM normalized_answers a WHERE a.submission_id = merged.id AND ${fieldFilter.sql}) AS answers_json`,
-      )
+  const selectedAnswers = answerKeys ? selectedSubmissionAnswersSql(answerKeys) : null;
+  const projection = selectedAnswers
+    ? `${MERGED_SUBMISSION_BASE_COLUMNS}, ${selectedAnswers.sql} AS answers_json`
     : MERGED_SUBMISSION_COLUMNS;
   const pageQuery = selectFromSubmissionPopulation(
     population,
     `SELECT ${projection}${answerSort ? `, ${answerSort.sql} AS answer_sort` : ""} FROM merged${params.responseId ? " WHERE id = ?" : ""}`,
     [
-      ...(fieldFilter?.bindings ?? []),
+      ...(selectedAnswers?.bindings ?? []),
       ...(answerSort?.bindings ?? []),
       ...(params.responseId ? [params.responseId] : []),
     ],
@@ -121,30 +119,17 @@ export function buildFormSubmissionsPageQuery(
   };
 }
 
+/** `fields` lets a caller that already loaded the form definition skip rereading the sorted field. */
 export async function listFormSubmissions(
   db: DatabaseLike,
   params: ListFormSubmissionsParams,
+  fields?: readonly FieldRow[],
 ): Promise<ListFormSubmissionsResult> {
   const population = await resolveFormSubmissionPopulation(db, params);
-  return readFormSubmissionsPage(db, population, params);
-}
-
-/** The export checks its population count before reading or hydrating any rows. */
-export async function readFormSubmissionsPage(
-  db: DatabaseLike,
-  population: FormSubmissionPopulation,
-  params: ListFormSubmissionsParams,
-  answerKeys?: string[],
-): Promise<ListFormSubmissionsResult> {
-  const options = await resolveAnswerSortOptions(db, population.form.id, params.sort);
-  const page = await queryPage<MergedSubmissionRow>(
-    db,
-    buildFormSubmissionsPageQuery(population, params, options, answerKeys),
-  );
+  const options = await resolveAnswerSortOptions(db, population.form.id, params.sort, fields);
+  const page = await queryPage<MergedSubmissionRow>(db, buildFormSubmissionsPageQuery(population, params, options));
   const submissions = page.rows.length
-    ? (await attachSubmissionAnswers(db, page.rows, answerKeys)).map((submission) =>
-        formSubmissionSchema.parse(submission),
-      )
+    ? (await attachSubmissionAnswers(db, page.rows)).map((submission) => formSubmissionSchema.parse(submission))
     : [];
 
   return {
@@ -160,4 +145,24 @@ export async function readFormSubmissionsPage(
     limit: params.limit,
     submissions,
   };
+}
+
+/**
+ * Reads every matching row, with its selected answers, in one statement so an
+ * export is a consistent snapshot. The caller checks the population count first.
+ */
+export async function readFormSubmissionSnapshot(
+  db: DatabaseLike,
+  population: FormSubmissionPopulation,
+  params: Pick<ListFormSubmissionsParams, "sort" | "limit">,
+  answerKeys: string[],
+  sortOptions: AnswerSortOption[],
+): Promise<SubmissionPayload[]> {
+  const page = buildOffsetPageSql(
+    buildFormSubmissionsPageQuery(population, { ...params, offset: 0 }, sortOptions, answerKeys),
+  );
+  const rows = await all<MergedSubmissionRow>(db, page.pageSql, [...page.bindings, params.limit, 0]);
+  return (await attachSubmissionAnswers(db, rows, answerKeys)).map((submission) =>
+    formSubmissionSchema.parse(submission),
+  );
 }

@@ -1,4 +1,5 @@
 import { parseAnswerSort, type FormSubmissionsExportQuery } from "../../../../assets/shared/schemas/form-management";
+import { statusLabel } from "../../../../assets/shared/status-display";
 import { encodeBoundedCsv } from "../../csv";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
@@ -6,7 +7,7 @@ import { formatCustomAnswerValue } from "../../utils/custom-answer-display";
 import { writeAuditLog } from "../audit";
 import { type ManagedFormWithFields, mapManagedFormFields, resolveFormFieldOptionCatalogs } from "../forms/read";
 import { countSubmissionPopulation, resolveFormSubmissionPopulation } from "./population-query";
-import { readFormSubmissionsPage } from "./submission-page";
+import { readFormSubmissionSnapshot } from "./submission-page";
 
 export async function exportEventFormResponses(
   db: DatabaseLike,
@@ -33,7 +34,7 @@ export async function exportEventFormResponses(
     const answer = parseAnswerSort(column);
     return answer ? [answer.key] : [];
   });
-  const readParams = { ...params, formKey: definition.form.key, offset: 0, limit: limits.maxRows + 1 };
+  const readParams = { ...params, formKey: definition.form.key };
   const population = await resolveFormSubmissionPopulation(db, readParams);
   const count = countSubmissionPopulation(population);
   const total = await db
@@ -43,13 +44,18 @@ export async function exportEventFormResponses(
   if (Number(total?.total ?? 0) > limits.maxRows) {
     throw new AppError(413, "CSV_EXPORT_ROW_LIMIT_EXCEEDED", `CSV export is limited to ${limits.maxRows} records`);
   }
-  const result = await readFormSubmissionsPage(db, population, readParams, answerKeys);
-  if (result.total > limits.maxRows) {
-    throw new AppError(413, "CSV_EXPORT_ROW_LIMIT_EXCEEDED", `CSV export is limited to ${limits.maxRows} records`);
-  }
-  const exportedFields = selectedFields.filter((field) => answerKeys.includes(field.key));
-  const catalogs = await resolveFormFieldOptionCatalogs(db, exportedFields, { includeInactive: true });
-  const fields = new Map(mapManagedFormFields(exportedFields, catalogs).map((field) => [field.key, field]));
+  // One catalog read serves both the exported labels and the sort order.
+  const sortKey = parseAnswerSort(params.sort)?.key;
+  const labeledFields = definition.fields.filter((field) => answerKeys.includes(field.key) || field.key === sortKey);
+  const catalogs = await resolveFormFieldOptionCatalogs(db, labeledFields, { includeInactive: true });
+  const fields = new Map(mapManagedFormFields(labeledFields, catalogs).map((field) => [field.key, field]));
+  const submissions = await readFormSubmissionSnapshot(
+    db,
+    population,
+    { sort: params.sort, limit: limits.maxRows },
+    answerKeys,
+    (sortKey && fields.get(sortKey)?.options) || [],
+  );
   const headers = columns.map((column) => {
     const answer = parseAnswerSort(column);
     return answer
@@ -63,12 +69,13 @@ export async function exportEventFormResponses(
   const csv = encodeBoundedCsv(
     [
       headers,
-      ...result.submissions.map((submission) =>
+      ...submissions.map((submission) =>
         columns.map((column) => {
           const answer = parseAnswerSort(column);
           if (answer) return formatCustomAnswerValue(submission.answers[answer.key], fields.get(answer.key));
-          if (column === "status") return submission.status;
+          if (column === "status") return statusLabel(submission.status);
           if (column === "submitted_at") return submission.submittedAt;
+          // Names only: an export handed to venue staff carries no email addresses.
           return [submission.submitter?.firstName, submission.submitter?.lastName].filter(Boolean).join(" ");
         }),
       ),
@@ -77,7 +84,7 @@ export async function exportEventFormResponses(
   );
   await writeAuditLog(db, "admin", params.actorUserId, "event_form_responses_export", "event", params.eventId, {
     formKey: definition.form.key,
-    recordCount: result.submissions.length,
+    recordCount: submissions.length,
   });
   return csv;
 }

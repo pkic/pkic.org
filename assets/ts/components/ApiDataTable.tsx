@@ -35,7 +35,8 @@ export interface ApiDataTableProps<T, Response> extends Omit<
   DataTableProps<T>,
   "data" | "currentSort" | "onSort" | "empty"
 > {
-  empty?: ComponentChildren | ((query: Readonly<Record<string, string>>) => ComponentChildren);
+  /** A function receives whether the reader's own search or column filters narrowed the list. */
+  empty?: ComponentChildren | ((state: { narrowed: boolean }) => ComponentChildren);
   /** Keep column filters available on desktop even for hidden columns. */
   tableOptionsFilters?: boolean;
   endpoint: string;
@@ -311,7 +312,8 @@ export function ApiDataTable<T, Response = unknown>({
     onData?.(collection.data);
   }, [collection.data, onData]);
 
-  const emptyContent = typeof empty === "function" ? empty(query) : empty;
+  const emptyContent =
+    typeof empty === "function" ? empty({ narrowed: Boolean(search) || Object.keys(filters).length > 0 }) : empty;
   const rows = collection.data ? resolve(collection.data) : [];
   const pageInfo = collection.data ? resolvePage(collection.data) : null;
   const pagerProps = pager.pagerProps({

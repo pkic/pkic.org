@@ -1,35 +1,85 @@
 import { formAnswerKeySchema } from "../../../../assets/shared/schemas/form-management";
+import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 
-/** One typed answer projection for filtering, sorting, and statistics. */
+type AnswerRowSource = "merged" | "response_candidates";
+
+/** Native answers stored as bare text stay one string value instead of disappearing. */
+function nativeAnswerJson(column: string): string {
+  return `CASE WHEN json_valid(${column}) THEN ${column} ELSE json_quote(${column}) END`;
+}
+
+/** One legacy `json_each` entry as the same JSON value a native answer stores. */
+function legacyAnswerJson(entry: string): string {
+  return `CASE ${entry}.type
+    WHEN 'array' THEN json(${entry}.value)
+    WHEN 'object' THEN json(${entry}.value)
+    WHEN 'true' THEN 'true'
+    WHEN 'false' THEN 'false'
+    WHEN 'null' THEN 'null'
+    ELSE json_quote(${entry}.value) END`;
+}
+
+function legacyAnswersJson(row: string): string {
+  return `CASE WHEN json_valid(${row}.answers_json) THEN ${row}.answers_json ELSE '{}' END`;
+}
+
+const NATIVE_FIELD_KEY = "COALESCE(ff.key, a.field_key)";
+
+/** Every answer of the filtered population, for statistics that aggregate all fields. */
 export const NORMALIZED_SUBMISSION_ANSWERS_CTE = `normalized_answers AS (
-  SELECT m.id AS submission_id, COALESCE(ff.key, a.field_key) AS field_key,
-         CASE WHEN json_valid(a.data_json) THEN a.data_json ELSE 'null' END AS data_json
-  FROM response_candidates m
+  SELECT m.id AS submission_id, ${NATIVE_FIELD_KEY} AS field_key, ${nativeAnswerJson("a.data_json")} AS data_json
+  FROM merged m
   JOIN form_submission_answers a ON m.source = 'submission' AND a.submission_id = m.source_id
   LEFT JOIN form_fields ff ON ff.id = a.field_id
   UNION ALL
-  SELECT m.id AS submission_id, je.key AS field_key,
-         CASE je.type
-           WHEN 'array' THEN json(je.value)
-           WHEN 'object' THEN json(je.value)
-           WHEN 'true' THEN 'true'
-           WHEN 'false' THEN 'false'
-           WHEN 'null' THEN 'null'
-           ELSE json_quote(je.value)
-         END AS data_json
-  FROM response_candidates m
-  CROSS JOIN json_each(CASE WHEN json_valid(m.answers_json) THEN m.answers_json ELSE '{}' END) je
+  SELECT m.id AS submission_id, je.key AS field_key, ${legacyAnswerJson("je")} AS data_json
+  FROM merged m
+  CROSS JOIN json_each(${legacyAnswersJson("m")}) je
   WHERE m.source IN ('registration', 'proposal')
 )`;
 
+/**
+ * One row's answer as JSON. Native rows probe the indexed answer table by
+ * submission; legacy rows read only their own JSON, so the cost stays per row.
+ */
 export function submissionAnswerSql(
   fieldKey: string,
-  rowSource: "merged" | "response_candidates" = "merged",
+  row: AnswerRowSource = "merged",
 ): { sql: string; bindings: string[] } {
+  const key = formAnswerKeySchema.parse(fieldKey);
   return {
-    sql: `SELECT a.data_json FROM normalized_answers a
-          WHERE a.submission_id = ${rowSource}.id AND a.field_key = ? LIMIT 1`,
-    bindings: [formAnswerKeySchema.parse(fieldKey)],
+    sql: `CASE WHEN ${row}.source = 'submission' THEN (
+      SELECT ${nativeAnswerJson("a.data_json")} FROM form_submission_answers a
+      LEFT JOIN form_fields ff ON ff.id = a.field_id
+      WHERE a.submission_id = ${row}.source_id AND ${NATIVE_FIELD_KEY} = ? LIMIT 1
+    ) ELSE (
+      SELECT ${legacyAnswerJson("je")} FROM json_each(${legacyAnswersJson(row)}) je
+      WHERE je.key = ? LIMIT 1
+    ) END`,
+    bindings: [key, key],
+  };
+}
+
+/** The selected answers of one row as a JSON object, read in the page statement itself. */
+export function selectedSubmissionAnswersSql(
+  answerKeys: readonly string[],
+  row: AnswerRowSource = "merged",
+): { sql: string; bindings: string[] } {
+  const keys = answerKeys.map((key) => formAnswerKeySchema.parse(key));
+  const nativeKeys = buildD1JsonMembershipFilter(NATIVE_FIELD_KEY, keys);
+  const legacyKeys = buildD1JsonMembershipFilter("je.key", keys);
+  return {
+    sql: `CASE WHEN ${row}.source = 'submission' THEN (
+      SELECT json_group_object(${NATIVE_FIELD_KEY}, json(${nativeAnswerJson("a.data_json")}))
+      FROM form_submission_answers a
+      LEFT JOIN form_fields ff ON ff.id = a.field_id
+      WHERE a.submission_id = ${row}.source_id AND ${nativeKeys.sql}
+    ) ELSE (
+      SELECT json_group_object(je.key, json(${legacyAnswerJson("je")}))
+      FROM json_each(${legacyAnswersJson(row)}) je
+      WHERE ${legacyKeys.sql}
+    ) END`,
+    bindings: [...nativeKeys.bindings, ...legacyKeys.bindings],
   };
 }
 

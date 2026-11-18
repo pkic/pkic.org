@@ -1,4 +1,4 @@
-import { NORMALIZED_SUBMISSION_ANSWERS_CTE, submissionAnswerFilter } from "./answer-query";
+import { submissionAnswerFilter } from "./answer-query";
 import { selectedAttendanceTypeSql } from "../registrations/day-states";
 import { REGISTRATION_ORGANIZATION_SQL, registrationOrganizationSql } from "../registrations/selected-identity";
 /**
@@ -50,8 +50,10 @@ export interface PopulationQuery {
   bindings: unknown[];
 }
 
-export const MERGED_SUBMISSION_COLUMNS = `id, source, source_id, context_type, context_ref, status, submitted_at,
-  user_id, user_email, user_first_name, user_last_name, user_organization, answers_json`;
+/** Row identity and submitter columns; a page may project `answers_json` differently. */
+export const MERGED_SUBMISSION_BASE_COLUMNS = `id, source, source_id, context_type, context_ref, status, submitted_at,
+  user_id, user_email, user_first_name, user_last_name, user_organization`;
+export const MERGED_SUBMISSION_COLUMNS = `${MERGED_SUBMISSION_BASE_COLUMNS}, answers_json`;
 
 function optionalEquality(expression: string, value: string | undefined): SqlFragment {
   return value ? { sql: `AND ${expression} = ?`, bindings: [value] } : { sql: "", bindings: [] };
@@ -437,7 +439,7 @@ export async function resolveFormSubmissionPopulation(
   return {
     form,
     placement,
-    cte: `${population.cte}, ${NORMALIZED_SUBMISSION_ANSWERS_CTE}, merged AS (SELECT ${MERGED_SUBMISSION_COLUMNS}, submitter FROM response_candidates ${answer.sql})`,
+    cte: `${population.cte}, merged AS (SELECT ${MERGED_SUBMISSION_COLUMNS}, submitter FROM response_candidates ${answer.sql})`,
     bindings: [...population.bindings, ...answer.bindings],
   };
 }

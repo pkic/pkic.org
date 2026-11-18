@@ -88,16 +88,20 @@ export function FormSubmissionsTable<Response extends { submissions: FormSubmiss
   onOpen,
   exportEndpoint,
   load,
+  filtered = false,
 }: {
   fields: FormFieldDefinition[];
   endpoint: string;
   exportEndpoint?: string;
+  /** The page narrowed the list outside the table, for example by a status picker. */
+  filtered?: boolean;
   load?: ApiDataTableProps<FormSubmission, Response>["load"];
   responseSchema: z.ZodType<Response>;
   params?: Record<string, string>;
   onOpen: (submission: FormSubmission) => void;
 }) {
   const answerColumns = fields.map((field) => ({
+    key: `answer:${field.key}`,
     header: { label: field.label, className: "adm-form-answer-col" },
     cell: (submission: FormSubmission) => {
       const answer = compactAnswer(submission.answers?.[field.key], field);
@@ -131,10 +135,10 @@ export function FormSubmissionsTable<Response extends { submissions: FormSubmiss
           columns: [
             "submitter",
             ...fields
-              .filter((field) => !hidden.has(field.label) && (!selected || field.key === selected.key))
+              .filter((field) => !hidden.has(`answer:${field.key}`) && (!selected || field.key === selected.key))
               .map((field) => `answer:${field.key}`),
-            ...(!selected && !hidden.has("Submitted") ? ["submitted_at"] : []),
-            ...(!selected && !hidden.has("Status") ? ["status"] : []),
+            ...(!selected && !hidden.has("submitted_at") ? ["submitted_at"] : []),
+            ...(!selected && !hidden.has("status") ? ["status"] : []),
           ].join(","),
           ...(selected ? { field: selected.key } : {}),
         });
@@ -172,14 +176,11 @@ export function FormSubmissionsTable<Response extends { submissions: FormSubmiss
           </>
         );
       }}
-      empty={(query) => (
+      empty={({ narrowed }) => (
         <EmptyState
           title="No responses found"
           body={
-            Object.entries(query).some(
-              ([key, value]) =>
-                !["limit", "offset", "sort", "eventSlug", "placementId", "responseId"].includes(key) && Boolean(value),
-            )
+            narrowed || filtered
               ? "Try changing your search or filters."
               : "Nothing has been submitted through this form yet."
           }
@@ -207,12 +208,14 @@ export function FormSubmissionsTable<Response extends { submissions: FormSubmiss
         },
         ...answerColumns,
         {
+          key: "submitted_at",
           header: "Submitted",
           cell: (submission) => formatDateTime(submission.submittedAt),
           className: "pk-mono pk-small pk-nowrap",
           sort: { asc: "submitted_at", desc: "-submitted_at", defaultDirection: "desc" },
         },
         {
+          key: "status",
           header: "Status",
           cell: (submission) => <Badge status={submission.status} />,
           sort: { asc: "status", desc: "-status" },
