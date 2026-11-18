@@ -2,7 +2,6 @@ import { useContext, useState } from "preact/hooks";
 import { toast } from "../../../../../ui";
 import type { ClockZone } from "../../../../../../../../shared/event-clock";
 import { format24HourClockInZone } from "../../../../../../../../shared/format-date";
-import { LIVE_AUX_OUTPUTS, LIVE_AUX_OUTPUT_DETAILS } from "../../../../../../../../shared/live-room-outputs";
 import { formatLiveDuration } from "../../../../../../../../shared/live-timer-format";
 import { countsUp, liveTimerCounts, liveTimerTotalMs } from "../../../../../../../../shared/live-timer-policy";
 import type {
@@ -18,6 +17,7 @@ import { StrokeIcon } from "../../../../../../../ui/MediaIcons";
 import { Menu, type MenuItem } from "../../../../../../../ui/Menu";
 import { Meter } from "../../../../../../../ui/Meter";
 import { LiveLayerTargets } from "../LiveLayerTargets";
+import { LiveScreenTrigger, liveScreenItems, liveScreens, liveScreensTitle } from "../LiveRowMenu";
 import { useLiveTimerGraphic } from "../LiveTimerGraphicControls";
 import { liveLayerTargets, sendLayerToggle, type LiveTargets } from "../live-output-targets";
 import type { LiveDestination } from "../OutputTargetControl";
@@ -36,6 +36,7 @@ function outputItems(
   where: ReturnType<typeof liveLayerTargets>,
   toggle: (destination: LiveDestination) => void,
   disabled: boolean,
+  screens: readonly MenuItem[],
 ): MenuItem[] {
   const item = (id: LiveDestination, label: string, checked: boolean, first = false): MenuItem => ({
     id: `output-${id}`,
@@ -47,11 +48,7 @@ function outputItems(
     disabled,
     onSelect: () => toggle(id),
   });
-  return [
-    item("preview", "Preview", where.preview, true),
-    item("program", "Program", where.program),
-    ...LIVE_AUX_OUTPUTS.map((output) => item(output, LIVE_AUX_OUTPUT_DETAILS[output].label, where.aux(output))),
-  ];
+  return [item("preview", "Preview", where.preview, true), item("program", "Program", where.program), ...screens];
 }
 
 /**
@@ -123,6 +120,7 @@ export function TimerRow({
       liveLayerTargets(targets, layer),
       (destination) => sendLayerToggle(targets, layer, destination),
       targets.disabled,
+      liveScreenItems(targets, layer),
     ).map((item, index) => (index === 0 && !live.length ? { ...item, separatorBefore: false } : item)),
     {
       id: "settings",
@@ -176,7 +174,7 @@ export function TimerRow({
         )}
       </span>
       <span class="pk-studio-time__outputs">
-        <LiveLayerTargets targets={targets} subject={`${timer.name} timer`} layer={layer} short />
+        <LiveLayerTargets targets={targets} subject={`${timer.name} timer`} layer={layer} />
       </span>
       {counts ? (
         // One joined control, like PVW | PGM: Start or Pause, Reset, and a minute either way.
@@ -222,12 +220,19 @@ export function TimerRow({
         </span>
       ) : null}
       <span class="pk-studio-time__menu">
-        <Menu label={`${timer.name} timer`} heading={timer.name} align="end" items={items} />
+        <Menu
+          label={`${timer.name} timer`}
+          heading={timer.name}
+          align="end"
+          title={liveScreensTitle(liveScreens(targets, layer))}
+          items={items}
+        >
+          <LiveScreenTrigger screens={liveScreens(targets, layer)} />
+        </Menu>
       </span>
       {dialog ? (
         <LiveTimerDialog
           timer={timer}
-          session={session}
           clock={clock}
           graphic={graphic}
           send={send}

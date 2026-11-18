@@ -5,10 +5,23 @@ import { LIVE_QUESTION_STATUSES, LIVE_ROOM_POLICY } from "../live-session-policy
 import { liveAuthorFields } from "./live-session-author";
 import { liveChangeSchema, livePersonNameSchema } from "./live-session-change";
 import { publicSessionPortraitUrlSchema } from "./event-session-history";
+import {
+  liveModerationReasonSchema,
+  liveParticipationRestrictionSchema,
+  liveRemovalSchema,
+} from "./live-session-moderation";
+import { liveCreditKeySchema } from "./live-session-credit";
 
 export const liveQuestionStatusSchema = z.enum(LIVE_QUESTION_STATUSES);
 
 const questionTextSchema = z.string().min(1).max(LIVE_ROOM_POLICY.questionMaxLength);
+
+/**
+ * Who a question is for: the key of one person credited on the session, as
+ * `session.credits` lists them, or null for everyone. Clients read the name
+ * from the credit; the question never carries a copy of it.
+ */
+export const liveQuestionAddresseeSchema = liveCreditKeySchema.nullable();
 
 export const liveQuestionSchema = z
   .object({
@@ -37,6 +50,20 @@ export const liveQuestionSchema = z
     originalText: questionTextSchema.nullable(),
     /** Moderators only: who last rewrote the question. */
     rewritten: liveChangeSchema.nullable(),
+    /** Answers everyone may see, so the list shows the thread's size without opening it. */
+    answerCount: z.number().int().nonnegative().default(0),
+    /** One of those answers is accepted as the answer. */
+    acceptedAnswer: z.boolean().default(false),
+    /** The author and moderators only: a moderator removed it, and why. */
+    removal: liveRemovalSchema.nullable().default(null),
+    /** Moderators only: cleared from the studio queue; attendees still see it. */
+    done: liveChangeSchema.nullable().default(null),
+    /** Moderators only: the author's block in force. */
+    authorRestriction: liveParticipationRestrictionSchema.nullable().default(null),
+    /** The credited person the question is for; null when it is for everyone. */
+    addressedTo: liveQuestionAddresseeSchema.default(null),
+    /** Moderators only: operators prepared this question ahead; false for everyone else. */
+    prepared: z.boolean().default(false),
   })
   .strict();
 export type LiveQuestion = z.infer<typeof liveQuestionSchema>;
@@ -51,7 +78,9 @@ const questionBodySchema = z
   );
 
 /** The ask form's contract: the socket message carries exactly these fields. */
-export const liveQuestionAskSchema = z.object({ text: questionBodySchema, anonymous: z.boolean() }).strict();
+export const liveQuestionAskSchema = z
+  .object({ text: questionBodySchema, anonymous: z.boolean(), addressedTo: liveQuestionAddresseeSchema.default(null) })
+  .strict();
 
 /**
  * The rewrite editor's contract. The operator submits the text the room will
@@ -69,6 +98,24 @@ export const liveQuestionEditSchema = liveQuestionRewriteSchema.extend({
   type: z.literal("question.edit"),
   ...questionAuthorRequestFields,
 });
+/**
+ * A status change. Hiding is a moderator's Remove: it always records why, and
+ * the author sees the reason.
+ */
+export const liveQuestionModerateSchema = z
+  .object({
+    type: z.literal("question.moderate"),
+    questionId: databaseIdSchema,
+    status: liveQuestionStatusSchema,
+    expectedRevision: z.number().int().nonnegative(),
+    reason: liveModerationReasonSchema.optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.status === "hidden" && !value.reason)
+      context.addIssue({ code: "custom", path: ["reason"], message: "Choose why you remove this question." });
+  });
+
 export const liveQuestionWithdrawSchema = z
   .object({
     type: z.literal("question.withdraw"),

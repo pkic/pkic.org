@@ -11,7 +11,6 @@ import { Select } from "../../../../../../ui/TextControl";
 import { Alert } from "../../../../../../ui/Alert";
 import { LiveGraphicRow } from "./LiveGraphicRow";
 import { LiveGraphicThemeField } from "./LiveGraphicThemeField";
-import { LiveLayerTargets } from "./LiveLayerTargets";
 import type { LiveTargets } from "./live-output-targets";
 
 const LAYOUT_LABELS: Record<LiveScheduleConfig["layout"], string> = { cards: "Cards", list: "List" };
@@ -30,6 +29,7 @@ export function LiveScheduleControls({ targets, detail }: { targets: LiveTargets
   return (
     <LiveGraphicRow
       name="Up next"
+      outputs={{ targets, subject: "up next", layer: { kind: "schedule", config } }}
       detail={detail}
       settings={{
         label: "Up next settings",
@@ -41,7 +41,6 @@ export function LiveScheduleControls({ targets, detail }: { targets: LiveTargets
         },
       }}
     >
-      <LiveLayerTargets targets={targets} subject="up next" layer={{ kind: "schedule", config }} />
       {open && (
         <Dialog
           open

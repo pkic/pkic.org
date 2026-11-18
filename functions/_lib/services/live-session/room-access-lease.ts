@@ -30,6 +30,13 @@ export class LiveRoomAccessLease {
     private readonly room: () => Room | null,
     private readonly candidates: () => string[],
     private readonly onErased: (userId: string) => Promise<void>,
+    /** The people D1 was asked about and those of them blocked for the whole event. */
+    /** `readAt` is when the D1 read began; decisions this room made after it win. */
+    private readonly onEventBlocks: (
+      checked: readonly string[],
+      blocked: ReadonlySet<string>,
+      readAt: number,
+    ) => Promise<void>,
   ) {}
 
   private sockets(): WebSocket[] {
@@ -175,6 +182,7 @@ export class LiveRoomAccessLease {
       });
     }
     for (const userId of newlyErased) await this.onErased(userId);
+    await this.onEventBlocks(candidates, read.eventBlocked ?? new Set(), checkedAt);
   }
 
   /** Never await D1 on a message or broadcast. A missing/expired lease refuses access until readmission. */

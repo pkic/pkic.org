@@ -19,7 +19,8 @@ const wholeSeconds = (milliseconds: number) => Math.ceil(Math.abs(milliseconds) 
 
 /**
  * The one clock format: "4:05" under an hour, "1:02:03" under a day,
- * "3d 04:12" (days, hours and minutes) under a year, and "2y 145d"
+ * "3d 4h 12m" (days, hours and minutes, each with its unit, so it never
+ * reads as a clock) under a year, and "2y 145d"
  * beyond, for a countdown that runs for years. Time over reads "+4:05".
  */
 export function formatLiveDuration(milliseconds: number): string {
@@ -32,10 +33,34 @@ export function formatLiveDuration(milliseconds: number): string {
     // Past a day the seconds drop away; the minutes round up as the seconds did.
     const minutes = Math.ceil(total / MINUTE);
     const days = Math.floor(minutes / (24 * 60));
-    return `${sign}${formatNumber(days)}d ${pad(Math.floor(minutes / 60) % 24)}:${pad(minutes % 60)}`;
+    return `${sign}${formatNumber(days)}d ${Math.floor(minutes / 60) % 24}h ${minutes % 60}m`;
   }
   const days = Math.ceil(total / DAY);
   return `${sign}${formatNumber(Math.floor(days / 365))}y ${formatNumber(days % 365)}d`;
+}
+
+/**
+ * The clock format at its most compact, for a timer that shares the screen:
+ * as `formatLiveDuration`, but from an hour on it reads hours and minutes
+ * ("1h 05m"), so the time takes no more room than it needs.
+ */
+export function formatLiveDurationCompact(milliseconds: number): string {
+  const total = wholeSeconds(milliseconds);
+  if (total < HOUR || total >= DAY) return formatLiveDuration(milliseconds);
+  const sign = milliseconds < 0 ? "+" : "";
+  const minutes = Math.ceil(total / MINUTE);
+  return `${sign}${Math.floor(minutes / 60)}h ${pad(minutes % 60)}m`;
+}
+
+/** Below this, the mark reads whole seconds alone: two digits fit inside it. */
+export const LIVE_TIMER_MARK_SECONDS = 100;
+
+/** What the mark reads in its center: whole seconds while they fit ("42", "+5"), then the clock, then hours and minutes. */
+export function formatLiveTimerMark(milliseconds: number): string {
+  const total = wholeSeconds(milliseconds);
+  if (total >= HOUR) return formatLiveDurationCompact(milliseconds);
+  if (total >= LIVE_TIMER_MARK_SECONDS) return formatLiveDuration(milliseconds);
+  return `${milliseconds < 0 ? "+" : ""}${total}`;
 }
 
 /** A timer graphic's text in its own format: the clock, total seconds, or the operators' template. */

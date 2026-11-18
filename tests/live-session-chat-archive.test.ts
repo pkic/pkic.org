@@ -22,8 +22,12 @@ async function chatInRoom() {
   await attendee.next("chat.message", (message) => message.message.text === "Hello, everyone");
   attendee.send({ type: "chat.send", text: "Buy cheap tokens" });
   const spam = await operator.next("chat.message", (message) => message.message.text === "Buy cheap tokens");
-  operator.send({ type: "chat.moderate", messageId: spam.message.id, decision: "hide" });
-  await attendee.next("chat.removed");
+  operator.send({ type: "chat.moderate", messageId: spam.message.id, decision: "remove", reason: "spam" });
+  // The author still sees their removed message, so the moderator's copy shows the removal.
+  await operator.next(
+    "chat.message",
+    (message) => message.message.id === spam.message.id && message.message.moderation?.hidden != null,
+  );
   operator.send({ type: "chat.send", text: "Staff only", channel: "operator" });
   await operator.next("chat.message", (message) => message.message.text === "Staff only");
   attendee.send({ type: "question.ask", text: "What comes next?", anonymous: false });

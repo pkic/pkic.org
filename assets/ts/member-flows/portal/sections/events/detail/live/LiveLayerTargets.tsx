@@ -1,11 +1,14 @@
+import { LIVE_OVERLAY_ELEMENT_LABELS } from "../../../../../../../shared/schemas/live-overlay-layout";
+import { LiveTallyBands } from "./LiveTallyBands";
 import { OutputTargetControl } from "./OutputTargetControl";
 import { liveLayerTargets, sendLayerToggle, type LiveLayer, type LiveTargets } from "./live-output-targets";
 import { livePresenceItem, useLivePresence } from "./presence/live-presence";
 import { LivePresenceTag } from "./presence/LivePresenceTag";
 
 /**
- * The output control for one graphic of this room: where it is now, a toggle
- * per destination, and which other operators are on it. An integrated control
+ * The output control for one graphic of this room: Preview and Program,
+ * their tally edge on its row, and which other operators are on it. The
+ * room's screens are in the row's menu (LiveRowMenu). An integrated control
  * leaves the operators' chips to the card it sits on.
  */
 export function LiveLayerTargets({
@@ -13,15 +16,12 @@ export function LiveLayerTargets({
   layer,
   subject,
   integrated = false,
-  short = false,
   disabled = false,
 }: {
   targets: LiveTargets;
   layer: LiveLayer;
   subject: string;
   integrated?: boolean;
-  /** PVW and PGM in place of the full names, for a dense row. */
-  short?: boolean;
   /** Held for a reason of this graphic's own, such as a ticker that does not validate yet. */
   disabled?: boolean;
 }) {
@@ -31,15 +31,16 @@ export function LiveLayerTargets({
   return (
     <>
       {integrated ? null : <LivePresenceTag marks={marks} />}
+      {/* The row this control sits in carries the Program and Preview edge. */}
+      <LiveTallyBands where={where} />
       <OutputTargetControl
         subject={subject}
         integrated={integrated}
-        short={short}
         presenceItem={item}
         presence={marks.map((mark) => ({ target: mark.focus?.target ?? null, color: mark.color }))}
         preview={where.preview}
         program={where.program}
-        aux={where.aux}
+        coveredBy={where.coveredBy ? LIVE_OVERLAY_ELEMENT_LABELS[where.coveredBy] : null}
         disabled={targets.disabled || disabled}
         onToggle={(destination) => sendLayerToggle(targets, layer, destination)}
       />

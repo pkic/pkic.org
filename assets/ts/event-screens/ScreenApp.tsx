@@ -8,7 +8,7 @@ import { useLiveTimerNow } from "../live-session/useLiveCountdown";
 import type { ScreenApi } from "./screen-api";
 import { cachedLiveSnapshot, cachedScreenView, liveStateFromCache, writeScreenCache } from "./screen-cache";
 import type { ScreenClock } from "./screen-clock";
-import { screenDisplay, type ScreenDisplay, type ScreenLink } from "./screen-display";
+import { screenDisplay, type ScreenDisplay, type ScreenLink, type ScreenMarker as Marker } from "./screen-display";
 import { screenHandoffDue, SCREEN_READY_ATTRIBUTE } from "./screen-handoff";
 import { ScreenLiveFeed, type ScreenLiveReport } from "./ScreenLiveFeed";
 import { ScreenIdentify } from "./ScreenIdentify";
@@ -82,10 +82,20 @@ export function ScreenView({ screenId, display, now }: { screenId: ScreenId; dis
           playsSounds
           stageAside={<ScreenMarker marker={display.marker} />}
         >
-          {display.output === "stage-display" ? null : <ScreenMarker marker={display.marker} placement="corner" />}
+          {display.output === "stage-display" ? null : (
+            <ScreenMarker marker={audienceMarker(display.output, display.marker)} placement="corner" />
+          )}
         </LiveOverlayPresentation>
       );
   }
+}
+
+/**
+ * The audience reads the projector, so a projector that runs the agenda on
+ * its own shows staff only the small offline dot, not a badge.
+ */
+function audienceMarker(output: string, marker: Marker): Marker {
+  return output === "projector" && marker?.kind === "auto" ? { kind: "offline-dot" } : marker;
 }
 
 /**

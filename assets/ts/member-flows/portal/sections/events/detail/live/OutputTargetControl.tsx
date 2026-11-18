@@ -1,14 +1,10 @@
 import {
-  LIVE_AUX_OUTPUTS,
-  LIVE_AUX_OUTPUT_DETAILS,
   LIVE_PREVIEW_OUTPUT_DETAILS,
   LIVE_PROGRAM_OUTPUT_DETAILS,
   type LiveAuxOutput,
 } from "../../../../../../../shared/live-room-outputs";
 import type { LivePresenceTarget } from "../../../../../../../shared/live-room-presence";
 import { Button } from "../../../../../../ui/Button";
-import { buttonClasses } from "../../../../../../ui/button-classes";
-import { Menu } from "../../../../../../ui/Menu";
 import "../../../../../../ui/ButtonToggle.css";
 import "./live-tally.css";
 import "./presence/LivePresence.css";
@@ -16,14 +12,30 @@ import "./OutputTargetControl.css";
 
 export type LiveDestination = "preview" | "program" | LiveAuxOutput;
 
-const AUX_TRIGGER = "pk-output-target__aux";
-
-/** Which output button an element is on, for operator presence; the aux menu counts as one. */
+/** Which output button an element is on, for operator presence. */
 export function liveDestinationOf(element: Element): LivePresenceTarget | null {
   const destination = element.closest<HTMLElement>(".pk-output-target__button[data-destination]")?.dataset.destination;
-  if (destination === "preview" || destination === "program") return destination;
-  return element.closest(`.${AUX_TRIGGER}`) ? "aux" : null;
+  return destination === "preview" || destination === "program" ? destination : null;
 }
+
+/**
+ * What PVW and PGM do, on hover. Preview is an optional check of the look and
+ * the details before air; Program puts the graphic on air at once.
+ */
+export const OUTPUT_TARGET_HINTS = {
+  preview: {
+    off: "Preview: check how it looks and that the details are right before it goes on air. Optional.",
+    on: "In Preview. Transition puts it on air; click to take it out of Preview.",
+  },
+  program: {
+    off: "Program: put it on air now. Preview is not needed first.",
+    on: "On air. Click to take it off air.",
+  },
+} as const;
+
+/** Why a graphic on air is not seen: a board drawn over it, named as the studio names it. */
+export const outputTargetCoveredHint = (board: string) =>
+  `On air, but the ${board.toLowerCase()} covers it, so nobody sees it. Take the ${board.toLowerCase()} off air to show it, or click to take this off air.`;
 
 /** The color slot of the first other operator on a button, which draws a ring in their color. */
 function presenceOn(presence: readonly OutputTargetPresence[], target: LivePresenceTarget): number | undefined {
@@ -36,26 +48,19 @@ export interface OutputTargetPresence {
   color: number;
 }
 
-/** "Screens" when on none, the screen's name for one, and how many when several. */
-function auxLabel(active: readonly LiveAuxOutput[]): string {
-  if (!active.length) return "Screens";
-  return active.length === 1 ? LIVE_AUX_OUTPUT_DETAILS[active[0]].label : `${active.length} screens`;
-}
-
 /**
  * Where one graphic goes, in words anyone running the room reads at once:
- * Preview (the next composition), Program (what is on air) and the room's
- * other screens, chosen together in one menu. Each destination toggles on
- * its own; pressed buttons and checked items say where it is now.
+ * Preview (the next composition) and Program (what is on air), each a
+ * toggle of its own, pressed where it is now. The room's screens are in the
+ * row's menu, so the row keeps its width.
  */
 export function OutputTargetControl({
   subject,
   preview,
   program,
-  aux,
+  coveredBy = null,
   disabled,
   integrated = false,
-  short = false,
   presenceItem,
   presence = [],
   onToggle,
@@ -64,76 +69,54 @@ export function OutputTargetControl({
   subject: string;
   preview: boolean;
   program: boolean;
-  aux: (output: LiveAuxOutput) => boolean;
+  /** The board that hides it on air, such as "Question"; the PGM button then reads on air but covered. */
+  coveredBy?: string | null;
   disabled: boolean;
   /** Spans the foot of a card instead of sitting inline. */
   integrated?: boolean;
-  /** Names Preview and Program by their switcher abbreviations, PVW and PGM, for a dense row. */
-  short?: boolean;
   /** The graphic's presence id, so other operators see this operator on it. */
   presenceItem?: string;
   presence?: readonly OutputTargetPresence[];
   onToggle: (destination: LiveDestination) => void;
 }) {
-  const active = LIVE_AUX_OUTPUTS.filter((output) => aux(output));
   return (
     <div
       class="pk-output-target pk-segmented"
       role="group"
       aria-label={`${subject} outputs`}
       data-integrated={integrated ? "true" : undefined}
-      data-aux-active={active.length ? "true" : undefined}
       data-presence-item={presenceItem}
-      data-presence-aux={presenceOn(presence, "aux")}
     >
       <Button
         class="pk-output-target__button"
         data-destination="preview"
         data-presence-color={presenceOn(presence, "preview")}
         aria-label={`Show ${subject} in preview`}
-        title={short ? LIVE_PREVIEW_OUTPUT_DETAILS.label : "Show in preview, ready to put on air"}
+        title={OUTPUT_TARGET_HINTS.preview[preview ? "on" : "off"]}
         aria-pressed={preview}
         disabled={disabled}
         onClick={() => onToggle("preview")}
       >
-        {short ? LIVE_PREVIEW_OUTPUT_DETAILS.short : LIVE_PREVIEW_OUTPUT_DETAILS.label}
+        {LIVE_PREVIEW_OUTPUT_DETAILS.short}
       </Button>
       <Button
         class="pk-output-target__button"
         data-destination="program"
         data-presence-color={presenceOn(presence, "program")}
         aria-label={`Show ${subject} on air`}
-        title={short ? LIVE_PROGRAM_OUTPUT_DETAILS.label : "Show on air now, on the program output"}
+        aria-description={program && coveredBy ? `Covered by the ${coveredBy.toLowerCase()}` : undefined}
+        data-covered={program && coveredBy ? "" : undefined}
+        title={
+          program && coveredBy
+            ? outputTargetCoveredHint(coveredBy)
+            : OUTPUT_TARGET_HINTS.program[program ? "on" : "off"]
+        }
         aria-pressed={program}
         disabled={disabled}
         onClick={() => onToggle("program")}
       >
-        {short ? LIVE_PROGRAM_OUTPUT_DETAILS.short : LIVE_PROGRAM_OUTPUT_DETAILS.label}
+        {LIVE_PROGRAM_OUTPUT_DETAILS.short}
       </Button>
-      <Menu
-        variant="plain"
-        align="end"
-        label={`Send ${subject} to the room's screens`}
-        title={
-          active.length
-            ? `On ${active.map((output) => LIVE_AUX_OUTPUT_DETAILS[output].label).join(", ")}`
-            : "Show on the projector or the stage screens"
-        }
-        triggerClass={buttonClasses({}, `pk-output-target__button ${AUX_TRIGGER}`)}
-        heading="Show on"
-        items={LIVE_AUX_OUTPUTS.map((output) => ({
-          id: output,
-          label: LIVE_AUX_OUTPUT_DETAILS[output].label,
-          checked: aux(output),
-          multiple: true,
-          keepOpen: true,
-          disabled,
-          onSelect: () => onToggle(output),
-        }))}
-      >
-        {auxLabel(active)}
-        <span aria-hidden="true"> ▾</span>
-      </Menu>
     </div>
   );
 }

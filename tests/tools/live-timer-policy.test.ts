@@ -14,7 +14,12 @@ import {
   updateLiveTimerGraphics,
 } from "../../assets/shared/live-timer-policy";
 import { format24HourClockInZone } from "../../assets/shared/format-date";
-import { formatLiveDuration, formatLiveTimer } from "../../assets/shared/live-timer-format";
+import {
+  formatLiveDuration,
+  formatLiveDurationCompact,
+  formatLiveTimer,
+  formatLiveTimerMark,
+} from "../../assets/shared/live-timer-format";
 import {
   DEFAULT_LIVE_TIMER_SOUND,
   defaultLiveTimerGraphic,
@@ -381,10 +386,10 @@ describe("the shared clock format", () => {
     [3_600_000, "1:00:00"],
     [3_723_000, "1:02:03"],
     [86_399_000, "23:59:59"],
-    [86_400_000, "1d 00:00"],
-    [(3 * 86400 + 4 * 3600 + 12 * 60) * 1000, "3d 04:12"],
-    [(19 * 86400 + 22 * 3600 + 30 * 60) * 1000, "19d 22:30"],
-    [(364 * 86400 + 23 * 3600) * 1000, "364d 23:00"],
+    [86_400_000, "1d 0h 0m"],
+    [(3 * 86400 + 4 * 3600 + 12 * 60) * 1000, "3d 4h 12m"],
+    [(19 * 86400 + 22 * 3600 + 30 * 60) * 1000, "19d 22h 30m"],
+    [(364 * 86400 + 23 * 3600) * 1000, "364d 23h 0m"],
     [365 * 86_400_000, "1y 0d"],
     [(4 * 365 + 210) * 86_400_000, "4y 210d"],
   ])("reads %i ms as %s", (milliseconds, text) => {
@@ -393,13 +398,13 @@ describe("the shared clock format", () => {
 
   it("rounds a countdown up to the second, so it reads 0:01 until it is over", () => {
     expect(formatLiveDuration(400)).toBe("0:01");
-    expect(formatLiveDuration((86_400 + 30) * 1000)).toBe("1d 00:01");
+    expect(formatLiveDuration((86_400 + 30) * 1000)).toBe("1d 0h 1m");
   });
 
   it("marks time over with a plus at every range", () => {
     expect(formatLiveDuration(-15_000)).toBe("+0:15");
     expect(formatLiveDuration(-62_481_000)).toBe("+17:21:21");
-    expect(formatLiveDuration(-2 * 86_400_000)).toBe("+2d 00:00");
+    expect(formatLiveDuration(-2 * 86_400_000)).toBe("+2d 0h 0m");
     expect(formatLiveDuration(-2 * 365 * 86_400_000)).toBe("+2y 0d");
   });
 
@@ -414,6 +419,21 @@ describe("the shared clock format", () => {
         "{{years}} year, {{months}} months, {{days}} days, {{hours}} hours, {{minutes}} minutes and {{seconds}} seconds",
       ),
     ).toBe("1 year, 2 months, 5 days, 3 hours, 20 minutes and 10 seconds");
+  });
+
+  it("drops the seconds past an hour where the timer shares the screen", () => {
+    expect(formatLiveDurationCompact(754_000)).toBe("12:34");
+    expect(formatLiveDurationCompact(3_723_000)).toBe("1h 03m");
+    expect(formatLiveDurationCompact(-3_600_000)).toBe("+1h 00m");
+    expect(formatLiveDurationCompact((86_400 + 30) * 1000)).toBe("1d 0h 1m");
+  });
+
+  it("reads whole seconds in the mark while two digits fit", () => {
+    expect(formatLiveTimerMark(42_000)).toBe("42");
+    expect(formatLiveTimerMark(400)).toBe("1");
+    expect(formatLiveTimerMark(-5_000)).toBe("+5");
+    expect(formatLiveTimerMark(100_000)).toBe("1:40");
+    expect(formatLiveTimerMark((10 * 60 + 35) * MINUTE - 5_000)).toBe("10h 35m");
   });
 });
 

@@ -6,8 +6,8 @@ import {
   liveChatPlainText,
   type LiveChatAction,
   type LiveChatReactionId,
-  type LiveChatRestriction,
 } from "../../../../assets/shared/live-chat-policy";
+import type { LiveModerationReason } from "../../../../assets/shared/live-moderation-policy";
 import { LIVE_ROOM_POLICY, takeLiveAllowance } from "../../../../assets/shared/live-session-policy";
 import type { LiveChatChannel } from "../../../../assets/shared/schemas/live-session-chat";
 import type { LiveRoomClientMessage, LiveRoomServerMessage } from "../../../../assets/shared/schemas/live-session-room";
@@ -20,6 +20,7 @@ import type { LiveRefusal } from "./room-controls";
 import { serializeLiveRoomMessage } from "./room-projection";
 import type { LiveRoomStore } from "./room-store";
 import type { LiveRoomAuthors } from "./room-authors";
+import { LIVE_PARTICIPATION_REFUSAL } from "./room-participation-refusal";
 
 type ChatCommand = Extract<LiveRoomClientMessage, { type: `chat.${string}` }>;
 type Actor = { userId: string; name: string };
@@ -28,8 +29,7 @@ type Allowance = "reaction" | "report" | "history" | "author";
 const REFUSALS = {
   missing: { code: "LIVE_CHAT_MESSAGE_NOT_FOUND", message: "That message is no longer available." },
   notAllowed: { code: "LIVE_CHAT_NOT_ALLOWED", message: "You can't do that with this message." },
-  muted: { code: "LIVE_CHAT_MUTED", message: "An organizer muted you in this chat. You can still read it." },
-  banned: { code: "LIVE_CHAT_BANNED", message: "An organizer removed you from this chat." },
+  blocked: LIVE_PARTICIPATION_REFUSAL,
   tooFast: { code: "LIVE_CHAT_RATE_LIMITED", message: "Wait a moment before sending another chat message." },
   tooShort: {
     code: "LIVE_CHAT_NOT_A_QUESTION",
@@ -52,7 +52,7 @@ function staff(viewer: LiveRoomParticipant): boolean {
 }
 
 /**
- * The chat's use cases: send, react, report, delete, moderate, restrict,
+ * The chat's use cases: send, react, report, delete, remove or keep,
  * convert to a question and page back through history. Each request is
  * checked against the shared chat policy for this viewer and message; every
  * moderator action is audited; moderation data reaches moderators only.
@@ -84,19 +84,18 @@ export class LiveRoomChatActions {
   ) {}
 
   async handle(viewer: LiveRoomParticipant, actor: Actor, command: ChatCommand, socket: WebSocket) {
-    const restriction = this.feed.moderation.restriction(actor.userId);
+    const restricted = this.feed.decisions.restriction(actor.userId, Date.now()) !== null;
     if (command.type === "chat.history") return this.history(viewer, actor, command.channel, command.before, socket);
-    if (command.type === "chat.send") return this.send(viewer, actor, restriction, command.text, command.channel);
+    if (command.type === "chat.send") return this.send(viewer, actor, restricted, command.text, command.channel);
     const row = this.chat.message(command.messageId);
-    if (restriction === "banned") return REFUSALS.banned;
     // A message a viewer may not see does not exist for them, whatever its id.
     if (!row || !this.feed.batch([row], []).project(row, viewer)) return REFUSALS.missing;
-    const allowed = this.actionsOn(row, viewer, restriction);
+    const allowed = this.actionsOn(row, viewer, restricted);
     const refuse = (action: LiveChatAction) =>
       allowed.has(action)
         ? null
-        : restriction === "muted" && (action === "react" || action === "report")
-          ? REFUSALS.muted
+        : restricted && (action === "react" || action === "report")
+          ? REFUSALS.blocked
           : REFUSALS.notAllowed;
     const at = nowIso();
     switch (command.type) {
@@ -107,21 +106,17 @@ export class LiveRoomChatActions {
       case "chat.delete":
         return refuse("delete") ?? this.remove(row);
       case "chat.moderate":
-        return refuse(command.decision) ?? this.moderate(actor, row, command.decision, at);
-      case "chat.restrict": {
-        const action = command.restriction === null ? "lift" : command.restriction === "muted" ? "mute" : "ban";
-        return refuse(action) ?? this.restrict(actor, row, command.restriction, at);
-      }
+        return refuse(command.decision) ?? this.moderate(actor, row, command.decision, command.reason ?? null, at);
       case "chat.convert":
         return refuse("convert") ?? this.convert(actor, row, at);
     }
   }
 
-  private actionsOn(row: LiveChatRow, viewer: LiveRoomParticipant, restriction: LiveChatRestriction | null) {
+  private actionsOn(row: LiveChatRow, viewer: LiveRoomParticipant, restricted: boolean) {
     const hiding = this.feed.moderation.hidden([row.id]).get(row.id);
     const reports = this.feed.moderation.reportCount(row.id);
     const author = this.feed.people.people([row.author_user_id]).get(row.author_user_id);
-    return liveChatActions(liveChatCapacity(viewer), restriction, {
+    return liveChatActions(liveChatCapacity(viewer), restricted, {
       channel: row.channel,
       mine: row.author_user_id === viewer.userId,
       hidden: hiding !== undefined,
@@ -131,8 +126,9 @@ export class LiveRoomChatActions {
         viewer.userId && this.feed.moderation.reportedBy([row.id], [viewer.userId]).get(viewer.userId)?.has(row.id),
       ),
       converted: this.feed.moderation.questions([row.id]).has(row.id),
+      done: this.feed.decisions.done([row.id]).has(row.id),
       authorStaff: author?.staff ?? false,
-      authorRestriction: this.feed.moderation.restriction(row.author_user_id),
+      authorRestriction: this.feed.decisions.restriction(row.author_user_id, Date.now())?.block ?? null,
     });
   }
 
@@ -152,17 +148,16 @@ export class LiveRoomChatActions {
   private async send(
     viewer: LiveRoomParticipant,
     actor: Actor,
-    restriction: LiveChatRestriction | null,
+    restricted: boolean,
     text: string,
     channel: LiveChatChannel = "attendee",
   ) {
-    if (!liveChatCanSend(liveChatCapacity(viewer), restriction, channel))
-      return restriction === "banned"
-        ? REFUSALS.banned
-        : restriction === "muted"
-          ? REFUSALS.muted
-          : REFUSALS.notAllowed;
+    if (!liveChatCanSend(liveChatCapacity(viewer), restricted, channel))
+      return restricted ? REFUSALS.blocked : REFUSALS.notAllowed;
     const stamp = await this.authors.writing(viewer);
+    // Author resolution yields: a moderator may have blocked this person meanwhile.
+    if (viewer.role !== "operator" && this.feed.decisions.restriction(actor.userId, Date.now()))
+      return REFUSALS.blocked;
     const row = this.chat.send(actor, text, Date.now(), channel);
     if (!row) return REFUSALS.tooFast;
     this.authors.recordMessage(row.id, stamp);
@@ -193,10 +188,9 @@ export class LiveRoomChatActions {
       const hidden = this.feed.moderation.hidden([row.id]).has(row.id);
       const reactions = this.feed.reactions.counts([row.id]).get(row.id) ?? {};
       const mine = this.feed.reactions.mine([row.id], [...changed]);
-      const banned = this.feed.banned();
       await this.broadcast.send(
         (viewer) =>
-          liveChatChannelVisible(row.channel, viewer, banned) && (!hidden || staff(viewer))
+          liveChatChannelVisible(row.channel, viewer) && (!hidden || staff(viewer))
             ? {
                 type: "chat.reactions",
                 channel: row.channel,
@@ -206,15 +200,12 @@ export class LiveRoomChatActions {
                   viewer.userId && changed.has(viewer.userId) ? (mine.get(viewer.userId)?.get(row.id) ?? []) : null,
               }
             : null,
-        (viewer) =>
-          viewer.userId && changed.has(viewer.userId)
-            ? `person:${viewer.userId}`
-            : `${viewer.role}:${viewer.userId !== null && banned.has(viewer.userId)}`,
+        (viewer) => (viewer.userId && changed.has(viewer.userId) ? `person:${viewer.userId}` : viewer.role),
       );
     }
   }
 
-  private async report(actor: Actor, row: LiveChatRow, reason: "abuse" | "conduct" | "spam" | "other", at: string) {
+  private async report(actor: Actor, row: LiveChatRow, reason: LiveModerationReason, at: string) {
     if (!this.allowed("report", actor.userId)) return REFUSALS.tooFast;
     if (!this.feed.moderation.report(row.id, actor.userId, reason, at)) return;
     const hiding = this.feed.moderation.hidden([row.id]).get(row.id);
@@ -244,36 +235,38 @@ export class LiveRoomChatActions {
     if (row.channel === "attendee") this.nudgeTicker();
   }
 
-  private async moderate(actor: Actor, row: LiveChatRow, decision: "hide" | "keep", at: string) {
-    if (decision === "hide") this.feed.moderation.hide(row.id, actor.name, false, at);
-    else this.feed.moderation.keep(row.id);
+  private async moderate(
+    actor: Actor,
+    row: LiveChatRow,
+    decision: "remove" | "keep",
+    reason: LiveModerationReason | null,
+    at: string,
+  ) {
+    if (decision === "remove" && reason) this.removeWithReason(actor, row, reason, at);
+    else {
+      this.feed.moderation.keep(row.id);
+      this.feed.decisions.restore(row.id);
+    }
     this.audit(
       actor.userId,
-      decision === "hide" ? "live_session.chat.hidden" : "live_session.chat.kept",
-      { messageId: row.id, channel: row.channel },
+      decision === "remove" ? "live_session.chat.removed" : "live_session.chat.kept",
+      { messageId: row.id, channel: row.channel, ...(decision === "remove" ? { reason } : {}) },
       at,
     );
-    await this.deliver([row], { removeWhenHidden: true });
-    if (row.channel === "attendee") this.nudgeTicker();
+    await this.redeliver([row]);
   }
 
-  private async restrict(actor: Actor, row: LiveChatRow, restriction: LiveChatRestriction | null, at: string) {
-    const author = row.author_user_id;
-    this.feed.moderation.restrict(author, restriction, actor.name, at);
-    this.audit(
-      actor.userId,
-      "live_session.chat.restricted",
-      { messageId: row.id, restriction: restriction ?? "lifted" },
-      at,
-    );
-    // A ban takes the person's messages out of everyone's chat until it is lifted; moderators keep seeing them.
-    const theirs = this.chat.byAuthor(author, LIVE_CHAT_POLICY.historyPage);
-    await this.deliver(theirs.length ? theirs : [row], { removeWhenHidden: true });
-    await this.broadcast.send(
-      (viewer) => (viewer.userId === author ? { type: "chat.access", restriction } : null),
-      () => "author",
-    );
-    this.nudgeTicker();
+  /** Takes a message from everyone but its author and moderators, recording why. */
+  removeWithReason(actor: Actor, row: LiveChatRow, reason: LiveModerationReason, at: string): void {
+    this.feed.moderation.hide(row.id, actor.name, false, at);
+    this.feed.decisions.remove("chat", row.id, reason, actor, at);
+  }
+
+  /** Sends changed messages to everyone as they may see them now, and their removal to those who no longer may. */
+  async redeliver(rows: LiveChatRow[]): Promise<void> {
+    if (!rows.length) return;
+    await this.deliver(rows, { removeWhenHidden: true });
+    if (rows.some((row) => row.channel === "attendee")) this.nudgeTicker();
   }
 
   private async convert(actor: Actor, row: LiveChatRow, at: string) {
@@ -317,8 +310,7 @@ export class LiveRoomChatActions {
     socket: WebSocket,
   ) {
     if (!this.allowed("history", actor.userId)) return REFUSALS.tooFast;
-    if (!liveChatChannelVisible(channel, viewer, this.feed.banned()))
-      return this.feed.moderation.restriction(actor.userId) === "banned" ? REFUSALS.banned : REFUSALS.notAllowed;
+    if (!liveChatChannelVisible(channel, viewer)) return REFUSALS.notAllowed;
     const page = this.feed.history(viewer, channel, before);
     if (!page) return REFUSALS.missing;
     socket.send(serializeLiveRoomMessage({ type: "chat.history", channel, ...page }));
@@ -346,15 +338,13 @@ export class LiveRoomChatActions {
           if (options.only && !options.only(viewer)) return null;
           const message = batch.project(row, viewer);
           if (message) return { type: "chat.message", message } satisfies LiveRoomServerMessage;
-          return options.removeWhenHidden && liveChatChannelVisible(row.channel, viewer, batch.banned)
+          return options.removeWhenHidden && liveChatChannelVisible(row.channel, viewer)
             ? { type: "chat.removed", messageId: row.id, channel: row.channel }
             : null;
         },
         // A copy with something of the viewer's own is theirs alone; every other copy is shared by its audience.
         (viewer) =>
-          batch.personal(row, viewer)
-            ? `person:${viewer.userId}`
-            : `${viewer.role}:${viewer.userId !== null && batch.banned.has(viewer.userId)}:${options.only?.(viewer) ?? true}`,
+          batch.personal(row, viewer) ? `person:${viewer.userId}` : `${viewer.role}:${options.only?.(viewer) ?? true}`,
       );
     }
   }

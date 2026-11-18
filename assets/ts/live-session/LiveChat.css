@@ -64,11 +64,6 @@
   .pk-live-chat__row:focus-within {
     background: var(--pk-surface-sunk);
   }
-  .pk-live-chat__row[data-hidden] .pk-live-chat__text {
-    color: var(--pk-ink-muted);
-    text-decoration: line-through;
-    text-decoration-color: var(--pk-line-strong);
-  }
   .pk-live-chat__body {
     min-inline-size: 0;
   }

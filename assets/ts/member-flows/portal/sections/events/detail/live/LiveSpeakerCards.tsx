@@ -5,7 +5,6 @@ import "./live-tally.css";
 import { signal } from "@preact/signals";
 import type { ComponentChildren } from "preact";
 import { useEffect, useRef } from "preact/hooks";
-import { LIVE_AUX_OUTPUTS } from "../../../../../../../shared/live-room-outputs";
 import {
   LIVE_ADDED_CREDITS_MAX,
   liveCreditAffiliations,
@@ -13,33 +12,17 @@ import {
 } from "../../../../../../../shared/live-room-credits";
 import type { LiveCredit } from "../../../../../../../shared/schemas/live-session-room";
 import { Avatar } from "../../../../../../ui/Avatar";
-import { Button } from "../../../../../../ui/Button";
 import { SectionHeading } from "../../../../../../ui/SectionHeading";
-import { IconRemove } from "../../../../../../ui/MediaIcons";
 import { LiveAddPersonDialog } from "./LiveAddPersonDialog";
 import { StudioCreateAction } from "./studio/StudioCreateAction";
 import { LiveLayerTargets } from "./LiveLayerTargets";
+import { LiveRowMenu } from "./LiveRowMenu";
 import { liveLayerTargets, sendLayerToggle, type LiveTargets } from "./live-output-targets";
 import { livePresenceItem } from "./presence/live-presence";
 import { personAffiliation, usePersonCard } from "../../../../../../site/PersonCard";
 
 /** Set while this desk waits for the person it just added, so only its operator is taken to them. */
 const awaitingAdded = signal(false);
-
-/** Where a credit's lower third is now, for the tally edge of its row. */
-function onAirOf(targets: LiveTargets, key: string) {
-  const where = liveLayerTargets(targets, { kind: "lowerThird", key });
-  return {
-    where,
-    onAir: where.program
-      ? ("program" as const)
-      : LIVE_AUX_OUTPUTS.some(where.aux)
-        ? ("aux" as const)
-        : where.preview
-          ? ("preview" as const)
-          : undefined,
-  };
-}
 
 /**
  * One person as one compact row: their photo, name, and the role or identity
@@ -63,7 +46,7 @@ function PersonRow({
   rowRef?: (node: HTMLLIElement | null) => void;
 }) {
   const layer = { kind: "lowerThird" as const, key: credit.key };
-  const { where, onAir } = onAirOf(targets, credit.key);
+  const where = liveLayerTargets(targets, { kind: "lowerThird", key: credit.key });
   const item = livePresenceItem(layer);
   // The first identity with a title or organization, as the lower third starts with; the row stays still
   // and only counts the further ones it rolls through.
@@ -89,7 +72,6 @@ function PersonRow({
         rowRef?.(node);
       }}
       class="pk-live-person"
-      data-on-air={onAir}
       data-presence-item={item}
     >
       <div class="pk-live-person__who" {...card.hoverProps}>
@@ -103,6 +85,7 @@ function PersonRow({
           disabled={targets.disabled}
           aria-pressed={where.preview}
           aria-label={`Prepare ${credit.name} in Preview`}
+          title="Put their lower third in Preview to check it before air"
           onClick={() => {
             if (!where.preview) sendLayerToggle(targets, layer, "preview");
           }}
@@ -129,20 +112,30 @@ function PersonRow({
         </button>
         {card.card}
       </div>
-      {/* The outputs name the other operators on this person, once. */}
-      <LiveLayerTargets targets={targets} subject={credit.name} layer={layer} />
-      {onRemove ? (
-        <Button
-          icon
-          variant="ghost"
-          aria-label={`Remove ${credit.name}`}
-          title="Remove from this session"
-          disabled={targets.disabled}
-          onClick={onRemove}
-        >
-          <IconRemove />
-        </Button>
-      ) : null}
+      {/* The outputs and the menu move under the name together, so the menu never wraps alone. */}
+      <span class="pk-live-person__outputs">
+        {/* The outputs name the other operators on this person, once. */}
+        <LiveLayerTargets targets={targets} subject={credit.name} layer={layer} />
+        <LiveRowMenu
+          targets={targets}
+          layer={layer}
+          label={`${credit.name} actions`}
+          heading={credit.name}
+          items={
+            onRemove
+              ? [
+                  {
+                    id: "remove",
+                    label: "Remove from this session",
+                    danger: true,
+                    disabled: targets.disabled,
+                    onSelect: onRemove,
+                  },
+                ]
+              : []
+          }
+        />
+      </span>
     </li>
   );
 }

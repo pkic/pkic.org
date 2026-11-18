@@ -86,12 +86,13 @@ export function applyControlValidity(control: FormControl): void {
  *
  * A control the user has not filled in yet gets no state at all: an empty
  * optional field is not a success, and marking every blank control green on
- * page load is noise rather than feedback. Choice controls are excluded from
+ * page load is noise rather than feedback. A select is a fixed list, so a valid pick is no result worth a mark. Choice controls are excluded from
  * the success mark because their `value` is the option's value whether or not
  * it is selected, so it says nothing about whether the group was answered.
  */
 export function fieldStateFor(control: FormControl): FieldState | null {
   if (!control.checkValidity()) return "invalid";
+  if (control instanceof HTMLSelectElement) return null;
   if (control instanceof HTMLInputElement && (control.type === "radio" || control.type === "checkbox")) return null;
   return control.value.trim().length > 0 ? "ok" : null;
 }

@@ -10,7 +10,8 @@ const mocks = vi.hoisted(() => ({
   select: vi.fn(),
   send: vi.fn(),
   order: [] as string[],
-  activeId: "20000000-0000-4000-8000-000000000099",
+  activeId: null as string | null,
+  status: "live" as "connecting" | "live" | "offline",
 }));
 vi.mock("../../assets/ts/live-session/useLiveRoomProgram", () => ({
   useLiveRoomProgram: () => {
@@ -22,8 +23,8 @@ vi.mock("../../assets/ts/live-session/useLiveRoomProgram", () => ({
       () => mocks.activeId,
     );
     return {
-      selection: { roomId: "hall", occurrenceId: activeId, revision: 1 },
-      status: "live",
+      selection: activeId ? { roomId: "hall", occurrenceId: activeId, revision: 1 } : null,
+      status: mocks.status,
       error: null,
       select: mocks.select,
     };
@@ -33,12 +34,16 @@ const state = applyLiveRoomMessage(null, liveSnapshot({ viewer: { role: "operato
 vi.mock("../../assets/ts/live-session/useLiveRoom", () => ({
   useLiveRoom: () => ({ state, status: "live", admissionRefusal: null, send: mocks.send }),
 }));
+/** The session on air in most tests. */
+const RUNNING_ID = "20000000-0000-4000-8000-000000000099";
 let host: HTMLElement;
 beforeEach(() => {
   mocks.order.length = 0;
-  mocks.activeId = "20000000-0000-4000-8000-000000000099";
+  mocks.activeId = RUNNING_ID;
+  mocks.status = "live";
   if (state) {
     state.stage.lowerThird = null;
+    state.stage.schedule = null;
     state.questions = [];
   }
   mocks.select.mockReset().mockImplementation(async () => {
@@ -97,14 +102,14 @@ it("warns that the agenda moved on, offers to go there, and never switches by it
     endsAt: at(end),
     label: title,
   });
-  const running = choice(mocks.activeId, "Overrunning keynote", -60, -3);
+  const running = choice(RUNNING_ID, "Overrunning keynote", -60, -3);
   const agenda = choice(LIVE_OCCURRENCE, "Hybrid certificates", -3, 27);
   const browse = vi.fn();
   await act(() =>
     render(
       <SelectedSessionDesk
         slug="conference"
-        occurrenceId={mocks.activeId}
+        occurrenceId={RUNNING_ID}
         roomId="hall"
         sessions={[running, agenda]}
         agendaSession={agenda}
@@ -129,9 +134,7 @@ it("warns that the agenda moved on, offers to go there, and never switches by it
 it("moderates a question without changing the active program", async () => {
   if (state) state.questions = [liveQuestion({ status: "pending" })];
   await mount();
-  const approve = Array.from(host.querySelectorAll("button")).find(
-    (button) => button.textContent?.trim() === "Approve",
-  )!;
+  const approve = host.querySelector<HTMLButtonElement>('button[aria-label="Approve"]')!;
   await act(() => approve.click());
   expect(mocks.select).not.toHaveBeenCalled();
   expect(mocks.send).toHaveBeenCalledWith(expect.objectContaining({ type: "question.moderate" }));
@@ -157,4 +160,27 @@ it("does not mark an inactive stored lower third as live, then shows and hides i
   await act(async () => hide.click());
   expect(mocks.select).toHaveBeenCalledTimes(1);
   expect(mocks.send).toHaveBeenLastCalledWith({ type: "stage.lowerThird", creditKey: null, motion: "animated" });
+});
+it("opens the panels on what is on air only once the room says which session that is", async () => {
+  if (!state) throw new Error("Missing fixture");
+  // A studio reloaded mid-show: Program holds Up next in settings other than the panel's defaults.
+  state.stage.schedule = {
+    config: { layout: "cards", scope: "all-rooms", theme: "white-on-black" },
+    available: true,
+    timeZone: null,
+    resolvedAt: "2026-12-01T09:00:00.000Z",
+    rooms: [],
+  };
+  mocks.activeId = null;
+  mocks.status = "connecting";
+  await mount();
+  expect(host.querySelector('button[aria-label="Show up next on air"]')).toBeNull();
+  expect(host.textContent).toContain("Joining the live room");
+  await act(() => {
+    mocks.activeId = LIVE_OCCURRENCE;
+    mocks.status = "live";
+    window.dispatchEvent(new Event("test-program-ack"));
+  });
+  const upNext = host.querySelector<HTMLButtonElement>('button[aria-label="Show up next on air"]')!;
+  expect(upNext.getAttribute("aria-pressed")).toBe("true");
 });

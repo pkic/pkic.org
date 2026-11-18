@@ -35,9 +35,8 @@ const ANNOTATIONS = [
   "room_chat_questions",
   "room_chat_authorship",
 ];
-/** Shown to attendees: not hidden by a moderator or held, and not by someone banned from the chat. */
-const HIDDEN = `id NOT IN (SELECT message_id FROM room_chat_hidden)
-  AND author_user_id NOT IN (SELECT user_id FROM room_chat_restrictions WHERE restriction = 'banned')`;
+/** Shown to attendees: not removed by a moderator or held after reports. */
+const HIDDEN = `id NOT IN (SELECT message_id FROM room_chat_hidden)`;
 
 function select(channel: LiveChatChannel): string {
   return `SELECT id, author_user_id, author_name, body, sent_at, rowid AS seq, '${channel}' AS channel FROM ${TABLES[channel]}`;
@@ -53,19 +52,21 @@ export class LiveRoomChat {
 
   /**
    * A channel's latest messages before `before`, oldest first, and whether
-   * any precede them. `shownOnly` leaves out messages hidden from attendees.
+   * any precede them. `shownOnly` leaves out messages hidden from attendees,
+   * except those `author` wrote: an author keeps seeing their removed messages.
    */
   page(
     channel: LiveChatChannel,
-    options: { before: LiveChatRow | null; limit: number; shownOnly: boolean },
+    options: { before: LiveChatRow | null; limit: number; shownOnly: boolean; author?: string | null },
   ): { rows: LiveChatRow[]; hasEarlier: boolean } {
     const where = [
       ...(options.before ? ["(sent_at < ? OR (sent_at = ? AND rowid < ?))"] : []),
-      ...(options.shownOnly ? [HIDDEN] : []),
+      ...(options.shownOnly ? [`(${HIDDEN} OR author_user_id = ?)`] : []),
     ];
     const rows = this.sql.rows<LiveChatRow>(
       `${select(channel)}${where.length ? ` WHERE ${where.join(" AND ")}` : ""} ORDER BY sent_at DESC, rowid DESC LIMIT ?`,
       ...(options.before ? [options.before.sent_at, options.before.sent_at, options.before.seq] : []),
+      ...(options.shownOnly ? [options.author ?? ""] : []),
       options.limit + 1,
     );
     return { rows: rows.slice(0, options.limit).reverse(), hasEarlier: rows.length > options.limit };
@@ -103,14 +104,15 @@ export class LiveRoomChat {
   }
 
   /**
-   * The latest attendee messages nobody reported or hid, by people free to
-   * chat, newest first; only those sent by `sentBy` when a wait applies.
+   * The latest attendee messages nobody reported or removed, by people not
+   * blocked, newest first; only those sent by `sentBy` when a wait applies.
    */
   tickerRows(limit: number, sentBy: string | null = null): LiveChatRow[] {
     return this.sql.rows<LiveChatRow>(
       `${select("attendee")} WHERE ${HIDDEN}
          AND id NOT IN (SELECT message_id FROM room_chat_reports)
-         AND author_user_id NOT IN (SELECT user_id FROM room_chat_restrictions)
+         AND author_user_id NOT IN (SELECT user_id FROM room_participation_blocks
+           WHERE until IS NULL OR until > strftime('%Y-%m-%dT%H:%M:%fZ', 'now') UNION SELECT user_id FROM room_event_blocks)
          ${sentBy ? "AND sent_at <= ?" : ""}
        ORDER BY sent_at DESC, rowid DESC LIMIT ?`,
       ...(sentBy ? [sentBy] : []),
@@ -223,7 +225,7 @@ export class LiveRoomChat {
     return removed;
   }
 
-  /** Everything of one person in the chat: their messages, reactions, reports, restriction and photo. */
+  /** Everything of one person in the chat: their messages, reactions, reports and photo. */
   forget(userId: string): LiveChatRemoval[] {
     const removed = CHANNELS.flatMap((channel) =>
       this.sql.rows<LiveChatRemoval>(
@@ -234,7 +236,7 @@ export class LiveRoomChat {
     this.remove(removed.map((row) => row.id));
     for (const table of ["room_chat_reactions", "room_chat_reports"])
       this.sql.exec(`DELETE FROM ${table} WHERE user_id = ?`, userId);
-    for (const table of ["room_chat_limits", "room_chat_restrictions", "room_people"])
+    for (const table of ["room_chat_limits", "room_people"])
       this.sql.exec(`DELETE FROM ${table} WHERE user_id = ?`, userId);
     if (this.sql.rows("DELETE FROM room_chat_senders WHERE user_id = ? RETURNING user_id", userId).length)
       this.sql.exec("UPDATE room_chat_totals SET change_seq=? WHERE id=1", this.sql.nextChange());

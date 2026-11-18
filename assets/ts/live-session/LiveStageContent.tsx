@@ -1,10 +1,12 @@
 import { formatNumber } from "../../shared/format-number";
+import { liveQuestionFit } from "../../shared/live-stage-display";
 import type { LiveStageContent as Content } from "../../shared/live-stage-display-plan";
 import type { LivePoll } from "../../shared/schemas/live-session-poll";
 import { useNumericCssProperties } from "../hooks/useNumericCssProperties";
+import { LiveScreenText } from "./LiveScreenText";
 
 /** A tag before a line: red while on air, green for what is next. */
-function StageTag({ tone, children }: { tone: "live" | "next"; children: string }) {
+function StageTag({ tone, children }: { tone: "live"; children: string }) {
   return (
     <span class="pk-live-stage-display__tag" data-tone={tone}>
       {children}
@@ -46,7 +48,9 @@ function StagePoll({ poll, onAir }: { poll: LivePoll; onAir: boolean }) {
           ))}
         </ol>
       ) : (
-        <p class="pk-live-stage-display__question-text">{poll.field.label}</p>
+        <p class="pk-live-stage-display__question-text">
+          <LiveScreenText text={poll.field.label} />
+        </p>
       )}
     </div>
   );
@@ -64,21 +68,28 @@ export function LiveStageContent({ content }: { content: Content }) {
     <div class="pk-live-stage-display__questions">
       {question ? (
         <>
-          {content.onAir ? (
+          {content.onAir || content.addressee ? (
             <p class="pk-live-stage-display__line">
-              <StageTag tone="live">On air</StageTag>
+              {content.onAir ? <StageTag tone="live">On air</StageTag> : null}
+              {content.addressee ? (
+                <span class="pk-live-stage-display__poll-count">For {content.addressee}</span>
+              ) : null}
             </p>
           ) : null}
-          <p class="pk-live-stage-display__question-text">{question.text}</p>
+          <p class="pk-live-stage-display__question-text" data-fit={liveQuestionFit(question.text)}>
+            <LiveScreenText text={question.text} />
+          </p>
         </>
       ) : null}
       {next ? (
         <p class="pk-live-stage-display__next" data-leads={question ? undefined : ""}>
-          <StageTag tone="next">Next</StageTag>
-          <span class="pk-live-stage-display__next-text">{next.question.text}</span>
-          {next.votes !== null ? (
-            <span class="pk-live-stage-display__votes" title="Votes">
-              {formatNumber(next.votes)}
+          <span class="pk-live-stage-display__next-label">Next question</span>
+          <span class="pk-live-stage-display__next-text" data-fit={liveQuestionFit(next.question.text)}>
+            <LiveScreenText text={next.question.text} />
+          </span>
+          {next.votes ? (
+            <span class="pk-live-stage-display__votes">
+              {formatNumber(next.votes)} {next.votes === 1 ? "vote" : "votes"}
             </span>
           ) : null}
         </p>

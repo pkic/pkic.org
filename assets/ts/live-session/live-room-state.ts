@@ -100,16 +100,23 @@ export function applyLiveRoomMessage(
       return { ...state, stageDisplayNext: message.question, stageDisplayNextVotes: message.votes ?? null };
     case "stage.display.settings.changed":
       return { ...state, stageDisplaySettings: message.settings };
+    case "screen.sync.changed":
+      return { ...state, screenSync: message.screenSync };
+    case "sources.changed":
+      return { ...state, sources: message.sources };
     case "program.cleared":
       return { ...state, programUndo: { snapshotId: message.snapshotId, change: message.change } };
     case "credits.added.changed":
       return { ...state, addedCredits: message.addedCredits };
+    case "question.prepared.changed":
+      return { ...state, preparedQuestions: message.preparedQuestions, preparedQuestionWindow: message.window };
     case "chat.message":
     case "chat.removed":
     case "chat.reactions":
     case "chat.history":
-    case "chat.access":
       return applyLiveChatMessage(state, message);
+    case "participation.access":
+      return { ...state, viewer: { ...state.viewer, participation: message.restriction } };
     case "overlay.mode.changed":
       return { ...state, overlayMode: message.mode };
     case "overlay.layouts.changed":
