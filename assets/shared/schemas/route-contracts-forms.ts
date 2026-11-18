@@ -1,9 +1,11 @@
+import { z } from "zod";
 import {
   formCreateResponseSchema,
   eventFormsListQuerySchema,
   formsListQuerySchema,
   formsListResponseSchema,
   formSubmissionsQuerySchema,
+  formSubmissionsExportQuerySchema,
   formSubmissionsResponseSchema,
   formSubmissionStatsQuerySchema,
   formSubmissionStatsResponseSchema,
@@ -282,5 +284,19 @@ export const eventFormSubmissionStatsRouteSchema = {
   ...formSubmissionStatsRouteSchema,
   summary: "Get event form submission statistics",
   request: { ...formSubmissionStatsRouteSchema.request, params: eventFormKeyParamsSchema },
+  "x-pkic-auth": { required: true, scopes: ["events:read"] },
+};
+
+export const eventFormSubmissionsExportRouteSchema = {
+  tags: ["Forms"],
+  summary: "Export filtered event form responses as CSV",
+  request: { params: eventFormKeyParamsSchema, query: formSubmissionsExportQuerySchema },
+  responses: {
+    "200": {
+      description: "Matching responses in the requested order.",
+      content: { "text/csv": { schema: z.string() } },
+    },
+    "413": { description: "The export exceeds configured limits." },
+  },
   "x-pkic-auth": { required: true, scopes: ["events:read"] },
 };

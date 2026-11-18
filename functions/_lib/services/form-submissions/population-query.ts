@@ -1,3 +1,4 @@
+import { submissionAnswerFilter } from "./answer-query";
 import { selectedAttendanceTypeSql } from "../registrations/day-states";
 import { REGISTRATION_ORGANIZATION_SQL, registrationOrganizationSql } from "../registrations/selected-identity";
 /**
@@ -367,7 +368,7 @@ function buildMergedSubmissionsQuery(params: {
   }
 
   return {
-    cte: `WITH merged AS (${branches.map((branch) => branch.sql).join(" UNION ALL ")})`,
+    cte: `WITH response_candidates AS (${branches.map((branch) => branch.sql).join(" UNION ALL ")})`,
     bindings: branches.flatMap((branch) => branch.bindings),
   };
 }
@@ -416,25 +417,28 @@ export async function resolveFormSubmissionPopulation(
           : form.scope_type === "event"
             ? form.scope_ref
             : null));
+  const population = buildMergedSubmissionsQuery({
+    formId: form.id,
+    placementId: placement?.id ?? null,
+    includeLegacyUnplaced: Boolean(
+      placement &&
+      !params.placementId &&
+      (form.purpose === "event_registration" || form.purpose === "proposal_submission"),
+    ),
+    status: params.status,
+    attendanceType: params.attendanceType,
+    q: params.q,
+    purpose: form.purpose,
+    eventId,
+    scopeNativeRowsToEvent: Boolean(params.eventSlug),
+    unownedOnly: params.unownedOnly,
+  });
+  const answer = submissionAnswerFilter(params.answerField, params.answerValue);
   return {
     form,
     placement,
-    ...buildMergedSubmissionsQuery({
-      formId: form.id,
-      placementId: placement?.id ?? null,
-      includeLegacyUnplaced: Boolean(
-        placement &&
-        !params.placementId &&
-        (form.purpose === "event_registration" || form.purpose === "proposal_submission"),
-      ),
-      status: params.status,
-      attendanceType: params.attendanceType,
-      q: params.q,
-      purpose: form.purpose,
-      eventId,
-      scopeNativeRowsToEvent: Boolean(params.eventSlug),
-      unownedOnly: params.unownedOnly,
-    }),
+    cte: `${population.cte}, merged AS (SELECT ${MERGED_SUBMISSION_COLUMNS}, submitter FROM response_candidates ${answer.sql})`,
+    bindings: [...population.bindings, ...answer.bindings],
   };
 }
 

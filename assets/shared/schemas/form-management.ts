@@ -8,10 +8,31 @@ import {
 } from "./pagination";
 import { booleanQueryFlagSchema, successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
-import { formFieldDefinitionSchema, formPlacementSchema, formPurposeSchema, formStatusSchema } from "./forms";
+import {
+  formFieldDefinitionSchema,
+  formFieldInputSchema,
+  formPlacementSchema,
+  formPurposeSchema,
+  formStatusSchema,
+} from "./forms";
 
 export const FORM_SUBMISSIONS_SORT_COLUMNS = ["submitter", "status", "submitted_at"] as const;
-export const formSubmissionsSortValueSchema = sortColumnSchema(FORM_SUBMISSIONS_SORT_COLUMNS);
+export const formAnswerKeySchema = formFieldInputSchema.shape.key;
+export const formSubmissionsSortValueSchema = z
+  .union([
+    sortColumnSchema(FORM_SUBMISSIONS_SORT_COLUMNS),
+    z
+      .string()
+      .max(88)
+      .refine(
+        (value) => {
+          const column = value.startsWith("-") ? value.slice(1) : value;
+          return column.startsWith("answer:") && formAnswerKeySchema.safeParse(column.slice(7)).success;
+        },
+        { message: "Unknown answer sort column" },
+      ),
+  ])
+  .optional();
 
 export const FORMS_SORT_COLUMNS = [
   "key",
@@ -92,6 +113,9 @@ export const FORM_SUBMISSION_STATUS_LABELS: Record<FormSubmissionStatus, string>
 };
 
 const formSubmissionFiltersSchema = z.object({
+  answerField: formAnswerKeySchema.optional(),
+  /** Matches a scalar answer or one member of a multi-select answer. */
+  answerValue: z.string().trim().min(1).max(500).optional(),
   placementId: databaseIdSchema.optional(),
   /**
    * Two lifecycles reach this one parameter: a registration form's submissions
@@ -110,6 +134,14 @@ const formSubmissionFiltersSchema = z.object({
 export const formSubmissionsQuerySchema = searchableListQuerySchema(formSubmissionsSortValueSchema, {
   limit: 200,
 }).merge(formSubmissionFiltersSchema);
+export const formSubmissionsExportQuerySchema = formSubmissionsQuerySchema
+  .omit({
+    limit: true,
+    offset: true,
+    responseId: true,
+  })
+  .extend({ field: formAnswerKeySchema.optional() });
+export type FormSubmissionsExportQuery = z.infer<typeof formSubmissionsExportQuerySchema>;
 export type FormSubmissionsQuery = z.infer<typeof formSubmissionsQuerySchema>;
 
 export const formSubmissionStatsQuerySchema = searchQuerySchema.merge(formSubmissionFiltersSchema);

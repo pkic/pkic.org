@@ -1,3 +1,4 @@
+import { submissionAnswerSql } from "./answer-query";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { queryPage, type OffsetPageQuery } from "../../db/pagination";
 import { all } from "../../db/queries";
@@ -73,16 +74,22 @@ export function buildFormSubmissionsPageQuery(
   population: FormSubmissionPopulation,
   params: Pick<ListFormSubmissionsParams, "sort" | "limit" | "offset" | "responseId">,
 ): OffsetPageQuery {
-  const orderBy = resolveOrderBy(
+  let orderBy = resolveOrderBy(
     params.sort,
     FORM_SUBMISSIONS_SORT_COLUMNS,
     "ORDER BY submitted_at DESC",
     "source ASC, source_id ASC",
   );
+  const answerSort = params.sort?.replace(/^-/, "").startsWith("answer:")
+    ? submissionAnswerSql(params.sort.replace(/^-/, "").slice(7))
+    : null;
+  if (answerSort) {
+    orderBy = `ORDER BY answer_sort ${params.sort?.startsWith("-") ? "DESC" : "ASC"}, source ASC, source_id ASC`;
+  }
   const pageQuery = selectFromSubmissionPopulation(
     population,
-    `SELECT ${MERGED_SUBMISSION_COLUMNS} FROM merged${params.responseId ? " WHERE id = ?" : ""}`,
-    params.responseId ? [params.responseId] : [],
+    `SELECT ${MERGED_SUBMISSION_COLUMNS}${answerSort ? `, LOWER((SELECT group_concat(CAST(value AS TEXT), ', ') FROM json_each((${answerSort.sql})))) AS answer_sort` : ""} FROM merged${params.responseId ? " WHERE id = ?" : ""}`,
+    [...(answerSort?.bindings ?? []), ...(params.responseId ? [params.responseId] : [])],
   );
   return {
     ...pageQuery,

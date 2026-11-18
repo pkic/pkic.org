@@ -15,6 +15,10 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import {
+  formSubmissionsQuerySchema,
+  formSubmissionsExportQuerySchema,
+} from "../../assets/shared/schemas/form-management";
 import type { FormSubmission } from "../../assets/shared/schemas/form-management";
 import type { FormFieldDefinition } from "../../assets/shared/schemas/forms";
 import { VISUALIZATIONS } from "../../assets/shared/schemas/form-field-rules";
@@ -196,6 +200,84 @@ describe("the submissions table", () => {
     const open = [...document.querySelectorAll("button")].find((button) => button.textContent === "Open response")!;
     await act(() => open.click());
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: "a0000000-0000-4000-8000-000000000001" }));
+  });
+
+  it("sends answer filters to the server and exports the selected field across all pages", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        requests.push(new URL(url, "https://example.test"));
+        return json({ submissions: [submission()], page: { limit: 50, offset: 0, total: 1, hasMore: false } });
+      }),
+    );
+    const page = mount(
+      <FormSubmissionsTable
+        fields={[field()]}
+        endpoint="/api/v1/events/pqc/forms/f/submissions"
+        exportEndpoint="/api/v1/events/pqc/forms/f/exports"
+        params={{ status: "registered", attendanceType: "in_person" }}
+        responseSchema={submissionsSchema}
+        onOpen={vi.fn()}
+      />,
+    );
+    await settle();
+    const choose = async (label: string, value: string) => {
+      const select = page.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`)!;
+      expect(select).toBeTruthy();
+      await act(() => {
+        select.value = value;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      await settle();
+    };
+    await choose("Filter answer field", "priority");
+    await choose("Filter Priority", "high");
+    const query = formSubmissionsQuerySchema.parse(Object.fromEntries(requests.at(-1)!.searchParams));
+    expect(query.answerField).toBe("priority");
+    expect(query.answerValue).toBe("high");
+    expect(query.status).toBe("registered");
+    const link = page.querySelector<HTMLAnchorElement>('a[aria-label="Download Priority (CSV)"]')!;
+    expect(link).toBeTruthy();
+    const url = new URL(link.href);
+    expect(url.pathname).toBe("/api/v1/events/pqc/forms/f/exports");
+    const exported = formSubmissionsExportQuerySchema.parse(Object.fromEntries(url.searchParams));
+    expect(exported.answerField).toBe(query.answerField);
+    expect(exported.answerValue).toBe(query.answerValue);
+    expect(exported.field).toBe("priority");
+    expect(exported.attendanceType).toBe("in_person");
+    expect(url.searchParams.has("limit")).toBe(false);
+    expect(url.searchParams.has("offset")).toBe(false);
+    await choose("Filter answer field", "");
+    const cleared = formSubmissionsQuerySchema.parse(Object.fromEntries(requests.at(-1)!.searchParams));
+    expect(cleared.answerValue).toBeUndefined();
+  });
+
+  it("keeps a refused bookmarked query visible and disables its CSV download", async () => {
+    const previous = window.location.href;
+    window.history.replaceState(null, "", "#?form-responses.sort=unknown");
+    try {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => json({ error: { code: "INVALID_QUERY", message: "Unknown sort column" } }, 400)),
+      );
+      const page = mount(
+        <FormSubmissionsTable
+          fields={[field()]}
+          endpoint="/api/v1/events/pqc/forms/f/submissions"
+          exportEndpoint="/api/v1/events/pqc/forms/f/exports"
+          responseSchema={submissionsSchema}
+          onOpen={vi.fn()}
+        />,
+      );
+      await settle();
+      expect(page.querySelector('[role="alert"]')?.textContent).toContain("Unknown sort column");
+      expect(page.querySelector<HTMLButtonElement>('button[aria-label="Download responses (CSV)"]')?.disabled).toBe(
+        true,
+      );
+    } finally {
+      window.history.replaceState(null, "", previous);
+    }
   });
 
   it("replaces the table with the failure rather than claiming there are no responses", async () => {

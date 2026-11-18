@@ -326,6 +326,7 @@ export function FormManagementDetail({
                 <FormSubmissionsTable
                   fields={detail.fields}
                   endpoint={`${base}/submissions`}
+                  exportEndpoint={formEndpoint?.startsWith("/api/v1/events/") ? `${base}/exports` : undefined}
                   responseSchema={formSubmissionsResponseSchema}
                   params={submissionParams}
                   onOpen={(submission) => setResponseId(submission.id)}

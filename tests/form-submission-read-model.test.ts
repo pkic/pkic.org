@@ -10,6 +10,8 @@ import {
 } from "../functions/_lib/services/form-submissions/population-query";
 import { buildFormSubmissionsPageQuery } from "../functions/_lib/services/form-submissions/submission-page";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
+import { getManagedFormWithFields } from "../functions/_lib/services/forms/read";
+import { exportEventFormResponses } from "../functions/_lib/services/form-submissions/export";
 import { createAdminSession } from "./helpers/auth";
 import { callApi } from "./helpers/app";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
@@ -600,5 +602,93 @@ describe("form-submission read-model population", () => {
       installationOnly: true,
     });
     expect(population.placement).toMatchObject({ contextType: "installation", ownerGroupId: null });
+  });
+  it("filters individual dietary selections and sorts the same legacy and normalized population before paging", async () => {
+    const formId = await insertForm("dietary-responses", "event_registration", "food", null, true);
+    await env.DB.prepare("UPDATE form_fields SET field_type = 'multi_select', options_json = ? WHERE form_id = ?")
+      .bind(
+        JSON.stringify([
+          { value: "vegan", label: "Vegan" },
+          { value: "nut_allergy", label: "Nut allergy" },
+        ]),
+        formId,
+      )
+      .run();
+    for (const [index, answer] of [["vegan", "nut_allergy"], ["vegan"], "vegetarian"].entries()) {
+      const userId = await insertUser(`dietary-${index}@example.test`);
+      await env.DB.prepare("UPDATE users SET first_name = 'Dietary', last_name = ? WHERE id = ?")
+        .bind(`Example ${index}`, userId)
+        .run();
+      const registrationId = await insertRegistration({
+        eventId,
+        userId,
+        status: "registered",
+        attendanceType: "in_person",
+        answer,
+      });
+      if (index === 1)
+        await backfillSourceAnswer({
+          formId,
+          contextType: "registration",
+          contextRef: registrationId,
+          fieldKey: "food",
+          answer,
+        });
+    }
+    const filters = { answerField: "food", answerValue: "vegan", sort: "answer:food" };
+    const first = await readPopulation("dietary-responses", filters);
+    expect(first.list.page.total).toBe(2);
+    expect(first.stats.total).toBe(2);
+    const second = await adminGet(
+      "/api/v1/events/pqc-2026/forms/dietary-responses/submissions?" +
+        new URLSearchParams({ ...filters, limit: "1", offset: "1" }).toString(),
+    );
+    const page = formSubmissionsResponseSchema.parse(await second.json());
+    expect(page.page.total).toBe(2);
+    expect(page.submissions[0].id).not.toBe(first.list.submissions[0].id);
+    const reverse = await readPopulation("dietary-responses", { ...filters, sort: "-answer:food" });
+    expect(reverse.list.submissions[0].id).toBe(page.submissions[0].id);
+    expect((await readPopulation("dietary-responses", { ...filters, answerValue: "nut" })).list.page.total).toBe(0);
+    const csv = await adminGet(
+      "/api/v1/events/pqc-2026/forms/dietary-responses/exports?" +
+        new URLSearchParams({ ...filters, field: "food" }).toString(),
+    );
+    expect(csv.status).toBe(200);
+    expect(csv.headers.get("content-type")).toContain("text/csv");
+    expect(csv.headers.get("cache-control")).toContain("no-store");
+    const text = await csv.text();
+    expect(text.split("\r\n")).toHaveLength(3);
+    expect(text).toContain("Name,food label");
+    expect(text).not.toContain("@example.test");
+    expect(text).not.toContain("vegetarian");
+    expect(text.split("\r\n")[1]).toBe("Dietary Example 1,Vegan");
+    expect(text).toContain('"Vegan, Nut allergy"');
+    const exportParams = {
+      ...filters,
+      definition: (await getManagedFormWithFields(env.DB, "dietary-responses"))!,
+      eventSlug: "pqc-2026",
+      eventId,
+      actorUserId: "test",
+    };
+    await expect(exportEventFormResponses(env.DB, exportParams, { maxRows: 1, maxBytes: 10000 })).rejects.toMatchObject(
+      { code: "CSV_EXPORT_ROW_LIMIT_EXCEEDED" },
+    );
+    await expect(exportEventFormResponses(env.DB, exportParams, { maxRows: 10, maxBytes: 1 })).rejects.toMatchObject({
+      code: "CSV_EXPORT_TOO_LARGE",
+    });
+    const missing = await adminGet("/api/v1/events/pqc-2026/forms/dietary-responses/exports?field=missing");
+    expect(missing.status).toBe(400);
+    const empty = await adminGet(
+      "/api/v1/events/pqc-2026/forms/dietary-responses/exports?answerField=food&answerValue=missing&field=food",
+    );
+    expect(await empty.text()).toBe("Name,food label");
+  });
+
+  it("rejects unsafe answer keys and unauthorized exports", async () => {
+    for (const query of ["sort=answer:food%27", "answerField=food%27&answerValue=vegan"]) {
+      expect((await adminGet(`/api/v1/events/pqc-2026/forms/missing/submissions?${query}`)).status).toBe(400);
+    }
+    expect((await callApi(env, "/api/v1/events/pqc-2026/forms/missing/exports")).status).toBe(401);
+    expect((await adminGet("/api/v1/events/pqc-2026/forms/missing/exports")).status).toBe(404);
   });
 });
