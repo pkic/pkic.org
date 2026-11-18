@@ -16,6 +16,7 @@ import {
   userAuthVerifySchema,
   type userAuthEstablishedResponseSchema,
 } from "../../../../shared/schemas/user-auth";
+import { ConfirmDialogHost, confirmAction } from "../../../components/ConfirmDialog";
 import { LoginFrame } from "../../../components/sign-in/LoginFrame";
 import {
   VerifiedOrganizationDetails,
@@ -97,6 +98,21 @@ export function AccountOrganizationStep({
       await answer({ organization: { contextToken: selected.contextToken } });
     });
 
+  /** A domain that is not a known free mailbox is likely an organization's, so keeping it personal is asked twice. */
+  async function choosePersonal() {
+    if (sending.current) return;
+    const copy = ACCOUNT_ORGANIZATION_COPY.personalConfirm;
+    const confirmed = await confirmAction({
+      title: copy.title(domain),
+      body: copy.body(domain),
+      consequences: copy.consequences(domain),
+      confirmLabel: copy.confirm,
+      cancelLabel: copy.cancel,
+      tone: "primary",
+    });
+    if (confirmed) await send(() => answer({ organization: { personal: true } }));
+  }
+
   return (
     <LoginFrame
       label={ACCOUNT_ORGANIZATION_COPY.title}
@@ -125,11 +141,13 @@ export function AccountOrganizationStep({
           {ACCOUNT_ORGANIZATION_COPY.finish}
         </Button>
         {step.personalAllowed && (
-          <Button variant="secondary" onClick={() => void send(() => answer({ organization: { personal: true } }))}>
+          <Button variant="secondary" onClick={() => void choosePersonal()}>
             {EMAIL_FIRST_ADVISORY_COPY.usePersonal}
           </Button>
         )}
       </fieldset>
+      {/* No session exists yet, so the portal's own host is not mounted. */}
+      <ConfirmDialogHost />
     </LoginFrame>
   );
 }

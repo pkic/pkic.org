@@ -172,6 +172,12 @@ it("holds a work address at the organization step until it is answered, then ope
   await act(async () => {
     [...step.querySelectorAll("button")].find((button) => button.textContent === "Use it as a personal email")!.click();
   });
+  // An unclaimed work domain is kept personal only once confirmed.
+  await act(async () => {
+    [...document.querySelectorAll<HTMLButtonElement>("dialog[open] button")]
+      .find((button) => button.textContent?.trim() === "Use as personal email")!
+      .click();
+  });
   await vi.waitFor(() => expect(host.textContent).toContain("Authenticated portal content"));
   expect(verifications).toEqual([
     { token: "synthetic-work-link" },

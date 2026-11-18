@@ -7,6 +7,21 @@ export const ACCOUNT_ORGANIZATION_COPY = {
   unclaimedIntro: (domain: string) =>
     `If you use @${domain} for work, add the organization you represent. If it's your own domain, use it as a personal email.`,
   finish: "Finish signing in",
+  /**
+   * Asked once more before a domain that is not a known free mailbox is kept
+   * as a personal address: a work address belongs with its organization.
+   */
+  personalConfirm: {
+    title: (domain: string) => `Use @${domain} as a personal email?`,
+    body: (domain: string) =>
+      `Choose this only if @${domain} is your own domain and no organization uses it. If you use it for work, add your organization instead.`,
+    consequences: (domain: string) => [
+      "Your account isn't connected to an organization",
+      `If an organization adds @${domain} later, you'll be asked to choose it the next time you sign in`,
+    ],
+    confirm: "Use as personal email",
+    cancel: "Add my organization",
+  },
   /** The server still asks, such as after a domain was claimed while the step was open. */
   stillRequired: "Choose your organization to finish signing in.",
   failed: "Your sign-in could not be finished. Try again.",

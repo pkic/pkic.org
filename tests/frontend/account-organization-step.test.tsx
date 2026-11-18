@@ -4,6 +4,7 @@ import { act } from "preact/test-utils";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AccountOrganizationStep } from "../../assets/ts/member-flows/portal/shell/AccountOrganizationStep";
 import { ACCOUNT_ORGANIZATION_COPY } from "../../assets/shared/account-organization-copy";
+import { EMAIL_FIRST_ADVISORY_COPY } from "../../assets/shared/email-first-copy";
 import { userAuthVerifySchema } from "../../assets/shared/schemas/user-auth";
 import { portalSessionFixture } from "../helpers/portal-session";
 
@@ -19,9 +20,9 @@ const SECOND = {
 };
 
 /** The step as the server words it, with one organization already holding the person's job title. */
-function step(organization: typeof FIRST, contextToken?: string) {
+function step(organization: typeof FIRST, contextToken?: string, personalAllowed = false) {
   return {
-    personalAllowed: false,
+    personalAllowed,
     affiliation: {
       email: "ada@claimed.test",
       domain: "claimed.test",
@@ -71,9 +72,9 @@ function prepared(body: ReturnType<typeof userAuthVerifySchema.parse>) {
   return { success: true, organizationRequired: step(organization, organization.token) };
 }
 
-async function mount(onSignedIn = vi.fn(async (_session: unknown) => {})) {
+async function mount(onSignedIn = vi.fn(async (_session: unknown) => {}), initial = step(FIRST)) {
   await act(() =>
-    render(<AccountOrganizationStep token="synthetic-work-link" step={step(FIRST)} onSignedIn={onSignedIn} />, host),
+    render(<AccountOrganizationStep token="synthetic-work-link" step={initial} onSignedIn={onSignedIn} />, host),
   );
   return onSignedIn;
 }
@@ -143,4 +144,26 @@ it("sends one answer when Finish is clicked twice while the organization is prep
   await act(async () => release());
   await vi.waitFor(() => expect(onSignedIn).toHaveBeenCalledOnce());
   expect(requests.map((body) => (body.organization ? "answer" : "prepare"))).toEqual(["prepare", "answer"]);
+});
+
+function buttonNamed(name: string, scope: ParentNode = document): HTMLButtonElement | undefined {
+  return [...scope.querySelectorAll("button")].find((button) => button.textContent?.trim() === name);
+}
+
+it("asks again before an unclaimed work domain is kept as a personal email, and sends nothing on cancel", async () => {
+  serve(() => session);
+  const onSignedIn = await mount(undefined, step(FIRST, undefined, true));
+  const copy = ACCOUNT_ORGANIZATION_COPY.personalConfirm;
+
+  await act(async () => buttonNamed(EMAIL_FIRST_ADVISORY_COPY.usePersonal, host)!.click());
+  const dialog = document.querySelector("dialog[open]")!;
+  expect(dialog.textContent).toContain(copy.title("claimed.test"));
+  expect(dialog.textContent).toContain(copy.consequences("claimed.test")[1]);
+  await act(async () => buttonNamed(copy.cancel, dialog)!.click());
+  expect(requests).toEqual([]);
+
+  await act(async () => buttonNamed(EMAIL_FIRST_ADVISORY_COPY.usePersonal, host)!.click());
+  await act(async () => buttonNamed(copy.confirm, document.querySelector("dialog[open]")!)!.click());
+  await vi.waitFor(() => expect(onSignedIn).toHaveBeenCalledOnce());
+  expect(requests).toEqual([{ token: "synthetic-work-link", organization: { personal: true } }]);
 });

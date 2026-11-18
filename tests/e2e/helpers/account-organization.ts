@@ -60,6 +60,11 @@ export async function answerAccountOrganizationStep(
     expect(result.organizationRequired.personalAllowed, "a claimed domain needs an organization").toBe(true);
     const answered = requestTo(page, "/api/v1/auth/verify-link");
     await step.getByRole("button", { name: EMAIL_FIRST_ADVISORY_COPY.usePersonal, exact: true }).click();
+    // A domain that is not a free mailbox is kept personal only once confirmed.
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: ACCOUNT_ORGANIZATION_COPY.personalConfirm.confirm, exact: true })
+      .click();
     return answered;
   }
   await organization.ready?.(step);
