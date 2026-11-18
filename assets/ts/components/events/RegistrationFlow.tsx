@@ -36,7 +36,7 @@ import { Button } from "../../ui/Button";
 import { Field } from "../../ui/Field";
 import { TextInput } from "../../ui/TextControl";
 import { ConsentList } from "../ConsentCard";
-import { DayAttendancePicker } from "../DayAttendancePicker";
+import { DayAttendancePicker, NOT_ATTENDING } from "../DayAttendancePicker";
 import { RegistrationContactStep } from "../RegistrationContactStep";
 import { RegistrationEmailAddress } from "./RegistrationEmailAddress";
 import { RegistrationRepresentationField } from "./RegistrationRepresentationField";
@@ -419,7 +419,14 @@ export function RegistrationFlow(props: Props) {
                     days={forms.eventDays}
                     {...(initial
                       ? {
-                          value: Object.fromEntries(attendance.map((day) => [day.dayDate, day.attendanceType])),
+                          // A saved registration lists only the days it attends; every other day was answered "not attending".
+                          value: Object.fromEntries(
+                            forms.eventDays.map((day) => [
+                              day.dayDate,
+                              attendance.find((saved) => saved.dayDate === day.dayDate)?.attendanceType ??
+                                NOT_ATTENDING,
+                            ]),
+                          ),
                           onChange: (dayDate: string, attendanceType: string) =>
                             setAttendance((current) => [
                               ...current.filter((day) => day.dayDate !== dayDate),
