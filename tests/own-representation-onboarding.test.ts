@@ -861,6 +861,33 @@ describe("verified subdomain organization mappings", () => {
     );
     expect(next.organization?.id).toBe(parent);
   });
+  it("never offers an organization on another domain, even one the person already represents", async () => {
+    const elsewhere = await insertOrganization(env.DB, "Elsewhere");
+    await claim("elsewhere-work.test", elsewhere);
+    const p = await person("person@northstar-work.test");
+    const represented = await buildCreateIdentityStatement(env.DB, {
+      userId: p.userId,
+      organizationId: elsewhere,
+      source: "staff",
+      jobTitle: "Advisor",
+      startImmediately: true,
+    });
+    await env.DB.batch([represented.statement]);
+    const resolved = identityAffiliationPreviewResponseSchema.parse(
+      await (await preview(p, { phase: "resolve", email: p.email, emailId: null })).json(),
+    );
+    expect(resolved.organization).toBeNull();
+    expect(resolved.organizations).toEqual([]);
+    const refused = await preview(p, {
+      phase: "prepare",
+      email: p.email,
+      emailId: null,
+      organizationId: elsewhere,
+      jobTitle: "Advisor",
+    });
+    expect(refused.status).toBe(422);
+    expect(await refused.json()).toMatchObject({ error: { code: "IDENTITY_DOMAIN_MISMATCH" } });
+  });
   it("never offers a sibling subdomain's organization", async () => {
     const council = await insertOrganization(env.DB, "Council");
     const parliament = await insertOrganization(env.DB, "Parliament");

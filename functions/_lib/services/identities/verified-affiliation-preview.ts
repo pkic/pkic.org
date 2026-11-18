@@ -22,20 +22,21 @@ export function verifiedAffiliationPreview(
       identity.blocked_at === null &&
       identity.email_id === (address.id ?? null),
   );
+  // Only organizations on the address's own domain, a parent domain or a subdomain are offered:
+  // an address never comes to speak for an organization on another domain, even one the person represents.
+  const organizations = basis.organizations.filter(
+    (organization) =>
+      resolveDomainOrganization(basis.facts, { organizationId: organization.id }).kind === "organization",
+  );
+  const listedOwned = owned.filter((identity) => organizations.some((item) => item.id === identity.organization_id));
   // The mapping supplies the chooser's default without excluding other proved organizations.
   const resolution = resolveDomainOrganization(basis.facts);
   const organizationId =
     resolution.kind === "organization"
       ? resolution.organizationId
-      : resolution.kind !== "ambiguous" && owned.length === 1
-        ? owned[0].organization_id
+      : resolution.kind !== "ambiguous" && listedOwned.length === 1
+        ? listedOwned[0].organization_id
         : null;
-  const organizations = basis.organizations.filter((organization) => {
-    return (
-      owned.some((identity) => identity.organization_id === organization.id) ||
-      resolveDomainOrganization(basis.facts, { organizationId: organization.id }).kind === "organization"
-    );
-  });
   const organization = organizations.find((item) => item.id === organizationId) ?? null;
   const rootDomain = workEmailDomain(address.email);
   return identityAffiliationPreviewResponseSchema.parse({
