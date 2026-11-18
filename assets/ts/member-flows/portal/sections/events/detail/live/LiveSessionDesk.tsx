@@ -12,6 +12,7 @@ import type { LiveRoomState } from "../../../../../../live-session/live-room-sta
 import { useLiveRoom, type LiveSocketFactory } from "../../../../../../live-session/useLiveRoom";
 import { Spinner } from "../../../../../../components/Spinner";
 import { Alert } from "../../../../../../ui/Alert";
+import { ControlTooltips } from "../../../../../../ui/ControlTooltips";
 import { LiveChatPanel } from "./LiveChatPanel";
 
 import { LivePollsCreateAction, LivePollsPanel } from "./LivePollsPanel";
@@ -376,6 +377,7 @@ export function LiveSessionDesk({
           if (!event.relatedTarget) presence.focus(null);
         }}
       >
+        <ControlTooltips scope={studio} />
         {phone ? (
           <StudioPhone
             state={state}

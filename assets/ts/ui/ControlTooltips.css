@@ -1,0 +1,17 @@
+@layer components {
+  /* A control's hint: the Tooltip's surface, compact, above everything the studio draws, never in the pointer's way. */
+  .pk-control-tooltip {
+    position: fixed;
+    z-index: 1100;
+    max-inline-size: min(20rem, calc(100vw - 1rem));
+    padding: var(--pk-1) var(--pk-2);
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius);
+    background: var(--pk-surface-raise);
+    color: var(--pk-ink);
+    box-shadow: var(--pk-shadow-2);
+    font-size: var(--pk-text-xs);
+    line-height: 1.4;
+    pointer-events: none;
+  }
+}

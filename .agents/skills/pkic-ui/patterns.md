@@ -52,7 +52,7 @@ Each entry is the full anatomy of a control. The gallery id renders it (`pnpm ga
 
 ## Tooltip (`tooltip`)
 
-- Use native `title` for a short icon-control label. Use the shared `Tooltip` for structured descriptions such as attendance dates: accessible on hover, focus and tap; Escape and outside press dismiss it. Keep the trigger named and use `aria-describedby` for the description.
+- Use native `title` for a short icon-control label; inside a scope that mounts `ControlTooltips` (the live studio), the same `title` shows as the design system's compact tooltip on hover and keyboard focus, never on touch. Use the shared `Tooltip` for structured descriptions such as attendance dates: accessible on hover, focus and tap; Escape and outside press dismiss it. Keep the trigger named and use `aria-describedby` for the description.
 - Shape and placement: the browser's own, on hover. Every icon-only control has one. Truncated table cells get the full value as `title` (handled by `DataTable`).
 - Dismissal and keyboard: native titles follow the browser; structured tooltips must remain hoverable and dismiss with Escape. ArrowDown from the trigger focuses the help for keyboard scrolling; Escape returns focus to the trigger. Never put essential information only in a tooltip.
 
