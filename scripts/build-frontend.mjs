@@ -117,6 +117,14 @@ const config = {
               test: /node_modules[\\/](pdf-lib|@pdf-lib|pako)[\\/]/,
               maxSize: 100 * 1024,
             },
+            // The on-screen graphics renderer draws the overlays, the screens and
+            // the studio's monitors and scene thumbnails; it changes far less
+            // often than the studio's controls, so it caches on its own.
+            {
+              name: "live-graphics",
+              includeDependenciesRecursively: false,
+              test: /assets[\\/]ts[\\/]live-session[\\/]/,
+            },
             {
               name: "vendor",
               test: /node_modules[\\/]zod[\\/]/,
