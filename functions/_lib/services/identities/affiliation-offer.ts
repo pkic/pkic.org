@@ -10,7 +10,6 @@ import type { AffiliationOffer, AffiliationOfferDismissal } from "../../../../as
 import { all, first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
-import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { emailDomainOf } from "../../../../assets/shared/schemas/email-domains";
 import { prepareAuditLog } from "../audit";
@@ -217,21 +216,16 @@ export async function dismissAffiliationOffer(
   const statements: StatementLike[] = [
     db
       .prepare(
+        // Only the organization ids travel; each row's id is made here, so the request stays small for a long card.
         `INSERT INTO affiliation_offer_dismissals (id, user_id, organization_id, created_at)
-       SELECT json_extract(candidate.value, '$.id'), ?, json_extract(candidate.value, '$.organizationId'), ?
+       SELECT lower(hex(randomblob(16))), ?, candidate.value, ?
          FROM json_each(?) candidate
         WHERE NOT EXISTS (SELECT 1 FROM affiliation_offer_dismissals
-          WHERE user_id=? AND organization_id = json_extract(candidate.value, '$.organizationId'))
-          AND (json_extract(candidate.value, '$.organizationId') IS NOT NULL OR NOT EXISTS (
+          WHERE user_id=? AND organization_id = candidate.value)
+          AND (candidate.value IS NOT NULL OR NOT EXISTS (
             SELECT 1 FROM affiliation_offer_dismissals WHERE user_id=? AND organization_id IS NULL))`,
       )
-      .bind(
-        input.userId,
-        at,
-        JSON.stringify(organizationIds.map((organizationId) => ({ id: uuid(), organizationId }))),
-        input.userId,
-        input.userId,
-      ),
+      .bind(input.userId, at, JSON.stringify(organizationIds), input.userId, input.userId),
     prepareAuditLog(db, "user", input.userId, "affiliation_offer_dismissed", "user", input.userId, {
       organizationId: input.organizationId,
       independent: input.organizationId === null,
