@@ -81,7 +81,7 @@ describe("live control room Transition", () => {
           ...snapshot.preview,
           lowerThird: snapshot.session.credits[0]!,
           timerGraphics: [defaultLiveTimerGraphic("session")],
-          scene: "side-by-side",
+          scene: "questions",
         },
       }),
     );
@@ -106,7 +106,7 @@ describe("live control room Transition", () => {
           chatFeed: null,
           reactions: false,
           reactionsGraphic: { showCount: false },
-          scene: "side-by-side",
+          scene: "questions",
         },
       },
     ]);
@@ -125,9 +125,20 @@ describe("live control room Transition", () => {
     );
     expect(strip).not.toBeNull();
     const scenes = [...strip!.querySelectorAll<HTMLButtonElement>("button")];
+    expect(scenes.map((scene) => scene.querySelector(".pk-studio-scene__name")?.textContent)).toEqual([
+      "Talk",
+      "Q&A",
+      "Panel",
+      "Break",
+      "Check-in",
+      "Full board",
+    ]);
     expect(scenes.filter((scene) => scene.getAttribute("aria-pressed") === "true")).toHaveLength(1);
     // Each scene is drawn live, with the same renderer as the monitors.
-    expect(scenes.every((scene) => scene.querySelector(".pk-studio-scenes__picture .pk-live-overlay"))).toBe(true);
+    expect(scenes.every((scene) => scene.querySelector(".pk-studio-scene__picture .pk-live-overlay"))).toBe(true);
+    // Preview is empty, so Talk shows the room's real content instead: the session's first credit.
+    expect(scenes[0]!.querySelector(".pk-live-overlay__name")?.textContent).toBe("Sam Speaker");
+    expect(panel(host, "Preview").querySelector(".pk-studio-monitor__screen .pk-live-overlay__name")).toBeNull();
     const next = scenes.find((scene) => scene.getAttribute("aria-pressed") === "false")!;
     void act(() => next.click());
     const sent = liveRoomClientMessageSchema.parse(commands(live).at(-1));

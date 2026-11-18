@@ -247,7 +247,7 @@ const PREVIEW_PANEL: StudioPanel = {
   outputs: ["preview"],
 };
 
-/** Preview with the event's scenes under it, each drawn live with what Preview holds. */
+/** Preview with the event's scenes under it, each drawn with the room's real content. */
 function PreviewScenes() {
   const view = monitorPanelView(PREVIEW_PANEL, MONITOR_SOURCES, noCommand, {
     clear: noCommand,
@@ -411,7 +411,7 @@ export const studioOnScreenSections: PreviewSection[] = [
     render: () => (
       <LivestreamOverlay
         state={roomWith({}, LISTS)}
-        elements={presetWith("side-by-side", ["topQuestions", "lowerThird"])}
+        elements={presetWith("check-in", ["topQuestions", "lowerThird"])}
       />
     ),
   },
@@ -420,10 +420,7 @@ export const studioOnScreenSections: PreviewSection[] = [
     title: "Chat beside the camera, on the right",
     note: "Graphics on the right: the same column on the other side of the frame.",
     render: () => (
-      <LivestreamOverlay
-        state={roomWith({}, { chatFeed: CHAT_MIXED })}
-        elements={presetWith("side-by-side-right", ["chat"])}
-      />
+      <LivestreamOverlay state={roomWith({}, { chatFeed: CHAT_MIXED })} elements={presetWith("questions", ["chat"])} />
     ),
   },
   {
@@ -463,7 +460,7 @@ export const studioOnScreenSections: PreviewSection[] = [
   {
     id: "studio-preview-scenes",
     title: "Preview with its scenes",
-    note: "Shown from the Preview panel's menu. Each scene is drawn live with Preview's graphics; the current one is edged in Preview's color. Choosing one loads it into Preview.",
+    note: "Shown under Preview unless hidden from its panel menu. Each scene is drawn with the room's real content: Preview's graphics, else Program's, the session's first speaker and the top questions. The scene in Preview is edged in Preview's color. The scene button beside PVW opens the same scenes, three to a row. Choosing one loads it into Preview.",
     render: () => <PreviewScenes />,
   },
   {

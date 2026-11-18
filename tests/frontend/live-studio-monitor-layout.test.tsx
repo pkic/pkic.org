@@ -25,7 +25,7 @@ const storage = {
 const KEYNOTE = {
   slug: "keynote",
   name: "Keynote",
-  elements: LIVE_OVERLAY_PRESET_LAYOUTS["ticker-only"].elements,
+  elements: LIVE_OVERLAY_PRESET_LAYOUTS.break.elements,
 };
 const room = applyLiveRoomMessage(
   null,
@@ -104,20 +104,46 @@ describe("studio monitor layouts", () => {
     expect(screen().querySelector(".pk-live-overlay__question-text")?.textContent).toBe(
       "What about hybrid certificates?",
     );
-    const picker = host.querySelector<HTMLButtonElement>('button[aria-label="Scene in Preview: Full frame"]')!;
-    expect(picker.textContent).toContain("Full frame");
+    const picker = host.querySelector<HTMLButtonElement>('button[aria-label="Scene in Preview: Talk"]')!;
+    expect(picker.textContent).toContain("Talk");
+    expect(picker.getAttribute("aria-haspopup")).toBe("dialog");
     void act(() => picker.click());
-    expect(menuItem("Keynote")).toBeDefined();
-    void act(() => menuItem("Lower third only").click());
-    // The choice goes to the room's shared Preview, not to this operator's monitor.
-    expect(switcher.previewScene).toHaveBeenLastCalledWith("lower-third");
-    expect(stored.get(STUDIO_LAYOUT_STORAGE_KEY) ?? "").not.toContain("lower-third");
-    // Preview draws the scene it holds: the lower third alone.
-    const inScene = { ...room, stage: { ...room.stage, scene: "lower-third" } };
+    // The scenes open as thumbnails, each named under its picture, the one in Preview pressed and focused.
+    const popover = document.querySelector<HTMLElement>('[role="dialog"]')!;
+    expect(popover.querySelector("h3")?.textContent).toBe("Load a scene into Preview");
+    const choices = [...popover.querySelectorAll<HTMLButtonElement>(".pk-studio-scene")];
+    expect(choices.map((choice) => choice.querySelector(".pk-studio-scene__name")?.textContent)).toEqual([
+      "Talk",
+      "Q&A",
+      "Panel",
+      "Break",
+      "Check-in",
+      "Full board",
+      "Keynote",
+    ]);
+    expect(choices.every((choice) => choice.querySelector(".pk-studio-scene__picture .pk-live-overlay"))).toBe(true);
+    expect(document.activeElement).toBe(choices[0]);
+    expect(choices[0]!.getAttribute("aria-pressed")).toBe("true");
+    void act(() => choices[1]!.click());
+    // The choice goes to the room's shared Preview, not to this operator's monitor, and the popover closes.
+    expect(switcher.previewScene).toHaveBeenLastCalledWith("questions");
+    expect(stored.get(STUDIO_LAYOUT_STORAGE_KEY) ?? "").not.toContain("questions");
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(picker);
+    // Escape closes it too, back on its button.
+    void act(() => picker.click());
+    void act(() => {
+      document
+        .querySelector('[role="dialog"]')!
+        .dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    // Preview draws the scene it holds: the panel scene has the question and no lower third.
+    const inScene = { ...room, stage: { ...room.stage, scene: "panel" } };
     void act(() => render(<Harness preview={inScene} />, host!));
-    expect(screen().querySelector(".pk-live-overlay__question-text")).toBeNull();
-    expect(screen().querySelector(".pk-live-overlay__name")).not.toBeNull();
-    expect(host.querySelector('button[aria-label="Scene in Preview: Lower third only"]')).not.toBeNull();
+    expect(screen().querySelector(".pk-live-overlay__question-text")).not.toBeNull();
+    expect(screen().querySelector(".pk-live-overlay__name")).toBeNull();
+    expect(host.querySelector('button[aria-label="Scene in Preview: Panel"]')).not.toBeNull();
   });
 
   it("names Program's scene, and keeps a room screen's tile in the layout an operator picks", () => {
@@ -128,16 +154,14 @@ describe("studio monitor layouts", () => {
       [...host!.querySelectorAll<HTMLElement>(".pk-studio-monitor__tile")].find(
         (candidate) => candidate.querySelector(".pk-studio-monitor__label")?.getAttribute("title") === label,
       )!;
-    expect(tile("Program").querySelector('[title="Scene on Program: Full frame"]')?.textContent).toBe("Full frame");
+    expect(tile("Program").querySelector('[title="Scene on Program: Talk"]')?.textContent).toBe("Talk");
     expect(tile("Program").querySelector('button[aria-label^="Layout on"]')).toBeNull();
     void act(() =>
-      tile("Projector")
-        .querySelector<HTMLButtonElement>('button[aria-label="Layout on Projector: Full frame"]')!
-        .click(),
+      tile("Projector").querySelector<HTMLButtonElement>('button[aria-label="Layout on Projector: Talk"]')!.click(),
     );
-    void act(() => menuItem("Lower third only").click());
+    void act(() => menuItem("Break").click());
     expect(studioLayoutsSchema.parse(JSON.parse(stored.get(STUDIO_LAYOUT_STORAGE_KEY)!)).show[2]!.layouts).toEqual({
-      projector: "lower-third",
+      projector: "break",
     });
   });
 
