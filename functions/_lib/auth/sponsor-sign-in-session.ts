@@ -25,8 +25,19 @@ import { resolveSessionActingIdentityId } from "../../../assets/shared/session-a
 import { recordAuditActingIdentity } from "../services/audit-actor";
 import { findActiveIdentity, prepareSessionEmailAuthenticationStatement, prepareUserSession } from "./user-session";
 import { provedMailboxSignInEvidence } from "./email-sign-in-policy";
+import { first } from "../db/queries";
+import { prepareFirstAddressSignInStatements } from "../services/account-security-notices";
+import type { AccountOrganizationRequired } from "../../../assets/shared/schemas/account-organization";
+import {
+  accountOrganizationStepStatements,
+  type AccountOrganizationStepInput,
+} from "../services/identities/account-organization";
 
-/** Redeem a sponsor-mailbox capability into the same user session used by the portal. */
+/**
+ * Redeem a sponsor-mailbox capability into the same user session used by the
+ * portal, under the rules of an email sign-in: account setup's organization
+ * step comes first, and the first sign-in through an added address is noticed.
+ */
 export async function redeemSponsorSignInCapability(
   db: DatabaseLike,
   payload: {
@@ -35,8 +46,9 @@ export async function redeemSponsorSignInCapability(
     sessionTtlHours: number;
     ipHash?: string | null;
     userAgentHash?: string | null;
+    organization?: AccountOrganizationStepInput;
   },
-): Promise<{ session: UserSessionResult; token: string }> {
+): Promise<{ session: UserSessionResult; token: string } | { required: AccountOrganizationRequired }> {
   const verified = await verifySponsorSignInCapability(db, payload);
   const preparedUser = await buildFindOrCreateUserStatement(db, {
     email: verified.sponsorship.contactEmail,
@@ -54,9 +66,27 @@ export async function redeemSponsorSignInCapability(
       ]);
   const actingIdentities = preparedUser.created ? [] : await findActingIdentitiesForUser(db, preparedUser.user.id);
   recordAuditActingIdentity(preparedUser.user.id, resolveSessionActingIdentityId(actingIdentities, null));
-  const prepared = await prepareUserSession(db, preparedUser.user.id, payload.sessionTtlHours);
   const verifiedAt = nowIso();
   const normalizedContactEmail = normalizeEmail(verified.sponsorship.contactEmail);
+  const organizationStep = await accountOrganizationStepStatements(db, {
+    signingSecret: payload.signingSecret,
+    subject: preparedUser.created ? { userId: null } : { userId: preparedUser.user.id },
+    newUserId: preparedUser.user.id,
+    email: normalizedContactEmail,
+    verifiedAt,
+    input: payload.organization,
+  });
+  if ("required" in organizationStep) return organizationStep;
+  // The link may sign in through an address added to an existing account.
+  const addedAddress =
+    !preparedUser.created && normalizeEmail(preparedUser.user.email) !== normalizedContactEmail
+      ? await first<{ id: string; email: string }>(
+          db,
+          "SELECT id, email FROM user_emails WHERE user_id = ? AND normalized_email = ?",
+          [preparedUser.user.id, normalizedContactEmail],
+        )
+      : null;
+  const prepared = await prepareUserSession(db, preparedUser.user.id, payload.sessionTtlHours);
   await commitEmailAuthRedemption(db, {
     purpose: "sponsor_sign_in",
     capabilityId: verified.capability.capabilityId,
@@ -81,13 +111,23 @@ export async function redeemSponsorSignInCapability(
         method: "magic_link",
         verifiedAt,
       }),
+      ...organizationStep.statements,
       ...prepared.statements,
       prepareSessionEmailAuthenticationStatement(db, {
         sessionId: prepared.sessionId,
-        emailId: null,
+        emailId: addedAddress?.id ?? null,
         normalizedEmail: normalizedContactEmail,
         at: verifiedAt,
       }),
+      ...(addedAddress
+        ? prepareFirstAddressSignInStatements(db, {
+            userId: preparedUser.user.id,
+            primaryEmail: preparedUser.user.email,
+            emailId: addedAddress.id,
+            email: addedAddress.email,
+            at: verifiedAt,
+          })
+        : []),
     ],
   });
 
@@ -97,15 +137,28 @@ export async function redeemSponsorSignInCapability(
   }
   const pendingIdentityCount = await countPendingIdentitiesForUser(db, preparedUser.user.id);
   const eventParticipation = await hasEventParticipation(db, preparedUser.user.id);
-  const session = await createEstablishedUserSessionResult(db, prepared, {
-    identity: { id: preparedUser.user.id, email: preparedUser.user.email },
-    staff,
-    memberships,
-    sponsors,
-    pendingIdentityCount,
-    eventParticipation,
-    actingIdentities,
-  });
+  // An organization added at account setup is read back, with any membership it brings, and acted as.
+  const added = organizationStep.identityId;
+  const [currentMemberships, currentActingIdentities] = added
+    ? await Promise.all([
+        resolveEligibleMembershipRows(db, preparedUser.user.id),
+        findActingIdentitiesForUser(db, preparedUser.user.id),
+      ])
+    : [memberships, actingIdentities];
+  const session = await createEstablishedUserSessionResult(
+    db,
+    prepared,
+    {
+      identity: { id: preparedUser.user.id, email: preparedUser.user.email },
+      staff,
+      memberships: currentMemberships,
+      sponsors,
+      pendingIdentityCount,
+      eventParticipation,
+      actingIdentities: currentActingIdentities,
+    },
+    added ?? null,
+  );
   const token = await signUserSessionToken(payload.signingSecret, {
     sub: preparedUser.user.id,
     sid: prepared.sessionId,

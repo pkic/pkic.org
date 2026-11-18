@@ -61,8 +61,11 @@ export function ownedEmailRepresentationActiveSql(address: string, ending: Endin
 /**
  * Holds while no ended representation retired this address: no started,
  * domain-backed organization identity of `userId` covers its domain, or one
- * that does is still active. An identity covers the address when its proved
- * domain or one of its organization's claimed domains holds the address's host.
+ * that does is still active. An identity covers the address when the domain
+ * recorded on it holds the address's host, or one of its organization's current
+ * claims does. The recorded domain (`covered_email_domain`) is its proved
+ * domain, else the claim that covered its address when it was created or
+ * ended, so a claim the organization removes later still retires the address.
  *
  * Written as one flat aggregate rather than the general domain-support rule
  * (which also weighs more specific claims) because this runs inside every
@@ -77,7 +80,7 @@ export function addressNotRetiredSql(userId: string, normalizedEmail: string, en
        AND (covering.started_at IS NOT NULL AND ${domainBackedIdentitySql("covering")})
       LEFT JOIN organization_domain_claims claim
         ON claim.organization_id = covering.organization_id AND claim.application_id IS NULL
-     WHERE ${hostWithinDomainSql(host, "covering.verified_email_domain")} OR ${hostWithinDomainSql(host, "claim.domain")}), 1) = 1`;
+     WHERE ${hostWithinDomainSql(host, "covering.covered_email_domain")} OR ${hostWithinDomainSql(host, "claim.domain")}), 1) = 1`;
 }
 
 /** The primary address of `person` (aliasing users) may sign in. */
@@ -105,18 +108,30 @@ export function liveAccountSql(person: string): string {
  * Holds while `normalizedEmail` is still on account `userId`, as its primary
  * address or an added one, and still signs in. Swapping which one is primary
  * keeps the address, so it keeps the sessions made through it.
+ *
+ * The same rules as `primaryEmailSignInAllowedSql` and
+ * `addedEmailSignInAllowedSql`, with the retirement check stated once for the
+ * primary address and an added one without an identity: this runs inside every
+ * session check, whose request size is budgeted.
  */
 export function accountAddressSignsInSql(userId: string, normalizedEmail: string): string {
-  return `(${existsSql(
+  return `(((${existsSql(
     "users",
     "signing_person",
     `(signing_person.id = ${userId} AND signing_person.normalized_email = ${normalizedEmail})
-      AND ${primaryEmailSignInAllowedSql("signing_person")}`,
+      AND ${primaryEmailProofMayAuthenticateSql("signing_person")}`,
   )} OR ${existsSql(
     "user_emails",
     "signing_address",
     `(signing_address.user_id = ${userId} AND signing_address.normalized_email = ${normalizedEmail})
-      AND ${addedEmailSignInAllowedSql("signing_address")}`,
+      AND signing_address.verified_at IS NOT NULL AND signing_address.identity_id IS NULL`,
+  )}) AND ${addressNotRetiredSql(userId, normalizedEmail)}) OR ${existsSql(
+    "user_emails owned_address JOIN identities",
+    "owner_identity",
+    `(owned_address.user_id = ${userId} AND owned_address.normalized_email = ${normalizedEmail}
+      AND owned_address.verified_at IS NOT NULL) AND (owner_identity.id = owned_address.identity_id
+      AND owner_identity.user_id = owned_address.user_id AND owner_identity.started_at IS NOT NULL)
+      AND (owner_identity.ended_at IS NULL AND owner_identity.blocked_at IS NULL)`,
   )})`;
 }
 

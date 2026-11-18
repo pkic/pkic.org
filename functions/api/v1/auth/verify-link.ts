@@ -27,7 +27,7 @@ export const UserAuthVerifyLink = openApiRoute(userAuthVerifyRouteSchema, async 
   };
   const organization = { affiliation: data.body.affiliation, answer: data.body.organization };
   const result = parseCapabilityToken(data.body.token, "sponsor_sign_in")
-    ? await redeemSponsorSignInCapability(http.db, redemption)
+    ? await redeemSponsorSignInCapability(http.db, { ...redemption, organization })
     : parseCapabilityToken(data.body.token, "user_sign_up")
       ? await redeemUserSignUpCapability(http.db, { ...redemption, organization })
       : await redeemUserSignInCapability(http.db, { ...redemption, organization });

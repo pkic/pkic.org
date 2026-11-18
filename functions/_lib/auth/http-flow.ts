@@ -36,6 +36,12 @@ async function hashRequestContext(
 }
 
 /**
+ * The request limit an address shares across every request that mails it a
+ * portal sign-in or sign-up link, so asking both ways sends no more mail.
+ */
+export const USER_EMAIL_LINK_RATE_LIMIT_NAMESPACE = "user-auth-request-link";
+
+/**
  * Applies the identical anti-enumeration request controls. The persona route
  * must supply its own namespace and still owns eligibility, TTL use, link URL,
  * email template, recipient, and delivery policy.

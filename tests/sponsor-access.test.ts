@@ -323,6 +323,68 @@ describe("sponsor capacity in the canonical portal session", () => {
     ).toMatchObject({ status: 403 });
   });
 
+  it("asks a new work address for its organization before the sponsor link opens a session", async () => {
+    await createActiveEventSponsor("Leader", "setup@sponsor-setup.test");
+    const token = await readSponsorAccessToken();
+    const redeem = (organization?: { answer: { personal: true } }) =>
+      redeemSponsorSignInCapability(env.DB, {
+        token,
+        signingSecret: env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret",
+        sessionTtlHours: 8,
+        organization,
+      });
+    const before = (await queryAll(env.DB, "SELECT id FROM sessions")).length;
+    const asked = await redeem();
+    expect(asked).toMatchObject({ required: { organizationRequired: { personalAllowed: true } } });
+    expect(await queryAll(env.DB, "SELECT id FROM sessions")).toHaveLength(before);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = 'setup@sponsor-setup.test'"),
+    ).toHaveLength(0);
+
+    const established = await redeem({ answer: { personal: true } });
+    expect("session" in established).toBe(true);
+    expect(await queryAll(env.DB, "SELECT id FROM sessions")).toHaveLength(before + 1);
+  });
+
+  it("sends the first-sign-in notice when a sponsor link signs in through an added address", async () => {
+    const userId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO users (id, email, normalized_email, email_verified_at, active, created_at, updated_at)
+         VALUES (?, 'owner@gmail.com', 'owner@gmail.com', datetime('now'), 1, datetime('now'), datetime('now'))`,
+      ).bind(userId),
+      env.DB.prepare(
+        `INSERT INTO user_emails (id, user_id, email, normalized_email, verified_at, created_at)
+         VALUES (?, ?, 'contact@gmail.com', 'contact@gmail.com', datetime('now'), datetime('now'))`,
+      ).bind(crypto.randomUUID(), userId),
+      env.DB.prepare(
+        `INSERT INTO identities (id, user_id, organization_id, source, show_on_organization_profile,
+           invited_at, started_at, created_at, updated_at)
+         VALUES (?, ?, NULL, 'account', 0, datetime('now'), datetime('now'), datetime('now'), datetime('now'))`,
+      ).bind(crypto.randomUUID(), userId),
+    ]);
+    await createActiveEventSponsor("Leader", "contact@gmail.com");
+    const result = await redeemSponsorSignInCapability(env.DB, {
+      token: await readSponsorAccessToken(),
+      signingSecret: env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret",
+      sessionTtlHours: 8,
+    });
+    expect("session" in result && result.session.identity.id).toBe(userId);
+    expect(await queryAll(env.DB, "SELECT email_id IS NOT NULL AS marked FROM session_email_authentication")).toEqual([
+      { marked: 1 },
+    ]);
+    expect(
+      await queryAll(env.DB, "SELECT first_signed_in_at IS NOT NULL AS noticed FROM user_emails WHERE user_id = ?", [
+        userId,
+      ]),
+    ).toEqual([{ noticed: 1 }]);
+    const notices = await queryAll<{ recipient: string }>(
+      env.DB,
+      "SELECT json_extract(payload_json, '$.to') AS recipient FROM email_outbox WHERE template_key = 'account_security_notice' ORDER BY recipient",
+    );
+    expect(notices).toHaveLength(2);
+  });
+
   it("rolls back sponsor redemption if the contact changes before its D1 batch", async () => {
     const sponsorId = await createActiveEventSponsor("Leader", "race@sponsor.test");
     const token = await readSponsorAccessToken();
@@ -331,6 +393,7 @@ describe("sponsor capacity in the canonical portal session", () => {
       token,
       signingSecret: env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret",
       sessionTtlHours: 8,
+      organization: { answer: { personal: true } },
     });
     await gate.reached;
     await env.DB.prepare("UPDATE sponsorships SET contact_email = ?, updated_at = datetime('now') WHERE id = ?")

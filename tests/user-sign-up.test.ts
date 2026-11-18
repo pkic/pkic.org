@@ -2,13 +2,15 @@ import "../functions/http-router";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "./helpers/app";
-import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
+import { createTestRateLimiter, deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 import { parseCapabilityToken } from "../functions/_lib/auth/capability-token";
 import { userAuthSessionResponseSchema } from "../assets/shared/schemas/user-auth";
 import { prepareAccountIdentityStatement } from "../functions/_lib/services/users";
 import { createMemberSession } from "./helpers/auth";
 import { insertOrganization, insertUser } from "./helpers/membership";
+import { redeemUserSignUpCapability } from "../functions/_lib/auth/user-sign-up";
+import type { DatabaseLike } from "../functions/_lib/types";
 
 /** Background work a request starts (outbox delivery); awaited so it never runs into the next test. */
 const background: Promise<unknown>[] = [];
@@ -260,5 +262,56 @@ describe("account sign-up", () => {
       { template_key: "user_sign_in_unavailable" },
     ]);
     expect(await queryAll(env.DB, "SELECT id FROM sessions")).toHaveLength(0);
+  });
+  it("refuses the second of two sign-up links for one address redeemed at the same time", async () => {
+    const email = "twice@gmail.com";
+    expect((await call("/api/v1/auth/sign-up", { email, unaffiliatedAttestation: true })).status).toBe(200);
+    const first = linkToken((await lastLink())!);
+    expect((await call("/api/v1/auth/sign-up", { email, unaffiliatedAttestation: true })).status).toBe(200);
+    const second = linkToken((await lastLink())!);
+    expect(second).not.toBe(first);
+
+    // The second redemption reads the address as unused, then the first commits before its batch does.
+    let raced = false;
+    const racingDb = new Proxy(env.DB, {
+      get(target, property) {
+        if (property !== "batch") return Reflect.get(target, property, target);
+        return async (statements: Parameters<DatabaseLike["batch"]>[0]) => {
+          if (!raced) {
+            raced = true;
+            expect((await call("/api/v1/auth/verify-link", { token: first })).status).toBe(200);
+          }
+          return target.batch(statements as never);
+        };
+      },
+    }) as unknown as DatabaseLike;
+    const refused = await redeemUserSignUpCapability(racingDb, {
+      token: second,
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+      sessionTtlHours: 1,
+    }).catch((error: unknown) => error);
+    expect(raced).toBe(true);
+    expect(refused).toMatchObject({ code: expect.stringMatching(/^MAGIC_LINK_(INVALID|USED)$/) });
+    expect(await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = ?", [email])).toHaveLength(1);
+  });
+  it("counts sign-up and sign-in link requests against one limit per address", async () => {
+    const limitedEnv = {
+      ...env,
+      EMAIL_RATE_LIMITER: createTestRateLimiter(2),
+      IP_RATE_LIMITER: createTestRateLimiter(20),
+    };
+    const request = (path: string) =>
+      app.fetch(
+        new Request(`https://app.test${path}`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.20" },
+          body: JSON.stringify({ email: "limited@gmail.com", unaffiliatedAttestation: true }),
+        }),
+        limitedEnv as never,
+        { passThroughOnException() {}, waitUntil: (work: Promise<unknown>) => void background.push(work) } as any,
+      );
+    expect((await request("/api/v1/auth/sign-up")).status).toBe(200);
+    expect((await request("/api/v1/auth/request-link")).status).toBe(200);
+    expect((await request("/api/v1/auth/sign-up")).status).toBe(429);
   });
 });

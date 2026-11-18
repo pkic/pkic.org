@@ -179,4 +179,42 @@ describe("account setup's organization step", () => {
     await recordPersonalAddressAnswer(env.DB, person.userId);
     expect((await authenticateWithPasskey(env, authenticator)).status).toBe(200);
   });
+  it("signs a passkey in when the work primary was retired by an ended representation", async () => {
+    const organizationId = await claimDomain("retired-work.example", "Former Employer");
+    const person = await signInJoinApplicant(env, "ray@retired-work.example");
+    const { authenticator } = await registerSyntheticPasskey(env, person.cookie.replace("pkic_session=", ""));
+    await env.DB.prepare(
+      `INSERT INTO identities (id, user_id, organization_id, source, invited_at, started_at, ended_at, created_at, updated_at)
+       VALUES (?, ?, ?, 'verified_domain', datetime('now'), datetime('now'), datetime('now'), datetime('now'), datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), person.userId, organizationId)
+      .run();
+
+    // The address no longer signs in, so it asks for no organization either.
+    const response = await authenticateWithPasskey(env, authenticator);
+    expect(response.status, await response.clone().text()).toBe(200);
+  });
+
+  it("opens the session without the organization when only a reviewer can add it", async () => {
+    const organizationId = await claimDomain("blocked.example", "Blocking Organization");
+    const person = await signInJoinApplicant(env, "bo@blocked.example");
+    await env.DB.prepare(
+      `INSERT INTO identities (id, user_id, organization_id, source, invited_at, ended_at, blocked_at, created_at, updated_at)
+       VALUES (?, ?, ?, 'verified_email', datetime('now'), datetime('now'), datetime('now'), datetime('now'), datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), person.userId, organizationId)
+      .run();
+    const token = await signInLink("bo@blocked.example");
+    const asked = accountOrganizationRequiredSchema.parse(await verify(token));
+    expect(asked.organizationRequired.personalAllowed).toBe(false);
+
+    const prepared = accountOrganizationRequiredSchema.parse(
+      await verify(token, { affiliation: { selection: { organizationId, jobTitle: "Engineer" } } }),
+    );
+    const established = userAuthEstablishedResponseSchema.parse(
+      await verify(token, { organization: { contextToken: prepared.organizationRequired.affiliation.contextToken! } }),
+    );
+    expect(established.identity.id).toBe(person.userId);
+    expect(established.actingIdentities.some((identity) => identity.organizationId === organizationId)).toBe(false);
+  });
 });

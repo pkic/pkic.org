@@ -11,6 +11,12 @@
  *
  * The personal answer is the existing "I am independent" record
  * (`affiliation_offer_dismissals` with no organization), not new storage.
+ *
+ * The step never locks a person out. An address that no longer signs in, such
+ * as a work address retired when its representation ended, asks nothing: it no
+ * longer speaks for the person, so a passkey signs in without it. And when the
+ * organization a claimed domain requires cannot be added without a reviewer,
+ * the session opens without it rather than refusing every time.
  */
 import { z } from "zod";
 import {
@@ -22,6 +28,7 @@ import type {
   AccountOrganizationRequired,
   accountOrganizationAffiliationRequestSchema,
 } from "../../../../assets/shared/schemas/account-organization";
+import { accountAddressSignsInSql } from "../../auth/email-sign-in-policy";
 import { prepareStateGuard } from "../../db/authorization-guard";
 import { batchFirst } from "../../db/pagination";
 import { mailboxKind, organizationDomainCandidates } from "../../email-domains/classification";
@@ -37,6 +44,13 @@ import { verifiedAffiliationPreview } from "./verified-affiliation-preview";
 import { prepareVerifiedAffiliationRead } from "./verified-affiliation-read";
 
 const CONTEXT_TYPE = "account-organization";
+/** Refusals of the affiliation planner that the person cannot resolve by choosing again. */
+const REVIEWER_DECIDES = new Set([
+  "IDENTITY_BLOCKED",
+  "IDENTITY_INVITATION_PENDING",
+  "ORGANIZATION_AFFILIATION_REVIEW_REQUIRED",
+  "ORGANIZATION_DOMAIN_IN_USE",
+]);
 const CONTEXT_TTL_SECONDS = 600;
 
 const contextSchema = z.object({
@@ -90,15 +104,19 @@ export async function readAccountOrganizationStep(
   const results = await db.batch([
     db
       .prepare(`SELECT
-        EXISTS (SELECT 1 FROM identities WHERE user_id=? AND organization_id IS NOT NULL
+        EXISTS (SELECT 1 FROM identities WHERE user_id=subject.id AND organization_id IS NOT NULL
           AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL) AS has_organization,
-        EXISTS (SELECT 1 FROM affiliation_offer_dismissals WHERE user_id=? AND organization_id IS NULL) AS said_personal,
-        EXISTS (${claimed.sql}) AS claimed`)
-      .bind(input.subject.userId, input.subject.userId, ...claimed.bindings),
+        EXISTS (SELECT 1 FROM affiliation_offer_dismissals WHERE user_id=subject.id AND organization_id IS NULL) AS said_personal,
+        EXISTS (${claimed.sql}) AS claimed,
+        (subject.id IS NULL OR ${accountAddressSignsInSql("subject.id", "subject.email")}) AS signs_in
+        FROM (SELECT ? AS id, ? AS email) subject`)
+      .bind(...claimed.bindings, input.subject.userId, input.email),
     ...read.statements,
   ]);
-  const facts = batchFirst<{ has_organization: number; said_personal: number; claimed: number }>(results[0]);
-  if (facts?.has_organization) return null;
+  const facts = batchFirst<{ has_organization: number; said_personal: number; claimed: number; signs_in: number }>(
+    results[0],
+  );
+  if (facts?.has_organization || !facts?.signs_in) return null;
   const personalAllowed = !facts?.claimed;
   if (personalAllowed && facts?.said_personal) return null;
   const { basis, address } = read.decode(results.slice(1));
@@ -244,19 +262,27 @@ export async function accountOrganizationStepStatements(
   const answer = input.input?.answer;
   // A personal answer on a domain an organization has claimed asks for the organization instead.
   const answerable = answer && !("personal" in answer && !step.personalAllowed);
-  if (answerable && userId)
-    return planAccountOrganizationAnswer(db, {
-      signingSecret: input.signingSecret,
-      userId,
-      email: input.email,
-      answer,
-      personalAllowed: step.personalAllowed,
-      at: input.verifiedAt,
-    });
-  return {
-    required: await accountOrganizationRequired(db, input.signingSecret, input.email, step, {
-      affiliation: input.input?.affiliation,
-      newAccount: input.subject.userId === null,
-    }),
-  };
+  try {
+    if (answerable && userId)
+      return await planAccountOrganizationAnswer(db, {
+        signingSecret: input.signingSecret,
+        userId,
+        email: input.email,
+        answer,
+        personalAllowed: step.personalAllowed,
+        at: input.verifiedAt,
+      });
+    return {
+      required: await accountOrganizationRequired(db, input.signingSecret, input.email, step, {
+        affiliation: input.input?.affiliation,
+        newAccount: input.subject.userId === null,
+      }),
+    };
+  } catch (error) {
+    // On a claimed domain there is no personal answer to fall back to: when the organization can only be
+    // added once a reviewer decides, the session opens without it, and the next sign-in asks again.
+    if (!step.personalAllowed && error instanceof AppError && REVIEWER_DECIDES.has(error.code))
+      return { statements: [] };
+    throw error;
+  }
 }

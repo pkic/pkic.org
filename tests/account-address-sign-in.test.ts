@@ -151,6 +151,64 @@ describe("account addresses after a representation ends", () => {
     expect(await outbox()).toEqual([{ template_key: "user_sign_in_unavailable", recipient_email: WORK_EMAIL }]);
   });
 
+  it("keeps a primary retired after the organization removes the claim that covered it", async () => {
+    const userId = await insertUser(env.DB, WORK_EMAIL);
+    const organizationId = await insertOrganization(env.DB, "Acme");
+    const identityId = crypto.randomUUID();
+    const at = nowIso();
+    await env.DB.batch([
+      env.DB.prepare("UPDATE users SET email_verified_at = ? WHERE id = ?").bind(at, userId),
+      env.DB.prepare(
+        "INSERT INTO organization_domain_claims (id, domain, organization_id, created_at, updated_at) VALUES (?, 'acme.example', ?, ?, ?)",
+      ).bind(crypto.randomUUID(), organizationId, at, at),
+      // Backed by the organization's claim, not by a domain proved on the identity itself.
+      env.DB.prepare(
+        `INSERT INTO identities (id, user_id, organization_id, source, invited_at, started_at, created_at, updated_at)
+         VALUES (?, ?, ?, 'verified_domain', ?, ?, ?, ?)`,
+      ).bind(identityId, userId, organizationId, at, at, at, at),
+    ]);
+    await addVerifiedAddress(userId, "ana@gmail.example");
+    await env.DB.prepare("UPDATE identities SET ended_at = ? WHERE id = ?").bind(nowIso(), identityId).run();
+    await env.DB.prepare("DELETE FROM organization_domain_claims WHERE organization_id = ?").bind(organizationId).run();
+
+    expect(await signInLink(WORK_EMAIL)).toBeNull();
+    expect(await signInLink("ana@gmail.example")).toMatchObject({ identity: { id: userId } });
+  });
+
+  it("ends, after the deploy, the open email sessions made through a primary that is now retired", async () => {
+    const { userId, identityId } = await workAccount();
+    await addVerifiedAddress(userId, "ana@gmail.example");
+    const at = nowIso();
+    const expires = new Date(Date.now() + 86_400_000).toISOString();
+    const session = (action: string) => {
+      const id = crypto.randomUUID();
+      return {
+        id,
+        statements: [
+          env.DB.prepare(
+            "INSERT INTO sessions (id, user_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?)",
+          ).bind(id, userId, crypto.randomUUID(), expires, at),
+          env.DB.prepare(
+            `INSERT INTO audit_log (id, actor_type, actor_id, action, entity_type, entity_id, created_at)
+             VALUES (?, 'user', ?, ?, 'identity_session', ?, ?)`,
+          ).bind(crypto.randomUUID(), userId, action, id, at),
+        ],
+      };
+    };
+    // Made before the deploy: no address marker on either.
+    const byLink = session("user_magic_link_verified");
+    const byPasskey = session("passkey_authenticated");
+    await env.DB.batch([...byLink.statements, ...byPasskey.statements]);
+    await env.DB.prepare("UPDATE identities SET ended_at = ? WHERE id = ?").bind(nowIso(), identityId).run();
+
+    const migration = env.TEST_MIGRATIONS.find((candidate) => candidate.name.startsWith("0049_"))!;
+    const revoke = migration.queries.find((query) => query.includes("UPDATE sessions"))!;
+    await env.DB.prepare(revoke).run();
+
+    const revoked = await queryAll<{ id: string }>(env.DB, "SELECT id FROM sessions WHERE revoked_at IS NOT NULL");
+    expect(revoked.map(({ id }) => id)).toEqual([byLink.id]);
+  });
+
   it("refuses ending your own representation when it would leave no way to sign in", async () => {
     const { userId, identityId, token } = await workAccount();
 
