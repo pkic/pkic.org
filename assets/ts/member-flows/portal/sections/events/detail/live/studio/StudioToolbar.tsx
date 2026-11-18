@@ -1,4 +1,4 @@
-import { IconHelp } from "../../../../../../../components/icons";
+import { IconHelp, IconPlus } from "../../../../../../../components/icons";
 import { Button } from "../../../../../../../ui/Button";
 import { buttonClasses } from "../../../../../../../ui/button-classes";
 import { StrokeIcon } from "../../../../../../../ui/MediaIcons";
@@ -54,7 +54,9 @@ export function StudioToolbar({
         <Menu
           variant="plain"
           label="Add panel"
-          triggerClass={buttonClasses({}, undefined)}
+          title="Add panel"
+          heading="Add panel"
+          triggerClass={buttonClasses({ icon: true }, undefined)}
           items={STUDIO_PANEL_TYPES.map((type) => ({
             id: type,
             label: type === "monitor" ? "Monitor (any output)" : STUDIO_PANEL_LABELS[type],
@@ -62,7 +64,7 @@ export function StudioToolbar({
             onSelect: () => change((current) => addStudioPanel(current, type, `${workspace}-${type}-${Date.now()}`)),
           }))}
         >
-          Add panel
+          <IconPlus />
         </Menu>
         <Button variant="ghost" onClick={reset}>
           Reset layout

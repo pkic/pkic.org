@@ -248,10 +248,10 @@ describe("the studio's switcher, session bar and phone layout", () => {
           ),
       );
     // With a menu open, Escape belongs to the menu.
-    void act(() => button(host, "Add panel").click());
+    void act(() => labeled(host, "Add panel").click());
     escape();
     expect(document.querySelector("dialog[open]")).toBeNull();
-    void act(() => button(host, "Add panel").click());
+    void act(() => labeled(host, "Add panel").click());
     escape();
     expect(document.querySelector("dialog")?.textContent).toContain("Leave full screen?");
     void act(() => button(document.querySelector("dialog")!, "Stay in full screen").click());

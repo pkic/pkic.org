@@ -126,8 +126,8 @@ export function LiveSessionDesk({
   const [broadcasting, setBroadcasting] = useState(false);
   const [lowerThirdSettings, setLowerThirdSettings] = useState(false);
   const [releaseTimes, setReleaseTimes] = useState(false);
-  // Where this operator's Transition goes: Program, or one of the room's screens.
-  const [takeTarget, setTakeTarget] = useState<LiveTakeTarget>("program");
+  // The output this operator's last take went to, for the spinner on its button.
+  const [takenTo, setTakenTo] = useState<LiveTakeTarget>("program");
   const runningBroadcast = useRef(false);
   const state = room.state;
   // Where the others were is unknown after a reconnect; they appear again as they move.
@@ -161,16 +161,17 @@ export function LiveSessionDesk({
     return true;
   };
   /** Program takes Preview through the room's Take; a screen is set to what Preview holds. */
-  const take = () => {
+  const take = (target: LiveTakeTarget = "program") => {
     if (!room.state) return;
-    if (takeTarget === "program") return void sendProgram({ type: "preview.take" });
+    setTakenTo(target);
+    if (target === "program") return void sendProgram({ type: "preview.take" });
     sendProgram({
       type: "aux.set",
-      output: takeTarget,
+      output: target,
       composition: liveCompositionInput(previewProjection(room.state).stage),
     });
   };
-  useTakeShortcut(take, live && !broadcasting);
+  useTakeShortcut(() => take("program"), live && !broadcasting);
   const phone = useStudioPhone();
   if (!state)
     return room.admissionRefusal ? (
@@ -186,13 +187,7 @@ export function LiveSessionDesk({
   const agenda = approvedAgenda ?? null;
   const preview = previewProjection(state);
   const transition = (
-    <TransitionControl
-      disabled={disabled}
-      transitioning={broadcasting}
-      target={takeTarget}
-      onTarget={setTakeTarget}
-      onTransition={take}
-    />
+    <TransitionControl disabled={disabled} transitioning={broadcasting ? takenTo : null} onTransition={take} />
   );
   const clearProgram = () => sendProgram({ type: "program.clear" });
   const empty = liveCompositionInput(EMPTY_LIVE_STAGE);
@@ -251,10 +246,8 @@ export function LiveSessionDesk({
           body: (
             <TransitionControl
               disabled={disabled}
-              transitioning={broadcasting}
+              transitioning={broadcasting ? takenTo : null}
               labeled={panel.labeled}
-              target={takeTarget}
-              onTarget={setTakeTarget}
               onTransition={take}
             />
           ),

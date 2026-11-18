@@ -1,35 +1,25 @@
 @layer components {
-  /* The Transition: its button in the middle of whatever holds it, its panel or the phone's switcher row. */
+  /* The Transition: its take buttons stacked in the middle of whatever holds them, its panel or the phone's switcher row. */
   .pk-studio-transition {
-    display: grid;
-    place-items: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: var(--pk-2);
     block-size: 100%;
   }
   /* A 44px target wherever it sits, desk or phone, solid in the tally color of the output it goes to. */
-  .pk-studio-transition__split {
+  .pk-studio-transition__take {
+    gap: var(--pk-1);
+    min-block-size: 2.75rem;
+    min-inline-size: 2.75rem;
     border-color: var(--tally-solid);
     border-style: var(--tally-line);
-  }
-  .pk-studio-transition__split > .pk-btn,
-  .pk-studio-transition__split .pk-studio-transition__target {
-    min-block-size: 2.75rem;
-    border: 0;
     background: var(--tally-solid);
     color: var(--pk-on-solid);
     font-family: var(--pk-font-mono);
     font-weight: 600;
   }
-  .pk-studio-transition__take {
-    gap: var(--pk-1);
-    min-inline-size: 2.75rem;
-  }
-  .pk-studio-transition__split .pk-studio-transition__target {
-    padding-inline: var(--pk-2);
-    border-inline-start: 1px solid color-mix(in srgb, var(--pk-on-solid) 35%, transparent);
-    border-radius: 0;
-  }
-  .pk-studio-transition__split > .pk-btn:hover:not(:disabled),
-  .pk-studio-transition__split .pk-studio-transition__target:hover {
+  .pk-studio-transition__take:hover:not(:disabled) {
     background: color-mix(in oklab, var(--tally-solid) 85%, var(--pk-live-shade));
   }
   /* The Undo after a clear, above the panels at the foot of the window, out of the way of the header. */

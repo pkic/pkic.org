@@ -443,30 +443,12 @@ export const studioOnScreenSections: PreviewSection[] = [
   {
     id: "studio-transition",
     title: "Transition to Program or to a screen",
-    note: "Red to Program by default; the menu beside it sends Preview to a screen instead, in that screen's color.",
+    note: "One take button per output, stacked, each in its tally color. Program is first and runs on Space. Labeled, the buttons spell out the output.",
     render: () => (
       <div class="pk-cluster">
-        <TransitionControl
-          disabled={false}
-          transitioning={false}
-          target="program"
-          onTarget={() => undefined}
-          onTransition={() => undefined}
-        />
-        <TransitionControl
-          disabled={false}
-          transitioning={false}
-          target="projector"
-          onTarget={() => undefined}
-          onTransition={() => undefined}
-        />
-        <TransitionControl
-          disabled={false}
-          transitioning={false}
-          target="stage-display"
-          onTarget={() => undefined}
-          onTransition={() => undefined}
-        />
+        <TransitionControl disabled={false} transitioning={null} onTransition={() => undefined} />
+        <TransitionControl disabled={false} transitioning="projector" labeled onTransition={() => undefined} />
+        <TransitionControl disabled transitioning={null} onTransition={() => undefined} />
       </div>
     ),
   },

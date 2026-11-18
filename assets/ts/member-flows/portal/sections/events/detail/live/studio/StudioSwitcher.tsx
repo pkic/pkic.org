@@ -7,8 +7,6 @@ import {
   type LiveTakeTarget,
 } from "../../../../../../../../shared/live-room-outputs";
 import { Button } from "../../../../../../../ui/Button";
-import { buttonClasses } from "../../../../../../../ui/button-classes";
-import { Menu } from "../../../../../../../ui/Menu";
 import { StrokeIcon } from "../../../../../../../ui/MediaIcons";
 import { Toast } from "../../../../../../../ui/Toast";
 import "../live-tally.css";
@@ -27,63 +25,50 @@ const outputName = (target: LiveTakeTarget) =>
   target === "program" ? LIVE_PROGRAM_OUTPUT_DETAILS : LIVE_AUX_OUTPUT_DETAILS[target];
 
 /**
- * The switcher's Transition: an arrow and the output it goes to, in that
- * output's tally color: Program by default, or one of the room's screens,
- * chosen in the menu beside it. In its own small panel on the desk and
- * between the two pictures on a phone. Labeled, it also says its name.
+ * The switcher's Transition: one take button per output, stacked, each an
+ * arrow and that output's code in its tally color. Program first; Space is
+ * its shortcut. In its own small panel on the desk and between the two
+ * pictures on a phone. Labeled, the buttons say the output's full name.
  */
 export function TransitionControl({
   disabled,
   transitioning,
   labeled = false,
-  target,
-  onTarget,
   onTransition,
 }: {
   disabled: boolean;
-  transitioning: boolean;
+  /** The output a take is on its way to, while it is. */
+  transitioning: LiveTakeTarget | null;
   labeled?: boolean;
-  target: LiveTakeTarget;
-  onTarget: (target: LiveTakeTarget) => void;
-  onTransition: () => void;
+  onTransition: (target: LiveTakeTarget) => void;
 }) {
-  const details = outputName(target);
-  const hint = target === "program" ? TRANSITION_HINT : SCREEN_TRANSITION_HINT(details.label.toLowerCase());
   return (
     <span class="pk-studio-transition">
-      <span class="pk-segmented pk-studio-transition__split" data-tally={target}>
-        <Button
-          class="pk-studio-transition__take"
-          disabled={disabled}
-          loading={transitioning}
-          aria-label={`Transition to ${details.label}`}
-          title={`${hint} Shortcut: ${TAKE_SHORTCUT}.`}
-          aria-keyshortcuts={TAKE_SHORTCUT}
-          onClick={onTransition}
-        >
-          <StrokeIcon stroke-width="2">
-            <path d="M6 3l5 5-5 5" />
-          </StrokeIcon>
-          {labeled ? "Transition to " : null}
-          {details.short}
-        </Button>
-        <Menu
-          variant="plain"
-          align="end"
-          label="Transition to"
-          title="Choose where Transition goes"
-          triggerClass={buttonClasses({}, "pk-studio-transition__target")}
-          heading="Transition to"
-          items={LIVE_TAKE_TARGETS.map((output) => ({
-            id: output,
-            label: outputName(output).label,
-            checked: output === target,
-            onSelect: () => onTarget(output),
-          }))}
-        >
-          <span aria-hidden="true">▾</span>
-        </Menu>
-      </span>
+      {LIVE_TAKE_TARGETS.map((target) => {
+        const details = outputName(target);
+        const program = target === "program";
+        const hint = program
+          ? `${TRANSITION_HINT} Shortcut: ${TAKE_SHORTCUT}.`
+          : SCREEN_TRANSITION_HINT(details.label.toLowerCase());
+        return (
+          <Button
+            key={target}
+            class="pk-studio-transition__take"
+            data-tally={target}
+            disabled={disabled}
+            loading={transitioning === target}
+            aria-label={`Transition to ${details.label}`}
+            title={hint}
+            aria-keyshortcuts={program ? TAKE_SHORTCUT : undefined}
+            onClick={() => onTransition(target)}
+          >
+            <StrokeIcon stroke-width="2">
+              <path d="M6 3l5 5-5 5" />
+            </StrokeIcon>
+            {labeled ? details.label : details.short}
+          </Button>
+        );
+      })}
     </span>
   );
 }
