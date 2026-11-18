@@ -207,6 +207,54 @@ it("does not show Program as pressed while another session is on air, and puts t
   expect(sendProgram).toHaveBeenCalledWith({ type: "stage.lowerThird", creditKey: credit.key, motion: "animated" });
 });
 
+it("tints the row in Program's color while on air, Preview as well or not, and Preview's only in Preview alone", async () => {
+  const state = roomState();
+  const credit = state.session.credits[0]!;
+  const band = () =>
+    [...host!.querySelectorAll(".pk-live-person .pk-live-tally-bands > [data-tally]")].map((edge) =>
+      edge.getAttribute("data-tally"),
+    );
+  const draw = () => act(() => render(<LiveSpeakerCards targets={liveTargets(state)} />, host!));
+  host = document.body.appendChild(document.createElement("div"));
+  state.preview = { ...state.preview, lowerThird: credit };
+  await draw();
+  expect(band()).toEqual(["preview"]);
+  state.stage = { ...state.stage, lowerThird: credit };
+  await draw();
+  expect(band()).toEqual(["program"]);
+});
+
+it("names every room screen a graphic was put on by its code in that screen's color", async () => {
+  const state = roomState();
+  const credit = state.session.credits[0]!;
+  host = document.body.appendChild(document.createElement("div"));
+  await act(() => render(<LiveSpeakerCards targets={liveTargets(state)} />, host!));
+  expect(host.querySelector(".pk-live-screen-tag")).toBeNull();
+  state.outputs = { ...state.outputs, projector: { ...EMPTY_LIVE_AUX_COMPOSITION, lowerThird: credit } };
+  await act(() => render(<LiveSpeakerCards targets={liveTargets(state)} />, host!));
+  const tags = [...host.querySelectorAll<HTMLElement>(".pk-live-person .pk-live-screen-tag")];
+  expect(tags.map((tag) => [tag.textContent, tag.getAttribute("data-tally")])).toEqual([["PRJ", "projector"]]);
+  expect(tags[0]!.getAttribute("title")).toMatch(/^On Projector\n/);
+});
+
+it("shows a press to Program as working at once and sends it once until the room answers", async () => {
+  const state = roomState();
+  const credit = state.session.credits[0]!;
+  const sendProgram = vi.fn((_message: LiveRoomClientMessage) => true);
+  host = document.body.appendChild(document.createElement("div"));
+  await act(() => render(<LiveSpeakerCards targets={liveTargets(state, { sendProgram })} />, host!));
+  const program = () => host!.querySelector<HTMLButtonElement>(`button[aria-label="Show ${credit.name} on air"]`)!;
+  await act(() => program().click());
+  expect(program().getAttribute("aria-busy")).toBe("true");
+  await act(() => program().click());
+  expect(sendProgram.mock.calls.filter(([message]) => message.type === "stage.lowerThird")).toHaveLength(1);
+  state.stage = { ...state.stage, lowerThird: credit };
+  await act(() => render(<LiveSpeakerCards targets={liveTargets(state, { sendProgram })} />, host!));
+  await act(async () => undefined);
+  expect(program().getAttribute("aria-busy")).toBeNull();
+  expect(program().getAttribute("aria-pressed")).toBe("true");
+});
+
 function typeInto(input: HTMLInputElement, value: string) {
   input.value = value;
   input.dispatchEvent(new Event("input", { bubbles: true }));

@@ -1,6 +1,4 @@
 import { updateLiveTimerGraphics } from "../../../../../../../shared/live-timer-policy";
-import { liveOverlayCoveredBy } from "../../../../../../../shared/live-overlay-cover";
-import { resolveLiveOverlayLayout } from "../../../../../../../shared/live-overlay-layout-presets";
 import { liveRoomOutputs, liveStudioOutputs, type LiveAuxOutput } from "../../../../../../../shared/live-room-outputs";
 import { liveOutputComposition } from "../../../../../../../shared/schemas/live-session-stage";
 import type { LivePollPresentation } from "../../../../../../../shared/schemas/live-session-poll";
@@ -19,6 +17,7 @@ import type {
   LiveTopQuestionsConfig,
 } from "../../../../../../../shared/schemas/live-session-on-screen";
 import type { LiveRoomState } from "../../../../../../live-session/live-room-state";
+import { liveLayerUnseen } from "./live-layer-unseen";
 import { liveCompositionInput, previewLiveStage, takeLiveStage } from "./live-stage-preview";
 
 type Send = (message: LiveRoomClientMessage) => boolean;
@@ -191,18 +190,16 @@ export function livePreviewToggle(state: LiveRoomState, layer: LiveLayer): LiveR
 /** Where a graphic is now: Preview, Program and each auxiliary output. */
 export function liveLayerTargets(targets: LiveTargets, layer: LiveLayer) {
   const { state, programActive } = targets;
+  const preview = liveLayerShown(state.preview, layer);
   const program = programActive && liveLayerShown(state.stage, layer);
+  const drawn = layer.kind === "chatFeed" ? "chat" : layer.kind;
   return {
-    preview: liveLayerShown(state.preview, layer),
+    preview,
     program,
-    /** The board that hides it on air in Program's scene, the one a source draws unless it names another. */
-    coveredBy: program
-      ? liveOverlayCoveredBy(
-          state.stage,
-          resolveLiveOverlayLayout(state.overlayLayouts, state.stage.scene),
-          layer.kind === "chatFeed" ? "chat" : layer.kind,
-        )
-      : null,
+    /** Why Preview holds it but would not show it: a board over it, or a scene without it. */
+    previewUnseen: preview ? liveLayerUnseen(state, state.preview, drawn) : null,
+    /** Why it is on air but nobody sees it, in Program's scene, the one a source draws unless it names another. */
+    programUnseen: program ? liveLayerUnseen(state, state.stage, drawn) : null,
     aux: (output: LiveAuxOutput) =>
       programActive && liveLayerShown(liveOutputComposition(state.outputs, output), layer),
   };

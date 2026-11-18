@@ -165,6 +165,10 @@
     background: var(--pk-stage-live);
     color: var(--pk-stage-live-ink);
   }
+  .pk-live-stage-display__tag[data-tone="next"] {
+    background: var(--pk-stage-next);
+    color: var(--pk-stage-next-ink);
+  }
   .pk-live-stage-display__question-text {
     display: -webkit-box;
     margin: 0;
@@ -193,17 +197,21 @@
     margin: 0;
     min-inline-size: 0;
   }
+  /* Under the question being answered, the next one sits apart behind a rule, so the two never read as one. */
+  .pk-live-stage-display__question-text + .pk-live-stage-display__next {
+    padding-block-start: 32px;
+    border-block-start: 4px solid var(--pk-stage-rule);
+  }
+  /* Beside its tag and votes, the next question takes two lines before it gives way. */
   .pk-live-stage-display__next-text {
+    display: -webkit-box;
     flex: 1 1 auto;
     min-inline-size: 0;
     overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-  .pk-live-stage-display__next-label {
-    flex: none;
-    color: var(--pk-stage-ink-muted);
-    font-weight: 700;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
   }
   .pk-live-stage-display__votes {
     flex: none;

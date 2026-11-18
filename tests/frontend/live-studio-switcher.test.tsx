@@ -160,8 +160,9 @@ describe("the studio's switcher, session bar and phone layout", () => {
     space(host.querySelector("button")!);
     space(panel(host, "Message to speaker").querySelector("input[name=text]")!);
     expect(commands(live)).toHaveLength(1);
-    expect(take(host).getAttribute("title")).toBe(
-      "Replace Program with Preview. This changes the overlay output, not the stream. Shortcut: Space.",
+    // The studio shows the hint as its own tooltip, so it holds it instead of the browser's title.
+    expect(take(host).dataset.tooltip).toBe(
+      "Transition to Program\nReplace Program with Preview. This changes the overlay output, not the stream. Shortcut: Space.",
     );
   });
 

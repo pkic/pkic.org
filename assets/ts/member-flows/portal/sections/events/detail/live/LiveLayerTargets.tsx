@@ -1,14 +1,16 @@
-import { LIVE_OVERLAY_ELEMENT_LABELS } from "../../../../../../../shared/schemas/live-overlay-layout";
+import { LiveScreenTags, liveScreens } from "./LiveRowMenu";
 import { LiveTallyBands } from "./LiveTallyBands";
 import { OutputTargetControl } from "./OutputTargetControl";
+import { useLiveTogglePending } from "./live-toggle-pending";
 import { liveLayerTargets, sendLayerToggle, type LiveLayer, type LiveTargets } from "./live-output-targets";
 import { livePresenceItem, useLivePresence } from "./presence/live-presence";
 import { LivePresenceTag } from "./presence/LivePresenceTag";
 
 /**
  * The output control for one graphic of this room: Preview and Program,
- * their tally edge on its row, and which other operators are on it. The
- * room's screens are in the row's menu (LiveRowMenu). An integrated control
+ * their tally edge on its row, the codes of the room's screens it was put
+ * on, and which other operators are on it. The screens' switches are in the
+ * row's menu (LiveRowMenu). An integrated control
  * leaves the operators' chips to the card it sits on.
  */
 export function LiveLayerTargets({
@@ -26,11 +28,14 @@ export function LiveLayerTargets({
   disabled?: boolean;
 }) {
   const where = liveLayerTargets(targets, layer);
+  const screens = liveScreens(targets, layer);
+  const toggle = useLiveTogglePending(where);
   const item = livePresenceItem(layer);
   const marks = useLivePresence().filter((mark) => mark.focus?.item === item);
   return (
     <>
       {integrated ? null : <LivePresenceTag marks={marks} />}
+      <LiveScreenTags screens={screens} />
       {/* The row this control sits in carries the Program and Preview edge. */}
       <LiveTallyBands where={where} />
       <OutputTargetControl
@@ -40,9 +45,11 @@ export function LiveLayerTargets({
         presence={marks.map((mark) => ({ target: mark.focus?.target ?? null, color: mark.color }))}
         preview={where.preview}
         program={where.program}
-        coveredBy={where.coveredBy ? LIVE_OVERLAY_ELEMENT_LABELS[where.coveredBy] : null}
+        previewUnseen={where.previewUnseen}
+        programUnseen={where.programUnseen}
         disabled={targets.disabled || disabled}
-        onToggle={(destination) => sendLayerToggle(targets, layer, destination)}
+        pending={toggle.pending}
+        onToggle={(destination) => toggle.press(destination, () => sendLayerToggle(targets, layer, destination))}
       />
     </>
   );

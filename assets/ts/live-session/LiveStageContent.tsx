@@ -6,7 +6,7 @@ import { useNumericCssProperties } from "../hooks/useNumericCssProperties";
 import { LiveScreenText } from "./LiveScreenText";
 
 /** A tag before a line: red while on air, green for what is next. */
-function StageTag({ tone, children }: { tone: "live"; children: string }) {
+function StageTag({ tone, children }: { tone: "live" | "next"; children: string }) {
   return (
     <span class="pk-live-stage-display__tag" data-tone={tone}>
       {children}
@@ -83,7 +83,7 @@ export function LiveStageContent({ content }: { content: Content }) {
       ) : null}
       {next ? (
         <p class="pk-live-stage-display__next" data-leads={question ? undefined : ""}>
-          <span class="pk-live-stage-display__next-label">Next question</span>
+          <StageTag tone="next">Next question</StageTag>
           <span class="pk-live-stage-display__next-text" data-fit={liveQuestionFit(next.question.text)}>
             <LiveScreenText text={next.question.text} />
           </span>

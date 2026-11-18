@@ -186,6 +186,33 @@ export function LiveScreenTrigger({ screens }: { screens: LiveScreens }) {
 }
 
 /**
+ * The room's screens a graphic was put on, by their codes in their tally
+ * colors beside PVW and PGM, so a row says at a glance that the projector
+ * shows it. A screen that shows it only by following Program keeps its ring
+ * on the menu.
+ */
+export function LiveScreenTags({ screens }: { screens: LiveScreens }) {
+  if (!screens.on.length) return null;
+  return (
+    <span class="pk-live-screen-tags">
+      {screens.on.map((output) => {
+        const { label, short } = liveOutputDetails(screens.outputs, output);
+        return (
+          <abbr
+            key={output}
+            class="pk-live-screen-tag"
+            {...liveTallyAttributes(screens.outputs, output)}
+            title={`On ${label}\nTake it off from the row's ⋯ menu.`}
+          >
+            {short}
+          </abbr>
+        );
+      })}
+    </span>
+  );
+}
+
+/**
  * A studio row's menu for a graphic: the room's screens as switches at the
  * top, so a row keeps only PVW and PGM in line, then the row's own actions.
  * The trigger carries a dot for each screen the graphic is on.

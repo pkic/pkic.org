@@ -341,13 +341,13 @@ function outputTag(output: StudioOutput, context: MonitorContext): { text: strin
   return { text: name, hint: `Scene on ${details.label}: ${name}` };
 }
 
-/** The output's tally tag and its switcher abbreviation, PVW or PGM; the full name on hover. */
+/** The output's tally tag and its switcher abbreviation, PVW or PGM; its full name and purpose on hover. */
 function OutputName({ output, room }: { output: StudioOutput; room: readonly LiveRoomOutput[] }) {
   const details = studioOutputDetails(room, output);
   return (
     <span class="pk-studio-monitor__name" {...liveTallyAttributes(room, output)}>
       <span class="pk-studio-monitor__dot" aria-hidden="true" />
-      <abbr class="pk-studio-monitor__label" title={details.label}>
+      <abbr class="pk-studio-monitor__label" title={`${details.short} · ${details.label}\n${details.purpose}`}>
         {details.short}
       </abbr>
     </span>
@@ -397,12 +397,11 @@ function MonitorScreen({ output, context }: { output: StudioOutput; context: Mon
  */
 function MonitorTile({ output, context }: { output: StudioOutput; context: MonitorContext }) {
   const { room } = context;
-  const details = studioOutputDetails(room, output);
   const tag = outputTag(output, context);
   return (
     <figure class="pk-studio-monitor__tile" {...liveTallyAttributes(room, output)}>
       <figcaption class="pk-studio-monitor__caption">
-        <span class="pk-studio-monitor__output" title={details.purpose}>
+        <span class="pk-studio-monitor__output">
           <OutputName output={output} room={room} />
         </span>
         <LayoutPicker output={output} context={context} />

@@ -1,5 +1,6 @@
 import type { ComponentChildren } from "preact";
 import { Menu, type MenuItem } from "../../../../../../ui/Menu";
+import { LiveLayerDetail, liveLayerUnseenOf } from "./LiveLayerDetail";
 import { LiveLayerTargets } from "./LiveLayerTargets";
 import { LiveRowMenu } from "./LiveRowMenu";
 import type { LiveLayer, LiveTargets } from "./live-output-targets";
@@ -15,6 +16,7 @@ export function LiveGraphicRow({
   detail,
   outputs,
   settings,
+  unseen,
   children,
 }: {
   name: string;
@@ -22,6 +24,8 @@ export function LiveGraphicRow({
   /** Where the graphic goes; a graphic with nothing to show yet has none. */
   outputs?: { targets: LiveTargets; layer: LiveLayer; subject: string };
   settings?: { label: string; onOpen: () => void; disabled?: boolean };
+  /** Why nobody sees it where it is held, when the row has no outputs to read it from, as in the gallery. */
+  unseen?: string;
   children?: ComponentChildren;
 }) {
   const items: MenuItem[] = settings
@@ -31,9 +35,11 @@ export function LiveGraphicRow({
     <div class="pk-live-graphic-row" role="group" aria-label={`${name} controls`}>
       <div class="pk-live-graphic-row__name">
         <strong>{name}</strong>
-        <span class="pk-live-graphic-row__detail" title={detail}>
-          {detail}
-        </span>
+        <LiveLayerDetail
+          class="pk-live-graphic-row__detail"
+          detail={detail}
+          unseen={unseen ?? liveLayerUnseenOf(outputs)}
+        />
       </div>
       {outputs ? <LiveLayerTargets targets={outputs.targets} subject={outputs.subject} layer={outputs.layer} /> : null}
       {children}

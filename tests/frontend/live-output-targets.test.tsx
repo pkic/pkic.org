@@ -6,7 +6,14 @@ import { EMPTY_LIVE_AUX_COMPOSITION, liveRoomClientMessageSchema } from "../../a
 import { defaultLiveTimerGraphic } from "../../assets/shared/schemas/live-session-timer";
 import { applyLiveRoomMessage } from "../../assets/ts/live-session/live-room-state";
 import { OutputTargetControl } from "../../assets/ts/member-flows/portal/sections/events/detail/live/OutputTargetControl";
-import { liveAuxToggle } from "../../assets/ts/member-flows/portal/sections/events/detail/live/live-output-targets";
+import {
+  liveAuxToggle,
+  liveLayerTargets,
+} from "../../assets/ts/member-flows/portal/sections/events/detail/live/live-output-targets";
+import { liveLayerUnseenLine } from "../../assets/ts/member-flows/portal/sections/events/detail/live/live-layer-unseen";
+import { LiveGraphicRow } from "../../assets/ts/member-flows/portal/sections/events/detail/live/LiveGraphicRow";
+import { LIVE_OVERLAY_STANDARD_ELEMENTS } from "../../assets/shared/live-overlay-layout-presets";
+import { LIVE_OVERLAY_ELEMENTS } from "../../assets/shared/schemas/live-overlay-layout";
 import { livePreviewDifferences } from "../../assets/ts/member-flows/portal/sections/events/detail/live/live-stage-preview";
 import { liveScreens } from "../../assets/ts/member-flows/portal/sections/events/detail/live/LiveRowMenu";
 import { liveStageQuestionSchema } from "../../assets/shared/schemas/live-session-room";
@@ -44,9 +51,97 @@ describe("output target control", () => {
     expect(host.querySelectorAll("button")).toHaveLength(2);
     void act(() => program.click());
     expect(onToggle.mock.calls).toEqual([["program"]]);
-    // Each says what it does: Preview is an optional check, Program goes on air at once.
-    expect(preview.title).toMatch(/^In Preview\./);
-    expect(program.title).toMatch(/^Program: put it on air now/);
+    // Each leads with where the graphic is, then says what a click does: Preview is an optional check.
+    expect(preview.title).toMatch(/^In Preview\nTransition puts it on air/);
+    expect(program.title).toMatch(/^Off air\nClick to put it on air now/);
+    expect(host.querySelector("[data-unseen]")).toBeNull();
+  });
+});
+
+describe("graphics held but unseen", () => {
+  const question = liveStageQuestionSchema.parse({ id: LIVE_QUESTION, text: "How do we migrate?", authorName: null });
+  const panel = { kind: "panelists", panelists: { layout: "panel" } } as const;
+  const elements = LIVE_OVERLAY_STANDARD_ELEMENTS;
+  /** A scene with the panel under a question of the same box, and one that leaves the panel out. */
+  const scenes = [
+    {
+      slug: "stacked",
+      name: "Stacked",
+      elements: {
+        ...elements,
+        panelists: { ...elements.question, visible: true },
+        question: { ...elements.question, visible: true },
+      },
+    },
+    {
+      slug: "close-up",
+      name: "Close-up",
+      elements: { ...elements, panelists: { ...elements.panelists, visible: false } },
+    },
+    {
+      slug: "curtain",
+      name: "Curtain",
+      elements: {
+        ...elements,
+        panelists: { ...elements.background, visible: true },
+        background: { ...elements.background, visible: true, layer: LIVE_OVERLAY_ELEMENTS.length - 1 },
+      },
+    },
+  ];
+  function heldState() {
+    const state = roomState();
+    state.overlayLayouts = scenes;
+    state.stage = { ...state.stage, scene: "stacked", panelists: { layout: "panel" }, question };
+    state.preview = { ...state.preview, scene: "close-up", panelists: { layout: "panel" } };
+    return state;
+  }
+
+  it("says why nobody sees a graphic on Program and in Preview: a board over it, or a scene without it", () => {
+    const where = liveLayerTargets(liveTargets(heldState()), panel);
+    expect(where).toMatchObject({
+      program: true,
+      preview: true,
+      programUnseen: { reason: "covered", by: "Question" },
+      previewUnseen: { reason: "scene", scene: "Close-up" },
+    });
+    expect(liveLayerUnseenLine(where)).toBe("On air · covered by Question");
+    expect(liveLayerUnseenLine({ ...where, programUnseen: null })).toBe("In Preview · not in this scene");
+    // With the question off air the panel shows; off air there is nothing to be unseen.
+    const shown = heldState();
+    shown.stage = { ...shown.stage, question: null };
+    expect(liveLayerTargets(liveTargets(shown), panel).programUnseen).toBeNull();
+    expect(liveLayerTargets(liveTargets(heldState(), { programActive: false }), panel).programUnseen).toBeNull();
+  });
+
+  it("counts the background as covering what it is moved in front of", () => {
+    const state = heldState();
+    state.stage = { ...state.stage, scene: "curtain", question: null };
+    expect(liveLayerTargets(liveTargets(state), panel).programUnseen).toEqual({ reason: "covered", by: "Background" });
+  });
+
+  it("hatches PVW and PGM and leads the row's summary with the words while it is unseen", () => {
+    host = document.body.appendChild(document.createElement("div"));
+    void act(() =>
+      render(
+        <LiveGraphicRow
+          name="Panel"
+          detail="Panel layout"
+          outputs={{ targets: liveTargets(heldState()), layer: panel, subject: "panel" }}
+        />,
+        host!,
+      ),
+    );
+    expect(host.querySelector(".pk-live-graphic-row__detail")?.textContent).toBe(
+      "On air · covered by Question · Panel layout",
+    );
+    expect(host.querySelector(".pk-live-unseen")?.textContent).toBe("On air · covered by Question");
+    const preview = host.querySelector<HTMLButtonElement>('[aria-label="Show panel in preview"]')!;
+    const program = host.querySelector<HTMLButtonElement>('[aria-label="Show panel on air"]')!;
+    expect([preview.hasAttribute("data-unseen"), program.hasAttribute("data-unseen")]).toEqual([true, true]);
+    expect(program.title).toBe(
+      "On air · covered by Question\nQuestion is drawn over it, so nobody sees it. Take Question off air to show it, or click to take this off air.",
+    );
+    expect(preview.title).toMatch(/^In Preview · not in this scene\nThe Close-up scene does not show it/);
   });
 });
 

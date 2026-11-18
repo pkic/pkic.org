@@ -8,18 +8,17 @@ export interface LiveTallyWhere {
 }
 
 /**
- * The leading edge of a studio row in Program red or Preview green, both
- * side by side when the graphic is on both. The room's screens show as dots
- * on the row's menu instead.
+ * The leading edge of a studio row in the color of where the graphic is:
+ * Program red while it is on air, on Preview as well or not, and Preview
+ * green only while it is in Preview alone. The room's screens show as their
+ * codes beside PVW and PGM instead.
  */
 export function LiveTallyBands({ where }: { where: LiveTallyWhere }) {
-  const on = [...(where.program ? (["program"] as const) : []), ...(where.preview ? (["preview"] as const) : [])];
-  if (!on.length) return null;
+  const on = where.program ? "program" : where.preview ? "preview" : null;
+  if (!on) return null;
   return (
     <span class="pk-live-tally-bands" aria-hidden="true">
-      {on.map((output) => (
-        <span key={output} data-tally={output} />
-      ))}
+      <span data-tally={on} />
     </span>
   );
 }

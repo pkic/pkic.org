@@ -14,8 +14,6 @@ import { LIVE_OVERLAY_DEFAULT_POSITIONS } from "../../../shared/live-overlay-lay
 import { OverlayLayoutEditor } from "../../member-flows/portal/sections/events/detail/settings/live-layouts/OverlayLayoutEditor";
 import { LiveReactionBar } from "../../live-session/LiveReactionBar";
 import type { LiveRoomState } from "../../live-session/live-room-state";
-import { OutputTargetControl } from "../../member-flows/portal/sections/events/detail/live/OutputTargetControl";
-import { TransitionControl } from "../../member-flows/portal/sections/events/detail/live/studio/StudioSwitcher";
 import { LiveSpeakerCards } from "../../member-flows/portal/sections/events/detail/live/LiveSpeakerCards";
 import { GraphicsPanel } from "../../member-flows/portal/sections/events/detail/live/studio/GraphicsPanel";
 import { monitorPanelView } from "../../member-flows/portal/sections/events/detail/live/studio/MonitorPanel";
@@ -28,7 +26,6 @@ import { DialogSpecimen } from "./sections-event-screens-staff";
 import { LiveOverlayGraphicsDialog } from "../../member-flows/portal/sections/events/detail/live/LiveOverlayGraphicsDialog";
 import { liveOverlayAddress } from "../../live-session/live-overlay-address";
 import {
-  GALLERY_ROOM_SCREENS,
   LivestreamOverlay,
   presetWith,
   ProjectorScreen,
@@ -37,7 +34,6 @@ import {
   ROOM_WITH_SCREENS,
   roomWith,
 } from "./studio-on-screen-fixtures";
-import { DEFAULT_LIVE_ROOM_OUTPUTS } from "../../../shared/schemas/live-room-output-setup";
 
 const noCommand = () => undefined;
 const noHandlers = {
@@ -520,65 +516,6 @@ export const studioOnScreenSections: PreviewSection[] = [
           />
         )}
       />
-    ),
-  },
-  {
-    id: "studio-output-target-covered",
-    title: "On air, but covered",
-    note: "PGM stays lit while a graphic is on air; hatched when a full-screen board, such as the question, hides it. Its tooltip says which board.",
-    render: () => (
-      <div class="pk-cluster">
-        <OutputTargetControl
-          subject="Up next"
-          preview={false}
-          program={false}
-          disabled={false}
-          onToggle={() => undefined}
-        />
-        <OutputTargetControl subject="Up next" preview program disabled={false} onToggle={() => undefined} />
-        <OutputTargetControl
-          subject="Up next"
-          preview={false}
-          program
-          coveredBy="Question"
-          disabled={false}
-          onToggle={() => undefined}
-        />
-      </div>
-    ),
-  },
-  {
-    id: "studio-transition",
-    title: "Transition to Program or to a screen",
-    note: "One take button per screen, stacked, each in its tally color. Program is first and runs on Space. A screen that follows Program takes a shot too and keeps Program's graphics where the shot has none. Labeled, the buttons spell out the screen.",
-    render: () => (
-      <div class="pk-cluster">
-        <TransitionControl
-          outputs={GALLERY_ROOM_SCREENS}
-          disabled={false}
-          transitioning={null}
-          onTransition={() => undefined}
-        />
-        <TransitionControl
-          outputs={GALLERY_ROOM_SCREENS}
-          disabled={false}
-          transitioning="foy"
-          labeled
-          onTransition={() => undefined}
-        />
-        <TransitionControl
-          outputs={GALLERY_ROOM_SCREENS}
-          disabled
-          transitioning={null}
-          onTransition={() => undefined}
-        />
-        <TransitionControl
-          outputs={DEFAULT_LIVE_ROOM_OUTPUTS}
-          disabled={false}
-          transitioning={null}
-          onTransition={() => undefined}
-        />
-      </div>
     ),
   },
   {

@@ -7,6 +7,8 @@ import {
   type LiveTakeTarget,
 } from "../../../../../../../../shared/live-room-outputs";
 import type { LiveRoomOutput } from "../../../../../../../../shared/schemas/live-room-output-setup";
+import { liveScreenSyncs } from "../../../../../../../../shared/live-screen-sync";
+import type { LiveScreenSync } from "../../../../../../../../shared/schemas/live-screen-sync";
 import { Button } from "../../../../../../../ui/Button";
 import { StrokeIcon } from "../../../../../../../ui/MediaIcons";
 import { Toast } from "../../../../../../../ui/Toast";
@@ -20,8 +22,16 @@ export const TAKE_SHORTCUT = "Space";
 /** What the Transition does, said on hover wherever it appears. */
 export const TRANSITION_HINT = "Replace Program with Preview. This changes the overlay output, not the stream.";
 
-/** What a Transition to a screen does: the screen shows Preview; Program stays as it is. */
-const SCREEN_TRANSITION_HINT = (screen: string) => `Show Preview on ${screen}. Program stays as it is.`;
+/**
+ * What a Transition to a screen does, on hover: its name, then what changes.
+ * A screen that follows Program takes Preview's scene and its own graphics,
+ * and keeps taking the question, the poll and the timers from Program.
+ */
+function screenTransitionHint(screen: string, following: boolean): string {
+  return following
+    ? `Transition to ${screen}\nShow Preview's scene on ${screen}. Its question and timer stay Program's.`
+    : `Transition to ${screen}\nShow Preview on ${screen}. Program stays as it is.`;
+}
 
 /**
  * The switcher's Transition: one take button per output, stacked, each an arrow and that output's code in its tally
@@ -34,10 +44,13 @@ export function TransitionControl({
   disabled,
   transitioning,
   labeled = false,
+  screenSync = null,
   onTransition,
 }: {
   /** The room's outputs; each one gets a button after Program's. */
   outputs: readonly LiveRoomOutput[];
+  /** Which screens follow Program now, so a take to one says what it keeps; unknown in the gallery. */
+  screenSync?: LiveScreenSync | null;
   disabled: boolean;
   /** The output a take is on its way to, while it is. */
   transitioning: LiveTakeTarget | null;
@@ -49,7 +62,9 @@ export function TransitionControl({
       {liveTakeTargets(outputs).map((target) => {
         const program = target === "program";
         const details = program ? LIVE_PROGRAM_OUTPUT_DETAILS : liveOutputDetails(outputs, target);
-        const hint = program ? `${TRANSITION_HINT} Shortcut: ${TAKE_SHORTCUT}.` : SCREEN_TRANSITION_HINT(details.label);
+        const hint = program
+          ? `Transition to ${details.label}\n${TRANSITION_HINT} Shortcut: ${TAKE_SHORTCUT}.`
+          : screenTransitionHint(details.label, screenSync !== null && liveScreenSyncs(screenSync, outputs, target));
         return (
           <Button
             key={target}

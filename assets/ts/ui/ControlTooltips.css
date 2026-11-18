@@ -3,6 +3,8 @@
   .pk-control-tooltip {
     position: fixed;
     z-index: 1100;
+    display: grid;
+    gap: var(--pk-1);
     max-inline-size: min(20rem, calc(100vw - 1rem));
     padding: var(--pk-1) var(--pk-2);
     border: 1px solid var(--pk-line);
@@ -13,5 +15,12 @@
     font-size: var(--pk-text-xs);
     line-height: 1.4;
     pointer-events: none;
+  }
+  /* What the control is and its state, over what a click does. */
+  .pk-control-tooltip__lead {
+    font-weight: 600;
+  }
+  .pk-control-tooltip__lead ~ span {
+    color: var(--pk-ink-muted);
   }
 }

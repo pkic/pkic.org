@@ -19,6 +19,7 @@ import { Meter } from "../../../../../../../ui/Meter";
 import { LiveLayerTargets } from "../LiveLayerTargets";
 import { LiveScreenTrigger, liveScreenItems, liveScreens, liveScreensTitle } from "../LiveRowMenu";
 import { useLiveTimerGraphic } from "../LiveTimerGraphicControls";
+import { LiveLayerDetail, liveLayerUnseenOf } from "../LiveLayerDetail";
 import { liveLayerTargets, sendLayerToggle, type LiveTargets } from "../live-output-targets";
 import type { LiveDestination } from "../OutputTargetControl";
 import { LiveTimerDialog } from "./LiveTimerDialog";
@@ -146,9 +147,7 @@ export function TimerRow({
       <span class="pk-studio-time__name" title={timer.name}>
         {timer.name}
       </span>
-      <span class="pk-studio-time__detail" title={detail}>
-        {detail}
-      </span>
+      <LiveLayerDetail class="pk-studio-time__detail" detail={detail} unseen={liveLayerUnseenOf({ targets, layer })} />
       <span class="pk-studio-time__reading">
         <output
           class="pk-studio-time__value"
