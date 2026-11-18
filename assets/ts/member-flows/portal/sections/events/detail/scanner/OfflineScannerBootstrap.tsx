@@ -8,11 +8,28 @@ import { listPreparedScannerContexts, restoreScannerOfflineContext } from "./sca
 import { EventScanner } from "./EventScanner";
 import { LoginFrame } from "../../../../shell/LoginFrame";
 
+function preparedTaskLabel(context: ScannerOfflineContext): string {
+  if (context.purpose === "collection") return "Badge collection";
+  if (context.occurrenceId) return ["Sessions", context.targetLabel, context.roomLabel].filter(Boolean).join(" · ");
+  if (context.action === "checkout") return "Venue exit";
+  if (context.action === "check") return "Venue entrance · Check registration";
+  if (context.action === "admission") return "Venue entrance · Check admission";
+  return "Venue entrance";
+}
+
+function preparedTaskOrder(context: ScannerOfflineContext): number {
+  return context.purpose === "collection" ? 0 : context.occurrenceId ? 3 : context.action === "checkout" ? 2 : 1;
+}
+
 /** The offline collector deliberately never mounts the authenticated portal shell. */
 export function OfflineScannerBootstrap({ route, onCheckSignIn }: { route: string | null; onCheckSignIn: () => void }) {
   const [context, setContext] = useState<ScannerOfflineContext | null>(null);
   const [available, setAvailable] = useState<ScannerOfflineContext[]>([]);
   const [loading, setLoading] = useState(true);
+  const routeQuery = new URLSearchParams(window.location.hash.split("?")[1] ?? "");
+  const selectionKey = route
+    ? [routeQuery.get("offlineContext"), routeQuery.get("scanAction"), routeQuery.get("scannerPurpose")].join(":")
+    : "";
   useEffect(() => {
     let disposed = false;
     async function check() {
@@ -41,7 +58,7 @@ export function OfflineScannerBootstrap({ route, onCheckSignIn }: { route: strin
       unsubscribe();
       window.clearInterval(timer);
     };
-  }, [route]);
+  }, [route, selectionKey]);
   if (loading || (context && context.route !== route)) return <Spinner label="Checking saved scanner context…" />;
   if (!route)
     return (
@@ -58,20 +75,32 @@ export function OfflineScannerBootstrap({ route, onCheckSignIn }: { route: strin
       >
         {available.length ? (
           <div class="pk-login__controls pk-stack pk-stack--snug">
-            {available.map((saved) => {
-              const query = new URLSearchParams({ scanAction: saved.action });
-              if (saved.purpose === "collection") query.set("scannerPurpose", "collection");
-              const task = saved.purpose === "collection" ? "Badge collection" : "Event scanner";
-              return (
-                <ButtonLink
-                  key={`${saved.epochId}:${saved.action}`}
-                  href={`#${saved.route}?${query}`}
-                  variant="secondary"
-                >
-                  {available.length === 1 ? task : `${task} · ${saved.slug.replaceAll("-", " ")}`}
-                </ButtonLink>
-              );
-            })}
+            {[...available]
+              .sort(
+                (a, b) =>
+                  a.slug.localeCompare(b.slug) ||
+                  preparedTaskOrder(a) - preparedTaskOrder(b) ||
+                  preparedTaskLabel(a).localeCompare(preparedTaskLabel(b)),
+              )
+              .map((saved) => {
+                const query = new URLSearchParams({ scanAction: saved.action });
+                if (saved.purpose === "collection") query.set("scannerPurpose", "collection");
+                if (saved.contextId) query.set("offlineContext", saved.contextId);
+                const task = preparedTaskLabel(saved);
+                const multipleEvents = new Set(available.map((item) => item.slug)).size > 1;
+                return (
+                  <ButtonLink
+                    key={
+                      saved.contextId ??
+                      `${saved.epochId}:${saved.action}:${saved.purpose}:${saved.occurrenceId}:${saved.roomId}`
+                    }
+                    href={`#${saved.route}?${query}`}
+                    variant="secondary"
+                  >
+                    {multipleEvents ? `${task} · ${saved.slug.replaceAll("-", " ")}` : task}
+                  </ButtonLink>
+                );
+              })}
           </div>
         ) : (
           <Alert tone="warn">No prepared scanner is available on this device. Reconnect to prepare one.</Alert>

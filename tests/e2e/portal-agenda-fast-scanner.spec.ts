@@ -108,6 +108,11 @@ test("badge collection opens for an upcoming event after daily preparation", asy
   await scanner.getByRole("button", { name: "Close scanner", exact: true }).click();
   await expect(scanner).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => document.fullscreenElement === null)).toBe(true);
+  await page.getByRole("button", { name: "Venue exit Check people out", exact: true }).click();
+  await expect(scanner).toBeVisible();
+  await scanner.getByRole("button", { name: "Close scanner", exact: true }).click();
+  await expect(scanner).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement === null)).toBe(true);
   await page.setViewportSize({ width: 375, height: 812 });
   await collection.click();
   await expect(scanner).toBeVisible();
@@ -166,6 +171,9 @@ test("badge collection opens for an upcoming event after daily preparation", asy
   await reopened.setViewportSize({ width: 375, height: 812 });
   await reopened.goto("/portal/");
   await expect(reopened.getByRole("heading", { name: "Continue scanning offline", exact: true })).toBeVisible();
+  await expect(reopened.getByRole("link", { name: "Badge collection", exact: true })).toBeVisible();
+  await expect(reopened.getByRole("link", { name: "Venue entrance", exact: true })).toBeVisible();
+  await expect(reopened.getByRole("link", { name: "Venue exit", exact: true })).toBeVisible();
   await reopened.screenshot({ animations: "disabled", path: testInfo.outputPath("offline-scanner-entry-phone.png") });
   await reopened.setViewportSize({ width: 1280, height: 720 });
   await reopened.screenshot({ animations: "disabled", path: testInfo.outputPath("offline-scanner-entry-desktop.png") });
@@ -175,6 +183,16 @@ test("badge collection opens for an upcoming event after daily preparation", asy
   await expect(reopenedScanner).toBeVisible();
   await expect(reopenedScanner.locator(".pk-fast-scanner__feedback")).toHaveText("Ready for badge collection");
   await expect(reopenedScanner.getByRole("status", { name: "Scanner status", exact: true })).toContainText("Offline");
+  await reopened.goto("/portal/");
+  await reopened.getByRole("link", { name: "Venue exit", exact: true }).click();
+  await reopened.getByRole("button", { name: "Start scanning", exact: true }).click();
+  await expect(reopenedScanner).toBeVisible();
+  await reopened.keyboard.type(badge.credential);
+  await reopened.keyboard.press("Enter");
+  await reopenedScanner.getByRole("button", { name: "Operator controls", exact: true }).click();
+  await expect(
+    reopenedScanner.getByRole("dialog", { name: "Scanner operator controls", exact: true }).getByText(/^2 pending/),
+  ).toBeVisible();
 });
 
 test("phone scanner guides staff through venue, search, offline entry and diagnostics", async ({

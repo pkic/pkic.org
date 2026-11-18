@@ -55,6 +55,9 @@ export function useScannerPreparation({
     eligibility.eligibilityManifest.current,
     slug,
     action,
+    location.targetLabel,
+    location.rooms.find((room) => room.id === location.roomId)?.name,
+    { occurrenceId: location.targetId, roomId: location.roomId },
   );
   const status = {
     occurrenceId: location.targetId,

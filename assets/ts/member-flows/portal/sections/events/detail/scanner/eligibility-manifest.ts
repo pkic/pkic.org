@@ -273,19 +273,19 @@ export async function prepareEligibilityManifest(
   const session = await readActiveUserSession();
   const sessionId = session?.sessionId;
   if (await scannerUploadSuspended(operatorUserId, sessionId)) throw new Error("SCANNER_SIGNED_OUT");
-  const key = JSON.stringify([
-    operatorUserId,
-    slug,
-    occurrenceId,
-    roomId,
-    enrollment.epochId,
-    enrollment.deviceId,
-    ...(includeBadgeNames ? [true] : []),
-  ]);
+  const scope = [operatorUserId, slug, occurrenceId, roomId, enrollment.epochId, enrollment.deviceId];
+  const key = JSON.stringify(includeBadgeNames ? [...scope, true] : scope);
   let fallback: unknown;
   try {
     // Retain IDs for qualified feedback in this foreground session, then remove expired persisted copies.
     fallback = await cached(key);
+    if (!includeBadgeNames) {
+      const regular = cachedManifestSchema.safeParse(fallback);
+      if (!regular.success || !snapshotCurrent(regular.data)) {
+        const named = cachedManifestSchema.safeParse(await cached(JSON.stringify([...scope, true])));
+        if (named.success && named.data.complete && snapshotCurrent(named.data)) fallback = named.data;
+      }
+    }
     await pruneExpiredEligibilityManifests();
   } catch {
     // An unavailable cache must not prevent an authorized network refresh.
@@ -346,19 +346,23 @@ export async function restoreEligibilityManifest(
   context: ScannerOfflineContext,
   includeBadgeNames = false,
 ): Promise<EligibilityManifest | null> {
-  const key = JSON.stringify([
+  const scope = [
     context.operatorUserId,
     context.slug,
     context.occurrenceId,
     context.roomId,
     context.epochId,
     context.deviceId,
-    ...(includeBadgeNames ? [true] : []),
-  ]);
+  ];
+  const key = JSON.stringify(includeBadgeNames ? [...scope, true] : scope);
   try {
     if (!scannerContextCurrent(context) || (await scannerUploadSuspended(context.operatorUserId, context.sessionId)))
       return null;
-    const saved = cachedManifestSchema.safeParse(await cached(key));
+    let saved = cachedManifestSchema.safeParse(await cached(key));
+    if (!includeBadgeNames && (!saved.success || !snapshotCurrent(saved.data))) {
+      const named = cachedManifestSchema.safeParse(await cached(JSON.stringify([...scope, true])));
+      if (named.success && named.data.complete && snapshotCurrent(named.data)) saved = named;
+    }
     if (
       !saved.success ||
       !snapshotCurrent(saved.data) ||

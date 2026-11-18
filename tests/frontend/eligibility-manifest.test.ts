@@ -689,7 +689,20 @@ describe("local scoped eligibility manifest", () => {
     const manifest = await restoreEligibilityManifest(context, true);
     expect(await manifest?.lookupName?.(badge)).toBe("Zoë 测试");
     expect(await manifest?.lookupName?.("23456789ABCDEFGH")).toBeNull();
-    expect(await restoreEligibilityManifest(context, false)).toBeNull();
+    expect((await restoreEligibilityManifest(context, false))?.lookup).toBeDefined();
+    expect(
+      (
+        await prepareEligibilityManifest(
+          "synthetic-event",
+          snapshot.operatorUserId,
+          null,
+          snapshot,
+          undefined,
+          null,
+          "cache",
+        )
+      ).badgeNamesPrepared,
+    ).toBe(true);
     vi.mocked(scannerUploadSuspended).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
     expect(await restoreEligibilityManifest(context, true)).toBeNull();
   });

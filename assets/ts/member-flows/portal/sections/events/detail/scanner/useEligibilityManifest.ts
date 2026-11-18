@@ -225,9 +225,15 @@ export function useScannerOfflinePreparation(
   manifest: EligibilityManifest | null,
   slug: string,
   action: EventScanRequest["action"],
+  targetLabel?: string,
+  roomLabel?: string,
+  expectedScope?: { occurrenceId: string | null; roomId: string | null },
 ) {
   const prepareCode = useContext(ScannerCodePreparation);
   const route = scannerCollectorPath(window.location.hash);
+  const hasExpectedScope = expectedScope !== undefined;
+  const expectedOccurrenceId = expectedScope?.occurrenceId;
+  const expectedRoomId = expectedScope?.roomId;
   const [prepared, setPrepared] = useState<ScannerOfflineContext | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [error, setError] = useState("");
@@ -237,9 +243,26 @@ export function useScannerOfflinePreparation(
     const controller = new AbortController();
     setError("");
     setPreparing(false);
-    if (prepareCode && session && epoch && manifest) {
+    if (
+      prepareCode &&
+      session &&
+      epoch &&
+      manifest &&
+      (!hasExpectedScope ||
+        (manifest.occurrenceId === expectedOccurrenceId && (manifest.roomId ?? null) === expectedRoomId))
+    ) {
       setPreparing(true);
-      void saveScannerOfflineContext({ slug, session, epoch, manifest, action, signal: controller.signal, prepareCode })
+      void saveScannerOfflineContext({
+        slug,
+        session,
+        epoch,
+        manifest,
+        action,
+        targetLabel,
+        roomLabel,
+        signal: controller.signal,
+        prepareCode,
+      })
         .then((context) => {
           if (!controller.signal.aborted) {
             if (context) setPrepared(context);
@@ -254,7 +277,21 @@ export function useScannerOfflinePreparation(
         });
     }
     return () => controller.abort();
-  }, [slug, action, session, epoch, manifest, prepareCode, attempt, route]);
+  }, [
+    slug,
+    action,
+    targetLabel,
+    roomLabel,
+    hasExpectedScope,
+    expectedOccurrenceId,
+    expectedRoomId,
+    session,
+    epoch,
+    manifest,
+    prepareCode,
+    attempt,
+    route,
+  ]);
   useEffect(() => {
     if (!prepared) return;
     const timer = window.setInterval(() => tick((value) => value + 1), 1000);
@@ -273,6 +310,7 @@ export function useScannerOfflinePreparation(
     prepared.deviceId === epoch.deviceId &&
     prepared.occurrenceId === manifest?.occurrenceId &&
     prepared.roomId === (manifest?.roomId ?? null) &&
+    (!hasExpectedScope || (prepared.occurrenceId === expectedOccurrenceId && prepared.roomId === expectedRoomId)) &&
     scannerContextCurrent(prepared)
       ? prepared
       : null;
