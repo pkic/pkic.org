@@ -148,6 +148,15 @@
     justify-content: center;
   }
 
+  /*
+   * Starting an account offers its email choices as cards side by side. On a
+   * page of its own the card widens while they show, so both fit in a row; on
+   * a phone they still stack.
+   */
+  .pk-login__embedded .pk-login__card-wrap:has(.pk-choice-cards) {
+    max-width: 42rem;
+  }
+
   .pk-login__card {
     background: var(--pk-surface);
     border: 1px solid var(--pk-line-soft);
