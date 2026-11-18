@@ -18,8 +18,6 @@ import { controlFor } from "./helpers/labeled-control";
 const PLACEMENTS = "/api/v1/events/pqc-2026/forms/placements/event_registration";
 const REGISTRATIONS = "/api/v1/events/pqc-2026/registrations";
 const SESSION = portalSessionFixture({ member: true });
-/** The account policies the signed-in account accepted when it was started. */
-let acceptedPolicies: string[] = [];
 
 interface Captured {
   path: string;
@@ -60,7 +58,7 @@ function installApi(scheduled = true, person: SavedNames | null = null): Capture
                 termKey: "privacy-policy",
                 version: "v1",
                 required: true,
-                contentRef: "/privacy/",
+                contentRef: null,
                 displayText: "I accept the privacy policy",
                 helpText: null,
               },
@@ -83,8 +81,6 @@ function installApi(scheduled = true, person: SavedNames | null = null): Capture
         return Promise.resolve(
           profile ? json(SESSION) : json({ error: { code: "UNAUTHORIZED", message: "Sign in" } }, 401),
         );
-      if (url.pathname === "/api/v1/users/current/policies" && profile)
-        return Promise.resolve(json({ accepted: acceptedPolicies }));
       if (url.pathname === "/api/v1/users/current" && profile) {
         if (init.method === "PATCH")
           profile = { ...profile, ...myProfileUpdateSchema.parse(JSON.parse(String(init.body))) };
@@ -131,7 +127,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  acceptedPolicies = [];
   vi.unstubAllGlobals();
   document.body.innerHTML = "";
   window.history.replaceState({}, "", "/");
@@ -227,13 +222,5 @@ describe("registration entry", () => {
         .success,
     ).toBe(false);
     expect(document.body.textContent).toContain("You're registered, Ada!");
-  });
-
-  it("does not ask an account again for the Privacy Policy it accepted when it was started", async () => {
-    acceptedPolicies = ["privacy-policy", "code-of-conduct"];
-    await loadPage(true, { firstName: "Ada", lastName: "Lovelace" });
-    expect(document.querySelector('[data-term-key="privacy-policy"]')).toBeNull();
-    expect(document.body.textContent).not.toContain("No required consents");
-    expect(document.body.textContent).toContain("You've already read the Privacy Policy (opens in a new tab).");
   });
 });

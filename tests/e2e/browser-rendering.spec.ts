@@ -293,8 +293,6 @@ async function fillRegistrationStep4(page: Page, expectedEmail?: string, expectP
   if (expectProfileDetails) {
     await expect(page.locator("[data-registration-review]")).toContainText("Profile details");
   }
-  await agreeToTerm(page, "privacy policy");
-  await agreeToTerm(page, "code of conduct");
   await agreeToTerm(page, "photos and videos");
   await page.getByRole("button", { name: "Register", exact: true }).click();
 }
@@ -314,8 +312,6 @@ async function fillInviteRegistration(
   await expect(page.locator("[data-registration-review]")).toContainText("State / Province");
   await expect(page.locator("[data-registration-review]")).toContainText("Interests (topics)");
   await expect(page.locator("[data-registration-review]")).toContainText("None provided");
-  await agreeToTerm(page, "privacy policy");
-  await agreeToTerm(page, "code of conduct");
   await agreeToTerm(page, "photos and videos");
   await page.getByRole("button", { name: "Register", exact: true }).click();
 }

@@ -27,8 +27,6 @@ import type { ProfileLinksHandle } from "../components/ProfileLinksInput";
 import { handleFormInviteSubmitError } from "../shared/widgets/invite-recovery";
 import { proposalSessionTypeLabel, type ProposalSessionType } from "../../shared/proposal-session-types";
 import { proposalEntryContextSchema } from "../../shared/schemas/proposal-entry";
-import { termsNotCoveredByAccount } from "../../shared/account-policies";
-import { asksAccountPolicy, readAcceptedAccountPolicies } from "../hooks/useAccountCoveredTerms";
 
 // ── Session type labels ───────────────────────────────────────────────────────
 
@@ -283,24 +281,8 @@ async function main(): Promise<void> {
   const syncEntryGate = () => {
     if (nextButton && currentStep === CONTACT_STEP) nextButton.hidden = !entry;
   };
-  let requiredTerms: z.infer<typeof eventFormsResponseSchema>["requiredTerms"] = [];
-  // Terms the account accepted when it was started are not asked again; the
-  // server counts them as accepted. Read again once the person signs in here.
-  async function renderTerms(): Promise<void> {
-    if (!consentsContainer) return;
-    const accepted = asksAccountPolicy(requiredTerms) ? await readAcceptedAccountPolicies() : [];
-    const remaining = termsNotCoveredByAccount(requiredTerms, (term) => term, accepted);
-    renderConsentInputs(
-      consentsContainer,
-      remaining,
-      undefined,
-      requiredTerms.filter((term) => !remaining.includes(term)),
-    );
-  }
   const updateEntry = (selection: ProposalEntrySelection | null): void => {
-    const signedIn = !entry && selection;
     entry = selection;
-    if (signedIn && formsLoaded) void renderTerms();
     syncEntryGate();
     if (selection && proposerCardEl && proposerLinksRef)
       createProposerCard(defaultProposerRole(), selection, proposerCardEl, proposerLinksRef);
@@ -442,8 +424,7 @@ async function main(): Promise<void> {
     }
     eventName = forms.event.name;
     formsLoaded = true;
-    requiredTerms = forms.requiredTerms;
-    await renderTerms();
+    if (consentsContainer) renderConsentInputs(consentsContainer, forms.requiredTerms);
     // Whatever the event allows, and only that. The fallback that used to
     // stand here named three session types of its own — a second copy of the
     // backend's `DEFAULT_SESSION_TYPES`, which `resolveSessionTypes` already

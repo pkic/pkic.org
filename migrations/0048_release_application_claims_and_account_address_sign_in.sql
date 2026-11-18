@@ -95,9 +95,9 @@ UPDATE user_emails
  WHERE first_signed_in_at IS NULL
    AND EXISTS (SELECT 1 FROM session_email_authentication marker WHERE marker.email_id = user_emails.id);
 
--- The policies an account accepted (the privacy policy and the code of conduct,
--- see assets/shared/account-policies.ts), so event forms stop asking for them.
--- Additive; recovery: drop the table, and event forms ask for them again.
+-- The policies an account accepted when it was started (the privacy policy and
+-- the code of conduct, see assets/shared/account-policies.ts). Additive;
+-- recovery: drop the table.
 CREATE TABLE account_policy_acceptances (
   id              TEXT NOT NULL PRIMARY KEY,
   user_id         TEXT NOT NULL,
@@ -109,3 +109,9 @@ CREATE TABLE account_policy_acceptances (
   UNIQUE(user_id, term_key, term_version),
   FOREIGN KEY(user_id) REFERENCES users(id)
 );
+
+-- Events no longer ask for the privacy policy or the code of conduct: every
+-- account takes them on when it is started. The terms stay, inactive, so past
+-- consent records still name what was accepted. Recovery: set active = 1.
+UPDATE event_terms SET active = 0
+ WHERE active = 1 AND term_key IN ('privacy-policy', 'code-of-conduct');

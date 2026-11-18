@@ -207,9 +207,7 @@ export async function registerInBrowser(
   await expect(page.locator('[data-step-panel="3"]').getByLabel("Organization", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await options.onReviewReady?.(page);
-  for (const term of [/privacy policy/i, /code of conduct/i, /photos and videos/i]) {
-    await page.getByRole("checkbox", { name: term }).check();
-  }
+  await page.getByRole("checkbox", { name: /photos and videos/i }).check();
   const since = await capturedEmailCount();
   const submitted = page.waitForResponse(
     (response) => new URL(response.url()).pathname === REGISTRATION_API && response.request().method() === "POST",

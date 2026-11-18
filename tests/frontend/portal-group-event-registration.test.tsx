@@ -260,17 +260,21 @@ describe("portal group event registration", () => {
   it.each([
     ["no attendee terms", []],
     ["only optional attendee terms", [{ ...term, required: false }]],
-  ])("keeps registration unavailable with %s", async (_description, requiredTerms) => {
-    const fetchSpy = vi.fn(async () => json(config({ requiredTerms })));
-    vi.stubGlobal("fetch", fetchSpy);
+  ])(
+    "opens registration with %s: the account already carries the Privacy Policy and Code of Conduct",
+    async (_description, requiredTerms) => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => json(config({ requiredTerms }))),
+      );
 
-    const container = mount(<GroupEventRegistrationPanel groupId={GROUP_ID} event={event} />);
-    await settle();
+      const container = mount(<GroupEventRegistrationPanel groupId={GROUP_ID} event={event} />);
+      await settle();
 
-    expect(container.textContent).toContain("required event terms have not been configured");
-    expect(container.querySelector<HTMLButtonElement>("button[type='submit']")).toBeNull();
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-  });
+      expect(container.textContent).not.toContain("Registration unavailable");
+      expect(container.querySelector<HTMLButtonElement>("button[type='submit']")).not.toBeNull();
+    },
+  );
 
   it("shows a bounded API error instead of a broken registration form", async () => {
     vi.stubGlobal(

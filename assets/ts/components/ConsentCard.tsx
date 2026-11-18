@@ -9,7 +9,6 @@ import { IconExternalLink, IconInfoCircle } from "./icons";
 import type { RequiredTerm } from "../shared/types";
 import type { FieldPresentation } from "../hooks/useContractForm";
 import { isTermAccepted } from "../../shared/consent-selection";
-import { AccountCoveredTermsNote } from "./AccountCoveredTermsNote";
 
 /** `recorded` marks a term the person already agreed to in this flow, so they are not asked again. */
 export function ConsentCard({
@@ -93,32 +92,30 @@ export function ConsentList({
   recorded = [],
   lockRecorded = false,
   presentationOf,
-  coveredTerms = [],
 }: {
   terms: RequiredTerm[];
   recorded?: readonly { termKey: string; version: string }[];
   lockRecorded?: boolean;
   presentationOf?: (termKey: string) => FieldPresentation;
-  /** The event's terms left out because the account already accepted them as account policies. */
-  coveredTerms?: readonly RequiredTerm[];
 }) {
   return (
     <div class="pk pk-stack pk-stack--snug">
-      {terms.length
-        ? terms.map((term) => {
-            const accepted = isTermAccepted(term, recorded);
-            return (
-              <ConsentCard
-                key={`${term.termKey}:${term.version}`}
-                term={term}
-                presentation={presentationOf?.(term.termKey)}
-                recorded={accepted}
-                locked={lockRecorded && accepted}
-              />
-            );
-          })
-        : coveredTerms.length === 0 && <p>No required consents for this flow.</p>}
-      {coveredTerms.length > 0 && <AccountCoveredTermsNote terms={coveredTerms} />}
+      {terms.length ? (
+        terms.map((term) => {
+          const accepted = isTermAccepted(term, recorded);
+          return (
+            <ConsentCard
+              key={`${term.termKey}:${term.version}`}
+              term={term}
+              presentation={presentationOf?.(term.termKey)}
+              recorded={accepted}
+              locked={lockRecorded && accepted}
+            />
+          );
+        })
+      ) : (
+        <p>No required consents for this flow.</p>
+      )}
     </div>
   );
 }

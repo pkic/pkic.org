@@ -29,7 +29,6 @@ import { CONTRACT_VALIDATION_ATTRIBUTE } from "../../shared/form/validation";
 import { splitHash } from "../../ui/url-query";
 import { CustomFieldList, readCustomFieldValues } from "../../shared/widgets/custom-fields";
 import { readConsentValues } from "../../shared/widgets/consents";
-import { useAccountCoveredTerms } from "../../hooks/useAccountCoveredTerms";
 import { readDayAttendance, readDayAttendanceChoices } from "../../shared/widgets/day-attendance";
 import { RegistrationProgress } from "./RegistrationProgress";
 import { Alert } from "../../ui/Alert";
@@ -75,10 +74,10 @@ const PERSONAL_FIELDS = [
 export function RegistrationFlow(props: Props) {
   const { forms } = props;
   const updating = props.mode === "update";
-  const termsAvailable = forms.requiredTerms.some((term) => term.required);
-  const terms = useAccountCoveredTerms(forms.requiredTerms);
+  // An event asks only its own terms, such as a photo policy; the Privacy Policy and the Code of Conduct come with the account.
+  const asksTerms = forms.requiredTerms.length > 0;
   const daysAvailable = forms.eventDays.length > 0;
-  const available = updating || (termsAvailable && daysAvailable);
+  const available = updating || daysAvailable;
   const initial = updating ? props.data : null;
   const root = useRef<HTMLDivElement>(null);
   const status = useRef<HTMLParagraphElement>(null);
@@ -147,12 +146,12 @@ export function RegistrationFlow(props: Props) {
     () =>
       withRequiredOrganizationRepresentation(
         withRequiredDayAttendanceChoices(
-          updating ? registrationManageSchema : registrationCreateForTermsSchema(terms.remaining),
+          updating ? registrationManageSchema : registrationCreateForTermsSchema(forms.requiredTerms),
           choices,
         ),
         representationMissing,
       ),
-    [updating, terms.remaining, choices, representationMissing],
+    [updating, forms.requiredTerms, choices, representationMissing],
   );
   const contract = useContractForm(request, readBody, {
     fieldOf: (name, control) =>
@@ -359,11 +358,6 @@ export function RegistrationFlow(props: Props) {
               Registration opens when the event days are scheduled.
             </Alert>
           )}
-          {!updating && daysAvailable && !termsAvailable && (
-            <Alert tone="warn" title="Registration unavailable">
-              Registration is temporarily unavailable because the required event terms have not been configured.
-            </Alert>
-          )}
           <section data-step={updating ? undefined : "1"} class="event-flow-step is-active pk-stack">
             {props.mode === "create" ? (
               <div data-registration-contact>
@@ -456,22 +450,23 @@ export function RegistrationFlow(props: Props) {
           {!updating && (
             <section data-step="4" class="event-flow-step pk-stack" hidden>
               <p class="event-flow-step-intro">
-                {terms.remaining.length > 0
+                {asksTerms
                   ? "Check your details, then accept the terms to register."
                   : "Check your details, then register."}
               </p>
               <div data-registration-review ref={review} />
-              <Field group label="Terms and conditions">
-                {() => (
-                  <div data-consents>
-                    <ConsentList
-                      terms={terms.remaining}
-                      coveredTerms={terms.covered}
-                      presentationOf={(key) => contract.of(`consents.${key}`)}
-                    />
-                  </div>
-                )}
-              </Field>
+              {asksTerms && (
+                <Field group label="Terms and conditions">
+                  {() => (
+                    <div data-consents>
+                      <ConsentList
+                        terms={forms.requiredTerms}
+                        presentationOf={(key) => contract.of(`consents.${key}`)}
+                      />
+                    </div>
+                  )}
+                </Field>
+              )}
             </section>
           )}
           {available && (

@@ -11,8 +11,6 @@ import { registrationCreateSchema, registrationSubmissionResponseSchema } from "
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { createPendingRegistration } from "./helpers/registration-confirmation";
 import { createInvite } from "../functions/_lib/services/invites";
-import { prepareAccountPolicyAcceptanceStatements } from "../functions/_lib/services/account-policies";
-import { ACCOUNT_POLICIES } from "../assets/shared/account-policies";
 
 const API = "/api/v1/events/pqc-2026/registrations";
 const consents = [
@@ -122,82 +120,6 @@ describe("registration continues with the signed-in session", () => {
       { invite_id: inviteId, status: "registered" },
     ]);
     expect(await queryAll(env.DB, "SELECT status FROM invites WHERE id=?", inviteId)).toEqual([{ status: "accepted" }]);
-  });
-
-  it("does not ask an account for the Privacy Policy and Code of Conduct it accepted, and records them for the event", async () => {
-    const accepted = await signInRegistrant(env.DB, "accepted.policies@gmail.com", {
-      firstName: "Ada",
-      lastName: "Fixture",
-    });
-    await env.DB.batch(
-      prepareAccountPolicyAcceptanceStatements(env.DB, {
-        userId: accepted.userId,
-        accepted: ACCOUNT_POLICIES.map(({ termKey, version }) => ({ termKey, version })),
-        at: "2026-01-01T00:00:00.000Z",
-      }),
-    );
-    const response = await submit(
-      registration("accepted.policies@gmail.com", { unaffiliatedAttestation: true, consents: [] }),
-      accepted.session,
-    );
-    expect(response.status, await response.clone().text()).toBe(200);
-    expect(
-      await queryAll(
-        env.DB,
-        "SELECT term_key FROM consent_acceptances WHERE user_id=? ORDER BY term_key",
-        accepted.userId,
-      ),
-    ).toEqual([{ term_key: "code-of-conduct" }, { term_key: "privacy-policy" }]);
-
-    // An account that has not accepted them is asked, and accepting them on the form records them on the account.
-    const asked = await signInRegistrant(env.DB, "asked.policies@gmail.com", { firstName: "Bo", lastName: "Fixture" });
-    const refused = await submit(
-      registration("asked.policies@gmail.com", { unaffiliatedAttestation: true, consents: [] }),
-      asked.session,
-    );
-    expect(refused.status).toBe(400);
-    const registered = await submit(
-      registration("asked.policies@gmail.com", { unaffiliatedAttestation: true }),
-      asked.session,
-    );
-    expect(registered.status, await registered.clone().text()).toBe(200);
-    expect(
-      await queryAll(
-        env.DB,
-        "SELECT term_key FROM account_policy_acceptances WHERE user_id=? ORDER BY term_key",
-        asked.userId,
-      ),
-    ).toEqual([{ term_key: "code-of-conduct" }, { term_key: "privacy-policy" }]);
-  });
-
-  it("asks for an event's own term under a policy's key, and records no account acceptance for it", async () => {
-    // The event links its Code of Conduct to its own on-site rules, not to the consortium's policy.
-    await env.DB.prepare(
-      "UPDATE event_terms SET content_ref='/events/pqc-2026/rules/' WHERE term_key='code-of-conduct'",
-    ).run();
-    const person = await signInRegistrant(env.DB, "own.rules@gmail.com", { firstName: "Cy", lastName: "Fixture" });
-    await env.DB.batch(
-      prepareAccountPolicyAcceptanceStatements(env.DB, {
-        userId: person.userId,
-        accepted: ACCOUNT_POLICIES.map(({ termKey, version }) => ({ termKey, version })),
-        at: "2026-01-01T00:00:00.000Z",
-      }),
-    );
-    const refused = await submit(
-      registration("own.rules@gmail.com", { unaffiliatedAttestation: true, consents: [] }),
-      person.session,
-    );
-    expect(refused.status).toBe(400);
-
-    const other = await signInRegistrant(env.DB, "fresh.rules@gmail.com", { firstName: "Di", lastName: "Fixture" });
-    const registered = await submit(
-      registration("fresh.rules@gmail.com", { unaffiliatedAttestation: true }),
-      other.session,
-    );
-    expect(registered.status, await registered.clone().text()).toBe(200);
-    expect(
-      await queryAll(env.DB, "SELECT term_key FROM account_policy_acceptances WHERE user_id=?", other.userId),
-    ).toEqual([{ term_key: "privacy-policy" }]);
   });
 
   it("binds an invite-only invitation link to the invited person's account", async () => {
