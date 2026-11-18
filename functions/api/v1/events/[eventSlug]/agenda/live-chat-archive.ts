@@ -9,19 +9,19 @@ import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { eraseEventChat, exportEventChat } from "../../../../../_lib/services/live-session/chat-archive";
 import { requireEventPermission } from "../authorization";
 
-/** A live moderator downloads the attendee chat the event's rooms still hold. */
+/** An organizer downloads the attendee chat the event's rooms still hold. */
 export const LiveChatArchiveExportGet = openApiRoute(
   liveChatArchiveExportRouteSchema,
   async (c: AdminContext, data) => {
     markResponseSensitive(c);
-    const { db, event, actor } = await requireEventPermission(c, data.params.eventSlug, "agenda:live_moderate");
+    const { db, event, actor } = await requireEventPermission(c, data.params.eventSlug, "events:write");
     return csvResponse(await exportEventChat(db, c.env, actor, event.id), `${event.slug}-live-chat.csv`);
   },
 );
 
-/** A live moderator erases the chat of every session whose room has closed. */
+/** An organizer erases the chat of every session whose room has closed. */
 export const LiveChatEraseDelete = openApiRoute(liveChatEraseRouteSchema, async (c: AdminContext, data) => {
   markResponseSensitive(c);
-  const { db, event, actor } = await requireEventPermission(c, data.params.eventSlug, "agenda:live_moderate");
+  const { db, event, actor } = await requireEventPermission(c, data.params.eventSlug, "events:write");
   return jsonNoStore(await eraseEventChat(db, c.env, actor, event.id));
 });

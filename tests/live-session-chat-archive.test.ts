@@ -6,6 +6,7 @@ import {
   liveChatEraseResponseSchema,
 } from "../assets/shared/schemas/event-live-chat-archive";
 import { callApi } from "./helpers/app";
+import { createAdminSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
 
@@ -204,8 +205,34 @@ describe("event chat download and erasure", () => {
     }
   });
 
-  it("requires live moderation permission", async () => {
+  it("is for the event's organizers: neither an attendee nor a room operator downloads or erases the chat", async () => {
     expect((await request("GET", f.tokens.attendee)).status).toBe(403);
     expect((await request("DELETE", f.tokens.attendee)).status).toBe(403);
+
+    await chatInRoom();
+    await sessionEnded(1);
+    // The second operator keeps running rooms, without the event's settings.
+    const now = new Date().toISOString();
+    await env.DB.batch([
+      env.DB.prepare("UPDATE user_roles SET revoked_at=? WHERE user_id=?").bind(now, f.users.secondOperator),
+      env.DB.prepare(
+        "INSERT INTO permission_grants (id,user_id,permission,context_type,context_id,granted_by_user_id,created_at) VALUES (?,?,'agenda:live_moderate','event',?,?,?)",
+      ).bind(crypto.randomUUID(), f.users.secondOperator, f.eventId, f.users.operator, now),
+    ]);
+    const roomOperator = await createAdminSession(env.DB, f.users.secondOperator, crypto.randomUUID());
+    expect((await request("GET", roomOperator)).status).toBe(403);
+    expect((await request("DELETE", roomOperator)).status).toBe(403);
+    expect(await rowCount("room_chat")).toBe(2);
+
+    // An organizer holds the event's settings, and needs no room permission for the chat.
+    await env.DB.prepare(
+      "INSERT INTO permission_grants (id,user_id,permission,context_type,context_id,granted_by_user_id,created_at) VALUES (?,?,'events:write','event',?,?,?)",
+    )
+      .bind(crypto.randomUUID(), f.users.outsider, f.eventId, f.users.operator, now)
+      .run();
+    const organizer = await createAdminSession(env.DB, f.users.outsider, crypto.randomUUID());
+    expect((await request("GET", organizer)).status).toBe(200);
+    expect((await request("DELETE", organizer)).status).toBe(200);
+    expect(await rowCount("room_chat")).toBe(0);
   });
 });

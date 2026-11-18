@@ -108,12 +108,14 @@ function LayoutBox({
  * as the outputs draw them, so a graphic in front covers the ones behind it.
  * Drag a box to move it, a corner to resize it; it snaps to the grid, the
  * title-safe area and the other boxes, with guides while it does. The arrow
- * keys move the selected box.
+ * keys move the selected box. Without `canEdit` the scene is only drawn: no
+ * boxes to move or resize.
  */
 export function OverlayLayoutCanvas({
   elements,
   shown,
   selected,
+  canEdit = true,
   safeAreas,
   onSafeAreas,
   onSelect,
@@ -123,6 +125,8 @@ export function OverlayLayoutCanvas({
   /** The graphics the scene shows, front first. */
   shown: readonly LiveOverlayElement[];
   selected: LiveOverlayElement | null;
+  /** Whether the boxes are drawn, to move and resize the graphics. */
+  canEdit?: boolean;
   /** Whether the action-safe and title-safe guides are drawn. */
   safeAreas: boolean;
   onSafeAreas: (shown: boolean) => void;
@@ -140,7 +144,9 @@ export function OverlayLayoutCanvas({
   return (
     <figure class="pk-layout-canvas-figure">
       <div class="pk-layout-canvas__bar">
-        <p class="pk-small pk-muted">1920 × 1080 · drag to move, drag a corner to resize</p>
+        <p class="pk-small pk-muted">
+          {canEdit ? "1920 × 1080 · drag to move, drag a corner to resize" : "1920 × 1080"}
+        </p>
         <Checkbox
           label="Show safe areas"
           checked={safeAreas}
@@ -154,23 +160,25 @@ export function OverlayLayoutCanvas({
         <LiveOverlayPresentation view="program" elements={elements} projection={room} />
         <div class="pk-layout-canvas__guide" data-axis="vertical" ref={gesture.verticalGuide} aria-hidden="true" />
         <div class="pk-layout-canvas__guide" data-axis="horizontal" ref={gesture.horizontalGuide} aria-hidden="true" />
-        <div class="pk-layout-canvas__boxes" role="group" aria-label={LAYOUT_CANVAS_LABEL}>
-          {/* Back to front, as the outputs stack them; the selected box's outline and corners draw over every box. */}
-          {[...shown].reverse().map((element) => (
-            <LayoutBox
-              key={element}
-              element={element}
-              box={elements[element]}
-              selected={element === selected}
-              labelShift={shifts[element] ?? 0}
-              describedBy={help}
-              cell={gesture.register(element)}
-              handlers={gesture.handlers}
-              onSelect={() => onSelect(element)}
-              onNudge={(box) => onChange(element, box)}
-            />
-          ))}
-        </div>
+        {canEdit ? (
+          <div class="pk-layout-canvas__boxes" role="group" aria-label={LAYOUT_CANVAS_LABEL}>
+            {/* Back to front, as the outputs stack them; the selected box's outline and corners draw over every box. */}
+            {[...shown].reverse().map((element) => (
+              <LayoutBox
+                key={element}
+                element={element}
+                box={elements[element]}
+                selected={element === selected}
+                labelShift={shifts[element] ?? 0}
+                describedBy={help}
+                cell={gesture.register(element)}
+                handlers={gesture.handlers}
+                onSelect={() => onSelect(element)}
+                onNudge={(box) => onChange(element, box)}
+              />
+            ))}
+          </div>
+        ) : null}
         {/* Over the graphics and their boxes, so the margins show wherever something reaches into them. */}
         {safeAreas ? (
           <>
@@ -187,10 +195,12 @@ export function OverlayLayoutCanvas({
         Sample content. Graphics keep clear of the ticker while it is on air; with the ticker off, they use the full
         height.
       </figcaption>
-      <p id={help} class="pk-sr-only">
-        Arrow keys move the selected box by one pixel, Shift and an arrow key by 24. Hold Alt while dragging to place it
-        without snapping.
-      </p>
+      {canEdit ? (
+        <p id={help} class="pk-sr-only">
+          Arrow keys move the selected box by one pixel, Shift and an arrow key by 24. Hold Alt while dragging to place
+          it without snapping.
+        </p>
+      ) : null}
     </figure>
   );
 }

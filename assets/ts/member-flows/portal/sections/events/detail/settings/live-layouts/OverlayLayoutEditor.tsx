@@ -55,7 +55,8 @@ const SHARING: Record<LayoutSharingAction, (drafts: LayoutDrafts, element: LiveO
  * shared position moves on every scene that shares it; its row menu places
  * it for this scene only, or shares it again. Changes stay a draft until
  * saved; the scene's menu renames or duplicates it, resets a built-in scene
- * to its default, and deletes one of the event's own.
+ * to its default, and deletes one of the event's own. Without `canEdit` the
+ * scene is only drawn: nothing in it can be changed or saved.
  */
 export function OverlayLayoutEditor({
   endpoint,
@@ -63,6 +64,7 @@ export function OverlayLayoutEditor({
   layout,
   layouts,
   positions: savedPositions,
+  canEdit,
   onSaved,
   onDuplicate,
   onDirty,
@@ -74,6 +76,8 @@ export function OverlayLayoutEditor({
   /** Every scene, to say how many share a graphic's position. */
   layouts: readonly LiveOverlayLayout[];
   positions: LiveOverlayPositions;
+  /** Whether the viewer may change the event's scenes. */
+  canEdit: boolean;
   onSaved: (layouts: EventLiveOverlayLayoutsResponse, select?: string) => void;
   onDuplicate: () => void;
   onDirty: (dirty: boolean) => void;
@@ -137,7 +141,7 @@ export function OverlayLayoutEditor({
 
   async function save(event?: SubmitEvent) {
     event?.preventDefault();
-    if (busy) return;
+    if (busy || !canEdit) return;
     const checked = form.submit();
     if (!checked.data) {
       setProblem(checked.formMessage);
@@ -250,6 +254,29 @@ export function OverlayLayoutEditor({
     onDirty(false);
   }
 
+  if (!canEdit)
+    return (
+      <div class="pk-scenes__editor" data-read-only="">
+        <Panel>
+          <PanelHeader title={name} headingLevel={4} />
+          <PanelBody class="pk-stack">
+            <OverlayLayoutCanvas
+              elements={elements}
+              shown={graphics}
+              selected={null}
+              canEdit={false}
+              safeAreas={safeAreas}
+              onSafeAreas={(shown) => {
+                setSafeAreas(shown);
+                saveSafeAreasPreference(shown);
+              }}
+              onSelect={setPicked}
+              onChange={place}
+            />
+          </PanelBody>
+        </Panel>
+      </div>
+    );
   return (
     <>
       <form noValidate class="pk-scenes__editor" {...form.handlers} onSubmit={(event) => void save(event)}>

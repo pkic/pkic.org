@@ -23,9 +23,10 @@ import "./OverlayLayouts.css";
 /**
  * The event's scenes in three columns: the list, the selected scene's
  * canvas, and its graphics; then the rooms' browser sources. The selected
- * scene follows the address, so a bookmark opens the same one.
+ * scene follows the address, so a bookmark opens the same one. Without
+ * `canEdit` the scenes are only shown: the list and the selected scene drawn.
  */
-export function EventLiveOverlayLayouts({ slug }: { slug: string }) {
+export function EventLiveOverlayLayouts({ slug, canEdit }: { slug: string; canEdit: boolean }) {
   const endpoint = `/api/v1/events/${encodeURIComponent(slug)}/settings/live/layouts`;
   const loaded = useData(() => getJson(endpoint, eventLiveOverlayLayoutsResponseSchema), [slug]);
   const [saved, setSaved] = useState<EventLiveOverlayLayoutsResponse | null>(null);
@@ -73,10 +74,12 @@ export function EventLiveOverlayLayouts({ slug }: { slug: string }) {
         <div class="pk-scenes__columns">
           <Panel class="pk-scenes__list">
             <PanelHeader title="Scenes" headingLevel={4}>
-              <Button onClick={() => setCreating({ from: current, duplicate: false })}>
-                <IconPlus />
-                New scene
-              </Button>
+              {canEdit ? (
+                <Button onClick={() => setCreating({ from: current, duplicate: false })}>
+                  <IconPlus />
+                  New scene
+                </Button>
+              ) : null}
             </PanelHeader>
             <PanelBody flush>
               <nav aria-label="Scenes">
@@ -105,6 +108,7 @@ export function EventLiveOverlayLayouts({ slug }: { slug: string }) {
             layout={current}
             layouts={layouts}
             positions={saved.positions}
+            canEdit={canEdit}
             onDirty={setDirty}
             onDuplicate={() => setCreating({ from: current, duplicate: true })}
             onSaved={(next, select) => {

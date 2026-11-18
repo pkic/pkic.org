@@ -4,6 +4,8 @@ import { act } from "preact/test-utils";
 import { afterEach, expect, it, vi } from "vitest";
 import { eventDetailSchema, eventSettingsUpdateSchema } from "../../assets/shared/schemas/event-management";
 import { LiveChatRetentionSettings } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/LiveChatRetentionSettings";
+import { portalSession } from "../../assets/ts/member-flows/portal/state";
+import { portalSessionFixture } from "../helpers/portal-session";
 import { beginRecordEdit } from "./helpers/record-edit";
 
 const event = eventDetailSchema.parse({
@@ -38,8 +40,17 @@ let root: HTMLElement;
 afterEach(() => {
   render(null, root);
   root.remove();
+  portalSession.value = null;
   vi.unstubAllGlobals();
 });
+
+/** Signs in staff who hold exactly this permission on the event. */
+function holds(permission: string) {
+  portalSession.value = portalSessionFixture({
+    staff: true,
+    grants: [{ permission, contextType: "event", contextId: event.id }],
+  });
+}
 
 async function settle() {
   await act(async () => {
@@ -103,4 +114,29 @@ it("shows the choice without an edit action to those who cannot change the event
     expect(root.textContent).toContain("1 week after each session");
   });
   expect(root.querySelector('[aria-label="Live chat settings actions"]')).toBeNull();
+});
+
+it("offers the chat download and erase to the event's organizers, not to a room operator", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ event })),
+  );
+  const archive = async (permission: string) => {
+    holds(permission);
+    root = document.createElement("div");
+    document.body.append(root);
+    await act(async () => render(<LiveChatRetentionSettings slug="summit" canEdit={false} />, root));
+    await vi.waitFor(async () => {
+      await settle();
+      expect(root.textContent).toContain("1 week after each session");
+    });
+    const actions = [...root.querySelectorAll("button")].map(
+      (action) => action.getAttribute("aria-label") ?? action.textContent!.trim(),
+    );
+    render(null, root);
+    root.remove();
+    return actions;
+  };
+  expect(await archive("agenda:live_moderate")).toEqual([]);
+  expect(await archive("events:write")).toEqual(["Download chat (CSV)", "Erase chat…"]);
 });

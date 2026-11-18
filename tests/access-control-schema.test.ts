@@ -129,6 +129,7 @@ describe("canonical permission metadata", () => {
     "proposals:score",
     "agenda:scan",
     "agenda:live_moderate",
+    "agenda:live_setup",
   ] as const)("classifies %s as a write without guessing its suffix", (permission) => {
     expect(PERMISSION_METADATA[permission].access).toBe("write");
   });

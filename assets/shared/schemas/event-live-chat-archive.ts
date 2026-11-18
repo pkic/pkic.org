@@ -13,7 +13,8 @@ export const liveChatEraseResponseSchema = z
   .strict();
 export type LiveChatEraseResponse = z.infer<typeof liveChatEraseResponseSchema>;
 
-const common = { ...requiresPermissions("agenda:live_moderate"), tags: ["Events"] };
+/** The kept chat belongs to the event's records: whoever may change the event's settings downloads and erases it. */
+const common = { ...requiresPermissions("events:write"), tags: ["Events"] };
 
 export const liveChatArchiveExportRouteSchema = {
   ...common,

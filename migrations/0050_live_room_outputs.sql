@@ -18,3 +18,8 @@ CREATE TABLE event_agenda_room_outputs (
   UNIQUE (room_id, code),
   FOREIGN KEY (event_id, room_id) REFERENCES event_agenda_rooms(event_id, id) ON DELETE CASCADE
 );
+-- Grants `agenda:live_setup` (changing the scenes every room of an event shares) to administrators and event organizers.
+INSERT INTO role_permissions(id,role_id,permission,created_at)
+SELECT lower(hex(randomblob(16))),candidate.role_id,'agenda:live_setup',strftime('%Y-%m-%dT%H:%M:%fZ','now')
+FROM (SELECT 'role-admin' AS role_id UNION ALL SELECT 'role-event_organizer') AS candidate
+WHERE NOT EXISTS(SELECT 1 FROM role_permissions existing WHERE existing.role_id=candidate.role_id AND existing.permission='agenda:live_setup');

@@ -7,13 +7,14 @@ import {
 } from "./live-overlay-layout";
 import { authErrors, ok, requiresPermissions } from "./route-contract";
 
-const common = {
-  tags: ["Event live settings"],
-  ...requiresPermissions("agenda:live_moderate"),
-};
+const tags = ["Event live settings"];
+/** Room operators load the event's layouts. */
+const read = { tags, ...requiresPermissions("agenda:live_moderate") };
+/** Every room shares the layouts, so changing them is for the people who set up the live studio. */
+const write = { tags, ...requiresPermissions("agenda:live_setup") };
 
 export const eventLiveOverlayLayoutsGetRouteSchema = {
-  ...common,
+  ...read,
   summary: "List the event's broadcast overlay layouts and shared element positions",
   description:
     "The built-in layouts, as saved for this event or as shipped, then the event's own, each element a layout " +
@@ -26,7 +27,7 @@ export const eventLiveOverlayLayoutsGetRouteSchema = {
 };
 
 export const eventLiveOverlayLayoutPutRouteSchema = {
-  ...common,
+  ...write,
   summary: "Create or replace one broadcast overlay layout",
   description:
     "Send a null expectedUpdatedAt to create a layout or to save a built-in one for the first time; otherwise send " +
@@ -48,7 +49,7 @@ export const eventLiveOverlayLayoutPutRouteSchema = {
 };
 
 export const eventLiveOverlayLayoutDeleteRouteSchema = {
-  ...common,
+  ...write,
   summary: "Delete one of the event's own overlay layouts",
   description: "Built-in layouts, the default among them, cannot be deleted; reset one by saving its preset instead.",
   request: { params: eventLiveOverlayLayoutParamsSchema },
@@ -59,7 +60,7 @@ export const eventLiveOverlayLayoutDeleteRouteSchema = {
 };
 
 export const eventLiveOverlayPositionsPutRouteSchema = {
-  ...common,
+  ...write,
   summary: "Replace the event's shared element positions",
   description:
     "Every layout element that shares its position moves with it; an element a layout places itself stays where it " +
@@ -76,7 +77,7 @@ export const eventLiveOverlayPositionsPutRouteSchema = {
 };
 
 export const eventLiveOverlayPositionsDeleteRouteSchema = {
-  ...common,
+  ...write,
   summary: "Reset the event's shared element positions to the built-in ones",
   description: "Layout elements that share their position move back to the built-in Full frame boxes.",
   request: { params: eventSlugParamsSchema },

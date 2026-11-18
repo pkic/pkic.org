@@ -86,6 +86,7 @@ export const PERMISSION_METADATA = {
   "agenda:leads_view": { domain: "agenda", access: "read", label: "View sponsor leads" },
   "agenda:leads_export": { domain: "agenda", access: "read", label: "Export sponsor leads" },
   "agenda:live_moderate": { domain: "agenda", access: "write", label: "Moderate live sessions" },
+  "agenda:live_setup": { domain: "agenda", access: "write", label: "Set up the live studio" },
   "agenda:screens_manage": { domain: "agenda", access: "write", label: "Manage event screens" },
   "admin:read": { domain: "admin", access: "read", label: "View platform settings" },
   "admin:write": { domain: "admin", access: "write", label: "Update platform settings" },

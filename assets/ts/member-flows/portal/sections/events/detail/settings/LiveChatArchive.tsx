@@ -15,7 +15,7 @@ function sessions(count: number) {
 }
 
 /**
- * Live moderators download every session's kept attendee chat in one file,
+ * Organizers download every session's kept attendee chat in one file,
  * then erase it. Erasing is its own confirmed step, so a download that failed
  * never costs the messages, and a failed download stays on this page.
  */

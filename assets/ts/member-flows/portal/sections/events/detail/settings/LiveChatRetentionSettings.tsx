@@ -31,7 +31,7 @@ const CHOICES: Record<KeepDays, { label: string; hint: string }> = {
   7: { label: "1 week", hint: "The chat goes with the rest of the session's live room." },
   90: {
     label: "90 days",
-    hint: "Only the attendee chat stays, so live moderators can download it below. Polls, questions, and the operator chat still go after a week.",
+    hint: "Only the attendee chat stays, so organizers can download it. Polls, questions, and the operator chat still go after a week.",
   },
 };
 
@@ -50,7 +50,7 @@ export function LiveChatRetentionSettings({
   const current = event ?? loaded.data?.event ?? null;
   if (loaded.error) return <ErrorAlert error={loaded.error} />;
   if (!current) return <Spinner label="Loading chat settings…" />;
-  // The kept chat is downloaded and erased beside the choice of how long it is kept, by the live moderators.
+  // The kept chat is downloaded and erased beside the choice of how long it is kept, by the event's organizers.
   return (
     <>
       <LiveChatRetentionPanel
@@ -64,7 +64,7 @@ export function LiveChatRetentionSettings({
             : undefined
         }
       />
-      {hasEventAgendaPermission(current.id, "agenda:live_moderate") ? <LiveChatArchive slug={slug} /> : null}
+      {hasEventAgendaPermission(current.id, "events:write") ? <LiveChatArchive slug={slug} /> : null}
     </>
   );
 }
