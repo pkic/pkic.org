@@ -354,17 +354,20 @@ One-time Cloudflare setup for the stable URL
    outside branch or PR cleanup. Cloudflare can evict the least recently
    deployed Preview when the account reaches its per-Worker limit.
 2. Wrangler enables `*.preview.pkic.org` for Preview traffic on the next
-   production deployment. For the bare hostname, create a proxied DNS record
-   if needed and a Single Redirect on the `pkic.org` zone matching
-   `http.host eq "preview.pkic.org"`. Set the dynamic destination to
+   production deployment. Verify DNS and HTTPS on the named and branch
+   Preview URLs before enabling the entry-point redirect. If DNS resolves
+   but TLS fails, enable Total TLS with Advanced Certificate Manager or
+   provision another certificate that covers `*.preview.pkic.org`.
+3. For the bare hostname, create a proxied DNS record if needed and a Single
+   Redirect on the `pkic.org` zone matching `http.host eq "preview.pkic.org"`.
+   Set the dynamic destination to
    `concat("https://main.preview.pkic.org", http.request.uri.path)`, use 307,
    and preserve the query string. Keep the bare hostname disabled for
    production Worker traffic.
-3. Verify DNS, certificates, the redirect, and both named and branch Preview
-   URLs. Preview builds set `X-Robots-Tag: noindex` on static assets. To cover
-   dynamic responses on the custom domain, set `X-Robots-Tag: noindex` in a
-   zone response header rule for `preview.pkic.org` and its subdomains.
-   Cloudflare Access can restrict Preview URLs to designated users.
+4. Preview builds add `X-Robots-Tag: noindex` to the generated `_headers` rule
+   for all static assets. Set `X-Robots-Tag: noindex` in a zone response header
+   rule for `preview.pkic.org` and its subdomains to cover Worker-generated
+   responses. Cloudflare Access can restrict Preview URLs to designated users.
 
 Manual deployment requires an explicit request and confirmed target. Build and
 deploy together because Vite selects the Wrangler environment at build time.
