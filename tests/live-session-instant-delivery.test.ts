@@ -73,6 +73,7 @@ describe("live interaction stays local to its Durable Object", () => {
             db,
             access,
             refreshGraphics: () => Reflect.get(instance, "graphics").refresh(),
+            preparedQuestions: Reflect.get(instance, "preparedQuestions"),
             copyDue: () => Date.now() + 60_000,
             purge: async () => {
               throw new Error("An active room must not be purged");

@@ -32,6 +32,11 @@ import {
   liveStageDisplaySettingsSnapshotSchema,
   type LiveStageDisplaySettings,
 } from "../../../../assets/shared/schemas/live-stage-display-settings";
+import {
+  liveScreenSyncSchema,
+  liveScreenSyncSnapshotSchema,
+  type LiveScreenSync,
+} from "../../../../assets/shared/schemas/live-screen-sync";
 import { copyableLivePolls, type LivePollCopy } from "./room-poll-store";
 import type { LiveRoomSql } from "./room-sql";
 
@@ -70,7 +75,19 @@ export interface LiveQuestionRow {
   author_photo_url: string | null;
   /** Who the author was as they asked (`LiveAuthorStamp` JSON); withheld like the photo from an anonymous question. */
   author_json: string | null;
+  /** The credit key of the person the question is for; null when it is for everyone. */
+  addressed_to: string | null;
+  /** The account of that person, when their credit has one; reporting reads it. */
+  addressed_to_user_id: string | null;
+  /** 1 when operators prepared the question; only operators are told. */
+  prepared: number;
   change_seq: number;
+}
+
+/** The person a question is for: a session credit's key and, when the credit names one, their account. */
+export interface LiveQuestionAddressee {
+  creditKey: string;
+  userId: string | null;
 }
 
 export interface LiveStaffActionRow {
@@ -96,8 +113,11 @@ const QUESTION_SELECT = `SELECT q.id, q.author_user_id, q.author_name, q.anonymo
   COALESCE(author_change.revision,0) AS author_revision, COALESCE(author_change.withdrawn,0) AS author_withdrawn, q.status, q.votes, q.asked_at,
   q.answered_at, q.moderated_by_user_id, q.moderated_by_name, q.moderated_at, r.text AS rewrite_text,
   r.by_user_id AS rewritten_by_user_id, r.by_name AS rewritten_by_name, r.at AS rewritten_at,
-  photo.photo_url AS author_photo_url, authorship.author_json, q.change_seq
+  photo.photo_url AS author_photo_url, authorship.author_json, addressee.credit_key AS addressed_to,
+  addressee.user_id AS addressed_to_user_id, CASE WHEN prepared.question_id IS NULL THEN 0 ELSE 1 END AS prepared, q.change_seq
   FROM questions q LEFT JOIN question_rewrites r ON r.question_id = q.id
+  LEFT JOIN question_addressees addressee ON addressee.question_id = q.id
+  LEFT JOIN question_prepared prepared ON prepared.question_id = q.id
   LEFT JOIN question_author_photos photo ON photo.question_id = q.id
   LEFT JOIN question_authorship authorship ON authorship.question_id = q.id
   LEFT JOIN question_author_changes author_change ON author_change.question_id = q.id`;
@@ -223,6 +243,9 @@ export class LiveRoomStore {
     askedAt: string;
     /** Kept only for a question asked by name; an anonymous one never stores a photo. */
     authorPhotoUrl: string | null;
+    addressee?: LiveQuestionAddressee | null;
+    /** Operators prepared it; the room tells nobody else. */
+    prepared?: boolean;
   }): void {
     this.sql.exec(
       "INSERT INTO questions(id, author_user_id, author_name, anonymous, body, status, votes, asked_at, change_seq) VALUES (?, ?, ?, ?, ?, 'pending', 0, ?, ?)",
@@ -240,6 +263,14 @@ export class LiveRoomStore {
         question.id,
         question.authorPhotoUrl,
       );
+    if (question.addressee)
+      this.sql.exec(
+        "INSERT INTO question_addressees(question_id, credit_key, user_id) VALUES (?, ?, ?)",
+        question.id,
+        question.addressee.creditKey,
+        question.addressee.userId,
+      );
+    if (question.prepared) this.sql.exec("INSERT INTO question_prepared(question_id) VALUES (?)", question.id);
   }
 
   /** One vote per person: records or withdraws it and recounts. */
@@ -315,6 +346,14 @@ export class LiveRoomStore {
     );
     this.sql.exec(
       "DELETE FROM question_author_changes WHERE question_id IN (SELECT id FROM questions WHERE author_user_id=?)",
+      userId,
+    );
+    this.sql.exec(
+      "DELETE FROM question_addressees WHERE question_id IN (SELECT id FROM questions WHERE author_user_id=?)",
+      userId,
+    );
+    this.sql.exec(
+      "DELETE FROM question_prepared WHERE question_id IN (SELECT id FROM questions WHERE author_user_id=?)",
       userId,
     );
     this.sql.exec("DELETE FROM question_write_times WHERE user_id=?", userId);
@@ -401,6 +440,16 @@ export class LiveRoomStore {
 
   saveStageDisplaySettings(settings: LiveStageDisplaySettings): void {
     this.saveControl("stageDisplaySettings", liveStageDisplaySettingsSchema.parse(settings));
+  }
+
+  /** Whether each room screen follows Program; a stored value that no longer parses reads as the defaults. */
+  screenSync(): LiveScreenSync {
+    const saved = liveScreenSyncSnapshotSchema.safeParse(this.control("screenSync") ?? undefined);
+    return saved.success ? saved.data : liveScreenSyncSnapshotSchema.parse(undefined);
+  }
+
+  saveScreenSync(sync: LiveScreenSync): void {
+    this.saveControl("screenSync", liveScreenSyncSchema.parse(sync));
   }
 
   queue(): LiveQueue {

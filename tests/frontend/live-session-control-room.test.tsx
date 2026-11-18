@@ -1,4 +1,5 @@
 import { DEFAULT_LIVE_CHECK_IN_TEXT } from "../../assets/shared/schemas/live-session-graphic-settings";
+import { LIVE_GRAPHIC_THEME_DEFAULTS } from "../../assets/shared/live-graphic-theme";
 // @vitest-environment jsdom
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -57,6 +58,24 @@ describe("live control room Transition", () => {
     expect(panel(host, "Preview").querySelector(".pk-live-overlay__name")?.textContent).toBe("Sam Speaker");
   });
 
+  it("transitions Preview to a screen instead of Program when the operator chooses one", () => {
+    const { host, live } = mountDesk();
+    const snapshot = liveSnapshot({ viewer: OPERATOR });
+    const credit = snapshot.session.credits[0]!;
+    void act(() =>
+      live.latest().deliver({ type: "preview.changed", composition: { ...snapshot.preview, lowerThird: credit } }),
+    );
+    void act(() => labeled(host, "Transition to").click());
+    void act(() =>
+      [...document.querySelectorAll<HTMLElement>('[role^="menuitem"]')]
+        .find((item) => item.textContent?.includes("Projector"))!
+        .click(),
+    );
+    void act(() => take(host, "Projector").click());
+    const sent = liveRoomClientMessageSchema.parse(commands(live).at(-1));
+    expect(sent).toMatchObject({ type: "aux.set", output: "projector", composition: { creditKey: credit.key } });
+  });
+
   it("clears the shared Preview from its monitor", () => {
     const { host, live } = mountDesk();
     const snapshot = liveSnapshot({ viewer: OPERATOR });
@@ -83,7 +102,7 @@ describe("live control room Transition", () => {
           panelists: null,
           schedule: null,
           checkIn: null,
-          checkInTheme: "black-on-white",
+          checkInTheme: LIVE_GRAPHIC_THEME_DEFAULTS.checkIn,
           checkInText: DEFAULT_LIVE_CHECK_IN_TEXT,
           lowerThirdMotion: "animated",
           timerGraphics: [],
@@ -198,9 +217,9 @@ describe("live control room panels", () => {
     const pending = liveQuestion({ status: "pending", votes: 0, anonymous: true, authorName: "Ada Attendee" });
     const { host, live } = mountDesk(liveSnapshot({ viewer: OPERATOR, questions: [pending] }));
     const questions = panel(host, "Questions");
-    expect(questions.textContent).toContain("Awaiting moderation");
+    expect(questions.textContent).toContain("Pending");
     expect(questions.textContent).toContain("1 open");
-    void act(() => button(questions, "Approve").click());
+    void act(() => labeled(questions, "Approve").click());
     void act(() =>
       live.latest().deliver({
         type: "question.changed",
@@ -208,11 +227,46 @@ describe("live control room panels", () => {
       }),
     );
     void act(() => labeled(questions, "Show question on air").click());
-    void act(() => button(questions, "Answered").click());
+    void act(() => labeled(questions, "Mark answered").click());
     expect(commands(live)).toEqual([
       { type: "question.moderate", questionId: LIVE_QUESTION, expectedRevision: 0, status: "approved" },
       { type: "stage.question", questionId: LIVE_QUESTION },
       { type: "question.moderate", questionId: LIVE_QUESTION, expectedRevision: 0, status: "answered" },
+    ]);
+  });
+
+  it("prepares a question for a speaker, lists it under the open ones and releases it on demand", () => {
+    const releaseAt = new Date(Date.now() + 15 * 60_000).toISOString();
+    const prepared = {
+      id: "0123456789abcdef0123456789abcdef",
+      text: "Where do we start?",
+      addressedTo: "user:speaker",
+      releaseAt,
+      revision: 0,
+    };
+    const { host, live } = mountDesk();
+    const questions = panel(host, "Questions");
+    void act(() => questions.querySelector<HTMLButtonElement>("button[aria-label='Prepare question']")!.click());
+    type(host.querySelector<HTMLTextAreaElement>("textarea[name=text]")!, "Where do we start?");
+    const addressee = host.querySelector<HTMLSelectElement>("select[name=addressedTo]")!;
+    void act(() => {
+      addressee.value = "user:speaker";
+      addressee.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    void act(() => button(host, "Prepare question").click());
+    void act(() =>
+      live.latest().deliver({
+        type: "question.prepared.changed",
+        preparedQuestions: [prepared],
+        window: { from: new Date().toISOString(), until: releaseAt },
+      }),
+    );
+    expect(questions.textContent).toContain("0 open · 1 prepared");
+    expect(questions.textContent).toContain("For Sam Speaker");
+    void act(() => labeled(questions, "Release now").click());
+    expect(commands(live)).toEqual([
+      { type: "question.prepare", preparedId: null, text: "Where do we start?", addressedTo: "user:speaker" },
+      { type: "question.prepared.release", preparedId: "0123456789abcdef0123456789abcdef" },
     ]);
   });
 
@@ -253,9 +307,9 @@ describe("live control room panels", () => {
       }),
     );
     const questions = panel(host, "Questions");
-    const pictured = [...questions.querySelectorAll<HTMLImageElement>(".pk-live-question img")];
+    const pictured = [...questions.querySelectorAll<HTMLImageElement>(".pk-studio-row img")];
     expect(pictured).toHaveLength(1);
-    expect(pictured[0]!.closest(".pk-live-question")?.textContent).toContain("Bea Attendee");
+    expect(pictured[0]!.closest(".pk-studio-row")?.textContent).toContain("Bea Attendee");
   });
 
   it("keeps a message flashing until an operator stops it from the on-stage footer", () => {

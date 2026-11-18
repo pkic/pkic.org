@@ -194,7 +194,14 @@ export function MenuLevel({
                 {item.icon}
               </span>
             )}
-            {item.label}
+            {item.description ? (
+              <span class="pk-menu__text">
+                <span>{item.label}</span>
+                <span class="pk-menu__description">{item.description}</span>
+              </span>
+            ) : (
+              item.label
+            )}
             {item.children && <span aria-hidden="true"> ›</span>}
           </>
         );

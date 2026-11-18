@@ -4,11 +4,7 @@ import type { ClockZone } from "../../../../../../../../shared/event-clock";
 import { clockTimeZone } from "../../../../../../../../shared/event-clock";
 import { format24HourClockInZone, formatClockName } from "../../../../../../../../shared/format-date";
 import { liveTimerHasSettings } from "../../../../../../../../shared/live-timer-policy";
-import type {
-  LiveRoomClientMessage,
-  LiveRoomSession,
-  LiveTimer,
-} from "../../../../../../../../shared/schemas/live-session-room";
+import type { LiveRoomClientMessage, LiveTimer } from "../../../../../../../../shared/schemas/live-session-room";
 import {
   LIVE_TIMER_ZERO_ACTIONS,
   liveTimerAtZeroSchema,
@@ -32,7 +28,7 @@ import { FormSection } from "../../../../../../../ui/FormSection";
 import { Select, TextInput } from "../../../../../../../ui/TextControl";
 import { LiveTimerLookFields } from "../LiveTimerGraphicControls";
 import "./LiveTimerDialog.css";
-import { liveTimerTargetInstant } from "./LiveTimerAddForm";
+import { liveTimerNextInstant } from "./LiveTimerAddForm";
 
 const ZERO_LABELS: Record<LiveTimerZeroAction, string> = {
   overtime: "Keep counting as overtime",
@@ -66,7 +62,6 @@ const RECONNECTING = "The control room is reconnecting or busy. Try again when i
  */
 export function LiveTimerDialog({
   timer,
-  session,
   clock,
   graphic,
   send,
@@ -74,7 +69,6 @@ export function LiveTimerDialog({
   onClose,
 }: {
   timer: LiveTimer;
-  session: Pick<LiveRoomSession, "startAt">;
   clock: ClockZone;
   graphic: LiveTimerGraphic;
   send: (message: LiveRoomClientMessage) => boolean;
@@ -105,9 +99,8 @@ export function LiveTimerDialog({
   const warnAt = seconds(warning);
   const edit: Record<string, unknown> = { name };
   if (timer.kind === "duration") edit.durationSeconds = length;
-  // An unchanged time keeps the stored instant; a new one keeps the date the timer counts to.
-  if (timer.kind === "until" && time !== shownTime)
-    edit.targetAt = liveTimerTargetInstant(time, { startAt: opened.timer.targetAt ?? session.startAt }, zone);
+  // An unchanged time keeps the stored instant; a new one counts to its next coming occurrence, as when added.
+  if (timer.kind === "until" && time !== shownTime) edit.targetAt = liveTimerNextInstant(time, Date.now(), zone);
   const body = {
     edit,
     settings: {

@@ -12,6 +12,7 @@ import {
 import type { LiveRoomParticipant } from "./room-admission";
 import type { CustomAnswerValue } from "../../../../assets/shared/form-answer-rules";
 import type { LivePollStore } from "./room-poll-store";
+import { projectLivePreparedQuestion, type LivePreparedQuestionStore } from "./room-prepared-question-store";
 import {
   projectLivePoll,
   projectLiveQuestion,
@@ -20,6 +21,7 @@ import {
 } from "./room-projection";
 import type { LiveQuestionRow, LiveRoomStore } from "./room-store";
 import { seesStageDisplayNext } from "../../../../assets/shared/live-stage-display";
+import { NO_LIVE_ROOM_SOURCES, type LiveRoomSources } from "../../../../assets/shared/schemas/live-room-sources";
 
 const EMPTY_QUEUE = { question: [], "lower-third": [], poll: [], change: null };
 
@@ -32,7 +34,8 @@ function roomOutputMessage(message: LiveRoomServerMessage): boolean {
   return (
     message.type === "aux.changed" ||
     message.type === "speaker.message.changed" ||
-    message.type === "stage.display.settings.changed"
+    message.type === "stage.display.settings.changed" ||
+    message.type === "screen.sync.changed"
   );
 }
 
@@ -45,6 +48,7 @@ export class LiveRoomBroadcast {
     private readonly ctx: DurableObjectState,
     private readonly store: LiveRoomStore,
     private readonly polls: LivePollStore,
+    private readonly prepared: LivePreparedQuestionStore,
     private readonly chat: LiveChatFeed,
     private readonly db: DatabaseLike,
     private readonly authorize: (sockets: WebSocket[]) => Promise<WebSocket[]>,
@@ -85,6 +89,8 @@ export class LiveRoomBroadcast {
         .flatMap(
           (poll) => projectLivePoll(poll, viewer, answers.get(poll.id) ?? null, this.store.pollOnAir(poll.id)) ?? [],
         ),
+      preparedQuestions: operator ? this.prepared.list().map(projectLivePreparedQuestion) : [],
+      preparedQuestionWindow: operator ? this.prepared.window(session) : null,
       overlayMode: this.store.overlayMode(),
       ...this.chat.snapshot(viewer),
       stage,
@@ -99,6 +105,8 @@ export class LiveRoomBroadcast {
       stageDisplayNext: seesStageDisplayNext(viewer) ? this.store.preview().question : null,
       stageDisplayNextVotes: seesStageDisplayNext(viewer) ? this.nextVotes() : null,
       stageDisplaySettings: this.store.stageDisplaySettings(),
+      screenSync: this.store.screenSync(),
+      sources: operator ? this.sources() : NO_LIVE_ROOM_SOURCES,
     });
   }
 
@@ -207,6 +215,26 @@ export class LiveRoomBroadcast {
     return [...people.values()].sort((left, right) => left.name.localeCompare(right.name));
   }
 
+  /** How many read-only sources draw each output now; `leaving` is a socket that is closing. */
+  sources(leaving?: WebSocket): LiveRoomSources {
+    const sources = { ...NO_LIVE_ROOM_SOURCES };
+    for (const socket of this.ctx.getWebSockets("overlay")) {
+      if (socket === leaving || socket.readyState !== WebSocket.OPEN) continue;
+      const viewer = socket.deserializeAttachment() as LiveRoomParticipant;
+      if (viewer.role !== "overlay") continue;
+      sources[viewer.overlayOutput ?? "program"] += 1;
+    }
+    return sources;
+  }
+
+  async sourcesChanged(leaving?: WebSocket): Promise<void> {
+    const sources = this.sources(leaving);
+    await this.send(
+      (viewer) => (viewer.role === "operator" ? { type: "sources.changed", sources } : null),
+      (viewer) => viewer.role,
+    );
+  }
+
   async operatorsChanged(leaving?: WebSocket): Promise<void> {
     await this.send(
       (viewer, sockets) =>
@@ -216,14 +244,15 @@ export class LiveRoomBroadcast {
   }
 
   /**
-   * A message that reads the same for its whole audience; queue, Preview and
-   * added-people changes reach operators only, and the room's other outputs never reach attendees.
+   * A message that reads the same for its whole audience; queue, Preview,
+   * prepared-question and added-people changes reach operators only, and the room's other outputs never reach attendees.
    */
   async all(message: LiveRoomServerMessage): Promise<void> {
     const operatorsOnly =
       message.type === "queue.changed" ||
       message.type === "preview.changed" ||
       message.type === "credits.added.changed" ||
+      message.type === "question.prepared.changed" ||
       message.type === "program.cleared";
     const roomOutput = roomOutputMessage(message);
     const banned = message.type === "chat.removed" ? this.chat.banned() : new Set<string>();

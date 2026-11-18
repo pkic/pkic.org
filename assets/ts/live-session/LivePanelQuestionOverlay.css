@@ -1,0 +1,17 @@
+/*
+ * The question and the panel on one board: the question holds at most three
+ * lines at the top, and the panel sits along the bottom of the board.
+ */
+@layer components {
+  .pk-live-panel .pk-live-overlay__question-text {
+    --question-lines: 3;
+  }
+  .pk-live-panel__people {
+    display: grid;
+    gap: 28px;
+    margin-block-start: auto;
+  }
+  .pk-live-panel .pk-live-panelists__session {
+    font-size: var(--pk-live-board-headline-type-compact);
+  }
+}

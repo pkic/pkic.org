@@ -1,4 +1,5 @@
 import { DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS } from "../../../../../../../../shared/schemas/live-stage-display-settings";
+import { DEFAULT_LIVE_SCREEN_SYNC } from "../../../../../../../../shared/schemas/live-screen-sync";
 import {
   DEFAULT_LIVE_CHAT_FEED_CONFIG,
   DEFAULT_LIVE_TOP_QUESTIONS_CONFIG,
@@ -17,6 +18,7 @@ import { DEFAULT_LIVE_SCHEDULE_CONFIG } from "../../../../../../../../shared/sch
 import { DEFAULT_LIVE_TICKER_CONTEXT } from "../../../../../../../../shared/schemas/live-session-ticker";
 import { defaultLiveTimerGraphic } from "../../../../../../../../shared/schemas/live-session-timer";
 import type { LiveRoomState } from "../../../../../../../live-session/live-room-state";
+import { NO_LIVE_ROOM_SOURCES } from "../../../../../../../../shared/schemas/live-room-sources";
 
 /**
  * A room with every graphic on air, so the layout editor's canvas shows each
@@ -79,6 +81,8 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
     },
     viewer: { role: "operator", name: "Sample operator" },
     questions: [],
+    preparedQuestions: [],
+    preparedQuestionWindow: null,
     polls: [
       {
         id: POLL,
@@ -110,6 +114,7 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
         authorName: null,
         authorPhotoUrl: null,
         authorAffiliation: null,
+        addressedTo: null,
       },
       questionChange: null,
       lowerThird: credits[0]!,
@@ -149,7 +154,12 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
         text: DEFAULT_LIVE_CHECK_IN_TEXT,
       },
       timerGraphics: [
-        { ...defaultLiveTimerGraphic(LIVE_SESSION_TIMER_ID), presentation: "digital", label: "Time left" },
+        {
+          ...defaultLiveTimerGraphic(LIVE_SESSION_TIMER_ID),
+          presentation: "digital",
+          showLabel: true,
+          label: "Time left",
+        },
       ],
       topQuestions: {
         config: DEFAULT_LIVE_TOP_QUESTIONS_CONFIG,
@@ -179,6 +189,8 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
     stageDisplayNext: null,
     stageDisplayNextVotes: null,
     stageDisplaySettings: DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS,
+    screenSync: DEFAULT_LIVE_SCREEN_SYNC,
+    sources: NO_LIVE_ROOM_SOURCES,
     burst: null,
     refusal: null,
   };

@@ -20,54 +20,18 @@
   .pk-output-target.pk-segmented > .pk-btn + .pk-btn {
     border-inline-start-color: var(--pk-line-soft);
   }
-  .pk-output-target > .pk-menu {
-    display: flex;
-    border-inline-start: 1px solid var(--pk-line-soft);
-  }
-  .pk-output-target .pk-output-target__aux {
-    border: 0;
-    border-radius: 0;
-    white-space: nowrap;
-    /* The menu's plain trigger drops its padding; this segment keeps the same inset as its neighbours. */
-    padding-inline: var(--pk-2);
-  }
   .pk-output-target[data-integrated="true"] {
     display: grid;
-    grid-template-columns: 1fr 1fr 1.2fr;
+    grid-template-columns: 1fr 1fr;
     inline-size: 100%;
     border-inline: 0;
     border-block-end: 0;
     border-radius: 0;
   }
-  .pk-output-target[data-integrated="true"] .pk-output-target__aux {
-    inline-size: 100%;
-    justify-content: center;
-  }
 
   /* Another operator on a button: an inset ring in their presence color, beside their initials. */
   .pk-output-target > .pk-output-target__button[data-presence-color] {
     box-shadow: inset 0 0 0 2px var(--live-presence);
-  }
-  .pk-output-target[data-presence-aux="0"] {
-    --live-presence-aux: var(--live-presence-0);
-  }
-  .pk-output-target[data-presence-aux="1"] {
-    --live-presence-aux: var(--live-presence-1);
-  }
-  .pk-output-target[data-presence-aux="2"] {
-    --live-presence-aux: var(--live-presence-2);
-  }
-  .pk-output-target[data-presence-aux="3"] {
-    --live-presence-aux: var(--live-presence-3);
-  }
-  .pk-output-target[data-presence-aux="4"] {
-    --live-presence-aux: var(--live-presence-4);
-  }
-  .pk-output-target[data-presence-aux="5"] {
-    --live-presence-aux: var(--live-presence-5);
-  }
-  .pk-output-target[data-presence-aux] .pk-output-target__aux {
-    box-shadow: inset 0 0 0 2px var(--live-presence-aux);
   }
 }
 
@@ -81,8 +45,17 @@
     background: var(--live-tally-program);
     color: var(--pk-on-solid);
   }
-  .pk-output-target[data-aux-active] .pk-output-target__aux {
-    background: var(--live-tally-aux);
-    color: var(--pk-on-solid);
+}
+
+/* On air but covered by a board: Program's color, hatched, so it reads as live yet unseen. */
+@layer utilities {
+  .pk-output-target > .pk-output-target__button[aria-pressed="true"][data-destination="program"][data-covered] {
+    background: repeating-linear-gradient(
+      -45deg,
+      color-mix(in oklab, var(--live-tally-program) 22%, transparent) 0 4px,
+      transparent 4px 8px
+    );
+    box-shadow: inset 0 0 0 1px var(--live-tally-program);
+    color: var(--pk-danger-ink);
   }
 }

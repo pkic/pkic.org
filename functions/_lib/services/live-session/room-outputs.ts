@@ -11,6 +11,7 @@ import type {
   LiveRoomSession,
 } from "../../../../assets/shared/schemas/live-session-room";
 import type { LiveStageDisplaySettingsPatch } from "../../../../assets/shared/schemas/live-stage-display-settings";
+import type { LiveSyncedScreen } from "../../../../assets/shared/schemas/live-screen-sync";
 import type { LiveControlOutcome } from "./room-controls";
 import { composeLiveStage, type ResolvedComposition } from "./room-composition";
 import type { LivePollStore } from "./room-poll-store";
@@ -83,6 +84,14 @@ export class LiveRoomOutputs {
     this.store.saveStageDisplaySettings(settings);
     this.store.recordStaffAction(operator.userId, "live_session.stage_display_settings", patch, at);
     return { messages: [{ type: "stage.display.settings.changed", settings }] };
+  }
+
+  /** Whether one of the room's screens follows Program. */
+  setScreenSync(operator: Operator, output: LiveSyncedScreen, sync: boolean, at: string): LiveControlOutcome {
+    const screenSync = { ...this.store.screenSync(), [output]: sync };
+    this.store.saveScreenSync(screenSync);
+    this.store.recordStaffAction(operator.userId, "live_session.screen_sync", { output, sync }, at);
+    return { messages: [{ type: "screen.sync.changed", screenSync }] };
   }
 
   /** A rewritten question already on an auxiliary output or Preview shows its new text there too. */

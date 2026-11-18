@@ -33,7 +33,15 @@ function Screen({ children }: { children: ComponentChildren }) {
   );
 }
 
-function StageDisplay({ state, marker }: { state: LiveRoomState; marker: ScreenMarker }) {
+function StageDisplay({
+  state,
+  marker,
+  output = "stage-display",
+}: {
+  state: LiveRoomState;
+  marker: ScreenMarker;
+  output?: "stage-display" | "projector";
+}) {
   return (
     <Screen>
       <ScreenView
@@ -41,7 +49,7 @@ function StageDisplay({ state, marker }: { state: LiveRoomState; marker: ScreenM
         now={SCREEN_FIXTURE_NOW}
         display={{
           kind: "output",
-          output: "stage-display",
+          output,
           layout: null,
           roomId: SCREEN_FIXTURE.roomId,
           state,
@@ -129,6 +137,12 @@ export const eventScreenSections: PreviewSection[] = [
     title: "Screen: auto mode",
     note: "Still offline after the studio's session ended: the screen follows its copy of the room's agenda.",
     render: () => <StageDisplay state={autoState} marker={{ kind: "auto" }} />,
+  },
+  {
+    id: "screen-projector-auto",
+    title: "Screen: projector, auto mode",
+    note: "The projector follows the same agenda copy; the audience sees only the offline dot, not a badge.",
+    render: () => <StageDisplay state={autoState} marker={{ kind: "auto" }} output="projector" />,
   },
   {
     id: "screen-stage-ready",

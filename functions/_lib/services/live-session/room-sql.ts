@@ -58,6 +58,14 @@ CREATE INDEX IF NOT EXISTS question_votes_user ON question_votes(user_id);
 CREATE TABLE IF NOT EXISTS question_author_photos (question_id TEXT PRIMARY KEY, photo_url TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS question_rewrites (
   question_id TEXT PRIMARY KEY, text TEXT NOT NULL, by_user_id TEXT NOT NULL, by_name TEXT NOT NULL, at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS question_addressees (question_id TEXT PRIMARY KEY, credit_key TEXT NOT NULL, user_id TEXT);
+CREATE TABLE IF NOT EXISTS question_prepared (question_id TEXT PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS prepared_questions (
+  id TEXT PRIMARY KEY, body TEXT NOT NULL, addressed_to_credit_key TEXT, addressed_to_user_id TEXT,
+  release_at TEXT NOT NULL, created_by_user_id TEXT NOT NULL, created_by_name TEXT NOT NULL,
+  created_at TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS prepared_questions_release ON prepared_questions(release_at, id);
+CREATE INDEX IF NOT EXISTS prepared_questions_author ON prepared_questions(created_by_user_id);
 CREATE TABLE IF NOT EXISTS session_polls (
   id TEXT PRIMARY KEY, field_json TEXT NOT NULL, show_results INTEGER NOT NULL, status TEXT NOT NULL,
   respondents INTEGER NOT NULL DEFAULT 0, created_by_user_id TEXT NOT NULL, created_at TEXT NOT NULL,

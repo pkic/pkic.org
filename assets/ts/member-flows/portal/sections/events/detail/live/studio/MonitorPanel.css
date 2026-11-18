@@ -97,35 +97,7 @@
     }
   }
 
-  .pk-studio-monitor,
-  .pk-studio-monitor__tile,
-  .pk-studio-monitor__name {
-    --tally: var(--live-tally-stream);
-  }
-  :is(
-    .pk-studio-monitor,
-    .pk-studio-monitor__tile,
-    .pk-studio-monitor__screen,
-    .pk-studio-monitor__name
-  )[data-tally="preview"] {
-    --tally: var(--live-tally-preview);
-  }
-  :is(
-    .pk-studio-monitor,
-    .pk-studio-monitor__tile,
-    .pk-studio-monitor__screen,
-    .pk-studio-monitor__name
-  )[data-tally="program"] {
-    --tally: var(--live-tally-program);
-  }
-  :is(
-    .pk-studio-monitor,
-    .pk-studio-monitor__tile,
-    .pk-studio-monitor__screen,
-    .pk-studio-monitor__name
-  )[data-tally="aux"] {
-    --tally: var(--live-tally-aux);
-  }
+  /* Each monitor's border and dot are its output's tally color, set by data-tally in live-tally.css. */
   /* A single monitor's header: its output, then the layout it is drawn in, on the left. */
   .pk-studio-monitor__heading {
     display: flex;
@@ -151,7 +123,7 @@
     min-inline-size: 0;
     margin: 0;
     overflow: hidden;
-    border: 2px solid var(--tally);
+    border: 2px var(--tally-line, solid) var(--tally, var(--pk-line));
     border-radius: var(--pk-radius);
     background: var(--pk-surface-sunk);
   }
@@ -181,7 +153,7 @@
     inline-size: 0.6rem;
     block-size: 0.6rem;
     border-radius: 50%;
-    background: var(--tally);
+    background: var(--tally, var(--pk-line));
   }
   /* The switcher abbreviation, PVW or PGM, without the browser's dotted underline. */
   .pk-studio-monitor__label {
@@ -204,9 +176,45 @@
     gap: var(--pk-1);
     margin-inline-start: auto;
   }
+  /* How many sources show the output: a screen and the number, amber only when nothing shows Program. */
+  .pk-studio-monitor__sources {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--pk-1);
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .pk-studio-monitor__sources-icon {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+  .pk-studio-monitor__sources[data-tone="warn"] {
+    color: var(--pk-warn-ink);
+    font-weight: 600;
+  }
+  /* Sync with Program: a small chip beside the icons, red like Program while on, quiet while off. */
+  .pk-studio-monitor__sync.pk-btn {
+    gap: var(--pk-1);
+    min-block-size: 0;
+    padding: 0.125rem var(--pk-2);
+    border: 1px solid var(--pk-line);
+    font-size: var(--pk-text-xs);
+    font-weight: 600;
+    color: var(--pk-ink-faint);
+  }
+  .pk-studio-monitor__sync.pk-btn[aria-pressed="true"] {
+    border-color: var(--tally);
+    border-style: var(--tally-line);
+    background: color-mix(in oklch, var(--tally) 10%, transparent);
+    color: var(--tally);
+  }
   /*
-   * On a small card the purpose goes first, then the layout's name, then the
-   * output's name beside its tag; Clear and full screen always stay.
+   * On a small card the purpose goes first, then the output's name beside
+   * its tag, and Sync keeps only its link; the layout, Clear and full
+   * screen always stay.
    */
   @container monitor-card (width < 24rem) {
     .pk-studio-monitor__caption .pk-studio-monitor__purpose {
@@ -214,7 +222,7 @@
     }
   }
   @container monitor-card (width < 18rem) {
-    .pk-studio-monitor__caption .pk-studio-monitor__layout {
+    .pk-studio-monitor__sync-text {
       display: none;
     }
   }
@@ -225,7 +233,7 @@
     place-items: center;
     aspect-ratio: 16 / 9;
     overflow: hidden;
-    border: 2px solid var(--tally, var(--pk-line));
+    border: 2px var(--tally-line, solid) var(--tally, var(--pk-line));
     border-radius: var(--pk-radius);
     background: var(--pk-chrome-deep);
     cursor: zoom-in;
@@ -244,6 +252,18 @@
     color: color-mix(in srgb, var(--pk-on-solid) 62%, transparent);
     font-size: var(--pk-text-sm);
     text-align: center;
+    /* A graphic still leaving is drawn beneath it: the line waits out the slowest exit before it fades in. */
+    animation: pk-studio-monitor-idle-in var(--pk-dur) var(--pk-ease) calc(var(--pk-dur-slow) * 1.6) both;
+  }
+  @keyframes pk-studio-monitor-idle-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pk-studio-monitor__idle {
+      animation: none;
+    }
   }
 
   /* A free place: as large as a card, dashed, offering another output. */
@@ -272,14 +292,11 @@
     font: inherit;
     white-space: nowrap;
   }
-  /* The layout, named quietly; it gives way first on a narrow header. */
+  /* The layout as an icon, its name in the tooltip, so the header keeps its room. */
   .pk-studio-monitor__layout {
-    flex: 0 1 auto;
-    min-inline-size: 0;
+    flex: none;
     min-block-size: 1.5rem;
-    overflow: hidden;
     color: var(--pk-ink-muted);
-    text-overflow: ellipsis;
   }
   /* Full screen, an output takes the whole window at 16:9, its title bar the only chrome. */
   .pk-dialog.pk-studio-monitor__viewer {

@@ -91,4 +91,18 @@
     white-space: nowrap;
     text-overflow: ellipsis;
   }
+  /* Whom the question is for beside how it is asked: one line on a wide form, stacked on a phone. */
+  .pk-live-questions__ask-options {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: start;
+    gap: var(--pk-3) var(--pk-5);
+  }
+  .pk-live-questions__ask-options > .pk-field {
+    flex: 0 1 16rem;
+    min-inline-size: 0;
+  }
+  .pk-live-questions__ask-options > :last-child {
+    flex: 1 1 16rem;
+  }
 }

@@ -9,13 +9,14 @@ function prepareQuestionCopy(db: DatabaseLike, copy: LiveRoomPendingCopy, questi
   // A question whose author was anonymized keeps its redaction: the copy never writes their words back.
   return db
     .prepare(
-      `INSERT INTO event_session_questions(id,event_id,occurrence_id,author_user_id,anonymous,body,status,vote_count,asked_at,answered_at,moderated_by,moderated_at,display_text,rewritten_by,rewritten_at,copied_at)
-       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      `INSERT INTO event_session_questions(id,event_id,occurrence_id,author_user_id,anonymous,body,status,vote_count,asked_at,answered_at,moderated_by,moderated_at,display_text,rewritten_by,rewritten_at,prepared,addressed_to_user_id,copied_at)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(id) DO UPDATE SET body=CASE WHEN event_session_questions.redacted_at IS NULL THEN excluded.body ELSE event_session_questions.body END,
          status=excluded.status,vote_count=excluded.vote_count,answered_at=excluded.answered_at,
          moderated_by=excluded.moderated_by,moderated_at=excluded.moderated_at,
          display_text=CASE WHEN event_session_questions.redacted_at IS NULL THEN excluded.display_text END,
-         rewritten_by=excluded.rewritten_by,rewritten_at=excluded.rewritten_at,copied_at=excluded.copied_at`,
+         rewritten_by=excluded.rewritten_by,rewritten_at=excluded.rewritten_at,prepared=excluded.prepared,
+         addressed_to_user_id=excluded.addressed_to_user_id,copied_at=excluded.copied_at`,
     )
     .bind(
       question.id,
@@ -33,6 +34,8 @@ function prepareQuestionCopy(db: DatabaseLike, copy: LiveRoomPendingCopy, questi
       question.rewrite_text,
       question.rewritten_by_user_id,
       question.rewritten_at,
+      question.prepared,
+      question.addressed_to_user_id,
       copiedAt,
     );
 }

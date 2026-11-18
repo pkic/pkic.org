@@ -8,6 +8,7 @@ import {
   liveLowerThirdEmblemBox,
   stepLiveLowerThird,
 } from "../../shared/live-lower-third";
+import { liveCreditAffiliations } from "../../shared/live-room-credits";
 import { LiveCreditTitles } from "./LiveCreditTitles";
 import { LiveEmblemLock, LiveEmblemWheel } from "./LiveEmblem";
 import "./LiveLowerThird.css";
@@ -72,6 +73,8 @@ export function LiveLowerThird({ credit, animate }: { credit: LiveCredit | null;
     return () => clearTimeout(fallback);
   }, [moving, state.phase, state.shown?.key]);
   const shown = state.shown;
+  // A speaker with no title or organization gets the name bar alone, not an empty field under it.
+  const titled = shown !== null && liveCreditAffiliations(shown).length > 0;
   // The phase's own animation ending moves the lower third on. Listened for directly, so it does not
   // depend on how the runtime names the animation event handler.
   const graphic = useRef<HTMLDivElement>(null);
@@ -117,14 +120,16 @@ export function LiveLowerThird({ credit, animate }: { credit: LiveCredit | null;
                 <rect x="0" y={TITLE_TOP} width={width} height={height - TITLE_TOP} />
               </clipPath>
             </defs>
-            <g clip-path={`url(#${clip}-title)`}>
-              <g class="pk-live-overlay__lower-third-title-bar">
-                {/* The conference field, painted with the kit's own tokens. */}
-                <foreignObject {...TITLE_BAR}>
-                  <div class="pk-live-overlay__title-field" />
-                </foreignObject>
+            {titled ? (
+              <g clip-path={`url(#${clip}-title)`}>
+                <g class="pk-live-overlay__lower-third-title-bar">
+                  {/* The conference field, painted with the kit's own tokens. */}
+                  <foreignObject {...TITLE_BAR}>
+                    <div class="pk-live-overlay__title-field" />
+                  </foreignObject>
+                </g>
               </g>
-            </g>
+            ) : null}
             <g clip-path={`url(#${clip}-name)`}>
               <Bars credit={shown} stripe={`${clip}-stripe`} />
             </g>
@@ -149,9 +154,11 @@ export function LiveLowerThird({ credit, animate }: { credit: LiveCredit | null;
               </svg>
             </g>
           </svg>
-          <div class="pk-live-overlay__title">
-            <LiveCreditTitles credit={shown} />
-          </div>
+          {titled ? (
+            <div class="pk-live-overlay__title">
+              <LiveCreditTitles credit={shown} />
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

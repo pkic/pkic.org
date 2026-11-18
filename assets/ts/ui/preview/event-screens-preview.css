@@ -25,4 +25,18 @@
   .pk-preview__watch {
     max-inline-size: 48rem;
   }
+  /* Room above a specimen for the studio tour's callout. */
+  .pk-preview__tour-room {
+    padding-block-start: 14rem;
+  }
+  /* An open row menu, set at the end of its row with room to drop down. */
+  .pk-preview__open-menu {
+    display: flex;
+    justify-content: end;
+    min-block-size: 18rem;
+  }
+  /* A studio panel's width. */
+  .pk-preview__studio-panel {
+    max-inline-size: 42rem;
+  }
 }

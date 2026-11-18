@@ -79,6 +79,9 @@ export function projectLiveQuestion(
       operator && row.rewritten_by_name && row.rewritten_at
         ? { operatorName: row.rewritten_by_name, at: row.rewritten_at }
         : null,
+    addressedTo: row.addressed_to,
+    // Nobody but moderators can tell a prepared question from an asked one.
+    prepared: operator && row.prepared === 1,
   };
 }
 

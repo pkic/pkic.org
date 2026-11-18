@@ -4,9 +4,9 @@ import { IconPlus } from "../../../../../../../components/icons";
 import { Button } from "../../../../../../../ui/Button";
 
 /**
- * A panel's create action, in its header at the end: the system's icon-only
- * "+" (as on a collection toolbar), named and with a tooltip, which opens
- * what creates the item.
+ * A panel's create action, in its header before the panel's menu and close:
+ * the same ghost icon button as they are, named and with a tooltip, which
+ * opens what creates the item.
  */
 export function StudioCreateAction({
   label,
@@ -23,7 +23,7 @@ export function StudioCreateAction({
   return (
     <>
       <Button
-        variant="primary"
+        variant="ghost"
         icon
         aria-label={label}
         title={label}

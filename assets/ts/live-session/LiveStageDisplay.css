@@ -113,6 +113,22 @@
   .pk-live-stage-display__timer[data-size="small"] .pk-live-stage-display__countdown {
     font-size: var(--pk-stage-type-timer-small);
   }
+  /*
+   * The timers beside a question or a poll: one column as wide as their
+   * digits, so the content keeps the rest. Two fit the area's height, each
+   * with a closer label.
+   */
+  .pk-live-stage-display__timers {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    justify-content: center;
+    gap: 12px;
+  }
+  .pk-live-stage-display__timers .pk-live-stage-display__timer {
+    gap: 12px;
+  }
+
   .pk-live-stage-display__countdown[data-tone="warn"] {
     color: var(--pk-stage-warn);
   }
@@ -149,10 +165,6 @@
     background: var(--pk-stage-live);
     color: var(--pk-stage-live-ink);
   }
-  .pk-live-stage-display__tag[data-tone="next"] {
-    background: var(--pk-stage-next);
-    color: var(--pk-stage-next-ink);
-  }
   .pk-live-stage-display__question-text {
     display: -webkit-box;
     margin: 0;
@@ -163,6 +175,16 @@
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
     line-clamp: 3;
+  }
+  /*
+   * A question longer than three lines at the lead size steps down to the
+   * smallest size and takes up to five, so the speaker reads all of it.
+   */
+  .pk-live-stage-display__question-text:not([data-fit="regular"]),
+  .pk-live-stage-display__next[data-leads] .pk-live-stage-display__next-text:not([data-fit="regular"]) {
+    font-size: var(--pk-stage-type);
+    -webkit-line-clamp: 5;
+    line-clamp: 5;
   }
   .pk-live-stage-display__next {
     display: flex;
@@ -177,6 +199,11 @@
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
+  }
+  .pk-live-stage-display__next-label {
+    flex: none;
+    color: var(--pk-stage-ink-muted);
+    font-weight: 700;
   }
   .pk-live-stage-display__votes {
     flex: none;
@@ -292,7 +319,7 @@
     color: var(--pk-stage-live);
   }
   .pk-live-stage-display__marker[data-marker="next"] {
-    color: var(--pk-stage-next);
+    color: var(--pk-stage-ink-muted);
   }
   .pk-live-stage-display__speakers {
     display: flex;

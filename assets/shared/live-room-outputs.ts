@@ -15,6 +15,17 @@ export const LIVE_AUX_OUTPUT_DETAILS: Record<LiveAuxOutput, { label: string; sho
   "stage-display": { label: "Stage display", short: "DSP", purpose: "Speaker-facing" },
 };
 
+/**
+ * The auxiliary outputs the studio sends graphics to. The stage preview is
+ * the speaker's confidence screen, which follows the room on its own, so the
+ * studio does not offer it.
+ */
+export const LIVE_STUDIO_AUX_OUTPUTS = ["projector", "stage-display"] as const satisfies readonly LiveAuxOutput[];
+
+/** Where the studio's Transition puts Preview: Program, or one of the room's screens. */
+export const LIVE_TAKE_TARGETS = ["program", ...LIVE_STUDIO_AUX_OUTPUTS] as const;
+export type LiveTakeTarget = (typeof LIVE_TAKE_TARGETS)[number];
+
 /** The broadcast the room puts on air, as the studio and the room's screens name it. */
 export const LIVE_PROGRAM_OUTPUT_DETAILS = { label: "Program", short: "PGM", purpose: "What is on air" } as const;
 /** The operators' shared Preview: the next composition, which a Transition puts on Program. */

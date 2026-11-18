@@ -154,7 +154,7 @@ export function SpeakerMessagePanel({
             </Button>
           </>
         ) : (
-          <span class="pk-muted">Nothing on the stage display.</span>
+          <span class="pk-muted">No message on the stage display.</span>
         )}
       </div>
     </div>
