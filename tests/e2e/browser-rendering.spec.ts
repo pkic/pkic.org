@@ -19,6 +19,7 @@ import { createPortalWaitlistEvent } from "./helpers/waitlist-event";
 import { publishE2eSite } from "./helpers/site-publication";
 import { waitForCapturedEmail } from "./helpers/sendgrid";
 import { signInThroughCard } from "./helpers/sign-in-card";
+import { answerAccountOrganizationStep } from "./helpers/account-organization";
 import { proposalCreateResponseSchema, proposalCreateSchema } from "../../assets/shared/schemas/proposal-management";
 import type { ProposalEntryContext } from "../../assets/shared/schemas/proposal-entry";
 import { defaultedSourceTypeSchema } from "../../assets/shared/schemas/source";
@@ -325,9 +326,12 @@ async function fillProposalParticipant(
   page: Page,
   person: { email: string; firstName: string; lastName: string },
 ): Promise<ProposalEntryContext | undefined> {
-  const originalQuery = new URL(page.url()).searchParams;
+  const address = page.url();
+  const originalQuery = new URL(address).searchParams;
+  // Leave the page first: a request still in flight could set the earlier visitor's session again.
+  await page.goto("about:blank");
   await page.context().clearCookies();
-  await page.reload();
+  await page.goto(address);
   // The terms come first; the contact step is then the sign-in card.
   await agreeToAllTerms(page);
   await page.getByRole("button", { name: /Continue/i }).click();
@@ -675,27 +679,33 @@ test.describe("browser workflows", () => {
     const manageToken = new URL(manageUrl).searchParams.get("token");
     expect(manageToken).toBeTruthy();
 
-    // Invite two attendees via the API using Alice's manage token
-    const inviteResp = await page.evaluate(async (token) => {
-      const res = await fetch("/api/v1/events/pqc-conference-amsterdam-nl/invites", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          invites: [
-            { email: "friend-accept@example.test", firstName: "First", lastName: "Friend" },
-            { email: "friend-decline@example.test", firstName: "Second", lastName: "Friend" },
-          ],
-        }),
-      });
-      return res.status;
-    }, manageToken);
+    // Invite two attendees via the API using Alice's manage token. The accepted
+    // one names an organization, which then claims their domain: it is their own.
+    const friendAccept = ownDomainEmail("friend-accept");
+    const friendDecline = ownDomainEmail("friend-decline");
+    const inviteResp = await page.evaluate(
+      async ({ token, friendAccept, friendDecline }) => {
+        const res = await fetch("/api/v1/events/pqc-conference-amsterdam-nl/invites", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            invites: [
+              { email: friendAccept, firstName: "First", lastName: "Friend" },
+              { email: friendDecline, firstName: "Second", lastName: "Friend" },
+            ],
+          }),
+        });
+        return res.status;
+      },
+      { token: manageToken, friendAccept, friendDecline },
+    );
     expect(inviteResp).toBe(200);
 
     // Accept-invite flow
-    const acceptInviteEmail = await waitForCapturedEmail("friend-accept@example.test", "invited");
+    const acceptInviteEmail = await waitForCapturedEmail(friendAccept, "invited");
     const acceptRegistrationUrl = extractUrlFromEmail(acceptInviteEmail, "/register/");
     const acceptDeclineUrl = extractUrlFromEmail(acceptInviteEmail, "/invite/");
     expect(acceptRegistrationUrl).toBeTruthy();
@@ -706,19 +716,19 @@ test.describe("browser workflows", () => {
     await fillInviteRegistration(page, {
       firstName: "First",
       lastName: "Friend",
-      email: "friend-accept@example.test",
+      email: friendAccept,
       organization: `Friend Org ${Date.now()}`,
     });
     await expect(page.getByRole("heading", { name: /You're registered, First!/i })).toBeVisible();
     await screenshot("04-invited-attendee-registered");
 
     // Ensure the confirmation email arrived for the accepted invite
-    const acceptConfirmedEmail = await waitForCapturedEmail("friend-accept@example.test", "confirmed");
+    const acceptConfirmedEmail = await waitForCapturedEmail(friendAccept, "confirmed");
     const acceptManageUrl = extractUrlFromEmail(acceptConfirmedEmail, "/register/manage/");
     expect(acceptManageUrl).toBeTruthy();
 
     // Decline-invite flow
-    const declineInviteEmail = await waitForCapturedEmail("friend-decline@example.test", "invited");
+    const declineInviteEmail = await waitForCapturedEmail(friendDecline, "invited");
     const declineUrl = extractUrlFromEmail(declineInviteEmail, "/invite/");
 
     const invalidDeclineUrl = new URL(declineUrl);
@@ -727,11 +737,11 @@ test.describe("browser workflows", () => {
     await expect(page.getByRole("heading", { name: /Invalid invitation link/i })).toBeVisible();
     await expect(page.locator("[data-resend-invite-section]")).toBeVisible();
     await clearOutbox();
-    await page.locator("[data-resend-invite-email]").fill("friend-decline@example.test");
+    await page.locator("[data-resend-invite-email]").fill(friendDecline);
     await page.locator("[data-resend-invite-btn]").click();
     await expect(page.getByText(/a fresh link is on its way/i)).toBeVisible({ timeout: 10_000 });
 
-    const recoveredDeclineEmail = await waitForCapturedEmail("friend-decline@example.test", "Still considering");
+    const recoveredDeclineEmail = await waitForCapturedEmail(friendDecline, "Still considering");
     const recoveredDeclineUrl = extractUrlFromEmail(recoveredDeclineEmail, "/invite/");
     expect(new URL(recoveredDeclineUrl).searchParams.get("token")).toMatch(/^pkc1_/);
     await page.goto(recoveredDeclineUrl);
@@ -1212,7 +1222,13 @@ test.describe("browser workflows", () => {
     const recoveredEmail = await waitForCapturedEmail("co-sam-speaker@example.test", "sign-in link");
     const recoveredUrl = extractUrlFromEmail(recoveredEmail, "/portal/");
     await page.goto("about:blank");
+    const verified = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/v1/auth/verify-link" && response.request().method() === "POST",
+    );
     await page.goto(recoveredUrl);
+    // A first sign-in from a work address answers the organization step; this one is personal.
+    await answerAccountOrganizationStep(page, await verified);
     const skipPasskey = page.getByRole("button", { name: "Continue without a passkey" });
     await expect(skipPasskey).toBeVisible({ timeout: 15_000 });
     await skipPasskey.click();

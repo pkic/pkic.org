@@ -138,8 +138,7 @@ test("checks invitation access before signup and preserves the review on late ex
   await page.getByRole("button", { name: /Continue/ }).click();
   const terms = page.locator("[data-term-key] input[required]");
   for (const term of await terms.all()) await term.check();
-  const read = page.getByRole("link", { name: /Read:/ }).first();
-  await expect(read).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: /photos and videos/i })).toBeChecked();
   await captureStep(page, info, 4, "review");
   await page.screenshot({ path: "test-results/registration-shared-consents.png", fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });

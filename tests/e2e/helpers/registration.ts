@@ -116,9 +116,11 @@ export async function continueRegistrationWithEmail(
   const contact = page.locator("[data-registration-contact]");
   const card = page.locator("[data-registration-sign-in]").getByRole("region", { name: "Sign in", exact: true });
   const details = contact.getByText("Representation", { exact: true });
-  await expect(card.or(details).first()).toBeVisible({ timeout: 30_000 });
+  // Every signed-in visitor sees their address; an account without an organization confirms one in place instead of Representation.
+  const signedIn = contact.getByText("Email", { exact: true });
+  await expect(card.or(signedIn).first()).toBeVisible({ timeout: 30_000 });
   // A browser still signed in as an earlier registrant is a different visitor: they arrive signed out.
-  if ((await details.isVisible()) && !(await contact.getByText(values.email, { exact: true }).count())) {
+  if ((await signedIn.isVisible()) && !(await contact.getByText(values.email, { exact: true }).count())) {
     await page.context().clearCookies();
     await page.reload();
     await expect(card).toBeVisible({ timeout: 30_000 });
