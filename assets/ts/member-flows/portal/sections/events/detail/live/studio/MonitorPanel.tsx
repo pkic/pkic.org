@@ -213,8 +213,11 @@ function SoundIcon({ audible }: { audible: boolean }) {
 function LivestreamSoundToggle() {
   const audible = studioLivestreamAudible();
   const label = audible ? "Mute Livestream" : "Unmute Livestream";
+  const hint = audible
+    ? "Livestream sound: on\nClick to mute it. Only this browser plays it."
+    : "Livestream sound: off\nClick to hear the livestream in this browser.";
   return (
-    <Button icon variant="ghost" aria-label={label} title={label} onClick={() => setStudioLivestreamSound(!audible)}>
+    <Button icon variant="ghost" aria-label={label} title={hint} onClick={() => setStudioLivestreamSound(!audible)}>
       <SoundIcon audible={audible} />
     </Button>
   );
@@ -253,10 +256,10 @@ function LayoutPicker({ output, context }: { output: StudioOutput; context: Moni
   return (
     <Menu
       variant="plain"
-      label={`Layout on ${details.label}: ${current.name}`}
-      title={`Layout: ${current.name}`}
+      label={`Scene on the ${details.label} monitor: ${current.name}`}
+      title={`Scene on the ${details.label} monitor: ${current.name}\nChoose a scene to see ${details.label} drawn in it here. The screen itself keeps its own scene.`}
       triggerClass="pk-studio-monitor__picker pk-studio-monitor__layout"
-      heading="Show as the layout"
+      heading="Scene for this monitor"
       items={choices.map((choice) => ({
         id: choice.slug,
         label: choice.name,
@@ -311,7 +314,7 @@ function MonitorActions({ output, context }: { output: StudioOutput; context: Mo
         icon
         variant="ghost"
         aria-label={`Full screen ${details.label}`}
-        title="Full screen"
+        title={`Full screen ${details.label}\nShow this monitor large. Double-clicking its picture does the same.`}
         onClick={() => (enlarged.value = enlargedKey(panel.id, output))}
       >
         <ExpandIcon />
@@ -332,18 +335,28 @@ function outputTag(output: StudioOutput, context: MonitorContext): { text: strin
   const details = studioOutputDetails(room, output);
   if (isBusOutput(output) || output === LIVE_STAGE_PREVIEW_OUTPUT) return { text: details.purpose };
   const role = liveOutputRole(room, output);
-  if (role === "speaker") return { text: "Speaker", hint: "Time, the next question and messages to the speaker." };
+  if (role === "speaker")
+    return {
+      text: "Speaker",
+      hint: "Speaker's screen\nShows the time, the next question and your messages to the speaker.",
+    };
   if (role === "follow")
     return liveScreenSyncs(switcher.screenSync, room, output)
       ? {
           text: "Follows PGM",
-          hint: "Shows what is on Program, in this screen's own scene, plus what you send to it.",
+          hint: "Follows Program\nShows what is on Program, in this screen's own scene, plus what you send to it. The PGM chip turns this off.",
         }
-      : { text: "Sync off", hint: "Shows only what you send to it." };
+      : {
+          text: "Sync off",
+          hint: "Sync with Program is off\nShows only what you send to it. The PGM chip turns sync back on.",
+        };
   const scene = liveOutputScene(projectionOf(output, sources), output);
   const choices = liveOverlayLayoutChoices(sources.preview.overlayLayouts);
   const name = (choices.find((choice) => choice.slug === scene) ?? choices[0]!).name;
-  return { text: name, hint: `Scene on ${details.label}: ${name}` };
+  return {
+    text: name,
+    hint: `Scene on ${details.label}: ${name}\nTransition to ${details.label} puts Preview's scene on it.`,
+  };
 }
 
 /** The output's tally tag and its switcher abbreviation, PVW or PGM; its full name and purpose on hover. */
@@ -472,7 +485,7 @@ export function monitorPanelView(
       <Menu
         variant="plain"
         label={`Outputs on ${title}`}
-        title="Choose outputs"
+        title={"Monitors in this panel\nChoose which outputs it shows: one, or several side by side."}
         triggerClass="pk-studio-monitor__picker pk-studio-monitor__output"
         heading="Show one or more"
         items={studioMonitorChoices(outputs, room).map((output) => ({
@@ -508,6 +521,7 @@ export function monitorPanelView(
               {
                 id: "scenes",
                 label: scenesShown ? "Hide scenes" : "Show scenes",
+                tooltip: "The scene thumbnails under Preview. The scene picker in the header stays either way.",
                 onSelect: () => change((panels) => setStudioPanelScenes(panels, panel.id, !scenesShown)),
               },
             ]

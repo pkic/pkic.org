@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "preact/hooks";
+import { useEffect, useId, useRef, useState } from "preact/hooks";
 import {
   LIVE_OVERLAY_DEFAULT_LAYOUT,
   eventLiveOverlayLayoutsResponseSchema,
@@ -12,6 +12,7 @@ import { useData } from "../../../../../../../hooks/useData";
 import { useHashQueryParam } from "../../../../../../../hooks/useHashQueryParam";
 import { getJson } from "../../../../../../../shared/api-client";
 import { Button } from "../../../../../../../ui/Button";
+import { ControlTooltips } from "../../../../../../../ui/ControlTooltips";
 import { IconPlus } from "../../../../../../../components/icons";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../../ui/Panel";
 import { SectionHeading } from "../../../../../../../ui/SectionHeading";
@@ -36,6 +37,7 @@ export function EventLiveOverlayLayouts({ slug, canEdit }: { slug: string; canEd
   const [creating, setCreating] = useState<{ from: LiveOverlayLayout; duplicate: boolean } | null>(null);
   const [dirty, setDirty] = useState(false);
   const heading = useId();
+  const page = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (loaded.data) setSaved(loaded.data);
   }, [loaded.data]);
@@ -67,7 +69,9 @@ export function EventLiveOverlayLayouts({ slug, canEdit }: { slug: string; canEd
     choose(next);
   }
   return (
-    <div class="pk-stack">
+    <div ref={page} class="pk-stack">
+      {/* The scene editor, the room screens and their dialogs show hints as the studio does. */}
+      <ControlTooltips scope={page} />
       <section class="pk-scenes" aria-labelledby={heading}>
         <SectionHeading level={3} id={heading} class="pk-scenes__title">
           Scenes

@@ -163,7 +163,9 @@ it("shows Program on the row edge, a screen it was put on as a dot on the menu, 
   // The projector follows Program in its own scene, which places a lower third: a ring, as it was not put there.
   expect(menu().querySelector('.pk-live-screen-dots > [data-tally="projector"][data-following]')).not.toBeNull();
   expect(menu().querySelector(".pk-live-screen-dots > :not([data-following])")).toBeNull();
-  expect(menu().getAttribute("title")).toBe("Room screens and more actions. On Projector because it is live.");
+  expect(menu().getAttribute("title")).toBe(
+    "Room screens and actions · on Projector because it is live\nOpen to put it on a room screen or take it off, and for its other actions.",
+  );
   const program = host.querySelector<HTMLButtonElement>(`button[aria-label="Show ${credit.name} on air"]`)!;
   expect(program.getAttribute("aria-pressed")).toBe("true");
   program.click();
@@ -189,7 +191,9 @@ it("shows Program on the row edge, a screen it was put on as a dot on the menu, 
   state.outputs = { ...state.outputs, projector: { ...EMPTY_LIVE_AUX_COMPOSITION, lowerThird: credit } };
   await act(() => render(<LiveSpeakerCards targets={liveTargets(state, { sendProgram })} />, host!));
   expect(menu().querySelector('.pk-live-screen-dots > [data-tally="projector"]:not([data-following])')).not.toBeNull();
-  expect(menu().getAttribute("title")).toBe("Room screens and more actions. On Projector.");
+  expect(menu().getAttribute("title")).toBe(
+    "Room screens and actions · on Projector\nOpen to put it on a room screen or take it off, and for its other actions.",
+  );
 });
 
 it("does not show Program as pressed while another session is on air, and puts the speaker on with the first press", async () => {

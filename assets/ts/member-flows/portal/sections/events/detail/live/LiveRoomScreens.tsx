@@ -159,6 +159,7 @@ export function LiveRoomScreens({
         row.builtIn ? null : (
           <RowActions
             subject={row.name}
+            hint="Edit this screen, move it in the list or remove it."
             actions={actionsOf(
               row,
               screens.findIndex((entry) => entry.key === row.key),

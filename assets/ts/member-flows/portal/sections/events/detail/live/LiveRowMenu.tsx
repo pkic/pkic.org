@@ -156,15 +156,15 @@ export function withScreenItems(screens: readonly MenuItem[], items: readonly Me
   return [...screens, ...items.map((item, index) => (index === 0 ? { ...item, separatorBefore: true } : item))];
 }
 
-/** The trigger's tooltip: what the menu holds, then the screens the graphic is on. */
+/** The trigger's tooltip: what the menu holds and the screens the graphic is on, then what opening it is for. */
 export function liveScreensTitle({ on, following, outputs }: LiveScreens): string {
   const names = (keys: readonly LiveAuxOutput[]) =>
     keys.map((output) => liveOutputDetails(outputs, output).label).join(" and ");
-  const parts = [
-    on.length ? `On ${names(on)}.` : null,
-    following.length ? `On ${names(following)} because it is live.` : null,
+  const where = [
+    on.length ? `on ${names(on)}` : null,
+    following.length ? `on ${names(following)} because it is live` : null,
   ].filter(Boolean);
-  return ["Room screens and more actions.", ...parts].join(" ");
+  return `${["Room screens and actions", ...where].join(" · ")}\nOpen to put it on a room screen or take it off, and for its other actions.`;
 }
 
 /**

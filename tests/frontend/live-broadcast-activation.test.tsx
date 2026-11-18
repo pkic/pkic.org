@@ -93,7 +93,7 @@ it("makes the browsed session active without sending anything to Program", async
     (button) => button.textContent?.trim() === "Load session",
   )!;
   expect(make.dataset.tooltip).toBe(
-    "Load this session into the studio and Preview. Program does not change until you transition.",
+    "Load session\nLoad this session into the studio and Preview. Program does not change until you transition.",
   );
   await act(async () => make.click());
   expect(mocks.select).toHaveBeenCalledWith(LIVE_OCCURRENCE);

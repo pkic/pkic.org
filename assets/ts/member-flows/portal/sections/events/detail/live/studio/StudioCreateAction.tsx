@@ -10,11 +10,14 @@ import { Button } from "../../../../../../../ui/Button";
  */
 export function StudioCreateAction({
   label,
+  hint,
   disabled = false,
   children,
 }: {
   /** What it creates, as an action: "Add person", "Add timer". */
   label: string;
+  /** What that gives the operator, in a sentence: the second line of its tooltip. */
+  hint: string;
   disabled?: boolean;
   /** The dialog or form it opens; `close` closes it again. */
   children: (close: () => void) => ComponentChildren;
@@ -26,7 +29,7 @@ export function StudioCreateAction({
         variant="ghost"
         icon
         aria-label={label}
-        title={label}
+        title={`${label}\n${hint}`}
         aria-expanded={open}
         disabled={disabled}
         onClick={() => setOpen(true)}

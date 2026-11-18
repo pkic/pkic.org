@@ -10,8 +10,15 @@ import { LiveScreenTags, NO_LIVE_SCREENS } from "../../member-flows/portal/secti
 import { LiveGraphicRow } from "../../member-flows/portal/sections/events/detail/live/LiveGraphicRow";
 import { TransitionControl } from "../../member-flows/portal/sections/events/detail/live/studio/StudioSwitcher";
 import { GALLERY_ROOM_SCREENS } from "./studio-on-screen-fixtures";
+import { ControlTooltipPreview } from "./TooltipPreview";
 
 export const studioOutputSections: PreviewSection[] = [
+  {
+    id: "control-tooltip",
+    title: "Control hints",
+    note: "On a live-production surface a title shows at once as this tooltip, on hover and on keyboard focus, never as the browser's bubble: the first line says what the control is and its state, the next what a click does.",
+    render: () => <ControlTooltipPreview />,
+  },
   {
     id: "studio-output-target-covered",
     title: "Held, but unseen",

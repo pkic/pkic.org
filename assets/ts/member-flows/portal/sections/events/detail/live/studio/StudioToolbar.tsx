@@ -54,7 +54,7 @@ export function StudioToolbar({
         <Menu
           variant="plain"
           label="Add panel"
-          title="Add panel"
+          title={"Add panel\nAdd a panel you closed, or another monitor, to this workspace."}
           heading="Add panel"
           triggerClass={buttonClasses({ icon: true }, undefined)}
           items={STUDIO_PANEL_TYPES.map((type) => ({
@@ -66,7 +66,12 @@ export function StudioToolbar({
         >
           <IconPlus />
         </Menu>
-        <Button icon aria-label="Reset layout" title="Reset layout: put this workspace's panels back" onClick={reset}>
+        <Button
+          icon
+          aria-label="Reset layout"
+          title={"Reset layout\nPut this workspace's panels back where they started. Nothing on air changes."}
+          onClick={reset}
+        >
           <IconLayoutReset />
         </Button>
         <Button
@@ -74,7 +79,7 @@ export function StudioToolbar({
           data-tour-trigger
           aria-expanded={touring}
           aria-label="Studio help"
-          title="Studio help: a short tour of how the studio works"
+          title={"Studio help\nA short tour of how the studio works."}
           onClick={toggleTour}
         >
           <IconHelp />
@@ -83,7 +88,11 @@ export function StudioToolbar({
           icon
           aria-pressed={expanded}
           aria-label={expanded ? "Exit full screen" : "Full screen"}
-          title={expanded ? "Exit full screen (Esc)" : "Full screen"}
+          title={
+            expanded
+              ? "Exit full screen\nPut the studio back in the portal page. Shortcut: Esc."
+              : "Full screen\nFill the screen with the studio. Nothing on air changes."
+          }
           onClick={toggleExpanded}
         >
           <StrokeIcon>

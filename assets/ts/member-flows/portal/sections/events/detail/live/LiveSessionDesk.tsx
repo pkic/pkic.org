@@ -281,6 +281,7 @@ export function LiveSessionDesk({
             {
               id: "label",
               label: panel.labeled ? "Hide label" : "Show label",
+              tooltip: "Whether each transition button says its output's full name or only its code.",
               onSelect: () => layout.change((panels) => setStudioPanelLabeled(panels, panel.id, !panel.labeled)),
             },
           ],
@@ -303,6 +304,7 @@ export function LiveSessionDesk({
             {
               id: "lower-third",
               label: "Lower third settings",
+              tooltip: "How lower thirds go on and off air: animated, or at once.",
               disabled,
               onSelect: () => setLowerThirdSettings(true),
             },
@@ -334,7 +336,15 @@ export function LiveSessionDesk({
         return {
           title,
           actions: <LiveQuestionsHeader targets={targets} send={sendProgram} />,
-          menu: [{ id: "release-times", label: "Release times", disabled, onSelect: () => setReleaseTimes(true) }],
+          menu: [
+            {
+              id: "release-times",
+              label: "Release times",
+              tooltip: "When each prepared question comes in.",
+              disabled,
+              onSelect: () => setReleaseTimes(true),
+            },
+          ],
           body: (
             <>
               <LiveQuestionsPanel targets={targets} clock={clock ?? state.session.timeZone} send={sendProgram} />
@@ -387,6 +397,8 @@ export function LiveSessionDesk({
             {
               id: "notify",
               label: "Notify me in this browser",
+              tooltip:
+                "A notification when a screen has a serious problem, and when it has recovered. Only while the studio is open.",
               checked: roomScreens.controller.notifications.enabled,
               multiple: true,
               disabled: !roomScreens.controller.notifications.supported,

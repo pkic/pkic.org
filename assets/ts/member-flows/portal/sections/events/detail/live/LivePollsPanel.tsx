@@ -96,7 +96,7 @@ function LivePollRow({
   return (
     <StudioItemRow
       text={poll.field.label}
-      open={{ title: `${poll.field.label}: results, edit and settings`, onOpen }}
+      open={{ title: `${poll.field.label}\nOpen the poll: its results, its text and its settings.`, onOpen }}
       summary={
         <>
           <LivePollStatusBadge status={poll.status} />
@@ -132,7 +132,11 @@ function LivePollRow({
 /** The polls panel's create action, in the studio panel's header: the "+" that prepares a new poll. */
 export function LivePollsCreateAction({ disabled, send }: { disabled: boolean; send: Send }) {
   return (
-    <StudioCreateAction label="New poll" disabled={disabled}>
+    <StudioCreateAction
+      label="New poll"
+      hint="Write a poll as a draft. Voting starts when you open it."
+      disabled={disabled}
+    >
       {(close) => (
         <LivePollEditor onSave={(draft) => send({ type: "poll.save", pollId: null, draft })} onClose={close} />
       )}

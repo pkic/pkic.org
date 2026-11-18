@@ -290,6 +290,7 @@ export function OverlayLayoutEditor({
             menu={
               <Menu
                 label={`Actions for ${layout.name}`}
+                title={`Actions for ${layout.name}\nRename, duplicate or reset this scene.`}
                 align="end"
                 items={[
                   { id: "rename", label: "Rename", disabled: busy, onSelect: () => setRenaming(true) },
@@ -311,6 +312,7 @@ export function OverlayLayoutEditor({
                   {
                     id: "reset-positions",
                     label: "Reset shared positions",
+                    tooltip: "Every scene that shares a graphic's position moves it back to its standard place.",
                     disabled: !savedPositions.saved,
                     onSelect: () => void resetPositions(),
                   },

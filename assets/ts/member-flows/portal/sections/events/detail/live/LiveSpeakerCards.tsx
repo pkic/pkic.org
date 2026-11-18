@@ -85,7 +85,11 @@ function PersonRow({
           disabled={targets.disabled}
           aria-pressed={where.preview}
           aria-label={`Prepare ${credit.name} in Preview`}
-          title="Put their lower third in Preview to check it before air"
+          title={
+            where.preview
+              ? `Lower third for ${credit.name}: in Preview\nTransition puts it on air. PVW takes it out of Preview.`
+              : `Lower third for ${credit.name}\nClick to put it in Preview and check it before air.`
+          }
           onClick={() => {
             if (!where.preview) sendLayerToggle(targets, layer, "preview");
           }}
@@ -243,6 +247,7 @@ export function LiveAddPersonAction({ targets, slug }: { targets: LiveTargets; s
   return (
     <StudioCreateAction
       label="Add person"
+      hint="Add someone to this session, so you can show their lower third."
       disabled={targets.disabled || targets.state.addedCredits.length >= LIVE_ADDED_CREDITS_MAX}
     >
       {(close) => (

@@ -187,6 +187,7 @@ export function OverlayLayoutGraphics({
           {
             id: "unlink",
             label: "Place differently on this scene",
+            tooltip: "Gives this scene its own position for the graphic. The other scenes keep the shared one.",
             disabled,
             onSelect: () => onSharing(element, "unlink"),
           },
@@ -195,12 +196,14 @@ export function OverlayLayoutGraphics({
           {
             id: "relink",
             label: "Use shared position",
+            tooltip: "Drops this scene's own position and takes the one the scenes share.",
             disabled,
             onSelect: () => onSharing(element, "relink"),
           },
           {
             id: "apply",
             label: "Apply this position to all scenes",
+            tooltip: "Makes this position the shared one, so every scene that shares it follows.",
             disabled,
             onSelect: () => onSharing(element, "apply"),
           },
@@ -257,7 +260,12 @@ export function OverlayLayoutGraphics({
               data-dragging={drag.shown?.element === element ? "" : undefined}
               data-drop={dropAt(index)}
             >
-              <span class="pk-scenes__grip" aria-hidden="true" title="Drag to reorder" {...drag.grip(element, index)}>
+              <span
+                class="pk-scenes__grip"
+                aria-hidden="true"
+                title={"Drag to reorder\nThe top of the list is drawn in front."}
+                {...drag.grip(element, index)}
+              >
                 ⠿
               </span>
               <button
@@ -273,7 +281,7 @@ export function OverlayLayoutGraphics({
                   icon
                   variant="ghost"
                   aria-label={`Move ${label} up`}
-                  title="Move up"
+                  title={`Move ${label} up\nOne step toward the front.`}
                   disabled={disabled || index === 0}
                   onClick={() => onReorder(element, index - 1)}
                 >
@@ -283,14 +291,18 @@ export function OverlayLayoutGraphics({
                   icon
                   variant="ghost"
                   aria-label={`Move ${label} down`}
-                  title="Move down"
+                  title={`Move ${label} down\nOne step toward the back.`}
                   disabled={disabled || index === graphics.length - 1}
                   onClick={() => onReorder(element, index + 1)}
                 >
                   <IconChevron pointing="down" />
                 </Button>
               </span>
-              <RowActions subject={label} actions={actions(element)} />
+              <RowActions
+                subject={label}
+                hint="Share or keep its position across scenes, or remove it from this scene."
+                actions={actions(element)}
+              />
               <OverlayLayoutGraphicSwitch
                 element={element}
                 placement={elements[element]}

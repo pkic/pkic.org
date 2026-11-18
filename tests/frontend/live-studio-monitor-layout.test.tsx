@@ -191,7 +191,9 @@ describe("studio monitor layouts", () => {
     // A marker names its output as its hint too, in the studio's tooltip; it is a picture, not a control.
     const marker = scenes()[1]!.querySelector<HTMLElement>(".pk-studio-scene__marker")!;
     expect(marker.getAttribute("role")).toBe("img");
-    expect(marker.dataset.tooltip ?? marker.getAttribute("title")).toBe("On Program");
+    expect(marker.dataset.tooltip ?? marker.getAttribute("title")).toBe(
+      "On Program\nThis scene is on Program now. The dot has that output's color.",
+    );
     expect(scenes()[1]!.querySelector("button")).toBeNull();
     // The picture stays aside for assistive technology; the scene reads as its name and where it shows.
     expect(scenes()[1]!.querySelector(".pk-studio-scene__picture")!.getAttribute("aria-hidden")).toBe("true");
@@ -225,10 +227,15 @@ describe("studio monitor layouts", () => {
         candidate.querySelector(".pk-studio-monitor__label")?.getAttribute("title")?.includes(` · ${label}\n`),
       )!;
     expect(tile("Program").querySelector('[title^="Scene on Program: Default"]')?.textContent).toBe("Default");
-    expect(tile("Program").querySelector('button[aria-label^="Layout on"]')).toBeNull();
-    void act(() =>
-      tile("Projector").querySelector<HTMLButtonElement>('button[aria-label="Layout on Projector: Default"]')!.click(),
+    expect(tile("Program").querySelector('button[aria-label^="Scene on the"]')).toBeNull();
+    const picker = tile("Projector").querySelector<HTMLButtonElement>(
+      'button[aria-label="Scene on the Projector monitor: Default"]',
+    )!;
+    // The monitor's scene is the operator's own view: the hint says the screen itself does not change.
+    expect(picker.title).toBe(
+      "Scene on the Projector monitor: Default\nChoose a scene to see Projector drawn in it here. The screen itself keeps its own scene.",
     );
+    void act(() => picker.click());
     void act(() => menuItem("Break").click());
     expect(studioLayoutsSchema.parse(JSON.parse(stored.get(STUDIO_LAYOUT_STORAGE_KEY)!)).show[2]!.layouts).toEqual({
       projector: "break",
@@ -291,7 +298,7 @@ describe("studio monitor layouts", () => {
     expect(sync("Livestream")).toBeNull();
     const projector = sync("Projector")!;
     expect(projector.getAttribute("aria-pressed")).toBe("true");
-    expect(projector.title).toMatch(/^Sync on: shows what is live on Program/);
+    expect(projector.title).toMatch(/^Sync with Program: on\nShows what is live on Program/);
     void act(() => projector.click());
     expect(switcher.sync).toHaveBeenLastCalledWith("projector", false);
     expect(sync("Stage display")!.getAttribute("aria-pressed")).toBe("true");

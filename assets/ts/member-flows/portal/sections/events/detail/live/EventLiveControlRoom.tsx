@@ -106,7 +106,9 @@ export function SelectedSessionDesk({
               <Button
                 disabled={program.status !== "live"}
                 aria-pressed={active}
-                title="Load this session into the studio and Preview. Program does not change until you transition."
+                title={
+                  "Load session\nLoad this session into the studio and Preview. Program does not change until you transition."
+                }
                 onClick={() => {
                   setFailure(null);
                   void program
@@ -230,13 +232,13 @@ export function EventLiveControlRoom({
           class="pk-studio-room__browse"
           href={`#${eventPath}`}
           aria-label="Back to the event"
-          title="Back to the event"
+          title={"Back to the event\nLeave the studio. Nothing on air changes."}
         >
           <IconChevron pointing="left" />
         </ButtonLink>
       ) : null}
       <Button
-        title="Choose room and session"
+        title={`Room: ${roomName}\nChoose another room or session to open in the studio.`}
         onClick={() => {
           setDraftRoom(roomId);
           setDraftSession(selected?.id ?? "");
@@ -251,7 +253,7 @@ export function EventLiveControlRoom({
         variant="ghost"
         class="pk-studio-room__browse"
         aria-label="Previous session"
-        title="Previous session"
+        title={"Previous session\nOpen the session before this one in this room. Nothing on air changes."}
         disabled={!previous}
         onClick={() => previous && choose(previous.id)}
       >
@@ -260,7 +262,9 @@ export function EventLiveControlRoom({
       <Button
         variant="ghost"
         class="pk-studio-room__browse"
-        title="Go to the session the agenda has now in this room, or the next one"
+        title={
+          "Session on the agenda now\nOpen the session the agenda has now in this room, or the next one. Nothing on air changes."
+        }
         disabled={!agendaNow || agendaNow.id === selected?.id}
         onClick={() => agendaNow && choose(agendaNow.id)}
       >
@@ -271,7 +275,7 @@ export function EventLiveControlRoom({
         variant="ghost"
         class="pk-studio-room__browse"
         aria-label="Next session"
-        title="Next session"
+        title={"Next session\nOpen the session after this one in this room. Nothing on air changes."}
         disabled={!next}
         onClick={() => next && choose(next.id)}
       >

@@ -32,7 +32,7 @@ export function OverlayLayoutGraphicSwitch({
   const current = layoutSwitchChoice(placement);
   if (!onComesOn)
     return (
-      <span class="pk-scenes__switch" title={current.help}>
+      <span class="pk-scenes__switch" title={`${text}\n${current.help}`}>
         {text}
       </span>
     );
@@ -41,7 +41,7 @@ export function OverlayLayoutGraphicSwitch({
       <Menu
         variant="plain"
         label={`${LIVE_OVERLAY_ELEMENT_LABELS[element]}: ${text}`}
-        title={current.help}
+        title={`${LIVE_OVERLAY_ELEMENT_LABELS[element]}: ${text}\n${current.help} Open to change it.`}
         triggerClass="pk-scenes__choice"
         disabled={disabled}
         items={LAYOUT_SWITCH_CHOICES.map((choice) => ({

@@ -21,8 +21,8 @@ function SyncIcon({ synced }: { synced: boolean }) {
 
 /** What a room screen shows besides its own graphics, said for an operator who is unsure mid-show. */
 const SYNC_HINTS = {
-  on: "Sync on: shows what is live on Program, plus anything you put here. Click to show only what you put here.",
-  off: "Sync off: shows only what you put here. Click to also show what is live on Program.",
+  on: "Sync with Program: on\nShows what is live on Program, plus anything you put here. Click to show only what you put here.",
+  off: "Sync with Program: off\nShows only what you put here. Click to also show what is live on Program.",
 } as const;
 
 /** Whether a room screen follows Program: on by default, a red PGM chip while on. */
@@ -74,15 +74,19 @@ export function SourceCount({
   const label = studioOutputDetails(room, output).label;
   const sentence =
     count === 0
-      ? `Nothing shows ${label} now. Check the browser source in your production software, or the screen in the room.`
-      : `${formatNumber(count)} ${count === 1 ? "browser source or screen shows" : "browser sources and screens show"} ${label} now.`;
-  // An icon and the number, as the header is narrow; the sentence is its name and tooltip.
+      ? `Nothing shows ${label} now`
+      : `${formatNumber(count)} ${count === 1 ? "browser source or screen shows" : "browser sources and screens show"} ${label} now`;
+  const advice =
+    count === 0
+      ? "Check the browser source in your production software, or the screen in the room."
+      : "If the number drops, a browser source or a screen lost its connection.";
+  // An icon and the number, as the header is narrow; the sentence is its name, and its hint adds what to do.
   return (
     <span
       class="pk-studio-monitor__sources"
       role="img"
       aria-label={sentence}
-      title={sentence}
+      title={`${sentence}\n${advice}`}
       data-tone={count === 0 && output === "program" ? "warn" : undefined}
     >
       <IconMonitor class="pk-studio-monitor__sources-icon" />

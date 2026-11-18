@@ -18,7 +18,7 @@ function StudioClock({ clock }: { clock: ClockZone }) {
     return () => clearInterval(tick);
   }, []);
   return (
-    <time class="pk-studio-header__clock" dateTime={now} title={formatClockName(clock)}>
+    <time class="pk-studio-header__clock" dateTime={now} title={`Event time · ${formatClockName(clock)}`}>
       {formatClockInZone(now, clock)}
     </time>
   );
@@ -67,7 +67,7 @@ export function SessionTiming({
       class="pk-studio-header__left"
       data-tone={tone}
       data-timing={timing.state}
-      title={early ? "Made active before its start" : undefined}
+      title={early ? "Loaded before its scheduled start" : undefined}
     >
       {liveSessionTimingText(timing, session, clock)}
     </span>

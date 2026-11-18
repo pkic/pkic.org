@@ -33,6 +33,37 @@ import {
 beforeEach(resetDeskStorage);
 afterEach(unmountDesks);
 
+/** Elements a browser would give its own title bubble; an iframe's title is its name, not a hint. */
+const nativeTitles = () => [...document.querySelectorAll("[title]")].filter((element) => element.tagName !== "IFRAME");
+
+describe("live control room hints", () => {
+  it("leaves no native title on the desk, in a row's menu or in a dialog it opens", async () => {
+    const { host } = mountDesk();
+    await act(async () => undefined);
+    expect(nativeTitles()).toEqual([]);
+    // PVW and PGM carry a hint that leads with the state and says what a click does.
+    expect(labeled(host, "Show Sam Speaker on air").dataset.tooltip).toBe(
+      "Off air\nClick to put it on air now. Preview is not needed first.",
+    );
+    await act(async () => labeled(host, "Sam Speaker actions").click());
+    expect(document.querySelector("[role='menu']")).not.toBeNull();
+    expect(nativeTitles()).toEqual([]);
+    await act(async () => menuItem(document, "Projector").click());
+    await act(async () => void document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    await act(async () => labeled(host, "Prepare question").click());
+    const dialog = document.querySelector("dialog[open]")!;
+    expect(dialog.textContent).toContain("Prepare question");
+    expect(nativeTitles()).toEqual([]);
+    // A panel's icon controls say what they do, not only their names.
+    expect(labeled(host, "Close Speakers").dataset.tooltip).toBe(
+      "Close Speakers\nTake this panel off the workspace. Nothing on air changes, and Add panel brings it back.",
+    );
+    expect(labeled(host, "Close Speakers").getAttribute("aria-description")).toBe(
+      "Take this panel off the workspace. Nothing on air changes, and Add panel brings it back.",
+    );
+  });
+});
+
 describe("live control room Transition", () => {
   it("changes the shared Preview through the room, counts the differences and transitions it", () => {
     const { host, live } = mountDesk();

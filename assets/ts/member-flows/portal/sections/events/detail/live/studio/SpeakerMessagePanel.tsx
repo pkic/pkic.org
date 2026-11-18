@@ -76,6 +76,7 @@ export function SpeakerMessagePanel({
               data-speaker-tone={preset.tone}
               disabled={disabled}
               aria-pressed={draft.text === preset.text}
+              title={"Ready-made message\nPut it in the message box to edit. It reaches the speaker when you send it."}
               onClick={() => change({ text: preset.text, tone: preset.tone })}
             >
               {preset.text}
@@ -137,7 +138,9 @@ export function SpeakerMessagePanel({
             <Button
               variant="ghost"
               disabled={disabled}
-              title="Put the message on stage back in the composer"
+              title={
+                "Edit the message on stage\nPut it back in the message box. The stage keeps showing it until you send again."
+              }
               onClick={() => setDraft({ text: message.text, tone: message.tone, flash: message.flash })}
             >
               Edit

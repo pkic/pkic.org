@@ -428,7 +428,7 @@ export const patternSections: PreviewSection[] = [
   {
     id: "tooltip",
     title: "Tooltip",
-    note: "Short icon labels use native titles. Structured help is available on hover, focus and tap, without clipping inside a table.",
+    note: "Short icon labels use native titles; live-production surfaces show them as Control hints instead. Structured help is available on hover, focus and tap, without clipping inside a table.",
     render: () => <TooltipPreview />,
   },
   {

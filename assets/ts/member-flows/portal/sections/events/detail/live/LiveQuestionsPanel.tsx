@@ -59,7 +59,11 @@ export function LiveQuestionsHeader({
         {formatNumber(openLiveQuestions(state.questions).length)} open
         {waiting ? ` · ${formatNumber(waiting)} prepared` : ""}
       </span>
-      <StudioCreateAction label="Prepare question" disabled={disabled}>
+      <StudioCreateAction
+        label="Prepare question"
+        hint="Write a question ahead. It comes in at the time you set, or when you release it."
+        disabled={disabled}
+      >
         {(close) => (
           <LivePreparedQuestionDialog question={null} credits={state.session.credits} send={send} onClose={close} />
         )}
@@ -112,12 +116,15 @@ const RELEASE = <path d="M5 3l8 5-8 5z" />;
 /** A row's one-tap action as the studio draws it: an icon, named by its label and tooltip. */
 function RowAction({
   label,
+  hint,
   primary = false,
   disabled,
   onClick,
   children,
 }: {
   label: string;
+  /** What the action does to the question: the second line of its tooltip. */
+  hint: string;
   primary?: boolean;
   disabled: boolean;
   onClick: () => void;
@@ -128,7 +135,7 @@ function RowAction({
       icon
       variant={primary ? "primary" : "secondary"}
       aria-label={label}
-      title={label}
+      title={`${label}\n${hint}`}
       disabled={disabled}
       onClick={onClick}
     >
@@ -163,12 +170,18 @@ function OpenQuestionRow({
   const screens = pending ? NO_LIVE_SCREENS : liveScreens(targets, layer);
   const actions = [
     { id: "open", label: "Open question", onSelect: onOpen },
-    { id: "edit", label: "Edit text", disabled, onSelect: onEdit },
+    {
+      id: "edit",
+      label: "Edit text",
+      tooltip: "Fix its wording before it goes on air. The question keeps what was asked.",
+      disabled,
+      onSelect: onEdit,
+    },
   ];
   return (
     <StudioItemRow
       text={question.text}
-      open={{ title: "Open question", onOpen }}
+      open={{ title: "Open question\nRead it in full, with who asked it.", onOpen }}
       presenceItem={pending ? item : undefined}
       summary={
         <>
@@ -184,14 +197,25 @@ function OpenQuestionRow({
         pending ? (
           <>
             <LiveItemPresence item={item} />
-            <RowAction label="Approve" primary disabled={disabled} onClick={() => moderate("approved")}>
+            <RowAction
+              label="Approve"
+              hint="Open it for votes. It can then go to Preview or on air."
+              primary
+              disabled={disabled}
+              onClick={() => moderate("approved")}
+            >
               {APPROVE}
             </RowAction>
           </>
         ) : (
           <>
             <LiveLayerTargets targets={targets} subject="question" layer={layer} />
-            <RowAction label="Mark answered" disabled={disabled} onClick={() => moderate("answered")}>
+            <RowAction
+              label="Mark answered"
+              hint="Take it out of the open questions."
+              disabled={disabled}
+              onClick={() => moderate("answered")}
+            >
               {ANSWERED}
             </RowAction>
           </>
@@ -241,7 +265,7 @@ function PreparedQuestionRow({
   return (
     <StudioItemRow
       text={question.text}
-      open={{ title: "Edit question", onOpen: onEdit }}
+      open={{ title: "Edit prepared question\nChange its text, who it is for, or when it comes in.", onOpen: onEdit }}
       summary={
         <>
           <span class="pk-live-desk__question-state">Prepared</span>
@@ -258,6 +282,7 @@ function PreparedQuestionRow({
       actions={
         <RowAction
           label="Release now"
+          hint="Bring this prepared question in now, ahead of its time."
           disabled={disabled}
           onClick={() => send({ type: "question.prepared.release", preparedId: question.id })}
         >
@@ -267,6 +292,7 @@ function PreparedQuestionRow({
       menu={
         <Menu
           label="Prepared question actions"
+          title={"Prepared question actions\nRelease it now, edit it or delete it."}
           align="end"
           items={[
             {

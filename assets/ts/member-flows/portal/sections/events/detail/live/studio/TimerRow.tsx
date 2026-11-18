@@ -107,6 +107,7 @@ export function TimerRow({
               {
                 id: "follow",
                 label: "Follow the agenda",
+                tooltip: "Goes back to the session's times on the agenda, after you ran the timer by hand.",
                 checked: timer.followsAgenda,
                 disabled: disabled || timer.followsAgenda,
                 onSelect: () => control("follow"),
@@ -182,7 +183,13 @@ export function TimerRow({
             icon
             variant={reading.running ? "secondary" : "primary"}
             aria-label={`${startLabel} ${timer.name}`}
-            title={reading.running ? "Pause" : before ? "Start now, from its full length" : "Start"}
+            title={`${startLabel} ${timer.name}\n${
+              reading.running
+                ? "Hold the timer where it is, on every screen that shows it."
+                : before
+                  ? "Start it now from its full length, ahead of its time."
+                  : "Run the timer from where it stands."
+            }`}
             disabled={disabled}
             onClick={() => control(reading.running ? "pause" : "start")}
           >
@@ -192,7 +199,9 @@ export function TimerRow({
             icon
             class="pk-studio-time__reset"
             aria-label={`Reset ${timer.name}`}
-            title={timer.kind === "until" ? "Count to its time again" : "Back to its full length, stopped"}
+            title={`Reset ${timer.name}\n${
+              timer.kind === "until" ? "Count to its set time again." : "Put it back to its full length, stopped."
+            }`}
             disabled={disabled}
             onClick={() => control("reset")}
           >
@@ -201,7 +210,7 @@ export function TimerRow({
           <Button
             class="pk-studio-time__minus"
             aria-label={`Take a minute from ${timer.name}`}
-            title="Take a minute"
+            title={`Take a minute from ${timer.name}\nEvery screen that shows the timer follows.`}
             disabled={disabled}
             onClick={() => adjust(-60)}
           >
@@ -210,7 +219,7 @@ export function TimerRow({
           <Button
             class="pk-studio-time__plus"
             aria-label={`Add a minute to ${timer.name}`}
-            title="Add a minute"
+            title={`Add a minute to ${timer.name}\nEvery screen that shows the timer follows.`}
             disabled={disabled}
             onClick={() => adjust(60)}
           >

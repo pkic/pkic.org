@@ -158,7 +158,7 @@ function SceneMarkers({ outputs }: { outputs: readonly SceneOutput[] }) {
           class="pk-studio-scene__marker"
           role="img"
           aria-label={sentence(output.where)}
-          title={sentence(output.where)}
+          title={`${sentence(output.where)}\nThis scene is ${output.where} now. The dot has that output's color.`}
           {...output.tally}
         />
       ))}

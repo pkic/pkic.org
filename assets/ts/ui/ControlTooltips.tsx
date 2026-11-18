@@ -1,167 +1,203 @@
 import type { RefObject } from "preact";
 import { createPortal } from "preact/compat";
-import { useEffect, useId, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
+import {
+  claimSurface,
+  describeBy,
+  hinted,
+  takeSurfaceTitles,
+  takeTitle,
+  takeTitles,
+  worthShowing,
+} from "./control-tooltip-hints";
 import { usePopupPlacement } from "./popup-placement";
 import "./ControlTooltips.css";
 
-/** A dialog keeps the browser's own titles: the tooltip layer draws under the top layer. */
-const outsideDialog = (element: Element) => !element.closest("dialog");
-
-/** The element whose hint applies, or null: a hinted element in the scope, not in a dialog. */
-function hinted(scope: HTMLElement, target: EventTarget | null): HTMLElement | null {
-  if (!(target instanceof Element)) return null;
-  const element = target.closest<HTMLElement>("[title], [data-tooltip]");
-  if (!element || !scope.contains(element) || !outsideDialog(element)) return null;
-  return element;
-}
-
-/** Whether something other than its title names the control. */
-const namedOtherwise = (element: HTMLElement) =>
-  element.hasAttribute("aria-labelledby") ||
-  (element.hasAttribute("aria-label") && !("tooltipNames" in element.dataset)) ||
-  Boolean(element.textContent?.trim());
-
-/**
- * Moves the element's title into its hint, so the browser's own title never
- * shows. A control the title alone named keeps that name; otherwise the hint
- * stays its description for assistive technology. Runs again whenever the
- * control writes a new title, so the hint always says the current state.
- */
-function takeTitle(element: HTMLElement) {
-  const title = element.getAttribute("title");
-  if (title === null || !outsideDialog(element)) return;
-  element.removeAttribute("title");
-  element.dataset.tooltip = title;
-  const spoken = title.replaceAll("\n", ". ");
-  if ("tooltipNames" in element.dataset || !namedOtherwise(element)) {
-    element.dataset.tooltipNames = "";
-    if (spoken) element.setAttribute("aria-label", spoken);
-    else element.removeAttribute("aria-label");
-  } else if (
-    "tooltipDescribes" in element.dataset ||
-    (!element.hasAttribute("aria-description") && element.getAttribute("aria-label") !== spoken)
-  ) {
-    element.dataset.tooltipDescribes = "";
-    if (spoken) element.setAttribute("aria-description", spoken);
-    else element.removeAttribute("aria-description");
-  }
-}
-
-/** Every titled element in this subtree, itself included. */
-function takeTitles(node: Node) {
-  if (!(node instanceof HTMLElement)) return;
-  if (node.hasAttribute("title")) takeTitle(node);
-  node.querySelectorAll<HTMLElement>("[title]").forEach(takeTitle);
-}
+/** The gap the placement keeps to the viewport's edge. */
+const EDGE = 8;
 
 /** A hint's first line leads when it has more: what the control is and its state, then what a click does. */
-function HintText({ text }: { text: string }) {
+function HintText({ id, text }: { id: string; text: string }) {
   const [lead, ...rest] = text.split("\n");
   if (!rest.length) return <>{text}</>;
   return (
     <>
       <strong class="pk-control-tooltip__lead">{lead}</strong>
-      {rest.map((line, index) => (
-        <span key={index}>{line}</span>
-      ))}
+      <span id={`${id}-more`} class="pk-control-tooltip__more">
+        {rest.map((line, index) => (
+          <span key={index}>{line}</span>
+        ))}
+      </span>
     </>
   );
 }
 
 /**
- * Shows every control's hint inside a scope as the design system's tooltip,
- * at once on hover and on keyboard focus, instead of the browser's plain
- * title. The controls keep writing `title`; this layer takes it as soon as it
- * is written, so the browser's own never shows, and follows it as it
- * changes. A touch never opens one, since a tap acts.
+ * Shows every control's hint on a surface as the design system's tooltip, at
+ * once on hover and on keyboard focus, instead of the browser's plain title.
+ * The surface is the scope's element and every dialog, menu and popover laid
+ * over it. The controls keep writing `title`; this layer takes it as soon as
+ * it is written, so the browser's own never shows, and follows it as it
+ * changes. The tooltip stands in the browser's top layer, above an open
+ * dialog. A touch never opens one, since a tap acts.
  */
 export function ControlTooltips({ scope }: { scope: RefObject<HTMLElement> }) {
   const id = useId();
   const anchor = useRef<HTMLElement | null>(null);
   const popup = useRef<HTMLDivElement>(null);
-  const [text, setText] = useState<string | null>(null);
-  // The hint on show, which the observer compares with the control's newest one.
-  const shown = useRef<string | null>(null);
+  // Where the pointer came onto the control, when a pointer opened the hint.
+  const pointer = useRef<{ x: number; y: number } | null>(null);
+  // `shown` counts every showing, so the same words on another control are placed and raised again. A menu
+  // item's hint stands beside the menu, as a submenu would, so it never covers the items above it.
+  const [hint, setHint] = useState<{ text: string; shown: number; side: "top" | "left" | "right" } | null>(null);
+  const current = useRef<string | null>(null);
+  const showings = useRef(0);
+  useLayoutEffect(() => {
+    const element = popup.current;
+    if (!hint || !element || typeof element.showPopover !== "function") return;
+    // The top layer draws its newest entry on top: shown again, the hint stands above a dialog or menu opened since.
+    element.setAttribute("popover", "manual");
+    if (element.matches(":popover-open")) element.hidePopover();
+    element.showPopover();
+  }, [hint]);
+  /** Keeps the placed hint near the pointer on a wide control, and never under it. */
+  const settle = useCallback(() => {
+    const element = popup.current;
+    const target = anchor.current;
+    const at = pointer.current;
+    if (!element || !target || !at || target.closest('[role="menu"]')) return;
+    const box = element.getBoundingClientRect();
+    const rect = target.getBoundingClientRect();
+    let { left, top } = box;
+    if (rect.width > box.width) left = Math.min(Math.max(at.x - box.width / 2, rect.left), rect.right - box.width);
+    left = Math.max(EDGE, Math.min(left, window.innerWidth - box.width - EDGE));
+    if (at.x >= left && at.x <= left + box.width && at.y >= top && at.y <= top + box.height)
+      top = at.y - box.height - 2 * EDGE >= EDGE ? at.y - box.height - 2 * EDGE : at.y + 3 * EDGE;
+    element.style.setProperty("left", `${left}px`);
+    element.style.setProperty("top", `${top}px`);
+  }, []);
   usePopupPlacement({
-    open: text !== null,
+    open: hint !== null,
     anchorRef: anchor,
     popupRef: popup,
-    side: "top",
-    revision: text ?? undefined,
+    side: hint?.side ?? "top",
+    revision: hint ? `${hint.shown}:${hint.text}` : undefined,
     matchAnchorWidth: false,
+    afterPlace: settle,
   });
   useEffect(() => {
     const root = scope.current;
     if (!root) return;
+    const release = claimSurface(root);
+    // The control pressed last, which keeps quiet until the pointer has left it.
+    let pressed: HTMLElement | null = null;
+    const undescribe = () => {
+      if (anchor.current?.getAttribute("aria-describedby")?.startsWith(id))
+        anchor.current.removeAttribute("aria-describedby");
+    };
     const hide = () => {
-      anchor.current?.removeAttribute("aria-describedby");
+      undescribe();
       anchor.current = null;
-      shown.current = null;
-      setText(null);
+      current.current = null;
+      setHint(null);
     };
     const show = (element: HTMLElement) => {
       takeTitle(element);
-      const hint = element.dataset.tooltip;
-      if (!hint) return hide();
-      if (anchor.current !== element) anchor.current?.removeAttribute("aria-describedby");
+      const text = element.dataset.tooltip;
+      if (!text || !worthShowing(element, text)) return hide();
+      if (anchor.current !== element) undescribe();
       anchor.current = element;
-      element.setAttribute("aria-describedby", id);
-      shown.current = hint;
-      setText(hint);
+      describeBy(element, id);
+      current.current = text;
+      const menu = element.closest('[role="menu"]')?.getBoundingClientRect();
+      const side = !menu ? "top" : menu.left + menu.width / 2 > window.innerWidth / 2 ? "left" : "right";
+      setHint({ text, shown: ++showings.current, side });
     };
-    takeTitles(root);
+    takeSurfaceTitles(root);
     const observer = new MutationObserver((records) => {
+      let opened: Node | null = null;
       for (const record of records) {
-        if (record.type === "attributes") takeTitles(record.target);
-        else record.addedNodes.forEach(takeTitles);
+        // The tooltip showing is itself a popover opening; it is not an overlay over its own control.
+        if (record.target === popup.current) continue;
+        if (record.type === "childList") record.addedNodes.forEach((node) => takeTitles(root, node));
+        else {
+          takeTitles(root, record.target);
+          if (record.attributeName !== "title") opened = record.target;
+        }
       }
-      const current = anchor.current;
-      if (current && !current.isConnected) hide();
-      else if (current && current.dataset.tooltip !== shown.current) show(current);
+      const element = anchor.current;
+      if (!element) return;
+      // Gone, hidden with its dialog, or left behind an overlay that opened: the hint goes with it.
+      if (!element.isConnected || element.checkVisibility?.() === false) hide();
+      else if (opened && !opened.contains(element)) hide();
+      else if (opened || element.dataset.tooltip !== current.current) show(element);
     });
-    observer.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ["title"] });
+    observer.observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["title", "popover", "open"],
+    });
     const over = (event: PointerEvent) => {
-      if (event.pointerType === "touch") return;
+      // A touch acts, and a drag passes over controls it is not about.
+      if (event.pointerType === "touch" || event.buttons) return;
       const element = hinted(root, event.target);
-      if (element === anchor.current) return;
-      if (element) show(element);
-      else hide();
+      if (element !== pressed) pressed = null;
+      if (element === anchor.current || (element && element === pressed)) return;
+      if (element) {
+        pointer.current = { x: event.clientX, y: event.clientY };
+        show(element);
+      } else if (pointer.current) hide();
     };
     const out = (event: PointerEvent) => {
-      if (anchor.current && hinted(root, event.relatedTarget) === anchor.current) return;
+      // A hint the keyboard opened stays while the pointer wanders elsewhere.
+      if (!pointer.current || hinted(root, event.relatedTarget) === anchor.current) return;
+      hide();
+    };
+    const down = (event: PointerEvent) => {
+      pressed = hinted(root, event.target);
       hide();
     };
     const focus = (event: FocusEvent) => {
       const element = hinted(root, event.target);
+      pointer.current = null;
       if (element?.matches(":focus-visible")) show(element);
       else hide();
+    };
+    const blur = (event: FocusEvent) => {
+      if (event.target instanceof Node && anchor.current?.contains(event.target)) hide();
     };
     const key = (event: KeyboardEvent) => {
       if (event.key === "Escape") hide();
     };
-    root.addEventListener("pointerover", over);
-    root.addEventListener("pointerout", out);
-    root.addEventListener("pointerdown", hide);
-    root.addEventListener("focusin", focus);
-    root.addEventListener("focusout", hide);
-    document.addEventListener("keydown", key);
-    window.addEventListener("scroll", hide, true);
+    // Only a scroll that moves the control takes its hint away; a chat scrolling by itself does not.
+    const scroll = (event: Event) => {
+      if (anchor.current && event.target instanceof Node && event.target.contains(anchor.current)) hide();
+    };
+    document.addEventListener("pointerover", over);
+    document.addEventListener("pointerout", out);
+    document.addEventListener("pointerdown", down, true);
+    document.addEventListener("focusin", focus);
+    document.addEventListener("focusout", blur);
+    document.addEventListener("keydown", key, true);
+    window.addEventListener("scroll", scroll, true);
     return () => {
       observer.disconnect();
+      release();
       hide();
-      root.removeEventListener("pointerover", over);
-      root.removeEventListener("pointerout", out);
-      root.removeEventListener("pointerdown", hide);
-      root.removeEventListener("focusin", focus);
-      root.removeEventListener("focusout", hide);
-      document.removeEventListener("keydown", key);
-      window.removeEventListener("scroll", hide, true);
+      document.removeEventListener("pointerover", over);
+      document.removeEventListener("pointerout", out);
+      document.removeEventListener("pointerdown", down, true);
+      document.removeEventListener("focusin", focus);
+      document.removeEventListener("focusout", blur);
+      document.removeEventListener("keydown", key, true);
+      window.removeEventListener("scroll", scroll, true);
     };
   }, [scope, id]);
-  if (text === null) return null;
+  if (hint === null) return null;
   return createPortal(
     <div ref={popup} id={id} role="tooltip" class="pk-control-tooltip">
-      <HintText text={text} />
+      <HintText id={id} text={hint.text} />
     </div>,
     document.body,
   );

@@ -68,6 +68,7 @@ function LayoutBox({
       aria-pressed={selected}
       aria-label={`${label}, ${position}: ${percent(box.x)} from left, ${percent(box.y)} from top, ${percent(box.w)} wide, ${percent(box.h)} high`}
       aria-describedby={describedBy}
+      title={`${label} · ${position}\nDrag to move it, or a corner to resize it. The arrow keys move it too.`}
       onFocus={onSelect}
       onClick={onSelect}
       onKeyDown={(event) => {

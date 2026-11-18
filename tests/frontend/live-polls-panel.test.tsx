@@ -79,7 +79,7 @@ it("opens a new poll from the panel header's create button", async () => {
   const send = vi.fn((_message: LiveRoomClientMessage) => true);
   await act(async () => render(<LivePollsCreateAction disabled={false} send={send} />, header));
   const create = header.querySelector<HTMLButtonElement>("button[aria-label='New poll']")!;
-  expect(create.getAttribute("title")).toBe("New poll");
+  expect(create.getAttribute("title")).toBe("New poll\nWrite a poll as a draft. Voting starts when you open it.");
   await act(async () => create.click());
   expect(document.querySelector("dialog[open]")?.textContent).toContain("New poll");
 });

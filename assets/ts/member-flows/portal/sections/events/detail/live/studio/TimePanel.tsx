@@ -17,7 +17,11 @@ type Send = (message: LiveRoomClientMessage) => boolean;
 /** The Time panel's create action: a timer of its own for this room. */
 export function LiveAddTimerAction({ clock, send, disabled }: { clock: ClockZone; send: Send; disabled: boolean }) {
   return (
-    <StudioCreateAction label="Add timer" disabled={disabled}>
+    <StudioCreateAction
+      label="Add timer"
+      hint="Add another timer for this room: a countdown of a set length, or to a set time."
+      disabled={disabled}
+    >
       {(close) => (
         <Dialog
           viewer
