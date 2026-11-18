@@ -15,15 +15,28 @@ import {
   portalSectionChildren,
 } from "../../assets/ts/member-flows/portal/shell/portal-navigation";
 import { portalSessionFixture } from "../helpers/portal-session";
+import type { PortalSession } from "../../assets/ts/member-flows/portal/types";
 import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 
 describe("portal capability-derived navigation", () => {
-  it("opens Home for an affiliation without granting membership or workspace navigation", () => {
+  it("opens Home for every signed-in person, whatever they hold or wait for", () => {
+    const person = portalSessionFixture({});
+    for (const session of [
+      person,
+      portalSessionFixture({ member: true }),
+      portalSessionFixture({ staff: true }),
+      portalSessionFixture({ pendingIdentityCount: 1 }),
+      { ...person, eventParticipation: true },
+      { ...person, sponsors: [{ sponsorshipId: "00000000-0000-4000-8000-0000000000c1" }] },
+    ] as PortalSession[]) {
+      expect(portalDefaultPath(session)).toBe("/home");
+    }
+    expect(portalDefaultPath(null)).toBe("/");
+  });
+
+  it("grants an affiliation Home without membership or workspace navigation", () => {
     const session = userAuthSessionResponseSchema.parse({ ...portalSessionFixture({}), hasActiveIdentity: true });
-    // Home is where a representative learns what their organization's membership stands at.
     expect(portalDefaultPath(session)).toBe("/home");
-    const pending = userAuthSessionResponseSchema.parse({ ...portalSessionFixture({ pendingIdentityCount: 1 }) });
-    expect(portalDefaultPath(pending)).toBe(`/users/${pending.identity.id}`);
     expect(portalSectionEnabled(session, "users")).toBe(true);
     expect(portalNavigationItems(session).map((item) => item.label)).toEqual(["Home"]);
     for (const section of ["groups", "organizations", "members", "sponsors", "settings"] as const) {

@@ -64,7 +64,7 @@ async function readSponsorAccessToken(): Promise<string> {
     "SELECT payload_json FROM email_outbox WHERE template_key = 'sponsor-portal-access' ORDER BY created_at DESC LIMIT 1",
   );
   const stored = JSON.parse(outbox.payload_json) as { portalUrl: string; __authorizedCapabilityMarkers?: unknown[] };
-  expect(stored.portalUrl).toContain("/portal/#/verify?token=pkcq1_");
+  expect(stored.portalUrl).toContain("/portal/#/verify?next=%2Fsponsors&token=pkcq1_");
   expect(stored.__authorizedCapabilityMarkers).toHaveLength(1);
   const payload = await deliveredEmailPayload<{ portalUrl: string }>(env.DB, env, outbox.payload_json);
   const query = new URL(payload.portalUrl).hash.split("?", 2)[1] ?? "";
