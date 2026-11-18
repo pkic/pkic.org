@@ -15,6 +15,7 @@ import {
   type LiveOverlayPositions,
 } from "../../../../../../../../shared/schemas/live-overlay-layout";
 import { confirmAction } from "../../../../../../../components/ConfirmDialog";
+import { IconLayoutReset } from "../../../../../../../components/icons";
 import { useContractForm } from "../../../../../../../hooks/useContractForm";
 import { useHashQueryParam } from "../../../../../../../hooks/useHashQueryParam";
 import { deleteJson, putJson } from "../../../../../../../shared/api-client";
@@ -53,7 +54,8 @@ const SHARING: Record<LayoutSharingAction, (drafts: LayoutDrafts, element: LiveO
  * under it, beside the scene's graphics. A graphic linked to the event's
  * shared position moves on every scene that shares it; its row menu places
  * it for this scene only, or shares it again. Changes stay a draft until
- * saved; the scene's menu renames, duplicates, resets or deletes it.
+ * saved; the scene's menu renames or duplicates it, resets a built-in scene
+ * to its default, and deletes one of the event's own.
  */
 export function OverlayLayoutEditor({
   endpoint,
@@ -172,8 +174,8 @@ export function OverlayLayoutEditor({
   }
   async function remove() {
     const confirmed = await confirmAction({
-      title: `Delete ${layout.name}?`,
-      body: `Browser sources that use this scene switch to ${LIVE_OVERLAY_PRESET_LAYOUTS[LIVE_OVERLAY_DEFAULT_LAYOUT].name}.`,
+      title: `Delete ${name}?`,
+      body: `Browser sources that use this scene switch to ${LIVE_OVERLAY_PRESET_LAYOUTS[LIVE_OVERLAY_DEFAULT_LAYOUT].name}. This cannot be undone.`,
       confirmLabel: "Delete scene",
       tone: "danger",
     });
@@ -187,6 +189,38 @@ export function OverlayLayoutEditor({
       );
     } catch (cause) {
       setProblem(form.refuse(cause));
+      setBusy(false);
+    }
+  }
+  // A built-in scene goes back to its default name and graphics, saved at once; the shared positions stay.
+  async function resetScene() {
+    if (!preset || !presetElements) return;
+    const confirmed = await confirmAction({
+      title: `Reset ${name}?`,
+      body: `It goes back to the built-in ${preset.name} scene: its name, its graphics and their order. Browser sources using it update within 30 seconds.`,
+      confirmLabel: "Reset scene",
+      tone: "danger",
+    });
+    if (!confirmed) return;
+    setBusy(true);
+    try {
+      const saved = await putJson(
+        `${endpoint}/${encodeURIComponent(layout.slug)}`,
+        eventLiveOverlayLayoutPutSchema.parse({
+          expectedUpdatedAt: layout.updatedAt,
+          name: preset.name,
+          preset: layout.preset,
+          elements: presetElements,
+        }),
+        eventLiveOverlayLayoutsResponseSchema,
+      );
+      form.reset();
+      onDirty(false);
+      onSaved(saved);
+      toast(`${preset.name} is back to its default.`, "success");
+    } catch (cause) {
+      setProblem(form.refuse(cause));
+    } finally {
       setBusy(false);
     }
   }
@@ -230,13 +264,17 @@ export function OverlayLayoutEditor({
                 items={[
                   { id: "rename", label: "Rename", disabled: busy, onSelect: () => setRenaming(true) },
                   { id: "duplicate", label: "Duplicate", onSelect: onDuplicate },
-                  ...(preset
+                  ...(preset && layout.builtIn
                     ? [
                         {
                           id: "reset",
-                          label: `Reset to ${preset.name}`,
-                          disabled: !layoutElementsChanged(elements, presetElements!),
-                          onSelect: () => update({ ...drafts, elements: presetElements! }),
+                          label: "Reset scene",
+                          icon: <IconLayoutReset />,
+                          description: `Back to the built-in ${preset.name}`,
+                          disabled:
+                            busy ||
+                            (!dirty && name === preset.name && !layoutElementsChanged(elements, presetElements!)),
+                          onSelect: () => void resetScene(),
                         },
                       ]
                     : []),
@@ -251,7 +289,7 @@ export function OverlayLayoutEditor({
                     : [
                         {
                           id: "delete",
-                          label: "Delete",
+                          label: "Delete scene",
                           danger: true,
                           separatorBefore: true,
                           onSelect: () => void remove(),
@@ -271,13 +309,16 @@ export function OverlayLayoutEditor({
             </Button>
           </PanelHeader>
           <PanelBody class="pk-stack">
-            <p class="pk-small pk-muted">1920 × 1080 · drag to move, drag a corner to resize</p>
             {problem ? <Alert tone="danger">{problem}</Alert> : null}
             <OverlayLayoutCanvas
               elements={elements}
               shown={graphics}
               selected={selected}
               safeAreas={safeAreas}
+              onSafeAreas={(shown) => {
+                setSafeAreas(shown);
+                saveSafeAreasPreference(shown);
+              }}
               onSelect={setPicked}
               onChange={place}
             />
@@ -289,14 +330,9 @@ export function OverlayLayoutEditor({
                 disabled={busy}
                 form={form}
                 sharing={layoutsSharing(layouts, selected)}
-                safeAreas={safeAreas}
                 open={exact}
                 onOpen={setExact}
                 onUnit={setUnit}
-                onSafeAreas={(shown) => {
-                  setSafeAreas(shown);
-                  saveSafeAreasPreference(shown);
-                }}
                 onChange={change}
               />
             ) : null}
@@ -307,7 +343,6 @@ export function OverlayLayoutEditor({
           selected={selected}
           disabled={busy}
           onSelect={setPicked}
-          onField={(element, background) => change(element, { background })}
           onShow={show}
           onReorder={(element, to) => update({ ...drafts, elements: reorderSceneGraphic(elements, element, to) })}
           onSharing={share}

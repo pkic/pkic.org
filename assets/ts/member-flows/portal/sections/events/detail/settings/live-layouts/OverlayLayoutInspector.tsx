@@ -7,7 +7,7 @@ import {
   type LiveOverlayElementPlacement,
 } from "../../../../../../../../shared/schemas/live-overlay-layout";
 import type { ContractForm } from "../../../../../../../hooks/useContractForm";
-import { Checkbox, Radio } from "../../../../../../../ui/Checkbox";
+import { Radio } from "../../../../../../../ui/Checkbox";
 import { Field } from "../../../../../../../ui/Field";
 import { Select, TextInput } from "../../../../../../../ui/TextControl";
 import {
@@ -76,7 +76,7 @@ function BoxField({
 
 /**
  * The selected graphic's exact box and its alignment inside the box, in a
- * disclosure under the canvas, with the safe-area guides' switch.
+ * disclosure under the canvas.
  */
 export function OverlayLayoutInspector({
   element,
@@ -85,11 +85,9 @@ export function OverlayLayoutInspector({
   disabled,
   form,
   sharing,
-  safeAreas,
   open,
   onOpen,
   onUnit,
-  onSafeAreas,
   onChange,
 }: {
   element: LiveOverlayElement;
@@ -99,12 +97,10 @@ export function OverlayLayoutInspector({
   unit: LayoutUnit;
   disabled: boolean;
   form: ContractForm<unknown>;
-  safeAreas: boolean;
   /** Whether the disclosure is open; the editor opens it when a field in it is refused. */
   open: boolean;
   onOpen: (open: boolean) => void;
   onUnit: (unit: LayoutUnit) => void;
-  onSafeAreas: (shown: boolean) => void;
   onChange: Change;
 }) {
   const path = `elements.${element}`;
@@ -204,11 +200,6 @@ export function OverlayLayoutInspector({
             )}
           </Field>
         </div>
-        <Checkbox
-          label="Show safe areas"
-          checked={safeAreas}
-          onChange={(event) => onSafeAreas(event.currentTarget.checked)}
-        />
       </div>
     </details>
   );

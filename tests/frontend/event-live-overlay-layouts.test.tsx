@@ -7,6 +7,8 @@ import {
   LIVE_OVERLAY_PRESET_LAYOUTS,
 } from "../../assets/shared/live-overlay-layout-presets";
 import {
+  LIVE_OVERLAY_DEFAULT_LAYOUT,
+  LIVE_OVERLAY_ELEMENT_LABELS,
   LIVE_OVERLAY_PRESETS,
   eventLiveOverlayLayoutPutSchema,
   eventLiveOverlayLayoutsResponseSchema,
@@ -17,6 +19,14 @@ import {
 import { EventLiveSettings } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/EventLiveSettings";
 import { describeGraphicPosition } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-graphics";
 import { controlFor, typeInto } from "./helpers/labeled-control";
+
+const confirmations = vi.hoisted(() => ({ asked: [] as Array<{ title: string; confirmLabel?: string }> }));
+vi.mock("../../assets/ts/components/ConfirmDialog", () => ({
+  confirmAction: async (options: { title: string; confirmLabel?: string }) => {
+    confirmations.asked.push(options);
+    return true;
+  },
+}));
 
 const LAYOUTS = eventLiveOverlayLayoutsResponseSchema.parse({
   layouts: LIVE_OVERLAY_PRESETS.map((preset) => ({
@@ -35,6 +45,7 @@ const LOWER_THIRD = LIVE_OVERLAY_PRESET_LAYOUTS.talk.elements.lowerThird;
 let root: HTMLElement | null = null;
 let written: Array<{ url: string; body: EventLiveOverlayLayoutPut }> = [];
 let positioned: EventLiveOverlayPositionsPut[] = [];
+let deleted: string[] = [];
 let stored = LAYOUTS;
 const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
@@ -42,6 +53,8 @@ const json = (value: unknown, status = 200) =>
 beforeEach(() => {
   written = [];
   positioned = [];
+  deleted = [];
+  confirmations.asked = [];
   stored = LAYOUTS;
   history.replaceState(null, "", "/portal/#/events/conference/settings/live");
   vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
@@ -60,7 +73,10 @@ beforeEach(() => {
       if (url.includes("/participation/program")) return json({ agenda: null, marks: [], availability: [] });
       // The server's answer: every layout and the shared positions, as saved so far.
       const updatedAt = new Date(Date.now() + written.length + positioned.length).toISOString();
-      if (init?.method === "PUT" && url === POSITIONS_URL) {
+      if (init?.method === "DELETE") {
+        deleted.push(url);
+        stored = { ...stored, layouts: stored.layouts.filter((layout) => !url.endsWith(`/${layout.slug}`)) };
+      } else if (init?.method === "PUT" && url === POSITIONS_URL) {
         const body = eventLiveOverlayPositionsPutSchema.parse(JSON.parse(String(init.body)));
         positioned.push(body);
         stored = { ...stored, positions: { elements: body.elements, saved: true, updatedAt } };
@@ -281,8 +297,16 @@ describe("scene editor", () => {
     await mount();
     const add = button("Add graphic");
     await act(() => add.click());
-    // Only the Program graphics Talk leaves out, the background among them; never the speaker's screen.
-    expect(menuItems()).toEqual(["Background", "QR code"]);
+    // Only the Program graphics Default leaves out, the boards and the background among them; never the speaker's screen.
+    expect(menuItems()).toEqual([
+      "Background",
+      "Question",
+      "Poll results",
+      "Panel",
+      "Top questions",
+      "Chat",
+      "QR code",
+    ]);
     await act(() => add.click());
     await choose(add, "QR code");
     expect(rows()).toContain("qrCode");
@@ -296,22 +320,70 @@ describe("scene editor", () => {
     expect(add.disabled).toBe(false);
   });
 
-  it("puts one graphic on the conference field from its menu and saves it with the scene", async () => {
+  it("never offers the conference field as a setting of another graphic", async () => {
     await mount();
-    const row = () => root!.querySelector('.pk-scenes__row[data-element="topQuestions"]')!;
-    expect(row().textContent).not.toContain("on the conference field");
-    await choose(button("Actions for Top questions"), "On the conference field");
-    expect(row().textContent).toContain("Full frame · on the conference field");
-    await act(() => button("Actions for Top questions").click());
-    const field = [...document.querySelectorAll("[role=menuitemcheckbox]")].find(
-      (item) => itemLabel(item) === "On the conference field",
-    )!;
-    expect(field.getAttribute("aria-checked")).toBe("true");
-    await act(() => button("Actions for Top questions").click());
-    await save();
-    // A shared graphic's background is the scene's own, like whether it shows.
-    expect(positioned).toHaveLength(0);
-    expect(written[0]!.body.elements.topQuestions).toMatchObject({ shared: true, background: true });
+    await act(() => button("Actions for Lower third").click());
+    expect(menuItems()).toEqual(["Place differently on this scene", "Remove from scene"]);
+    expect(document.querySelector("[role=menuitemcheckbox]")).toBeNull();
+  });
+
+  it("resets a built-in scene to its default, saving its name and graphics at once", async () => {
+    // The scene the editor opens on: the event's default one.
+    const base = LIVE_OVERLAY_PRESET_LAYOUTS[LIVE_OVERLAY_DEFAULT_LAYOUT];
+    await mount();
+    await choose(button(`Actions for ${base.name}`), "Rename");
+    await typeInto(controlFor(document.body, "Name"), "Keynote");
+    await act(async () => {
+      [...document.querySelectorAll("button")].find((b) => b.textContent === "Rename")!.click();
+    });
+    const second = rows()[1] as "ticker";
+    await act(() => button(`Move ${LIVE_OVERLAY_ELEMENT_LABELS[second]} up`).click());
+    await act(() => button(`Actions for ${base.name}`).click());
+    // A built-in scene is reset, never deleted.
+    expect(menuItems()).toContain("Reset scene");
+    expect(menuItems()).not.toContain("Delete scene");
+    await act(() =>
+      [...document.querySelectorAll<HTMLElement>("[role=menuitem]")]
+        .find((item) => itemLabel(item) === "Reset scene")!
+        .click(),
+    );
+    await vi.waitFor(() => expect(written).toHaveLength(1));
+    expect(confirmations.asked[0]).toMatchObject({ title: "Reset Keynote?", confirmLabel: "Reset scene" });
+    expect(written[0]!.body).toMatchObject({ name: base.name, preset: LIVE_OVERLAY_DEFAULT_LAYOUT });
+    expect(written[0]!.body.elements[second].layer).toBe(base.elements[second].layer);
+  });
+
+  it("deletes one of the event's own scenes after asking, and offers no reset for it", async () => {
+    stored = eventLiveOverlayLayoutsResponseSchema.parse({
+      ...LAYOUTS,
+      layouts: [
+        ...LAYOUTS.layouts,
+        {
+          ...LAYOUTS.layouts[0]!,
+          slug: "keynote",
+          name: "Keynote",
+          preset: null,
+          builtIn: false,
+          saved: true,
+          updatedAt: "2026-11-18T10:00:00.000Z",
+        },
+      ],
+    });
+    history.replaceState(null, "", "/portal/#/events/conference/settings/live?layout=keynote");
+    await mount();
+    await act(() => button("Actions for Keynote").click());
+    expect(menuItems()).not.toContain("Reset scene");
+    await act(() => button("Actions for Keynote").click());
+    await choose(button("Actions for Keynote"), "Delete scene");
+    await vi.waitFor(() => expect(deleted).toEqual(["/api/v1/events/conference/settings/live/layouts/keynote"]));
+    expect(confirmations.asked[0]).toMatchObject({ title: "Delete Keynote?", confirmLabel: "Delete scene" });
+  });
+
+  it("draws the scene with sample content under the boxes", async () => {
+    await mount();
+    const canvas = root!.querySelector(".pk-layout-canvas")!;
+    expect(canvas.querySelector(".pk-live-overlay__frame")).not.toBeNull();
+    expect(canvas.querySelector('[data-overlay-element="lowerThird"]')).not.toBeNull();
   });
 
   it("lists the scene's graphics front first and saves one moved up the stack as the scene's order", async () => {
@@ -394,7 +466,7 @@ describe("scene editor", () => {
 
   it("refuses a box that leaves the frame without sending it and opens its exact position", async () => {
     await mount();
-    void act(() => box("question").click());
+    void act(() => box("lowerThird").click());
     const width = controlFor(root!, "Width");
     await typeInto(width, "120");
     await save();
@@ -405,7 +477,7 @@ describe("scene editor", () => {
 
   it("renames the scene as part of its draft, under the same source name", async () => {
     await mount();
-    await choose(button("Actions for Talk"), "Rename");
+    await choose(button("Actions for Default"), "Rename");
     const name = controlFor(document.body, "Name");
     await typeInto(name, "Keynote");
     await act(async () => {
@@ -415,7 +487,7 @@ describe("scene editor", () => {
       "Keynote",
     );
     await save();
-    expect(written[0]!.url).toBe("/api/v1/events/conference/settings/live/layouts/talk");
+    expect(written[0]!.url).toBe("/api/v1/events/conference/settings/live/layouts/default");
     expect(written[0]!.body.name).toBe("Keynote");
   });
 
@@ -431,7 +503,7 @@ describe("scene editor", () => {
       await Promise.resolve();
     });
     expect(written[0]!.url).toBe("/api/v1/events/conference/settings/live/layouts/keynote-scene");
-    expect(written[0]!.body).toMatchObject({ expectedUpdatedAt: null, name: "Keynote scene", preset: "talk" });
+    expect(written[0]!.body).toMatchObject({ expectedUpdatedAt: null, name: "Keynote scene", preset: "default" });
   });
 });
 

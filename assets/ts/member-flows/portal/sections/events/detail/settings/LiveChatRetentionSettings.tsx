@@ -22,6 +22,8 @@ import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
 import { Spinner } from "../../../../../../ui/Spinner";
 import { readEventSettings } from "../../../management/event-settings-detail";
 import { useEventSettingsSave } from "./useEventSettingsSave";
+import { hasEventAgendaPermission } from "../../event-agenda-access";
+import { LiveChatArchive } from "./LiveChatArchive";
 
 type KeepDays = EventLiveChatSettings["keepDays"];
 
@@ -29,7 +31,7 @@ const CHOICES: Record<KeepDays, { label: string; hint: string }> = {
   7: { label: "1 week", hint: "The chat goes with the rest of the session's live room." },
   90: {
     label: "90 days",
-    hint: "Only the attendee chat stays, so live moderators can download it from Studio settings. Polls, questions, and the operator chat still go after a week.",
+    hint: "Only the attendee chat stays, so live moderators can download it below. Polls, questions, and the operator chat still go after a week.",
   },
 };
 
@@ -48,18 +50,22 @@ export function LiveChatRetentionSettings({
   const current = event ?? loaded.data?.event ?? null;
   if (loaded.error) return <ErrorAlert error={loaded.error} />;
   if (!current) return <Spinner label="Loading chat settings…" />;
+  // The kept chat is downloaded and erased beside the choice of how long it is kept, by the live moderators.
   return (
-    <LiveChatRetentionPanel
-      key={current.updatedAt}
-      event={current}
-      canEdit={canEdit}
-      onUpdated={setEvent}
-      groupTarget={
-        groupId
-          ? { groupId, eventId: current.id, canEdit: true, onSaved: () => loaded.reload().then(() => setEvent(null)) }
-          : undefined
-      }
-    />
+    <>
+      <LiveChatRetentionPanel
+        key={current.updatedAt}
+        event={current}
+        canEdit={canEdit}
+        onUpdated={setEvent}
+        groupTarget={
+          groupId
+            ? { groupId, eventId: current.id, canEdit: true, onSaved: () => loaded.reload().then(() => setEvent(null)) }
+            : undefined
+        }
+      />
+      {hasEventAgendaPermission(current.id, "agenda:live_moderate") ? <LiveChatArchive slug={slug} /> : null}
+    </>
   );
 }
 

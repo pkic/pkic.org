@@ -1,13 +1,16 @@
-import { useId, useLayoutEffect, useRef } from "preact/hooks";
+import { useId, useLayoutEffect, useMemo, useRef } from "preact/hooks";
+import { LiveOverlayPresentation } from "../../../../../../../live-session/LiveOverlayPresentation";
+import { Checkbox } from "../../../../../../../ui/Checkbox";
 import { layoutLabelShifts } from "./overlay-layout-labels";
 import {
   LIVE_OVERLAY_ELEMENT_LABELS,
   type LiveOverlayElement,
   type LiveOverlayLayoutElements,
 } from "../../../../../../../../shared/schemas/live-overlay-layout";
-import { LAYOUT_CANVAS_LABEL, LAYOUT_FIELD_LABEL } from "./overlay-layout-copy";
+import { LAYOUT_CANVAS_LABEL } from "./overlay-layout-copy";
 import { CORNER_HANDLES, nudgeBox, type Box } from "./overlay-layout-editing";
 import { describeGraphicPosition } from "./overlay-layout-graphics";
+import { sampleOverlayRoom } from "./overlay-layout-sample";
 import { placeLayoutBox, useOverlayLayoutGesture } from "./useOverlayLayoutGesture";
 import "./OverlayLayoutCanvas.css";
 
@@ -24,7 +27,6 @@ const percent = (value: number) => `${Math.round(value * 1000) / 10}%`;
 function LayoutBox({
   element,
   box,
-  background,
   selected,
   labelShift,
   describedBy,
@@ -35,7 +37,6 @@ function LayoutBox({
 }: {
   element: LiveOverlayElement;
   box: Box;
-  background: boolean;
   selected: boolean;
   /** How many label lines the label moves down (or up) so it never covers another box's label. */
   labelShift: number;
@@ -64,7 +65,6 @@ function LayoutBox({
       class="pk-layout-canvas__box"
       data-element={element}
       data-selected={selected ? "" : undefined}
-      data-background={background ? "" : undefined}
       aria-pressed={selected}
       aria-label={`${label}, ${position}: ${percent(box.x)} from left, ${percent(box.y)} from top, ${percent(box.w)} wide, ${percent(box.h)} high`}
       aria-describedby={describedBy}
@@ -85,11 +85,7 @@ function LayoutBox({
     >
       <span class="pk-layout-canvas__label" aria-hidden="true">
         <span class="pk-layout-canvas__name">{label}</span>
-        {selected ? (
-          <span class="pk-layout-canvas__detail">
-            {background ? `${position} · ${LAYOUT_FIELD_LABEL.toLowerCase()}` : position}
-          </span>
-        ) : null}
+        {selected ? <span class="pk-layout-canvas__detail">{position}</span> : null}
       </span>
       {selected
         ? CORNER_HANDLES.map((handle) => (
@@ -107,17 +103,19 @@ function LayoutBox({
 }
 
 /**
- * The scene on a 16:9 canvas: a labeled box for each graphic it shows, over
- * the camera, stacked as the outputs draw them, so a graphic in front covers
- * the ones behind it. Drag a box to move it, a corner to resize it; it snaps
- * to the grid, the title-safe area and the other boxes, with guides while it
- * does. The arrow keys move the selected box.
+ * The scene on a 16:9 canvas, drawn by the renderer the outputs use with a
+ * sample room on air, and a box over each graphic it shows. Boxes are stacked
+ * as the outputs draw them, so a graphic in front covers the ones behind it.
+ * Drag a box to move it, a corner to resize it; it snaps to the grid, the
+ * title-safe area and the other boxes, with guides while it does. The arrow
+ * keys move the selected box.
  */
 export function OverlayLayoutCanvas({
   elements,
   shown,
   selected,
   safeAreas,
+  onSafeAreas,
   onSelect,
   onChange,
 }: {
@@ -127,10 +125,12 @@ export function OverlayLayoutCanvas({
   selected: LiveOverlayElement | null;
   /** Whether the action-safe and title-safe guides are drawn. */
   safeAreas: boolean;
+  onSafeAreas: (shown: boolean) => void;
   onSelect: (element: LiveOverlayElement) => void;
   onChange: (element: LiveOverlayElement, box: Box) => void;
 }) {
   const help = useId();
+  const room = useMemo(() => sampleOverlayRoom(Date.now()), []);
   const gesture = useOverlayLayoutGesture(
     elements,
     (moving) => shown.filter((element) => element !== moving).map((element) => elements[element]),
@@ -139,20 +139,19 @@ export function OverlayLayoutCanvas({
   const shifts = layoutLabelShifts(elements, shown, LIVE_OVERLAY_ELEMENT_LABELS);
   return (
     <figure class="pk-layout-canvas-figure">
+      <div class="pk-layout-canvas__bar">
+        <p class="pk-small pk-muted">1920 × 1080 · drag to move, drag a corner to resize</p>
+        <Checkbox
+          label="Show safe areas"
+          checked={safeAreas}
+          onChange={(event) => onSafeAreas(event.currentTarget.checked)}
+        />
+      </div>
       <div class="pk-layout-canvas" ref={gesture.canvas}>
         <span class="pk-layout-canvas__camera" aria-hidden="true">
           Camera
         </span>
-        {safeAreas ? (
-          <>
-            <div class="pk-layout-canvas__safe" data-area="action" aria-hidden="true">
-              <span>Action safe</span>
-            </div>
-            <div class="pk-layout-canvas__safe" data-area="title" aria-hidden="true">
-              <span>Title safe</span>
-            </div>
-          </>
-        ) : null}
+        <LiveOverlayPresentation view="program" elements={elements} projection={room} />
         <div class="pk-layout-canvas__guide" data-axis="vertical" ref={gesture.verticalGuide} aria-hidden="true" />
         <div class="pk-layout-canvas__guide" data-axis="horizontal" ref={gesture.horizontalGuide} aria-hidden="true" />
         <div class="pk-layout-canvas__boxes" role="group" aria-label={LAYOUT_CANVAS_LABEL}>
@@ -162,7 +161,6 @@ export function OverlayLayoutCanvas({
               key={element}
               element={element}
               box={elements[element]}
-              background={elements[element].background === true}
               selected={element === selected}
               labelShift={shifts[element] ?? 0}
               describedBy={help}
@@ -173,9 +171,21 @@ export function OverlayLayoutCanvas({
             />
           ))}
         </div>
+        {/* Over the graphics and their boxes, so the margins show wherever something reaches into them. */}
+        {safeAreas ? (
+          <>
+            <div class="pk-layout-canvas__safe" data-area="action" aria-hidden="true">
+              <span>Action safe</span>
+            </div>
+            <div class="pk-layout-canvas__safe" data-area="title" aria-hidden="true">
+              <span>Title safe</span>
+            </div>
+          </>
+        ) : null}
       </div>
       <figcaption class="pk-small pk-muted">
-        Graphics keep clear of the ticker while it is on air; with the ticker off, they use the full height.
+        Sample content. Graphics keep clear of the ticker while it is on air; with the ticker off, they use the full
+        height.
       </figcaption>
       <p id={help} class="pk-sr-only">
         Arrow keys move the selected box by one pixel, Shift and an arrow key by 24. Hold Alt while dragging to place it

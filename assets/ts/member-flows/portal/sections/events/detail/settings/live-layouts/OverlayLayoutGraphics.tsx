@@ -14,7 +14,7 @@ import { Menu, type MenuItem } from "../../../../../../../ui/Menu";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../../ui/Panel";
 import { IconChevron } from "../../../../../../../ui/MediaIcons";
 import { RowActions } from "../../../../../../../ui/RowActions";
-import { LAYOUT_FIELD_LABEL, LAYOUT_GRAPHIC_DESCRIPTIONS } from "./overlay-layout-copy";
+import { LAYOUT_GRAPHIC_DESCRIPTIONS } from "./overlay-layout-copy";
 import { addableGraphics, describeGraphicPosition, sceneGraphics } from "./overlay-layout-graphics";
 
 /** What a row's menu does to a graphic's position: see `overlay-layout-sharing.ts`. */
@@ -85,15 +85,14 @@ function useRowDrag(rows: () => HTMLElement[], onReorder: (element: LiveProgramL
  * The scene's graphics, front first, the background among them: each row
  * picks its box on the canvas, says where it sits, and moves it up or down
  * the stack. Add graphic offers the ones the scene does not show yet; a row's
- * menu puts the graphic on the conference field, decides whether it shares
- * its position, or removes it.
+ * menu decides whether it shares its position, or removes it. The conference
+ * field is the background graphic alone, never a setting of another one.
  */
 export function OverlayLayoutGraphics({
   elements,
   selected,
   disabled,
   onSelect,
-  onField,
   onShow,
   onReorder,
   onSharing,
@@ -102,8 +101,6 @@ export function OverlayLayoutGraphics({
   selected: LiveOverlayElement | null;
   disabled: boolean;
   onSelect: (element: LiveOverlayElement) => void;
-  /** Puts the conference field behind a graphic, in its own box, or takes it away. */
-  onField: (element: LiveOverlayElement, field: boolean) => void;
   /** Shows a graphic in the scene, or removes it. */
   onShow: (element: LiveOverlayElement, visible: boolean) => void;
   onReorder: (element: LiveProgramLayer, to: number) => void;
@@ -114,26 +111,11 @@ export function OverlayLayoutGraphics({
   const addable = addableGraphics(elements);
   const drag = useRowDrag(() => [...(list.current?.children ?? [])] as HTMLElement[], onReorder);
   const actions = (element: LiveProgramLayer): MenuItem[] => [
-    // The background is the field itself; every other graphic can carry one in its box.
-    ...(element === "background"
-      ? []
-      : [
-          {
-            id: "field",
-            label: LAYOUT_FIELD_LABEL,
-            description: "Draws the conference field behind it, in its box",
-            multiple: true,
-            checked: elements[element].background === true,
-            disabled,
-            onSelect: () => onField(element, elements[element].background !== true),
-          },
-        ]),
     ...(elements[element].shared
       ? [
           {
             id: "unlink",
             label: "Place differently on this scene",
-            separatorBefore: element !== "background",
             disabled,
             onSelect: () => onSharing(element, "unlink"),
           },
@@ -142,7 +124,6 @@ export function OverlayLayoutGraphics({
           {
             id: "relink",
             label: "Use shared position",
-            separatorBefore: element !== "background",
             disabled,
             onSelect: () => onSharing(element, "relink"),
           },
@@ -197,8 +178,6 @@ export function OverlayLayoutGraphics({
           <ul class="pk-scenes__rows" ref={list} aria-label="Graphics in this scene">
             {graphics.map((element, index) => {
               const label = LIVE_OVERLAY_ELEMENT_LABELS[element];
-              const position = describeGraphicPosition(elements[element]);
-              const onField = element !== "background" && elements[element].background === true;
               return (
                 <li
                   key={element}
@@ -223,9 +202,7 @@ export function OverlayLayoutGraphics({
                     onClick={() => onSelect(element)}
                   >
                     <span class="pk-scenes__name">{label}</span>
-                    <span class="pk-scenes__meta">
-                      {onField ? `${position} · ${LAYOUT_FIELD_LABEL.toLowerCase()}` : position}
-                    </span>
+                    <span class="pk-scenes__meta">{describeGraphicPosition(elements[element])}</span>
                   </button>
                   <span class="pk-scenes__moves">
                     <Button

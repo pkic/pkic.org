@@ -1,6 +1,6 @@
 /*
- * The scene editor's canvas: the camera at 16:9 with a labeled box for each
- * graphic the scene shows. A box sits at its fractions of the frame through
+ * The scene editor's canvas: the camera at 16:9, the scene drawn over it by
+ * the outputs' renderer, and a box for each graphic the scene shows. A box sits at its fractions of the frame through
  * custom properties; a drag moves it with a transform and the box settles on
  * release. Corner handles are drawn small but each takes a 24px target.
  */
@@ -9,6 +9,17 @@
     display: grid;
     gap: var(--pk-2);
     min-inline-size: 0;
+    margin: 0;
+  }
+  /* The hint and the safe-area switch on one line above the canvas. */
+  .pk-layout-canvas__bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--pk-2) var(--pk-4);
+  }
+  .pk-layout-canvas__bar > p {
     margin: 0;
   }
   .pk-layout-canvas {
@@ -36,6 +47,13 @@
     color: color-mix(in srgb, var(--pk-on-solid) 70%, transparent);
     font-size: var(--pk-text-sm);
   }
+  /* The scene as the outputs draw it; the boxes over it take every press. */
+  .pk-layout-canvas > .pk-live-overlay__frame {
+    grid-area: 1 / 1;
+    inline-size: 100%;
+    block-size: 100%;
+    pointer-events: none;
+  }
   /*
    * The safe areas, as quiet labeled guides: action safe (3.5% in) keeps
    * what matters on any display; title safe (5% in, which snapping uses)
@@ -43,6 +61,7 @@
    */
   .pk-layout-canvas__safe {
     position: absolute;
+    z-index: 4;
     inset: 5%;
     border: 1px dashed color-mix(in srgb, var(--pk-on-solid) 40%, transparent);
     pointer-events: none;
@@ -52,18 +71,18 @@
     border-style: dotted;
     border-color: color-mix(in srgb, var(--pk-on-solid) 25%, transparent);
   }
+  /* Each name sits inside its own margin, on a plate so it reads over the sample graphics: title safe at the top left, action safe at the top right. */
   .pk-layout-canvas__safe > span {
     position: absolute;
-    inset-block-end: 0;
-    inset-inline-end: 0;
+    inset: 0 auto auto 0;
     padding: 0 var(--pk-1);
-    color: color-mix(in srgb, var(--pk-on-solid) 70%, transparent);
+    background: color-mix(in srgb, var(--pk-chrome-deep) 85%, transparent);
+    color: color-mix(in srgb, var(--pk-on-solid) 80%, transparent);
     font-size: var(--pk-text-2xs);
     line-height: 1.6;
   }
   .pk-layout-canvas__safe[data-area="action"] > span {
-    inset-block-end: auto;
-    inset-block-start: 100%;
+    inset: 0 0 auto auto;
   }
   .pk-layout-canvas__boxes {
     position: absolute;
@@ -86,7 +105,7 @@
     padding: 0;
     border: 1px dashed color-mix(in srgb, var(--pk-on-solid) 35%, transparent);
     border-radius: 0;
-    background: color-mix(in srgb, var(--pk-on-solid) 16%, var(--pk-chrome-deep));
+    background: transparent;
     color: var(--pk-on-solid);
     font: inherit;
     cursor: grab;
@@ -94,6 +113,7 @@
   .pk-layout-canvas__box:hover {
     border-style: solid;
     border-color: color-mix(in srgb, var(--pk-on-solid) 60%, transparent);
+    background: color-mix(in srgb, var(--pk-accent) 10%, transparent);
   }
   .pk-layout-canvas__box:focus-visible {
     outline: 2px solid var(--pk-focus);
@@ -106,11 +126,7 @@
    */
   .pk-layout-canvas__box[data-selected] {
     border-color: transparent;
-    background: color-mix(
-      in srgb,
-      var(--pk-accent) 12%,
-      color-mix(in srgb, var(--pk-on-solid) 16%, var(--pk-chrome-deep))
-    );
+    background: color-mix(in srgb, var(--pk-accent) 10%, transparent);
   }
   .pk-layout-canvas__box[data-selected]::after {
     content: "";
@@ -127,9 +143,10 @@
     transition: none;
   }
   /*
-   * The graphic's name in the middle of its box, moved a line or more when it
-   * would cover another box's name. Names draw above every box, so a graphic
-   * that shares its place with others still shows its name.
+   * The graphic's name in the middle of its box, on a plate so it reads over
+   * the drawn graphic, shown for the box pointed at, focused or selected. It
+   * moves a line or more when it would cover another box's name and draws
+   * above every box.
    */
   .pk-layout-canvas__label {
     position: absolute;
@@ -142,10 +159,21 @@
     padding-inline: var(--pk-1);
     font-size: var(--pk-text-xs);
     line-height: 1.6;
+    visibility: hidden;
     pointer-events: none;
+  }
+  .pk-layout-canvas__box:hover > .pk-layout-canvas__label,
+  .pk-layout-canvas__box:focus-visible > .pk-layout-canvas__label,
+  .pk-layout-canvas__box[data-selected] > .pk-layout-canvas__label {
+    visibility: visible;
+  }
+  .pk-layout-canvas__box[data-selected] > .pk-layout-canvas__label {
+    z-index: 3;
   }
   .pk-layout-canvas__name,
   .pk-layout-canvas__detail {
+    padding-inline: var(--pk-1);
+    background: color-mix(in srgb, var(--pk-chrome-deep) 85%, transparent);
     max-inline-size: 100%;
     overflow: hidden;
     white-space: nowrap;
