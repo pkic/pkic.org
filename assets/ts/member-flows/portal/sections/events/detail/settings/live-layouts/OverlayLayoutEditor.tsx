@@ -25,7 +25,7 @@ import { Button } from "../../../../../../../ui/Button";
 import { Menu } from "../../../../../../../ui/Menu";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../../ui/Panel";
 import { OverlayLayoutCanvas } from "./OverlayLayoutCanvas";
-import { OverlayLayoutGraphics, type LayoutSharingAction } from "./OverlayLayoutGraphics";
+import { OverlayLayoutGraphics, OverlayLayoutGraphicsSummary, type LayoutSharingAction } from "./OverlayLayoutGraphics";
 import { OverlayLayoutInspector } from "./OverlayLayoutInspector";
 import { OverlayLayoutRenameDialog } from "./OverlayLayoutRenameDialog";
 import {
@@ -53,10 +53,12 @@ const SHARING: Record<LayoutSharingAction, (drafts: LayoutDrafts, element: LiveO
  * One scene's editor: the canvas with the selected graphic's exact position
  * under it, beside the scene's graphics. A graphic linked to the event's
  * shared position moves on every scene that shares it; its row menu places
- * it for this scene only, or shares it again. Changes stay a draft until
- * saved; the scene's menu renames or duplicates it, resets a built-in scene
- * to its default, and deletes one of the event's own. Without `canEdit` the
- * scene is only drawn: nothing in it can be changed or saved.
+ * it for this scene only, or shares it again. A graphic that fills itself
+ * from the room comes on with the scene or is switched in the studio, as its
+ * row says. Changes stay a draft until saved; the scene's menu renames or
+ * duplicates it, resets a built-in scene to its default, and deletes one of
+ * the event's own. Without `canEdit` the scene is drawn and its graphics
+ * listed: nothing in it can be changed or saved.
  */
 export function OverlayLayoutEditor({
   endpoint,
@@ -275,6 +277,7 @@ export function OverlayLayoutEditor({
             />
           </PanelBody>
         </Panel>
+        <OverlayLayoutGraphicsSummary elements={elements} />
       </div>
     );
   return (
@@ -371,6 +374,7 @@ export function OverlayLayoutEditor({
           disabled={busy}
           onSelect={setPicked}
           onShow={show}
+          onComesOn={(element, comesOn) => change(element, { comesOn })}
           onReorder={(element, to) => update({ ...drafts, elements: reorderSceneGraphic(elements, element, to) })}
           onSharing={share}
         />

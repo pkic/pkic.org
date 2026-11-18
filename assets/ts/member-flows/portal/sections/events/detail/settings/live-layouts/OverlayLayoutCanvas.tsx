@@ -104,7 +104,8 @@ function LayoutBox({
 
 /**
  * The scene on a 16:9 canvas, drawn by the renderer the outputs use with a
- * sample room on air, and a box over each graphic it shows. Boxes are stacked
+ * sample room that has every graphic on, whatever puts it on in the studio,
+ * and a box over each graphic the scene includes. Boxes are stacked
  * as the outputs draw them, so a graphic in front covers the ones behind it.
  * Drag a box to move it, a corner to resize it; it snaps to the grid, the
  * title-safe area and the other boxes, with guides while it does. The arrow
@@ -192,8 +193,8 @@ export function OverlayLayoutCanvas({
         ) : null}
       </div>
       <figcaption class="pk-small pk-muted">
-        Sample content. Graphics keep clear of the ticker while it is on air; with the ticker off, they use the full
-        height.
+        Sample content with every graphic on. Where graphics share a spot, the front one shows. Graphics keep clear of
+        the ticker while it is on; with the ticker off, they use the full height.
       </figcaption>
       {canEdit ? (
         <p id={help} class="pk-sr-only">

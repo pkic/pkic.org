@@ -172,6 +172,28 @@ describe("event overlay layouts", () => {
     expect((await layouts()).find((layout) => layout.slug === "break")!.saved).toBe(true);
   });
 
+  it("keeps whether a graphic comes on with the scene, and refuses it for one that needs a pick or has no switch", async () => {
+    const elements = {
+      ...BASE,
+      ticker: { ...BASE.ticker, comesOn: true },
+      schedule: { ...BASE.schedule, comesOn: false },
+    };
+    expect((await api("PUT", "keynote", put({ elements }))).status).toBe(200);
+    const saved = (await layouts()).find((layout) => layout.slug === "keynote")!;
+    expect(saved.elements.ticker.comesOn).toBe(true);
+    expect(saved.elements.schedule.comesOn).toBe(false);
+    expect(saved.elements.reactions.comesOn).toBeUndefined();
+    // Only a graphic that fills itself from the room can come on with a scene.
+    for (const element of ["lowerThird", "background"] as const) {
+      const refused = await api("PUT", "keynote", {
+        ...put({ expectedUpdatedAt: saved.updatedAt }),
+        elements: { ...elements, [element]: { ...BASE[element], comesOn: true } },
+      });
+      expect(refused.status).toBe(400);
+    }
+    expect((await layouts()).find((layout) => layout.slug === "keynote")!.updatedAt).toBe(saved.updatedAt);
+  });
+
   it("refuses attendees and invalid layouts without writing", async () => {
     expect((await api("GET", null, undefined, "attendee")).status).toBe(403);
     expect((await api("PUT", "keynote", put(), "attendee")).status).toBe(403);

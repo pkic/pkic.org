@@ -24,7 +24,8 @@ import "./OverlayLayouts.css";
  * The event's scenes in three columns: the list, the selected scene's
  * canvas, and its graphics; then the rooms' browser sources. The selected
  * scene follows the address, so a bookmark opens the same one. Without
- * `canEdit` the scenes are only shown: the list and the selected scene drawn.
+ * `canEdit` the scenes are only shown: the list, the selected scene drawn,
+ * and its graphics with what puts each on.
  */
 export function EventLiveOverlayLayouts({ slug, canEdit }: { slug: string; canEdit: boolean }) {
   const endpoint = `/api/v1/events/${encodeURIComponent(slug)}/settings/live/layouts`;

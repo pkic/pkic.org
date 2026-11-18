@@ -1,3 +1,4 @@
+import type { ComponentChildren } from "preact";
 import { useRef, useState } from "preact/hooks";
 import type { LiveProgramLayer } from "../../../../../../../../shared/live-overlay-stacking";
 import {
@@ -14,6 +15,7 @@ import { Menu, type MenuItem } from "../../../../../../../ui/Menu";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../../ui/Panel";
 import { IconChevron } from "../../../../../../../ui/MediaIcons";
 import { RowActions } from "../../../../../../../ui/RowActions";
+import { OverlayLayoutGraphicSwitch } from "./OverlayLayoutGraphicSwitch";
 import { LAYOUT_GRAPHIC_DESCRIPTIONS } from "./overlay-layout-copy";
 import { addableGraphics, describeGraphicPosition, sceneGraphics } from "./overlay-layout-graphics";
 
@@ -81,12 +83,78 @@ function useRowDrag(rows: () => HTMLElement[], onReorder: (element: LiveProgramL
   return { shown, grip };
 }
 
+/** The Graphics panel around the scene's rows, the same for someone who changes the scene and someone who reads it. */
+function GraphicsPanel({
+  toolbar,
+  empty,
+  children,
+}: {
+  toolbar?: ComponentChildren;
+  empty: boolean;
+  children: ComponentChildren;
+}) {
+  return (
+    <Panel class="pk-scenes__graphics">
+      <PanelHeader title="Graphics" headingLevel={4}>
+        {toolbar}
+      </PanelHeader>
+      <PanelBody flush>
+        <p class="pk-scenes__note">Top of the list is drawn in front.</p>
+        {empty ? (
+          <div class="pk-scenes__empty">
+            <EmptyState title="This scene shows no graphics yet." />
+          </div>
+        ) : (
+          children
+        )}
+        <p class="pk-scenes__note">
+          Content comes from the room live: which timer, which question, the current top questions.
+        </p>
+      </PanelBody>
+    </Panel>
+  );
+}
+
+/** A graphic's name and where it sits on the frame. */
+function GraphicLabel({ element, elements }: { element: LiveProgramLayer; elements: LiveOverlayLayoutElements }) {
+  return (
+    <>
+      <span class="pk-scenes__name">{LIVE_OVERLAY_ELEMENT_LABELS[element]}</span>
+      <span class="pk-scenes__meta">{describeGraphicPosition(elements[element])}</span>
+    </>
+  );
+}
+
+/**
+ * The scene's graphics for someone who may not change the scene: what it
+ * contains, front first, where each sits and what puts it on. Nothing to
+ * press.
+ */
+export function OverlayLayoutGraphicsSummary({ elements }: { elements: LiveOverlayLayoutElements }) {
+  const graphics = sceneGraphics(elements);
+  return (
+    <GraphicsPanel empty={graphics.length === 0}>
+      <ul class="pk-scenes__rows" aria-label="Graphics in this scene">
+        {graphics.map((element) => (
+          <li key={element} class="pk-scenes__row" data-element={element}>
+            <span class="pk-scenes__label">
+              <GraphicLabel element={element} elements={elements} />
+            </span>
+            <OverlayLayoutGraphicSwitch element={element} placement={elements[element]} />
+          </li>
+        ))}
+      </ul>
+    </GraphicsPanel>
+  );
+}
+
 /**
  * The scene's graphics, front first, the background among them: each row
- * picks its box on the canvas, says where it sits, and moves it up or down
- * the stack. Add graphic offers the ones the scene does not show yet; a row's
- * menu decides whether it shares its position, or removes it. The conference
- * field is the background graphic alone, never a setting of another one.
+ * picks its box on the canvas, says where it sits and what puts it on, and
+ * moves it up or down the stack. A graphic that fills itself from the room
+ * carries the scene's choice there: it comes on with the scene, or it is
+ * switched in the studio. Add graphic offers the ones the scene does not show
+ * yet; a row's menu decides whether it shares its position, or removes it.
  */
 export function OverlayLayoutGraphics({
   elements,
@@ -94,6 +162,7 @@ export function OverlayLayoutGraphics({
   disabled,
   onSelect,
   onShow,
+  onComesOn,
   onReorder,
   onSharing,
 }: {
@@ -103,6 +172,8 @@ export function OverlayLayoutGraphics({
   onSelect: (element: LiveOverlayElement) => void;
   /** Shows a graphic in the scene, or removes it. */
   onShow: (element: LiveOverlayElement, visible: boolean) => void;
+  /** Sets whether a graphic that fills itself from the room comes on with the scene. */
+  onComesOn: (element: LiveOverlayElement, comesOn: boolean) => void;
   onReorder: (element: LiveProgramLayer, to: number) => void;
   onSharing: (element: LiveOverlayElement, action: LayoutSharingAction) => void;
 }) {
@@ -153,8 +224,9 @@ export function OverlayLayoutGraphics({
     return undefined;
   };
   return (
-    <Panel class="pk-scenes__graphics">
-      <PanelHeader title="Graphics" headingLevel={4}>
+    <GraphicsPanel
+      empty={graphics.length === 0}
+      toolbar={
         <Menu
           label="Add graphic"
           variant="plain"
@@ -171,75 +243,64 @@ export function OverlayLayoutGraphics({
           <IconPlus />
           Add graphic
         </Menu>
-      </PanelHeader>
-      <PanelBody flush>
-        <p class="pk-scenes__note">Top of the list is drawn in front.</p>
-        {graphics.length ? (
-          <ul class="pk-scenes__rows" ref={list} aria-label="Graphics in this scene">
-            {graphics.map((element, index) => {
-              const label = LIVE_OVERLAY_ELEMENT_LABELS[element];
-              return (
-                <li
-                  key={element}
-                  class="pk-scenes__row"
-                  data-element={element}
-                  data-selected={element === selected ? "" : undefined}
-                  data-dragging={drag.shown?.element === element ? "" : undefined}
-                  data-drop={dropAt(index)}
+      }
+    >
+      <ul class="pk-scenes__rows" ref={list} aria-label="Graphics in this scene">
+        {graphics.map((element, index) => {
+          const label = LIVE_OVERLAY_ELEMENT_LABELS[element];
+          return (
+            <li
+              key={element}
+              class="pk-scenes__row"
+              data-element={element}
+              data-selected={element === selected ? "" : undefined}
+              data-dragging={drag.shown?.element === element ? "" : undefined}
+              data-drop={dropAt(index)}
+            >
+              <span class="pk-scenes__grip" aria-hidden="true" title="Drag to reorder" {...drag.grip(element, index)}>
+                ⠿
+              </span>
+              <button
+                type="button"
+                class="pk-scenes__pick"
+                aria-pressed={element === selected}
+                onClick={() => onSelect(element)}
+              >
+                <GraphicLabel element={element} elements={elements} />
+              </button>
+              <span class="pk-scenes__moves">
+                <Button
+                  icon
+                  variant="ghost"
+                  aria-label={`Move ${label} up`}
+                  title="Move up"
+                  disabled={disabled || index === 0}
+                  onClick={() => onReorder(element, index - 1)}
                 >
-                  <span
-                    class="pk-scenes__grip"
-                    aria-hidden="true"
-                    title="Drag to reorder"
-                    {...drag.grip(element, index)}
-                  >
-                    ⠿
-                  </span>
-                  <button
-                    type="button"
-                    class="pk-scenes__pick"
-                    aria-pressed={element === selected}
-                    onClick={() => onSelect(element)}
-                  >
-                    <span class="pk-scenes__name">{label}</span>
-                    <span class="pk-scenes__meta">{describeGraphicPosition(elements[element])}</span>
-                  </button>
-                  <span class="pk-scenes__moves">
-                    <Button
-                      icon
-                      variant="ghost"
-                      aria-label={`Move ${label} up`}
-                      title="Move up"
-                      disabled={disabled || index === 0}
-                      onClick={() => onReorder(element, index - 1)}
-                    >
-                      <IconChevron pointing="up" />
-                    </Button>
-                    <Button
-                      icon
-                      variant="ghost"
-                      aria-label={`Move ${label} down`}
-                      title="Move down"
-                      disabled={disabled || index === graphics.length - 1}
-                      onClick={() => onReorder(element, index + 1)}
-                    >
-                      <IconChevron pointing="down" />
-                    </Button>
-                  </span>
-                  <RowActions subject={label} actions={actions(element)} />
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <div class="pk-scenes__empty">
-            <EmptyState title="This scene shows no graphics yet." />
-          </div>
-        )}
-        <p class="pk-scenes__note">
-          Content comes from the room live: which timer, which question, the current top questions.
-        </p>
-      </PanelBody>
-    </Panel>
+                  <IconChevron pointing="up" />
+                </Button>
+                <Button
+                  icon
+                  variant="ghost"
+                  aria-label={`Move ${label} down`}
+                  title="Move down"
+                  disabled={disabled || index === graphics.length - 1}
+                  onClick={() => onReorder(element, index + 1)}
+                >
+                  <IconChevron pointing="down" />
+                </Button>
+              </span>
+              <RowActions subject={label} actions={actions(element)} />
+              <OverlayLayoutGraphicSwitch
+                element={element}
+                placement={elements[element]}
+                disabled={disabled}
+                onComesOn={(comesOn) => onComesOn(element, comesOn)}
+              />
+            </li>
+          );
+        })}
+      </ul>
+    </GraphicsPanel>
   );
 }
