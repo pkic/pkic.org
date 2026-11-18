@@ -1,0 +1,59 @@
+@layer components {
+  /* One scene: its picture with the name under it, the picture edged in Preview's color while Preview holds it. */
+  .pk-studio-scene {
+    display: grid;
+    align-content: start;
+    gap: var(--pk-1);
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--pk-ink-muted);
+    font: inherit;
+    font-size: var(--pk-text-xs);
+    text-align: start;
+    cursor: pointer;
+  }
+  .pk-studio-scene:hover:not(:disabled),
+  .pk-studio-scene[aria-pressed="true"] {
+    color: var(--pk-ink);
+  }
+  .pk-studio-scene:focus-visible {
+    outline: none;
+  }
+  .pk-studio-scene:focus-visible .pk-studio-scene__picture {
+    box-shadow: var(--pk-focus);
+  }
+  .pk-studio-scene:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+  /* The picture at 16:9, its overlay scaled to the box by its own container units. */
+  .pk-studio-scene__picture {
+    display: grid;
+    box-sizing: border-box;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border: 1px solid var(--pk-line);
+    border-radius: calc(var(--pk-radius) / 2);
+    background: var(--pk-chrome-deep);
+    pointer-events: none;
+  }
+  .pk-studio-scene:hover:not(:disabled) .pk-studio-scene__picture {
+    border-color: var(--pk-line-strong);
+  }
+  .pk-studio-scene[data-tally] .pk-studio-scene__picture {
+    border: 2px var(--tally-line, solid) var(--tally);
+  }
+  .pk-studio-scene__picture > * {
+    grid-area: 1 / 1;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+  .pk-studio-scene__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

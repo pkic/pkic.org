@@ -6,7 +6,7 @@ describe("a browser source's address", () => {
   it("keeps the whole address in the fragment, output and scene first", () => {
     const address = liveOverlayAddress("https://pkic.org", {
       view: "program",
-      layout: "lower-third",
+      layout: "check-in",
       slug: "pqc-2026",
       roomId: "33333333-3333-4333-8333-333333333333",
       token: "signed.overlay.access",
@@ -14,24 +14,24 @@ describe("a browser source's address", () => {
     const url = new URL(address);
     expect(url.pathname).toBe("/live/overlay/");
     expect(url.search).toBe("");
-    expect(url.hash).toMatch(/^#view=program&layout=lower-third&event=/);
+    expect(url.hash).toMatch(/^#view=program&layout=check-in&event=/);
     expect(parseLiveOverlayAddress(url)).toEqual({
       view: "program",
-      layout: "lower-third",
+      layout: "check-in",
       slug: "pqc-2026",
       roomId: "33333333-3333-4333-8333-333333333333",
       token: "signed.overlay.access",
       graphics: ALL_LIVE_OVERLAY_GRAPHICS,
     });
-    const fallback = new URL(address.replace("layout=lower-third", "layout=Not%20a%20name"));
+    const fallback = new URL(address.replace("layout=check-in", "layout=Not%20a%20name"));
     // A source that names no scene, or a malformed one, draws the scene its output has on air.
     expect(parseLiveOverlayAddress(fallback)?.layout).toBeNull();
     expect(
       new URL(liveOverlayAddress("https://pkic.org", { ...parseLiveOverlayAddress(url)!, layout: null })).hash,
     ).not.toContain("layout=");
     expect(
-      new URL(liveOverlayAddress("https://pkic.org", { ...parseLiveOverlayAddress(url)!, layout: "full-frame" })).hash,
-    ).toContain("layout=full-frame");
+      new URL(liveOverlayAddress("https://pkic.org", { ...parseLiveOverlayAddress(url)!, layout: "talk" })).hash,
+    ).toContain("layout=talk");
     // A view must be an output's key; a room checks that it sets that output up when the source connects.
     expect(parseLiveOverlayAddress({ hash: url.hash.replace("view=program", "view=Lower%20third") })).toBeNull();
     expect(parseLiveOverlayAddress({ hash: url.hash.replace("view=program", "view=foy") })?.view).toBe("foy");

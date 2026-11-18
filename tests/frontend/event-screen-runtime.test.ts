@@ -104,7 +104,7 @@ describe("what a screen shows", () => {
   });
 
   it("runs the agenda only on a stage display or a projector; other outputs hold their last frame", () => {
-    const program = view({ ...assigned.screen.assignment!, output: "program", layout: "full-frame" });
+    const program = view({ ...assigned.screen.assignment!, output: "program", layout: "talk" });
     expect(
       screenDisplay(
         situation({

@@ -34,6 +34,7 @@ import {
   type StudioPanel,
 } from "./studio-layout";
 import type { StudioPanelView } from "./StudioGrid";
+import { ScenePicker } from "./ScenePicker";
 import { SceneStrip } from "./SceneStrip";
 import type { StudioChange } from "./useStudioLayout";
 import { setStudioLivestreamSound, studioLivestreamAudible } from "./studio-livestream-sound";
@@ -226,53 +227,19 @@ interface MonitorContext {
   change: StudioChange;
 }
 
-/** The scene Preview or Program holds, by its name; an unknown one is drawn as the event's default. */
-function sceneOf(output: "preview" | "program", sources: MonitorSources) {
-  const choices = liveOverlayLayoutChoices(sources.preview.overlayLayouts);
-  const scene = projectionOf(output, sources)?.stage.scene;
-  return { choices, current: choices.find((choice) => choice.slug === scene) ?? choices[0]! };
-}
-
-/**
- * Preview's scene, by name, beside PVW: choosing one loads it into Preview
- * for every operator, and the next Take puts it on Program with Preview's
- * graphics. Program names the scene it has on air.
- */
-function ScenePicker({ output, context }: { output: "preview" | "program"; context: MonitorContext }) {
-  const { sources, switcher } = context;
-  const { choices, current } = sceneOf(output, sources);
-  if (output === "program")
-    return sources.program ? (
-      <span class="pk-studio-monitor__purpose" title={`Scene on Program: ${current.name}`}>
-        {current.name}
-      </span>
-    ) : null;
-  return (
-    <Menu
-      variant="plain"
-      label={`Scene in Preview: ${current.name}`}
-      title={`Scene in Preview: ${current.name}. Choose one to load it into Preview; Take puts it on Program.`}
-      triggerClass="pk-studio-monitor__picker pk-studio-monitor__scene"
-      heading="Load a scene into Preview"
-      disabled={switcher.disabled}
-      items={choices.map((choice) => ({
-        id: choice.slug,
-        label: choice.name,
-        checked: choice.slug === current.slug,
-        onSelect: () => switcher.previewScene(choice.slug),
-      }))}
-    >
-      <span class="pk-studio-monitor__scene-name">{current.name}</span>
-      <span aria-hidden="true"> ▾</span>
-    </Menu>
-  );
-}
-
 /** The overlay layout a monitor draws its output in, beside the output's name. */
 function LayoutPicker({ output, context }: { output: StudioOutput; context: MonitorContext }) {
   const { panel, sources, change } = context;
   if (output === "livestream") return null;
-  if (output === "preview" || output === "program") return <ScenePicker output={output} context={context} />;
+  if (output === "preview" || output === "program")
+    return (
+      <ScenePicker
+        output={output}
+        sources={sources}
+        disabled={context.switcher.disabled}
+        onScene={context.switcher.previewScene}
+      />
+    );
   const details = studioOutputDetails(context.room, output);
   // Unless the operator chose one for this tile, it draws the scene the output itself draws.
   const layout = studioOutputLayout(panel, output) ?? liveOutputScene(projectionOf(output, sources), output);
@@ -617,13 +584,7 @@ export function monitorPanelView(
             </div>
           </div>
           {single === "preview" && scenesShown ? (
-            <SceneStrip
-              preview={sources.preview}
-              roomId={sources.roomId}
-              eventSlug={sources.slug}
-              disabled={switcher.disabled}
-              onScene={switcher.previewScene}
-            />
+            <SceneStrip sources={sources} disabled={switcher.disabled} onScene={switcher.previewScene} />
           ) : null}
         </div>
       ),

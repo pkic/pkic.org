@@ -71,7 +71,7 @@ export const studioBoardSections: PreviewSection[] = [
     render: () => (
       <LivestreamOverlay
         state={{ ...sessionWith(2), stage: { ...EMPTY_LIVE_AUX_COMPOSITION, panelists: { layout: "panel" } } }}
-        elements={presetWith("full-frame", ["panelists"])}
+        elements={presetWith("talk", ["panelists"])}
       />
     ),
   },
@@ -82,7 +82,7 @@ export const studioBoardSections: PreviewSection[] = [
     render: () => (
       <LivestreamOverlay
         state={{ ...sessionWith(6), stage: { ...EMPTY_LIVE_AUX_COMPOSITION, panelists: { layout: "panel" } } }}
-        elements={presetWith("full-frame", ["panelists"])}
+        elements={presetWith("talk", ["panelists"])}
       />
     ),
   },
@@ -93,18 +93,18 @@ export const studioBoardSections: PreviewSection[] = [
     render: () => (
       <LivestreamOverlay
         state={{ ...sessionWith(6), stage: { ...EMPTY_LIVE_AUX_COMPOSITION, panelists: { layout: "panel" } } }}
-        elements={presetWith("side-by-side", ["panelists", "lowerThird"])}
+        elements={presetWith("check-in", ["panelists", "lowerThird"])}
       />
     ),
   },
   {
     id: "onscreen-question-poll-board",
     title: "Question on the board",
-    note: "In Full frame a board covers the whole frame; one board shows at a time.",
+    note: "In Talk a board covers the whole frame; one board shows at a time.",
     render: () => (
       <LivestreamOverlay
         state={roomWith({}, { question: NAMED_QUESTION })}
-        elements={presetWith("full-frame", ["question"])}
+        elements={presetWith("talk", ["question"])}
       />
     ),
   },
@@ -112,7 +112,7 @@ export const studioBoardSections: PreviewSection[] = [
     id: "onscreen-poll-side-by-side",
     title: "Poll beside the camera",
     note: "The same poll board, scaled into the Graphics on the left column.",
-    render: () => <LivestreamOverlay state={roomWith({}, ON_POLL)} elements={presetWith("side-by-side", ["poll"])} />,
+    render: () => <LivestreamOverlay state={roomWith({}, ON_POLL)} elements={presetWith("check-in", ["poll"])} />,
   },
   {
     id: "onscreen-panel-question",

@@ -44,7 +44,7 @@ export const ROOM_WITH_SCREENS: LiveRoomState = {
  * large on the left, reactions up the right, every other element hidden. It
  * is sized in the event's layout settings like any other card.
  */
-const FULL_FRAME = LIVE_OVERLAY_PRESET_LAYOUTS["full-frame"].elements;
+const FULL_FRAME = LIVE_OVERLAY_PRESET_LAYOUTS["talk"].elements;
 const QA_ELEMENTS = Object.fromEntries(
   LIVE_OVERLAY_ELEMENTS.map((element) => [
     element,
@@ -59,7 +59,7 @@ QA_ELEMENTS.topQuestions = {
 export const QA_LAYOUT: LiveOverlayLayout = {
   slug: "projector-qa",
   name: "Projector Q&A",
-  preset: "full-frame",
+  preset: "talk",
   builtIn: false,
   saved: true,
   elements: QA_ELEMENTS,

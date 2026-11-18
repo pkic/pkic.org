@@ -1,28 +1,17 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import {
-  LIVE_OVERLAY_ELEMENTS,
-  LIVE_OVERLAY_ELEMENT_COMPOSITIONS,
   LIVE_OVERLAY_ELEMENT_LABELS,
   LIVE_OVERLAY_HORIZONTAL,
   LIVE_OVERLAY_VERTICAL,
-  type LiveOverlayComposition,
   type LiveOverlayElement,
   type LiveOverlayElementPlacement,
-  type LiveOverlayLayoutElements,
 } from "../../../../../../../../shared/schemas/live-overlay-layout";
 import type { ContractForm } from "../../../../../../../hooks/useContractForm";
 import { Checkbox, Radio } from "../../../../../../../ui/Checkbox";
 import { Field } from "../../../../../../../ui/Field";
-import { FormSection } from "../../../../../../../ui/FormSection";
 import { Select, TextInput } from "../../../../../../../ui/TextControl";
-import { Menu } from "../../../../../../../ui/Menu";
-import { Button } from "../../../../../../../ui/Button";
-import { isLiveStackableLayer, liveProgramLayers } from "../../../../../../../../shared/live-overlay-stacking";
-import { IconLink, IconUnlink } from "../../../../../../../components/icons";
 import {
-  LAYOUT_COMPOSITION_LABEL,
   LAYOUT_HORIZONTAL_LABEL,
-  LAYOUT_SHARING_LABEL,
   LAYOUT_UNIT_LABEL,
   LAYOUT_VERTICAL_LABEL,
   layoutSharingNote,
@@ -30,193 +19,6 @@ import {
 import { LAYOUT_UNITS, fieldValue, fractionOf, type LayoutUnit } from "./overlay-layout-editing";
 
 type Change = (element: LiveOverlayElement, patch: Partial<LiveOverlayElementPlacement>) => void;
-/** What the link menu does to an element's position: see `overlay-layout-sharing.ts`. */
-export type LayoutSharingAction = "unlink" | "relink" | "apply";
-
-/**
- * The link control beside each element: a chain while it shares the event's
- * position, a broken one while this layout places it itself, and a menu to
- * change that.
- */
-function SharingMenu({
-  element,
-  shared,
-  disabled,
-  onSharing,
-}: {
-  element: LiveOverlayElement;
-  shared: boolean;
-  disabled: boolean;
-  onSharing: (element: LiveOverlayElement, action: LayoutSharingAction) => void;
-}) {
-  const label = LIVE_OVERLAY_ELEMENT_LABELS[element];
-  return (
-    <Menu
-      variant="plain"
-      align="end"
-      triggerClass="pk-layout-elements__link"
-      label={`${label} position: ${shared ? LAYOUT_SHARING_LABEL.shared : LAYOUT_SHARING_LABEL.own}`}
-      title={shared ? LAYOUT_SHARING_LABEL.shared : LAYOUT_SHARING_LABEL.own}
-      heading={shared ? LAYOUT_SHARING_LABEL.shared : LAYOUT_SHARING_LABEL.own}
-      items={
-        shared
-          ? [
-              {
-                id: "unlink",
-                label: "Place differently on this scene",
-                disabled,
-                onSelect: () => onSharing(element, "unlink"),
-              },
-            ]
-          : [
-              { id: "relink", label: "Use shared position", disabled, onSelect: () => onSharing(element, "relink") },
-              {
-                id: "apply",
-                label: "Apply this position to all scenes",
-                disabled,
-                onSelect: () => onSharing(element, "apply"),
-              },
-            ]
-      }
-    >
-      {shared ? <IconLink /> : <IconUnlink />}
-    </Menu>
-  );
-}
-
-/** The composition an element is edited on: the first one that draws it. */
-export function compositionOf(element: LiveOverlayElement): LiveOverlayComposition {
-  return LIVE_OVERLAY_ELEMENT_COMPOSITIONS[element][0]!;
-}
-
-/** The selected Program graphic's place in the stack: up draws it in front of the one above, down behind the one below. */
-function StackButtons({
-  element,
-  front,
-  back,
-  disabled,
-  onMove,
-}: {
-  element: LiveOverlayElement;
-  front: boolean;
-  back: boolean;
-  disabled: boolean;
-  onMove: (element: LiveOverlayElement, direction: -1 | 1) => void;
-}) {
-  const label = LIVE_OVERLAY_ELEMENT_LABELS[element];
-  return (
-    <span class="pk-cluster" data-density="compact">
-      <Button
-        icon
-        variant="ghost"
-        aria-label={`Move ${label} up`}
-        title="Move up: draw it in front"
-        disabled={disabled || front}
-        onClick={() => onMove(element, -1)}
-      >
-        <span aria-hidden="true">↑</span>
-      </Button>
-      <Button
-        icon
-        variant="ghost"
-        aria-label={`Move ${label} down`}
-        title="Move down: draw it behind"
-        disabled={disabled || back}
-        onClick={() => onMove(element, 1)}
-      >
-        <span aria-hidden="true">↓</span>
-      </Button>
-    </span>
-  );
-}
-
-/** A composition's elements as the list shows them: Program's front first, the stage display's in their fixed order. */
-function listed(elements: LiveOverlayLayoutElements, composition: LiveOverlayComposition): LiveOverlayElement[] {
-  return composition === "program"
-    ? liveProgramLayers(elements).reverse()
-    : LIVE_OVERLAY_ELEMENTS.filter((element) => compositionOf(element) === composition);
-}
-
-/**
- * The element list: picking one with the arrow keys selects its box on the
- * canvas, and each element's Show box decides whether this layout draws it.
- * Program's graphics are listed front first; the selected one moves up or
- * down the stack.
- */
-export function OverlayLayoutElementList({
-  elements,
-  selected,
-  disabled,
-  onSelect,
-  onChange,
-  onSharing,
-  onMove,
-}: {
-  elements: LiveOverlayLayoutElements;
-  selected: LiveOverlayElement;
-  disabled: boolean;
-  onSelect: (element: LiveOverlayElement) => void;
-  onChange: Change;
-  onSharing: (element: LiveOverlayElement, action: LayoutSharingAction) => void;
-  onMove: (element: LiveOverlayElement, direction: -1 | 1) => void;
-}) {
-  return (
-    <Field
-      label="Elements"
-      group
-      help="Choose an element to place it on the canvas. A linked element moves on every scene that shares its position. On Program, the top of the list is drawn in front."
-    >
-      {(control) => (
-        <div class="pk-layout-elements" aria-describedby={control["aria-describedby"]}>
-          {(["program", "stage-display"] as const).map((composition) => (
-            <div key={composition} class="pk-layout-elements__group">
-              <p class="pk-layout-elements__heading">{LAYOUT_COMPOSITION_LABEL[composition]}</p>
-              {listed(elements, composition).map((element, index, list) => (
-                <div
-                  key={element}
-                  class="pk-layout-elements__row"
-                  data-selected={element === selected ? "" : undefined}
-                >
-                  <Radio
-                    name="layoutElement"
-                    value={element}
-                    checked={element === selected}
-                    fill
-                    label={LIVE_OVERLAY_ELEMENT_LABELS[element]}
-                    onChange={() => onSelect(element)}
-                  />
-                  {element === selected && isLiveStackableLayer(element) ? (
-                    <StackButtons
-                      element={element}
-                      front={index === 0}
-                      back={index === list.length - 1}
-                      disabled={disabled}
-                      onMove={onMove}
-                    />
-                  ) : null}
-                  <SharingMenu
-                    element={element}
-                    shared={elements[element].shared}
-                    disabled={disabled}
-                    onSharing={onSharing}
-                  />
-                  <Checkbox
-                    name={`elements.${element}.visible`}
-                    checked={elements[element].visible}
-                    disabled={disabled}
-                    aria-label={`Show ${LIVE_OVERLAY_ELEMENT_LABELS[element]}`}
-                    label="Show"
-                    onChange={(event) => onChange(element, { visible: event.currentTarget.checked })}
-                  />
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      )}
-    </Field>
-  );
-}
 
 /** A box field in the chosen unit. While it has focus it keeps what is typed; otherwise it follows the box. */
 function BoxField({
@@ -272,7 +74,10 @@ function BoxField({
   );
 }
 
-/** The selected element's exact box and its alignment inside the box. */
+/**
+ * The selected graphic's exact box and its alignment inside the box, in a
+ * disclosure under the canvas, with the safe-area guides' switch.
+ */
 export function OverlayLayoutInspector({
   element,
   placement,
@@ -280,17 +85,26 @@ export function OverlayLayoutInspector({
   disabled,
   form,
   sharing,
+  safeAreas,
+  open,
+  onOpen,
   onUnit,
+  onSafeAreas,
   onChange,
 }: {
   element: LiveOverlayElement;
   placement: LiveOverlayElementPlacement;
-  /** How many of the event's layouts share this element's position. */
+  /** How many of the event's scenes share this graphic's position. */
   sharing: number;
   unit: LayoutUnit;
   disabled: boolean;
   form: ContractForm<unknown>;
+  safeAreas: boolean;
+  /** Whether the disclosure is open; the editor opens it when a field in it is refused. */
+  open: boolean;
+  onOpen: (open: boolean) => void;
   onUnit: (unit: LayoutUnit) => void;
+  onSafeAreas: (shown: boolean) => void;
   onChange: Change;
 }) {
   const path = `elements.${element}`;
@@ -307,85 +121,95 @@ export function OverlayLayoutInspector({
     />
   );
   return (
-    <FormSection
-      layout="stack"
-      title={LIVE_OVERLAY_ELEMENT_LABELS[element]}
-      description={`Shown on ${LAYOUT_COMPOSITION_LABEL[compositionOf(element)].toLowerCase()}. ${
-        placement.shared ? layoutSharingNote(sharing) : "Placed for this scene only."
-      }`}
+    <details
+      class="pk-layout-inspector"
+      open={open}
+      onToggle={(event) => onOpen((event.currentTarget as HTMLDetailsElement).open)}
     >
-      <Field label="Units" group>
-        {(control) => (
-          <div class="pk-cluster" aria-describedby={control["aria-describedby"]}>
-            {LAYOUT_UNITS.map((choice) => (
-              <Radio
-                key={choice}
-                name="layoutUnit"
-                value={choice}
-                checked={unit === choice}
-                label={LAYOUT_UNIT_LABEL[choice]}
-                onChange={() => onUnit(choice)}
-              />
-            ))}
-          </div>
-        )}
-      </Field>
-      <div class="pk-layout-inspector__box">
-        {box("x", "From left")}
-        {box("y", "From top")}
-        {box("w", "Width")}
-        {box("h", "Height")}
-      </div>
-      <div class="pk-layout-inspector__box">
-        <Field
-          label="Horizontal alignment"
-          help="Where the graphic sits when it is narrower than its box."
-          {...form.of(`${path}.horizontal`)}
-        >
+      <summary class="pk-layout-inspector__summary">Exact position of {LIVE_OVERLAY_ELEMENT_LABELS[element]}</summary>
+      <div class="pk-layout-inspector__body">
+        <p class="pk-small pk-muted">
+          {placement.shared ? layoutSharingNote(sharing) : "Placed for this scene only."} Hold Alt while dragging to
+          place a box without snapping.
+        </p>
+        <Field label="Units" group>
           {(control) => (
-            <Select
-              {...control}
-              name={`${path}.horizontal`}
-              value={placement.horizontal}
-              disabled={disabled}
-              onChange={(event) => {
-                const next = LIVE_OVERLAY_HORIZONTAL.find((value) => value === event.currentTarget.value);
-                if (next) onChange(element, { horizontal: next });
-              }}
-            >
-              {LIVE_OVERLAY_HORIZONTAL.map((value) => (
-                <option key={value} value={value}>
-                  {LAYOUT_HORIZONTAL_LABEL[value]}
-                </option>
+            <div class="pk-cluster" aria-describedby={control["aria-describedby"]}>
+              {LAYOUT_UNITS.map((choice) => (
+                <Radio
+                  key={choice}
+                  name="layoutUnit"
+                  value={choice}
+                  checked={unit === choice}
+                  label={LAYOUT_UNIT_LABEL[choice]}
+                  onChange={() => onUnit(choice)}
+                />
               ))}
-            </Select>
+            </div>
           )}
         </Field>
-        <Field
-          label="Vertical alignment"
-          help="Where the graphic sits when it is shorter than its box."
-          {...form.of(`${path}.vertical`)}
-        >
-          {(control) => (
-            <Select
-              {...control}
-              name={`${path}.vertical`}
-              value={placement.vertical}
-              disabled={disabled}
-              onChange={(event) => {
-                const next = LIVE_OVERLAY_VERTICAL.find((value) => value === event.currentTarget.value);
-                if (next) onChange(element, { vertical: next });
-              }}
-            >
-              {LIVE_OVERLAY_VERTICAL.map((value) => (
-                <option key={value} value={value}>
-                  {LAYOUT_VERTICAL_LABEL[value]}
-                </option>
-              ))}
-            </Select>
-          )}
-        </Field>
+        <div class="pk-layout-inspector__box">
+          {box("x", "From left")}
+          {box("y", "From top")}
+          {box("w", "Width")}
+          {box("h", "Height")}
+        </div>
+        <div class="pk-layout-inspector__box">
+          <Field
+            label="Horizontal alignment"
+            help="Where the graphic sits when it is narrower than its box."
+            {...form.of(`${path}.horizontal`)}
+          >
+            {(control) => (
+              <Select
+                {...control}
+                name={`${path}.horizontal`}
+                value={placement.horizontal}
+                disabled={disabled}
+                onChange={(event) => {
+                  const next = LIVE_OVERLAY_HORIZONTAL.find((value) => value === event.currentTarget.value);
+                  if (next) onChange(element, { horizontal: next });
+                }}
+              >
+                {LIVE_OVERLAY_HORIZONTAL.map((value) => (
+                  <option key={value} value={value}>
+                    {LAYOUT_HORIZONTAL_LABEL[value]}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          <Field
+            label="Vertical alignment"
+            help="Where the graphic sits when it is shorter than its box."
+            {...form.of(`${path}.vertical`)}
+          >
+            {(control) => (
+              <Select
+                {...control}
+                name={`${path}.vertical`}
+                value={placement.vertical}
+                disabled={disabled}
+                onChange={(event) => {
+                  const next = LIVE_OVERLAY_VERTICAL.find((value) => value === event.currentTarget.value);
+                  if (next) onChange(element, { vertical: next });
+                }}
+              >
+                {LIVE_OVERLAY_VERTICAL.map((value) => (
+                  <option key={value} value={value}>
+                    {LAYOUT_VERTICAL_LABEL[value]}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        </div>
+        <Checkbox
+          label="Show safe areas"
+          checked={safeAreas}
+          onChange={(event) => onSafeAreas(event.currentTarget.checked)}
+        />
       </div>
-    </FormSection>
+    </details>
   );
 }
