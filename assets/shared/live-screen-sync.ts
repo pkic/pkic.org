@@ -1,7 +1,7 @@
 import { liveOutputRole, type LiveAuxOutput } from "./live-room-outputs";
 import type { LiveRoomOutput, LiveRoomOutputRole } from "./schemas/live-room-output-setup";
 import { liveTimerCounts } from "./live-timer-policy";
-import type { LiveStage, LiveTimer } from "./schemas/live-session-room";
+import { EMPTY_LIVE_STAGE, type LiveStage, type LiveTimer } from "./schemas/live-session-room";
 import type { LiveScreenSync } from "./schemas/live-screen-sync";
 
 /**
@@ -91,6 +91,26 @@ export function liveScreenSyncs(
 /** Whether an output of this role takes this graphic from Program while it syncs. */
 export function liveScreenFollows(role: LiveRoomOutputRole | null, graphic: LiveScreenGraphic): boolean {
   return role !== null && role !== "exact" && LIVE_SCREEN_FOLLOWS[role].includes(graphic);
+}
+
+/**
+ * What a take puts on a room screen: Preview's shot, a new shot in place of
+ * the last. While a screen syncs, the graphics it follows are Program's, so
+ * the shot brings its scene and the other graphics and leaves those empty:
+ * none of Preview's shows before it is on Program, and none the screen held
+ * of its own stays.
+ */
+export function liveScreenTake(
+  output: LiveAuxOutput,
+  room: { shot: LiveStage; sync: LiveScreenSync; outputs: readonly LiveRoomOutput[] },
+): LiveStage {
+  const { shot, sync, outputs } = room;
+  const role = followingRole(sync, outputs, output);
+  if (!role) return shot;
+  const taken: Record<string, unknown> = { ...shot };
+  for (const graphic of LIVE_SCREEN_FOLLOWS[role])
+    for (const field of GRAPHICS[graphic]) taken[field] = EMPTY_LIVE_STAGE[field];
+  return taken as LiveStage;
 }
 
 /**

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks"
 import type { ClockZone } from "../../../../../../../shared/event-clock";
 import { liveCompositionInput } from "../../../../../../../shared/live-room-preview";
 import { liveRoomOutputs, type LiveTakeTarget } from "../../../../../../../shared/live-room-outputs";
+import { liveScreenTake } from "../../../../../../../shared/live-screen-sync";
 import type { AgendaSnapshot } from "../../../../../../../shared/schemas/event-agenda";
 import {
   EMPTY_LIVE_STAGE,
@@ -165,16 +166,18 @@ export function LiveSessionDesk({
     });
     return true;
   };
-  /** Program takes Preview through the room's Take; a screen is set to what Preview holds. */
+  /** Program takes Preview through the room's Take; a screen takes Preview's shot, minus what it follows from Program. */
   const take = (target: LiveTakeTarget = "program") => {
-    if (!room.state) return;
+    const current = room.state;
+    if (!current) return;
     setTakenTo(target);
     if (target === "program") return void sendProgram({ type: "preview.take" });
-    sendProgram({
-      type: "aux.set",
-      output: target,
-      composition: liveCompositionInput(previewProjection(room.state).stage),
+    const shot = liveScreenTake(target, {
+      shot: current.preview,
+      sync: current.screenSync,
+      outputs: liveRoomOutputs(current.session),
     });
+    sendProgram({ type: "aux.set", output: target, composition: liveCompositionInput(shot) });
   };
   useTakeShortcut(() => take("program"), live && !broadcasting);
   const phone = useStudioPhone();

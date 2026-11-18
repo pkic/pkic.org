@@ -45,7 +45,7 @@ export const LIVE_ROOM_OUTPUT_ROLE_COPY: Record<LiveRoomOutputRole, { label: str
   follow: {
     label: "Follow Program",
     shows: "Same question and timer as Program",
-    hint: "Also shows the poll, and anything you send or take to it.",
+    hint: "Also shows the poll. A take brings the scene, names and ticker from Preview, never its timer or question.",
   },
   speaker: {
     label: "Speaker",

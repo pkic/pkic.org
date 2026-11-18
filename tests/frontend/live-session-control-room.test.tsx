@@ -91,6 +91,46 @@ describe("live control room Transition", () => {
     expect(sent).toMatchObject({ type: "aux.set", output: "foy", composition: { creditKey: credit.key } });
   });
 
+  it("takes Preview's scene to a screen that follows Program as a new shot, leaving the timer and question to Program", () => {
+    const { host, live } = mountDesk();
+    const snapshot = liveSnapshot({ viewer: OPERATOR });
+    // Program has no timer; the Panel scene and a timer wait on Preview only.
+    void act(() =>
+      live.latest().deliver({
+        type: "preview.changed",
+        composition: {
+          ...snapshot.preview,
+          scene: "panel",
+          panelists: { layout: "panel" },
+          question: {
+            id: LIVE_QUESTION,
+            text: "How do we inventory our certificates?",
+            authorName: null,
+            authorPhotoUrl: null,
+            authorAffiliation: null,
+            addressedTo: null,
+          },
+          timerGraphics: [defaultLiveTimerGraphic("session")],
+        },
+      }),
+    );
+    // A timer sent to the projector before goes too: a take is a new shot, so Program's timer shows.
+    void act(() =>
+      live.latest().deliver({
+        type: "aux.changed",
+        output: "projector",
+        composition: { ...snapshot.stage, timerGraphics: [defaultLiveTimerGraphic("session")] },
+      }),
+    );
+    void act(() => take(host, "Projector").click());
+    const sent = liveRoomClientMessageSchema.parse(commands(live).at(-1));
+    expect(sent).toMatchObject({
+      type: "aux.set",
+      output: "projector",
+      composition: { scene: "panel", panelists: { layout: "panel" }, questionId: null, timerGraphics: [] },
+    });
+  });
+
   it("clears the shared Preview from its monitor and keeps its scene", () => {
     const { host, live } = mountDesk();
     const snapshot = liveSnapshot({ viewer: OPERATOR });

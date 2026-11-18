@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { liveScreenComposition } from "../../assets/shared/live-screen-sync";
+import { liveScreenComposition, liveScreenTake } from "../../assets/shared/live-screen-sync";
 import { EMPTY_LIVE_STAGE, type LiveStage } from "../../assets/shared/schemas/live-session-room";
 import { DEFAULT_LIVE_SCREEN_SYNC } from "../../assets/shared/schemas/live-screen-sync";
 import { DEFAULT_LIVE_ROOM_OUTPUTS, type LiveRoomOutput } from "../../assets/shared/schemas/live-room-output-setup";
@@ -113,5 +113,21 @@ describe("room screens synced with Program", () => {
       outputs: room,
     });
     expect(exact).toBe(EMPTY_LIVE_STAGE);
+  });
+
+  it("takes Preview's shot to a screen as a new shot, leaving the graphics it follows to Program", () => {
+    const shot: LiveStage = { ...program, panelists: { layout: "panel" }, scene: "panel" };
+    const room = { shot, sync: DEFAULT_LIVE_SCREEN_SYNC, outputs };
+    // Preview's question, timer and reactions are not on Program yet, so the projector shows Program's instead.
+    expect(liveScreenTake("projector", room)).toEqual({
+      ...shot,
+      question: null,
+      timerGraphics: [],
+      reactions: false,
+    });
+    // A screen that does not follow Program, or no longer syncs, takes the whole shot.
+    expect(liveScreenTake("projector", { ...room, sync: { projector: false } })).toBe(shot);
+    const exact: LiveRoomOutput[] = [{ key: "foy", name: "Foyer", code: "FOY", role: "exact", scene: null }];
+    expect(liveScreenTake("foy", { ...room, outputs: exact })).toBe(shot);
   });
 });
