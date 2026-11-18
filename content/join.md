@@ -12,9 +12,9 @@ menu:
 
 We welcome all organizations and individuals that are [eligible to join the PKI Consortium](/bylaws/#eligibility) as defined by the Bylaws of the PKI Consortium. Membership applications will be reviewed following the [Process for Admitting New Members](/bylaws/#process-for-admitting-new-members). 
 
-{{< alert type="success" >}}
-Membership fees depend on the category. If a fee applies, the exact amount and payment timing are shown before you submit. Sponsorship and donations are separate and optional.
-{{< /alert >}}
+:::aside
+There are **no membership fees**, we encourage (but do not require) all members to become a sponsor.
+:::
 
 [Learn more about the application process to join the PKI Consortium](/application-process/).
 
