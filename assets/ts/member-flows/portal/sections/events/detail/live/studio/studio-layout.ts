@@ -114,6 +114,8 @@ export const studioPanelSchema = z
     layouts: z.partialRecord(z.enum(STUDIO_OUTPUTS), liveOverlayLayoutSlugSchema).optional().catch(undefined),
     /** The Transition's button shows its name beside the arrow. */
     labeled: z.literal(true).optional(),
+    /** A Preview monitor shows the event's scenes under its picture. */
+    scenes: z.literal(true).optional(),
   })
   .strict()
   .refine((panel) => panel.x + panel.w <= STUDIO_COLUMNS, "A panel stays within the grid's columns.")
@@ -300,6 +302,15 @@ export function setStudioPanelLabeled(panels: readonly StudioPanel[], id: string
     if (panel.id !== id) return panel;
     const { labeled: _shown, ...rest } = panel;
     return labeled ? { ...rest, labeled: true } : rest;
+  });
+}
+
+/** Shows or hides the scenes under a Preview monitor. */
+export function setStudioPanelScenes(panels: readonly StudioPanel[], id: string, scenes: boolean): StudioPanel[] {
+  return panels.map((panel) => {
+    if (panel.id !== id) return panel;
+    const { scenes: _shown, ...rest } = panel;
+    return scenes ? { ...rest, scenes: true } : rest;
   });
 }
 

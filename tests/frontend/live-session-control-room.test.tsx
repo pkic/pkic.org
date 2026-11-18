@@ -19,6 +19,7 @@ import {
   button,
   commands,
   labeled,
+  menuItem,
   mountClosedDesk,
   mountDesk,
   panel,
@@ -109,6 +110,27 @@ describe("live control room Transition", () => {
         },
       },
     ]);
+  });
+
+  it("shows the scenes under Preview from its panel menu and loads one into Preview", () => {
+    const { host, live } = mountDesk();
+    const preview = panel(host, "Preview");
+    expect(preview.querySelector(".pk-studio-scenes")).toBeNull();
+    void act(() => labeled(preview, "Preview panel").click());
+    void act(() => menuItem(document.body, "Show scenes").click());
+    const strip = panel(host, "Preview").querySelector<HTMLElement>(
+      '[role="group"][aria-label="Load a scene into Preview"]',
+    );
+    expect(strip).not.toBeNull();
+    const scenes = [...strip!.querySelectorAll<HTMLButtonElement>("button")];
+    expect(scenes.filter((scene) => scene.getAttribute("aria-pressed") === "true")).toHaveLength(1);
+    // Each scene is drawn live, with the same renderer as the monitors.
+    expect(scenes.every((scene) => scene.querySelector(".pk-studio-scenes__picture .pk-live-overlay"))).toBe(true);
+    const next = scenes.find((scene) => scene.getAttribute("aria-pressed") === "false")!;
+    void act(() => next.click());
+    const sent = liveRoomClientMessageSchema.parse(commands(live).at(-1));
+    expect(sent).toMatchObject({ type: "preview.set", composition: { scene: expect.any(String) } });
+    expect(next.title).toContain("into Preview");
   });
 
   it("puts the timer on the shared Preview and toggles it on Program directly", () => {

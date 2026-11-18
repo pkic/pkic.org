@@ -1,0 +1,59 @@
+@layer components {
+  /* The scenes under Preview: one row of small live pictures, scrolling sideways when the panel is narrow. */
+  .pk-studio-scenes {
+    display: flex;
+    gap: var(--pk-2);
+    padding: 0 var(--pk-2) var(--pk-2);
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .pk-studio-scenes__scene {
+    display: grid;
+    flex: none;
+    gap: var(--pk-1);
+    inline-size: 7.5rem;
+    margin: 0;
+    padding: var(--pk-1);
+    border: 2px var(--tally-line, solid) var(--tally, var(--pk-line));
+    border-radius: var(--pk-radius);
+    background: var(--pk-surface);
+    color: var(--pk-ink);
+    font: inherit;
+    font-size: var(--pk-text-xs);
+    text-align: start;
+    cursor: pointer;
+  }
+  .pk-studio-scenes__scene:hover:not(:disabled) {
+    background: var(--pk-surface-sunk);
+  }
+  .pk-studio-scenes__scene:focus-visible {
+    outline: none;
+    box-shadow: var(--pk-focus);
+  }
+  .pk-studio-scenes__scene:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+  .pk-studio-scenes__scene[aria-pressed="true"] {
+    font-weight: 600;
+  }
+  /* The picture at 16:9, its overlay scaled to the box by its own container units. */
+  .pk-studio-scenes__picture {
+    display: grid;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border-radius: calc(var(--pk-radius) / 2);
+    background: var(--pk-chrome-deep);
+    pointer-events: none;
+  }
+  .pk-studio-scenes__picture > * {
+    grid-area: 1 / 1;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+  .pk-studio-scenes__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

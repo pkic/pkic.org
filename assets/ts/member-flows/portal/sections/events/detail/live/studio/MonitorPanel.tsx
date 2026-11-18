@@ -18,12 +18,14 @@ import {
   STUDIO_OUTPUT_DETAILS,
   studioMonitorChoices,
   setStudioOutputLayout,
+  setStudioPanelScenes,
   studioOutputLayout,
   toggleStudioOutput,
   type StudioOutput,
   type StudioPanel,
 } from "./studio-layout";
 import type { StudioPanelView } from "./StudioGrid";
+import { SceneStrip } from "./SceneStrip";
 import type { StudioChange } from "./useStudioLayout";
 import { setStudioLivestreamSound, studioLivestreamAudible } from "./studio-livestream-sound";
 import "../live-tally.css";
@@ -544,11 +546,33 @@ export function monitorPanelView(
         </span>
       ),
       actions: <MonitorActions output={single} context={context} />,
+      // Preview can show the scenes under its picture, as the operator chose.
+      menu:
+        single === "preview"
+          ? [
+              {
+                id: "scenes",
+                label: panel.scenes ? "Hide scenes" : "Show scenes",
+                onSelect: () => change((panels) => setStudioPanelScenes(panels, panel.id, !panel.scenes)),
+              },
+            ]
+          : undefined,
       body: (
-        <div class="pk-studio-monitor-frame">
-          <div class="pk-studio-monitor" data-single="" data-tally={tally(single)}>
-            <MonitorScreen output={single} context={context} />
+        <div class="pk-studio-monitor-stack">
+          <div class="pk-studio-monitor-frame">
+            <div class="pk-studio-monitor" data-single="" data-tally={tally(single)}>
+              <MonitorScreen output={single} context={context} />
+            </div>
           </div>
+          {single === "preview" && panel.scenes ? (
+            <SceneStrip
+              preview={sources.preview}
+              roomId={sources.roomId}
+              eventSlug={sources.slug}
+              disabled={switcher.disabled}
+              onScene={switcher.previewScene}
+            />
+          ) : null}
         </div>
       ),
     };
