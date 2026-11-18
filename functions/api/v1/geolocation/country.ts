@@ -69,7 +69,7 @@ export async function onRequest(c: any): Promise<Response> {
     return json({ error: "forbidden" }, 403);
   }
   const origin = request.headers.get("origin");
-  if (origin !== null && !isAllowedOrigin(origin, configuredAppOrigin(c.env ?? {}))) {
+  if (origin !== null && !isAllowedOrigin(origin, configuredAppOrigin(c.env ?? {}, request))) {
     return json({ error: "forbidden" }, 403);
   }
 

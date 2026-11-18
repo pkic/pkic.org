@@ -45,6 +45,13 @@
           "pattern": "pkic.org",
           "custom_domain": true,
         },
+        {
+          // Only subdomains route to Worker Previews. The zone redirects the root hostname.
+          "pattern": "preview.pkic.org",
+          "custom_domain": true,
+          "previews_enabled": true,
+          "enabled": false,
+        },
       ],
       "assets": {
         "directory": "./public/",
@@ -259,9 +266,8 @@
           "RSVP_INBOUND_EMAIL_MAX_BYTES": "5242880",
           "FROM_NAME": "PKI Consortium (Preview)",
           "STRIPE_PUBLISHABLE_KEY": "pk_test_51TADczLT173BlQwOCJAhV0Mf5xxJXJWG9VWkprhXUSJZTaYdqr5vJynipzUfCglU93cIoCBBNOkviwhOqQ3ZFPNk00cxzuEyMH",
-          "WEBAUTHN_RP_ID": "pkic.workers.dev",
+          "WEBAUTHN_RP_ID": "preview.pkic.org",
           "WEBAUTHN_RP_NAME": "PKI Consortium (Preview)",
-          "WEBAUTHN_PREVIEW_WORKER_NAME": "pkic-org",
         },
       },
     },

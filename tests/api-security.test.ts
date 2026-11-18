@@ -19,7 +19,8 @@ import { ADMINISTRATOR_FIXTURE_USER_SQL, grantAdministrator } from "./helpers/ad
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
-import { SELF, env } from "cloudflare:test";
+import { SELF, env, createExecutionContext } from "cloudflare:test";
+import fetchWithMcp from "../functions/http-router";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { PERMISSION_DENIED_MESSAGE } from "../assets/shared/auth-errors";
@@ -693,31 +694,32 @@ describe("public endpoints — accessible without credentials", () => {
     expect(response.status).toBe(403);
   });
 
-  it("GET /api/v1/geolocation/country accepts only its own configured Preview origin", async () => {
-    const previewOrigin = "https://feature-x-pkic-org.pkic.workers.dev";
-    const previewEnv = { ...appEnv, APP_BASE_URL: previewOrigin };
-    const request = (origin: string) =>
-      geolocationCountryRequest(
-        createContext(
-          previewEnv,
+  it.each(["https://feature-x.preview.pkic.org", "https://feature-x-pkic-org.pkic.workers.dev"])(
+    "GET /api/v1/geolocation/country accepts only its own Preview origin on %s",
+    async (previewOrigin) => {
+      const previewEnv = { ...appEnv, APP_BASE_URL: "https://feature-x.preview.pkic.org" };
+      const invoke = (origin: string) =>
+        fetchWithMcp(
           new Request(`${previewOrigin}/api/v1/geolocation/country`, {
             headers: { "sec-fetch-site": "same-origin", origin },
           }),
-          {},
-        ),
-      );
+          previewEnv,
+          createExecutionContext(),
+        );
 
-    expect((await request(previewOrigin)).status).toBe(200);
-    for (const lookalike of [
-      "https://other-branch-pkic-org.pkic.workers.dev",
-      "https://pkic-org.pkic.workers.dev",
-      "https://feature-x-pkic-org.pkic.workers.dev.evil.example",
-      "http://feature-x-pkic-org.pkic.workers.dev",
-      "https://x.pkic.pages.dev",
-    ]) {
-      expect((await request(lookalike)).status).toBe(403);
-    }
-  });
+      expect((await invoke(previewOrigin)).status).toBe(200);
+      for (const lookalike of [
+        "https://other-branch.preview.pkic.org",
+        "https://pkic.org",
+        "https://preview.pkic.org",
+        "https://pkic-org.pkic.workers.dev",
+        "https://feature-x.preview.pkic.org.evil.example",
+        "http://feature-x.preview.pkic.org",
+      ]) {
+        expect((await invoke(lookalike)).status).toBe(403);
+      }
+    },
+  );
 
   it("GET /api/v1/events/:slug/forms/placements/:purpose returns 200 without Authorization header", async () => {
     const response = await callApp(

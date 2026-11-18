@@ -33,7 +33,7 @@ import {
   wasPasskeyChallengeConsumed,
 } from "./passkey-challenges";
 import {
-  expectedPasskeyOrigin,
+  expectedPasskeyIdentity,
   PASSKEY_USER_VERIFICATION_POLICY,
   requireEnvVar,
   type WebAuthnEnv,
@@ -49,8 +49,7 @@ export async function beginPasskeyAuthentication(
   env: WebAuthnEnv,
   requestUrl: string,
 ): Promise<{ options: Record<string, unknown>; challengeToken: string }> {
-  expectedPasskeyOrigin(env, requestUrl);
-  const rpId = requireEnvVar(env.WEBAUTHN_RP_ID, "WEBAUTHN_RP_ID");
+  const { rpId } = expectedPasskeyIdentity(env, requestUrl);
   const signingSecret = requireEnvVar(env.INTERNAL_SIGNING_SECRET, "INTERNAL_SIGNING_SECRET");
 
   // No `allowCredentials` — a usernameless/discoverable-credential flow
@@ -80,8 +79,7 @@ export async function completePasskeyAuthentication(
   requestUrl: string,
   payload: { challengeToken: string; response: AuthenticationResponseInput },
 ): Promise<PasskeyAuthenticationResult> {
-  const rpId = requireEnvVar(env.WEBAUTHN_RP_ID, "WEBAUTHN_RP_ID");
-  const origin = expectedPasskeyOrigin(env, requestUrl);
+  const { rpId, origin } = expectedPasskeyIdentity(env, requestUrl);
   const signingSecret = requireEnvVar(env.INTERNAL_SIGNING_SECRET, "INTERNAL_SIGNING_SECRET");
 
   const claims = await verifyPasskeyChallengeToken(signingSecret, payload.challengeToken, "authentication");

@@ -314,67 +314,65 @@ pnpm run build:preview
 pnpm run build:production
 ```
 
-Merges to `main` are automatically deployed to production. Branches and pull
-requests are deployed as [Workers Previews](https://developers.cloudflare.com/workers/previews/)
-of the production Worker (`wrangler preview`), at
-`https://<branch>-pkic-org.pkic.workers.dev`. They replace the former separate
-`pkic-org-preview` Worker. Previews inherit no production bindings: every
-binding they use is declared in `env.production.previews` in
-[wrangler.jsonc](wrangler.jsonc) and points at preview resources
-(`pkic-db-preview`, `pkic-assets-preview`, `pkic-speaker-uploads-preview`).
-`tests/tools/workers-previews-config.test.ts` fails if a production resource
-appears there.
+Merges to `main` deploy to production on `pkic.org`. The same commit also
+updates the named `main` [Workers Preview](https://developers.cloudflare.com/workers/previews/)
+of `pkic-org`. The stable entry point `https://preview.pkic.org` redirects to
+`https://main.preview.pkic.org`. Branches and pull requests get their own
+`https://<branch>.preview.pkic.org` URLs. Existing
+`https://<branch>-pkic-org.pkic.workers.dev` URLs also work.
 
-- Each Preview's `APP_BASE_URL` and `WEBAUTHN_ORIGIN` are its own branch URL,
-  injected by `vite.config.ts` from `WORKERS_CI_BRANCH` or the current git
-  branch. A preview build without a non-`main` branch fails.
-- All Previews share the `pkic-db-preview` D1 database, which is also the
-  production `DB` binding's `preview_database_id`. Deployments never apply
-  migrations; apply them separately with `pnpm migrate preview`, which runs
-  Wrangler with `--env production --preview`. `pnpm seed --preview` uses the same
-  arguments, and `pnpm backup preview` exports `pkic-db-preview` by name
-  because `d1 export` has no `--preview` option. Wrangler takes the account
-  from `wrangler.jsonc`.
-- Cron Triggers, routes, and inbound email do not run in Previews, so the
-  email outbox and other scheduled jobs stay idle there. Run a job manually
-  from the portal scheduler when a Preview test needs it.
-- Preview URLs are public unless Cloudflare Access protects them. Cloudflare
-  adds `X-Robots-Tag: noindex` to `workers.dev` Previews.
-- MCP OAuth in Previews uses its own `OAUTH_KV` namespace, never the
-  production one.
+All Previews use the resources declared in `env.production.previews` in
+[wrangler.jsonc](wrangler.jsonc), including the shared `pkic-db-preview`
+database, isolated from production. Each Preview has its own Durable Object
+storage. The preview R2 buckets and OAuth KV namespace are shared among
+Previews. Deployments never apply migrations. Use `pnpm migrate preview`,
+`pnpm seed --preview`, and `pnpm backup preview` for the shared database.
+Use synthetic or purpose-created preview data. Keep production personal data,
+credentials, secrets, and private uploads out of Preview resources.
 
-Never copy production personal data, credentials, secrets, or private uploads
-into preview; use synthetic or purpose-created preview data. Preview secrets
-belong to the Previews base configuration:
-`pnpm exec wrangler preview base-config secret put <NAME> --env production`.
+An explicit preview build sets `APP_BASE_URL` and `WEBAUTHN_ORIGIN` from
+`WORKERS_CI_BRANCH` or the local git branch and reads preview resources for
+the static publication. The default Workers Builds command still builds for
+production on `main` and for preview on other branches. Passkeys use
+`preview.pkic.org` on custom domains and `pkic.workers.dev` on Workers URLs.
+Enroll a passkey on the custom domain to sign in there with a passkey.
 
-One-time Cloudflare dashboard steps for the switch:
+Workers Previews reuse their existing base secrets. To add or rotate a secret,
+use `pnpm exec wrangler preview base-config secret put <NAME> --env production`
+with its preview value. Cron Triggers and inbound
+email are unavailable on them. Run outbox jobs from the portal scheduler
+when a test needs them, after verifying the preview delivery configuration.
 
-1. Set each secret the old `pkic-org-preview` Worker used
-   (`pnpm exec wrangler secret list --name pkic-org-preview` lists the names)
-   in the Previews base configuration with its preview value, never a
-   production value.
-2. In Workers Builds for `pkic-org`, complete the one-time Previews setup and
-   set the non-production branch deploy command to `pnpm exec wrangler preview`.
-   Keep the build command unchanged.
-3. Optionally protect `*-pkic-org.pkic.workers.dev` with Cloudflare Access.
-4. Repoint or remove any Stripe test-mode or SendGrid webhook that targets
-   `pkic-org-preview.pkic.workers.dev`.
-5. After a Preview builds and works, disconnect and delete the
-   `pkic-org-preview` Worker.
+One-time Cloudflare setup for the stable URL
 
-Manual deployment is exceptional. If an explicitly approved recovery or
-operational task requires it, build and deploy together, because the Vite
-plugin applies `env.production` (with its `previews` block) during build time:
+1. In Workers Builds for `pkic-org`, keep the existing build and branch Preview
+   commands. Append `&& pnpm run deploy:preview` to the production deploy
+   command. With the standard Wrangler deploy command, the result is
+   `pnpm exec wrangler deploy && pnpm run deploy:preview`. The Preview builds
+   separately from the same `main` checkout and publishes static assets
+   generated from preview data. Keep the Preview named `main`
+   outside branch or PR cleanup. Cloudflare can evict the least recently
+   deployed Preview when the account reaches its per-Worker limit.
+2. Wrangler enables `*.preview.pkic.org` for Preview traffic on the next
+   production deployment. For the bare hostname, create a proxied DNS record
+   if needed and a Single Redirect on the `pkic.org` zone matching
+   `http.host eq "preview.pkic.org"`. Set the dynamic destination to
+   `concat("https://main.preview.pkic.org", http.request.uri.path)`, use 307,
+   and preserve the query string. Keep the bare hostname disabled for
+   production Worker traffic.
+3. Verify DNS, certificates, the redirect, and both named and branch Preview
+   URLs. Preview builds set `X-Robots-Tag: noindex` on static assets. To cover
+   dynamic responses on the custom domain, set `X-Robots-Tag: noindex` in a
+   zone response header rule for `preview.pkic.org` and its subdomains.
+   Cloudflare Access can restrict Preview URLs to designated users.
+
+Manual deployment requires an explicit request and confirmed target. Build and
+deploy together because Vite selects the Wrangler environment at build time.
 
 ```bash
 pnpm run deploy:preview
 pnpm run deploy:production
 ```
-
-The MCP OAuth binding uses Wrangler automatic provisioning for `OAUTH_KV`. On
-the first deployment for an environment, Wrangler creates the namespace and
-writes the generated IDs back into [wrangler.jsonc](wrangler.jsonc).
 
 ### Client updates after deployment
 
