@@ -144,13 +144,27 @@ export const organizationNameSchema = z
   .max(160);
 /** Said wherever someone takes part on behalf of an organization without a job title. */
 export const JOB_TITLE_REQUIRED = "Enter your job title at this organization.";
+export const JOB_TITLE_MAX_LENGTH = 100;
+/** Letters in any script, digits, spaces and the punctuation titles use, such as "R&D", "C++" or "Head of PKI (EMEA)". */
+const jobTitleCharacters = /^[\p{L}\p{M}\p{N}\p{Zs}.,&/()'’\-–+#:]*$/u;
+/** A web address, or a phone number: an international prefix or seven digits in a row. */
+const jobTitleContact = /https?:|www\.|[\p{L}\p{N}-]{2,}\.\p{L}{2,}(?!\p{L})|(?:^|[\s(])\+\s?\d|\d(?:[\s-]?\d){6,}/iu;
+/** A job title says what someone does there and nothing else: no links, contact details or promotion. Empty is allowed. */
+function jobTitleText(schema: z.ZodString): z.ZodString {
+  return schema
+    .max(JOB_TITLE_MAX_LENGTH, `Keep your job title to ${JOB_TITLE_MAX_LENGTH} characters or fewer.`)
+    .regex(jobTitleCharacters, "Use only letters, numbers and simple punctuation in your job title.")
+    .refine(
+      (value) => !jobTitleContact.test(value),
+      "Enter only your job title, without web addresses or phone numbers.",
+    );
+}
+/** An edit that may clear the title; the identity's own rule decides whether it must have one. */
+export const jobTitleTextSchema = jobTitleText(z.string().trim());
 /** Required wherever it is asked: someone taking part on behalf of an organization says what they do there. */
-export const jobTitleSchema = z
-  .string({ error: JOB_TITLE_REQUIRED })
-  .trim()
-  .min(1, JOB_TITLE_REQUIRED)
-  .min(2, "Enter at least 2 characters.")
-  .max(120);
+export const jobTitleSchema = jobTitleText(
+  z.string({ error: JOB_TITLE_REQUIRED }).trim().min(1, JOB_TITLE_REQUIRED).min(2, "Enter at least 2 characters."),
+);
 export const tokenSchema = z.string().trim().min(16).max(512).regex(tokenCharactersPattern, "Invalid token format");
 export const emailAuthTokenSchema = z
   .string()
