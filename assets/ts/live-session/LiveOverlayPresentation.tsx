@@ -15,7 +15,7 @@ import {
   liveOverlayCropElement,
   type LiveOverlayGraphics,
 } from "./live-overlay-graphics";
-import { LiveOverlayLayer } from "./LiveOverlayLayer";
+import { LiveOverlayLayer, useLiveSceneMove } from "./LiveOverlayLayer";
 import { BOARDS, meets, stackedPanelBox, timerReserve, within } from "./live-overlay-fields";
 import { LivePanelistsOverlay } from "./LivePanelistsOverlay";
 import { LivePanelQuestionOverlay } from "./LivePanelQuestionOverlay";
@@ -218,9 +218,11 @@ function prefersReducedMotion(): boolean {
 }
 
 /**
- * Program's layers, each drawn only while the room has something for it. A
- * scene stacks them (`liveProgramLayers`), in the one order the studio also
- * reads to tell a graphic a board hides.
+ * Program's layers, each drawn only while the room has something for it, in
+ * the one order they keep in the document. A scene stacks them
+ * (`liveProgramLayers`), in the order the studio also reads to tell a graphic
+ * a board hides; that order reaches each layer as its `order`, never as its
+ * place in the document, so a scene change leaves every graphic's node alone.
  */
 const PROGRAM_LAYERS: ReadonlyMap<LiveProgramLayer, Layer> = new Map(
   (
@@ -394,21 +396,24 @@ export function LiveOverlayPresentation({
   const animate = broadcast || !prefersReducedMotion();
   const state = projection && isLiveAuxOutput(requested) ? liveOutputProjection(projection, requested) : projection;
   const view = liveOutputView(requested);
+  // The scene on this output, whose change moves the graphics that stay on. The editor's unsaved boxes are no
+  // scene: dragging one places its graphic at once.
+  const scene = draft ? null : (layout ?? liveOutputScene(state, requested));
+  const moving = useLiveSceneMove(scene);
   // The scene decides what can draw and where; a source drawing only some graphics leaves the others out,
   // and while the ticker is on air, every other graphic keeps clear of it.
-  const allowed = liveOverlayAllowedElements(
-    draft ?? resolveLiveSceneElements(state, layout ?? liveOutputScene(state, requested)),
-    graphics,
-  );
+  const allowed = liveOverlayAllowedElements(draft ?? resolveLiveSceneElements(state, scene), graphics);
   const elements = liveOverlayClearOfTicker(
     allowed,
     view !== "stage-display" && state !== null && allowed.ticker.visible && liveOverlayDrawn(state.stage, "ticker"),
   );
   const cropped = liveOverlayCropElement(graphics, view === "stage-display" ? "stage-display" : "program");
-  const layers =
-    view === "stage-display" && projection
-      ? STAGE_DISPLAY_LAYERS(projection, roomId, stageAside, elements.stageMessage.visible)
-      : liveProgramLayers(elements).map((layer) => PROGRAM_LAYERS.get(layer)!);
+  // The stage display stacks its layers as listed; Program's keep their own order and the scene stacks them.
+  const speaker = view === "stage-display" ? projection : null;
+  const stack = speaker ? null : liveProgramLayers(elements);
+  const layers = speaker
+    ? STAGE_DISPLAY_LAYERS(speaker, roomId, stageAside, elements.stageMessage.visible)
+    : LIVE_PROGRAM_LAYER_ORDER.map((layer) => PROGRAM_LAYERS.get(layer)!);
   // An output sounds the timers it shows; the stage display only its countdowns.
   const shown =
     view === "stage-display" && state
@@ -439,54 +444,63 @@ export function LiveOverlayPresentation({
   return (
     <LiveOverlayFrame view={requested} status={status} crop={cropped ? elements[cropped] : null}>
       {sounding?.length && state ? <LiveTimerSounds timers={sounding} session={state.session} /> : null}
-      {state
-        ? layers.map(({ element, draw }) => {
-            if (element === "timer")
-              return timers.map(({ graphic, slot, mark, tab }) => (
+      {/* The layers' own stacking context, so what the host page draws over the output stays over every layer. */}
+      <div class="pk-live-overlay__stack">
+        {state
+          ? layers.flatMap(({ element, draw }, index) => {
+              const order = stack && isLiveProgramLayer(element) ? stack.indexOf(element) : index;
+              if (element === "timer")
+                return timers.map(({ graphic, slot, mark, tab }) => (
+                  <LiveOverlayLayer
+                    key={`timer:${graphic.timerId}`}
+                    element="timer"
+                    order={order}
+                    moving={moving}
+                    dimmed={focus !== null && focus !== "timer"}
+                    placement={slot}
+                  >
+                    {/* A timer over the background sets its time on the field instead of on a plate. */}
+                    <TimerOverlay
+                      graphic={graphic}
+                      state={state}
+                      mark={mark}
+                      tab={tab}
+                      onBoard={ground !== null && meets(ground, slot)}
+                    />
+                  </LiveOverlayLayer>
+                ));
+              const placement = elements[element];
+              const joined = element === "panelists" && panel !== null;
+              const box = joined ? panel : placement;
+              // Of two graphics in one spot the front one that is on shows; the one behind it is left out, as the
+              // studio's row says. The background always draws, and so does the layout editor's selected element.
+              const covered =
+                view !== "stage-display" &&
+                !joined &&
+                element !== focus &&
+                element !== "background" &&
+                isLiveProgramLayer(element) &&
+                liveOverlayCoveredBy(state.stage, elements, element) !== null;
+              const content =
+                placement.visible && !covered ? draw(state, { placement, animate, panel, eventSlug }) : null;
+              return content ? (
                 <LiveOverlayLayer
-                  key={`timer:${graphic.timerId}`}
-                  element="timer"
-                  dimmed={focus !== null && focus !== "timer"}
-                  placement={slot}
+                  key={joined ? "panel" : element}
+                  element={element}
+                  order={order}
+                  moving={moving}
+                  on={!stack || !isLiveProgramLayer(element) || liveOverlayDrawn(state.stage, element)}
+                  dimmed={focus !== null && focus !== element && !(joined && focus === "question")}
+                  timerReserve={BOARDS.has(element) ? timerReserve(box, timerBoxes) : 0}
+                  onGround={element === "schedule" && ground !== null && within(box, ground)}
+                  placement={box}
                 >
-                  {/* A timer over the background sets its time on the field instead of on a plate. */}
-                  <TimerOverlay
-                    graphic={graphic}
-                    state={state}
-                    mark={mark}
-                    tab={tab}
-                    onBoard={ground !== null && meets(ground, slot)}
-                  />
+                  {content}
                 </LiveOverlayLayer>
-              ));
-            const placement = elements[element];
-            const joined = element === "panelists" && panel !== null;
-            const box = joined ? panel : placement;
-            // Of two graphics in one spot the front one that is on shows; the one behind it is left out, as the
-            // studio's row says. The background always draws, and so does the layout editor's selected element.
-            const covered =
-              view !== "stage-display" &&
-              !joined &&
-              element !== focus &&
-              element !== "background" &&
-              isLiveProgramLayer(element) &&
-              liveOverlayCoveredBy(state.stage, elements, element) !== null;
-            const content =
-              placement.visible && !covered ? draw(state, { placement, animate, panel, eventSlug }) : null;
-            return content ? (
-              <LiveOverlayLayer
-                key={joined ? "panel" : element}
-                element={element}
-                dimmed={focus !== null && focus !== element && !(joined && focus === "question")}
-                timerReserve={BOARDS.has(element) ? timerReserve(box, timerBoxes) : 0}
-                onGround={element === "schedule" && ground !== null && within(box, ground)}
-                placement={box}
-              >
-                {content}
-              </LiveOverlayLayer>
-            ) : null;
-          })
-        : null}
+              ) : null;
+            })
+          : null}
+      </div>
       {children}
     </LiveOverlayFrame>
   );

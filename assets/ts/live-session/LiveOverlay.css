@@ -86,9 +86,25 @@
         calc((0.5 - var(--crop-y, 0) - var(--crop-h, 1) / 2) * 1080px)
       );
   }
+  /*
+   * The layers stack inside a context of their own, so a scene can order them
+   * freely and what the host page draws over the output stays over them all.
+   */
+  .pk-live-overlay__stack {
+    position: absolute;
+    inset: 0;
+    isolation: isolate;
+    pointer-events: none;
+  }
+  /*
+   * Layers keep one order in the document, whatever the scene: taking one out
+   * and putting it back would restart the motion of its graphic. The scene's
+   * stack order is the layer's own, set by the layer (--overlay-order).
+   */
   .pk-live-overlay__layer {
     position: absolute;
     inset: 0;
+    z-index: var(--overlay-order, auto);
     inline-size: 1920px;
     block-size: 1080px;
     overflow: hidden;
@@ -130,6 +146,25 @@
   .pk-live-overlay__surface[data-placed] {
     transform: translate(var(--overlay-dx, 0), var(--overlay-dy, 0)) scale(var(--overlay-scale, 1));
     transform-origin: 0 0;
+  }
+  /*
+   * A scene change moves a graphic that stays on to its box in the new scene,
+   * while its own motion runs on. Only then, and only to a box of the same
+   * size: a graphic that comes on, whose content changes size, or whose box
+   * the scene resizes is placed at once.
+   */
+  .pk-live-overlay__surface[data-moving] {
+    transform-origin: 0 0;
+    transition: transform var(--pk-dur-slow) var(--pk-ease);
+  }
+  /* A cropped source follows its graphic's box, so the graphic keeps its place in the window. */
+  .pk-live-overlay__frame[data-crop] .pk-live-overlay__surface[data-moving] {
+    transition: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    :root:not(:has([data-live-broadcast-source])) .pk-live-overlay__surface[data-moving] {
+      transition: none;
+    }
   }
   /* The emblem's square box pads it by 360/314, so each size scales by that to keep the emblem's size. */
   .pk-live-overlay__emblem {
