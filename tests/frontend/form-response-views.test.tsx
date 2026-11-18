@@ -262,7 +262,7 @@ describe("the submissions table", () => {
       <FormSubmissionsTable
         fields={[field()]}
         endpoint="/api/v1/forms/f/submissions"
-        params={filtered ? { status: "submitted" } : undefined}
+        params={{ eventSlug: "pqc-2026", ...(filtered ? { status: "submitted" } : {}) }}
         responseSchema={submissionsSchema}
         onOpen={vi.fn()}
       />,

@@ -176,7 +176,10 @@ export function FormSubmissionsTable<Response extends { submissions: FormSubmiss
         <EmptyState
           title="No responses found"
           body={
-            Object.entries(query).some(([key, value]) => !["limit", "offset", "sort"].includes(key) && Boolean(value))
+            Object.entries(query).some(
+              ([key, value]) =>
+                !["limit", "offset", "sort", "eventSlug", "placementId", "responseId"].includes(key) && Boolean(value),
+            )
               ? "Try changing your search or filters."
               : "Nothing has been submitted through this form yet."
           }

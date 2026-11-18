@@ -8,7 +8,10 @@ import {
   resolveFormSubmissionPopulation,
   selectFromSubmissionPopulation,
 } from "../functions/_lib/services/form-submissions/population-query";
-import { buildFormSubmissionsPageQuery } from "../functions/_lib/services/form-submissions/submission-page";
+import {
+  buildFormSubmissionsPageQuery,
+  readFormSubmissionsPage,
+} from "../functions/_lib/services/form-submissions/submission-page";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import { getManagedFormWithFields } from "../functions/_lib/services/forms/read";
 import { exportEventFormResponses } from "../functions/_lib/services/form-submissions/export";
@@ -16,6 +19,7 @@ import { createAdminSession } from "./helpers/auth";
 import { callApi } from "./helpers/app";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
+import type { DatabaseLike } from "../functions/_lib/types";
 import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { resetDb } from "./helpers/reset-db";
 
@@ -687,8 +691,9 @@ describe("form-submission read-model population", () => {
     expect((await visible.text()).split("\r\n")[0]).toBe("Name,Status");
     const projected = profileD1Flow(env.DB);
     await exportEventFormResponses(projected.db, { ...exportParams, field: "food" }, { maxRows: 10, maxBytes: 10000 });
-    expect(projected.summary().queries.find((query) => query.sql.startsWith("SELECT a.submission_id"))?.sql).toContain(
-      "COALESCE(ff.key, a.field_key) IN (SELECT value FROM json_each(?))",
+    expect(projected.summary().queries.some((query) => query.sql.startsWith("SELECT a.submission_id"))).toBe(false);
+    expect(projected.summary().queries.find((query) => query.sql.includes("LIMIT ? OFFSET ?"))?.sql).toContain(
+      "a.field_key IN (SELECT value FROM json_each(?))",
     );
     await expect(exportEventFormResponses(env.DB, exportParams, { maxRows: 10, maxBytes: 1 })).rejects.toMatchObject({
       code: "CSV_EXPORT_TOO_LARGE",
@@ -791,6 +796,100 @@ describe("form-submission read-model population", () => {
       expect((await csv.text()).split("\r\n")).toEqual(["food label", answer ? "Yes" : "No", answer ? "Yes" : "No"]);
     },
   );
+
+  it("keeps projected native answers in the filter and sort snapshot when a response changes", async () => {
+    const formKey = "projected-response";
+    const formId = await insertForm(formKey, "event_registration", "food", null, true);
+    const registrationId = await insertRegistration({
+      eventId,
+      userId: await insertUser("projected@example.test"),
+      status: "registered",
+      attendanceType: "in_person",
+      answer: "vegan",
+    });
+    await backfillSourceAnswer({
+      formId,
+      contextType: "registration",
+      contextRef: registrationId,
+      fieldKey: "food",
+      answer: "vegan",
+    });
+    const params = {
+      formKey,
+      eventSlug: "pqc-2026",
+      answerField: "food",
+      answerValue: "vegan",
+      sort: "answer:food",
+      limit: 10,
+      offset: 0,
+    };
+    const population = await resolveFormSubmissionPopulation(env.DB, params);
+    const profile = profileD1Flow(env.DB);
+    let changed = false;
+    const database: DatabaseLike = {
+      ...profile.db,
+      async batch(statements) {
+        const result = await profile.db.batch(statements);
+        await env.DB.prepare("UPDATE form_submission_answers SET data_json = ? WHERE field_key = 'food'")
+          .bind(JSON.stringify("vegetarian"))
+          .run();
+        changed = true;
+        return result;
+      },
+    };
+    const result = await readFormSubmissionsPage(database, population, params, ["food"]);
+    expect(changed).toBe(true);
+    expect(result.submissions).toHaveLength(1);
+    expect(result.submissions[0].answers.food).toBe("vegan");
+    expect(profile.summary().queries.some((query) => query.sql.startsWith("SELECT a.submission_id"))).toBe(false);
+  });
+
+  it("sorts and exports inactive catalog choices by their historical labels", async () => {
+    const formId = await insertForm("historical-choices", "event_registration", "food", null, true);
+    await env.DB.prepare(
+      "UPDATE form_fields SET field_type = 'select', option_source = 'active_working_groups' WHERE form_id = ?",
+    )
+      .bind(formId)
+      .run();
+    const choices = [
+      { id: "00000000-0000-4000-8000-000000000001", label: "Zulu retired", active: 0 },
+      { id: "00000000-0000-4000-8000-000000000002", label: "Alpha active", active: 1 },
+    ];
+    const at = new Date().toISOString();
+    for (const [index, choice] of choices.entries()) {
+      await env.DB.prepare(
+        "INSERT INTO groups (id, type_key, name, slug, active, public_roster, created_at, updated_at) VALUES (?, 'working_group', ?, ?, ?, 0, ?, ?)",
+      )
+        .bind(choice.id, choice.label, `historical-choice-${index}`, choice.active, at, at)
+        .run();
+      const registrationId = await insertRegistration({
+        eventId,
+        userId: await insertUser(`historical-choice-${index}@example.test`),
+        status: "registered",
+        attendanceType: "in_person",
+        answer: choice.id,
+      });
+      if (index === 1)
+        await backfillSourceAnswer({
+          formId,
+          contextType: "registration",
+          contextRef: registrationId,
+          fieldKey: "food",
+          answer: choice.id,
+        });
+    }
+    const response = await adminGet(
+      "/api/v1/events/pqc-2026/forms/historical-choices/submissions?sort=answer:food&limit=10",
+    );
+    expect(response.status).toBe(200);
+    const result = formSubmissionsResponseSchema.parse(await response.json());
+    expect(result.submissions.map((submission) => submission.answers.food)).toEqual([choices[1].id, choices[0].id]);
+    const csv = await adminGet(
+      "/api/v1/events/pqc-2026/forms/historical-choices/submissions/exports?sort=answer:food&columns=answer:food",
+    );
+    expect(csv.status).toBe(200);
+    expect((await csv.text()).split("\r\n")).toEqual(["food label", "Alpha active", "Zulu retired"]);
+  });
 
   it("rejects unsafe answer keys and unauthorized exports", async () => {
     for (const query of ["sort=answer:food%27", "answerField=food%27&answerValue=vegan"]) {

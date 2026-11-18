@@ -48,7 +48,7 @@ export async function exportEventFormResponses(
     throw new AppError(413, "CSV_EXPORT_ROW_LIMIT_EXCEEDED", `CSV export is limited to ${limits.maxRows} records`);
   }
   const exportedFields = selectedFields.filter((field) => answerKeys.includes(field.key));
-  const catalogs = await resolveFormFieldOptionCatalogs(db, exportedFields);
+  const catalogs = await resolveFormFieldOptionCatalogs(db, exportedFields, { includeInactive: true });
   const fields = new Map(mapManagedFormFields(exportedFields, catalogs).map((field) => [field.key, field]));
   const headers = columns.map((column) => {
     const answer = parseAnswerSort(column);

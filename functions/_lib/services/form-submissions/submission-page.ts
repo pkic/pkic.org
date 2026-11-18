@@ -42,21 +42,20 @@ async function attachSubmissionAnswers(
   rows: MergedSubmissionRow[],
   answerKeys?: string[],
 ): Promise<SubmissionPayload[]> {
-  const submissionIds = rows.filter((row) => row.source === "submission").map((row) => row.source_id);
+  const submissionIds =
+    answerKeys === undefined ? rows.filter((row) => row.source === "submission").map((row) => row.source_id) : [];
   const submissionFilter = buildD1JsonMembershipFilter("a.submission_id", submissionIds);
-  const fieldFilter = answerKeys ? buildD1JsonMembershipFilter("COALESCE(ff.key, a.field_key)", answerKeys) : null;
-  const answerRows =
-    submissionIds.length && (!answerKeys || answerKeys.length > 0)
-      ? await all<AnswerRow>(
-          db,
-          `SELECT a.submission_id, COALESCE(ff.key, a.field_key) AS field_key, a.data_json
+  const answerRows = submissionIds.length
+    ? await all<AnswerRow>(
+        db,
+        `SELECT a.submission_id, COALESCE(ff.key, a.field_key) AS field_key, a.data_json
          FROM form_submission_answers a
          LEFT JOIN form_fields ff ON ff.id = a.field_id
-         WHERE ${submissionFilter.sql}${fieldFilter ? ` AND ${fieldFilter.sql}` : ""}
+         WHERE ${submissionFilter.sql}
          ORDER BY a.submission_id, COALESCE(ff.key, a.field_key)`,
-          [...submissionFilter.bindings, ...(fieldFilter?.bindings ?? [])],
-        )
-      : [];
+        submissionFilter.bindings,
+      )
+    : [];
 
   const answersBySubmission = new Map<string, Record<string, unknown>>();
   for (const answer of answerRows) {
@@ -73,13 +72,9 @@ async function attachSubmissionAnswers(
     contextRef: row.context_ref,
     submitter: submitterFromRow(row),
     answers:
-      row.source === "submission"
+      row.source === "submission" && answerKeys === undefined
         ? (answersBySubmission.get(row.source_id) ?? {})
-        : Object.fromEntries(
-            Object.entries(parseJsonSafe<Record<string, unknown>>(row.answers_json, {})).filter(
-              ([key]) => !answerKeys || answerKeys.includes(key),
-            ),
-          ),
+        : parseJsonSafe<Record<string, unknown>>(row.answers_json, {}),
   }));
 }
 
