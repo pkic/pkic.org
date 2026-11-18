@@ -7,6 +7,9 @@ import { liveOverlayAddress, LIVE_OVERLAY_VIEWS } from "../../../../../../live-s
 import { postJson } from "../../../../../../shared/api-client";
 import { CopyLinkRow } from "../../../../../../shared/widgets/copy-link-row";
 import { Spinner } from "../../../../../../components/Spinner";
+import type { LiveOverlayView } from "../../../../../../../shared/schemas/live-session-room";
+import type { LiveOverlayGraphics } from "../../../../../../live-session/live-overlay-graphics";
+import { LiveOverlayGraphicsDialog } from "./LiveOverlayGraphicsDialog";
 
 /**
  * A physical room's browser sources, drawing the scene on air or always one: one compact row per
@@ -27,6 +30,8 @@ export function LiveOverlayLinks({
   const [error, setError] = useState<Error | null>(null);
   // Bumped by Try again, so a failed load can repeat without leaving the page.
   const [attempt, setAttempt] = useState(0);
+  // The output whose link is being narrowed to some graphics.
+  const [narrowing, setNarrowing] = useState<LiveOverlayView | null>(null);
   useEffect(() => {
     let current = true;
     setAccess(null);
@@ -56,6 +61,9 @@ export function LiveOverlayLinks({
       </div>
     );
   if (!access) return <Spinner label="Getting the links…" />;
+  const link = (view: LiveOverlayView, graphics?: LiveOverlayGraphics) =>
+    liveOverlayAddress(window.location.origin, { view, layout, slug, roomId, token: access.token, graphics });
+  const narrowed = LIVE_OVERLAY_VIEWS.find((view) => view.id === narrowing);
   return (
     <div class="pk-stack">
       <div class="pk-stack pk-stack--snug">
@@ -64,17 +72,26 @@ export function LiveOverlayLinks({
             key={view.id}
             compact
             label={view.label}
-            url={liveOverlayAddress(window.location.origin, {
-              view: view.id,
-              layout,
-              slug,
-              roomId,
-              token: access.token,
-            })}
+            url={link(view.id)}
+            actions={
+              // The stage display draws its own speaker screen, not graphics to choose from.
+              view.id === "stage-display" ? null : (
+                <Button variant="ghost" onClick={() => setNarrowing(view.id)}>
+                  Show only some graphics…
+                </Button>
+              )
+            }
           />
         ))}
       </div>
       <p class="pk-small pk-muted">These links stay the same and work until {formatDateTime(access.expiresAt)}.</p>
+      {narrowed ? (
+        <LiveOverlayGraphicsDialog
+          label={narrowed.label}
+          link={(graphics) => link(narrowed.id, graphics)}
+          onClose={() => setNarrowing(null)}
+        />
+      ) : null}
     </div>
   );
 }

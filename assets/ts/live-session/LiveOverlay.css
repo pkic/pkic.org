@@ -73,6 +73,19 @@
       transform: scale(min(tan(atan2(100cqi, 1920px)), tan(atan2(100cqb, 1080px))));
     }
   }
+  /*
+   * A cropped source: the graphic's box, moved to the canvas's center, then
+   * scaled until it fits the window, so the window holds that graphic alone.
+   */
+  .pk-live-overlay__frame[data-crop] > .pk-live-overlay {
+    transform: scale(
+        min(tan(atan2(100cqi, calc(1920px * var(--crop-w, 1)))), tan(atan2(100cqb, calc(1080px * var(--crop-h, 1)))))
+      )
+      translate(
+        calc((0.5 - var(--crop-x, 0) - var(--crop-w, 1) / 2) * 1920px),
+        calc((0.5 - var(--crop-y, 0) - var(--crop-h, 1) / 2) * 1080px)
+      );
+  }
   .pk-live-overlay__layer {
     position: absolute;
     inset: 0;

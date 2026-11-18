@@ -1,4 +1,5 @@
 import type { LiveOverlayView } from "../../shared/schemas/live-session-room";
+import type { LiveOverlayGraphics } from "./live-overlay-graphics";
 import { LiveOverlay } from "./LiveOverlay";
 import { useLiveRoomProgram } from "./useLiveRoomProgram";
 import type { LiveSocketFactory } from "./useLiveRoom";
@@ -8,6 +9,7 @@ const KEEPS_TRYING = {};
 export function LiveProgramOverlay({
   view,
   layout,
+  graphics,
   slug,
   roomId,
   token,
@@ -16,6 +18,8 @@ export function LiveProgramOverlay({
   view: LiveOverlayView;
   /** The scene the source names; null to draw the scene its output has on air. */
   layout: string | null;
+  /** Which graphics the source draws, and whether it crops to the one left. */
+  graphics?: LiveOverlayGraphics;
   slug: string;
   roomId: string;
   token: string;
@@ -29,6 +33,7 @@ export function LiveProgramOverlay({
       key={`${program.selection.occurrenceId}:${program.selection.revision}`}
       view={view}
       layout={layout}
+      graphics={graphics}
       slug={slug}
       occurrenceId={program.selection.occurrenceId}
       token={token}

@@ -15,6 +15,10 @@ import { defaultLiveTimerGraphic } from "../../assets/shared/schemas/live-sessio
 import { LiveOverlay } from "../../assets/ts/live-session/LiveOverlay";
 import { liveOverlayAddress, parseLiveOverlayAddress } from "../../assets/ts/live-session/live-overlay-address";
 import {
+  ALL_LIVE_OVERLAY_GRAPHICS,
+  type LiveOverlayGraphics,
+} from "../../assets/ts/live-session/live-overlay-graphics";
+import {
   fakeLiveSockets,
   LIVE_OCCURRENCE,
   LIVE_POLL,
@@ -81,7 +85,12 @@ function savedLayout(
   };
 }
 
-function mountOverlay(view: LiveOverlayView, layout = "full-frame", overlayLayouts: LiveOverlayLayoutGeometry[] = []) {
+function mountOverlay(
+  view: LiveOverlayView,
+  layout = "full-frame",
+  overlayLayouts: LiveOverlayLayoutGeometry[] = [],
+  graphics: LiveOverlayGraphics = ALL_LIVE_OVERLAY_GRAPHICS,
+) {
   const live = fakeLiveSockets();
   const host = document.createElement("div");
   document.body.append(host);
@@ -91,6 +100,7 @@ function mountOverlay(view: LiveOverlayView, layout = "full-frame", overlayLayou
       <LiveOverlay
         view={view}
         layout={layout}
+        graphics={graphics}
         slug="pqc-2026"
         occurrenceId={LIVE_OCCURRENCE}
         token="signed.overlay.access"
@@ -186,6 +196,32 @@ describe("broadcast overlays", () => {
     void act(() => live.latest().deliver({ type: "stage.changed", stage: { ...ON_STAGE, lowerThird: null } }));
     expect(host.querySelector(".pk-live-overlay__name")).toBeNull();
     expect(host.querySelector(".pk-live-overlay__question-text")?.textContent).toBe("What about hybrid certificates?");
+  });
+
+  it("draws only the graphics a source shows, or all but those it hides", () => {
+    const only = mountOverlay("program", "full-frame", [], { show: ["question"], hide: null, crop: false });
+    expect(only.host.querySelector(".pk-live-overlay__question-text")).not.toBeNull();
+    expect(only.host.querySelector(".pk-live-overlay__name")).toBeNull();
+    const except = mountOverlay("program", "full-frame", [], { show: null, hide: ["question"], crop: false });
+    expect(except.host.querySelector(".pk-live-overlay__question-text")).toBeNull();
+    expect(except.host.querySelector(".pk-live-overlay__name")?.textContent).toBe("Sam Speaker");
+    expect(except.host.querySelector(".pk-live-overlay__frame")?.hasAttribute("data-crop")).toBe(false);
+  });
+
+  it("crops the page to the one graphic left, and ignores crop while several are", () => {
+    const box = FULL_FRAME.lowerThird;
+    const cropped = mountOverlay("program", "full-frame", [], { show: ["lowerThird"], hide: null, crop: true });
+    const frame = cropped.host.querySelector<HTMLElement>(".pk-live-overlay__frame")!;
+    expect(frame.hasAttribute("data-crop")).toBe(true);
+    expect(frame.style.getPropertyValue("--crop-w")).toBe(String(box.w));
+    expect(frame.style.getPropertyValue("--crop-y")).toBe(String(box.y));
+    expect(cropped.host.querySelector(".pk-live-overlay__name")?.textContent).toBe("Sam Speaker");
+    const several = mountOverlay("program", "full-frame", [], {
+      show: ["lowerThird", "question"],
+      hide: null,
+      crop: true,
+    });
+    expect(several.host.querySelector(".pk-live-overlay__frame")?.hasAttribute("data-crop")).toBe(false);
   });
 
   it("draws a scene's background whenever the scene shows it, with the boards on it sharing its field", () => {
@@ -545,6 +581,7 @@ describe("broadcast overlays", () => {
       slug: "pqc-2026",
       roomId: "33333333-3333-4333-8333-333333333333",
       token: "signed.overlay.access",
+      graphics: ALL_LIVE_OVERLAY_GRAPHICS,
     });
     const fallback = new URL(address.replace("layout=lower-third", "layout=Not%20a%20name"));
     // A source that names no scene, or a malformed one, draws the scene its output has on air.
@@ -557,5 +594,39 @@ describe("broadcast overlays", () => {
     ).toContain("layout=full-frame");
     expect(parseLiveOverlayAddress({ hash: url.hash.replace("view=program", "view=lower-third") })).toBeNull();
     expect(parseLiveOverlayAddress({ hash: "#view=program" })).toBeNull();
+  });
+
+  it("carries the graphics a source shows or hides, and crop, readable in the fragment", () => {
+    const base = {
+      view: "program" as const,
+      layout: null,
+      slug: "pqc-2026",
+      roomId: "33333333-3333-4333-8333-333333333333",
+      token: "signed.overlay.access",
+    };
+    const cropped = new URL(
+      liveOverlayAddress("https://pkic.org", { ...base, graphics: { show: ["checkIn"], hide: null, crop: true } }),
+    );
+    expect(cropped.hash).toMatch(/^#view=program&show=checkIn&crop&event=/);
+    expect(parseLiveOverlayAddress(cropped)?.graphics).toEqual({ show: ["checkIn"], hide: null, crop: true });
+    const several = new URL(
+      liveOverlayAddress("https://pkic.org", {
+        ...base,
+        graphics: { show: ["ticker", "checkIn"], hide: null, crop: false },
+      }),
+    );
+    expect(several.hash).toContain("show=ticker,checkIn&event=");
+    const hidden = new URL(
+      liveOverlayAddress("https://pkic.org", {
+        ...base,
+        graphics: { show: null, hide: ["chat", "reactions"], crop: false },
+      }),
+    );
+    expect(parseLiveOverlayAddress(hidden)?.graphics).toEqual({ show: null, hide: ["chat", "reactions"], crop: false });
+    // Show wins over hide, and a show naming nothing the page knows draws nothing rather than everything.
+    const both = { hash: hidden.hash.replace("hide=chat,reactions", "show=ticker&hide=chat") };
+    expect(parseLiveOverlayAddress(both)?.graphics).toEqual({ show: ["ticker"], hide: null, crop: false });
+    const unknown = { hash: hidden.hash.replace("hide=chat,reactions", "show=nonsense") };
+    expect(parseLiveOverlayAddress(unknown)?.graphics.show).toEqual([]);
   });
 });

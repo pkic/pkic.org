@@ -58,3 +58,46 @@ it("offers Try again when the links fail to load, and loads them on a retry", as
   await vi.waitFor(() => expect(host!.querySelector("[data-copy-link-row]")).not.toBeNull());
   expect(fetch).toHaveBeenCalledTimes(2);
 });
+
+it("builds a link that shows only some graphics and crops to the one left", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(JSON.stringify({ token: "signed", expiresAt: "2026-12-04T17:00:00.000Z" }), {
+          status: 201,
+          headers: { "content-type": "application/json" },
+        }),
+    ),
+  );
+  host = document.createElement("div");
+  document.body.append(host);
+  await act(async () => render(<LiveOverlayLinks slug="pqc-2026" roomId="room-1" layout={null} />, host!));
+  await vi.waitFor(() => expect(host!.querySelector("[data-copy-link-row]")).not.toBeNull());
+  const program = [...host!.querySelectorAll<HTMLElement>("[data-copy-link-row]")].find(
+    (row) => row.querySelector("span")?.textContent === "Program",
+  )!;
+  const narrow = [...program.querySelectorAll("button")].find(
+    (button) => button.textContent === "Show only some graphics…",
+  )!;
+  await act(async () => narrow.click());
+  const dialog = document.querySelector<HTMLElement>("dialog[open]")!;
+  const choice = (label: string) =>
+    [...dialog.querySelectorAll<HTMLLabelElement>("label.pk-check")]
+      .find((each) => each.textContent?.startsWith(label))!
+      .querySelector("input")!;
+  const link = () => dialog.querySelector<HTMLInputElement>("[data-copy-link]")!.value;
+  expect(link()).not.toContain("show=");
+  await act(async () => choice("Only these").click());
+  await act(async () => choice("Check-in code").click());
+  expect(choice("Crop to the graphic").disabled).toBe(false);
+  await act(async () => choice("Crop to the graphic").click());
+  expect(link()).toContain("#view=program&show=checkIn&crop&event=pqc-2026");
+  // A second graphic leaves more than one, so the link drops crop until one is left again.
+  await act(async () => choice("News ticker").click());
+  expect(choice("Crop to the graphic").disabled).toBe(true);
+  expect(link()).toContain("show=ticker,checkIn&event=");
+  await act(async () => choice("All except these").click());
+  expect(link()).toContain("hide=ticker,checkIn&event=");
+  expect(link()).not.toContain("show=");
+});

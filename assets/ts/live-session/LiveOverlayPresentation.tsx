@@ -9,6 +9,12 @@ import { LiveTimerSounds } from "./useLiveTimerSounds";
 import "./LiveOverlay.css";
 import { liveStageDisplayGraphics } from "../../shared/live-stage-display-plan";
 import { LiveOverlayFrame } from "./LiveOverlayFrame";
+import {
+  ALL_LIVE_OVERLAY_GRAPHICS,
+  liveOverlayAllowedElements,
+  liveOverlayCropElement,
+  type LiveOverlayGraphics,
+} from "./live-overlay-graphics";
 import { LiveOverlayLayer } from "./LiveOverlayLayer";
 import { LivePanelistsOverlay } from "./LivePanelistsOverlay";
 import { LivePanelQuestionOverlay } from "./LivePanelQuestionOverlay";
@@ -422,6 +428,7 @@ export function LiveOverlayPresentation({
   stageAside,
   playsSounds = false,
   eventSlug = null,
+  graphics = ALL_LIVE_OVERLAY_GRAPHICS,
   children,
 }: {
   view: LiveOverlayView;
@@ -443,17 +450,24 @@ export function LiveOverlayPresentation({
   playsSounds?: boolean;
   /** The event the output belongs to, for the links its graphics carry, such as the QR code's. */
   eventSlug?: string | null;
+  /** Which graphics a browser source draws, and whether it crops to the one left. */
+  graphics?: LiveOverlayGraphics;
   /** Drawn over every layer by the page that hosts the output, such as a screen's connection status. */
   children?: ComponentChildren;
 }) {
   const animate = broadcast || !prefersReducedMotion();
   const state = projection && isLiveAuxOutput(requested) ? liveOutputProjection(projection, requested) : projection;
   const view = liveOutputView(requested);
-  // While the ticker is on air, every other graphic keeps clear of it.
-  const elements = liveOverlayClearOfTicker(
+  // A source drawing only some graphics leaves the others out; while the ticker is on air, every other graphic keeps clear of it.
+  const allowed = liveOverlayAllowedElements(
     draft ?? resolveLiveOverlayLayout(state?.overlayLayouts ?? [], layout ?? state?.stage.scene),
-    view !== "stage-display" && state !== null && liveOverlayDrawn(state.stage, "ticker"),
+    graphics,
   );
+  const elements = liveOverlayClearOfTicker(
+    allowed,
+    view !== "stage-display" && state !== null && allowed.ticker.visible && liveOverlayDrawn(state.stage, "ticker"),
+  );
+  const cropped = liveOverlayCropElement(graphics, view === "stage-display" ? "stage-display" : "program");
   const layers =
     view === "stage-display" && projection
       ? STAGE_DISPLAY_LAYERS(projection, roomId, stageAside, elements.stageMessage.visible)
@@ -489,7 +503,7 @@ export function LiveOverlayPresentation({
       ? state.timers.filter((timer) => shown.some((graphic) => graphic.timerId === timer.id))
       : null;
   return (
-    <LiveOverlayFrame view={requested} status={status}>
+    <LiveOverlayFrame view={requested} status={status} crop={cropped ? elements[cropped] : null}>
       {sounding?.length && state ? <LiveTimerSounds timers={sounding} session={state.session} /> : null}
       {state
         ? layers.map(({ element, draw }) => {
