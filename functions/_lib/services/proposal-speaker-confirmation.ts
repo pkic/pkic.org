@@ -31,6 +31,7 @@ import {
   validateRequiredConsents,
 } from "./consent";
 import { getRequiredTerms } from "./events";
+import { resolveAccountCoveredConsents } from "./account-policies";
 import {
   getSpeakerByManageToken,
   getSpeakerByProposalUser,
@@ -169,7 +170,19 @@ async function confirmParticipation(
   )
     throw representationRequired();
   const requiredTerms = await getRequiredTerms(db, proposal.event_id, "speaker");
-  if (confirmation.kind === "speaker") await validateRequiredConsents(requiredTerms, confirmation.payload.consents);
+  const coverage =
+    confirmation.kind === "speaker"
+      ? await resolveAccountCoveredConsents(db, {
+          userId: speaker.user_id,
+          terms: requiredTerms,
+          accepted: confirmation.payload.consents,
+          at: now,
+          ip: confirmation.payload.ip,
+          userAgent: confirmation.payload.userAgent,
+          secret: confirmation.signingSecret,
+        })
+      : null;
+  if (coverage) await validateRequiredConsents(requiredTerms, coverage.consents);
   const lateConsentGuard = reviewingLateResponse
     ? await prepareLateSpeakerConsentGuard(db, proposal.event_id, speaker.user_id)
     : null;
@@ -253,13 +266,14 @@ async function confirmParticipation(
       ...(organizerIdentity?.guards ?? []),
       prepareActiveTermsSnapshotGuard(db, proposal.event_id, requiredTerms, "speaker"),
       ...(lateConsentGuard ? [lateConsentGuard] : []),
-      ...(confirmation.kind === "speaker"
+      ...(coverage?.statements ?? []),
+      ...(confirmation.kind === "speaker" && coverage
         ? await prepareConsentStatements(db, {
             proposalId: proposal.id,
             eventId: proposal.event_id,
             userId: speaker.user_id,
             audienceType: "speaker",
-            accepted: confirmation.payload.consents,
+            accepted: coverage.consents,
             ip: confirmation.payload.ip,
             userAgent: confirmation.payload.userAgent,
             secret: confirmation.signingSecret,

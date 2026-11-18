@@ -1,3 +1,4 @@
+import { ACCOUNT_POLICIES_COPY } from "../account-policies";
 import { protectsPublicAction } from "./abuse-protection";
 /** Neutral user identity authentication contracts used by every human UI. */
 import { z } from "zod";
@@ -59,6 +60,8 @@ export const userAuthVerifySchema = magicLinkVerifySchema.extend({
 /** Starting an account: the shared work-email step, and where the link returns the person. */
 export const userSignUpRequestSchema = workEmailStepSchema.extend({
   returnPath: signInReturnPathSchema.optional(),
+  /** Every account agrees to follow the Code of Conduct, and is shown the Privacy Policy, when it is started. */
+  acceptsAccountPolicies: z.literal(true, { error: ACCOUNT_POLICIES_COPY.required }),
 });
 
 export const userIdentitySchema = z.object({

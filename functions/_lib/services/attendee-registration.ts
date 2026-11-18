@@ -3,6 +3,8 @@ import type { DatabaseLike, StatementLike } from "../types";
 import { prepareActiveTermsSnapshotGuard, validateRequiredConsents } from "./consent";
 import { prepareRequiredTerms, type EventTermRecord } from "./events";
 import { batchRows } from "../db/pagination";
+import { resolveAccountCoveredConsents } from "./account-policies";
+import { nowIso } from "../utils/time";
 import {
   toEventFormResolutionEvent,
   prepareEventFormDefinitionRead,
@@ -39,7 +41,16 @@ export async function prepareValidatedAttendeeRegistration(
     ...formRead.statements,
   ]);
   const requiredTerms = batchRows<EventTermRecord>(termsResult);
-  await validateRequiredConsents(requiredTerms, input.consents);
+  const coverage = await resolveAccountCoveredConsents(db, {
+    userId: options.verifiedIdentity.userId,
+    terms: requiredTerms,
+    accepted: input.consents,
+    at: nowIso(),
+    ip: options.ip,
+    userAgent: options.userAgent,
+    secret: options.signingSecret,
+  });
+  await validateRequiredConsents(requiredTerms, coverage.consents);
   const form = formRead.decode(formResults);
   const validatedForm = validateCustomAnswersForResolvedForm(form, {
     customAnswers: input.customAnswers,
@@ -60,7 +71,7 @@ export async function prepareValidatedAttendeeRegistration(
     formAnswers: customAnswers,
     referredByCode: options.referredByCode,
     invite: options.invite,
-    consents: input.consents,
+    consents: coverage.consents,
     ip: options.ip,
     userAgent: options.userAgent,
     signingSecret: options.signingSecret,
@@ -69,5 +80,6 @@ export async function prepareValidatedAttendeeRegistration(
     termsSnapshotGuard: prepareActiveTermsSnapshotGuard(db, event.id, requiredTerms),
     verifiedIdentity: options.verifiedIdentity,
   });
+  prepared.statements.push(...coverage.statements);
   return { prepared, requiredTerms, formResponse: validatedForm };
 }

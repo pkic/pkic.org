@@ -19,6 +19,9 @@ import { Button } from "../ui/Button";
 import { ChoiceCard, ChoiceCards } from "../ui/ChoiceCard";
 import { Field, StateIcon } from "../ui/Field";
 import { TextInput } from "../ui/TextControl";
+import { Checkbox } from "../ui/Checkbox";
+import { ACCOUNT_POLICIES_COPY } from "../../shared/account-policies";
+import { AccountPolicyLink } from "./AccountPolicyLinks";
 import { IconOrganization } from "./icons";
 import { IconPerson } from "./icons/app-navigation";
 
@@ -72,6 +75,7 @@ export function EmailFirstStep<Schema extends WorkEmailContract>({
   onChangeEmail,
   controller,
   onBusy,
+  accountPolicies,
 }: {
   flow: EmailFirstFlow;
   schema?: Schema;
@@ -87,6 +91,8 @@ export function EmailFirstStep<Schema extends WorkEmailContract>({
   onChangeEmail?: () => void;
   controller?: EmailFirstController;
   onBusy?: (busy: boolean) => void;
+  /** Starting an account: the person agrees to follow the Code of Conduct and is shown the Privacy Policy. */
+  accountPolicies?: { accepted: boolean; onChange: (accepted: boolean) => void };
 }) {
   const copy = EMAIL_FIRST_COPY[flow];
   const choice = individual ? copy.personal : copy.work;
@@ -94,6 +100,7 @@ export function EmailFirstStep<Schema extends WorkEmailContract>({
     ...body,
     email,
     unaffiliatedAttestation: individual,
+    ...(accountPolicies ? { acceptsAccountPolicies: accountPolicies.accepted } : {}),
   });
   const [busy, setBusy] = useState(false);
   // State lags a render behind, so two clicks, or Enter and a click, in one tick would both send.
@@ -230,6 +237,31 @@ export function EmailFirstStep<Schema extends WorkEmailContract>({
           />
         )}
       </Field>
+      {accountPolicies && (
+        <>
+          <Field group label="Code of Conduct" labelHidden {...form.of("acceptsAccountPolicies")}>
+            {() => (
+              <Checkbox
+                name="acceptsAccountPolicies"
+                checked={accountPolicies.accepted}
+                onChange={(event) => accountPolicies.onChange(event.currentTarget.checked)}
+                label={
+                  <>
+                    {ACCOUNT_POLICIES_COPY.agreeBefore}
+                    <AccountPolicyLink termKey="code-of-conduct" />
+                    {ACCOUNT_POLICIES_COPY.agreeAfter}
+                  </>
+                }
+              />
+            )}
+          </Field>
+          <p class="pk-small pk-muted">
+            {ACCOUNT_POLICIES_COPY.noticeBefore}
+            <AccountPolicyLink termKey="privacy-policy" />
+            {ACCOUNT_POLICIES_COPY.noticeAfter}
+          </p>
+        </>
+      )}
       <div class="pk-cluster">
         {steered ? (
           <>

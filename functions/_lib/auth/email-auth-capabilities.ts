@@ -1,3 +1,8 @@
+import {
+  ACCOUNT_POLICIES,
+  accountPolicyKeySchema,
+  type AccountPolicyKey,
+} from "../../../assets/shared/account-policies";
 import { z } from "zod";
 import { databaseIdSchema } from "../../../assets/shared/schemas/identifiers";
 import { normalizedEmailSchema } from "../../../assets/shared/schemas/api-common";
@@ -51,6 +56,11 @@ const emailAuthCapabilityPayloadSchema = z
     signUpEmail: normalizedEmailSchema.optional(),
     /** The sign-up's first step said this is a personal address. */
     signUpPersonal: z.literal(true).optional(),
+    /** The account policy versions the sign-up request accepted, recorded when the account is created. */
+    signUpAcceptedPolicies: z
+      .array(z.object({ termKey: accountPolicyKeySchema, version: z.string().min(1).max(32) }).strict())
+      .max(ACCOUNT_POLICIES.length)
+      .optional(),
     capabilityId: z.string().min(16).max(64),
     emailFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
     ipHash: z
@@ -83,6 +93,7 @@ export async function queueEmailAuthCapability(options: {
   addressRequest?: { userId: string; email: string; purpose?: "representation" };
   signUpEmail?: string;
   signUpPersonal?: boolean;
+  signUpAcceptedPolicies?: Array<{ termKey: AccountPolicyKey; version: string }>;
   ttlSeconds: number;
   ipHash?: string | null;
   userAgentHash?: string | null;
@@ -95,6 +106,7 @@ export async function queueEmailAuthCapability(options: {
     ...(options.addressRequest ? { addressRequest: options.addressRequest } : {}),
     ...(options.signUpEmail ? { signUpEmail: options.signUpEmail } : {}),
     ...(options.signUpPersonal ? { signUpPersonal: true } : {}),
+    ...(options.signUpAcceptedPolicies ? { signUpAcceptedPolicies: options.signUpAcceptedPolicies } : {}),
     capabilityId,
     emailFingerprint: await hmacSha256Hex(options.signingSecret, emailFingerprintInput(options.email)),
     ipHash: options.ipHash ?? null,

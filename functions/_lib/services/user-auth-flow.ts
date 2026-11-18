@@ -1,3 +1,4 @@
+import type { AccountPolicyKey } from "../../../assets/shared/account-policies";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
 import { queueEmailAuthCapability } from "../auth/email-auth-capabilities";
 import { findRetiredSignInAddress, queueUserSignInCapability } from "../auth/user-session";
@@ -112,7 +113,11 @@ export async function requestUserSignInLink(
  */
 export async function requestUserSignUpLink(
   db: DatabaseLike,
-  payload: Parameters<typeof requestUserSignInLink>[1] & { returnPath?: string; personal?: boolean },
+  payload: Parameters<typeof requestUserSignInLink>[1] & {
+    returnPath?: string;
+    personal?: boolean;
+    acceptedPolicies: Array<{ termKey: AccountPolicyKey; version: string }>;
+  },
 ): Promise<{ outboxId: string | null }> {
   const message = await signUpMessage(db, payload.returnPath);
   const signIn = await requestUserSignInLink(db, payload, message);
@@ -131,6 +136,7 @@ export async function requestUserSignUpLink(
     email: recipientEmail,
     signUpEmail: recipientEmail,
     signUpPersonal: payload.personal,
+    signUpAcceptedPolicies: payload.acceptedPolicies,
     ttlSeconds: payload.ttlMinutes * 60,
     ipHash: payload.ipHash,
     userAgentHash: payload.userAgentHash,

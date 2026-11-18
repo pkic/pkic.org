@@ -38,6 +38,7 @@ import { proposalInviteEmailTextVariables } from "./proposal-invite-email-contex
 import { formatProposalSpeakerLineup } from "./proposal-invite-person";
 import { eventInviteWindowEvidence, resolveEventInviteExpiry } from "../invite-validity";
 import { nowIso } from "../utils/time";
+import { resolveAccountCoveredConsents } from "./account-policies";
 import { proposalTermsDigest } from "./event-proposal-proof-capabilities";
 import { prepareIndependentDisclosure, requireIndependentDisclosure } from "./proposal-speaker-independent-disclosure";
 import { prepareInvitedSpeakerRepresentation } from "./proposal-invited-speaker-identity";
@@ -93,7 +94,17 @@ export async function submitProposal(
   const statements: StatementLike[] = input.formRevisionGuard && !input.formDefinition ? [input.formRevisionGuard] : [];
   const inviteNow = nowIso();
   const terms = await getRequiredTerms(db, input.event.id, "speaker");
-  await validateRequiredConsents(terms, input.body.consents);
+  const coverage = await resolveAccountCoveredConsents(db, {
+    userId: input.actor.userId,
+    terms,
+    accepted: input.body.consents,
+    at: inviteNow,
+    ip: input.ip,
+    userAgent: input.userAgent,
+    secret: input.signingSecret,
+  });
+  await validateRequiredConsents(terms, coverage.consents);
+  statements.push(...coverage.statements);
   statements.push(prepareActiveTermsSnapshotGuard(db, input.event.id, terms, "speaker"));
   const coSpeakerExpiresAt =
     input.body.speakers.length > 0 ? resolveEventInviteExpiry(input.event, undefined, inviteNow) : null;
@@ -210,7 +221,7 @@ export async function submitProposal(
       eventId: input.event.id,
       userId: proposer.id,
       audienceType: "speaker",
-      accepted: input.body.consents,
+      accepted: coverage.consents,
       ip: input.ip,
       userAgent: input.userAgent,
       secret: input.signingSecret,

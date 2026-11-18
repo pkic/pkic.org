@@ -29,6 +29,7 @@ import { CONTRACT_VALIDATION_ATTRIBUTE } from "../../shared/form/validation";
 import { splitHash } from "../../ui/url-query";
 import { CustomFieldList, readCustomFieldValues } from "../../shared/widgets/custom-fields";
 import { readConsentValues } from "../../shared/widgets/consents";
+import { useAccountCoveredTerms } from "../../hooks/useAccountCoveredTerms";
 import { readDayAttendance, readDayAttendanceChoices } from "../../shared/widgets/day-attendance";
 import { RegistrationProgress } from "./RegistrationProgress";
 import { Alert } from "../../ui/Alert";
@@ -75,6 +76,7 @@ export function RegistrationFlow(props: Props) {
   const { forms } = props;
   const updating = props.mode === "update";
   const termsAvailable = forms.requiredTerms.some((term) => term.required);
+  const terms = useAccountCoveredTerms(forms.requiredTerms);
   const daysAvailable = forms.eventDays.length > 0;
   const available = updating || (termsAvailable && daysAvailable);
   const initial = updating ? props.data : null;
@@ -145,12 +147,12 @@ export function RegistrationFlow(props: Props) {
     () =>
       withRequiredOrganizationRepresentation(
         withRequiredDayAttendanceChoices(
-          updating ? registrationManageSchema : registrationCreateForTermsSchema(forms.requiredTerms),
+          updating ? registrationManageSchema : registrationCreateForTermsSchema(terms.remaining),
           choices,
         ),
         representationMissing,
       ),
-    [updating, forms.requiredTerms, choices, representationMissing],
+    [updating, terms.remaining, choices, representationMissing],
   );
   const contract = useContractForm(request, readBody, {
     fieldOf: (name, control) =>
@@ -453,12 +455,20 @@ export function RegistrationFlow(props: Props) {
           </section>
           {!updating && (
             <section data-step="4" class="event-flow-step pk-stack" hidden>
-              <p class="event-flow-step-intro">Check your details, then accept the terms to register.</p>
+              <p class="event-flow-step-intro">
+                {terms.remaining.length > 0
+                  ? "Check your details, then accept the terms to register."
+                  : "Check your details, then register."}
+              </p>
               <div data-registration-review ref={review} />
               <Field group label="Terms and conditions">
                 {() => (
                   <div data-consents>
-                    <ConsentList terms={forms.requiredTerms} presentationOf={(key) => contract.of(`consents.${key}`)} />
+                    <ConsentList
+                      terms={terms.remaining}
+                      coveredByAccount={terms.covered.length > 0}
+                      presentationOf={(key) => contract.of(`consents.${key}`)}
+                    />
                   </div>
                 )}
               </Field>

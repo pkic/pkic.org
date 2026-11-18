@@ -1,4 +1,4 @@
-import { expect, request, type APIRequestContext, type Page } from "@playwright/test";
+import { expect, request, type APIRequestContext, type Locator, type Page } from "@playwright/test";
 import { EMAIL_FIRST_COPY, type EmailFirstFlow } from "../../../assets/shared/email-first-copy";
 import { userSignUpRequestSchema } from "../../../assets/shared/schemas/user-auth";
 import {
@@ -12,6 +12,11 @@ import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./sen
 /** A returning person gets a sign-in link; starting an account sends the email that confirms the address. */
 const SIGN_IN_LINK_SUBJECT = "sign-in link";
 const SIGN_UP_LINK_SUBJECT = "Confirm your email";
+
+/** Ticks the agreement every new account makes: to follow the Code of Conduct. */
+export async function acceptAccountPolicies(scope: Page | Locator): Promise<void> {
+  await scope.getByRole("checkbox", { name: /^I agree to follow the Code of Conduct/ }).check();
+}
 
 function requestTo(page: Page, path: string) {
   return page.waitForResponse(
@@ -66,6 +71,7 @@ export async function signInThroughCard(
     await card.getByRole("button", { name: START_LABELS[options.emailFlow ?? "registration"], exact: true }).click();
     if (options.individual) await card.getByRole("radio", { name: copy.personal.title, exact: true }).check();
     await card.getByLabel(choice.label, { exact: true }).fill(email);
+    await acceptAccountPolicies(card);
     const requested = requestTo(page, "/api/v1/auth/sign-up");
     await card.getByRole("button", { name: choice.action, exact: true }).click();
     const response = await requested;
@@ -73,6 +79,7 @@ export async function signInThroughCard(
     expect(userSignUpRequestSchema.parse(response.request().postDataJSON())).toMatchObject({
       email,
       unaffiliatedAttestation: Boolean(options.individual),
+      acceptsAccountPolicies: true,
       returnPath: `${returnTo.pathname}${returnTo.search}`,
     });
     await expect(card.getByText(copy.sent(email), { exact: true })).toBeVisible();
@@ -158,7 +165,11 @@ export async function startAccountLinkToken(
   const since = await capturedEmailCount();
   const start = () =>
     context.post("/api/v1/auth/sign-up", {
-      data: userSignUpRequestSchema.parse({ email, unaffiliatedAttestation: options.individual ?? false }),
+      data: userSignUpRequestSchema.parse({
+        email,
+        unaffiliatedAttestation: options.individual ?? false,
+        acceptsAccountPolicies: true,
+      }),
     });
   let started = await start();
   // The local D1 binding occasionally drops its connection under load; the refused start sent no mail, so asking once more is safe.

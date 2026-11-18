@@ -8,7 +8,7 @@ import type { Env } from "../functions/_lib/types";
 
 let environment: Env;
 const path = "/api/v1/auth/sign-up";
-const body = { email: "new@company.example", unaffiliatedAttestation: true };
+const body = { email: "new@company.example", unaffiliatedAttestation: true, acceptsAccountPolicies: true };
 function post(headers: Record<string, string> = {}, payload: unknown = body, endpoint = path) {
   return callApi(environment, endpoint, {
     method: "POST",

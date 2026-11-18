@@ -180,6 +180,7 @@ describe("proposal sign-in step", () => {
     const card = await shownSignInCard();
     await act(() => buttonNamed(card, "Start your proposal").click());
     await typeInto(controlFor(card, copy.work.label), "ada@organization.example");
+    await act(() => document.querySelector<HTMLInputElement>('input[name="acceptsAccountPolicies"]')!.click());
     await act(async () => {
       buttonNamed(card, copy.work.action).click();
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -191,6 +192,7 @@ describe("proposal sign-in step", () => {
     expect(userSignUpRequestSchema.parse(sent[0].body)).toEqual({
       email: "ada@organization.example",
       unaffiliatedAttestation: false,
+      acceptsAccountPolicies: true,
       returnPath: RETURN_PATH,
     });
     await vi.waitFor(() => expect(card.textContent).toContain(copy.sent("ada@organization.example")));

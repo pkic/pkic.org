@@ -16,6 +16,8 @@ import { isProposalSpeakerRosterEditableStatus } from "../../../shared/schemas/p
 import { proposalSpeakerAccessPath } from "../../../shared/proposal-access-paths";
 import type { RequiredTerm } from "../../../shared/schemas/forms";
 import { useContractForm } from "../../hooks/useContractForm";
+import { useAccountCoveredTerms } from "../../hooks/useAccountCoveredTerms";
+import { AccountCoveredTermsNote } from "../AccountCoveredTermsNote";
 import { patchJson } from "../../shared/api-client";
 import { HeadshotTile } from "../../shared/headshot/HeadshotTile";
 import { headshotFormEndpoint } from "../../shared/headshot/endpoints";
@@ -41,7 +43,7 @@ import {
 export function ParticipantSpeaker({
   data,
   eventSlug,
-  terms,
+  terms: eventTerms,
   reload,
 }: {
   data: SpeakerSelfServiceReadResponse;
@@ -49,6 +51,8 @@ export function ParticipantSpeaker({
   terms: RequiredTerm[];
   reload: () => Promise<void>;
 }) {
+  const accountTerms = useAccountCoveredTerms(eventTerms);
+  const terms = accountTerms.remaining;
   const access = { resourceId: data.proposal.id };
   const path = (...segments: string[]) => proposalSpeakerAccessPath("/api/v1", access, ...segments);
   const [selectedConsents, setConsents] = useState<typeof data.acceptedConsents>([]);
@@ -222,6 +226,7 @@ export function ParticipantSpeaker({
                   {newTerms.map((term) => (
                     <ConsentCard term={term} key={term.termKey} recorded={isTermAccepted(term, consents)} />
                   ))}
+                  {accountTerms.covered.length > 0 && <AccountCoveredTermsNote />}
                   {!data.currentRepresentation && (
                     <p class="pk-small pk-muted">
                       Accept the terms, then choose and save your speaker identity before confirming.

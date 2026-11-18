@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
 import { userSignUpRequestSchema } from "../../assets/shared/schemas/user-auth";
+import { acceptAccountPolicies } from "./helpers/sign-in-card";
 
 test("maintenance refusal preserves a public form and recovery never replays it", async ({ page }) => {
   let paused = false;
@@ -38,6 +39,7 @@ test("maintenance refusal preserves a public form and recovery never replays it"
   const email = page.getByLabel(EMAIL_FIRST_COPY.join.work.label);
   const address = `maintenance-${Date.now()}@organization.test`;
   await email.fill(address);
+  await acceptAccountPolicies(page);
   paused = true;
   await page.getByRole("button", { name: EMAIL_FIRST_COPY.join.work.action, exact: true }).click();
   await expect(page.getByText("Maintenance in progress", { exact: true })).toBeVisible();

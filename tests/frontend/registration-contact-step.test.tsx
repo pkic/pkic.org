@@ -271,6 +271,7 @@ describe("registration contact step", () => {
       control.value = "Ada@Example.test";
       control.dispatchEvent(new Event("input", { bubbles: true }));
     });
+    await act(() => document.querySelector<HTMLInputElement>('input[name="acceptsAccountPolicies"]')!.click());
     await act(async () => buttonNamed(card, copy.work.action)!.click());
     await settle();
     const signUp = recorded.find((request) => request.path === "/api/v1/auth/sign-up");

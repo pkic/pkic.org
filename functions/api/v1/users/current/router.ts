@@ -20,6 +20,7 @@ import { CurrentUserProposalsGet } from "./proposals/index";
 import identitiesRouter from "./identities/router";
 import emailsRouter from "./emails/router";
 import { OwnedWebPushDeviceRevokeDelete } from "./web-push";
+import { CurrentUserPoliciesGet } from "./policies";
 
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
@@ -37,6 +38,7 @@ openapi.get("/forms", CurrentUserFormsGet);
 openapi.get("/registrations", CurrentUserRegistrationsGet);
 openapi.get("/donations", CurrentUserDonationsGet);
 openapi.get("/proposals", CurrentUserProposalsGet);
+openapi.get("/policies", CurrentUserPoliciesGet);
 openapi.delete("/push/devices/:deviceId", OwnedWebPushDeviceRevokeDelete);
 openapi.route("/groups", groupsRouter);
 openapi.route("/applications", applicationsRouter);

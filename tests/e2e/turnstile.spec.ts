@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { userSignUpRequestSchema } from "../../assets/shared/schemas/user-auth";
+import { acceptAccountPolicies } from "./helpers/sign-in-card";
 
 // Synthetic widget responses exercise our browser integration; live Cloudflare verification is separate.
 test("public join preserves input on cancel and submits once after verification", async ({ page }) => {
@@ -37,6 +38,7 @@ test("public join preserves input on cancel and submits once after verification"
   await page.getByRole("button", { name: "Start your application", exact: true }).click();
   const email = page.getByLabel("Your official work or organization email address");
   await email.fill(`turnstile-${Date.now()}@organization.test`);
+  await acceptAccountPolicies(page);
   await page.getByRole("button", { name: "Verify your work email", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Verify to continue" });
   await expect(dialog).toBeVisible();

@@ -5,6 +5,7 @@
  */
 import { EMAIL_FIRST_ADVISORY_COPY, EMAIL_FIRST_COPY, WORK_EMAIL_STEER } from "../../assets/shared/email-first-copy";
 import { startJoinInBrowser } from "./helpers/member-join";
+import { acceptAccountPolicies } from "./helpers/sign-in-card";
 import { addMissingName, addRepresentationBio } from "./helpers/person-details";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
@@ -27,6 +28,7 @@ test("starts from the sign-in card and steers a personal address to the explicit
   await expect(organizationEmail).toBeVisible();
 
   await organizationEmail.fill("person@gmail.com");
+  await acceptAccountPolicies(card);
   // The steer holds the step: nothing is sent for a personal address on behalf of an organization.
   await card.getByRole("button", { name: EMAIL_FIRST_COPY.join.work.action, exact: true }).click();
   await expect(card.getByText(WORK_EMAIL_STEER)).toBeVisible();

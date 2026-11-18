@@ -11,16 +11,24 @@ import { createMemberSession } from "./helpers/auth";
 import { insertOrganization, insertUser } from "./helpers/membership";
 import { redeemUserSignUpCapability } from "../functions/_lib/auth/user-sign-up";
 import type { DatabaseLike } from "../functions/_lib/types";
+import { ACCOUNT_POLICIES, ACCOUNT_POLICIES_COPY } from "../assets/shared/account-policies";
 
 /** Background work a request starts (outbox delivery); awaited so it never runs into the next test. */
 const background: Promise<unknown>[] = [];
+
+/** A sign-up request accepts the account policies unless the test says otherwise. */
+function withPolicies(path: string, body: unknown): unknown {
+  return path === "/api/v1/auth/sign-up" && body && typeof body === "object"
+    ? { acceptsAccountPolicies: true, ...body }
+    : body;
+}
 
 async function call(path: string, body: unknown, environment: object = env): Promise<Response> {
   return app.fetch(
     new Request(`https://app.test${path}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify(withPolicies(path, body)),
     }),
     environment as never,
     {
@@ -99,8 +107,34 @@ describe("account sign-up", () => {
         session.sessionId,
       ]),
     ).toEqual([{ normalized_email: "ada@organization.example" }]);
+    // Starting the account records the Code of Conduct agreement and the Privacy Policy notice in their current version.
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT term_key, term_version FROM account_policy_acceptances WHERE user_id = ? ORDER BY term_key",
+        [user.id],
+      ),
+    ).toEqual(
+      ACCOUNT_POLICIES.map(({ termKey, version }) => ({ term_key: termKey, term_version: version })).sort((a, b) =>
+        a.term_key.localeCompare(b.term_key),
+      ),
+    );
 
     expect((await call("/api/v1/auth/verify-link", { token, organization: { personal: true } })).status).toBe(409);
+  });
+
+  it("refuses to start an account without agreeing to follow the Code of Conduct", async () => {
+    for (const acceptsAccountPolicies of [undefined, false]) {
+      const refused = await call("/api/v1/auth/sign-up", {
+        email: "ada@organization.example",
+        acceptsAccountPolicies,
+      });
+      expect(refused.status).toBe(400);
+      expect(await refused.json()).toMatchObject({
+        error: { details: { fieldErrors: { acceptsAccountPolicies: [ACCOUNT_POLICIES_COPY.required] } } },
+      });
+    }
+    expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
   });
 
   it("refuses a return path that carries an invitation token, so no token reaches the outbox", async () => {
@@ -340,7 +374,7 @@ describe("account sign-up", () => {
         new Request(`https://app.test${path}`, {
           method: "POST",
           headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.20" },
-          body: JSON.stringify({ email: "limited@gmail.com", unaffiliatedAttestation: true }),
+          body: JSON.stringify(withPolicies(path, { email: "limited@gmail.com", unaffiliatedAttestation: true })),
         }),
         limitedEnv as never,
         { passThroughOnException() {}, waitUntil: (work: Promise<unknown>) => void background.push(work) } as any,

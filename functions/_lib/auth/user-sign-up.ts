@@ -19,6 +19,7 @@ import {
 } from "./email-auth-capabilities";
 import { prepareVerifyOwnedEmailStatements } from "../services/email-verification";
 import { buildFindOrCreateUserStatement } from "../services/users";
+import { prepareAccountPolicyAcceptanceStatements } from "../services/account-policies";
 import { findActiveSponsorCapacitiesByUserId } from "./sponsor-capacity";
 import { signUserSessionToken } from "./user-session-token";
 import { createEstablishedUserSessionResult, type UserSessionResult } from "./user-session-result";
@@ -102,6 +103,13 @@ export async function redeemUserSignUpCapability(
       ...preparedUser.statements,
       ...prepareVerifyOwnedEmailStatements(db, { userId, normalizedEmail: email, method: "magic_link", verifiedAt }),
       ...organizationStep.statements,
+      ...prepareAccountPolicyAcceptanceStatements(db, {
+        userId,
+        accepted: capability.signUpAcceptedPolicies ?? [],
+        at: verifiedAt,
+        ipHash: capability.ipHash,
+        userAgentHash: capability.userAgentHash,
+      }),
       ...prepared.statements,
       prepareSessionEmailAuthenticationStatement(db, {
         sessionId: prepared.sessionId,

@@ -48,7 +48,7 @@ function sessionTokenFrom(response: Response): string {
 
 /** A sponsor contact has no separate way in: they start with their email like anyone else. */
 async function signUpToken(email: string): Promise<string> {
-  expect((await call(jsonRequest("/api/v1/auth/sign-up", { email }))).status).toBe(200);
+  expect((await call(jsonRequest("/api/v1/auth/sign-up", { email, acceptsAccountPolicies: true }))).status).toBe(200);
   const [outbox] = await queryAll<{ payload_json: string }>(
     env.DB,
     "SELECT payload_json FROM email_outbox WHERE template_key = 'user_sign_up_link' ORDER BY rowid DESC LIMIT 1",

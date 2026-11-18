@@ -181,7 +181,7 @@ test("a personal address cannot start an account for an organization without the
     const response = await fetch("/api/v1/auth/sign-up", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email: address, unaffiliatedAttestation: false }),
+      body: JSON.stringify({ email: address, unaffiliatedAttestation: false, acceptsAccountPolicies: true }),
     });
     return { status: response.status, body: await response.json() };
   }, email);

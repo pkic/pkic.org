@@ -81,6 +81,7 @@ describe("joining without a session", () => {
     expect(card.textContent).toContain(EMAIL_FIRST_COPY.join.personal.description);
 
     await typeInto(controlFor(card, EMAIL_FIRST_COPY.join.work.label), "ada@example-corp.test");
+    await act(() => document.querySelector<HTMLInputElement>('input[name="acceptsAccountPolicies"]')!.click());
     await act(async () => {
       button(EMAIL_FIRST_COPY.join.work.action).click();
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -91,6 +92,7 @@ describe("joining without a session", () => {
     expect(userSignUpRequestSchema.parse(sent[0]!.body)).toEqual({
       email: "ada@example-corp.test",
       unaffiliatedAttestation: false,
+      acceptsAccountPolicies: true,
       returnPath: "/join/",
     });
   });

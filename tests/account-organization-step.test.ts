@@ -46,7 +46,9 @@ async function lastLinkToken(): Promise<string> {
 }
 
 async function signUpLink(email: string, unaffiliatedAttestation = false): Promise<string> {
-  expect((await call("/api/v1/auth/sign-up", { email, unaffiliatedAttestation })).status).toBe(200);
+  expect(
+    (await call("/api/v1/auth/sign-up", { email, unaffiliatedAttestation, acceptsAccountPolicies: true })).status,
+  ).toBe(200);
   return lastLinkToken();
 }
 

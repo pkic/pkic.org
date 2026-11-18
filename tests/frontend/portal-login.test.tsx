@@ -8,6 +8,7 @@
  * send is announced rather than merely colored, and the request body is the
  * shape the shared contract describes.
  */
+import { ACCOUNT_POLICIES_COPY } from "../../assets/shared/account-policies";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -504,6 +505,14 @@ describe("portal login", () => {
         control.value = "ada@organization.example";
         control.dispatchEvent(new Event("input", { bubbles: true }));
       });
+      // Starting an account asks for the Code of Conduct agreement first.
+      await act(async () => {
+        buttonLabeled("Verify your work email").click();
+        await Promise.resolve();
+      });
+      expect(container.textContent).toContain(ACCOUNT_POLICIES_COPY.required);
+      expect(requests).toHaveLength(0);
+      await act(() => document.querySelector<HTMLInputElement>('input[name="acceptsAccountPolicies"]')!.click());
       await act(async () => {
         buttonLabeled("Verify your work email").click();
         await Promise.resolve();
@@ -515,6 +524,7 @@ describe("portal login", () => {
       expect(userSignUpRequestSchema.parse(requests[0].body)).toEqual({
         email: "ada@organization.example",
         unaffiliatedAttestation: false,
+        acceptsAccountPolicies: true,
         // The invitation token stays in this browser; the emailed link carries only the invitation id.
         returnPath: "/events/pqc-2027/register?id=0b7e9d1c-5a4f-4c2e-9f3a-2d6b8e1c4a70",
       });

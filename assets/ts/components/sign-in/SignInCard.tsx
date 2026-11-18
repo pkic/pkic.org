@@ -39,7 +39,6 @@ import { signInDestination } from "./sign-in-destinations";
 import { Alert } from "../../ui/Alert";
 import { SectionHeading } from "../../ui/SectionHeading";
 import { Button } from "../../ui/Button";
-import { ExternalLink } from "../../ui/ExternalLink";
 import { Field } from "../../ui/Field";
 import { TextInput } from "../../ui/TextControl";
 import { LoginFrame } from "./LoginFrame";
@@ -93,6 +92,7 @@ export function SignInCard({
   // "New here?": the work-or-personal email step that starts an account, opened from the card's lower band.
   const [createOpen, setCreateOpen] = useState(false);
   const [individual, setIndividual] = useState(false);
+  const [acceptsPolicies, setAcceptsPolicies] = useState(false);
   const [createSentTo, setCreateSentTo] = useState<string | null>(null);
   const returnPath = embedded ? embedded.returnPath : pageReturnPath;
   // The card says what the reader came to do: the flow sign-in returns them to describes itself, on its
@@ -268,15 +268,7 @@ export function SignInCard({
       }
       after={
         <p class="pk-small pk-muted pk-login__terms">
-          By continuing you accept the{" "}
-          <ExternalLink href="/bylaws/" external>
-            bylaws
-          </ExternalLink>{" "}
-          and{" "}
-          <ExternalLink href="/privacy/" external>
-            privacy policy
-          </ExternalLink>
-          . Trouble signing in? <a href={CONSORTIUM_CONTACT_HREF}>Ask the secretariat</a>.
+          Trouble signing in? <a href={CONSORTIUM_CONTACT_HREF}>Ask the secretariat</a>.
         </p>
       }
     >
@@ -297,6 +289,7 @@ export function SignInCard({
               onEmailChange={setEmail}
               individual={individual}
               onIndividualChange={setIndividual}
+              accountPolicies={{ accepted: acceptsPolicies, onChange: setAcceptsPolicies }}
               onContinue={async (step) => {
                 // The answer is the same whether or not the address has an account: a link is on its way.
                 await postJson("/api/v1/auth/sign-up", step, successResponseSchema);
