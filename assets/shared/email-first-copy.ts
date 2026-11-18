@@ -169,9 +169,7 @@ export const ORGANIZATION_JOB_TITLE_COPY = {
   label: "Job title",
   /** Names the organization the title is held at, once one is chosen. */
   help: (organizationName?: string | null) =>
-    organizationName
-      ? `Your job title at ${organizationName}, shown next to your name.`
-      : "Your job title at the organization above, shown next to your name.",
+    organizationName ? `Your job title at ${organizationName}.` : "Your job title at the organization above.",
 } as const;
 
 /** The organization a verified work address names when its domain resolves to none. */
