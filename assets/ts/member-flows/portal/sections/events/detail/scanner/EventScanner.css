@@ -23,6 +23,14 @@
     font-size: var(--pk-text-sm);
     margin-block: var(--pk-2) var(--pk-4);
   }
+  .pk-scanner-connection--compact {
+    margin: 0;
+    font-size: var(--pk-text-sm);
+  }
+  .pk-scanner-connection--compact svg {
+    width: var(--pk-5);
+    height: var(--pk-5);
+  }
   @media (max-width: 40rem) {
     .pk-scanner-destinations .pk-action-tiles {
       grid-template-columns: repeat(2, minmax(0, 1fr));

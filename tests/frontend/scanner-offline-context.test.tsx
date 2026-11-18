@@ -29,6 +29,7 @@ import {
 import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import {
   saveScannerOfflineContext,
+  listPreparedScannerContexts,
   restoreScannerOfflineContext,
   assertScannerOfflineContext,
   clearScannerOfflineContexts,
@@ -95,12 +96,22 @@ describe("scanner-only offline preparation", () => {
     });
     expect(prepared).not.toBeNull();
     expect(prepared?.route).toBe(route);
+    expect(prepared?.purpose).toBe("collection");
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
     expect(await restoreScannerOfflineContext(route)).toMatchObject({ action: "attendance", route });
     await expect(assertScannerOfflineContext(prepared!)).resolves.toBeUndefined();
     expect(portalSession.value).toBeNull();
     expect(scannerCollectorPath(`#${route}?scannerPurpose=lead`)).toBeNull();
     expect(scannerCollectorPath(`#${route}?scannerPurpose=collection&attendee=private`)).toBeNull();
+  });
+  it("finds only current locally owned scanner leases from the portal entry point", async () => {
+    retain();
+    scannerTransportUnavailable.value = true;
+    expect(await listPreparedScannerContexts()).toEqual([context()]);
+    mocks.rows.push({ ...epoch(), key: "other", collectorContext: { ...context(), sessionId: device } });
+    expect(await listPreparedScannerContexts()).toEqual([context()]);
+    vi.setSystemTime(new Date(context().expiresAt));
+    expect(await listPreparedScannerContexts()).toEqual([]);
   });
   it("refuses offline preparation when current badge data exists only in memory", async () => {
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);

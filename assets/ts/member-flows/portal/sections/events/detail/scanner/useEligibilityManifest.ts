@@ -11,6 +11,7 @@ import { prepareEligibilityManifest, type EligibilityManifest } from "./eligibil
 import {
   SCANNER_PREPARATION_CLOSED_MESSAGE,
   SCANNER_PREPARATION_CLOSING_MESSAGE,
+  EligibilityRefreshFailure,
   eligibilityPreparationStopped,
   eligibilityRefreshError,
   eligibilityRefreshRefused,
@@ -94,6 +95,7 @@ export function useEligibilityManifest({
       return;
     const enrollment = { epochId: epoch.epochId, deviceId: epoch.deviceId };
     let refreshing = false;
+    let automaticRefreshAt = 0;
     const prepare = async () => {
       if (refreshing || controller.signal.aborted || closedEpochId.current === enrollment.epochId) return;
       refreshing = true;
@@ -116,10 +118,13 @@ export function useEligibilityManifest({
         );
         if (controller.signal.aborted) return;
         eligibilityManifest.current = manifest;
+        automaticRefreshAt = manifest.retryAfterMs ? Date.now() + manifest.retryAfterMs : 0;
         setManifestReady(true);
         setManifestError(manifest.storageError ?? manifest.refreshError ?? "");
       } catch (error) {
         if (controller.signal.aborted) return;
+        if (error instanceof EligibilityRefreshFailure && error.retryAfterMs)
+          automaticRefreshAt = Date.now() + error.retryAfterMs;
         if (eligibilityRefreshRefused(error)) {
           eligibilityManifest.current = null;
           if (error instanceof Error && eligibilityPreparationStopped(error.message)) {
@@ -147,7 +152,7 @@ export function useEligibilityManifest({
     refreshRequest.current = prepare;
     void prepare();
     const reconnect = () => {
-      if (!collector && navigator.onLine) void prepare();
+      if (!collector && navigator.onLine && Date.now() >= automaticRefreshAt) void prepare();
     };
     const visible = () => {
       if (document.visibilityState === "visible") reconnect();

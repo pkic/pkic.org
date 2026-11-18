@@ -321,8 +321,10 @@ export function EventScannerCapture({
     roomId,
     onStart: startScanning,
     error: preparation.status.error,
+    allowUnverified: !badgeCollection,
   });
-  const preparationStatus = { ...preparation.status, lastSync: syncHistory.lastSync };
+  const badgeNamesPrepared = eligibilityManifest.current?.badgeNamesPrepared;
+  const preparationStatus = { ...preparation.status, lastSync: syncHistory.lastSync, badgeNamesPrepared };
   function nextCollectionAttendee() {
     if (busy || cooldown.saving) return;
     collection.clear();
@@ -343,6 +345,7 @@ export function EventScannerCapture({
     cooldown.reset();
     lastOperation.current = null;
     setResult(null);
+    if (!result && !failed && message === scannerStartMessage(false, false, action)) setMessage("Ready to scan");
     manual.reset();
     setFastMode(false);
   }
@@ -401,6 +404,7 @@ export function EventScannerCapture({
   );
   const connection = (
     <ScannerConnectionStatus
+      compact={fastMode}
       pending={pending}
       online={online}
       syncing={syncing}
@@ -408,9 +412,8 @@ export function EventScannerCapture({
       collector={Boolean(collectorContext)}
       uploadStatus={uploadStatus}
       error={failed ? message : scannerDevice.error}
-      lastSync={syncHistory.lastSync}
       offlinePrepared={Boolean(collectorContext || preparation.offlinePreparation.context)}
-      preparation={{ ...preparation.status, badgeNamesPrepared: eligibilityManifest.current?.badgeNamesPrepared }}
+      preparation={fastMode ? preparationStatus : undefined}
     />
   );
   const mode = {
@@ -452,8 +455,9 @@ export function EventScannerCapture({
             form={form}
             busy={busy}
             capture={() => void capture()}
-            pendingStart={autoStart.pending ? preparation.status.error || "Preparing scanner…" : undefined}
+            pendingStart={autoStart.pending ? preparation.status : undefined}
             cancelStart={() => autoStart.cancel()}
+            retryStart={() => void preparation.eligibility.refresh()}
             controls={
               <ScannerCaptureControls
                 collector={collectorContext}
@@ -470,6 +474,8 @@ export function EventScannerCapture({
                           setPurpose("collection");
                           sound.unlock();
                           autoStart.request();
+                          if (badgeCollection && !manifestReady && !manifestPreparing)
+                            void preparation.eligibility.refresh();
                         }
                       : undefined,
                   sponsorOnly: action === "lead",
@@ -495,7 +501,7 @@ export function EventScannerCapture({
                 }}
                 mode={mode}
                 canStart={captureReady}
-                preparing={manifestPreparing || !scannerDevice.ready}
+                preparing={!scannerDevice.ready}
                 cameraError={badgeCamera.error}
                 start={() => {
                   sound.unlock();

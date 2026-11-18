@@ -17,6 +17,165 @@ import {
 import { confirmRegistration, ownDomainEmail, registerInBrowser } from "./helpers/registration";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
 import { openScannerSessionDetails, queuedScanSchema } from "./helpers/scanner-recovery-storage";
+import { createRegistrationEvent, registerStateAttendee } from "./helpers/participation-state-fixture";
+import { instantToCalendarDate } from "../../assets/shared/timezone";
+
+test("badge collection opens for an upcoming event after daily preparation", async ({ page, context }, testInfo) => {
+  test.setTimeout(240000);
+  await context.clearPermissions();
+  await signInAsE2eStaff(page, e2eAdminEmail("portal-agenda-fast-scanner-idle"));
+  const date = instantToCalendarDate(new Date(Date.now() + 13 * 24 * 60 * 60_000), "UTC");
+  const event = await createRegistrationEvent(page, "badge-collection-early", {
+    date,
+    startTime: "09:00",
+    endTime: "17:00",
+  });
+  const attendeeEmail = ownDomainEmail("badge-collection-offline");
+  await registerStateAttendee(page, event, attendeeEmail, {
+    staticRelease: false,
+    organization: "Synthetic Badge Collection Org",
+  });
+  await page.setExtraHTTPHeaders({});
+  const attendeeResponse = await page.request.get(
+    `/api/v1/events/${event.slug}/badges/attendees?q=${encodeURIComponent(attendeeEmail)}&sort=email&limit=10&offset=0`,
+  );
+  expect(attendeeResponse.status(), await attendeeResponse.text()).toBe(200);
+  const attendee = badgeAttendeesResponseSchema
+    .parse(await attendeeResponse.json())
+    .users.find((user) => user.email === attendeeEmail);
+  expect(attendee).toBeDefined();
+  const issueResponse = await page.request.post(`/api/v1/events/${event.slug}/badges`, {
+    data: badgeIssueRequestSchema.parse({ operationId: randomUUID(), userId: attendee!.id }),
+  });
+  expect(issueResponse.status(), await issueResponse.text()).toBe(200);
+  const badge = badgeIssueResponseSchema.parse(await issueResponse.json());
+  if (badge.result !== "issued") throw new Error("A fresh operation must issue a printable badge credential");
+  let releasePreparation!: () => void;
+  const preparationGate = new Promise<void>((resolve) => {
+    releasePreparation = resolve;
+  });
+  let firstCollectionRequest = true;
+  let refreshStatus: number | null = null;
+  let refreshAttempts = 0;
+  await page.route("**/offline-eligibility?*", async (route) => {
+    if (new URL(route.request().url()).searchParams.get("includeBadgeNames") !== "true") return route.continue();
+    if (!firstCollectionRequest) {
+      if (!refreshStatus) return route.continue();
+      refreshAttempts++;
+      return route.fulfill({
+        status: refreshStatus,
+        contentType: "application/json",
+        headers: refreshStatus === 429 ? { "Retry-After": "120" } : undefined,
+        body:
+          refreshStatus === 409
+            ? JSON.stringify({ error: { code: "SCANNER_PREPARATION_CLOSED", message: "Closed" } })
+            : "{}",
+      });
+    }
+    firstCollectionRequest = false;
+    await preparationGate;
+    await route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
+  });
+  await page.goto(`/portal/#/events/${event.slug}/scanner`);
+  const collection = page.getByRole("button", { name: "Badge collection Check in and find a badge", exact: true });
+  await expect(collection).toBeEnabled();
+  const launch = page.getByRole("tabpanel", { name: "Scan", exact: true });
+  await expect(launch).not.toContainText(/Preparing badge checks|Badge data changed during refresh/);
+  await page.screenshot({ animations: "disabled", path: testInfo.outputPath("badge-collection-launch-desktop.png") });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.screenshot({ animations: "disabled", path: testInfo.outputPath("badge-collection-launch-phone.png") });
+  await collection.click();
+  const preparation = page.getByRole("dialog", { name: "Prepare badge collection", exact: true });
+  await expect(preparation).toBeVisible();
+  await expect(preparation).toContainText("Preparing badge names");
+  await page.screenshot({ animations: "disabled", path: testInfo.outputPath("badge-collection-progress-phone.png") });
+  releasePreparation();
+  await expect(preparation.getByRole("alert")).toContainText("Try again shortly");
+  await page.screenshot({ animations: "disabled", path: testInfo.outputPath("badge-collection-error-phone.png") });
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.screenshot({ animations: "disabled", path: testInfo.outputPath("badge-collection-error-desktop.png") });
+  await preparation.getByRole("button", { name: "Retry preparation", exact: true }).click();
+  const scanner = page.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
+  await expect(scanner).toBeVisible();
+  await expect(scanner.getByRole("status", { name: "Scanner status", exact: true })).toHaveAttribute(
+    "title",
+    "All scans synced",
+  );
+  await expect(scanner.locator(".pk-fast-scanner__feedback")).toHaveText("Ready for badge collection");
+  await expect(scanner.locator(".pk-fast-scanner__feedback")).not.toContainText("Ready to scan");
+  await expect(scanner.getByText("Starting camera…", { exact: true })).toHaveCount(0);
+  await page.screenshot({ animations: "disabled", path: testInfo.outputPath("badge-collection-desktop.png") });
+  await scanner.getByRole("button", { name: "Close scanner", exact: true }).click();
+  await expect(scanner).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement === null)).toBe(true);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await collection.click();
+  await expect(scanner).toBeVisible();
+  await expect(scanner.getByRole("status", { name: "Scanner status", exact: true })).toHaveAttribute(
+    "title",
+    "All scans synced",
+  );
+  await page.screenshot({ animations: "disabled", path: testInfo.outputPath("badge-collection-phone.png") });
+  for (const status of [500, 403, 409, 429]) {
+    refreshStatus = status;
+    await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.status() === status &&
+          new URL(response.url()).pathname.endsWith("/offline-eligibility") &&
+          new URL(response.url()).searchParams.get("includeBadgeNames") === "true",
+      ),
+      page.evaluate(() => window.dispatchEvent(new Event("focus"))),
+    ]);
+    await expect(scanner).toBeVisible();
+    await expect(scanner.locator(".pk-fast-scanner__feedback")).toHaveText("Ready for badge collection");
+  }
+  expect(refreshAttempts).toBe(4);
+  const uploadStatuses = [500, 403, 429];
+  let uploadAttempts = 0;
+  await page.route(new RegExp(`/api/v1/events/${event.slug}/scans$`), async (route) => {
+    const status = uploadStatuses[Math.min(uploadAttempts++, uploadStatuses.length - 1)]!;
+    await route.fulfill({
+      status,
+      contentType: "application/json",
+      headers: status === 429 ? { "Retry-After": "120" } : undefined,
+      body: "{}",
+    });
+  });
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+  });
+  await context.setOffline(true);
+  await expect(scanner.getByRole("status", { name: "Scanner status", exact: true })).toContainText("Offline");
+  await page.keyboard.type(badge.credential);
+  await page.keyboard.press("Enter");
+  await expect(scanner.getByLabel("Attendee name", { exact: true })).toContainText("Synthetic Attendee");
+  await scanner.getByRole("button", { name: "Operator controls", exact: true }).click();
+  const controls = scanner.getByRole("dialog", { name: "Scanner operator controls", exact: true });
+  await expect(controls.getByText(/^1 pending/)).toBeVisible();
+  await controls.getByRole("button", { name: "Close operator controls", exact: true }).click();
+  await context.setOffline(false);
+  await expect.poll(() => uploadAttempts, { timeout: 30000 }).toBe(3);
+  await expect(scanner).toBeVisible();
+  await scanner.getByRole("button", { name: "Operator controls", exact: true }).click();
+  await expect(controls.getByText(/^1 pending/)).toBeVisible();
+  await controls.getByRole("button", { name: "Close operator controls", exact: true }).click();
+  await context.setOffline(true);
+  await page.close();
+  const reopened = await context.newPage();
+  await reopened.setViewportSize({ width: 375, height: 812 });
+  await reopened.goto("/portal/");
+  await expect(reopened.getByRole("heading", { name: "Continue scanning offline", exact: true })).toBeVisible();
+  await reopened.screenshot({ animations: "disabled", path: testInfo.outputPath("offline-scanner-entry-phone.png") });
+  await reopened.setViewportSize({ width: 1280, height: 720 });
+  await reopened.screenshot({ animations: "disabled", path: testInfo.outputPath("offline-scanner-entry-desktop.png") });
+  await reopened.getByRole("link", { name: /badge collection/i }).click();
+  await reopened.getByRole("button", { name: "Start scanning", exact: true }).click();
+  const reopenedScanner = reopened.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
+  await expect(reopenedScanner).toBeVisible();
+  await expect(reopenedScanner.locator(".pk-fast-scanner__feedback")).toHaveText("Ready for badge collection");
+  await expect(reopenedScanner.getByRole("status", { name: "Scanner status", exact: true })).toContainText("Offline");
+});
 
 test("phone scanner guides staff through venue, search, offline entry and diagnostics", async ({
   page,
@@ -41,7 +200,10 @@ test("phone scanner guides staff through venue, search, offline entry and diagno
   await entrance.click();
   const scanner = page.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
   await expect(scanner).toBeVisible();
-  await expect(scanner.getByText("All scans synced", { exact: true })).toBeVisible();
+  await expect(scanner.getByRole("status", { name: "Scanner status", exact: true })).toHaveAttribute(
+    "title",
+    "All scans synced",
+  );
   await scanner.getByRole("button", { name: "Find attendee or badge", exact: true }).click();
   await expect(scanner.getByLabel("Badge code or attendee", { exact: true })).toBeVisible();
   await page.screenshot({ animations: "disabled", path: testInfo.outputPath("scanner-search-phone.png") });
@@ -49,7 +211,7 @@ test("phone scanner guides staff through venue, search, offline entry and diagno
   await expect(scanner.getByLabel("Badge code", { exact: true })).toBeVisible();
   const status = scanner.getByRole("status", { name: "Scanner status", exact: true });
   await expect(status.getByText("Offline", { exact: true })).toBeVisible();
-  await expect(status.getByText("All scans synced", { exact: true })).toBeVisible();
+  await expect(status).not.toContainText("All scans synced");
   await expect(scanner.getByText(/Offline: use a badge code/)).toBeVisible();
   await context.setOffline(false);
   await scanner.getByRole("button", { name: "Return to scanning", exact: true }).click();
@@ -253,6 +415,11 @@ test("continuous local eligibility checks queue a burst while attempt uploads ar
   holdUploads = false;
   releaseUploads();
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
-  await expect(scanner.getByText("All scans synced", { exact: true })).toBeVisible({ timeout: 30000 });
-  await controls.getByRole("button", { name: "Close scanner", exact: true }).click();
+  await expect(controls.getByText(/^0 pending/)).toBeVisible({ timeout: 30000 });
+  await controls.getByRole("button", { name: "Close operator controls", exact: true }).click();
+  await expect(scanner.getByRole("status", { name: "Scanner status", exact: true })).toHaveAttribute(
+    "title",
+    "All scans synced",
+  );
+  await scanner.getByRole("button", { name: "Close scanner", exact: true }).click();
 });

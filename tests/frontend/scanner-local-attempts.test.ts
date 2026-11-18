@@ -120,6 +120,7 @@ function storage(): IDBDatabase {
 beforeEach(() => {
   rows = new Map();
   history = new Map();
+  mocks.suspended.mockReset().mockResolvedValue(false);
   mocks.active.mockResolvedValue({ operatorUserId: operator, sessionId: "active" });
   highWater = 0;
   mocks.open.mockImplementation(async () => storage());
@@ -148,6 +149,21 @@ function failure(raw = "  not-a-badge 😀  ") {
   };
 }
 describe("durable rejected scanner attempts", () => {
+  it.each([401, 403, 409, 429, 500, 503])("retains a scan and backs off after server HTTP %s", async (status) => {
+    const queued = await queueScannerAttempt(failure());
+    const upload = vi.fn(
+      async () => new Response(null, { status, headers: status === 429 ? { "Retry-After": "120" } : undefined }),
+    );
+    const result = await drainScanOutbox(upload, operator);
+    expect(result.state).toBe("retry");
+    expect(rows.size).toBe(1);
+    expect(history.size).toBe(0);
+    expect(rows.get(queued.scan.operationId)?.nextAttemptAt).toBeGreaterThan(
+      Date.now() + (status === 429 ? 119_000 : 0),
+    );
+    expect((await drainScanOutbox(upload, operator)).state).toBe("retry");
+    expect(upload).toHaveBeenCalledOnce();
+  });
   it("claims the awaited operation before a backlog and archives each operation once", async () => {
     const older = await queueScannerAttempt(failure());
     const awaited = await queueScannerAttempt(failure());

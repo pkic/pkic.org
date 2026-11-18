@@ -12,7 +12,7 @@ import {
 } from "../../../../../../../shared/schemas/event-scanner-devices";
 import { ApiClientError, getJson, postJson } from "../../../../../../shared/api-client";
 import type { ScannerOfflineContext } from "../../../../../../../shared/schemas/event-scanner-offline-context";
-import { scannerOfflineContextMatches } from "./scanner-offline-context";
+import { scannerOfflineContextMatches, scannerOfflineLeaseCurrent } from "./scanner-offline-context";
 import {
   SCANNER_DEVICE_STORE,
   SCANNER_EPOCH_STORE,
@@ -166,10 +166,17 @@ async function refreshScannerEpoch(db: IDBDatabase, epoch: ScannerEpoch, sponsor
       { signal: AbortSignal.timeout(8000) },
     );
   } catch (error) {
-    // Only connectivity failures permit saved offline authorization. Refusals and malformed status fail closed.
-    if (error instanceof ApiClientError && error.status === 0) return epoch;
+    // A current local lease survives server outages and refusals; it never renews itself.
+    if (
+      error instanceof ApiClientError &&
+      (error.status === 0 ||
+        (scannerOfflineLeaseCurrent(epoch) &&
+          (error.status === 401 || error.status === 403 || error.status === 429 || error.status >= 500)))
+    )
+      return epoch;
     throw error;
   }
+  if ((status.closedAt || status.closingDeclaredAt) && scannerOfflineLeaseCurrent(epoch)) return epoch;
   if (status.epochId !== epoch.epochId) throw new Error("Scanner status belongs to another session");
   if ((status.closedAt || status.closingDeclaredAt) && !status.closingOperationId)
     throw new Error("Scanner status is missing the original closing operation");

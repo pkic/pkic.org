@@ -12,8 +12,10 @@ export function useScannerAutoStart({
   roomId,
   onStart,
   error = "",
+  allowUnverified = true,
 }: {
   error?: string;
+  allowUnverified?: boolean;
   ready: boolean;
   preparing: boolean;
   manifest: { current: Pick<EligibilityManifest, "occurrenceId" | "roomId"> | null };
@@ -32,13 +34,13 @@ export function useScannerAutoStart({
       !pending ||
       !ready ||
       preparing ||
-      (!manifestReady && !error) ||
+      (!manifestReady && (!error || !allowUnverified)) ||
       (current ? current.occurrenceId !== targetId || (current.roomId ?? null) !== roomId : !error)
     )
       return;
     setPending(false);
     start.current();
-  }, [pending, ready, preparing, manifestReady, manifest, targetId, roomId, error]);
+  }, [pending, ready, preparing, manifestReady, manifest, targetId, roomId, error, allowUnverified]);
   return { pending, request: () => setPending(true), cancel: () => setPending(false) };
 }
 

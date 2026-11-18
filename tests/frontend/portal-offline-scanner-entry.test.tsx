@@ -4,7 +4,7 @@ import { act } from "preact/test-utils";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AVAILABILITY_ERROR_CODE } from "../../assets/shared/schemas/availability";
 import { serviceAvailability } from "../../assets/ts/shared/availability-state";
-import { clearAuth, portalSession, isAuthed } from "../../assets/ts/member-flows/portal/state";
+import { clearAuth, expirePortalSession, portalSession, isAuthed } from "../../assets/ts/member-flows/portal/state";
 const mocks = vi.hoisted(() => ({
   registerWorker: vi.fn(),
   clearPreparation: vi.fn(),
@@ -218,15 +218,32 @@ it.each(["online", "focus", "retry", "local-session-change"])(
     } else expect(fetchMock).toHaveBeenCalledOnce();
   },
 );
-it("does not expose other portal pages after a disconnected request", async () => {
+it("offers the local scanner without exposing other portal pages after a disconnected request", async () => {
   window.location.hash = "#/organizations/private-organization";
   fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
   await mount();
-  await vi.waitFor(() => expect(host.textContent).toContain("Could not check sign-in"));
-  expect(host.textContent).not.toContain("Prepared offline scanner");
+  await vi.waitFor(() => expect(host.textContent).toContain("Prepared offline scanner"));
+  expect(host.textContent).not.toContain("Authenticated portal content");
   expect(portalSession.value).toBeNull();
 });
-it.each([401, 403])("binds a delayed HTTP %s cleanup to the durable session at request start", async (status) => {
+it("offers prepared scanners from the portal entry point without a remembered scanner URL", async () => {
+  window.location.hash = "#/home";
+  mocks.activeSession.mockResolvedValue({
+    sessionId: "11111111-1111-4111-8111-111111111111",
+    operatorUserId: "22222222-2222-4222-8222-222222222222",
+  });
+  fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+  await mount();
+  await vi.waitFor(() => expect(host.textContent).toContain("Prepared offline scanner"));
+  expect(host.textContent).not.toContain("Authenticated portal content");
+  expect(scannerTransportUnavailable.value).toBe(true);
+});
+it("moves an expired web sign-in to the local scanner route without erasing preparation", () => {
+  expirePortalSession();
+  expect(scannerTransportUnavailable.value).toBe(true);
+  expect(mocks.clearPreparation).not.toHaveBeenCalled();
+});
+it.each([401, 403])("does not erase a newer local scanner after a delayed HTTP %s refusal", async (status) => {
   const original = {
     sessionId: "11111111-1111-4111-8111-111111111111",
     operatorUserId: "22222222-2222-4222-8222-222222222222",
@@ -251,7 +268,24 @@ it.each([401, 403])("binds a delayed HTTP %s cleanup to the durable session at r
       }),
     ),
   );
-  await vi.waitFor(() => expect(mocks.clearPreparation).toHaveBeenCalledExactlyOnceWith(original));
-  expect(mocks.clearPreparation).not.toHaveBeenCalledWith(newer);
-  expect(scannerTransportUnavailable.value).toBe(false);
+  await vi.waitFor(() => expect(host.textContent).toContain("Prepared offline scanner"));
+  expect(mocks.clearPreparation).not.toHaveBeenCalled();
+  expect(scannerTransportUnavailable.value).toBe(true);
+  expect(portalSession.value).toBeNull();
+});
+it.each([401, 403, 429, 500, 503])("offers a saved scanner after HTTP %s on portal sign-in", async (status) => {
+  mocks.activeSession.mockResolvedValue({
+    sessionId: "11111111-1111-4111-8111-111111111111",
+    operatorUserId: "22222222-2222-4222-8222-222222222222",
+  });
+  fetchMock.mockResolvedValue(
+    new Response(JSON.stringify({ error: { code: "SERVER_UNAVAILABLE", message: "Unavailable" } }), {
+      status,
+      headers: { "content-type": "application/json" },
+    }),
+  );
+  await mount();
+  await vi.waitFor(() => expect(host.textContent).toContain("Prepared offline scanner"));
+  expect(portalSession.value).toBeNull();
+  expect(mocks.clearPreparation).not.toHaveBeenCalled();
 });

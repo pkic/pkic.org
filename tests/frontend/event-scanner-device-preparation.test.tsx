@@ -64,7 +64,7 @@ describe("scanner device enrollment and manual capture boundary", () => {
     expect(host.querySelector(".pk-fast-scanner")).toBeNull();
     if (source === "preparation") {
       await act(async () => mocks.preparationClosed!());
-      expect(button("Cancel")).toBeUndefined();
+      expect(Array.from(host.querySelectorAll("dialog")).some((dialog) => dialog.open)).toBe(false);
     }
     await openDiagnostics();
     mocks.freeze.mockResolvedValueOnce({ state: "closed", epochId: mocks.epochId, issuedHighWater: 0 });
@@ -407,7 +407,8 @@ describe("scanner device enrollment and manual capture boundary", () => {
     expect(fast.textContent).toContain(formatDateTime(mocks.snapshot.expiresAt));
     const readiness = fast.querySelector('[role="status"][aria-label="Scanner status"]');
     expect(readiness).not.toBeNull();
-    expect(readiness?.textContent).toContain("Badge data ready");
+    expect(readiness?.getAttribute("title")).toBe("All scans synced");
+    expect(readiness?.textContent).not.toContain("Badge data ready");
   });
   it.each(["eligible", "unknown"] as const)(
     "resets the cleared entry field after capturing a %s badge while retaining feedback",
@@ -588,9 +589,10 @@ it("records a failed local save and clears its finite feedback without submittin
     mocks.hardwareScan!(badgeCode);
   });
   await vi.waitFor(() => expect(host.textContent).toContain("Scan was not saved"));
-  await vi.waitFor(() => expect(host.querySelector(".pk-fast-scanner__message")?.textContent).toBe("Ready to scan"), {
+  await vi.waitFor(() => expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Ready for entry"), {
     timeout: 1800,
   });
+  expect(host.querySelector(".pk-fast-scanner__message")).toBeNull();
   expect(mocks.persist).toHaveBeenCalledOnce();
   expect(host.querySelector(".pk-fast-scanner")).not.toBeNull();
 });

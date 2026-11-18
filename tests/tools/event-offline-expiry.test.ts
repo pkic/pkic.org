@@ -30,12 +30,27 @@ describe("Offline eligibility calendar expiry", () => {
       }),
     ).toBe("2026-12-04T23:00:00.000Z");
   });
-  it("refuses preparation outside the event window and uses calendar dates across DST", () => {
+  it("gives early preparation a daily lease and uses calendar dates across DST", () => {
     const window = { startsAt: "2026-10-24T08:00:00.000Z", endsAt: "2026-10-25T17:00:00.000Z" };
     expect(offlineEligibilityExpiresAt("2026-10-23T08:00:00.000Z", "Europe/Amsterdam", window)).toBe(
       "2026-10-26T23:00:00.000Z",
     );
     const tooEarly = "2026-10-22T08:00:00.000Z";
-    expect(offlineEligibilityExpiresAt(tooEarly, "Europe/Amsterdam", window)).toBe(tooEarly);
+    expect(offlineEligibilityExpiresAt(tooEarly, "Europe/Amsterdam", window)).toBe("2026-10-22T22:00:00.000Z");
+  });
+  it("keeps PQC badge collection preparation valid on the day it is downloaded", () => {
+    expect(
+      offlineEligibilityExpiresAt("2026-11-18T12:00:00.000Z", "Europe/Amsterdam", {
+        startsAt: "2026-12-01T08:00:00.000Z",
+        endsAt: "2026-12-03T17:00:00.000Z",
+      }),
+    ).toBe("2026-11-18T23:00:00.000Z");
+    const afterEvent = "2026-12-05T12:00:00.000Z";
+    expect(
+      offlineEligibilityExpiresAt(afterEvent, "Europe/Amsterdam", {
+        startsAt: "2026-12-01T08:00:00.000Z",
+        endsAt: "2026-12-03T17:00:00.000Z",
+      }),
+    ).toBe(afterEvent);
   });
 });

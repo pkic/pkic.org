@@ -6,7 +6,7 @@ import { readActiveUserSession } from "../../../../../../shared/pending-user-log
 import type { NativeEventCaptureContext } from "../../../../../../../shared/schemas/event-attendance-capture";
 import { scannerUploadSuspended } from "../../../../../../shared/pending-user-logout";
 import { cachedManifestSchema, sameSnapshotScope, snapshotCurrent, type CachedManifest } from "./eligibility-snapshot";
-import { eligibilityRefreshError, eligibilityRefreshRefused } from "./eligibility-refresh-error";
+import { EligibilityRefreshFailure, eligibilityRefreshError } from "./eligibility-refresh-error";
 import { downloadEligibilitySnapshot } from "./eligibility-download";
 import type {
   EventScanRequest,
@@ -16,6 +16,7 @@ import type {
 export type LocalEligibility = Pick<EventScanResponse, "outcome" | "reason"> & { message: string; userId?: string };
 export interface EligibilityManifest {
   refreshError?: string;
+  retryAfterMs?: number;
   storageError?: string;
   enrollment?: Pick<CachedManifest, "eventId" | "deviceId" | "epochId" | "writtenAt">;
   operatorUserId: string;
@@ -331,10 +332,13 @@ export async function prepareEligibilityManifest(
     }
     return Object.assign(buildEligibilityManifest(snapshot), storageError ? { storageError } : {});
   } catch (error) {
-    if (signal?.aborted || eligibilityRefreshRefused(error)) throw error;
+    if (signal?.aborted) throw error;
     if (await scannerUploadSuspended(operatorUserId, sessionId))
       throw new Error("SCANNER_SIGNED_OUT", { cause: error });
-    return Object.assign(restore(error), { refreshError: eligibilityRefreshError(error) });
+    return Object.assign(restore(error), {
+      refreshError: eligibilityRefreshError(error),
+      retryAfterMs: error instanceof EligibilityRefreshFailure ? error.retryAfterMs : undefined,
+    });
   }
 }
 /** Read only this prepared operator/device/target, without granting portal or network access. */

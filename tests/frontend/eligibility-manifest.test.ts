@@ -442,6 +442,21 @@ describe("local scoped eligibility manifest", () => {
     const failed = await prepareEligibilityManifest("synthetic-event", snapshot.operatorUserId, null, enrolled);
     expect(failed.refreshError).toContain("HTTP 503");
     expect(failed.validUntil).toBe(restored.validUntil);
+    for (const status of [401, 403, 429, 500]) {
+      fetcher.mockResolvedValueOnce(Response.json({}, { status }));
+      const retained = await prepareEligibilityManifest("synthetic-event", snapshot.operatorUserId, null, enrolled);
+      expect(retained.refreshError).toContain(`HTTP ${status}`);
+      expect(retained.validUntil).toBe(restored.validUntil);
+    }
+    fetcher.mockResolvedValueOnce(new Response("{}", { status: 429, headers: { "Retry-After": "120" } }));
+    const limited = await prepareEligibilityManifest("synthetic-event", snapshot.operatorUserId, null, enrolled);
+    expect(limited.retryAfterMs).toBe(120_000);
+    fetcher.mockResolvedValueOnce(
+      Response.json({ error: { code: "SCANNER_PREPARATION_CLOSED", message: "Closed" } }, { status: 409 }),
+    );
+    const closed = await prepareEligibilityManifest("synthetic-event", snapshot.operatorUserId, null, enrolled);
+    expect(closed.refreshError).toContain("session has closed");
+    expect(closed.validUntil).toBe(restored.validUntil);
     fetcher.mockRejectedValueOnce(new Error("Offline"));
     await expect(
       prepareEligibilityManifest("synthetic-event", snapshot.operatorUserId, null, {

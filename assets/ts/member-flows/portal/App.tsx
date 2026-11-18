@@ -129,7 +129,19 @@ export function App() {
       if (isCurrent() && portalSession.value === session) saveProfile(nextProfile);
     } catch (error) {
       if (!isCurrent()) return portalSession.value !== null;
-      if (error instanceof ApiClientError && [401, 403].includes(error.status)) {
+      const scannerFallback =
+        Boolean(checkedLocalSession) &&
+        error instanceof ApiClientError &&
+        (error.status === 0 ||
+          error.status === 401 ||
+          error.status === 403 ||
+          error.status === 429 ||
+          error.status >= 500);
+      if (scannerFallback) {
+        scannerTransportUnavailable.value = true;
+        setSessionError("We could not check sign-in. Saved scanner preparation remains available on this device.");
+        if (portalSession.value?.sessionId === checkedSessionId) clearUserSession();
+      } else if (error instanceof ApiClientError && [401, 403].includes(error.status)) {
         scannerTransportUnavailable.value = false;
         await clearScannerOfflineContexts(checkedLocalSession).catch(() => {
           if (isCurrent())
@@ -329,7 +341,7 @@ export function App() {
     </Alert>
   ) : null;
   const collectorRoute = scannerCollectorPath(window.location.hash);
-  if (sessionError && !isAuthed.value && scannerTransportUnavailable.value && collectorRoute)
+  if (!isAuthed.value && scannerTransportUnavailable.value)
     return (
       <div class="pk pk-stack">
         <Suspense fallback={<VerifyingOverlay />}>

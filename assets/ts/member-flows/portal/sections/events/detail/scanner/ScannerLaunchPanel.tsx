@@ -1,8 +1,11 @@
 import type { ComponentChildren, ComponentProps } from "preact";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
 import { Button } from "../../../../../../ui/Button";
+import { Dialog } from "../../../../../../ui/Dialog";
+import { Alert } from "../../../../../../ui/Alert";
 import { ScannerCaptureContext } from "./ScannerCaptureContext";
 import { ScannerFeedback } from "./ScannerFeedback";
+import { scannerReadinessLabel, type ScannerReadiness } from "./ScannerConnectionStatus";
 
 /** The launch screen owns presentation; capture and uploads remain in the scanner controller. */
 export function ScannerLaunchPanel({
@@ -15,6 +18,7 @@ export function ScannerLaunchPanel({
   controls,
   pendingStart,
   cancelStart,
+  retryStart,
   children,
 }: {
   connection: ComponentChildren;
@@ -24,8 +28,9 @@ export function ScannerLaunchPanel({
   busy: boolean;
   capture: () => void;
   controls: ComponentChildren;
-  pendingStart?: string;
+  pendingStart?: ScannerReadiness;
   cancelStart: () => void;
+  retryStart: () => void;
   children?: ComponentChildren;
 }) {
   return (
@@ -47,16 +52,34 @@ export function ScannerLaunchPanel({
         >
           {controls}
         </form>
-        {pendingStart && (
-          <div role="status">
-            <p>{pendingStart}</p>
-            <Button type="button" variant="secondary" onClick={cancelStart}>
-              Cancel
-            </Button>
-          </div>
-        )}
         {children}
       </PanelBody>
+      <Dialog
+        open={Boolean(pendingStart)}
+        title={pendingStart?.badgeCollection ? "Prepare badge collection" : "Prepare scanner"}
+        confirmLabel="Retry preparation"
+        onConfirm={retryStart}
+        onCancel={cancelStart}
+        viewer
+        footerActions={
+          <>
+            <Button type="button" variant="ghost" onClick={cancelStart}>
+              Cancel
+            </Button>
+            {pendingStart?.error && !pendingStart.preparing && (
+              <Button type="button" onClick={retryStart}>
+                Retry preparation
+              </Button>
+            )}
+          </>
+        }
+      >
+        {pendingStart?.error && !pendingStart.preparing ? (
+          <Alert tone="warn">{pendingStart.error}</Alert>
+        ) : (
+          <p role="status">{pendingStart ? scannerReadinessLabel(pendingStart) : ""}</p>
+        )}
+      </Dialog>
     </Panel>
   );
 }
