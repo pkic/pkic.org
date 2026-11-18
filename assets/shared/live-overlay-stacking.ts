@@ -38,22 +38,17 @@ function depth(elements: LiveOverlayLayoutElements, layer: LiveProgramLayer): nu
   return elements[layer].layer ?? LIVE_PROGRAM_LAYER_ORDER.indexOf(layer);
 }
 
-/** The background stays under every other graphic, whatever order a scene gives the rest. */
-const GROUND = "background" satisfies LiveProgramLayer;
-
-/** Whether an organizer can move this graphic in the scene's stack: every one but the background. */
-export function isLiveStackableLayer(element: LiveOverlayElement): element is LiveProgramLayer {
-  return isLiveProgramLayer(element) && element !== GROUND;
-}
-
-/** Program's graphics in this scene, bottom to top: a later one draws over an earlier one. */
+/**
+ * Program's graphics in this scene, bottom to top: a later one draws over an
+ * earlier one. The background starts at the bottom, under the boards it
+ * carries, and a scene can stack it like any other graphic.
+ */
 export function liveProgramLayers(elements: LiveOverlayLayoutElements): LiveProgramLayer[] {
-  const stacked = LIVE_PROGRAM_LAYER_ORDER.filter((layer) => layer !== GROUND).sort(
+  return [...LIVE_PROGRAM_LAYER_ORDER].sort(
     (a, b) =>
       depth(elements, a) - depth(elements, b) ||
       LIVE_PROGRAM_LAYER_ORDER.indexOf(a) - LIVE_PROGRAM_LAYER_ORDER.indexOf(b),
   );
-  return [GROUND, ...stacked];
 }
 
 /** The scene with its graphics stacked in this order, front first, as the scene editor lists them. */
@@ -78,8 +73,7 @@ export function moveLiveProgramLayer(
   const frontToBack = liveProgramLayers(elements).reverse();
   const from = frontToBack.indexOf(layer);
   const to = from + direction;
-  // The background is last in the list and never trades places.
-  if (layer === GROUND || to < 0 || to >= frontToBack.length - 1) return elements;
+  if (to < 0 || to >= frontToBack.length) return elements;
   [frontToBack[from], frontToBack[to]] = [frontToBack[to]!, frontToBack[from]!];
   return withLiveProgramOrder(elements, frontToBack);
 }

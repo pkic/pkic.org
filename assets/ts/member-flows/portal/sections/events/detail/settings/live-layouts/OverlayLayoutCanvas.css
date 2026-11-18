@@ -99,16 +99,30 @@
     outline: 2px solid var(--pk-focus);
     outline-offset: 2px;
   }
+  /*
+   * The selected box keeps its place in the stack, so a graphic in front
+   * still covers it; its outline and corners draw over every box. A box has
+   * no stacking context of its own, so they rise above its neighbors.
+   */
   .pk-layout-canvas__box[data-selected] {
-    z-index: 1;
-    border: 2px solid var(--pk-accent);
+    border-color: transparent;
     background: color-mix(
       in srgb,
       var(--pk-accent) 12%,
       color-mix(in srgb, var(--pk-on-solid) 16%, var(--pk-chrome-deep))
     );
   }
+  .pk-layout-canvas__box[data-selected]::after {
+    content: "";
+    position: absolute;
+    z-index: 3;
+    inset: -1px;
+    border: 2px solid var(--pk-accent);
+    pointer-events: none;
+  }
+  /* A box being dragged draws in front until it lands. */
   .pk-layout-canvas__box[data-gesture] {
+    z-index: 3;
     cursor: grabbing;
     transition: none;
   }
@@ -143,6 +157,7 @@
   /* A 24px target around a small visible square, centered on the box's corner or side. */
   .pk-layout-canvas__handle {
     position: absolute;
+    z-index: 3;
     inline-size: 1.5rem;
     block-size: 1.5rem;
     translate: -50% -50%;

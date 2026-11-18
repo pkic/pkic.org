@@ -1,5 +1,5 @@
 import {
-  isLiveStackableLayer,
+  isLiveProgramLayer,
   liveProgramLayers,
   withLiveProgramOrder,
   type LiveProgramLayer,
@@ -13,23 +13,23 @@ import type { Box } from "./overlay-layout-editing";
 
 /**
  * A scene's graphics as the editor lists them: the Program graphics the
- * scene shows, front first, and the ones it can still add. The scene-wide
- * background is no graphic of its own; each graphic's Background switch puts
- * the conference field behind it. Pure, so the list, the canvas and the menu
- * agree.
+ * scene shows, front first, and the ones it can still add. The background
+ * (the conference field) is a graphic like the others, placed, sized and
+ * stacked on its own; a graphic put on the conference field carries one in
+ * its own box. Pure, so the list, the canvas and the menu agree.
  */
 
 /** The graphics this scene shows, front first: the top of the list draws in front. */
 export function sceneGraphics(elements: LiveOverlayLayoutElements): LiveProgramLayer[] {
   return liveProgramLayers(elements)
     .reverse()
-    .filter((element) => isLiveStackableLayer(element) && elements[element].visible);
+    .filter((element) => elements[element].visible);
 }
 
 /** The Program graphics the scene does not show yet, in the editor's order, for Add graphic. */
 export function addableGraphics(elements: LiveOverlayLayoutElements): LiveOverlayElement[] {
   return liveOverlaySourceGraphics("program").filter(
-    (element) => isLiveStackableLayer(element) && !elements[element].visible,
+    (element) => isLiveProgramLayer(element) && !elements[element].visible,
   );
 }
 

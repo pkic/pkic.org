@@ -124,13 +124,13 @@
     color: var(--pk-ink-muted);
     font-size: var(--pk-text-sm);
   }
-  /* The switch's word before the switch, as settings lists put it. */
-  .pk-scenes__switch {
+  /* A graphic's place and whether it is on the conference field wrap rather than cut off. */
+  .pk-scenes__graphics .pk-scenes__meta {
+    white-space: normal;
+  }
+  .pk-scenes__moves {
+    display: flex;
     flex: none;
-    flex-direction: row-reverse;
-    align-items: center;
-    color: var(--pk-ink-muted);
-    font-size: var(--pk-text-sm);
   }
   .pk-scenes__row > .pk-row-actions {
     flex: none;

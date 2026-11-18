@@ -214,7 +214,10 @@ describe("stacking a scene's graphics", () => {
     const read = liveOverlayLayoutElementsSchema.parse(saved);
     expect(read.background.visible).toBe(false);
     expect(liveProgramLayers(read)[0]).toBe("background");
-    expect(moveLiveProgramLayer(read, "background", -1)).toBe(read);
+    // At the back it moves no further back; a scene can still bring it forward like any other graphic.
+    expect(moveLiveProgramLayer(read, "background", 1)).toBe(read);
+    const forward = liveProgramLayers(moveLiveProgramLayer(read, "background", -1));
+    expect(forward.slice(0, 2)).toEqual(["panelists", "background"]);
   });
 
   it("lets a board drawn in front hide a graphic only from where the scene stacks it", () => {

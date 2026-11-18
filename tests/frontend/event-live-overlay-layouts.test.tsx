@@ -128,11 +128,16 @@ async function save() {
   });
 }
 
+/** A menu item's label, without its check mark or second line. */
+const itemLabel = (item: Element) =>
+  (item.querySelector(".pk-menu__text > span:first-child") ?? item).textContent!.replace(/^✓/, "");
+/** The open menu's items by their labels. */
+const menuItems = () => [...document.querySelectorAll<HTMLElement>("[role^=menuitem]")].map(itemLabel);
 /** Opens a menu by its trigger and chooses one of its items. */
 async function choose(trigger: HTMLButtonElement, item: string) {
   await act(() => trigger.click());
-  const entry = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find(
-    (candidate) => candidate.textContent === item,
+  const entry = [...document.querySelectorAll<HTMLElement>("[role^=menuitem]")].find(
+    (candidate) => itemLabel(candidate) === item,
   );
   if (!entry) throw new Error(`no menu item reads "${item}"`);
   await act(() => entry.click());
@@ -140,8 +145,11 @@ async function choose(trigger: HTMLButtonElement, item: string) {
 const button = (label: string) => root!.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
 /** The graphics list, front first, by the boxes' element names. */
 const rows = () =>
-  [...root!.querySelectorAll(".pk-scenes__graphics .pk-scenes__row")].map(
-    (row) => row.querySelector<HTMLInputElement>("input[role=switch]")!.name.split(".")[1],
+  [...root!.querySelectorAll<HTMLElement>(".pk-scenes__graphics .pk-scenes__row")].map((row) => row.dataset.element);
+/** The canvas's boxes in drawing order, back first. */
+const drawnOrder = () =>
+  [...root!.querySelectorAll<HTMLElement>(".pk-layout-canvas__boxes > button[data-element]")].map(
+    (box) => box.dataset.element,
   );
 
 describe("scene editor", () => {
@@ -214,7 +222,7 @@ describe("scene editor", () => {
   it("draws a labeled box for each graphic the scene shows and says where the selected one sits", async () => {
     await mount();
     const drawn = () => [...root!.querySelectorAll<HTMLElement>("button[data-element]")].map((b) => b.dataset.element);
-    // Talk leaves the QR code out, and the scene-wide background is no graphic of its own.
+    // Talk leaves the QR code and the background out.
     expect(drawn()).not.toContain("qrCode");
     expect(drawn()).not.toContain("background");
     expect(drawn()).not.toContain("stageDisplay");
@@ -273,8 +281,8 @@ describe("scene editor", () => {
     await mount();
     const add = button("Add graphic");
     await act(() => add.click());
-    // Only the Program graphics Talk leaves out; never the scene-wide background or the speaker's screen.
-    expect([...document.querySelectorAll("[role=menuitem]")].map((item) => item.textContent)).toEqual(["QR code"]);
+    // Only the Program graphics Talk leaves out, the background among them; never the speaker's screen.
+    expect(menuItems()).toEqual(["Background", "QR code"]);
     await act(() => add.click());
     await choose(add, "QR code");
     expect(rows()).toContain("qrCode");
@@ -288,13 +296,18 @@ describe("scene editor", () => {
     expect(add.disabled).toBe(false);
   });
 
-  it("switches the conference background behind one graphic and saves it with the scene", async () => {
+  it("puts one graphic on the conference field from its menu and saves it with the scene", async () => {
     await mount();
-    const background = root!.querySelector<HTMLInputElement>('input[aria-label="Background for Top questions"]')!;
-    expect(background.getAttribute("role")).toBe("switch");
-    expect(background.checked).toBe(false);
-    await act(() => background.click());
-    expect(background.checked).toBe(true);
+    const row = () => root!.querySelector('.pk-scenes__row[data-element="topQuestions"]')!;
+    expect(row().textContent).not.toContain("on the conference field");
+    await choose(button("Actions for Top questions"), "On the conference field");
+    expect(row().textContent).toContain("Full frame · on the conference field");
+    await act(() => button("Actions for Top questions").click());
+    const field = [...document.querySelectorAll("[role=menuitemcheckbox]")].find(
+      (item) => itemLabel(item) === "On the conference field",
+    )!;
+    expect(field.getAttribute("aria-checked")).toBe("true");
+    await act(() => button("Actions for Top questions").click());
     await save();
     // A shared graphic's background is the scene's own, like whether it shows.
     expect(positioned).toHaveLength(0);
@@ -305,15 +318,56 @@ describe("scene editor", () => {
     await mount();
     expect(rows().slice(0, 3)).toEqual(["reactions", "ticker", "timer"]);
     expect(rows()).not.toContain("qrCode");
-    await choose(button("Actions for Reactions"), "Move down");
+    expect(button("Move Reactions up").disabled).toBe(true);
+    await act(() => button("Move Reactions down").click());
     expect(rows().slice(0, 2)).toEqual(["ticker", "reactions"]);
     const above = rows()[rows().indexOf("lowerThird") - 1]!;
-    await choose(button("Actions for Lower third"), "Move up");
+    await act(() => button("Move Lower third up").click());
     expect(rows().indexOf("lowerThird")).toBe(rows().indexOf(above) - 1);
+    // The canvas stacks its boxes as the list does, so the one in front covers the ones behind it.
+    expect(drawnOrder()).toEqual([...rows()].reverse());
     await save();
     const { elements } = written[0]!.body;
     expect(elements.lowerThird.layer!).toBeGreaterThan(elements[above as "poll"].layer!);
     expect(elements.ticker.layer!).toBeGreaterThan(elements.reactions.layer!);
+  });
+
+  it("adds a removed graphic back at its shared position, wherever this scene had placed it", async () => {
+    await mount();
+    await choose(button("Actions for Lower third"), "Place differently on this scene");
+    pointer(box("lowerThird"), "pointerdown", 100, 200);
+    pointer(box("lowerThird"), "pointermove", 340, 200, { altKey: true });
+    pointer(box("lowerThird"), "pointerup", 340, 200, { altKey: true });
+    await choose(button("Actions for Lower third"), "Remove from scene");
+    await choose(button("Add graphic"), "Lower third");
+    expect(Number(controlFor(root!, "From left").value)).toBeCloseTo(LOWER_THIRD.x * 100, 1);
+    // Back where the scene started: shared and shown, so there is nothing to save.
+    const submit = root!.querySelector<HTMLButtonElement>('form.pk-scenes__editor button[type="submit"]')!;
+    expect(submit.disabled).toBe(true);
+  });
+
+  it("adds the background as its own graphic at the back, and moves it in front of a board", async () => {
+    await mount();
+    await choose(button("Add graphic"), "Background");
+    // It starts behind everything, at the full frame, and is placed like any other graphic.
+    expect(rows().at(-1)).toBe("background");
+    expect(drawnOrder()[0]).toBe("background");
+    expect(box("background").getAttribute("aria-pressed")).toBe("true");
+    expect(root!.querySelector('.pk-scenes__row[data-element="background"]')!.textContent).toContain("Full frame");
+    expect(button("Move Background down").disabled).toBe(true);
+    // Its menu places and removes it, but never puts the field on itself.
+    await act(() => button("Actions for Background").click());
+    expect(menuItems()).not.toContain("On the conference field");
+    expect(menuItems()).toContain("Remove from scene");
+    await act(() => button("Actions for Background").click());
+    const behind = rows().at(-2)!;
+    await act(() => button("Move Background up").click());
+    expect(rows().slice(-2)).toEqual(["background", behind]);
+    expect(drawnOrder().slice(0, 2)).toEqual([behind, "background"]);
+    await save();
+    const { elements } = written[0]!.body;
+    expect(elements.background.visible).toBe(true);
+    expect(elements.background.layer!).toBeGreaterThan(elements[behind as "panelists"].layer!);
   });
 
   it("reorders by dragging a row's grip, keeping hidden graphics in their places", async () => {

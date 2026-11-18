@@ -5,7 +5,7 @@ import {
   type LiveOverlayElement,
   type LiveOverlayLayoutElements,
 } from "../../../../../../../../shared/schemas/live-overlay-layout";
-import { LAYOUT_CANVAS_LABEL } from "./overlay-layout-copy";
+import { LAYOUT_CANVAS_LABEL, LAYOUT_FIELD_LABEL } from "./overlay-layout-copy";
 import { CORNER_HANDLES, nudgeBox, type Box } from "./overlay-layout-editing";
 import { describeGraphicPosition } from "./overlay-layout-graphics";
 import { placeLayoutBox, useOverlayLayoutGesture } from "./useOverlayLayoutGesture";
@@ -86,7 +86,9 @@ function LayoutBox({
       <span class="pk-layout-canvas__label" aria-hidden="true">
         <span class="pk-layout-canvas__name">{label}</span>
         {selected ? (
-          <span class="pk-layout-canvas__detail">{background ? `${position} · background on` : position}</span>
+          <span class="pk-layout-canvas__detail">
+            {background ? `${position} · ${LAYOUT_FIELD_LABEL.toLowerCase()}` : position}
+          </span>
         ) : null}
       </span>
       {selected
@@ -106,9 +108,10 @@ function LayoutBox({
 
 /**
  * The scene on a 16:9 canvas: a labeled box for each graphic it shows, over
- * the camera. Drag a box to move it, a corner to resize it; it snaps to the
- * grid, the title-safe area and the other boxes, with guides while it does.
- * The arrow keys move the selected box.
+ * the camera, stacked as the outputs draw them, so a graphic in front covers
+ * the ones behind it. Drag a box to move it, a corner to resize it; it snaps
+ * to the grid, the title-safe area and the other boxes, with guides while it
+ * does. The arrow keys move the selected box.
  */
 export function OverlayLayoutCanvas({
   elements,
@@ -153,24 +156,22 @@ export function OverlayLayoutCanvas({
         <div class="pk-layout-canvas__guide" data-axis="vertical" ref={gesture.verticalGuide} aria-hidden="true" />
         <div class="pk-layout-canvas__guide" data-axis="horizontal" ref={gesture.horizontalGuide} aria-hidden="true" />
         <div class="pk-layout-canvas__boxes" role="group" aria-label={LAYOUT_CANVAS_LABEL}>
-          {/* Larger boxes underneath, so a small one inside them stays reachable; the stylesheet lifts the selected one. */}
-          {[...shown]
-            .sort((a, b) => elements[b].w * elements[b].h - elements[a].w * elements[a].h)
-            .map((element) => (
-              <LayoutBox
-                key={element}
-                element={element}
-                box={elements[element]}
-                background={elements[element].background === true}
-                selected={element === selected}
-                labelShift={shifts[element] ?? 0}
-                describedBy={help}
-                cell={gesture.register(element)}
-                handlers={gesture.handlers}
-                onSelect={() => onSelect(element)}
-                onNudge={(box) => onChange(element, box)}
-              />
-            ))}
+          {/* Back to front, as the outputs stack them; the selected box's outline and corners draw over every box. */}
+          {[...shown].reverse().map((element) => (
+            <LayoutBox
+              key={element}
+              element={element}
+              box={elements[element]}
+              background={elements[element].background === true}
+              selected={element === selected}
+              labelShift={shifts[element] ?? 0}
+              describedBy={help}
+              cell={gesture.register(element)}
+              handlers={gesture.handlers}
+              onSelect={() => onSelect(element)}
+              onNudge={(box) => onChange(element, box)}
+            />
+          ))}
         </div>
       </div>
       <figcaption class="pk-small pk-muted">

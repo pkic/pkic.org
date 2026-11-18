@@ -123,9 +123,14 @@ export function OverlayLayoutEditor({
     update(changeLayoutElement(drafts, element, patch));
   const place = (element: LiveOverlayElement, box: Box) => change(element, box);
   const share = (element: LiveOverlayElement, action: LayoutSharingAction) => update(SHARING[action](drafts, element));
+  // An added graphic starts at its shared position, where the event's other scenes put it.
   const show = (element: LiveOverlayElement, visible: boolean) => {
-    change(element, { visible });
-    if (visible) setPicked(element);
+    if (!visible) {
+      change(element, { visible });
+      return;
+    }
+    update(changeLayoutElement(relinkLayoutElement(drafts, element), element, { visible }));
+    setPicked(element);
   };
 
   async function save(event?: SubmitEvent) {
@@ -302,7 +307,7 @@ export function OverlayLayoutEditor({
           selected={selected}
           disabled={busy}
           onSelect={setPicked}
-          onBackground={(element, background) => change(element, { background })}
+          onField={(element, background) => change(element, { background })}
           onShow={show}
           onReorder={(element, to) => update({ ...drafts, elements: reorderSceneGraphic(elements, element, to) })}
           onSharing={share}
