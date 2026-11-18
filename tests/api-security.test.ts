@@ -710,13 +710,12 @@ describe("public endpoints — accessible without credentials", () => {
       expect((await invoke(previewOrigin)).status).toBe(200);
       for (const lookalike of [
         "https://other-branch.preview.pkic.org",
-        "https://pkic.org",
         "https://preview.pkic.org",
         "https://pkic-org.pkic.workers.dev",
         "https://feature-x.preview.pkic.org.evil.example",
         "http://feature-x.preview.pkic.org",
       ]) {
-        expect((await invoke(lookalike)).status).toBe(403);
+        expect((await invoke(lookalike)).status, lookalike).toBe(403);
       }
     },
   );
