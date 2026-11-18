@@ -28,7 +28,7 @@ export async function resolveAnswerSortOptions(
         .first<FieldRow>();
   if (!field) return [];
   const source = parseFormFieldOptionSource(field.option_source);
-  if (!source) return parseFormFieldOptions(parseJsonSafe(field.options_json, null)) ?? [];
+  if (!source) return parseFormFieldOptions(parseJsonSafe(field.options_json, null));
   const catalogs = await resolveFormFieldOptionCatalogs(db, [field], { includeInactive: true });
   return catalogs[source] ?? [];
 }

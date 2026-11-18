@@ -1,4 +1,4 @@
-import { selectedSubmissionAnswersSql } from "./answer-query";
+import { nativeAnswerJson, selectedSubmissionAnswersSql } from "./answer-query";
 import { resolveAnswerSortOptions, submissionAnswerSortSql, type AnswerSortOption } from "./answer-sort";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { buildOffsetPageSql, queryPage, type OffsetPageQuery } from "../../db/pagination";
@@ -50,7 +50,7 @@ async function attachSubmissionAnswers(
   const answerRows = submissionIds.length
     ? await all<AnswerRow>(
         db,
-        `SELECT a.submission_id, COALESCE(ff.key, a.field_key) AS field_key, a.data_json
+        `SELECT a.submission_id, COALESCE(ff.key, a.field_key) AS field_key, ${nativeAnswerJson("a.data_json")} AS data_json
          FROM form_submission_answers a
          LEFT JOIN form_fields ff ON ff.id = a.field_id
          WHERE ${submissionFilter.sql}

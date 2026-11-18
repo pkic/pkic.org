@@ -4,7 +4,7 @@ import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 type AnswerRowSource = "merged" | "response_candidates";
 
 /** Native answers stored as bare text stay one string value instead of disappearing. */
-function nativeAnswerJson(column: string): string {
+export function nativeAnswerJson(column: string): string {
   return `CASE WHEN json_valid(${column}) THEN ${column} ELSE json_quote(${column}) END`;
 }
 

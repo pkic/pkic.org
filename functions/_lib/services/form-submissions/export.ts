@@ -9,6 +9,10 @@ import { type ManagedFormWithFields, mapManagedFormFields, resolveFormFieldOptio
 import { countSubmissionPopulation, resolveFormSubmissionPopulation } from "./population-query";
 import { readFormSubmissionSnapshot } from "./submission-page";
 
+function exportRowLimitError(maxRows: number) {
+  return new AppError(413, "CSV_EXPORT_ROW_LIMIT_EXCEEDED", `CSV export is limited to ${maxRows} records`);
+}
+
 export async function exportEventFormResponses(
   db: DatabaseLike,
   params: FormSubmissionsExportQuery & {
@@ -41,9 +45,7 @@ export async function exportEventFormResponses(
     .prepare(count.sql)
     .bind(...count.bindings)
     .first<{ total: number }>();
-  if (Number(total?.total ?? 0) > limits.maxRows) {
-    throw new AppError(413, "CSV_EXPORT_ROW_LIMIT_EXCEEDED", `CSV export is limited to ${limits.maxRows} records`);
-  }
+  if (Number(total?.total ?? 0) > limits.maxRows) throw exportRowLimitError(limits.maxRows);
   // One catalog read serves both the exported labels and the sort order.
   const sortKey = parseAnswerSort(params.sort)?.key;
   const labeledFields = definition.fields.filter((field) => answerKeys.includes(field.key) || field.key === sortKey);
@@ -52,10 +54,12 @@ export async function exportEventFormResponses(
   const submissions = await readFormSubmissionSnapshot(
     db,
     population,
-    { sort: params.sort, limit: limits.maxRows },
+    { sort: params.sort, limit: limits.maxRows + 1 },
     answerKeys,
     (sortKey && fields.get(sortKey)?.options) || [],
   );
+  // A response added after the count must refuse the export, not drop a row silently.
+  if (submissions.length > limits.maxRows) throw exportRowLimitError(limits.maxRows);
   const headers = columns.map((column) => {
     const answer = parseAnswerSort(column);
     return answer

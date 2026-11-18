@@ -547,6 +547,7 @@ describe("form-submission read-model population", () => {
 
     const population = await readPopulation("bare-text-answer", { answerField: "food", answerValue: "Vegan" });
     expect(population.list.page.total).toBe(1);
+    expect(population.list.submissions[0].answers.food).toBe("Vegan");
     expect(population.stats.stats).toEqual([
       expect.objectContaining({
         fieldKey: "food",
@@ -716,6 +717,19 @@ describe("form-submission read-model population", () => {
     ).rejects.toMatchObject({ code: "CSV_EXPORT_ROW_LIMIT_EXCEEDED" });
     expect(profile.summary().queries.some((query) => query.sql.includes("LIMIT ? OFFSET ?"))).toBe(false);
     expect(profile.summary().queries.some((query) => query.sql.startsWith("SELECT a.submission_id"))).toBe(false);
+    // A response added between the count and the read refuses the export instead of dropping a row.
+    const staleCount = new Proxy(env.DB, {
+      get(target, property, receiver) {
+        if (property !== "prepare") return Reflect.get(target, property, receiver);
+        return (sql: string) =>
+          sql.includes("SELECT COUNT(*) AS total FROM merged")
+            ? target.prepare(`SELECT MIN(total, 1) AS total FROM (${sql})`)
+            : target.prepare(sql);
+      },
+    });
+    await expect(
+      exportEventFormResponses(staleCount, exportParams, { maxRows: 1, maxBytes: 10000 }),
+    ).rejects.toMatchObject({ code: "CSV_EXPORT_ROW_LIMIT_EXCEEDED" });
     const visible = await adminGet(
       "/api/v1/events/pqc-2026/forms/dietary-responses/submissions/exports?columns=submitter,status",
     );
