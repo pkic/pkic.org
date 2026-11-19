@@ -2,6 +2,7 @@ import { LiveScheduleOverlay } from "./LiveScheduleOverlay";
 import { LiveTickerOverlay } from "./LiveTickerOverlay";
 import type { LiveOverlayView, LiveTimerGraphic } from "../../shared/schemas/live-session-room";
 import type { ComponentChildren } from "preact";
+import { useContext } from "preact/hooks";
 import { liveTimerLayout } from "../../shared/live-timer-policy";
 import type { LiveRoomState } from "./live-room-state";
 import { useLiveTimerGraphicReading } from "./useLiveCountdown";
@@ -37,6 +38,7 @@ import { LiveTimerMark } from "./LiveTimerMark";
 import { LiveTimerPlate } from "./LiveTimerPlate";
 import { formatLiveTimerMark } from "../../shared/live-timer-format";
 import { LiveLowerThird } from "./LiveLowerThird";
+import { LiveStillPictures } from "./live-still-pictures";
 import { LiveStageDisplay, LiveStageDisplayBanner } from "./LiveStageDisplay";
 import { isLiveAuxOutput, liveOutputProjection, liveOutputScene, liveOutputView } from "./live-output-projection";
 import "../../design/tokens.event.generated.css";
@@ -393,7 +395,9 @@ export function LiveOverlayPresentation({
   /** Drawn over every layer by the page that hosts the output, such as a screen's connection status. */
   children?: ComponentChildren;
 }) {
-  const animate = broadcast || !prefersReducedMotion();
+  // A still picture cuts between states; a browser source on air moves even under reduced motion.
+  const still = useContext(LiveStillPictures);
+  const animate = !still && (broadcast || !prefersReducedMotion());
   const state = projection && isLiveAuxOutput(requested) ? liveOutputProjection(projection, requested) : projection;
   const view = liveOutputView(requested);
   // The scene on this output, whose change moves the graphics that stay on. The editor's unsaved boxes are no

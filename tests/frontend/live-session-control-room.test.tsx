@@ -366,7 +366,7 @@ describe("live control room panels", () => {
     expect(commands(live)).toEqual([{ type: "preview.set", composition: { lowerThirdMotion: "cut" } }]);
   });
 
-  it("moderates a submitted question, puts an approved one on Program, marks it discussed, reopens it and shows a hidden one again", () => {
+  it("moderates a submitted question, puts an approved one on Program, marks it discussed, reopens it and shows a hidden one again", async () => {
     const pending = liveQuestion({ status: "pending", votes: 0, anonymous: true, authorName: "Ada Attendee" });
     const { host, live } = mountDesk(liveSnapshot({ viewer: OPERATOR, questions: [pending] }));
     const questions = panel(host, "Questions");
@@ -380,7 +380,10 @@ describe("live control room panels", () => {
       }),
     );
     void act(() => labeled(questions, "Show question on air").click());
-    void act(() => labeled(questions, "Mark discussed").click());
+    // Mark discussed is in the row's menu only, so a slip of the hand on the row never closes a question.
+    expect(questions.querySelector('button[aria-label="Mark discussed"]')).toBeNull();
+    await act(async () => labeled(questions, "Question actions").click());
+    await act(async () => menuItem(document, "Mark discussed").click());
     expect(commands(live)).toEqual([
       { type: "question.moderate", questionId: LIVE_QUESTION, expectedRevision: 0, status: "approved" },
       { type: "stage.question", questionId: LIVE_QUESTION },

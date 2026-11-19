@@ -3,6 +3,8 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyLiveRoomMessage } from "../../assets/ts/live-session/live-room-state";
+import { LiveOverlayPresentation } from "../../assets/ts/live-session/LiveOverlayPresentation";
+import { LiveStillPictures } from "../../assets/ts/live-session/live-still-pictures";
 import {
   STUDIO_PHONE_VIEWS,
   StudioPhone,
@@ -82,6 +84,34 @@ afterEach(() => {
     void act(() => render(null, host));
     host.remove();
   }
+});
+
+describe("a still picture of an output", () => {
+  it("cuts a lower third on and off at once, where a moving picture plays it out", () => {
+    const credit = room.session.credits[0]!;
+    const withLowerThird = {
+      ...room,
+      stage: { ...room.stage, lowerThird: credit, lowerThirdMotion: "animated" as const },
+    };
+    const graphic = (host: HTMLElement) => host.querySelector<HTMLElement>(".pk-live-overlay__lower-third-graphic");
+    const draw = (host: HTMLElement, still: boolean, projection: typeof room) =>
+      void act(() =>
+        render(
+          <LiveStillPictures.Provider value={still}>
+            <LiveOverlayPresentation view="program" projection={projection} eventSlug="pqc-2026" />
+          </LiveStillPictures.Provider>,
+          host,
+        ),
+      );
+    const [still, moving] = [document.createElement("div"), document.createElement("div")];
+    document.body.append(still, moving);
+    hosts.push(still, moving);
+    for (const host of [still, moving]) draw(host, host === still, withLowerThird);
+    for (const host of [still, moving]) draw(host, host === still, room);
+    // The still picture has nothing to wait for; the moving one is on its way out.
+    expect(graphic(still)).toBeNull();
+    expect(graphic(moving)?.dataset.phase).toBe("exiting");
+  });
 });
 
 describe("the studio on a phone", () => {

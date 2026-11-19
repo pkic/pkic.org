@@ -82,8 +82,16 @@
       flex-wrap: wrap;
       padding-block-end: var(--pk-1);
     }
+    /* The text gives way first, so a row with three actions keeps them and its menu on its line at a phone's width. */
+    .pk-studio-row__open {
+      flex-basis: 8rem;
+    }
     .pk-studio-row__actions {
       margin-inline-start: var(--pk-2);
+    }
+    /* A menu that still wraps keeps to the row's end, under its actions, never alone at the row's start. */
+    .pk-studio-row > :last-child:not(.pk-studio-row__open) {
+      margin-inline-start: auto;
     }
   }
 }

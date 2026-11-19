@@ -42,7 +42,7 @@ import {
 import { LivePreparedQuestionDialog, LivePreparedQuestionWindowDialog } from "./LivePreparedQuestionDialogs";
 import { LiveQuestionDialog, type LiveAnswerConnection } from "./LiveQuestionDialog";
 import { LiveQuestionRewrite } from "./LiveQuestionRewrite";
-import type { LiveTargets } from "./live-output-targets";
+import { liveLayerTargets, type LiveTargets } from "./live-output-targets";
 import { livePresenceItem } from "./presence/live-presence";
 import { LiveItemPresence } from "./presence/LivePresenceTag";
 import { StudioCreateAction } from "./studio/StudioCreateAction";
@@ -122,12 +122,6 @@ const ignoreCommand = (question: LiveQuestion, done: boolean): LiveRoomClientMes
 });
 
 const APPROVE = <path d="M3 8.5l3 3 7-7" />;
-const DISCUSSED = (
-  <>
-    <circle cx="8" cy="8" r="6" />
-    <path d="M5.5 8.2l1.8 1.8 3.2-3.5" />
-  </>
-);
 const REOPEN = <path d="M4.5 3.5 2 6l2.5 2.5M2 6h7.5a3.5 3.5 0 0 1 0 7H6" />;
 // Release starts a prepared question, so it takes the timers' Start.
 const RELEASE = <path d="M5 3l8 5-8 5z" />;
@@ -137,7 +131,6 @@ function RowAction({
   label,
   hint,
   primary = false,
-  quiet = false,
   disabled,
   onClick,
   children,
@@ -146,8 +139,6 @@ function RowAction({
   /** What the action does to the question: the second line of its tooltip. */
   hint: string;
   primary?: boolean;
-  /** An action that ends something, such as Mark answered, recedes so a slip of the hand is less likely. */
-  quiet?: boolean;
   disabled: boolean;
   onClick: () => void;
   children: ComponentChildren;
@@ -155,7 +146,7 @@ function RowAction({
   return (
     <Button
       icon
-      variant={primary ? "primary" : quiet ? "ghost" : "secondary"}
+      variant={primary ? "primary" : "secondary"}
       aria-label={label}
       title={`${label}\n${hint}`}
       disabled={disabled}
@@ -166,7 +157,10 @@ function RowAction({
   );
 }
 
-/** One open question: its votes, answers, asker, addressee and state, Approve or its outputs and Answered, and the menu. */
+/**
+ * One open question: its votes, answers, asker, addressee and state, Approve or its outputs, and the menu. Mark
+ * discussed, Ignore and Hide are in the menu only, so a slip of the hand on the row never closes a question.
+ */
 function OpenQuestionRow({
   question,
   targets,
@@ -245,15 +239,6 @@ function OpenQuestionRow({
         ) : (
           <>
             <LiveLayerTargets targets={targets} subject="question" layer={layer} />
-            <RowAction
-              label="Mark discussed"
-              hint="It was discussed on stage. It moves to the Discussed tab; people can still answer it in writing."
-              quiet
-              disabled={disabled}
-              onClick={() => moderate("answered")}
-            >
-              {DISCUSSED}
-            </RowAction>
           </>
         )
       }
@@ -295,6 +280,15 @@ function ClosedQuestionRow({
   // An ignored question is still open in the room: it comes back by undoing the ignore, the others by their status.
   const ignored = liveQuestionPlace(question) === "ignored";
   const comeBack = () => (ignored ? send(ignoreCommand(question, false)) : moderate("approved"));
+  // A question discussed or ignored while it is on an output stays there, so its row keeps the way to take it off.
+  const layer = { kind: "question", id: question.id } as const;
+  const where = liveLayerTargets(targets, layer);
+  const screens = liveScreens(targets, layer);
+  const onOutput = where.preview || where.program || screens.on.length > 0 || screens.following.length > 0;
+  const own = [
+    { id: "open", label: "Open question", onSelect: onOpen },
+    ...(ignored ? [{ id: "back", label: back.label, disabled, onSelect: comeBack }] : []),
+  ];
   return (
     <StudioItemRow
       text={question.text}
@@ -307,9 +301,12 @@ function ClosedQuestionRow({
         </>
       }
       actions={
-        <RowAction label={back.label} hint={back.hint} disabled={disabled} onClick={comeBack}>
-          {REOPEN}
-        </RowAction>
+        <>
+          {onOutput ? <LiveLayerTargets targets={targets} subject="question" layer={layer} /> : null}
+          <RowAction label={back.label} hint={back.hint} disabled={disabled} onClick={comeBack}>
+            {REOPEN}
+          </RowAction>
+        </>
       }
       menu={
         <LiveQuestionTransitions
@@ -317,10 +314,9 @@ function ClosedQuestionRow({
           role="operator"
           disabled={disabled}
           menuLabel="Question actions"
-          additionalActions={[
-            { id: "open", label: "Open question", onSelect: onOpen },
-            ...(ignored ? [{ id: "back", label: back.label, disabled, onSelect: comeBack }] : []),
-          ]}
+          menuTrigger={onOutput ? <LiveScreenTrigger screens={screens} /> : undefined}
+          menuTitle={onOutput ? liveScreensTitle(screens) : undefined}
+          additionalActions={onOutput ? withScreenItems(liveScreenItems(targets, layer), own) : own}
           onMove={moderate}
         />
       }

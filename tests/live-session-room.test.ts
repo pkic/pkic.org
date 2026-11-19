@@ -293,6 +293,27 @@ describe("live session questions", () => {
     expect(shown.question.id).toBe(questionId);
   });
 
+  it("lets an operator ignore a question without changing it for attendees, until a new decision about it", async () => {
+    const { author, operator, questionId } = await askApproved();
+    const item = { kind: "question" as const, questionId };
+    const seenByAuthor = author.received.length;
+    operator.send({ type: "moderation.done", item, done: true });
+    const ignored = await operator.next("question.changed", (message) => message.question.done !== null);
+    expect(ignored.question.status).toBe("approved");
+    // Attendees are told nothing new: the question stays as it was for them.
+    expect(
+      author.received
+        .slice(seenByAuthor)
+        .some((message) => message.type === "question.changed" && message.question.done !== null),
+    ).toBe(false);
+    // Marking it discussed is a new decision, so it is no longer ignored when it is reopened.
+    operator.send({ type: "question.moderate", questionId, status: "answered" });
+    const discussed = await operator.next("question.changed", (message) => message.question.status === "answered");
+    expect(discussed.question.done).toBeNull();
+    author.send({ type: "moderation.done", item, done: true });
+    expect((await author.next("room.refused")).code).toBe("LIVE_MODERATION_FORBIDDEN");
+  });
+
   it("limits how fast one person asks", async () => {
     const author = await f.connect({ person: "attendee" });
     for (let index = 0; index <= LIVE_ROOM_POLICY.questionsPerPerson.limit; index += 1)

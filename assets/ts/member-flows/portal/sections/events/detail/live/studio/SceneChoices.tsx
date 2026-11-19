@@ -17,6 +17,7 @@ import {
   type LiveOverlayElementPlacement,
 } from "../../../../../../../../shared/schemas/live-overlay-layout";
 import { LiveOverlayPresentation } from "../../../../../../../live-session/LiveOverlayPresentation";
+import { LiveStillPictures } from "../../../../../../../live-session/live-still-pictures";
 import { sceneOutputs, type SceneOutput } from "./scene-outputs";
 import "../live-tally.css";
 import "./SceneChoices.css";
@@ -119,13 +120,15 @@ const SceneThumbnail = memo(function SceneThumbnail({
   const picture = useSceneScale();
   return (
     <span ref={picture} class="pk-studio-scene__picture" aria-hidden="true">
-      <LiveOverlayPresentation
-        view="program"
-        layout={scene}
-        projection={thumbnail.state}
-        roomId={roomId}
-        eventSlug={eventSlug}
-      />
+      <LiveStillPictures.Provider value={true}>
+        <LiveOverlayPresentation
+          view="program"
+          layout={scene}
+          projection={thumbnail.state}
+          roomId={roomId}
+          eventSlug={eventSlug}
+        />
+      </LiveStillPictures.Provider>
       {outline.length ? <SceneOutline boxes={outline} /> : null}
     </span>
   );

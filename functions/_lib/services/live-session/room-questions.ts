@@ -241,6 +241,8 @@ export class LiveRoomQuestions {
     if (status === "hidden" && !reason) return REFUSALS.reason;
     const at = nowIso();
     this.store.moderate(questionId, status, actor, at);
+    // A new decision about a question replaces an earlier Ignore, so it goes where its status puts it.
+    this.decisions.setDone("question", questionId, false, actor.name, at);
     if (status === "hidden" && reason) this.decisions.remove("question", questionId, reason, actor, at);
     else this.decisions.restore(questionId);
     this.store.recordStaffAction(
