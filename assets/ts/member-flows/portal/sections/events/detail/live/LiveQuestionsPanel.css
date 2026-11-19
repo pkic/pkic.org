@@ -3,19 +3,6 @@
     margin: 0;
     padding: var(--pk-3);
   }
-  /* Answered questions, folded away under the open ones: a quiet line that opens the list, tall enough for a thumb. */
-  .pk-live-questions__answered > summary {
-    min-block-size: 2.75rem;
-    padding: var(--pk-2) var(--pk-3);
-    color: var(--pk-ink-muted);
-    font-size: var(--pk-text-sm);
-    font-weight: 600;
-    align-content: center;
-    cursor: pointer;
-  }
-  .pk-live-questions__answered > summary:hover {
-    color: var(--pk-ink);
-  }
   /* Where a question stands, ahead of its summary: plain text, as the expected states it is. */
   .pk-live-desk__question-state {
     color: var(--pk-ink);

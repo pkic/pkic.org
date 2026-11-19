@@ -386,12 +386,15 @@ describe("live control room panels", () => {
       { type: "stage.question", questionId: LIVE_QUESTION },
       { type: "question.moderate", questionId: LIVE_QUESTION, expectedRevision: 0, status: "answered" },
     ]);
-    // An answered question leaves the open ones and waits under Answered, where Reopen brings it back.
+    // An answered question leaves the open ones for the Answered tab, where Reopen brings it back.
     void act(() =>
       live.latest().deliver({ type: "question.changed", question: liveQuestion({ status: "answered", revision: 1 }) }),
     );
     expect(questions.textContent).toContain("0 open");
-    expect(questions.querySelector(".pk-live-questions__answered > summary")?.textContent).toBe("Answered · 1");
+    const answered = questions.querySelector<HTMLElement>("#studio-questions-answered")!;
+    expect(answered.textContent).toBe("Answered · 1");
+    void act(() => answered.click());
+    expect(questions.querySelector("#studio-questions-panel-answered")?.hasAttribute("hidden")).toBe(false);
     void act(() => labeled(questions, "Reopen").click());
     expect(commands(live).at(-1)).toEqual({
       type: "question.moderate",

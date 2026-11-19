@@ -6,7 +6,7 @@
  */
 import type { PreviewSection } from "./PreviewShell";
 import type { LivePreparedQuestion } from "../../../shared/schemas/live-session-prepared-question";
-import { useEffect, useRef } from "preact/hooks";
+import { useRef } from "preact/hooks";
 import {
   EMPTY_LIVE_AUX_COMPOSITION,
   liveStageQuestionSchema,
@@ -172,20 +172,14 @@ const ANSWERED_TARGETS = {
   },
 };
 
-/** The Questions panel with its Answered list open, as after a click on it. */
-function AnsweredSpecimen() {
-  const host = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    host.current?.querySelector("details")?.setAttribute("open", "");
-  }, []);
-  return (
-    <div ref={host}>
-      <QuestionsPanelSpecimen targets={ANSWERED_TARGETS} />
-    </div>
-  );
-}
-
-function QuestionsPanelSpecimen({ targets = TARGETS }: { targets?: typeof TARGETS }) {
+function QuestionsPanelSpecimen({
+  targets = TARGETS,
+  opensOn,
+}: {
+  targets?: typeof TARGETS;
+  /** The tab the panel opens on; Open unless a specimen is of another one. */
+  opensOn?: "answered";
+}) {
   return (
     <div class="pk-studio-grid-frame" data-density="compact">
       <div class="pk-studio-grid">
@@ -201,7 +195,7 @@ function QuestionsPanelSpecimen({ targets = TARGETS }: { targets?: typeof TARGET
           dragHandle={noHandlers}
           resizeHandle={() => noHandlers}
         >
-          <LiveQuestionsPanel targets={targets} clock="UTC" send={send} answers={ANSWERS} />
+          <LiveQuestionsPanel targets={targets} clock="UTC" send={send} answers={ANSWERS} opensOn={opensOn} />
         </StudioPanelFrame>
       </div>
     </div>
@@ -292,8 +286,8 @@ export const studioQuestionSections: PreviewSection[] = [
   {
     id: "studio-questions-answered",
     title: "Studio: answered questions, with Reopen",
-    note: "A question marked answered leaves the open ones and waits under Answered, folded away until someone opens the list. Reopen puts it back with the open questions. Mark answered is a quiet button, so a slip of the hand is less likely.",
-    render: () => <AnsweredSpecimen />,
+    note: "A question marked answered leaves the open ones for the Answered tab. Reopen puts it back with the open questions. Mark answered is a quiet button, so a slip of the hand is less likely.",
+    render: () => <QuestionsPanelSpecimen targets={ANSWERED_TARGETS} opensOn="answered" />,
   },
   {
     id: "studio-screens-menu-carried",

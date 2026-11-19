@@ -12,6 +12,8 @@ import {
 import type { LivePreparedQuestion } from "../../../../../../../shared/schemas/live-session-prepared-question";
 import type { LiveQuestion, LiveRoomClientMessage } from "../../../../../../../shared/schemas/live-session-room";
 import { confirmAction } from "../../../../../../components/ConfirmDialog";
+import { useHashQueryParam } from "../../../../../../hooks/useHashQueryParam";
+import { TabList } from "../../../../../../ui/TabList";
 import { LiveQuestionTransitions } from "../../../../../../live-session/LiveQuestionList";
 import { liveAnswerCountLabel } from "../../../../../../live-session/LiveQuestionThread";
 import { LiveModerationDialogHost } from "../../../../../../live-session/LiveModerationDialog";
@@ -108,6 +110,10 @@ export function waitingPreparedQuestions(questions: readonly LivePreparedQuestio
 }
 
 type Send = (message: LiveRoomClientMessage) => boolean;
+
+/** The panel's tabs: the open and prepared questions, and the answered ones. */
+const QUESTION_VIEWS = ["open", "answered"] as const;
+type QuestionView = (typeof QUESTION_VIEWS)[number];
 
 const APPROVE = <path d="M3 8.5l3 3 7-7" />;
 const ANSWERED = (
@@ -228,7 +234,7 @@ function OpenQuestionRow({
             <LiveLayerTargets targets={targets} subject="question" layer={layer} />
             <RowAction
               label="Mark answered"
-              hint="Move it to Answered, below the open questions. You can reopen it from there."
+              hint="Move it to the Answered tab. You can reopen it from there."
               quiet
               disabled={disabled}
               onClick={() => moderate("answered")}
@@ -391,18 +397,22 @@ function PreparedQuestionRow({
  * The session's questions as compact rows, like the Time and Polls panels:
  * open ones first, then prepared ones in the order they come in. Every
  * action is in a row's menu; the row shows only the one used most. Answered
- * questions wait under them, folded away, each with Reopen.
+ * questions have a tab of their own, each with Reopen; the tab in view
+ * follows the address, as the chat's does.
  */
 export function LiveQuestionsPanel({
   targets,
   clock,
   send,
   answers,
+  opensOn = "open",
 }: {
   targets: LiveTargets;
   clock: ClockZone;
   send: Send;
   answers: LiveAnswerConnection;
+  /** The tab in view until the address names one. */
+  opensOn?: QuestionView;
 }) {
   // The open question is read from the room each time, so its answers and their count stay current.
   const [inspectedId, setInspectedId] = useState<string | null>(null);
@@ -412,38 +422,64 @@ export function LiveQuestionsPanel({
   const open = openLiveQuestions(targets.state.questions);
   const prepared = waitingPreparedQuestions(targets.state.preparedQuestions);
   const answered = answeredLiveQuestions(targets.state.questions);
+  const [view, setView] = useHashQueryParam("questions", opensOn, QUESTION_VIEWS);
   return (
     <div class="pk-live-desk__questions">
       <LiveModerationDialogHost />
-      {open.length || prepared.length ? (
-        <ol class="pk-studio-rows">
-          {open.map((question) => (
-            <OpenQuestionRow
-              key={question.id}
-              question={question}
-              targets={targets}
-              send={send}
-              onOpen={() => setInspectedId(question.id)}
-              onEdit={() => setEditing(question)}
-            />
-          ))}
-          {prepared.map((question) => (
-            <PreparedQuestionRow
-              key={question.id}
-              question={question}
-              targets={targets}
-              clock={clock}
-              send={send}
-              onEdit={() => setEditingPrepared(question)}
-            />
-          ))}
-        </ol>
-      ) : (
-        <p class="pk-live-questions__empty">No open questions.</p>
-      )}
-      {answered.length ? (
-        <details class="pk-live-questions__answered">
-          <summary>Answered · {formatNumber(answered.length)}</summary>
+      <TabList
+        label="Questions"
+        idPrefix="studio-questions"
+        activeId={view}
+        onSelect={(id) => setView(id as QuestionView)}
+        items={[
+          { id: "open", panelId: "studio-questions-panel-open", label: "Open" },
+          {
+            id: "answered",
+            panelId: "studio-questions-panel-answered",
+            label: answered.length ? `Answered · ${formatNumber(answered.length)}` : "Answered",
+          },
+        ]}
+      />
+      <div
+        id="studio-questions-panel-open"
+        role="tabpanel"
+        aria-labelledby="studio-questions-open"
+        hidden={view !== "open"}
+      >
+        {open.length || prepared.length ? (
+          <ol class="pk-studio-rows">
+            {open.map((question) => (
+              <OpenQuestionRow
+                key={question.id}
+                question={question}
+                targets={targets}
+                send={send}
+                onOpen={() => setInspectedId(question.id)}
+                onEdit={() => setEditing(question)}
+              />
+            ))}
+            {prepared.map((question) => (
+              <PreparedQuestionRow
+                key={question.id}
+                question={question}
+                targets={targets}
+                clock={clock}
+                send={send}
+                onEdit={() => setEditingPrepared(question)}
+              />
+            ))}
+          </ol>
+        ) : (
+          <p class="pk-live-questions__empty">No open questions.</p>
+        )}
+      </div>
+      <div
+        id="studio-questions-panel-answered"
+        role="tabpanel"
+        aria-labelledby="studio-questions-answered"
+        hidden={view !== "answered"}
+      >
+        {answered.length ? (
           <ol class="pk-studio-rows">
             {answered.map((question) => (
               <AnsweredQuestionRow
@@ -455,8 +491,10 @@ export function LiveQuestionsPanel({
               />
             ))}
           </ol>
-        </details>
-      ) : null}
+        ) : (
+          <p class="pk-live-questions__empty">No answered questions.</p>
+        )}
+      </div>
       {editingPrepared ? (
         <LivePreparedQuestionDialog
           question={editingPrepared}
