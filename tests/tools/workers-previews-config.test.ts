@@ -108,13 +108,13 @@ describe("Workers Previews configuration", () => {
       expect(hostname).toMatch(/^[a-z0-9-]+\.preview\.pkic\.org$/);
       expect(hostname).not.toBe(new URL(production.vars.APP_BASE_URL as string).hostname);
     }
-    expect(() => previewOriginVars("MAIN")).toThrow(/valid Preview hostname/);
+    expect(() => previewOriginVars("main")).toThrow(/valid Preview hostname/);
     expect(() => previewOriginVars("")).toThrow(/valid Preview hostname/);
   });
 
   it("routes the stable and branch Preview hosts without serving production at the entry hostname", () => {
-    const { hostname } = new URL(previewOriginVars("main").APP_BASE_URL);
-    expect(hostname).toBe("main.preview.pkic.org");
+    const { hostname } = new URL(previewOriginVars("stable").APP_BASE_URL);
+    expect(hostname).toBe("stable.preview.pkic.org");
     expect(production.routes).toContainEqual({
       pattern: previews.vars?.WEBAUTHN_RP_ID,
       custom_domain: true,
@@ -123,15 +123,14 @@ describe("Workers Previews configuration", () => {
     });
   });
 
-  it("builds main for production by default and allows a separate preview build", () => {
+  it("builds main for production and stable for preview", () => {
     try {
       vi.stubEnv("WORKERS_CI_BRANCH", "main");
       vi.stubEnv("CLOUDFLARE_ENV", undefined);
       expect(publicationEnvironment()).toBe("production");
-      vi.stubEnv("CLOUDFLARE_ENV", "preview");
+      vi.stubEnv("WORKERS_CI_BRANCH", "stable");
       expect(publicationEnvironment()).toBe("preview");
       vi.stubEnv("WORKERS_CI_BRANCH", "MAIN");
-      vi.stubEnv("CLOUDFLARE_ENV", undefined);
       expect(publicationEnvironment()).toBe("preview");
     } finally {
       vi.unstubAllEnvs();
@@ -163,6 +162,8 @@ describe("Workers Previews configuration", () => {
   it("derives custom Preview URLs from deployable branch names", () => {
     expect(workersPreviewBaseUrl("codex/Workers_Previews")).toBe("https://codex-workers-previews.preview.pkic.org");
     expect(workersPreviewBaseUrl("main-")).toBeNull();
+    expect(workersPreviewBaseUrl("Stable")).toBeNull();
+    expect(workersPreviewBaseUrl("stable-")).toBeNull();
     expect(workersPreviewBaseUrl(undefined)).toBeNull();
     expect(workersPreviewBaseUrl("///")).toBeNull();
   });

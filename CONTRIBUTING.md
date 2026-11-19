@@ -314,10 +314,12 @@ pnpm run build:preview
 pnpm run build:production
 ```
 
-Merges to `main` deploy to production on `pkic.org`. The same commit also
-updates the named `main` [Workers Preview](https://developers.cloudflare.com/workers/previews/)
-of `pkic-org`. The stable entry point `https://preview.pkic.org` redirects to
-`https://main.preview.pkic.org`. Branches and pull requests get their own
+Merges to `main` deploy to production on `pkic.org`. A GitHub workflow
+fast-forwards the protected `stable` branch to the same commit. Cloudflare
+builds it as a [Workers Preview](https://developers.cloudflare.com/workers/previews/)
+of `pkic-org` using its Preview build settings. The entry point
+`https://preview.pkic.org` redirects to `https://stable.preview.pkic.org`.
+Other branches and pull requests get their own
 `https://<branch>.preview.pkic.org` URLs. Existing
 `https://<branch>-pkic-org.pkic.workers.dev` URLs also work.
 
@@ -343,31 +345,36 @@ with its preview value. Cron Triggers and inbound
 email are unavailable on them. Run outbox jobs from the portal scheduler
 when a test needs them, after verifying the preview delivery configuration.
 
-One-time Cloudflare setup for the stable URL
+One-time setup for the stable URL
 
-1. In Workers Builds for `pkic-org`, keep the existing build and branch Preview
-   commands. Append `&& pnpm run deploy:preview` to the production deploy
-   command. With the standard Wrangler deploy command, the result is
-   `pnpm exec wrangler deploy && pnpm run deploy:preview`. The Preview builds
-   separately from the same `main` checkout and publishes static assets
-   generated from preview data. Keep the Preview named `main`
-   outside branch or PR cleanup. Cloudflare can evict the least recently
-   deployed Preview when the account reaches its per-Worker limit.
-2. Wrangler enables `*.preview.pkic.org` for Preview traffic on the next
+1. Install a GitHub App only on this repository with Contents and Workflows write
+   access. Set its client ID as `STABLE_PREVIEW_APP_CLIENT_ID` and its private
+   key as `STABLE_PREVIEW_APP_PRIVATE_KEY` in the `stable-preview-sync` GitHub
+   Actions environment. Restrict that environment to the `main` branch.
+2. Protect `stable` before merging the workflow. Restrict branch creation
+   and updates to the mirror App in one ruleset. In a separate ruleset with
+   no bypass, block non-fast-forward updates and deletion. The workflow
+   creates `stable` on its first run.
+3. Keep Preview builds enabled for `pkic-org` and include `stable` in any
+   branch or path filters. Wrangler enables `*.preview.pkic.org` on the next
    production deployment. Verify DNS and HTTPS on the named and branch
    Preview URLs before enabling the entry-point redirect. If DNS resolves
    but TLS fails, enable Total TLS with Advanced Certificate Manager or
    provision another certificate that covers `*.preview.pkic.org`.
-3. For the bare hostname, create a proxied DNS record if needed and a Single
+4. For the bare hostname, create a proxied DNS record if needed and a Single
    Redirect on the `pkic.org` zone matching `http.host eq "preview.pkic.org"`.
    Set the dynamic destination to
-   `concat("https://main.preview.pkic.org", http.request.uri.path)`, use 307,
+   `concat("https://stable.preview.pkic.org", http.request.uri.path)`, use 307,
    and preserve the query string. Keep the bare hostname disabled for
    production Worker traffic.
-4. Preview builds add `X-Robots-Tag: noindex` to the generated `_headers` rule
+5. Preview builds add `X-Robots-Tag: noindex` to the generated `_headers` rule
    for all static assets. Set `X-Robots-Tag: noindex` in a zone response header
    rule for `preview.pkic.org` and its subdomains to cover Worker-generated
    responses. Cloudflare Access can restrict Preview URLs to designated users.
+
+On the next normal merge, compare the GitHub `main` and `stable` commit SHAs
+with the production and stable Preview commits in Workers Builds. Check the
+entry URL after both deployments succeed.
 
 Manual deployment requires an explicit request and confirmed target. Build and
 deploy together because Vite selects the Wrangler environment at build time.

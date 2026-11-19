@@ -2,15 +2,15 @@ import { execFileSync } from "node:child_process";
 
 import { PREVIEW_HOSTNAME } from "../../assets/shared/preview-domain.ts";
 
-/** The custom URL for a named Preview, including the stable Preview of main. */
+/** The custom URL for a non-production branch Preview. */
 export function workersPreviewBaseUrl(branch) {
   if (!branch) return null;
   const label = branch
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
-  // Keep branches whose slug looks like main from targeting its Preview hostname.
-  if (!label || (label === "main" && branch !== "main")) return null;
+  // Reserve the stable hostname for the exact branch managed by the sync workflow.
+  if (!label || label === "main" || (label === "stable" && branch !== "stable")) return null;
   return `https://${label}.${PREVIEW_HOSTNAME}`;
 }
 
