@@ -576,7 +576,8 @@ export const registrationTicketSyncRouteSchema = {
     "200": { description: "The ticket was checked.", content: json(registrationTicketSyncResponseSchema) },
     ...refusals,
   },
-  ...organizer,
+  // The registrant asks whether their own payment arrived; an organizer of the event brings the whole ticket in line.
+  ...member,
 };
 export const registrationTicketReviewRouteSchema = {
   tags: ["Events"],

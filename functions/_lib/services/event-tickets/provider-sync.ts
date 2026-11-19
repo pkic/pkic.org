@@ -1,15 +1,16 @@
 /**
- * Brings one registration's ticket in line with the payment provider on an
- * organizer's request. The provider's events normally do this; where one did
- * not arrive, the same facts are read from the provider and applied through
- * the same handler, so a read and a later event for the same fact change the
- * ticket once.
+ * Brings one registration's ticket in line with the payment provider on
+ * request: an organizer's, or the registrant's own when they come back from
+ * the payment page before the provider's event has arrived. The provider's
+ * events normally do this; where one did not arrive, the same facts are read
+ * from the provider and applied through the same handler, so a read and a
+ * later event for the same fact change the ticket once.
  */
 import { first, all } from "../../db/queries";
 import { AppError } from "../../errors";
 import { readStripeCheckoutSession } from "../../integrations/stripe/checkout";
 import { readStripeRefund } from "../../integrations/stripe/refunds";
-import type { DatabaseLike, Env, UserBackedAuthAdmin } from "../../types";
+import type { DatabaseLike, Env } from "../../types";
 import { prepareAuditLog } from "../audit";
 import { handleEventTicketStripeEvent } from "./payment";
 import { OPEN_REFUND_SQL, reconcileTicketRefunds } from "./refunds";
@@ -24,17 +25,22 @@ const SETTLED_REFUND_STATUSES = ["succeeded", "failed", "canceled"];
 export async function syncRegistrationTicketWithProvider(
   db: DatabaseLike,
   env: Pick<Env, "STRIPE_SECRET_KEY" | "STRIPE_API_BASE">,
-  actor: UserBackedAuthAdmin,
-  input: { eventId: string; registrationId: string },
+  actor: { id: string },
+  /** `paymentOnly` is the registrant's own check: whether their payment arrived, and nothing about refunds. */
+  input: { eventId: string; registrationId: string; paymentOnly?: boolean },
   fetcher?: typeof fetch,
 ): Promise<{ changed: boolean }> {
   const secretKey = env.STRIPE_SECRET_KEY;
+  // Without a provider the registrant's own check has nothing to learn; an organizer is told why.
+  if (!secretKey && input.paymentOnly) return { changed: false };
   if (!secretKey) throw new AppError(503, "NOT_CONFIGURED", "The payment provider is not configured.");
   const read = () => readRegistrationTicket(db, input);
   const before = await read();
   if (!before) throw new AppError(404, "TICKET_NOT_FOUND", "This registration has no ticket.");
+  // A registrant with nothing to pay has nothing to ask the provider.
+  if (input.paymentOnly && before.status !== "pending_payment") return { changed: false };
   try {
-    await applyProviderState(db, env, secretKey, before.id, fetcher);
+    await applyProviderState(db, env, secretKey, before.id, Boolean(input.paymentOnly), fetcher);
   } catch (error) {
     // What was applied before the failed read stays applied; asking again picks up from there.
     if (error instanceof AppError && error.code === "STRIPE_ERROR")
@@ -54,6 +60,7 @@ async function applyProviderState(
   env: Pick<Env, "STRIPE_SECRET_KEY" | "STRIPE_API_BASE">,
   secretKey: string,
   ticketId: string,
+  paymentOnly: boolean,
   fetcher?: typeof fetch,
 ): Promise<void> {
   const options = { fetcher, apiBase: env.STRIPE_API_BASE };
@@ -78,6 +85,8 @@ async function applyProviderState(
       data: { object: session },
     });
   }
+
+  if (paymentOnly) return;
 
   // Refunds that were sent and have not been confirmed or failed.
   const refunds = await all<{ provider_refund_id: string }>(

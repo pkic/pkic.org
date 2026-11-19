@@ -243,7 +243,7 @@ export function ParticipantEvent({
           <VirtualRoom slug={event.slug} eventName={event.name} />
         </Suspense>
       ) : tab === "ticket" && !ticketless ? (
-        <EventTicket event={event} />
+        <EventTicket event={event} onSettled={onRegistered} />
       ) : tab === "check-in" ? (
         <Suspense fallback={<Spinner />}>
           <EventCheckIn slug={event.slug} pointToken={pointToken} />

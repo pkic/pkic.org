@@ -1468,6 +1468,13 @@ describe("event tickets", () => {
     expect(asked).toEqual(["/v1/checkout/sessions/cs_test_ticket"]);
     expect(await read()).toMatchObject({ status: "pending_payment" });
 
+    // The registrant's own check asks about the payment only, and says nothing has changed while it is open.
+    const own = (held: Parameters<typeof provider>[0]) =>
+      syncRegistrationTicketWithProvider(env.DB, paymentEnv, user, { ...input, paymentOnly: true }, provider(held));
+    asked.length = 0;
+    expect(await own({ session })).toEqual({ changed: false });
+    expect(asked).toEqual(["/v1/checkout/sessions/cs_test_ticket"]);
+
     // It was paid and the event never arrived: the ticket is settled as the event would have settled it.
     const paid = {
       ...session,
@@ -1504,11 +1511,26 @@ describe("event tickets", () => {
       await env.DB.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'registration_ticket_synced'").first(),
     ).toEqual({ n: 2 });
 
-    // Only an organizer of the event may ask.
+    // A settled ticket gives the registrant's own check nothing to ask the provider.
+    asked.length = 0;
+    expect(await own({})).toEqual({ changed: false });
+    expect(asked).toEqual([]);
+
+    // The registrant may ask about their own ticket and an organizer about anyone's; nobody else may.
     const path = `/api/v1/events/pqc-2026/registrations/${registration.id}/ticket/sync`;
     expect((await callApi(paymentEnv, path, { method: "POST", body: "{}" })).status).toBe(401);
-    const token = await createMemberSession(env.DB, user.id, `session-${crypto.randomUUID()}`);
-    const own = { headers: { authorization: `Bearer ${token}`, "content-type": "application/json" } };
-    expect((await callApi(paymentEnv, path, { method: "POST", body: "{}", ...own })).status).toBe(403);
+    const signedIn = async (userId: string) => ({
+      headers: {
+        authorization: `Bearer ${await createMemberSession(env.DB, userId, `session-${crypto.randomUUID()}`)}`,
+        "content-type": "application/json",
+      },
+    });
+    const mine = await callApi(paymentEnv, path, { method: "POST", body: "{}", ...(await signedIn(user.id)) });
+    expect(mine.status).toBe(200);
+    expect(await mine.json()).toEqual({ success: true, changed: false });
+    const other = await findOrCreateUser(env.DB, { email: "other-sync@gmail.com", firstName: "O", lastName: "T" });
+    expect(
+      (await callApi(paymentEnv, path, { method: "POST", body: "{}", ...(await signedIn(other.id)) })).status,
+    ).toBe(403);
   });
 });

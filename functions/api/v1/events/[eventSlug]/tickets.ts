@@ -158,13 +158,25 @@ const RegistrationTicketRefundPost = openApiRoute(
   },
 );
 
+/** An organizer brings the whole ticket in line; the registrant asks only whether their own payment arrived. */
 const RegistrationTicketSyncPost = openApiRoute(registrationTicketSyncRouteSchema, async (c: AdminContext, data) => {
-  const { actor, db, event } = await requireEventPermission(c, data.params.eventSlug, "events:write");
-  const synced = await syncRegistrationTicketWithProvider(db, c.env, actor, {
-    eventId: event.id,
-    registrationId: data.params.registrationId,
-  });
-  return json({ success: true, ...synced });
+  markResponseSensitive(c);
+  const db = requestDb(c);
+  const identity = await requireIdentityFromRequest(db, c.req.raw, c.env);
+  const event = await getEventBySlug(db, data.params.eventSlug);
+  const input = { eventId: event.id, registrationId: data.params.registrationId };
+  if ((await readRegistrationOwner(db, input)) === identity.userId)
+    return json({
+      success: true,
+      ...(await syncRegistrationTicketWithProvider(
+        db,
+        c.env,
+        { id: identity.userId },
+        { ...input, paymentOnly: true },
+      )),
+    });
+  const { actor } = await requireEventPermission(c, data.params.eventSlug, "events:write");
+  return json({ success: true, ...(await syncRegistrationTicketWithProvider(db, c.env, actor, input)) });
 });
 
 const RegistrationTicketReviewPost = openApiRoute(

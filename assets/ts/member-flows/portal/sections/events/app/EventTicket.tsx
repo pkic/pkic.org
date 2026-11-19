@@ -28,7 +28,14 @@ import { eventRegistrationStanding, type ParticipantEventDetail } from "./event-
 import { attendanceStanding, type AttendanceStanding } from "../../../../../shared/viewer-attendance";
 import { formatDayList } from "../../../../../../shared/format-date";
 
-export function EventTicket({ event }: { event: ParticipantEventDetail }) {
+export function EventTicket({
+  event,
+  onSettled,
+}: {
+  event: ParticipantEventDetail;
+  /** The ticket turned out to be paid, so what the event says about the reader is read again. */
+  onSettled?: () => unknown;
+}) {
   // Only a registered reader reaches this page; the event home offers registration to everyone else.
   const standing = eventRegistrationStanding(event);
   if (!standing.registrationId)
@@ -49,7 +56,9 @@ export function EventTicket({ event }: { event: ParticipantEventDetail }) {
         <div class="pk-cluster">{details}</div>
       </EventCard>
     );
-  return <SettledTicket event={event} registrationId={standing.registrationId} details={details} />;
+  return (
+    <SettledTicket event={event} registrationId={standing.registrationId} details={details} onSettled={onSettled} />
+  );
 }
 
 // Loaded only for a ticket that is not settled, so the installed event app does not carry it offline.
@@ -60,10 +69,12 @@ function SettledTicket({
   event,
   registrationId,
   details,
+  onSettled,
 }: {
   event: ParticipantEventDetail;
   registrationId: string;
   details: ComponentChildren;
+  onSettled?: () => unknown;
 }) {
   const ticket = useData(
     () =>
@@ -78,7 +89,13 @@ function SettledTicket({
   if (held && held.status !== "paid" && held.status !== "free")
     return (
       <Suspense fallback={<Spinner label="Loading your ticket…" />}>
-        <EventTicketPayment slug={event.slug} registrationId={registrationId} ticket={held} details={details} />
+        <EventTicketPayment
+          slug={event.slug}
+          registrationId={registrationId}
+          ticket={held}
+          details={details}
+          onSettled={() => Promise.all([ticket.reload(), onSettled?.()])}
+        />
       </Suspense>
     );
   // A ticket that could not be read still shows the badge the device holds; if that fails too, both are tried again.
