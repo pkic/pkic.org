@@ -168,26 +168,18 @@ export function App() {
       if (isCurrent() && portalSession.value === session) saveProfile(nextProfile);
     } catch (error) {
       if (!isCurrent()) return portalSession.value !== null;
-      const scannerFallback =
-        Boolean(checkedLocalSession) &&
-        error instanceof ApiClientError &&
-        (error.status === 0 ||
-          error.status === 401 ||
-          error.status === 403 ||
-          error.status === 429 ||
-          error.status >= 500) &&
-        // An HTTP refusal must not replace normal sign-in with an empty scanner chooser.
-        (error.status === 0 ||
-          (await listPreparedScannerContexts().then(
+      const preparedScanner = checkedLocalSession
+        ? await listPreparedScannerContexts().then(
             (contexts) => contexts.length > 0,
-            () => true,
-          )));
+            () => null,
+          )
+        : false;
       if (!isCurrent()) return portalSession.value !== null;
-      if (scannerFallback) {
+      if (preparedScanner) {
         scannerTransportUnavailable.value = true;
         setSessionError("We could not check sign-in. Saved scanner preparation remains available on this device.");
         if (portalSession.value?.sessionId === checkedSessionId) clearUserSession();
-      } else if (error instanceof ApiClientError && [401, 403].includes(error.status)) {
+      } else if (preparedScanner === false && error instanceof ApiClientError && [401, 403].includes(error.status)) {
         scannerTransportUnavailable.value = false;
         await clearScannerOfflineContexts(checkedLocalSession).catch(() => {
           if (isCurrent())
@@ -196,8 +188,7 @@ export function App() {
         if (!isCurrent()) return portalSession.value !== null;
         if (portalSession.value?.sessionId === checkedSessionId) clearUserSession();
       } else {
-        scannerTransportUnavailable.value =
-          error instanceof ApiClientError && error.status === 0 && error.code === "NETWORK_UNAVAILABLE";
+        scannerTransportUnavailable.value = false;
         setSessionError("We could not refresh your sign-in information. Keep this page open and try again shortly.");
       }
     }

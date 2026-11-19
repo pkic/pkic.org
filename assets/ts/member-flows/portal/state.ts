@@ -10,6 +10,7 @@ import { PERMISSION_DENIED_WITH_REFRESH_MESSAGE } from "../../../shared/auth-err
 import type { MyProfile, PortalSession } from "./types";
 import { personDisplayName } from "../../../shared/person-display";
 import {
+  listPreparedScannerContexts,
   scannerCollectorPath,
   scannerTransportUnavailable,
 } from "./sections/events/detail/scanner/scanner-offline-context";
@@ -137,9 +138,18 @@ function restoreReturnPath(): void {
  */
 export function expirePortalSession(): void {
   recordReturnPath();
-  if (typeof window !== "undefined" && scannerCollectorPath(window.location.hash))
-    scannerTransportUnavailable.value = true;
+  const scannerRoute = typeof window === "undefined" ? null : scannerCollectorPath(window.location.hash);
+  if (!scannerRoute) scannerTransportUnavailable.value = false;
   clearAuth();
+  if (scannerRoute)
+    void listPreparedScannerContexts()
+      .then((contexts) => {
+        if (!portalSession.value)
+          scannerTransportUnavailable.value = contexts.some((context) => context.route === scannerRoute);
+      })
+      .catch(() => {
+        if (!portalSession.value) scannerTransportUnavailable.value = false;
+      });
 }
 
 /** Rewrites SCOPE_REQUIRED errors so the portal never surfaces internal scope names. */

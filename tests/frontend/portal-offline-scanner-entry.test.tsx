@@ -76,6 +76,16 @@ import { App } from "../../assets/ts/member-flows/portal/App";
 import { scannerTransportUnavailable } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-offline-context";
 let host: HTMLElement;
 let fetchMock: ReturnType<typeof vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>>;
+const localSession = {
+  sessionId: "11111111-1111-4111-8111-111111111111",
+  operatorUserId: "22222222-2222-4222-8222-222222222222",
+};
+function prepareLocalScanner() {
+  mocks.activeSession.mockResolvedValue(localSession);
+  mocks.preparedContexts.mockResolvedValue([
+    { sessionId: localSession.sessionId, route: "/events/synthetic-event/scanner" },
+  ]);
+}
 beforeEach(() => {
   mocks.registerWorker.mockReset().mockResolvedValue(null);
   clearAuth();
@@ -133,6 +143,7 @@ it("keeps ordinary sign-in usable after startup worker registration fails", asyn
 it.each([true, false])(
   "enters after a real disconnected fetch with navigator online=%s without authenticating",
   async (online) => {
+    prepareLocalScanner();
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(online);
     fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
     await mount();
@@ -177,8 +188,9 @@ it.each([401, 403, 503])(
   },
 );
 it.each(["online", "focus", "retry", "local-session-change"])(
-  "keeps offline capture until an authoritative response during %s recovery",
+  "keeps a prepared scanner through sign-in refusal during %s recovery",
   async (trigger) => {
+    prepareLocalScanner();
     fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
     await mount();
     await vi.waitFor(() => expect(host.textContent).toContain("Prepared offline scanner"));
@@ -209,14 +221,14 @@ it.each(["online", "focus", "retry", "local-session-change"])(
           }),
         ),
       );
-      await vi.waitFor(() => expect(mocks.clearPreparation).toHaveBeenCalledOnce());
-      await vi.waitFor(() => expect(host.textContent).toContain("Sign in"));
-      expect(scannerTransportUnavailable.value).toBe(false);
-      expect(host.textContent).not.toContain("Prepared offline scanner");
+      expect(mocks.clearPreparation).not.toHaveBeenCalled();
+      expect(scannerTransportUnavailable.value).toBe(true);
+      expect(host.textContent).toContain("Prepared offline scanner");
     } else expect(fetchMock).toHaveBeenCalledOnce();
   },
 );
 it("offers the local scanner without exposing other portal pages after a disconnected request", async () => {
+  prepareLocalScanner();
   window.location.hash = "#/organizations/private-organization";
   fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
   await mount();
@@ -226,42 +238,51 @@ it("offers the local scanner without exposing other portal pages after a disconn
 });
 it("offers prepared scanners from the portal entry point without a remembered scanner URL", async () => {
   window.location.hash = "#/home";
-  mocks.activeSession.mockResolvedValue({
-    sessionId: "11111111-1111-4111-8111-111111111111",
-    operatorUserId: "22222222-2222-4222-8222-222222222222",
-  });
+  prepareLocalScanner();
   fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
   await mount();
   await vi.waitFor(() => expect(host.textContent).toContain("Prepared offline scanner"));
   expect(host.textContent).not.toContain("Authenticated portal content");
   expect(scannerTransportUnavailable.value).toBe(true);
 });
-it.each([true, false])(
-  "keeps the offline return route when local session state changes after the network fails (local session: %s)",
-  async (hasLocalSession) => {
-    window.location.hash = "#/home";
-    if (hasLocalSession)
-      mocks.activeSession.mockResolvedValue({
-        sessionId: "11111111-1111-4111-8111-111111111111",
-        operatorUserId: "22222222-2222-4222-8222-222222222222",
-      });
-    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
-    await mount();
-    await vi.waitFor(() => expect(host.textContent).toContain("Prepared offline scanner"));
-    await act(async () => {
-      for (const callback of mocks.sessionListeners) callback();
-    });
-    expect(host.textContent).toContain("Prepared offline scanner");
-    expect(scannerTransportUnavailable.value).toBe(true);
-  },
-);
-it("moves an expired web sign-in to the local scanner route without erasing preparation", () => {
+it("keeps the offline return route when local session state changes after the network fails", async () => {
+  window.location.hash = "#/home";
+  prepareLocalScanner();
+  fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+  await mount();
+  await vi.waitFor(() => expect(host.textContent).toContain("Prepared offline scanner"));
+  await act(async () => {
+    for (const callback of mocks.sessionListeners) callback();
+  });
+  expect(host.textContent).toContain("Prepared offline scanner");
+  expect(scannerTransportUnavailable.value).toBe(true);
+});
+it.each([true, false])("does not offer a scanner without saved access (local session: %s)", async (hasLocalSession) => {
+  window.location.hash = "#/home";
+  if (hasLocalSession) mocks.activeSession.mockResolvedValue(localSession);
+  fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+  await mount();
+  await vi.waitFor(() => expect(host.textContent).toContain("Sign in"));
+  expect(host.textContent).not.toContain("Prepared offline scanner");
+  expect(scannerTransportUnavailable.value).toBe(false);
+});
+it("moves an expired web sign-in to a prepared local scanner without erasing preparation", async () => {
+  prepareLocalScanner();
+  scannerTransportUnavailable.value = true;
   expirePortalSession();
+  expect(scannerTransportUnavailable.value).toBe(true);
+  await vi.waitFor(() => expect(mocks.preparedContexts).toHaveBeenCalledOnce());
   expect(scannerTransportUnavailable.value).toBe(true);
   expect(mocks.clearPreparation).not.toHaveBeenCalled();
 });
+it("does not offer a scanner after sign-in expires without a prepared task", async () => {
+  scannerTransportUnavailable.value = true;
+  expirePortalSession();
+  await vi.waitFor(() => expect(mocks.preparedContexts).toHaveBeenCalledOnce());
+  await vi.waitFor(() => expect(scannerTransportUnavailable.value).toBe(false));
+});
 it.each([401, 403])("does not erase a newer local scanner after a delayed HTTP %s refusal", async (status) => {
-  mocks.preparedContexts.mockResolvedValue([{}]);
+  mocks.preparedContexts.mockResolvedValue([{ sessionId: "33333333-3333-4333-8333-333333333333" }]);
   const original = {
     sessionId: "11111111-1111-4111-8111-111111111111",
     operatorUserId: "22222222-2222-4222-8222-222222222222",
@@ -292,7 +313,7 @@ it.each([401, 403])("does not erase a newer local scanner after a delayed HTTP %
   expect(portalSession.value).toBeNull();
 });
 it.each([401, 403, 429, 500, 503])("offers a saved scanner after HTTP %s on portal sign-in", async (status) => {
-  mocks.preparedContexts.mockResolvedValue([{}]);
+  mocks.preparedContexts.mockResolvedValue([{ sessionId: localSession.sessionId }]);
   mocks.activeSession.mockResolvedValue({
     sessionId: "11111111-1111-4111-8111-111111111111",
     operatorUserId: "22222222-2222-4222-8222-222222222222",
@@ -327,7 +348,7 @@ it.each([401, 403, 429, 500, 503])(
     expect(scannerTransportUnavailable.value).toBe(false);
   },
 );
-it("preserves scanner preparation when its local inventory cannot be read after HTTP 403", async () => {
+it("keeps scanner data without offering access when its local inventory cannot be read after HTTP 403", async () => {
   mocks.activeSession.mockResolvedValue({
     sessionId: "11111111-1111-4111-8111-111111111111",
     operatorUserId: "22222222-2222-4222-8222-222222222222",
@@ -340,6 +361,7 @@ it("preserves scanner preparation when its local inventory cannot be read after 
     }),
   );
   await mount();
-  await vi.waitFor(() => expect(host.textContent).toContain("Prepared offline scanner"));
+  await vi.waitFor(() => expect(host.textContent).toContain("Sign in"));
+  expect(host.textContent).not.toContain("Prepared offline scanner");
   expect(mocks.clearPreparation).not.toHaveBeenCalled();
 });
