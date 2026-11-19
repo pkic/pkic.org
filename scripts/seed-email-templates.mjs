@@ -352,9 +352,9 @@ The PKI Consortium is a vendor-neutral community of PKI practitioners working to
     contentType: "markdown",
     content: `---
 
-**Help keep PKI Consortium membership, conferences, and resources free**
+**Help keep the PKI Consortium open to everyone**
 
-If our work is valuable to you or your organization, please consider a voluntary contribution. Any amount helps keep membership, conferences, and resources open to everyone.
+Membership and our resources are free, and we keep our conferences as accessible as we can. If our work is valuable to you or your organization, please consider a voluntary contribution.
 
 :::button variant=secondary
 [Support the PKI Consortium →]({{brandBaseUrl}}/donate/)
@@ -362,7 +362,7 @@ If our work is valuable to you or your organization, please consider a voluntary
 
 {{> donation_tax_notice}}
 
-Want your organization to make a bigger impact? Sponsors fund free, open events for the global PKI and security community. [Explore sponsorship]({{brandBaseUrl}}/sponsors/).
+Want your organization to make a bigger impact? Sponsors help keep our events open and affordable for the global PKI and security community. [Explore sponsorship]({{brandBaseUrl}}/sponsors/).
 `,
   },
   // ─────────────────────────────────────────────────────────────────────────
@@ -671,7 +671,7 @@ Didn't register? [Cancel this registration and remove your data]({{manageUrl}}).
 
 We noticed that you declined or removed the calendar invitation for **{{event_name}} on {{event_day}}**.
 
-In-person seats are limited, and each one costs $150–$300 per day for venue and catering, paid by sponsors so attendance stays free. So it matters that we know who is coming.
+In-person seats are limited, and each one costs us $150–$300 per day for venue and catering. So it matters that we know who is coming.
 
 Still coming in person? Please confirm as soon as you can. If you don't, we'll switch that day to virtual attendance and offer your seat to someone on the waitlist.
 
@@ -1253,7 +1253,7 @@ Didn't ask for this? You can ignore this email. Nothing changes unless you confi
 
 Thank you for your **{{formattedAmount}}** donation. It means more than you might think.
 
-Donations keep our conferences **free and open** to security engineers, researchers, policymakers, and open-source contributors who couldn't attend otherwise. You've opened a door for someone in the global PKI community.
+Donations keep our conferences **open and affordable**, and help us offer free tickets to security engineers, researchers, policymakers, and open-source contributors who couldn't attend otherwise. You've opened a door for someone in the global PKI community.
 
 Welcome to a growing group of people who are shaping the future of digital trust.
 
