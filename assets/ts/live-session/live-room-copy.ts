@@ -2,7 +2,8 @@
  * Why a session's live room did not open, in the words of the person it
  * failed for: an operator at the control desk or an attendee asking
  * questions. The reason is the error code the room closed a refused socket
- * with; without one, the room could not be reached at all.
+ * with, or the reference of a fault on our side; without either, the room
+ * could not be reached, which is the only case that blames the connection.
  */
 export type LiveRoomAudience = "operator" | "attendee" | "chat";
 
@@ -47,8 +48,23 @@ const UNREACHABLE: FailureCopy = {
   chat: "Chat can't be reached right now. Check your connection, then reload the page.",
 };
 
-/** What failed for this audience: the refusal the room gave, or that it could not be reached. */
-export function liveRoomOpenFailure(refusalCode: string | null, audience: LiveRoomAudience): string {
-  if (!refusalCode) return UNREACHABLE[audience];
-  return (OPEN_FAILURES[refusalCode] ?? REFUSED)[audience];
+const FAULT_SUBJECT: FailureCopy = {
+  operator: "the live room isn't",
+  attendee: "questions aren't",
+  chat: "chat isn't",
+};
+
+/** A fault on our side: nothing the reader can fix, so it asks them to tell us, with the reference to quote. */
+function serverFault(reference: string, audience: LiveRoomAudience): string {
+  return `Something went wrong on our side, so ${FAULT_SUBJECT[audience]} available. Let us know and quote reference ${reference}.`;
+}
+
+/** What failed for this audience: the refusal the room gave, a fault on our side, or that it could not be reached. */
+export function liveRoomOpenFailure(
+  refusalCode: string | null,
+  audience: LiveRoomAudience,
+  faultReference: string | null = null,
+): string {
+  if (refusalCode) return (OPEN_FAILURES[refusalCode] ?? REFUSED)[audience];
+  return faultReference ? serverFault(faultReference, audience) : UNREACHABLE[audience];
 }

@@ -5,7 +5,11 @@ import {
   liveProgramSelectionSchema,
   type LiveProgramSelection,
 } from "../../shared/schemas/live-room-program";
-import { LIVE_OVERLAY_PROTOCOL_PREFIX, liveRoomRefusalFromClose } from "../../shared/schemas/live-session-room";
+import {
+  LIVE_OVERLAY_PROTOCOL_PREFIX,
+  liveRoomFaultFromClose,
+  liveRoomRefusalFromClose,
+} from "../../shared/schemas/live-session-room";
 import { getJson, postJson } from "../shared/api-client";
 import { liveRoomOpenFailure } from "./live-room-copy";
 import type { LiveSocketFactory } from "./useLiveRoom";
@@ -126,6 +130,8 @@ export function useLiveRoomProgram({
           retry = undefined;
           return;
         }
+        const fault = liveRoomFaultFromClose(event.code, event.reason);
+        if (fault) setError(new Error(liveRoomOpenFailure(null, "operator", fault)));
         again();
       });
     }

@@ -102,9 +102,13 @@ export const LIVE_OVERLAY_PROTOCOL_PREFIX = "pkic-overlay.";
  * bare close. So a room that cannot admit a socket (no such session, no
  * access) accepts it and closes it at once with `4000 + the 4xx status` and
  * the error code as the close reason; the page then says what failed and does
- * not retry. A server fault stays an HTTP failure, which the page retries.
+ * not retry. A fault on our side closes the same way with 4500 and a
+ * reference the server logged the fault under, so the page tells it apart
+ * from a lost connection, says so with the reference, and still retries.
  */
 const LIVE_ROOM_REFUSAL_CLOSE_BASE = 4000;
+/** The close code of a socket the room could not serve because of a fault on our side. */
+export const LIVE_ROOM_FAULT_CLOSE_CODE = 4500;
 
 export function liveRoomRefusalCloseCode(status: number): number {
   return LIVE_ROOM_REFUSAL_CLOSE_BASE + status;
@@ -114,6 +118,11 @@ export function liveRoomRefusalCloseCode(status: number): number {
 export function liveRoomRefusalFromClose(code: number, reason: string): string | null {
   if (!(code >= LIVE_ROOM_REFUSAL_CLOSE_BASE + 400 && code <= LIVE_ROOM_REFUSAL_CLOSE_BASE + 499)) return null;
   return reason || "LIVE_ROOM_REFUSED";
+}
+
+/** The reference of a fault on our side, or null for any other close. */
+export function liveRoomFaultFromClose(code: number, reason: string): string | null {
+  return code === LIVE_ROOM_FAULT_CLOSE_CODE ? reason || "unknown" : null;
 }
 
 export const liveRoomParamsSchema = eventSlugParamsSchema.extend({ occurrenceId: databaseIdSchema });

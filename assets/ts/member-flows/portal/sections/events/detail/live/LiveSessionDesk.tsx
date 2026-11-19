@@ -191,7 +191,9 @@ export function LiveSessionDesk({
     return room.admissionRefusal ? (
       <Alert tone="danger">{liveRoomOpenFailure(room.admissionRefusal, "operator")}</Alert>
     ) : room.status === "offline" ? (
-      <Alert tone="warn">{liveRoomOpenFailure(null, "operator")}</Alert>
+      <Alert tone={room.serverFault ? "danger" : "warn"}>
+        {liveRoomOpenFailure(null, "operator", room.serverFault)}
+      </Alert>
     ) : (
       <Spinner label="Joining the live room…" />
     );
@@ -421,12 +423,14 @@ export function LiveSessionDesk({
     ? room.admissionRefusal
       ? { tone: "danger", text: liveRoomOpenFailure(room.admissionRefusal, "operator") }
       : room.status === "offline"
-        ? { tone: "warn", text: liveRoomOpenFailure(null, "operator") }
+        ? { tone: room.serverFault ? "danger" : "warn", text: liveRoomOpenFailure(null, "operator", room.serverFault) }
         : { tone: "warn", text: "Opening the session. Controls are paused until it is ready." }
     : state.refusal
       ? { tone: "danger", text: state.refusal.message }
       : !live
-        ? { tone: "warn", text: "Reconnecting to the live room. Controls are paused until it is back." }
+        ? room.serverFault
+          ? { tone: "danger", text: liveRoomOpenFailure(null, "operator", room.serverFault) }
+          : { tone: "warn", text: "Reconnecting to the live room. Controls are paused until it is back." }
         : agendaNotice;
   const reportFocus = (event: Event) => presence.focus(livePresenceFocusAt(event.target as Element | null));
   return (

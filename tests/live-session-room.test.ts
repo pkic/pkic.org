@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LIVE_ROOM_POLICY } from "../assets/shared/live-session-policy";
-import { LIVE_ROOM_PROTOCOL } from "../assets/shared/schemas/live-session-room";
+import { LIVE_ROOM_FAULT_CLOSE_CODE, LIVE_ROOM_PROTOCOL } from "../assets/shared/schemas/live-session-room";
 import { liveOverlayAccessResponseSchema } from "../assets/shared/schemas/live-overlay-access";
 import { signLiveOverlayToken } from "../functions/_lib/auth/live-session-overlay-token";
 import { callApi } from "./helpers/app";
@@ -136,6 +136,29 @@ describe("live session room admission", () => {
       code: 4404,
       reason: "LIVE_SESSION_NOT_FOUND",
     });
+  });
+
+  it("closes with a fault code and a reference when the room fails on our side, so the page does not blame the connection", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const response = await callApi({ ...env, LIVE_SESSION_ROOMS: undefined }, f.path(), {
+      headers: {
+        upgrade: "websocket",
+        origin: "https://app.test",
+        "sec-websocket-protocol": LIVE_ROOM_PROTOCOL,
+        authorization: `Bearer ${f.tokens.operator}`,
+        "cf-ray": "8f1b2c3d4e5f6a7b-AMS",
+      },
+    });
+    expect(response.status).toBe(101);
+    const socket = response.webSocket!;
+    const closed = new Promise<{ code: number; reason: string }>((resolve) =>
+      socket.addEventListener("close", (event) => resolve({ code: event.code, reason: event.reason })),
+    );
+    socket.accept();
+    expect(await closed).toEqual({ code: LIVE_ROOM_FAULT_CLOSE_CODE, reason: "8f1b2c3d4e5f6a7b-AMS" });
+    // The logged fault carries the same reference, so it can be found from what the page shows.
+    expect(String(error.mock.calls[0]?.[0])).toContain("8f1b2c3d4e5f6a7b-AMS");
+    error.mockRestore();
   });
 });
 

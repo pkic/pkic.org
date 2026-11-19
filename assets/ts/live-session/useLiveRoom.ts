@@ -3,6 +3,7 @@ import {
   LIVE_OVERLAY_PROTOCOL_PREFIX,
   LIVE_ROOM_PROTOCOL,
   liveRoomClientMessageSchema,
+  liveRoomFaultFromClose,
   liveRoomRefusalFromClose,
   liveRoomSocketQuerySchema,
   type LiveOverlayView,
@@ -80,6 +81,8 @@ export function useLiveRoom({
   const [state, setState] = useState<LiveRoomState | null>(null);
   const [status, setStatus] = useState<LiveRoomStatus>("connecting");
   const [admissionRefusal, setAdmissionRefusal] = useState<string | null>(null);
+  // The reference of a fault on our side at the last close, so the page does not blame the connection for it.
+  const [serverFault, setServerFault] = useState<string | null>(null);
   const socket = useRef<WebSocket | null>(null);
   const factory = useRef(createSocket);
   factory.current = createSocket;
@@ -160,6 +163,7 @@ export function useLiveRoom({
           admitted = true;
           attempt = 0;
           setStatus("live");
+          setServerFault(null);
         }
         // Moving to another session keeps the last one's state on screen; nothing of the new room lands on it before its snapshot.
         if (admitted) setState((previous) => applyLiveRoomMessage(previous, message));
@@ -180,6 +184,7 @@ export function useLiveRoom({
       setStatus("offline");
       const refused = liveRoomRefusalFromClose(event.code, event.reason);
       if (refused) setAdmissionRefusal(refused);
+      setServerFault(liveRoomFaultFromClose(event.code, event.reason));
       if (keepsTrying) {
         if (refused) persistence.current?.onRefusal?.(refused);
         retry = setTimeout(open, persistentRetryDelay(attempt));
@@ -200,6 +205,7 @@ export function useLiveRoom({
     setAnswerResult(null);
     setStatus("connecting");
     setAdmissionRefusal(null);
+    setServerFault(null);
     open();
     const stopWaiting = retryWhenBack(() => {
       // Waiting out a backoff while the network was away: try now.
@@ -225,5 +231,5 @@ export function useLiveRoom({
     return true;
   }, []);
 
-  return { state, status, admissionRefusal, send, questionResult, answerResult, questionChangeResult };
+  return { state, status, admissionRefusal, serverFault, send, questionResult, answerResult, questionChangeResult };
 }

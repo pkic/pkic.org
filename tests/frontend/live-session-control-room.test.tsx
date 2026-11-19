@@ -4,7 +4,7 @@ import { LIVE_GRAPHIC_THEME_DEFAULTS } from "../../assets/shared/live-graphic-th
 // @vitest-environment jsdom
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { liveRoomClientMessageSchema } from "../../assets/shared/schemas/live-session-room";
+import { LIVE_ROOM_FAULT_CLOSE_CODE, liveRoomClientMessageSchema } from "../../assets/shared/schemas/live-session-room";
 import { liveRoomOpenFailure } from "../../assets/ts/live-session/live-room-copy";
 import { defaultLiveTimerGraphic } from "../../assets/shared/schemas/live-session-timer";
 import {
@@ -588,5 +588,22 @@ describe("live control room states", () => {
   it("names missing access only when the room says so", () => {
     expect(liveRoomOpenFailure("LIVE_SESSION_ACCESS_REQUIRED", "operator")).toContain("live moderation access");
     expect(liveRoomOpenFailure(null, "operator")).toContain("can't be reached");
+  });
+
+  it("says a fault on our side is ours, with its reference, and keeps trying", () => {
+    const { host, live } = mountClosedDesk();
+    vi.useFakeTimers();
+    try {
+      void act(() => live.latest().refuse(LIVE_ROOM_FAULT_CLOSE_CODE, "8f1b2c3d4e5f6a7b-AMS"));
+      const alert = host.querySelector(".pk-alert")!;
+      expect(alert.textContent).toBe(
+        "Something went wrong on our side, so the live room isn't available. Let us know and quote reference 8f1b2c3d4e5f6a7b-AMS.",
+      );
+      expect(alert.textContent).not.toContain("connection");
+      void act(() => vi.advanceTimersByTime(60_000));
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(live.sockets.length).toBeGreaterThan(1);
   });
 });

@@ -1,6 +1,5 @@
 import { LIVE_PROGRAM_PROTOCOL, liveProgramParamsSchema } from "../../../assets/shared/schemas/live-room-program";
 import { AppError, isAppError } from "../errors";
-import { handleError } from "../http";
 import type { Env } from "../types";
 import { getEventBySlug } from "../services/events";
 import { readPublishedProgramRoom } from "../services/live-session/program-room";
@@ -13,7 +12,7 @@ import { offeredOverlayToken } from "../services/live-session/room-access";
 import { verifyLiveOverlayToken } from "../auth/live-session-overlay-token";
 import { getUserSessionToken, resolveUserSessionContext } from "../auth/user-session";
 import { hasPermission } from "../auth/permissions";
-import { assertLiveSocketHandshake, refusedLiveSocket } from "./live-socket-handshake";
+import { assertLiveSocketHandshake, failedLiveSocket, refusedLiveSocket } from "./live-socket-handshake";
 const PATH = /^\/api\/v1\/events\/([^/]+)\/agenda\/rooms\/([^/]+)\/live\/program\/?$/;
 export function isLiveProgramSocketPath(request: Request): boolean {
   return PATH.test(new URL(request.url).pathname) && request.headers.get("upgrade")?.toLowerCase() === "websocket";
@@ -69,6 +68,6 @@ export async function liveProgramSocketRequest(request: Request, env: Env): Prom
       }),
     );
   } catch (error) {
-    return handleError(error);
+    return failedLiveSocket(request, error, LIVE_PROGRAM_PROTOCOL);
   }
 }

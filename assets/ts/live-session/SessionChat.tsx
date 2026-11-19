@@ -30,7 +30,7 @@ function SessionChatRoom({
   const room = useLiveRoom({ slug, occurrenceId, createSocket });
   if (!room.state)
     return room.admissionRefusal || room.status === "offline" ? (
-      <Alert tone="warn">{liveRoomOpenFailure(room.admissionRefusal, "chat")}</Alert>
+      <Alert tone="warn">{liveRoomOpenFailure(room.admissionRefusal, "chat", room.serverFault)}</Alert>
     ) : (
       <p class="pk-small pk-muted">Joining session chat…</p>
     );

@@ -170,7 +170,7 @@ function SessionQuestionsRoom({
     return room.admissionRefusal ? (
       <Alert tone="warn">{liveRoomOpenFailure(room.admissionRefusal, "attendee")}</Alert>
     ) : room.status === "offline" ? (
-      <Alert tone="warn">{liveRoomOpenFailure(null, "attendee")}</Alert>
+      <Alert tone="warn">{liveRoomOpenFailure(null, "attendee", room.serverFault)}</Alert>
     ) : (
       <p class="pk-live-questions__empty">Joining the session’s questions…</p>
     );

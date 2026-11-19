@@ -4,8 +4,7 @@ import {
   liveRoomSocketQuerySchema,
 } from "../../../assets/shared/schemas/live-session-room";
 import { AppError, isAppError } from "../errors";
-import { handleError } from "../http";
-import { assertLiveSocketHandshake, refusedLiveSocket } from "./live-socket-handshake";
+import { assertLiveSocketHandshake, failedLiveSocket, refusedLiveSocket } from "./live-socket-handshake";
 import { isLiveProgramSocketPath, liveProgramSocketRequest } from "./live-program-socket";
 import { admitLiveRoomParticipant } from "../services/live-session/room-access";
 import {
@@ -66,6 +65,6 @@ export async function liveRoomSocketRequest(request: Request, env: Env): Promise
       }),
     );
   } catch (error) {
-    return handleError(error);
+    return failedLiveSocket(request, error, LIVE_ROOM_PROTOCOL);
   }
 }
