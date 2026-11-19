@@ -26,7 +26,7 @@ export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
     key: "event_proposal_verify",
     subjectTemplate: "Verify your email for {{eventName}}",
     content:
-      'Verify your email address to continue your proposal for **{{eventName}}**.\n\n<div class="cta-navy"><a href="{{verificationUrl}}">Verify my email &rarr;</a></div>\n\nThe link works for a short time. Didn\'t ask for it? You can ignore this email.',
+      "Verify your email address to continue your proposal for **{{eventName}}**.\n\n:::button\n[Verify my email →]({{verificationUrl}})\n:::\n\nThe link works for a short time. Didn't ask for it? You can ignore this email.",
     contentType: "markdown",
     messageType: "transactional",
   },
@@ -36,7 +36,7 @@ export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
     subjectTemplate:
       "{{#if registration}}Confirm your email to register for {{eventName}}{{else}}{{#if proposal}}Confirm your email to submit a proposal for {{eventName}}{{else}}{{#if join}}Confirm your email to join the PKI Consortium{{else}}Confirm your email for the PKI Consortium{{/if}}{{/if}}{{/if}}",
     content:
-      'Hello,\n\nConfirm that **{{email}}** is your email address to {{#if registration}}register for **{{eventName}}**{{else}}{{#if proposal}}submit a proposal for **{{eventName}}**{{else}}{{#if join}}apply to join the **PKI Consortium**{{else}}continue to the **PKI Consortium portal**{{/if}}{{/if}}{{/if}}.\n\n<div class="cta-navy"><a href="{{magicLinkUrl}}">Confirm my email &rarr;</a></div>\n\nThe link sets up your PKI Consortium account and takes you straight back to {{#if registration}}your registration{{else}}{{#if proposal}}your proposal{{else}}{{#if join}}your membership application{{else}}the portal{{/if}}{{/if}}{{/if}}.\n\n{{> link_safety_notice}}',
+      "Hello,\n\nConfirm that **{{email}}** is your email address to {{#if registration}}register for **{{eventName}}**{{else}}{{#if proposal}}submit a proposal for **{{eventName}}**{{else}}{{#if join}}apply to join the **PKI Consortium**{{else}}continue to the **PKI Consortium portal**{{/if}}{{/if}}{{/if}}.\n\n:::button\n[Confirm my email →]({{magicLinkUrl}})\n:::\n\nThe link sets up your PKI Consortium account and takes you straight back to {{#if registration}}your registration{{else}}{{#if proposal}}your proposal{{else}}{{#if join}}your membership application{{else}}the portal{{/if}}{{/if}}{{/if}}.\n\n{{> link_safety_notice}}",
     contentType: "markdown",
     messageType: "transactional",
   },
@@ -44,7 +44,7 @@ export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
     key: "user_email_verification",
     subjectTemplate: "Verify your email address",
     content:
-      'Hello,\n\nVerify that **{{email}}** is yours to add it to your **PKI Consortium** account.\n\n<div class="cta-navy"><a href="{{verificationUrl}}">Verify this address &rarr;</a></div>\n\nOpen the link while you are signed in to the account you added it to, and verify it only if both addresses are yours. Once verified, you can sign in with this address too, and a work address connects you to your organization.\n\nThe link works once, for {{expiresInHours}} hours. Didn\'t add this address? You can ignore this email.',
+      "Hello,\n\nVerify that **{{email}}** is yours to add it to your **PKI Consortium** account.\n\n:::button\n[Verify this address →]({{verificationUrl}})\n:::\n\nOpen the link while you are signed in to the account you added it to, and verify it only if both addresses are yours. Once verified, you can sign in with this address too, and a work address connects you to your organization.\n\nThe link works once, for {{expiresInHours}} hours. Didn't add this address? You can ignore this email.",
     contentType: "markdown",
     messageType: "transactional",
   },
@@ -53,7 +53,7 @@ export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
     subjectTemplate:
       "{{#if address_added}}An email address was added to your PKI Consortium account{{/if}}{{#if address_removed}}An email address was removed from your PKI Consortium account{{/if}}{{#if primary_changed}}Your PKI Consortium primary email address changed{{/if}}{{#if first_sign_in}}New sign-in to your PKI Consortium account{{/if}}",
     content:
-      'Hello,\n\n{{#if address_added}}**{{address}}** was added to your PKI Consortium account. You can now sign in with it.{{/if}}{{#if address_removed}}**{{address}}** was removed from your PKI Consortium account and can no longer be used to sign in.{{/if}}{{#if primary_changed}}**{{address}}** is now the primary email address of your PKI Consortium account. We\'ll send account email there from now on.{{/if}}{{#if first_sign_in}}Someone signed in to your PKI Consortium account with **{{address}}** for the first time.{{/if}}\n\nIf this was you, there\'s nothing else to do.\n\nIf it wasn\'t, sign in with another email address or a passkey right away and check the email addresses and passkeys on your account.\n\n<div class="cta-navy"><a href="{{baseUrl}}/portal/#/users/{{userId}}">Review my account &rarr;</a></div>',
+      "Hello,\n\n{{#if address_added}}**{{address}}** was added to your PKI Consortium account. You can now sign in with it.{{/if}}{{#if address_removed}}**{{address}}** was removed from your PKI Consortium account and can no longer be used to sign in.{{/if}}{{#if primary_changed}}**{{address}}** is now the primary email address of your PKI Consortium account. We'll send account email there from now on.{{/if}}{{#if first_sign_in}}Someone signed in to your PKI Consortium account with **{{address}}** for the first time.{{/if}}\n\nIf this was you, there's nothing else to do.\n\nIf it wasn't, sign in with another email address or a passkey right away and check the email addresses and passkeys on your account.\n\n:::button\n[Review my account →]({{baseUrl}}/portal/#/users/{{userId}})\n:::\n",
     contentType: "markdown",
     messageType: "transactional",
   },
@@ -61,7 +61,7 @@ export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
     key: "user_sign_in_unavailable",
     subjectTemplate: "Sign in to the PKI Consortium another way",
     content:
-      'Hello,\n\nWe received a request to sign in with **{{email}}**. This address can no longer be used to sign in, because your representation of its organization has ended, so we didn\'t send a link.\n\nSign in with a passkey or with another email address on your account instead. If you still work at the organization, you can reinstate your representation once you are signed in.\n\n<div class="cta-navy"><a href="{{baseUrl}}/portal/">Go to sign-in &rarr;</a></div>\n\nDidn\'t ask to sign in? You can ignore this email.',
+      "Hello,\n\nWe received a request to sign in with **{{email}}**. This address can no longer be used to sign in, because your representation of its organization has ended, so we didn't send a link.\n\nSign in with a passkey or with another email address on your account instead. If you still work at the organization, you can reinstate your representation once you are signed in.\n\n:::button\n[Go to sign-in →]({{baseUrl}}/portal/)\n:::\n\nDidn't ask to sign in? You can ignore this email.",
     contentType: "markdown",
     messageType: "transactional",
   },
@@ -72,7 +72,7 @@ export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
     subjectTemplate:
       "{{#if alreadyRegistered}}You're already registered for {{eventName}}{{else}}{{#if registration}}Continue your registration for {{eventName}}{{else}}{{#if proposal}}Continue your proposal for {{eventName}}{{else}}{{#if join}}Continue your membership application{{else}}Sign in to the PKI Consortium{{/if}}{{/if}}{{/if}}{{/if}}",
     content:
-      '{{> greeting}}\n\n{{#if alreadyRegistered}}Good news: you\'re already registered for **{{eventName}}**, so there\'s nothing more to do. Your registration details are below.\n\n<div class="cta-navy"><a href="{{magicLinkUrl}}">View or change my registration &rarr;</a></div>\n\n{{> reg_details}}{{else}}Welcome back! You already have a PKI Consortium account with **{{email}}**, so there\'s no need to create another one. Sign in to continue {{#if registration}}your registration for **{{eventName}}**{{else}}{{#if proposal}}your proposal for **{{eventName}}**{{else}}{{#if join}}your membership application{{else}}to the portal{{/if}}{{/if}}{{/if}}.\n\n<div class="cta-navy"><a href="{{magicLinkUrl}}">Sign in and continue &rarr;</a></div>{{/if}}\n\n{{> link_safety_notice}}',
+      "{{> greeting}}\n\n{{#if alreadyRegistered}}Good news: you're already registered for **{{eventName}}**, so there's nothing more to do. Your registration details are below.\n\n:::button\n[View or change my registration →]({{magicLinkUrl}})\n:::\n\n{{> reg_details}}{{else}}Welcome back! You already have a PKI Consortium account with **{{email}}**, so there's no need to create another one. Sign in to continue {{#if registration}}your registration for **{{eventName}}**{{else}}{{#if proposal}}your proposal for **{{eventName}}**{{else}}{{#if join}}your membership application{{else}}to the portal{{/if}}{{/if}}{{/if}}.\n\n:::button\n[Sign in and continue →]({{magicLinkUrl}})\n:::\n{{/if}}\n\n{{> link_safety_notice}}",
     contentType: "markdown",
     messageType: "transactional",
   },
@@ -82,7 +82,7 @@ export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
     subjectTemplate:
       "{{#if noAccount}}We couldn't find a PKI Consortium account for this address{{else}}We couldn't send you a sign-in link{{/if}}",
     content:
-      'Hello,\n\n{{#if noAccount}}We received a request to sign in with **{{email}}**, but no PKI Consortium account uses this address.\n\nNew here? Create an account with this address. Already have an account? Sign in with the email address or passkey you use for it.\n\n<div class="cta-navy"><a href="{{startUrl}}">Create an account &rarr;</a></div>{{else}}We received a request to sign in with **{{email}}**, but this address can\'t be used to sign in to its account, so we didn\'t send a link.\n\nThe secretariat can help you sign in: email [{{contactEmail}}](mailto:{{contactEmail}}).{{/if}}\n\nDidn\'t ask to sign in? You can ignore this email.',
+      "Hello,\n\n{{#if noAccount}}We received a request to sign in with **{{email}}**, but no PKI Consortium account uses this address.\n\nNew here? Create an account with this address. Already have an account? Sign in with the email address or passkey you use for it.\n\n:::button\n[Create an account →]({{startUrl}})\n:::\n{{else}}We received a request to sign in with **{{email}}**, but this address can't be used to sign in to its account, so we didn't send a link.\n\nThe secretariat can help you sign in: email [{{contactEmail}}](mailto:{{contactEmail}}).{{/if}}\n\nDidn't ask to sign in? You can ignore this email.",
     contentType: "markdown",
     messageType: "transactional",
   },

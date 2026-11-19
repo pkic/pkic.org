@@ -34,7 +34,7 @@ describe("co-speaker invitation template", () => {
     expect(rendered).toContain("An organizer then reviews your response");
     expect(rendered).toContain("Review and respond");
     expect(rendered).toContain(
-      'href="https://pkic.org/portal/#/events/pqc-2026/proposals/proposal-1/participation?speaker=user-1"',
+      "(https://pkic.org/portal/#/events/pqc-2026/proposals/proposal-1/participation?speaker=user-1)",
     );
   });
 

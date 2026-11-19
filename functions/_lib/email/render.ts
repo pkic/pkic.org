@@ -440,7 +440,7 @@ function stripHtmlToText(input: string): string {
         return placeholder;
       })
       .replace(/<br\s*\/?>/gi, "\n")
-      .replace(/<\/(p|div|li|h[1-6]|blockquote|section|article|table|tr)>/gi, "\n")
+      .replace(/<\/(p|div|li|h[1-6]|blockquote|section|article|table|tr|td)>/gi, "\n")
       .replace(/<li[^>]*>/gi, "- ")
       // Inline marks sit inside a sentence, so removing them must not leave a space before the next word or period.
       .replace(/<\/?(?:strong|b|em|i|u|span|code|small)\b[^>]*>/gi, "")

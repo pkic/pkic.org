@@ -15,7 +15,8 @@ export function readMarkdownButton(markdown: string): { href: string; label: str
     link?.type !== "link" ||
     !link.text.trim() ||
     !link.tokens ||
-    link.tokens.some((token) => token.type !== "text")
+    // Escaped punctuation, as in a variable value, is literal label text.
+    link.tokens.some((token) => token.type !== "text" && token.type !== "escape")
   )
     throw new Error("A button contains one Markdown link with a text label and a safe destination.");
   const label = link.tokens.map((token) => ("text" in token ? token.text : "")).join("");

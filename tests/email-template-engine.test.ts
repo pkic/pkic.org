@@ -729,7 +729,7 @@ describe("email renderer", () => {
 
     expect(rendered.html).toContain('src="https://pkic.org/img/logo-white.png"');
     expect(rendered.html).toContain('href="http://localhost:8788/portal/#/verify?token=secret"');
-    expect(rendered.html).toContain("background:#0d1b2a");
+    expect(rendered.html).toContain("background:#198754");
     expect(rendered.html).toContain("color:#ffffff!important");
   });
 });

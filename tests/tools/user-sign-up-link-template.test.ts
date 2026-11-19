@@ -96,7 +96,7 @@ describe("the email for a sign-in request that sends no link", () => {
     const body = compileSeededBody(help.content, data);
     expect(body).toContain("no PKI Consortium account uses this address");
     expect(body).toContain("Create an account");
-    expect(body).toContain('href="https://app.test/portal/"');
+    expect(body).toContain("(https://app.test/portal/)");
   });
 
   it("sends a proved address its account cannot sign in with to the secretariat", () => {

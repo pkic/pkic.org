@@ -67,7 +67,11 @@ export const DEFAULT_LAYOUT_HTML = `<!doctype html>
     .cta-navy a{background:#0d1b2a}
     .cta-secondary{text-align:center;margin:12px 0 28px}
     .cta-secondary a{display:inline-block;color:#6b7280!important;text-decoration:none!important;font-size:13px;font-weight:400;padding:8px 20px;border-radius:6px;border:1px solid #d1d5db;font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,sans-serif;background:#ffffff}
+    .pk-email-box>:first-child{margin-top:0!important}
+    .pk-email-box>:last-child{margin-bottom:0!important}
     @media only screen and (max-width:680px){
+      .pk-email-col{display:block!important;width:100%!important;box-sizing:border-box!important;margin:0 0 16px!important}
+      .pk-email-gap,.pk-email-empty{display:none!important}
       .ew{width:100%!important;border-radius:0!important}
       .ep{padding:28px 24px!important}
       .ef{padding:20px 24px!important}
@@ -352,7 +356,9 @@ The PKI Consortium is a vendor-neutral community of PKI practitioners working to
 
 If our work is valuable to you or your organization, please consider a voluntary contribution. Any amount helps keep membership, conferences, and resources open to everyone.
 
-<div class="cta-secondary"><a href="{{brandBaseUrl}}/donate/">Support the PKI Consortium &rarr;</a></div>
+:::button variant=secondary
+[Support the PKI Consortium →]({{brandBaseUrl}}/donate/)
+:::
 
 {{> donation_tax_notice}}
 
@@ -433,7 +439,9 @@ Want your organization to make a bigger impact? Sponsors fund free, open events 
 
 Thanks for registering for **{{eventName}}**. One more step: confirm your email address, **{{email}}**, to complete your registration.
 
-<div class="cta"><a href="{{confirmationUrl}}">Confirm my registration &rarr;</a></div>
+:::button
+[Confirm my registration →]({{confirmationUrl}})
+:::
 
 <div class="notice notice-warning"><strong>You're not registered until you confirm.</strong> Open the link and select <strong>Confirm my registration</strong> on the page. The link expires in 24 hours.</div>
 
@@ -560,7 +568,9 @@ Good news: an in-person seat is now available for you at **{{eventName}}**.
 
 <div class="notice notice-info"><strong>Claim it within 24 hours.</strong> Open your registration, keep the offered day set to in person, and save.</div>
 
-<div class="cta"><a href="{{manageUrl}}">Claim my seat &rarr;</a></div>
+:::button
+[Claim my seat →]({{manageUrl}})
+:::
 
 No longer coming in person? Change that day to virtual attendance or cancel your registration on the same page, so we can offer the seat to the next person on the waitlist.
 
@@ -614,7 +624,9 @@ We're sorry for the trouble.
 
 Here's the link to your registration for **{{eventName}}**. Use it to review, change, or cancel your registration at any time.
 
-<div class="cta"><a href="{{manageUrl}}">Manage your registration &rarr;</a></div>
+:::button
+[Manage your registration →]({{manageUrl}})
+:::
 
 {{#if eq status "cancelled"}}{{else}}
 {{#if myAgendaUrl}}
@@ -640,7 +652,9 @@ Didn't ask for this link? You can ignore this email.
 
 Your registration for **{{eventName}}** isn't complete yet. Confirm your email address to secure your place.
 
-<div class="cta"><a href="{{confirmationUrl}}">Confirm my registration &rarr;</a></div>
+:::button
+[Confirm my registration →]({{confirmationUrl}})
+:::
 
 Didn't register? [Cancel this registration and remove your data]({{manageUrl}}).
 `,
@@ -661,7 +675,9 @@ In-person seats are limited, and each one costs $150–$300 per day for venue an
 
 Still coming in person? Please confirm as soon as you can. If you don't, we'll switch that day to virtual attendance and offer your seat to someone on the waitlist.
 
-<div class="cta"><a href="{{manage_url}}">I'm still coming in person &rarr;</a></div>
+:::button
+[I'm still coming in person →]({{manage_url}})
+:::
 
 Not coming after all? You don't need to do anything. Only this day changes; your other days stay as they are.
 `,
@@ -707,9 +723,15 @@ Is this a mistake, and do you still want to come in person? [Update your registr
 
 Join security experts, researchers, and industry leaders to explore the latest developments in public key infrastructure and post-quantum cryptography.
 
-<div class="cta"><a href="{{registrationUrl}}">Register now &rarr;</a></div>
+:::button
+[Register now →]({{registrationUrl}})
+:::
 
-{{#if declineUrl}}<div class="cta-secondary"><a href="{{declineUrl}}">No thanks, decline the invitation</a></div>{{/if}}
+{{#if declineUrl}}
+:::button variant=secondary
+[No thanks, decline the invitation]({{declineUrl}})
+:::
+{{/if}}
 
 {{#if isReminder}}If this is relevant to your work, now is a good time to register while seats remain.{{else}}Seats are limited, so register soon.{{/if}}
 
@@ -744,9 +766,15 @@ Your expertise would be a valuable addition to the program, and we invite you to
 
 {{#if isReminder}}If this topic matters to you, don't miss the chance to help shape the conversation on stage.{{/if}}
 
-<div class="cta"><a href="{{proposalUrl}}">Submit a proposal &rarr;</a></div>
+:::button
+[Submit a proposal →]({{proposalUrl}})
+:::
 
-{{#if declineUrl}}<div class="cta-secondary"><a href="{{declineUrl}}">No thanks, decline the invitation</a></div>{{/if}}
+{{#if declineUrl}}
+:::button variant=secondary
+[No thanks, decline the invitation]({{declineUrl}})
+:::
+{{/if}}
 
 <div class="notice notice-info">&#128274; This invitation link is <strong>personal</strong> and filled in with your details. Please don't share it.</div>
 
@@ -788,7 +816,9 @@ If you have any questions or would like to discuss your proposal first, please [
 
 <div class="notice notice-info">An empty seat costs the event money and keeps out someone on the waitlist.</div>
 
-<div class="cta"><a href="{{manageUrl}}">Update my registration &rarr;</a></div>
+:::button
+[Update my registration →]({{manageUrl}})
+:::
 
 {{> reg_details}}
 
@@ -978,7 +1008,9 @@ Thank you for the time and effort you put into it. We hope to see you at the eve
 {{#if eq finalStatus "needs-work"}}
 <div class="notice notice-warning">&#128679; The program committee asks for changes to <strong>{{proposalTitle}}</strong> before it decides. Please read the committee's note below and update your proposal.</div>
 
-<div class="cta"><a href="{{manageUrl}}">Update my proposal &rarr;</a></div>
+:::button
+[Update my proposal →]({{manageUrl}})
+:::
 {{/if}}
 {{#if eq finalStatus "waitlisted"}}
 <div class="notice notice-warning">&#9203; <strong>{{proposalTitle}}</strong> is on the <strong>waitlist</strong>. We may still include it if a slot opens up, and we'll keep you posted.</div>
@@ -1041,7 +1073,9 @@ Please review the proposal and **let us know whether you will speak**. We'll als
 
 Past the invitation deadline? Sign in to respond. An organizer then reviews your response, because someone else may already have been invited.
 
-<div class="cta"><a href="{{manageUrl}}">Review and respond &rarr;</a></div>
+:::button
+[Review and respond →]({{manageUrl}})
+:::
 
 <div class="notice notice-info">&#128274; This link is <strong>personal</strong> and opens your speaker profile, so please don't share it.</div>
 
@@ -1073,7 +1107,9 @@ Please take a moment to complete your speaker profile, so we can introduce you a
 {{#unless hasHeadshot}}<div class="notice notice-warning">&#128247; Your <strong>headshot</strong> is missing. Please upload a high-resolution photo so attendees can recognize you (JPEG, PNG, or WebP; at least 1000 &times; 1000 px; up to 20 MB).</div>{{/unless}}
 {{#if and hasBio hasHeadshot}}<div class="notice notice-success">&#10003; Your profile looks complete. You can still change it before the event.</div>{{/if}}
 
-<div class="cta"><a href="{{profileUrl}}">Review my speaker profile &rarr;</a></div>
+:::button
+[Review my speaker profile →]({{profileUrl}})
+:::
 
 You can update your profile at any time before the event.
 
@@ -1122,7 +1158,9 @@ Please upload your slides by the deadline below, so we can prepare the AV setup 
 
 **Accepted formats:** PDF, PPTX, PPT, PPTM, ODP (max 200 MB)
 
-<div class="cta"><a href="{{uploadUrl}}">Upload my presentation &rarr;</a></div>
+:::button
+[Upload my presentation →]({{uploadUrl}})
+:::
 
 You can replace your file at any time before the deadline.
 
@@ -1148,7 +1186,9 @@ We haven't received your slides for **{{proposalTitle}}** at **{{eventName}}** y
 
 **Accepted formats:** PDF, PPTX, PPT, PPTM, ODP (max 200 MB)
 
-<div class="cta"><a href="{{uploadUrl}}">Upload my presentation &rarr;</a></div>
+:::button
+[Upload my presentation →]({{uploadUrl}})
+:::
 
 Trouble uploading, or need more time? Please [contact us](mailto:{{contactEmail}}).
 `,
@@ -1165,7 +1205,9 @@ Trouble uploading, or need more time? Please [contact us](mailto:{{contactEmail}
 
 Here's your link to sign in to the **PKI Consortium portal**.
 
-<div class="cta-navy"><a href="{{magicLinkUrl}}">Sign in &rarr;</a></div>
+:::button
+[Sign in →]({{magicLinkUrl}})
+:::
 
 {{> link_safety_notice}}
 `,
@@ -1188,7 +1230,9 @@ You asked to reinstate your representation of **{{organizationName}}** in the **
 
 Once you confirm, your {{organizationName}} identity is active again, and the group seats and roles that ended with it come back where they're still available.
 
-<div class="cta-navy"><a href="{{reinstatementUrl}}">Confirm reinstatement &rarr;</a></div>
+:::button
+[Confirm reinstatement →]({{reinstatementUrl}})
+:::
 
 The link works once, for {{expiresInHours}} hours, while you're signed in to that account. If you ask again, we'll send a new link and this one stops working.
 
@@ -1229,7 +1273,9 @@ Welcome to a growing group of people who are shaping the future of digital trust
 
 We made a **personal fundraising page** for you, with your name on it. Every donation made through your link counts toward your total.
 
-<div class="cta"><a href="{{shareUrl}}">Share my fundraising page &rarr;</a></div>
+:::button
+[Share my fundraising page →]({{shareUrl}})
+:::
 
 Who in your network cares about open security standards? A single share could match, or multiply, what you gave today.{{/if}}
 
@@ -1260,7 +1306,9 @@ Your **{{formattedAmount}}** donation to the **PKI Consortium** wasn't completed
 
 If you'd still like to support us, you can start again at any time:
 
-<div class="cta"><a href="{{brandBaseUrl}}/donate/">Donate again &rarr;</a></div>
+:::button
+[Donate again →]({{brandBaseUrl}}/donate/)
+:::
 
 There's no obligation, but we'd truly appreciate your support.
 
@@ -1288,7 +1336,9 @@ Unfortunately, the payment for your **{{formattedAmount}}** donation to the **PK
 
 If you'd still like to support us, you're very welcome to try again:
 
-<div class="cta"><a href="{{brandBaseUrl}}/donate/">Donate again &rarr;</a></div>
+:::button
+[Donate again →]({{brandBaseUrl}}/donate/)
+:::
 
 There's no obligation, but we'd truly appreciate your support.
 

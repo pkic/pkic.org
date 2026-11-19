@@ -1,6 +1,6 @@
 import { eventVirtualRoomRoute } from "../../shared/event-participation-link";
 
-export type TemplateHelperCategory = "Variables" | "Conditions" | "CTAs";
+export type TemplateHelperCategory = "Variables" | "Conditions" | "Buttons";
 
 export interface TemplateHelperItem {
   category: TemplateHelperCategory;
@@ -161,11 +161,11 @@ export const TEMPLATE_HELPERS: TemplateHelperItem[] = [
     target: "body",
   },
 
-  // ── CTAs ──────────────────────────────────────────────────────────────────
+  // ── Buttons ───────────────────────────────────────────────────────────────
   {
-    category: "CTAs",
-    label: "CTA button",
-    snippet: '<div class="cta"><a href="{{url}}">Label &rarr;</a></div>',
+    category: "Buttons",
+    label: "Button",
+    snippet: ":::button\n[Label →]({{url}})\n:::",
     target: "body",
   },
 ];
