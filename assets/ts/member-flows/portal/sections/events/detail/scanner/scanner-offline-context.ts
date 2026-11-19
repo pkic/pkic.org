@@ -171,6 +171,7 @@ export async function saveScannerOfflineContext(input: {
   epoch: ScannerEpoch;
   manifest: EligibilityManifest;
   action: EventScanRequest["action"];
+  purpose?: "scan" | "collection";
   allowedActions?: readonly EventScanRequest["action"][];
   targetLabel?: string;
   roomLabel?: string;
@@ -227,7 +228,8 @@ export async function saveScannerOfflineContext(input: {
     ...(input.roomLabel ? { roomLabel: input.roomLabel } : {}),
     purpose:
       input.action === "attendance" &&
-      new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("scannerPurpose") === "collection"
+      (input.purpose ?? new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("scannerPurpose")) ===
+        "collection"
         ? "collection"
         : "scan",
     occurrenceId: manifest.occurrenceId,

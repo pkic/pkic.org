@@ -62,8 +62,9 @@ export function EventScannerCapture({
   const [action, setAction] = useScannerAction(allowedActions, collectorContext?.action, !!sponsorId);
   const [scannerTab, setScannerTab] = useHashQueryParam("scannerTab", "scan", ["scan", "recent", "diagnostics"]);
   const recentVisible = scannerTab === "recent" && !collectorContext;
-  const [purpose, setPurpose] = useHashQueryParam("scannerPurpose", "scan", ["scan", "collection"]);
-  const badgeCollection = purpose === "collection" && !sponsorId && action === "attendance";
+  const [selectedPurpose, setPurpose] = useHashQueryParam("scannerPurpose", "scan", ["scan", "collection"]);
+  const badgeCollection =
+    !sponsorId && action === "attendance" && (collectorContext?.purpose ?? selectedPurpose) === "collection";
   const collectionManifest = useRef<import("./eligibility-manifest").EligibilityManifest | null>(null);
   const collection = useBadgeCollection(
     badgeCollection,
@@ -182,7 +183,6 @@ export function EventScannerCapture({
   );
   const syncHistory = useScannerSyncHistory(operatorUserId, slug);
   const capturePause = useScannerCapturePause(badgeCamera.stop, () => autoStart.cancel());
-  const operatorPaused = capturePause.paused;
   useScannerSessionFence(
     operatorUserId,
     () => {
@@ -257,7 +257,6 @@ export function EventScannerCapture({
   function captureAllowed() {
     return scannerDevice.ready && !closedMessage && !authorityPaused.current && (!badgeCollection || manifestReady);
   }
-  /** User gestures report refusals; passive decoder checks stay silent. */
   function requestCapture() {
     if (captureAllowed()) return true;
     if (closedMessage || authorityPaused.current) setMessage(closedMessage || "Sign in again to upload pending scans.");
@@ -287,7 +286,7 @@ export function EventScannerCapture({
     cooldown,
     camera,
     failure,
-    operatorPaused,
+    operatorPaused: capturePause.paused,
     manualPaused,
     scannerContext,
     badgeCamera,
@@ -456,8 +455,9 @@ export function EventScannerCapture({
             busy={busy}
             capture={() => void capture()}
             pendingStart={autoStart.pending ? preparation.status : undefined}
+            devicePreparation={{ ready: scannerDevice.ready, error: scannerDevice.error }}
             cancelStart={() => autoStart.cancel()}
-            retryStart={() => void preparation.eligibility.refresh()}
+            retryStart={() => (scannerDevice.error ? scannerDevice.retry() : void preparation.eligibility.refresh())}
             controls={
               <ScannerCaptureControls
                 collector={collectorContext}

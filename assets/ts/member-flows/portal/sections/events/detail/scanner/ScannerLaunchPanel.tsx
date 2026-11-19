@@ -17,6 +17,7 @@ export function ScannerLaunchPanel({
   capture,
   controls,
   pendingStart,
+  devicePreparation,
   cancelStart,
   retryStart,
   children,
@@ -29,10 +30,20 @@ export function ScannerLaunchPanel({
   capture: () => void;
   controls: ComponentChildren;
   pendingStart?: ScannerReadiness;
+  devicePreparation?: { ready: boolean; error: string };
   cancelStart: () => void;
   retryStart: () => void;
   children?: ComponentChildren;
 }) {
+  const status =
+    pendingStart && devicePreparation
+      ? {
+          ...pendingStart,
+          preparing:
+            pendingStart.preparing || (!devicePreparation.ready && !devicePreparation.error && !pendingStart.error),
+          error: devicePreparation.error || pendingStart.error,
+        }
+      : pendingStart;
   return (
     <Panel>
       <PanelHeader title="Start scanning" />
@@ -56,7 +67,7 @@ export function ScannerLaunchPanel({
       </PanelBody>
       <Dialog
         open={Boolean(pendingStart)}
-        title={pendingStart?.badgeCollection ? "Prepare badge collection" : "Prepare scanner"}
+        title={status?.badgeCollection ? "Prepare badge collection" : "Prepare scanner"}
         confirmLabel="Retry preparation"
         onConfirm={retryStart}
         onCancel={cancelStart}
@@ -66,7 +77,7 @@ export function ScannerLaunchPanel({
             <Button type="button" variant="ghost" onClick={cancelStart}>
               Cancel
             </Button>
-            {pendingStart?.error && !pendingStart.preparing && (
+            {status?.error && !status.preparing && (
               <Button type="button" onClick={retryStart}>
                 Retry preparation
               </Button>
@@ -74,10 +85,10 @@ export function ScannerLaunchPanel({
           </>
         }
       >
-        {pendingStart?.error && !pendingStart.preparing ? (
-          <Alert tone="warn">{pendingStart.error}</Alert>
+        {status?.error && !status.preparing ? (
+          <Alert tone="warn">{status.error}</Alert>
         ) : (
-          <p role="status">{pendingStart ? scannerReadinessLabel(pendingStart) : ""}</p>
+          <p role="status">{status ? scannerReadinessLabel(status) : ""}</p>
         )}
       </Dialog>
     </Panel>

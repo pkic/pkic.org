@@ -115,11 +115,23 @@ it("shows preparation progress and retryable errors in a modal", async () => {
       <ScannerLaunchPanel
         {...props}
         pendingStart={{ preparing: false, ready: false, error: "Badge data could not be refreshed" }}
+        devicePreparation={{ ready: false, error: "" }}
       />,
       host,
     ),
   );
   expect(dialog.querySelector('[role="alert"]')?.textContent).toContain("Badge data could not be refreshed");
+  await act(() =>
+    render(
+      <ScannerLaunchPanel
+        {...props}
+        pendingStart={{ preparing: false, ready: false, error: "" }}
+        devicePreparation={{ ready: false, error: "Scanner preparation unavailable" }}
+      />,
+      host,
+    ),
+  );
+  expect(dialog.querySelector('[role="alert"]')?.textContent).toContain("Scanner preparation unavailable");
   await act(() =>
     Array.from(dialog.querySelectorAll("button"))
       .find((button) => button.textContent?.trim() === "Retry preparation")!

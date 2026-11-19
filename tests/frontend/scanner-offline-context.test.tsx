@@ -482,6 +482,24 @@ describe("scanner-only offline preparation", () => {
     expect(mocks.backgroundSync).not.toHaveBeenCalled();
     expect(portalSession.value).toBeNull();
   });
+  it("opens a saved badge collection in collection mode from a bare scanner link", async () => {
+    retain();
+    host = document.createElement("div");
+    document.body.append(host);
+    await act(async () =>
+      render(
+        <EventScanner
+          slug={slug}
+          operatorUserId={operator}
+          occurrenceId={occurrenceId}
+          allowedActions={["attendance"]}
+          collectorContext={{ ...context(), purpose: "collection" }}
+        />,
+        host!,
+      ),
+    );
+    await vi.waitFor(() => expect(host!.textContent).toContain("Badge collection"));
+  });
   it("queues only the fixed original context and verifies using its prepared eligibility snapshot", async () => {
     retain();
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
