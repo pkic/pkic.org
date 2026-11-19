@@ -67,7 +67,7 @@ export const liveModerationClientMessageSchemas = [
       removePosts: z.boolean(),
     })
     .strict(),
-  /** Lets the item's author post again. Removed posts stay removed. */
+  /** Lets the item's author post again. Hidden posts stay hidden. */
   z.object({ type: z.literal("participation.lift"), item: liveModerationItemSchema }).strict(),
 ] as const;
 

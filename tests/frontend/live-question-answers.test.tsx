@@ -125,7 +125,7 @@ describe("answer threads", () => {
     openThread(host, live, [
       answer({ mine: true, removal: { reason: "spam", at: "2026-10-16T12:01:00.000Z", byName: null } }),
     ]);
-    expect(host.textContent).toContain("Removed by a moderator: Spam.");
+    expect(host.textContent).toContain("Hidden by a moderator: Spam.");
     const removed = host.querySelector<HTMLDetailsElement>("details.pk-live-removed")!;
     expect(removed.open).toBe(false);
     expect(removed.querySelector(".pk-live-answers__text")?.textContent).toBe("Automate renewal first.");
@@ -155,17 +155,17 @@ describe("answer threads", () => {
     openThread(host, live, [spam], { canModerate: true });
     await act(async () => labeled(host, "Actions for answer from Alex Moreau").click());
     const remove = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
-      (item) => item.textContent?.trim() === "Remove answer…",
+      (item) => item.textContent?.trim() === "Hide answer…",
     )!;
     expect(remove.title).toBe("Hides it from everyone and records why. The author sees the reason.");
     await act(async () => remove.click());
     const dialog = document.querySelector("dialog")!;
-    expect(dialog.textContent).toContain("Remove this answer?");
+    expect(dialog.textContent).toContain("Hide this answer?");
     const before = live.latest().messages().length;
-    await act(async () => labeled(dialog, "Remove answer").click());
+    await act(async () => labeled(dialog, "Hide answer").click());
     expect(live.latest().messages()).toHaveLength(before);
     await act(async () => dialog.querySelector<HTMLInputElement>('input[value="spam"]')!.click());
-    await act(async () => labeled(dialog, "Remove answer").click());
+    await act(async () => labeled(dialog, "Hide answer").click());
     expect(live.latest().messages().at(-1)).toEqual({
       type: "question.answer.hide",
       questionId: LIVE_QUESTION,

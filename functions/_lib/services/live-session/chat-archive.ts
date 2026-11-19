@@ -20,7 +20,7 @@ interface ChatSession {
 
 const STATUS_LABELS: Record<LiveChatArchiveRow["status"], string> = {
   shown: "Shown",
-  hidden: "Removed by a moderator",
+  hidden: "Hidden by a moderator",
   held: "Held after reports",
 };
 

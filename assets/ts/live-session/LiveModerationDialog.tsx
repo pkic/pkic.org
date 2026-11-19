@@ -1,5 +1,5 @@
 /**
- * The Remove and Block dialogs of a live session room: one question, why,
+ * The Hide and Block dialogs of a live session room: one question, why,
  * answered from the shared moderation reasons, and for a block whether the
  * person's posts in this session go too.
  *
@@ -20,9 +20,9 @@ export interface LiveModerationRequest {
   title: string;
   /** One sentence on what happens. */
   body: string;
-  /** Names the action, e.g. "Remove message". */
+  /** Names the action, e.g. "Hide message". */
   confirmLabel: string;
-  /** Offers "Also remove their posts in this session", on by default. */
+  /** Offers "Also hide their posts in this session", on by default. */
   offerRemovePosts?: boolean;
 }
 
@@ -112,7 +112,7 @@ function LiveModerationDialogBody({ request }: { request: ActiveRequest }) {
               name="removePosts"
               checked={removePosts}
               onChange={(event) => setRemovePosts(event.currentTarget.checked)}
-              label="Also remove their posts in this session"
+              label="Also hide their posts in this session"
             />
           ) : null}
         </form>

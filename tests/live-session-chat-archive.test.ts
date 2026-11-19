@@ -156,7 +156,7 @@ describe("event chat download and erasure", () => {
     expect(lines[0]).toBe("Session,Session start (UTC),Sent (UTC),Author,Message,Status");
     expect(lines.slice(1).map((line) => line.split(",").slice(3).join(","))).toEqual([
       'Ada Attendee,"Hello, everyone",Shown',
-      "Ada Attendee,Buy cheap tokens,Removed by a moderator",
+      "Ada Attendee,Buy cheap tokens,Hidden by a moderator",
     ]);
     expect(lines.join("\n")).not.toContain("Staff only");
 

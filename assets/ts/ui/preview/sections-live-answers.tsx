@@ -1,7 +1,7 @@
 /**
  * The event app's answer threads and moderation, drawn through their own
  * components: an asker's thread with votes and the accepted answer, an
- * author's removed answer, a blocked attendee, and a moderator's Remove.
+ * author's hidden answer, a blocked attendee, and a moderator's Hide.
  */
 import { useEffect } from "preact/hooks";
 import type { LiveQuestionAnswer } from "../../../shared/schemas/live-session-answer";
@@ -125,9 +125,9 @@ function Thread({
 function RemoveDialog() {
   useEffect(() => {
     void askModerationReason({
-      title: "Remove this answer?",
+      title: "Hide this answer?",
       body: "It's hidden from everyone. The author still sees it, with the reason you choose.",
-      confirmLabel: "Remove answer",
+      confirmLabel: "Hide answer",
     });
   }, []);
   return <LiveModerationDialogHost />;
@@ -148,8 +148,8 @@ export const liveAnswerSections: PreviewSection[] = [
   },
   {
     id: "live-answer-removed",
-    title: "Event app: my removed answer",
-    note: "Only the author still sees a removed answer, with the reason and no moderator's name.",
+    title: "Event app: my hidden answer",
+    note: "Only the author still sees a hidden answer, with the reason and no moderator's name.",
     render: () => (
       <Thread
         q={question({ mine: false, answerCount: 1, acceptedAnswer: false })}
@@ -181,7 +181,7 @@ export const liveAnswerSections: PreviewSection[] = [
   {
     id: "live-answer-moderator",
     title: "Event app: a moderator's answer actions",
-    note: "Remove asks why; Pause, Block and Lift reach the author. Every item has a tooltip.",
+    note: "Hide asks why; Pause, Block and Lift reach the author. Every item has a tooltip.",
     render: () => (
       <div data-gallery-open>
         <Thread
@@ -195,7 +195,7 @@ export const liveAnswerSections: PreviewSection[] = [
   },
   {
     id: "live-remove-dialog",
-    title: "Event app: Remove dialog",
+    title: "Event app: Hide dialog",
     note: "A reason is required; the author sees it.",
     render: () => <RemoveDialog />,
   },

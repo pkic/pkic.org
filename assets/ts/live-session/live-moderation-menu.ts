@@ -31,7 +31,7 @@ export function liveDoneMenuItem(item: LiveModerationItem, done: boolean, send: 
       };
 }
 
-/** Remove…: asks why, then removes the post from everyone but its author and moderators. */
+/** Hide…: asks why, then hides the post from everyone but its author and moderators. A moderator can show it again. */
 export function liveRemoveMenuItem(
   noun: LiveModerationNoun,
   remove: (reason: LiveModerationReason) => void,
@@ -39,14 +39,14 @@ export function liveRemoveMenuItem(
 ): MenuItem {
   return {
     id: "remove",
-    label: `Remove ${noun}…`,
+    label: `Hide ${noun}…`,
     tooltip: "Hides it from everyone and records why. The author sees the reason.",
     danger: true,
     onSelect: () => {
       void askModerationReason({
-        title: `Remove this ${noun}?`,
+        title: `Hide this ${noun}?`,
         body: "It's hidden from everyone. The author still sees it, with the reason you choose.",
-        confirmLabel: `Remove ${noun}`,
+        confirmLabel: `Hide ${noun}`,
       })
         .then((decision) => {
           if (decision) remove(decision.reason);
@@ -125,7 +125,7 @@ export function liveParticipationMenuItems({
     items.push({
       id: "lift",
       label: "Lift block",
-      tooltip: `${authorName} can post again. Removed posts stay removed.`,
+      tooltip: `${authorName} can post again. Hidden posts stay hidden.`,
       separatorBefore: true,
       onSelect: () => sendOrReport({ type: "participation.lift", item }),
     });

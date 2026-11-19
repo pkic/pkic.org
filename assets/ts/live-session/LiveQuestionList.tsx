@@ -25,7 +25,7 @@ const TRANSITION_LABEL: Record<LiveQuestionStatus, string> = {
   pending: "Return to queue",
   approved: "Approve",
   answered: "Mark answered",
-  hidden: "Remove question…",
+  hidden: "Hide question…",
 };
 
 /** The status actions a role may take on a question, from the shared moderation policy. */
