@@ -41,7 +41,7 @@ describe("registration details email", () => {
     );
     expect(rendered.text).toMatch(/Day 1:\s*Livestream Lounge\s*\n/);
     expect(rendered.text).toMatch(/Day 2:\s*In person — confirmed\s*\n/);
-    expect(rendered.text).toMatch(/Day 3:\s*In person — waitlisted, not confirmed/);
+    expect(rendered.text).toMatch(/Day 3:\s*In person — waitlisted/);
     expect(rendered.text).toMatch(/Day 4:\s*Workshop room — confirmed/);
     expect(rendered.text).toContain("You can't enter the venue on a waitlisted day.");
   });

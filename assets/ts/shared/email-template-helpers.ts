@@ -57,7 +57,7 @@ export const PREVIEW_DEFAULTS: Record<string, unknown> = {
       dayLabel: "Thursday 2 October 2026",
       attendanceLabel: "In person",
       statusLabel: "Waitlisted",
-      statusNote: "waitlisted, not confirmed",
+      statusNote: "waitlisted",
     },
   ],
   // Custom answers

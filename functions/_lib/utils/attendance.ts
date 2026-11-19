@@ -30,9 +30,9 @@ type DayWaitlistEmailEntry = EmailDayWaitlist;
 const VENUE_DAY_NOTES: Record<string, string> = {
   "": "confirmed",
   accepted: "confirmed",
-  waiting: "waitlisted, not confirmed",
-  offered: "seat offered, not confirmed until you accept it",
-  expired: "offer expired, not confirmed",
+  waiting: "waitlisted",
+  offered: "seat offered, accept it to attend",
+  expired: "seat offer expired",
 };
 
 export function hasActiveDayWaitlist(dayWaitlist: DayWaitlistEmailEntry[] = []): boolean {
@@ -101,7 +101,7 @@ export function buildAttendanceEmailData(
           statusLabel: buildDayAttendanceStatusLabel(d.attendanceType, waitlistStatus, d.optionLabel),
           statusNote:
             eventAttendanceAccessMode({ value: d.attendanceType, accessMode: d.accessMode }) === "physical"
-              ? (VENUE_DAY_NOTES[waitlistStatus] ?? "not confirmed")
+              ? (VENUE_DAY_NOTES[waitlistStatus] ?? "waitlisted")
               : "",
           waitlistStatus,
           isWaitlisted: waitlistStatus === "waiting",
