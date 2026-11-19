@@ -337,8 +337,21 @@ describe("canonical user authentication", () => {
   );
 
   it("is enumeration-safe for unknown identities and rate-limits repeated requests", async () => {
-    expect(await requestUserToken("unknown@example.test")).toBeNull();
-    expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
+    // An unknown address gets the same answer on screen; only its mailbox learns there is no account, and no link.
+    expect(
+      await call("/api/v1/auth/request-link", {
+        method: "POST",
+        body: JSON.stringify({ email: "unknown@example.test" }),
+        headers: { "content-type": "application/json" },
+      }),
+    ).toMatchObject({ status: 200 });
+    const outbox = await queryAll<{ template_key: string; payload_json: string }>(
+      env.DB,
+      "SELECT template_key, payload_json FROM email_outbox",
+    );
+    expect(outbox.map((row) => row.template_key)).toEqual(["user_sign_in_help"]);
+    expect(JSON.parse(outbox[0]!.payload_json)).toMatchObject({ noAccount: true });
+    expect(outbox[0]!.payload_json).not.toContain("token=");
 
     await seedEventAndAdmin(env.DB);
     const limitedEnv = {
