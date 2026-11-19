@@ -30,6 +30,7 @@ import {
 import { RegistrationIdentityField } from "../components/RegistrationIdentitySelect";
 import { ButtonLink } from "../ui/Button";
 import { PersonDetailsSummary } from "../components/PersonDetailsSummary";
+import { JoinApplicantBio } from "./join-applicant-bio";
 
 /** How a person who represents no organization yet is joining. */
 export type JoinPath = "organization" | "individual";
@@ -190,6 +191,8 @@ export function JoinSignedInApplicant({
           setNames(next);
           onNamesSaved?.({ ...applicant, ...next, name: [next.firstName, next.lastName].filter(Boolean).join(" ") });
         }}
+        // The application needs a bio, so it is asked for here rather than refused on submit.
+        bio={refusal ? undefined : <JoinApplicantBio key={identity.id} identityId={identity.id} />}
         representation={
           <RegistrationIdentityField
             preferred={applicant.preferred}

@@ -160,15 +160,43 @@ describe("signed-in membership application", () => {
     expect(joinRefusalFor(representation, [personal, representation])).toBeNull();
   });
 
-  it("shows the applicant's name, email and representation instead of fields to type them", () => {
+  it("shows the applicant's name, email, representation and bio instead of fields to type them", () => {
     const view = mount(applicant([representation, personal]));
     const terms = Array.from(view.querySelectorAll("dt")).map((term) => term.textContent);
-    expect(terms).toEqual(["Name", "Email", "Representation"]);
+    // The application needs a bio, so it is shown, or asked for, before the person submits.
+    expect(terms).toEqual(["Name", "Email", "Representation", "Bio"]);
     expect(view.textContent).toContain("Ada Lovelace");
     expect(view.textContent).toContain("ada@example-corp.test");
     expect(view.textContent).toContain("Example Corp");
     expect(view.querySelector('button[aria-label="Change representation"]')).not.toBeNull();
     expect(view.querySelector("[data-join-refusal]")).toBeNull();
+  });
+
+  it("asks for the bio the application needs before the person submits", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          identityId: REPRESENTATION_ID,
+          organizationId: ORGANIZATION_ID,
+          organizationName: "Example Corp",
+          jobTitle: "Security architect",
+          biography: null,
+          links: [],
+        }),
+      ),
+    );
+    await act(async () => {
+      mount(applicant([representation]));
+    });
+    await vi.waitFor(() =>
+      expect(document.querySelector("[data-join-applicant-bio]")?.textContent).toBe("Add a bio to apply"),
+    );
+    await act(async () => buttonNamed(document.body, "Add bio").click());
+    // The pencil opens the representation's own profile editor, at its bio.
+    await vi.waitFor(() =>
+      expect(document.querySelector("dialog[open]")?.textContent).toContain("Your bio at Example Corp"),
+    );
   });
 
   it("lets a new account add the name the application needs, on the person's own profile", async () => {

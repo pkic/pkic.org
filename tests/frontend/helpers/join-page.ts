@@ -6,6 +6,7 @@ import { h } from "preact";
 import { renderToString } from "preact-render-to-string";
 import { vi } from "vitest";
 import { myProfileSchema } from "../../../assets/shared/schemas/me";
+import { ownIdentityProfileSchema } from "../../../assets/shared/schemas/own-identity-profile";
 import { userAuthSessionResponseSchema } from "../../../assets/shared/schemas/user-auth";
 import {
   sessionActingIdentitySchema,
@@ -60,6 +61,18 @@ function profile(identity: SessionActingIdentity) {
   });
 }
 
+/** The bio the application needs, already on file for each identity. */
+function identityProfile(identity: SessionActingIdentity) {
+  return ownIdentityProfileSchema.parse({
+    identityId: identity.id,
+    organizationId: identity.organizationId,
+    organizationName: identity.organizationName,
+    jobTitle: identity.jobTitle,
+    biography: "I work on PKI.",
+    links: [],
+  });
+}
+
 export interface JoinRequest {
   path: string;
   body: unknown;
@@ -85,6 +98,8 @@ export function openJoinPage(
           ? Response.json(session(identities))
           : Response.json({ error: { code: "AUTH_REQUIRED", message: "Sign in" } }, { status: 401 });
       if (path === "/api/v1/users/current" && identities) return Response.json(profile(identities[0]!));
+      const own = identities?.find((identity) => path === `/api/v1/users/current/identities/${identity.id}/profile`);
+      if (own) return Response.json(identityProfile(own));
       const request = { path, body: init?.body ? JSON.parse(String(init.body)) : undefined };
       requests.push(request);
       return answer(request);

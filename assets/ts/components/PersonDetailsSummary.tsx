@@ -15,6 +15,7 @@ export function PersonDetailsSummary({
   firstName,
   lastName,
   representation,
+  bio,
   saveNames,
   refusal,
 }: {
@@ -22,6 +23,8 @@ export function PersonDetailsSummary({
   firstName?: string | null;
   lastName?: string | null;
   representation?: ComponentChildren;
+  /** The bio of that representation, where the flow needs one. */
+  bio?: ComponentChildren;
   saveNames?: (names: PersonalNamePatch) => Promise<void>;
   refusal?: string;
 }) {
@@ -60,6 +63,7 @@ export function PersonDetailsSummary({
               : []),
             { term: "Email", value: <span class="pk-break">{email}</span> },
             ...(representation ? [{ term: "Representation", value: representation }] : []),
+            ...(bio ? [{ term: "Bio", value: bio }] : []),
           ]}
         />
       )}

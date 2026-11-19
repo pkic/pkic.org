@@ -57,8 +57,8 @@ export const ORGANIZATION_DOMAIN_APPLICATION_PENDING_MESSAGE =
   "A membership application for an organization with this email domain is already in progress.";
 
 export const APPLICANT_BIO_REQUIRED_MESSAGE =
-  "Add a bio to the representation you apply as, then submit again. Edit it under Representation.";
+  "Your application needs a bio. Add it next to Bio above, then submit again.";
 export const APPLICANT_JOB_TITLE_REQUIRED_MESSAGE =
   "Add a job title to the representation you apply as, then submit again. Edit it under Representation.";
 export const APPLICANT_NAME_REQUIRED_MESSAGE =
-  "Add your first and last name to your profile, then submit again. Edit it under Representation.";
+  "Your application needs your first and last name. Add them next to Name above, then submit again.";

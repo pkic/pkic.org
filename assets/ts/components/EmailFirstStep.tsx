@@ -20,7 +20,7 @@ import { ChoiceCard, ChoiceCards } from "../ui/ChoiceCard";
 import { Field, StateIcon } from "../ui/Field";
 import { TextInput } from "../ui/TextControl";
 import { Checkbox } from "../ui/Checkbox";
-import { ACCOUNT_POLICIES_COPY } from "../../shared/account-policies";
+import { ACCOUNT_POLICIES_COPY, ACCOUNT_PRIVACY_NOTICE } from "../../shared/account-policies";
 import { AccountPolicyLink } from "./AccountPolicyLinks";
 import { IconOrganization } from "./icons";
 import { IconPerson } from "./icons/app-navigation";
@@ -256,7 +256,7 @@ export function EmailFirstStep<Schema extends WorkEmailContract>({
             )}
           </Field>
           <p class="pk-small pk-muted">
-            {ACCOUNT_POLICIES_COPY.noticeBefore}
+            {ACCOUNT_PRIVACY_NOTICE[flow]}
             <AccountPolicyLink termKey="privacy-policy" />
             {ACCOUNT_POLICIES_COPY.noticeAfter}
           </p>

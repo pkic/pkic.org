@@ -241,8 +241,7 @@ async function main(): Promise<void> {
         renderQuestionsFor(selected ?? categories[0], answers);
       });
       if (recoveryMessage) setStatus(statusEl, recoveryMessage, true);
-      else if (restored)
-        setStatus(statusEl, "We restored the answers you entered earlier. Agreements need accepting again.");
+      else if (restored) setStatus(statusEl, "We restored the answers you entered earlier.");
     } finally {
       restoringAnswers = false;
     }
