@@ -22,7 +22,7 @@ const PHONE_MONITORS: StudioPanel = {
   outputs: ["preview", "program"],
 };
 
-/** The studio on a phone with its Monitors view open: every picture of an output holds still there. */
+/** The studio on a phone with its Monitors view open: its pictures of an output move without graphics layers. */
 function PhoneStudio() {
   const view = monitorPanelView(PHONE_MONITORS, MONITOR_SOURCES, noCommand, {
     clear: noCommand,
@@ -61,8 +61,8 @@ function PhoneStudio() {
 export const studioPhoneSections: PreviewSection[] = [
   {
     id: "studio-phone-monitors",
-    title: "Studio on a phone: thumbnails and monitors hold still",
-    note: "Open at phone width. Preview and Program sit at the top as thumbnails, with the Monitors view under them. No picture moves here: a scrolling ticker or a rotating title in each one would cost a phone's browser more memory than it has. The outputs themselves move as always.",
+    title: "Studio on a phone: thumbnails and monitors",
+    note: "Open at phone width. Preview and Program sit at the top as thumbnails, with the Monitors view under them. The ticker still travels and a person's titles still take turns, in a way that costs a phone's browser little memory; a graphic that comes on or goes off cuts instead of playing its motion. The outputs themselves move as always.",
     render: () => <PhoneStudio />,
   },
 ];

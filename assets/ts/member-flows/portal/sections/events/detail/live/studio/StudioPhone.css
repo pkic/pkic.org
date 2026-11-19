@@ -97,21 +97,125 @@
     block-size: 100%;
   }
   /*
-   * On a phone every picture of an output holds still: the thumbnails, the
-   * monitors and the large view. A running animation, such as the ticker's
-   * scroll or a rotating title, makes the browser keep several graphics
-   * layers per picture at the full broadcast size, and with a few pictures a
-   * phone's browser runs out of memory and reloads the page. This overrides
-   * each graphic's own motion, so it wins whatever their selectors. The
-   * outputs themselves move as always.
+   * On a phone a picture of an output moves without graphics layers: the
+   * thumbnails, the monitors and the large view. A graphic that moves by
+   * transform or opacity, such as the ticker's scroll on a real output, makes
+   * the browser keep several layers per picture at the full broadcast size.
+   * With a few pictures that is over a gigabyte, more than a phone's browser
+   * has, so it reloads the page. Here every such motion is off, and a graphic
+   * cuts between its states (see LiveStillPictures). The two an operator
+   * reads content from keep going in a way that needs no layer: the ticker
+   * travels by its margin, ten steps a second, and a person's titles change
+   * by a cut. The outputs themselves move as always.
    */
-  .pk-studio[data-phone] :is(.pk-studio-phone__thumb-screen, .pk-studio-monitor__screen) :is(*, ::before, ::after) {
+  .pk-studio[data-phone]
+    :is(.pk-studio-phone__thumb-screen, .pk-studio-monitor__screen)
+    *:not(.pk-live-ticker__track, .pk-affiliation-rotation__unit),
+  .pk-studio[data-phone] :is(.pk-studio-phone__thumb-screen, .pk-studio-monitor__screen) *::before,
+  .pk-studio[data-phone] :is(.pk-studio-phone__thumb-screen, .pk-studio-monitor__screen) *::after {
     animation: none !important;
     transition: none !important;
   }
   /* A reaction only exists as its float up the frame; held still it would sit in the picture. */
   .pk-studio[data-phone] :is(.pk-studio-phone__thumb-screen, .pk-studio-monitor__screen) .pk-live-overlay__reaction {
     display: none;
+  }
+  /* One pass of the messages, by the length the ticker measured; the loop lasts as long as on the output. */
+  @keyframes pk-studio-picture-ticker {
+    to {
+      margin-inline-start: calc(var(--pk-live-ticker-travel) * -1);
+    }
+  }
+  .pk-studio[data-phone] :is(.pk-studio-phone__thumb-screen, .pk-studio-monitor__screen) .pk-live-ticker__track {
+    animation-name: pk-studio-picture-ticker !important;
+    animation-timing-function: steps(300) !important;
+    transition: none !important;
+  }
+  /*
+   * Each of a person's titles in its turn, on the rotation's own timing and
+   * delays: shown for its share of the loop, hidden for the rest and while it
+   * waits for its first turn.
+   */
+  @keyframes pk-studio-picture-titles-2 {
+    0% {
+      visibility: hidden;
+    }
+    0.01%,
+    50% {
+      visibility: visible;
+    }
+    50.01%,
+    100% {
+      visibility: hidden;
+    }
+  }
+  @keyframes pk-studio-picture-titles-3 {
+    0% {
+      visibility: hidden;
+    }
+    0.01%,
+    33.33% {
+      visibility: visible;
+    }
+    33.34%,
+    100% {
+      visibility: hidden;
+    }
+  }
+  @keyframes pk-studio-picture-titles-4 {
+    0% {
+      visibility: hidden;
+    }
+    0.01%,
+    25% {
+      visibility: visible;
+    }
+    25.01%,
+    100% {
+      visibility: hidden;
+    }
+  }
+  @keyframes pk-studio-picture-titles-5 {
+    0% {
+      visibility: hidden;
+    }
+    0.01%,
+    20% {
+      visibility: visible;
+    }
+    20.01%,
+    100% {
+      visibility: hidden;
+    }
+  }
+  .pk-studio[data-phone]
+    :is(.pk-studio-phone__thumb-screen, .pk-studio-monitor__screen)
+    .pk-affiliation-rotation__unit {
+    transition: none !important;
+  }
+  .pk-studio[data-phone]
+    :is(.pk-studio-phone__thumb-screen, .pk-studio-monitor__screen)
+    .pk-affiliation-rotation--rotate-2
+    .pk-affiliation-rotation__unit {
+    animation-name: pk-studio-picture-titles-2 !important;
+  }
+  .pk-studio[data-phone]
+    :is(.pk-studio-phone__thumb-screen, .pk-studio-monitor__screen)
+    .pk-affiliation-rotation--rotate-3
+    .pk-affiliation-rotation__unit {
+    animation-name: pk-studio-picture-titles-3 !important;
+  }
+  .pk-studio[data-phone]
+    :is(.pk-studio-phone__thumb-screen, .pk-studio-monitor__screen)
+    .pk-affiliation-rotation--rotate-4
+    .pk-affiliation-rotation__unit {
+    animation-name: pk-studio-picture-titles-4 !important;
+  }
+  .pk-studio[data-phone]
+    :is(.pk-studio-phone__thumb-screen, .pk-studio-monitor__screen)
+    .pk-affiliation-rotation--rotate-5
+    .pk-affiliation-rotation__unit {
+    animation-name: pk-studio-picture-titles-5 !important;
   }
   /* The output's scene under its picture, filling the height the Transition's buttons give the row. */
   .pk-studio-phone__thumb-scene {
