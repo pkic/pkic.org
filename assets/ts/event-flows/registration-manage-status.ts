@@ -1,4 +1,5 @@
 /** The words and tones the attendee manage page uses for registration, attendance and waitlist states. */
+import { TICKET_STANDING_COPY, type TicketStanding } from "../../shared/event-ticket-standing";
 import type { BadgeTone } from "../ui/Badge";
 
 export function attendanceTypeLabel(attendanceType: string): string {
@@ -28,14 +29,15 @@ export function dayConfirmation(
 ): { label: string; tone: BadgeTone } {
   if (waitlistStatus === "offered") return { label: "Spot available", tone: "info" };
   if (waitlistStatus === "waiting") return { label: "Waitlisted", tone: "warn" };
-  if (paymentDue) return { label: PAYMENT_REQUIRED_STATUS.label, tone: "warn" };
+  if (paymentDue) return { label: TICKET_STANDING_COPY.to_pay.status, tone: TICKET_STANDING_COPY.to_pay.tone };
   return { label: "Confirmed", tone: "ok" };
 }
 
-/** A registration whose ticket is still to be paid is not confirmed, whatever its lifecycle status says. */
-export const PAYMENT_REQUIRED_STATUS = { label: "Payment required", cssClass: "pk-badge--warn" } as const;
-/** A payment that takes days was made and has not arrived yet. */
-export const PAYMENT_PROCESSING_STATUS = { label: "Payment processing", cssClass: "pk-badge--info" } as const;
+/** The badge for a registration whose ticket is not settled; it is not confirmed, whatever its lifecycle status says. */
+export function ticketStandingBadge(standing: Exclude<TicketStanding, "settled">): { label: string; cssClass: string } {
+  const copy = TICKET_STANDING_COPY[standing];
+  return { label: copy.status, cssClass: `pk-badge--${copy.tone}` };
+}
 
 export function statusLabel(
   status: string,

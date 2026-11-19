@@ -8,14 +8,14 @@ import {
   type RegistrationManageReadResponse,
 } from "../../../shared/schemas/registration";
 import { eventFormsResponseSchema } from "../../../shared/schemas/forms";
-import { eventTicketPath } from "../../../shared/event-participation-link";
 import { useData } from "../../hooks/useData";
 import { getJson, patchJson, postJson } from "../../shared/api-client";
 import { refusalSentence } from "../../shared/form/validation-map";
 import { Spinner } from "../Spinner";
 import { confirmAction } from "../ConfirmDialog";
 import { Alert } from "../../ui/Alert";
-import { Button, ButtonLink } from "../../ui/Button";
+import { Button } from "../../ui/Button";
+import { TicketStandingNotice } from "./tickets/TicketStandingNotice";
 import { Panel, PanelBody } from "../../ui/Panel";
 import type { EventFormsResponse } from "../../shared/types";
 import { ParticipantRegistrationDetails } from "./ParticipantRegistrationDetails";
@@ -179,22 +179,11 @@ function RegistrationRecord({
         <div class="pk-stack pk-stack--loose">
           {error && <Alert tone="danger">{error}</Alert>}
           {message && <Alert tone="ok">{message}</Alert>}
-          {data.paymentProcessing && (
-            <Alert title="Your payment is being processed">
-              Some payment methods take a few days. You're registered once the payment arrives, and we email your
-              confirmation then.
-            </Alert>
-          )}
-          {data.paymentDue && !data.paymentProcessing && (
-            <Alert tone="warn" title="Your ticket is not paid yet">
-              <p>Your registration is saved. You're registered once your ticket is paid.</p>
-              <div class="pk-cluster">
-                <ButtonLink href={eventTicketPath(data.event.slug)} variant="secondary">
-                  Pay for your ticket
-                </ButtonLink>
-              </div>
-            </Alert>
-          )}
+          <TicketStandingNotice
+            eventSlug={data.event.slug}
+            paymentDue={data.paymentDue}
+            paymentProcessing={data.paymentProcessing}
+          />
           {cancelled && (
             <Alert>
               This registration is cancelled.

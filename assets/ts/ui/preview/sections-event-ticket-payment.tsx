@@ -3,8 +3,7 @@ import { registrationTicketSchema } from "../../../shared/schemas/event-tickets"
 import { TicketCard } from "../../member-flows/portal/sections/events/app/EventHome";
 import type { ParticipantEventDetail } from "../../member-flows/portal/sections/events/app/event-app-model";
 import { EventTicketPayment } from "../../member-flows/portal/sections/events/app/EventTicketPayment";
-import { Alert } from "../Alert";
-import { ButtonLink } from "../Button";
+import { TicketStandingNotice } from "../../components/events/tickets/TicketStandingNotice";
 
 /** The ticket page while a ticket awaits payment: what is owed, the way to pay, and the refund terms. */
 export function TicketAwaitingPayment() {
@@ -73,14 +72,8 @@ export function TicketUnpaidStanding() {
       <div class="pk-grid pk-grid--cards">
         <TicketCard event={event} ended={false} />
       </div>
-      <Alert tone="warn" title="Your ticket is not paid yet">
-        <p>Your registration is saved. You're registered once your ticket is paid.</p>
-        <div class="pk-cluster">
-          <ButtonLink href="#ticket-unpaid" variant="secondary">
-            Pay for your ticket
-          </ButtonLink>
-        </div>
-      </Alert>
+      <TicketStandingNotice eventSlug="example" paymentDue paymentProcessing={false} />
+      <TicketStandingNotice eventSlug="example" paymentDue paymentProcessing />
     </div>
   );
 }

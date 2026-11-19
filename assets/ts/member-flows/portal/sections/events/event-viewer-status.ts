@@ -10,6 +10,7 @@
  */
 import type { EventParticipation } from "../../../../../shared/schemas/event-participation";
 import type { EventViewerState } from "../../../../../shared/schemas/event-management";
+import { TICKET_STANDING_COPY, ticketStanding } from "../../../../../shared/event-ticket-standing";
 import { formatNumber } from "../../../../../shared/format-number";
 import { statusLabel, statusTone } from "../../../../../shared/status-display";
 import { attendanceStandingParts } from "../../../../shared/viewer-attendance";
@@ -35,8 +36,9 @@ function registrationStatus({ participation, viewer }: EventStanding): Collectio
   if (status !== "registered") return [];
   if (!viewer) return [{ label: "You're registered" }];
   // An unpaid ticket leaves the registration incomplete, so it is what the viewer does next.
-  if (viewer.paymentProcessing) return [{ label: "Payment being processed", tone: "info" }];
-  if (viewer.paymentDue) return [{ label: "Pay for your ticket", tone: "warn" }];
+  const ticket = ticketStanding(viewer);
+  if (ticket !== "settled")
+    return [{ label: TICKET_STANDING_COPY[ticket].status, tone: TICKET_STANDING_COPY[ticket].tone }];
   const parts = attendanceStandingParts(viewer);
   const waiting = parts.filter((part) => part.startsWith("Waitlisted"));
   const holding = parts.filter((part) => !part.startsWith("Waitlisted"));

@@ -26,12 +26,12 @@ import { Badge } from "../ui/Badge";
 import {
   attendanceTypeLabel,
   dayConfirmation,
-  PAYMENT_PROCESSING_STATUS,
-  PAYMENT_REQUIRED_STATUS,
   statusLabel,
+  ticketStandingBadge,
   waitlistTone,
 } from "./registration-manage-status";
 import { eventMyAgendaPath, eventTicketPath } from "../../shared/event-participation-link";
+import { TICKET_STANDING_COPY, ticketStanding } from "../../shared/event-ticket-standing";
 import { Kicker } from "../ui/Kicker";
 import { confirmAction } from "../components/ConfirmDialog";
 import { RegistrationManageSummary } from "./registration-manage-summary";
@@ -67,7 +67,8 @@ function RegistrationStatusBanner({
           </>
         ) : paymentDue ? (
           <>
-            <Badge tone="warn">Payment required</Badge> You're registered once your ticket is paid.
+            <Badge tone={TICKET_STANDING_COPY.to_pay.tone}>{TICKET_STANDING_COPY.to_pay.status}</Badge>{" "}
+            {TICKET_STANDING_COPY.to_pay.body}
           </>
         ) : (
           <>
@@ -184,29 +185,26 @@ async function main(): Promise<void> {
 
   // ── Greeting ──────────────────────────────────────────────────────────────
   if (greetingEl && greetingText && statusBadge) {
-    const paymentProcessing = !isCancelled && manageData.paymentProcessing;
-    const paymentDue = !isCancelled && manageData.paymentDue && !paymentProcessing;
+    const ticket = isCancelled ? "settled" : ticketStanding(manageData);
+    const ticketCopy = ticket === "settled" ? null : TICKET_STANDING_COPY[ticket];
     greetingText.textContent = isCancelled
       ? `Your registration for ${eventName} is cancelled.`
-      : paymentProcessing
-        ? `Your payment for ${eventName} is being processed. You're registered once it arrives.`
-        : paymentDue
-          ? `Your registration for ${eventName} is saved. You're registered once your ticket is paid.`
-          : firstName
-            ? `Hi ${firstName}, we're looking forward to seeing you at ${eventName}!`
-            : `Your registration for ${eventName}`;
-    const { label, cssClass } = paymentProcessing
-      ? PAYMENT_PROCESSING_STATUS
-      : paymentDue
-        ? PAYMENT_REQUIRED_STATUS
+      : ticketCopy
+        ? ticketCopy.body
+        : firstName
+          ? `Hi ${firstName}, we're looking forward to seeing you at ${eventName}!`
+          : `Your registration for ${eventName}`;
+    const { label, cssClass } =
+      ticket !== "settled"
+        ? ticketStandingBadge(ticket)
         : statusLabel(registration.status, registration.cancellation_reason_code);
     statusBadge.textContent = label;
     statusBadge.className = `pk-badge ${cssClass}`;
     // The ticket page in the portal says what is owed and takes the payment.
-    if (paymentDue && !greetingEl.querySelector("[data-manage-pay-link]")) {
+    if (ticketCopy?.action && !greetingEl.querySelector("[data-manage-pay-link]")) {
       const payLink = document.createElement("a");
       payLink.href = eventTicketPath(event?.slug ?? eventSlug);
-      payLink.textContent = "Pay for your ticket";
+      payLink.textContent = ticketCopy.action;
       payLink.dataset.managePayLink = "";
       greetingEl.append(payLink);
     }

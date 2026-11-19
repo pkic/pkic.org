@@ -68,10 +68,10 @@ describe("event viewer status", () => {
       paymentProcessing: false,
       holdsWorkAddress: true,
     };
-    expect(eventViewerStatus({ viewer })).toEqual([{ label: "Pay for your ticket", tone: "warn" }]);
+    expect(eventViewerStatus({ viewer })).toEqual([{ label: "Payment required", tone: "warn" }]);
     // A payment that takes days is on its way: nothing is asked.
     expect(eventViewerStatus({ viewer: { ...viewer, paymentProcessing: true } })).toEqual([
-      { label: "Payment being processed", tone: "info" },
+      { label: "Payment processing", tone: "info" },
     ]);
   });
 

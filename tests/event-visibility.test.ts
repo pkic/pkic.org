@@ -388,6 +388,8 @@ describe("event audience viewer state", () => {
       registrationStatus: "registered",
       waitlisted: false,
       days: [],
+      paymentDue: false,
+      paymentProcessing: false,
       holdsWorkAddress: true,
     });
 
@@ -396,6 +398,8 @@ describe("event audience viewer state", () => {
       registrationStatus: "registered",
       waitlisted: false,
       days: [],
+      paymentDue: false,
+      paymentProcessing: false,
       holdsWorkAddress: true,
     });
   });
@@ -451,6 +455,8 @@ describe("event audience viewer state", () => {
       registrationStatus: "registered",
       waitlisted: true,
       days,
+      paymentDue: false,
+      paymentProcessing: false,
       holdsWorkAddress: true,
     });
 

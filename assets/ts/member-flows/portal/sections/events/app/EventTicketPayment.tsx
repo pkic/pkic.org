@@ -9,6 +9,7 @@ import {
   registrationTicketSyncResponseSchema,
   type RegistrationTicket,
 } from "../../../../../../shared/schemas/event-tickets";
+import { TICKET_STANDING_COPY } from "../../../../../../shared/event-ticket-standing";
 import { formatTicketMoney, ticketRefundNote } from "../../../../../../shared/event-ticket-display";
 import { postJson } from "../../../../../shared/api-client";
 import { Alert } from "../../../../../ui/Alert";
@@ -76,11 +77,8 @@ export function EventTicketPayment({
   if (checking) return <Spinner label="Checking your payment…" />;
   if (ticket.paymentProcessing)
     return (
-      <EventCard eyebrow={`${ticket.ticketName} ticket`} title="Your payment is being processed">
-        <p>
-          Some payment methods take a few days. You don't need to do anything: we email your confirmation when the
-          payment arrives, and your badge and check-in code appear here then.
-        </p>
+      <EventCard eyebrow={`${ticket.ticketName} ticket`} title={TICKET_STANDING_COPY.processing.title}>
+        <p>{TICKET_STANDING_COPY.processing.body} Your badge and check-in code appear here then.</p>
         <div class="pk-cluster">{details}</div>
       </EventCard>
     );
@@ -97,7 +95,7 @@ export function EventTicketPayment({
       {error && <Alert tone="danger">{error}</Alert>}
       <div class="pk-cluster">
         <Button variant="primary" loading={opening} disabled={opening} onClick={() => void pay()}>
-          Pay for your ticket
+          {TICKET_STANDING_COPY.to_pay.action}
         </Button>
         {details}
       </div>

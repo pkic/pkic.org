@@ -3,6 +3,7 @@
  * where the payment stands, and the two decisions only an organizer takes —
  * refunding it and settling a disputed ticket.
  */
+import { TICKET_STANDING_COPY } from "../../../../../../../shared/event-ticket-standing";
 import { useState } from "preact/hooks";
 import { successResponseSchema } from "../../../../../../../shared/schemas/api-common";
 import {
@@ -40,7 +41,7 @@ const SOURCE_LABELS: Record<TicketAssignmentSource, string> = {
 function status(ticket: RegistrationTicket) {
   if (ticket.refundPending) return <Badge tone="warn">Refund on its way</Badge>;
   // The person paid by a method that takes days; the provider says when it arrives.
-  if (ticket.paymentProcessing) return <Badge tone="info">Payment processing</Badge>;
+  if (ticket.paymentProcessing) return <Badge tone="info">{TICKET_STANDING_COPY.processing.status}</Badge>;
   if (ticket.status === "pending_payment") return <Badge tone="warn">{TICKET_STATUS_LABELS.pending_payment}</Badge>;
   if (ticket.status === "refunded" || ticket.status === "canceled")
     return <Badge tone="danger">{TICKET_STATUS_LABELS[ticket.status]}</Badge>;
