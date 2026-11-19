@@ -147,8 +147,12 @@ describe("account addresses after a representation ends", () => {
     ];
 
     expect(new Set(answers.map((answer) => JSON.stringify(answer))).size).toBe(1);
-    // Only the retired mailbox hears of it; an unproved or unknown address gets nothing.
-    expect(await outbox()).toEqual([{ template_key: "user_sign_in_unavailable", recipient_email: WORK_EMAIL }]);
+    // Each mailbox hears only about itself: the retired one how to sign in, the others where to start an account.
+    expect(await outbox()).toEqual([
+      { template_key: "user_sign_in_unavailable", recipient_email: WORK_EMAIL },
+      { template_key: "user_sign_in_help", recipient_email: "unknown@example.test" },
+      { template_key: "user_sign_in_help", recipient_email: "ana@unproved.example" },
+    ]);
   });
 
   it("keeps a primary retired after the organization removes the claim that covered it", async () => {

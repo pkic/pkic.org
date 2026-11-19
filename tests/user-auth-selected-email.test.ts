@@ -87,7 +87,11 @@ describe("Selected sign-in email delivery", () => {
   it("does not let an unverified primary claim unlock an account established through another mailbox", async () => {
     await env.DB.prepare("UPDATE users SET email_verified_at=NULL WHERE id=?").bind(userId).run();
     await requestLink(primaryEmail);
-    expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toEqual([]);
+    // No link: the unproved primary is told only that no account signs in with it.
+    expect(await queryAll(env.DB, "SELECT template_key, payload_json FROM email_outbox")).toEqual([
+      { template_key: "user_sign_in_help", payload_json: expect.stringContaining('"noAccount":true') },
+    ]);
+    expect(await queryAll(env.DB, "SELECT id FROM sessions")).toEqual([]);
   });
 
   it("lets every verified address sign in, with no separate switch to turn on", async () => {
@@ -279,7 +283,7 @@ describe("Selected sign-in email delivery", () => {
     expect(await queryAll(env.DB, "SELECT user_id FROM sessions")).toEqual([{ user_id: userId }]);
   });
 
-  it("queues no delivery for an unverified alias, an unknown address or a disabled account's verified alias", async () => {
+  it("sends an unverified alias, an unknown address or a disabled account's verified alias help, never a link", async () => {
     const unverifiedEmail = "unverified-work@example.test";
     await addEmail(userId, unverifiedEmail, false);
     const otherId = await insertUser(env.DB, "other-primary@example.test");
@@ -287,7 +291,18 @@ describe("Selected sign-in email delivery", () => {
     await addEmail(otherId, otherAlias);
     await env.DB.prepare("UPDATE users SET active=0 WHERE id=?").bind(otherId).run();
     for (const email of [unverifiedEmail, "unknown@example.test", otherAlias]) await requestLink(email);
-    expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toEqual([]);
+    const help = await queryAll<{ template_key: string; recipient_email: string; payload_json: string }>(
+      env.DB,
+      "SELECT template_key, recipient_email, payload_json FROM email_outbox ORDER BY rowid",
+    );
+    expect(help.map(({ template_key, recipient_email }) => [template_key, recipient_email])).toEqual([
+      ["user_sign_in_help", unverifiedEmail],
+      ["user_sign_in_help", "unknown@example.test"],
+      ["user_sign_in_help", otherAlias],
+    ]);
+    // Only the disabled account's proved alias is sent to the secretariat; the others may start an account.
+    expect(help.map(({ payload_json }) => JSON.parse(payload_json).noAccount ?? false)).toEqual([true, true, false]);
+    expect(help.some(({ payload_json }) => payload_json.includes("token="))).toBe(false);
     expect(await queryAll(env.DB, "SELECT id FROM sessions")).toEqual([]);
     expect(await queryAll(env.DB, "SELECT id FROM users")).toHaveLength(2);
   });

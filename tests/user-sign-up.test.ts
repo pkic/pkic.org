@@ -259,17 +259,20 @@ describe("account sign-up", () => {
     );
   });
 
-  it("names the registration the link is for, alike for a new address and one that already signs in", async () => {
+  it("names the registration the link is for, and tells an address that already signs in its account was found", async () => {
     await seedEventAndAdmin(env.DB);
     await env.DB.prepare("UPDATE events SET visibility = 'public' WHERE slug = 'pqc-2026'").run();
     const returnPath = "/events/pqc-2026/register";
-    for (const email of ["ada@organization.example", "admin@pkic.org"]) {
+    for (const [email, template] of [
+      ["ada@organization.example", "user_sign_up_link"],
+      ["admin@pkic.org", "user_account_found_link"],
+    ] as const) {
       expect((await call("/api/v1/auth/sign-up", { email, returnPath })).status, email).toBe(200);
       const [outbox] = await queryAll<{ template_key: string; payload_json: string }>(
         env.DB,
         "SELECT template_key, payload_json FROM email_outbox ORDER BY rowid DESC LIMIT 1",
       );
-      expect(outbox!.template_key, email).toBe("user_sign_up_link");
+      expect(outbox!.template_key, email).toBe(template);
       expect(JSON.parse(outbox!.payload_json), email).toMatchObject({
         registration: true,
         eventName: "PQC Conference 2026",
@@ -332,6 +335,50 @@ describe("account sign-up", () => {
     ]);
     expect(await queryAll(env.DB, "SELECT id FROM sessions")).toHaveLength(0);
   });
+  it("answers a sign-in request for an address without an account with the way to start one", async () => {
+    const returnPath = "/events/pqc-2026/register";
+    expect((await call("/api/v1/auth/request-link", { email: "nobody@organization.example", returnPath })).status).toBe(
+      200,
+    );
+    const [outbox] = await queryAll<{ template_key: string; recipient_email: string; payload_json: string }>(
+      env.DB,
+      "SELECT template_key, recipient_email, payload_json FROM email_outbox",
+    );
+    expect(outbox).toMatchObject({ template_key: "user_sign_in_help", recipient_email: "nobody@organization.example" });
+    expect(JSON.parse(outbox!.payload_json)).toMatchObject({
+      noAccount: true,
+      startUrl: expect.stringMatching(/\/events\/pqc-2026\/register$/),
+    });
+    // It carries no link that signs anyone in.
+    expect(outbox!.payload_json).not.toContain("token=");
+  });
+
+  it.each(["/api/v1/auth/sign-up", "/api/v1/auth/request-link"])(
+    "tells an address its deactivated account proved whom to ask, through %s",
+    async (path) => {
+      await seedEventAndAdmin(env.DB);
+      await env.DB.prepare("UPDATE users SET active = 0, email_verified_at = ? WHERE normalized_email = ?")
+        .bind(new Date().toISOString(), "admin@pkic.org")
+        .run();
+      const limited = {
+        ...env,
+        EMAIL_RATE_LIMITER: createTestRateLimiter(50),
+        IP_RATE_LIMITER: createTestRateLimiter(50),
+      };
+      expect((await call(path, { email: "admin@pkic.org" }, limited)).status).toBe(200);
+      const outbox = await queryAll<{ template_key: string; payload_json: string }>(
+        env.DB,
+        "SELECT template_key, payload_json FROM email_outbox",
+      );
+      expect(outbox.map((row) => row.template_key)).toEqual(["user_sign_in_help"]);
+      expect(JSON.parse(outbox[0]!.payload_json)).toMatchObject({ contactEmail: "contact@pkic.org" });
+      expect(JSON.parse(outbox[0]!.payload_json).noAccount).toBeUndefined();
+      expect(
+        await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = ?", ["admin@pkic.org"]),
+      ).toHaveLength(1);
+    },
+  );
+
   it("refuses the second of two sign-up links for one address redeemed at the same time", async () => {
     const email = "twice@gmail.com";
     expect((await call("/api/v1/auth/sign-up", { email, unaffiliatedAttestation: true })).status).toBe(200);

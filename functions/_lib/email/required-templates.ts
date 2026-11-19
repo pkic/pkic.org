@@ -77,6 +77,8 @@ export const REQUIRED_EMAIL_TEMPLATE_KEYS = [
   "user_magic_link",
   "user_sign_up_link",
   "user_sign_in_unavailable",
+  "user_account_found_link",
+  "user_sign_in_help",
   "vote-proposal-rejected",
   "wg-chair-membership-digest",
 ] as const;

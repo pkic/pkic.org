@@ -67,6 +67,27 @@ Speaker participation does not accept the proposal or guarantee inclusion in the
     messageType: "transactional",
   },
   {
+    // Starting an account with an address that already signs in: only that mailbox learns the account exists,
+    // and its link signs in and returns to what the person came for.
+    key: "user_account_found_link",
+    subjectTemplate:
+      "{{#if registration}}Continue your registration for {{eventName}}{{else}}{{#if proposal}}Continue your proposal for {{eventName}}{{else}}{{#if join}}Continue your membership application{{else}}Sign in to the PKI Consortium{{/if}}{{/if}}{{/if}}",
+    content:
+      'You already have a PKI Consortium account with **{{email}}**, so we did not start a new one.\n\nSign in with this link to continue {{#if registration}}your registration for **{{eventName}}**{{else}}{{#if proposal}}your proposal for **{{eventName}}**{{else}}{{#if join}}your membership application{{else}}to the portal{{/if}}{{/if}}{{/if}}.\n\n<div class="cta-navy"><a href="{{magicLinkUrl}}">Sign in and continue &rarr;</a></div>\n\n<div class="notice notice-warning">&#9888;&#65039; <strong>Security notice</strong><br>&bull; This link is valid for <strong>{{expiresInMinutes}} minutes</strong> only.<br>&bull; It can only be used <strong>once</strong> and is tied to <code>{{email}}</code>.<br>&bull; If you did not request this link, ignore this email.</div>',
+    contentType: "markdown",
+    messageType: "transactional",
+  },
+  {
+    // A sign-in request that cannot send a link still answers the mailbox it names, so nobody waits for nothing.
+    key: "user_sign_in_help",
+    subjectTemplate:
+      "{{#if noAccount}}No PKI Consortium account uses this address{{else}}We could not send a PKI Consortium sign-in link{{/if}}",
+    content:
+      '{{#if noAccount}}Someone asked for a sign-in link for **{{email}}**, but no PKI Consortium account signs in with this address.\n\nStart an account with it, or sign in with the address or passkey of the account you already have.\n\n<div class="cta-navy"><a href="{{startUrl}}">Start an account &rarr;</a></div>{{else}}Someone asked for a sign-in link for **{{email}}**. The account this address belongs to cannot sign in with it, so we did not send a link.\n\nAsk the secretariat at [{{contactEmail}}](mailto:{{contactEmail}}) to help you sign in.{{/if}}\n\nIf you did not ask for a link, you can ignore this email.',
+    contentType: "markdown",
+    messageType: "transactional",
+  },
+  {
     key: "agenda_session_invitation",
     subjectTemplate: "Session invitation: {{sessionTitle}}",
     content:

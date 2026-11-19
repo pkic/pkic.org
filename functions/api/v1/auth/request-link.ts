@@ -9,14 +9,20 @@ import { userAuthRequestRouteSchema } from "../../../../assets/shared/schemas/us
 
 export const UserAuthRequestLink = openApiRoute(userAuthRequestRouteSchema, async (c: AdminContext, data) => {
   const http = await prepareMagicLinkRequestHttp(c, data.body.email, USER_EMAIL_LINK_RATE_LIMIT_NAMESPACE);
-  const result = await requestUserSignInLink(http.db, {
-    email: data.body.email,
-    ipHash: http.ipHash,
-    userAgentHash: http.userAgentHash,
-    ttlMinutes: http.magicLinkTtlMinutes,
-    signingSecret: http.secret,
-    magicLinkBaseUrl: portalVerifyLinkBase(http.appBaseUrl, data.body.returnPath),
-  });
+  const result = await requestUserSignInLink(
+    http.db,
+    {
+      email: data.body.email,
+      ipHash: http.ipHash,
+      userAgentHash: http.userAgentHash,
+      ttlMinutes: http.magicLinkTtlMinutes,
+      signingSecret: http.secret,
+      magicLinkBaseUrl: portalVerifyLinkBase(http.appBaseUrl, data.body.returnPath),
+    },
+    undefined,
+    // An address without an account is told so, with the way back to start one where the person was going.
+    `${http.appBaseUrl}${data.body.returnPath ?? "/portal/"}`,
+  );
 
   if (!result.outboxId) {
     logInfo("user_magic_link_skipped", { reason: "No active user capacity found for the requested email address." });
