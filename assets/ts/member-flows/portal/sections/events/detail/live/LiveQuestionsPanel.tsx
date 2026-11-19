@@ -16,6 +16,13 @@ import { useHashQueryParam } from "../../../../../../hooks/useHashQueryParam";
 import { TabList } from "../../../../../../ui/TabList";
 import { LiveQuestionTransitions } from "../../../../../../live-session/LiveQuestionList";
 import { liveRemovalNote } from "../../../../../../live-session/LiveRemovedPost";
+import {
+  LIVE_CLOSED_QUESTION_PLACES,
+  LIVE_QUESTION_PLACES,
+  liveQuestionPlace,
+  liveQuestionsIn,
+  type LiveQuestionPlace,
+} from "./live-question-places";
 import { liveAnswerCountLabel } from "../../../../../../live-session/LiveQuestionThread";
 import { LiveModerationDialogHost } from "../../../../../../live-session/LiveModerationDialog";
 import { Avatar } from "../../../../../../ui/Avatar";
@@ -42,17 +49,9 @@ import { StudioCreateAction } from "./studio/StudioCreateAction";
 import { StudioItemRow } from "./studio/StudioItemRow";
 import "./LiveQuestionsPanel.css";
 
-/** Open questions, most voted first, with moderation and outputs; answered and hidden ones leave the list. */
+/** Open questions, most voted first, with moderation and outputs; discussed, ignored and hidden ones leave the list. */
 export function openLiveQuestions(questions: readonly LiveQuestion[]): LiveQuestion[] {
-  return questions.filter((question) => question.status === "pending" || question.status === "approved");
-}
-
-/** Questions that left the open ones and can still come back: answered ones to reopen, hidden ones to show again. */
-type ClosedStatus = "answered" | "hidden";
-
-/** The closed questions of one kind; one its author withdrew is gone for good. */
-export function closedLiveQuestions(questions: readonly LiveQuestion[], status: ClosedStatus): LiveQuestion[] {
-  return questions.filter((question) => question.status === status && !question.withdrawn);
+  return liveQuestionsIn(questions, "open");
 }
 
 /** The Questions panel's header: how many are open and waiting, and the "+" that prepares one. */
@@ -115,16 +114,15 @@ export function waitingPreparedQuestions(questions: readonly LivePreparedQuestio
 
 type Send = (message: LiveRoomClientMessage) => boolean;
 
-/** The panel's tabs: the open and prepared questions, the answered ones, and the ones a moderator hid. */
-const QUESTION_VIEWS = ["open", "answered", "hidden"] as const;
-type QuestionView = (typeof QUESTION_VIEWS)[number];
-const CLOSED_VIEWS = [
-  { id: "answered", label: "Answered", empty: "No answered questions." },
-  { id: "hidden", label: "Hidden", empty: "No hidden questions." },
-] as const satisfies ReadonlyArray<{ id: ClosedStatus; label: string; empty: string }>;
+/** Clears a question from the open ones without hiding it, or puts it back: the room's Done, which chat messages share. */
+const ignoreCommand = (question: LiveQuestion, done: boolean): LiveRoomClientMessage => ({
+  type: "moderation.done",
+  item: { kind: "question", questionId: question.id },
+  done,
+});
 
 const APPROVE = <path d="M3 8.5l3 3 7-7" />;
-const ANSWERED = (
+const DISCUSSED = (
   <>
     <circle cx="8" cy="8" r="6" />
     <path d="M5.5 8.2l1.8 1.8 3.2-3.5" />
@@ -201,6 +199,13 @@ function OpenQuestionRow({
       disabled,
       onSelect: onEdit,
     },
+    {
+      id: "ignore",
+      label: "Ignore",
+      tooltip: "Take it off your Open list. Nothing changes for attendees, and nobody is told.",
+      disabled,
+      onSelect: () => send(ignoreCommand(question, true)),
+    },
   ];
   return (
     <StudioItemRow
@@ -241,13 +246,13 @@ function OpenQuestionRow({
           <>
             <LiveLayerTargets targets={targets} subject="question" layer={layer} />
             <RowAction
-              label="Mark answered"
-              hint="Move it to the Answered tab. You can reopen it from there."
+              label="Mark discussed"
+              hint="It was discussed on stage. It moves to the Discussed tab; people can still answer it in writing."
               quiet
               disabled={disabled}
               onClick={() => moderate("answered")}
             >
-              {ANSWERED}
+              {DISCUSSED}
             </RowAction>
           </>
         )
@@ -268,29 +273,28 @@ function OpenQuestionRow({
   );
 }
 
-/** How each kind of closed question comes back, as its row's one action says it. */
-const CLOSED_QUESTION_RETURN: Record<ClosedStatus, { label: string; hint: string }> = {
-  answered: { label: "Reopen", hint: "Put it back with the open questions." },
-  hidden: { label: "Show question", hint: "Show it to everyone again, with the open questions." },
-};
-
-/** One answered or hidden question: its votes and asker, or why it was hidden, its way back, and the menu. */
+/** One discussed, ignored or hidden question: its votes and asker, why it was hidden, its way back, and the menu. */
 function ClosedQuestionRow({
   question,
+  back,
   targets,
   send,
   onOpen,
 }: {
   question: LiveQuestion;
+  /** How a question in this place comes back to the open ones. */
+  back: { label: string; hint: string };
   targets: LiveTargets;
   send: Send;
   onOpen: () => void;
 }) {
   const { disabled } = targets;
   const asker = liveQuestionAskerName(question);
-  const back = CLOSED_QUESTION_RETURN[question.status === "hidden" ? "hidden" : "answered"];
   const moderate = (status: LiveQuestionStatus, reason?: LiveModerationReason) =>
     send({ type: "question.moderate", questionId: question.id, expectedRevision: question.revision, status, reason });
+  // An ignored question is still open in the room: it comes back by undoing the ignore, the others by their status.
+  const ignored = liveQuestionPlace(question) === "ignored";
+  const comeBack = () => (ignored ? send(ignoreCommand(question, false)) : moderate("approved"));
   return (
     <StudioItemRow
       text={question.text}
@@ -303,7 +307,7 @@ function ClosedQuestionRow({
         </>
       }
       actions={
-        <RowAction label={back.label} hint={back.hint} disabled={disabled} onClick={() => moderate("approved")}>
+        <RowAction label={back.label} hint={back.hint} disabled={disabled} onClick={comeBack}>
           {REOPEN}
         </RowAction>
       }
@@ -313,7 +317,10 @@ function ClosedQuestionRow({
           role="operator"
           disabled={disabled}
           menuLabel="Question actions"
-          additionalActions={[{ id: "open", label: "Open question", onSelect: onOpen }]}
+          additionalActions={[
+            { id: "open", label: "Open question", onSelect: onOpen },
+            ...(ignored ? [{ id: "back", label: back.label, disabled, onSelect: comeBack }] : []),
+          ]}
           onMove={moderate}
         />
       }
@@ -407,9 +414,10 @@ function PreparedQuestionRow({
 /**
  * The session's questions as compact rows, like the Time and Polls panels:
  * open ones first, then prepared ones in the order they come in. Every
- * action is in a row's menu; the row shows only the one used most. Answered
- * and hidden questions each have a tab of their own, every row with its way
- * back; the tab in view follows the address, as the chat's does.
+ * action is in a row's menu; the row shows only the one used most.
+ * Discussed, ignored and hidden questions each have a tab of their own,
+ * every row with its way back; the tab in view follows the address, as the
+ * chat's does.
  */
 export function LiveQuestionsPanel({
   targets,
@@ -423,7 +431,7 @@ export function LiveQuestionsPanel({
   send: Send;
   answers: LiveAnswerConnection;
   /** The tab in view until the address names one. */
-  opensOn?: QuestionView;
+  opensOn?: LiveQuestionPlace;
 }) {
   // The open question is read from the room each time, so its answers and their count stay current.
   const [inspectedId, setInspectedId] = useState<string | null>(null);
@@ -433,10 +441,11 @@ export function LiveQuestionsPanel({
   const open = openLiveQuestions(targets.state.questions);
   const prepared = waitingPreparedQuestions(targets.state.preparedQuestions);
   const closed = {
-    answered: closedLiveQuestions(targets.state.questions, "answered"),
-    hidden: closedLiveQuestions(targets.state.questions, "hidden"),
+    discussed: liveQuestionsIn(targets.state.questions, "discussed"),
+    ignored: liveQuestionsIn(targets.state.questions, "ignored"),
+    hidden: liveQuestionsIn(targets.state.questions, "hidden"),
   };
-  const [view, setView] = useHashQueryParam("questions", opensOn, QUESTION_VIEWS);
+  const [view, setView] = useHashQueryParam("questions", opensOn, LIVE_QUESTION_PLACES);
   return (
     <div class="pk-live-desk__questions">
       <LiveModerationDialogHost />
@@ -444,10 +453,10 @@ export function LiveQuestionsPanel({
         label="Questions"
         idPrefix="studio-questions"
         activeId={view}
-        onSelect={(id) => setView(id as QuestionView)}
+        onSelect={(id) => setView(id as LiveQuestionPlace)}
         items={[
           { id: "open", panelId: "studio-questions-panel-open", label: "Open" },
-          ...CLOSED_VIEWS.map(({ id, label }) => ({
+          ...LIVE_CLOSED_QUESTION_PLACES.map(({ id, label }) => ({
             id,
             panelId: `studio-questions-panel-${id}`,
             label: closed[id].length ? `${label} · ${formatNumber(closed[id].length)}` : label,
@@ -487,7 +496,7 @@ export function LiveQuestionsPanel({
           <p class="pk-live-questions__empty">No open questions.</p>
         )}
       </div>
-      {CLOSED_VIEWS.map(({ id, empty }) => (
+      {LIVE_CLOSED_QUESTION_PLACES.map(({ id, empty, back }) => (
         <div
           key={id}
           id={`studio-questions-panel-${id}`}
@@ -501,6 +510,7 @@ export function LiveQuestionsPanel({
                 <ClosedQuestionRow
                   key={question.id}
                   question={question}
+                  back={back}
                   targets={targets}
                   send={send}
                   onOpen={() => setInspectedId(question.id)}

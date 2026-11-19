@@ -490,10 +490,10 @@ describe("session questions", () => {
     expect(host.textContent).not.toContain("Bea Attendee");
   });
 
-  it("lets a credited speaker mark an open question answered", () => {
+  it("lets a credited speaker mark an open question discussed", () => {
     const { host, live } = mount();
     connect(live, liveSnapshot({ viewer: { role: "speaker", name: "Sam Speaker" }, questions: [liveQuestion()] }));
-    void act(() => button(host, "Mark answered").click());
+    void act(() => button(host, "Mark discussed").click());
     expect(live.latest().messages()).toEqual([
       { type: "question.moderate", questionId: LIVE_QUESTION, expectedRevision: 0, status: "answered" },
     ]);

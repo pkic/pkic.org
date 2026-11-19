@@ -17,14 +17,14 @@ import "./SessionQuestions.css";
 const STATUS: Record<LiveQuestionStatus, { label: string; tone: BadgeTone }> = {
   pending: { label: "Awaiting moderation", tone: "warn" },
   approved: { label: "Open", tone: "info" },
-  answered: { label: "Answered", tone: "ok" },
+  answered: { label: "Discussed on stage", tone: "ok" },
   hidden: { label: "Hidden", tone: "neutral" },
 };
 
 const TRANSITION_LABEL: Record<LiveQuestionStatus, string> = {
   pending: "Return to queue",
   approved: "Approve",
-  answered: "Mark answered",
+  answered: "Mark discussed",
   hidden: "Hide question…",
 };
 

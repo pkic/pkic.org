@@ -366,7 +366,7 @@ describe("live control room panels", () => {
     expect(commands(live)).toEqual([{ type: "preview.set", composition: { lowerThirdMotion: "cut" } }]);
   });
 
-  it("moderates a submitted question, puts an approved one on Program, marks it answered, reopens it and shows a hidden one again", () => {
+  it("moderates a submitted question, puts an approved one on Program, marks it discussed, reopens it and shows a hidden one again", () => {
     const pending = liveQuestion({ status: "pending", votes: 0, anonymous: true, authorName: "Ada Attendee" });
     const { host, live } = mountDesk(liveSnapshot({ viewer: OPERATOR, questions: [pending] }));
     const questions = panel(host, "Questions");
@@ -380,21 +380,21 @@ describe("live control room panels", () => {
       }),
     );
     void act(() => labeled(questions, "Show question on air").click());
-    void act(() => labeled(questions, "Mark answered").click());
+    void act(() => labeled(questions, "Mark discussed").click());
     expect(commands(live)).toEqual([
       { type: "question.moderate", questionId: LIVE_QUESTION, expectedRevision: 0, status: "approved" },
       { type: "stage.question", questionId: LIVE_QUESTION },
       { type: "question.moderate", questionId: LIVE_QUESTION, expectedRevision: 0, status: "answered" },
     ]);
-    // An answered question leaves the open ones for the Answered tab, where Reopen brings it back.
+    // A discussed question leaves the open ones for the Discussed tab, where Reopen brings it back.
     void act(() =>
       live.latest().deliver({ type: "question.changed", question: liveQuestion({ status: "answered", revision: 1 }) }),
     );
     expect(questions.textContent).toContain("0 open");
-    const answered = questions.querySelector<HTMLElement>("#studio-questions-answered")!;
-    expect(answered.textContent).toBe("Answered · 1");
-    void act(() => answered.click());
-    expect(questions.querySelector("#studio-questions-panel-answered")?.hasAttribute("hidden")).toBe(false);
+    const discussed = questions.querySelector<HTMLElement>("#studio-questions-discussed")!;
+    expect(discussed.textContent).toBe("Discussed · 1");
+    void act(() => discussed.click());
+    expect(questions.querySelector("#studio-questions-panel-discussed")?.hasAttribute("hidden")).toBe(false);
     void act(() => labeled(questions, "Reopen").click());
     expect(commands(live).at(-1)).toEqual({
       type: "question.moderate",

@@ -168,6 +168,10 @@ const ANSWERED_TARGETS = {
         status: "answered",
         votes: 6,
       }),
+      asked("40000000-0000-4000-8000-000000000036", "Can you say something about quantum?", {
+        votes: 1,
+        done: { operatorName: "Olga Operator", at: "2026-12-01T09:18:00.000Z" },
+      }),
       asked("40000000-0000-4000-8000-000000000035", "Buy cheap certificates at example.test", {
         status: "hidden",
         removal: { reason: "spam", at: "2026-12-01T09:20:00.000Z", byName: "Olga Operator" },
@@ -182,7 +186,7 @@ function QuestionsPanelSpecimen({
 }: {
   targets?: typeof TARGETS;
   /** The tab the panel opens on; Open unless a specimen is of another one. */
-  opensOn?: "answered" | "hidden";
+  opensOn?: "discussed" | "ignored" | "hidden";
 }) {
   return (
     <div class="pk-studio-grid-frame" data-density="compact">
@@ -282,16 +286,22 @@ export const studioQuestionSections: PreviewSection[] = [
           layer={{ kind: "question", id: ON_AIR }}
           label="Question actions"
           heading="Question"
-          items={[{ id: "answered", label: "Mark answered", onSelect: noCommand }]}
+          items={[{ id: "answered", label: "Mark discussed", onSelect: noCommand }]}
         />
       </div>
     ),
   },
   {
-    id: "studio-questions-answered",
-    title: "Studio: answered questions, with Reopen",
-    note: "A question marked answered leaves the open ones for the Answered tab. Reopen puts it back with the open questions. Mark answered is a quiet button, so a slip of the hand is less likely.",
-    render: () => <QuestionsPanelSpecimen targets={ANSWERED_TARGETS} opensOn="answered" />,
+    id: "studio-questions-discussed",
+    title: "Studio: discussed questions, with Reopen",
+    note: "A question marked discussed leaves the open ones for the Discussed tab; attendees see it as discussed on stage and can still answer it in writing. Reopen puts it back with the open questions. Mark discussed is a quiet button, so a slip of the hand is less likely.",
+    render: () => <QuestionsPanelSpecimen targets={ANSWERED_TARGETS} opensOn="discussed" />,
+  },
+  {
+    id: "studio-questions-ignored",
+    title: "Studio: ignored questions, with Back to Open",
+    note: "Ignore, in a question's menu, takes it off the Open list when it is not for the stage and nothing is wrong with it. Nothing changes for attendees and nobody is told. Back to Open returns it.",
+    render: () => <QuestionsPanelSpecimen targets={ANSWERED_TARGETS} opensOn="ignored" />,
   },
   {
     id: "studio-questions-hidden",
@@ -310,7 +320,7 @@ export const studioQuestionSections: PreviewSection[] = [
           layer={{ kind: "question", id: ON_AIR }}
           label="Question actions"
           heading="Question"
-          items={[{ id: "answered", label: "Mark answered", onSelect: noCommand }]}
+          items={[{ id: "answered", label: "Mark discussed", onSelect: noCommand }]}
         />
       </div>
     ),
