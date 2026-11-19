@@ -19,11 +19,7 @@ import {
   getCustomAnswerRows,
   type AcceptedRegistrationTermRow,
 } from "../../utils/registration-email";
-import {
-  buildAttendanceEmailData,
-  buildRegistrationEmailStatusData,
-  hasActiveDayWaitlist,
-} from "../../utils/attendance";
+import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../../utils/attendance";
 import { buildRegistrationIcs, calendarConfirmedDays } from "../../utils/calendar";
 import { generateSignedRsvpAddress } from "../../email/rsvp";
 import { prepareRegistrationDayAttendance, type RegistrationDayAttendanceRow } from "../event-days";
@@ -140,8 +136,8 @@ function registrationDetailsData(context: RegistrationEmailContext, recipientEma
     jobTitle: user.job_title ?? "",
     attendanceLabel: attendanceData.attendanceLabel,
     dayAttendance: attendanceData.dayAttendance,
+    ...attendanceData.venueDayStanding,
     dayWaitlist,
-    hasActiveDayWaitlist: hasActiveDayWaitlist(dayWaitlist),
     customAnswerRows,
     acceptedTermsText: acceptedTermsText || undefined,
   };

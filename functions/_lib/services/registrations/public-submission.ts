@@ -155,6 +155,7 @@ export async function submitEventRegistration(
     jobTitle: affiliation.jobTitle ?? "",
     attendanceLabel: attendanceData.attendanceLabel,
     dayAttendance: attendanceData.dayAttendance,
+    ...attendanceData.venueDayStanding,
     dayWaitlist,
     customAnswerRows,
     acceptedTermsText: acceptedTermsText || undefined,

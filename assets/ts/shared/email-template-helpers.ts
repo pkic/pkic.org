@@ -45,6 +45,10 @@ export const PREVIEW_DEFAULTS: Record<string, unknown> = {
   decisionNote: "Please add concrete deployment constraints and success metrics.",
   acceptedTermsText: "I agree to the Code of Conduct.",
   waitlistOfferNotice: false,
+  hasUnconfirmedVenueDay: true,
+  hasWaitingVenueDay: true,
+  hasOfferedVenueDay: false,
+  hasExpiredVenueDay: false,
   // Day attendance
   dayAttendance: [
     {
