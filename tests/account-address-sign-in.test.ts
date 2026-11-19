@@ -208,8 +208,10 @@ describe("account addresses after a representation ends", () => {
     ]);
     await env.DB.prepare("UPDATE identities SET ended_at = ? WHERE id = ?").bind(nowIso(), identityId).run();
 
-    const migration = env.TEST_MIGRATIONS.find((candidate) => candidate.name.startsWith("0049_"))!;
-    const revoke = migration.queries.find((query) => query.includes("UPDATE sessions"))!;
+    const migration = env.TEST_MIGRATIONS.find((candidate) => candidate.name.startsWith("0047_account_sign_up_"))!;
+    const revoke = migration.queries.find((query) =>
+      query.includes("FROM session_email_authentication marker WHERE marker.session_id = sessions.id"),
+    )!;
     await env.DB.prepare(revoke).run();
 
     const revoked = await queryAll<{ id: string }>(env.DB, "SELECT id FROM sessions WHERE revoked_at IS NOT NULL");
