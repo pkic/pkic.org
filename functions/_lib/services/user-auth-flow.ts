@@ -41,6 +41,8 @@ interface LinkMessage {
   data: Record<string, unknown>;
   /** Where the link lands instead of the requested return path. */
   magicLinkBaseUrl?: string;
+  /** The event the message is about, so delivery adds the event's links and sponsors. */
+  eventId?: string;
 }
 
 const SIGN_IN_MESSAGE: LinkMessage = {
@@ -71,7 +73,7 @@ async function heldRegistration(
   db: DatabaseLike,
   userId: string,
   returnPath: string | undefined,
-): Promise<{ path: string; details: Awaited<ReturnType<typeof registrationDetailsEmailData>> } | null> {
+): Promise<{ eventId: string; path: string; details: Awaited<ReturnType<typeof registrationDetailsEmailData>> } | null> {
   const purpose = signInPurpose(returnPath);
   if (purpose?.flow !== "registration") return null;
   const held = await first<{ id: string; event_id: string; source_mode: "hugo" | "portal" | "integration" | null }>(
@@ -82,6 +84,7 @@ async function heldRegistration(
   );
   if (!held) return null;
   return {
+    eventId: held.event_id,
     path: eventParticipantRecordPath(purpose.eventSlug, "registration", held.id),
     details: await registrationDetailsEmailData(db, { id: held.event_id, source_mode: held.source_mode }, held.id),
   };
@@ -114,7 +117,7 @@ export async function requestUserSignInLink(
     templateKey: worded.templateKey,
     recipientEmail: magic.recipientEmail,
     recipientUserId: magic.identity.id,
-    eventId: null,
+    eventId: worded.eventId ?? null,
     messageType: "transactional",
     subject: worded.subject,
     data: {
@@ -173,6 +176,7 @@ export async function requestUserSignUpLink(
       subject: "You are already registered",
       data: { ...purpose, ...registration.details, alreadyRegistered: true },
       magicLinkBaseUrl: portalVerifyLinkBase(new URL(payload.magicLinkBaseUrl).origin, registration.path),
+      eventId: registration.eventId,
     };
   });
   // A retired address was told how to sign in instead; it does not start a second account.

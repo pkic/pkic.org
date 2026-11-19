@@ -297,11 +297,13 @@ describe("account sign-up", () => {
       IP_RATE_LIMITER: createTestRateLimiter(50),
     };
     expect((await call("/api/v1/auth/sign-up", { email: admin.email, returnPath }, limited)).status).toBe(200);
-    const [outbox] = await queryAll<{ template_key: string; payload_json: string }>(
+    const [outbox] = await queryAll<{ template_key: string; payload_json: string; event_id: string | null }>(
       env.DB,
-      "SELECT template_key, payload_json FROM email_outbox ORDER BY rowid DESC LIMIT 1",
+      "SELECT template_key, payload_json, event_id FROM email_outbox ORDER BY rowid DESC LIMIT 1",
     );
     expect(outbox!.template_key).toBe("user_account_found_link");
+    // The email is about the event, so delivery adds the event's links and sponsors.
+    expect(outbox!.event_id).toBe(eventId);
     const payload = JSON.parse(outbox!.payload_json);
     // The registration's own details come along, under the address the link is tied to.
     expect(payload).toMatchObject({

@@ -1,6 +1,7 @@
 /**
  * Sponsors help fund the events, so an email about an event shows the event's sponsors.
- * Sign-in and verification emails, a cancellation of a registration someone never made,
+ * Sign-in and verification emails (the account-found email shows them only when it
+ * reports a registration), a cancellation of a registration someone never made,
  * and notices to organizers leave them out. Delivery fills the event's sponsor image, and
  * the block hides itself when the site build published none.
  */
@@ -11,7 +12,6 @@ const SPONSORS = "{{> sponsors_block}}";
 const WITHOUT_SPONSORS = new Set([
   "event_proposal_verify",
   "user_sign_up_link",
-  "user_account_found_link",
   "registration_unauthorized",
   "agenda_speaker_declined",
 ]);
