@@ -57,15 +57,65 @@
     align-content: start;
   }
 
-  .pk-virtual-room__item {
-    display: grid;
-    gap: var(--pk-1);
-    padding-inline-start: var(--pk-3);
-    border-inline-start: var(--pk-1) solid var(--pk-line-soft);
+  /*
+   * The sponsors under the stream, always in view: one row of logos that changes by itself. Every logo sits
+   * on a light tile, since a sponsor's mark is drawn for a light page; the highest tiers get the taller one.
+   */
+  .pk-virtual-room__sponsors {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-3);
+    padding-block: var(--pk-2);
+    border-block: 1px solid var(--pk-line-soft);
   }
 
-  .pk-virtual-room__item--live {
-    border-inline-start-color: var(--pk-accent);
+  .pk-virtual-room__sponsors-label {
+    flex: none;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .pk-virtual-room__sponsor-list {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: space-around;
+    gap: var(--pk-3);
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  /* A logo gives way before it leaves the row: on a phone three share the width, each scaled inside its tile. */
+  .pk-virtual-room__sponsor {
+    display: flex;
+    flex: 0 1 auto;
+    min-inline-size: 0;
+  }
+
+  .pk-virtual-room__sponsor a {
+    display: flex;
+    min-inline-size: 0;
+    border-radius: var(--pk-radius-sm);
+  }
+
+  .pk-virtual-room__sponsor img {
+    box-sizing: border-box;
+    inline-size: auto;
+    max-inline-size: 100%;
+    block-size: 2rem;
+    padding: var(--pk-1) var(--pk-2);
+    border-radius: var(--pk-radius-sm);
+    background: var(--pk-on-solid);
+    object-fit: contain;
+  }
+
+  .pk-virtual-room__sponsor[data-top] img {
+    block-size: 2.75rem;
   }
 
   /* Wide screens: the player large on the left, the room's panels beside it. */
@@ -99,4 +149,3 @@
     }
   }
 }
-

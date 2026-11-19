@@ -233,7 +233,7 @@ export function ParticipantEvent({
         <ParticipantProposals event={event} />
       ) : tab === "virtual" ? (
         <Suspense fallback={<Spinner />}>
-          <VirtualRoom slug={event.slug} eventName={event.name} />
+          <VirtualRoom slug={event.slug} />
         </Suspense>
       ) : tab === "ticket" && !ticketless ? (
         <EventTicket event={event} />

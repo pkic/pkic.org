@@ -140,7 +140,7 @@ async function open() {
   await act(async () => {
     render(
       <HeadingOutline titleLevel={1}>
-        <VirtualRoom slug="summit" eventName="Summit" />
+        <VirtualRoom slug="summit" />
       </HeadingOutline>,
       host,
     );
@@ -168,9 +168,16 @@ describe("virtual room", () => {
     expect(title?.getAttribute("href")).toBe(`#/events/summit/agenda?session=${KEYNOTE}`);
   });
 
-  it("offers the room's question and chat panels alongside its current schedule", async () => {
+  it("offers the room's question and chat panels alongside its current schedule, with the sponsors always in view", async () => {
     await open();
-    expect(tabs().map((item) => item.textContent)).toEqual(["Now & next", "Questions", "Chat", "Sponsors"]);
+    expect(tabs().map((item) => item.textContent)).toEqual(["Questions", "Chat", "Now & next"]);
+    // A session is running in the fixture, so the panels open on its questions.
+    expect(tab("Questions").getAttribute("aria-selected")).toBe("true");
+    // The sponsors sit under the stream, outside the tabs: nobody has to look for them.
+    const logo = host.querySelector<HTMLAnchorElement>('section[aria-label="Sponsors"] a');
+    expect(logo?.getAttribute("href")).toBe("https://trust.example.test/");
+    expect(logo?.getAttribute("target")).toBe("_blank");
+    expect(logo?.closest('[role="tabpanel"]')).toBeNull();
     // The player comes before the panels, so a phone shows it first and keeps it above them.
     const order = [...host.querySelectorAll('iframe, [aria-label="In this room"]')].map((node) => node.tagName);
     expect(order).toEqual(["IFRAME", "SECTION"]);
@@ -179,14 +186,11 @@ describe("virtual room", () => {
     const panel = host.querySelector('[role="tabpanel"]');
     expect(panel?.textContent).not.toContain("Questions open when the session is live");
     expect(panel?.querySelector('section[aria-labelledby="virtual-room-tab-questions"]')).not.toBeNull();
-    await act(async () => tab("Sponsors").click());
-    const logo = host.querySelector<HTMLAnchorElement>('[role="tabpanel"] a');
-    expect(logo?.getAttribute("href")).toBe("https://trust.example.test/");
-    expect(logo?.getAttribute("target")).toBe("_blank");
   });
 
   it("lists now and next for the location and moves on at the session boundary without asking the server", async () => {
     await open();
+    await act(async () => tab("Now & next").click());
     const schedule = () =>
       [...host.querySelectorAll('[aria-label="Sessions in this room"] li')].map((item) => item.textContent ?? "");
     expect(schedule()).toHaveLength(2);

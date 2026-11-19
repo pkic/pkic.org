@@ -4,9 +4,10 @@ import {
   ONLINE_JOIN_LEAD_MS,
 } from "../../../../../../../shared/event-agenda-media";
 /**
- * The event app's virtual room: one location's live stream, large, with what is on now and next, the
- * session's questions and the event's sponsors beside it (below it on a phone, under a player that stays in
- * view). The viewer switches location by its tab; each location has its own address.
+ * The event app's virtual room: one location's live stream, large, with the running session and the event's
+ * sponsors under it, always in view, and the session's questions, its chat and what is on next beside it
+ * (below it on a phone, under a player that stays in view). The viewer switches location by its tab; each
+ * location has its own address.
  *
  * Streams come from the attendee endpoint, which releases them only to registered attendees and staff; the
  * running session comes from the published agenda compared with the browser clock at session boundaries.
@@ -30,6 +31,7 @@ import { Tabs } from "../../../../../../ui/Tabs";
 import { useSponsorDisplay } from "../../../../../sponsors-wall-data";
 import { usePortalHashLocation } from "../../../../hash-location";
 import { VirtualRoomPanels } from "./VirtualRoomPanels";
+import { VirtualRoomSponsors } from "./VirtualRoomSponsors";
 import { VirtualRoomNowPlaying, VirtualRoomPlayer } from "./VirtualRoomPlayer";
 import { SessionReactions } from "../../../../../../live-session/SessionReactions";
 import {
@@ -49,7 +51,7 @@ function useVirtualRoomData(slug: string) {
   return { streams, program };
 }
 
-export function VirtualRoom({ slug, eventName }: { slug: string; eventName: string }) {
+export function VirtualRoom({ slug }: { slug: string }) {
   const [location] = useHashLocation();
   const query = new URLSearchParams(location.split("?", 2)[1] ?? "");
   const { streams, program } = useVirtualRoomData(slug);
@@ -143,15 +145,10 @@ export function VirtualRoom({ slug, eventName }: { slug: string; eventName: stri
           />
         ) : null}
         <VirtualRoomNowPlaying slug={slug} moment={moment} stream={stream} formatTime={formatTime} />
+        <VirtualRoomSponsors sponsors={sponsors.display} />
       </div>
       {program.error && <ErrorAlert error={program.error} />}
-      <VirtualRoomPanels
-        slug={slug}
-        eventName={eventName}
-        moment={moment}
-        sponsors={sponsors.display}
-        formatTime={formatTime}
-      />
+      <VirtualRoomPanels slug={slug} moment={moment} formatTime={formatTime} />
     </div>
   );
 }

@@ -20,6 +20,7 @@ import { stageDisplaySections } from "./sections-stage-display";
 import { liveReactionsSections } from "./sections-live-reactions";
 import { liveSceneSwitchSections } from "./sections-live-scene-switch";
 import { roomScreensSections } from "./sections-room-screens";
+import { virtualRoomSections } from "./sections-virtual-room";
 
 export const liveProductionSections: PreviewSection[] = [
   ...eventScreenSections,
@@ -37,4 +38,5 @@ export const liveProductionSections: PreviewSection[] = [
   ...stageDisplaySections,
   ...liveReactionsSections,
   ...liveSceneSwitchSections,
+  ...virtualRoomSections,
 ];

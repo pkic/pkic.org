@@ -1,19 +1,19 @@
 import { SessionChat } from "../../../../../../live-session/SessionChat";
 import { useHashQueryParam } from "../../../../../../hooks/useHashQueryParam";
 /**
- * The virtual room's side panels: "Now & next" in this location, the live "Questions", and the event's
- * "Sponsors". Chat uses the same canonical session window and authenticated live room as questions.
+ * The virtual room's side panels: the live "Questions", the "Chat", and "Now & next" in this location. Chat
+ * uses the same canonical session window and authenticated live room as questions. While a session is on,
+ * the panels open on its questions; between sessions they open on what comes next.
  */
 import { eventSessionRoute } from "../../../../../../../shared/event-participation-link";
-import type { SponsorsDisplayResponse } from "../../../../../../../shared/schemas/public-sponsors";
-import { SponsorGridView } from "../../../../../../site/SponsorDisplays";
 import { EmptyState } from "../../../../../../ui/EmptyState";
 import { TabList } from "../../../../../../ui/TabList";
 import { usePortalHashLocation } from "../../../../hash-location";
 import { SessionQuestionsSlot } from "./SessionQuestionsSlot";
 import { sessionSpeakerLine, type RoomMoment, type RoomSession } from "./virtual-room-schedule";
 
-type PanelId = "schedule" | "questions" | "chat" | "sponsors";
+const PANELS = ["questions", "chat", "schedule"] as const;
+type PanelId = (typeof PANELS)[number];
 
 function ScheduleItem({
   slug,
@@ -43,31 +43,19 @@ function ScheduleItem({
 
 export function VirtualRoomPanels({
   slug,
-  eventName,
   moment,
-  sponsors,
   formatTime,
 }: {
   slug: string;
-  eventName: string;
   moment: RoomMoment;
-  sponsors: SponsorsDisplayResponse | null;
   formatTime: (startAt: string, endAt: string) => string;
 }) {
-  const [active, setActive] = useHashQueryParam("roomPanel", "schedule", [
-    "schedule",
-    "questions",
-    "chat",
-    "sponsors",
-  ] as const);
-  const hasSponsors = Boolean(sponsors?.groups.some((group) => group.sponsors.some((sponsor) => sponsor.logoUrl)));
+  const [shown, setActive] = useHashQueryParam("roomPanel", moment.current ? "questions" : "schedule", PANELS);
   const items = [
-    { id: "schedule" as const, label: "Now & next" },
     { id: "questions" as const, label: "Questions" },
     { id: "chat" as const, label: "Chat" },
-    ...(hasSponsors ? [{ id: "sponsors" as const, label: "Sponsors" }] : []),
+    { id: "schedule" as const, label: "Now & next" },
   ].map((item) => ({ ...item, panelId: `virtual-room-${item.id}` }));
-  const shown = items.some((item) => item.id === active) ? active : "schedule";
   const sessions = [...(moment.current ? [moment.current] : []), ...moment.upcoming];
   const interactionSession = moment.current ?? moment.upcoming[0];
   return (
@@ -124,7 +112,6 @@ export function VirtualRoomPanels({
           ) : (
             <EmptyState title="No session chat right now" body="Chat follows the current session in this room." />
           ))}
-        {shown === "sponsors" && sponsors && <SponsorGridView display={sponsors} eventName={eventName} rows={false} />}
       </div>
     </section>
   );
