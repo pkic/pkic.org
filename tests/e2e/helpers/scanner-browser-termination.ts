@@ -18,6 +18,7 @@ import { signInAsE2eStaff } from "./staff-auth";
 import { createPortalWaitlistEvent } from "./waitlist-event";
 import { clientIpForIdentity } from "./portal-auth";
 import { registerSignedIn } from "./registrant";
+import { ownDomainEmail } from "./registration";
 import {
   enrolledEventScanRequestSchema,
   eventScanResponseSchema,
@@ -41,7 +42,8 @@ export async function prepareScannerTermination(page: Page) {
   expect(published.status()).toBe(200);
   const agenda = agendaSnapshotSchema.parse(await published.json());
   expect(agenda.publishedRevision).toBe(agenda.revision);
-  const email = `termination-attendee-${randomUUID()}@example.test`;
+  // Its own domain: a shared one may already belong to an organization another test added.
+  const email = ownDomainEmail("termination-attendee");
   const browser = page.context().browser();
   if (!browser) throw new Error("The fixture needs its actual owned browser");
   const guest = await browser.newContext({
@@ -79,7 +81,7 @@ export async function prepareScannerTermination(page: Page) {
       {
         firstName: "Synthetic",
         lastName: "Termination attendee",
-        organization: "Synthetic attribution",
+        // No shared organization name: each attendee's own domain names its own.
         jobTitle: "Attendee",
       },
     );

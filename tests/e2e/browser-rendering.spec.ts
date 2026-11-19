@@ -777,7 +777,7 @@ test.describe("browser workflows", () => {
     await expect(page.getByRole("heading", { name: /Proposal submitted, Priya!/i })).toBeVisible();
     await screenshot("01-proposal-submitted");
 
-    const proposalSubmittedEmail = await waitForCapturedEmail(proposerEmail, "proposal");
+    const proposalSubmittedEmail = await waitForCapturedEmail(proposerEmail, "Proposal received:");
     const proposalManageUrl = extractUrlFromEmail(proposalSubmittedEmail, "/propose/manage/");
     const originalProposalManageToken = new URL(proposalManageUrl).searchParams.get("token") ?? "";
     expect(originalProposalManageToken).toMatch(/^pkc1_/);
@@ -953,7 +953,7 @@ test.describe("browser workflows", () => {
     await page.getByRole("button", { name: /Submit proposal/i }).click();
     await expect(page.getByRole("heading", { name: /Proposal submitted, Priya!/i })).toBeVisible();
 
-    const proposalEmail = await waitForCapturedEmail("proposal-speaker@example.test", "proposal");
+    const proposalEmail = await waitForCapturedEmail("proposal-speaker@example.test", "Proposal received:");
     const propManageUrl = extractUrlFromEmail(proposalEmail, "/propose/manage/");
     const propToken = new URL(propManageUrl).searchParams.get("token") ?? "";
 
@@ -1272,7 +1272,7 @@ test.describe("browser workflows", () => {
     await expect(page.getByRole("heading", { name: /Proposal submitted/i })).toBeVisible({ timeout: 15_000 });
     await screenshot("01-proposal-submitted");
 
-    const submittedEmail = await waitForCapturedEmail("proposal-speaker@example.test", "proposal");
+    const submittedEmail = await waitForCapturedEmail("proposal-speaker@example.test", "Proposal received:");
     const proposalManageUrl = extractUrlFromEmail(submittedEmail, "/propose/manage/");
     void proposalManageUrl; // only used to confirm the email arrived; speaker token comes later
 
