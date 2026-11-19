@@ -91,6 +91,23 @@
     inline-size: 100%;
     block-size: 100%;
   }
+  /*
+   * On a phone every picture of an output holds still: the thumbnails, the
+   * monitors and the large view. A running animation, such as the ticker's
+   * scroll or a rotating title, makes the browser keep several graphics
+   * layers per picture at the full broadcast size, and with a few pictures a
+   * phone's browser runs out of memory and reloads the page. This overrides
+   * each graphic's own motion, so it wins whatever their selectors. The
+   * outputs themselves move as always.
+   */
+  .pk-studio[data-phone] :is(.pk-studio-phone__thumb-screen, .pk-studio-monitor__screen) :is(*, ::before, ::after) {
+    animation: none !important;
+    transition: none !important;
+  }
+  /* A reaction only exists as its float up the frame; held still it would sit in the picture. */
+  .pk-studio[data-phone] :is(.pk-studio-phone__thumb-screen, .pk-studio-monitor__screen) .pk-live-overlay__reaction {
+    display: none;
+  }
   /* The output's scene under its picture, filling the height the Transition's buttons give the row. */
   .pk-studio-phone__thumb-scene {
     display: flex;

@@ -170,7 +170,8 @@ function Reacting({ state, children }: { state: LiveRoomState; children: (state:
 }
 
 const LIVE_PANEL: StudioPanel = { id: "live-1", type: "monitor", x: 0, y: 0, w: 6, h: 9, outputs: ["livestream"] };
-const MONITOR_SOURCES = {
+/** A room with graphics on Preview and Program, as the monitors read it. */
+export const MONITOR_SOURCES = {
   preview: ROOM,
   program: ROOM,
   agenda: null,
