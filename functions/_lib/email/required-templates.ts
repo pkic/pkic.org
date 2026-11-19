@@ -10,6 +10,7 @@ import { resolveTemplateSet } from "./templates";
  */
 export const REQUIRED_EMAIL_TEMPLATE_KEYS = [
   EMAIL_LAYOUT_TEMPLATE_KEY,
+  "account_security_notice",
   "agenda_changed",
   "agenda_session_booking",
   "agenda_session_invitation",
@@ -37,8 +38,6 @@ export const REQUIRED_EMAIL_TEMPLATE_KEYS = [
   "member-vote-representative-notify",
   "membership-participation-warning",
   "membership-workflow-review-digest",
-  "membership_join_existing_member",
-  "membership_join_verify",
   "org-contact-assigned",
   "org-content-approved",
   "org-content-rejected",
@@ -60,7 +59,6 @@ export const REQUIRED_EMAIL_TEMPLATE_KEYS = [
   "registration_confirmed",
   "registration_email_change",
   "registration_email_change_notice",
-  "registration_email_verify",
   "registration_manage_link",
   "registration_unauthorized",
   "registration_unfinished_reminder",
@@ -81,6 +79,10 @@ export const REQUIRED_EMAIL_TEMPLATE_KEYS = [
   "ticket_payment_request",
   "user_email_verification",
   "user_magic_link",
+  "user_sign_up_link",
+  "user_sign_in_unavailable",
+  "user_account_found_link",
+  "user_sign_in_help",
   "vote-proposal-rejected",
   "wg-chair-membership-digest",
 ] as const;

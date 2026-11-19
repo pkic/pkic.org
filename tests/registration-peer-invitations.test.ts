@@ -41,7 +41,7 @@ async function attendee() {
     event,
     userId,
     sourceType: "test",
-    mailboxVerified: true,
+    verifiedIdentity: { userId },
     dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
     signingSecret: env.INTERNAL_SIGNING_SECRET!,
   });

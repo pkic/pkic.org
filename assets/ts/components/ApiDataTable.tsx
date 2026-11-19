@@ -31,7 +31,12 @@ export interface ApiTableActions {
   setFilters?: (changes: Readonly<Record<string, string>>) => void;
 }
 
-export interface ApiDataTableProps<T, Response> extends Omit<DataTableProps<T>, "data" | "currentSort" | "onSort"> {
+export interface ApiDataTableProps<T, Response> extends Omit<
+  DataTableProps<T>,
+  "data" | "currentSort" | "onSort" | "empty"
+> {
+  /** A function receives whether the reader's own search or column filters narrowed the list. */
+  empty?: ComponentChildren | ((state: { narrowed: boolean }) => ComponentChildren);
   /** Keep column filters available on desktop even for hidden columns. */
   tableOptionsFilters?: boolean;
   endpoint: string;
@@ -53,7 +58,8 @@ export interface ApiDataTableProps<T, Response> extends Omit<DataTableProps<T>, 
   toolbar?: (
     actions: ApiTableActions,
     query: Readonly<Record<string, string>>,
-    sorting?: { sort: string; onSort: (sort: string) => void },
+    sorting: { sort: string; onSort: (sort: string) => void },
+    visibility: { hidden: ReadonlySet<string> },
   ) => ComponentChildren;
   /**
    * The list's create affordance, rendered in the same bar as search and
@@ -306,6 +312,8 @@ export function ApiDataTable<T, Response = unknown>({
     onData?.(collection.data);
   }, [collection.data, onData]);
 
+  const emptyContent =
+    typeof empty === "function" ? empty({ narrowed: Boolean(search) || Object.keys(filters).length > 0 }) : empty;
   const rows = collection.data ? resolve(collection.data) : [];
   const pageInfo = collection.data ? resolvePage(collection.data) : null;
   const pagerProps = pager.pagerProps({
@@ -355,7 +363,7 @@ export function ApiDataTable<T, Response = unknown>({
               : undefined
           }
         >
-          {toolbar?.(actions, query, { sort, onSort: applySort })}
+          {toolbar?.(actions, query, { sort, onSort: applySort }, { hidden: columnControls.hidden })}
           <span class={compactToolbarActions ? "pk-toolbar-secondary" : undefined}>{cardMenu}</span>
           <Button
             class={compactToolbarActions ? "pk-toolbar-secondary" : undefined}
@@ -393,7 +401,7 @@ export function ApiDataTable<T, Response = unknown>({
               ) : rows.length ? (
                 renderItems(rows, { sort, onSort: applySort })
               ) : (
-                <p>{empty}</p>
+                <p>{emptyContent}</p>
               )}
             </div>
           ) : (
@@ -404,7 +412,7 @@ export function ApiDataTable<T, Response = unknown>({
               columns={columns}
               data={rows}
               loading={collection.loading && !collection.data}
-              empty={empty}
+              empty={emptyContent}
               rowKey={rowKey}
               rowAction={rowAction}
               detailRow={detailRow}

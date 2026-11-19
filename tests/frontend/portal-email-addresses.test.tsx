@@ -46,7 +46,7 @@ const addresses = ownEmailAddressesListResponseSchema.parse({
       id: null,
       email: "ana@gmail.com",
       primary: true,
-      signInEnabled: true,
+      signIn: "signs_in",
       verifiedAt: "2026-08-01T00:00:00.000Z",
       verificationMethod: "magic_link",
       identityId: null,
@@ -56,7 +56,7 @@ const addresses = ownEmailAddressesListResponseSchema.parse({
       id: workId,
       email: "ana@work.example",
       primary: false,
-      signInEnabled: false,
+      signIn: "signs_in",
       verifiedAt: "2026-09-01T00:00:00.000Z",
       verificationMethod: "magic_link",
       identityId: null,
@@ -67,7 +67,7 @@ const addresses = ownEmailAddressesListResponseSchema.parse({
       id: waitingId,
       email: "ana@waiting.example",
       primary: false,
-      signInEnabled: false,
+      signIn: "signs_in",
       verifiedAt: null,
       verificationMethod: null,
       identityId: null,
@@ -393,6 +393,21 @@ describe("email address delivery warnings", () => {
     expect(host.querySelectorAll('[aria-label="Verified"]').length).toBe(2);
     expect(host.querySelectorAll(".pk-badge").length).toBe(2);
   });
+  it("says which address stopped signing in when its representation ended, and only that one", async () => {
+    stub(() => json({}), {
+      ...addresses,
+      emails: addresses.emails.map((address, index) =>
+        index === 1 ? { ...address, usedBy: [], signIn: "representation_ended" } : address,
+      ),
+    });
+    const host = mount(<EmailAddressesPanel userId={USER_ID} isSelf primaryEmail="ana@gmail.com" />);
+    await settle();
+    const rows = Array.from(host.querySelectorAll("li"));
+    const ended = rows.filter((row) => row.textContent?.includes("Stopped signing in when its representation ended"));
+    expect(ended).toHaveLength(1);
+    expect(ended[0].textContent).toContain("ana@work.example");
+  });
+
   it("shows staff the primary address's failure from the user record", async () => {
     stub(() => json({}), { emails: [], page: { limit: 10, offset: 0, total: 0, hasMore: false } });
     const host = mount(

@@ -28,7 +28,7 @@ import { openApiRoute } from "../../../../../_lib/openapi/route";
 import {
   addOwnEmailAddress,
   listOwnEmailAddresses,
-  updateOwnEmailAddress,
+  makeOwnEmailAddressPrimary,
   removeOwnEmailAddress,
 } from "../../../../../_lib/services/own-email-addresses";
 import { requestOwnEmailVerification } from "../../../../../_lib/services/own-email-verification";
@@ -87,10 +87,9 @@ export const OwnEmailAddressVerificationPost = openApiRoute(
 
 export const OwnEmailAddressPatch = openApiRoute(ownEmailAddressUpdateRouteSchema, async (c: AdminContext, data) => {
   const { db, actor } = await currentUser(c);
-  const email = await updateOwnEmailAddress(guardUserSessionDatabase(db, actor), {
+  const email = await makeOwnEmailAddressPrimary(guardUserSessionDatabase(db, actor), {
     userId: actor.userId,
     emailId: data.params.emailId,
-    update: data.body,
   });
   return jsonPrivate(ownEmailAddressResponseSchema.parse({ email }));
 });

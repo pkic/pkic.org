@@ -1,8 +1,8 @@
+import { buildEventEmailVariables } from "../email/event-email-variables";
 import type { InviteEmailQueueRow } from "../email/outbox";
 import { emailPlainText } from "../email/plain-text";
 import { buildEventInviteRecipientVariables } from "./event-invite-email-variables";
 import { queuedCapabilityToken } from "./capability-links";
-import { buildEventEmailVariables } from "./events";
 import { inviteDeclineUrl, proposalPageUrl, registrationPageUrl } from "./frontend-links";
 import type { EventRouteRow } from "./reminders-support";
 import { inviteExpirySeconds } from "../invite-validity";

@@ -1,7 +1,8 @@
+import { buildEventEmailVariables } from "../../email/event-email-variables";
 import { first } from "../../db/queries";
 import { prepareQueueEmailStatementWhen } from "../../email/outbox";
 import type { DatabaseLike } from "../../types";
-import { buildEventEmailVariables, type EventRecord } from "../events";
+import { type EventRecord } from "../events";
 import { normalizeEmail } from "../../validation";
 import {
   REGISTRATION_RECOVERY_RECIPIENT_EMAIL_SQL,
@@ -22,19 +23,13 @@ interface RegistrationManageLinkMatch {
   user_updated_at: string;
 }
 
-/**
- * Queues one enumeration-safe management-link recovery email when the match remains current.
- * `alreadyRegistered` answers a fresh registration attempt: only a held registration matches,
- * and the email says there is nothing to register again.
- */
+/** Queues one enumeration-safe management-link recovery email when the match remains current. */
 export async function queueRegistrationManageLinkRecovery(
   db: DatabaseLike,
   event: EventRecord,
   email: string,
   appBaseUrl: string,
-  options: { alreadyRegistered?: boolean } = {},
 ): Promise<string | null> {
-  const alreadyRegistered = options.alreadyRegistered === true;
   const normalizedEmail = normalizeEmail(email);
   // Recovery may go to the account's login mailbox or this registration's recipient.
   const inputSql = "input(email) AS (VALUES (?))";
@@ -60,10 +55,9 @@ export async function queueRegistrationManageLinkRecovery(
      JOIN registrations r ON r.user_id = u.id CROSS JOIN input
      WHERE ${matchSql}
        AND r.event_id = ?
-       AND (? = 0 OR r.status NOT IN ('cancelled', 'pending_email_confirmation'))
      ORDER BY r.created_at DESC
      LIMIT 1`,
-    [normalizedEmail, event.id, alreadyRegistered ? 1 : 0],
+    [normalizedEmail, event.id],
   );
   if (!registration) return null;
 
@@ -89,7 +83,6 @@ export async function queueRegistrationManageLinkRecovery(
         manageUrl,
         myAgendaUrl: myAgendaPageUrl(appBaseUrl, event),
         status: registration.registration_status,
-        alreadyRegistered,
       },
     },
     {

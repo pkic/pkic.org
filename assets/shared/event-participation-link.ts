@@ -40,6 +40,11 @@ export function eventVirtualRoomRoute(
   return `/events/${encodeURIComponent(eventSlug)}/virtual${search ? `?${search}` : ""}`;
 }
 
+/** The event's virtual room in the portal, as an absolute link for email and calendar invites. */
+export function eventVirtualRoomUrl(eventSlug: string, siteBaseUrl: string): string {
+  return new URL(`/portal/#${eventVirtualRoomRoute(eventSlug)}`, siteBaseUrl).href;
+}
+
 /** The attendee's own agenda in the portal, relative to the site origin. */
 export function eventMyAgendaPath(eventSlug: string): string {
   return `/portal/#${eventAgendaRoute(eventSlug, { mine: true })}`;

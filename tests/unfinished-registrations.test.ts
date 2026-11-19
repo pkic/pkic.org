@@ -84,7 +84,7 @@ it("sends nothing to a person who registered", async () => {
     event: { id: eventId },
     userId: registered.id,
     sourceType: "direct",
-    mailboxVerified: true,
+    verifiedIdentity: { userId: registered.id },
   });
   expect(await sendUnfinishedRegistrationReminders(env.DB, BASE)).toEqual({ reminded: 0, cleared: 1 });
 
@@ -167,7 +167,7 @@ it("lets the person say they are not registering, which stops reminders and reac
     event: { id: eventId },
     userId: user.id,
     sourceType: "direct",
-    mailboxVerified: true,
+    verifiedIdentity: { userId: user.id },
   });
   expect(await readUnfinishedRegistrationSummary(env.DB, { id: eventId })).toMatchObject({
     started: 1,

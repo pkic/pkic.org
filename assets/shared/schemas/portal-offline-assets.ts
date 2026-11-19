@@ -31,9 +31,8 @@ export const portalOfflineInventorySchema = z
   .object({
     version: z.literal(1),
     entrypoints: z.array(portalOfflineAssetPathSchema).min(1).max(32),
-    // The portal shell links every lazy route's stylesheet, so each new screen adds one. The
-    // serialized inventory stays bounded by PORTAL_OFFLINE_INVENTORY_MAX_BYTES below.
-    assets: z.array(portalOfflineAssetPathSchema).min(1).max(640),
+    // A sanity bound on the list, not a budget: the portal shell alone reached 512, and the byte cap below still holds.
+    assets: z.array(portalOfflineAssetPathSchema).min(1).max(1024),
   })
   .strict()
   .refine(

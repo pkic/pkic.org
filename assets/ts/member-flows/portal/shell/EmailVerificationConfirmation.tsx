@@ -11,8 +11,8 @@ import { ApiClientError, postJson } from "../../../shared/api-client";
 import { Alert } from "../../../ui/Alert";
 import { Button, ButtonLink } from "../../../ui/Button";
 import { portalEmailVerificationToken } from "../hash-route";
-import { LoginBackdrop } from "./LoginBackdrop";
-import "./Login.css";
+import { LoginBackdrop } from "../../../components/sign-in/LoginBackdrop";
+import "../../../components/sign-in/Login.css";
 
 const ENDPOINT = "/api/v1/auth/email-verifications";
 const ACCOUNT_HREF = "/portal/#/users/current";

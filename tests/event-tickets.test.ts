@@ -123,7 +123,7 @@ async function register(event: { id: string; timezone: string }, email: string, 
     event: { id: event.id },
     userId: user.id,
     sourceType: "direct",
-    mailboxVerified: true,
+    verifiedIdentity: { userId: user.id },
   });
   const ticket = await planRegistrationTicket(env.DB, classifierEnv, {
     event,
@@ -422,7 +422,7 @@ describe("event tickets", () => {
         event: { id: event.id },
         userId: person.id,
         sourceType: "direct",
-        mailboxVerified: true,
+        verifiedIdentity: { userId: person.id },
       });
       return (await planRegistrationTicket(
         env.DB,
@@ -868,7 +868,7 @@ describe("event tickets", () => {
         event: { id: event.id },
         userId: user.id,
         sourceType: "direct",
-        mailboxVerified: true,
+        verifiedIdentity: { userId: user.id },
         dayAttendance: virtual,
       });
       const ticket = await planRegistrationTicket(

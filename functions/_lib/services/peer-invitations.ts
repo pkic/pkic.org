@@ -1,3 +1,4 @@
+import { buildEventEmailVariables } from "../email/event-email-variables";
 import type { z } from "zod";
 import type {
   registrationInviteCreateSchema,
@@ -8,7 +9,7 @@ import { resolveEventInviteExpiry } from "../invite-validity";
 import { batchFirst } from "../db/pagination";
 import { AppError } from "../errors";
 import { getConfig, resolveAppBaseUrl } from "../config";
-import { buildEventEmailVariables, getEventBySlug } from "./events";
+import { getEventBySlug } from "./events";
 import { resolvePeerInvitationAuthority } from "./peer-invitation-authority";
 import { prepareInvitesByInviterCount } from "./invite-creation";
 import { bulkCreateInvites } from "./invite-bulk";

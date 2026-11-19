@@ -7,6 +7,7 @@ import { z } from "zod";
 import { userAuthLogoutRequestSchema, userAuthLogoutResponseSchema } from "../../../assets/shared/schemas/user-auth";
 import { scannerQueueRecordSchema } from "../../../assets/shared/schemas/event-scanner-offline-queue";
 import { archivedScanSchema, scanRecoverySchema } from "../../../assets/shared/schemas/event-scan-recovery";
+import { scanActionSchema } from "../../../assets/shared/schemas/event-participation-scanning";
 import { SCAN_STORAGE_VERSION } from "../../../assets/ts/member-flows/portal/sections/events/detail/scanner/outbox-storage";
 
 export const queuedScanSchema = scannerQueueRecordSchema.options[0].extend({
@@ -105,8 +106,8 @@ export async function openScannerManualEntry(page: Page): Promise<void> {
       const find = page.getByRole("button", { name: "Find attendee or badge", exact: true });
       if (!(await find.isVisible())) {
         const mode = page.locator('select[name="action"]');
-        const action = (await mode.count()) ? await mode.inputValue() : "attendance";
-        await page.getByRole("button", { name: action === "checkout" ? /^Venue exit\b/ : /^Venue entrance\b/ }).click();
+        const action = (await mode.count()) ? scanActionSchema.parse(await mode.inputValue()) : "attendance";
+        await page.locator(`button[data-scanner-action="${action}"][data-scanner-purpose="scan"]`).click();
       }
       await find.click();
     }

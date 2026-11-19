@@ -364,7 +364,10 @@ export function DayAttendancePicker({
           ? "Pick one option per day. Tap a mode’s column header to use it for every available day."
           : "Pick one option per day. Click an option’s name to use it for every available day."}
       </p>
+      {/* Each orientation is its own table. Reusing one table for the other orientation's
+          columns left Chromium with no layout box for it after a resize. */}
       <DataTable
+        key={transposed ? "by-option" : "by-day"}
         caption="Attendance by day"
         narrowLayout="columns"
         columns={columns}

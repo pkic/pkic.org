@@ -1,7 +1,6 @@
 /**
- * A speaker's edit of an identity they hold, through the authority their
- * proposal gives them: their own speaker link, an email confirmation, or their
- * session. The identity itself is edited — the same profile rule, write and
+ * A signed-in speaker's edit of an identity they hold, optionally through
+ * their own speaker link. The identity itself is edited — the same profile rule, write and
  * audit as every other identity edit — so every proposal, email, badge and
  * agenda that shows the identity shows the change. Nothing is copied onto the
  * proposal.
@@ -28,11 +27,11 @@ export async function updateEventProposalOwnIdentity(
     identityId: string;
     signingSecret: string;
     body: z.infer<typeof eventProposalProofIdentityPatchSchema>;
-    actor?: Pick<AuthenticatedIdentity, "userId" | "sessionId">;
+    actor: Pick<AuthenticatedIdentity, "userId" | "sessionId">;
   },
 ) {
   const at = nowIso();
-  const owner = await prepareEventProposalPersonOwner(db, { ...input, ...input.body, at });
+  const owner = await prepareEventProposalPersonOwner(db, { ...input, ...input.body });
   const identity = await first<
     EditableIdentityProfile & {
       email: string;
@@ -57,8 +56,7 @@ export async function updateEventProposalOwnIdentity(
   if (!identity) throw new AppError(404, "IDENTITY_NOT_FOUND", "Your identity was not found.");
   if (!identity.started_at || identity.ended_at || identity.blocked_at)
     throw new AppError(409, "IDENTITY_INACTIVE", "Only your active identity can be edited.");
-  // A mailbox continuation may establish primary verification in this same guarded batch.
-  if (!identity.verified_at && owner.proofEmail !== identity.email)
+  if (!identity.verified_at)
     throw new AppError(422, "IDENTITY_EMAIL_UNVERIFIED", "Confirm this identity's email before editing it.");
   const { jobTitle, biography, links } = input.body;
   const edit = prepareIdentityProfileEdit(db, identity, { jobTitle, biography, links }, at);

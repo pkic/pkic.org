@@ -124,7 +124,7 @@ test("attendees ask, upvote, reply, accept answers and restore participation aft
     const attendees = await Promise.all(contexts.map((context) => context.newPage()));
     for (const attendee of attendees) {
       const email = ownDomainEmail("live-attendee");
-      await registerStateAttendee(attendee, fixture, email, { staticRelease: false });
+      await registerStateAttendee(attendee, fixture, email);
       await signInToPortal(attendee, email);
       await attendee.goto(`/portal/#/events/${fixture.slug}/agenda?session=${occurrence.id}`);
       await expect(attendee.getByLabel("Your question", { exact: true })).toBeVisible();

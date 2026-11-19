@@ -6,7 +6,11 @@ import { readActiveUserSession } from "../../../../../../shared/pending-user-log
 import type { NativeEventCaptureContext } from "../../../../../../../shared/schemas/event-attendance-capture";
 import { scannerUploadSuspended } from "../../../../../../shared/pending-user-logout";
 import { cachedManifestSchema, sameSnapshotScope, snapshotCurrent, type CachedManifest } from "./eligibility-snapshot";
-import { eligibilityRefreshError, eligibilityRefreshRefused } from "./eligibility-refresh-error";
+import {
+  EligibilityRefreshFailure,
+  eligibilityPreparationStopped,
+  eligibilityRefreshError,
+} from "./eligibility-refresh-error";
 import { downloadEligibilitySnapshot } from "./eligibility-download";
 import type {
   EventScanRequest,
@@ -14,8 +18,11 @@ import type {
 } from "../../../../../../../shared/schemas/event-participation-scanning";
 
 export type LocalEligibility = Pick<EventScanResponse, "outcome" | "reason"> & { message: string; userId?: string };
+const containsBadgeNameResponse = (snapshot: CachedManifest) =>
+  snapshot.badgeNamesPrepared !== undefined || snapshot.badgeNamesUnavailable !== undefined;
 export interface EligibilityManifest {
   refreshError?: string;
+  retryAfterMs?: number;
   storageError?: string;
   enrollment?: Pick<CachedManifest, "eventId" | "deviceId" | "epochId" | "writtenAt">;
   operatorUserId: string;
@@ -272,19 +279,23 @@ export async function prepareEligibilityManifest(
   const session = await readActiveUserSession();
   const sessionId = session?.sessionId;
   if (await scannerUploadSuspended(operatorUserId, sessionId)) throw new Error("SCANNER_SIGNED_OUT");
-  const key = JSON.stringify([
-    operatorUserId,
-    slug,
-    occurrenceId,
-    roomId,
-    enrollment.epochId,
-    enrollment.deviceId,
-    ...(includeBadgeNames ? [true] : []),
-  ]);
+  const scope = [operatorUserId, slug, occurrenceId, roomId, enrollment.epochId, enrollment.deviceId];
+  const key = JSON.stringify(includeBadgeNames ? [...scope, true] : scope);
   let fallback: unknown;
   try {
     // Retain IDs for qualified feedback in this foreground session, then remove expired persisted copies.
     fallback = await cached(key);
+    const preferred = cachedManifestSchema.safeParse(fallback);
+    if (
+      !preferred.success ||
+      !snapshotCurrent(preferred.data) ||
+      (includeBadgeNames && (!preferred.data.complete || !containsBadgeNameResponse(preferred.data)))
+    ) {
+      const alternate = cachedManifestSchema.safeParse(
+        await cached(JSON.stringify(includeBadgeNames ? scope : [...scope, true])),
+      );
+      if (alternate.success && alternate.data.complete && snapshotCurrent(alternate.data)) fallback = alternate.data;
+    }
     await pruneExpiredEligibilityManifests();
   } catch {
     // An unavailable cache must not prevent an authorized network refresh.
@@ -302,6 +313,8 @@ export async function prepareEligibilityManifest(
   if (source === "cache") return restore();
   try {
     const saved = cachedManifestSchema.safeParse(fallback);
+    const reusable =
+      saved.success && saved.data.complete && (!includeBadgeNames || containsBadgeNameResponse(saved.data));
     const downloaded = await downloadEligibilitySnapshot(
       slug,
       operatorUserId,
@@ -309,7 +322,7 @@ export async function prepareEligibilityManifest(
       roomId,
       enrollment,
       signal,
-      saved.success && saved.data.complete ? saved.data : undefined,
+      reusable ? saved.data : undefined,
       onProgress,
       includeBadgeNames,
     );
@@ -319,7 +332,7 @@ export async function prepareEligibilityManifest(
     let storageError: string | undefined;
     try {
       snapshot = cachedManifestSchema.parse(
-        await cached(key, downloaded, saved.success ? saved.data.snapshotId : undefined),
+        await cached(key, downloaded, reusable ? saved.data.snapshotId : undefined),
       );
     } catch {
       storageError =
@@ -331,10 +344,15 @@ export async function prepareEligibilityManifest(
     }
     return Object.assign(buildEligibilityManifest(snapshot), storageError ? { storageError } : {});
   } catch (error) {
-    if (signal?.aborted || eligibilityRefreshRefused(error)) throw error;
+    if (signal?.aborted) throw error;
     if (await scannerUploadSuspended(operatorUserId, sessionId))
       throw new Error("SCANNER_SIGNED_OUT", { cause: error });
-    return Object.assign(restore(error), { refreshError: eligibilityRefreshError(error) });
+    // A stopped session is not an outage: the server refuses its scans, so its snapshot must not keep scanning.
+    if (error instanceof Error && eligibilityPreparationStopped(error.message)) throw error;
+    return Object.assign(restore(error), {
+      refreshError: eligibilityRefreshError(error),
+      retryAfterMs: error instanceof EligibilityRefreshFailure ? error.retryAfterMs : undefined,
+    });
   }
 }
 /** Read only this prepared operator/device/target, without granting portal or network access. */
@@ -342,19 +360,29 @@ export async function restoreEligibilityManifest(
   context: ScannerOfflineContext,
   includeBadgeNames = false,
 ): Promise<EligibilityManifest | null> {
-  const key = JSON.stringify([
+  const scope = [
     context.operatorUserId,
     context.slug,
     context.occurrenceId,
     context.roomId,
     context.epochId,
     context.deviceId,
-    ...(includeBadgeNames ? [true] : []),
-  ]);
+  ];
+  const key = JSON.stringify(includeBadgeNames ? [...scope, true] : scope);
   try {
     if (!scannerContextCurrent(context) || (await scannerUploadSuspended(context.operatorUserId, context.sessionId)))
       return null;
-    const saved = cachedManifestSchema.safeParse(await cached(key));
+    let saved = cachedManifestSchema.safeParse(await cached(key));
+    if (
+      !saved.success ||
+      !snapshotCurrent(saved.data) ||
+      (includeBadgeNames && (!saved.data.complete || !containsBadgeNameResponse(saved.data)))
+    ) {
+      const alternate = cachedManifestSchema.safeParse(
+        await cached(JSON.stringify(includeBadgeNames ? scope : [...scope, true])),
+      );
+      if (alternate.success && alternate.data.complete && snapshotCurrent(alternate.data)) saved = alternate;
+    }
     if (
       !saved.success ||
       !snapshotCurrent(saved.data) ||

@@ -5,6 +5,7 @@ import { getConfig } from "../config";
 import type { DatabaseLike, Env } from "../types";
 import { CURRENT_GROUP_LEADERSHIP_CTES_SQL, GROUP_LEAD_ROLE_ID } from "./group-leadership-query";
 import { outboxIdForOperation } from "../email/outbox-queue";
+import { emailPlainText, type EmailPlainTextValue } from "../email/plain-text";
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1_000;
 const DIGEST_BOUNDARY_HOUR_UTC = 8;
@@ -32,7 +33,7 @@ interface WgRecipientRow {
 
 interface WgChangeEntry {
   name: string;
-  organizationName: string | null;
+  organizationName: EmailPlainTextValue | null;
 }
 
 interface WgDigestRecipient {
@@ -179,7 +180,7 @@ async function readDigestRows(
 function toChangeEntry(row: WgChangeRow): WgChangeEntry {
   return {
     name: [row.first_name, row.last_name].filter(Boolean).join(" ") || "Unknown",
-    organizationName: row.organization_name,
+    organizationName: row.organization_name ? emailPlainText(row.organization_name) : null,
   };
 }
 

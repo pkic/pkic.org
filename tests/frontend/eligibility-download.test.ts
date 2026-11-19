@@ -321,15 +321,13 @@ describe("Conditional eligibility page downloads", () => {
     expect(smaller.entries.find((entry) => entry.badgeId === inventory[699]!.badgeId)?.revoked).toBe(true);
   });
 
-  it.each([401, 403])("refuses permission denial %s without renewing the snapshot", async (status) => {
+  it.each([401, 403])("reports HTTP %s without claiming local sign-out", async (status) => {
     const snapshot = fixture();
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => new Response(null, { status })),
     );
-    await expect(download(snapshot)).rejects.toThrow(
-      status === 401 ? "SCANNER_SIGNED_OUT" : "SCANNER_PERMISSION_CHANGED",
-    );
+    await expect(download(snapshot)).rejects.toMatchObject({ code: "http", status });
   });
 
   it("reports a changed room without refusing scanner access", async () => {

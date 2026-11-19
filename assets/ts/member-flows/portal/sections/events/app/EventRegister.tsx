@@ -5,7 +5,7 @@ import { continueToTicketPayment } from "../../../../../components/events/ticket
 import { Panel, PanelBody } from "../../../../../ui/Panel";
 import { ButtonLink } from "../../../../../ui/Button";
 import { usePortalHashLocation } from "../../../hash-location";
-import { eventParticipantRecordPath } from "../event-participant-paths";
+import { eventParticipantRecordPath } from "../../../../../../shared/event-participant-paths";
 import { eventRegistrationStanding, registrationOffer, type ParticipantEventDetail } from "./event-app-model";
 import { eventPhase } from "./event-timing";
 

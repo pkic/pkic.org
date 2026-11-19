@@ -5,7 +5,7 @@ import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
-import { prepareProposalProof } from "./helpers/proposal-proof";
+import { signInProposer } from "./helpers/proposal-proof";
 import { independentCapacityFixture } from "./helpers/independent-capacity";
 import { INDEPENDENT_CAPACITY_COPY } from "../assets/shared/email-first-copy";
 import { proposalSpeakersResponseSchema } from "../assets/shared/schemas/proposal-speakers";
@@ -15,18 +15,12 @@ const consents = [{ termKey: "speaker-terms", version: "v1" }];
 const email = "independent.speaker@gmail.com";
 
 async function submit(independentCapacity: unknown) {
-  const { independentCapacity: _fixture, ...proof } = await prepareProposalProof({
-    environment: env,
-    eventSlug: "pqc-2026",
-    email,
-    consents,
-    unaffiliatedAttestation: true,
-  });
+  const proposer = await signInProposer({ environment: env, email });
   return callApi(env, "/api/v1/events/pqc-2026/proposals", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...proposer.headers },
     body: JSON.stringify({
-      ...proof,
+      unaffiliatedAttestation: true,
       ...(independentCapacity === undefined ? {} : { independentCapacity }),
       proposer: { firstName: "Indie", lastName: "Speaker", actingIdentityId: null },
       proposal: {

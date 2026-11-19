@@ -1,12 +1,12 @@
 /**
  * An organization's email domains, as staff manage them.
  *
- * A domain reaches an organization in one of three ways the shared resolver
- * (`organization-domain.ts`) already knows: an approved claim (`claimed`),
- * people who joined through a verified address on it without a claim
- * (`derived`), or a pending membership application that holds it (`held`).
- * Staff add and remove claims here; derived and held domains are listed so
- * the view explains where each linked person came from.
+ * A domain reaches an organization in one of two ways the shared resolver
+ * (`organization-domain.ts`) knows: a claim (`claimed`), which a person's
+ * email challenge or staff add, or people who joined through a verified
+ * address on it before claims were recorded (`derived`). Staff add and remove
+ * claims here; derived domains are listed so the view explains where each
+ * linked person came from.
  */
 import { z } from "zod";
 import { successResponseSchema, trimmedString } from "./api-common";
@@ -15,7 +15,7 @@ import { organizationManagementParamsSchema } from "./organization-management";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { authErrors, created, ok, requiresPermissions } from "./route-contract";
 
-export const ORGANIZATION_DOMAIN_STATUSES = ["claimed", "derived", "held"] as const;
+export const ORGANIZATION_DOMAIN_STATUSES = ["claimed", "derived"] as const;
 export type OrganizationDomainStatus = (typeof ORGANIZATION_DOMAIN_STATUSES)[number];
 
 export const organizationDomainParamsSchema = organizationManagementParamsSchema.extend({

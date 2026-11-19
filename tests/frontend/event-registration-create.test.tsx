@@ -95,8 +95,6 @@ it("uses the session address, validates event questions, and submits the shared 
   const consentContract = registrationCreateForTermsSchema(terms);
   const request = {
     email: "ada@example.test",
-    firstName: "Ada",
-    lastName: "Lovelace",
     dayAttendance: [{ dayDate: "2027-09-10", attendanceType: "virtual" }],
     consents: [{ termKey: "privacy", version: "1" }],
   };
@@ -124,8 +122,6 @@ it("uses the session address, validates event questions, and submits the shared 
           status: "registered",
           startsAt: "2026-12-01T08:00:00.000Z",
           shareUrl: null,
-          manageUrl: null,
-          manageToken: null,
           dayAttendance: [],
           dayWaitlist: [],
         };
@@ -186,10 +182,9 @@ it("uses the session address, validates event questions, and submits the shared 
   expect(posted).toHaveLength(1);
   expect(posted[0]).toMatchObject({
     email: session.identity.email,
-    firstName: "Ada",
-    lastName: "Lovelace",
     customAnswers: { interest: "Migration" },
     dayAttendance: [{ dayDate: "2027-09-10", attendanceType: "virtual" }],
   });
   expect(posted[0]).not.toHaveProperty("emailProof");
+  expect(posted[0]).not.toHaveProperty("firstName");
 });

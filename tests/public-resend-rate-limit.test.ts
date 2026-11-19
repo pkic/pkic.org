@@ -6,6 +6,7 @@ import { resetDb } from "./helpers/reset-db";
 import { createScheduledRegistration } from "./helpers/scheduled-registration";
 import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { findOrCreateUser } from "../functions/_lib/services/users";
+import { signInRegistrant } from "./helpers/auth";
 
 describe("public resend rate limits", () => {
   beforeEach(async () => {
@@ -103,14 +104,16 @@ describe("public resend rate limits", () => {
       IP_RATE_LIMITER: createTestRateLimiter(20),
     };
     const email = `registration-create-rate-${crypto.randomUUID()}@example.test`;
+    const { headers, identityId } = await signInRegistrant(env.DB, email, {
+      organization: "Rate Limited Organization",
+    });
     const makeRequest = () =>
       callApi(limitedEnv, "/api/v1/events/pqc-2026/registrations", {
         method: "POST",
-        headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.42" },
+        headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.42", ...headers },
         body: JSON.stringify({
-          firstName: "Rate",
-          lastName: "Limited",
           email,
+          identityId,
           dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
           sourceType: "direct",
           consents: [
@@ -121,7 +124,7 @@ describe("public resend rate limits", () => {
       });
 
     expect((await makeRequest()).status).toBe(200);
-    // The domain workflow rejects a duplicate pending registration, but the
+    // The domain workflow rejects a duplicate registration, but the
     // attempted email triggers still consume the abuse-control budget.
     expect((await makeRequest()).status).toBe(409);
     expect((await makeRequest()).status).toBe(409);

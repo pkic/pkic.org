@@ -7,7 +7,7 @@ import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, Env } from "../../types";
 import type { GroupResourceViewer } from "../resource-grants";
-import { submitEventRegistration, type PublicRegistrationSubmissionConfig } from "../registrations/public-submission";
+import { submitEventRegistration } from "../registrations/public-submission";
 import { userRecordColumns, type UserRecord } from "../users";
 import { getGroupEvent } from "./group-read-model";
 import {
@@ -28,7 +28,7 @@ export async function submitGroupEventRegistration(
     userAgent: string | null;
     appBaseUrl: string;
     signingSecret: string;
-    config: PublicRegistrationSubmissionConfig;
+    referralCodeLength: number;
   },
 ) {
   const { event } = await getGroupEvent(db, viewer, groupId, eventId);

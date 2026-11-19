@@ -424,11 +424,6 @@ export async function prepareFinalizeEmailChange(
       .prepare("UPDATE passkey_credentials SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL")
       .bind(now, user.id),
     db
-      .prepare(
-        "UPDATE user_email_sign_in_permissions SET revoked_at = ? WHERE revoked_at IS NULL AND email_id IN (SELECT id FROM user_emails WHERE user_id = ?)",
-      )
-      .bind(now, user.id),
-    db
       .prepare("UPDATE agenda_calendar_subscriptions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL")
       .bind(now, user.id),
     prepareRotateUserRegistrationCapabilities(db, user.id, now, registrationBefore.id),

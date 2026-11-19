@@ -1,39 +1,44 @@
-import type { RegistrationOrganizationOutcome } from "../../../../assets/shared/schemas/registration";
 import { isStateGuardFailure } from "../../db/authorization-guard";
-import { readEventAffiliationContext } from "../identities/event-affiliation-context";
+import { buildEventEmailVariables } from "../../email/event-email-variables";
 import {
   personalPromotionImagePath,
   personalPromotionSharePath,
 } from "../../../../assets/shared/personal-promotion-image";
 import type { z } from "zod";
 import type {
-  RegistrationConfirmOrganization,
   RegistrationSubmissionResponse,
   registrationCreateSchema,
 } from "../../../../assets/shared/schemas/registration";
 import { AppError } from "../../errors";
 import type { DatabaseLike, Env, StatementLike } from "../../types";
 import { buildBadgeAttachment } from "../../email/attachments";
-import { checkEmailDomainMx } from "../../email/mx-check";
 import { prepareQueueEmailStatement, processOutboxByIdBackground } from "../../email/outbox";
 import { generateSignedRsvpAddress } from "../../email/rsvp";
+import { emailPlainText } from "../../email/plain-text";
 import { buildRegistrationIcs, calendarConfirmedDays } from "../../utils/calendar";
 import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../../utils/attendance";
 import { buildAcceptedTermsText, buildCustomAnswerRows } from "../../utils/registration-email";
 import { prepareValidatedAttendeeRegistration } from "../attendee-registration";
-import { buildEventEmailVariables, getEventBySlug, recordHugoEventBasePath } from "../events";
-import { myAgendaPageUrl, registrationManagePageUrl } from "../frontend-links";
+import { getEventBySlug, recordHugoEventBasePath } from "../events";
+import { myAgendaPageUrl } from "../frontend-links";
 import { findInviteByToken, type InviteRecord } from "../invites";
 import { prepareBadgeRenderJob } from "../badge-render-job-statements";
 import { seedGravatarAndProcessBadgeRenderJob } from "../registration-badge-regeneration";
 import { commitRegistrationSubmission } from "../registration-submission";
-import { registrationConfirmationUrl, registrationManageCapability } from "./capability-urls";
+import { registrationManageCapability } from "./capability-urls";
 import { readRegistrationAffiliation } from "./selected-identity";
 import type { VerifiedRegistrationIdentityContext } from "./types";
-import { nowIso, persistedUtcInstant } from "../../utils/time";
-import { linkConfirmedRegistrationOrganization } from "./confirmation-organization";
-import { findRegistrationGroup, prepareGroupEventRegistrationGuard } from "./authorization";
-import { eventTakesRegistrations } from "./email-proof";
+import { persistedUtcInstant } from "../../utils/time";
+import {
+  inviteSentToAccount,
+  prepareGroupEventRegistrationGuard,
+  readRegistrationAccessEvidence,
+} from "./authorization";
+import {
+  eventTakesRegistrations,
+  registrationAllowsPublicAccess,
+  requireRegistrationPolicy,
+} from "./registration-policy";
 import {
   isTicketCodeSpent,
   planRegistrationTicket,
@@ -45,13 +50,6 @@ import { readRefundPolicy } from "../event-tickets/refund-policy";
 
 /** The individual capacity only gates the public contract's work-email policy; the use case does not read it. */
 type RegistrationCreateInput = Omit<z.infer<typeof registrationCreateSchema>, "unaffiliatedAttestation">;
-
-export interface PublicRegistrationSubmissionConfig {
-  maxPendingConfirmationReminders: number;
-  pendingConfirmationReminderIntervalDays: number;
-  confirmationLinkTtlHours: number;
-  referralCodeLength: number;
-}
 
 export interface PublicRegistrationSubmissionResult {
   response: RegistrationSubmissionResponse;
@@ -65,60 +63,13 @@ export interface EventRegistrationSubmissionMetadata {
   userAgent: string | null;
   appBaseUrl: string;
   signingSecret: string;
-  config: PublicRegistrationSubmissionConfig;
-  verifiedIdentity?: VerifiedRegistrationIdentityContext;
-  /** The submission carried a verification link for its address: it is registered without a confirmation email. */
-  mailboxVerified?: boolean;
+  referralCodeLength: number;
+  /** Every registration belongs to a signed-in account; its session proved the mailbox. */
+  verifiedIdentity: VerifiedRegistrationIdentityContext;
   authorizationGuards?: readonly StatementLike[];
 }
 
-function registrationAllowsPublicAccess(registrationMode: string): boolean {
-  return registrationMode === "public" || registrationMode === "open" || registrationMode === "invite_or_open";
-}
-
-function requireRegistrationPolicy(
-  registrationMode: string,
-  access: { invited: boolean; authorizedByGroup: boolean },
-): void {
-  // An automatic meeting invites its group's members itself (#103); like a
-  // meeting without registration, it takes no registrations.
-  if (!eventTakesRegistrations(registrationMode)) {
-    throw new AppError(403, "EVENT_REGISTRATION_DISABLED", "This event does not use registration");
-  }
-  if (registrationAllowsPublicAccess(registrationMode)) return;
-  if (
-    (registrationMode === "optional" ||
-      registrationMode === "required" ||
-      registrationMode === "invitation_only" ||
-      registrationMode === "invite_only") &&
-    (access.invited || access.authorizedByGroup)
-  ) {
-    return;
-  }
-  throw new AppError(403, "EVENT_REGISTRATION_ACCESS_REQUIRED", "Registration requires an invitation or group access");
-}
-
-/**
- * After a verified registration commits, link the organization chosen on the
- * form or queue it for review without undoing the registration.
- */
-async function linkVerifiedRegistrant(
-  db: DatabaseLike,
-  input: {
-    registrationId: string;
-    organization?: RegistrationConfirmOrganization;
-  },
-): Promise<RegistrationOrganizationOutcome | null> {
-  return input.organization
-    ? linkConfirmedRegistrationOrganization(db, {
-        registrationId: input.registrationId,
-        organization: input.organization,
-        at: nowIso(),
-      })
-    : null;
-}
-
-/** Canonical registration use case shared by public and authenticated group adapters. */
+/** Canonical registration use case shared by the event and group registration routes. */
 export async function submitEventRegistration(
   db: DatabaseLike,
   env: Env,
@@ -129,31 +80,40 @@ export async function submitEventRegistration(
   const startsAt = persistedUtcInstant(event.starts_at);
   await recordHugoEventBasePath(db, event, metadata.eventBasePath);
 
-  let invite: InviteRecord | null = null;
+  let linkedInvite: InviteRecord | null = null;
   if (body.inviteToken) {
-    invite = await findInviteByToken(db, body.inviteToken, metadata.signingSecret, body.inviteId);
-    if (invite.event_id !== event.id || invite.invite_type !== "attendee") {
+    linkedInvite = await findInviteByToken(db, body.inviteToken, metadata.signingSecret, body.inviteId);
+    if (linkedInvite.event_id !== event.id || linkedInvite.invite_type !== "attendee") {
       throw new AppError(400, "INVITE_INVALID", "Invite token is not valid for attendee registration for this event");
+    }
+    // An invitation-only event admits only the invited person; on an open event a forwarded link is an ordinary registration.
+    if (!(await inviteSentToAccount(db, metadata.verifiedIdentity.userId, linkedInvite.invitee_email))) {
+      if (!registrationAllowsPublicAccess(event.registration_mode))
+        throw new AppError(
+          403,
+          "INVITE_FOR_ANOTHER_ADDRESS",
+          "This invitation was sent to another email address. Sign in with that address, or add it to your account.",
+        );
+      linkedInvite = null;
     }
   }
   let verifiedIdentity = metadata.verifiedIdentity;
   const authorizationGuards = [...(metadata.authorizationGuards ?? [])];
-  if (
-    verifiedIdentity &&
-    !verifiedIdentity.registrationGroupId &&
-    !invite &&
-    !registrationAllowsPublicAccess(event.registration_mode)
-  ) {
-    const registrationGroupId = await findRegistrationGroup(db, {
+  let invite = linkedInvite;
+  if (!invite && eventTakesRegistrations(event.registration_mode)) {
+    // The session proved the account's mailbox, so an invitation sent to it counts without its link.
+    const access = await readRegistrationAccessEvidence(db, {
       eventId: event.id,
       userId: verifiedIdentity.userId,
+      discoverGroup: !verifiedIdentity.registrationGroupId && !registrationAllowsPublicAccess(event.registration_mode),
     });
-    if (registrationGroupId) {
-      verifiedIdentity = { ...verifiedIdentity, registrationGroupId };
+    invite = access.invite;
+    if (access.registrationGroupId && !invite) {
+      verifiedIdentity = { ...verifiedIdentity, registrationGroupId: access.registrationGroupId };
       authorizationGuards.push(
         prepareGroupEventRegistrationGuard(db, {
           eventId: event.id,
-          groupId: registrationGroupId,
+          groupId: access.registrationGroupId,
           userId: verifiedIdentity.userId,
         }),
       );
@@ -161,90 +121,50 @@ export async function submitEventRegistration(
   }
   requireRegistrationPolicy(event.registration_mode, {
     invited: Boolean(invite),
-    authorizedByGroup: Boolean(verifiedIdentity?.registrationGroupId),
+    authorizedByGroup: Boolean(verifiedIdentity.registrationGroupId),
   });
 
-  if (!metadata.verifiedIdentity && !metadata.mailboxVerified) {
-    const mxResult = await checkEmailDomainMx(body.email);
-    if (!mxResult.hasMxRecords) {
-      throw new AppError(
-        422,
-        "EMAIL_DOMAIN_INVALID",
-        "The email domain does not appear to accept mail. Please check the address and try again.",
-      );
-    }
-  }
-
-  if (body.organization?.organizationId !== undefined && !body.organization.contextToken)
-    throw new AppError(409, "IDENTITY_CONTEXT_REQUIRED", "Confirm your organization details again before registering.");
-  const affiliationContext =
-    body.organization?.contextToken && metadata.mailboxVerified
-      ? await readEventAffiliationContext(
-          metadata.signingSecret,
-          body.organization.contextToken,
-          event.id,
-          body.email,
-          "registration-affiliation",
-          body.organization,
-        )
-      : undefined;
-  if (body.organization?.contextToken && !affiliationContext)
-    throw new AppError(
-      422,
-      "REGISTRATION_EMAIL_PROOF_REQUIRED",
-      "Verify your email before confirming the organization.",
-    );
   const { prepared, requiredTerms, formResponse } = await prepareValidatedAttendeeRegistration(db, body, {
-    sourceType: invite ? "invite" : body.sourceType,
+    sourceType: linkedInvite ? "invite" : body.sourceType,
     sourceRef: body.sourceRef,
     referredByCode: body.referralCode,
     invite,
     ip: metadata.clientIp,
     userAgent: metadata.userAgent,
-    pendingConfirmationDeadlineHours:
-      (metadata.config.maxPendingConfirmationReminders + 1) *
-      metadata.config.pendingConfirmationReminderIntervalDays *
-      24,
     signingSecret: metadata.signingSecret,
-    confirmationTtlHours: metadata.config.confirmationLinkTtlHours,
-    referralCodeLength: metadata.config.referralCodeLength,
+    referralCodeLength: metadata.referralCodeLength,
     authorizationGuards,
     event: { id: event.id, source_mode: event.source_mode },
     verifiedIdentity,
-    affiliationContext,
-    mailboxVerified: metadata.mailboxVerified,
   });
   const { user, referralCode } = prepared;
   const registration = prepared.registration;
+  // The session proved the mailbox, so the registration is confirmed at once.
+  if (registration.status !== "registered") {
+    throw new AppError(500, "REGISTRATION_NOT_CONFIRMED", "A signed-in registration must be confirmed at once");
+  }
+  // The manage capability travels only through the durable email outbox; the portal serves the signed-in person.
   const { manageUrl: queuedManageUrl } = await registrationManageCapability(metadata.appBaseUrl, event, registration);
-  const manageUrl = registrationManagePageUrl(metadata.appBaseUrl, event, prepared.manageToken);
-  // Email equality discovers an existing identity; it does not prove that the
-  // anonymous submitter owns it. Existing identities receive their management
-  // capability only through the durable email outbox. A newly created,
-  // unprivileged identity may keep the immediate correction link so a typo can
-  // still be fixed before confirmation. A verified mailbox is that proof.
-  const exposeManageCapability = prepared.identityWasCreated || Boolean(metadata.mailboxVerified);
   const shareUrl = `${metadata.appBaseUrl}${personalPromotionSharePath(referralCode)}`;
   const dayWaitlist = prepared.plannedDayWaitlist;
   const attendanceData = buildAttendanceEmailData(prepared.dayAttendance, dayWaitlist);
   const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
   const customAnswerRows = buildCustomAnswerRows(formResponse.answers, formResponse.form?.fields);
   const acceptedTermsText = buildAcceptedTermsText(body.consents, requiredTerms);
-  const affiliation =
-    prepared.representation ??
-    (await readRegistrationAffiliation(db, {
-      identityId: registration.registration_identity_id,
-      userId: user.id,
-    }));
+  const affiliation = await readRegistrationAffiliation(db, {
+    identityId: registration.registration_identity_id,
+    userId: user.id,
+  });
   const commonData = {
     ...buildEventEmailVariables(event, metadata.appBaseUrl),
     firstName: user.first_name ?? "",
     lastName: user.last_name ?? "",
     email: user.email,
-    organizationName: affiliation.organizationName ?? "",
+    organizationName: emailPlainText(affiliation.organizationName ?? ""),
     jobTitle: affiliation.jobTitle ?? "",
     attendanceLabel: attendanceData.attendanceLabel,
     dayAttendance: attendanceData.dayAttendance,
+    ...attendanceData.venueDayStanding,
     dayWaitlist,
     customAnswerRows,
     acceptedTermsText: acceptedTermsText || undefined,
@@ -271,74 +191,53 @@ export async function submitEventRegistration(
     dayAttendance: prepared.dayAttendance.map((day) => ({ dayDate: day.dayDate, attendanceType: day.attendanceType })),
   });
   const awaitingPayment = ticket?.status === "pending_payment";
-  let queuedEmail: ReturnType<typeof prepareQueueEmailStatement>;
-  if (registration.status === "pending_email_confirmation") {
-    const confirmationUrl = await registrationConfirmationUrl(
-      metadata.appBaseUrl,
-      event,
-      registration,
-      metadata.config.confirmationLinkTtlHours,
-    );
-    queuedEmail = prepareQueueEmailStatement(db, {
+  const rsvpEmail = env.INTERNAL_SIGNING_SECRET
+    ? await generateSignedRsvpAddress(registration.id, env.INTERNAL_SIGNING_SECRET, env.RSVP_EMAIL)
+    : undefined;
+  const calendar = await buildRegistrationIcs(
+    event,
+    registration.id,
+    queuedManageUrl,
+    calendarConfirmedDays(prepared.dayAttendance, dayWaitlist),
+    metadata.appBaseUrl,
+    rsvpEmail,
+    user.email,
+    env.INTERNAL_SIGNING_SECRET,
+  );
+  const queuedEmail = prepareQueueEmailStatement(db, {
+    eventId: event.id,
+    baseUrl: metadata.appBaseUrl,
+    templateKey: "registration_confirmed",
+    recipientEmail: user.email,
+    recipientUserId: user.id,
+    messageType: "transactional",
+    subject: `Registration confirmed for ${event.name}`,
+    capabilityLinkValues: [queuedManageUrl],
+    ...(awaitingPayment
+      ? { sendAt: HELD_UNTIL_PAID }
+      : { sendAfterSeconds: env.ASSETS_BUCKET ? Number(env.EMAIL_BADGE_DELAY_SECONDS ?? 90) : 0 }),
+    attachments: [
+      buildBadgeAttachment({
+        badgeCode: referralCode,
+        badgeType: "attendee",
+        firstName: user.first_name ?? "",
+        lastName: user.last_name ?? "",
+      }),
+    ],
+    data: {
+      ...commonData,
+      hasCalendarInvite: calendar.files.length > 0,
+      myAgendaUrl: myAgendaPageUrl(metadata.appBaseUrl, event),
+    },
+    bounceAddress: rsvpEmail,
+    calendar: {
+      registrationId: registration.id,
       eventId: event.id,
-      baseUrl: metadata.appBaseUrl,
-      templateKey: "registration_confirm_email",
-      recipientEmail: user.email,
-      recipientUserId: user.id,
-      messageType: "transactional",
-      subject: `Confirm your registration for ${event.name}`,
-      capabilityLinkValues: [confirmationUrl, queuedManageUrl],
-      data: { ...commonData, confirmationUrl },
-    });
-  } else {
-    const rsvpEmail = env.INTERNAL_SIGNING_SECRET
-      ? await generateSignedRsvpAddress(registration.id, env.INTERNAL_SIGNING_SECRET, env.RSVP_EMAIL)
-      : undefined;
-    const calendar = await buildRegistrationIcs(
-      event,
-      registration.id,
-      queuedManageUrl,
-      calendarConfirmedDays(prepared.dayAttendance, dayWaitlist),
-      metadata.appBaseUrl,
-      rsvpEmail,
-      user.email,
-      env.INTERNAL_SIGNING_SECRET,
-    );
-    queuedEmail = prepareQueueEmailStatement(db, {
-      eventId: event.id,
-      baseUrl: metadata.appBaseUrl,
-      templateKey: "registration_confirmed",
-      recipientEmail: user.email,
-      recipientUserId: user.id,
-      messageType: "transactional",
-      subject: `Registration confirmed for ${event.name}`,
-      capabilityLinkValues: [queuedManageUrl],
-      ...(awaitingPayment
-        ? { sendAt: HELD_UNTIL_PAID }
-        : { sendAfterSeconds: env.ASSETS_BUCKET ? Number(env.EMAIL_BADGE_DELAY_SECONDS ?? 90) : 0 }),
-      attachments: [
-        buildBadgeAttachment({
-          badgeCode: referralCode,
-          badgeType: "attendee",
-          firstName: user.first_name ?? "",
-          lastName: user.last_name ?? "",
-        }),
-      ],
-      data: {
-        ...commonData,
-        hasCalendarInvite: calendar.files.length > 0,
-        myAgendaUrl: myAgendaPageUrl(metadata.appBaseUrl, event),
-      },
-      bounceAddress: rsvpEmail,
-      calendar: {
-        registrationId: registration.id,
-        eventId: event.id,
-        icsUid: calendar.uid,
-        icsFiles: calendar.files,
-        inlineContent: calendar.inlineContent,
-      },
-    });
-  }
+      icsUid: calendar.uid,
+      icsFiles: calendar.files,
+      inlineContent: calendar.inlineContent,
+    },
+  });
 
   const badgeRenderJob = prepareBadgeRenderJob(db, referralCode);
   // The payment request states the refund terms a payment made now falls under.
@@ -346,7 +245,7 @@ export async function submitEventRegistration(
   const ticketStatements = ticket
     ? [
         ...ticket.statements,
-        ...(awaitingPayment && registration.status !== "pending_email_confirmation"
+        ...(awaitingPayment
           ? [
               db
                 .prepare(
@@ -389,26 +288,15 @@ export async function submitEventRegistration(
       throw ticketCodeExhaustedError();
     throw error;
   }
-  const organizationOutcome = affiliationContext
-    ? (prepared.organizationOutcome ?? null)
-    : metadata.mailboxVerified
-      ? await linkVerifiedRegistrant(db, {
-          registrationId: registration.id,
-          organization: body.organization,
-        })
-      : null;
   return {
     response: {
       success: true,
       registrationId: registration.id,
       status: registration.status,
       startsAt,
-      manageToken: exposeManageCapability ? prepared.manageToken : null,
-      manageUrl: exposeManageCapability ? manageUrl : null,
       shareUrl,
       dayAttendance: prepared.dayAttendance,
       dayWaitlist,
-      organizationOutcome,
     },
     backgroundTasks: [
       seedGravatarAndProcessBadgeRenderJob(db, env, {
@@ -419,6 +307,3 @@ export async function submitEventRegistration(
     ],
   };
 }
-
-/** Public adapter name retained for the existing public route. */
-export const submitPublicRegistration = submitEventRegistration;

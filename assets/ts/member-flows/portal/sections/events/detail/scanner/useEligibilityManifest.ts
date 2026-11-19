@@ -5,12 +5,13 @@ import { scannerCollectorPath, scannerContextCurrent } from "./scanner-offline-c
 import type { EventScanRequest } from "../../../../../../../shared/schemas/event-participation-scanning";
 import type { PortalSession } from "../../../../types";
 import type { ScannerEpoch } from "./scanner-device-ledger";
-import { useContext, useEffect, useRef, useState } from "preact/hooks";
+import { useContext, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { ScannerCodePreparation, useScannerCodePreparationRetry } from "./scanner-code-preparation";
 import { prepareEligibilityManifest, type EligibilityManifest } from "./eligibility-manifest";
 import {
   SCANNER_PREPARATION_CLOSED_MESSAGE,
   SCANNER_PREPARATION_CLOSING_MESSAGE,
+  EligibilityRefreshFailure,
   eligibilityPreparationStopped,
   eligibilityRefreshError,
   eligibilityRefreshRefused,
@@ -94,6 +95,7 @@ export function useEligibilityManifest({
       return;
     const enrollment = { epochId: epoch.epochId, deviceId: epoch.deviceId };
     let refreshing = false;
+    let automaticRefreshAt = 0;
     const prepare = async () => {
       if (refreshing || controller.signal.aborted || closedEpochId.current === enrollment.epochId) return;
       refreshing = true;
@@ -116,10 +118,13 @@ export function useEligibilityManifest({
         );
         if (controller.signal.aborted) return;
         eligibilityManifest.current = manifest;
+        automaticRefreshAt = manifest.retryAfterMs ? Date.now() + manifest.retryAfterMs : 0;
         setManifestReady(true);
         setManifestError(manifest.storageError ?? manifest.refreshError ?? "");
       } catch (error) {
         if (controller.signal.aborted) return;
+        if (error instanceof EligibilityRefreshFailure && error.retryAfterMs)
+          automaticRefreshAt = Date.now() + error.retryAfterMs;
         if (eligibilityRefreshRefused(error)) {
           eligibilityManifest.current = null;
           if (error instanceof Error && eligibilityPreparationStopped(error.message)) {
@@ -147,7 +152,7 @@ export function useEligibilityManifest({
     refreshRequest.current = prepare;
     void prepare();
     const reconnect = () => {
-      if (!collector && navigator.onLine) void prepare();
+      if (!collector && navigator.onLine && Date.now() >= automaticRefreshAt) void prepare();
     };
     const visible = () => {
       if (document.visibilityState === "visible") reconnect();
@@ -220,9 +225,17 @@ export function useScannerOfflinePreparation(
   manifest: EligibilityManifest | null,
   slug: string,
   action: EventScanRequest["action"],
+  targetLabel?: string,
+  roomLabel?: string,
+  expectedScope?: { occurrenceId: string | null; roomId: string | null },
+  allowedActions?: readonly EventScanRequest["action"][],
 ) {
+  const preparedActions = useMemo(() => allowedActions ?? [action], [allowedActions, action]);
   const prepareCode = useContext(ScannerCodePreparation);
   const route = scannerCollectorPath(window.location.hash);
+  const hasExpectedScope = expectedScope !== undefined;
+  const expectedOccurrenceId = expectedScope?.occurrenceId;
+  const expectedRoomId = expectedScope?.roomId;
   const [prepared, setPrepared] = useState<ScannerOfflineContext | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [error, setError] = useState("");
@@ -232,9 +245,27 @@ export function useScannerOfflinePreparation(
     const controller = new AbortController();
     setError("");
     setPreparing(false);
-    if (prepareCode && session && epoch && manifest) {
+    if (
+      prepareCode &&
+      session &&
+      epoch &&
+      manifest &&
+      (!hasExpectedScope ||
+        (manifest.occurrenceId === expectedOccurrenceId && (manifest.roomId ?? null) === expectedRoomId))
+    ) {
       setPreparing(true);
-      void saveScannerOfflineContext({ slug, session, epoch, manifest, action, signal: controller.signal, prepareCode })
+      void saveScannerOfflineContext({
+        slug,
+        session,
+        epoch,
+        manifest,
+        action,
+        allowedActions: preparedActions,
+        targetLabel,
+        roomLabel,
+        signal: controller.signal,
+        prepareCode,
+      })
         .then((context) => {
           if (!controller.signal.aborted) {
             if (context) setPrepared(context);
@@ -249,7 +280,22 @@ export function useScannerOfflinePreparation(
         });
     }
     return () => controller.abort();
-  }, [slug, action, session, epoch, manifest, prepareCode, attempt, route]);
+  }, [
+    slug,
+    action,
+    preparedActions,
+    targetLabel,
+    roomLabel,
+    hasExpectedScope,
+    expectedOccurrenceId,
+    expectedRoomId,
+    session,
+    epoch,
+    manifest,
+    prepareCode,
+    attempt,
+    route,
+  ]);
   useEffect(() => {
     if (!prepared) return;
     const timer = window.setInterval(() => tick((value) => value + 1), 1000);
@@ -268,6 +314,7 @@ export function useScannerOfflinePreparation(
     prepared.deviceId === epoch.deviceId &&
     prepared.occurrenceId === manifest?.occurrenceId &&
     prepared.roomId === (manifest?.roomId ?? null) &&
+    (!hasExpectedScope || (prepared.occurrenceId === expectedOccurrenceId && prepared.roomId === expectedRoomId)) &&
     scannerContextCurrent(prepared)
       ? prepared
       : null;

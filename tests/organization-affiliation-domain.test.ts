@@ -42,11 +42,25 @@ async function prepare(
     },
   });
 }
+/** The person confirmed the organization they join; an unconfirmed join is refused. */
+async function join(
+  person: Awaited<ReturnType<typeof verifiedPerson>>,
+  organizationId: string,
+  organizationName: string,
+) {
+  return prepare(person, organizationName, organizationId);
+}
 async function establish(local = "original", name = "Canonical Employer") {
   const person = await verifiedPerson(local);
   const prepared = await prepare(person, name);
   await env.DB.batch(prepared.statements);
   return { person, prepared };
+}
+/** An affiliation made before an email challenge linked its domain: people reach the organization only through it. */
+async function establishDerived(local = "original", name = "Canonical Employer") {
+  const established = await establish(local, name);
+  await env.DB.prepare("DELETE FROM organization_domain_claims WHERE domain=?").bind(domain).run();
+  return established;
 }
 async function claim(organizationId: string) {
   await env.DB.prepare(
@@ -58,14 +72,31 @@ async function claim(organizationId: string) {
 
 beforeEach(resetDb);
 describe("Immutable verified-email organization resolution", () => {
-  it("links another proved person to one canonical organization despite a different submitted name", async () => {
+  it("links the domain on the first email challenge, then links another proved person through it despite a different submitted name", async () => {
     const original = await establish();
+    expect(await queryAll(env.DB, "SELECT domain,organization_id FROM organization_domain_claims")).toEqual([
+      { domain, organization_id: original.prepared.organizationId },
+    ]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT entity_id,json_extract(details_json,'$.domain.to') AS domain FROM audit_log WHERE action='organization_domain_claimed'",
+      ),
+    ).toEqual([{ entity_id: original.prepared.organizationId, domain }]);
     const person = await verifiedPerson("colleague");
     expect(await resolveVerifiedEmailDomainOrganization(env.DB, person.email)).toEqual({
       id: original.prepared.organizationId,
       name: "Canonical Employer",
     });
-    const prepared = await prepare(person, "New spelling must not create another organization");
+    await expect(prepare(person, "New spelling must not create another organization")).rejects.toMatchObject({
+      code: "IDENTITY_CONTEXT_REQUIRED",
+    });
+    expect(await queryAll(env.DB, "SELECT id FROM identities WHERE user_id=?", [person.userId])).toEqual([]);
+    const prepared = await join(
+      person,
+      original.prepared.organizationId,
+      "New spelling must not create another organization",
+    );
     expect(prepared.organizationId).toBe(original.prepared.organizationId);
     expect(prepared.memberId).toBeNull();
     expect(prepared.representation.organizationName).toBe("Canonical Employer");
@@ -78,25 +109,32 @@ describe("Immutable verified-email organization resolution", () => {
         prepared.identityId,
       ]),
     ).toEqual([
-      { source: "verified_email", verified_email_domain: domain, organization_id: original.prepared.organizationId },
+      { source: "verified_domain", verified_email_domain: null, organization_id: original.prepared.organizationId },
     ]);
-    expect(await queryAll(env.DB, "SELECT id FROM organization_domain_claims")).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT organization_id FROM organization_domain_claims")).toEqual([
+      { organization_id: original.prepared.organizationId },
+    ]);
+    expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='organization_domain_claimed'")).toHaveLength(
+      1,
+    );
     expect(await queryAll(env.DB, "SELECT id FROM members")).toEqual([]);
     expect(await queryAll(env.DB, "SELECT id FROM member_applications")).toEqual([]);
     expect(await queryAll(env.DB, "SELECT id FROM permission_grants WHERE user_id=?", [person.userId])).toEqual([]);
   });
 
   it("retains original domain proof across primary-address changes and requires review after its last active period ends", async () => {
-    const original = await establish();
+    const original = await establishDerived();
     await env.DB.prepare(
       "UPDATE users SET email='changed@different-work.example',normalized_email='changed@different-work.example' WHERE id=?",
     )
       .bind(original.person.userId)
       .run();
     const colleague = await verifiedPerson("after-address-change");
-    const linked = await prepare(colleague, "Different spelling");
+    const linked = await join(colleague, original.prepared.organizationId, "Different spelling");
     expect(linked.organizationId).toBe(original.prepared.organizationId);
     await env.DB.batch(linked.statements);
+    // The colleague's challenge linked the domain again; only derived history remains once that link is released.
+    await env.DB.prepare("DELETE FROM organization_domain_claims WHERE domain=?").bind(domain).run();
     expect(
       await queryAll(env.DB, "SELECT verified_email_domain FROM identities WHERE id=?", [original.prepared.identityId]),
     ).toEqual([{ verified_email_domain: domain }]);
@@ -119,9 +157,9 @@ describe("Immutable verified-email organization resolution", () => {
     ).rejects.toThrow();
   });
 
-  it("reuses an explicit owned affiliation unchanged while new links require pending-claim review", async () => {
+  it("reuses an explicit owned affiliation unchanged, and a pending application changes nothing about new links", async () => {
     const original = await establish();
-    await seedOrganizationAggregate(env.DB, original.prepared.organizationId, "A");
+    const memberId = await seedOrganizationAggregate(env.DB, original.prepared.organizationId, "A");
     await seedMemberApplication({ applicantEmail: `pending@${domain}`, organizationDomain: domain });
     const before = await queryAll(
       env.DB,
@@ -137,15 +175,33 @@ describe("Immutable verified-email organization resolution", () => {
         original.prepared.identityId,
       ]),
     ).toEqual(before);
-    await expect(prepare(await verifiedPerson("new-pending"), "Different Name")).rejects.toMatchObject({
-      code: "ORGANIZATION_DOMAIN_IN_USE",
-    });
+    const colleague = await join(
+      await verifiedPerson("new-pending"),
+      original.prepared.organizationId,
+      "Different Name",
+    );
+    expect(colleague.organizationId).toBe(original.prepared.organizationId);
+    expect(colleague.memberId).toBe(memberId);
   });
 
-  it.each(["ambiguous", "blocked", "member", "unknown"] as const)(
+  it("links a derived member organization like any other organization", async () => {
+    const original = await establishDerived();
+    const memberId = await seedOrganizationAggregate(env.DB, original.prepared.organizationId, "A");
+    const prepared = await join(
+      await verifiedPerson("member-colleague"),
+      original.prepared.organizationId,
+      "A different submitted spelling",
+    );
+    expect(prepared.organizationId).toBe(original.prepared.organizationId);
+    expect(prepared.memberId).toBe(memberId);
+    await env.DB.batch(prepared.statements);
+    expect(await queryAll(env.DB, "SELECT id FROM organizations")).toHaveLength(1);
+  });
+
+  it.each(["ambiguous", "blocked", "unknown"] as const)(
     "refuses %s evidence without creating a fresh organization",
     async (state) => {
-      const original = await establish();
+      const original = await establishDerived();
       if (state === "ambiguous") {
         const conflictingOrg = await insertOrganization(env.DB, "Reviewed Fixture With Conflicting Domain");
         const person = await verifiedPerson("conflicting");
@@ -161,8 +217,6 @@ describe("Immutable verified-email organization resolution", () => {
         await env.DB.prepare("UPDATE identities SET ended_at=?,blocked_at=?,blocked_by_user_id=? WHERE id=?")
           .bind(nowIso(), nowIso(), original.person.userId, original.prepared.identityId)
           .run();
-      } else if (state === "member") {
-        await seedOrganizationAggregate(env.DB, original.prepared.organizationId, "A");
       } else {
         // A prior unknown source cannot be inferred or rewritten from its selected current mailbox.
         const older = await verifiedPerson("older-unknown");
@@ -187,22 +241,22 @@ describe("Immutable verified-email organization resolution", () => {
     },
   );
 
-  it("keeps pending and conflicting claims under review but lets an exact same-organization claim carry member authority", async () => {
+  it("asks to confirm another claimant instead of joining it unasked, and lets an exact same-organization claim carry member authority", async () => {
     const original = await establish();
-    await seedMemberApplication({ applicantEmail: `pending@${domain}`, organizationDomain: domain });
-    await expect(prepare(await verifiedPerson("while-pending"), "Different Name")).rejects.toMatchObject({
-      code: "ORGANIZATION_DOMAIN_IN_USE",
-    });
     await env.DB.prepare("DELETE FROM organization_domain_claims WHERE domain=?").bind(domain).run();
     const otherOrg = await insertOrganization(env.DB, "Conflicting Claimed Employer");
     await claim(otherOrg);
     await expect(prepare(await verifiedPerson("conflicting-claim"), "Different Name")).rejects.toMatchObject({
-      code: "ORGANIZATION_AFFILIATION_REVIEW_REQUIRED",
+      code: "IDENTITY_CONTEXT_REQUIRED",
     });
     await env.DB.prepare("DELETE FROM organization_domain_claims WHERE domain=?").bind(domain).run();
     await claim(original.prepared.organizationId);
     const memberId = await seedOrganizationAggregate(env.DB, original.prepared.organizationId, "A");
-    const prepared = await prepare(await verifiedPerson("claimed-colleague"), "Ignore this name");
+    const prepared = await join(
+      await verifiedPerson("claimed-colleague"),
+      original.prepared.organizationId,
+      "Ignore this name",
+    );
     expect(prepared.organizationId).toBe(original.prepared.organizationId);
     expect(prepared.memberId).toBe(memberId);
     await env.DB.batch(prepared.statements);
@@ -232,19 +286,18 @@ describe("Immutable verified-email organization resolution", () => {
     expect(await queryAll(env.DB, "SELECT id FROM organizations")).toEqual([{ id: first.organizationId }]);
     expect(await queryAll(env.DB, "SELECT id FROM identities WHERE user_id=?", [secondPerson.userId])).toEqual([]);
     expect(await queryAll(env.DB, "SELECT id FROM audit_log ORDER BY id")).toEqual(beforeAudit);
-    const retry = await prepare(secondPerson, "Still a different submitted spelling");
+    const retry = await join(secondPerson, first.organizationId, "Still a different submitted spelling");
     expect(retry.organizationId).toBe(first.organizationId);
     await env.DB.batch(retry.statements);
     expect(await queryAll(env.DB, "SELECT id FROM organizations")).toHaveLength(1);
   });
 
-  it.each(["ended", "membership", "claim", "name", "claimed_conflict"] as const)(
+  it.each(["ended", "membership", "claim", "name"] as const)(
     "rolls back prepared reuse when %s changes before the final batch",
     async (race) => {
-      const original = await establish();
-      if (race === "claimed_conflict") await claim(original.prepared.organizationId);
+      const original = await establishDerived();
       const person = await verifiedPerson(`reuse-${race}`);
-      const prepared = await prepare(person, "Ignored submitted name");
+      const prepared = await join(person, original.prepared.organizationId, "Ignored submitted name");
       const beforeAudit = await queryAll(env.DB, "SELECT id FROM audit_log ORDER BY id");
       const beforeName = await queryAll(env.DB, "SELECT first_name FROM users WHERE id=?", [person.userId]);
       const raced = mutateBeforeNextBatch(env.DB, async () => {
@@ -254,18 +307,7 @@ describe("Immutable verified-email organization resolution", () => {
             .run();
         else if (race === "membership") await seedOrganizationAggregate(env.DB, original.prepared.organizationId, "A");
         else if (race === "claim") await claim(original.prepared.organizationId);
-        else if (race === "claimed_conflict") {
-          const conflictingOrg = await insertOrganization(env.DB, "Concurrent Domain Conflict");
-          const owner = await verifiedPerson("concurrent-conflict");
-          const identity = await buildCreateIdentityStatement(env.DB, {
-            userId: owner.userId,
-            organizationId: conflictingOrg,
-            source: "verified_email",
-            verifiedEmailDomain: domain,
-            startImmediately: true,
-          });
-          await env.DB.batch([identity.statement]);
-        } else
+        else
           await env.DB.prepare("UPDATE organizations SET name='Concurrent canonical rename' WHERE id=?")
             .bind(original.prepared.organizationId)
             .run();
@@ -278,8 +320,33 @@ describe("Immutable verified-email organization resolution", () => {
       ).rejects.toThrow();
       expect(await queryAll(env.DB, "SELECT first_name FROM users WHERE id=?", [person.userId])).toEqual(beforeName);
       expect(await queryAll(env.DB, "SELECT id FROM identities WHERE user_id=?", [person.userId])).toEqual([]);
-      expect(await queryAll(env.DB, "SELECT id FROM organizations")).toHaveLength(race === "claimed_conflict" ? 2 : 1);
+      expect(await queryAll(env.DB, "SELECT id FROM organizations")).toHaveLength(1);
       expect(await queryAll(env.DB, "SELECT id FROM audit_log ORDER BY id")).toEqual(beforeAudit);
     },
   );
+
+  it("keeps a confirmed join when another organization starts sharing its claimed domain", async () => {
+    const original = await establishDerived();
+    await claim(original.prepared.organizationId);
+    const person = await verifiedPerson("confirmed-shared");
+    const prepared = await join(person, original.prepared.organizationId, "Ignored submitted name");
+    const raced = mutateBeforeNextBatch(env.DB, async () => {
+      const sharing = await insertOrganization(env.DB, "Concurrent Domain Sharer");
+      const owner = await verifiedPerson("concurrent-sharer");
+      const identity = await buildCreateIdentityStatement(env.DB, {
+        userId: owner.userId,
+        organizationId: sharing,
+        source: "verified_email",
+        verifiedEmailDomain: domain,
+        startImmediately: true,
+      });
+      await env.DB.batch([identity.statement]);
+      // The sharer claims the domain too, so the confirmed join outlives a second claimant, not just a derived fact.
+      await claim(sharing);
+    });
+    await raced.batch(prepared.statements);
+    expect(await queryAll(env.DB, "SELECT organization_id FROM identities WHERE user_id=?", [person.userId])).toEqual([
+      { organization_id: original.prepared.organizationId },
+    ]);
+  });
 });

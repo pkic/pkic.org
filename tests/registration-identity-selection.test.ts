@@ -39,6 +39,7 @@ import type { DatabaseLike, Env } from "../functions/_lib/types";
 import { signAdminManageJwt } from "../functions/_lib/utils/jwt";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { outboxIdForOperation, prepareQueueEmailStatement } from "../functions/_lib/email/outbox-queue";
+import { emailPlainText, resolveEmailTemplateData } from "../functions/_lib/email/plain-text";
 import { registrationIdentityChangeSchema } from "../assets/shared/schemas/registration-identity";
 
 let registrationEnvironment: Env;
@@ -101,6 +102,21 @@ describe("registration representation changes", () => {
         [f.registrationId],
       ),
     ).toHaveLength(1);
+  });
+  it("keeps a registration on a work address with an organization, refusing a change to a personal identity", async () => {
+    const f = await setupChange();
+    const email = `identity-${crypto.randomUUID()}@organization.example`;
+    await env.DB.prepare(
+      "UPDATE users SET email=?, normalized_email=?, email_verified_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
+    )
+      .bind(email, email, f.userId)
+      .run();
+    const response = await change(f);
+    expect(response.status, await response.clone().text()).toBe(422);
+    expect(((await response.json()) as { error: { code: string } }).error.code).toBe(
+      "REGISTRATION_REPRESENTATION_REQUIRED",
+    );
+    expect((await getRegistrationById(env.DB, f.registrationId)).registration_identity_id).toBe(f.identityId);
   });
   it.each(["participant", "manage link"])(
     "does not record identity effects for an unchanged selection through %s",
@@ -480,8 +496,6 @@ async function fixture(withMembership = true) {
   const identityId = identity.identityId;
   const token = await createMemberSession(env.DB, userId, `registration-${crypto.randomUUID()}`);
   const body = registrationCreateSchema.parse({
-    firstName: "Event",
-    lastName: "Attendee",
     email,
     identityId,
     dayAttendance: [{ dayDate: "2026-11-30", attendanceType: "virtual" }],
@@ -536,7 +550,10 @@ async function emailAttribution(userId: string, templateKey: string) {
   );
   return rows.map((row) => {
     const payload = JSON.parse(row.payload_json);
-    return { organizationName: payload.organizationName, jobTitle: payload.jobTitle };
+    const { organizationName } = resolveEmailTemplateData(payload, "text");
+    // The organization name is the person's own text: the email renders it as plain text.
+    expect(payload.organizationName).toEqual(emailPlainText(String(organizationName)));
+    return { organizationName, jobTitle: payload.jobTitle };
   });
 }
 
@@ -661,17 +678,18 @@ describe("explicit event identity selection", () => {
     const response = await register(
       registrationCreateSchema.parse({
         ...f.body,
-        identityId: undefined,
         consents: [...f.body.consents, { termKey: "sponsor-data-sharing", version: "v1" }],
       }),
+      f.token,
     );
     expect(response.status, await response.clone().text()).toBe(200);
     const result = registrationSubmissionResponseSchema.parse(await response.json());
-    expect(result.status).toBe("pending_email_confirmation");
-    expect((await getRegistrationById(env.DB, result.registrationId)).registration_identity_id).toBeNull();
-    expect(await emailAttribution(f.userId, "registration_confirm_email")).toEqual([
-      { organizationName: "Primary organization", jobTitle: "Primary role" },
-    ]);
+    expect(result.status).toBe("registered");
+    // Every new registration names its identity; a legacy record can lack one, and its read model shows the
+    // person's current affiliation.
+    await env.DB.prepare("UPDATE registrations SET registration_identity_id = NULL WHERE id = ?")
+      .bind(result.registrationId)
+      .run();
     await env.DB.prepare("UPDATE identities SET job_title = 'Later primary role' WHERE id = ?")
       .bind(primaryIdentityId)
       .run();
@@ -679,22 +697,6 @@ describe("explicit event identity selection", () => {
       organization_name: "Primary organization",
       job_title: "Later primary role",
     });
-    const confirmationToken = await issueDatabaseCapability({
-      db: env.DB,
-      signingSecret: env.INTERNAL_SIGNING_SECRET!,
-      purpose: "registration_confirm",
-      resourceId: result.registrationId,
-    });
-    const confirmed = await callApi(registrationEnvironment, "/api/v1/events/pqc-2026/registrations/confirm-email", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ id: result.registrationId, token: confirmationToken }),
-    });
-    expect(confirmed.status, await confirmed.clone().text()).toBe(422);
-    // A legacy confirmed record can lack a recorded identity; its read model remains covered below.
-    await env.DB.prepare("UPDATE registrations SET status='registered',confirmed_at=? WHERE id=?")
-      .bind(nowIso(), result.registrationId)
-      .run();
     const exported = await buildRegistrationCsv(
       env.DB,
       { id: event.id, source_mode: event.source_mode! },
@@ -824,8 +826,6 @@ describe("explicit event identity selection", () => {
       ip: null,
       userAgent: null,
       signingSecret: env.INTERNAL_SIGNING_SECRET!,
-      pendingConfirmationDeadlineHours: 24,
-      confirmationTtlHours: 24,
       referralCodeLength: 8,
       verifiedIdentity: { userId: f.userId, selectedIdentity },
       authorizationGuards: [prepareSelectedRegistrationIdentityGuard(env.DB, selectedIdentity)],

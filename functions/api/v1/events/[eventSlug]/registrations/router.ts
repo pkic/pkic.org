@@ -6,11 +6,7 @@ import { EventsEventSlugRegistrationsConfirmEmailPost } from "./confirm-email";
 import { EventsEventSlugRegistrationsConfirmInfoGet } from "./confirm-info";
 import { EventsEventSlugRegistrationsResendConfirmationPost } from "./resend-confirmation";
 import { EventsEventSlugRegistrationsResendManageLinkPost } from "./resend-manage-link";
-import {
-  RegistrationEmailProofPost,
-  RegistrationEmailProofVerifyPost,
-  RegistrationProofPersonPatch,
-} from "./email-proof";
+import { RegistrationEmailProofVerifyPost } from "./email-proof";
 import { EventRegistrationsListGet } from "./index";
 import { EventRegistrationExportGet } from "./exports";
 import { EventRegistrationPromotionsCreate } from "./promotions";
@@ -22,9 +18,7 @@ export const openapi = fromHono(app);
 openapi.get("/confirm-email", EventsEventSlugRegistrationsConfirmEmailGet);
 openapi.post("/confirm-email", EventsEventSlugRegistrationsConfirmEmailPost);
 openapi.get("/confirm-info", EventsEventSlugRegistrationsConfirmInfoGet);
-openapi.post("/proof", RegistrationEmailProofPost);
 openapi.post("/proof/verify", RegistrationEmailProofVerifyPost);
-openapi.patch("/proof/person", RegistrationProofPersonPatch);
 openapi.post("/resend-confirmation", EventsEventSlugRegistrationsResendConfirmationPost);
 openapi.post("/resend-manage-link", EventsEventSlugRegistrationsResendManageLinkPost);
 openapi.get("/exports", EventRegistrationExportGet);

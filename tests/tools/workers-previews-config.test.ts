@@ -1,8 +1,9 @@
 import { resolve } from "node:path";
 import { experimental_readRawConfig as readRawConfig, unstable_readConfig as readConfig } from "wrangler";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { PREVIEW_DATABASE_NAME, wranglerTargetArgs } from "../../scripts/lib/wrangler-target.mjs";
 import { previewOriginVars, workersPreviewBaseUrl } from "../../scripts/lib/workers-preview-url.mjs";
+import { publicationEnvironment } from "../../scripts/publication/build-context.mjs";
 import { backupExportArgs } from "../../scripts/backup-d1.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
@@ -99,19 +100,44 @@ describe("Workers Previews configuration", () => {
   it("injects a branch Preview origin and refuses a build without a branch", () => {
     const vars = previewOriginVars("feature/Workers_Previews");
     expect(vars).toEqual({
-      APP_BASE_URL: "https://feature-workers-previews-pkic-org.pkic.workers.dev",
-      WEBAUTHN_ORIGIN: "https://feature-workers-previews-pkic-org.pkic.workers.dev",
+      APP_BASE_URL: "https://feature-workers-previews.preview.pkic.org",
+      WEBAUTHN_ORIGIN: "https://feature-workers-previews.preview.pkic.org",
     });
     for (const origin of Object.values(vars)) {
       const { hostname } = new URL(origin);
-      expect(hostname).toMatch(/^[a-z0-9-]+-pkic-org\.pkic\.workers\.dev$/);
+      expect(hostname).toMatch(/^[a-z0-9-]+\.preview\.pkic\.org$/);
       expect(hostname).not.toBe(new URL(production.vars.APP_BASE_URL as string).hostname);
     }
-    expect(() => previewOriginVars("main")).toThrow(/non-main branch/);
-    expect(() => previewOriginVars("")).toThrow(/non-main branch/);
+    expect(() => previewOriginVars("MAIN")).toThrow(/valid Preview hostname/);
+    expect(() => previewOriginVars("")).toThrow(/valid Preview hostname/);
   });
 
-  it("replaces the separate preview Worker environment", () => {
+  it("routes the stable and branch Preview hosts without serving production at the entry hostname", () => {
+    const { hostname } = new URL(previewOriginVars("stable").APP_BASE_URL);
+    expect(hostname).toBe("stable.preview.pkic.org");
+    expect(production.routes).toContainEqual({
+      pattern: previews.vars?.WEBAUTHN_RP_ID,
+      custom_domain: true,
+      enabled: false,
+      previews_enabled: true,
+    });
+  });
+
+  it("builds main for production and stable for preview", () => {
+    try {
+      vi.stubEnv("WORKERS_CI_BRANCH", "main");
+      vi.stubEnv("CLOUDFLARE_ENV", undefined);
+      expect(publicationEnvironment()).toBe("production");
+      vi.stubEnv("WORKERS_CI_BRANCH", "stable");
+      expect(publicationEnvironment()).toBe("preview");
+      vi.stubEnv("WORKERS_CI_BRANCH", "MAIN");
+      expect(publicationEnvironment()).toBe("preview");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("uses the existing Worker for all Previews", () => {
     const { rawConfig } = readRawConfig({ config: resolve(root, "wrangler.jsonc") });
     expect(Object.keys(rawConfig.env ?? {}).sort()).toEqual(["local", "production"]);
   });
@@ -133,11 +159,12 @@ describe("Workers Previews configuration", () => {
     expect(() => backupExportArgs("local", "out.sql")).toThrow("pnpm backup <preview|production>");
   });
 
-  it("derives a branch Preview URL only for non-production branches", () => {
-    expect(workersPreviewBaseUrl("codex/Workers_Previews")).toBe(
-      "https://codex-workers-previews-pkic-org.pkic.workers.dev",
-    );
-    expect(workersPreviewBaseUrl("main")).toBeNull();
+  it("derives custom Preview URLs from deployable branch names", () => {
+    expect(workersPreviewBaseUrl("codex/Workers_Previews")).toBe("https://codex-workers-previews.preview.pkic.org");
+    expect(workersPreviewBaseUrl("main")).toBe("https://main.preview.pkic.org");
+    expect(workersPreviewBaseUrl("main-")).toBeNull();
+    expect(workersPreviewBaseUrl("Stable")).toBeNull();
+    expect(workersPreviewBaseUrl("stable-")).toBeNull();
     expect(workersPreviewBaseUrl(undefined)).toBeNull();
     expect(workersPreviewBaseUrl("///")).toBeNull();
   });

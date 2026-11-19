@@ -13,6 +13,7 @@ import { lazy, Suspense } from "preact/compat";
 import {
   scannerCollectorPath,
   clearScannerOfflineContexts,
+  listPreparedScannerContexts,
   scannerTransportUnavailable,
 } from "./sections/events/detail/scanner/scanner-offline-context";
 import { getJson, postJson, ApiClientError } from "../../shared/api-client";
@@ -35,7 +36,13 @@ import { Alert } from "../../ui/Alert";
 import { ConfirmDialogHost } from "../../components/ConfirmDialog";
 import { VerifyingOverlay } from "../../components/VerifyingOverlay";
 import { myProfileSchema } from "../../../shared/schemas/me";
-import { userAuthEstablishedResponseSchema, userAuthSessionResponseSchema } from "../../../shared/schemas/user-auth";
+import {
+  userAuthSessionResponseSchema,
+  userAuthVerifyResponseSchema,
+  type userAuthEstablishedResponseSchema,
+} from "../../../shared/schemas/user-auth";
+import type { AccountOrganizationRequired } from "../../../shared/schemas/account-organization";
+import type { z } from "zod";
 import {
   recordCanonicalSession,
   readActiveUserSession,
@@ -43,7 +50,6 @@ import {
   subscribeUserSessionState,
 } from "../../shared/pending-user-logout";
 import { resumePendingUserLogout } from "./logout-session";
-import { SponsorAccess } from "./sections/sponsors/Access";
 import { eventFlowReturnPath, portalHashPath, portalMagicLinkReturnPath, portalMagicLinkToken } from "./hash-route";
 import { IdentityInvitationAcceptance } from "./shell/IdentityInvitationAcceptance";
 import { EmailVerificationConfirmation } from "./shell/EmailVerificationConfirmation";
@@ -58,6 +64,7 @@ import { useSessionActivity } from "./use-session-activity";
 import { applyRememberedActingIdentity } from "./acting-identity";
 import { ActingIdentitySwitcher } from "./shell/ActingIdentitySwitcher";
 import { PasskeyOffer, passkeyOfferDue } from "./shell/PasskeyOffer";
+import { AccountOrganizationStep } from "./shell/AccountOrganizationStep";
 import { SignedInHeaderMenu } from "./shell/SignedInHeaderMenu";
 import { sessionActingIdentityChoiceRequired } from "../../../shared/session-acting-identity";
 const PortalShell = lazy(() => import("./shell/PortalShell").then((module) => ({ default: module.PortalShell })));
@@ -67,14 +74,45 @@ const OfflineScannerBootstrap = lazy(() =>
 );
 const prepareOfflineScannerCode = (signal: AbortSignal) => prepareScannerDecoder(signal, loadOfflineScannerBootstrap);
 
-async function verifyMagicLink(token: string, isCurrent: () => boolean): Promise<PortalSession | null> {
-  const session = await postJson("/api/v1/auth/verify-link", { token }, userAuthEstablishedResponseSchema);
-  if (!isCurrent()) return null;
+type OrganizationStep = AccountOrganizationRequired["organizationRequired"];
+
+async function establishLinkSession(
+  session: z.infer<typeof userAuthEstablishedResponseSchema>,
+  isCurrent: () => boolean,
+): Promise<PortalSession | null> {
   if (!(await recordCanonicalSession({ sessionId: session.sessionId, operatorUserId: session.identity.id })))
     throw new Error("This session was signed out on this device.");
   if (!isCurrent()) return null;
   savePortalSession(session);
   return session;
+}
+
+/** The session a link opens, or account setup's organization step when that comes first. */
+async function verifyMagicLink(
+  token: string,
+  isCurrent: () => boolean,
+): Promise<PortalSession | { organizationStep: OrganizationStep } | null> {
+  const result = await postJson("/api/v1/auth/verify-link", { token }, userAuthVerifyResponseSchema);
+  if (!isCurrent()) return null;
+  if ("organizationRequired" in result) return { organizationStep: result.organizationRequired };
+  return establishLinkSession(result, isCurrent);
+}
+
+/** Leaves the verify route for where the link returns the person; false once the page itself navigates. */
+function leaveVerifyRoute(session: PortalSession): boolean {
+  // Session establishment may have restored a recorded return path; only
+  // replace the hash when it still carries the verify token. The link itself
+  // may name where to land — the route the sign-in began on — and that wins
+  // over the session's default page.
+  if (portalHashPath(window.location.hash) !== "/verify") return true;
+  const next = portalMagicLinkReturnPath(window.location.hash);
+  const eventFlow = eventFlowReturnPath(next);
+  if (eventFlow) {
+    window.location.replace(eventFlow);
+    return false;
+  }
+  history.replaceState({}, "", `/portal/#${next ?? portalDefaultPath(session)}`);
+  return true;
 }
 
 export function App() {
@@ -92,6 +130,7 @@ export function App() {
   const [verifying, setVerifying] = useState(() => Boolean(portalMagicLinkToken(window.location.hash)));
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
+  const [organizationStep, setOrganizationStep] = useState<{ token: string; step: OrganizationStep } | null>(null);
 
   async function loadPortalSession(
     isCurrent: () => boolean = () => true,
@@ -129,7 +168,25 @@ export function App() {
       if (isCurrent() && portalSession.value === session) saveProfile(nextProfile);
     } catch (error) {
       if (!isCurrent()) return portalSession.value !== null;
-      if (error instanceof ApiClientError && [401, 403].includes(error.status)) {
+      const scannerFallback =
+        Boolean(checkedLocalSession) &&
+        error instanceof ApiClientError &&
+        (error.status === 0 ||
+          error.status === 401 ||
+          error.status === 403 ||
+          error.status === 429 ||
+          error.status >= 500) &&
+        // An HTTP refusal must not replace normal sign-in with an empty scanner chooser.
+        (error.status === 0 ||
+          (await listPreparedScannerContexts().then(
+            (contexts) => contexts.length > 0,
+            () => true,
+          )));
+      if (scannerFallback) {
+        scannerTransportUnavailable.value = true;
+        setSessionError("We could not check sign-in. Saved scanner preparation remains available on this device.");
+        if (portalSession.value?.sessionId === checkedSessionId) clearUserSession();
+      } else if (error instanceof ApiClientError && [401, 403].includes(error.status)) {
         scannerTransportUnavailable.value = false;
         await clearScannerOfflineContexts(checkedLocalSession).catch(() => {
           if (isCurrent())
@@ -176,23 +233,16 @@ export function App() {
         try {
           const session = await verifyMagicLink(userToken, () => !cancelled);
           if (!session || cancelled) return;
+          if ("organizationStep" in session) {
+            setOrganizationStep({ token: userToken, step: session.organizationStep });
+            setVerifying(false);
+            return;
+          }
           // Recorded before the redirect below rewrites the hash: after that
           // there is nothing left on the page saying this session began with a
           // link rather than with a passkey.
           signedInWithLink.value = true;
-          // Session establishment may have restored a recorded return path;
-          // only replace the hash when it still carries the verify token. The
-          // link itself may name where to land — the route the sign-in began
-          // on — and that wins over the session's default page.
-          if (portalHashPath(window.location.hash) === "/verify") {
-            const next = portalMagicLinkReturnPath(window.location.hash);
-            const eventFlow = eventFlowReturnPath(next);
-            if (eventFlow) {
-              window.location.replace(eventFlow);
-              return;
-            }
-            history.replaceState({}, "", `/portal/#${next ?? portalDefaultPath(session)}`);
-          }
+          if (!leaveVerifyRoute(session)) return;
           // Token removal owns the canonical session refresh in the next effect.
           setVerifying(false);
           return;
@@ -206,14 +256,8 @@ export function App() {
             // verify route that is about to be replaced.
             const signedIn = await loadPortalSession(() => !cancelled);
             if (cancelled) return;
-            if (signedIn && portalSession.value && portalHashPath(window.location.hash) === "/verify") {
-              const next = portalMagicLinkReturnPath(window.location.hash);
-              const eventFlow = eventFlowReturnPath(next);
-              if (eventFlow) {
-                window.location.replace(eventFlow);
-                return;
-              }
-              history.replaceState({}, "", `/portal/#${next ?? portalDefaultPath(portalSession.value)}`);
+            if (signedIn && portalSession.value) {
+              if (!leaveVerifyRoute(portalSession.value)) return;
             } else if (!signedIn) {
               setVerifyError(
                 err instanceof ApiClientError ? err.message : "The link may have expired or already been used.",
@@ -302,6 +346,22 @@ export function App() {
     return <EmailVerificationConfirmation />;
   }
 
+  // A sign-up link opened beside a session this tab already holds still asks for its organization first.
+  if (organizationStep)
+    return (
+      <AccountOrganizationStep
+        token={organizationStep.token}
+        step={organizationStep.step}
+        onSignedIn={async (established) => {
+          const session = await establishLinkSession(established, () => true);
+          if (!session) return;
+          signedInWithLink.value = true;
+          setOrganizationStep(null);
+          leaveVerifyRoute(session);
+        }}
+      />
+    );
+
   if (verifying || authStatus.value === "loading") {
     return (
       <Login
@@ -329,7 +389,7 @@ export function App() {
     </Alert>
   ) : null;
   const collectorRoute = scannerCollectorPath(window.location.hash);
-  if (sessionError && !isAuthed.value && scannerTransportUnavailable.value && collectorRoute)
+  if (!isAuthed.value && scannerTransportUnavailable.value)
     return (
       <div class="pk pk-stack">
         <Suspense fallback={<VerifyingOverlay />}>
@@ -391,28 +451,6 @@ export function App() {
           </Suspense>
         </ScannerCodePreparation.Provider>
         <ConfirmDialogHost />
-      </>
-    );
-  }
-
-  if (portalHashPath(window.location.hash).startsWith("/sponsors")) {
-    return (
-      <>
-        {verifyError && (
-          // Laid out like the panel it sits above, so the banner and the card
-          // share one measure. The cross that used to lead the sentence is
-          // gone: `Alert`'s danger tone already carries role="alert", and the
-          // title says what failed in words.
-          <div class="pk pk-container pk-section pk-cluster pk-cluster--center">
-            <div class="content-width-sm">
-              <Alert tone="danger" title="Sponsor access failed">
-                {verifyError}
-              </Alert>
-            </div>
-          </div>
-        )}
-        {pendingNotice}
-        <SponsorAccess />
       </>
     );
   }

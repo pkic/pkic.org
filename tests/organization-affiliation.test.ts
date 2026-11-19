@@ -8,7 +8,8 @@ import {
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { nowIso } from "../functions/_lib/utils/time";
 import { callApi } from "./helpers/app";
-import { createAdminSession } from "./helpers/auth";
+import { createAdminSession, createMemberSession } from "./helpers/auth";
+import { memberApplicationCreateAsIdentitySchema } from "../assets/shared/schemas/member-applications";
 import { deliveredEmailPayload, queryAll } from "./helpers/context";
 import { mutateBeforeNextBatch, mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
@@ -17,12 +18,7 @@ import {
   requiredMembershipApplicationAnswers,
   seedMemberApplication,
   seedMembershipApplicationForm,
-  verifiedMemberApplicationPayload,
 } from "./helpers/member-applications";
-import {
-  issueMemberJoinApplicationToken,
-  newMemberJoinCapabilityPayload,
-} from "../functions/_lib/services/membership/join/capabilities";
 import { buildFindOrCreateUserStatement } from "../functions/_lib/services/users";
 import { buildProvisionOrganizationMembership } from "../functions/_lib/services/membership/provisioning";
 import { prepareVerifyOwnedEmailStatements } from "../functions/_lib/services/email-verification";
@@ -206,7 +202,10 @@ describe("canonical organization affiliations", () => {
     expect(prepared.memberId).toBeNull();
     expect(prepared.representation).toEqual({ organizationName: "New Affiliation Organization", jobTitle: "Engineer" });
     await env.DB.batch(prepared.statements);
-    expect(await queryAll(env.DB, "SELECT id FROM organization_domain_claims")).toEqual([]);
+    // The email challenge links the new organization to the domain it proved.
+    expect(await queryAll(env.DB, "SELECT domain,organization_id FROM organization_domain_claims")).toEqual([
+      { domain: "affiliation-work.example", organization_id: prepared.organizationId },
+    ]);
     expect(
       await queryAll(env.DB, "SELECT source,email_id,job_title FROM identities WHERE id=?", [prepared.identityId]),
     ).toEqual([{ source: "verified_email", email_id: emailId, job_title: "Engineer" }]);
@@ -227,30 +226,29 @@ describe("canonical organization affiliations", () => {
       [prepared.identityId],
     );
     await seedMembershipApplicationForm();
-    const application = await verifiedMemberApplicationPayload({
-      applicantEmail: person.email,
-      applicantName: "Different Submitted Name",
-      organizationName: "New Affiliation Organization",
-      membershipCategory: "A",
-      answers: {
-        reason: "Apply after the speaking affiliation",
-        job_title: "Different submitted position",
-        linkedin: "https://example.test/application",
-        ...requiredMembershipApplicationAnswers,
-      },
-    });
-    application.joinToken = await issueMemberJoinApplicationToken(
-      env.INTERNAL_SIGNING_SECRET!,
-      {
-        ...newMemberJoinCapabilityPayload(person.email, "organization"),
-        applicantUserId: person.userId,
-      },
-      15 * 60,
+    await env.DB.prepare("UPDATE users SET first_name='Ada',last_name='Lovelace' WHERE id=?").bind(person.userId).run();
+    // The organization applies through the identity of the person who represents it.
+    const session = await createMemberSession(
+      env.DB,
+      person.userId,
+      `session-${crypto.randomUUID()}`,
+      undefined,
+      prepared.identityId,
     );
     const submitted = await callApi(env, "/api/v1/members/applications", {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(application),
+      headers: { "content-type": "application/json", authorization: `Bearer ${session}` },
+      body: JSON.stringify(
+        memberApplicationCreateAsIdentitySchema.parse({
+          identityId: prepared.identityId,
+          membershipCategory: "A",
+          answers: {
+            reason: "Apply after the speaking affiliation",
+            about_organization: "We build PKI services.",
+            ...requiredMembershipApplicationAnswers,
+          },
+        }),
+      ),
     });
     expect(submitted.status, await submitted.clone().text()).toBe(201);
     const applicationReceipt = (await submitted.json()) as { applicationId: string };
@@ -401,14 +399,18 @@ describe("canonical organization affiliations", () => {
     ).toEqual([{ user_id: person.user.id, email_id: null }]);
   });
 
-  it("does not turn a pending membership application's domain reservation into organization affiliation", async () => {
+  it("affiliates a person on a domain with a pending membership application like any other", async () => {
     const person = await verifiedPerson();
     await seedMemberApplication({ applicantEmail: person.email, organizationDomain: "affiliation-work.example" });
-    await expect(prepare(person, { organizationName: "Application Pending Organization" })).rejects.toMatchObject({
-      code: "ORGANIZATION_DOMAIN_IN_USE",
-    });
-    expect(await queryAll(env.DB, "SELECT id FROM organizations")).toEqual([]);
-    expect(await queryAll(env.DB, "SELECT id FROM identities WHERE user_id=?", [person.userId])).toEqual([]);
+    const prepared = await prepare(person, { organizationName: "Application Pending Organization" });
+    expect(prepared.organizationWasCreated).toBe(true);
+    await env.DB.batch(prepared.statements);
+    expect(await queryAll(env.DB, "SELECT name FROM organizations")).toEqual([
+      { name: "Application Pending Organization" },
+    ]);
+    expect(await queryAll(env.DB, "SELECT organization_id FROM identities WHERE user_id=?", [person.userId])).toEqual([
+      { organization_id: prepared.organizationId },
+    ]);
   });
 
   it("rejects an existing typed-name collision without exact domain proof or an owned approved relationship", async () => {

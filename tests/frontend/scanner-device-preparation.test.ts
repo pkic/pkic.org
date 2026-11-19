@@ -43,6 +43,7 @@ import {
   prepareScannerEpoch,
   startNextScannerEpoch,
 } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-device-ledger";
+import { scannerOfflineContextSchema } from "../../assets/shared/schemas/event-scanner-offline-context";
 const operator = "11111111-1111-4111-8111-111111111111",
   device = "22222222-2222-4222-8222-222222222222",
   epochId = "77777777-7777-4777-8777-777777777777",
@@ -60,6 +61,26 @@ const status = (closedAt: string | null, closingDeclaredAt: string | null = null
     closingDeclaredAt,
     closingOperationId: closedAt || closingDeclaredAt ? operationId : null,
   });
+function preparedLease() {
+  const now = new Date().toISOString();
+  return scannerOfflineContextSchema.parse({
+    slug: "synthetic-event",
+    route: "/events/synthetic-event/scanner",
+    eventId: "55555555-5555-4555-8555-555555555555",
+    operatorUserId: operator,
+    sessionId: "66666666-6666-4666-8666-666666666666",
+    deviceId: device,
+    epochId,
+    action: "attendance",
+    occurrenceId: null,
+    roomId: null,
+    publishedRevision: null,
+    serverNow: now,
+    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    savedAt: now,
+    lastObservedAt: now,
+  });
+}
 beforeEach(() => {
   mocks.archives = [];
   mocks.count = 1;
@@ -111,6 +132,27 @@ describe("persistent scanner preparation", () => {
     expect((await prepareScannerEpoch("synthetic-event", operator, device)).issuedHighWater).toBe(17);
     expect(mocks.get).not.toHaveBeenCalled();
     expect(mocks.post).not.toHaveBeenCalled();
+  });
+  it.each(["closed", "closing"])("follows the server to %s despite a prepared local lease", async (state) => {
+    mocks.epoch = { ...mocks.epoch, collectorContext: preparedLease() };
+    mocks.get.mockResolvedValue(
+      status(
+        state === "closed" ? new Date().toISOString() : null,
+        state === "closing" ? new Date().toISOString() : null,
+      ),
+    );
+    const prepared = await prepareScannerEpoch("synthetic-event", operator, device);
+    expect(prepared.state).toBe(state);
+    expect(prepared.issuedHighWater).toBe(17);
+    expect(mocks.epoch.state).toBe(state);
+  });
+  it.each([401, 403, 429, 500, 503])("keeps a prepared local lease through HTTP %s", async (httpStatus) => {
+    mocks.epoch = { ...mocks.epoch, collectorContext: preparedLease() };
+    mocks.get.mockRejectedValue(
+      new ApiClientError({ error: { code: "SERVER_REFUSAL", message: "Unavailable" } }, httpStatus),
+    );
+    expect((await prepareScannerEpoch("synthetic-event", operator, device)).state).toBe("open");
+    expect(mocks.put).not.toHaveBeenCalled();
   });
   it("uses saved authorization only for connectivity errors", async () => {
     mocks.get.mockRejectedValue(new ApiClientError({ error: { code: "NETWORK_UNAVAILABLE", message: "Offline" } }, 0));

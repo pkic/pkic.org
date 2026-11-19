@@ -17,12 +17,9 @@ import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
 import { runRowAction } from "./helpers/data-table";
 import { createPortalWaitlistEvent } from "./helpers/waitlist-event";
 import { publishE2eSite } from "./helpers/site-publication";
-import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
-import {
-  eventProposalProofStartSchema,
-  eventProposalProofStartResponseSchema,
-  eventProposalProofVerifyResponseSchema,
-} from "../../assets/shared/schemas/event-proposal-proof";
+import { waitForCapturedEmail } from "./helpers/sendgrid";
+import { signInThroughCard } from "./helpers/sign-in-card";
+import { answerAccountOrganizationStep } from "./helpers/account-organization";
 import { proposalCreateResponseSchema, proposalCreateSchema } from "../../assets/shared/schemas/proposal-management";
 import type { ProposalEntryContext } from "../../assets/shared/schemas/proposal-entry";
 import { defaultedSourceTypeSchema } from "../../assets/shared/schemas/source";
@@ -266,8 +263,8 @@ async function fillRegistrationStep1(
   page: Page,
   values: { firstName: string; lastName: string; email: string; organization?: string },
 ): Promise<void> {
-  await expect(page.locator("[data-event-registration] form")).toBeVisible();
   await continueRegistrationWithEmail(page, values);
+  await expect(page.locator("[data-event-registration] form")).toBeVisible();
   await expect(page.getByRole("group", { name: "Attendance choices" })).toBeVisible({ timeout: 15_000 });
 }
 
@@ -297,8 +294,6 @@ async function fillRegistrationStep4(page: Page, expectedEmail?: string, expectP
   if (expectProfileDetails) {
     await expect(page.locator("[data-registration-review]")).toContainText("Profile details");
   }
-  await agreeToTerm(page, "privacy policy");
-  await agreeToTerm(page, "code of conduct");
   await agreeToTerm(page, "photos and videos");
   await page.getByRole("button", { name: "Register", exact: true }).click();
 }
@@ -318,73 +313,57 @@ async function fillInviteRegistration(
   await expect(page.locator("[data-registration-review]")).toContainText("State / Province");
   await expect(page.locator("[data-registration-review]")).toContainText("Interests (topics)");
   await expect(page.locator("[data-registration-review]")).toContainText("None provided");
-  await agreeToTerm(page, "privacy policy");
-  await agreeToTerm(page, "code of conduct");
   await agreeToTerm(page, "photos and videos");
   await page.getByRole("button", { name: "Register", exact: true }).click();
 }
 
-/** Follow real email proof; known person details are reused rather than filled again. */
+/**
+ * Sign the proposer in through the card as an individual; saved personal
+ * details are reused rather than filled again. Returns the entry context the
+ * page's own address carries (an invitation), which the submission sends.
+ */
 async function fillProposalParticipant(
   page: Page,
   person: { email: string; firstName: string; lastName: string },
 ): Promise<ProposalEntryContext | undefined> {
-  const originalQuery = new URL(page.url()).searchParams;
+  const address = page.url();
+  const originalQuery = new URL(address).searchParams;
+  // Leave the page first: a request still in flight could set the earlier visitor's session again.
+  await page.goto("about:blank");
   await page.context().clearCookies();
-  // The terms come first; the contact step then starts from the work email.
+  await page.goto(address);
+  // The terms come first; the contact step is then the sign-in card.
   await agreeToAllTerms(page);
   await page.getByRole("button", { name: /Continue/i }).click();
   const identity = page.locator("[data-proposer-identity]");
-  await identity.getByRole("radio", { name: EMAIL_FIRST_COPY.proposal.personal.title, exact: true }).check();
-  await identity
-    .getByRole("textbox", { name: EMAIL_FIRST_COPY.proposal.personal.label, exact: true })
-    .fill(person.email);
-  const since = await capturedEmailCount();
-  const started = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname === "/api/v1/events/pqc-conference-amsterdam-nl/proposals/proof" &&
-      response.request().method() === "POST",
-  );
-  await identity.getByRole("button", { name: EMAIL_FIRST_COPY.proposal.personal.action, exact: true }).click();
-  const startResponse = await started;
-  expect(startResponse.status(), await startResponse.text()).toBe(200);
-  expect(eventProposalProofStartSchema.parse(startResponse.request().postDataJSON()).unaffiliatedAttestation).toBe(
-    true,
-  );
-  expect(eventProposalProofStartResponseSchema.parse(await startResponse.json()).status).toBe("verification_sent");
-  const mail = await waitForCapturedEmail(person.email, "Verify your email for", { since });
-  const verified = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname === "/api/v1/events/pqc-conference-amsterdam-nl/proposals/proof/verify" &&
-      response.request().method() === "POST",
-  );
-  // The terms agreed before the email was sent travel with the link; they are not asked again.
-  await page.goto(extractEmailUrl(mail, "/propose/"));
-  const result = await verified;
-  expect(result.status(), await result.text()).toBe(200);
-  const proof = eventProposalProofVerifyResponseSchema.parse(await result.json());
-  expect(proof.status).toBe("ready");
-  if (proof.status !== "ready") throw new Error("The browser participant requires successful mailbox proof.");
-  if (originalQuery.has("invite")) {
-    expect(proof.entryContext?.inviteToken).toMatch(/^pkc1_/);
-    expect(proof.entryContext?.inviteId).toBe(originalQuery.get("id"));
-    expect(proof.entryContext?.sourceType).toBe(
-      defaultedSourceTypeSchema.parse(originalQuery.get("source") ?? undefined),
-    );
-  }
-  const resolved = page.locator("[data-proposer-identity]");
-  await expect(resolved).toContainText(person.email);
+  await expect(identity.getByRole("region", { name: "Sign in", exact: true })).toBeVisible();
+  await signInThroughCard(page, person.email, { emailFlow: "proposal", individual: true });
+  // The emailed link returns to the same address without the invitation token, which stays in this browser;
+  // the submission below still carries it. The form starts again with its terms.
+  const returnedQuery = new URLSearchParams(originalQuery);
+  returnedQuery.delete("invite");
+  expect(new URL(page.url()).searchParams.toString()).toBe(returnedQuery.toString());
+  await agreeToAllTerms(page);
+  await page.getByRole("button", { name: /Continue/i }).click();
+  await identity.getByRole("button", { name: EMAIL_FIRST_COPY.proposal.individualSwitch, exact: true }).click();
+  await expect(identity).toContainText(person.email);
   for (const [name, value] of [
     ["First name", person.firstName],
     ["Last name", person.lastName],
   ] as const) {
-    const missing = resolved.getByRole("textbox", { name, exact: true });
+    const missing = identity.getByRole("textbox", { name, exact: true });
     if (await missing.count()) await missing.fill(value);
   }
-  await expect(resolved.locator('input[name="email"]')).toHaveCount(0);
-  await expect(resolved.locator('input[name="organizationName"]')).toHaveCount(0);
-  await completeIndependentCapacityDisclosure(resolved);
-  return proof.entryContext;
+  await expect(identity.locator('input[name="email"]')).toHaveCount(0);
+  await expect(identity.locator('input[name="organizationName"]')).toHaveCount(0);
+  await completeIndependentCapacityDisclosure(identity);
+  const inviteToken = originalQuery.get("invite");
+  if (!inviteToken) return undefined;
+  return {
+    inviteToken,
+    inviteId: originalQuery.get("id") ?? undefined,
+    sourceType: defaultedSourceTypeSchema.parse(originalQuery.get("source") ?? undefined),
+  };
 }
 
 /** Complete the signed-in speaker's participation using their own identity. */
@@ -595,7 +574,8 @@ test.describe("browser workflows", () => {
     });
     const screenshot = createScreenshotter(page);
 
-    // The second registrant shares the first one's domain, which the first confirmation gives an organization.
+    // The second registrant shares the first one's domain and chooses the organization the first one linked to it.
+    const capacityOrganization = `Capacity Test Org ${Date.now()}`;
     const capacityOne = ownDomainEmail("capacity-one");
     const capacityTwo = `capacity-two@${capacityOne.split("@")[1]}`;
     await signInAsAdmin(page, "browser-waitlist");
@@ -606,7 +586,7 @@ test.describe("browser workflows", () => {
       firstName: "Capacity",
       lastName: "One",
       email: capacityOne,
-      organization: "Capacity Test Org",
+      organization: capacityOrganization,
     });
     await fillRegistrationStep2(page);
     await fillRegistrationStep3WithoutQuestions(page);
@@ -618,6 +598,7 @@ test.describe("browser workflows", () => {
       firstName: "Capacity",
       lastName: "Two",
       email: capacityTwo,
+      organization: capacityOrganization,
     });
     await fillRegistrationStep2(page);
     await fillRegistrationStep3WithoutQuestions(page);
@@ -637,7 +618,7 @@ test.describe("browser workflows", () => {
       "Some day-specific entries still need attention.",
     );
     await expect(page.locator("[data-day-waitlist-section]")).toContainText(
-      "Tuesday 1 December 2026: Waiting for in-person seat",
+      "Tuesday 1 December 2026: On the waitlist (general)",
     );
     await screenshot("02-partial-capacity-manage-friendly-state");
 
@@ -657,7 +638,7 @@ test.describe("browser workflows", () => {
       firstName: "Alice",
       lastName: "Attendee",
       email: alice,
-      organization: "Test Org",
+      organization: `Test Org ${Date.now()}`,
     });
     await fillRegistrationStep2(page);
     await fillRegistrationStep3(page, { dietaryRestriction: "Vegetarian" });
@@ -698,27 +679,33 @@ test.describe("browser workflows", () => {
     const manageToken = new URL(manageUrl).searchParams.get("token");
     expect(manageToken).toBeTruthy();
 
-    // Invite two attendees via the API using Alice's manage token
-    const inviteResp = await page.evaluate(async (token) => {
-      const res = await fetch("/api/v1/events/pqc-conference-amsterdam-nl/invites", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          invites: [
-            { email: "friend-accept@example.test", firstName: "First", lastName: "Friend" },
-            { email: "friend-decline@example.test", firstName: "Second", lastName: "Friend" },
-          ],
-        }),
-      });
-      return res.status;
-    }, manageToken);
+    // Invite two attendees via the API using Alice's manage token. The accepted
+    // one names an organization, which then claims their domain: it is their own.
+    const friendAccept = ownDomainEmail("friend-accept");
+    const friendDecline = ownDomainEmail("friend-decline");
+    const inviteResp = await page.evaluate(
+      async ({ token, friendAccept, friendDecline }) => {
+        const res = await fetch("/api/v1/events/pqc-conference-amsterdam-nl/invites", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            invites: [
+              { email: friendAccept, firstName: "First", lastName: "Friend" },
+              { email: friendDecline, firstName: "Second", lastName: "Friend" },
+            ],
+          }),
+        });
+        return res.status;
+      },
+      { token: manageToken, friendAccept, friendDecline },
+    );
     expect(inviteResp).toBe(200);
 
     // Accept-invite flow
-    const acceptInviteEmail = await waitForCapturedEmail("friend-accept@example.test", "invited");
+    const acceptInviteEmail = await waitForCapturedEmail(friendAccept, "invited");
     const acceptRegistrationUrl = extractUrlFromEmail(acceptInviteEmail, "/register/");
     const acceptDeclineUrl = extractUrlFromEmail(acceptInviteEmail, "/invite/");
     expect(acceptRegistrationUrl).toBeTruthy();
@@ -729,19 +716,19 @@ test.describe("browser workflows", () => {
     await fillInviteRegistration(page, {
       firstName: "First",
       lastName: "Friend",
-      email: "friend-accept@example.test",
-      organization: "Friend Org",
+      email: friendAccept,
+      organization: `Friend Org ${Date.now()}`,
     });
     await expect(page.getByRole("heading", { name: /You're registered, First!/i })).toBeVisible();
     await screenshot("04-invited-attendee-registered");
 
     // Ensure the confirmation email arrived for the accepted invite
-    const acceptConfirmedEmail = await waitForCapturedEmail("friend-accept@example.test", "confirmed");
+    const acceptConfirmedEmail = await waitForCapturedEmail(friendAccept, "confirmed");
     const acceptManageUrl = extractUrlFromEmail(acceptConfirmedEmail, "/register/manage/");
     expect(acceptManageUrl).toBeTruthy();
 
     // Decline-invite flow
-    const declineInviteEmail = await waitForCapturedEmail("friend-decline@example.test", "invited");
+    const declineInviteEmail = await waitForCapturedEmail(friendDecline, "invited");
     const declineUrl = extractUrlFromEmail(declineInviteEmail, "/invite/");
 
     const invalidDeclineUrl = new URL(declineUrl);
@@ -750,11 +737,11 @@ test.describe("browser workflows", () => {
     await expect(page.getByRole("heading", { name: /Invalid invitation link/i })).toBeVisible();
     await expect(page.locator("[data-resend-invite-section]")).toBeVisible();
     await clearOutbox();
-    await page.locator("[data-resend-invite-email]").fill("friend-decline@example.test");
+    await page.locator("[data-resend-invite-email]").fill(friendDecline);
     await page.locator("[data-resend-invite-btn]").click();
     await expect(page.getByText(/a fresh link is on its way/i)).toBeVisible({ timeout: 10_000 });
 
-    const recoveredDeclineEmail = await waitForCapturedEmail("friend-decline@example.test", "Still considering");
+    const recoveredDeclineEmail = await waitForCapturedEmail(friendDecline, "Still considering");
     const recoveredDeclineUrl = extractUrlFromEmail(recoveredDeclineEmail, "/invite/");
     expect(new URL(recoveredDeclineUrl).searchParams.get("token")).toMatch(/^pkc1_/);
     await page.goto(recoveredDeclineUrl);
@@ -790,7 +777,7 @@ test.describe("browser workflows", () => {
     await expect(page.getByRole("heading", { name: /Proposal submitted, Priya!/i })).toBeVisible();
     await screenshot("01-proposal-submitted");
 
-    const proposalSubmittedEmail = await waitForCapturedEmail(proposerEmail, "proposal");
+    const proposalSubmittedEmail = await waitForCapturedEmail(proposerEmail, "Proposal received:");
     const proposalManageUrl = extractUrlFromEmail(proposalSubmittedEmail, "/propose/manage/");
     const originalProposalManageToken = new URL(proposalManageUrl).searchParams.get("token") ?? "";
     expect(originalProposalManageToken).toMatch(/^pkc1_/);
@@ -911,7 +898,7 @@ test.describe("browser workflows", () => {
       firstName: "Sec",
       lastName: "Tester",
       email: sec,
-      organization: "Security Test Org",
+      organization: `Security Test Org ${Date.now()}`,
     });
     await fillRegistrationStep2(page);
     await fillRegistrationStep3(page);
@@ -941,7 +928,7 @@ test.describe("browser workflows", () => {
         fetch(`/api/v1/registrations/access/${fake}`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ action: "update", attendanceType: "on_demand" }),
+          body: JSON.stringify({ action: "cancel" }),
         }).then((r) => r.status),
       ]);
       return { getStatus, patchStatus };
@@ -966,7 +953,7 @@ test.describe("browser workflows", () => {
     await page.getByRole("button", { name: /Submit proposal/i }).click();
     await expect(page.getByRole("heading", { name: /Proposal submitted, Priya!/i })).toBeVisible();
 
-    const proposalEmail = await waitForCapturedEmail("proposal-speaker@example.test", "proposal");
+    const proposalEmail = await waitForCapturedEmail("proposal-speaker@example.test", "Proposal received:");
     const propManageUrl = extractUrlFromEmail(proposalEmail, "/propose/manage/");
     const propToken = new URL(propManageUrl).searchParams.get("token") ?? "";
 
@@ -1035,7 +1022,7 @@ test.describe("browser workflows", () => {
       firstName: "Resend",
       lastName: "Tester",
       email: resendTester,
-      organization: "Resend Test Org",
+      organization: `Resend Test Org ${Date.now()}`,
     });
     await fillRegistrationStep2(page);
     await fillRegistrationStep3(page);
@@ -1061,8 +1048,8 @@ test.describe("browser workflows", () => {
     await expect(page.getByText(/you will receive an email shortly/i)).toBeVisible({ timeout: 10_000 });
     await screenshot("02-resend-manage-submitted");
 
-    // Wait for fresh management link email (subject: "Your management link for …")
-    const newManageEmail = await waitForCapturedEmail(resendTester, "Your management link");
+    // Wait for fresh management link email (subject: "Manage your registration for …")
+    const newManageEmail = await waitForCapturedEmail(resendTester, "Manage your registration");
     const newManageUrl = extractUrlFromEmail(newManageEmail, "/register/manage/");
     const newManageToken = new URL(newManageUrl).searchParams.get("token") ?? "";
     expect(newManageToken).toMatch(/^pkc1_/);
@@ -1100,7 +1087,7 @@ test.describe("browser workflows", () => {
       firstName: "Nominator",
       lastName: "User",
       email: nominator,
-      organization: "Nominator Test Org",
+      organization: `Nominator Test Org ${Date.now()}`,
     });
     await fillRegistrationStep2(page);
     await fillRegistrationStep3(page);
@@ -1235,7 +1222,13 @@ test.describe("browser workflows", () => {
     const recoveredEmail = await waitForCapturedEmail("co-sam-speaker@example.test", "sign-in link");
     const recoveredUrl = extractUrlFromEmail(recoveredEmail, "/portal/");
     await page.goto("about:blank");
+    const verified = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/v1/auth/verify-link" && response.request().method() === "POST",
+    );
     await page.goto(recoveredUrl);
+    // A first sign-in from a work address answers the organization step; this one is personal.
+    await answerAccountOrganizationStep(page, await verified);
     const skipPasskey = page.getByRole("button", { name: "Continue without a passkey" });
     await expect(skipPasskey).toBeVisible({ timeout: 15_000 });
     await skipPasskey.click();
@@ -1279,7 +1272,7 @@ test.describe("browser workflows", () => {
     await expect(page.getByRole("heading", { name: /Proposal submitted/i })).toBeVisible({ timeout: 15_000 });
     await screenshot("01-proposal-submitted");
 
-    const submittedEmail = await waitForCapturedEmail("proposal-speaker@example.test", "proposal");
+    const submittedEmail = await waitForCapturedEmail("proposal-speaker@example.test", "Proposal received:");
     const proposalManageUrl = extractUrlFromEmail(submittedEmail, "/propose/manage/");
     void proposalManageUrl; // only used to confirm the email arrived; speaker token comes later
 
@@ -1312,10 +1305,16 @@ test.describe("browser workflows", () => {
     await page.context().clearCookies();
     await signInToPortal(page, "proposal-speaker@example.test");
     await page.goto(speakerManageUrl);
+    // The page decides what it asks only once the participation has loaded.
+    await expect(page.getByRole("heading", { name: "Speaker participation", exact: true })).toBeVisible();
     const confirmation = page.getByRole("button", { name: "Confirm willingness to participate", exact: true });
     if (await confirmation.isVisible()) await confirmPortalSpeaker(page);
 
-    // Choose a presentation and accept the upload terms.
+    // Presentations have their own tab on the proposal; choose one there and accept the upload terms.
+    await page
+      .getByRole("navigation", { name: "Proposal", exact: true })
+      .getByRole("link", { name: "Presentations", exact: true })
+      .click();
     const presentationChooser = page.waitForEvent("filechooser");
     await page.getByLabel("Presentation file").click();
     await (

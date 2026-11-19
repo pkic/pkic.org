@@ -12,8 +12,7 @@ import {
   createMockAuthenticator,
 } from "./webauthn-mock-authenticator";
 
-/** Real WebAuthn verification against the mounted routes and a synthetic authenticator. */
-export async function signInWithPasskey(env: Env, initialToken: string) {
+function passkeyRoutes(env: Env) {
   const call = (path: string, body?: unknown, token?: string) =>
     callApi(env, path, {
       method: body ? "POST" : "GET",
@@ -30,6 +29,12 @@ export async function signInWithPasskey(env: Env, initialToken: string) {
     if (typeof result.options.challenge !== "string") throw new Error("Missing WebAuthn challenge");
     return { challengeToken: result.challengeToken, challenge: result.options.challenge };
   };
+  return { call, begin };
+}
+
+/** Registers a synthetic authenticator on the account `initialToken` signs in as. */
+export async function registerSyntheticPasskey(env: Env, initialToken: string) {
+  const { call, begin } = passkeyRoutes(env);
   const registration = await begin("/api/v1/auth/passkeys/register/begin", initialToken);
   const authenticator = await createMockAuthenticator();
   const credential = await buildRegistrationResponse(authenticator, {
@@ -48,6 +53,15 @@ export async function signInWithPasskey(env: Env, initialToken: string) {
   );
   expect(registered.status).toBe(201);
   const { id: credentialId } = (await registered.json()) as { id: string };
+  return { authenticator, credentialId };
+}
+
+/** Signs in with a registered synthetic authenticator and returns the route's response. */
+export async function authenticateWithPasskey(
+  env: Env,
+  authenticator: Awaited<ReturnType<typeof createMockAuthenticator>>,
+): Promise<Response> {
+  const { call, begin } = passkeyRoutes(env);
   const authentication = await begin("/api/v1/auth/passkeys/authenticate/begin");
   const assertion = await buildAuthenticationResponse(authenticator, {
     challenge: authentication.challenge,
@@ -55,10 +69,16 @@ export async function signInWithPasskey(env: Env, initialToken: string) {
     origin: "https://app.test",
     signCount: 1,
   });
-  const completed = await call("/api/v1/auth/passkeys/authenticate/complete", {
+  return call("/api/v1/auth/passkeys/authenticate/complete", {
     challengeToken: authentication.challengeToken,
     response: assertion,
   });
+}
+
+/** Real WebAuthn verification against the mounted routes and a synthetic authenticator. */
+export async function signInWithPasskey(env: Env, initialToken: string) {
+  const { authenticator, credentialId } = await registerSyntheticPasskey(env, initialToken);
+  const completed = await authenticateWithPasskey(env, authenticator);
   expect(completed.status).toBe(200);
   const publicSession = await completed.json();
   expect(publicSession).not.toHaveProperty("passkeyAuthentication");

@@ -23,6 +23,7 @@ import { nextDomId } from "./dom-id";
 import { FIELD_STATE_ICON, type FieldState } from "./field-state";
 import { StrokeIcon } from "./MediaIcons";
 import "./Field.css";
+import "./FieldWidth.css";
 
 export type { FieldState };
 

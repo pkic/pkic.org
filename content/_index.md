@@ -35,10 +35,10 @@ moreUrl: /wg/
 {{< /working-groups >}}
 
 {{< banner style="inline" >}}
-heading: Help us keep this free
-body: No membership fees. No tickets. No paywalls. We rely on voluntary donations and sponsors to keep it that way.
+heading: Help us keep our community open
+body: Membership and resources are free, and we keep our conferences as accessible as we can. Voluntary donations and sponsors make that possible.
 stat: "$500"
-statLabel: keeps one seat free at our events
+statLabel: covers one attendee at our events
 links:
   - text: Donate now
     url: /donate/

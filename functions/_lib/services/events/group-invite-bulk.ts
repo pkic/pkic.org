@@ -1,7 +1,8 @@
+import { buildEventEmailVariables } from "../../email/event-email-variables";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
 import { requireGroupEventProposalContext, prepareGroupEventProposalContextGuard } from "../proposal-group-context";
-import { getEventById, buildEventEmailVariables } from "../events";
+import { getEventById } from "../events";
 import { registrationPageUrl, proposalPageUrl, inviteDeclineUrl } from "../frontend-links";
 import { resolveEventInviteExpiry } from "../../invite-validity";
 import { requireValidEventInviteRecipientBatch, type EventInviteType } from "../event-invite-preview";
