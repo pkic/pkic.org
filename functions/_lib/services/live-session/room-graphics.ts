@@ -133,6 +133,23 @@ export class LiveRoomGraphics {
     const composition = { ...message.composition, scene };
     return this.outputs.setAux(actor, session, message.output, await this.resolve(session, composition, at), at);
   }
+  /**
+   * Changes the scene a room screen draws, as loading a scene does on
+   * Preview: the screen keeps everything it holds, and the scene's comes-on
+   * graphics that are off there go on. A screen its room locked to a scene
+   * stays in that scene.
+   */
+  async setAuxScene(
+    actor: Actor,
+    session: LiveRoomSession,
+    message: Extract<LiveRoomClientMessage, { type: "aux.scene" }>,
+    at: string,
+  ): Promise<LiveControlOutcome> {
+    const scene = liveOutputFixedScene(liveRoomOutputs(session), message.output) ?? message.scene;
+    const held = { ...liveCompositionInput(this.store.aux(message.output)), scene };
+    const composition = { ...held, ...this.comesOn(session, held) };
+    return this.outputs.setAux(actor, session, message.output, await this.resolve(session, composition, at), at);
+  }
   async setPreview(
     actor: Actor,
     session: LiveRoomSession,

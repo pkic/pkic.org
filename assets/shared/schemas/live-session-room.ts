@@ -456,6 +456,14 @@ export const liveAuxSetSchema = z
   .object({ type: z.literal("aux.set"), output: liveAuxOutputSchema, composition: liveCompositionInputSchema })
   .strict();
 /**
+ * Changes the scene a room screen draws. The screen keeps everything it
+ * holds, and the graphics that come on with the scene go on, as when a scene
+ * loads on Preview.
+ */
+export const liveAuxSceneSchema = z
+  .object({ type: z.literal("aux.scene"), output: liveAuxOutputSchema, scene: liveOverlayLayoutSlugSchema.nullable() })
+  .strict();
+/**
  * Changes the shared Preview. Only the layers named change, so operators
  * working on different graphics at once merge instead of overwriting.
  */
@@ -508,6 +516,7 @@ export const liveRoomClientMessageSchema = z.discriminatedUnion("type", [
   liveScheduleCommandSchema,
   liveCompositionInputSchema.extend({ type: z.literal("stage.set") }).strict(),
   liveAuxSetSchema,
+  liveAuxSceneSchema,
   livePreviewSetSchema,
   /** Puts the shared Preview on Program; Preview keeps its contents. */
   z.object({ type: z.literal("preview.take") }).strict(),

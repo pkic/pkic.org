@@ -187,6 +187,7 @@ function LiveMonitor() {
     screenSync: DEFAULT_LIVE_SCREEN_SYNC,
     sync: noCommand,
     previewScene: noCommand,
+    screenScene: noCommand,
     disabled: false,
   });
   return (
@@ -251,6 +252,7 @@ function Multiview({
     screenSync: DEFAULT_LIVE_SCREEN_SYNC,
     sync: noCommand,
     previewScene: noCommand,
+    screenScene: noCommand,
     disabled: false,
   });
   return (
@@ -292,6 +294,7 @@ function PreviewScenes() {
     screenSync: DEFAULT_LIVE_SCREEN_SYNC,
     sync: noCommand,
     previewScene: noCommand,
+    screenScene: noCommand,
     disabled: false,
   });
   return (

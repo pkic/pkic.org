@@ -14,10 +14,7 @@ import {
   type LiveRoomOutput,
 } from "../../../../../../../../shared/schemas/live-room-output-setup";
 import { LIVE_HELD_OUTPUTS_MAX, liveAuxOutputSchema } from "../../../../../../../../shared/schemas/live-session-stage";
-import {
-  LIVE_OVERLAY_DEFAULT_LAYOUT,
-  liveOverlayLayoutSlugSchema,
-} from "../../../../../../../../shared/schemas/live-overlay-layout";
+import { LIVE_OVERLAY_DEFAULT_LAYOUT } from "../../../../../../../../shared/schemas/live-overlay-layout";
 import { compactGrid, flowGrid, placeGridItem, type GridBounds, type GridRect } from "./studio-grid";
 
 /**
@@ -156,8 +153,6 @@ export const studioPanelSchema = z
     w: z.number().int().min(1).max(STUDIO_COLUMNS),
     h: z.number().int().min(1).max(STUDIO_MAX_H),
     outputs: z.array(studioOutputSchema).min(1).max(STUDIO_OUTPUTS_MAX).optional(),
-    /** The overlay layout each output's tile draws, when not its own scene; a saved name may since be gone. */
-    layouts: z.record(studioOutputSchema, liveOverlayLayoutSlugSchema).optional().catch(undefined),
     /** The Transition's button shows its name beside the arrow. */
     labeled: z.literal(true).optional(),
     /** A Preview monitor shows the event's scenes under its picture unless the operator hid them. */
@@ -172,9 +167,17 @@ export const studioPanelSchema = z
 export type StudioPanel = z.infer<typeof studioPanelSchema>;
 /** Panel types the studio no longer has: the output links are on the event's live layouts settings. A saved one is dropped. */
 const RETIRED_PANEL_TYPES: ReadonlySet<unknown> = new Set(["sources"]);
+/** A saved monitor may still name a scene per tile, from when a tile could draw another scene than its screen. */
+const withoutTileScenes = (panel: unknown) => {
+  if (!panel || typeof panel !== "object" || !("layouts" in panel)) return panel;
+  const { layouts: _retired, ...rest } = panel;
+  return rest;
+};
 const withoutRetiredPanels = (panels: unknown) =>
   Array.isArray(panels)
-    ? panels.filter((panel: unknown) => !RETIRED_PANEL_TYPES.has((panel as { type?: unknown } | null)?.type))
+    ? panels
+        .filter((panel: unknown) => !RETIRED_PANEL_TYPES.has((panel as { type?: unknown } | null)?.type))
+        .map(withoutTileScenes)
     : panels;
 const studioWorkspaceSchema = z.preprocess(withoutRetiredPanels, z.array(studioPanelSchema).max(24));
 export const studioLayoutsSchema = z
@@ -338,10 +341,7 @@ export function toggleStudioOutput(
       ? current.filter((entry) => entry !== output)
       : studioMonitorChoices([...current, output], room).filter((entry) => entry === output || current.includes(entry));
     if (!next.length) return panel;
-    // A tile taken off the monitor forgets its layout.
-    const { layouts, ...rest } = panel;
-    const kept = Object.fromEntries(Object.entries(layouts ?? {}).filter(([entry]) => next.includes(entry)));
-    return Object.keys(kept).length ? { ...rest, outputs: next, layouts: kept } : { ...rest, outputs: next };
+    return { ...panel, outputs: next };
   });
 }
 
@@ -364,33 +364,15 @@ export function setStudioPanelScenes(panels: readonly StudioPanel[], id: string,
 }
 
 /**
- * The overlay layout a monitor's tile draws for an output: the scene the
- * output itself draws, unless the operator chose one for this tile. The
+ * The overlay layout a monitor's tile draws for an output: always the scene
+ * the output itself draws, so a monitor shows what its screen shows. The
  * stream and the stage preview, which carry no scene of their own, draw the
  * event's default.
  */
-export function studioOutputLayout(panel: StudioPanel, output: StudioOutput): string | null {
+export function studioOutputLayout(output: StudioOutput): string | null {
   // Preview and Program draw the scene their composition carries, as the room's sources do.
   if (output === "preview" || output === "program") return null;
-  const chosen = panel.layouts?.[output];
-  if (chosen) return chosen;
   return isBus(output) || output === LIVE_STAGE_PREVIEW_OUTPUT ? LIVE_OVERLAY_DEFAULT_LAYOUT : null;
-}
-
-/** Chooses the layout one tile of a monitor draws; the default is not stored. */
-export function setStudioOutputLayout(
-  panels: readonly StudioPanel[],
-  id: string,
-  output: StudioOutput,
-  layout: string,
-): StudioPanel[] {
-  return panels.map((panel) => {
-    if (panel.id !== id) return panel;
-    const { layouts: current, ...rest } = panel;
-    const others = Object.fromEntries(Object.entries(current ?? {}).filter(([entry]) => entry !== output));
-    const layouts = layout === LIVE_OVERLAY_DEFAULT_LAYOUT ? others : { ...others, [output]: layout };
-    return Object.keys(layouts).length ? { ...rest, layouts } : rest;
-  });
 }
 
 export const STUDIO_LAYOUT_STORAGE_KEY = "pkic.live-studio.layouts.v2";

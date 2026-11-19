@@ -49,7 +49,7 @@ async function overlayToken() {
 }
 
 type Client = Awaited<ReturnType<typeof f.connect>>;
-type ScreenCommand = Extract<Parameters<Client["send"]>[0], { type: "aux.set" }>;
+type ScreenCommand = Extract<Parameters<Client["send"]>[0], { type: "aux.set" | "aux.scene" }>;
 /** What a screen holds once the room answered this command: its next change, never an earlier one. */
 async function screenAfter(client: Client, message: ScreenCommand) {
   const after = client.received.length;
@@ -606,6 +606,29 @@ describe("live room auxiliary outputs", () => {
     });
   });
 
+  it("changes the scene a screen draws and keeps what it holds, with what comes on with the scene", async () => {
+    const operator = await f.connect({ person: "operator" });
+    const attendee = await f.connect({ person: "attendee" });
+    const held = await screenAfter(operator, {
+      type: "aux.set",
+      output: "projector",
+      composition: { ...EMPTY_COMPOSITION, timerGraphics: [GRAPHIC] },
+    });
+    expect(held.scene).toBeNull();
+    // Q&A's top questions come on, as when the scene loads on Preview; the timer the screen held stays.
+    const changed = await screenAfter(operator, { type: "aux.scene", output: "projector", scene: "questions" });
+    expect(liveCompositionInput(changed)).toEqual({
+      ...liveCompositionInput(EMPTY_LIVE_STAGE),
+      timerGraphics: [GRAPHIC],
+      topQuestions: DEFAULT_LIVE_TOP_QUESTIONS_CONFIG,
+      scene: "questions",
+    });
+    // Program and Preview are never touched, and only an operator changes a screen's scene.
+    expect(operator.received.some((m) => m.type === "stage.changed" || m.type === "preview.changed")).toBe(false);
+    attendee.send({ type: "aux.scene", output: "projector", scene: "break" });
+    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
+  });
+
   it("loads the scene a room locked a screen that follows Program to before anyone takes to it, once, and keeps it", async () => {
     const now = new Date().toISOString();
     const screens = [
@@ -661,6 +684,8 @@ describe("live room auxiliary outputs", () => {
     });
     expect(foyer.scene).toBe("break");
     expect(foyer.schedule).toBeNull();
+    // A scene change sent to a locked screen leaves it in its scene too.
+    expect((await screenAfter(operator, { type: "aux.scene", output: "foy", scene: "panel" })).scene).toBe("break");
 
     // The room's settings give the projector another scene: the next join loads it on what the screen holds,
     // from the room's own storage.

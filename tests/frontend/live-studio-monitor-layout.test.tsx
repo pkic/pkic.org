@@ -62,6 +62,7 @@ const switcher = {
   screenSync: DEFAULT_LIVE_SCREEN_SYNC,
   sync: vi.fn(),
   previewScene: vi.fn(),
+  screenScene: vi.fn(),
   disabled: false,
 };
 
@@ -218,7 +219,7 @@ describe("studio monitor layouts", () => {
     expect(Object.values(marked()).flat()).toEqual([["In Preview", "preview"]]);
   });
 
-  it("names Program's scene, and keeps a room screen's tile in the layout an operator picks", () => {
+  it("names Program's scene, and changes a room screen's own scene from its monitor", () => {
     host = document.createElement("div");
     document.body.append(host);
     void act(() => render(<Harness panel={2} />, host!));
@@ -227,19 +228,17 @@ describe("studio monitor layouts", () => {
         candidate.querySelector(".pk-studio-monitor__label")?.getAttribute("title")?.includes(` · ${label}\n`),
       )!;
     expect(tile("Program").querySelector('[title^="Scene on Program: Default"]')?.textContent).toBe("Default");
-    expect(tile("Program").querySelector('button[aria-label^="Scene on the"]')).toBeNull();
-    const picker = tile("Projector").querySelector<HTMLButtonElement>(
-      'button[aria-label="Scene on the Projector monitor: Default"]',
-    )!;
-    // The monitor's scene is the operator's own view: the hint says the screen itself does not change.
-    expect(picker.title).toBe(
-      "Scene on the Projector monitor: Default\nChoose a scene to see Projector drawn in it here. The screen itself keeps its own scene.",
-    );
-    void act(() => picker.click());
+    const picker = (label: string) =>
+      tile(label).querySelector<HTMLButtonElement>(`button[aria-label^="Scene on ${label}: "]`);
+    // The picker names the scene the projector itself draws, and a choice changes that scene in the room.
+    expect(picker("Projector")!.getAttribute("aria-label")).toBe("Scene on Projector: Default");
+    void act(() => picker("Projector")!.click());
     void act(() => menuItem("Break").click());
-    expect(studioLayoutsSchema.parse(JSON.parse(stored.get(STUDIO_LAYOUT_STORAGE_KEY)!)).show[2]!.layouts).toEqual({
-      projector: "break",
-    });
+    expect(switcher.screenScene).toHaveBeenLastCalledWith("projector", "break");
+    // Nothing is kept in this browser: the monitor shows what the screen shows.
+    expect(stored.get(STUDIO_LAYOUT_STORAGE_KEY) ?? "").not.toContain("layouts");
+    // The speaker's screen draws its own layout and no scene, so it offers none.
+    expect(picker("Stage display")).toBeNull();
   });
 
   it("clears from each card's own header, and fills a free place with an output from the multiview", () => {
@@ -319,14 +318,14 @@ describe("studio monitor layouts", () => {
     expect(others.every((count) => count.text === "0" && !count.warn)).toBe(true);
   });
 
-  it("reads a saved arrangement from before layouts, and drops an unreadable layout choice rather than the arrangement", () => {
+  it("reads a saved arrangement that still names a scene per tile, and drops the scene rather than the arrangement", () => {
     const show = defaultStudioLayouts().show;
     stored.set(STUDIO_LAYOUT_STORAGE_KEY, JSON.stringify({ ...defaultStudioLayouts(), show }));
     expect(loadStudioLayouts(storage).show).toEqual(show);
-    const odd = [{ ...show[0]!, x: 0, layouts: { preview: "Not a name!" } }, ...show.slice(1)];
+    const odd = [{ ...show[0]!, x: 0, layouts: { projector: "break" } }, ...show.slice(1)];
     stored.set(STUDIO_LAYOUT_STORAGE_KEY, JSON.stringify({ ...defaultStudioLayouts(), show: odd }));
     const loaded = loadStudioLayouts(storage).show;
     expect(loaded[0]!.id).toBe(show[0]!.id);
-    expect(loaded[0]!.layouts).toBeUndefined();
+    expect(loaded[0]).not.toHaveProperty("layouts");
   });
 });

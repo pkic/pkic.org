@@ -63,6 +63,8 @@ export async function operateLiveDesk(
       return desk.graphics.setStage(actor, session, message, at);
     case "aux.set":
       return desk.graphics.setAux(actor, session, message, at);
+    case "aux.scene":
+      return desk.graphics.setAuxScene(actor, session, message, at);
     case "preview.set":
       return desk.graphics.setPreview(actor, session, message, at);
     case "preview.take":

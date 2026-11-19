@@ -2,7 +2,11 @@ import { Fragment, type ComponentChildren } from "preact";
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { ClockZone } from "../../../../../../../shared/event-clock";
 import { liveCompositionInput } from "../../../../../../../shared/live-room-preview";
-import { liveRoomOutputs, type LiveTakeTarget } from "../../../../../../../shared/live-room-outputs";
+import {
+  liveRoomOutputs,
+  type LiveAuxOutput,
+  type LiveTakeTarget,
+} from "../../../../../../../shared/live-room-outputs";
 import { liveScreenTake } from "../../../../../../../shared/live-screen-sync";
 import type { AgendaSnapshot } from "../../../../../../../shared/schemas/event-agenda";
 import {
@@ -61,6 +65,7 @@ function changesBroadcast(message: LiveRoomClientMessage): boolean {
     message.type === "program.clear" ||
     message.type === "program.restore" ||
     message.type === "aux.set" ||
+    message.type === "aux.scene" ||
     message.type === "screen.sync" ||
     message.type === "speaker.message"
   );
@@ -234,6 +239,7 @@ export function LiveSessionDesk({
     screenSync: state.screenSync,
     sync: (output: LiveSyncedScreen, sync: boolean) => sendProgram({ type: "screen.sync", output, sync }),
     previewScene: (scene: string) => sendProgram({ type: "preview.set", composition: { scene } }),
+    screenScene: (output: LiveAuxOutput, scene: string) => sendProgram({ type: "aux.scene", output, scene }),
     disabled,
   };
   /** A room's state when it is of the session on air. */

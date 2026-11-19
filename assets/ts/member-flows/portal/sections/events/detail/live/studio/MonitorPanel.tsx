@@ -3,6 +3,7 @@ import { memo } from "preact/compat";
 import type { LiveRoomState } from "../../../../../../../live-session/live-room-state";
 import {
   LIVE_STAGE_PREVIEW_OUTPUT,
+  liveOutputFixedScene,
   liveOutputRole,
   liveRoomOutputs,
   type LiveAuxOutput,
@@ -24,7 +25,6 @@ import { LiveDeskStream } from "../LiveDeskStream";
 import { LiveMonitorPointers, useLivePointerReport } from "../presence/LiveMonitorPointers";
 import {
   studioMonitorChoices,
-  setStudioOutputLayout,
   setStudioPanelScenes,
   studioOutputDetails,
   studioOutputLayout,
@@ -54,6 +54,8 @@ export interface MonitorSwitcher {
   sync: (output: LiveSyncedScreen, sync: boolean) => void;
   /** Loads a scene into Preview; the next Take puts it on Program with Preview's graphics. */
   previewScene: (scene: string) => void;
+  /** Changes the scene one of the room's screens draws, at once and for everyone. */
+  screenScene: (output: LiveAuxOutput, scene: string) => void;
   disabled: boolean;
 }
 
@@ -235,10 +237,15 @@ interface MonitorContext {
   change: StudioChange;
 }
 
-/** The overlay layout a monitor draws its output in, beside the output's name. */
+/**
+ * The scene an output draws, beside the output's name, and the way to
+ * change it: Preview's for the buses, the screen's own for a room screen. A
+ * screen its room locked to a scene, the speaker's screen and the stage
+ * preview offer none.
+ */
 function LayoutPicker({ output, context }: { output: StudioOutput; context: MonitorContext }) {
-  const { panel, sources, change } = context;
-  if (output === "livestream") return null;
+  const { sources, switcher, room } = context;
+  if (output === "livestream" || output === LIVE_STAGE_PREVIEW_OUTPUT) return null;
   if (output === "preview" || output === "program")
     return (
       <ScenePicker
@@ -248,23 +255,24 @@ function LayoutPicker({ output, context }: { output: StudioOutput; context: Moni
         onScene={context.switcher.previewScene}
       />
     );
-  const details = studioOutputDetails(context.room, output);
-  // Unless the operator chose one for this tile, it draws the scene the output itself draws.
-  const layout = studioOutputLayout(panel, output) ?? liveOutputScene(projectionOf(output, sources), output);
+  if (liveOutputRole(room, output) === "speaker" || liveOutputFixedScene(room, output)) return null;
+  const details = studioOutputDetails(room, output);
+  const layout = liveOutputScene(projectionOf(output, sources), output);
   const choices = liveOverlayLayoutChoices(sources.preview.overlayLayouts);
   const current = choices.find((choice) => choice.slug === layout) ?? choices[0]!;
   return (
     <Menu
       variant="plain"
-      label={`Scene on the ${details.label} monitor: ${current.name}`}
-      title={`Scene on the ${details.label} monitor: ${current.name}\nChoose a scene to see ${details.label} drawn in it here. The screen itself keeps its own scene.`}
+      label={`Scene on ${details.label}: ${current.name}`}
+      title={`Scene on ${details.label}: ${current.name}\nChoose a scene to change it on ${details.label} at once. What is on ${details.label} stays, and what comes on with the scene goes on.`}
       triggerClass="pk-studio-monitor__picker pk-studio-monitor__layout"
-      heading="Scene for this monitor"
+      heading={`Scene on ${details.label}`}
       items={choices.map((choice) => ({
         id: choice.slug,
         label: choice.name,
         checked: choice.slug === current.slug,
-        onSelect: () => change((panels) => setStudioOutputLayout(panels, panel.id, output, choice.slug)),
+        disabled: switcher.disabled,
+        onSelect: () => switcher.screenScene(output, choice.slug),
       }))}
     >
       <LayoutIcon />
@@ -379,7 +387,7 @@ function OutputName({ output, room }: { output: StudioOutput; room: readonly Liv
 function MonitorScreen({ output, context }: { output: StudioOutput; context: MonitorContext }) {
   const { panel, sources, room } = context;
   const details = studioOutputDetails(room, output);
-  const layout = studioOutputLayout(panel, output);
+  const layout = studioOutputLayout(output);
   const pointer = useLivePointerReport(output);
   const key = enlargedKey(panel.id, output);
   return (
