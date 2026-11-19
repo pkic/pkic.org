@@ -8,7 +8,7 @@ export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
     messageType: "transactional",
     subjectTemplate:
       "{{#if withdrawn}}Late speaker response withdrawn{{else}}{{#if rejected}}Late speaker response declined{{else}}{{#if approved}}Late speaker response approved{{else}}{{#if late}}Late speaker response awaits review{{else}}Speaker confirmed{{/if}}{{/if}}{{/if}}{{/if}} — {{eventName}}",
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Hello,{{/if}}
+    content: `{{> greeting}}
 
 {{#if withdrawn}}{{#if recipientIsSpeaker}}You withdrew your late response{{else}}{{speakerName}} withdrew their late response{{/if}} to speak on **{{proposalTitle}}** at **{{eventName}}**. There is nothing left for an organizer to review.{{else}}{{#if rejected}}An organizer declined {{#if recipientIsSpeaker}}your late response{{else}}the late response from {{speakerName}}{{/if}} to speak on **{{proposalTitle}}** at **{{eventName}}**.{{else}}{{#if approved}}An organizer approved {{#if recipientIsSpeaker}}your late response{{else}}the late response from {{speakerName}}{{/if}} to speak on **{{proposalTitle}}** at **{{eventName}}**.{{else}}
 
@@ -16,7 +16,7 @@ export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
 
 {{#if late}}The response came in after the invitation deadline, and someone else may already have been invited. An organizer will review it; until then, the proposal's speakers stay as they are.{{/if}}{{/if}}{{/if}}{{/if}}
 
-Confirming as a speaker doesn't mean the proposal is accepted. The program committee decides that, and the schedule, separately.
+{{> speaker_confirmation_note}}
 
 [{{#if recipientIsSpeaker}}View your participation{{else}}Review the proposal{{/if}}]({{proposalUrl}})
 `,
@@ -36,7 +36,7 @@ Confirming as a speaker doesn't mean the proposal is accepted. The program commi
     subjectTemplate:
       "{{#if registration}}Confirm your email to register for {{eventName}}{{else}}{{#if proposal}}Confirm your email to submit a proposal for {{eventName}}{{else}}{{#if join}}Confirm your email to join the PKI Consortium{{else}}Confirm your email for the PKI Consortium{{/if}}{{/if}}{{/if}}",
     content:
-      'Hello,\n\nConfirm that **{{email}}** is your email address to {{#if registration}}register for **{{eventName}}**{{else}}{{#if proposal}}submit a proposal for **{{eventName}}**{{else}}{{#if join}}apply to join the **PKI Consortium**{{else}}continue to the **PKI Consortium portal**{{/if}}{{/if}}{{/if}}.\n\n<div class="cta-navy"><a href="{{magicLinkUrl}}">Confirm my email &rarr;</a></div>\n\nThe link sets up your PKI Consortium account and takes you straight back to {{#if registration}}your registration{{else}}{{#if proposal}}your proposal{{else}}{{#if join}}your membership application{{else}}the portal{{/if}}{{/if}}{{/if}}.\n\n<div class="notice notice-warning">&#9888;&#65039; <strong>Keep this link to yourself</strong><br>&bull; It works <strong>once</strong>, for <strong>{{expiresInMinutes}} minutes</strong>.<br>&bull; It only works for <code>{{email}}</code>.<br>&bull; Didn\'t ask for it? You can ignore this email.</div>',
+      'Hello,\n\nConfirm that **{{email}}** is your email address to {{#if registration}}register for **{{eventName}}**{{else}}{{#if proposal}}submit a proposal for **{{eventName}}**{{else}}{{#if join}}apply to join the **PKI Consortium**{{else}}continue to the **PKI Consortium portal**{{/if}}{{/if}}{{/if}}.\n\n<div class="cta-navy"><a href="{{magicLinkUrl}}">Confirm my email &rarr;</a></div>\n\nThe link sets up your PKI Consortium account and takes you straight back to {{#if registration}}your registration{{else}}{{#if proposal}}your proposal{{else}}{{#if join}}your membership application{{else}}the portal{{/if}}{{/if}}{{/if}}.\n\n{{> link_safety_notice}}',
     contentType: "markdown",
     messageType: "transactional",
   },
@@ -72,7 +72,7 @@ Confirming as a speaker doesn't mean the proposal is accepted. The program commi
     subjectTemplate:
       "{{#if alreadyRegistered}}You're already registered for {{eventName}}{{else}}{{#if registration}}Continue your registration for {{eventName}}{{else}}{{#if proposal}}Continue your proposal for {{eventName}}{{else}}{{#if join}}Continue your membership application{{else}}Sign in to the PKI Consortium{{/if}}{{/if}}{{/if}}{{/if}}",
     content:
-      '{{#if firstName}}Dear {{firstName}},{{else}}Hello,{{/if}}\n\n{{#if alreadyRegistered}}Good news: you\'re already registered for **{{eventName}}**, so there\'s nothing more to do. Your registration details are below.\n\n<div class="cta-navy"><a href="{{magicLinkUrl}}">View or change my registration &rarr;</a></div>\n\n{{> reg_details}}{{else}}Welcome back! You already have a PKI Consortium account with **{{email}}**, so there\'s no need to create another one. Sign in to continue {{#if registration}}your registration for **{{eventName}}**{{else}}{{#if proposal}}your proposal for **{{eventName}}**{{else}}{{#if join}}your membership application{{else}}to the portal{{/if}}{{/if}}{{/if}}.\n\n<div class="cta-navy"><a href="{{magicLinkUrl}}">Sign in and continue &rarr;</a></div>{{/if}}\n\n<div class="notice notice-warning">&#9888;&#65039; <strong>Keep this link to yourself</strong><br>&bull; It works <strong>once</strong>, for <strong>{{expiresInMinutes}} minutes</strong>.<br>&bull; It only works for <code>{{email}}</code>.<br>&bull; Didn\'t ask for it? You can ignore this email.</div>',
+      '{{> greeting}}\n\n{{#if alreadyRegistered}}Good news: you\'re already registered for **{{eventName}}**, so there\'s nothing more to do. Your registration details are below.\n\n<div class="cta-navy"><a href="{{magicLinkUrl}}">View or change my registration &rarr;</a></div>\n\n{{> reg_details}}{{else}}Welcome back! You already have a PKI Consortium account with **{{email}}**, so there\'s no need to create another one. Sign in to continue {{#if registration}}your registration for **{{eventName}}**{{else}}{{#if proposal}}your proposal for **{{eventName}}**{{else}}{{#if join}}your membership application{{else}}to the portal{{/if}}{{/if}}{{/if}}.\n\n<div class="cta-navy"><a href="{{magicLinkUrl}}">Sign in and continue &rarr;</a></div>{{/if}}\n\n{{> link_safety_notice}}',
     contentType: "markdown",
     messageType: "transactional",
   },

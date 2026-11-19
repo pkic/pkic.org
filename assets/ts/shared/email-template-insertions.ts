@@ -1,10 +1,6 @@
 import type { MenuItem } from "../ui/Menu";
-import {
-  TEMPLATE_HELPERS,
-  TEMPLATE_PARTIALS,
-  type TemplateHelperItem,
-  type TemplatePartialItem,
-} from "./email-template-helpers";
+import { TEMPLATE_HELPERS, type TemplateHelperItem } from "./email-template-helpers";
+import { EMAIL_PARTIALS, type EmailPartial } from "../../shared/email-partials";
 
 export function subjectTemplateInsertions(
   onInsert: (snippet: string) => void,
@@ -20,14 +16,14 @@ export function subjectTemplateInsertions(
 export function bodyTemplateInsertions(
   onInsert: (snippet: string) => void,
   isHelperAvailable: (item: TemplateHelperItem) => boolean = () => true,
-  isPartialAvailable: (partial: TemplatePartialItem) => boolean = () => true,
+  isPartialAvailable: (partial: EmailPartial) => boolean = () => true,
 ): MenuItem[] {
   const helpers = TEMPLATE_HELPERS.filter(isHelperAvailable).map((item) => ({
     id: item.label,
     label: item.label,
     onSelect: () => onInsert(item.snippet),
   }));
-  const partials = TEMPLATE_PARTIALS.filter(isPartialAvailable).map((partial, index) => ({
+  const partials = EMAIL_PARTIALS.filter(isPartialAvailable).map((partial, index) => ({
     id: `partial-${partial.name}`,
     label: `${partial.name} — ${partial.description}`,
     separatorBefore: index === 0,

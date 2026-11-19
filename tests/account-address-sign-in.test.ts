@@ -218,7 +218,12 @@ describe("account addresses after a representation ends", () => {
     )!;
     await env.DB.prepare(revoke).run();
 
-    const revoked = await queryAll<{ id: string }>(env.DB, "SELECT id FROM sessions WHERE revoked_at IS NOT NULL");
+    // Other test files share the database, so only this account's sessions count.
+    const revoked = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM sessions WHERE revoked_at IS NOT NULL AND user_id = ?",
+      [userId],
+    );
     expect(revoked.map(({ id }) => id).sort()).toEqual([byLink.id, bySponsorLink.id, byJoinLink.id].sort());
   });
 

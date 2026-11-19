@@ -9,7 +9,7 @@ export const DEFAULT_EVENT_MESSAGE_TEMPLATES = [
   {
     key: "msg_attendee_session_favorites",
     subjectTemplate: "Save sessions that interest you — {{eventName}}",
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Hello,{{/if}}
+    content: `{{> greeting}}
 
 Building your plan for **{{eventName}}**? Star the sessions that interest you to save them to your agenda.
 
@@ -22,7 +22,7 @@ A star only saves the session for you. It doesn't reserve a place, so check whet
   {
     key: "msg_attendee_session_reminder",
     subjectTemplate: "Review your session plans — {{eventName}}",
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Hello,{{/if}}
+    content: `{{> greeting}}
 
 **{{eventName}}** is coming up. Take a moment to check the times, rooms, and requirements of the sessions you want to join.
 
@@ -35,7 +35,7 @@ Your agenda shows the sessions you starred and those you registered for. A star 
   {
     key: "msg_attendee_session_reservations",
     subjectTemplate: "Check which sessions need registration — {{eventName}}",
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Hello,{{/if}}
+    content: `{{> greeting}}
 
 Some sessions at **{{eventName}}** need a registration or an organizer's approval. Open each session you want to join to see its status and what it requires.
 
@@ -48,7 +48,7 @@ Starring a session doesn't register you, and this email doesn't confirm a place.
   {
     key: "msg_attendee_session_waitlist",
     subjectTemplate: "Check session availability — {{eventName}}",
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Hello,{{/if}}
+    content: `{{> greeting}}
 
 Waiting for a place in a session at **{{eventName}}**? Open it in your agenda to see its status and what you can do.
 

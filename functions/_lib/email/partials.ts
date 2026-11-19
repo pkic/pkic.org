@@ -1,4 +1,5 @@
 import type { EmailTemplatePartials } from "../../../assets/shared/schemas/email-templates";
+import { EMAIL_PARTIAL_NAMES } from "../../../assets/shared/email-partials";
 import type { DatabaseLike } from "../types";
 import {
   requireResolvedTemplates,
@@ -9,7 +10,6 @@ import {
 } from "./templates";
 
 export const EMAIL_LAYOUT_TEMPLATE_KEY = "email_layout";
-export const EMAIL_PARTIAL_NAMES = ["reg_details", "sponsors_block", "about_pkic", "donation_request"] as const;
 export const EMAIL_PARTIAL_TEMPLATE_KEYS = EMAIL_PARTIAL_NAMES.map((name) => `partial_${name}`);
 
 export interface EmailRenderResources {

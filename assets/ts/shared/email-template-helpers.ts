@@ -9,19 +9,6 @@ export interface TemplateHelperItem {
   target?: "subject" | "body" | null;
 }
 
-export interface TemplatePartialItem {
-  name: string;
-  description: string;
-}
-
-// Partials are block-level includes registered in the email render engine.
-export const TEMPLATE_PARTIALS: TemplatePartialItem[] = [
-  { name: "reg_details", description: "Registration summary (name, attendance, custom answers)" },
-  { name: "sponsors_block", description: "Sponsors section" },
-  { name: "about_pkic", description: "About PKIC blurb" },
-  { name: "donation_request", description: "Donation request block" },
-];
-
 // Default sample values used when no custom preview data is provided.
 export const PREVIEW_DEFAULTS: Record<string, unknown> = {
   // Event

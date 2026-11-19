@@ -3,6 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { escapeMarkdownText } from "../../functions/_lib/email/markdown";
 import { renderEmail } from "../../functions/_lib/email/render";
+import { withSeededPartials } from "./helpers/seeded-email-partials";
 import { DEFAULT_LAYOUT_HTML, DEFAULT_TEMPLATES } from "../../scripts/seed-email-templates.mjs";
 import { buildTemplateSqlStatements } from "../../scripts/lib/email-template-seed-sql.mjs";
 
@@ -40,10 +41,15 @@ const EXPECTED_BASELINE_TEMPLATE_KEYS = [
   "organization-identity-changed",
   "organization_identity_reinstatement",
   "partial_about_pkic",
+  "partial_budget_waitlist_notice",
   "partial_donation_request",
+  "partial_donation_tax_notice",
+  "partial_greeting",
+  "partial_link_safety_notice",
   "partial_membership_review_details",
   "partial_membership_review_summary",
   "partial_reg_details",
+  "partial_speaker_confirmation_note",
   "partial_sponsors_block",
   "presentation_upload_reminder",
   "presentation_upload_request",
@@ -246,14 +252,14 @@ describe("buildTemplateSqlStatements", () => {
     const decision = DEFAULT_TEMPLATES.find((item) => item.key === "proposal_decision")!;
     const rendered = await renderEmail(
       decision.content,
-      {
+      withSeededPartials({
         firstName: "Alex",
         finalStatus: "needs-work",
         proposalTitle: "Forms for organizations",
         eventName: "User conference",
         decisionNote: "Please narrow the scope.",
         manageUrl: "https://example.test/proposal",
-      },
+      }),
       DEFAULT_LAYOUT_HTML,
     );
     expect(rendered.text).toContain("Dear Alex,");
@@ -274,6 +280,28 @@ describe("buildTemplateSqlStatements", () => {
       expect(rendered.text.includes("Your profile looks complete")).toBe(complete);
     },
   );
+  it("shows the shared registration details and the waitlist notice in a registration update", async () => {
+    const update = DEFAULT_TEMPLATES.find((item) => item.key === "registration_updated")!;
+    const rendered = await renderEmail(
+      update.content,
+      withSeededPartials({
+        firstName: "Alex",
+        lastName: "Rivera",
+        eventName: "User conference",
+        status: "waitlisted",
+        organizationName: "Example Org",
+        dayAttendance: [{ dayLabel: "Day 1", attendanceLabel: "In person", statusLabel: "Waitlisted" }],
+        manageUrl: "https://example.test/registration",
+      }),
+      DEFAULT_LAYOUT_HTML,
+    );
+    expect(rendered.text).toContain("Dear Alex,");
+    expect(rendered.text).toContain("Your registration details");
+    expect(rendered.text).toContain("Day 1: In person — Waitlisted");
+    expect(rendered.text).toContain("limited by the event budget");
+    expect(rendered.html).toContain('href="mailto:contact@pkic.org"');
+    expect(rendered.text).not.toMatch(/\{\{/);
+  });
   it("keeps the baseline layout light and separates public branding from action links", () => {
     expect(DEFAULT_LAYOUT_HTML).toContain('content="light only"');
     expect(DEFAULT_LAYOUT_HTML).toContain("{{brandBaseUrl}}/img/logo-white.png");

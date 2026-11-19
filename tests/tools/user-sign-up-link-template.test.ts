@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { compileSimpleTemplate } from "../../functions/_lib/email/render";
+import { compileSeededBody } from "./helpers/seeded-email-partials";
 import { DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES } from "../../scripts/lib/transactional-email-default-templates.mjs";
-import { DEFAULT_TEMPLATES } from "../../scripts/seed-email-templates.mjs";
 
 const template = DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES.find((item) => item.key === "user_sign_up_link")!;
 const link = {
@@ -27,7 +27,7 @@ describe("the email that starts an account", () => {
   ])("names what the person came for (%o)", (purpose, subject, destination) => {
     const data = { ...link, ...purpose };
     expect(compileSimpleTemplate(template.subjectTemplate, data, "text")).toBe(subject);
-    const body = compileSimpleTemplate(template.content, data, "markdown");
+    const body = compileSeededBody(template.content, data);
     expect(body).toContain("**ada@organization.example**");
     expect(body).toContain(`takes you straight back to ${destination}`);
     expect(body).toContain("The link sets up your PKI Consortium account");
@@ -37,7 +37,6 @@ describe("the email that starts an account", () => {
 
 const found = DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES.find((item) => item.key === "user_account_found_link")!;
 const help = DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES.find((item) => item.key === "user_sign_in_help")!;
-const registrationDetails = DEFAULT_TEMPLATES.find((item) => item.key === "partial_reg_details")!;
 
 describe("the email for an address that already has an account", () => {
   it.each([
@@ -56,7 +55,7 @@ describe("the email for an address that already has an account", () => {
   ])("says the account was found and continues what the person came for (%o)", (purpose, subject, destination) => {
     const data = { ...link, ...purpose };
     expect(compileSimpleTemplate(found.subjectTemplate, data, "text")).toBe(subject);
-    const body = compileSimpleTemplate(found.content, data, "markdown");
+    const body = compileSeededBody(found.content, data);
     expect(body).toContain("You already have a PKI Consortium account with **ada@organization.example**");
     expect(body).toContain(`Sign in to continue ${destination}.`);
     expect(body).not.toContain("Your registration details");
@@ -76,11 +75,7 @@ describe("the email for an address that already has an account", () => {
     expect(compileSimpleTemplate(found.subjectTemplate, data, "text")).toBe(
       "You're already registered for PQC Conference",
     );
-    const body = compileSimpleTemplate(
-      found.content,
-      { ...data, _partials: { reg_details: { content: registrationDetails.content, contentType: "markdown" } } },
-      "markdown",
-    );
+    const body = compileSeededBody(found.content, data);
     expect(body).toContain("Dear Ada,");
     expect(body).toContain("you're already registered for **PQC Conference**, so there's nothing more to do");
     expect(body).toContain("View or change my registration");
@@ -98,7 +93,7 @@ describe("the email for a sign-in request that sends no link", () => {
     expect(compileSimpleTemplate(help.subjectTemplate, data, "text")).toBe(
       "We couldn't find a PKI Consortium account for this address",
     );
-    const body = compileSimpleTemplate(help.content, data, "markdown");
+    const body = compileSeededBody(help.content, data);
     expect(body).toContain("no PKI Consortium account uses this address");
     expect(body).toContain("Create an account");
     expect(body).toContain('href="https://app.test/portal/"');
@@ -107,7 +102,7 @@ describe("the email for a sign-in request that sends no link", () => {
   it("sends a proved address its account cannot sign in with to the secretariat", () => {
     const data = { email: "ada@organization.example", contactEmail: "contact@pkic.org" };
     expect(compileSimpleTemplate(help.subjectTemplate, data, "text")).toBe("We couldn't send you a sign-in link");
-    const body = compileSimpleTemplate(help.content, data, "markdown");
+    const body = compileSeededBody(help.content, data);
     expect(body).toContain("this address can't be used to sign in to its account");
     expect(body).toContain("mailto:contact@pkic.org");
     expect(body).not.toContain("Create an account");

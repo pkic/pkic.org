@@ -4,6 +4,7 @@ import { DEFAULT_EVENT_MESSAGE_TEMPLATES } from "../../scripts/lib/event-message
 import { DEFAULT_TEMPLATES } from "../../scripts/seed-email-templates.mjs";
 import { buildTemplateSqlStatements } from "../../scripts/lib/email-template-seed-sql.mjs";
 import { renderEmail, renderSubject } from "../../functions/_lib/email/render";
+import { SEEDED_EMAIL_PARTIALS, withSeededPartials } from "./helpers/seeded-email-partials";
 import { emailPlainText } from "../../functions/_lib/email/plain-text";
 import { findBroadcastOnlyTemplateRefs } from "../../functions/_lib/services/event-email-campaign/broadcast-safety";
 
@@ -15,7 +16,7 @@ describe("editable attendee session message examples", () => {
   it.each(DEFAULT_EVENT_MESSAGE_TEMPLATES)(
     "renders $key through the canonical compiler and authenticated agenda destination",
     async (template) => {
-      const rendered = await renderEmail(template.content, data, layout, "markdown", baseUrl);
+      const rendered = await renderEmail(template.content, withSeededPartials(data), layout, "markdown", baseUrl);
       expect(renderSubject(template.subjectTemplate, "Event message", data)).toContain(data.eventName);
       expect(rendered.text).toContain("Dear Alex");
       expect(rendered.text).toContain(data.eventName);
@@ -31,7 +32,7 @@ describe("editable attendee session message examples", () => {
     const reservation = DEFAULT_EVENT_MESSAGE_TEMPLATES.find(({ key }) => key === "msg_attendee_session_reservations")!;
     const waitlist = DEFAULT_EVENT_MESSAGE_TEMPLATES.find(({ key }) => key === "msg_attendee_session_waitlist")!;
     const favorite = DEFAULT_EVENT_MESSAGE_TEMPLATES.find(({ key }) => key === "msg_attendee_session_favorites")!;
-    const rendering = (content: string) => renderEmail(content, data, layout, "markdown", baseUrl);
+    const rendering = (content: string) => renderEmail(content, withSeededPartials(data), layout, "markdown", baseUrl);
     expect((await rendering(reservation.content)).text).toContain("this email doesn't confirm a place");
     expect((await rendering(waitlist.content)).text).toContain("Waiting for a place in a session");
     expect((await rendering(waitlist.content)).text).toContain("this email doesn't mean one has opened up");
@@ -40,19 +41,27 @@ describe("editable attendee session message examples", () => {
 
   it("handles missing names and escaped user text while retaining personal-campaign safety", async () => {
     const template = DEFAULT_EVENT_MESSAGE_TEMPLATES[0]!;
-    const unnamed = await renderEmail(template.content, { ...data, firstName: "" }, layout, "markdown", baseUrl);
+    const unnamed = await renderEmail(
+      template.content,
+      withSeededPartials({ ...data, firstName: "" }),
+      layout,
+      "markdown",
+      baseUrl,
+    );
     expect(unnamed.text).toContain("Hello,");
     expect(unnamed.text).not.toMatch(/\{\{/);
     const hostile = await renderEmail(
       template.content,
-      { ...data, firstName: emailPlainText("<script>profile()</script>") },
+      withSeededPartials({ ...data, firstName: emailPlainText("<script>profile()</script>") }),
       layout,
       "markdown",
       baseUrl,
     );
     expect(hostile.html).not.toContain("<script>");
     expect(hostile.text).toContain("<script>profile()</script>");
-    expect(findBroadcastOnlyTemplateRefs([], [template.content])).toContain("firstName");
+    expect(findBroadcastOnlyTemplateRefs([], [template.content], { partials: SEEDED_EMAIL_PARTIALS })).toContain(
+      "firstName",
+    );
   });
 
   it("seeds missing examples idempotently without replacing an editor's active version, and retains history on explicit replacement", () => {

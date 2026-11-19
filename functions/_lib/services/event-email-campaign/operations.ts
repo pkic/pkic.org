@@ -109,6 +109,7 @@ export async function previewEventEmailCampaign(
     "customText",
     "baseUrl",
     "brandBaseUrl",
+    "contactEmail",
   ]);
   const authored = campaignAuthoredTemplates(input, template);
   const templateReferences = authored.map((source) => analyzeTemplateReferences(source, partials));
