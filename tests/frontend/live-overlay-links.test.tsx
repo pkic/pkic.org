@@ -15,7 +15,7 @@ afterEach(() => {
 });
 
 const SCENES = [
-  { slug: "talk", name: "Talk" },
+  { slug: "default", name: "Default" },
   { slug: "break", name: "Break" },
 ];
 
@@ -71,9 +71,9 @@ it("lists Program and the room's screens with their code, role, scene and a copy
   expect(program.textContent).toContain("From Preview");
   const projector = rowOf("Projector");
   expect(projector.textContent).toContain("Follow Program");
-  // A screen that follows Program draws its own scene too: the one last taken to it, never Program's.
+  // A screen that follows Program draws its own scene too: it starts in Default, then the one taken to it.
   expect(projector.textContent).toContain("Shows what is on Program, in its own scene");
-  expect(projector.textContent).toContain("From Preview");
+  expect(projector.textContent).toContain("Starts in Default");
   expect(rowOf("Stage display").textContent).toContain("Fixed");
   // No long link fields until a copy fails.
   expect(host!.querySelector("[data-copy-link]")).toBeNull();
@@ -110,7 +110,7 @@ it("offers Try again when the screens fail to load, and loads them on a retry", 
   await vi.waitFor(() => expect(host!.querySelector("[data-copy-link-row]")).not.toBeNull());
 });
 
-it("adds a screen by saving the room's whole list, with the scene it always draws", async () => {
+it("adds a screen by saving the room's whole list, with the scene it starts in or always draws", async () => {
   const fetch = roomApi();
   vi.stubGlobal("fetch", fetch);
   await renderLinks();
@@ -121,22 +121,23 @@ it("adds a screen by saving the room's whole list, with the scene it always draw
   // Another screen holds the speaker's role, so it stays closed.
   expect(dialog.querySelector<HTMLInputElement>('input[name="role"][value="speaker"]')!.disabled).toBe(true);
   const scene = dialog.querySelector<HTMLSelectElement>('select[name="scene"]')!;
-  expect([...scene.options].map((option) => option.textContent)).toEqual([
-    "From Preview",
-    "Always Talk",
-    "Always Break",
-  ]);
+  expect([...scene.options].map((option) => option.textContent)).toEqual(["Default", "Break"]);
+  expect(scene.value).toBe("default");
   await act(async () => {
     scene.value = "break";
     scene.dispatchEvent(new Event("change", { bubbles: true }));
   });
+  await act(async () => dialog.querySelector<HTMLInputElement>('input[name="sceneLocked"]')!.click());
   await act(async () => buttonIn(dialog, "Add screen")!.click());
   await vi.waitFor(() => expect(rowOf("Foyer")).toBeDefined());
   const put = fetch.mock.calls.find(([, init]) => init?.method === "PUT")!;
   expect(JSON.parse(String(put[1]!.body))).toEqual({
-    outputs: [...DEFAULT_LIVE_ROOM_OUTPUTS, { name: "Foyer", code: "FOY", role: "exact", scene: "break" }],
+    outputs: [
+      ...DEFAULT_LIVE_ROOM_OUTPUTS,
+      { name: "Foyer", code: "FOY", role: "exact", scene: "break", sceneLocked: true },
+    ],
   });
-  expect(rowOf("Foyer").textContent).toContain("Break");
+  expect(rowOf("Foyer").textContent).toContain("Always Break");
 });
 
 it("says on the field when a code is already in use, before anything is sent", async () => {

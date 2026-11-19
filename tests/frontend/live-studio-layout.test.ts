@@ -238,10 +238,10 @@ describe("saved studio layouts", () => {
 
 describe("a monitor in a room that sets up its own screens", () => {
   const room = [
-    { key: "prj-l", name: "Screen left", code: "PRJ L", role: "follow" as const, scene: null },
-    { key: "prj-r", name: "Screen right", code: "PRJ R", role: "follow" as const, scene: null },
-    { key: "stage-display", name: "Speaker", code: "DSP", role: "speaker" as const, scene: null },
-    { key: "foy", name: "Foyer", code: "FOY", role: "exact" as const, scene: "break" },
+    { key: "prj-l", name: "Screen left", code: "PRJ L", role: "follow" as const, scene: null, sceneLocked: false },
+    { key: "prj-r", name: "Screen right", code: "PRJ R", role: "follow" as const, scene: null, sceneLocked: false },
+    { key: "stage-display", name: "Speaker", code: "DSP", role: "speaker" as const, scene: null, sceneLocked: false },
+    { key: "foy", name: "Foyer", code: "FOY", role: "exact" as const, scene: "break", sceneLocked: true },
   ];
 
   it("shows every screen of the room in place of one the room does not have, in the room's order", () => {

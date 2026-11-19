@@ -1,8 +1,6 @@
 import { useState } from "preact/hooks";
-import {
-  LIVE_ROOM_OUTPUT_ROLE_COPY,
-  LIVE_ROOM_OUTPUT_SCENE_TAKEN,
-} from "../../../../../../../shared/live-room-outputs";
+import { LIVE_ROOM_OUTPUT_ROLE_COPY } from "../../../../../../../shared/live-room-outputs";
+import { LIVE_OVERLAY_DEFAULT_LAYOUT } from "../../../../../../../shared/schemas/live-overlay-layout";
 import {
   LIVE_ROOM_OUTPUT_CODE_MAX,
   LIVE_ROOM_OUTPUT_ROLES,
@@ -13,15 +11,15 @@ import {
 } from "../../../../../../../shared/schemas/live-room-output-setup";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
 import { Alert } from "../../../../../../ui/Alert";
-import { Radio } from "../../../../../../ui/Checkbox";
+import { Checkbox, Radio } from "../../../../../../ui/Checkbox";
 import { Dialog } from "../../../../../../ui/Dialog";
 import { Field } from "../../../../../../ui/Field";
 import { Select, TextInput } from "../../../../../../ui/TextControl";
 
-const BLANK: LiveRoomOutputInput = { name: "", code: "", role: "exact", scene: null };
+const BLANK: LiveRoomOutputInput = { name: "", code: "", role: "exact", scene: null, sceneLocked: false };
 
 /** The control names the dialog's fields carry; the contract checks them as one row of the room's whole list. */
-const FIELDS = ["name", "code", "role", "scene"] as const;
+const FIELDS = ["name", "code", "role", "scene", "sceneLocked"] as const;
 
 /** What a role shows; the speaker's role says which screen holds it while another one does. */
 function roleHint(role: LiveRoomOutputRole, speaker: LiveRoomOutput | undefined): string {
@@ -144,30 +142,39 @@ export function LiveRoomScreenDialog({
                   hint={roleHint(role, speaker)}
                   checked={draft.role === role}
                   disabled={role === "speaker" && speaker !== undefined}
-                  onChange={() => change({ role, scene: role === "speaker" ? null : draft.scene })}
+                  onChange={() => change(role === "speaker" ? { role, scene: null, sceneLocked: false } : { role })}
                 />
               ))}
             </div>
           )}
         </Field>
         {draft.role === "speaker" ? null : (
-          <Field label="Scene" {...form.of(`outputs.${index}.scene`)}>
-            {(control) => (
-              <Select
-                {...control}
-                name="scene"
-                value={draft.scene ?? ""}
-                onChange={(event) => change({ scene: event.currentTarget.value || null })}
-              >
-                <option value="">{LIVE_ROOM_OUTPUT_SCENE_TAKEN}</option>
-                {scenes.map((scene) => (
-                  <option key={scene.slug} value={scene.slug}>
-                    Always {scene.name}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </Field>
+          <>
+            <Field label="Scene" help="The scene the screen starts in." {...form.of(`outputs.${index}.scene`)}>
+              {(control) => (
+                <Select
+                  {...control}
+                  name="scene"
+                  value={draft.scene ?? LIVE_OVERLAY_DEFAULT_LAYOUT}
+                  onChange={(event) => change({ scene: event.currentTarget.value })}
+                >
+                  {scenes.map((scene) => (
+                    <option key={scene.slug} value={scene.slug}>
+                      {scene.name}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            <Checkbox
+              label="Lock scene"
+              hint="A take from Preview can't change it."
+              checked={draft.sceneLocked}
+              {...form.of(`outputs.${index}.sceneLocked`)}
+              name="sceneLocked"
+              onChange={(event) => change({ sceneLocked: event.currentTarget.checked })}
+            />
+          </>
         )}
       </form>
     </Dialog>

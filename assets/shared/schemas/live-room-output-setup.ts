@@ -46,8 +46,10 @@ const outputFieldsSchema = z.object({
     .regex(/^[A-Z0-9]+( [A-Z0-9]+)?$/, "Use letters and numbers, with at most one space.")
     .max(LIVE_ROOM_OUTPUT_CODE_MAX, `Use at most ${LIVE_ROOM_OUTPUT_CODE_MAX} characters.`),
   role: z.enum(LIVE_ROOM_OUTPUT_ROLES),
-  /** The scene the output always draws; null for the scene last taken to it from Preview. */
+  /** The scene the output starts in; null for Default. */
   scene: liveOverlayLayoutSlugSchema.nullable(),
+  /** Whether the output always draws its scene; an unlocked one starts there and a take from Preview changes it. */
+  sceneLocked: z.boolean(),
 });
 
 export const liveRoomOutputSchema = outputFieldsSchema.extend({ key: liveRoomOutputKeySchema }).strict();
@@ -77,8 +79,15 @@ export const liveRoomOutputsSchema = z.array(liveRoomOutputSchema).max(LIVE_ROOM
 
 /** The room's outputs until anyone sets them up: the projector and the speaker's screen it always had. */
 export const DEFAULT_LIVE_ROOM_OUTPUTS: readonly LiveRoomOutput[] = [
-  { key: "projector", name: "Projector", code: "PRJ", role: "follow", scene: null },
-  { key: LIVE_SPEAKER_OUTPUT_KEY, name: "Stage display", code: "DSP", role: "speaker", scene: null },
+  { key: "projector", name: "Projector", code: "PRJ", role: "follow", scene: null, sceneLocked: false },
+  {
+    key: LIVE_SPEAKER_OUTPUT_KEY,
+    name: "Stage display",
+    code: "DSP",
+    role: "speaker",
+    scene: null,
+    sceneLocked: false,
+  },
 ];
 
 /** One output as saved: an existing one names its key, a new one leaves it out and the room makes one. */

@@ -129,14 +129,14 @@ export class LiveRoomGraphics {
     message: Extract<LiveRoomClientMessage, { type: "aux.set" }>,
     at: string,
   ): Promise<LiveControlOutcome> {
-    // A screen its room fixed a scene for keeps that scene, whatever scene a shot names.
+    // A screen its room locked to a scene keeps that scene, whatever scene a shot names.
     const scene = liveOutputFixedScene(liveRoomOutputs(session), message.output) ?? message.composition.scene;
     const composition = { ...message.composition, scene };
     return this.outputs.setAux(actor, session, message.output, await this.resolve(session, composition, at), at);
   }
   /**
    * A take to a screen that follows Program: the screen starts again in the
-   * scene, the one its room fixed for it or else the one taken, with the
+   * scene, the one its room locked it to or else the one taken, with the
    * graphics that come on with that scene and nothing else of its own. Every
    * other switch and pick it shows stays Program's.
    */
@@ -174,22 +174,26 @@ export class LiveRoomGraphics {
     return liveSceneFill(scene, input, { session, program: this.store.stage() });
   }
   /**
-   * A screen that follows Program draws the scene its room fixed for it from
-   * the start, before anyone takes anything to it: the room loads that scene
-   * on the screen once, which switches on what comes on with it and leaves
-   * everything the screen holds. A screen already in its scene is left alone,
-   * so a graphic an operator switched off there stays off.
+   * A screen draws the scene its room set up for it from the start, before
+   * anyone takes anything to it: the room loads that scene on the screen once.
+   * On a screen that follows Program that switches on what comes on with the
+   * scene; on one that shows what you take to it nothing comes on by itself.
+   * Everything the screen holds stays. After a take, only a locked screen
+   * goes back to its scene; a screen
+   * already in its scene is left alone, so a graphic an operator switched off
+   * there stays off.
    */
-  private async loadFixedScenes(): Promise<void> {
+  private async loadSetUpScenes(): Promise<void> {
     const room = this.store.session();
     if (!room) return;
     const at = nowIso();
     for (const output of liveRoomOutputs(room.session)) {
-      if (output.role !== "follow" || !output.scene) continue;
+      if (output.role === "speaker" || !output.scene) continue;
+      if (!output.sceneLocked && this.store.composed(output.key)) continue;
       const held = this.store.aux(output.key);
       if (held.scene === output.scene) continue;
       const input = { ...liveCompositionInput(held), scene: output.scene };
-      const fill = this.comesOn(room.session, input);
+      const fill = output.role === "follow" ? this.comesOn(room.session, input) : {};
       const resolved: Record<string, unknown> = await this.resolve(room.session, { ...input, ...fill }, at);
       // Only what the scene switched on changes; the store reads the whole composition again before it saves.
       const brought = Object.fromEntries(Object.keys(fill).map((graphic) => [graphic, resolved[graphic]]));
@@ -245,7 +249,7 @@ export class LiveRoomGraphics {
   async initialize(): Promise<void> {
     if (!this.basis.ready) await this.refresh();
     else await this.refreshLocal();
-    await this.loadFixedScenes();
+    await this.loadSetUpScenes();
   }
 
   async refresh(): Promise<void> {

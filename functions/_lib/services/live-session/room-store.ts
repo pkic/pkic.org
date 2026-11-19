@@ -362,6 +362,11 @@ export class LiveRoomStore {
     return saved ? liveAuxCompositionSchema.parse(saved) : EMPTY_LIVE_AUX_COMPOSITION;
   }
 
+  /** Whether anyone composed this output yet, a take or the room loading its starting scene. */
+  composed(output: LiveAuxOutput): boolean {
+    return this.control(`aux:${output}`) !== null;
+  }
+
   saveAux(output: LiveAuxOutput, composition: LiveAuxComposition): void {
     this.saveControl(`aux:${output}`, liveAuxCompositionSchema.parse(composition));
   }

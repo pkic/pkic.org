@@ -25,8 +25,8 @@ import type { EventRecord } from "../events";
 
 /** One room's outputs as a JSON array in their order, for the room the SQL expression `roomId` names. */
 export function liveRoomOutputsJsonSql(roomId: string): string {
-  return `SELECT json_group_array(json_object('key',output.output_key,'name',output.name,'code',output.code,'role',output.role,'scene',output.scene_slug))
-    FROM (SELECT output_key,name,code,role,scene_slug FROM event_agenda_room_outputs WHERE room_id=${roomId} ORDER BY position) output`;
+  return `SELECT json_group_array(json_object('key',output.output_key,'name',output.name,'code',output.code,'role',output.role,'scene',output.scene_slug,'sceneLocked',json(CASE WHEN output.scene_locked THEN 'true' ELSE 'false' END)))
+    FROM (SELECT output_key,name,code,role,scene_slug,scene_locked FROM event_agenda_room_outputs WHERE room_id=${roomId} ORDER BY position) output`;
 }
 
 /** The saved outputs, or undefined while the room has none saved and keeps the ones it always had. */
@@ -93,7 +93,14 @@ export async function saveLiveRoomOutputs(
           ? kept
           : liveRoomOutputKey(output.code, taken);
     taken.add(key);
-    return { key, name: output.name, code: output.code, role: output.role, scene: output.scene };
+    return {
+      key,
+      name: output.name,
+      code: output.code,
+      role: output.role,
+      scene: output.scene,
+      sceneLocked: output.sceneLocked,
+    };
   });
   const checked = liveRoomOutputsSchema.safeParse(outputs);
   if (!checked.success)
@@ -107,8 +114,8 @@ export async function saveLiveRoomOutputs(
       ...checked.data.map((output, position) =>
         db
           .prepare(
-            `INSERT INTO event_agenda_room_outputs(event_id,room_id,output_key,name,code,role,scene_slug,position,updated_at,updated_by_user_id)
-             VALUES (?,?,?,?,?,?,?,?,?,?)`,
+            `INSERT INTO event_agenda_room_outputs(event_id,room_id,output_key,name,code,role,scene_slug,scene_locked,position,updated_at,updated_by_user_id)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
           )
           .bind(
             event.id,
@@ -118,6 +125,7 @@ export async function saveLiveRoomOutputs(
             output.code,
             output.role,
             output.scene,
+            output.sceneLocked ? 1 : 0,
             position,
             at,
             actor.id,
@@ -132,7 +140,13 @@ export async function saveLiveRoomOutputs(
         "agenda_room",
         roomId,
         {
-          outputs: checked.data.map(({ key, code, role, scene }) => ({ key, code, role, scene })),
+          outputs: checked.data.map(({ key, code, role, scene, sceneLocked }) => ({
+            key,
+            code,
+            role,
+            scene,
+            sceneLocked,
+          })),
         },
         at,
       ),

@@ -19,7 +19,14 @@ afterEach(() => {
 const SNAPSHOT = liveSnapshot();
 const CREDIT = SNAPSHOT.session.credits[0]!;
 const TOP = { config: { count: 3 }, questions: [{ id: LIVE_QUESTION, text: "Top one", authorName: null, votes: 3 }] };
-const FOYER: LiveRoomOutput = { key: "foy", name: "Foyer", code: "FOY", role: "exact", scene: null };
+const FOYER: LiveRoomOutput = {
+  key: "foy",
+  name: "Foyer",
+  code: "FOY",
+  role: "exact",
+  scene: null,
+  sceneLocked: false,
+};
 
 /** The room with this on Program, and this held by the screen itself. */
 function room(program: Partial<LiveStage>, own: Partial<LiveStage>, changes: Partial<LiveRoomState> = {}) {
@@ -48,15 +55,17 @@ describe("a room screen that follows Program", () => {
     expect(drawn(room(live, { scene: "questions" })).name).toBe("Sam Speaker");
     // Panel names its people itself and places none.
     expect(drawn(room(live, { scene: "panel" })).name).toBeNull();
-    // The scene its room fixed for the screen is the one it draws, whatever scene was taken to it.
-    const fixed = (scene: string): Partial<LiveRoomState> => ({
+    // The scene its room locked the screen to is the one it draws, whatever scene was taken to it.
+    const setUp = (scene: string, sceneLocked: boolean): Partial<LiveRoomState> => ({
       session: {
         ...SNAPSHOT.session,
-        roomOutputs: [{ key: "projector", name: "Projector", code: "PRJ", role: "follow", scene }],
+        roomOutputs: [{ key: "projector", name: "Projector", code: "PRJ", role: "follow", scene, sceneLocked }],
       },
     });
-    expect(drawn(room(live, { scene: "questions" }, fixed("panel"))).name).toBeNull();
-    expect(drawn(room(live, { scene: "panel" }, fixed("questions"))).name).toBe("Sam Speaker");
+    expect(drawn(room(live, { scene: "questions" }, setUp("panel", true))).name).toBeNull();
+    expect(drawn(room(live, { scene: "panel" }, setUp("questions", true))).name).toBe("Sam Speaker");
+    // A scene it only starts in gives way to the one taken to it.
+    expect(drawn(room(live, { scene: "questions" }, setUp("panel", false))).name).toBe("Sam Speaker");
   });
 
   it("keeps top questions that came on with its scene while Program has none, and follows Program's switch for ones left to the studio", () => {

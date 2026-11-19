@@ -30,10 +30,10 @@ export const ROOM = sampleOverlayRoom(SCREEN_FIXTURE_NOW);
 
 /** A room set up with its own screens: two that follow Program, the speaker's, and a foyer screen you take to. */
 export const GALLERY_ROOM_SCREENS: readonly LiveRoomOutput[] = [
-  { key: "prj-l", name: "Screen left", code: "PRJ L", role: "follow", scene: null },
-  { key: "prj-r", name: "Screen right", code: "PRJ R", role: "follow", scene: null },
-  { key: "stage-display", name: "Speaker", code: "DSP", role: "speaker", scene: null },
-  { key: "foy", name: "Foyer", code: "FOY", role: "exact", scene: "break" },
+  { key: "prj-l", name: "Screen left", code: "PRJ L", role: "follow", scene: null, sceneLocked: false },
+  { key: "prj-r", name: "Screen right", code: "PRJ R", role: "follow", scene: null, sceneLocked: false },
+  { key: "stage-display", name: "Speaker", code: "DSP", role: "speaker", scene: null, sceneLocked: false },
+  { key: "foy", name: "Foyer", code: "FOY", role: "exact", scene: "break", sceneLocked: true },
 ];
 
 /** The sample room with its own screens set up. */

@@ -34,10 +34,10 @@ describe("a room's outputs", () => {
 
   it("saves the list in its order, keeps a key for good and gives the speaker's screen its fixed key", async () => {
     const saved = await save([
-      { key: "projector", name: "Screen left", code: "PRJ L", role: "follow", scene: null },
-      { name: "Screen right", code: "PRJ R", role: "follow", scene: "talk" },
-      { name: "Speaker", code: "DSP", role: "speaker", scene: null },
-      { name: "Foyer", code: "foy", role: "exact", scene: null },
+      { key: "projector", name: "Screen left", code: "PRJ L", role: "follow", scene: null, sceneLocked: false },
+      { name: "Screen right", code: "PRJ R", role: "follow", scene: "break", sceneLocked: true },
+      { name: "Speaker", code: "DSP", role: "speaker", scene: null, sceneLocked: false },
+      { name: "Foyer", code: "foy", role: "exact", scene: null, sceneLocked: false },
     ]);
     expect(saved.status, await saved.clone().text()).toBe(200);
     const outputs = liveRoomOutputsResponseSchema.parse(await saved.json()).outputs;
@@ -47,6 +47,7 @@ describe("a room's outputs", () => {
       ["stage-display", "DSP"],
       ["foy", "FOY"],
     ]);
+    expect(outputs[1]).toMatchObject({ scene: "break", sceneLocked: true });
     const listed = liveRoomOutputsResponseSchema.parse(await (await read()).json()).outputs;
     expect(listed).toEqual(outputs);
   });
@@ -54,13 +55,13 @@ describe("a room's outputs", () => {
   it("refuses a code in use, a second speaker's screen and an empty list", async () => {
     for (const outputs of [
       [
-        { name: "Left", code: "PRJ", role: "follow", scene: null },
-        { name: "Right", code: "PRJ", role: "follow", scene: null },
+        { name: "Left", code: "PRJ", role: "follow", scene: null, sceneLocked: false },
+        { name: "Right", code: "PRJ", role: "follow", scene: null, sceneLocked: false },
       ],
-      [{ name: "Program again", code: "PGM", role: "exact", scene: null }],
+      [{ name: "Program again", code: "PGM", role: "exact", scene: null, sceneLocked: false }],
       [
-        { name: "Speaker", code: "DSP", role: "speaker", scene: null },
-        { name: "Lectern", code: "LEC", role: "speaker", scene: null },
+        { name: "Speaker", code: "DSP", role: "speaker", scene: null, sceneLocked: false },
+        { name: "Lectern", code: "LEC", role: "speaker", scene: null, sceneLocked: false },
       ],
       [],
     ]) {
@@ -89,7 +90,7 @@ describe("a new output's key", () => {
     expect(key).toBe("preview-2");
     expect(
       liveRoomOutputsRequestSchema.safeParse({
-        outputs: [{ key: "preview", name: "X", code: "X", role: "exact", scene: null }],
+        outputs: [{ key: "preview", name: "X", code: "X", role: "exact", scene: null, sceneLocked: false }],
       }).success,
     ).toBe(false);
   });

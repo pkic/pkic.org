@@ -605,7 +605,7 @@ describe("live room auxiliary outputs", () => {
     expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
   });
 
-  it("loads the scene a room fixed for a screen that follows Program before anyone takes to it, once, and keeps it", async () => {
+  it("loads the scene a room locked a screen that follows Program to before anyone takes to it, once, and keeps it", async () => {
     const now = new Date().toISOString();
     const screens = [
       ["projector", "Projector", "PRJ", "follow", "questions"],
@@ -614,9 +614,9 @@ describe("live room auxiliary outputs", () => {
     ] as const;
     for (const [position, [key, name, code, role, scene]] of screens.entries())
       await env.DB.prepare(
-        "INSERT INTO event_agenda_room_outputs(event_id,room_id,output_key,name,code,role,scene_slug,position,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO event_agenda_room_outputs(event_id,room_id,output_key,name,code,role,scene_slug,scene_locked,position,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
       )
-        .bind(f.eventId, f.roomId, key, name, code, role, scene, position, now)
+        .bind(f.eventId, f.roomId, key, name, code, role, scene, scene ? 1 : 0, position, now)
         .run();
 
     // Nobody took anything to the projector: it is in its Q&A scene with the top questions that come on with it.
@@ -627,8 +627,11 @@ describe("live room auxiliary outputs", () => {
       topQuestions: DEFAULT_LIVE_TOP_QUESTIONS_CONFIG,
       scene: "questions",
     });
-    // A screen that shows what you take to it is left as it was: nothing comes on by itself there.
-    expect(first.outputs.foy).toBeUndefined();
+    // A screen that shows what you take to it is in its scene, and nothing comes on by itself there.
+    expect(liveCompositionInput(first.outputs.foy)).toEqual({
+      ...liveCompositionInput(EMPTY_LIVE_STAGE),
+      scene: "break",
+    });
 
     // An operator switches the top questions off and puts a timer there: the next join loads nothing back.
     const held = { ...EMPTY_COMPOSITION, timerGraphics: [GRAPHIC] };
@@ -642,11 +645,11 @@ describe("live room auxiliary outputs", () => {
     const rejoined = await (await f.connect({ person: "operator" })).next("room.snapshot");
     expect(rejoined.outputs.projector).toEqual(off);
 
-    // A take names Preview's scene, yet the screen keeps the one its room fixed and starts again in it.
+    // A take names Preview's scene, yet the screen keeps the one its room locked it to and starts again in it.
     const taken = await screenAfter(operator, { type: "aux.scene", output: "projector", scene: "break" });
     expect(taken).toMatchObject({ scene: "questions", schedule: null, timerGraphics: [] });
     expect(taken.topQuestions).not.toBeNull();
-    // So does a whole shot, which a screen takes while its sync is off, and one taken to any screen with a fixed scene.
+    // So does a whole shot, which a screen takes while its sync is off, and one taken to any locked screen.
     const shot = await screenAfter(operator, {
       type: "aux.set",
       output: "projector",
@@ -680,6 +683,26 @@ describe("live room auxiliary outputs", () => {
       schedule: { ...DEFAULT_LIVE_SCHEDULE_CONFIG, scope: "all-rooms" },
       scene: "break",
     });
+  });
+
+  it("starts a screen in the scene its room set up for it, and keeps the scene a take brings after that", async () => {
+    await env.DB.prepare(
+      "INSERT INTO event_agenda_room_outputs(event_id,room_id,output_key,name,code,role,scene_slug,scene_locked,position,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
+    )
+      .bind(f.eventId, f.roomId, "projector", "Projector", "PRJ", "follow", "questions", 0, 0, new Date().toISOString())
+      .run();
+    const operator = await f.connect({ person: "operator" });
+    const first = await operator.next("room.snapshot");
+    expect(liveCompositionInput(first.outputs.projector)).toMatchObject({
+      scene: "questions",
+      topQuestions: DEFAULT_LIVE_TOP_QUESTIONS_CONFIG,
+    });
+
+    // A take changes its scene, and the next join leaves it there.
+    const taken = await screenAfter(operator, { type: "aux.scene", output: "projector", scene: "break" });
+    expect(taken.scene).toBe("break");
+    const rejoined = await (await f.connect({ person: "operator" })).next("room.snapshot");
+    expect(rejoined.outputs.projector.scene).toBe("break");
   });
 
   it("refuses a source that names an output the room does not draw", async () => {

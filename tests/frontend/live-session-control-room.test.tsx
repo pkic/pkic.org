@@ -100,7 +100,7 @@ describe("live control room Transition", () => {
         ...base.session,
         roomOutputs: [
           ...DEFAULT_LIVE_ROOM_OUTPUTS,
-          { key: "foy", name: "Foyer", code: "FOY", role: "exact", scene: null },
+          { key: "foy", name: "Foyer", code: "FOY", role: "exact", scene: null, sceneLocked: false },
         ],
       },
     });

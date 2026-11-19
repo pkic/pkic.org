@@ -181,7 +181,9 @@ describe("room screens", () => {
     // The scene its room fixed for the screen wins over the one taken to it.
     state.session = {
       ...state.session,
-      roomOutputs: [{ key: "projector", name: "Projector", code: "PRJ", role: "follow", scene: "break" }],
+      roomOutputs: [
+        { key: "projector", name: "Projector", code: "PRJ", role: "follow", scene: "break", sceneLocked: true },
+      ],
     };
     expect(liveScreens(liveTargets(state), lowerThird).following).toEqual(["projector"]);
     expect(liveScreens(liveTargets(state), layer).following).toEqual([]);

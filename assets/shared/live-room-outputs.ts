@@ -1,3 +1,4 @@
+import { LIVE_OVERLAY_DEFAULT_LAYOUT } from "./schemas/live-overlay-layout";
 import {
   DEFAULT_LIVE_ROOM_OUTPUTS,
   LIVE_SPEAKER_OUTPUT_KEY,
@@ -54,24 +55,26 @@ export const LIVE_ROOM_OUTPUT_ROLE_COPY: Record<LiveRoomOutputRole, { label: str
   },
 };
 
-/** What a screen draws when the room fixed no scene for it: the scene last taken to it from Preview. */
+/** Where Program's scene comes from: whatever is taken to it from Preview. */
 export const LIVE_ROOM_OUTPUT_SCENE_TAKEN = "From Preview";
 /** The speaker's screen draws its own layout, not a scene. */
 export const LIVE_SPEAKER_SCENE = "Fixed";
 
-/** The scene a screen draws, by name: the one the room fixed for it, else where it takes one from. */
+/** A screen's scene as its room set it up: "Always Break" for a locked one, "Starts in Default" otherwise. */
 export function liveOutputSceneLabel(
-  output: Pick<LiveRoomOutput, "role" | "scene">,
+  output: Pick<LiveRoomOutput, "role" | "scene" | "sceneLocked">,
   scenes: ReadonlyArray<{ slug: string; name: string }>,
 ): string {
   if (output.role === "speaker") return LIVE_SPEAKER_SCENE;
-  const fixed = output.scene ? scenes.find((scene) => scene.slug === output.scene) : undefined;
-  return fixed?.name ?? LIVE_ROOM_OUTPUT_SCENE_TAKEN;
+  const slug = output.scene ?? LIVE_OVERLAY_DEFAULT_LAYOUT;
+  const name = scenes.find((scene) => scene.slug === slug)?.name ?? slug;
+  return output.sceneLocked ? `Always ${name}` : `Starts in ${name}`;
 }
 
-/** The scene the room fixed for one of its screens; null for a screen that draws the scene last taken to it. */
+/** The scene a locked screen always draws; null for a screen that draws the scene last taken to it. */
 export function liveOutputFixedScene(outputs: readonly LiveRoomOutput[], key: LiveAuxOutput): string | null {
-  return outputs.find((output) => output.key === key)?.scene ?? null;
+  const output = outputs.find((entry) => entry.key === key);
+  return output?.sceneLocked ? (output.scene ?? LIVE_OVERLAY_DEFAULT_LAYOUT) : null;
 }
 
 /** An output's name, code and purpose; an output the room no longer lists keeps its built-in name. */
