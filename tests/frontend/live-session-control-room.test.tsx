@@ -600,7 +600,9 @@ describe("live control room states", () => {
         "Something went wrong on our side, so the live room isn't available. Let us know and quote reference 8f1b2c3d4e5f6a7b-AMS.",
       );
       expect(alert.textContent).not.toContain("connection");
-      void act(() => vi.advanceTimersByTime(60_000));
+      void act(() => {
+        vi.advanceTimersByTime(60_000);
+      });
     } finally {
       vi.useRealTimers();
     }
