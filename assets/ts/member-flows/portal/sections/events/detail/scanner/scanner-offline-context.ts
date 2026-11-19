@@ -137,7 +137,6 @@ export function scannerOfflineLeaseCurrent(
 
 /** List only current leases for the locally signed-in operator, without restoring portal access. */
 export async function listPreparedScannerContexts(): Promise<ScannerOfflineContext[]> {
-  if (!scannerTransportUnavailable.value) return [];
   const active = await readActiveUserSession();
   if (!active || (await scannerUploadSuspended(active.operatorUserId, active.sessionId))) return [];
   const db = await openScanStorage();

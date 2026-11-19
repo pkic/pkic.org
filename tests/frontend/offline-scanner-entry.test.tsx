@@ -50,6 +50,8 @@ it("offers a prepared badge collection link from the portal entry point", async 
   await vi.waitFor(() => expect(host.textContent).toContain("Continue scanning offline"));
   const entry = host.querySelector<HTMLAnchorElement>("a[href*='scannerPurpose=collection']")!;
   expect(entry.textContent).toContain("Badge collection");
+  expect(entry.classList.contains("pk-action-tile")).toBe(true);
+  expect(entry.querySelector("svg")).not.toBeNull();
   expect(entry.getAttribute("href")).toContain("scanAction=attendance");
   expect(host.textContent).not.toContain("Saved scanner opened");
 });
@@ -91,14 +93,15 @@ it("lists each prepared scanner task with its own link", async () => {
     },
   ]);
   await act(() => render(<OfflineScannerBootstrap route={null} onCheckSignIn={() => {}} />, host));
-  await vi.waitFor(() => expect(host.querySelectorAll("a[href*='offlineContext']")).toHaveLength(5));
-  expect(
-    [...host.querySelectorAll<HTMLAnchorElement>("a[href*='offlineContext']")].map((link) => link.textContent),
-  ).toEqual([
+  await vi.waitFor(() => expect(host.querySelectorAll(".pk-action-tiles a[href*='offlineContext']")).toHaveLength(5));
+  const tiles = [...host.querySelectorAll<HTMLAnchorElement>(".pk-action-tiles a[href*='offlineContext']")];
+  expect(tiles.every((tile) => tile.classList.contains("pk-action-tile") && tile.querySelector("svg"))).toBe(true);
+  expect(tiles.map((tile) => tile.querySelector(".pk-action-tile__label")?.textContent)).toEqual([
     "Badge collection",
     "Venue entrance",
-    "Venue entrance · Check registration",
+    "Venue entrance",
     "Venue exit",
-    "Sessions · Opening session · Main hall · Admission decision",
+    "Opening session",
   ]);
+  expect(tiles[4]?.textContent).toContain("Main hall · Admission decision");
 });

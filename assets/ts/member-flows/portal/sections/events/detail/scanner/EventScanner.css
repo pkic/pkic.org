@@ -1,4 +1,19 @@
 @layer components {
+  .pk-scanner-offline-entry {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+  }
+  .pk-scanner-offline-entry .pk-login__card-wrap {
+    max-width: 36rem;
+  }
+  .pk-scanner-offline-entry .pk-scanner-destinations .pk-action-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: none;
+  }
+  .pk-scanner-offline-entry .pk-scanner-destinations .pk-action-tile {
+    min-block-size: 7rem;
+  }
   .pk-scanner-destinations .pk-action-tiles {
     grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr));
     gap: var(--pk-4);

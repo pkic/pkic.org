@@ -13,6 +13,7 @@ import { lazy, Suspense } from "preact/compat";
 import {
   scannerCollectorPath,
   clearScannerOfflineContexts,
+  listPreparedScannerContexts,
   scannerTransportUnavailable,
 } from "./sections/events/detail/scanner/scanner-offline-context";
 import { getJson, postJson, ApiClientError } from "../../shared/api-client";
@@ -136,7 +137,13 @@ export function App() {
           error.status === 401 ||
           error.status === 403 ||
           error.status === 429 ||
-          error.status >= 500);
+          error.status >= 500) &&
+        // An HTTP refusal must not replace normal sign-in with an empty scanner chooser.
+        (error.status === 0 ||
+          (await listPreparedScannerContexts().then(
+            (contexts) => contexts.length > 0,
+            () => true,
+          )));
       if (scannerFallback) {
         scannerTransportUnavailable.value = true;
         setSessionError("We could not check sign-in. Saved scanner preparation remains available on this device.");

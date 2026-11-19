@@ -8,6 +8,7 @@ import { clearAuth, expirePortalSession, portalSession, isAuthed } from "../../a
 const mocks = vi.hoisted(() => ({
   registerWorker: vi.fn(),
   clearPreparation: vi.fn(),
+  preparedContexts: vi.fn(),
   recordSession: vi.fn(),
   pendingLogout: vi.fn(),
   activeSession: vi.fn(),
@@ -23,6 +24,7 @@ vi.mock(
       typeof import("../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-offline-context")
     >()),
     clearScannerOfflineContexts: mocks.clearPreparation,
+    listPreparedScannerContexts: mocks.preparedContexts,
   }),
 );
 vi.mock("../../assets/ts/shared/pending-user-logout", () => ({
@@ -83,6 +85,7 @@ beforeEach(() => {
   window.location.hash = "#/events/synthetic-event/scanner";
   vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
   mocks.clearPreparation.mockReset().mockResolvedValue(undefined);
+  mocks.preparedContexts.mockReset().mockResolvedValue([]);
   mocks.recordSession.mockReset();
   mocks.pendingLogout.mockReset().mockResolvedValue(null);
   mocks.activeSession.mockReset().mockResolvedValue(null);
@@ -244,6 +247,7 @@ it("moves an expired web sign-in to the local scanner route without erasing prep
   expect(mocks.clearPreparation).not.toHaveBeenCalled();
 });
 it.each([401, 403])("does not erase a newer local scanner after a delayed HTTP %s refusal", async (status) => {
+  mocks.preparedContexts.mockResolvedValue([{}]);
   const original = {
     sessionId: "11111111-1111-4111-8111-111111111111",
     operatorUserId: "22222222-2222-4222-8222-222222222222",
@@ -274,6 +278,7 @@ it.each([401, 403])("does not erase a newer local scanner after a delayed HTTP %
   expect(portalSession.value).toBeNull();
 });
 it.each([401, 403, 429, 500, 503])("offers a saved scanner after HTTP %s on portal sign-in", async (status) => {
+  mocks.preparedContexts.mockResolvedValue([{}]);
   mocks.activeSession.mockResolvedValue({
     sessionId: "11111111-1111-4111-8111-111111111111",
     operatorUserId: "22222222-2222-4222-8222-222222222222",
@@ -287,5 +292,40 @@ it.each([401, 403, 429, 500, 503])("offers a saved scanner after HTTP %s on port
   await mount();
   await vi.waitFor(() => expect(host.textContent).toContain("Prepared offline scanner"));
   expect(portalSession.value).toBeNull();
+  expect(mocks.clearPreparation).not.toHaveBeenCalled();
+});
+it.each([401, 403, 429, 500, 503])(
+  "shows ordinary sign-in after HTTP %s when no scanner is prepared",
+  async (status) => {
+    mocks.activeSession.mockResolvedValue({
+      sessionId: "11111111-1111-4111-8111-111111111111",
+      operatorUserId: "22222222-2222-4222-8222-222222222222",
+    });
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: "AUTH_REQUIRED", message: "Refused" } }), {
+        status,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    await mount();
+    await vi.waitFor(() => expect(host.textContent).toContain("Sign in"));
+    expect(host.textContent).not.toContain("Prepared offline scanner");
+    expect(scannerTransportUnavailable.value).toBe(false);
+  },
+);
+it("preserves scanner preparation when its local inventory cannot be read after HTTP 403", async () => {
+  mocks.activeSession.mockResolvedValue({
+    sessionId: "11111111-1111-4111-8111-111111111111",
+    operatorUserId: "22222222-2222-4222-8222-222222222222",
+  });
+  mocks.preparedContexts.mockRejectedValue(new Error("Local storage unavailable"));
+  fetchMock.mockResolvedValue(
+    new Response(JSON.stringify({ error: { code: "AUTH_REQUIRED", message: "Refused" } }), {
+      status: 403,
+      headers: { "content-type": "application/json" },
+    }),
+  );
+  await mount();
+  await vi.waitFor(() => expect(host.textContent).toContain("Prepared offline scanner"));
   expect(mocks.clearPreparation).not.toHaveBeenCalled();
 });

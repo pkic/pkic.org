@@ -1,9 +1,55 @@
-import { scannerEntranceAction } from "./ScannerModeSelect";
+import { scannerActionLabel, scannerEntranceAction } from "./ScannerModeSelect";
 import type { EventScanRequest } from "../../../../../../../shared/schemas/event-participation-scanning";
 import { IconPrint } from "../../../../../../components/icons/app-navigation";
-import { ActionTile, ActionTiles } from "../../../../../../ui/ActionTile";
+import { ActionTile, ActionTiles, type ActionTileProps } from "../../../../../../ui/ActionTile";
 import { IconCalendar } from "../../../../../../ui/MediaIcons";
 import { ScannerModeIcon } from "./ScannerModeIcon";
+import "./EventScanner.css";
+
+type ScannerTaskTileProps = Pick<ActionTileProps, "href" | "onClick" | "disabled"> & {
+  action: EventScanRequest["action"];
+  purpose?: "scan" | "collection";
+  occurrenceId?: string | null;
+  targetLabel?: string;
+  roomLabel?: string;
+  eventLabel?: string;
+};
+
+/** One presentation for the same scanner task online and on the offline entry screen. */
+export function ScannerTaskTile({
+  action,
+  purpose,
+  occurrenceId,
+  targetLabel,
+  roomLabel,
+  eventLabel,
+  ...tile
+}: ScannerTaskTileProps) {
+  let label: string;
+  let hint: string;
+  if (purpose === "collection") {
+    label = "Badge collection";
+    hint = "Check in and find a badge";
+  } else if (occurrenceId) {
+    label = targetLabel ?? "Session scanner";
+    hint = [roomLabel, scannerActionLabel(action)].filter(Boolean).join(" · ");
+  } else if (action === "checkout") {
+    label = "Venue exit";
+    hint = "Check people out";
+  } else {
+    label = "Venue entrance";
+    hint =
+      action === "attendance" ? "Check people in" : action === "admission" ? "Check admission" : "Check registration";
+  }
+  return (
+    <ActionTile
+      icon={<ScannerModeIcon action={action} role={occurrenceId ? "session" : undefined} />}
+      label={label}
+      hint={eventLabel ? `${hint} · ${eventLabel}` : hint}
+      {...tile}
+    />
+  );
+}
 
 /** The task determines the protocol action; staff do not need to configure a scan mode. */
 export function ScannerDestinationTiles({
@@ -28,41 +74,17 @@ export function ScannerDestinationTiles({
       <ActionTiles label="Choose a scanner task">
         {onCollection && allowedActions.includes("attendance") && (
           <li>
-            <ActionTile
-              icon={<ScannerModeIcon action="attendance" />}
-              label="Badge collection"
-              hint="Check in and find a badge"
-              disabled={disabled}
-              onClick={onCollection}
-            />
+            <ScannerTaskTile action="attendance" purpose="collection" disabled={disabled} onClick={onCollection} />
           </li>
         )}
         {allowedActions.includes(entrance) && (
           <li>
-            <ActionTile
-              icon={<ScannerModeIcon action={entrance} />}
-              label="Venue entrance"
-              hint={
-                entrance === "attendance"
-                  ? "Check people in"
-                  : entrance === "admission"
-                    ? "Check admission"
-                    : "Check registration"
-              }
-              disabled={disabled}
-              onClick={() => onVenue(entrance)}
-            />
+            <ScannerTaskTile action={entrance} disabled={disabled} onClick={() => onVenue(entrance)} />
           </li>
         )}
         {allowedActions.includes("checkout") && (
           <li>
-            <ActionTile
-              icon={<ScannerModeIcon action="checkout" />}
-              label="Venue exit"
-              hint="Check people out"
-              disabled={disabled}
-              onClick={() => onVenue("checkout")}
-            />
+            <ScannerTaskTile action="checkout" disabled={disabled} onClick={() => onVenue("checkout")} />
           </li>
         )}
         <li>
