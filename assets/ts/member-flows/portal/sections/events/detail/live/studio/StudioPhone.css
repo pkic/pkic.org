@@ -56,56 +56,41 @@
   .pk-studio-phone__session .pk-btn {
     min-block-size: 2.75rem;
   }
-  /*
-   * Preview and Program side by side, as wide as the phone allows, and one slim row under them: Preview's tag
-   * and scene, the Transition's arrows, then Program's tag and scene. A thumbnail's own box dissolves into
-   * this grid, so its picture takes the top row and its names the bottom one. The two middle tracks share the
-   * arrows' width, which keeps the two pictures the same size.
-   */
   .pk-studio-phone__switcher {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto minmax(0, 1fr);
-    grid-template-areas:
-      "preview preview program program"
-      "preview-scene take take program-scene";
-    align-items: center;
-    gap: var(--pk-1) var(--pk-2);
-  }
-  .pk-studio-phone__thumb {
-    display: contents;
-  }
-  .pk-studio-phone__thumb[data-tally="preview"] > .pk-studio-phone__thumb-picture {
-    grid-area: preview;
-  }
-  .pk-studio-phone__thumb[data-tally="program"] > .pk-studio-phone__thumb-picture {
-    grid-area: program;
-  }
-  .pk-studio-phone__thumb[data-tally="preview"] > .pk-studio-phone__thumb-scene {
-    grid-area: preview-scene;
-    justify-content: flex-start;
-  }
-  .pk-studio-phone__thumb[data-tally="program"] > .pk-studio-phone__thumb-scene {
-    grid-area: program-scene;
-    justify-content: flex-end;
+    /* Preview, the Transition between them, then Program. */
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: stretch;
+    gap: var(--pk-2);
   }
   .pk-studio-phone__switcher .pk-studio-transition {
-    grid-area: take;
-    grid-auto-flow: column;
+    gap: var(--pk-2);
     padding: 0;
   }
   /*
-   * On a phone a take button is its arrow alone, in the color of the output it goes to. It keeps its full name
-   * for a screen reader.
+   * On a phone a take button is its arrow alone, small, in the color of the output it goes to, between the two
+   * pictures. It keeps its full name for a screen reader. The button is drawn smaller than a thumb, by the
+   * owner's choice, and takes a touch a little outside its edge, up to the gap around it.
    */
   .pk-studio-phone__switcher .pk-studio-transition__name {
     display: none;
   }
   .pk-studio-phone__switcher .pk-studio-transition > .pk-btn.pk-studio-transition__take {
-    justify-content: center;
-  }
-  /* The picture in its output's color; its tools sit on it. */
-  .pk-studio-phone__thumb-picture {
     position: relative;
+    justify-content: center;
+    min-block-size: 2rem;
+    min-inline-size: 2rem;
+    padding: 0;
+  }
+  .pk-studio-phone__switcher .pk-studio-transition > .pk-btn.pk-studio-transition__take::after {
+    content: "";
+    position: absolute;
+    inset: calc(var(--pk-1) * -1);
+  }
+  .pk-studio-phone__thumb {
+    position: relative;
+    display: flex;
+    flex-direction: column;
     min-inline-size: 0;
     border: 2px solid var(--tally, var(--pk-line));
     border-radius: var(--pk-radius);
@@ -253,22 +238,22 @@
     .pk-affiliation-rotation__unit {
     animation-name: pk-studio-picture-titles-5 !important;
   }
-  /* An output's tag and its scene's name, small, beside the arrows; a long name shortens before it pushes them. */
+  /* The output's scene under its picture, filling the height the Transition's buttons give the row. */
   .pk-studio-phone__thumb-scene {
     display: flex;
+    flex: 1;
     align-items: center;
+    justify-content: center;
     min-inline-size: 0;
     gap: var(--pk-1);
+    padding: 2px var(--pk-1);
     color: var(--pk-ink-muted);
     font-size: var(--pk-text-2xs);
   }
+  /* Each output's tag and its scene's name sit under its picture; Preview's scenes open from the tools on the picture. */
   .pk-studio-phone__thumb-scene .pk-studio-monitor__purpose {
-    flex: 0 1 auto;
-    min-inline-size: 0;
-    overflow: hidden;
     font-size: inherit;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    text-align: center;
   }
   /*
    * The scenes, Clear and Full screen at the end of the picture's top edge. Three thumb-sized tools fit a
@@ -367,5 +352,18 @@
   }
   .pk-studio-phone .pk-studio-monitor__tile > .pk-studio-monitor__screen {
     inline-size: 100%;
+  }
+}
+
+/*
+ * Touch sizing gives every button a thumb's size in the utilities layer; the phone's take buttons are the one
+ * exception, so they answer it there.
+ */
+@layer utilities {
+  @media (any-pointer: coarse) {
+    .pk-studio-phone__switcher .pk-studio-transition > .pk-btn.pk-studio-transition__take {
+      min-block-size: 2rem;
+      min-inline-size: 2rem;
+    }
   }
 }
