@@ -58,6 +58,17 @@
   .pk-studio-scene__picture .pk-live-overlay {
     transform: scale(var(--scene-scale, 0));
   }
+  /*
+   * A thumbnail is a picture: nothing in it moves. A running animation, such
+   * as the ticker's scroll, gets a graphics layer of its own at the graphic's
+   * full broadcast size, and a phone's browser runs out of memory with a
+   * strip of them. This overrides each graphic's own motion, so it wins
+   * whatever their selectors.
+   */
+  .pk-studio-scene__picture :is(*, ::before, ::after) {
+    animation: none !important;
+    transition: none !important;
+  }
   /* A thumbnail with no graphic: the scene's boxes as faint hairlines, so each scene still reads as itself. */
   .pk-studio-scene__outline {
     fill: none;
