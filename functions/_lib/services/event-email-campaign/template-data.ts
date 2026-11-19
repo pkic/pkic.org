@@ -75,6 +75,7 @@ function buildAttendeeTemplateData(
     label: string | null;
     optionLabel?: string | null;
     accessMode?: EventAttendanceAccessMode;
+    waitlistAlternativeJson?: string | null;
   }>,
   dayWaitlist: Array<{ dayDate: string; status: string }>,
 ): Record<string, unknown> {
@@ -94,6 +95,7 @@ function buildAttendeeTemplateData(
     ...buildRegistrationEmailStatusData(row.status, dayWaitlist),
     attendanceLabel: attendanceData.attendanceLabel,
     dayAttendance: attendanceData.dayAttendance,
+    waitlistAlternatives: attendanceData.waitlistAlternatives,
     dayWaitlist,
     acceptedTermsText: emailMarkdownText(row.acceptedTermsText),
     manageUrl: undefined,

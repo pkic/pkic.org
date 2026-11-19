@@ -298,7 +298,8 @@ The PKI Consortium is a vendor-neutral community of PKI practitioners working to
   },
   // ─────────────────────────────────────────────────────────────────────────
   // Shared registration details
-  // Variables: registration and custom-answer fields
+  // Variables: registration and custom-answer fields, dayAttendance,
+  //            hasActiveDayWaitlist, waitlistAlternatives, manageUrl
   // Partials:  {{> reg_details}}
   // ─────────────────────────────────────────────────────────────────────────
   {
@@ -317,7 +318,7 @@ The PKI Consortium is a vendor-neutral community of PKI practitioners working to
 > {{/each}}{{#if acceptedTermsText}}**Terms agreed:**<br>
 > - {{acceptedTermsText}}{{/if}}
 
-{{#if hasActiveDayWaitlist}}<div class="notice notice-warning"><strong>You can't enter the venue on a waitlisted day.</strong> Only days marked confirmed give you access. We'll email you if a seat opens up.</div>{{/if}}
+{{#if hasActiveDayWaitlist}}<div class="notice notice-warning"><strong>You can't enter the venue on a waitlisted day.</strong> Only days marked confirmed give you access. We'll email you if a seat opens up.{{#each waitlistAlternatives}}<br><br>We recommend <strong>{{label}}</strong> instead{{#if description}}: {{description}}{{/if}}{{#if limited}}, while space lasts{{/if}}.{{#if manageUrl}} To switch, <a href="{{manageUrl}}">change your registration</a>.{{/if}}{{/each}}</div>{{/if}}
 `,
   },
   // ─────────────────────────────────────────────────────────────────────────

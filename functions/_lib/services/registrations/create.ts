@@ -1,4 +1,3 @@
-import { eventAttendanceAccessMode } from "../../../../assets/shared/event-attendance-access";
 import type { EventDayCapacityGuardPlan } from "./day-waitlist-capacity";
 import { assertRegistrationRestorationAllowed } from "./restoration";
 import type { EventParticipantRole } from "../../../../assets/shared/schemas/participant-roles";
@@ -16,7 +15,7 @@ import { nowIso, addHours } from "../../utils/time";
 import { prepareReferralByCode, planReferralConversionStatements, type ReferralRow } from "../referrals";
 import { prepareEngagementStatement } from "../engagement";
 import {
-  configuredAttendanceOptions,
+  selectedDayEmailAttendance,
   prepareEventDays,
   preparePreviousRegistrationDayAttendance,
   planRegistrationDayAttendanceChange,
@@ -97,6 +96,7 @@ export async function buildCreateRegistration(
     label: string | null;
     optionLabel: string | null;
     accessMode: import("../../../../assets/shared/event-attendance-access").EventAttendanceAccessMode;
+    waitlistAlternativeJson: string | null;
     startsAt: string | null;
     endsAt: string | null;
   }>;
@@ -331,26 +331,13 @@ export async function buildCreateRegistration(
     reactivated: Boolean(existing),
     statements,
     plannedDayWaitlist: waitlist.activeRows,
-    dayAttendance: (payload.dayAttendance ?? []).map((selection) => {
-      const day = configuredEventDays.find((entry) => entry.day_date === selection.dayDate);
-      return {
-        dayDate: selection.dayDate,
-        attendanceType: selection.attendanceType,
-        label: day?.label ?? null,
-        accessMode: eventAttendanceAccessMode(
-          day
-            ? (configuredAttendanceOptions(day).find((option) => option.value === selection.attendanceType) ?? {
-                value: selection.attendanceType,
-              })
-            : { value: selection.attendanceType },
-        ),
-        startsAt: day?.starts_at ?? null,
-        endsAt: day?.ends_at ?? null,
-        optionLabel: day
-          ? (configuredAttendanceOptions(day).find((option) => option.value === selection.attendanceType)?.label ??
-            null)
-          : null,
-      };
-    }),
+    dayAttendance: (payload.dayAttendance ?? []).map((selection) => ({
+      dayDate: selection.dayDate,
+      attendanceType: selection.attendanceType,
+      ...selectedDayEmailAttendance(
+        configuredEventDays.find((entry) => entry.day_date === selection.dayDate),
+        selection.attendanceType,
+      ),
+    })),
   };
 }

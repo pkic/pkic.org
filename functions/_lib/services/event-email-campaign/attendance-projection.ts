@@ -1,6 +1,10 @@
 import { batchRows } from "../../db/pagination";
 import { stringifyJson } from "../../utils/json";
-import { attendanceOptionLabelSql, eventDayOptionAccessSql } from "../event-attendance-option-sql";
+import {
+  attendanceOptionLabelSql,
+  eventDayOptionAccessSql,
+  waitlistAlternativeOptionSql,
+} from "../event-attendance-option-sql";
 import { dayWaitlistStatusSql } from "../registrations/day-waitlist-policy";
 import type { DatabaseLike } from "../../types";
 import type {
@@ -21,6 +25,7 @@ function indexAttendanceRows(rows: AttendeeDayAttendanceRow[]): Map<string, Atte
       label: row.label,
       optionLabel: row.optionLabel,
       accessMode: row.accessMode,
+      waitlistAlternativeJson: row.waitlistAlternativeJson,
     });
     byRegistration.set(row.registration_id, entries);
   }
@@ -44,7 +49,8 @@ function prepareDayAttendance(db: DatabaseLike, registrationIdsJson: string) {
             rda.attendance_type AS attendanceType,
             ed.label AS label,
             ${attendanceOptionLabelSql("ed", "rda.attendance_type")} AS optionLabel,
-            ${eventDayOptionAccessSql("ed", "rda.attendance_type")} AS accessMode
+            ${eventDayOptionAccessSql("ed", "rda.attendance_type")} AS accessMode,
+            ${waitlistAlternativeOptionSql("ed", "rda.attendance_type")} AS waitlistAlternativeJson
      FROM registration_day_attendance rda
      JOIN event_days ed ON ed.id = rda.event_day_id
      WHERE rda.registration_id IN (SELECT value FROM json_each(?))

@@ -60,6 +60,9 @@ export const PREVIEW_DEFAULTS: Record<string, unknown> = {
       statusNote: "waitlisted, not confirmed",
     },
   ],
+  waitlistAlternatives: [
+    { label: "Livestream Lounge", description: "Watch together at a partner venue", limited: true },
+  ],
   // Custom answers
   customAnswerRows: [
     { label: "Session interests", displayValue: "Web PKI" },

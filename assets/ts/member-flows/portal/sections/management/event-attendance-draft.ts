@@ -25,7 +25,11 @@ export function attendanceSettingsDraft(response: EventDaysManagementResponse, z
   const definitions = new Map<string, AttendanceDefinition>();
   for (const day of response.days)
     for (const option of day.attendanceOptions) {
-      if (definitions.has(option.value)) continue;
+      const known = definitions.get(option.value);
+      // A day that does not offer the alternative stores none, so take it from any day that names it.
+      if (known && !known.option.waitlistAlternative && option.waitlistAlternative)
+        known.option = { ...known.option, waitlistAlternative: option.waitlistAlternative };
+      if (known) continue;
       const { capacity: _capacity, enabled: _enabled, ...metadata } = option;
       definitions.set(option.value, { id: crypto.randomUUID(), originalValue: option.value, option: metadata });
     }
@@ -67,18 +71,61 @@ export function dayOptionEntries(draft: AttendanceSettingsDraft, dayIndex: numbe
 
 export function attendanceConfiguration(draft: AttendanceSettingsDraft): EventDaysReplaceInput {
   return {
-    days: draft.days.map((day, index) => ({
-      date: day.date,
-      label: day.label || undefined,
-      startTime: day.startTime || undefined,
-      endTime: day.endTime || undefined,
-      sortOrder: index * 10,
-      attendanceOptions: dayOptionEntries(draft, index).map(({ definition, choice }) => ({
-        ...definition.option,
-        capacity: choice.capacity,
-        ...(choice.enabled ? {} : { enabled: false }),
-      })),
-    })),
+    days: draft.days.map((day, index) => {
+      const entries = dayOptionEntries(draft, index);
+      const values = new Set(entries.map(({ definition }) => definition.option.value));
+      return {
+        date: day.date,
+        label: day.label || undefined,
+        startTime: day.startTime || undefined,
+        endTime: day.endTime || undefined,
+        sortOrder: index * 10,
+        attendanceOptions: entries.map(({ definition, choice }) => {
+          const { waitlistAlternative, ...option } = definition.option;
+          return {
+            ...option,
+            // A day names an alternative only when it has that option too.
+            ...(waitlistAlternative && values.has(waitlistAlternative) ? { waitlistAlternative } : {}),
+            capacity: choice.capacity,
+            ...(choice.enabled ? {} : { enabled: false }),
+          };
+        }),
+      };
+    }),
+  };
+}
+
+/** Apply an edit to one option; options that name it as their waitlist alternative follow a new key. */
+export function updateAttendanceDefinition(
+  draft: AttendanceSettingsDraft,
+  id: string,
+  patch: Partial<AttendanceDefinition["option"]>,
+): AttendanceSettingsDraft {
+  const previous = draft.definitions.find((definition) => definition.id === id)?.option.value;
+  const renamed = patch.value !== undefined && previous !== undefined && patch.value !== previous;
+  return {
+    ...draft,
+    definitions: draft.definitions.map((definition) => {
+      if (definition.id === id) return { ...definition, option: { ...definition.option, ...patch } };
+      if (renamed && definition.option.waitlistAlternative === previous)
+        return { ...definition, option: { ...definition.option, waitlistAlternative: patch.value } };
+      return definition;
+    }),
+  };
+}
+
+/** Remove an option, and clear it where another option names it as the waitlist alternative. */
+export function removeAttendanceDefinition(draft: AttendanceSettingsDraft, id: string): AttendanceSettingsDraft {
+  const removed = draft.definitions.find((definition) => definition.id === id)?.option.value;
+  return {
+    ...draft,
+    definitions: draft.definitions
+      .filter((definition) => definition.id !== id)
+      .map((definition) =>
+        removed !== undefined && definition.option.waitlistAlternative === removed
+          ? { ...definition, option: { ...definition.option, waitlistAlternative: undefined } }
+          : definition,
+      ),
   };
 }
 

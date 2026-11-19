@@ -2,7 +2,13 @@ import {
   eventAttendanceAccessMode,
   type EventAttendanceAccessMode,
 } from "../../../assets/shared/event-attendance-access";
-import type { EmailDayAttendance, EmailDayWaitlist } from "../../../assets/shared/schemas/email-template-data";
+import type {
+  EmailDayAttendance,
+  EmailDayWaitlist,
+  EmailWaitlistAlternative,
+} from "../../../assets/shared/schemas/email-template-data";
+import { eventAttendanceOptionSchema } from "../../../assets/shared/schemas/event-configuration";
+import { parseJsonSafe } from "./json";
 /**
  * Human-readable labels for registration attendance type values.
  */
@@ -82,17 +88,21 @@ export function buildAttendanceEmailData(
     label: string | null;
     optionLabel?: string | null;
     accessMode?: EventAttendanceAccessMode;
+    /** The configured option the day suggests when its own option is full, as stored JSON. */
+    waitlistAlternativeJson?: string | null;
   }>,
   dayWaitlist: DayWaitlistEmailEntry[] = [],
 ): {
   attendanceLabel: string;
   dayAttendance: EmailDayAttendance[];
+  waitlistAlternatives: EmailWaitlistAlternative[];
 } {
   const waitlistByDay = new Map(dayWaitlist.map((entry) => [entry.dayDate, entry.status]));
 
   if (dayAttendance.length > 0) {
     return {
       attendanceLabel: "",
+      waitlistAlternatives: waitlistAlternatives(dayAttendance, waitlistByDay),
       dayAttendance: dayAttendance.map((d) => {
         const waitlistStatus = waitlistByDay.get(d.dayDate) ?? "";
         return {
@@ -114,7 +124,39 @@ export function buildAttendanceEmailData(
   return {
     attendanceLabel: "",
     dayAttendance: [],
+    waitlistAlternatives: [],
   };
+}
+
+/**
+ * The options to suggest for venue days still on the waitlist, each once. Only the organizer's
+ * label and description say what they are; the email adds no event-specific wording.
+ */
+function waitlistAlternatives(
+  dayAttendance: ReadonlyArray<{
+    dayDate: string;
+    attendanceType: string;
+    accessMode?: EventAttendanceAccessMode;
+    waitlistAlternativeJson?: string | null;
+  }>,
+  waitlistByDay: ReadonlyMap<string, string>,
+): EmailWaitlistAlternative[] {
+  const suggested = new Map<string, EmailWaitlistAlternative>();
+  for (const day of dayAttendance) {
+    // A held offer is the person's seat to claim, so only a day still waiting gets a suggestion.
+    if (waitlistByDay.get(day.dayDate) !== "waiting") continue;
+    if (eventAttendanceAccessMode({ value: day.attendanceType, accessMode: day.accessMode }) !== "physical") continue;
+    const parsed = day.waitlistAlternativeJson
+      ? eventAttendanceOptionSchema.safeParse(parseJsonSafe<unknown>(day.waitlistAlternativeJson, null))
+      : null;
+    if (!parsed?.success || parsed.data.enabled === false) continue;
+    const description = (parsed.data.description ?? "").replace(/[.\s]+$/, "");
+    const limited = parsed.data.capacity != null;
+    const key = `${parsed.data.label}\u0000${description}`;
+    const known = suggested.get(key);
+    suggested.set(key, { label: parsed.data.label, description, limited: limited || Boolean(known?.limited) });
+  }
+  return [...suggested.values()];
 }
 
 function buildDayAttendanceStatusLabel(
