@@ -98,9 +98,9 @@ it("lists each prepared scanner task with its own link", async () => {
   expect(tiles.every((tile) => tile.classList.contains("pk-action-tile") && tile.querySelector("svg"))).toBe(true);
   expect(tiles.map((tile) => tile.querySelector(".pk-action-tile__label")?.textContent)).toEqual([
     "Badge collection",
-    "Venue entrance",
-    "Venue entrance",
-    "Venue exit",
+    "Record attendance",
+    "Check registration only",
+    "Record checkout",
     "Opening session",
   ]);
   expect(tiles[4]?.textContent).toContain("Main hall · Admission decision");

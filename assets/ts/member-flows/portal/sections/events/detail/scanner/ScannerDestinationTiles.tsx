@@ -29,23 +29,21 @@ export function ScannerTaskTile({
   let hint: string;
   if (purpose === "collection") {
     label = "Badge collection";
-    hint = "Check in and find a badge";
+    hint = "Check in, find or print";
   } else if (occurrenceId) {
     label = targetLabel ?? "Session scanner";
     hint = [roomLabel, scannerActionLabel(action)].filter(Boolean).join(" · ");
-  } else if (action === "checkout") {
-    label = "Venue exit";
-    hint = "Check people out";
   } else {
-    label = "Venue entrance";
-    hint =
-      action === "attendance" ? "Check people in" : action === "admission" ? "Check admission" : "Check registration";
+    label = scannerActionLabel(action);
+    hint = "";
   }
   return (
     <ActionTile
       icon={<ScannerModeIcon action={action} role={occurrenceId ? "session" : undefined} />}
       label={label}
-      hint={eventLabel ? `${hint} · ${eventLabel}` : hint}
+      hint={[hint, eventLabel].filter(Boolean).join(" · ")}
+      data-scanner-action={action}
+      data-scanner-purpose={purpose ?? "scan"}
       {...tile}
     />
   );

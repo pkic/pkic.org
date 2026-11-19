@@ -77,12 +77,19 @@ test("badge collection opens for an upcoming event after daily preparation", asy
     await route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
   });
   await page.goto(`/portal/#/events/${event.slug}/scanner`);
-  const collection = page.getByRole("button", { name: "Badge collection Check in and find a badge", exact: true });
+  const collection = page.getByRole("button", { name: "Badge collection Check in, find or print", exact: true });
   await expect(collection).toBeEnabled();
   const launch = page.getByRole("tabpanel", { name: "Scan", exact: true });
   await expect(launch).not.toContainText(/Preparing badge checks|Badge data changed during refresh/);
   await page.screenshot({ animations: "disabled", path: testInfo.outputPath("badge-collection-launch-desktop.png") });
   await page.setViewportSize({ width: 375, height: 812 });
+  const hint = collection.locator(".pk-action-tile__hint");
+  expect(
+    await hint.evaluate((element) => {
+      const lineHeight = Number.parseFloat(getComputedStyle(element).lineHeight);
+      return element.scrollWidth <= element.clientWidth + 1 && element.getBoundingClientRect().height <= lineHeight + 1;
+    }),
+  ).toBe(true);
   await page.screenshot({ animations: "disabled", path: testInfo.outputPath("badge-collection-launch-phone.png") });
   await collection.click();
   const preparation = page.getByRole("dialog", { name: "Prepare badge collection", exact: true });
@@ -167,8 +174,10 @@ test("badge collection opens for an upcoming event after daily preparation", asy
   await reopened.goto("/portal/");
   await expect(reopened.getByRole("heading", { name: "Continue scanning offline", exact: true })).toBeVisible();
   await expect(reopened.getByRole("link", { name: /^Badge collection/ })).toBeVisible();
-  await expect(reopened.getByRole("link", { name: /^Venue entrance Check people in/ })).toBeVisible();
-  await expect(reopened.getByRole("link", { name: /^Venue exit/ })).toBeVisible();
+  await expect(reopened.getByRole("link", { name: /^Record attendance/ })).toBeVisible();
+  await expect(reopened.getByRole("link", { name: /^Admission decision/ })).toBeVisible();
+  await expect(reopened.getByRole("link", { name: /^Check registration only/ })).toBeVisible();
+  await expect(reopened.getByRole("link", { name: /^Record checkout/ })).toBeVisible();
   await reopened.screenshot({ animations: "disabled", path: testInfo.outputPath("offline-scanner-entry-phone.png") });
   await reopened.setViewportSize({ width: 1280, height: 720 });
   await reopened.screenshot({ animations: "disabled", path: testInfo.outputPath("offline-scanner-entry-desktop.png") });
@@ -179,7 +188,7 @@ test("badge collection opens for an upcoming event after daily preparation", asy
   await expect(reopenedScanner.locator(".pk-fast-scanner__feedback")).toHaveText("Ready for badge collection");
   await expect(reopenedScanner.getByRole("status", { name: "Scanner status", exact: true })).toContainText("Offline");
   await reopened.goto("/portal/");
-  await reopened.getByRole("link", { name: /^Venue exit/ }).click();
+  await reopened.getByRole("link", { name: /^Record checkout/ }).click();
   await reopened.getByRole("button", { name: "Start scanning", exact: true }).click();
   await expect(reopenedScanner).toBeVisible();
   await reopened.keyboard.type(badge.credential);
@@ -203,7 +212,7 @@ test("phone scanner guides staff through venue, search, offline entry and diagno
   );
   await page.goto("/portal/#/events/pqc-conference-amsterdam-nl/scanner");
   const enrollment = scannerDeviceSessionEnrollmentResponseSchema.parse(await (await enrolled).json());
-  const entrance = page.getByRole("button", { name: "Venue entrance Check people in", exact: true });
+  const entrance = page.getByRole("button", { name: "Record attendance", exact: true });
   await expect(entrance).toBeEnabled();
   await expect(page.getByLabel("Scan mode", { exact: true })).toBeHidden();
   await expect(page.getByRole("button", { name: "Sync now", exact: true })).toBeHidden();
@@ -336,7 +345,7 @@ test("continuous local eligibility checks queue a burst while attempt uploads ar
   await expect(page.getByLabel("Scan mode", { exact: true })).toHaveCount(0);
   await page.getByLabel("Feedback pause", { exact: true }).selectOption("1000");
   await page.getByRole("tab", { name: "Scan", exact: true }).click();
-  await page.getByRole("button", { name: "Venue entrance Check people in", exact: true }).click();
+  await page.getByRole("button", { name: "Record attendance", exact: true }).click();
   const attendeeField = page.getByLabel("Badge code or attendee", { exact: true });
   await page.getByRole("button", { name: "Find attendee or badge", exact: true }).click();
   await attendeeField.fill(emails[0]!);
@@ -413,7 +422,7 @@ test("continuous local eligibility checks queue a burst while attempt uploads ar
   await scanner.getByRole("button", { name: "Operator controls", exact: true }).click();
   await expect(controls.getByText(/^5 pending/)).toBeVisible();
   await controls.getByRole("button", { name: "Close scanner", exact: true }).click();
-  await page.getByRole("button", { name: "Venue exit Check people out", exact: true }).click();
+  await page.getByRole("button", { name: "Record checkout", exact: true }).click();
   await expect(scanner).toBeVisible();
   await expect(ready).toHaveJSProperty("value", 1000);
   // The same known badge lacks physical-day entry entitlement, but departure needs no admission.
