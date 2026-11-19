@@ -62,6 +62,10 @@ function BadgeTicket({ event, details }: { event: ParticipantEventDetail; detail
     return { ...current, badge: { ...current.badge, displayName: current.badge.displayName ?? "" } };
   }, [event.slug]);
   const qr = ticket.data ? splitBadgePrintSvg(ticket.data.badge.svg) : null;
+  const badgeName = ticket.data?.badge.displayName.trim() ?? "";
+  const badgeTitle = ticket.data?.badge.jobTitle?.trim() ?? "";
+  const badgeOrganization = ticket.data?.badge.organization?.trim() ?? "";
+  const hasBadgeIdentity = Boolean(badgeName || badgeTitle || badgeOrganization);
   const viewer = "viewer" in event ? event.viewer : null;
   const standing = viewer ? attendanceStanding(viewer) : UNDATED_SEAT;
   const use = <TicketUse standing={standing}>{details}</TicketUse>;
@@ -95,12 +99,25 @@ function BadgeTicket({ event, details }: { event: ParticipantEventDetail; detail
             viewer
             size="wide"
           >
-            <img
-              class="pk-badge-qr-expanded"
-              src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(qr?.qr ?? ticket.data.badge.svg)}`}
-              alt="Your check-in QR code"
-            />
-            {qr && <p class="pk-center pk-mono">{qr.code}</p>}
+            <div
+              class={`pk-ticket-code-viewer__layout${hasBadgeIdentity ? " pk-ticket-code-viewer__layout--identity" : ""}`}
+            >
+              <div class="pk-ticket-code-viewer__scan">
+                <img
+                  class="pk-badge-qr-expanded"
+                  src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(qr?.qr ?? ticket.data.badge.svg)}`}
+                  alt="Your check-in QR code"
+                />
+                {qr && <p class="pk-center pk-mono">{qr.code}</p>}
+              </div>
+              {hasBadgeIdentity && (
+                <div class="pk-ticket-code-viewer__identity">
+                  {badgeName && <strong>{badgeName}</strong>}
+                  {badgeTitle && <span>{badgeTitle}</span>}
+                  {badgeOrganization && <span>{badgeOrganization}</span>}
+                </div>
+              )}
+            </div>
           </Dialog>,
           document.body,
         )}

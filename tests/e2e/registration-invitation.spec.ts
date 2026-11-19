@@ -66,6 +66,9 @@ test("cancelled attendees can restore registration without stale badge or invita
   const codeViewer = page.getByRole("dialog", { name: "Check-in code", exact: true });
   await expect(codeViewer).toBeVisible();
   await expect(codeViewer).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(codeViewer.getByText("Event Attendee", { exact: true })).toBeVisible();
+  await expect(codeViewer.getByText("Conference attendee", { exact: true })).toBeVisible();
+  await expect(codeViewer.getByText("Synthetic Attendee Services", { exact: true })).toBeVisible();
   expect(
     (await page.getByRole("img", { name: "Your check-in QR code", exact: true }).boundingBox())?.width,
   ).toBeGreaterThan(320);

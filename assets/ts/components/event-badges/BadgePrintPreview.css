@@ -41,6 +41,43 @@
     color: var(--pk-on-solid-ink);
   }
 
+  .pk-ticket-code-viewer__layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
+    justify-items: center;
+    gap: var(--pk-5);
+    inline-size: 100%;
+  }
+
+  .pk-ticket-code-viewer__layout--identity {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 15rem);
+  }
+
+  .pk-ticket-code-viewer__scan,
+  .pk-ticket-code-viewer__identity {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--pk-3);
+    min-inline-size: 0;
+  }
+
+  .pk-ticket-code-viewer__scan {
+    inline-size: 100%;
+  }
+
+  .pk-ticket-code-viewer__identity {
+    align-items: flex-start;
+    gap: var(--pk-1);
+    inline-size: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .pk-ticket-code-viewer__identity strong {
+    font-size: var(--pk-text-lg);
+  }
+
   /* A badge face fills the column up to its printed width; the frame keeps the printed proportions.
      The outline takes no layout space, so the measured width is the frame's whole width. */
   .pk-badge-face {
@@ -86,6 +123,15 @@
   }
 
   @media (max-width: 40rem) {
+    .pk-ticket-code-viewer__layout--identity {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .pk-ticket-code-viewer__identity {
+      align-items: center;
+      text-align: center;
+    }
+
     .pk-dialog.pk-ticket-code-viewer {
       width: 100dvw;
       max-width: none;
