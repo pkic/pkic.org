@@ -77,19 +77,13 @@ test("badge collection opens for an upcoming event after daily preparation", asy
     await route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
   });
   await page.goto(`/portal/#/events/${event.slug}/scanner`);
-  const collection = page.getByRole("button", { name: "Badge collection Check in, find or print", exact: true });
+  const collection = page.getByRole("button", { name: "Badge collection", exact: true });
   await expect(collection).toBeEnabled();
   const launch = page.getByRole("tabpanel", { name: "Scan", exact: true });
   await expect(launch).not.toContainText(/Preparing badge checks|Badge data changed during refresh/);
   await page.screenshot({ animations: "disabled", path: testInfo.outputPath("badge-collection-launch-desktop.png") });
   await page.setViewportSize({ width: 375, height: 812 });
-  const hint = collection.locator(".pk-action-tile__hint");
-  expect(
-    await hint.evaluate((element) => {
-      const lineHeight = Number.parseFloat(getComputedStyle(element).lineHeight);
-      return element.scrollWidth <= element.clientWidth + 1 && element.getBoundingClientRect().height <= lineHeight + 1;
-    }),
-  ).toBe(true);
+  await expect(collection.locator(".pk-action-tile__hint")).toHaveCount(0);
   await page.screenshot({ animations: "disabled", path: testInfo.outputPath("badge-collection-launch-phone.png") });
   await collection.click();
   const preparation = page.getByRole("dialog", { name: "Prepare badge collection", exact: true });

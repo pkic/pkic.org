@@ -29,7 +29,7 @@ export function ScannerTaskTile({
   let hint: string;
   if (purpose === "collection") {
     label = "Badge collection";
-    hint = "Check in, find or print";
+    hint = "";
   } else if (occurrenceId) {
     label = targetLabel ?? "Session scanner";
     hint = [roomLabel, scannerActionLabel(action)].filter(Boolean).join(" · ");

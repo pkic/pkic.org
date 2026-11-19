@@ -30,9 +30,6 @@
     width: var(--pk-7);
     height: var(--pk-7);
   }
-  .pk-scanner-destinations .pk-action-tile[data-scanner-purpose="collection"] .pk-action-tile__hint {
-    white-space: nowrap;
-  }
   .pk-scanner-connection {
     display: flex;
     flex-wrap: wrap;
@@ -59,11 +56,6 @@
     }
     .pk-scanner-destinations .pk-action-tile__label {
       font-size: var(--pk-text-md);
-    }
-  }
-  @media (max-width: 22rem) {
-    .pk-scanner-destinations .pk-action-tiles {
-      grid-template-columns: minmax(0, 1fr);
     }
   }
   .pk-event-scanner {
