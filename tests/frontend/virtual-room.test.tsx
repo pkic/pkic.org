@@ -64,6 +64,15 @@ const streams = virtualRoomResponseSchema.parse({
     { id: HALL, name: "Main hall", stream: { provider: "youtube", videoId: HALL_STREAM }, days: [] },
     { id: STUDIO, name: "Studio", stream: { provider: "youtube", videoId: STUDIO_STREAM }, days: [] },
   ],
+  productionPartners: [
+    {
+      role: "Camera Technology Provider",
+      organizationId: "30000000-0000-4000-8000-000000000001",
+      name: "Northlight",
+      website: "https://northlight.example.test/",
+      logoUrl: "/api/v1/members/30000000-0000-4000-8000-000000000001/logo?v=1",
+    },
+  ],
 });
 const sponsors = sponsorsDisplayResponseSchema.parse({
   groups: [
@@ -178,6 +187,12 @@ describe("virtual room", () => {
     expect(logo?.getAttribute("href")).toBe("https://trust.example.test/");
     expect(logo?.getAttribute("target")).toBe("_blank");
     expect(logo?.closest('[role="tabpanel"]')).toBeNull();
+    // Who helps produce the stream is credited under the sponsors with what they provide, never among them.
+    const partner = host.querySelector('section[aria-label="Production partners"] li');
+    expect(partner?.firstElementChild?.textContent).toBe("Camera Technology Provider");
+    expect(partner?.querySelector("img")?.getAttribute("alt")).toBe("Northlight");
+    expect(partner?.querySelector("a")?.getAttribute("href")).toBe("https://northlight.example.test/");
+    expect(host.querySelector('section[aria-label="Sponsors"]')?.textContent).not.toContain("Camera");
     // The player comes before the panels, so a phone shows it first and keeps it above them.
     const order = [...host.querySelectorAll('iframe, [aria-label="In this room"]')].map((node) => node.tagName);
     expect(order).toEqual(["IFRAME", "SECTION"]);

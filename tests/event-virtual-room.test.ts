@@ -5,6 +5,7 @@ import {
   locationLiveStreamResponseSchema,
   virtualRoomResponseSchema,
 } from "../assets/shared/schemas/event-live-stream";
+import { eventManagementDetailResponseSchema } from "../assets/shared/schemas/event-management";
 import { personalAgendaResponseSchema } from "../assets/shared/schemas/event-personal-agenda";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
@@ -182,12 +183,78 @@ describe("virtual room access", () => {
             days: [{ dayDate: "2026-12-03", stream: { provider: "youtube", videoId: dayTwo } }],
           },
         ],
+        productionPartners: [],
       });
     }
     await env.DB.prepare("UPDATE registrations SET status='cancelled' WHERE user_id=?").bind(attendee.id).run();
     const cancelled = await f.call(`${base}/streams`, attendee.token);
     expect(cancelled.status).toBe(403);
     expect(await cancelled.text()).not.toContain(usual);
+  });
+
+  it("credits the event's production partners with each organization's own name, website and logo", async () => {
+    const f = await fixture();
+    const camera = crypto.randomUUID();
+    const captions = crypto.randomUUID();
+    const gone = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO organizations(id,name,normalized_name,website,logo_r2_key,created_at,updated_at) VALUES(?,'Northlight Cameras','northlight cameras','https://northlight.example.test/','logos/northlight-2.svg',datetime('now'),datetime('now'))",
+      ).bind(camera),
+      env.DB.prepare(
+        "INSERT INTO organizations(id,name,normalized_name,created_at,updated_at) VALUES(?,'Clearline','clearline',datetime('now'),datetime('now'))",
+      ).bind(captions),
+    ]);
+    const settings = async (productionPartners: unknown) => {
+      const event = (await (await f.call("/api/v1/events/pqc-2026", f.staffToken)).json()) as {
+        event: { updatedAt: string };
+      };
+      return f.call(
+        "/api/v1/events/pqc-2026/settings",
+        f.staffToken,
+        { productionPartners, expectedUpdatedAt: event.event.updatedAt },
+        "PATCH",
+      );
+    };
+    const twice = await settings([
+      { role: "Camera Technology Provider", organizationId: camera },
+      { role: "Cameras", organizationId: camera },
+    ]);
+    expect(twice.status).toBe(400);
+    const saved = await settings([
+      { role: "  Camera Technology Provider ", organizationId: camera },
+      { role: "Captioning", organizationId: captions },
+      // An organization that does not exist is never shown.
+      { role: "Lighting", organizationId: gone },
+    ]);
+    expect(saved.status, await saved.clone().text()).toBe(200);
+    const credits = [
+      {
+        role: "Camera Technology Provider",
+        organizationId: camera,
+        name: "Northlight Cameras",
+        website: "https://northlight.example.test/",
+        logoUrl: `/api/v1/members/${camera}/logo?v=northlight-2.svg`,
+      },
+      { role: "Captioning", organizationId: captions, name: "Clearline", website: null, logoUrl: null },
+    ];
+    // The organizers read the same credits the room shows.
+    expect(eventManagementDetailResponseSchema.parse(await saved.json()).event.productionPartners).toEqual(credits);
+    const room = await f.call(`${base}/streams`, f.staffToken);
+    expect(virtualRoomResponseSchema.parse(await room.json()).productionPartners).toEqual(credits);
+    // The organization's new name shows without saving the event again.
+    await env.DB.prepare("UPDATE organizations SET name='Northlight' WHERE id=?").bind(camera).run();
+    const renamed = await f.call(`${base}/streams`, f.staffToken);
+    expect(virtualRoomResponseSchema.parse(await renamed.json()).productionPartners[0]?.name).toBe("Northlight");
+    // An emptied list removes the setting.
+    expect((await settings([])).status).toBe(200);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT json_type(settings_json,'$.productionPartners') AS stored FROM events WHERE id=?",
+        [f.eventId],
+      ),
+    ).toEqual([{ stored: null }]);
   });
 
   it("keeps staff stream access scoped to the event granting it", async () => {

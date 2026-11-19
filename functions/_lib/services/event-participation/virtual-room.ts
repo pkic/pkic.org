@@ -15,6 +15,7 @@ import { createUserBackedAuthAdmin } from "../../auth/admin-identity";
 import { permissionAuthorizationEvidenceForResource } from "../../auth/permissions";
 import { eventReadIdSql, type EventReadSelection } from "../events/selection";
 import { readParticipantEvent } from "./participant-read-context";
+import { decodeEventProductionPartners, eventProductionPartnersJsonSql } from "../events/production-partners";
 
 /** Canonical permission evidence remains server-owned and live in this read snapshot. */
 function viewerMayWatchSql(staff: string) {
@@ -30,11 +31,13 @@ export function prepareVirtualRoom(
 ) {
   const event = eventReadIdSql(eventSelection);
   const staff = { sql: `EXISTS(${viewer.staff.sql})`, bindings: viewer.staff.bindings };
-  const accessSql = `SELECT watch_event.id,watch_event.timezone,${viewerMayWatchSql(staff.sql)} AS allowed FROM events watch_event WHERE watch_event.id=${event.sql}`;
+  const access = (also = "") =>
+    `SELECT watch_event.id,watch_event.timezone,${viewerMayWatchSql(staff.sql)} AS allowed${also} FROM events watch_event WHERE watch_event.id=${event.sql}`;
+  const accessSql = access();
   const bindings = [viewer.sessionId, viewer.userId, ...staff.bindings, ...event.bindings];
   return {
     statements: [
-      db.prepare(accessSql).bind(...bindings),
+      db.prepare(access(`,${eventProductionPartnersJsonSql("watch_event")} AS partners_json`)).bind(...bindings),
       db
         .prepare(`WITH access AS(${accessSql})
         SELECT location.id,location.name,stream.day_date,stream.provider,stream.stream_ref
@@ -44,7 +47,7 @@ export function prepareVirtualRoom(
         .bind(...bindings),
     ],
     decode(loaded: D1StatementResult[]) {
-      const allowed = batchFirst<{ allowed: number; timezone: string }>(loaded[0]);
+      const allowed = batchFirst<{ allowed: number; timezone: string; partners_json: string | null }>(loaded[0]);
       if (!allowed?.allowed)
         throw new AppError(
           403,
@@ -65,6 +68,7 @@ export function prepareVirtualRoom(
           name,
           ...locationStreams(streams),
         })),
+        productionPartners: decodeEventProductionPartners(allowed.partners_json),
       });
     },
   };

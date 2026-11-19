@@ -41,6 +41,11 @@ const LiveChatRetentionSettings = lazy(() =>
 const EventLiveSettings = lazy(() =>
   import("../events/detail/settings/EventLiveSettings").then((module) => ({ default: module.EventLiveSettings })),
 );
+const ProductionPartnersSettings = lazy(() =>
+  import("../events/detail/settings/ProductionPartnersSettings").then((module) => ({
+    default: module.ProductionPartnersSettings,
+  })),
+);
 const GroupEventScheduling = lazy(() =>
   import("./GroupEventScheduling").then((module) => ({ default: module.GroupEventScheduling })),
 );
@@ -159,7 +164,10 @@ export function GroupEventSettingsTab({
       ) : (detailId === "live" || (!canManage && !detailId)) &&
         hasEventAgendaPermission(event.id, "agenda:live_moderate") ? (
         <Suspense fallback={<Spinner label="Loading live settings…" />}>
-          <EventLiveSettings slug={event.slug} canEdit={hasEventAgendaPermission(event.id, "agenda:live_setup")} />
+          <div class="pk-stack">
+            <EventLiveSettings slug={event.slug} canEdit={hasEventAgendaPermission(event.id, "agenda:live_setup")} />
+            <ProductionPartnersSettings slug={event.slug} groupId={groupId} canEdit={canManage} />
+          </div>
         </Suspense>
       ) : detailId === "scheduling" ? (
         <Suspense fallback={<Spinner />}>

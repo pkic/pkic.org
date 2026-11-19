@@ -31,6 +31,7 @@ import { Tabs } from "../../../../../../ui/Tabs";
 import { useSponsorDisplay } from "../../../../../sponsors-wall-data";
 import { usePortalHashLocation } from "../../../../hash-location";
 import { VirtualRoomPanels } from "./VirtualRoomPanels";
+import { VirtualRoomPartners } from "./VirtualRoomPartners";
 import { VirtualRoomSponsors } from "./VirtualRoomSponsors";
 import { VirtualRoomNowPlaying, VirtualRoomPlayer } from "./VirtualRoomPlayer";
 import { SessionReactions } from "../../../../../../live-session/SessionReactions";
@@ -146,6 +147,7 @@ export function VirtualRoom({ slug }: { slug: string }) {
         ) : null}
         <VirtualRoomNowPlaying slug={slug} moment={moment} stream={stream} formatTime={formatTime} />
         <VirtualRoomSponsors sponsors={sponsors.display} />
+        <VirtualRoomPartners partners={streams.data?.productionPartners ?? []} />
       </div>
       {program.error && <ErrorAlert error={program.error} />}
       <VirtualRoomPanels slug={slug} moment={moment} formatTime={formatTime} />

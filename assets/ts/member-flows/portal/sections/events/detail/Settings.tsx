@@ -1,5 +1,6 @@
 import { PromotionDesignSettings } from "./settings/PromotionDesignSettings";
 import { EventLiveSettings } from "./settings/EventLiveSettings";
+import { ProductionPartnersSettings } from "./settings/ProductionPartnersSettings";
 import { hasEventAgendaPermission } from "../event-agenda-access";
 import { Tabs } from "../../../../../components/Tabs";
 import type { EventDetail } from "../types";
@@ -115,7 +116,10 @@ export function Settings({
         <LazySponsorTiersTab slug={event.slug} canWrite={event.capabilities.includes("write")} />
       )}
       {tab === "live" && (
-        <EventLiveSettings slug={event.slug} canEdit={hasEventAgendaPermission(event.id, "agenda:live_setup")} />
+        <>
+          <EventLiveSettings slug={event.slug} canEdit={hasEventAgendaPermission(event.id, "agenda:live_setup")} />
+          <ProductionPartnersSettings slug={event.slug} canEdit={event.capabilities.includes("write")} />
+        </>
       )}
       {tab === "team" && (
         <EventTeamSettings

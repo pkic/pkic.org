@@ -16,11 +16,13 @@ import { readEventAudienceAccess } from "./scanner-access";
 import type { EventAudienceViewer } from "./visibility";
 import { eventRegistrationPath } from "../event-presentation";
 import { persistedUtcInstant } from "../../utils/time";
+import { decodeEventProductionPartners, eventProductionPartnersJsonSql } from "./production-partners";
 
 export interface EventDetailRow extends EventRecord {
   user_retention_days: number | null;
   series_id: string | null;
   form_links_json: string;
+  production_partners_json: string | null;
 }
 
 export function normalizeEventRegistrationPolicy(value: string): EventDetail["registrationPolicy"] {
@@ -66,6 +68,7 @@ export function prepareEventDetail(db: DatabaseLike, eventSlug: string, authorit
   );
   return db
     .prepare(`SELECT ${eventColumns("event")}, policy.user_retention_days, series.id AS series_id,
+      ${eventProductionPartnersJsonSql("event")} AS production_partners_json,
       json_object('event_registration', (SELECT CASE WHEN COUNT(*)=1 THEN MIN(key) END FROM (${formReads[0].sql})),
                   'proposal_submission', (SELECT CASE WHEN COUNT(*)=1 THEN MIN(key) END FROM (${formReads[1].sql}))) AS form_links_json
        FROM events event
@@ -114,6 +117,7 @@ export function decodeEventDetail(
     sessionTypes: resolveEventSessionTypes(event.settings_json),
     links: parseLinksJson(event.links_json),
     registrationPath: eventRegistrationPath(event),
+    productionPartners: decodeEventProductionPartners(event.production_partners_json),
     settings,
     capabilities: directWriteAllowed ? capabilities : capabilities.filter((capability) => capability !== "write"),
   });

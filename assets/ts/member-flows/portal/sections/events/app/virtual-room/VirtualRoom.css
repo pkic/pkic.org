@@ -69,7 +69,8 @@
     border-block: 1px solid var(--pk-line-soft);
   }
 
-  .pk-virtual-room__sponsors-label {
+  .pk-virtual-room__sponsors-label,
+  .pk-virtual-room__partner-role {
     flex: none;
     color: var(--pk-ink-muted);
     font-size: var(--pk-text-xs);
@@ -116,6 +117,39 @@
 
   .pk-virtual-room__sponsor[data-top] img {
     block-size: 2.75rem;
+  }
+
+  /* Production partners under the sponsors: each a role and a logo, quieter than the sponsors and apart from them. */
+  .pk-virtual-room__partner-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pk-2) var(--pk-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .pk-virtual-room__partner {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2);
+    min-inline-size: 0;
+  }
+
+  .pk-virtual-room__partner a {
+    display: flex;
+    border-radius: var(--pk-radius-sm);
+  }
+
+  .pk-virtual-room__partner img {
+    box-sizing: border-box;
+    inline-size: auto;
+    max-inline-size: 100%;
+    block-size: 1.75rem;
+    padding: var(--pk-1) var(--pk-2);
+    border-radius: var(--pk-radius-sm);
+    background: var(--pk-on-solid);
+    object-fit: contain;
   }
 
   /* Wide screens: the player large on the left, the room's panels beside it. */

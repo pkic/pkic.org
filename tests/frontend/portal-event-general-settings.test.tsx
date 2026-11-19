@@ -76,6 +76,7 @@ const portalEvent = {
   links: [],
   capabilities: ["read"],
   registrationPath: null,
+  productionPartners: [],
   settings: { forms: { event_registration: "legacy-attendee-form" } },
 } as EventDetail;
 

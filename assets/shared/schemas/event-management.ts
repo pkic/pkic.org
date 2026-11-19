@@ -25,6 +25,7 @@ import { countryCodeSchema } from "../countries";
 import { eventCitySchema, eventPlaceSchema } from "../event-place";
 import { eventAttendanceSettingsSchema } from "../attendance-attribution";
 import { eventLiveChatSettingsSchema } from "../live-chat-retention";
+import { eventProductionPartnerCreditsSchema, eventProductionPartnersSchema } from "./event-production-partners";
 
 /**
  * D1-backed event profile catalog projection. The key remains a validated
@@ -57,6 +58,7 @@ export const EVENT_MANAGED_SETTING_KEYS = [
   "frontend",
   "heroImageUrl",
   "liveChat",
+  "productionPartners",
   "proposal",
   "venue",
   "virtualUrl",
@@ -133,6 +135,8 @@ export const eventSettingsSchema = z.object({
   attendance: eventAttendanceSettingsSchema.optional(),
   /** How long live rooms keep their attendee chat; stored under `liveChat` in the event settings. */
   liveChat: eventLiveChatSettingsSchema.optional(),
+  /** Who helps produce the event and what each provides; null or an empty list removes them. */
+  productionPartners: eventProductionPartnersSchema.nullable().optional(),
   userRetentionDays: z.number().int().positive().max(3650).optional(),
 });
 export type EventSettingsInput = z.infer<typeof eventSettingsSchema>;
@@ -312,6 +316,8 @@ export const eventDetailSchema = eventResourceCoreSchema.extend({
   links: linksSchema,
   /** Where a person registers, when the event's registration flow is open; never the event's base page. */
   registrationPath: z.string().nullable(),
+  /** The stored production partners with each organization's current name, website and logo. */
+  productionPartners: eventProductionPartnerCreditsSchema.default([]),
   settings: z.record(z.string(), z.unknown()),
   capabilities: z.array(eventManagementCapabilitySchema).max(3),
 });
