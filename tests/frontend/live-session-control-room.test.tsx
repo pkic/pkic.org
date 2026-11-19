@@ -366,7 +366,7 @@ describe("live control room panels", () => {
     expect(commands(live)).toEqual([{ type: "preview.set", composition: { lowerThirdMotion: "cut" } }]);
   });
 
-  it("moderates a submitted question, puts an approved one on Program and marks it answered", () => {
+  it("moderates a submitted question, puts an approved one on Program, marks it answered and reopens it", () => {
     const pending = liveQuestion({ status: "pending", votes: 0, anonymous: true, authorName: "Ada Attendee" });
     const { host, live } = mountDesk(liveSnapshot({ viewer: OPERATOR, questions: [pending] }));
     const questions = panel(host, "Questions");
@@ -386,6 +386,19 @@ describe("live control room panels", () => {
       { type: "stage.question", questionId: LIVE_QUESTION },
       { type: "question.moderate", questionId: LIVE_QUESTION, expectedRevision: 0, status: "answered" },
     ]);
+    // An answered question leaves the open ones and waits under Answered, where Reopen brings it back.
+    void act(() =>
+      live.latest().deliver({ type: "question.changed", question: liveQuestion({ status: "answered", revision: 1 }) }),
+    );
+    expect(questions.textContent).toContain("0 open");
+    expect(questions.querySelector(".pk-live-questions__answered > summary")?.textContent).toBe("Answered · 1");
+    void act(() => labeled(questions, "Reopen").click());
+    expect(commands(live).at(-1)).toEqual({
+      type: "question.moderate",
+      questionId: LIVE_QUESTION,
+      expectedRevision: 1,
+      status: "approved",
+    });
   });
 
   it("prepares a question for a speaker, lists it under the open ones and releases it on demand", () => {

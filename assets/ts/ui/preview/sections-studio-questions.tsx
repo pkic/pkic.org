@@ -6,7 +6,7 @@
  */
 import type { PreviewSection } from "./PreviewShell";
 import type { LivePreparedQuestion } from "../../../shared/schemas/live-session-prepared-question";
-import { useRef } from "preact/hooks";
+import { useEffect, useRef } from "preact/hooks";
 import {
   EMPTY_LIVE_AUX_COMPOSITION,
   liveStageQuestionSchema,
@@ -158,6 +158,33 @@ const CARRIED_TARGETS = {
   },
 };
 
+const ANSWERED_TARGETS = {
+  ...TARGETS,
+  state: {
+    ...ROOM,
+    questions: [
+      ...ROOM.questions,
+      asked("40000000-0000-4000-8000-000000000034", "Will the slides be shared after the session?", {
+        status: "answered",
+        votes: 6,
+      }),
+    ],
+  },
+};
+
+/** The Questions panel with its Answered list open, as after a click on it. */
+function AnsweredSpecimen() {
+  const host = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    host.current?.querySelector("details")?.setAttribute("open", "");
+  }, []);
+  return (
+    <div ref={host}>
+      <QuestionsPanelSpecimen targets={ANSWERED_TARGETS} />
+    </div>
+  );
+}
+
 function QuestionsPanelSpecimen({ targets = TARGETS }: { targets?: typeof TARGETS }) {
   return (
     <div class="pk-studio-grid-frame" data-density="compact">
@@ -261,6 +288,12 @@ export const studioQuestionSections: PreviewSection[] = [
         />
       </div>
     ),
+  },
+  {
+    id: "studio-questions-answered",
+    title: "Studio: answered questions, with Reopen",
+    note: "A question marked answered leaves the open ones and waits under Answered, folded away until someone opens the list. Reopen puts it back with the open questions. Mark answered is a quiet button, so a slip of the hand is less likely.",
+    render: () => <AnsweredSpecimen />,
   },
   {
     id: "studio-screens-menu-carried",

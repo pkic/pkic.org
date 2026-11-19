@@ -44,6 +44,11 @@ export function openLiveQuestions(questions: readonly LiveQuestion[]): LiveQuest
   return questions.filter((question) => question.status === "pending" || question.status === "approved");
 }
 
+/** Answered questions, which an operator can still reopen; one its author withdrew is gone for good. */
+export function answeredLiveQuestions(questions: readonly LiveQuestion[]): LiveQuestion[] {
+  return questions.filter((question) => question.status === "answered" && !question.withdrawn);
+}
+
 /** The Questions panel's header: how many are open and waiting, and the "+" that prepares one. */
 export function LiveQuestionsHeader({
   targets,
@@ -111,6 +116,7 @@ const ANSWERED = (
     <path d="M5.5 8.2l1.8 1.8 3.2-3.5" />
   </>
 );
+const REOPEN = <path d="M4.5 3.5 2 6l2.5 2.5M2 6h7.5a3.5 3.5 0 0 1 0 7H6" />;
 // Release starts a prepared question, so it takes the timers' Start.
 const RELEASE = <path d="M5 3l8 5-8 5z" />;
 
@@ -119,6 +125,7 @@ function RowAction({
   label,
   hint,
   primary = false,
+  quiet = false,
   disabled,
   onClick,
   children,
@@ -127,6 +134,8 @@ function RowAction({
   /** What the action does to the question: the second line of its tooltip. */
   hint: string;
   primary?: boolean;
+  /** An action that ends something, such as Mark answered, recedes so a slip of the hand is less likely. */
+  quiet?: boolean;
   disabled: boolean;
   onClick: () => void;
   children: ComponentChildren;
@@ -134,7 +143,7 @@ function RowAction({
   return (
     <Button
       icon
-      variant={primary ? "primary" : "secondary"}
+      variant={primary ? "primary" : quiet ? "ghost" : "secondary"}
       aria-label={label}
       title={`${label}\n${hint}`}
       disabled={disabled}
@@ -219,7 +228,8 @@ function OpenQuestionRow({
             <LiveLayerTargets targets={targets} subject="question" layer={layer} />
             <RowAction
               label="Mark answered"
-              hint="Take it out of the open questions."
+              hint="Move it to Answered, below the open questions. You can reopen it from there."
+              quiet
               disabled={disabled}
               onClick={() => moderate("answered")}
             >
@@ -237,6 +247,56 @@ function OpenQuestionRow({
           menuTrigger={<LiveScreenTrigger screens={screens} />}
           menuTitle={liveScreensTitle(screens)}
           additionalActions={pending ? actions : withScreenItems(liveScreenItems(targets, layer), actions)}
+          onMove={moderate}
+        />
+      }
+    />
+  );
+}
+
+/** One answered question: its votes and asker, Reopen as its one action, and the menu. */
+function AnsweredQuestionRow({
+  question,
+  targets,
+  send,
+  onOpen,
+}: {
+  question: LiveQuestion;
+  targets: LiveTargets;
+  send: Send;
+  onOpen: () => void;
+}) {
+  const { disabled } = targets;
+  const asker = liveQuestionAskerName(question);
+  const moderate = (status: LiveQuestionStatus, reason?: LiveModerationReason) =>
+    send({ type: "question.moderate", questionId: question.id, expectedRevision: question.revision, status, reason });
+  return (
+    <StudioItemRow
+      text={question.text}
+      open={{ title: "Open question\nRead it in full, with who asked it and its answers.", onOpen }}
+      summary={
+        <>
+          <span>▲ {formatNumber(question.votes)}</span>
+          <span>{asker ?? "Anonymous"}</span>
+        </>
+      }
+      actions={
+        <RowAction
+          label="Reopen"
+          hint="Put it back with the open questions."
+          disabled={disabled}
+          onClick={() => moderate("approved")}
+        >
+          {REOPEN}
+        </RowAction>
+      }
+      menu={
+        <LiveQuestionTransitions
+          question={question}
+          role="operator"
+          disabled={disabled}
+          menuLabel="Question actions"
+          additionalActions={[{ id: "open", label: "Open question", onSelect: onOpen }]}
           onMove={moderate}
         />
       }
@@ -330,7 +390,8 @@ function PreparedQuestionRow({
 /**
  * The session's questions as compact rows, like the Time and Polls panels:
  * open ones first, then prepared ones in the order they come in. Every
- * action is in a row's menu; the row shows only the one used most.
+ * action is in a row's menu; the row shows only the one used most. Answered
+ * questions wait under them, folded away, each with Reopen.
  */
 export function LiveQuestionsPanel({
   targets,
@@ -350,6 +411,7 @@ export function LiveQuestionsPanel({
   const [editingPrepared, setEditingPrepared] = useState<LivePreparedQuestion | null>(null);
   const open = openLiveQuestions(targets.state.questions);
   const prepared = waitingPreparedQuestions(targets.state.preparedQuestions);
+  const answered = answeredLiveQuestions(targets.state.questions);
   return (
     <div class="pk-live-desk__questions">
       <LiveModerationDialogHost />
@@ -379,6 +441,22 @@ export function LiveQuestionsPanel({
       ) : (
         <p class="pk-live-questions__empty">No open questions.</p>
       )}
+      {answered.length ? (
+        <details class="pk-live-questions__answered">
+          <summary>Answered · {formatNumber(answered.length)}</summary>
+          <ol class="pk-studio-rows">
+            {answered.map((question) => (
+              <AnsweredQuestionRow
+                key={question.id}
+                question={question}
+                targets={targets}
+                send={send}
+                onOpen={() => setInspectedId(question.id)}
+              />
+            ))}
+          </ol>
+        </details>
+      ) : null}
       {editingPrepared ? (
         <LivePreparedQuestionDialog
           question={editingPrepared}
