@@ -135,8 +135,8 @@ describe("room screens synced with Program", () => {
 
   it("syncs a screen the room sets up by its role: one you take to never follows Program, one that follows does", () => {
     const room: LiveRoomOutput[] = [
-      { key: "prj-l", name: "Screen left", code: "PRJ L", role: "follow", scene: null },
-      { key: "foy", name: "Foyer", code: "FOY", role: "exact", scene: "break" },
+      { key: "prj-l", name: "Screen left", code: "PRJ L", role: "follow", scene: null, sceneLocked: false },
+      { key: "foy", name: "Foyer", code: "FOY", role: "exact", scene: "break", sceneLocked: true },
     ];
     const following = liveScreenComposition("prj-l", {
       own: EMPTY_LIVE_STAGE,
@@ -177,7 +177,9 @@ describe("a take to a room screen", () => {
       ...whole,
       output: "projector",
     });
-    const exact: LiveRoomOutput[] = [{ key: "foy", name: "Foyer", code: "FOY", role: "exact", scene: null }];
+    const exact: LiveRoomOutput[] = [
+      { key: "foy", name: "Foyer", code: "FOY", role: "exact", scene: null, sceneLocked: false },
+    ];
     expect(liveScreenTake("foy", { ...room, outputs: exact })).toEqual({ ...whole, output: "foy" });
     expect(liveScreenTake("stage-preview", room)).toEqual({ ...whole, output: "stage-preview" });
   });
