@@ -9,6 +9,11 @@
     flex-direction: column;
     gap: var(--pk-1);
     min-inline-size: 0;
+    /*
+     * The studio scrolls inside its own full-window layer, so the page's clearance for the fixed tab bar does
+     * not reach it: the last row of a view, such as the chat's composer, keeps clear of the bar here.
+     */
+    padding-block-end: calc(var(--pk-app-tabbar-height) + env(safe-area-inset-bottom, 0px));
   }
   .pk-studio-phone__bar {
     position: sticky;
