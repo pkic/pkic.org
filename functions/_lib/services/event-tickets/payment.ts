@@ -70,6 +70,18 @@ export const payableTicketSql = (columns = "") => `
   JOIN events event ON event.id = ticket.event_id
   JOIN users user ON user.id = registration.user_id`;
 
+/** Outcomes that say where a ticket's payment stands; the latest one decides. */
+const PAYMENT_STANDING_OUTCOMES = "'processing', 'payment_failed', 'paid', 'returned', 'already_paid'";
+
+/**
+ * Whether the payment for a ticket was made and has not arrived yet: a bank debit or transfer takes days. The
+ * provider's events are the record, so the latest one about the payment says it.
+ */
+export const ticketPaymentProcessingSql = (ticketId: string) =>
+  `COALESCE((SELECT seen.outcome = 'processing' FROM registration_ticket_payment_events seen
+             WHERE seen.ticket_id = ${ticketId} AND seen.outcome IN (${PAYMENT_STANDING_OUTCOMES})
+             ORDER BY seen.rowid DESC LIMIT 1), 0)`;
+
 /** The short form of a registration's id that people read on an invoice or quote to an organizer. */
 export function registrationReference(registrationId: string): string {
   return registrationId.replace(/-/g, "").slice(0, 8).toUpperCase();
@@ -102,6 +114,13 @@ export async function openTicketCheckout(
   if (!ticket) throw new AppError(404, "TICKET_NOT_FOUND", "This registration has no ticket.");
   if (ticket.status !== "pending_payment" || ticket.registration_status === "cancelled")
     throw new AppError(409, "TICKET_NOT_PAYABLE", "This ticket has nothing left to pay.");
+  // A payment that is on its way is not asked for a second time.
+  if (await first(db, `SELECT 1 WHERE ${ticketPaymentProcessingSql("?")}`, [ticket.id]))
+    throw new AppError(
+      409,
+      "TICKET_PAYMENT_PROCESSING",
+      "Your payment is being processed. We email you when it arrives.",
+    );
   const now = nowIso();
   let attempt = await first<CheckoutRow>(
     db,
@@ -147,8 +166,6 @@ export async function openTicketCheckout(
       cancel_url: returnUrl,
       customer_email: ticket.email,
       billing_address_collection: "required",
-      // The ticket is settled by an exact amount in the event's currency, so the buyer is not offered another one.
-      "adaptive_pricing[enabled]": "false",
       expires_at: String(Math.floor(Date.parse(expiresAt) / 1000)),
       "payment_intent_data[receipt_email]": ticket.email,
       "line_items[0][price_data][currency]": ticket.currency,
@@ -428,6 +445,32 @@ export async function handleEventTicketStripeEvent(
             .bind(now, now, row.held_email_id),
         );
     }
+  } else if (
+    row.status === "pending_payment" &&
+    object.metadata?.registrationTicketId === row.ticket_id &&
+    ((event.type === "checkout.session.completed" && object.payment_status === "unpaid") ||
+      event.type === "checkout.session.async_payment_failed")
+  ) {
+    // A payment that takes days was made, or turned out to fail: reminders wait for the first and resume after the second.
+    const failed = event.type === "checkout.session.async_payment_failed";
+    outcome = failed ? "payment_failed" : "processing";
+    statements.push(
+      db
+        .prepare(
+          `UPDATE registration_tickets
+           SET next_reminder_at = CASE WHEN ?1 = 1 AND reminders_end_at > ?2 THEN ?2 ELSE NULL END, updated_at = ?2
+           WHERE id = ?3 AND status = 'pending_payment'`,
+        )
+        .bind(failed ? 1 : 0, now, row.ticket_id),
+      // The failed payment page is closed, so the next attempt opens a new one.
+      ...(failed
+        ? [
+            db
+              .prepare("UPDATE registration_ticket_checkouts SET expires_at = ? WHERE id = ?")
+              .bind(now, row.checkout_id),
+          ]
+        : []),
+    );
   } else if (event.type === "charge.refunded") {
     const returned = Math.max(0, object.amount_refunded ?? 0);
     if (!object.payment_intent || object.payment_intent !== row.payment_intent_id) {

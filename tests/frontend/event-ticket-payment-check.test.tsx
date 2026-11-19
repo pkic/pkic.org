@@ -44,13 +44,13 @@ afterEach(() => {
   host.remove();
 });
 
-async function open(onSettled = vi.fn()) {
+async function open(onSettled = vi.fn(), held = ticket) {
   await act(async () => {
     render(
       <EventTicketPayment
         slug="summit"
         registrationId={registrationId}
-        ticket={ticket}
+        ticket={held}
         details={null}
         onSettled={onSettled}
       />,
@@ -84,5 +84,12 @@ describe("ticket payment check", () => {
     await open(onSettled);
     expect(onSettled).not.toHaveBeenCalled();
     expect(host.querySelector("button")?.textContent).toBe("Pay for your ticket");
+  });
+
+  it("asks for nothing while a payment that takes days is on its way", async () => {
+    postJson.mockResolvedValue({ success: true, changed: false });
+    await open(vi.fn(), { ...ticket, paymentProcessing: true });
+    expect(host.textContent).toContain("Your payment is being processed");
+    expect(host.querySelector("button")).toBeNull();
   });
 });

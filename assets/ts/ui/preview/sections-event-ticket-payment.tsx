@@ -41,6 +41,12 @@ export function TicketAwaitingPayment() {
         ticket={{ ...ticket, refundableUntil: null, refundFee: 0 }}
         details={<a href="#ticket-payment">Registration details</a>}
       />
+      <EventTicketPayment
+        slug="example"
+        registrationId="20000000-0000-4000-8000-0000000000ab"
+        ticket={{ ...ticket, paymentProcessing: true }}
+        details={<a href="#ticket-payment">Registration details</a>}
+      />
     </div>
   );
 }

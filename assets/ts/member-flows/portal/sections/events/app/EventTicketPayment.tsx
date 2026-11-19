@@ -74,6 +74,16 @@ export function EventTicketPayment({
       </EventCard>
     );
   if (checking) return <Spinner label="Checking your payment…" />;
+  if (ticket.paymentProcessing)
+    return (
+      <EventCard eyebrow={`${ticket.ticketName} ticket`} title="Your payment is being processed">
+        <p>
+          Some payment methods take a few days. You don't need to do anything: we email your confirmation when the
+          payment arrives, and your badge and check-in code appear here then.
+        </p>
+        <div class="pk-cluster">{details}</div>
+      </EventCard>
+    );
   return (
     <EventCard
       eyebrow={`${ticket.ticketName} ticket`}

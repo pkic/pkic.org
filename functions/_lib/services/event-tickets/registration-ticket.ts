@@ -15,6 +15,7 @@ import type { DatabaseLike, Env, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { priceTicket, readTicketPerson, resolveTicket } from "./assignment";
+import { ticketPaymentProcessingSql } from "./payment";
 import { refundDeadlineSql } from "./refund-policy";
 import { OPEN_REFUND_SQL } from "./refunds";
 import { prepareRepriceTicketForDays } from "./reprice";
@@ -316,6 +317,7 @@ export function ticketCodeExhaustedError(): AppError {
 }
 
 interface TicketReadRow {
+  payment_processing: number;
   id: string;
   ticket_key: string;
   ticket_name: string;
@@ -341,6 +343,7 @@ export const REGISTRATION_TICKET_READ_SQL = `
          ticket.amount, ticket.currency, code.label AS code_label, ticket.paid_at, ticket.dispute_reason,
          ticket.dispute_resolved_at,
          ticket.refunded_amount, ticket.paid_amount,
+         (ticket.status = 'pending_payment' AND ${ticketPaymentProcessingSql("ticket.id")}) AS payment_processing,
          (ticket.refund_reconcile_at IS NOT NULL
           OR EXISTS (SELECT 1 FROM registration_ticket_refunds refund
                      WHERE refund.ticket_id = ticket.id AND ${OPEN_REFUND_SQL})) AS refund_pending,
@@ -376,6 +379,7 @@ export function decodeRegistrationTicket(row: TicketReadRow | null): Registratio
     disputeReason: row.dispute_reason && !row.dispute_resolved_at ? row.dispute_reason : null,
     refundPending: row.refund_pending === 1,
     refundFailed: row.refund_failed === 1,
+    paymentProcessing: row.payment_processing === 1,
     refundedAmount: row.refunded_amount,
     paidAmount: row.paid_amount,
     paymentReference: row.payment_reference,

@@ -77,9 +77,11 @@ async function applyProviderState(
   );
   for (const page of pages) {
     const session = await readStripeCheckoutSession(secretKey, page.provider_session_id, options);
-    if (session.status !== "complete" || session.payment_status !== "paid") continue;
+    // A finished page was paid, or its payment is on its way; either is applied as the provider's event would be.
+    if (session.status !== "complete" || (session.payment_status !== "paid" && session.payment_status !== "unpaid"))
+      continue;
     await handleEventTicketStripeEvent(db, {
-      id: `sync:${page.provider_session_id}:paid`,
+      id: `sync:${page.provider_session_id}:${session.payment_status === "paid" ? "paid" : "processing"}`,
       type: "checkout.session.completed",
       created: askedAt,
       data: { object: session },

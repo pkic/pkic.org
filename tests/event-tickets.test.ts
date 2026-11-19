@@ -1305,8 +1305,8 @@ describe("event tickets", () => {
       return new Response(JSON.stringify({ id, url: `https://checkout.stripe.com/c/pay/${id}` }), { status: 200 });
     }) as unknown as typeof fetch;
     const first = await openTicketCheckout(env.DB, paymentEnv, "https://example.test", input, provider);
-    // The buyer pays the event's currency: a local-currency amount would not settle the ticket.
-    expect(new URLSearchParams(calls[0].body).get("adaptive_pricing[enabled]")).toBe("false");
+    // Local currencies stay on, so a buyer is offered the payment methods of their own country.
+    expect(new URLSearchParams(calls[0].body).has("adaptive_pricing[enabled]")).toBe(false);
     await env.DB.prepare("UPDATE registration_tickets SET amount = 39500 WHERE registration_id = ?")
       .bind(registration.id)
       .run();
@@ -1421,6 +1421,61 @@ describe("event tickets", () => {
       send_after: string;
     }>();
     expect(held!.send_after < "9999").toBe(true);
+  });
+
+  it("waits for a payment that takes days: no second payment, no reminders, and a failure asks again", async () => {
+    const { event } = await seedTickets();
+    const { registration, user } = await register(event, "slow@gmail.com");
+    const input = { eventId: event.id, registrationId: registration.id };
+    let pages = 0;
+    const provider = (async () => {
+      const id = `cs_test_slow_${++pages}`;
+      return new Response(JSON.stringify({ id, url: `https://checkout.stripe.com/c/pay/${id}` }), { status: 200 });
+    }) as unknown as typeof fetch;
+    const open = () =>
+      openTicketCheckout(env.DB, paymentEnv, "https://example.test", { ...input, userId: user.id }, provider);
+    await open();
+    const read = () => readRegistrationTicket(env.DB, input);
+    const ticketId = (await read())!.id;
+    const session = (type: string, payment_status: string) =>
+      handleEventTicketStripeEvent(env.DB, {
+        id: `evt_${crypto.randomUUID()}`,
+        type,
+        data: {
+          object: {
+            id: `cs_test_slow_${pages}`,
+            payment_intent: "pi_synthetic",
+            amount_total: 19500,
+            currency: "usd",
+            payment_status,
+            metadata: { pkic_payment_type: "event", registrationTicketId: ticketId },
+          },
+        },
+      });
+    const due = () =>
+      env.DB.prepare("UPDATE registration_tickets SET next_reminder_at = ? WHERE id = ?")
+        .bind(new Date(Date.now() - 1000).toISOString(), ticketId)
+        .run();
+
+    // The page was finished with a bank debit: the money is on its way, so nothing more is asked.
+    await due();
+    expect(await session("checkout.session.completed", "unpaid")).toMatchObject({ outcome: "processing" });
+    expect(await read()).toMatchObject({ status: "pending_payment", paymentProcessing: true });
+    await expect(open()).rejects.toMatchObject({ code: "TICKET_PAYMENT_PROCESSING" });
+    expect(await sendTicketPaymentReminders(env.DB, "https://example.test")).toEqual({ reminded: 0 });
+
+    // It failed after all: the person is asked again, on a new payment page.
+    expect(await session("checkout.session.async_payment_failed", "unpaid")).toMatchObject({
+      outcome: "payment_failed",
+    });
+    expect(await read()).toMatchObject({ status: "pending_payment", paymentProcessing: false });
+    expect(await sendTicketPaymentReminders(env.DB, "https://example.test")).toEqual({ reminded: 1 });
+    await expect(open()).resolves.toMatchObject({ checkoutUrl: expect.any(String) });
+
+    // The next one arrives days later and settles the ticket.
+    expect(await session("checkout.session.completed", "unpaid")).toMatchObject({ outcome: "processing" });
+    expect(await session("checkout.session.async_payment_succeeded", "paid")).toMatchObject({ outcome: "paid" });
+    expect(await read()).toMatchObject({ status: "paid", paymentProcessing: false });
   });
 
   it("reminds an unpaid ticket once it is due and not a registration that is cancelled", async () => {

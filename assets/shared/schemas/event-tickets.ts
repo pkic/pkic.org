@@ -392,6 +392,8 @@ export const registrationTicketSchema = z.object({
   refundPending: z.boolean(),
   /** The latest refund for this ticket did not go through. */
   refundFailed: z.boolean(),
+  /** The payment was made by a method that takes days and has not arrived yet; nothing is asked meanwhile. */
+  paymentProcessing: z.boolean().default(false),
   /** The payment provider's reference for the payment, once paid. */
   paymentReference: z.string().nullable(),
   /** Until when this ticket is refunded on cancellation or a move to cheaper days; null when it never is. */
