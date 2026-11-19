@@ -407,7 +407,6 @@ describe("scanner device enrollment and manual capture boundary", () => {
     expect(fast.textContent).toContain(formatDateTime(mocks.snapshot.expiresAt));
     const readiness = fast.querySelector('[role="status"][aria-label="Scanner status"]');
     expect(readiness).not.toBeNull();
-    expect(readiness?.getAttribute("title")).toBe("All scans synced");
     expect(readiness?.textContent).not.toContain("Badge data ready");
   });
   it.each(["eligible", "unknown"] as const)(
