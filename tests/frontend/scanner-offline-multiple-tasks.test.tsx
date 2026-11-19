@@ -134,6 +134,8 @@ describe("multiple prepared scanner tasks", () => {
       otherDeviceId,
     ]);
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    window.location.hash = `#${route}`;
+    expect(await restoreScannerOfflineContext(route)).toBeNull();
     for (const selected of [first!, second!]) {
       window.location.hash = `#${route}?offlineContext=${selected.contextId}`;
       expect(await restoreScannerOfflineContext(route)).toMatchObject({ deviceId: selected.deviceId });
@@ -168,6 +170,8 @@ describe("multiple prepared scanner tasks", () => {
       ["checkout", "scan"],
     ]);
     const entrance = choices[1]!;
+    window.location.hash = `#${route}`;
+    expect(await restoreScannerOfflineContext(route)).toMatchObject({ contextId: checkout!.contextId });
     for (const selected of [collection!, entrance, checkout!]) {
       window.location.hash = `#${route}?scanAction=${selected.action}&scannerPurpose=${selected.purpose}&offlineContext=${selected.contextId}`;
       expect(await restoreScannerOfflineContext(route)).toMatchObject({ contextId: selected.contextId });

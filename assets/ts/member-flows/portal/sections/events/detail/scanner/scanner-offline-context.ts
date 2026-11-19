@@ -384,12 +384,18 @@ export async function restoreScannerOfflineContext(route: string): Promise<Scann
           : [],
       );
     });
-    // Never guess between two retained devices/targets.
-    if (candidates.length !== 1) {
+    // A prepared roster can offer several tasks. The epoch records the task this scanner last used;
+    // a bare scanner URL resumes that task, while distinct devices remain ambiguous.
+    const selectedCandidates = selectedId
+      ? candidates
+      : candidates.length > 1
+        ? candidates.filter(({ epoch, context }) => epoch.collectorContext?.contextId === context.contextId)
+        : candidates;
+    if (selectedCandidates.length !== 1) {
       await done;
       return null;
     }
-    const { epoch, context } = candidates[0]!;
+    const { epoch, context } = selectedCandidates[0]!;
     const next = { ...context, lastObservedAt: new Date().toISOString() };
     const contexts = preparedContexts(epoch).map((item) =>
       item.contextId === context.contextId && samePreparedTask(item, context) ? next : item,
