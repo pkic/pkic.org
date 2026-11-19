@@ -280,6 +280,47 @@ describe("account sign-up", () => {
     }
   });
 
+  it("tells an account that already holds a registration for the event so, and links to it in the portal", async () => {
+    const { eventId, admin } = await seedEventAndAdmin(env.DB);
+    await env.DB.prepare("UPDATE events SET visibility = 'public' WHERE slug = 'pqc-2026'").run();
+    const registrationId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO registrations (id, event_id, user_id, status, source_type, manage_link_secret, created_at, updated_at)
+       VALUES (?, ?, ?, 'registered', 'self_service', ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+    )
+      .bind(registrationId, eventId, admin.id, crypto.randomUUID())
+      .run();
+    const returnPath = "/events/pqc-2026/register";
+    const limited = {
+      ...env,
+      EMAIL_RATE_LIMITER: createTestRateLimiter(50),
+      IP_RATE_LIMITER: createTestRateLimiter(50),
+    };
+    expect((await call("/api/v1/auth/sign-up", { email: admin.email, returnPath }, limited)).status).toBe(200);
+    const [outbox] = await queryAll<{ template_key: string; payload_json: string }>(
+      env.DB,
+      "SELECT template_key, payload_json FROM email_outbox ORDER BY rowid DESC LIMIT 1",
+    );
+    expect(outbox!.template_key).toBe("user_account_found_link");
+    expect(JSON.parse(outbox!.payload_json)).toMatchObject({
+      alreadyRegistered: true,
+      eventName: "PQC Conference 2026",
+    });
+    const link = (await lastLink())!;
+    expect(link.pathname).toBe("/portal/");
+    expect(new URLSearchParams(link.hash.split("?", 2)[1]).get("next")).toBe(
+      `/events/pqc-2026/registrations/${registrationId}`,
+    );
+    expect(parseCapabilityToken(linkToken(link), "user_sign_in")).not.toBeNull();
+
+    // A cancelled registration is no longer held: the email continues the registration instead.
+    await env.DB.prepare("UPDATE registrations SET status = 'cancelled' WHERE id = ?").bind(registrationId).run();
+    expect((await call("/api/v1/auth/sign-up", { email: admin.email, returnPath }, limited)).status).toBe(200);
+    const continued = JSON.parse(await storedPayload());
+    expect(continued.alreadyRegistered).toBeUndefined();
+    expect(continued).toMatchObject({ registration: true });
+  });
+
   it("keeps an event that is not public out of the link's email", async () => {
     await seedEventAndAdmin(env.DB);
     const returnPath = "/events/pqc-2026/register";

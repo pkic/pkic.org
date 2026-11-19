@@ -60,6 +60,18 @@ describe("the email for an address that already has an account", () => {
     expect(body).toContain(`Sign in with this link to continue ${destination}.`);
     expect(body).toContain(link.magicLinkUrl);
   });
+
+  it("tells an account that is already registered so, and leads to the registration", () => {
+    const data = { ...link, registration: true, alreadyRegistered: true, eventName: "PQC Conference" };
+    expect(compileSimpleTemplate(found.subjectTemplate, data, "text")).toBe(
+      "You are already registered for PQC Conference",
+    );
+    const body = compileSimpleTemplate(found.content, data, "markdown");
+    expect(body).toContain("You are already registered for **PQC Conference**.");
+    expect(body).toContain("View my registration");
+    expect(body).not.toContain("Sign in and continue");
+    expect(body).toContain(link.magicLinkUrl);
+  });
 });
 
 describe("the email for a sign-in request that sends no link", () => {

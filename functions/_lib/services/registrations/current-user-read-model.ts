@@ -71,6 +71,10 @@ export function buildCurrentUserRegistrationsPageQuery(
     conditions.push("strftime('%Y-%m-%dT%H:%M:%fZ', e.starts_at) >= ?");
     bindings.push(query.from);
   }
+  if (query.eventSlug) {
+    conditions.push("e.slug = ?");
+    bindings.push(query.eventSlug);
+  }
   if (query.to) {
     conditions.push("strftime('%Y-%m-%dT%H:%M:%fZ', e.starts_at) <= ?");
     bindings.push(query.to);

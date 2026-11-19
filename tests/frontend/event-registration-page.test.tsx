@@ -11,6 +11,10 @@ import { EventRegistrationForm } from "../../assets/ts/site/EventRegistrationFor
 import { registrationCreateSchema } from "../../assets/shared/schemas/registration";
 import { myProfileUpdateSchema } from "../../assets/shared/schemas/me";
 import { emailDomainResponseSchema } from "../../assets/shared/schemas/email-domains";
+import {
+  currentUserRegistrationsListResponseSchema,
+  type CurrentUserRegistration,
+} from "../../assets/shared/schemas/current-user-registrations";
 import { portalProfileFixture, portalSessionFixture } from "../helpers/portal-session";
 import { FORMS } from "./helpers/participant-registration-fixtures";
 import { controlFor } from "./helpers/labeled-control";
@@ -18,6 +22,7 @@ import { controlFor } from "./helpers/labeled-control";
 const PLACEMENTS = "/api/v1/events/pqc-2026/forms/placements/event_registration";
 const REGISTRATIONS = "/api/v1/events/pqc-2026/registrations";
 const SESSION = portalSessionFixture({ member: true });
+const HELD_ID = "30000000-0000-4000-8000-000000000009";
 
 interface Captured {
   path: string;
@@ -33,8 +38,38 @@ interface SavedNames {
   lastName: string | null;
 }
 
+/** The person's own registrations for the event, as the register page looks them up once signed in. */
+function heldRegistrations(status: CurrentUserRegistration["status"] | null) {
+  return currentUserRegistrationsListResponseSchema.parse({
+    registrations: status
+      ? [
+          {
+            id: HELD_ID,
+            event: {
+              id: "20000000-0000-4000-8000-000000000001",
+              slug: "pqc-2026",
+              name: "PQC Conference 2026",
+              startsAt: "2026-12-01T08:00:00.000Z",
+              endsAt: "2026-12-01T17:00:00.000Z",
+              timezone: "Europe/Amsterdam",
+            },
+            status,
+            days: [],
+            waitlisted: false,
+            createdAt: "2026-10-01T08:00:00.000Z",
+          },
+        ]
+      : [],
+    page: { limit: 1, offset: 0, total: status ? 1 : 0, hasMore: false },
+  });
+}
+
 /** `person` null leaves the browser signed out; otherwise the session's saved names. */
-function installApi(scheduled = true, person: SavedNames | null = null): Captured[] {
+function installApi(
+  scheduled = true,
+  person: SavedNames | null = null,
+  held: CurrentUserRegistration["status"] | null = null,
+): Captured[] {
   const requests: Captured[] = [];
   let profile = person && { ...portalProfileFixture(SESSION), ...person };
   vi.stubGlobal(
@@ -86,6 +121,10 @@ function installApi(scheduled = true, person: SavedNames | null = null): Capture
           profile = { ...profile, ...myProfileUpdateSchema.parse(JSON.parse(String(init.body))) };
         return Promise.resolve(json(profile));
       }
+      if (url.pathname === "/api/v1/users/current/registrations" && profile) {
+        expect(url.searchParams.get("eventSlug")).toBe("pqc-2026");
+        return Promise.resolve(json(heldRegistrations(held)));
+      }
       if (url.pathname.startsWith("/api/v1/email/domains/"))
         return Promise.resolve(
           json(emailDomainResponseSchema.parse({ domain: url.pathname.split("/").at(-1), kind: "free" })),
@@ -132,10 +171,14 @@ afterEach(() => {
   window.history.replaceState({}, "", "/");
 });
 
-async function loadPage(scheduled = true, person: SavedNames | null = null): Promise<Captured[]> {
+async function loadPage(
+  scheduled = true,
+  person: SavedNames | null = null,
+  held: CurrentUserRegistration["status"] | null = null,
+): Promise<Captured[]> {
   document.body.innerHTML = renderToString(<EventRegistrationForm />);
   document.querySelector<HTMLElement>("[data-event-registration]")!.dataset.eventSlug = "pqc-2026";
-  const requests = installApi(scheduled, person);
+  const requests = installApi(scheduled, person, held);
   await act(async () => {
     await import("../../assets/ts/event-flows/registration-page");
   });
@@ -223,4 +266,22 @@ describe("registration entry", () => {
     ).toBe(false);
     expect(document.body.textContent).toContain("You're registered, Ada!");
   });
+
+  it("takes a signed-in person who is already registered to their registration in the portal", async () => {
+    const assign = vi.fn();
+    vi.stubGlobal("location", { ...window.location, assign });
+    await loadPage(true, { firstName: "Ada", lastName: "Lovelace" }, "registered");
+    expect(assign).toHaveBeenCalledWith(`/portal/#/events/pqc-2026/registrations/${HELD_ID}`);
+  });
+
+  it.each(["cancelled", "pending_email_confirmation"] as const)(
+    "lets a person whose registration is %s register again",
+    async (status) => {
+      const assign = vi.fn();
+      vi.stubGlobal("location", { ...window.location, assign });
+      await loadPage(true, { firstName: "Ada", lastName: "Lovelace" }, status);
+      expect(assign).not.toHaveBeenCalled();
+      expect(document.querySelector<HTMLFormElement>("form[novalidate].needs-validation")!.hidden).toBe(false);
+    },
+  );
 });

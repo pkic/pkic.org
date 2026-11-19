@@ -1,4 +1,4 @@
-import { eventParticipantRecordPath } from "../../assets/ts/member-flows/portal/sections/events/event-participant-paths";
+import { eventParticipantRecordPath } from "../../assets/shared/event-participant-paths";
 import { eventWorkspacePath } from "./helpers/agenda-workspace";
 import { SPEAKER_PARTICIPATION_COPY } from "../../assets/shared/proposal-speaker-acceptance";
 import { uploadThroughControl } from "./helpers/file-upload";

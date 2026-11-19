@@ -8,7 +8,7 @@ import {
 } from "../components/RegistrationDayStatusSummary";
 import { renderSharePanel } from "../shared/widgets/share-panel";
 import { renderDonationCta } from "../shared/donation/cta";
-import { eventParticipantRecordPath } from "../member-flows/portal/sections/events/event-participant-paths";
+import { eventParticipantRecordPath } from "../../shared/event-participant-paths";
 
 export function showRegistrationSuccess(
   root: HTMLElement,

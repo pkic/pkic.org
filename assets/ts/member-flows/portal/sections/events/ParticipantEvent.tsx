@@ -8,7 +8,7 @@ import {
   isMyAgendaQuery,
 } from "../../../../../shared/event-participation-link";
 import type { ComponentChildren } from "preact";
-import { eventParticipantRecordPath } from "./event-participant-paths";
+import { eventParticipantRecordPath } from "../../../../../shared/event-participant-paths";
 import { useBoundaryClock } from "../../../../hooks/useBoundaryClock";
 import { useData } from "../../../../hooks/useData";
 import { getJson, ApiClientError } from "../../../../shared/api-client";

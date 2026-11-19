@@ -14,7 +14,7 @@ import { ButtonLink } from "../../../../../ui/Button";
 import { Button } from "../../../../../ui/Button";
 import { usePortalHashLocation } from "../../../hash-location";
 import { profile } from "../../../state";
-import { eventParticipantRecordPath } from "../event-participant-paths";
+import { eventParticipantRecordPath } from "../../../../../../shared/event-participant-paths";
 import { EventCard } from "./EventCard";
 import { eventRegistrationStanding, type ParticipantEventDetail } from "./event-app-model";
 import { calendarDate, countdownLabel, eventCountdown, greetingFor } from "./event-welcome";

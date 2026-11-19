@@ -1,6 +1,6 @@
 /** One registration form and question pipeline, embedded by public pages and the portal. */
 import { render } from "preact";
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 import type { EventFormsResponse } from "../../../shared/schemas/forms";
 import { isIdentityOwnedFormKey } from "../../../shared/schemas/form-answers";
@@ -22,7 +22,8 @@ import { registrationInvitation } from "./registration-invitation";
 import { updateRegistrationReview } from "./registration-review";
 import { clearReferralSession, clearRememberedInvitation } from "../../shared/query-context";
 import { useContractForm } from "../../hooks/useContractForm";
-import { postJson } from "../../shared/api-client";
+import { getJson, postJson } from "../../shared/api-client";
+import { currentUserRegistrationsListResponseSchema } from "../../../shared/schemas/current-user-registrations";
 import { readField } from "../../shared/form/helpers";
 import { installStepNavigation, REGISTRATION_STEP_PARAM } from "../../shared/form/step-navigation";
 import { CONTRACT_VALIDATION_ATTRIBUTE } from "../../shared/form/validation";
@@ -48,6 +49,8 @@ type Create = {
   mode: "create";
   context: Omit<FlowBoot, "root" | "form" | "statusEl">;
   autoSession?: boolean;
+  /** Takes a signed-in person who already holds a registration for the event to it, instead of the steps. */
+  onAlreadyRegistered?: (registrationId: string) => void;
   submit?: (body: RegistrationInput) => Promise<RegistrationSubmissionResponse>;
   onRegistered: (
     result: RegistrationSubmissionResponse,
@@ -242,6 +245,28 @@ export function RegistrationFlow(props: Props) {
     };
   }, [element]);
 
+  const heldLookup = useRef(props.mode === "create" ? props : null);
+  heldLookup.current = props.mode === "create" ? props : null;
+  useEffect(() => {
+    const create = heldLookup.current;
+    if (!ready || !create?.onAlreadyRegistered) return;
+    const controller = new AbortController();
+    const query = new URLSearchParams({ eventSlug: create.context.eventSlug, limit: "1" });
+    getJson(
+      `${create.context.apiBase}/users/current/registrations?${query}`,
+      currentUserRegistrationsListResponseSchema,
+      {
+        signal: controller.signal,
+      },
+    )
+      .then(({ registrations }) => {
+        const held = registrations.find((registration) => registration.status === "registered");
+        if (held) heldLookup.current?.onAlreadyRegistered?.(held.id);
+      })
+      // Without the answer the steps simply continue; submitting still refuses a second registration.
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [ready]);
   useLayoutEffect(() => {
     const first = root.current?.querySelector<HTMLElement>('[data-step="1"]');
     const next = root.current?.querySelector<HTMLButtonElement>("[data-step-next]");
