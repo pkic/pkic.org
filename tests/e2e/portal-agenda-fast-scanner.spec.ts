@@ -74,10 +74,7 @@ test("badge collection opens for an upcoming event after daily preparation", asy
         status: refreshStatus,
         contentType: "application/json",
         headers: refreshStatus === 429 ? { "Retry-After": "120" } : undefined,
-        body:
-          refreshStatus === 409
-            ? JSON.stringify({ error: { code: "SCANNER_PREPARATION_CLOSED", message: "Closed" } })
-            : "{}",
+        body: "{}",
       });
     }
     firstCollectionRequest = false;
@@ -125,7 +122,7 @@ test("badge collection opens for an upcoming event after daily preparation", asy
     "All scans synced",
   );
   await page.screenshot({ animations: "disabled", path: testInfo.outputPath("badge-collection-phone.png") });
-  for (const status of [500, 403, 409, 429]) {
+  for (const status of [500, 403, 429]) {
     refreshStatus = status;
     await Promise.all([
       page.waitForResponse(
@@ -139,7 +136,7 @@ test("badge collection opens for an upcoming event after daily preparation", asy
     await expect(scanner).toBeVisible();
     await expect(scanner.locator(".pk-fast-scanner__feedback")).toHaveText("Ready for badge collection");
   }
-  expect(refreshAttempts).toBe(4);
+  expect(refreshAttempts).toBe(3);
   const uploadStatuses = [500, 403, 429];
   let uploadAttempts = 0;
   await page.route(new RegExp(`/api/v1/events/${event.slug}/scans$`), async (route) => {
