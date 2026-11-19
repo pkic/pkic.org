@@ -418,7 +418,7 @@ test("a new proposer signs in, adds a nonmember affiliation, and an invited know
     }
     await capture(guest, info, "parallel-representation-selected");
 
-    const invitation = await waitForCapturedEmail(knownEmail, "Speaker invitation: please confirm", { since });
+    const invitation = await waitForCapturedEmail(knownEmail, "Speaker invitation for", { since });
     const speakerUrl = extractEmailUrl(invitation, "/portal/");
     const proposalId = submittedProposal.proposalId!;
     const resumed = await resumeContext.newPage();

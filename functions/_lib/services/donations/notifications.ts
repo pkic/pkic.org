@@ -87,9 +87,7 @@ async function queueUnsuccessfulPayment(
     templateKey: failed ? "donation_payment_failed" : "donation_expired",
     recipientEmail: donation.email,
     messageType: "transactional",
-    subject: failed
-      ? "Your donation payment failed — PKI Consortium"
-      : "Your donation checkout expired — PKI Consortium",
+    subject: failed ? "Your donation payment didn't go through" : "Your donation wasn't completed",
     data: {
       firstName: firstName(donation.name),
       name: donation.name,

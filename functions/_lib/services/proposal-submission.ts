@@ -272,7 +272,7 @@ export async function submitProposal(
       recipientEmail: user.email,
       recipientUserId: user.id,
       messageType: "transactional",
-      subject: `Speaker invitation: please confirm — ${input.event.name}`,
+      subject: `Speaker invitation for ${input.event.name}`,
       capabilityLinkValues: [manageToken],
       data: {
         __speakerCapability: manageToken,
@@ -326,7 +326,7 @@ export async function submitProposal(
       recipientEmail: proposer.email,
       recipientUserId: proposer.id,
       messageType: "transactional",
-      subject: `Review your speaker representation — ${input.event.name}`,
+      subject: `Choose who you speak as — ${input.event.name}`,
       capabilityLinkValues: [proposerSpeaker.manageToken],
       data: {
         __speakerCapability: proposerSpeaker.manageToken,

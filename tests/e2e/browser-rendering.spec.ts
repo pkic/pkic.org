@@ -1048,8 +1048,8 @@ test.describe("browser workflows", () => {
     await expect(page.getByText(/you will receive an email shortly/i)).toBeVisible({ timeout: 10_000 });
     await screenshot("02-resend-manage-submitted");
 
-    // Wait for fresh management link email (subject: "Your management link for …")
-    const newManageEmail = await waitForCapturedEmail(resendTester, "Your management link");
+    // Wait for fresh management link email (subject: "Manage your registration for …")
+    const newManageEmail = await waitForCapturedEmail(resendTester, "Manage your registration");
     const newManageUrl = extractUrlFromEmail(newManageEmail, "/register/manage/");
     const newManageToken = new URL(newManageUrl).searchParams.get("token") ?? "";
     expect(newManageToken).toMatch(/^pkc1_/);

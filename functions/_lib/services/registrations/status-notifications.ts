@@ -74,9 +74,11 @@ interface RegistrationEmailOverrides {
   dayWaitlist?: RegistrationDayWaitlistRow[];
 }
 
+type RegistrationEmailContext = Awaited<ReturnType<typeof loadRegistrationEmailContext>>;
+
 async function loadRegistrationEmailContext(
   db: DatabaseLike,
-  event: RegistrationStatusEmailEvent,
+  event: Pick<RegistrationStatusEmailEvent, "id" | "source_mode">,
   registrationId: string,
   overrides: RegistrationEmailOverrides = {},
 ): Promise<{
@@ -122,6 +124,34 @@ async function loadRegistrationEmailContext(
   return { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText };
 }
 
+/** The fields of the shared registration details block (`{{> reg_details}}`), as every registration email shows it. */
+function registrationDetailsData(context: RegistrationEmailContext, recipientEmail: string) {
+  const { user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText } = context;
+  const attendanceData = buildAttendanceEmailData(dayAttendance, dayWaitlist);
+  return {
+    firstName: user.first_name ?? "",
+    lastName: user.last_name ?? "",
+    email: recipientEmail,
+    organizationName: emailPlainText(user.organization_name ?? ""),
+    jobTitle: user.job_title ?? "",
+    attendanceLabel: attendanceData.attendanceLabel,
+    dayAttendance: attendanceData.dayAttendance,
+    dayWaitlist,
+    customAnswerRows,
+    acceptedTermsText: acceptedTermsText || undefined,
+  };
+}
+
+/** The registration details block for one registration, for an email that is not about the registration itself. */
+export async function registrationDetailsEmailData(
+  db: DatabaseLike,
+  event: Pick<RegistrationStatusEmailEvent, "id" | "source_mode">,
+  registrationId: string,
+) {
+  const context = await loadRegistrationEmailContext(db, event, registrationId);
+  return registrationDetailsData(context, context.user.email);
+}
+
 export interface RegistrationStatusEmailParams extends RegistrationEmailOverrides {
   event: RegistrationStatusEmailEvent;
   registrationId: string;
@@ -140,9 +170,9 @@ export async function prepareRegistrationStatusEmail(
   db: DatabaseLike,
   params: RegistrationStatusEmailParams,
 ): Promise<{ outboxId: string; statement: StatementLike; manageToken: string; manageUrl: string }> {
-  const { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText } =
-    await loadRegistrationEmailContext(db, params.event, params.registrationId, params);
-  const attendanceData = buildAttendanceEmailData(dayAttendance, dayWaitlist);
+  const context = await loadRegistrationEmailContext(db, params.event, params.registrationId, params);
+  const { registration, user, dayWaitlist } = context;
+  const details = registrationDetailsData(context, params.recipientEmailOverride ?? user.email);
   const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
   const { manageToken, manageUrl } = await registrationManageCapability(params.appBaseUrl, params.event, registration);
   const recipientEmail = params.recipientEmailOverride ?? user.email;
@@ -159,24 +189,15 @@ export async function prepareRegistrationStatusEmail(
     capabilityLinkValues: [manageUrl],
     data: {
       ...buildEventEmailVariables(params.event, params.appBaseUrl),
-      firstName: user.first_name ?? "",
-      lastName: user.last_name ?? "",
-      email: recipientEmail,
-      organizationName: emailPlainText(user.organization_name ?? ""),
-      jobTitle: user.job_title ?? "",
-      attendanceLabel: attendanceData.attendanceLabel,
-      attendanceSummary: attendanceData.dayAttendance.length
-        ? attendanceData.dayAttendance
+      ...details,
+      attendanceSummary: details.dayAttendance.length
+        ? details.dayAttendance
             .map(
               (day) =>
                 `${day.dayLabel}: ${day.attendanceLabel}${day.statusLabel === day.attendanceLabel ? "" : ` — ${day.statusLabel}`}`,
             )
             .join("; ")
-        : attendanceData.attendanceLabel,
-      dayAttendance: attendanceData.dayAttendance,
-      dayWaitlist,
-      customAnswerRows,
-      acceptedTermsText: acceptedTermsText || undefined,
+        : details.attendanceLabel,
       ...statusData,
       manageUrl,
       myAgendaUrl: myAgendaPageUrl(params.appBaseUrl, params.event),
@@ -214,10 +235,9 @@ export async function prepareRegistrationConfirmedEmail(
   db: DatabaseLike,
   params: RegistrationConfirmedEmailParams,
 ): Promise<{ outboxId: string; statement: StatementLike; manageUrl: string }> {
-  const { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText } =
-    await loadRegistrationEmailContext(db, params.event, params.registrationId, params);
+  const context = await loadRegistrationEmailContext(db, params.event, params.registrationId, params);
+  const { registration, user, dayAttendance, dayWaitlist } = context;
   const recipientEmail = params.recipientEmailOverride ?? user.email;
-  const attendanceData = buildAttendanceEmailData(dayAttendance, dayWaitlist);
   const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
   const { manageUrl } = await registrationManageCapability(params.appBaseUrl, params.event, registration);
   const rsvpAddress = params.internalSigningSecret
@@ -260,16 +280,7 @@ export async function prepareRegistrationConfirmedEmail(
     data: {
       hasCalendarInvite: calendar.files.length > 0,
       ...buildEventEmailVariables(params.event, params.appBaseUrl),
-      firstName: user.first_name ?? "",
-      lastName: user.last_name ?? "",
-      email: recipientEmail,
-      organizationName: emailPlainText(user.organization_name ?? ""),
-      jobTitle: user.job_title ?? "",
-      attendanceLabel: attendanceData.attendanceLabel,
-      dayAttendance: attendanceData.dayAttendance,
-      dayWaitlist,
-      customAnswerRows,
-      acceptedTermsText: acceptedTermsText || undefined,
+      ...registrationDetailsData(context, recipientEmail),
       ...statusData,
       registrationId: registration.id,
       manageUrl,
@@ -315,10 +326,9 @@ export async function prepareRegistrationConfirmationEmail(
   db: DatabaseLike,
   params: RegistrationConfirmationEmailParams,
 ): Promise<{ outboxId: string; statement: StatementLike; confirmationUrl: string }> {
-  const { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText } =
-    await loadRegistrationEmailContext(db, params.event, params.registrationId, params);
+  const context = await loadRegistrationEmailContext(db, params.event, params.registrationId, params);
+  const { registration, user, dayWaitlist } = context;
   const recipientEmail = params.recipientEmail ?? user.email;
-  const attendanceData = buildAttendanceEmailData(dayAttendance, dayWaitlist);
   const statusData = buildRegistrationEmailStatusData("pending_email_confirmation", dayWaitlist);
   const kind = params.kind ?? "registration";
   const confirmationUrl = await registrationConfirmationUrl(
@@ -344,16 +354,7 @@ export async function prepareRegistrationConfirmationEmail(
     capabilityLinkValues: [confirmationUrl],
     data: {
       ...buildEventEmailVariables(params.event, params.appBaseUrl),
-      firstName: user.first_name ?? "",
-      lastName: user.last_name ?? "",
-      email: recipientEmail,
-      organizationName: emailPlainText(user.organization_name ?? ""),
-      jobTitle: user.job_title ?? "",
-      attendanceLabel: attendanceData.attendanceLabel,
-      dayAttendance: attendanceData.dayAttendance,
-      customAnswerRows,
-      dayWaitlist,
-      acceptedTermsText: acceptedTermsText || undefined,
+      ...registrationDetailsData(context, recipientEmail),
       ...statusData,
       registrationId: registration.id,
       confirmationUrl,

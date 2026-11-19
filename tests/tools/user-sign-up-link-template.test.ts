@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { compileSimpleTemplate } from "../../functions/_lib/email/render";
 import { DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES } from "../../scripts/lib/transactional-email-default-templates.mjs";
+import { DEFAULT_TEMPLATES } from "../../scripts/seed-email-templates.mjs";
 
 const template = DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES.find((item) => item.key === "user_sign_up_link")!;
 const link = {
@@ -29,14 +30,14 @@ describe("the email that starts an account", () => {
     const body = compileSimpleTemplate(template.content, data, "markdown");
     expect(body).toContain("**ada@organization.example**");
     expect(body).toContain(`takes you straight back to ${destination}`);
-    // Sent alike to an address with or without an account, it never says which one this is.
-    expect(body).toContain("creates your PKI Consortium account, or signs you in if you already have one");
-    expect(body).not.toContain("sign-in link was requested");
+    expect(body).toContain("The link sets up your PKI Consortium account");
+    expect(body).toContain("Confirm my email");
   });
 });
 
 const found = DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES.find((item) => item.key === "user_account_found_link")!;
 const help = DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES.find((item) => item.key === "user_sign_in_help")!;
+const registrationDetails = DEFAULT_TEMPLATES.find((item) => item.key === "partial_reg_details")!;
 
 describe("the email for an address that already has an account", () => {
   it.each([
@@ -57,18 +58,35 @@ describe("the email for an address that already has an account", () => {
     expect(compileSimpleTemplate(found.subjectTemplate, data, "text")).toBe(subject);
     const body = compileSimpleTemplate(found.content, data, "markdown");
     expect(body).toContain("You already have a PKI Consortium account with **ada@organization.example**");
-    expect(body).toContain(`Sign in with this link to continue ${destination}.`);
+    expect(body).toContain(`Sign in to continue ${destination}.`);
+    expect(body).not.toContain("Your registration details");
     expect(body).toContain(link.magicLinkUrl);
   });
 
-  it("tells an account that is already registered so, and leads to the registration", () => {
-    const data = { ...link, registration: true, alreadyRegistered: true, eventName: "PQC Conference" };
+  it("tells an account that is already registered so, shows the registration and leads to it", () => {
+    const data = {
+      ...link,
+      registration: true,
+      alreadyRegistered: true,
+      eventName: "PQC Conference",
+      firstName: "Ada",
+      lastName: "Lovelace",
+      dayAttendance: [{ dayLabel: "Day 1", attendanceLabel: "In person", statusLabel: "Confirmed" }],
+    };
     expect(compileSimpleTemplate(found.subjectTemplate, data, "text")).toBe(
-      "You are already registered for PQC Conference",
+      "You're already registered for PQC Conference",
     );
-    const body = compileSimpleTemplate(found.content, data, "markdown");
-    expect(body).toContain("You are already registered for **PQC Conference**.");
-    expect(body).toContain("View my registration");
+    const body = compileSimpleTemplate(
+      found.content,
+      { ...data, _partials: { reg_details: { content: registrationDetails.content, contentType: "markdown" } } },
+      "markdown",
+    );
+    expect(body).toContain("Hello Ada,");
+    expect(body).toContain("you're already registered for **PQC Conference**, so there's nothing more to do");
+    expect(body).toContain("View or change my registration");
+    expect(body).toContain("## Your registration details");
+    expect(body).toContain("**Name:** Ada Lovelace");
+    expect(body).toContain("**Day 1:** In person — Confirmed");
     expect(body).not.toContain("Sign in and continue");
     expect(body).toContain(link.magicLinkUrl);
   });
@@ -78,21 +96,20 @@ describe("the email for a sign-in request that sends no link", () => {
   it("offers an address without an account the way to start one", () => {
     const data = { noAccount: true, email: "ada@organization.example", startUrl: "https://app.test/portal/" };
     expect(compileSimpleTemplate(help.subjectTemplate, data, "text")).toBe(
-      "No PKI Consortium account uses this address",
+      "We couldn't find a PKI Consortium account for this address",
     );
     const body = compileSimpleTemplate(help.content, data, "markdown");
-    expect(body).toContain("no PKI Consortium account signs in with this address");
+    expect(body).toContain("no PKI Consortium account uses this address");
+    expect(body).toContain("Create an account");
     expect(body).toContain('href="https://app.test/portal/"');
   });
 
   it("sends a proved address its account cannot sign in with to the secretariat", () => {
     const data = { email: "ada@organization.example", contactEmail: "contact@pkic.org" };
-    expect(compileSimpleTemplate(help.subjectTemplate, data, "text")).toBe(
-      "We could not send a PKI Consortium sign-in link",
-    );
+    expect(compileSimpleTemplate(help.subjectTemplate, data, "text")).toBe("We couldn't send you a sign-in link");
     const body = compileSimpleTemplate(help.content, data, "markdown");
-    expect(body).toContain("cannot sign in with it");
+    expect(body).toContain("this address can't be used to sign in to its account");
     expect(body).toContain("mailto:contact@pkic.org");
-    expect(body).not.toContain("Start an account");
+    expect(body).not.toContain("Create an account");
   });
 });

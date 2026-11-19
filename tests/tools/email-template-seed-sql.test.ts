@@ -197,7 +197,7 @@ describe("buildTemplateSqlStatements", () => {
       "https://example.test",
     );
     expect(rendered.text).toContain("https://example.test/private-speaker-profile");
-    expect(rendered.text).toContain("individual presentation");
+    expect(rendered.text).toContain("yourself, or an organization you represent");
     expect(rendered.text).toContain("only your own speaker profile");
   });
   it.each([true, false])(
@@ -217,21 +217,21 @@ describe("buildTemplateSqlStatements", () => {
         "markdown",
         "https://example.test",
       );
-      expect(rendered.text).toContain("awaiting a decision");
-      expect(rendered.text).not.toContain("has been accepted");
-      expect(rendered.text.includes("confirm or decline")).toBe(requiresConfirmation);
+      expect(rendered.text).toContain("is waiting for a decision");
+      expect(rendered.text).not.toContain("is accepted for");
+      expect(rendered.text.includes("say whether you will")).toBe(requiresConfirmation);
     },
   );
   it.each([true, false])("asks for a headshot only when one is missing: %s", async (hasHeadshot) => {
     const reminder = DEFAULT_TEMPLATES.find((item) => item.key === "speaker_profile_reminder")!;
     const rendered = await renderEmail(reminder.content, { hasHeadshot }, DEFAULT_LAYOUT_HTML);
-    expect(rendered.text.includes("Please upload a headshot")).toBe(!hasHeadshot);
+    expect(rendered.text.includes("upload a headshot")).toBe(!hasHeadshot);
   });
   it.each([
-    ["accepted", "has been accepted"],
-    ["waitlisted", "on the waitlist"],
-    ["needs-work", "Updates are requested"],
-    ["submitted", "awaiting a decision"],
+    ["accepted", "is accepted for"],
+    ["waitlisted", "is on the waitlist"],
+    ["needs-work", "asked for changes"],
+    ["submitted", "is waiting for a decision"],
   ])("explains the actual proposal status: %s", async (proposalDecisionStatus, expected) => {
     const reminder = DEFAULT_TEMPLATES.find((item) => item.key === "speaker_profile_reminder")!;
     const rendered = await renderEmail(
@@ -240,7 +240,7 @@ describe("buildTemplateSqlStatements", () => {
       DEFAULT_LAYOUT_HTML,
     );
     expect(rendered.text).toContain(expected);
-    expect(rendered.text.includes("has been accepted")).toBe(proposalDecisionStatus === "accepted");
+    expect(rendered.text.includes("is accepted for")).toBe(proposalDecisionStatus === "accepted");
   });
   it("keeps the baseline layout light and separates public branding from action links", () => {
     expect(DEFAULT_LAYOUT_HTML).toContain('content="light only"');
@@ -271,7 +271,7 @@ describe("buildTemplateSqlStatements", () => {
     expect(rendered.html.split(`href="${magicLinkUrl}"`)).toHaveLength(2);
     expect(rendered.html).toContain("background:#0d1b2a");
     expect(rendered.html).not.toContain("use this sign-in link");
-    expect(rendered.text).toContain("Sign in to the portal");
+    expect(rendered.text).toContain("your link to sign in to the");
     expect(rendered.text.split(magicLinkUrl)).toHaveLength(2);
     expect(rendered.html).not.toContain("http://localhost:8788/img/logo-white.png");
   });

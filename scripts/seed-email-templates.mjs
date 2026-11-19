@@ -133,9 +133,9 @@ export const DEFAULT_TEMPLATES = [
   ...DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES,
   {
     key: "agenda_changed",
-    subjectTemplate: "Your schedule has changed — {{eventName}}",
+    subjectTemplate: "Your schedule changed — {{eventName}}",
     content:
-      "The organizers have approved changes to **{{eventName}}** that affect a session in your personal agenda. Open the event portal to review your updated schedule before attending. Your existing registration remains in place.",
+      "Hello,\n\nThe schedule for **{{eventName}}** has changed, and a session in your agenda is affected.\n\nCheck your agenda in the PKI Consortium portal before you go. Your registration hasn't changed.",
     contentType: "markdown",
     messageType: "transactional",
   },
@@ -143,7 +143,7 @@ export const DEFAULT_TEMPLATES = [
     key: "agenda_session_reminder",
     subjectTemplate: "Starting soon: {{sessionTitle}}",
     content:
-      "Your reserved session **{{sessionTitle}}** at **{{eventName}}** starts at {{sessionStart}}. Location: {{sessionLocation}}. Open your event agenda for the latest information.",
+      "Hello,\n\nYour session **{{sessionTitle}}** at **{{eventName}}** starts at {{sessionStart}}.\n\nLocation: **{{sessionLocation}}**\n\nCheck your agenda in the PKI Consortium portal for any last-minute changes.",
     contentType: "markdown",
     messageType: "transactional",
   },
@@ -289,7 +289,7 @@ Applicant name: {{applicantName}}
     contentType: "markdown",
     content: `**About the PKI Consortium**
 
-The PKI Consortium is a vendor-neutral community of PKI practitioners dedicated to advancing trust, security, and interoperability in digital infrastructure. [Learn more &rarr;]({{brandBaseUrl}}/about/)
+The PKI Consortium is a vendor-neutral community of PKI practitioners working to advance trust, security, and interoperability in digital infrastructure. [Learn more &rarr;]({{brandBaseUrl}}/about/)
 `,
   },
   // ─────────────────────────────────────────────────────────────────────────
@@ -306,7 +306,7 @@ The PKI Consortium is a vendor-neutral community of PKI practitioners dedicated 
 > {{#if firstName}}**Name:** {{firstName}} {{lastName}}<br>
 > {{/if}}{{#if email}}**Email:** {{email}}<br>
 > {{/if}}{{#if organizationName}}**Organization:** {{organizationName}}<br>
-> {{/if}}{{#if jobTitle}}**Title / Role:** {{jobTitle}}<br>
+> {{/if}}{{#if jobTitle}}**Job title:** {{jobTitle}}<br>
 > {{/if}}{{#each dayAttendance}}**{{dayLabel}}:** {{attendanceLabel}} — {{statusLabel}}<br>
 > {{/each}}{{#if attendanceLabel}}**Attendance:** {{attendanceLabel}}<br>
 > {{/if}}{{#each customAnswerRows}}**{{label}}:** {{displayValue}}<br>
@@ -348,13 +348,13 @@ The PKI Consortium is a vendor-neutral community of PKI practitioners dedicated 
     contentType: "markdown",
     content: `---
 
-**Help to keep the PKI Consortium Membership, Conferences, and Resources free**
+**Help keep PKI Consortium membership, conferences, and resources free**
 
-If what we do is valuable to you or your organization, please consider a voluntary contribution — any amount helps us keep membership, conferences, and resources open to the widest possible audience.
+If our work is valuable to you or your organization, please consider a voluntary contribution. Any amount helps keep membership, conferences, and resources open to everyone.
 
 <div class="cta-secondary"><a href="{{brandBaseUrl}}/donate/">Support the PKI Consortium &rarr;</a></div>
 
-<div class="notice notice-info">Contributions to the PKI Consortium are <strong>entirely voluntary</strong> and are not a ticket, fee, or payment for goods or services. The PKI Consortium is a <strong>501(c)(6) nonprofit business league</strong> — donations are <strong>not deductible as charitable contributions</strong> for U.S. federal income tax purposes. Consult your tax advisor regarding any applicable treatment in your jurisdiction.<br><br>Does your organization want to make a bigger impact? Sponsors directly fund free, open events for the global PKI and security community — <a href="{{brandBaseUrl}}/sponsors/">explore sponsorship opportunities at pkic.org/sponsors/</a>.</div>
+<div class="notice notice-info">Contributions to the PKI Consortium are <strong>entirely voluntary</strong> and are not a ticket, fee, or payment for goods or services. The PKI Consortium is a <strong>501(c)(6) nonprofit business league</strong> — donations are <strong>not deductible as charitable contributions</strong> for U.S. federal income tax purposes. Consult your tax advisor regarding any applicable treatment in your jurisdiction.<br><br>Want your organization to make a bigger impact? Sponsors fund free, open events for the global PKI and security community. <a href="{{brandBaseUrl}}/sponsors/">Explore sponsorship</a>.</div>
 `,
   },
   // ─────────────────────────────────────────────────────────────────────────
@@ -366,26 +366,22 @@ If what we do is valuable to you or your organization, please consider a volunta
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "registration_confirm_email",
-    subjectTemplate: "Please confirm your registration for {{eventName}}",
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
+    subjectTemplate: "Confirm your registration for {{eventName}}",
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
 
-Thank you for starting your registration for **{{eventName}}**.
-
-<div class="notice notice-warning"><strong>You are not registered yet.</strong> Please confirm this email address to continue your registration. After you confirm, you will receive a final confirmation email. That final email may still show that you are on the waitlist for one or more days.</div>
-
-This registration was submitted with the email address **{{email}}**.
+Thanks for registering for **{{eventName}}**. One more step: confirm your email address, **{{email}}**, to complete your registration.
 
 <div class="cta"><a href="{{confirmationUrl}}">Confirm my registration &rarr;</a></div>
 
-<div class="notice notice-warning">&#9201; This link expires in <strong>24 hours</strong>. If you did not request this registration, <a href="{{manageUrl}}">click here to cancel it and remove your data</a>.</div>
+<div class="notice notice-warning"><strong>You're not registered until you confirm.</strong> The link expires in 24 hours. After you confirm, we'll email your confirmation, including any days you're on the waitlist for.</div>
+
+Didn't register? [Cancel this registration and remove your data]({{manageUrl}}).
 
 ---
 
 {{> reg_details}}
 
-Use your [registration management link]({{manageUrl}}) to review, update your email address, or cancel this registration at any time.
-
-Know someone who should attend? Share your personal referral link: [{{shareUrl}}]({{shareUrl}})
+{{#if shareUrl}}Know someone who should attend? Share your personal link: [{{shareUrl}}]({{shareUrl}}){{/if}}
 
 {{> sponsors_block}}
 
@@ -402,13 +398,13 @@ Know someone who should attend? Share your personal referral link: [{{shareUrl}}
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "registration_confirmed",
-    subjectTemplate: `{{#if eq status "waitlisted"}}Waitlisted: registration received — {{eventName}}{{else}}Your registration is confirmed — {{eventName}}{{/if}}`,
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
+    subjectTemplate: `{{#if eq status "waitlisted"}}You're on the waitlist for {{eventName}}{{else}}Your registration is confirmed — {{eventName}}{{/if}}`,
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
 
 {{#if eq status "waitlisted"}}
-<div class="notice notice-warning"><strong>Waitlisted:</strong> your registration for <strong>{{eventName}}</strong> has been received. {{#if dayAttendance}}Your overall registration is still pending, and the day-by-day details below show which days are confirmed and which are waitlisted.{{else}}Your entire registration is waitlisted, so no seat has been confirmed yet.{{/if}}</div>
+<div class="notice notice-warning">We received your registration for <strong>{{eventName}}</strong>, and you're on the waitlist. {{#if dayAttendance}}The details below show which days are confirmed and which are waitlisted.{{else}}No seat is confirmed yet.{{/if}}</div>
 {{else}}
-We are delighted to confirm that **your registration for {{eventName}} has been successfully processed**.
+You're registered for **{{eventName}}**. We look forward to seeing you!
 {{/if}}
 
 {{#if hasCalendarInvite}}
@@ -416,11 +412,11 @@ We are delighted to confirm that **your registration for {{eventName}} has been 
 {{/if}}
 
 {{#if venue}}
-<div class="notice notice-info">&#128205; The conference will be held at <strong>{{venue}}</strong>. Enhance your conference experience by staying at the official venue hotel(s), see the <a href="{{eventUrl}}">event website</a> for more details.</div>
+<div class="notice notice-info">&#128205; The event takes place at <strong>{{venue}}</strong>. See the <a href="{{eventUrl}}">event website</a> for travel and hotel information.</div>
 {{/if}}
 
 {{#if eq status "waitlisted"}}
-<div class="notice notice-warning">&#9203; Your registration is currently <strong>waitlisted</strong>, which means the event has not yet fully confirmed your attendance. One of the limiting factors for in-person capacity is the event budget — we will be able to admit more attendees as sponsors commit to the conference. If {{#if organizationName}}<strong>{{organizationName}}</strong>{{else}}your organization{{/if}} is willing and able to sponsor this conference, please <a href="mailto:contact@pkic.org">contact us</a>. We will notify you as soon as the remaining seats become available.</div>
+<div class="notice notice-warning">&#9203; In-person seats are limited by the event budget, and we can admit more attendees as sponsors commit. If {{#if organizationName}}<strong>{{organizationName}}</strong>{{else}}your organization{{/if}} would like to sponsor the event, please <a href="mailto:contact@pkic.org">contact us</a>. We'll email you as soon as a seat opens up.</div>
 {{/if}}
 
 ---
@@ -433,10 +429,8 @@ We are delighted to confirm that **your registration for {{eventName}} has been 
 Plan the sessions you want to attend in [My agenda &rarr;]({{myAgendaUrl}})
 {{/if}}
 
-Know someone who should attend? Share your personal referral link and use the attached personal image to help grow the community:
-[{{shareUrl}}]({{shareUrl}})
-
-We look forward to seeing you at the *{{eventName}}**!
+{{#if shareUrl}}Know someone who should attend? Share your personal link, and the attached image, with your network:
+[{{shareUrl}}]({{shareUrl}}){{/if}}
 
 {{> sponsors_block}}
 
@@ -452,19 +446,19 @@ We look forward to seeing you at the *{{eventName}}**!
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "registration_updated",
-    subjectTemplate: `{{#if adminAdmitNotice}}In-person registration accepted — {{eventName}}{{else}}{{#if waitlistOfferNotice}}Waitlist availability update — {{eventName}}{{else}}{{#if eq status "waitlisted"}}Waitlisted registration updated — {{eventName}}{{else}}Registration updated — {{eventName}}{{/if}}{{/if}}{{/if}}`,
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
+    subjectTemplate: `{{#if adminAdmitNotice}}Your in-person seat is confirmed — {{eventName}}{{else}}{{#if waitlistOfferNotice}}A seat is available — {{eventName}}{{else}}{{#if eq status "cancelled"}}Your registration is cancelled — {{eventName}}{{else}}Your registration was updated — {{eventName}}{{/if}}{{/if}}{{/if}}`,
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
 
-This email confirms that your registration for **{{eventName}}** has been successfully updated.
+Your registration for **{{eventName}}** was updated.
 
 {{#if adminAdmitNotice}}
-<div class="notice notice-success"><strong>Accepted for in-person attendance:</strong> you have been admitted from the waitlist for the in-person day(s) shown as confirmed below.</div>
+<div class="notice notice-success"><strong>Good news:</strong> you have an in-person seat for the days marked confirmed below.</div>
 {{/if}}
 {{#if eq status "waitlisted"}}
-  <div class="notice notice-warning"><strong>Waitlisted:</strong> your attendance is not yet confirmed. You can use your registration management link to review, update, or cancel this registration.</div>
+<div class="notice notice-warning">You're on the waitlist, so your attendance isn't confirmed yet.</div>
 {{/if}}
 {{#if waitlistOfferNotice}}
-<div class="notice notice-info"><strong>A seat is available:</strong> we have sent a waitlist availability notification for your registration. Please open your management link below to review the latest status and take the next step.</div>
+<div class="notice notice-info"><strong>A seat is available.</strong> <a href="{{manageUrl}}">Open your registration</a> to claim it.</div>
 {{/if}}
 
 ---
@@ -474,7 +468,7 @@ This email confirms that your registration for **{{eventName}}** has been succes
 > {{#if firstName}}**Name:** {{firstName}} {{lastName}}  
 > {{/if}}{{#if email}}**Email:** {{email}}  
 > {{/if}}{{#if organizationName}}**Organization:** {{organizationName}}  
-> {{/if}}{{#if jobTitle}}**Title / Role:** {{jobTitle}}  
+> {{/if}}{{#if jobTitle}}**Job title:** {{jobTitle}}  
 > {{/if}}{{#if attendanceSummary}}**Attendance:** {{attendanceSummary}}  
 > {{/if}}{{#if statusLabel}}**Status:** {{statusLabel}}  
 > {{/if}}{{#each customAnswerRows}}**{{label}}:** {{displayValue}}  
@@ -482,13 +476,13 @@ This email confirms that your registration for **{{eventName}}** has been succes
 > - {{acceptedTermsText}}{{/if}}
 
 {{#if eq status "waitlisted"}}
-<div class="notice notice-warning">&#9203; Your registration is currently <strong>waitlisted</strong> for in-person attendance. One of the limiting factors for in-person capacity is the event budget — we will be able to admit more attendees as sponsors commit to the conference. If {{#if organizationName}}<strong>{{organizationName}}</strong>{{else}}your organization{{/if}} is willing and able to sponsor this conference, please <a href="mailto:contact@pkic.org">contact us</a>. We will notify you as soon as a seat becomes available.</div>
+<div class="notice notice-warning">&#9203; In-person seats are limited by the event budget, and we can admit more attendees as sponsors commit. If {{#if organizationName}}<strong>{{organizationName}}</strong>{{else}}your organization{{/if}} would like to sponsor the event, please <a href="mailto:contact@pkic.org">contact us</a>. We'll email you as soon as a seat opens up.</div>
 {{/if}}
 {{#if eq status "cancelled"}}
-<div class="notice notice-danger">Your registration has been <strong>cancelled</strong>. If this was a mistake, please re-register through the event page.</div>
+<div class="notice notice-danger">Your registration is <strong>cancelled</strong>. If this was a mistake, register again on the event page.</div>
 {{/if}}
 
-If the details above don't look right, use your [registration management link]({{manageUrl}}) to review or edit your registration.
+{{#if eq status "cancelled"}}{{else}}Something not right? [Review or change your registration]({{manageUrl}}).{{/if}}
 
 {{#if eq status "cancelled"}}{{else}}
 {{#if myAgendaUrl}}
@@ -505,31 +499,31 @@ Plan the sessions you want to attend in [My agenda &rarr;]({{myAgendaUrl}})
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "registration_waitlist_offer",
-    subjectTemplate: "In-person spot available — {{eventName}}",
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
+    subjectTemplate: "An in-person seat is available — {{eventName}}",
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
 
-An in-person spot is now available for **{{eventName}}**.
+Good news: an in-person seat is now available for you at **{{eventName}}**.
 
-<div class="notice notice-info"><strong>Please review your registration within 24 hours.</strong> Open your management link, keep the offered day selected as in-person, and save your registration to claim the available spot.</div>
+<div class="notice notice-info"><strong>Claim it within 24 hours.</strong> Open your registration, keep the offered day set to in person, and save.</div>
 
-<div class="cta"><a href="{{manageUrl}}">Review and claim my spot &rarr;</a></div>
+<div class="cta"><a href="{{manageUrl}}">Claim my seat &rarr;</a></div>
 
-If you no longer want to attend in person, you can update that day to virtual attendance or cancel your registration from the same page. This helps us offer the spot to the next person on the waitlist.
+No longer coming in person? Change that day to virtual attendance or cancel your registration on the same page, so we can offer the seat to the next person on the waitlist.
 
 ---
 
-## Current registration details
+## Your registration details
 
 > {{#if firstName}}**Name:** {{firstName}} {{lastName}}  
 > {{/if}}{{#if email}}**Email:** {{email}}  
 > {{/if}}{{#if organizationName}}**Organization:** {{organizationName}}  
-> {{/if}}{{#if jobTitle}}**Title / Role:** {{jobTitle}}  
+> {{/if}}{{#if jobTitle}}**Job title:** {{jobTitle}}  
 > {{/if}}{{#each dayAttendance}}**{{dayLabel}}:** {{attendanceLabel}} — {{statusLabel}}  
 > {{/each}}{{#if attendanceLabel}}**Attendance:** {{attendanceLabel}}  
 > {{/if}}
 
 {{#if waitlistedDayCount}}
-Some selected in-person days may still be waitlisted. The management page shows the latest status for each day.
+Some of your in-person days may still be on the waitlist. Your registration shows the latest status for each day.
 {{/if}}
 `,
   },
@@ -542,15 +536,15 @@ Some selected in-person days may still be waitlisted. The management page shows 
   {
     key: "registration_unauthorized",
     subjectTemplate: "Registration cancelled and data removed — {{eventName}}",
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
 
-We have received your report that you did not request a registration for **{{eventName}}**.
+Thanks for letting us know that you didn't register for **{{eventName}}**.
 
-<div class="notice notice-success">&#10003; Your registration has been <strong>cancelled</strong> and your personal data has been <strong>removed</strong> from our records.</div>
+<div class="notice notice-success">&#10003; We cancelled the registration and <strong>removed your personal data</strong> from our records.</div>
 
-No further action is required on your part. If you receive any further emails regarding this event that you believe are in error, please [contact us](mailto:contact@pkic.org).
+There's nothing more you need to do. If you get more email about this event that you didn't expect, please [contact us](mailto:contact@pkic.org).
 
-We apologise for any inconvenience.
+We're sorry for the trouble.
 `,
   },
 
@@ -561,10 +555,10 @@ We apologise for any inconvenience.
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "registration_manage_link",
-    subjectTemplate: "Your management link for {{eventName}}",
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
+    subjectTemplate: "Manage your registration for {{eventName}}",
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
 
-Here is your management link for **{{eventName}}**. Use it to review, update, or cancel your registration at any time.
+Here's the link to your registration for **{{eventName}}**. Use it to review, change, or cancel your registration at any time.
 
 <div class="cta"><a href="{{manageUrl}}">Manage your registration &rarr;</a></div>
 
@@ -574,7 +568,7 @@ Plan the sessions you want to attend in [My agenda &rarr;]({{myAgendaUrl}})
 {{/if}}
 {{/if}}
 
-If you did not request this email, you can safely ignore it.
+Didn't ask for this link? You can ignore this email.
 
 {{> sponsors_block}}
 `,
@@ -587,14 +581,14 @@ If you did not request this email, you can safely ignore it.
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "registration_confirmation_reminder",
-    subjectTemplate: "Reminder: please confirm your registration for {{eventName}}",
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
+    subjectTemplate: "Reminder: confirm your registration for {{eventName}}",
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
 
-This is a friendly reminder that your registration for **{{eventName}}** is not yet confirmed.
+Your registration for **{{eventName}}** isn't complete yet. Confirm your email address to secure your place.
 
 <div class="cta"><a href="{{confirmationUrl}}">Confirm my registration &rarr;</a></div>
 
-<div class="notice notice-warning">&#9201; Please confirm as soon as possible to secure your spot. If you did not request this registration, <a href="{{manageUrl}}">click here to cancel it and remove your data</a>.</div>
+Didn't register? [Cancel this registration and remove your data]({{manageUrl}}).
 `,
   },
 
@@ -604,18 +598,18 @@ This is a friendly reminder that your registration for **{{eventName}}** is not 
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "rsvp_warning",
-    subjectTemplate: "Action required: Your in-person attendance for {{event_name}} on {{event_day}} is at risk",
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
+    subjectTemplate: "Are you still coming in person to {{event_name}} on {{event_day}}?",
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
 
-We noticed that the calendar invitation for **{{event_name}} on {{event_day}}** was recently declined or removed from your calendar.
+We noticed that you declined or removed the calendar invitation for **{{event_name}} on {{event_day}}**.
 
-As a nonprofit, the PKI Consortium covers significant costs for catering and venue space ($150–$300 per attendee, per day) to keep this event fully funded by sponsors and free for attendees. Because in-person capacity is strictly limited, it's incredibly important that we know exactly who will be attending.
+In-person seats are limited, and each one costs $150–$300 per day for venue and catering, paid by sponsors so attendance stays free. So it matters that we know who is coming.
 
-If you are still planning to join us in person, please confirm your attendance using the link below as soon as possible. If we do not receive your re-confirmation, we will automatically update your registration to remote / virtual attendance to free up your seat for a community member on the waitlist.
+Still coming in person? Please confirm as soon as you can. If you don't, we'll switch that day to virtual attendance and offer your seat to someone on the waitlist.
 
-<div class="cta"><a href="{{manage_url}}">Re-confirm my in-person attendance &rarr;</a></div>
+<div class="cta"><a href="{{manage_url}}">I'm still coming in person &rarr;</a></div>
 
-If your plans have changed and you intended to decline, you do not need to do anything. We will update this event day only, and your other selected days will remain unchanged. Thank you for your understanding and cooperation!
+Not coming after all? You don't need to do anything. Only this day changes; your other days stay as they are.
 `,
   },
 
@@ -625,20 +619,18 @@ If your plans have changed and you intended to decline, you do not need to do an
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "rsvp_downgraded",
-    subjectTemplate: "Update: Your attendance for {{event_name}} on {{event_day}} has been changed",
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
+    subjectTemplate: "Your attendance for {{event_name}} on {{event_day}} changed",
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
 
-Following up on our previous email regarding your declined calendar invitation, your attendance for **{{event_name}} on {{event_day}}** has now been automatically updated.
-
-Because we did not receive an in-person confirmation, we have released your seat to another community member on the waitlist.
+You declined the calendar invitation for **{{event_name}} on {{event_day}}**, and we didn't hear back that you're still coming in person. So we gave your in-person seat to someone on the waitlist.
 
 {{#if eq new_attendance_type "not_attending"}}
-<div class="notice notice-warning"><strong>You are no longer registered to attend this event day.</strong> Your registration and selections for any other event days remain unchanged.</div>
+<div class="notice notice-warning"><strong>You're no longer attending on this day.</strong> Your other days haven't changed.</div>
 {{else}}
-<div class="notice notice-info"><strong>Your attendance type for this event day has been updated to {{new_attendance_type}}.</strong> Your registration and other event-day selections remain unchanged.</div>
+<div class="notice notice-info"><strong>You're now attending this day as {{new_attendance_type}}.</strong> Your other days haven't changed.</div>
 {{/if}}
 
-If this was done in error and you still wish to attend in person, please use your [registration management link]({{manage_url}}) to review and update your registration, subject to remaining availability.
+Is this a mistake, and do you still want to come in person? [Update your registration]({{manage_url}}) while seats remain.
 `,
   },
 
@@ -651,10 +643,10 @@ If this was done in error and you still wish to attend in person, please use you
   {
     key: "attendee_invite",
     subjectTemplate: `{{#if isReminder}}{{#if lte daysUntilExpiry "2"}}Last chance to join peers at {{eventName}}{{else}}Still considering {{eventName}}?{{/if}}{{else}}You're invited to {{eventName}}{{/if}}`,
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Colleague,{{/if}}
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
 
 {{#if isReminder}}
-<div class="notice notice-warning">A quick follow-up on your personal invitation to <strong>{{eventName}}</strong>.{{#if daysUntilExpiry}}{{#if lte daysUntilExpiry "2"}} Access closes in {{daysUntilExpiry}} day(s).{{else}} We'd love to have you in the room for this one.{{/if}}{{/if}}</div>
+<div class="notice notice-warning">A quick follow-up on your personal invitation to <strong>{{eventName}}</strong>.{{#if daysUntilExpiry}}{{#if lte daysUntilExpiry "2"}} Your invitation expires in {{daysUntilExpiry}} day(s).{{else}} We'd love to have you in the room for this one.{{/if}}{{/if}}</div>
 {{/if}}
 
 {{#if inviterName}}You have been personally invited by **{{inviterName}}** to attend **{{eventName}}**, an event organized by the [PKI Consortium](https://pkic.org).{{else}}You have been personally invited to attend **{{eventName}}**, an event organized by the [PKI Consortium](https://pkic.org).{{/if}}
@@ -663,9 +655,9 @@ Join security experts, researchers, and industry leaders to explore the latest d
 
 <div class="cta"><a href="{{registrationUrl}}">Register now &rarr;</a></div>
 
-{{#if declineUrl}}<div class="cta-secondary"><a href="{{declineUrl}}">No thanks, decline this invitation</a></div>{{/if}}
+{{#if declineUrl}}<div class="cta-secondary"><a href="{{declineUrl}}">No thanks, decline the invitation</a></div>{{/if}}
 
-{{#if isReminder}}If this is relevant to your work, this is a good moment to secure your place before capacity tightens.{{else}}Seats are limited — please register at your earliest convenience.{{/if}}
+{{#if isReminder}}If this is relevant to your work, now is a good time to register while seats remain.{{else}}Seats are limited, so register soon.{{/if}}
 
 ---
 
@@ -686,7 +678,7 @@ Join security experts, researchers, and industry leaders to explore the latest d
   {
     key: "speaker_invite",
     subjectTemplate: `{{#if isReminder}}{{#if lte daysUntilExpiry "2"}}Last call to speak at {{eventName}}{{else}}Opportunity to speak at {{eventName}}{{/if}}{{else}}Invitation to speak at {{eventName}}{{/if}}`,
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Speaker,{{/if}}
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
 
 {{#if isReminder}}
 <div class="notice notice-warning">A quick follow-up on your speaker invitation for <strong>{{eventName}}</strong>.{{#if daysUntilExpiry}}{{#if lte daysUntilExpiry "2"}} This opportunity closes in {{daysUntilExpiry}} day(s).{{else}} We'd be excited to feature your perspective in this program.{{/if}}{{/if}}</div>
@@ -694,15 +686,15 @@ Join security experts, researchers, and industry leaders to explore the latest d
 
 {{#if inviterName}}You have been personally nominated by **{{inviterName}}** to speak at **{{eventName}}**, organized by the [PKI Consortium](https://pkic.org).{{else}}We would be honored to have you present at **{{eventName}}**, organized by the [PKI Consortium](https://pkic.org).{{/if}}
 
-We believe your expertise would be a valuable contribution to the program. We invite you to submit a proposal for a session, workshop, or roundtable.
+Your expertise would be a valuable addition to the program, and we invite you to submit a proposal for a session, workshop, or roundtable.
 
-{{#if isReminder}}If this topic matters to you, we'd hate for you to miss the chance to help shape the conversation on stage.{{/if}}
+{{#if isReminder}}If this topic matters to you, don't miss the chance to help shape the conversation on stage.{{/if}}
 
 <div class="cta"><a href="{{proposalUrl}}">Submit a proposal &rarr;</a></div>
 
-{{#if declineUrl}}<div class="cta-secondary"><a href="{{declineUrl}}">No thanks, decline this invitation</a></div>{{/if}}
+{{#if declineUrl}}<div class="cta-secondary"><a href="{{declineUrl}}">No thanks, decline the invitation</a></div>{{/if}}
 
-<div class="notice notice-info">&#128274; This invitation link is <strong>personal</strong> and pre-filled with your details. Please do not share it with others.</div>
+<div class="notice notice-info">&#128274; This invitation link is <strong>personal</strong> and filled in with your details. Please don't share it.</div>
 
 If you have any questions or would like to discuss your proposal first, please [contact us](mailto:contact@pkic.org).
 
@@ -723,7 +715,7 @@ If you have any questions or would like to discuss your proposal first, please [
   {
     key: "msg_dear_firstname",
     subjectTemplate: "Message from PKI Consortium",
-    content: `{{#if firstName}}Dear {{firstName}},{{/if}}
+    content: `{{#if firstName}}Hello {{firstName}},{{/if}}
 
 {{message}}
 `,
@@ -735,18 +727,18 @@ If you have any questions or would like to discuss your proposal first, please [
   },
   {
     key: "msg_attendee_inperson_check_plans",
-    subjectTemplate: "Cannot attend {{eventName}} in person? Pass your seat to someone on the waitlist.",
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
+    subjectTemplate: "Can't come to {{eventName}} in person? Pass your seat on",
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
 
-{{eventName}} is currently full, and people on the waitlist are hoping to attend. **If your plans have changed and you can no longer join us in person, please update your registration as soon as possible.** Switching to virtual or on-demand attendance frees your seat for someone waiting.
+**{{eventName}}** is full, and people on the waitlist are hoping for a seat. **If you can no longer come in person, please update your registration now.** Switching to virtual or on-demand attendance gives your seat to someone who is waiting.
 
-<div class="notice notice-info">Every unused seat is both an unnecessary event expense and a missed opportunity for someone on the waitlist.</div>
+<div class="notice notice-info">An empty seat costs the event money and keeps out someone on the waitlist.</div>
 
-<div class="cta"><a href="{{manageUrl}}">Manage your registration &rarr;</a></div>
+<div class="cta"><a href="{{manageUrl}}">Update my registration &rarr;</a></div>
 
 {{> reg_details}}
 
-Thank you for helping us make room for everyone waiting for a spot.
+Thank you for helping us make room for everyone.
 
 {{> sponsors_block}}
 `,
@@ -760,9 +752,9 @@ Thank you for helping us make room for everyone waiting for a spot.
   {
     key: "proposal_submitted",
     subjectTemplate: "Proposal received: {{proposalTitle}}",
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Proposer,{{/if}}
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
 
-Thank you for submitting your proposal to **{{eventName}}**. We have successfully received it and our program committee will begin reviewing submissions shortly.
+Thank you for submitting a proposal to **{{eventName}}**. We received it, and the program committee will start reviewing proposals soon.
 
 ---
 
@@ -788,21 +780,21 @@ Thank you for submitting your proposal to **{{eventName}}**. We have successfull
 
 ## What happens next?
 
-1. **Review** — Our program committee will evaluate all submissions.
-2. **Decision** — You will receive an email with the outcome once a decision has been made.
-3. **Preparation** *(if accepted)* — We will be in touch with scheduling and logistical details.
+1. **Review**: the program committee reviews every proposal.
+2. **Decision**: we email you as soon as the committee decides.
+3. **Preparation** *(if accepted)*: we contact you about scheduling and logistics.
 
-Please review the details above carefully. If anything looks incorrect, use your management link to make changes before the review process begins.
+Please check the details above. If anything is wrong, change it before the review starts.
 
 [Manage my proposal &rarr;]({{manageUrl}})
 
 {{#if speakerManageUrl}}
-[Review my speaker representation]({{speakerManageUrl}})
+[Choose who I speak as]({{speakerManageUrl}})
 {{/if}}
 
-Encourage colleagues to attend by sharing your referral link: [{{shareUrl}}]({{shareUrl}})
+{{#if shareUrl}}Invite colleagues to attend by sharing your personal link: [{{shareUrl}}]({{shareUrl}}){{/if}}
 
-Thank you for contributing to **{{eventName}}** and the broader PKI community!
+Thank you for contributing to **{{eventName}}** and the PKI community!
 
 {{> donation_request}}
 `,
@@ -829,36 +821,36 @@ The published agenda still shows the earlier version until you approve the draft
   },
   {
     key: "proposal_representation_review",
-    subjectTemplate: "Review your speaker representation — {{eventName}}",
+    subjectTemplate: "Choose who you speak as — {{eventName}}",
     content: `Hello {{firstName}},
 
-Your proposal **{{proposalTitle}}** has been received for **{{eventName}}**.
+We received the proposal **{{proposalTitle}}** for **{{eventName}}**.
 
-Choose and save the identity you will speak as, or choose individual presentation. Your representation must be reviewed before the session can be approved for the agenda.
+Please choose who you will speak as: yourself, or an organization you represent. We need to review this before the session can go on the agenda.
 
-[Review my speaker representation]({{speakerManageUrl}})
+[Choose who I speak as]({{speakerManageUrl}})
 
-This private link manages only your own speaker profile.
+This link is personal and manages only your own speaker profile.
 `,
   },
   {
     key: "proposal_speaker_confirmed_by_organizer",
-    subjectTemplate: "Speaker participation confirmed — {{eventName}}",
+    subjectTemplate: "You're confirmed as a speaker — {{eventName}}",
     contentType: "markdown",
     messageType: "transactional",
-    content: `An organizer has confirmed your speaker identity and willingness to participate in the proposal **{{proposalTitle}}** for **{{eventName}}**.
+    content: `Hello,
 
-This does not accept the proposal or guarantee inclusion in the program. Committee acceptance and scheduling are separate decisions.
+An organizer confirmed, on your behalf, that you will speak on **{{proposalTitle}}** at **{{eventName}}**.
 
-Speaker identity: {{speakerName}}{{#if organizationName}}, {{organizationName}}{{else}} (individual){{/if}}.
+You speak as **{{speakerName}}**{{#if organizationName}}, {{organizationName}}{{else}}, on your own behalf{{/if}}.
 
-{{#if terms}}The organizer accepted the following terms and conditions on your behalf:
+{{#if terms}}The organizer also accepted these terms for you:
 
-{{#each terms}}- {{label}} (version {{version}}){{#if helpText}} — {{helpText}}{{/if}}{{#if contentRef}} — {{contentRef}}{{/if}}
+{{#each terms}}- {{label}} (version {{version}}){{#if helpText}}: {{helpText}}{{/if}}{{#if contentRef}} ({{contentRef}}){{/if}}
 
-{{/each}}{{else}}There are no required speaker terms configured for this event.
+{{/each}}{{/if}}This doesn't mean the proposal is accepted. The program committee decides that, and the schedule, separately.
 
-{{/if}}If you do not agree with this confirmation or these terms, contact the PKI Consortium at {{contactEmail}}.
+Don't agree with this{{#if terms}} or with these terms{{/if}}? Email [{{contactEmail}}](mailto:{{contactEmail}}).
 `,
   },
   {
@@ -881,28 +873,30 @@ You can invite another speaker or change the proposal on its page.
   },
   {
     key: "proposal_organizational_representation_request",
-    subjectTemplate: "Please speak on behalf of your organization — {{eventName}}",
+    subjectTemplate: "Speak on behalf of your organization — {{eventName}}",
     content: `Hello {{firstName}},
 
 Thank you for proposing **{{proposalTitle}}** for **{{eventName}}**.
 
-Our reviewers ask that this talk be given on behalf of the organization connected to its topic, rather than as an individual. Please confirm your work email address and choose the organization you represent; the organization authorizes the talk and may own the material presented.
+Our reviewers ask that you give this talk on behalf of the organization connected to its topic, not on your own behalf. The organization authorizes the talk and may own the material you present.
 
-[Choose the organization I represent]({{speakerManageUrl}})
+Please confirm your work email address and choose the organization you represent.
 
-If you believe you take part independently, contact the event organizers. This private link manages only your own speaker profile.
+[Choose my organization]({{speakerManageUrl}})
+
+Do you take part independently? Let the event organizers know. This link is personal and manages only your own speaker profile.
 `,
   },
   {
     key: "proposal_manage_link_transferred",
-    subjectTemplate: "You now manage proposal: {{proposalTitle}}",
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Hello,{{/if}}
+    subjectTemplate: "You now manage the proposal {{proposalTitle}}",
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
 
-You are now responsible for managing **{{proposalTitle}}** for **{{eventName}}**.
+You now manage the proposal **{{proposalTitle}}** for **{{eventName}}**.
 
 [Manage the proposal &rarr;]({{manageUrl}})
 
-This link replaces the previous proposer's management link. Keep it private.
+This link is personal; please don't share it. The previous proposer's link no longer works.
 `,
   },
 
@@ -912,23 +906,23 @@ This link replaces the previous proposer's management link. Keep it private.
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "proposal_decision",
-    subjectTemplate: "Update on your proposal: {{proposalTitle}}",
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Proposer,{{/if}}
+    subjectTemplate: "A decision on your proposal {{proposalTitle}}",
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
 
-We have completed our review of your proposal submitted to **{{eventName}}**.
+The program committee has reviewed your proposal for **{{eventName}}**.
 
 ---
 
 ## Decision: {{proposalTitle}}
 
 {{#if eq finalStatus "accepted"}}
-<div class="notice notice-success">&#127881; <strong>Congratulations — your proposal has been accepted!</strong><br>We are pleased to include <strong>{{proposalTitle}}</strong> in the program for {{eventName}}. Our team will be in touch with scheduling, AV requirements, and speaker logistics.</div>
+<div class="notice notice-success">&#127881; <strong>Congratulations, your proposal is accepted!</strong><br>We're glad to include <strong>{{proposalTitle}}</strong> in the {{eventName}} program. We'll contact you about scheduling, AV, and speaker logistics.</div>
 {{/if}}
 {{#if eq finalStatus "rejected"}}
-<div class="notice notice-danger">Thank you for your submission. After careful consideration, we regret to inform you that <strong>{{proposalTitle}}</strong> was not selected for this event's program.<br>We truly appreciate the time and effort you invested, and we hope you will consider submitting again for a future event.</div>
+<div class="notice notice-danger">After careful consideration, we're sorry to say that <strong>{{proposalTitle}}</strong> wasn't selected for this program.<br>Thank you for the time and effort you put into it. We hope you'll submit again for a future event.</div>
 {{/if}}
 {{#if eq finalStatus "waitlisted"}}
-<div class="notice notice-warning">&#9203; Your proposal <strong>{{proposalTitle}}</strong> has been placed on the <strong>waitlist</strong>. We may still be able to include it if a slot becomes available, and will keep you informed.</div>
+<div class="notice notice-warning">&#9203; <strong>{{proposalTitle}}</strong> is on the <strong>waitlist</strong>. We may still include it if a slot opens up, and we'll keep you posted.</div>
 {{/if}}
 
 {{#if decisionNote}}
@@ -957,11 +951,11 @@ Thank you for your interest in contributing to **{{eventName}}**.
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "co_speaker_invite",
-    subjectTemplate: `{{#if isReminder}}Reminder: please confirm speaker participation — {{eventName}}{{else}}Speaker invitation: please confirm — {{eventName}}{{/if}}`,
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Speaker,{{/if}}
+    subjectTemplate: `{{#if isReminder}}Reminder: speaker invitation for {{eventName}}{{else}}Speaker invitation for {{eventName}}{{/if}}`,
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
 
 {{#if isReminder}}
-<div class="notice notice-warning">A quick follow-up: we still need your confirmation for this speaker invitation.</div>
+<div class="notice notice-warning">A quick reminder: we still need your answer to this speaker invitation.</div>
 {{/if}}
 
 {{#if invitedByDisplay}}{{invitedByDisplay}}{{else}}{{#if proposerFirstName}}{{proposerFirstName}}{{else}}The proposer{{/if}}{{/if}} has proposed a session for **{{eventName}}**, organized by the [PKI Consortium](https://pkic.org), and invited you to take part as a speaker.
@@ -980,13 +974,13 @@ Thank you for your interest in contributing to **{{eventName}}**.
 {{speakerLineupText}}
 {{/if}}
 
-Please review the proposal and **confirm or decline your willingness to participate in this proposal**. Confirmation does not accept the proposal or guarantee a place in the program. The program committee decides whether to accept the proposal; scheduling is a separate decision.
+Please review the proposal and **let us know whether you will speak**. Confirming doesn't mean the proposal is accepted. The program committee decides that, and the schedule, separately.
 
-If the invitation deadline has passed, sign in to respond. A late response awaits approval because a replacement may already have been invited.
+Past the invitation deadline? Sign in to respond. An organizer then reviews your response, because someone else may already have been invited.
 
-<div class="cta"><a href="{{manageUrl}}">Review proposal &amp; confirm participation &rarr;</a></div>
+<div class="cta"><a href="{{manageUrl}}">Review and respond &rarr;</a></div>
 
-<div class="notice notice-info">&#128274; This link is <strong>personal</strong> — please do not share it. It gives access to your speaker profile and participation management.</div>
+<div class="notice notice-info">&#128274; This link is <strong>personal</strong> and opens your speaker profile, so please don't share it.</div>
 
 If you have questions, please [contact us](mailto:contact@pkic.org).
 
@@ -1005,20 +999,20 @@ If you have questions, please [contact us](mailto:contact@pkic.org).
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "speaker_profile_request",
-    subjectTemplate: "Please complete your speaker profile — {{eventName}}",
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Speaker,{{/if}}
+    subjectTemplate: "Complete your speaker profile — {{eventName}}",
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
 
-Great news — your session **{{proposalTitle}}** has been accepted for **{{eventName}}**!
+Great news: your session **{{proposalTitle}}** is accepted for **{{eventName}}**!
 
-To help us promote your session, please take a moment to complete your speaker profile.
+Please take a moment to complete your speaker profile, so we can introduce you and promote your session.
 
-{{#unless hasBio}}<div class="notice notice-warning">&#9997;&#65039; Your <strong>biography</strong> is missing. Please add a short speaker bio so we can introduce you properly.</div>{{/unless}}
-{{#unless hasHeadshot}}<div class="notice notice-warning">&#128247; Please upload a <strong>headshot</strong> so attendees can recognize you and we can promote your session (JPEG / PNG / WebP, min 1000 &times; 1000 px, max 20 MB).</div>{{/unless}}
-{{#if hasBio}}<div class="notice notice-success">&#10003; Your biography is on file and can be updated before the event.</div>{{/if}}
+{{#unless hasBio}}<div class="notice notice-warning">&#9997;&#65039; Your <strong>bio</strong> is missing. Please add a short one.</div>{{/unless}}
+{{#unless hasHeadshot}}<div class="notice notice-warning">&#128247; Please upload a <strong>headshot</strong> so attendees can recognize you (JPEG, PNG, or WebP; at least 1000 &times; 1000 px; up to 20 MB).</div>{{/unless}}
+{{#if hasBio}}<div class="notice notice-success">&#10003; We have your bio. You can still change it.</div>{{/if}}
 
-<div class="cta"><a href="{{profileUrl}}">Review &amp; update my speaker profile &rarr;</a></div>
+<div class="cta"><a href="{{profileUrl}}">Review my speaker profile &rarr;</a></div>
 
-Your profile can be updated at any time up until the event.
+You can update your profile at any time before the event.
 
 {{> donation_request}}
 `,
@@ -1028,17 +1022,17 @@ Your profile can be updated at any time up until the event.
   // Profile reminders are independent from proposal decisions.
   {
     key: "speaker_profile_reminder",
-    subjectTemplate: "Please review your speaker profile — {{eventName}}",
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Speaker,{{/if}}
+    subjectTemplate: "Review your speaker profile — {{eventName}}",
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
 
-{{#if eq proposalDecisionStatus "accepted"}}Your session **{{proposalTitle}}** has been accepted for **{{eventName}}**. Please review your speaker profile so we can prepare the program.{{else}}
-{{#if eq proposalDecisionStatus "waitlisted"}}Your proposal **{{proposalTitle}}** is on the waitlist for **{{eventName}}**. Please review your speaker profile while we check program availability. This reminder does not confirm a place in the program.{{else}}
-{{#if eq proposalDecisionStatus "needs-work"}}Updates are requested for your proposal **{{proposalTitle}}** for **{{eventName}}**. Please address the committee's feedback and review your speaker profile. The proposal has not been accepted.{{else}}Your proposal **{{proposalTitle}}** is awaiting a decision for **{{eventName}}**. Please review your speaker profile to help the committee assess the submission. This reminder is not an acceptance.{{/if}}
+{{#if eq proposalDecisionStatus "accepted"}}Your session **{{proposalTitle}}** is accepted for **{{eventName}}**. Please review your speaker profile so we can prepare the program.{{else}}
+{{#if eq proposalDecisionStatus "waitlisted"}}Your proposal **{{proposalTitle}}** for **{{eventName}}** is on the waitlist. Please review your speaker profile in the meantime. This doesn't confirm a place in the program.{{else}}
+{{#if eq proposalDecisionStatus "needs-work"}}The program committee asked for changes to your proposal **{{proposalTitle}}** for **{{eventName}}**. Please make them and review your speaker profile. The proposal isn't accepted yet.{{else}}Your proposal **{{proposalTitle}}** for **{{eventName}}** is waiting for a decision. Please review your speaker profile to help the committee. This isn't an acceptance.{{/if}}
 {{/if}}
 {{/if}}
 
-{{#if requiresConfirmation}}You have been invited to participate as a speaker. Follow the link below to confirm or decline your participation and review your profile.{{else}}Please review your biography.{{/if}}
-{{#unless hasHeadshot}}Please upload a headshot so attendees can recognize you and we can promote your session.{{/unless}}
+{{#if requiresConfirmation}}You're invited to speak on this proposal. Use the link below to say whether you will, and to review your profile.{{else}}Please check that your bio is up to date.{{/if}}
+{{#unless hasHeadshot}}Please also upload a headshot so attendees can recognize you.{{/unless}}
 
 [Review my speaker profile]({{profileUrl}})
 `,
@@ -1050,16 +1044,16 @@ Your profile can be updated at any time up until the event.
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "presentation_upload_request",
-    subjectTemplate: `{{#if isReminder}}{{#if lte daysUntilDeadline "1"}}Final call: upload your presentation today — {{eventName}}{{else}}{{#if lte daysUntilDeadline "3"}}Urgent: upload your presentation — {{eventName}}{{else}}Reminder: upload your presentation — {{eventName}}{{/if}}{{/if}}{{else}}Please upload your presentation — {{eventName}}{{/if}}`,
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Speaker,{{/if}}
+    subjectTemplate: `{{#if isReminder}}{{#if lte daysUntilDeadline "1"}}Final call: upload your presentation today — {{eventName}}{{else}}{{#if lte daysUntilDeadline "3"}}Urgent: upload your presentation — {{eventName}}{{else}}Reminder: upload your presentation — {{eventName}}{{/if}}{{/if}}{{else}}Upload your presentation — {{eventName}}{{/if}}`,
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
 
 {{#if isReminder}}
-<div class="notice notice-warning">This is reminder #{{reminderCount}} that we still need your slides for <strong>{{proposalTitle}}</strong>.{{#if daysUntilDeadline}} {{#if lte daysUntilDeadline "3"}}Only {{daysUntilDeadline}} day(s) left.{{/if}}{{/if}}</div>
+<div class="notice notice-warning">We still need your slides for <strong>{{proposalTitle}}</strong>.{{#if daysUntilDeadline}} {{#if lte daysUntilDeadline "3"}}Only {{daysUntilDeadline}} day(s) left.{{/if}}{{/if}}</div>
 {{/if}}
 
-We are looking forward to your session **{{proposalTitle}}** at **{{eventName}}**!
+We're looking forward to your session **{{proposalTitle}}** at **{{eventName}}**!
 
-Please upload your presentation slides by the deadline below so our team can prepare the AV setup and program materials.
+Please upload your slides by the deadline below, so we can prepare the AV setup and program materials.
 
 {{#if deadline}}<div class="notice notice-warning">&#128197; <strong>Upload deadline: {{deadline}}</strong></div>{{/if}}
 
@@ -1083,17 +1077,17 @@ If you have any questions, please [contact us](mailto:contact@pkic.org).
   {
     key: "presentation_upload_reminder",
     subjectTemplate: "Reminder: upload your presentation — {{eventName}}",
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Speaker,{{/if}}
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
 
-This is a friendly reminder that we have not yet received your presentation slides for **{{proposalTitle}}** at **{{eventName}}**.
+We haven't received your slides for **{{proposalTitle}}** at **{{eventName}}** yet.
 
-{{#if daysRemaining}}<div class="notice notice-warning">&#9201; <strong>{{daysRemaining}} {{#if eq daysRemaining "1"}}day{{else}}days{{/if}} remaining</strong> — deadline: {{deadline}}</div>{{else}}{{#if deadline}}<div class="notice notice-danger">&#128680; <strong>Deadline: {{deadline}}</strong> — please upload as soon as possible.</div>{{/if}}{{/if}}
+{{#if daysRemaining}}<div class="notice notice-warning">&#9201; <strong>{{daysRemaining}} {{#if eq daysRemaining "1"}}day{{else}}days{{/if}} remaining</strong> — deadline: {{deadline}}</div>{{else}}{{#if deadline}}<div class="notice notice-danger">&#128680; <strong>Deadline: {{deadline}}</strong>. Please upload your slides as soon as you can.</div>{{/if}}{{/if}}
 
 **Accepted formats:** PDF, PPTX, PPT, PPTM, ODP (max 200 MB)
 
 <div class="cta"><a href="{{uploadUrl}}">Upload my presentation &rarr;</a></div>
 
-If you have any issues uploading or need to request an extension, please [contact us](mailto:contact@pkic.org).
+Trouble uploading, or need more time? Please [contact us](mailto:contact@pkic.org).
 `,
   },
 
@@ -1104,11 +1098,13 @@ If you have any issues uploading or need to request an extension, please [contac
   {
     key: "user_magic_link",
     subjectTemplate: "Your PKI Consortium sign-in link",
-    content: `A sign-in link was requested for the **PKI Consortium portal**.
+    content: `Hello,
 
-<div class="cta-navy"><a href="{{magicLinkUrl}}">Sign in to the portal &rarr;</a></div>
+Here's your link to sign in to the **PKI Consortium portal**.
 
-<div class="notice notice-warning">&#9888;&#65039; <strong>Security notice</strong><br>&bull; This link is valid for <strong>{{expiresInMinutes}} minutes</strong> only.<br>&bull; It can only be used <strong>once</strong> and is tied to <code>{{email}}</code>.<br>&bull; If you did not request this link, ignore this email immediately.</div>
+<div class="cta-navy"><a href="{{magicLinkUrl}}">Sign in &rarr;</a></div>
+
+<div class="notice notice-warning">&#128274; <strong>Keep this link to yourself</strong><br>&bull; It works <strong>once</strong>, for <strong>{{expiresInMinutes}} minutes</strong>.<br>&bull; It only works for <code>{{email}}</code>.<br>&bull; Didn't ask for it? You can ignore this email.</div>
 `,
   },
 
@@ -1123,17 +1119,17 @@ If you have any issues uploading or need to request an extension, please [contac
     key: "organization_identity_reinstatement",
     subjectTemplate: "Confirm reinstating your representation of {{organizationName}}",
     messageType: "transactional",
-    content: `Hi {{recipientName}},
+    content: `Hello {{recipientName}},
 
-You asked to reinstate your representation of **{{organizationName}}** while signed in to the **PKI Consortium portal** as {{accountEmail}}.
+You asked to reinstate your representation of **{{organizationName}}** in the **PKI Consortium portal**, signed in as {{accountEmail}}.
 
-Confirming makes your identity for {{organizationName}} active again and restores the group seats and roles that ended with it, where they are still available.
+Once you confirm, your {{organizationName}} identity is active again, and the group seats and roles that ended with it come back where they're still available.
 
 <div class="cta-navy"><a href="{{reinstatementUrl}}">Confirm reinstatement &rarr;</a></div>
 
-The link works once, for {{expiresInHours}} hours, while you are signed in to that account. Asking again sends a new link and retires this one.
+The link works once, for {{expiresInHours}} hours, while you're signed in to that account. If you ask again, we'll send a new link and this one stops working.
 
-If you did not ask for this, you can ignore this email. Nothing changes unless the link is confirmed.
+Didn't ask for this? You can ignore this email. Nothing changes unless you confirm.
 `,
   },
 
@@ -1145,14 +1141,14 @@ If you did not ask for this, you can ignore this email. Nothing changes unless t
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "donation_thank_you",
-    subjectTemplate: "You just helped secure the internet — thank you, {{firstName}}",
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear {{name}},{{/if}}
+    subjectTemplate: "Thank you for helping secure the internet",
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello {{name}},{{/if}}
 
-Your **{{formattedAmount}}** donation just landed — and it means more than you might think.
+Thank you for your **{{formattedAmount}}** donation. It means more than you might think.
 
-Every dollar we raise lets us keep our conferences **free and open** to security engineers, researchers, policymakers, and open-source contributors who otherwise couldn't attend. You didn't just write a cheque — you opened a door for someone in the global PKI community.
+Donations keep our conferences **free and open** to security engineers, researchers, policymakers, and open-source contributors who couldn't attend otherwise. You've opened a door for someone in the global PKI community.
 
-**That makes you one of us.** Welcome to a small but growing group of people who are actively shaping the future of digital trust.
+Welcome to a growing group of people who are shaping the future of digital trust.
 
 ---
 
@@ -1162,25 +1158,23 @@ Every dollar we raise lets us keep our conferences **free and open** to security
 > {{#if organizationName}}**Organization:** {{organizationName}}
 > {{/if}}**Amount:** {{formattedAmount}}
 
-<div class="notice notice-success">&#10003; Payment confirmed. A receipt from our payment processor will be sent separately to <strong>{{email}}</strong>.</div>
+<div class="notice notice-success">&#10003; Your payment is confirmed. Our payment processor will email a receipt to <strong>{{email}}</strong> separately.</div>
 
 ---
 
-### Want to go further? Become our top fundraiser.
+{{#if shareUrl}}### Want to do more?
 
-We've created a **personal fundraising page just for you** — with your name and badge attached. When someone donates through your link, it counts toward your total.
+We made a **personal fundraising page** for you, with your name on it. Every donation made through your link counts toward your total.
 
-<div class="cta"><a href="{{shareUrl}}">Share your fundraising page &rarr;</a></div>
+<div class="cta"><a href="{{shareUrl}}">Share my fundraising page &rarr;</a></div>
 
-Even a single share to your network could match — or multiply — what you donated today. Who in your network cares about open security standards? Send them your link.
-
-We track every contribution that comes through your page, and our top fundraisers get a shout-out in our community newsletter.
+Who in your network cares about open security standards? A single share could match, or multiply, what you gave today.{{/if}}
 
 ---
 
-*PKI Consortium is a section 501(c)(6) nonprofit business league. Contributions or gifts to PKI Consortium are not deductible as charitable contributions for federal income tax purposes in the United States. This payment is voluntary and is not a ticket, fee, or payment for goods or services. Please consult your tax advisor regarding any possible business-expense treatment or other tax consequences.*
+*The PKI Consortium is a section 501(c)(6) nonprofit business league. Contributions or gifts to the PKI Consortium are not deductible as charitable contributions for federal income tax purposes in the United States. This payment is voluntary and is not a ticket, fee, or payment for goods or services. Please consult your tax advisor about any business-expense treatment or other tax consequences.*
 
-Questions? [contact us](mailto:contact@pkic.org).
+Questions? [Contact us](mailto:contact@pkic.org).
 
 With gratitude,<br>
 The PKI Consortium team
@@ -1194,22 +1188,22 @@ The PKI Consortium team
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "donation_expired",
-    subjectTemplate: "Your donation checkout expired — PKI Consortium",
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear {{name}},{{/if}}
+    subjectTemplate: "Your donation wasn't completed",
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello {{name}},{{/if}}
 
-It looks like your checkout for a **{{formattedAmount}}** donation to the **PKI Consortium** was not completed — this can happen if you closed the page, navigated away, or the session expired.
+Your **{{formattedAmount}}** donation to the **PKI Consortium** wasn't completed. This happens when the checkout page is closed or left open too long.
 
-**No charge was made to your account.**
+**You haven't been charged.**
 
-If you still wish to support us, you can start a new checkout at any time:
+If you'd still like to support us, you can start again at any time:
 
-<div class="cta"><a href="https://pkic.org/donate/">Retry my donation &rarr;</a></div>
+<div class="cta"><a href="https://pkic.org/donate/">Donate again &rarr;</a></div>
 
-Of course, there is absolutely no obligation — but if you change your mind, we would truly appreciate your support.
+There's no obligation, but we'd truly appreciate your support.
 
-PKI Consortium is a section 501(c)(6) nonprofit business league. Contributions or gifts to PKI Consortium are not deductible as charitable contributions for federal income tax purposes in the United States.
+The PKI Consortium is a section 501(c)(6) nonprofit business league. Contributions or gifts to PKI Consortium are not deductible as charitable contributions for federal income tax purposes in the United States.
 
-If you have any questions, please [contact us](mailto:contact@pkic.org).
+Questions? [Contact us](mailto:contact@pkic.org).
 
 The PKI Consortium team
 `,
@@ -1222,24 +1216,22 @@ The PKI Consortium team
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "donation_payment_failed",
-    subjectTemplate: "Your donation payment failed — PKI Consortium",
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear {{name}},{{/if}}
+    subjectTemplate: "Your donation payment didn't go through",
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello {{name}},{{/if}}
 
-We wanted to let you know that the payment for your **{{formattedAmount}}** donation to the **PKI Consortium** unfortunately did not go through.
+Unfortunately, the payment for your **{{formattedAmount}}** donation to the **PKI Consortium** didn't go through. This can happen with bank transfers, direct debits, and other delayed payments when the bank declines or returns the payment.
 
-This can happen with bank transfers, direct debits, or other delayed payment methods if the payment was declined or returned by your bank.
+**No money was taken from your account.**
 
-**No funds have been taken from your account.**
+If you'd still like to support us, you're very welcome to try again:
 
-If you would still like to support the PKI Consortium, you are very welcome to try again:
+<div class="cta"><a href="https://pkic.org/donate/">Donate again &rarr;</a></div>
 
-<div class="cta"><a href="https://pkic.org/donate/">Try donating again &rarr;</a></div>
+There's no obligation, but we'd truly appreciate your support.
 
-Of course, there is absolutely no obligation — but if you change your mind, we would truly appreciate your support.
+The PKI Consortium is a section 501(c)(6) nonprofit business league. Contributions or gifts to PKI Consortium are not deductible as charitable contributions for federal income tax purposes in the United States.
 
-PKI Consortium is a section 501(c)(6) nonprofit business league. Contributions or gifts to PKI Consortium are not deductible as charitable contributions for federal income tax purposes in the United States.
-
-If you have any questions or believe this is an error, please [contact us](mailto:contact@pkic.org).
+Questions, or think this is a mistake? [Contact us](mailto:contact@pkic.org).
 
 The PKI Consortium team
 `,

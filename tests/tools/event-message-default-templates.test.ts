@@ -32,10 +32,10 @@ describe("editable attendee session message examples", () => {
     const waitlist = DEFAULT_EVENT_MESSAGE_TEMPLATES.find(({ key }) => key === "msg_attendee_session_waitlist")!;
     const favorite = DEFAULT_EVENT_MESSAGE_TEMPLATES.find(({ key }) => key === "msg_attendee_session_favorites")!;
     const rendering = (content: string) => renderEmail(content, data, layout, "markdown", baseUrl);
-    expect((await rendering(reservation.content)).text).toContain("does not confirm a booking or approval");
-    expect((await rendering(waitlist.content)).text).toContain("If you are waiting for a session place");
-    expect((await rendering(waitlist.content)).text).toContain("does not announce that a place is available");
-    expect((await rendering(favorite.content)).text).toContain("does not register you for the session");
+    expect((await rendering(reservation.content)).text).toContain("this email doesn't confirm a place");
+    expect((await rendering(waitlist.content)).text).toContain("Waiting for a place in a session");
+    expect((await rendering(waitlist.content)).text).toContain("this email doesn't mean one has opened up");
+    expect((await rendering(favorite.content)).text).toContain("It doesn't reserve a place");
   });
 
   it("handles missing names and escaped user text while retaining personal-campaign safety", async () => {

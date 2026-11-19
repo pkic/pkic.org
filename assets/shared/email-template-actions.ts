@@ -3,7 +3,7 @@ export const IDENTITY_NOTIFICATION_EMAIL_TEMPLATE = {
   key: "organization-identity-changed",
   subjectTemplate: "Your organization identity changed",
   content:
-    "Hi {{recipientName}},\n\n{{changeMessage}}\n\n{{#if invitationToken}}[Review and accept this identity]({{baseUrl}}/portal/#/identity-invitations?token={{invitationToken}})\n\nThe link expires after seven days. Opening it does not activate the identity; confirm on the page.{{/if}}\n\nWhen this identity is active, actions taken in that capacity are attributed to {{organizationName}}. If this change is unexpected, contact an authorized contact for the organization.",
+    "Hello {{recipientName}},\n\n{{changeMessage}}\n\n{{#if invitationToken}}[Review and accept this identity]({{baseUrl}}/portal/#/identity-invitations?token={{invitationToken}})\n\nThe link works for seven days. Opening it doesn't activate the identity; you confirm on the page.{{/if}}\n\nWhile this identity is active, what you do as this identity is attributed to {{organizationName}}. Didn't expect this change? Contact an authorized contact at the organization.",
   contentType: "markdown",
   messageType: "transactional",
 } as const;

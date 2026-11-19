@@ -302,10 +302,15 @@ describe("account sign-up", () => {
       "SELECT template_key, payload_json FROM email_outbox ORDER BY rowid DESC LIMIT 1",
     );
     expect(outbox!.template_key).toBe("user_account_found_link");
-    expect(JSON.parse(outbox!.payload_json)).toMatchObject({
+    const payload = JSON.parse(outbox!.payload_json);
+    // The registration's own details come along, under the address the link is tied to.
+    expect(payload).toMatchObject({
       alreadyRegistered: true,
       eventName: "PQC Conference 2026",
+      email: admin.email,
+      customAnswerRows: [],
     });
+    expect(payload).toHaveProperty("firstName");
     const link = (await lastLink())!;
     expect(link.pathname).toBe("/portal/");
     expect(new URLSearchParams(link.hash.split("?", 2)[1]).get("next")).toBe(

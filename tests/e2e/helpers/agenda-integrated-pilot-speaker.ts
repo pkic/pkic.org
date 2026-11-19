@@ -30,7 +30,7 @@ export async function preparePilotSpeaker(staff: Page, speaker: Page, info: Test
   });
   expect(invitation.status(), await invitation.text()).toBe(200);
   expect(coSpeakerInviteResponseSchema.parse(await invitation.json()).email).toBe(email);
-  const message = await waitForCapturedEmail(email, "Speaker invitation: please confirm", { since });
+  const message = await waitForCapturedEmail(email, "Speaker invitation for", { since });
   const speakerUrl = extractEmailUrl(message, "/portal/");
   const path = `/api/v1/proposals/${encodeURIComponent(proposal.proposalId)}/participation`;
   await signInToPortal(speaker, email);

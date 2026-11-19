@@ -11,6 +11,7 @@ import { first } from "../db/queries";
 import { signInPurpose } from "../../../assets/shared/sign-in-purpose";
 import { CONSORTIUM_CONTACT_EMAIL } from "../../../assets/shared/consortium-contact";
 import { eventParticipantRecordPath } from "../../../assets/shared/event-participant-paths";
+import { registrationDetailsEmailData } from "./registrations/status-notifications";
 
 export const SIGN_IN_UNAVAILABLE_TEMPLATE = "user_sign_in_unavailable";
 export const SIGN_IN_HELP_TEMPLATE = "user_sign_in_help";
@@ -63,23 +64,27 @@ async function signUpPurposeData(db: DatabaseLike, returnPath: string | undefine
 }
 
 /**
- * The portal page of the registration the account already holds, other than one still waiting for its email
- * proof, for the event the person came to register for; its email then leads there instead of the steps.
+ * The registration the account already holds, other than one still waiting for its email proof, for the event
+ * the person came to register for: its email then shows the registration and leads to it instead of the steps.
  */
-async function heldRegistrationPath(
+async function heldRegistration(
   db: DatabaseLike,
   userId: string,
   returnPath: string | undefined,
-): Promise<string | null> {
+): Promise<{ path: string; details: Awaited<ReturnType<typeof registrationDetailsEmailData>> } | null> {
   const purpose = signInPurpose(returnPath);
   if (purpose?.flow !== "registration") return null;
-  const held = await first<{ id: string }>(
+  const held = await first<{ id: string; event_id: string; source_mode: "hugo" | "portal" | "integration" | null }>(
     db,
-    `SELECT r.id FROM registrations r JOIN events e ON e.id = r.event_id
+    `SELECT r.id, e.id AS event_id, e.source_mode FROM registrations r JOIN events e ON e.id = r.event_id
       WHERE e.slug = ? AND e.visibility = 'public' AND r.user_id = ? AND r.status = 'registered'`,
     [purpose.eventSlug, userId],
   );
-  return held ? eventParticipantRecordPath(purpose.eventSlug, "registration", held.id) : null;
+  if (!held) return null;
+  return {
+    path: eventParticipantRecordPath(purpose.eventSlug, "registration", held.id),
+    details: await registrationDetailsEmailData(db, { id: held.event_id, source_mode: held.source_mode }, held.id),
+  };
 }
 
 export async function requestUserSignInLink(
@@ -155,14 +160,19 @@ export async function requestUserSignUpLink(
   const message: LinkMessage = { templateKey: "user_sign_up_link", subject: "Confirm your email", data: purpose };
   // An address that already signs in is told its account was found, and its link continues the same flow.
   const signIn = await requestUserSignInLink(db, payload, async (userId) => {
-    const registration = await heldRegistrationPath(db, userId, payload.returnPath);
+    const registration = await heldRegistration(db, userId, payload.returnPath);
+    if (!registration)
+      return {
+        templateKey: "user_account_found_link",
+        subject: "Continue with your PKI Consortium account",
+        data: purpose,
+      };
+    // The email names the address that asked, which its link is tied to, in place of the registration's own.
     return {
       templateKey: "user_account_found_link",
-      subject: "Continue with your PKI Consortium account",
-      data: registration ? { ...purpose, alreadyRegistered: true } : purpose,
-      ...(registration
-        ? { magicLinkBaseUrl: portalVerifyLinkBase(new URL(payload.magicLinkBaseUrl).origin, registration) }
-        : {}),
+      subject: "You are already registered",
+      data: { ...purpose, ...registration.details, alreadyRegistered: true },
+      magicLinkBaseUrl: portalVerifyLinkBase(new URL(payload.magicLinkBaseUrl).origin, registration.path),
     };
   });
   // A retired address was told how to sign in instead; it does not start a second account.
@@ -229,8 +239,8 @@ async function queueSignInHelp(db: DatabaseLike, email: string, startUrl: string
     eventId: null,
     messageType: "transactional",
     subject: noAccount
-      ? "No PKI Consortium account uses this address"
-      : "We could not send a PKI Consortium sign-in link",
+      ? "We couldn't find a PKI Consortium account for this address"
+      : "We couldn't send you a sign-in link",
     data: noAccount
       ? { noAccount: true, email: recipientEmail, startUrl }
       : { email: recipientEmail, contactEmail: CONSORTIUM_CONTACT_EMAIL },

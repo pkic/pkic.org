@@ -29,14 +29,14 @@ describe("co-speaker invitation template", () => {
       },
       "markdown",
     );
-    expect(rendered).toContain("Dear Co,");
+    expect(rendered).toContain("Hello Co,");
     expect(rendered).toContain("Ada Lovelace (Example Org) has proposed a session for **PQC 2026**");
     expect(rendered).toContain("**Post-Quantum Migration Strategies**");
     expect(rendered).toContain("A practical guide to migrating enterprise PKI.");
-    expect(rendered).toContain("willingness to participate in this proposal");
-    expect(rendered).toContain("does not accept the proposal or guarantee a place in the program");
-    expect(rendered).toContain("A late response awaits approval");
-    expect(rendered).toContain("decline");
+    expect(rendered).toContain("let us know whether you will speak");
+    expect(rendered).toContain("Confirming doesn't mean the proposal is accepted");
+    expect(rendered).toContain("An organizer then reviews your response");
+    expect(rendered).toContain("Review and respond");
     expect(rendered).toContain(
       'href="https://pkic.org/portal/#/events/pqc-2026/proposals/proposal-1/participation?speaker=user-1"',
     );
@@ -56,7 +56,7 @@ describe("co-speaker invitation template", () => {
       },
       "markdown",
     );
-    expect(rendered).toContain("Dear Speaker,");
+    expect(rendered).toContain("Hello,");
     expect(rendered).toContain(`${proposerLabel} has proposed a session for **PQC 2026**`);
     expect(rendered).not.toContain("Speakers on this proposal");
   });

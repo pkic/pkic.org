@@ -224,7 +224,7 @@ async function removeProposalSpeaker(
         templateKey: "proposal_manage_link_transferred",
         recipientUserId: replacement.user_id,
         recipientEmail: replacement.email,
-        subject: `You now manage proposal: ${context.proposal_title}`,
+        subject: `You now manage the proposal ${context.proposal_title}`,
         messageType: "transactional",
         capabilityLinkValues: [manageUrl],
         data: {
@@ -386,7 +386,7 @@ async function removeProposalSpeaker(
         __currentRecipient: { userId: context.speaker_user_id, email: context.speaker_email },
         firstName: emailPlainText(context.speaker_first_name ?? ""),
         proposalTitle: emailPlainText(context.proposal_title),
-        ...directEmailBodyPayload(`{{#if firstName}}Dear {{firstName}},{{else}}Dear Speaker,{{/if}}
+        ...directEmailBodyPayload(`{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
 
 You have been removed as a speaker from **{{proposalTitle}}** for **{{eventName}}**. Your previous speaker link no longer works.
 

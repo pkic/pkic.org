@@ -7,16 +7,16 @@ export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
     contentType: "markdown",
     messageType: "transactional",
     subjectTemplate:
-      "{{#if withdrawn}}Late speaker response withdrawn{{else}}{{#if rejected}}Late speaker participation declined{{else}}{{#if approved}}Late speaker participation approved{{else}}{{#if late}}Late speaker response awaits review{{else}}Speaker willingness confirmed{{/if}}{{/if}}{{/if}}{{/if}} — {{eventName}}",
+      "{{#if withdrawn}}Late speaker response withdrawn{{else}}{{#if rejected}}Late speaker response declined{{else}}{{#if approved}}Late speaker response approved{{else}}{{#if late}}Late speaker response awaits review{{else}}Speaker confirmed{{/if}}{{/if}}{{/if}}{{/if}} — {{eventName}}",
     content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
 
-{{#if withdrawn}}{{#if recipientIsSpeaker}}You withdrew your late response{{else}}{{speakerName}} withdrew their late response{{/if}} for the proposal **{{proposalTitle}}** at **{{eventName}}**. It no longer awaits organizer review.{{else}}{{#if rejected}}{{#if recipientIsSpeaker}}An organizer declined your late participation{{else}}An organizer declined late participation by {{speakerName}}{{/if}} in the proposal **{{proposalTitle}}** for **{{eventName}}**.{{else}}{{#if approved}}{{#if recipientIsSpeaker}}An organizer approved your late participation{{else}}An organizer approved late participation by {{speakerName}}{{/if}} in the proposal **{{proposalTitle}}** for **{{eventName}}**.{{else}}
+{{#if withdrawn}}{{#if recipientIsSpeaker}}You withdrew your late response{{else}}{{speakerName}} withdrew their late response{{/if}} to speak on **{{proposalTitle}}** at **{{eventName}}**. There is nothing left for an organizer to review.{{else}}{{#if rejected}}An organizer declined {{#if recipientIsSpeaker}}your late response{{else}}the late response from {{speakerName}}{{/if}} to speak on **{{proposalTitle}}** at **{{eventName}}**.{{else}}{{#if approved}}An organizer approved {{#if recipientIsSpeaker}}your late response{{else}}the late response from {{speakerName}}{{/if}} to speak on **{{proposalTitle}}** at **{{eventName}}**.{{else}}
 
-{{#if recipientIsSpeaker}}You are willing to participate{{else}}{{speakerName}} is willing to participate{{/if}} in the proposal **{{proposalTitle}}** for **{{eventName}}**.
+{{#if recipientIsSpeaker}}You confirmed{{else}}{{speakerName}} confirmed{{/if}} speaking on **{{proposalTitle}}** at **{{eventName}}**.
 
-{{#if late}}The response arrived after the invitation deadline. A replacement may already exist. Participation awaits an authorized organizer's approval; existing participation reservations remain until review, and this response adds no agenda credit.{{else}}{{#if recipientIsSpeaker}}Your willingness{{else}}Their willingness{{/if}} to participate in the proposal is confirmed.{{/if}}{{/if}}{{/if}}{{/if}}
+{{#if late}}The response came in after the invitation deadline, and someone else may already have been invited. An organizer will review it; until then, the proposal's speakers stay as they are.{{/if}}{{/if}}{{/if}}{{/if}}
 
-Speaker participation does not accept the proposal or guarantee inclusion in the program. Committee acceptance and scheduling are separate decisions.
+Confirming as a speaker doesn't mean the proposal is accepted. The program committee decides that, and the schedule, separately.
 
 [{{#if recipientIsSpeaker}}View your participation{{else}}Review the proposal{{/if}}]({{proposalUrl}})
 `,
@@ -26,18 +26,17 @@ Speaker participation does not accept the proposal or guarantee inclusion in the
     key: "event_proposal_verify",
     subjectTemplate: "Verify your email for {{eventName}}",
     content:
-      'Verify your email address to continue your proposal for **{{eventName}}**.\n\n<div class="cta-navy"><a href="{{verificationUrl}}">Verify your email &rarr;</a></div>\n\nThe link works for a short time. If you did not request it, you can ignore this email.',
+      'Verify your email address to continue your proposal for **{{eventName}}**.\n\n<div class="cta-navy"><a href="{{verificationUrl}}">Verify my email &rarr;</a></div>\n\nThe link works for a short time. Didn\'t ask for it? You can ignore this email.',
     contentType: "markdown",
     messageType: "transactional",
   },
   {
-    // Starting an account from a flow. An address that already has an account gets this same message, so it
-    // never says which addresses have one; the link signs that account in instead.
+    // Starting an account from a flow. An address that already signs in gets user_account_found_link instead.
     key: "user_sign_up_link",
     subjectTemplate:
       "{{#if registration}}Confirm your email to register for {{eventName}}{{else}}{{#if proposal}}Confirm your email to submit a proposal for {{eventName}}{{else}}{{#if join}}Confirm your email to join the PKI Consortium{{else}}Confirm your email for the PKI Consortium{{/if}}{{/if}}{{/if}}",
     content:
-      'Confirm that **{{email}}** is yours to {{#if registration}}register for **{{eventName}}**{{else}}{{#if proposal}}submit a proposal for **{{eventName}}**{{else}}{{#if join}}join the **PKI Consortium**{{else}}continue to the **PKI Consortium portal**{{/if}}{{/if}}{{/if}}.\n\n<div class="cta-navy"><a href="{{magicLinkUrl}}">Confirm my email &rarr;</a></div>\n\nThe link creates your PKI Consortium account, or signs you in if you already have one, and takes you straight back to {{#if registration}}your registration{{else}}{{#if proposal}}your proposal{{else}}{{#if join}}your membership application{{else}}the portal{{/if}}{{/if}}{{/if}}.\n\n<div class="notice notice-warning">&#9888;&#65039; <strong>Security notice</strong><br>&bull; This link is valid for <strong>{{expiresInMinutes}} minutes</strong> only.<br>&bull; It can only be used <strong>once</strong> and is tied to <code>{{email}}</code>.<br>&bull; If you did not request this link, ignore this email.</div>',
+      'Hello,\n\nConfirm that **{{email}}** is your email address to {{#if registration}}register for **{{eventName}}**{{else}}{{#if proposal}}submit a proposal for **{{eventName}}**{{else}}{{#if join}}apply to join the **PKI Consortium**{{else}}continue to the **PKI Consortium portal**{{/if}}{{/if}}{{/if}}.\n\n<div class="cta-navy"><a href="{{magicLinkUrl}}">Confirm my email &rarr;</a></div>\n\nThe link sets up your PKI Consortium account and takes you straight back to {{#if registration}}your registration{{else}}{{#if proposal}}your proposal{{else}}{{#if join}}your membership application{{else}}the portal{{/if}}{{/if}}{{/if}}.\n\n<div class="notice notice-warning">&#9888;&#65039; <strong>Keep this link to yourself</strong><br>&bull; It works <strong>once</strong>, for <strong>{{expiresInMinutes}} minutes</strong>.<br>&bull; It only works for <code>{{email}}</code>.<br>&bull; Didn\'t ask for it? You can ignore this email.</div>',
     contentType: "markdown",
     messageType: "transactional",
   },
@@ -45,16 +44,16 @@ Speaker participation does not accept the proposal or guarantee inclusion in the
     key: "user_email_verification",
     subjectTemplate: "Verify your email address",
     content:
-      'Please confirm that **{{email}}** is your address for the **PKI Consortium portal**.\n\n<div class="cta-navy"><a href="{{verificationUrl}}">Verify this address &rarr;</a></div>\n\nThe link works once, for {{expiresInHours}} hours. Sign in to the account where you requested this address, then confirm linking it. Confirm only if both addresses belong to you. A verified work address links you to your organization.\n\nIf you did not add this address, you can ignore this email.',
+      'Hello,\n\nVerify that **{{email}}** is yours to add it to your **PKI Consortium** account.\n\n<div class="cta-navy"><a href="{{verificationUrl}}">Verify this address &rarr;</a></div>\n\nOpen the link while you are signed in to the account you added it to, and verify it only if both addresses are yours. Once verified, you can sign in with this address too, and a work address connects you to your organization.\n\nThe link works once, for {{expiresInHours}} hours. Didn\'t add this address? You can ignore this email.',
     contentType: "markdown",
     messageType: "transactional",
   },
   {
     key: "account_security_notice",
     subjectTemplate:
-      "{{#if address_added}}An email address was added to your PKI Consortium account{{/if}}{{#if address_removed}}An email address was removed from your PKI Consortium account{{/if}}{{#if primary_changed}}Your PKI Consortium primary email address changed{{/if}}{{#if first_sign_in}}New sign-in with an email address on your PKI Consortium account{{/if}}",
+      "{{#if address_added}}An email address was added to your PKI Consortium account{{/if}}{{#if address_removed}}An email address was removed from your PKI Consortium account{{/if}}{{#if primary_changed}}Your PKI Consortium primary email address changed{{/if}}{{#if first_sign_in}}New sign-in to your PKI Consortium account{{/if}}",
     content:
-      '{{#if address_added}}**{{address}}** was added to your PKI Consortium account. You can now sign in with it.{{/if}}{{#if address_removed}}**{{address}}** was removed from your PKI Consortium account. It no longer signs in.{{/if}}{{#if primary_changed}}**{{address}}** is now the primary email address of your PKI Consortium account. Account email goes there from now on.{{/if}}{{#if first_sign_in}}Someone signed in to your PKI Consortium account with **{{address}}** for the first time.{{/if}}\n\nIf this was you, there is nothing to do.\n\nIf it was not, sign in with another address or your passkey and review your email addresses and passkeys.\n\n<div class="cta-navy"><a href="{{baseUrl}}/portal/#/users/{{userId}}">Review your account &rarr;</a></div>',
+      'Hello,\n\n{{#if address_added}}**{{address}}** was added to your PKI Consortium account. You can now sign in with it.{{/if}}{{#if address_removed}}**{{address}}** was removed from your PKI Consortium account and can no longer be used to sign in.{{/if}}{{#if primary_changed}}**{{address}}** is now the primary email address of your PKI Consortium account. We\'ll send account email there from now on.{{/if}}{{#if first_sign_in}}Someone signed in to your PKI Consortium account with **{{address}}** for the first time.{{/if}}\n\nIf this was you, there\'s nothing else to do.\n\nIf it wasn\'t, sign in with another email address or a passkey right away and check the email addresses and passkeys on your account.\n\n<div class="cta-navy"><a href="{{baseUrl}}/portal/#/users/{{userId}}">Review my account &rarr;</a></div>',
     contentType: "markdown",
     messageType: "transactional",
   },
@@ -62,18 +61,18 @@ Speaker participation does not accept the proposal or guarantee inclusion in the
     key: "user_sign_in_unavailable",
     subjectTemplate: "Sign in to the PKI Consortium another way",
     content:
-      'Someone asked for a sign-in link for **{{email}}**. This address stopped signing in when the organization representation it belongs to ended, so we did not send a link.\n\nSign in with your passkey or with another email address on your account instead.\n\n<div class="cta-navy"><a href="{{baseUrl}}/portal/">Go to sign-in &rarr;</a></div>\n\nIf you did not ask for a link, you can ignore this email.',
+      'Hello,\n\nWe received a request to sign in with **{{email}}**. This address can no longer be used to sign in, because your representation of its organization has ended, so we didn\'t send a link.\n\nSign in with a passkey or with another email address on your account instead. If you still work at the organization, you can reinstate your representation once you are signed in.\n\n<div class="cta-navy"><a href="{{baseUrl}}/portal/">Go to sign-in &rarr;</a></div>\n\nDidn\'t ask to sign in? You can ignore this email.',
     contentType: "markdown",
     messageType: "transactional",
   },
   {
     // Starting an account with an address that already signs in: only that mailbox learns the account exists,
-    // and its link signs in and returns to what the person came for.
+    // and its link signs in and returns to what the person came for, or to the registration they already hold.
     key: "user_account_found_link",
     subjectTemplate:
-      "{{#if alreadyRegistered}}You are already registered for {{eventName}}{{else}}{{#if registration}}Continue your registration for {{eventName}}{{else}}{{#if proposal}}Continue your proposal for {{eventName}}{{else}}{{#if join}}Continue your membership application{{else}}Sign in to the PKI Consortium{{/if}}{{/if}}{{/if}}{{/if}}",
+      "{{#if alreadyRegistered}}You're already registered for {{eventName}}{{else}}{{#if registration}}Continue your registration for {{eventName}}{{else}}{{#if proposal}}Continue your proposal for {{eventName}}{{else}}{{#if join}}Continue your membership application{{else}}Sign in to the PKI Consortium{{/if}}{{/if}}{{/if}}{{/if}}",
     content:
-      'You already have a PKI Consortium account with **{{email}}**, so we did not start a new one.\n\n{{#if alreadyRegistered}}You are already registered for **{{eventName}}**. Sign in with this link to view or change your registration.{{else}}Sign in with this link to continue {{#if registration}}your registration for **{{eventName}}**{{else}}{{#if proposal}}your proposal for **{{eventName}}**{{else}}{{#if join}}your membership application{{else}}to the portal{{/if}}{{/if}}{{/if}}.{{/if}}\n\n<div class="cta-navy"><a href="{{magicLinkUrl}}">{{#if alreadyRegistered}}View my registration{{else}}Sign in and continue{{/if}} &rarr;</a></div>\n\n<div class="notice notice-warning">&#9888;&#65039; <strong>Security notice</strong><br>&bull; This link is valid for <strong>{{expiresInMinutes}} minutes</strong> only.<br>&bull; It can only be used <strong>once</strong> and is tied to <code>{{email}}</code>.<br>&bull; If you did not request this link, ignore this email.</div>',
+      '{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}\n\n{{#if alreadyRegistered}}Good news: you\'re already registered for **{{eventName}}**, so there\'s nothing more to do. Your registration details are below.\n\n<div class="cta-navy"><a href="{{magicLinkUrl}}">View or change my registration &rarr;</a></div>\n\n{{> reg_details}}{{else}}Welcome back! You already have a PKI Consortium account with **{{email}}**, so there\'s no need to create another one. Sign in to continue {{#if registration}}your registration for **{{eventName}}**{{else}}{{#if proposal}}your proposal for **{{eventName}}**{{else}}{{#if join}}your membership application{{else}}to the portal{{/if}}{{/if}}{{/if}}.\n\n<div class="cta-navy"><a href="{{magicLinkUrl}}">Sign in and continue &rarr;</a></div>{{/if}}\n\n<div class="notice notice-warning">&#9888;&#65039; <strong>Keep this link to yourself</strong><br>&bull; It works <strong>once</strong>, for <strong>{{expiresInMinutes}} minutes</strong>.<br>&bull; It only works for <code>{{email}}</code>.<br>&bull; Didn\'t ask for it? You can ignore this email.</div>',
     contentType: "markdown",
     messageType: "transactional",
   },
@@ -81,25 +80,25 @@ Speaker participation does not accept the proposal or guarantee inclusion in the
     // A sign-in request that cannot send a link still answers the mailbox it names, so nobody waits for nothing.
     key: "user_sign_in_help",
     subjectTemplate:
-      "{{#if noAccount}}No PKI Consortium account uses this address{{else}}We could not send a PKI Consortium sign-in link{{/if}}",
+      "{{#if noAccount}}We couldn't find a PKI Consortium account for this address{{else}}We couldn't send you a sign-in link{{/if}}",
     content:
-      '{{#if noAccount}}Someone asked for a sign-in link for **{{email}}**, but no PKI Consortium account signs in with this address.\n\nStart an account with it, or sign in with the address or passkey of the account you already have.\n\n<div class="cta-navy"><a href="{{startUrl}}">Start an account &rarr;</a></div>{{else}}Someone asked for a sign-in link for **{{email}}**. The account this address belongs to cannot sign in with it, so we did not send a link.\n\nAsk the secretariat at [{{contactEmail}}](mailto:{{contactEmail}}) to help you sign in.{{/if}}\n\nIf you did not ask for a link, you can ignore this email.',
+      'Hello,\n\n{{#if noAccount}}We received a request to sign in with **{{email}}**, but no PKI Consortium account uses this address.\n\nNew here? Create an account with this address. Already have an account? Sign in with the email address or passkey you use for it.\n\n<div class="cta-navy"><a href="{{startUrl}}">Create an account &rarr;</a></div>{{else}}We received a request to sign in with **{{email}}**, but this address can\'t be used to sign in to its account, so we didn\'t send a link.\n\nThe secretariat can help you sign in: email [{{contactEmail}}](mailto:{{contactEmail}}).{{/if}}\n\nDidn\'t ask to sign in? You can ignore this email.',
     contentType: "markdown",
     messageType: "transactional",
   },
   {
     key: "agenda_session_invitation",
-    subjectTemplate: "Session invitation: {{sessionTitle}}",
+    subjectTemplate: "You're invited to {{sessionTitle}}",
     content:
-      "You are invited to **{{sessionTitle}}** at **{{eventName}}**. Review the invitation in your event portal. An invitation does not register you for the event or reserve a seat.",
+      "Hello,\n\nYou're invited to the session **{{sessionTitle}}** at **{{eventName}}**. Open the event in the PKI Consortium portal to respond.\n\nThis invitation doesn't register you for the event or reserve you a seat.",
     contentType: "markdown",
     messageType: "transactional",
   },
   {
     key: "agenda_session_booking",
-    subjectTemplate: "Session registration updated: {{sessionTitle}}",
+    subjectTemplate: "Your place in {{sessionTitle}} changed",
     content:
-      "Your registration for **{{sessionTitle}}** at **{{eventName}}** has changed to **{{participationStatus}}** ({{attendanceMode}}). Review your event portal for the current schedule and admission requirements. A preference or waitlist entry does not guarantee a seat.",
+      "Hello,\n\nYour place in the session **{{sessionTitle}}** at **{{eventName}}** is now **{{participationStatus}}** ({{attendanceMode}}).\n\nCheck the event in the PKI Consortium portal for the latest schedule and what you need to get in. A preference or a waitlist place doesn't guarantee a seat.",
     contentType: "markdown",
     messageType: "transactional",
   },
