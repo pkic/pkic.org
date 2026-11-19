@@ -119,6 +119,18 @@ describe("scanner status bar", () => {
     expect(ready).toContain('title="All scans synced"');
     expect(ready).not.toContain("Badge names ready");
     expect(ready).not.toContain("No recent sync");
+    const notSaved = render(
+      <ScannerConnectionStatus
+        compact
+        pending={0}
+        online
+        syncing={false}
+        offlinePrepared={false}
+        preparation={{ preparing: false, ready: true, error: "" }}
+      />,
+    );
+    expect(notSaved).toContain("Keep open to scan offline");
+    expect(notSaved).not.toContain('title="All scans synced"');
     const offline = render(
       <ScannerConnectionStatus compact pending={1} online={false} syncing={false} offlinePrepared />,
     );

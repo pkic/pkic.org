@@ -196,13 +196,8 @@ it.each(["online", "focus", "retry", "local-session-change"])(
       else if (trigger === "retry") host.querySelector("button")!.click();
       else for (const callback of mocks.sessionListeners) callback();
     });
-    if (trigger === "online" || trigger === "focus") {
-      expect(scannerTransportUnavailable.value).toBe(true);
-      expect(host.textContent).toContain("Prepared offline scanner");
-    } else {
-      await vi.waitFor(() => expect(scannerTransportUnavailable.value).toBe(false));
-      await vi.waitFor(() => expect(host.textContent).not.toContain("Prepared offline scanner"));
-    }
+    expect(scannerTransportUnavailable.value).toBe(true);
+    expect(host.textContent).toContain("Prepared offline scanner");
     expect(portalSession.value).toBeNull();
     if (trigger !== "local-session-change") {
       await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
@@ -241,6 +236,25 @@ it("offers prepared scanners from the portal entry point without a remembered sc
   expect(host.textContent).not.toContain("Authenticated portal content");
   expect(scannerTransportUnavailable.value).toBe(true);
 });
+it.each([true, false])(
+  "keeps the offline return route when local session state changes after the network fails (local session: %s)",
+  async (hasLocalSession) => {
+    window.location.hash = "#/home";
+    if (hasLocalSession)
+      mocks.activeSession.mockResolvedValue({
+        sessionId: "11111111-1111-4111-8111-111111111111",
+        operatorUserId: "22222222-2222-4222-8222-222222222222",
+      });
+    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+    await mount();
+    await vi.waitFor(() => expect(host.textContent).toContain("Prepared offline scanner"));
+    await act(async () => {
+      for (const callback of mocks.sessionListeners) callback();
+    });
+    expect(host.textContent).toContain("Prepared offline scanner");
+    expect(scannerTransportUnavailable.value).toBe(true);
+  },
+);
 it("moves an expired web sign-in to the local scanner route without erasing preparation", () => {
   expirePortalSession();
   expect(scannerTransportUnavailable.value).toBe(true);

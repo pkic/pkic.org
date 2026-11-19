@@ -105,3 +105,30 @@ it("lists each prepared scanner task with its own link", async () => {
   ]);
   expect(tiles[4]?.textContent).toContain("Main hall · Admission decision");
 });
+
+it("hides the previous scanner while a different saved task is being restored", async () => {
+  const route = "/events/synthetic-event/scanner";
+  const firstId = "66666666-6666-4666-8666-666666666666";
+  const secondId = "77777777-7777-4777-8777-777777777777";
+  const first = {
+    route,
+    contextId: firstId,
+    sessionId: "33333333-3333-4333-8333-333333333333",
+    epochId: "55555555-5555-4555-8555-555555555555",
+    action: "attendance",
+    occurrenceId: null,
+    roomId: null,
+  };
+  window.location.hash = `#${route}?offlineContext=${firstId}`;
+  mocks.restore.mockResolvedValueOnce(first);
+  await act(() => render(<OfflineScannerBootstrap route={route} onCheckSignIn={() => {}} />, host));
+  await vi.waitFor(() => expect(host.textContent).toContain("Saved scanner opened"));
+  let finish!: (value: typeof first) => void;
+  mocks.restore.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)));
+  window.location.hash = `#${route}?offlineContext=${secondId}`;
+  await act(() => render(<OfflineScannerBootstrap route={route} onCheckSignIn={() => {}} />, host));
+  expect(host.textContent).not.toContain("Saved scanner opened");
+  expect(host.textContent).toContain("Checking saved scanner context");
+  await act(() => finish({ ...first, contextId: secondId }));
+  await vi.waitFor(() => expect(host.textContent).toContain("Saved scanner opened"));
+});

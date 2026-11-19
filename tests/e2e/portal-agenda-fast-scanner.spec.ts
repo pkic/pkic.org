@@ -20,6 +20,7 @@ import { capturedEmailCount, waitForCapturedEmail } from "./helpers/sendgrid";
 import { openScannerSessionDetails, queuedScanSchema } from "./helpers/scanner-recovery-storage";
 import { createRegistrationEvent, registerStateAttendee } from "./helpers/participation-state-fixture";
 import { instantToCalendarDate } from "../../assets/shared/timezone";
+import { USER_SESSION_STATE_CHANGED } from "../../assets/ts/shared/pending-user-logout";
 
 test("badge collection opens for an upcoming event after daily preparation", async ({
   page,
@@ -171,6 +172,8 @@ test("badge collection opens for an upcoming event after daily preparation", asy
   const reopened = await context.newPage();
   await reopened.setViewportSize({ width: 375, height: 812 });
   await reopened.goto("/portal/");
+  await expect(reopened.getByRole("heading", { name: "Continue scanning offline", exact: true })).toBeVisible();
+  await reopened.evaluate((eventName) => window.dispatchEvent(new Event(eventName)), USER_SESSION_STATE_CHANGED);
   await expect(reopened.getByRole("heading", { name: "Continue scanning offline", exact: true })).toBeVisible();
   await expect(reopened.getByRole("link", { name: /^Badge collection/ })).toBeVisible();
   await expect(reopened.getByRole("link", { name: /^Record attendance/ })).toBeVisible();

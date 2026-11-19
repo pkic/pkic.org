@@ -108,6 +108,7 @@ export function ScannerConnectionStatus({
       (props.ready === false ? "Checking saved scans…" : "") ||
       (preparation && !preparation.ready ? readiness : "") ||
       (preparation?.badgeCollection && preparation.ready && !preparation.badgeNamesPrepared ? readiness : "") ||
+      (offlinePrepared === false && preparation?.ready ? "Keep open to scan offline" : "") ||
       (!props.online || props.collector ? (props.pending ? `Offline · ${uploads}` : "Offline") : "") ||
       uploads;
     const synced = label === "All scans synced";

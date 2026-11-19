@@ -21,12 +21,15 @@ export function OfflineScannerBootstrap({ route, onCheckSignIn }: { route: strin
   const [context, setContext] = useState<ScannerOfflineContext | null>(null);
   const [available, setAvailable] = useState<ScannerOfflineContext[]>([]);
   const [loading, setLoading] = useState(true);
+  const [resolvedSelection, setResolvedSelection] = useState<string | null>(null);
   const routeQuery = new URLSearchParams(window.location.hash.split("?")[1] ?? "");
   const selectionKey = route
     ? [routeQuery.get("offlineContext"), routeQuery.get("scanAction"), routeQuery.get("scannerPurpose")].join(":")
     : "";
+  const currentSelection = `${route ?? ""}?${selectionKey}`;
   useEffect(() => {
     let disposed = false;
+    setLoading(true);
     async function check() {
       try {
         const saved = route ? await restoreScannerOfflineContext(route) : null;
@@ -38,7 +41,10 @@ export function OfflineScannerBootstrap({ route, onCheckSignIn }: { route: strin
       } catch {
         if (!disposed) setContext(null);
       } finally {
-        if (!disposed) setLoading(false);
+        if (!disposed) {
+          setResolvedSelection(currentSelection);
+          setLoading(false);
+        }
       }
     }
     const unsubscribe = subscribeUserSessionState(() => {
@@ -53,8 +59,9 @@ export function OfflineScannerBootstrap({ route, onCheckSignIn }: { route: strin
       unsubscribe();
       window.clearInterval(timer);
     };
-  }, [route, selectionKey]);
-  if (loading || (context && context.route !== route)) return <Spinner label="Checking saved scanner context…" />;
+  }, [route, currentSelection]);
+  if (loading || resolvedSelection !== currentSelection || (context && context.route !== route))
+    return <Spinner label="Checking saved scanner context…" />;
   const multipleEvents = available.some((item) => item.slug !== available[0]?.slug);
   if (!route)
     return (

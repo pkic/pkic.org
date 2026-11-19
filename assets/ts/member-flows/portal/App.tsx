@@ -182,6 +182,7 @@ export function App() {
             (contexts) => contexts.length > 0,
             () => true,
           )));
+      if (!isCurrent()) return portalSession.value !== null;
       if (scannerFallback) {
         scannerTransportUnavailable.value = true;
         setSessionError("We could not check sign-in. Saved scanner preparation remains available on this device.");
@@ -286,7 +287,6 @@ export function App() {
 
   useEffect(() => {
     async function changed() {
-      scannerTransportUnavailable.value = false;
       const current = portalSession.value;
       if (!current) return;
       try {
@@ -393,7 +393,10 @@ export function App() {
     return (
       <div class="pk pk-stack">
         <Suspense fallback={<VerifyingOverlay />}>
-          <OfflineScannerBootstrap route={collectorRoute} onCheckSignIn={() => void loadPortalSession()} />
+          <OfflineScannerBootstrap
+            route={collectorRoute}
+            onCheckSignIn={() => void loadPortalSession(() => true, true)}
+          />
         </Suspense>
       </div>
     );
