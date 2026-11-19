@@ -46,6 +46,7 @@ import {
 } from "../event-tickets/registration-ticket";
 import { HELD_UNTIL_PAID } from "../event-tickets/payment";
 import { prepareTicketPaymentEmail } from "../event-tickets/payment-emails";
+import { uuid } from "../../utils/ids";
 import { readRefundPolicy } from "../event-tickets/refund-policy";
 
 /** The individual capacity only gates the public contract's work-email policy; the use case does not read it. */
@@ -242,6 +243,8 @@ export async function submitEventRegistration(
   const badgeRenderJob = prepareBadgeRenderJob(db, referralCode);
   // The payment request states the refund terms a payment made now falls under.
   const refundPolicy = awaitingPayment ? await readRefundPolicy(db, event.id) : { refundableUntil: null, refundFee: 0 };
+  // The request for payment goes out with the response, not on the outbox's next run.
+  const paymentEmailId = uuid();
   const ticketStatements = ticket
     ? [
         ...ticket.statements,
@@ -271,6 +274,7 @@ export async function submitEventRegistration(
                   templateKey: "ticket_payment_request",
                   idempotencyKey: `ticket-payment:${registration.id}:${registration.updated_at}`,
                   userId: user.id,
+                  outboxId: paymentEmailId,
                 },
               ),
             ]
@@ -303,7 +307,7 @@ export async function submitEventRegistration(
         userId: user.id,
         email: user.email,
         jobId: badgeRenderJob.id,
-      }).then(() => (awaitingPayment ? undefined : processOutboxByIdBackground(db, env, queuedEmail.id))),
+      }).then(() => processOutboxByIdBackground(db, env, awaitingPayment ? paymentEmailId : queuedEmail.id)),
     ],
   };
 }

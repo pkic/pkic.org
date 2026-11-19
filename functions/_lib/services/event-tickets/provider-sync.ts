@@ -29,18 +29,20 @@ export async function syncRegistrationTicketWithProvider(
   /** `paymentOnly` is the registrant's own check: whether their payment arrived, and nothing about refunds. */
   input: { eventId: string; registrationId: string; paymentOnly?: boolean },
   fetcher?: typeof fetch,
-): Promise<{ changed: boolean }> {
+): Promise<{ changed: boolean; outboxIds: string[] }> {
   const secretKey = env.STRIPE_SECRET_KEY;
   // Without a provider the registrant's own check has nothing to learn; an organizer is told why.
-  if (!secretKey && input.paymentOnly) return { changed: false };
+  if (!secretKey && input.paymentOnly) return { changed: false, outboxIds: [] };
   if (!secretKey) throw new AppError(503, "NOT_CONFIGURED", "The payment provider is not configured.");
   const read = () => readRegistrationTicket(db, input);
   const before = await read();
   if (!before) throw new AppError(404, "TICKET_NOT_FOUND", "This registration has no ticket.");
   // A registrant with nothing to pay has nothing to ask the provider.
-  if (input.paymentOnly && before.status !== "pending_payment") return { changed: false };
+  if (input.paymentOnly && before.status !== "pending_payment") return { changed: false, outboxIds: [] };
+  // Emails that a settled payment released; the route sends them with its response.
+  const outboxIds: string[] = [];
   try {
-    await applyProviderState(db, env, secretKey, before.id, Boolean(input.paymentOnly), fetcher);
+    await applyProviderState(outboxIds, db, env, secretKey, before.id, Boolean(input.paymentOnly), fetcher);
   } catch (error) {
     // What was applied before the failed read stays applied; asking again picks up from there.
     if (error instanceof AppError && error.code === "STRIPE_ERROR")
@@ -52,10 +54,11 @@ export async function syncRegistrationTicketWithProvider(
     await prepareAuditLog(db, "user", actor.id, "registration_ticket_synced", "registration", input.registrationId, {
       eventId: input.eventId,
     }).run();
-  return { changed };
+  return { changed, outboxIds };
 }
 
 async function applyProviderState(
+  outboxIds: string[],
   db: DatabaseLike,
   env: Pick<Env, "STRIPE_SECRET_KEY" | "STRIPE_API_BASE">,
   secretKey: string,
@@ -80,12 +83,13 @@ async function applyProviderState(
     // A finished page was paid, or its payment is on its way; either is applied as the provider's event would be.
     if (session.status !== "complete" || (session.payment_status !== "paid" && session.payment_status !== "unpaid"))
       continue;
-    await handleEventTicketStripeEvent(db, {
+    const applied = await handleEventTicketStripeEvent(db, {
       id: `sync:${page.provider_session_id}:${session.payment_status === "paid" ? "paid" : "processing"}`,
       type: "checkout.session.completed",
       created: askedAt,
       data: { object: session },
     });
+    outboxIds.push(...applied.outboxIds);
   }
 
   if (paymentOnly) return;

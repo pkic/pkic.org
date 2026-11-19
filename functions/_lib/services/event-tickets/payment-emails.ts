@@ -92,7 +92,8 @@ export function prepareTicketPaymentEmail(
   db: DatabaseLike,
   appBaseUrl: string,
   ticket: TicketPaymentEmailTicket,
-  message: { templateKey: TicketPaymentTemplate; idempotencyKey: string; userId?: string | null },
+  /** `outboxId` lets a caller send the email right after its write instead of on the outbox's next run. */
+  message: { templateKey: TicketPaymentTemplate; idempotencyKey: string; userId?: string | null; outboxId?: string },
 ): StatementLike {
   return prepareQueueEmailStatement(db, {
     eventId: ticket.event_id,
@@ -101,7 +102,7 @@ export function prepareTicketPaymentEmail(
     recipientEmail: ticket.email,
     recipientUserId: message.userId ?? undefined,
     messageType: "transactional",
-    outboxId: uuid(),
+    outboxId: message.outboxId ?? uuid(),
     idempotencyKey: message.idempotencyKey,
     data: {
       eventName: ticket.event_name,

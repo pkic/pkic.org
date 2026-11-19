@@ -349,8 +349,8 @@ export async function handleEventTicketStripeEvent(
   db: DatabaseLike,
   event: StripeEvent,
   retried = false,
-): Promise<{ received: true; outcome: string }> {
-  if (!event.id) return { received: true, outcome: "ignored" };
+): Promise<{ received: true; outcome: string; outboxIds: string[] }> {
+  if (!event.id) return { received: true, outcome: "ignored", outboxIds: [] };
   const object = objectFields(event);
   const sessionId = object.id?.startsWith("cs_") ? object.id : null;
   const row = await first<SettlementRow>(
@@ -364,8 +364,8 @@ export async function handleEventTicketStripeEvent(
      LIMIT 1`,
     [sessionId, object.payment_intent ?? null, event.id],
   );
-  if (!row) return { received: true, outcome: "unknown_ticket" };
-  if (row.recorded) return { received: true, outcome: "duplicate" };
+  if (!row) return { received: true, outcome: "unknown_ticket", outboxIds: [] };
+  if (row.recorded) return { received: true, outcome: "duplicate", outboxIds: [] };
   const now = nowIso();
   // When the provider says this happened: refund facts are applied in that order, not in the order they arrive.
   const eventAt = providerInstant((event as StripeEvent & { created?: unknown }).created) ?? now;
@@ -542,10 +542,11 @@ export async function handleEventTicketStripeEvent(
   } catch (error) {
     // A concurrent delivery of the same event won the primary key.
     if (error instanceof Error && /UNIQUE constraint failed: registration_ticket_payment_events/.test(error.message))
-      return { received: true, outcome: "duplicate" };
+      return { received: true, outcome: "duplicate", outboxIds: [] };
     // The ticket changed between the read and the batch: nothing was written, so the event is judged once more.
     if (isStateGuardFailure(error) && !retried) return handleEventTicketStripeEvent(db, event, true);
     throw error;
   }
-  return { received: true, outcome };
+  // The confirmation that paying released is sent now, not on the outbox's next run.
+  return { received: true, outcome, outboxIds: outcome === "paid" && row.held_email_id ? [row.held_email_id] : [] };
 }

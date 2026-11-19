@@ -20,6 +20,7 @@ import {
 import { hasPermission } from "../../../../_lib/auth/permissions";
 import { getUserSessionToken, requireIdentityFromRequest } from "../../../../_lib/auth/user-session";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
+import { processSelectedOutboxBackground } from "../../../../_lib/email/outbox";
 import { markResponseSensitive, requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { AppError } from "../../../../_lib/errors";
 import { json } from "../../../../_lib/http";
@@ -165,18 +166,17 @@ const RegistrationTicketSyncPost = openApiRoute(registrationTicketSyncRouteSchem
   const identity = await requireIdentityFromRequest(db, c.req.raw, c.env);
   const event = await getEventBySlug(db, data.params.eventSlug);
   const input = { eventId: event.id, registrationId: data.params.registrationId };
-  if ((await readRegistrationOwner(db, input)) === identity.userId)
-    return json({
-      success: true,
-      ...(await syncRegistrationTicketWithProvider(
-        db,
-        c.env,
-        { id: identity.userId },
-        { ...input, paymentOnly: true },
-      )),
-    });
-  const { actor } = await requireEventPermission(c, data.params.eventSlug, "events:write");
-  return json({ success: true, ...(await syncRegistrationTicketWithProvider(db, c.env, actor, input)) });
+  const own = (await readRegistrationOwner(db, input)) === identity.userId;
+  const actor = own
+    ? { id: identity.userId }
+    : (await requireEventPermission(c, data.params.eventSlug, "events:write")).actor;
+  const { outboxIds, changed } = await syncRegistrationTicketWithProvider(db, c.env, actor, {
+    ...input,
+    paymentOnly: own,
+  });
+  // A confirmation that the payment released goes out with this response.
+  if (outboxIds.length > 0) c.executionCtx.waitUntil(processSelectedOutboxBackground(c.env.DB, c.env, outboxIds));
+  return json({ success: true, changed });
 });
 
 const RegistrationTicketReviewPost = openApiRoute(

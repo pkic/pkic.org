@@ -1519,7 +1519,7 @@ describe("event tickets", () => {
     });
     // The payment page is still open: nothing changes, and no payment is asked about.
     const session = { id: "cs_test_ticket", status: "open", payment_status: "unpaid" };
-    expect(await sync({ session })).toEqual({ changed: false });
+    expect(await sync({ session })).toMatchObject({ changed: false });
     expect(asked).toEqual(["/v1/checkout/sessions/cs_test_ticket"]);
     expect(await read()).toMatchObject({ status: "pending_payment" });
 
@@ -1527,7 +1527,7 @@ describe("event tickets", () => {
     const own = (held: Parameters<typeof provider>[0]) =>
       syncRegistrationTicketWithProvider(env.DB, paymentEnv, user, { ...input, paymentOnly: true }, provider(held));
     asked.length = 0;
-    expect(await own({ session })).toEqual({ changed: false });
+    expect(await own({ session })).toMatchObject({ changed: false });
     expect(asked).toEqual(["/v1/checkout/sessions/cs_test_ticket"]);
 
     // It was paid and the event never arrived: the ticket is settled as the event would have settled it.
@@ -1541,12 +1541,12 @@ describe("event tickets", () => {
       metadata: { pkic_payment_type: "event", registrationTicketId: ticketId },
     };
     const charge = { amount_refunded: 0, refunded: false };
-    expect(await sync({ session: paid, charge })).toEqual({ changed: true });
+    expect(await sync({ session: paid, charge })).toMatchObject({ changed: true });
     expect(await read()).toMatchObject({ status: "paid", paidAmount: 19500, refundedAmount: 0 });
     // The event arriving afterwards, and asking again, change nothing.
     expect(await paidEvent(ticketId, "cs_test_ticket", 19500)).toMatchObject({ outcome: "already_paid" });
     asked.length = 0;
-    expect(await sync({ session: paid, charge })).toEqual({ changed: false });
+    expect(await sync({ session: paid, charge })).toMatchObject({ changed: false });
     expect(asked).toEqual(["/v1/payment_intents/pi_synthetic"]);
 
     // A refund was sent and its confirmation never arrived.
@@ -1556,11 +1556,11 @@ describe("event tickets", () => {
     await processTicketRefunds(env.DB, paymentEnv, 5, pending);
     expect(await read()).toMatchObject({ status: "paid", refundPending: true });
     const refund = { id: "re_sync", status: "pending", payment_intent: "pi_synthetic", amount: 19500 };
-    expect(await sync({ refund, charge })).toEqual({ changed: false });
+    expect(await sync({ refund, charge })).toMatchObject({ changed: false });
     expect(await read()).toMatchObject({ status: "paid", refundPending: true });
     expect(
       await sync({ refund: { ...refund, status: "succeeded" }, charge: { amount_refunded: 19500, refunded: true } }),
-    ).toEqual({ changed: true });
+    ).toMatchObject({ changed: true });
     expect(await read()).toMatchObject({ status: "refunded", refundedAmount: 19500, refundPending: false });
     expect(
       await env.DB.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'registration_ticket_synced'").first(),
@@ -1568,7 +1568,7 @@ describe("event tickets", () => {
 
     // A settled ticket gives the registrant's own check nothing to ask the provider.
     asked.length = 0;
-    expect(await own({})).toEqual({ changed: false });
+    expect(await own({})).toMatchObject({ changed: false });
     expect(asked).toEqual([]);
 
     // The registrant may ask about their own ticket and an organizer about anyone's; nobody else may.
