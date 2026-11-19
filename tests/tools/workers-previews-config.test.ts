@@ -108,7 +108,7 @@ describe("Workers Previews configuration", () => {
       expect(hostname).toMatch(/^[a-z0-9-]+\.preview\.pkic\.org$/);
       expect(hostname).not.toBe(new URL(production.vars.APP_BASE_URL as string).hostname);
     }
-    expect(() => previewOriginVars("main")).toThrow(/valid Preview hostname/);
+    expect(() => previewOriginVars("MAIN")).toThrow(/valid Preview hostname/);
     expect(() => previewOriginVars("")).toThrow(/valid Preview hostname/);
   });
 
@@ -161,6 +161,7 @@ describe("Workers Previews configuration", () => {
 
   it("derives custom Preview URLs from deployable branch names", () => {
     expect(workersPreviewBaseUrl("codex/Workers_Previews")).toBe("https://codex-workers-previews.preview.pkic.org");
+    expect(workersPreviewBaseUrl("main")).toBe("https://main.preview.pkic.org");
     expect(workersPreviewBaseUrl("main-")).toBeNull();
     expect(workersPreviewBaseUrl("Stable")).toBeNull();
     expect(workersPreviewBaseUrl("stable-")).toBeNull();
