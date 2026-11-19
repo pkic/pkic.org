@@ -166,7 +166,8 @@ async function refreshScannerEpoch(db: IDBDatabase, epoch: ScannerEpoch, sponsor
       { signal: AbortSignal.timeout(8000) },
     );
   } catch (error) {
-    // A current local lease survives server outages and refusals; it never renews itself.
+    // A current local lease survives server outages and refusals; it never renews itself. A close the
+    // server reports is final, because the server refuses scans uploaded to a closed session.
     if (
       error instanceof ApiClientError &&
       (error.status === 0 ||
@@ -176,7 +177,6 @@ async function refreshScannerEpoch(db: IDBDatabase, epoch: ScannerEpoch, sponsor
       return epoch;
     throw error;
   }
-  if ((status.closedAt || status.closingDeclaredAt) && scannerOfflineLeaseCurrent(epoch)) return epoch;
   if (status.epochId !== epoch.epochId) throw new Error("Scanner status belongs to another session");
   if ((status.closedAt || status.closingDeclaredAt) && !status.closingOperationId)
     throw new Error("Scanner status is missing the original closing operation");

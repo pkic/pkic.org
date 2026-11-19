@@ -16,7 +16,11 @@ import {
   isEventParticipantSourceConflict,
 } from "./event-participant-source-revision";
 import { formatProposalInvitePerson } from "./proposal-invite-person";
-import { proposalSpeakerProfileColumns, proposalSpeakerHeadshotColumns } from "./proposal-speaker-profile-projection";
+import {
+  proposalSpeakerProfileColumns,
+  proposalSpeakerHeadshotColumns,
+  proposalSpeakerRecipientEmailSql,
+} from "./proposal-speaker-profile-projection";
 import { unclaimedAccountSql } from "./proposal-speaker-account-authority";
 import type { DatabaseLike, StatementLike } from "../types";
 import type { ProposalAccessSpeakerStatus } from "../../../assets/shared/schemas/proposal-management";
@@ -525,6 +529,8 @@ export interface ProposalSpeakerWithUser extends ProposalSpeakerUserProfile, Pro
   decline_reason: string | null;
   created_at: string;
   invited_email: string | null;
+  /** Where mail about the speaker's part goes: the address of the identity they speak as, else the primary. */
+  recipient_email: string;
   /** 1 once the person has proved a mailbox; 0 for an account no one has claimed yet. */
   account_claimed: 0 | 1;
 }
@@ -535,6 +541,7 @@ export {
   proposalSpeakerHeadshotColumns,
   proposalSpeakerOrganizationNameSql,
   proposalSpeakerJobTitleSql,
+  proposalSpeakerRecipientEmailSql,
 } from "./proposal-speaker-profile-projection";
 
 export const PROPOSAL_SPEAKER_WITH_USER_COLUMNS = `ps.id AS speaker_id, ps.user_id, ps.role, ps.status,
@@ -542,7 +549,7 @@ export const PROPOSAL_SPEAKER_WITH_USER_COLUMNS = `ps.id AS speaker_id, ps.user_
   ps.manage_link_secret, ps.confirmed_at, ps.declined_at, ps.terms_accepted_at, ps.invite_expires_at,
   ps.decline_reason, ps.created_at, ps.invited_email,
   CASE WHEN ${unclaimedAccountSql("u")} THEN 0 ELSE 1 END AS account_claimed,
-  u.email,
+  u.email, ${proposalSpeakerRecipientEmailSql()} AS recipient_email,
   ${proposalSpeakerProfileColumns()},
   ${proposalSpeakerHeadshotColumns()}`;
 

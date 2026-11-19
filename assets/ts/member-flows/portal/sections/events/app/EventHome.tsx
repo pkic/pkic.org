@@ -23,7 +23,7 @@ import { viewerTimeZone } from "../../../../../../shared/timezone";
 import { formatNumber } from "../../../../../../shared/format-number";
 import { usePortalHashLocation } from "../../../hash-location";
 import { formatDateRange } from "../../../ui";
-import { eventParticipantRecordPath } from "../event-participant-paths";
+import { eventParticipantRecordPath } from "../../../../../../shared/event-participant-paths";
 import { EventCard } from "./EventCard";
 import { EventHero } from "./EventHero";
 import { eventPhase, sessionPhase } from "./event-timing";

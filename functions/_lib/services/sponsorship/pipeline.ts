@@ -13,6 +13,7 @@ import { isAuditChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChan
 import { prepareQueueEmailStatement } from "../../email/outbox";
 import { escapeMarkdownText } from "../../email/markdown";
 import { queueSponsorSignInCapability } from "../../auth/sponsor-capacity";
+import { capabilityLinkUrl, portalVerifyLinkBase } from "../user-auth-flow";
 import { prepareRefreshOrganizationSponsorshipProjection, prepareSponsorshipStageTransition } from "./stage-transition";
 import { hasFutureRenewalDate, initialRenewalActionDueAt, utcDate } from "./renewal-policy";
 import {
@@ -358,7 +359,10 @@ export async function advanceSponsorshipStage(
       ttlMinutes: params.notifications.magicLinkTtlMinutes,
       signingSecret: params.notifications.signingSecret,
     });
-    const portalUrl = `${params.notifications.appBaseUrl}/portal/#/verify?token=${encodeURIComponent(magicLink.queuedToken)}`;
+    const portalUrl = capabilityLinkUrl(
+      portalVerifyLinkBase(params.notifications.appBaseUrl, "/sponsors"),
+      magicLink.queuedToken,
+    );
     const queued = prepareQueueEmailStatement(
       db,
       {

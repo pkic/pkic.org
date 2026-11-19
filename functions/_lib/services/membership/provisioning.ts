@@ -40,7 +40,7 @@ import {
 } from "./representative-roles";
 import { serializeLinks } from "../../../../assets/shared/schemas/links";
 import { requireProvisioningCategory } from "./provisioning-policy";
-import { prepareClaimDomainForOrganization, prepareTransferApplicationDomainClaim } from "./organization-domain-claims";
+import { prepareClaimDomainForOrganization } from "./organization-domain-claims";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { prepareSitePublicationRequest } from "../site-publication-requests";
 import { firstFreeSlug, slugifyOr } from "../../../../assets/shared/slug";
@@ -58,8 +58,6 @@ export interface ProvisionMembershipInput extends ProvisioningGroupSelection {
   /** The organization's own profile links (canonical links contract). Only applied when the organization is created here. */
   links?: string[] | null;
   organizationDomain?: string | null;
-  /** Set when approval transfers the application's existing domain claim. */
-  domainClaimApplicationId?: string | null;
   /** Only applied when given; the organization-tied path never overwrites an already-set member_since. */
   memberSince?: string | null;
   identities: ProvisionIdentityInput[];
@@ -378,21 +376,12 @@ async function buildProvisionOrganizationTiedMemberships(
   statements.push(...orgStatements);
 
   if (input.organizationDomain) {
-    const domainStatements = input.domainClaimApplicationId
-      ? await prepareTransferApplicationDomainClaim(db, {
-          domain: input.organizationDomain,
-          applicationId: input.domainClaimApplicationId,
-          organizationId,
-          now,
-        })
-      : [
-          await prepareClaimDomainForOrganization(db, {
-            domain: input.organizationDomain,
-            organizationId,
-            now,
-          }),
-        ];
-    for (const statement of domainStatements) if (statement) statements.push(statement);
+    const domainStatement = await prepareClaimDomainForOrganization(db, {
+      domain: input.organizationDomain,
+      organizationId,
+      now,
+    });
+    if (domainStatement) statements.push(domainStatement);
   }
 
   const { aggregateId, statements: aggregateStatements } = await buildResolveOrCreateAggregateStatements(

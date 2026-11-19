@@ -1,4 +1,5 @@
 // Prepare the real HTTP graph before timed journeys, as the shared API test helper does.
+import { recordPersonalAddressAnswer } from "./helpers/account-organization";
 import "../functions/http-router";
 import { grantAdministrator } from "./helpers/administrator";
 /**
@@ -68,6 +69,7 @@ async function insertStaffUser(email: string): Promise<string> {
     .bind(id, email, email)
     .run();
   await grantAdministrator(env.DB, id);
+  await recordPersonalAddressAnswer(env.DB, id);
   return id;
 }
 
@@ -91,6 +93,7 @@ async function insertActiveMemberUser(email: string): Promise<string> {
     identity.statement,
     ...statements,
   ]);
+  await recordPersonalAddressAnswer(env.DB, userId);
   return userId;
 }
 
@@ -816,14 +819,21 @@ describe("passkeys (WebAuthn)", () => {
    * the account once another mailbox is verified, and that mailbox may not sign
    * in until its owner allows it. Returns that mailbox's id.
    */
+  /** The only verified address belongs to an ended representation, and it keeps the unproved primary out. */
   async function leaveNoOtherWayToSignIn(): Promise<string> {
     const emailId = crypto.randomUUID();
+    const identityId = crypto.randomUUID();
+    const organizationId = await insertOrganization(env.DB);
     const at = new Date().toISOString();
     await env.DB.batch([
       env.DB.prepare("UPDATE users SET email_verified_at = NULL WHERE id = ?").bind(userId),
       env.DB.prepare(
-        "INSERT INTO user_emails (id,user_id,email,normalized_email,verified_at,created_at) VALUES (?,?,?,?,?,?)",
-      ).bind(emailId, userId, "added@example.test", "added@example.test", at, at),
+        `INSERT INTO identities (id, user_id, organization_id, source, invited_at, started_at, ended_at, created_at, updated_at)
+         VALUES (?,?,?,'staff',?,?,?,?,?)`,
+      ).bind(identityId, userId, organizationId, at, at, at, at, at),
+      env.DB.prepare(
+        "INSERT INTO user_emails (id,user_id,email,normalized_email,verified_at,identity_id,created_at) VALUES (?,?,?,?,?,?,?)",
+      ).bind(emailId, userId, "added@example.test", "added@example.test", at, identityId, at),
     ]);
     return emailId;
   }
@@ -849,7 +859,6 @@ describe("passkeys (WebAuthn)", () => {
   it("refuses removing the last way to sign in, and allows it once another remains", async () => {
     const { passkeyId } = await registerPasskey();
     const emailId = await leaveNoOtherWayToSignIn();
-    const at = new Date().toISOString();
 
     const refused = await call(`/api/v1/auth/passkeys/${passkeyId}`, { method: "DELETE" }, token);
     expect(refused.status).toBe(409);
@@ -863,9 +872,8 @@ describe("passkeys (WebAuthn)", () => {
     );
     expect(kept[0].revoked_at).toBeNull();
 
-    await env.DB.prepare("INSERT INTO user_email_sign_in_permissions (email_id, revision, enabled_at) VALUES (?,?,?)")
-      .bind(emailId, crypto.randomUUID(), at)
-      .run();
+    // Unbound from the ended representation, the verified address signs in again.
+    await env.DB.prepare("UPDATE user_emails SET identity_id = NULL WHERE id = ?").bind(emailId).run();
     const allowed = await call(`/api/v1/auth/passkeys/${passkeyId}`, { method: "DELETE" }, token);
     expect(allowed.status).toBe(200);
     expect(await passkeyRemovals(passkeyId)).toEqual([{ otherSessionsSignedOut: { from: null, to: true } }]);

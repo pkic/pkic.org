@@ -15,13 +15,18 @@ export async function validateEmailDeliveryGuard(db: DatabaseLike, payload: Reco
       .safeParse(payload.__currentRecipient);
     if (!recipient.success)
       throw new AppError(409, "CAPABILITY_RESOURCE_STALE", "This notification is no longer deliverable.");
+    // Still one of the person's addresses: the primary (under its proof rule), or a verified added one,
+    // which mail about a record made as an identity may go to.
+    const email = recipient.data.email.toLowerCase();
     const currentRecipient = await first<{ id: string }>(
       db,
-      `SELECT id FROM users WHERE id = ? AND active = 1 AND normalized_email = ?
-        AND (email_verified_at IS NOT NULL OR NOT EXISTS (
+      `SELECT id FROM users WHERE id = ? AND active = 1 AND (
+        (normalized_email = ? AND (email_verified_at IS NOT NULL OR NOT EXISTS (
           SELECT 1 FROM user_emails WHERE user_id = users.id AND verified_at IS NOT NULL
-        ))`,
-      [recipient.data.userId, recipient.data.email.toLowerCase()],
+        )))
+        OR EXISTS (SELECT 1 FROM user_emails added
+          WHERE added.user_id = users.id AND added.normalized_email = ? AND added.verified_at IS NOT NULL))`,
+      [recipient.data.userId, email, email],
     );
     if (!currentRecipient)
       throw new AppError(409, "CAPABILITY_RESOURCE_STALE", "This notification is no longer deliverable.");

@@ -1,8 +1,8 @@
 /**
  * Staff manage the email domains an organization claims.
  *
- * Approved claims can be shared, including with pending applications.
- * Ambiguous domains never automatically affiliate people.
+ * Several organizations can claim one domain. Ambiguous domains never
+ * automatically affiliate people.
  */
 import { buildPageInfo, type PageInfo } from "../../../../assets/shared/schemas/pagination";
 import type {
@@ -37,8 +37,7 @@ const DOMAIN_SORT_EXPRESSIONS = { domain: "domain", people: "people" } as const;
 
 /**
  * Every domain the organization is reached through: its claims, plus the
- * domains its active identities follow without one. A derived domain a
- * pending application holds is `held` until this organization claims it.
+ * domains its active identities follow without one.
  */
 const DOMAINS_SQL = `WITH linked AS (
     SELECT identity.user_id, ${identityOrganizationEmailDomainSql("identity.id")} AS domain
@@ -52,9 +51,7 @@ const DOMAINS_SQL = `WITH linked AS (
       FROM organization_domain_claims claim LEFT JOIN people ON people.domain = claim.domain
      WHERE claim.organization_id = ?
     UNION ALL
-    SELECT people.domain, CASE WHEN EXISTS (SELECT 1 FROM organization_domain_claims claim
-        WHERE claim.domain=people.domain AND claim.application_id IS NOT NULL) THEN 'held' ELSE 'derived' END,
-      people.people, NULL
+    SELECT people.domain, 'derived', people.people, NULL
       FROM people
      WHERE NOT EXISTS (SELECT 1 FROM organization_domain_claims claim
        WHERE claim.domain=people.domain AND claim.organization_id=?)

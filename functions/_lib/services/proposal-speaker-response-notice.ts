@@ -1,3 +1,4 @@
+import { buildEventEmailVariables } from "../email/event-email-variables";
 import { personDisplayName } from "../../../assets/shared/person-display";
 import { proposalManagePageUrl, proposalSpeakerReviewPageUrl, speakerParticipationPageUrl } from "./frontend-links";
 import { queuedCapabilityToken } from "./capability-links";
@@ -7,7 +8,7 @@ import { prepareBulkQueueEmailChunkStatements } from "../email/outbox-queue";
 import { emailPlainText } from "../email/plain-text";
 import { sha256Hex } from "../utils/crypto";
 import type { DatabaseLike } from "../types";
-import { buildEventEmailVariables, getEventById, type EventRecord } from "./events";
+import { getEventById, type EventRecord } from "./events";
 import type { SpeakerWithContext } from "./proposals-speaker-capability";
 
 /** Domain keys make retries enqueue each recipient's notice once, in bounded bulk inserts in the response batch. */

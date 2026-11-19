@@ -48,6 +48,7 @@ function domainList(domains: readonly string[]): string {
  * it, and a refusal lands on the field.
  */
 function OrganizationAnswer({
+  organizationName,
   schema,
   body,
   send,
@@ -55,6 +56,7 @@ function OrganizationAnswer({
   confirmLabel,
   children,
 }: {
+  organizationName: string;
   schema: typeof affiliationLinkKeptSchema | typeof currentUserIdentityCreateSchema;
   body: (jobTitle: string) => Record<string, unknown>;
   send: (data: Record<string, unknown>) => Promise<void>;
@@ -77,7 +79,7 @@ function OrganizationAnswer({
     >
       <Field
         label={ORGANIZATION_JOB_TITLE_COPY.label}
-        help={ORGANIZATION_JOB_TITLE_COPY.help}
+        help={ORGANIZATION_JOB_TITLE_COPY.help(organizationName)}
         required
         {...form.of("jobTitle")}
       >
@@ -160,6 +162,7 @@ export function AffiliationOfferCard() {
             You’re now linked to <strong>{offer.organization.name}</strong> (from your @{offer.domain} email).
           </p>
           <OrganizationAnswer
+            organizationName={offer.organization.name}
             schema={affiliationLinkKeptSchema}
             body={(jobTitle) => ({ organizationId: offer.organization.id, jobTitle })}
             send={keep}
@@ -194,6 +197,7 @@ export function AffiliationOfferCard() {
           </p>
           <WrittenName offer={offer} />
           <OrganizationAnswer
+            organizationName={offer.organization.name}
             schema={currentUserIdentityCreateSchema}
             body={(jobTitle) => ({ emailId: offer.emailId, organizationId: offer.organization.id, jobTitle })}
             send={join}

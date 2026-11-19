@@ -4,6 +4,7 @@ import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 import { signInWithPasskey } from "./helpers/passkey-sign-in";
+import { recordPersonalAddressAnswer } from "./helpers/account-organization";
 import { createMcpOauthTestClient } from "./helpers/mcp-oauth";
 import { verifyUserSessionToken, signUserSessionToken } from "../functions/_lib/auth/user-session-token";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
@@ -25,6 +26,8 @@ describe("passkey-backed MCP authorization lifetimes", () => {
     await env.DB.prepare("UPDATE users SET email_verified_at=? WHERE id=?")
       .bind(new Date().toISOString(), user.id)
       .run();
+    // A passkey sign-in on a work address needs account setup's organization step answered.
+    await recordPersonalAddressAnswer(env.DB, user.id);
     emailToken = await createAdminSession(env.DB, user.id, crypto.randomUUID(), env.INTERNAL_SIGNING_SECRET);
   });
   afterEach(() => {

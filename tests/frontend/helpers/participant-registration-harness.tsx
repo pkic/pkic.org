@@ -14,13 +14,21 @@ import {
   type SessionIdentity,
 } from "./participant-registration-fixtures";
 
+import { emailDomainResponseSchema } from "../../../assets/shared/schemas/email-domains";
+
 const mounted: HTMLElement[] = [];
 
 export function installApi(
   read: RegistrationManageReadResponse = readResponse(),
-  options: { forms?: typeof FORMS; refusePatch?: unknown; identities?: SessionIdentity[] } = {},
+  options: {
+    forms?: typeof FORMS;
+    refusePatch?: unknown;
+    identities?: SessionIdentity[];
+    /** The account's address is on an organization domain. */
+    workEmail?: boolean;
+  } = {},
 ) {
-  const requests: Array<{ method: string; path: string; body?: unknown }> = [];
+  const requests: Array<{ method: string; path: string; search: string; body?: unknown }> = [];
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
@@ -30,12 +38,16 @@ export function installApi(
       );
       const method = init.method ?? "GET";
       const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
-      requests.push({ method, path: url.pathname, body });
+      requests.push({ method, path: url.pathname, search: url.search, body });
       const json = (value: unknown) =>
         new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
       if (method === "GET" && url.pathname === ENDPOINT) return json(read);
       const identityReply = options.identities && identityApi(method, url.pathname, options.identities);
       if (identityReply) return json(identityReply);
+      if (method === "GET" && url.pathname.startsWith("/api/v1/email/domains/")) {
+        const domain = decodeURIComponent(url.pathname.slice("/api/v1/email/domains/".length));
+        return json(emailDomainResponseSchema.parse({ domain, kind: options.workEmail ? "work" : "free" }));
+      }
       if (method === "GET" && url.pathname.endsWith("/forms/placements/event_registration")) {
         return json({ ...(options.forms ?? FORMS), eventDays: read.eventDays });
       }

@@ -35,6 +35,10 @@ const OPEN_APPLICATION_SQL = `stage NOT IN (${APPLICATION_TERMINAL_STAGES.map(()
 function membershipApplicationConflictSelections(input: MembershipApplicationConflictInput): SqlSelection[] {
   const normalizedName = input.organizationName ? normalizeOrgName(input.organizationName) : null;
   const self = input.applicationId ?? "";
+  const organization = organizationApplicationMatch(
+    input.isIndividual ? null : input.organizationId,
+    input.isIndividual ? null : normalizedName,
+  );
   return [
     {
       sql: `SELECT organization.name FROM organizations organization
@@ -72,17 +76,37 @@ function membershipApplicationConflictSelections(input: MembershipApplicationCon
     },
     {
       sql: `SELECT organization_name FROM member_applications
-          WHERE ${OPEN_APPLICATION_SQL} AND id <> ?
-            AND organization_name IS NOT NULL AND (organization_id = ? OR lower(trim(organization_name)) = ?)
+          WHERE ${OPEN_APPLICATION_SQL} AND id <> ? AND organization_name IS NOT NULL AND ${organization.sql}
           LIMIT 1`,
-      bindings: [
-        ...APPLICATION_TERMINAL_STAGES,
-        self,
-        input.isIndividual ? null : input.organizationId,
-        input.isIndividual ? null : normalizedName,
-      ],
+      bindings: [...APPLICATION_TERMINAL_STAGES, self, ...organization.bindings],
     },
   ];
+}
+
+/**
+ * An application for the organization: one linked to it, or an older unlinked
+ * one that only names it or the name given. An application linked to another
+ * organization never matches by its name; for a new organization (no id), one
+ * linked to an organization of the given name does. Readiness, submission and
+ * the organization's current application all match an organization this way.
+ */
+function organizationApplicationMatch(organizationId: string | null, normalizedName: string | null): SqlSelection {
+  return {
+    sql: `(organization_id = ?
+      OR (organization_id IS NULL
+        AND lower(trim(organization_name)) IN (?, (SELECT normalized_name FROM organizations WHERE id = ?)))
+      OR (? IS NULL AND organization_id IN (SELECT id FROM organizations WHERE normalized_name = ?)))`,
+    bindings: [organizationId, normalizedName, organizationId, organizationId, normalizedName],
+  };
+}
+
+/** The organization's open applications, matched as {@link organizationApplicationMatch} does. */
+export function openOrganizationApplicationsWhere(organizationId: string): SqlSelection {
+  const organization = organizationApplicationMatch(organizationId, null);
+  return {
+    sql: `${OPEN_APPLICATION_SQL} AND ${organization.sql}`,
+    bindings: [...APPLICATION_TERMINAL_STAGES, ...organization.bindings],
+  };
 }
 
 /** The preflight refusals remain authoritative inside the caller's atomic submission. */

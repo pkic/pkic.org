@@ -7,7 +7,7 @@ import { subscribeUserSessionState } from "../../../../../../shared/pending-user
 import type { ScannerOfflineContext } from "../../../../../../../shared/schemas/event-scanner-offline-context";
 import { listPreparedScannerContexts, restoreScannerOfflineContext } from "./scanner-offline-context";
 import { EventScanner } from "./EventScanner";
-import { LoginFrame } from "../../../../shell/LoginFrame";
+import { LoginFrame } from "../../../../../../components/sign-in/LoginFrame";
 import { ScannerTaskTile } from "./ScannerDestinationTiles";
 
 function preparedTaskOrder(context: ScannerOfflineContext): number {

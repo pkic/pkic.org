@@ -72,16 +72,6 @@ event:
 
 terms:
   attendee:
-    - termKey: privacy-policy
-      version: v1
-      required: true
-      contentRef: /privacy-policy/
-      displayText: I have read and accept the privacy policy.
-    - termKey: code-of-conduct
-      version: v1
-      required: true
-      contentRef: /code-of-conduct/
-      displayText: I have read and agree to follow the code of conduct.
     - termKey: photo-policy
       version: v1
       required: true

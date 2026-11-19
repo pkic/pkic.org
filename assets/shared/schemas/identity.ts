@@ -3,6 +3,7 @@ import { z } from "zod";
 import { organizationIdentityJobTitleSchema } from "./identity-job-title";
 import {
   booleanQueryFlagSchema,
+  jobTitleTextSchema,
   normalizedEmailSchema,
   successResponseSchema,
   trimmedString,
@@ -100,7 +101,7 @@ export type ActingIdentity = z.infer<typeof actingIdentitySchema>;
 
 const identityProfileFields = {
   emailId: databaseIdSchema.nullable().optional(),
-  jobTitle: trimmedString(0, 200).nullable().optional(),
+  jobTitle: jobTitleTextSchema.nullable().optional(),
   biography: trimmedString(0, 5000).nullable().optional(),
   links: linksSchema.optional(),
   showOnOrganizationProfile: z.boolean().optional(),

@@ -1,5 +1,4 @@
 import axe from "axe-core";
-import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
 import { expect, test, type Page } from "@playwright/test";
 import { userAuthRequestSchema } from "../../assets/shared/schemas/user-auth";
 import { sitePublicationReleaseSchema } from "../../assets/shared/schemas/site-publication-release";
@@ -72,12 +71,13 @@ test("public social previews use complete static cards for every published varia
   expect(await page.locator('meta[property="og:image"]').count()).toBe(0);
 });
 
-test("published membership starts from a single work email field", async ({ page }) => {
+test("published membership starts from the sign-in card", async ({ page }) => {
   await page.route("**/api/**", (route) => route.abort());
   await page.goto("/join/");
-  const step = page.locator("[data-join-email-step]");
-  await expect(step.locator("input")).toHaveCount(1);
-  await expect(step.getByLabel("Your official work or organization email address")).toBeVisible();
+  const card = page.locator("[data-join-sign-in-card]").getByRole("region", { name: "Sign in", exact: true });
+  await expect(card.getByRole("button", { name: "Start your application", exact: true })).toBeVisible();
+  // Nothing is asked on the page itself before the person is signed in.
+  await expect(page.locator("[data-join-application-form]")).toBeHidden();
   await expect(page.locator('input[type="radio"][name="applicantKind"]')).toHaveCount(0);
 });
 
@@ -1022,10 +1022,14 @@ test("published database event workflows have static pages and local form config
   await expect(
     page.getByRole("heading", { name: "Event registration — Static publication workshop (synthetic)", exact: true }),
   ).toBeVisible();
-  await expect(page.getByLabel(EMAIL_FIRST_COPY.registration.work.label)).toBeVisible();
-  await expect(page.locator("[data-step-next]")).toBeEnabled();
+  // Signed out, the form's first step is the sign-in card; the wizard continues only with a session.
+  await expect(
+    page.locator("[data-registration-sign-in]").getByRole("region", { name: "Sign in", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator("[data-step-next]")).toBeHidden();
   await page.waitForLoadState("networkidle");
-  expect(apiCalls).toEqual([]);
+  // The form's configuration is local; the only request is the session check that decides the first step.
+  expect(apiCalls.filter((url) => new URL(url).pathname !== "/api/v1/auth/session")).toEqual([]);
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
   await expect(page.getByRole("main")).toHaveAttribute("data-pagefind-ignore", "all");
   const release = sitePublicationReleaseSchema.parse(await (await request.get("/publication.json")).json());

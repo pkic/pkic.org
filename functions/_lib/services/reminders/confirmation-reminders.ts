@@ -1,6 +1,6 @@
+import { buildEventEmailVariables } from "../../email/event-email-variables";
 import { all } from "../../db/queries";
 import { eventCommunicationSettingsSql } from "../events/communication-settings";
-import { buildEventEmailVariables } from "../events";
 import { nowIso } from "../../utils/time";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
 import { queueRegistrationStatusEmail, type RegistrationStatusEmailEvent } from "../registrations/status-notifications";

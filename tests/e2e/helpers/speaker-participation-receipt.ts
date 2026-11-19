@@ -31,7 +31,7 @@ export async function confirmSpeakerWithReceipt(page: Page, accessPath: string):
   };
   await page.route(matches, capture);
   try {
-    await page.getByRole("button", { name: "Confirm participation", exact: true }).click();
+    await page.getByRole("button", { name: "Confirm willingness to participate", exact: true }).click();
     await expect.poll(() => Boolean(captured || failure), { timeout: 30_000 }).toBe(true);
     if (failure) throw new Error("Could not capture the real speaker confirmation receipt", { cause: failure });
     if (!captured) throw new Error("Speaker confirmation did not yield its real backend receipt");

@@ -12,6 +12,7 @@ import { OrganizationActiveSponsorshipGet } from "./sponsorships/active";
 import { OrganizationGroupsGet } from "./groups";
 import { OrganizationEventsGet } from "./events";
 import { OrganizationProposalsGet } from "./proposals";
+import { OrganizationCurrentApplicationGet } from "./applications";
 import { OrganizationMergePost } from "./merges";
 import {
   OrganizationDomainClaimDelete,
@@ -46,6 +47,7 @@ openapi.get("/content/reviews", OrganizationContentReviewsGet);
 openapi.post("/content/reviews", OrganizationContentReviewPost);
 openapi.delete("/content/reviews/:reviewId", OrganizationContentReviewDelete);
 openapi.get("/sponsors/current", OrganizationActiveSponsorshipGet);
+openapi.get("/applications/current", OrganizationCurrentApplicationGet);
 openapi.put("/contacts/secondary/nomination", OrganizationSecondaryContactNominationPut);
 openapi.delete("/contacts/secondary/nomination", OrganizationSecondaryContactNominationDelete);
 openapi.post("/logo", OrganizationLogoReviewPost);

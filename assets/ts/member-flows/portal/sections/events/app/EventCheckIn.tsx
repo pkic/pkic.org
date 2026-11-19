@@ -22,7 +22,7 @@ import { getJson, postJson } from "../../../../../shared/api-client";
 import { Alert } from "../../../../../ui/Alert";
 import { Button } from "../../../../../ui/Button";
 import { usePortalHashLocation } from "../../../hash-location";
-import { eventCheckInPath } from "../event-participant-paths";
+import { eventCheckInPath } from "../../../../../../shared/event-participant-paths";
 import { CheckInScanner } from "./CheckInScanner";
 import { EventCard } from "./EventCard";
 import { checkInActionLabel, checkInHeading, checkInNotes, checkInOutcome } from "./check-in-copy";

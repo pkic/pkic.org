@@ -2,7 +2,7 @@ import { EventCollectionCard, eventWhen } from "./EventCollectionCard";
 import { CollectionStatusLine } from "../../../../ui/CollectionCard";
 import { DiscoveryViewToggle, useDiscoveryView } from "../DiscoveryView";
 import { formatEventPlace } from "../../../../../shared/event-place";
-import { eventParticipantRecordPath } from "./event-participant-paths";
+import { eventParticipantRecordPath } from "../../../../../shared/event-participant-paths";
 import { useRef } from "preact/hooks";
 import type { z } from "zod";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";

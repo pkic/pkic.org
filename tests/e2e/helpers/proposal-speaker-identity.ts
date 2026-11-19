@@ -40,7 +40,7 @@ export async function captureResponsive(page: Page, info: TestInfo, phase: strin
       }
       for (let index = 1; index < boxes.length; index++)
         expect(boxes[index].y).toBeGreaterThanOrEqual(boxes[index - 1].y + boxes[index - 1].height);
-      const confirmation = page.getByRole("button", { name: "Confirm participation", exact: true });
+      const confirmation = page.getByRole("button", { name: "Confirm willingness to participate", exact: true });
       await expect(confirmation).toHaveAttribute("form", "speaker-participation-confirm");
       await expect(confirmation).toBeDisabled();
       await expect(page.getByRole("button", { name: "Decline participation…", exact: true })).toBeEnabled();

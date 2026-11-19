@@ -111,7 +111,7 @@ test("a stale My agenda reservation refreshes the approved session and requires 
   try {
     const attendee = await attendeeContext.newPage();
     // The fresh event is never released to the static site; only its portal agenda is exercised.
-    await registerStateAttendee(attendee, event, email, { staticRelease: false });
+    await registerStateAttendee(attendee, event, email);
     await signInToPortal(attendee, email);
     const focusedPath = `/portal/#/events/${slug}/agenda?session=${occurrence.id}`;
     const initialList = attendee.waitForResponse((response) => {

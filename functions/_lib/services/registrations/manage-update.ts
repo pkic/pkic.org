@@ -12,6 +12,7 @@ import type { z } from "zod";
 import type { RegistrationRecord } from "./types";
 import type { ParticipantAuthority } from "../participant-authority";
 import { withdrawRegistrationSponsorSharing } from "./sponsor-sharing";
+import { requireRegistrationIdentityChangeRepresentation } from "./selected-identity";
 import { updateRegistrationByIdWithNotification, updateRegistrationByManageTokenWithNotification } from "./update";
 
 type RegistrationManageBody = z.infer<typeof registrationManageSchema>;
@@ -56,6 +57,11 @@ export async function updateManagedRegistration(
   }
   if (body.identityChange && (!input.identitySessionClaims || input.isAdminManageJwt))
     throw new AppError(403, "REGISTRATION_IDENTITY_UNAVAILABLE", "Sign in to change your own representation.");
+  if (body.identityChange)
+    await requireRegistrationIdentityChangeRepresentation(db, {
+      userId: current.user_id,
+      identityId: body.identityChange.identityId,
+    });
   const event = await getEventById(db, current.event_id);
   const validatedForm =
     body.customAnswers !== undefined

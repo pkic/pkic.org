@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { successResponseSchema, tokenSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
-import { inviteAcceptAttendeeSchema, inviteDeclineSchema, inviteTypeSchema } from "./registration";
+import { inviteDeclineSchema, inviteTypeSchema } from "./registration";
 import { httpOrSameOriginUrlSchema } from "./urls";
 import { publicOperation } from "./route-contract";
 
@@ -37,15 +37,10 @@ export const inviteInfoResponseSchema = z.union([inviteInfoValidSchema, inviteTe
 export const inviteDeclineInfoValidSchema = inviteInfoValidSchema.omit({ inviters: true, totalInviters: true });
 export const inviteDeclineInfoResponseSchema = z.union([inviteDeclineInfoValidSchema, inviteTerminalInfoSchema]);
 
-export const inviteAcceptResponseSchema = z.union([
-  successResponseSchema.extend({ inviteType: z.literal("speaker"), next: z.string() }),
-  successResponseSchema.extend({
-    registrationId: databaseIdSchema,
-    status: z.string(),
-    manageToken: tokenSchema,
-    shareUrl: httpOrSameOriginUrlSchema,
-  }),
-]);
+export const inviteAcceptResponseSchema = successResponseSchema.extend({
+  inviteType: z.literal("speaker"),
+  next: z.string(),
+});
 export const inviteDeclineResponseSchema = successResponseSchema.extend({
   forwarded: z.array(z.email()),
 });
@@ -116,10 +111,8 @@ export const inviteAcceptRouteSchema = {
     body: {
       content: {
         "application/json": {
-          // Speaker acceptance has no attendee fields, but clients send an
-          // empty JSON object. Compose that shape with the attendee contract
-          // instead of bypassing mounted validation for this branch.
-          schema: z.union([inviteAcceptAttendeeSchema, z.object({}).strict()]).optional(),
+          // Only speaker invitations are accepted here; clients may send an empty JSON object.
+          schema: z.object({}).strict().optional(),
         },
       },
       required: false,

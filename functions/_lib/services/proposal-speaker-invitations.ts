@@ -1,8 +1,8 @@
+import { buildEventEmailVariables } from "../email/event-email-variables";
 import { prepareQueueEmailStatement } from "../email/outbox";
 import { emailPlainText } from "../email/plain-text";
 import type { DatabaseLike, StatementLike } from "../types";
 import type { EventRecord } from "./events";
-import { buildEventEmailVariables } from "./events";
 import { speakerParticipationPageUrl } from "./frontend-links";
 import { buildProposalInviteEmailContext, proposalInviteEmailTextVariables } from "./proposal-invite-email-context";
 import { buildAddProposalSpeaker } from "./proposal-speakers";
@@ -106,7 +106,7 @@ async function inviteProposalSpeakerOnce(
     recipientEmail: invitedEmail,
     recipientUserId: preparedUser.user.id,
     messageType: "transactional",
-    subject: `Speaker invitation: please confirm — ${payload.event.name}`,
+    subject: `Speaker invitation for ${payload.event.name}`,
     capabilityLinkValues: [preparedSpeaker.manageToken],
     data: {
       ...buildEventEmailVariables(payload.event, payload.appBaseUrl),

@@ -17,7 +17,7 @@ import { usePortalHashLocation } from "../../../hash-location";
 import type { AppTab } from "../../../shell/AppTabBar";
 import type { PortalSession } from "../../../types";
 import { canOpenGroupWorkspace } from "../event-destination";
-import { eventParticipantRecordPath } from "../event-participant-paths";
+import { eventParticipantRecordPath } from "../../../../../../shared/event-participant-paths";
 import { eventRegistrationStanding, eventVenueLines, type ParticipantEventDetail } from "./event-app-model";
 import { participantScannerAccess } from "./participant-scanner-access";
 import { eventPhase } from "./event-timing";

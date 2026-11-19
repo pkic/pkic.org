@@ -119,7 +119,7 @@ test("two already-open live moderator clients stop receiving private questions, 
   const path = `${api}/occurrences/${occurrence.id}/live`;
   const marker = crypto.randomUUID();
   try {
-    await registerStateAttendee(pages[0]!, fixture, moderator.email, { staticRelease: false });
+    await registerStateAttendee(pages[0]!, fixture, moderator.email);
     await connectLiveBrowser(staff, path);
     await expectLiveOperator(staff);
     for (const page of pages) {

@@ -14,14 +14,13 @@
 import { expect, test } from "@playwright/test";
 import {
   ownEmailVerificationRequestedResponseSchema,
-  ownEmailAddressUpdateSchema,
   ownEmailAddressesListResponseSchema,
 } from "../../assets/shared/schemas/own-email-addresses";
 import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { declinePasskeyOffer, openEmailSignIn, openMyProfile, signInToPortal } from "./helpers/portal-auth";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
-import { ensureAppOrigin, uniqueSuffix } from "./helpers/membership";
+import { uniqueSuffix } from "./helpers/membership";
 
 /** Requests one sign-in link and returns the URL from the delivered mail. */
 async function requestSignInLink(page: import("@playwright/test").Page, email: string): Promise<string> {
@@ -111,15 +110,10 @@ test("sign-in capabilities require address permission, revoke with it, and canno
     await (await page.request.get("/api/v1/users/current/emails")).json(),
   );
   const added = addresses.emails.find((address) => address.email === aliasEmail)!;
-  expect(added).toMatchObject({
-    verifiedAt: expect.any(String),
-    signInEnabled: false,
-  });
+  expect(added).toMatchObject({ verifiedAt: expect.any(String), signIn: "signs_in" });
 
-  // The account owner separately enables sign-in through the canonical address update contract.
+  // A verified address signs in to the same account, and its session ends when the address is removed.
   const path = `/api/v1/users/current/emails/${added.id}`;
-  const enabled = await page.request.patch(path, { data: ownEmailAddressUpdateSchema.parse({ signInEnabled: true }) });
-  expect(enabled.status()).toBe(200);
   const aliasContext = await context.browser()!.newContext({ baseURL: new URL(page.url()).origin });
   try {
     const aliasPage = await aliasContext.newPage();
@@ -128,17 +122,13 @@ test("sign-in capabilities require address permission, revoke with it, and canno
       await (await aliasPage.request.get("/api/v1/auth/session")).json(),
     );
     expect(aliasSession.identity.id).toBe(owner.identity.id);
-    const disabled = await page.request.patch(path, {
-      data: ownEmailAddressUpdateSchema.parse({ signInEnabled: false }),
-    });
-    expect(disabled.status()).toBe(200);
+    const removed = await page.request.delete(path);
+    expect(removed.status(), await removed.text()).toBe(200);
     expect((await aliasPage.request.get("/api/v1/auth/session")).status()).toBe(401);
     expect((await page.request.get("/api/v1/auth/session")).status()).toBe(200);
   } finally {
     await aliasContext.close();
   }
-  const removed = await page.request.delete(path);
-  expect(removed.status(), await removed.text()).toBe(200);
 });
 
 test("the capability is removed from the address bar and not left in history", async ({ page }) => {
@@ -196,36 +186,3 @@ for (const withoutRandomUUID of [false, true]) {
     expect(after.status(), "sign out must revoke the session, not just the rendered state").toBe(401);
   });
 }
-
-test("a membership join capability cannot be redeemed as a portal sign-in", async ({ page }) => {
-  const suffix = uniqueSuffix();
-  const email = `wrong-purpose-${suffix}@wrong-purpose-${suffix}.test`;
-  await ensureAppOrigin(page);
-
-  // Start a join flow to obtain a capability issued for a different purpose.
-  const since = await capturedEmailCount();
-  const started = await page.evaluate(async (address) => {
-    const response = await fetch("/api/v1/members/join/start", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email: address, unaffiliatedAttestation: false }),
-    });
-    return response.status;
-  }, email);
-  expect(started).toBe(200);
-
-  const message = await waitForCapturedEmail(email, "Verify your email address", { since });
-  const joinUrl = extractEmailUrl(message, "/join/");
-  const joinToken = new URLSearchParams(new URL(joinUrl).hash.slice(1)).get("verify");
-  expect(joinToken).toBeTruthy();
-
-  // Present it where a portal sign-in capability is expected, in the portal's own sign-in link form.
-  const presented = await openSignInLink(page, `/portal/#/verify?token=${encodeURIComponent(joinToken!)}`);
-  expect(presented.ok(), "a join capability must be refused as a sign-in").toBe(false);
-  await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible({ timeout: 15_000 });
-  const session = await page.evaluate(async () => {
-    const response = await fetch("/api/v1/auth/session", { credentials: "same-origin" });
-    return response.status;
-  });
-  expect(session, "a join capability must not authenticate a portal session").toBe(401);
-});

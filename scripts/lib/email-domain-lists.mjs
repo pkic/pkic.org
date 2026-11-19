@@ -76,7 +76,12 @@ export function parseDomainLines(text) {
  * that spans registrants — a public suffix such as `za.com`, or a parent of
  * one — is dropped, so a listed parent never covers someone else's domain.
  */
-export function buildEmailDomainLists({ freeEntries, disposableEntries, publicSuffixText, minimums = MINIMUM_ENTRIES }) {
+export function buildEmailDomainLists({
+  freeEntries,
+  disposableEntries,
+  publicSuffixText,
+  minimums = MINIMUM_ENTRIES,
+}) {
   const publicSuffix = parsePublicSuffixList(publicSuffixText);
   const rules = parsePublicSuffixRules(publicSuffix.rules);
   const ancestors = ruleAncestors(rules);

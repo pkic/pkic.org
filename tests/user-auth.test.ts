@@ -1,6 +1,7 @@
 // Prepare the real HTTP graph before timed journeys, as the shared API test helper does.
 import "../functions/http-router";
 import { userAuthSessionResponseSchema } from "../assets/shared/schemas/user-auth";
+import { accountOrganizationRequiredSchema } from "../assets/shared/schemas/account-organization";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "./helpers/app";
@@ -78,7 +79,7 @@ describe("canonical user authentication", () => {
     expect(token).toBeTruthy();
     const verified = await call("/api/v1/auth/verify-link", {
       method: "POST",
-      body: JSON.stringify({ token }),
+      body: JSON.stringify({ token, organization: { personal: true } }),
     });
     expect(verified.status).toBe(200);
     const signedIn = userAuthSessionResponseSchema.parse(await verified.json());
@@ -98,7 +99,7 @@ describe("canonical user authentication", () => {
     expect(refreshed.staff?.grants.find((grant) => grant.contextType === null)?.contextName).toBeUndefined();
   });
 
-  it("records mailbox proof without choosing an attendee's organization", async () => {
+  it("asks a claimed domain's attendee for the organization before recording mailbox proof", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const email = "imported@uk.ibm.example";
     const userId = await insertUser(env.DB, email);
@@ -135,22 +136,19 @@ describe("canonical user authentication", () => {
     expect(
       await queryAll(env.DB, "SELECT id FROM identities WHERE user_id = ? AND organization_id IS NOT NULL", [userId]),
     ).toEqual([]);
-    const response = await call("/api/v1/auth/verify-link", { method: "POST", body: JSON.stringify({ token }) });
+    // A claimed domain is never personal: the link asks for the organization and records nothing yet.
+    const response = await call("/api/v1/auth/verify-link", {
+      method: "POST",
+      body: JSON.stringify({ token, organization: { personal: true } }),
+    });
     expect(response.status, await response.clone().text()).toBe(200);
-    userAuthSessionResponseSchema.parse(await response.json());
-    expect(
-      await queryAll(
-        env.DB,
-        "SELECT email_verification_method FROM users WHERE id = ? AND email_verified_at IS NOT NULL",
-        [userId],
-      ),
-    ).toEqual([{ email_verification_method: "magic_link" }]);
-    const identities = await queryAll<{ id: string; source: string }>(
-      env.DB,
-      "SELECT id,source FROM identities WHERE user_id = ? AND organization_id = ? AND started_at IS NOT NULL",
-      [userId, organizationId],
-    );
-    expect(identities).toEqual([]);
+    const asked = accountOrganizationRequiredSchema.parse(await response.json());
+    expect(asked.organizationRequired.personalAllowed).toBe(false);
+    expect(asked.organizationRequired.affiliation.organizations.map(({ id }) => id)).toContain(organizationId);
+    expect(await queryAll(env.DB, "SELECT email_verified_at FROM users WHERE id = ?", [userId])).toEqual([
+      { email_verified_at: null },
+    ]);
+    expect(await queryAll(env.DB, "SELECT id FROM sessions WHERE user_id = ?", [userId])).toEqual([]);
     expect(
       await queryAll(env.DB, "SELECT resolved_identity_id FROM affiliation_reviews WHERE user_id = ?", [userId]),
     ).toEqual([{ resolved_identity_id: null }]);
@@ -181,7 +179,7 @@ describe("canonical user authentication", () => {
 
     const verified = await call("/api/v1/auth/verify-link", {
       method: "POST",
-      body: JSON.stringify({ token }),
+      body: JSON.stringify({ token, organization: { personal: true } }),
       headers: { "cf-connecting-ip": "203.0.113.9", "user-agent": "issuer" },
     });
     expect(verified.status).toBe(200);
@@ -339,8 +337,21 @@ describe("canonical user authentication", () => {
   );
 
   it("is enumeration-safe for unknown identities and rate-limits repeated requests", async () => {
-    expect(await requestUserToken("unknown@example.test")).toBeNull();
-    expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
+    // An unknown address gets the same answer on screen; only its mailbox learns there is no account, and no link.
+    expect(
+      await call("/api/v1/auth/request-link", {
+        method: "POST",
+        body: JSON.stringify({ email: "unknown@example.test" }),
+        headers: { "content-type": "application/json" },
+      }),
+    ).toMatchObject({ status: 200 });
+    const outbox = await queryAll<{ template_key: string; payload_json: string }>(
+      env.DB,
+      "SELECT template_key, payload_json FROM email_outbox",
+    );
+    expect(outbox.map((row) => row.template_key)).toEqual(["user_sign_in_help"]);
+    expect(JSON.parse(outbox[0]!.payload_json)).toMatchObject({ noAccount: true });
+    expect(outbox[0]!.payload_json).not.toContain("token=");
 
     await seedEventAndAdmin(env.DB);
     const limitedEnv = {
@@ -380,21 +391,21 @@ describe("canonical user authentication", () => {
     expect(
       await call("/api/v1/auth/verify-link", {
         method: "POST",
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ token, organization: { personal: true } }),
         headers: { "cf-connecting-ip": "203.0.113.10", "user-agent": "issuer" },
       }),
     ).toMatchObject({ status: 403 });
 
     const verified = await call("/api/v1/auth/verify-link", {
       method: "POST",
-      body: JSON.stringify({ token }),
+      body: JSON.stringify({ token, organization: { personal: true } }),
       headers: { "cf-connecting-ip": "203.0.113.9", "user-agent": "issuer" },
     });
     expect(verified.status).toBe(200);
     expect(
       await call("/api/v1/auth/verify-link", {
         method: "POST",
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ token, organization: { personal: true } }),
         headers: { "cf-connecting-ip": "203.0.113.9", "user-agent": "issuer" },
       }),
     ).toMatchObject({ status: 409 });
@@ -405,7 +416,7 @@ describe("canonical user authentication", () => {
     const staffToken = await requestUserToken("admin@pkic.org");
     const staffResponse = await call("/api/v1/auth/verify-link", {
       method: "POST",
-      body: JSON.stringify({ token: staffToken }),
+      body: JSON.stringify({ token: staffToken, organization: { personal: true } }),
     });
     expect(await staffResponse.clone().json()).toMatchObject({ staff: expect.any(Object) });
     expect(await staffResponse.clone().json()).not.toHaveProperty("member");
@@ -416,7 +427,7 @@ describe("canonical user authentication", () => {
     const memberToken = await requestUserToken("member-only@example.test");
     const memberResponse = await call("/api/v1/auth/verify-link", {
       method: "POST",
-      body: JSON.stringify({ token: memberToken }),
+      body: JSON.stringify({ token: memberToken, organization: { personal: true } }),
     });
     expect(memberResponse.status).toBe(200);
     expect(await memberResponse.clone().json()).toMatchObject({ identity: { id: userId }, member: expect.any(Object) });

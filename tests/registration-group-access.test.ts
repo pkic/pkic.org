@@ -55,8 +55,6 @@ async function fixture(delegated = false) {
   const token = await createMemberSession(env.DB, member.userId, crypto.randomUUID());
   const body = registrationCreateSchema.parse({
     identityId: member.identityId,
-    firstName: "Test",
-    lastName: "Attendee",
     email,
     dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
     consents: [
@@ -202,8 +200,12 @@ describe("group access through the canonical registration route", () => {
   it("never authorizes an anonymous caller or a client-supplied group ID", async () => {
     const f = await fixture();
     const { identityId: _identityId, ...unselectedBody } = f.body;
-    expect((await f.submit(unselectedBody, false)).status).toBe(403);
+    const anonymous = await f.submit(unselectedBody, false);
+    expect(anonymous.status).toBe(401);
+    expect(await anonymous.json()).toMatchObject({ error: { code: "AUTH_REQUIRED" } });
     expect((await f.submit({ ...f.body, registrationGroupId: f.groupId })).status).toBe(400);
-    expect((await f.submit({ ...unselectedBody, email: "other-attendee@example.test" })).status).toBe(403);
+    const otherAddress = await f.submit({ ...unselectedBody, email: "other-attendee@example.test" });
+    expect(otherAddress.status).toBe(422);
+    expect(await otherAddress.json()).toMatchObject({ error: { code: "REGISTRATION_SESSION_EMAIL_REQUIRED" } });
   });
 });

@@ -1,3 +1,4 @@
+import { buildEventEmailVariables } from "../email/event-email-variables";
 import { first } from "../db/queries";
 import { prepareAuthorizationGuard } from "../db/authorization-guard";
 import { emailPlainText } from "../email/plain-text";
@@ -7,7 +8,7 @@ import type { DatabaseLike } from "../types";
 import { SPEAKER_ACCEPTANCE_CONTACT_EMAIL } from "../../../assets/shared/proposal-speaker-acceptance";
 import { ownedIdentityAtEvidence } from "./identities/selection";
 import { ownedIdentityEmailEvidence } from "./identities/owned-email";
-import { buildEventEmailVariables, getEventById, type EventTermRecord } from "./events";
+import { getEventById, type EventTermRecord } from "./events";
 import { prepareProposalActingIdentity } from "./proposal-speaker-identity";
 import { proposalSpeakerIdentityIdSql } from "./proposal-speaker-profile-projection";
 import type { SpeakerWithContext } from "./proposals-speaker-capability";

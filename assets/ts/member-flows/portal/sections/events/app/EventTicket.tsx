@@ -20,7 +20,7 @@ import { useData } from "../../../../../hooks/useData";
 import { putJson } from "../../../../../shared/api-client";
 import { EmptyState } from "../../../../../ui/EmptyState";
 import { usePortalHashLocation } from "../../../hash-location";
-import { eventParticipantRecordPath } from "../event-participant-paths";
+import { eventParticipantRecordPath } from "../../../../../../shared/event-participant-paths";
 import { EventCard } from "./EventCard";
 import { eventRegistrationStanding, type ParticipantEventDetail } from "./event-app-model";
 import { attendanceStanding, type AttendanceStanding } from "../../../../../shared/viewer-attendance";

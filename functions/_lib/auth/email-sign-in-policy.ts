@@ -1,65 +1,182 @@
+/**
+ * Which of an account's addresses sign in. Every verified address does, the
+ * primary one included, while it still speaks for the person:
+ *
+ * - An added address bound to an organization identity signs in while that
+ *   identity is active (started, not ended, not blocked).
+ * - Any other address, the primary one included, stops signing in once a
+ *   representation that its domain supported has ended: the person had one or
+ *   more organization identities backed by that domain and none is active now.
+ *   A reused work mailbox then no longer unlocks the account. An address no
+ *   such identity ever covered, such as a personal one, keeps signing in.
+ *
+ * A session made through an address carries a marker naming it, and lives only
+ * while that address is still on the account and still signs in.
+ */
 import type { AuthorizationEvidence } from "../db/authorization-guard";
+import { hostWithinDomainSql } from "../email-domains/sql";
+import { domainBackedIdentitySql } from "../services/identities/email-domain-support";
+
+/**
+ * `EXISTS` over `table` rows meeting `conditions`, stated as a join condition.
+ * These checks run inside every session check, and D1 caps an expression's
+ * depth at 100. SQLite counts a subquery's WHERE terms about twice toward that
+ * depth but a join's ON terms once, so the policy keeps its conditions there.
+ */
+function existsSql(table: string, alias: string, conditions: string): string {
+  return `EXISTS (SELECT 1 FROM (SELECT 1) ${alias}_anchor JOIN ${table} ${alias} ON ${conditions})`;
+}
 
 /**
  * An unproved primary claim cannot unlock an account established through another verified mailbox.
  * `ignoredEmailId` is a SQL expression for an address to leave out, one about to be removed.
  */
 export function primaryEmailProofMayAuthenticateSql(person: string, ignoredEmailId?: string): string {
-  return `(${person}.email_verified_at IS NOT NULL OR NOT EXISTS (SELECT 1 FROM user_emails verified
-    WHERE verified.user_id=${person}.id AND verified.verified_at IS NOT NULL${
+  return `(${person}.email_verified_at IS NOT NULL OR NOT ${existsSql(
+    "user_emails",
+    "verified",
+    `verified.user_id=${person}.id AND verified.verified_at IS NOT NULL${
       ignoredEmailId ? ` AND verified.id IS NOT ${ignoredEmailId}` : ""
-    }))`;
+    }`,
+  )})`;
 }
+
+/**
+ * A SQL expression naming an identity to treat as already ended, so a guard
+ * can ask what would still sign in after the person ends it. "NULL" for none.
+ */
+type EndingIdentity = string;
 
 /** Ownership of an address can outlive the representation that previously used it. */
-export function ownedEmailRepresentationActiveSql(address: string): string {
-  return `(${address}.identity_id IS NULL OR EXISTS (
-    SELECT 1 FROM identities owner_identity
-     WHERE owner_identity.id = ${address}.identity_id AND owner_identity.user_id = ${address}.user_id
-       AND owner_identity.started_at IS NOT NULL AND owner_identity.ended_at IS NULL
-       AND owner_identity.blocked_at IS NULL))`;
+export function ownedEmailRepresentationActiveSql(address: string, ending: EndingIdentity = "NULL"): string {
+  return `(${address}.identity_id IS NULL OR ${existsSql(
+    "identities",
+    "owner_identity",
+    `(owner_identity.id = ${address}.identity_id AND owner_identity.user_id = ${address}.user_id
+       AND owner_identity.started_at IS NOT NULL) AND (owner_identity.ended_at IS NULL
+       AND owner_identity.blocked_at IS NULL AND owner_identity.id IS NOT ${ending})`,
+  )})`;
 }
 
-/** Mailbox proof and representation authority do not imply consent to account sign-in. */
-export function secondaryEmailSignInAllowedSql(address: string): string {
-  return `${address}.verified_at IS NOT NULL
-    AND EXISTS (SELECT 1 FROM user_email_sign_in_permissions permission
-      WHERE permission.email_id = ${address}.id AND permission.revoked_at IS NULL)
-    AND ${ownedEmailRepresentationActiveSql(address)}`;
+/**
+ * Holds while no ended representation retired this address: no started,
+ * domain-backed organization identity of `userId` covers its domain, or one
+ * that does is still active. An identity covers the address when the domain
+ * recorded on it holds the address's host, or one of its organization's current
+ * claims does. The recorded domain (`covered_email_domain`) is its proved
+ * domain, else the claim that covered its address when it was created or
+ * ended, so a claim the organization removes later still retires the address.
+ *
+ * Written as one flat aggregate rather than the general domain-support rule
+ * (which also weighs more specific claims) because this runs inside every
+ * session check, and D1 caps an expression's depth at 100.
+ */
+export function addressNotRetiredSql(userId: string, normalizedEmail: string, ending: EndingIdentity = "NULL"): string {
+  const host = `substr(${normalizedEmail}, instr(${normalizedEmail}, '@') + 1)`;
+  return `COALESCE((SELECT MAX(covering.ended_at IS NULL AND covering.blocked_at IS NULL AND covering.id IS NOT ${ending})
+      FROM (SELECT 1) covering_anchor
+      JOIN identities covering
+        ON (covering.user_id = ${userId} AND covering.organization_id IS NOT NULL)
+       AND (covering.started_at IS NOT NULL AND ${domainBackedIdentitySql("covering")})
+      LEFT JOIN organization_domain_claims claim
+        ON claim.organization_id = covering.organization_id AND claim.application_id IS NULL
+     WHERE ${hostWithinDomainSql(host, "covering.covered_email_domain")} OR ${hostWithinDomainSql(host, "claim.domain")}), 1) = 1`;
 }
 
-/** Pin the selected mailbox and its permission generation inside the session's atomic command. */
+/** The primary address of `person` (aliasing users) may sign in. */
+export function primaryEmailSignInAllowedSql(
+  person: string,
+  options: { ignoredEmailId?: string; ending?: EndingIdentity } = {},
+): string {
+  return `(${primaryEmailProofMayAuthenticateSql(person, options.ignoredEmailId)}
+    AND ${addressNotRetiredSql(`${person}.id`, `${person}.normalized_email`, options.ending)})`;
+}
+
+/** An added address (aliasing user_emails) may sign in. */
+export function addedEmailSignInAllowedSql(address: string, ending: EndingIdentity = "NULL"): string {
+  return `(${address}.verified_at IS NOT NULL AND CASE WHEN ${address}.identity_id IS NULL
+    THEN ${addressNotRetiredSql(`${address}.user_id`, `${address}.normalized_email`, ending)}
+    ELSE ${ownedEmailRepresentationActiveSql(address, ending)} END)`;
+}
+
+/** The account `person` (aliasing users) may still be signed in to. */
+export function liveAccountSql(person: string): string {
+  return `${person}.active = 1 AND ${person}.pii_redacted_at IS NULL AND ${person}.merged_into_user_id IS NULL`;
+}
+
+/**
+ * Holds while `normalizedEmail` is still on account `userId`, as its primary
+ * address or an added one, and still signs in. Swapping which one is primary
+ * keeps the address, so it keeps the sessions made through it.
+ *
+ * The same rules as `primaryEmailSignInAllowedSql` and
+ * `addedEmailSignInAllowedSql`, with the retirement check stated once for the
+ * primary address and an added one without an identity: this runs inside every
+ * session check, whose request size is budgeted.
+ */
+export function accountAddressSignsInSql(userId: string, normalizedEmail: string): string {
+  return `(((${existsSql(
+    "users",
+    "signing_person",
+    `(signing_person.id = ${userId} AND signing_person.normalized_email = ${normalizedEmail})
+      AND ${primaryEmailProofMayAuthenticateSql("signing_person")}`,
+  )} OR ${existsSql(
+    "user_emails",
+    "signing_address",
+    `(signing_address.user_id = ${userId} AND signing_address.normalized_email = ${normalizedEmail})
+      AND signing_address.verified_at IS NOT NULL AND signing_address.identity_id IS NULL`,
+  )}) AND ${addressNotRetiredSql(userId, normalizedEmail)}) OR ${existsSql(
+    "user_emails owned_address JOIN identities",
+    "owner_identity",
+    `(owned_address.user_id = ${userId} AND owned_address.normalized_email = ${normalizedEmail}
+      AND owned_address.verified_at IS NOT NULL) AND (owner_identity.id = owned_address.identity_id
+      AND owner_identity.user_id = owned_address.user_id AND owner_identity.started_at IS NOT NULL)
+      AND (owner_identity.ended_at IS NULL AND owner_identity.blocked_at IS NULL)`,
+  )})`;
+}
+
+/** Recheck the address a sign-in uses inside the session's atomic command. */
 export function signInEmailAuthorizationEvidence(input: {
   userId: string;
   normalizedEmail: string;
-  emailId: string | null;
-  permissionRevision: string | null;
 }): AuthorizationEvidence {
   return {
-    sql: `SELECT 1 FROM users person WHERE person.id = ? AND person.active = 1
-      AND person.pii_redacted_at IS NULL AND person.merged_into_user_id IS NULL
-      AND ${
-        input.emailId === null
-          ? `person.normalized_email = ? AND ${primaryEmailProofMayAuthenticateSql("person")}`
-          : `EXISTS (
-        SELECT 1 FROM user_emails address JOIN user_email_sign_in_permissions permission ON permission.email_id = address.id
-         WHERE address.user_id = person.id AND address.id = ? AND address.normalized_email = ?
-           AND permission.revision = ? AND ${secondaryEmailSignInAllowedSql("address")})`
-      }`,
-    bindings:
-      input.emailId === null
-        ? [input.userId, input.normalizedEmail]
-        : [input.userId, input.emailId, input.normalizedEmail, input.permissionRevision],
+    sql: `SELECT 1 FROM (SELECT ? AS normalized_email) signing CROSS JOIN users person
+      WHERE person.id = ? AND ${liveAccountSql("person")}
+      AND ${accountAddressSignsInSql("person.id", "signing.normalized_email")}`,
+    bindings: [input.normalizedEmail, input.userId],
   };
 }
 
-/** A missing address after removal must invalidate its bound session, never turn it into primary access. */
+/**
+ * A redemption that proves the mailbox itself, such as a sponsor contact link,
+ * may sign in to the account holding the address unless the address is retired:
+ * the link stands in for the proof, but not for the representation behind it.
+ */
+export function provedMailboxSignInEvidence(input: { userId: string; normalizedEmail: string }): AuthorizationEvidence {
+  return {
+    sql: `SELECT 1 FROM (SELECT ? AS normalized_email) signing CROSS JOIN users person
+      WHERE person.id = ? AND ${liveAccountSql("person")}
+      AND ((person.normalized_email = signing.normalized_email
+          AND ${addressNotRetiredSql("person.id", "signing.normalized_email")})
+        OR ${existsSql(
+          "user_emails",
+          "proved_address",
+          `(proved_address.user_id = person.id AND proved_address.normalized_email = signing.normalized_email)
+            AND CASE WHEN proved_address.identity_id IS NULL
+              THEN ${addressNotRetiredSql("person.id", "signing.normalized_email")}
+              ELSE ${ownedEmailRepresentationActiveSql("proved_address")} END`,
+        )})`,
+    bindings: [input.normalizedEmail, input.userId],
+  };
+}
+
+/** A session made through an address ends with that address; one without a marker (a passkey) is unaffected. */
 export function sessionEmailSignInAllowedSql(sessionId: string, userId: string): string {
-  return `NOT EXISTS (SELECT 1 FROM session_email_authentication authentication
-    WHERE authentication.session_id = ${sessionId} AND NOT EXISTS (
-      SELECT 1 FROM user_emails address JOIN user_email_sign_in_permissions permission ON permission.email_id = address.id
-       WHERE address.id = authentication.email_id AND address.user_id = ${userId}
-         AND address.normalized_email = authentication.normalized_email
-         AND permission.revision = authentication.permission_revision
-         AND ${secondaryEmailSignInAllowedSql("address")}))`;
+  return `NOT ${existsSql(
+    "session_email_authentication",
+    "authentication",
+    `authentication.session_id = ${sessionId}
+      AND NOT ${accountAddressSignsInSql(userId, "authentication.normalized_email")}`,
+  )}`;
 }
