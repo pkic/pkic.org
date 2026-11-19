@@ -24,6 +24,11 @@ export function headLabel(head: HeadCell): string {
   return typeof head === "string" ? head : head.label;
 }
 
+/** A column's identity for visibility: its `key`, or its header when it has none. */
+export function columnKey<T>(column: Column<T>): string {
+  return column.key ?? headLabel(column.header);
+}
+
 export interface ColumnControlsOptions {
   /** The current `sort` query value, as the server understands it. */
   currentSort?: string;
@@ -35,7 +40,7 @@ export interface ColumnControlsOptions {
 }
 
 export interface ColumnControls<T> {
-  /** Headers of the columns the reader has hidden for this visit. */
+  /** Keys (see `columnKey`) of the columns the reader has hidden for this visit. */
   hidden: ReadonlySet<string>;
   /** The query parameter of the column whose typed filter is open, if any. */
   filterOpen: string | null;
@@ -62,9 +67,9 @@ export function useColumnControls<T>(
   { currentSort, onSort, filters = {}, onFilterChange }: ColumnControlsOptions,
 ): ColumnControls<T> {
   // Hidden columns are the reader's choice for this visit; they are keyed by
-  // header so the choice survives a re-render that rebuilds the column list.
+  // `columnKey` so the choice survives a re-render that rebuilds the column list.
   const [hidden, setHidden] = useState<ReadonlySet<string>>(
-    () => new Set(columns.filter((column) => column.defaultHidden).map((column) => headLabel(column.header))),
+    () => new Set(columns.filter((column) => column.defaultHidden).map(columnKey)),
   );
   // Which column's typed filter is open, by query parameter. One at a time:
   // the row appears above the rows it narrows, and two of them would push the
@@ -196,7 +201,7 @@ export function useColumnControls<T>(
         id: `${id}-hide`,
         label: "Hide column",
         separatorBefore: items.length > 0,
-        onSelect: () => setHidden((current) => new Set([...current, headLabel(column.header)])),
+        onSelect: () => setHidden((current) => new Set([...current, columnKey(column)])),
       });
     }
     return items;
@@ -228,17 +233,17 @@ export function useColumnControls<T>(
 
   const columnsMenu: MenuItem[] = columns.flatMap((column, index) => {
     if (!canHide(column, index)) return [];
-    const label = headLabel(column.header);
+    const key = columnKey(column);
     return [
       {
         id: `columns-${String(index)}`,
-        label,
-        checked: !hidden.has(label),
+        label: headLabel(column.header),
+        checked: !hidden.has(key),
         onSelect: () =>
           setHidden((current) => {
             const next = new Set(current);
-            if (next.has(label)) next.delete(label);
-            else next.add(label);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
             return next;
           }),
       },
@@ -270,7 +275,7 @@ export function useColumnControls<T>(
   // remain available from this menu; sorting stays limited to visible columns.
   const visibleColumns = columns
     .map((column, index) => ({ column, index }))
-    .filter(({ column }) => !hidden.has(headLabel(column.header)) && headLabel(column.header).trim().length > 0);
+    .filter(({ column }) => !hidden.has(columnKey(column)) && headLabel(column.header).trim().length > 0);
   const sortMenu: MenuItem[] = visibleColumns.flatMap(({ column, index }) => {
     const children = sortItems(column, `card-${String(index)}`, { asc: "Ascending", desc: "Descending" });
     if (children.length === 0) return [];

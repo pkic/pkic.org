@@ -8,10 +8,51 @@ import {
 } from "./pagination";
 import { booleanQueryFlagSchema, successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
-import { formFieldDefinitionSchema, formPlacementSchema, formPurposeSchema, formStatusSchema } from "./forms";
+import {
+  formFieldDefinitionSchema,
+  formFieldInputSchema,
+  formPlacementSchema,
+  formPurposeSchema,
+  formStatusSchema,
+} from "./forms";
 
 export const FORM_SUBMISSIONS_SORT_COLUMNS = ["submitter", "status", "submitted_at"] as const;
-export const formSubmissionsSortValueSchema = sortColumnSchema(FORM_SUBMISSIONS_SORT_COLUMNS);
+export const formAnswerKeySchema = formFieldInputSchema.shape.key;
+/** Decode the canonical answer-column sort token for contracts and SQL. */
+export function parseAnswerSort(value?: string): { key: string; desc: boolean } | null {
+  if (!value) return null;
+  const desc = value.startsWith("-");
+  const column = desc ? value.slice(1) : value;
+  if (!column.startsWith("answer:")) return null;
+  const key = formAnswerKeySchema.safeParse(column.slice(7));
+  return key.success ? { key: key.data, desc } : null;
+}
+
+export const formSubmissionsSortValueSchema = z
+  .union([
+    sortColumnSchema(FORM_SUBMISSIONS_SORT_COLUMNS),
+    z
+      .string()
+      .max(88)
+      .refine((value) => parseAnswerSort(value) !== null, {
+        message: "Unknown answer sort column",
+      }),
+  ])
+  .optional();
+
+export const formSubmissionExportColumnSchema = z.union([
+  z.enum(FORM_SUBMISSIONS_SORT_COLUMNS),
+  z
+    .string()
+    .max(87)
+    .refine(
+      (value) => {
+        const answer = parseAnswerSort(value);
+        return answer !== null && !answer.desc;
+      },
+      { message: "Unknown export column" },
+    ),
+]);
 
 export const FORMS_SORT_COLUMNS = [
   "key",
@@ -92,6 +133,9 @@ export const FORM_SUBMISSION_STATUS_LABELS: Record<FormSubmissionStatus, string>
 };
 
 const formSubmissionFiltersSchema = z.object({
+  answerField: formAnswerKeySchema.optional(),
+  /** Matches a scalar answer or one member of a multi-select answer. */
+  answerValue: z.string().trim().min(1).max(500).optional(),
   placementId: databaseIdSchema.optional(),
   /**
    * Two lifecycles reach this one parameter: a registration form's submissions
@@ -110,6 +154,22 @@ const formSubmissionFiltersSchema = z.object({
 export const formSubmissionsQuerySchema = searchableListQuerySchema(formSubmissionsSortValueSchema, {
   limit: 200,
 }).merge(formSubmissionFiltersSchema);
+export const formSubmissionsExportQuerySchema = formSubmissionsQuerySchema
+  .omit({
+    limit: true,
+    offset: true,
+    responseId: true,
+  })
+  .extend({
+    field: formAnswerKeySchema.optional(),
+    columns: z
+      .string()
+      .max(20000)
+      .transform((value) => value.split(","))
+      .pipe(z.array(formSubmissionExportColumnSchema).min(1).max(203))
+      .optional(),
+  });
+export type FormSubmissionsExportQuery = z.infer<typeof formSubmissionsExportQuerySchema>;
 export type FormSubmissionsQuery = z.infer<typeof formSubmissionsQuerySchema>;
 
 export const formSubmissionStatsQuerySchema = searchQuerySchema.merge(formSubmissionFiltersSchema);
