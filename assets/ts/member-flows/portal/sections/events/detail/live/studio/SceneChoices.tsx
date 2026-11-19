@@ -20,6 +20,7 @@ import { LiveOverlayPresentation } from "../../../../../../../live-session/LiveO
 import { LiveStillPictures } from "../../../../../../../live-session/live-still-pictures";
 import { sceneOutputs, type SceneOutput } from "./scene-outputs";
 import "../live-tally.css";
+import { usePictureInView } from "./use-picture-in-view";
 import "./SceneChoices.css";
 
 /** Where the scene thumbnails draw from: the shared Preview, the room as it is on air, and the approved agenda. */
@@ -118,17 +119,21 @@ const SceneThumbnail = memo(function SceneThumbnail({
 }) {
   const outline = liveSceneOutline(thumbnail, scene);
   const picture = useSceneScale();
+  // A scene at the far end of the strip is drawn once it scrolls near.
+  const inView = usePictureInView(picture);
   return (
     <span ref={picture} class="pk-studio-scene__picture" aria-hidden="true">
-      <LiveStillPictures.Provider value={true}>
-        <LiveOverlayPresentation
-          view="program"
-          layout={scene}
-          projection={thumbnail.state}
-          roomId={roomId}
-          eventSlug={eventSlug}
-        />
-      </LiveStillPictures.Provider>
+      {inView ? (
+        <LiveStillPictures.Provider value={true}>
+          <LiveOverlayPresentation
+            view="program"
+            layout={scene}
+            projection={thumbnail.state}
+            roomId={roomId}
+            eventSlug={eventSlug}
+          />
+        </LiveStillPictures.Provider>
+      ) : null}
       {outline.length ? <SceneOutline boxes={outline} /> : null}
     </span>
   );

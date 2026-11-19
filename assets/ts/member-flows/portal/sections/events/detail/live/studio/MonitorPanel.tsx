@@ -1,5 +1,6 @@
 import { signal } from "@preact/signals";
 import { memo } from "preact/compat";
+import { useRef } from "preact/hooks";
 import type { LiveRoomState } from "../../../../../../../live-session/live-room-state";
 import {
   LIVE_STAGE_PREVIEW_OUTPUT,
@@ -43,6 +44,7 @@ import "../live-tally.css";
 import { SourceCount, SyncToggle } from "./MonitorOutputStatus";
 import { liveSceneName } from "../live-layer-unseen";
 import { clearHint } from "./StudioSwitcher";
+import { usePictureInView } from "./use-picture-in-view";
 import "./MonitorPanel.css";
 
 /** The switcher's actions the Preview and Program monitors offer with their controls. */
@@ -390,10 +392,13 @@ function MonitorScreen({ output, context }: { output: StudioOutput; context: Mon
   const layout = studioOutputLayout(output);
   const pointer = useLivePointerReport(output);
   const key = enlargedKey(panel.id, output);
+  // A monitor out of sight keeps its place and draws nothing until it comes into view.
+  const screen = useRef<HTMLDivElement>(null);
+  const inView = usePictureInView(screen);
   return (
     <>
-      <div class="pk-studio-monitor__screen" onDblClick={() => (enlarged.value = key)} {...pointer}>
-        <Screen output={output} layout={layout} sources={sources} />
+      <div ref={screen} class="pk-studio-monitor__screen" onDblClick={() => (enlarged.value = key)} {...pointer}>
+        {inView ? <Screen output={output} layout={layout} sources={sources} /> : null}
         <LiveMonitorPointers output={output} />
       </div>
       {enlarged.value === key ? (

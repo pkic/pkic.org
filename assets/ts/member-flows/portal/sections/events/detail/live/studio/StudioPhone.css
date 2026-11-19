@@ -66,6 +66,17 @@
   .pk-studio-phone__switcher .pk-studio-transition {
     padding: 0;
   }
+  /*
+   * On a phone a take button is its arrow alone, in the color of the output it goes to, which the tag under
+   * each picture names: the pictures get the width the codes took. The button keeps its full name for a
+   * screen reader.
+   */
+  .pk-studio-phone__switcher .pk-studio-transition__name {
+    display: none;
+  }
+  .pk-studio-phone__switcher .pk-studio-transition > .pk-btn.pk-studio-transition__take {
+    justify-content: center;
+  }
   .pk-studio-phone__thumb {
     position: relative;
     display: flex;

@@ -113,7 +113,7 @@ export function TransitionControl({
             <StrokeIcon stroke-width="2">
               <path d="M6 3l5 5-5 5" />
             </StrokeIcon>
-            {labeled ? details.label : details.short}
+            <span class="pk-studio-transition__name">{labeled ? details.label : details.short}</span>
           </Button>
         );
       })}

@@ -52,3 +52,15 @@ test("pictures of an output move on a phone without a graphics layer", async ({ 
     .poll(async () => (await page.evaluate(moving, PICTURES)).some((property) => LAYERED.includes(property)))
     .toBe(true);
 });
+
+test("a monitor out of sight is not drawn until it scrolls into view", async ({ page }) => {
+  // A short window: the second monitor of the phone's Monitors view starts well below it.
+  await page.setViewportSize({ width: 375, height: 420 });
+  await page.goto(`${gallery.resolvedUrls!.local[0]}?only=studio-phone-monitors`);
+  const monitors = page.locator("section#studio-phone-monitors [data-phone] .pk-studio-monitor__screen");
+  await expect(monitors).toHaveCount(2);
+  const last = monitors.last();
+  await expect(last.locator(".pk-live-overlay")).toHaveCount(0);
+  await last.scrollIntoViewIfNeeded();
+  await expect(last.locator(".pk-live-overlay")).toHaveCount(1);
+});
