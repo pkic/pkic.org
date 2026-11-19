@@ -200,33 +200,43 @@ export function preparePlacedEventFormDefinition(db: DatabaseLike, event: EventR
   };
 }
 
+/** Each option catalog the selected forms use, read in the caller's batch; unused catalogs return no rows. */
+export function prepareFormOptionCatalogs(
+  db: DatabaseLike,
+  formIdsSql: string,
+  bindings: unknown[],
+  options: { includeArchived?: boolean; includeInactive?: boolean } = {},
+) {
+  return {
+    statements: FORM_FIELD_OPTION_SOURCES.map((source) =>
+      prepareOptionCatalog(db, source, options.includeInactive ?? false, {
+        sql: formIdsSql,
+        bindings,
+        includeArchived: options.includeArchived,
+      }),
+    ),
+    decode(results: D1StatementResult[]): OptionCatalogs {
+      return Object.fromEntries(
+        FORM_FIELD_OPTION_SOURCES.map((source, index) => [
+          source,
+          decodeOptionCatalog(batchRows<OptionCatalogRow>(results[index])),
+        ]),
+      );
+    },
+  };
+}
+
 function prepareFormDefinitionFields(
   db: DatabaseLike,
   formIdsSql: string,
   bindings: unknown[],
   options: { includeArchived?: boolean } = {},
 ) {
+  const catalogs = prepareFormOptionCatalogs(db, formIdsSql, bindings, options);
   return {
-    statements: [
-      prepareFormFields(db, formIdsSql, bindings, options.includeArchived ?? false),
-      ...FORM_FIELD_OPTION_SOURCES.map((source) =>
-        prepareOptionCatalog(db, source, false, {
-          sql: formIdsSql,
-          bindings,
-          includeArchived: options.includeArchived,
-        }),
-      ),
-    ],
+    statements: [prepareFormFields(db, formIdsSql, bindings, options.includeArchived ?? false), ...catalogs.statements],
     decode(results: D1StatementResult[]): [FormFieldRow[], OptionCatalogs] {
-      return [
-        batchRows<FormFieldRow>(results[0]),
-        Object.fromEntries(
-          FORM_FIELD_OPTION_SOURCES.map((source, index) => [
-            source,
-            decodeOptionCatalog(batchRows<OptionCatalogRow>(results[1 + index])),
-          ]),
-        ),
-      ];
+      return [batchRows<FormFieldRow>(results[0]), catalogs.decode(results.slice(1))];
     },
   };
 }

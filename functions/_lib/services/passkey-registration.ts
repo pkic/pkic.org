@@ -23,7 +23,7 @@ import {
   type PasskeyChallengeUse,
 } from "./passkey-challenges";
 import {
-  expectedPasskeyOrigin,
+  expectedPasskeyIdentity,
   PASSKEY_USER_VERIFICATION_POLICY,
   requireEnvVar,
   type WebAuthnEnv,
@@ -51,8 +51,7 @@ export async function beginPasskeyRegistration(
   requestUrl: string,
   actor: { id: string; email: string },
 ): Promise<{ options: Record<string, unknown>; challengeToken: string }> {
-  expectedPasskeyOrigin(env, requestUrl);
-  const rpId = requireEnvVar(env.WEBAUTHN_RP_ID, "WEBAUTHN_RP_ID");
+  const { rpId } = expectedPasskeyIdentity(env, requestUrl);
   const rpName = requireEnvVar(env.WEBAUTHN_RP_NAME, "WEBAUTHN_RP_NAME");
   const signingSecret = requireEnvVar(env.INTERNAL_SIGNING_SECRET, "INTERNAL_SIGNING_SECRET");
 
@@ -106,8 +105,7 @@ export async function completePasskeyRegistration(
   actor: { id: string; kind: "user" },
   payload: { challengeToken: string; response: RegistrationResponseInput; deviceName?: string | null },
 ): Promise<PasskeySummary> {
-  const rpId = requireEnvVar(env.WEBAUTHN_RP_ID, "WEBAUTHN_RP_ID");
-  const origin = expectedPasskeyOrigin(env, requestUrl);
+  const { rpId, origin } = expectedPasskeyIdentity(env, requestUrl);
   const signingSecret = requireEnvVar(env.INTERNAL_SIGNING_SECRET, "INTERNAL_SIGNING_SECRET");
 
   const claims = await verifyPasskeyChallengeToken(signingSecret, payload.challengeToken, "registration");
