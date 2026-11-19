@@ -73,7 +73,11 @@ async function heldRegistration(
   db: DatabaseLike,
   userId: string,
   returnPath: string | undefined,
-): Promise<{ eventId: string; path: string; details: Awaited<ReturnType<typeof registrationDetailsEmailData>> } | null> {
+): Promise<{
+  eventId: string;
+  path: string;
+  details: Awaited<ReturnType<typeof registrationDetailsEmailData>>;
+} | null> {
   const purpose = signInPurpose(returnPath);
   if (purpose?.flow !== "registration") return null;
   const held = await first<{ id: string; event_id: string; source_mode: "hugo" | "portal" | "integration" | null }>(

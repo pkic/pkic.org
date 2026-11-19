@@ -42,7 +42,7 @@ export function resolveTemplateOnce(
   return pending;
 }
 
-export function loadEventEmailVariablesOnce(
+function loadEventEmailVariablesOnce(
   db: DatabaseLike,
   env: Pick<Env, "ASSETS" | "ASSETS_PUBLIC">,
   context: OutboxProcessingContext,
@@ -57,4 +57,23 @@ export function loadEventEmailVariablesOnce(
   );
   context.events.set(key, pending);
   return pending;
+}
+
+/**
+ * A queued payload with its event's variables. The event supplies its own name and links under
+ * what the sender wrote; its sponsor image always comes from the event, so an event without one
+ * never links a missing image.
+ */
+export async function withEventEmailVariables<T extends Record<string, unknown>>(
+  db: DatabaseLike,
+  env: Pick<Env, "ASSETS" | "ASSETS_PUBLIC">,
+  context: OutboxProcessingContext,
+  eventId: string | null,
+  siteBaseUrl: string,
+  payload: T,
+): Promise<T> {
+  if (!eventId) return payload;
+  const eventVariables = await loadEventEmailVariablesOnce(db, env, context, eventId, siteBaseUrl);
+  if (!eventVariables) return payload;
+  return { ...eventVariables, ...payload, sponsorsImageUrl: eventVariables.sponsorsImageUrl };
 }

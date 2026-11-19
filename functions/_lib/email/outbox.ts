@@ -7,10 +7,10 @@ import {
 import { runEmailDeliveryPool, type EmailDeliveryAdmission, type EmailDeliveryOutcome } from "./outbox-delivery-pool";
 import {
   createOutboxProcessingContext,
-  loadEventEmailVariablesOnce,
   loadRenderResources,
   resolveTemplateOnce,
   type OutboxProcessingContext,
+  withEventEmailVariables,
 } from "./outbox-processing-context";
 import { assertRequiredEmailActions } from "./required-actions";
 import { validateEmailDeliveryGuard } from "./delivery-guard";
@@ -43,21 +43,12 @@ import {
 import type { CalendarPayload } from "./outbox-queue";
 import { createDurableJobLease } from "../jobs/lease";
 import { resolveImageAttachmentFormat } from "../utils/image-format";
+import { bytesToBase64 } from "../../../assets/shared/base64";
 import type { EmailOutboxStatus, ImmediateEmailDelivery } from "../../../assets/shared/schemas/email-outbox";
 
 const EMAIL_TEMPLATE_UNAVAILABLE_CODES: ReadonlySet<string> = new Set(emailTemplateUnavailableCodeSchema.options);
 
 export * from "./outbox-queue";
-
-function uint8ToBase64(bytes: Uint8Array): string {
-  const chunkSize = 12288; // 12kb chunks to avoid stack overflow
-  let result = "";
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.subarray(i, i + chunkSize);
-    result += String.fromCharCode(...chunk);
-  }
-  return btoa(result);
-}
 
 interface OutboxRow {
   id: string;
@@ -258,17 +249,8 @@ async function attemptOutboxDelivery(
     const payload = await materializeQueuedCapabilityLinks(db, env, storedPayload);
     const { partials, layoutHtml } = await loadRenderResources(db, context);
     const emailBaseUrl = resolveEmailBaseUrl(payload, env);
-    // The event supplies its own name and links under what the sender wrote; its sponsor
-    // image always comes from the event, so an event without one never links a missing image.
-    const eventVariables = row.event_id
-      ? await loadEventEmailVariablesOnce(db, env, context, row.event_id, emailBaseUrl)
-      : null;
-    const dataWithPartials = {
-      ...eventVariables,
-      ...payload,
-      ...(eventVariables ? { sponsorsImageUrl: eventVariables.sponsorsImageUrl } : {}),
-      _partials: partials,
-    };
+    const eventPayload = await withEventEmailVariables(db, env, context, row.event_id, emailBaseUrl, payload);
+    const dataWithPartials = { ...eventPayload, _partials: partials };
     const bodyOverride = readDirectEmailBody(payload);
 
     let subject: string;
@@ -314,7 +296,7 @@ async function attemptOutboxDelivery(
       attachments = calendar.icsFiles.map((f) => ({
         filename: f.filename,
         contentType: "application/ics",
-        base64Content: uint8ToBase64(new TextEncoder().encode(f.content)),
+        base64Content: bytesToBase64(new TextEncoder().encode(f.content)),
       }));
     }
 
@@ -342,7 +324,7 @@ async function attemptOutboxDelivery(
           const buf = await badgeObj.arrayBuffer();
           const bytes = new Uint8Array(buf);
           const format = resolveImageAttachmentFormat(declaredType, bytes);
-          const base64 = uint8ToBase64(bytes);
+          const base64 = bytesToBase64(bytes);
           const badgeFilename = `${badgeAttachment.filenameBase}.${format.extension}`;
           attachments = [
             ...(attachments ?? []),
