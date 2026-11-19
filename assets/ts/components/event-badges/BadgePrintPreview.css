@@ -28,6 +28,19 @@
     height: auto;
   }
 
+  .pk-dialog.pk-ticket-code-viewer {
+    --pk-ink: var(--pk-on-solid-ink);
+    --pk-ink-muted: var(--pk-on-solid-ink);
+    background: var(--pk-on-solid);
+    color: var(--pk-on-solid-ink);
+  }
+
+  .pk-ticket-code-viewer .pk-dialog__body {
+    align-items: center;
+    justify-content: center;
+    color: var(--pk-on-solid-ink);
+  }
+
   /* A badge face fills the column up to its printed width; the frame keeps the printed proportions.
      The outline takes no layout space, so the measured width is the frame's whole width. */
   .pk-badge-face {
@@ -46,5 +59,55 @@
     outline: 1px solid var(--pk-line);
     box-shadow: var(--pk-shadow-2);
     background: var(--pk-surface);
+  }
+
+  .pk-badge-face__open {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--pk-2);
+    max-width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--pk-accent-ink);
+    font: inherit;
+    font-weight: 600;
+    cursor: zoom-in;
+  }
+
+  .pk-badge-face__open .pk-badge-face__frame {
+    pointer-events: none;
+  }
+
+  .pk-badge-face__open:focus-visible {
+    outline: none;
+    box-shadow: var(--pk-focus);
+  }
+
+  @media (max-width: 40rem) {
+    .pk-dialog.pk-ticket-code-viewer {
+      width: 100dvw;
+      max-width: none;
+      block-size: 100dvh;
+      max-height: 100dvh;
+      margin: 0;
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+    }
+
+    .pk-ticket-code-viewer .pk-dialog__head {
+      padding-block-start: max(var(--pk-4), env(safe-area-inset-top));
+    }
+
+    .pk-ticket-code-viewer .pk-dialog__body {
+      padding-inline: max(var(--pk-2), env(safe-area-inset-left)) max(var(--pk-2), env(safe-area-inset-right));
+      padding-block-end: max(var(--pk-4), env(safe-area-inset-bottom));
+    }
+
+    .pk-ticket-code-viewer .pk-badge-qr-expanded {
+      inline-size: min(100%, calc(100dvh - 10rem));
+    }
   }
 }

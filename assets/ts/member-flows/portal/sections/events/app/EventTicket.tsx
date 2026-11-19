@@ -86,6 +86,7 @@ function BadgeTicket({ event, details }: { event: ParticipantEventDetail; detail
         createPortal(
           <Dialog
             open={enlarged}
+            class="pk-ticket-code-viewer"
             title="Check-in code"
             confirmLabel="Close"
             closeLabel="Close check-in code"
