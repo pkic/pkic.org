@@ -1,5 +1,6 @@
 import { signMcpSessionToken } from "../functions/_lib/auth/mcp-session";
 import { signInWithPasskey } from "./helpers/passkey-sign-in";
+import { recordPersonalAddressAnswer } from "./helpers/account-organization";
 import { createAdminSession } from "./helpers/auth";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import {
@@ -394,6 +395,8 @@ describe("MCP OAuth session interoperability", () => {
       await env.DB.prepare("UPDATE users SET email_verified_at=? WHERE id=?")
         .bind(new Date().toISOString(), user.id)
         .run();
+      // A passkey sign-in on a work address needs account setup's organization step answered.
+      await recordPersonalAddressAnswer(env.DB, user.id);
       const emailToken = await createAdminSession(env.DB, user.id, crypto.randomUUID(), env.INTERNAL_SIGNING_SECRET);
       const passkey = await signInWithPasskey(env, emailToken);
       const grant = await authorize(passkey.token);

@@ -28,6 +28,7 @@ import { Panel, PanelBody } from "../../ui/Panel";
 import { TextInput } from "../../ui/TextControl";
 import { ApiClientError, getJson, patchJson, postJson, requestJson } from "../../shared/api-client";
 import { beginClientMutation } from "../../shared/client-release-safety";
+import { clearRememberedInvitations } from "../../shared/query-context";
 import type { MeetingGuestInvitationFragment } from "./invitation-fragment";
 import { MeetingJoinForm, type MeetingJoinConfirmInput } from "./MeetingJoinForm";
 
@@ -241,6 +242,7 @@ export function App({
       deleteCompleted = forgotten.ok || (forgotten.status >= 400 && forgotten.status < 500);
       if (!forgotten.ok) throw new Error("The remembered meeting identity could not be cleared.");
       await postJson("/api/v1/auth/logout", {}, userAuthLogoutResponseSchema);
+      clearRememberedInvitations();
       window.location.assign(
         resumePersonalLink && personalToken ? personalMeetingEntrySignInUrl(personalToken) : "/portal/",
       );

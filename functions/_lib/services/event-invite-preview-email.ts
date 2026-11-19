@@ -1,7 +1,8 @@
+import { buildEventEmailVariables } from "../email/event-email-variables";
 import { AppError } from "../errors";
 import { renderEmail, renderSubject } from "../email/render";
 import { loadEmailRenderBundle } from "../email/partials";
-import { buildEventEmailVariables, type EventRecord } from "./events";
+import { type EventRecord } from "./events";
 import { inviteDeclineUrl, proposalPageUrl, registrationPageUrl } from "./frontend-links";
 import {
   computeEventInviteDigest,

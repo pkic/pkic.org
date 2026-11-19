@@ -489,11 +489,8 @@ export function portalHasCapacity(session: PortalSession | null): boolean {
   );
 }
 
+/** Every signed-in person opens the portal on Home; a link that names a page takes them there instead. */
 export function portalDefaultPath(session: PortalSession | null): string {
-  if (session?.member || session?.staff) return "/home";
-  if (session?.eventParticipation) return "/events";
-  if (session?.sponsors.length) return "/sponsors";
-  if (session?.pendingIdentityCount || session?.hasActiveIdentity) return portalOwnUserRecordPath(session) ?? "/";
   return session?.identity.id ? "/home" : "/";
 }
 

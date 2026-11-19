@@ -71,7 +71,7 @@ export async function prepareEventAppScreens(staff: Page, email: string) {
   });
   expect(published.status(), await published.text()).toBe(200);
 
-  await registerStateAttendee(staff, fixture, email, { staticRelease: false });
+  await registerStateAttendee(staff, fixture, email);
 
   const detail = await staff.request.get(`/api/v1/events/${encodeURIComponent(fixture.slug)}`);
   expect(detail.status()).toBe(200);

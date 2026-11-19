@@ -1,24 +1,14 @@
-import { ownedIdentityLifecycleSql } from "../identities/selection";
+import { recordRecipientEmailSql } from "../identities/record-recipient";
 
 /**
  * Canonical registration-recipient projections for SQL queries that alias
  * registrations as `r` and users as `u`.
  *
  * A registration speaks for the identity it was made as, so its ordinary
- * messages go to that identity's verified address, else to the account's
- * verified canonical address. A pending account address is untrusted and may
+ * messages follow the shared record recipient rule. A pending account address is untrusted and may
  * receive only messages whose sole purpose is proving control of that exact
  * address.
  */
-
-/** The verified address an identity uses, or NULL when it uses the account's address. */
-function identityVerifiedEmailSql(identityIdSql: string, column: "email" | "normalized_email"): string {
-  return `(SELECT recipient_address.${column} FROM identities recipient_identity
-    JOIN user_emails recipient_address ON recipient_address.id = recipient_identity.email_id
-     AND recipient_address.user_id = recipient_identity.user_id AND recipient_address.verified_at IS NOT NULL
-    WHERE recipient_identity.id = ${identityIdSql} AND recipient_identity.user_id = u.id
-      AND ${ownedIdentityLifecycleSql("recipient_identity", null)})`;
-}
 
 /** Where a registration made as `identityIdSql` sends its ordinary messages. */
 export function registrationRecipientEmailSql(identityIdSql = "r.registration_identity_id"): string {
@@ -26,7 +16,7 @@ export function registrationRecipientEmailSql(identityIdSql = "r.registration_id
 }
 
 function registrationRecipientAddressSql(identityIdSql: string, column: "email" | "normalized_email"): string {
-  return `COALESCE(${identityVerifiedEmailSql(identityIdSql, column)}, u.${column})`;
+  return recordRecipientEmailSql(identityIdSql, "u", column);
 }
 
 export const REGISTRATION_RECIPIENT_EMAIL_SQL = registrationRecipientEmailSql();

@@ -4,6 +4,7 @@ import { getJson } from "../shared/api-client";
 import { eventFlowContext, setStatus } from "./boot";
 import { RegistrationFlow } from "../components/events/RegistrationFlow";
 import { showRegistrationSuccess } from "./registration-success";
+import { eventParticipantRecordPath } from "../../shared/event-participant-paths";
 
 async function main() {
   const context = eventFlowContext(document.querySelector<HTMLElement>("[data-event-registration]"));
@@ -21,15 +22,17 @@ async function main() {
         mode="create"
         forms={forms}
         context={context}
-        onRegistered={(result, body, form) => {
+        onAlreadyRegistered={(registrationId) =>
+          location.assign(`/portal/#${eventParticipantRecordPath(context.eventSlug, "registration", registrationId)}`)
+        }
+        onRegistered={(result, body, form, names) => {
           showRegistrationSuccess(
             context.root,
             form,
             result,
-            body.firstName,
-            body.lastName,
+            names.firstName,
+            names.lastName,
             body.email,
-            body.organization?.name ?? "",
             forms.event.name,
             context.eventSlug,
           );

@@ -16,8 +16,32 @@ afterEach(() => {
   portalSession.value = null;
   vi.unstubAllGlobals();
 });
-function stubStatus({ member = false, applications = 0, fail = false } = {}) {
-  const session = portalSessionFixture({});
+const ORGANIZATION_ID = "00000000-0000-4000-8000-0000000000a1";
+type OrganizationApplicant = { userId: string; userName: string; email: string } | null;
+
+function stubStatus({
+  member = false,
+  applications = 0,
+  fail = false,
+  organizationApplication = undefined as { applicant: OrganizationApplicant } | null | undefined,
+} = {}) {
+  const fixture = portalSessionFixture({});
+  const session =
+    organizationApplication === undefined
+      ? fixture
+      : {
+          ...fixture,
+          actingIdentities: [
+            {
+              id: "00000000-0000-4000-8000-0000000000a2",
+              organizationId: ORGANIZATION_ID,
+              organizationName: "Applying Org",
+              jobTitle: "Engineer",
+              membershipCategory: null,
+              membershipLabel: null,
+            },
+          ],
+        };
   portalSession.value = session;
   const person = myProfileSchema.parse({
     userId: session.identity.id,
@@ -46,6 +70,22 @@ function stubStatus({ member = false, applications = 0, fail = false } = {}) {
     vi.fn(async (input) => {
       if (fail) throw new Error("Unavailable");
       const url = new URL(String(input), location.origin);
+      if (url.pathname === `/api/v1/organizations/${ORGANIZATION_ID}/applications/current`)
+        return new Response(
+          JSON.stringify({
+            application: organizationApplication && {
+              stage: "processing",
+              createdAt: "2026-11-02T09:00:00.000Z",
+              applicant: organizationApplication.applicant && {
+                id: "00000000-0000-4000-8000-0000000000a3",
+                jobTitle: "Chief Architect",
+                headshotUrl: null,
+                ...organizationApplication.applicant,
+              },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
       const body = url.pathname.endsWith("/applications")
         ? {
             applications: applications
@@ -95,4 +135,37 @@ it("does not query eligibility or flash an invitation for an existing member", a
   await mount();
   expect(fetch).not.toHaveBeenCalled();
   expect(host.textContent).toBe("");
+});
+it("shows a representative who applied for their organization, so they wait for it instead of applying", async () => {
+  stubStatus({
+    organizationApplication: {
+      applicant: {
+        userId: "00000000-0000-4000-8000-0000000000a4",
+        userName: "Jane Applicant",
+        email: "jane@applying.example",
+      },
+    },
+  });
+  await mount();
+  expect(host.textContent).toContain("Membership application for Applying Org");
+  expect(host.textContent).toContain("Processing");
+  expect(host.textContent).toContain("Jane Applicant");
+  expect(host.textContent).toContain("can join working groups here");
+  expect(host.querySelector('a[href="mailto:jane@applying.example"]')?.textContent).toBe("Email Jane Applicant");
+  expect(host.querySelector('a[href="/join/"]')).toBeNull();
+});
+it("leaves the applicant's own application to its own panel and invites when no application is open", async () => {
+  stubStatus({
+    organizationApplication: {
+      applicant: { userId: "00000000-0000-4000-8000-000000000001", userName: "Me", email: "person@example.test" },
+    },
+  });
+  await mount();
+  expect(host.textContent).not.toContain("Membership application for");
+  render(null, host);
+  host.remove();
+  stubStatus({ organizationApplication: null });
+  await mount();
+  expect(host.textContent).not.toContain("Membership application for");
+  expect(host.querySelector('a[href="/join/"]')).not.toBeNull();
 });

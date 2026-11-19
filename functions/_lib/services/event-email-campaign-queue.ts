@@ -1,8 +1,9 @@
+import { buildEventEmailVariables } from "../email/event-email-variables";
 import { isAttendeeCampaignAudience } from "../../../assets/shared/schemas/event-email-campaigns";
 import { prepareBulkQueueEmailChunkStatements } from "../email/outbox";
 import { DIRECT_EMAIL_TEMPLATE_KEY, directEmailBodyPayload } from "../email/direct-body";
 import type { DatabaseLike, StatementLike } from "../types";
-import { buildEventEmailVariables, type EventRecord } from "./events";
+import { type EventRecord } from "./events";
 import { proposalPageUrl, registrationPageUrl } from "./frontend-links";
 import { registrationManageCapability } from "./registrations/capability-urls";
 import { campaignAuthoredTemplates } from "./event-email-campaign/template-content";

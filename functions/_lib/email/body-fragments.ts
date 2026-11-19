@@ -1,4 +1,4 @@
-import { renderEmailMarkdown } from "./markdown";
+import { renderEmailContent } from "./content-blocks";
 import type { EmailContentType, EmailTemplateFragment } from "../../../assets/shared/schemas/email-templates";
 import { assertTemplateRenderLength, type TemplateRenderBudget } from "./render-limit";
 
@@ -18,6 +18,10 @@ function escapeHtml(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+function fragmentKey(nonce: string, index: number): string {
+  return `PKICEMAILFRAGMENT${nonce}N${index}X`;
+}
+
 /** Render each body independently; only the caller applies the outer email layout. */
 export function renderEmailBody(
   source: string,
@@ -33,25 +37,32 @@ export function renderEmailBody(
     contentType,
     partial(fragment, values, childDepth) {
       const html = renderEmailBody(fragment.content, values, fragment.contentType, budget, compile, childDepth);
-      const key = `PKIC_EMAIL_FRAGMENT_${nonce}_${fragments.size}_`;
+      const key = fragmentKey(nonce, fragments.size);
       fragments.set(key, html);
-      return key;
+      // A Markdown body keeps its blocks intact, so a shared block stands as its own paragraph.
+      return contentType === "markdown" ? `\n\n${key}\n\n` : key;
     },
   });
-  const pattern = new RegExp(`(PKIC_EMAIL_FRAGMENT_${nonce}_\\d+_)`, "g");
+  if (contentType === "markdown") {
+    let html = renderEmailContent(compiled);
+    assertTemplateRenderLength(html.length, budget);
+    for (const [key, fragment] of fragments) {
+      html = html.replace(`<p>${key}</p>`, () => fragment).replace(key, () => fragment);
+      assertTemplateRenderLength(html.length, budget);
+    }
+    return html;
+  }
+  const pattern = new RegExp(`(PKICEMAILFRAGMENT${nonce}N\\d+X)`, "g");
   const parts: string[] = [];
   let length = 0;
   for (const sourcePart of compiled.split(pattern)) {
-    const fragment = fragments.get(sourcePart);
     const part =
-      fragment ??
-      (contentType === "markdown"
-        ? renderEmailMarkdown(sourcePart)
-        : contentType === "html"
-          ? sourcePart
-          : sourcePart
-            ? `<pre style="white-space:pre-wrap;font-family:inherit">${escapeHtml(sourcePart)}</pre>`
-            : "");
+      fragments.get(sourcePart) ??
+      (contentType === "html"
+        ? sourcePart
+        : sourcePart
+          ? `<pre style="white-space:pre-wrap;font-family:inherit">${escapeHtml(sourcePart)}</pre>`
+          : "");
     length += part.length;
     assertTemplateRenderLength(length, budget);
     parts.push(part);

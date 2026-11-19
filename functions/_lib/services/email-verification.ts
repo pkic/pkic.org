@@ -82,10 +82,11 @@ export function prepareVerifyPrimaryEmailStatements(
         .prepare(`UPDATE ${table} SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL AND ${recovering}`)
         .bind(at, input.userId, input.userId, input.normalizedEmail),
     ),
+    // Every verified address signs in, so one added before the account was owned is unproved again.
     db
-      .prepare(`UPDATE user_email_sign_in_permissions SET revoked_at = ? WHERE revoked_at IS NULL
-      AND email_id IN (SELECT id FROM user_emails WHERE user_id = ?) AND ${recovering}`)
-      .bind(at, input.userId, input.userId, input.normalizedEmail),
+      .prepare(`UPDATE user_emails SET verified_at = NULL, verification_method = NULL
+      WHERE user_id = ? AND verified_at IS NOT NULL AND ${recovering}`)
+      .bind(input.userId, input.userId, input.normalizedEmail),
     prepareRotateUserRegistrationCapabilities(db, input.userId, at, input.excludeRegistrationId, {
       sql: `SELECT 1 WHERE ${recovering}`,
       bindings: [input.userId, input.normalizedEmail],

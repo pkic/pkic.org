@@ -56,7 +56,8 @@ test("an organization contact adds a colleague and can take the access away agai
   });
 
   await page.context().clearCookies();
-  await signInToPortal(page, contactEmail);
+  // The account also holds the individual identity it signed up with, so the contact acts for the organization.
+  await signInToPortal(page, contactEmail, { continueAs: organizationName });
   await openMyOrganization(page, organizationName);
 
   // Adding a colleague is a member action, not a staff one.
@@ -171,7 +172,8 @@ test("an organization contact adds a colleague and can take the access away agai
 
   // Removing that access again is the half that had no coverage.
   await page.context().clearCookies();
-  await signInToPortal(page, contactEmail);
+  // The account also holds the individual identity it signed up with, so the contact acts for the organization.
+  await signInToPortal(page, contactEmail, { continueAs: organizationName });
   await openMyOrganization(page, organizationName);
   const identityRow = page.getByRole("row").filter({ hasText: `Colleague ${suffix}` });
   await expect(identityRow).toBeVisible({ timeout: 15_000 });
@@ -215,7 +217,8 @@ test("a member joins an open working group, sets their mail preference, and leav
   });
 
   await page.context().clearCookies();
-  await signInToPortal(page, email);
+  // Membership is held by the organization identity, not the individual one the account signed up with.
+  await signInToPortal(page, email, { continueAs: `Working Group Org ${suffix}` });
   const memberships = await readActiveIdentities(page);
   expect(memberships.length).toBeGreaterThan(0);
 

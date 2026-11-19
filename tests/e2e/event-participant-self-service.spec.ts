@@ -1,4 +1,4 @@
-import { eventParticipantRecordPath } from "../../assets/ts/member-flows/portal/sections/events/event-participant-paths";
+import { eventParticipantRecordPath } from "../../assets/shared/event-participant-paths";
 import { eventWorkspacePath } from "./helpers/agenda-workspace";
 import { SPEAKER_PARTICIPATION_COPY } from "../../assets/shared/proposal-speaker-acceptance";
 import { uploadThroughControl } from "./helpers/file-upload";
@@ -72,13 +72,11 @@ test("a signed-in group member completes required registration through the porta
   expect(updated.status(), await updated.text()).toBe(200);
 
   const email = `attendee@group-${crypto.randomUUID()}.test`;
-  await approveMemberThroughReview(page, {
-    email,
-    name: "Group Attendee",
-    organizationName: `Synthetic Group ${crypto.randomUUID()}`,
-  });
+  const organizationName = `Synthetic Group ${crypto.randomUUID()}`;
+  await approveMemberThroughReview(page, { email, name: "Group Attendee", organizationName });
   await page.context().clearCookies();
-  await signInToPortal(page, email);
+  // The account also holds its individual identity; the group is joined as the member organization's representative.
+  await signInToPortal(page, email, { continueAs: organizationName });
   const joined = await page.request.post(`/api/v1/groups/${event.ownerGroupId}/join`, {
     data: { capacitySelection: { mode: "all_eligible", confirmed: true } },
   });
@@ -86,12 +84,18 @@ test("a signed-in group member completes required registration through the porta
   await page.goto(`/portal/#/events/${fixture.slug}/register`);
   const form = page.getByRole("region", { name: "Event registration", exact: true });
   await expect(form).toBeVisible();
+  // The account was started with an email alone, so the form asks for the name it lacks.
+  await form.getByRole("button", { name: "Edit personal details", exact: true }).click();
+  const names = page.getByRole("dialog", { name: "Edit my details", exact: true });
+  await names.getByRole("textbox", { name: /^First name/ }).fill("Group");
+  await names.getByRole("textbox", { name: /^Last name/ }).fill("Attendee");
+  await names.getByRole("button", { name: "Save my details", exact: true }).click();
+  await expect(names).not.toBeVisible();
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await page.getByRole("radio", { name: "In person — Workshop day", exact: true }).check();
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await page.getByRole("button", { name: "Continue", exact: true }).click();
-  await page.getByRole("checkbox", { name: "I agree to the privacy policy", exact: true }).check();
-  await page.getByRole("checkbox", { name: "I agree to the code of conduct", exact: true }).check();
+  await page.getByRole("checkbox", { name: "I agree to photos and videos", exact: true }).check();
   const submitted = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
@@ -184,7 +188,10 @@ test("a signed-in user registers from event home without another email challenge
   }
   const challenged: string[] = [];
   page.on("request", (request) => {
-    if (request.method() === "POST" && /\/(?:proof|auth\/request)(?:\/|$)/.test(new URL(request.url()).pathname))
+    if (
+      request.method() === "POST" &&
+      /\/(?:proof|auth\/(?:request-link|sign-up))(?:\/|$)/.test(new URL(request.url()).pathname)
+    )
       challenged.push(request.url());
   });
   await page.getByRole("link", { name: "Register", exact: true }).click();
@@ -287,7 +294,10 @@ test("a signed-in user registers from event home without another email challenge
   await expect(
     registrationPage.getByRole("group", { name: "Attendance choices", exact: true }),
   ).toHaveAccessibleDescription("Choose at least one event day and attendance option to register.");
-  await expect(registrationPage.getByRole("group", { name: "Attendance choices", exact: true })).toBeFocused();
+  // The refused choice takes focus: the first day's first option, inside the described group.
+  await expect(
+    registrationPage.getByRole("group", { name: "Attendance choices", exact: true }).locator("input:focus"),
+  ).toHaveCount(1);
   await matrix.getByRole("radio", { name: "In person — Workshop day 1", exact: true }).check();
   await registrationPage.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(registrationPage.locator('[data-step="2"]')).toBeVisible();
@@ -328,7 +338,7 @@ test("a signed-in user registers from event home without another email challenge
   ).toHaveCount(6);
   await registrationPage.getByRole("button", { name: "Register", exact: true }).click();
   await expect(
-    registrationPage.getByRole("checkbox", { name: "I agree to the privacy policy", exact: true }),
+    registrationPage.getByRole("checkbox", { name: "I agree to photos and videos", exact: true }),
   ).toHaveAttribute("aria-invalid", "true");
   await expect(registrationPage.getByText("Too small:", { exact: false })).toHaveCount(0);
   await expect(registrationPage.locator('[data-step="4"]')).toHaveCSS("opacity", "1");
@@ -342,8 +352,7 @@ test("a signed-in user registers from event home without another email challenge
   await page.goBack();
   await expect(registrationPage.getByText("No additional questions.", { exact: true })).toBeVisible();
   await page.goForward();
-  await registrationPage.getByRole("checkbox", { name: "I agree to the privacy policy", exact: true }).check();
-  await registrationPage.getByRole("checkbox", { name: "I agree to the code of conduct", exact: true }).check();
+  await registrationPage.getByRole("checkbox", { name: "I agree to photos and videos", exact: true }).check();
   const saved = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === `/api/v1/events/${event.slug}/registrations` &&
@@ -357,7 +366,6 @@ test("a signed-in user registers from event home without another email challenge
   const body = registrationCreateSchema.parse(response.request().postDataJSON());
   expect(body.identityId).toBe(representations[0].id);
   expect(body.email).toBe(email);
-  expect(body.emailProof).toBeUndefined();
   expect(body.dayAttendance).toEqual([{ dayDate, attendanceType: "in_person" }]);
   expect(result.status).toBe("registered");
   await expect(page).toHaveURL(new RegExp(`#/events/${event.slug}/ticket$`));
@@ -367,8 +375,8 @@ test("a signed-in user registers from event home without another email challenge
   await expect(page.getByRole("heading", { name: "No ticket yet", exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Registration details", exact: true })).toBeVisible();
   await expect(page.locator("[data-og-badge-img]")).toHaveCount(0);
-  const badgeFrame = page.frameLocator("iframe.pk-badge-face__frame");
-  await badgeFrame.getByRole("button", { name: "Enlarge check-in code", exact: true }).click();
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.getByRole("button", { name: "Enlarge check-in code", exact: true }).click();
   const codeViewer = page.getByRole("dialog", { name: "Check-in code", exact: true });
   await expect(codeViewer).toBeVisible();
   for (const [width, height, device] of [
@@ -385,15 +393,14 @@ test("a signed-in user registers from event home without another email challenge
   await codeViewer.getByRole("button", { name: "Close check-in code", exact: true }).click();
   await expect(codeViewer).toBeHidden();
   await page.goto(`/portal/#/events/${event.slug}/promotion`);
-  await expect(page.getByRole("heading", { name: "Share", exact: true })).toBeVisible();
-  const socialBadge = page.getByRole("img", { name: "Preview of your badge", exact: true });
+  await expect(page.getByRole("heading", { name: "Share & Invite", exact: true })).toBeVisible();
+  const socialBadge = page.getByRole("img", { name: "Preview of your wide badge", exact: true });
   await expect(socialBadge).toHaveAttribute("src", new RegExp(`layout=${PERSONAL_PROMOTION_RENDERER}`));
   await expect
     .poll(() => socialBadge.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0))
     .toBe(true);
-  await expect(page.getByRole("link", { name: "Download badge (JPEG)", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Download badge formats", exact: true }).click();
-  const squareDownload = page.getByRole("menuitem", { name: "Square badge (JPEG)", exact: true });
+  await expect(page.getByRole("link", { name: "Download wide badge (JPEG)", exact: true })).toBeVisible();
+  const squareDownload = page.getByRole("link", { name: "Download square badge (JPEG)", exact: true });
   const downloaded = page.waitForEvent("download");
   await squareDownload.click();
   const squareFile = await downloaded;
@@ -455,14 +462,15 @@ test("a signed-in user registers from event home without another email challenge
     expect(ratio.displayed).toBeCloseTo(ratio.source, 1);
     await page.screenshot({ path: info.outputPath(`registration-social-badge-${device}.png`) });
   }
-  await expect(page.getByRole("heading", { name: "Your attendee materials", exact: true })).toBeVisible();
+  // The materials are a named region under the Share & Invite heading.
+  await expect(page.getByRole("region", { name: "Your attendee materials", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Download tall post (JPEG)", exact: true })).toBeVisible();
   const confirmation = await waitForCapturedEmail(email, "confirmed", { since: beforeConfirmationEmail });
   const attachments = confirmation.payload.attachments as Array<{ type: string; content: string }>;
   const attachment = attachments.find((item) => item.type.startsWith("image/"));
   expect(attachment).toBeDefined();
   const renderedBadge = await page.request.get(
-    (await page.getByRole("link", { name: "Download badge (JPEG)", exact: true }).getAttribute("href"))!,
+    (await page.getByRole("link", { name: "Download wide badge (JPEG)", exact: true }).getAttribute("href"))!,
   );
   expect(renderedBadge.status()).toBe(200);
   expect(Buffer.from(attachment!.content, "base64")).toEqual(await renderedBadge.body());
@@ -604,8 +612,8 @@ test("attendee manages a registration and downloads a personal event calendar", 
   await registerInBrowser(page, email, undefined, undefined, { individual: true });
   await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible();
   await signInToPortal(page, email);
-  await expect(page).toHaveURL(/#\/events$/);
-  await page.goto("/portal/#/home");
+  // Every signed-in person opens the portal on Home.
+  await expect(page).toHaveURL(/#\/home$/);
   const personalCalendar = page.getByRole("link", {
     name: /Download your personal calendar for Post-Quantum Cryptography Conference/,
   });
@@ -891,7 +899,7 @@ test("attendees invite colleagues and confirm a seat release from one day picker
   });
   expect(represented.status(), await represented.text()).toBe(201);
   const identityId = identityMutationResponseSchema.parse(await represented.json()).identityId;
-  await registerStateAttendee(page, fixture, sharingEmail, { staticRelease: false, identityId });
+  await registerStateAttendee(page, fixture, sharingEmail, { identityId });
   const response = await page.request.get(`/api/v1/events/${fixture.slug}`);
   const detail = eventDetailResponseSchema.parse(await response.json()).event;
   const registrationId = detail.participation!.registrationId!;

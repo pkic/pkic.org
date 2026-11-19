@@ -8,6 +8,8 @@ export const emailDayAttendanceSchema = z.object({
   dayLabel: z.string(),
   attendanceLabel: z.string(),
   statusLabel: z.string(),
+  /** Whether an in-person day is confirmed or waitlisted; empty for a day attended online. */
+  statusNote: z.string(),
   waitlistStatus: z.string(),
   isWaitlisted: z.boolean(),
   isWaitlistOffer: z.boolean(),

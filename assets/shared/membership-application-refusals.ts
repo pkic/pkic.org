@@ -15,6 +15,10 @@ export const INDIVIDUAL_ALREADY_MEMBER = "INDIVIDUAL_ALREADY_MEMBER";
 export const INDIVIDUAL_WHILE_REPRESENTING = "INDIVIDUAL_WHILE_REPRESENTING";
 /** An application for the same person or organization is still open. */
 export const APPLICATION_ALREADY_PENDING = "APPLICATION_ALREADY_PENDING";
+/** An organization applies only through the organization identity of the person who represents it. */
+export const ORGANIZATION_IDENTITY_REQUIRED = "ORGANIZATION_IDENTITY_REQUIRED";
+/** Something the application relied on changed while it was sent, and no other refusal explains it. */
+export const APPLICATION_CHANGED = "APPLICATION_CHANGED";
 /** The identity an application is made as lacks a detail the application needs. */
 export const APPLICANT_PROFILE_INCOMPLETE = "APPLICANT_PROFILE_INCOMPLETE";
 
@@ -36,6 +40,12 @@ export function individualWhileRepresentingMessage(organizationName: string): st
   return `You represent ${organizationName}. For IPR reasons, you cannot apply as an individual while you represent an organization. End the representation first, or apply for the organization instead.`;
 }
 
+export const ORGANIZATION_IDENTITY_REQUIRED_MESSAGE =
+  "To apply on behalf of an organization, first add it to your account with your work email address.";
+
+export const APPLICATION_CHANGED_MESSAGE =
+  "Something on the application form changed while you were sending it. Reload the page and try again.";
+
 export const APPLICATION_ALREADY_PENDING_MESSAGE =
   "You already have a membership application in progress. Follow it in the member portal or from the link in your confirmation email.";
 
@@ -47,8 +57,8 @@ export const ORGANIZATION_DOMAIN_APPLICATION_PENDING_MESSAGE =
   "A membership application for an organization with this email domain is already in progress.";
 
 export const APPLICANT_BIO_REQUIRED_MESSAGE =
-  "Add a bio to the representation you apply as, then submit again. Edit it under Representation.";
+  "Your application needs a bio. Add it next to Bio above, then submit again.";
 export const APPLICANT_JOB_TITLE_REQUIRED_MESSAGE =
   "Add a job title to the representation you apply as, then submit again. Edit it under Representation.";
 export const APPLICANT_NAME_REQUIRED_MESSAGE =
-  "Add your first and last name to your profile, then submit again. Edit it under Representation.";
+  "Your application needs your first and last name. Add them next to Name above, then submit again.";

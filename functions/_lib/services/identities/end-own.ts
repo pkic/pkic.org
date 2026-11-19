@@ -9,6 +9,8 @@ import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/auto
 import { organizationIdentityAuditScope } from "./authorization";
 import { resolveIdentityEndedAt } from "./identity-end";
 import { loadIdentityNotificationContext, prepareIdentityNotification } from "./notifications";
+import { refuseRemovingLastSignInMethod, signInMethodRemainsEvidence } from "../../auth/sign-in-methods";
+import { ENDING_LAST_SIGN_IN_METHOD_MESSAGE } from "../../../../assets/shared/auth-errors";
 
 interface OwnActiveIdentityRow {
   id: string;
@@ -46,8 +48,11 @@ export async function endOwnIdentity(
   const at = nowIso();
   const endedAt = resolveIdentityEndedAt(input.endedAt, identity.started_at, at);
   const context = await loadIdentityNotificationContext(db, identity.organization_id, identity.user_id, false);
+  const change = { endedIdentityId: identity.id };
   try {
     await db.batch([
+      // Ending retires the addresses this representation supported; something else must still sign in.
+      prepareAuthorizationGuard(db, signInMethodRemainsEvidence(identity.user_id, change)),
       prepareAuthorizationGuard(db, {
         sql: `SELECT 1
                 FROM sessions session
@@ -95,6 +100,8 @@ export async function endOwnIdentity(
     ]);
   } catch (error) {
     if (isAuthorizationGuardFailure(error)) {
+      // The batch rolled back; asking again names the guard that refused.
+      await refuseRemovingLastSignInMethod(db, identity.user_id, change, ENDING_LAST_SIGN_IN_METHOD_MESSAGE);
       throw new AppError(409, "IDENTITY_AUTHORIZATION_CHANGED", "The user session or identity changed while ending");
     }
     if (isAuditChangeGuardFailure(error)) {

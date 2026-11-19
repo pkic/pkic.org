@@ -1,6 +1,6 @@
 import { eventVirtualRoomRoute } from "../../shared/event-participation-link";
 
-export type TemplateHelperCategory = "Variables" | "Conditions" | "CTAs";
+export type TemplateHelperCategory = "Variables" | "Conditions" | "Buttons";
 
 export interface TemplateHelperItem {
   category: TemplateHelperCategory;
@@ -8,19 +8,6 @@ export interface TemplateHelperItem {
   snippet: string;
   target?: "subject" | "body" | null;
 }
-
-export interface TemplatePartialItem {
-  name: string;
-  description: string;
-}
-
-// Partials are block-level includes registered in the email render engine.
-export const TEMPLATE_PARTIALS: TemplatePartialItem[] = [
-  { name: "reg_details", description: "Registration summary (name, attendance, custom answers)" },
-  { name: "sponsors_block", description: "Sponsors section" },
-  { name: "about_pkic", description: "About PKIC blurb" },
-  { name: "donation_request", description: "Donation request block" },
-];
 
 // Default sample values used when no custom preview data is provided.
 export const PREVIEW_DEFAULTS: Record<string, unknown> = {
@@ -58,10 +45,24 @@ export const PREVIEW_DEFAULTS: Record<string, unknown> = {
   decisionNote: "Please add concrete deployment constraints and success metrics.",
   acceptedTermsText: "I agree to the Code of Conduct.",
   waitlistOfferNotice: false,
+  hasUnconfirmedVenueDay: true,
+  hasWaitingVenueDay: true,
+  hasOfferedVenueDay: false,
+  hasExpiredVenueDay: false,
   // Day attendance
   dayAttendance: [
-    { dayLabel: "Wednesday 1 October 2026", attendanceLabel: "In-person", statusLabel: "Confirmed" },
-    { dayLabel: "Thursday 2 October 2026", attendanceLabel: "Virtual", statusLabel: "Confirmed" },
+    {
+      dayLabel: "Wednesday 1 October 2026",
+      attendanceLabel: "In person",
+      statusLabel: "Confirmed",
+      statusNote: "confirmed",
+    },
+    {
+      dayLabel: "Thursday 2 October 2026",
+      attendanceLabel: "In person",
+      statusLabel: "Waitlisted",
+      statusNote: "waitlisted",
+    },
   ],
   // Custom answers
   customAnswerRows: [
@@ -170,15 +171,16 @@ export const TEMPLATE_HELPERS: TemplateHelperItem[] = [
   {
     category: "Conditions",
     label: "each dayAttendance",
-    snippet: "{{#each dayAttendance}}\n- **{{dayLabel}}:** {{attendanceLabel}} ({{statusLabel}})\n{{/each}}",
+    snippet:
+      "{{#each dayAttendance}}\n- **{{dayLabel}}:** {{attendanceLabel}}{{#if statusNote}} — {{statusNote}}{{/if}}\n{{/each}}",
     target: "body",
   },
 
-  // ── CTAs ──────────────────────────────────────────────────────────────────
+  // ── Buttons ───────────────────────────────────────────────────────────────
   {
-    category: "CTAs",
-    label: "CTA button",
-    snippet: '<div class="cta"><a href="{{url}}">Label &rarr;</a></div>',
+    category: "Buttons",
+    label: "Button",
+    snippet: ":::button\n[Label →]({{url}})\n:::",
     target: "body",
   },
 ];

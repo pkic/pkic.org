@@ -1,10 +1,10 @@
+import { buildEventEmailVariables } from "../../email/event-email-variables";
 import type { ProposalDecisionStatus } from "../../../../assets/shared/schemas/proposal-status";
 import { first } from "../../db/queries";
 import { emailMarkdownText, emailPlainText } from "../../email/plain-text";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 import { speakerParticipationPageUrl } from "../frontend-links";
-import { buildEventEmailVariables } from "../events";
 import { listProposalSpeakersWithStatus, type ProposalSpeakerWithUser } from "../proposal-speakers";
 import { eventSessionTypeRequiresPresentation } from "../event-presentation";
 import type { ProposalDecisionEmailMessage, ProposalDecisionEmailPlan } from "./types";
@@ -74,7 +74,7 @@ export async function buildProposalDecisionEmailPlan(
       messages.push({
         id: `proposal-decision:${speaker.user_id}`,
         templateKey: "proposal_decision",
-        recipientEmail: speaker.email,
+        recipientEmail: speaker.recipient_email,
         recipientUserId: speaker.user_id,
         recipientLabel: recipientLabel(speaker),
         fallbackSubject: `Proposal update: ${proposal.title}`,
@@ -100,7 +100,7 @@ export async function buildProposalDecisionEmailPlan(
     messages.push({
       id: `speaker-profile:${speaker.user_id}`,
       templateKey: "speaker_profile_request",
-      recipientEmail: speaker.email,
+      recipientEmail: speaker.recipient_email,
       recipientUserId: speaker.user_id,
       recipientLabel: recipientLabel(speaker),
       fallbackSubject: `Action required: complete your speaker profile — ${event.name}`,
@@ -121,7 +121,7 @@ export async function buildProposalDecisionEmailPlan(
     messages.push({
       id: `presentation-upload:${speaker.user_id}`,
       templateKey: "presentation_upload_request",
-      recipientEmail: speaker.email,
+      recipientEmail: speaker.recipient_email,
       recipientUserId: speaker.user_id,
       recipientLabel: recipientLabel(speaker),
       fallbackSubject: `Please upload your presentation — ${event.name}`,

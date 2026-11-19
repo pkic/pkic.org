@@ -46,7 +46,7 @@ export const SPEAKER_STATUS_FILTER_LABELS: Record<EventEmailCampaignSpeakerStatu
   scheduled: "Scheduled on the agenda",
 };
 
-export const HELPER_CATEGORIES: TemplateHelperCategory[] = ["Variables", "Conditions", "CTAs"];
+export const HELPER_CATEGORIES: TemplateHelperCategory[] = ["Variables", "Conditions", "Buttons"];
 export const PERSONAL_ONLY_HELPERS = new Set([
   "firstName",
   "lastName",

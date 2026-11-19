@@ -1,7 +1,7 @@
+import { buildEventEmailVariables } from "../email/event-email-variables";
 import { inviteDeclineSchema } from "../../../assets/shared/schemas/registration";
 import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
-import { buildEventEmailVariables } from "./event-presentation";
 import { getEventById } from "./events";
 import { inviteDeclineUrl, proposalPageUrl, registrationPageUrl } from "./frontend-links";
 import { bulkCreateInvites } from "./invite-bulk";

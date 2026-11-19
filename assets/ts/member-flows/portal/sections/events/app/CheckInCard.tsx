@@ -10,7 +10,7 @@ import { getJson } from "../../../../../shared/api-client";
 import { ButtonLink } from "../../../../../ui/Button";
 import { usePortalHashLocation } from "../../../hash-location";
 import { EventCard } from "./EventCard";
-import { eventCheckInPath } from "../event-participant-paths";
+import { eventCheckInPath } from "../../../../../../shared/event-participant-paths";
 
 export function CheckInCard({ slug }: { slug: string }) {
   const current = useData(

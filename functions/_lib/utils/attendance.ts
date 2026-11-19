@@ -1,3 +1,7 @@
+import {
+  eventAttendanceAccessMode,
+  type EventAttendanceAccessMode,
+} from "../../../assets/shared/event-attendance-access";
 import type { EmailDayAttendance, EmailDayWaitlist } from "../../../assets/shared/schemas/email-template-data";
 /**
  * Human-readable labels for registration attendance type values.
@@ -18,6 +22,36 @@ export const STATUS_LABELS: Record<string, string> = {
 };
 
 type DayWaitlistEmailEntry = EmailDayWaitlist;
+
+/**
+ * Whether a day attended at the venue gets the person in. Only a confirmed day does, so every
+ * venue day says which it is; a day attended remotely needs no note.
+ */
+const VENUE_DAY_NOTES: Record<string, string> = {
+  "": "confirmed",
+  accepted: "confirmed",
+  waiting: "waitlisted",
+  offered: "waitlisted, seat offered",
+  expired: "waitlisted, offer expired",
+};
+
+/** Which kinds of unconfirmed venue day a registration has, so one notice explains each next step. */
+export type VenueDayStanding = {
+  hasUnconfirmedVenueDay: boolean;
+  hasWaitingVenueDay: boolean;
+  hasOfferedVenueDay: boolean;
+  hasExpiredVenueDay: boolean;
+};
+
+function venueDayStanding(days: Array<{ statusNote: string; waitlistStatus: string }>): VenueDayStanding {
+  const unconfirmed = days.filter((day) => day.statusNote && day.statusNote !== VENUE_DAY_NOTES[""]);
+  return {
+    hasUnconfirmedVenueDay: unconfirmed.length > 0,
+    hasWaitingVenueDay: unconfirmed.some((day) => day.waitlistStatus !== "offered" && day.waitlistStatus !== "expired"),
+    hasOfferedVenueDay: unconfirmed.some((day) => day.waitlistStatus === "offered"),
+    hasExpiredVenueDay: unconfirmed.some((day) => day.waitlistStatus === "expired"),
+  };
+}
 
 export function hasActiveDayWaitlist(dayWaitlist: DayWaitlistEmailEntry[] = []): boolean {
   return dayWaitlist.some((entry) => entry.status === "waiting" || entry.status === "offered");
@@ -60,34 +94,44 @@ export function buildRegistrationEmailStatusData(
  * falling back to the ISO day_date if no label is set.
  */
 export function buildAttendanceEmailData(
-  dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null; optionLabel?: string | null }>,
+  dayAttendance: Array<{
+    dayDate: string;
+    attendanceType: string;
+    label: string | null;
+    optionLabel?: string | null;
+    accessMode?: EventAttendanceAccessMode;
+  }>,
   dayWaitlist: DayWaitlistEmailEntry[] = [],
 ): {
   attendanceLabel: string;
   dayAttendance: EmailDayAttendance[];
+  venueDayStanding: VenueDayStanding;
 } {
   const waitlistByDay = new Map(dayWaitlist.map((entry) => [entry.dayDate, entry.status]));
 
   if (dayAttendance.length > 0) {
-    return {
-      attendanceLabel: "",
-      dayAttendance: dayAttendance.map((d) => {
-        const waitlistStatus = waitlistByDay.get(d.dayDate) ?? "";
-        return {
-          dayLabel: d.label ?? d.dayDate,
-          attendanceLabel: d.optionLabel ?? ATTENDANCE_TYPE_LABELS[d.attendanceType] ?? d.attendanceType,
-          statusLabel: buildDayAttendanceStatusLabel(d.attendanceType, waitlistStatus, d.optionLabel),
-          waitlistStatus,
-          isWaitlisted: waitlistStatus === "waiting",
-          isWaitlistOffer: waitlistStatus === "offered",
-        };
-      }),
-    };
+    const days = dayAttendance.map((d) => {
+      const waitlistStatus = waitlistByDay.get(d.dayDate) ?? "";
+      return {
+        dayLabel: d.label ?? d.dayDate,
+        attendanceLabel: d.optionLabel ?? ATTENDANCE_TYPE_LABELS[d.attendanceType] ?? d.attendanceType,
+        statusLabel: buildDayAttendanceStatusLabel(d.attendanceType, waitlistStatus, d.optionLabel),
+        statusNote:
+          eventAttendanceAccessMode({ value: d.attendanceType, accessMode: d.accessMode }) === "physical"
+            ? (VENUE_DAY_NOTES[waitlistStatus] ?? "waitlisted")
+            : "",
+        waitlistStatus,
+        isWaitlisted: waitlistStatus === "waiting",
+        isWaitlistOffer: waitlistStatus === "offered",
+      };
+    });
+    return { attendanceLabel: "", dayAttendance: days, venueDayStanding: venueDayStanding(days) };
   }
 
   return {
     attendanceLabel: "",
     dayAttendance: [],
+    venueDayStanding: venueDayStanding([]),
   };
 }
 

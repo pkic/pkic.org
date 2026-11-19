@@ -4,7 +4,6 @@ import { EventsEventSlugProposalsResendSpeakerManageLinkPost } from "./resend-sp
 import { EventsEventSlugProposalsResendManageLinkPost } from "./resend-manage-link";
 import {
   EventProposalProofIdentityPatch,
-  EventProposalProofPersonPatch,
   EventProposalProofPost,
   EventProposalProofVerifyPost,
   EventProposalProofIdentitiesPost,
@@ -14,7 +13,6 @@ const app = new Hono();
 export const openapi = fromHono(app);
 
 openapi.patch("/proof/identities/:identityId", EventProposalProofIdentityPatch);
-openapi.patch("/proof/person", EventProposalProofPersonPatch);
 openapi.post("/proof", EventProposalProofPost);
 openapi.post("/proof/verify", EventProposalProofVerifyPost);
 openapi.post("/proof/identities", EventProposalProofIdentitiesPost);

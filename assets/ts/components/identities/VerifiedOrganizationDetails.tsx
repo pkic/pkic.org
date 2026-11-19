@@ -35,7 +35,10 @@ export function VerifiedOrganizationDetails({
   prepare,
   controller,
   onDraftChange,
+  confirmSole = false,
 }: {
+  /** Selects the domain's only organization, for a step that confirms it rather than adds one. */
+  confirmSole?: boolean;
   initial: Resolved;
   emailId: string | null;
   resolve: (domain?: string) => Promise<Resolved>;
@@ -44,8 +47,12 @@ export function VerifiedOrganizationDetails({
   onDraftChange?: (draft: { organizationName: string; jobTitle: string }) => void;
 }) {
   const [resolved, setResolved] = useState(initial);
+  const soleOrganization = (value: Resolved) =>
+    confirmSole && value.organizations.length === 1 ? value.organizations[0]!.id : null;
   const [domainConfirmed, setDomainConfirmed] = useState(initial.domains.length <= 1);
-  const [organizationId, setOrganizationId] = useState<string | null>(null);
+  const [organizationId, setOrganizationId] = useState<string | null>(() =>
+    initial.domains.length <= 1 ? soleOrganization(initial) : null,
+  );
   const [organizationName, setOrganizationName] = useState("");
   const [adding, showAdding, closeAdding] = useDialogQueryState("organization");
   const [jobTitle, setJobTitle] = useState("");
@@ -108,7 +115,7 @@ export function VerifiedOrganizationDetails({
       const result = await resolve(domain);
       setResolved(result);
       setDomainConfirmed(true);
-      setOrganizationId(null);
+      setOrganizationId(soleOrganization(result));
     } catch (cause) {
       setError(detailsForm.refuse(cause));
     } finally {
@@ -154,7 +161,6 @@ export function VerifiedOrganizationDetails({
       {resolved.organizations.length === 0 ? (
         <VerifiedOrganizationNameField
           domain={domainConfirmed ? resolved.domain : ""}
-          reviewRequired={resolved.reviewRequired}
           value={organizationName}
           disabled={busy}
           onChange={setOrganizationName}
@@ -165,11 +171,9 @@ export function VerifiedOrganizationDetails({
           label="Organization"
           required
           help={
-            !domainConfirmed
-              ? "Choose an email domain first, or use + to add your organization."
-              : resolved.domain
-                ? `Organizations linked to your verified email domain, ${resolved.domain}, and organizations you already represent using this address are listed. Use + to add your organization if it is missing.`
-                : "Use + to add your organization."
+            domainConfirmed
+              ? "Not listed? Use + to add your organization."
+              : "Choose an email domain first, or use + to add your organization."
           }
           {...detailsForm.of(organizationId ? "organizationId" : "organizationName")}
         >
@@ -183,7 +187,7 @@ export function VerifiedOrganizationDetails({
               >
                 {resolved.organizations.map((organization) => (
                   <option key={organization.id} value={organization.id}>
-                    {organization.name}
+                    {organization.domain ? `${organization.name} (${organization.domain})` : organization.name}
                   </option>
                 ))}
                 <option value="" disabled={!organizationName}>
@@ -227,7 +231,9 @@ export function VerifiedOrganizationDetails({
         <Field
           id={`${formId}-title`}
           label={ORGANIZATION_JOB_TITLE_COPY.label}
-          help={ORGANIZATION_JOB_TITLE_COPY.help}
+          help={ORGANIZATION_JOB_TITLE_COPY.help(
+            resolved.organizations.find((item) => item.id === organizationId)?.name ?? organizationName,
+          )}
           required
           {...detailsForm.of("jobTitle")}
         >

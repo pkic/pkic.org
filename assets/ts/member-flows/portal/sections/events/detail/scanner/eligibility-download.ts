@@ -1,4 +1,5 @@
 import { EligibilityRefreshFailure, eligibilityPreparationStopped } from "./eligibility-refresh-error";
+import { scannerRetryAfterMs } from "./scanner-retry-after";
 import {
   enrolledOfflineEligibilityQuerySchema,
   OFFLINE_ELIGIBILITY_PAGE_SIZE,
@@ -64,8 +65,6 @@ export async function downloadEligibilitySnapshot(
       cache: "no-store",
       signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
     });
-    if (response.status === 401) throw new Error("SCANNER_SIGNED_OUT");
-    if (response.status === 403) throw new Error("SCANNER_PERMISSION_CHANGED");
     const refusal = !response.ok ? apiErrorPayloadSchema.safeParse(await response.json().catch(() => null)) : null;
     const code = refusal?.success ? refusal.data.error.code : undefined;
     if (response.status === 400 && (code === "SESSION_ROOM_REQUIRED" || code === "SESSION_ROOM_INVALID"))
@@ -83,7 +82,14 @@ export async function downloadEligibilitySnapshot(
     }
     if (code === "OFFLINE_MANIFEST_CHANGED") throw new EligibilityRefreshFailure("changed", code);
     if (!response.ok)
-      throw new EligibilityRefreshFailure("http", `Badge refresh failed (HTTP ${response.status}).`, response.status);
+      throw new EligibilityRefreshFailure(
+        "http",
+        `Badge refresh failed (HTTP ${response.status}).`,
+        response.status,
+        response.status === 429 || response.status === 503
+          ? (scannerRetryAfterMs(response.headers) ?? undefined)
+          : undefined,
+      );
     const page = enrolledOfflineEligibilityResponseSchema.parse(await response.json());
     const requestedScope = { operatorUserId, occurrenceId, roomId, ...enrollment, eventId: snapshot?.eventId };
     if (!sameSnapshotEnrollment(page, requestedScope)) throw new Error("SCANNER_PERMISSION_CHANGED");

@@ -194,7 +194,7 @@ function stubApi(pending = false): Array<{ method: string; path: string; body: u
               id: null,
               email: "person@example.test",
               primary: true,
-              signInEnabled: true,
+              signIn: "signs_in",
               verifiedAt: "2026-08-01T00:00:00.000Z",
               verificationMethod: "magic_link",
               identityId: null,

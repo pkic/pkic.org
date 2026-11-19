@@ -10,7 +10,6 @@ import { all, first } from "../db/queries";
 import type { AuthorizationEvidence } from "../db/authorization-guard";
 import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
-import { normalizeEmail } from "../validation";
 import {
   assertEmailAuthCapabilityEmail,
   queueEmailAuthCapability,
@@ -192,33 +191,6 @@ export function sponsorUserSignInAuthorizationEvidence(
              )`,
     bindings: [userId, normalizedSignInEmail, normalizedSignInEmail],
   };
-}
-
-export async function queueSponsorSignInCapabilityForEmail(
-  db: DatabaseLike,
-  payload: {
-    email: string;
-    eventId: string;
-    ipHash?: string | null;
-    userAgentHash?: string | null;
-    ttlMinutes: number;
-    signingSecret: string;
-  },
-): Promise<{ queuedToken: string | null; sponsorship: SponsorCapacity | null }> {
-  const email = normalizeEmail(payload.email);
-  const row = await first<SponsorshipCapacityRow>(
-    db,
-    `SELECT s.id, s.event_id, e.slug AS event_slug, e.name AS event_name, s.tier, s.contact_email
-       FROM sponsorships s
-       JOIN events e ON e.id = s.event_id
-      WHERE ${ACTIVE_EVENT_SPONSORSHIP_SQL}
-        AND (e.id = ? OR e.slug = ?)
-        AND lower(trim(s.contact_email)) = ?`,
-    [payload.eventId, payload.eventId, email],
-  );
-  if (!row) return { queuedToken: null, sponsorship: null };
-  const capability = await queueSponsorSignInCapability(row.id, row.contact_email, payload);
-  return { queuedToken: capability.queuedToken, sponsorship: toSponsorCapacity(row) };
 }
 
 /** Queue marker materialized into a signed capability only by the outbox. */

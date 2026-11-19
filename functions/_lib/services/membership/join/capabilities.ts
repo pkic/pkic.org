@@ -1,13 +1,8 @@
 import { z } from "zod";
 import { memberJoinApplicantKindSchema } from "../../../../../assets/shared/schemas/member-join";
-import { normalizedEmailSchema, organizationNameSchema } from "../../../../../assets/shared/schemas/api-common";
-import { emailDomainNameSchema } from "../../../../../assets/shared/schemas/email-domains";
+import { normalizedEmailSchema } from "../../../../../assets/shared/schemas/api-common";
 import { databaseIdSchema } from "../../../../../assets/shared/schemas/identifiers";
-import {
-  queuedCapabilityToken,
-  signStatelessCapabilityToken,
-  verifyStatelessCapabilityToken,
-} from "../../../auth/capability-links";
+import { signStatelessCapabilityToken, verifyStatelessCapabilityToken } from "../../../auth/capability-links";
 import { AppError } from "../../../errors";
 import { randomToken } from "../../../utils/crypto";
 import { decodeCapabilityPayload, encodeCapabilityPayload } from "../../../auth/capability-payload";
@@ -19,61 +14,19 @@ const memberJoinCapabilityPayloadSchema = z.object({
 });
 export type MemberJoinCapabilityPayload = z.infer<typeof memberJoinCapabilityPayloadSchema>;
 
+/** The continuation of one signed-in person's individual application; an organization applies as its identity. */
 const memberJoinApplicationCapabilityPayloadSchema = memberJoinCapabilityPayloadSchema.extend({
-  applicantUserId: databaseIdSchema.nullable(),
-  organization: z
-    .object({
-      id: databaseIdSchema.optional(),
-      name: organizationNameSchema,
-      domain: emailDomainNameSchema,
-      claimsFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
-    })
-    .optional(),
+  applicantKind: z.literal("individual"),
+  applicantUserId: databaseIdSchema,
 });
 export type MemberJoinApplicationCapabilityPayload = z.infer<typeof memberJoinApplicationCapabilityPayloadSchema>;
 
+/** One membership path a signed-in person resolved; its id binds the continuation to a single application. */
 export function newMemberJoinCapabilityPayload(
   email: string,
   applicantKind: MemberJoinCapabilityPayload["applicantKind"],
 ): MemberJoinCapabilityPayload {
   return { email, applicantKind, capabilityId: randomToken(18) };
-}
-
-export function queuedMemberJoinVerificationToken(
-  payload: MemberJoinCapabilityPayload,
-  ttlSeconds: number,
-  nowSeconds = Math.floor(Date.now() / 1000),
-): string {
-  // Delivery materializes this server-authored marker with the Worker signing
-  // secret. D1 stores neither a usable verification token nor its signing key.
-  return queuedCapabilityToken(
-    "member_join_verify",
-    encodeCapabilityPayload(payload),
-    ttlSeconds,
-    undefined,
-    nowSeconds + ttlSeconds,
-  );
-}
-
-export async function verifyMemberJoinVerificationToken(
-  signingSecret: string,
-  token: string,
-): Promise<MemberJoinCapabilityPayload> {
-  const verified = await verifyStatelessCapabilityToken({
-    signingSecret,
-    purpose: "member_join_verify",
-    token,
-  });
-  if (!verified.ok) {
-    throw new AppError(
-      verified.reason === "expired" ? 410 : 404,
-      verified.reason === "expired" ? "MEMBER_JOIN_LINK_EXPIRED" : "MEMBER_JOIN_LINK_INVALID",
-      verified.reason === "expired" ? "Membership verification link expired" : "Invalid membership verification link",
-    );
-  }
-  const payload = decodeCapabilityPayload(verified.resourceId, memberJoinCapabilityPayloadSchema);
-  if (!payload) throw new AppError(404, "MEMBER_JOIN_LINK_INVALID", "Invalid membership verification link");
-  return payload;
 }
 
 export function issueMemberJoinApplicationToken(
