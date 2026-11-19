@@ -107,10 +107,10 @@ const THUMB_TOOLS_MS = 4000;
 type PhoneOutput = "preview" | "program";
 
 /**
- * Preview or Program as the picture, with its tag and its scene's name under
- * it. A tap on the picture shows its tools on the picture itself: Preview's
- * scenes to load another, Clear and Full screen. They hide again on their
- * own.
+ * Preview or Program as the picture, with its tag and its scene's name in the
+ * row under the two pictures, either side of the Transition. A tap on the
+ * picture shows its tools on the picture itself: Preview's scenes to load
+ * another, Clear and Full screen. They hide again on their own.
  */
 function Thumbnail({
   label,
@@ -132,6 +132,8 @@ function Thumbnail({
   const [scenes, setScenes] = useState(false);
   const closeScenes = useCallback(() => setScenes(false), []);
   const root = useRef<HTMLDivElement>(null);
+  // The picture alone has a box of its own: the scenes hang from it, and its tools sit on it.
+  const picture = useRef<HTMLDivElement>(null);
   usePressOutside(scenes, root, closeScenes);
   const previewScene = previewSceneOf(sources.preview).current.name;
   const toolsId = useId();
@@ -151,65 +153,67 @@ function Thumbnail({
   return (
     <>
       <div ref={root} class="pk-studio-phone__thumb" data-tally={tally}>
-        <button
-          type="button"
-          class="pk-studio-phone__thumb-screen"
-          aria-label={label}
-          aria-expanded={tools}
-          aria-controls={tools ? toolsId : undefined}
-          onClick={() => setTools(!tools)}
-        >
-          {projection ? (
-            <LiveOverlayPresentation
-              view="program"
-              projection={projection}
-              roomId={sources.roomId}
-              eventSlug={sources.slug}
-            />
-          ) : null}
-        </button>
-        {tools ? (
-          <div id={toolsId} class="pk-studio-phone__thumb-tools">
-            {tally === "preview" ? (
+        <div ref={picture} class="pk-studio-phone__thumb-picture">
+          <button
+            type="button"
+            class="pk-studio-phone__thumb-screen"
+            aria-label={label}
+            aria-expanded={tools}
+            aria-controls={tools ? toolsId : undefined}
+            onClick={() => setTools(!tools)}
+          >
+            {projection ? (
+              <LiveOverlayPresentation
+                view="program"
+                projection={projection}
+                roomId={sources.roomId}
+                eventSlug={sources.slug}
+              />
+            ) : null}
+          </button>
+          {tools ? (
+            <div id={toolsId} class="pk-studio-phone__thumb-tools">
+              {tally === "preview" ? (
+                <Button
+                  icon
+                  variant="ghost"
+                  disabled={disabled}
+                  aria-label={`Scene in Preview: ${previewScene}`}
+                  title={`Scene in Preview: ${previewScene}\nChoose another to load it into Preview. Transition puts it on Program.`}
+                  aria-haspopup="dialog"
+                  onClick={() => {
+                    setTools(false);
+                    setScenes(true);
+                  }}
+                >
+                  <LayoutIcon />
+                </Button>
+              ) : null}
               <Button
                 icon
                 variant="ghost"
                 disabled={disabled}
-                aria-label={`Scene in Preview: ${previewScene}`}
-                title={`Scene in Preview: ${previewScene}\nChoose another to load it into Preview. Transition puts it on Program.`}
-                aria-haspopup="dialog"
+                aria-label={`Clear ${label}`}
+                title={clearHint(tally, label, liveSceneName(sources.preview, null))}
+                onClick={() => onClear(tally)}
+              >
+                <ClearIcon />
+              </Button>
+              <Button
+                icon
+                variant="ghost"
+                aria-label={`Full screen ${label}`}
+                title={`Full screen ${label}\nShow this monitor large.`}
                 onClick={() => {
                   setTools(false);
-                  setScenes(true);
+                  setEnlarged(true);
                 }}
               >
-                <LayoutIcon />
+                <ExpandIcon />
               </Button>
-            ) : null}
-            <Button
-              icon
-              variant="ghost"
-              disabled={disabled}
-              aria-label={`Clear ${label}`}
-              title={clearHint(tally, label, liveSceneName(sources.preview, null))}
-              onClick={() => onClear(tally)}
-            >
-              <ClearIcon />
-            </Button>
-            <Button
-              icon
-              variant="ghost"
-              aria-label={`Full screen ${label}`}
-              title={`Full screen ${label}\nShow this monitor large.`}
-              onClick={() => {
-                setTools(false);
-                setEnlarged(true);
-              }}
-            >
-              <ExpandIcon />
-            </Button>
-          </div>
-        ) : null}
+            </div>
+          ) : null}
+        </div>
         <div class="pk-studio-phone__thumb-scene">
           <abbr
             class="pk-studio-phone__thumb-tag"
@@ -224,7 +228,7 @@ function Thumbnail({
           )}
         </div>
         {scenes && !disabled ? (
-          <ScenePopover sources={sources} anchorRef={root} onScene={onScene} onClose={closeScenes} />
+          <ScenePopover sources={sources} anchorRef={picture} onScene={onScene} onClose={closeScenes} />
         ) : null}
       </div>
       {enlarged ? (
