@@ -27,6 +27,7 @@ import {
   type RegistrationSponsorSharingRow,
 } from "../event-participation/sponsor-consent";
 import { holdsWorkAddress } from "../../email-domains/contact-kind";
+import { prepareTicketPaymentDue } from "../event-tickets/registration-ticket";
 import { parseVerifiedAddresses, verifiedAddressesJsonSql } from "../user-emails";
 import { persistedUtcInstant } from "../../utils/time";
 
@@ -57,6 +58,7 @@ export async function buildRegistrationManageView(
     countsResult,
     sharingResult,
     pendingReviewResult,
+    paymentDueResult,
   ] = await db.batch([
     prepareEventById(db, registration.event_id),
     db
@@ -80,6 +82,7 @@ export async function buildRegistrationManageView(
           ORDER BY created_at DESC LIMIT 1`,
       )
       .bind(registration.user_id, registration.id),
+    prepareTicketPaymentDue(db, registration.id),
   ]);
   const event = batchFirst<EventRecord>(eventResult);
   if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
@@ -131,5 +134,6 @@ export async function buildRegistrationManageView(
     dayWaitlist,
     waitlistHandledLast: !holdsWorkAddress(parseVerifiedAddresses(user.verified_addresses)),
     pendingOrganizationName: user.organization_name ? null : (pendingOrganizationName ?? null),
+    paymentDue: registration.status !== "cancelled" && Boolean(batchFirst(paymentDueResult)),
   });
 }

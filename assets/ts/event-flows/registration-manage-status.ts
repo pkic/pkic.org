@@ -22,11 +22,18 @@ export function waitlistTone(status: string): BadgeTone {
 }
 
 /** What one day's waitlist state says, and the tone that agrees with it. */
-export function dayConfirmation(waitlistStatus: string | undefined): { label: string; tone: BadgeTone } {
+export function dayConfirmation(
+  waitlistStatus: string | undefined,
+  paymentDue = false,
+): { label: string; tone: BadgeTone } {
   if (waitlistStatus === "offered") return { label: "Spot available", tone: "info" };
   if (waitlistStatus === "waiting") return { label: "Waitlisted", tone: "warn" };
+  if (paymentDue) return { label: PAYMENT_REQUIRED_STATUS.label, tone: "warn" };
   return { label: "Confirmed", tone: "ok" };
 }
+
+/** A registration whose ticket is still to be paid is not confirmed, whatever its lifecycle status says. */
+export const PAYMENT_REQUIRED_STATUS = { label: "Payment required", cssClass: "pk-badge--warn" } as const;
 
 export function statusLabel(
   status: string,

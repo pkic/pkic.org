@@ -35,6 +35,9 @@ const VENUE_DAY_NOTES: Record<string, string> = {
   expired: "waitlisted, offer expired",
 };
 
+/** What a day with a seat says while the registration itself is not settled. */
+const UNSETTLED_DAY_NOTES = { payment_required: "payment required", cancelled: "cancelled" } as const;
+
 /** Which kinds of unconfirmed venue day a registration has, so one notice explains each next step. */
 export type VenueDayStanding = {
   hasUnconfirmedVenueDay: boolean;
@@ -102,6 +105,8 @@ export function buildAttendanceEmailData(
     accessMode?: EventAttendanceAccessMode;
   }>,
   dayWaitlist: DayWaitlistEmailEntry[] = [],
+  /** What keeps a day with a seat from being confirmed: an unpaid ticket, or a cancelled registration. */
+  unsettled?: "payment_required" | "cancelled",
 ): {
   attendanceLabel: string;
   dayAttendance: EmailDayAttendance[];
@@ -111,21 +116,33 @@ export function buildAttendanceEmailData(
 
   if (dayAttendance.length > 0) {
     const days = dayAttendance.map((d) => {
-      const waitlistStatus = waitlistByDay.get(d.dayDate) ?? "";
+      // A cancelled registration waits for nothing.
+      const waitlistStatus = unsettled === "cancelled" ? "" : (waitlistByDay.get(d.dayDate) ?? "");
+      const venueNote = VENUE_DAY_NOTES[waitlistStatus] ?? "waitlisted";
       return {
         dayLabel: d.label ?? d.dayDate,
         attendanceLabel: d.optionLabel ?? ATTENDANCE_TYPE_LABELS[d.attendanceType] ?? d.attendanceType,
         statusLabel: buildDayAttendanceStatusLabel(d.attendanceType, waitlistStatus, d.optionLabel),
         statusNote:
-          eventAttendanceAccessMode({ value: d.attendanceType, accessMode: d.accessMode }) === "physical"
-            ? (VENUE_DAY_NOTES[waitlistStatus] ?? "waitlisted")
-            : "",
+          unsettled === "cancelled"
+            ? "cancelled"
+            : eventAttendanceAccessMode({ value: d.attendanceType, accessMode: d.accessMode }) === "physical"
+              ? unsettled && venueNote === VENUE_DAY_NOTES[""]
+                ? UNSETTLED_DAY_NOTES[unsettled]
+                : venueNote
+              : "",
         waitlistStatus,
         isWaitlisted: waitlistStatus === "waiting",
         isWaitlistOffer: waitlistStatus === "offered",
       };
     });
-    return { attendanceLabel: "", dayAttendance: days, venueDayStanding: venueDayStanding(days) };
+    // The seat notice explains waitlist steps only; payment and cancellation have their own.
+    const waiting = days.filter((day) => day.waitlistStatus && day.waitlistStatus !== "accepted");
+    return {
+      attendanceLabel: "",
+      dayAttendance: days,
+      venueDayStanding: venueDayStanding(unsettled ? waiting : days),
+    };
   }
 
   return {

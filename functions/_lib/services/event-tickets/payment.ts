@@ -13,6 +13,7 @@ import type { DatabaseLike, Env, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { ticketRefundNote } from "../../../../assets/shared/event-ticket-display";
+import { eventTicketPath } from "../../../../assets/shared/event-participation-link";
 import { prepareStripePaymentEvent } from "../payments/ledger";
 import { readRefundPolicy, refundDeadlineSql } from "./refund-policy";
 import {
@@ -76,7 +77,7 @@ export function registrationReference(registrationId: string): string {
 
 /** Where a person finishes or checks their ticket in the portal. */
 export function ticketPageUrl(appBaseUrl: string, eventSlug: string): string {
-  return `${appBaseUrl}/portal/#/events/${encodeURIComponent(eventSlug)}/ticket`;
+  return `${appBaseUrl}${eventTicketPath(eventSlug)}`;
 }
 
 /**

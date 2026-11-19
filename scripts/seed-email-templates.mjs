@@ -311,6 +311,7 @@ The PKI Consortium is a vendor-neutral community of PKI practitioners working to
 > {{/if}}{{#if email}}**Email:** {{email}}<br>
 > {{/if}}{{#if organizationName}}**Organization:** {{organizationName}}<br>
 > {{/if}}{{#if jobTitle}}**Job title:** {{jobTitle}}<br>
+> {{/if}}{{#if paymentDue}}**Payment:** {{ticketPrice}} to pay{{#if paymentUrl}} — [Pay for your ticket]({{paymentUrl}}){{/if}}<br>
 > {{/if}}{{#each dayAttendance}}**{{dayLabel}}:** {{attendanceLabel}}{{#if statusNote}} — {{statusNote}}{{/if}}<br>
 > {{/each}}{{#if attendanceLabel}}**Attendance:** {{attendanceLabel}}<br>
 > {{/if}}{{#each customAnswerRows}}**{{label}}:** {{displayValue}}<br>
@@ -520,11 +521,18 @@ Plan the sessions you want to attend in [My agenda &rarr;]({{myAgendaUrl}})
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "registration_updated",
-    subjectTemplate: `{{#if adminAdmitNotice}}Your in-person seat is confirmed — {{eventName}}{{else}}{{#if waitlistOfferNotice}}A seat is available — {{eventName}}{{else}}{{#if eq status "cancelled"}}Your registration is cancelled — {{eventName}}{{else}}Your registration was updated — {{eventName}}{{/if}}{{/if}}{{/if}}`,
+    subjectTemplate: `{{#if adminAdmitNotice}}Your in-person seat is confirmed — {{eventName}}{{else}}{{#if waitlistOfferNotice}}A seat is available — {{eventName}}{{else}}{{#if eq status "cancelled"}}Your registration is cancelled — {{eventName}}{{else}}{{#if paymentDue}}Pay for your ticket to complete your registration — {{eventName}}{{else}}Your registration was updated — {{eventName}}{{/if}}{{/if}}{{/if}}{{/if}}`,
     content: `{{> greeting}}
 
+{{#if eq status "cancelled"}}
+<div class="notice notice-danger">Your registration for <strong>{{eventName}}</strong> is <strong>cancelled</strong>. If this was a mistake, register again on the event page.</div>
+{{else}}
 Your registration for **{{eventName}}** was updated.
+{{/if}}
 
+{{#if paymentDue}}
+<div class="notice notice-warning"><strong>You're not registered until your ticket is paid.</strong> {{ticketPrice}} is still to pay. <a href="{{paymentUrl}}">Pay for your ticket</a>.</div>
+{{/if}}
 {{#if adminAdmitNotice}}
 <div class="notice notice-success"><strong>Good news:</strong> you have an in-person seat for the days marked confirmed below.</div>
 {{/if}}
@@ -541,9 +549,6 @@ Your registration for **{{eventName}}** was updated.
 
 {{#if eq status "waitlisted"}}
 {{> budget_waitlist_notice}}
-{{/if}}
-{{#if eq status "cancelled"}}
-<div class="notice notice-danger">Your registration is <strong>cancelled</strong>. If this was a mistake, register again on the event page.</div>
 {{/if}}
 
 {{#if eq status "cancelled"}}{{else}}Something not right? [Review or change your registration]({{manageUrl}}).{{/if}}

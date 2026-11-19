@@ -31,6 +31,9 @@ import { registrationRecipientEmailSql } from "./recipient-email";
 import type { RegistrationRecord } from "./types";
 import { registrationConfirmationUrl, registrationManageCapability } from "./capability-urls";
 import { myAgendaPageUrl } from "../frontend-links";
+import { formatCurrencyAmount } from "../../../../assets/shared/format-currency";
+import { ticketPageUrl } from "../event-tickets/payment";
+import { prepareTicketPaymentDue, type TicketPaymentDue } from "../event-tickets/registration-ticket";
 
 interface UserRow {
   id: string;
@@ -68,6 +71,8 @@ type DayAttendanceForEmail = Array<{
 }>;
 
 interface RegistrationEmailOverrides {
+  /** What the ticket owes once the write this email belongs to is made; undefined reads the stored ticket. */
+  paymentDue?: TicketPaymentDue | null;
   registration?: RegistrationRecord;
   profilePatch?: UserProfilePatch;
   dayAttendance?: DayAttendanceForEmail;
@@ -88,20 +93,24 @@ async function loadRegistrationEmailContext(
   dayWaitlist: RegistrationDayWaitlistRow[];
   customAnswerRows: Awaited<ReturnType<typeof getCustomAnswerRows>>;
   acceptedTermsText: string;
+  paymentDue: TicketPaymentDue | null;
 }> {
   const selectedIdentity = overrides.registration ? "(SELECT id FROM email_identity)" : "r.registration_identity_id";
-  const [registrationResult, userResult, attendanceResult, waitlistResult, termsResult] = await db.batch([
-    prepareRegistrationByIdForEvent(db, event.id, registrationId),
-    db
-      .prepare(`WITH email_identity AS (SELECT ? AS id) SELECT u.id, ${registrationRecipientEmailSql(selectedIdentity)} AS email,
+  const [registrationResult, userResult, attendanceResult, waitlistResult, termsResult, paymentResult] = await db.batch(
+    [
+      prepareRegistrationByIdForEvent(db, event.id, registrationId),
+      db
+        .prepare(`WITH email_identity AS (SELECT ? AS id) SELECT u.id, ${registrationRecipientEmailSql(selectedIdentity)} AS email,
             u.first_name, u.last_name, ${selectedOrAffiliationOrganizationNameSql(selectedIdentity, "u.id")} AS organization_name, ${selectedOrAffiliationJobTitleSql(selectedIdentity, "u.id")} AS job_title
        FROM registrations r JOIN users u ON u.id = r.user_id
        WHERE r.id = ? AND r.event_id = ?`)
-      .bind(overrides.registration?.registration_identity_id ?? null, registrationId, event.id),
-    prepareRegistrationDayAttendance(db, registrationId),
-    prepareRegistrationDayWaitlist(db, registrationId),
-    prepareAcceptedRegistrationTerms(db, registrationId),
-  ]);
+        .bind(overrides.registration?.registration_identity_id ?? null, registrationId, event.id),
+      prepareRegistrationDayAttendance(db, registrationId),
+      prepareRegistrationDayWaitlist(db, registrationId),
+      prepareAcceptedRegistrationTerms(db, registrationId),
+      prepareTicketPaymentDue(db, registrationId),
+    ],
+  );
   const registration = overrides.registration ?? batchFirst<RegistrationRecord>(registrationResult);
   if (!registration) throw new AppError(404, "REGISTRATION_NOT_FOUND", "Registration not found");
   const storedUser = batchFirst<UserRow>(userResult);
@@ -121,14 +130,28 @@ async function loadRegistrationEmailContext(
     formPlacementId: registration.form_placement_id,
     answersJson: registration.custom_answers_json,
   });
-  return { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText };
+  // A cancelled registration owes nothing, whatever its ticket still says in this write.
+  const paymentDue =
+    registration.status === "cancelled"
+      ? null
+      : overrides.paymentDue === undefined
+        ? (batchFirst<TicketPaymentDue>(paymentResult) ?? null)
+        : overrides.paymentDue;
+  return { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText, paymentDue };
 }
 
 /** The fields of the shared registration details block (`{{> reg_details}}`), as every registration email shows it. */
 function registrationDetailsData(context: RegistrationEmailContext, recipientEmail: string) {
-  const { user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText } = context;
-  const attendanceData = buildAttendanceEmailData(dayAttendance, dayWaitlist);
+  const { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText, paymentDue } = context;
+  const attendanceData = buildAttendanceEmailData(
+    dayAttendance,
+    dayWaitlist,
+    registration.status === "cancelled" ? "cancelled" : paymentDue ? "payment_required" : undefined,
+  );
   return {
+    // An unpaid ticket leaves the registration incomplete, and every email with these details says so.
+    paymentDue: Boolean(paymentDue),
+    ticketPrice: paymentDue ? formatCurrencyAmount(paymentDue.amount, paymentDue.currency) : "",
     firstName: user.first_name ?? "",
     lastName: user.last_name ?? "",
     email: recipientEmail,
@@ -198,6 +221,7 @@ export async function prepareRegistrationStatusEmail(
         : details.attendanceLabel,
       ...statusData,
       manageUrl,
+      paymentUrl: ticketPageUrl(params.appBaseUrl, params.event.slug),
       myAgendaUrl: myAgendaPageUrl(params.appBaseUrl, params.event),
       shareUrl: null,
       waitlistOfferNotice: params.noticeKind === "waitlist_offer",
@@ -282,6 +306,7 @@ export async function prepareRegistrationConfirmedEmail(
       ...statusData,
       registrationId: registration.id,
       manageUrl,
+      paymentUrl: ticketPageUrl(params.appBaseUrl, params.event.slug),
       myAgendaUrl: myAgendaPageUrl(params.appBaseUrl, params.event),
       shareUrl,
       ...(shareUrl && params.referralCode
@@ -355,6 +380,7 @@ export async function prepareRegistrationConfirmationEmail(
       ...registrationDetailsData(context, recipientEmail),
       ...statusData,
       registrationId: registration.id,
+      paymentUrl: ticketPageUrl(params.appBaseUrl, params.event.slug),
       confirmationUrl,
       emailChangeConfirmation: kind === "email_change_confirmation",
       currentEmail: params.currentEmail,

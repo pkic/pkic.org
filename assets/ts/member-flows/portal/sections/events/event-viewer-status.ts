@@ -4,8 +4,8 @@
  * proposals (accepted) · Speaker".
  *
  * Expected states are plain text. Only a state that changes what the viewer
- * does next is flagged with a tone: a registration still to confirm, a wait
- * for a seat, a speaker invitation to answer, a proposal that needs work or
+ * does next is flagged with a tone: a registration still to confirm, a ticket
+ * still to pay, a wait for a seat, a speaker invitation to answer, a proposal that needs work or
  * was turned down.
  */
 import type { EventParticipation } from "../../../../../shared/schemas/event-participation";
@@ -34,6 +34,8 @@ function registrationStatus({ participation, viewer }: EventStanding): Collectio
   if (status === "cancelled") return [{ label: "Registration cancelled", tone: "neutral" }];
   if (status !== "registered") return [];
   if (!viewer) return [{ label: "You're registered" }];
+  // An unpaid ticket leaves the registration incomplete, so it is what the viewer does next.
+  if (viewer.paymentDue) return [{ label: "Pay for your ticket", tone: "warn" }];
   const parts = attendanceStandingParts(viewer);
   const waiting = parts.filter((part) => part.startsWith("Waitlisted"));
   const holding = parts.filter((part) => !part.startsWith("Waitlisted"));

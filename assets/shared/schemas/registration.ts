@@ -447,6 +447,8 @@ export const registrationManageReadResponseSchema = successResponseSchema.extend
   waitlistHandledLast: z.boolean(),
   /** The organization the registrant named that staff have not yet linked to their identity. */
   pendingOrganizationName: z.string().nullable().default(null),
+  /** The registration's ticket still waits for payment, so the registration is not complete. */
+  paymentDue: z.boolean().default(false),
   shareUrl: httpUrlSchema.nullable(),
   headshotUrl: httpUrlSchema.nullable(),
 });

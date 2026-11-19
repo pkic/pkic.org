@@ -36,7 +36,15 @@ interface HeldRow {
 
 const OPEN_STATUSES = ["free", "pending_payment"];
 
-export async function prepareRepriceTicketForDays(
+/** A change of days as the write to make and what the ticket owes once it is made; null when nothing is owed. */
+export interface RepricedTicket {
+  statements: StatementLike[];
+  due: { amount: number; currency: string } | null;
+}
+
+const owed = (amount: number, currency: string) => (amount > 0 ? { amount, currency } : null);
+
+export async function planRepriceTicketForDays(
   db: DatabaseLike,
   input: {
     eventId: string;
@@ -49,7 +57,7 @@ export async function prepareRepriceTicketForDays(
     byOrganizer: boolean;
     now: string;
   },
-): Promise<StatementLike[]> {
+): Promise<RepricedTicket> {
   const held = await first<HeldRow>(
     db,
     `SELECT ticket.id, ticket.status, ticket.amount, ticket.paid_amount, ticket.refunded_amount, ticket.kept_fee,
@@ -68,14 +76,16 @@ export async function prepareRepriceTicketForDays(
     [input.registrationId, input.eventId],
   );
   // A registration without a ticket was made before the event had any; nothing was priced for it.
-  if (!held) return [];
+  if (!held) return { statements: [], due: null };
   const open =
     OPEN_STATUSES.includes(held.status) || (input.restoring && ["canceled", "refunded"].includes(held.status));
   // A refunded or canceled ticket admits nobody, whatever the days.
-  if (!open && held.status !== "paid") return [];
+  if (!open && held.status !== "paid") return { statements: [], due: null };
   const snapshot = await readEventTicketSnapshot(db, { id: input.eventId, timezone: held.timezone });
   const type = snapshot.types.find((candidate) => candidate.id === held.ticket_type_id);
-  if (!type || !snapshot.settings) return [];
+  // Without its type or the event's settings the ticket keeps its price; a restore still asks for it.
+  if (!type || !snapshot.settings)
+    return { statements: [], due: held.status === "paid" ? null : owed(held.amount, held.currency) };
   const code = held.code_id
     ? await first<TicketCodeRow>(
         db,
@@ -104,7 +114,7 @@ export async function prepareRepriceTicketForDays(
       );
     if (total > covered) {
       // An organizer may give days the ticket did not pay for; the person may not take them.
-      if (input.byOrganizer) return [];
+      if (input.byOrganizer) return { statements: [], due: null };
       throw new AppError(
         409,
         "TICKET_CHANGE_COSTS_MORE",
@@ -116,8 +126,8 @@ export async function prepareRepriceTicketForDays(
     const fee = held.refund_fee;
     const within = held.refund_deadline !== null && held.refund_deadline >= input.now;
     const refund = within ? net - total - fee : 0;
-    if (total === held.amount && refund <= 0) return [];
-    return [
+    if (total === held.amount && refund <= 0) return { statements: [], due: null };
+    const statements = [
       // The ticket is changed only as it was priced here; otherwise nothing of the change is written.
       prepareStateGuard(db, {
         sql: `SELECT 1 FROM registration_tickets ticket
@@ -144,11 +154,13 @@ export async function prepareRepriceTicketForDays(
           })
         : []),
     ];
+    return { statements, due: null };
   }
   const status = total > 0 ? "pending_payment" : "free";
   const restored = held.amount > 0 ? "pending_payment" : "free";
-  if (total === held.amount && status === (input.restoring ? restored : held.status)) return [];
   const settings = snapshot.settings;
+  const due = owed(total, settings.currency);
+  if (total === held.amount && status === (input.restoring ? restored : held.status)) return { statements: [], due };
   const reminders = ticketReminderSchedule(
     { intervalDays: settings.reminder_interval_days, periodDays: settings.reminder_period_days },
     input.now,
@@ -189,5 +201,13 @@ export async function prepareRepriceTicketForDays(
         held.id,
       ),
   );
-  return statements;
+  return { statements, due };
+}
+
+/** The statements alone, for a write that sends no email about the registration. */
+export async function prepareRepriceTicketForDays(
+  db: DatabaseLike,
+  input: Parameters<typeof planRepriceTicketForDays>[1],
+): Promise<StatementLike[]> {
+  return (await planRepriceTicketForDays(db, input)).statements;
 }

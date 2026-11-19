@@ -1,6 +1,10 @@
 /** Gallery specimen: the registrant's ticket page while the ticket awaits payment. */
 import { registrationTicketSchema } from "../../../shared/schemas/event-tickets";
+import { TicketCard } from "../../member-flows/portal/sections/events/app/EventHome";
+import type { ParticipantEventDetail } from "../../member-flows/portal/sections/events/app/event-app-model";
 import { EventTicketPayment } from "../../member-flows/portal/sections/events/app/EventTicketPayment";
+import { Alert } from "../Alert";
+import { ButtonLink } from "../Button";
 
 /** The ticket page while a ticket awaits payment: what is owed, the way to pay, and the refund terms. */
 export function TicketAwaitingPayment() {
@@ -37,6 +41,40 @@ export function TicketAwaitingPayment() {
         ticket={{ ...ticket, refundableUntil: null, refundFee: 0 }}
         details={<a href="#ticket-payment">Registration details</a>}
       />
+    </div>
+  );
+}
+
+/** The event home and the registration page while the ticket awaits payment: neither says "registered". */
+export function TicketUnpaidStanding() {
+  // Only what the card reads; the rest of an event plays no part in it.
+  const event = {
+    slug: "example",
+    participation: { registrationId: "20000000-0000-4000-8000-0000000000ab", registrationStatus: "registered" },
+    viewer: {
+      registrationStatus: "registered",
+      waitlisted: false,
+      paymentDue: true,
+      holdsWorkAddress: true,
+      days: [
+        { date: "2027-11-16", attendanceType: "in_person", accessMode: "physical", state: "registered" },
+        { date: "2027-11-17", attendanceType: "in_person", accessMode: "physical", state: "registered" },
+      ],
+    },
+  } as ParticipantEventDetail;
+  return (
+    <div class="pk-stack">
+      <div class="pk-grid pk-grid--cards">
+        <TicketCard event={event} ended={false} />
+      </div>
+      <Alert tone="warn" title="Your ticket is not paid yet">
+        <p>Your registration is saved. You're registered once your ticket is paid.</p>
+        <div class="pk-cluster">
+          <ButtonLink href="#ticket-unpaid" variant="secondary">
+            Pay for your ticket
+          </ButtonLink>
+        </div>
+      </Alert>
     </div>
   );
 }

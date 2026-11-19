@@ -217,6 +217,11 @@ export const eventViewerStateSchema = z.object({
   registrationStatus: registrationLifecycleStatusSchema,
   waitlisted: z.boolean(),
   days: z.array(eventViewerDaySchema).max(31),
+  /**
+   * The registration's ticket still waits for payment, so the registration is not complete.
+   * Absent in an event a device stored before tickets existed, which owes nothing.
+   */
+  paymentDue: z.boolean().default(false),
   /** Whether any of the viewer's verified addresses, primary or secondary, is a work address. */
   holdsWorkAddress: z.boolean(),
 });

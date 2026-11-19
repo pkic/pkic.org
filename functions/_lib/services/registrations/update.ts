@@ -111,6 +111,7 @@ async function commitUpdateWithNotification(
     profilePatch: payload.profilePatch,
     dayAttendance: built.dayAttendance,
     dayWaitlist: built.dayWaitlist,
+    paymentDue: built.paymentDue,
   });
   await commitBatch([...built.statements, email.statement]);
   return { registration: built.registration, outboxId: email.outboxId, outboxIds: [email.outboxId] };
@@ -131,6 +132,7 @@ async function commitUpdateWithEmailChange(
           profilePatch: payload.profilePatch,
           dayAttendance: built.dayAttendance,
           dayWaitlist: built.dayWaitlist,
+          paymentDue: built.paymentDue,
         }
       : undefined,
   });

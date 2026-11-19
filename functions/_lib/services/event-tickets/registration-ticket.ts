@@ -240,6 +240,24 @@ export async function planRegistrationTicket(
   };
 }
 
+/** Whether a registration's ticket still waits for payment, for a query that holds the registration's id. */
+export const ticketPaymentDueSql = (registrationId: string) =>
+  `EXISTS (SELECT 1 FROM registration_tickets due WHERE due.registration_id = ${registrationId} AND due.status = 'pending_payment')`;
+
+/** What is still owed for a registration's ticket; no row when nothing is. */
+export interface TicketPaymentDue {
+  amount: number;
+  currency: string;
+}
+
+export function prepareTicketPaymentDue(db: DatabaseLike, registrationId: string): StatementLike {
+  return db
+    .prepare(
+      "SELECT amount, currency FROM registration_tickets WHERE registration_id = ? AND status = 'pending_payment'",
+    )
+    .bind(registrationId);
+}
+
 /**
  * What cancelling a registration does to its ticket: one that is free or
  * unpaid is canceled, gives its code's pass back and drops the confirmation
@@ -429,14 +447,22 @@ export async function assertRegistrationTicketRestorable(db: DatabaseLike, regis
  * What restoring a canceled registration does to its ticket: it holds the same
  * ticket again at the price it had, free or still to be paid, and takes its
  * code's pass back. A ticket that was refunded when the registration was
- * canceled is to be paid again. Without a pass to take back nothing of the restore is
- * written. A ticket that was never canceled is untouched.
+ * canceled is to be paid again, and its payment reminders start over: the
+ * email about the restored registration asks for the payment first. Without a
+ * pass to take back nothing of the restore is written. A ticket that was never
+ * canceled is untouched.
  */
 export function prepareRestoreRegistrationTicket(
   db: DatabaseLike,
   registrationId: string,
   now: string,
 ): StatementLike[] {
+  // The event's reminder interval and period, counted from the restore; no period means no reminders.
+  const reminderAt = (days: string) =>
+    `CASE WHEN amount = 0 THEN NULL ELSE (
+       SELECT CASE WHEN settings.reminder_period_days > 0
+                   THEN strftime('%Y-%m-%dT%H:%M:%fZ', ?, '+' || settings.${days} || ' days') END
+       FROM event_ticket_settings settings WHERE settings.event_id = registration_tickets.event_id) END`;
   return [
     // The pass may have gone to someone else since the check; then the ticket must not come back at the code's price.
     prepareStateGuard(db, {
@@ -453,11 +479,13 @@ export function prepareRestoreRegistrationTicket(
     db
       .prepare(
         `UPDATE registration_tickets SET status = CASE WHEN amount = 0 THEN 'free' ELSE 'pending_payment' END,
-           reminders_sent = 0, paid_at = NULL, payment_intent_id = NULL, paid_amount = 0, kept_fee = 0, refunded_amount = 0,
+           reminders_sent = 0, next_reminder_at = ${reminderAt("reminder_interval_days")},
+           reminders_end_at = ${reminderAt("reminder_period_days")},
+           paid_at = NULL, payment_intent_id = NULL, paid_amount = 0, kept_fee = 0, refunded_amount = 0,
            refund_until = NULL, refund_fee = 0, refunds_seen_at = NULL,
            refund_reconcile_at = NULL, revision = revision + 1, updated_at = ?
          WHERE registration_id = ? AND status IN ('canceled', 'refunded') AND refund_reconcile_at IS NULL`,
       )
-      .bind(now, registrationId),
+      .bind(now, now, now, registrationId),
   ];
 }

@@ -68,6 +68,85 @@ describe("registration details email", () => {
     );
   });
 
+  it("never calls a day confirmed while the ticket is unpaid, and says what is owed", async () => {
+    const data = buildAttendanceEmailData(
+      [
+        { dayDate: "2026-12-01", attendanceType: "virtual", label: "Day 1" },
+        { dayDate: "2026-12-02", attendanceType: "in_person", label: "Day 2" },
+        { dayDate: "2026-12-03", attendanceType: "in_person", label: "Day 3" },
+      ],
+      [{ dayDate: "2026-12-03", status: "waiting" }],
+      "payment_required",
+    );
+    const rendered = await renderDetails({
+      dayAttendance: data.dayAttendance,
+      ...data.venueDayStanding,
+      paymentDue: true,
+      ticketPrice: "$395.00",
+      paymentUrl: "https://example.test/portal/#/events/example/ticket",
+    });
+    expect(rendered.text).toMatch(/Payment:\s*\$395\.00 to pay/);
+    expect(rendered.html).toContain("https://example.test/portal/#/events/example/ticket");
+    expect(rendered.text).toMatch(/Day 2:\s*In person — payment required/);
+    expect(rendered.text).toMatch(/Day 3:\s*In person — waitlisted/);
+    expect(rendered.text).not.toMatch(/— confirmed/);
+    // The seat notice still explains the waiting day, and only that.
+    expect(data.venueDayStanding).toMatchObject({ hasUnconfirmedVenueDay: true, hasWaitingVenueDay: true });
+  });
+
+  it("shows a cancelled registration's days as cancelled, with no seat notice", async () => {
+    const data = buildAttendanceEmailData(
+      [
+        { dayDate: "2026-12-01", attendanceType: "virtual", label: "Day 1" },
+        { dayDate: "2026-12-02", attendanceType: "in_person", label: "Day 2" },
+      ],
+      [{ dayDate: "2026-12-02", status: "waiting" }],
+      "cancelled",
+    );
+    const rendered = await renderDetails({ dayAttendance: data.dayAttendance, ...data.venueDayStanding });
+    expect(rendered.text).toMatch(/Day 1:\s*Virtual \(online\) — cancelled/);
+    expect(rendered.text).toMatch(/Day 2:\s*In person — cancelled/);
+    expect(rendered.text).not.toMatch(/confirmed|waitlisted|venue entry/);
+  });
+
+  it("opens the update email with the cancellation or the payment still owed", async () => {
+    const updated = DEFAULT_TEMPLATES.find((template) => template.key === "registration_updated")!;
+    const render = async (data: Record<string, unknown>) => ({
+      subject: (await renderEmail(updated.subjectTemplate!, data, "{{{body_html}}}", "markdown")).text.trim(),
+      body: (
+        await renderEmail(
+          updated.content,
+          {
+            eventName: "Example Event",
+            ...data,
+            _partials: {
+              greeting: { content: "Hello,", contentType: "markdown" },
+              reg_details: { content: detailsPartial.content, contentType: "markdown" },
+              sponsors_block: { content: "", contentType: "html" },
+              budget_waitlist_notice: { content: "", contentType: "markdown" },
+            },
+          },
+          "{{{body_html}}}",
+          "markdown",
+        )
+      ).text,
+    });
+    const cancelled = await render({ eventName: "Example Event", status: "cancelled" });
+    expect(cancelled.subject).toBe("Your registration is cancelled — Example Event");
+    expect(cancelled.body).not.toContain("was updated");
+    expect(cancelled.body.indexOf("is cancelled")).toBeLessThan(cancelled.body.indexOf("Your registration details"));
+    const unpaid = await render({
+      eventName: "Example Event",
+      status: "registered",
+      paymentDue: true,
+      ticketPrice: "$395.00",
+      paymentUrl: "https://example.test/portal/#/events/example/ticket",
+    });
+    expect(unpaid.subject).toBe("Pay for your ticket to complete your registration — Example Event");
+    expect(unpaid.body).toContain("You're not registered until your ticket is paid.");
+    expect(unpaid.body).toContain("$395.00 is still to pay");
+  });
+
   it("names a country answer", () => {
     const field = { options: null, validation: { format: "iso_country" as const } };
     expect(formatCustomAnswerValue("NL", field)).toBe("Netherlands");

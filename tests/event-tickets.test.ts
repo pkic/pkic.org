@@ -945,6 +945,25 @@ describe("event tickets", () => {
     await other.change({ action: "update", dayAttendance: inPerson });
     expect(await other.read()).toMatchObject({ status: "pending_payment", amount: 19500 });
     expect(await other.eligible()).toBe(0);
+
+    // A restore at the same price is asked for again: its reminders start over, and the write says what is owed.
+    await other.change({ action: "cancel" });
+    const reminders = () =>
+      env.DB.prepare(
+        "SELECT next_reminder_at, reminders_end_at, reminders_sent FROM registration_tickets WHERE registration_id = ?",
+      )
+        .bind(other.registration.id)
+        .first<{ next_reminder_at: string | null; reminders_end_at: string | null; reminders_sent: number }>();
+    expect(await reminders()).toMatchObject({ next_reminder_at: null });
+    const record = await getRegistrationByIdForEvent(env.DB, event.id, other.registration.id);
+    const restored = await buildRegistrationUpdate(env.DB, record, { action: "update" });
+    expect(restored.paymentDue).toMatchObject({ amount: 19500 });
+    await env.DB.batch(restored.statements);
+    expect(await other.read()).toMatchObject({ status: "pending_payment", amount: 19500 });
+    const restarted = await reminders();
+    expect(restarted?.reminders_sent).toBe(0);
+    expect(Date.parse(restarted!.next_reminder_at!)).toBeGreaterThan(Date.now());
+    expect(Date.parse(restarted!.reminders_end_at!)).toBeGreaterThan(Date.parse(restarted!.next_reminder_at!));
   });
 
   it("refunds by the event's policy: the difference for cheaper days and the ticket on cancellation, within its period", async () => {

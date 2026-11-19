@@ -59,6 +59,20 @@ describe("event viewer status", () => {
     expect(status.some((item) => (item.tone as string | undefined) === "ok")).toBe(false);
   });
 
+  it("asks for the payment instead of calling an unpaid registration registered", () => {
+    expect(
+      eventViewerStatus({
+        viewer: {
+          registrationStatus: "registered",
+          waitlisted: false,
+          days: [],
+          paymentDue: true,
+          holdsWorkAddress: true,
+        },
+      }),
+    ).toEqual([{ label: "Pay for your ticket", tone: "warn" }]);
+  });
+
   it("says nothing for a viewer with no standing", () => {
     expect(eventViewerStatus({ participation: participation(), viewer: null })).toEqual([]);
   });

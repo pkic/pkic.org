@@ -8,13 +8,14 @@ import {
   type RegistrationManageReadResponse,
 } from "../../../shared/schemas/registration";
 import { eventFormsResponseSchema } from "../../../shared/schemas/forms";
+import { eventTicketPath } from "../../../shared/event-participation-link";
 import { useData } from "../../hooks/useData";
 import { getJson, patchJson, postJson } from "../../shared/api-client";
 import { refusalSentence } from "../../shared/form/validation-map";
 import { Spinner } from "../Spinner";
 import { confirmAction } from "../ConfirmDialog";
 import { Alert } from "../../ui/Alert";
-import { Button } from "../../ui/Button";
+import { Button, ButtonLink } from "../../ui/Button";
 import { Panel, PanelBody } from "../../ui/Panel";
 import type { EventFormsResponse } from "../../shared/types";
 import { ParticipantRegistrationDetails } from "./ParticipantRegistrationDetails";
@@ -178,6 +179,16 @@ function RegistrationRecord({
         <div class="pk-stack pk-stack--loose">
           {error && <Alert tone="danger">{error}</Alert>}
           {message && <Alert tone="ok">{message}</Alert>}
+          {data.paymentDue && (
+            <Alert tone="warn" title="Your ticket is not paid yet">
+              <p>Your registration is saved. You're registered once your ticket is paid.</p>
+              <div class="pk-cluster">
+                <ButtonLink href={eventTicketPath(data.event.slug)} variant="secondary">
+                  Pay for your ticket
+                </ButtonLink>
+              </div>
+            </Alert>
+          )}
           {cancelled && (
             <Alert>
               This registration is cancelled.

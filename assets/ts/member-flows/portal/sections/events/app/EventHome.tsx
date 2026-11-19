@@ -153,7 +153,8 @@ function LiveNowCard({ slug, sessions }: { slug: string; sessions: readonly Agen
   );
 }
 
-function TicketCard({ event, ended }: { event: ParticipantEventDetail; ended: boolean }) {
+/** The reader's standing on the event home: register, confirm, pay, or show the ticket. */
+export function TicketCard({ event, ended }: { event: ParticipantEventDetail; ended: boolean }) {
   const standing = eventRegistrationStanding(event);
   const base = `/events/${encodeURIComponent(event.slug)}`;
   if (!standing.registered) {
@@ -171,14 +172,20 @@ function TicketCard({ event, ended }: { event: ParticipantEventDetail; ended: bo
   }
   const viewer = "viewer" in event ? event.viewer : null;
   const pending = standing.status === "pending_email_confirmation";
+  // The ticket page says what is owed and takes the payment; until then nobody is told they are registered.
+  const unpaid = !pending && Boolean(viewer?.paymentDue);
   return (
-    <EventCard eyebrow="Your ticket" title={pending ? "Confirm your email address" : "You're registered"}>
+    <EventCard
+      eyebrow="Your ticket"
+      title={pending ? "Confirm your email address" : unpaid ? "Pay for your ticket" : "You're registered"}
+    >
       {pending && <p>Check your inbox to complete your registration.</p>}
+      {unpaid && <p>Your registration is saved. You're registered once your ticket is paid.</p>}
       {viewer && <p class="pk-event-card__meta">{attendanceStandingParts(viewer).join(" · ")}</p>}
       {viewer && <PersonalAddressPrompt withoutWorkAddress={!viewer.holdsWorkAddress} />}
       <div class="pk-cluster">
         <ButtonLink variant="primary" href={href(base + "/ticket")}>
-          Show ticket
+          {unpaid ? "Pay for your ticket" : "Show ticket"}
         </ButtonLink>
         {standing.registrationId && (
           <a href={href(eventParticipantRecordPath(event.slug, "registration", standing.registrationId))}>

@@ -50,6 +50,11 @@ export function eventMyAgendaPath(eventSlug: string): string {
   return `/portal/#${eventAgendaRoute(eventSlug, { mine: true })}`;
 }
 
+/** The attendee's ticket in the portal, where an unpaid ticket is paid; relative to the site origin. */
+export function eventTicketPath(eventSlug: string): string {
+  return `/portal/#/events/${encodeURIComponent(eventSlug)}/ticket`;
+}
+
 /** The participant's own promotion materials in the portal, relative to the site origin. */
 export function eventPromotionKitPath(eventSlug: string): string {
   return `/portal/#/events/${encodeURIComponent(eventSlug)}/promotion`;
