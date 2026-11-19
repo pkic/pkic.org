@@ -84,7 +84,7 @@ describe("the email for an address that already has an account", () => {
     expect(body).toContain("## Your registration details");
     expect(body).toContain("**Name:** Ada Lovelace");
     expect(body).toMatch(/\*\*Day 1:\*\* In person — confirmed<br>/);
-    expect(body).not.toContain("You can't enter the venue");
+    expect(body).not.toContain("venue entry");
     expect(body).not.toContain("Sign in and continue");
     expect(body).toContain(link.magicLinkUrl);
   });

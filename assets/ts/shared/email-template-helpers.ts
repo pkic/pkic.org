@@ -45,6 +45,10 @@ export const PREVIEW_DEFAULTS: Record<string, unknown> = {
   decisionNote: "Please add concrete deployment constraints and success metrics.",
   acceptedTermsText: "I agree to the Code of Conduct.",
   waitlistOfferNotice: false,
+  hasUnconfirmedVenueDay: true,
+  hasWaitingVenueDay: true,
+  hasOfferedVenueDay: false,
+  hasExpiredVenueDay: false,
   // Day attendance
   dayAttendance: [
     {
@@ -57,7 +61,7 @@ export const PREVIEW_DEFAULTS: Record<string, unknown> = {
       dayLabel: "Thursday 2 October 2026",
       attendanceLabel: "In person",
       statusLabel: "Waitlisted",
-      statusNote: "waitlisted, not confirmed",
+      statusNote: "waitlisted",
     },
   ],
   waitlistAlternatives: [

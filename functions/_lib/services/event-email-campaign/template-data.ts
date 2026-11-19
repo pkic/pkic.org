@@ -95,6 +95,7 @@ function buildAttendeeTemplateData(
     ...buildRegistrationEmailStatusData(row.status, dayWaitlist),
     attendanceLabel: attendanceData.attendanceLabel,
     dayAttendance: attendanceData.dayAttendance,
+    ...attendanceData.venueDayStanding,
     waitlistAlternatives: attendanceData.waitlistAlternatives,
     dayWaitlist,
     acceptedTermsText: emailMarkdownText(row.acceptedTermsText),

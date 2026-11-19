@@ -133,7 +133,7 @@ describe("persistent scanner preparation", () => {
     expect(mocks.get).not.toHaveBeenCalled();
     expect(mocks.post).not.toHaveBeenCalled();
   });
-  it.each(["closed", "closing"])("keeps a prepared local lease after the server reports %s", async (state) => {
+  it.each(["closed", "closing"])("follows the server to %s despite a prepared local lease", async (state) => {
     mocks.epoch = { ...mocks.epoch, collectorContext: preparedLease() };
     mocks.get.mockResolvedValue(
       status(
@@ -142,9 +142,9 @@ describe("persistent scanner preparation", () => {
       ),
     );
     const prepared = await prepareScannerEpoch("synthetic-event", operator, device);
-    expect(prepared.state).toBe("open");
+    expect(prepared.state).toBe(state);
     expect(prepared.issuedHighWater).toBe(17);
-    expect(mocks.put).not.toHaveBeenCalled();
+    expect(mocks.epoch.state).toBe(state);
   });
   it.each([401, 403, 429, 500, 503])("keeps a prepared local lease through HTTP %s", async (httpStatus) => {
     mocks.epoch = { ...mocks.epoch, collectorContext: preparedLease() };

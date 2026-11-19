@@ -298,8 +298,8 @@ The PKI Consortium is a vendor-neutral community of PKI practitioners working to
   },
   // ─────────────────────────────────────────────────────────────────────────
   // Shared registration details
-  // Variables: registration and custom-answer fields, dayAttendance,
-  //            hasActiveDayWaitlist, waitlistAlternatives, manageUrl
+  // Variables: registration and custom-answer fields, dayAttendance, hasUnconfirmedVenueDay,
+  //            hasWaitingVenueDay, hasOfferedVenueDay, hasExpiredVenueDay, waitlistAlternatives, manageUrl
   // Partials:  {{> reg_details}}
   // ─────────────────────────────────────────────────────────────────────────
   {
@@ -318,7 +318,7 @@ The PKI Consortium is a vendor-neutral community of PKI practitioners working to
 > {{/each}}{{#if acceptedTermsText}}**Terms agreed:**<br>
 > - {{acceptedTermsText}}{{/if}}
 
-{{#if hasActiveDayWaitlist}}<div class="notice notice-warning"><strong>You can't enter the venue on a waitlisted day.</strong> Only days marked confirmed give you access. We'll email you if a seat opens up.{{#each waitlistAlternatives}}<br><br>We recommend <strong>{{label}}</strong> instead{{#if description}}: {{description}}{{/if}}{{#if limited}}, while space lasts{{/if}}.{{#if manageUrl}} To switch, <a href="{{manageUrl}}">change your registration</a>.{{/if}}{{/each}}</div>{{/if}}
+{{#if hasUnconfirmedVenueDay}}<div class="notice notice-warning"><strong>Only days marked confirmed give you venue entry.</strong>{{#if hasOfferedVenueDay}} Accept your offered seat before the offer expires to confirm that day.{{/if}}{{#if hasExpiredVenueDay}} An expired offer can't be accepted; update your registration to request a place again.{{/if}}{{#if hasWaitingVenueDay}} We'll email you if a seat opens up.{{/if}}{{#each waitlistAlternatives}}<br><br>We recommend <strong>{{label}}</strong> instead{{#if description}}: {{description}}{{/if}}{{#if limited}}, while space lasts{{/if}}.{{#if manageUrl}} To switch, <a href="{{manageUrl}}">change your registration</a>.{{/if}}{{/each}}</div>{{/if}}
 `,
   },
   // ─────────────────────────────────────────────────────────────────────────
@@ -562,7 +562,7 @@ Plan the sessions you want to attend in [My agenda &rarr;]({{myAgendaUrl}})
   // ─────────────────────────────────────────────────────────────────────────
   // 3b. Waitlist offer
   // Variables: eventName, firstName, manageUrl, dayAttendance, dayWaitlist,
-  //            hasActiveDayWaitlist
+  //            hasUnconfirmedVenueDay, hasWaitingVenueDay, hasOfferedVenueDay, hasExpiredVenueDay
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "registration_waitlist_offer",

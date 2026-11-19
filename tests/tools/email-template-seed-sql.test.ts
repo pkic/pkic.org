@@ -295,10 +295,13 @@ describe("buildTemplateSqlStatements", () => {
             dayLabel: "Day 1",
             attendanceLabel: "In person",
             statusLabel: "Waitlisted",
-            statusNote: "waitlisted, not confirmed",
+            statusNote: "waitlisted",
           },
         ],
-        hasActiveDayWaitlist: true,
+        hasUnconfirmedVenueDay: true,
+        hasWaitingVenueDay: true,
+        hasOfferedVenueDay: false,
+        hasExpiredVenueDay: false,
         waitlistAlternatives: [{ label: "Livestream Lounge", description: "Watch together nearby", limited: true }],
         manageUrl: "https://example.test/registration",
       }),
@@ -309,8 +312,10 @@ describe("buildTemplateSqlStatements", () => {
     );
     expect(rendered.text).toContain("Dear Alex,");
     expect(rendered.text).toContain("Your registration details");
-    expect(rendered.text).toContain("Day 1: In person — waitlisted, not confirmed");
-    expect(rendered.text).toContain("You can't enter the venue on a waitlisted day.");
+    expect(rendered.text).toContain("Day 1: In person — waitlisted");
+    expect(rendered.text).toContain(
+      "Only days marked confirmed give you venue entry. We'll email you if a seat opens up.",
+    );
     expect(rendered.text).toContain("limited by the event budget");
     expect(rendered.html).toContain('href="mailto:contact@pkic.org"');
     expect(rendered.text).not.toMatch(/\{\{/);

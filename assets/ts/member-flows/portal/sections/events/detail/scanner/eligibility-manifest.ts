@@ -6,7 +6,11 @@ import { readActiveUserSession } from "../../../../../../shared/pending-user-log
 import type { NativeEventCaptureContext } from "../../../../../../../shared/schemas/event-attendance-capture";
 import { scannerUploadSuspended } from "../../../../../../shared/pending-user-logout";
 import { cachedManifestSchema, sameSnapshotScope, snapshotCurrent, type CachedManifest } from "./eligibility-snapshot";
-import { EligibilityRefreshFailure, eligibilityRefreshError } from "./eligibility-refresh-error";
+import {
+  EligibilityRefreshFailure,
+  eligibilityPreparationStopped,
+  eligibilityRefreshError,
+} from "./eligibility-refresh-error";
 import { downloadEligibilitySnapshot } from "./eligibility-download";
 import type {
   EventScanRequest,
@@ -343,6 +347,8 @@ export async function prepareEligibilityManifest(
     if (signal?.aborted) throw error;
     if (await scannerUploadSuspended(operatorUserId, sessionId))
       throw new Error("SCANNER_SIGNED_OUT", { cause: error });
+    // A stopped session is not an outage: the server refuses its scans, so its snapshot must not keep scanning.
+    if (error instanceof Error && eligibilityPreparationStopped(error.message)) throw error;
     return Object.assign(restore(error), {
       refreshError: eligibilityRefreshError(error),
       retryAfterMs: error instanceof EligibilityRefreshFailure ? error.retryAfterMs : undefined,
