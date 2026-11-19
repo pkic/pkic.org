@@ -284,6 +284,13 @@ describe("live session questions", () => {
       (await attendee.next("stage.changed", (message) => message.stage.question === null)).stage.questionChange
         ?.operatorName,
     ).toBe("Olga Operator");
+    // The operator still holds it, with why it was hidden, and can show it to everyone again.
+    const hidden = (await operator.next("question.changed", (message) => message.question.status === "hidden"))
+      .question;
+    expect(hidden.removal?.reason).toBe("spam");
+    operator.send({ type: "question.moderate", questionId, status: "approved" });
+    const shown = await attendee.next("question.changed", (message) => message.question.status === "approved");
+    expect(shown.question.id).toBe(questionId);
   });
 
   it("limits how fast one person asks", async () => {

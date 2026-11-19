@@ -15,6 +15,7 @@ import { confirmAction } from "../../../../../../components/ConfirmDialog";
 import { useHashQueryParam } from "../../../../../../hooks/useHashQueryParam";
 import { TabList } from "../../../../../../ui/TabList";
 import { LiveQuestionTransitions } from "../../../../../../live-session/LiveQuestionList";
+import { liveRemovalNote } from "../../../../../../live-session/LiveRemovedPost";
 import { liveAnswerCountLabel } from "../../../../../../live-session/LiveQuestionThread";
 import { LiveModerationDialogHost } from "../../../../../../live-session/LiveModerationDialog";
 import { Avatar } from "../../../../../../ui/Avatar";
@@ -46,9 +47,12 @@ export function openLiveQuestions(questions: readonly LiveQuestion[]): LiveQuest
   return questions.filter((question) => question.status === "pending" || question.status === "approved");
 }
 
-/** Answered questions, which an operator can still reopen; one its author withdrew is gone for good. */
-export function answeredLiveQuestions(questions: readonly LiveQuestion[]): LiveQuestion[] {
-  return questions.filter((question) => question.status === "answered" && !question.withdrawn);
+/** Questions that left the open ones and can still come back: answered ones to reopen, hidden ones to show again. */
+type ClosedStatus = "answered" | "hidden";
+
+/** The closed questions of one kind; one its author withdrew is gone for good. */
+export function closedLiveQuestions(questions: readonly LiveQuestion[], status: ClosedStatus): LiveQuestion[] {
+  return questions.filter((question) => question.status === status && !question.withdrawn);
 }
 
 /** The Questions panel's header: how many are open and waiting, and the "+" that prepares one. */
@@ -111,9 +115,13 @@ export function waitingPreparedQuestions(questions: readonly LivePreparedQuestio
 
 type Send = (message: LiveRoomClientMessage) => boolean;
 
-/** The panel's tabs: the open and prepared questions, and the answered ones. */
-const QUESTION_VIEWS = ["open", "answered"] as const;
+/** The panel's tabs: the open and prepared questions, the answered ones, and the ones a moderator hid. */
+const QUESTION_VIEWS = ["open", "answered", "hidden"] as const;
 type QuestionView = (typeof QUESTION_VIEWS)[number];
+const CLOSED_VIEWS = [
+  { id: "answered", label: "Answered", empty: "No answered questions." },
+  { id: "hidden", label: "Hidden", empty: "No hidden questions." },
+] as const satisfies ReadonlyArray<{ id: ClosedStatus; label: string; empty: string }>;
 
 const APPROVE = <path d="M3 8.5l3 3 7-7" />;
 const ANSWERED = (
@@ -260,8 +268,14 @@ function OpenQuestionRow({
   );
 }
 
-/** One answered question: its votes and asker, Reopen as its one action, and the menu. */
-function AnsweredQuestionRow({
+/** How each kind of closed question comes back, as its row's one action says it. */
+const CLOSED_QUESTION_RETURN: Record<ClosedStatus, { label: string; hint: string }> = {
+  answered: { label: "Reopen", hint: "Put it back with the open questions." },
+  hidden: { label: "Show question", hint: "Show it to everyone again, with the open questions." },
+};
+
+/** One answered or hidden question: its votes and asker, or why it was hidden, its way back, and the menu. */
+function ClosedQuestionRow({
   question,
   targets,
   send,
@@ -274,6 +288,7 @@ function AnsweredQuestionRow({
 }) {
   const { disabled } = targets;
   const asker = liveQuestionAskerName(question);
+  const back = CLOSED_QUESTION_RETURN[question.status === "hidden" ? "hidden" : "answered"];
   const moderate = (status: LiveQuestionStatus, reason?: LiveModerationReason) =>
     send({ type: "question.moderate", questionId: question.id, expectedRevision: question.revision, status, reason });
   return (
@@ -284,15 +299,11 @@ function AnsweredQuestionRow({
         <>
           <span>▲ {formatNumber(question.votes)}</span>
           <span>{asker ?? "Anonymous"}</span>
+          {question.removal ? <span>{liveRemovalNote(question.removal)}</span> : null}
         </>
       }
       actions={
-        <RowAction
-          label="Reopen"
-          hint="Put it back with the open questions."
-          disabled={disabled}
-          onClick={() => moderate("approved")}
-        >
+        <RowAction label={back.label} hint={back.hint} disabled={disabled} onClick={() => moderate("approved")}>
           {REOPEN}
         </RowAction>
       }
@@ -397,8 +408,8 @@ function PreparedQuestionRow({
  * The session's questions as compact rows, like the Time and Polls panels:
  * open ones first, then prepared ones in the order they come in. Every
  * action is in a row's menu; the row shows only the one used most. Answered
- * questions have a tab of their own, each with Reopen; the tab in view
- * follows the address, as the chat's does.
+ * and hidden questions each have a tab of their own, every row with its way
+ * back; the tab in view follows the address, as the chat's does.
  */
 export function LiveQuestionsPanel({
   targets,
@@ -421,7 +432,10 @@ export function LiveQuestionsPanel({
   const [editingPrepared, setEditingPrepared] = useState<LivePreparedQuestion | null>(null);
   const open = openLiveQuestions(targets.state.questions);
   const prepared = waitingPreparedQuestions(targets.state.preparedQuestions);
-  const answered = answeredLiveQuestions(targets.state.questions);
+  const closed = {
+    answered: closedLiveQuestions(targets.state.questions, "answered"),
+    hidden: closedLiveQuestions(targets.state.questions, "hidden"),
+  };
   const [view, setView] = useHashQueryParam("questions", opensOn, QUESTION_VIEWS);
   return (
     <div class="pk-live-desk__questions">
@@ -433,11 +447,11 @@ export function LiveQuestionsPanel({
         onSelect={(id) => setView(id as QuestionView)}
         items={[
           { id: "open", panelId: "studio-questions-panel-open", label: "Open" },
-          {
-            id: "answered",
-            panelId: "studio-questions-panel-answered",
-            label: answered.length ? `Answered · ${formatNumber(answered.length)}` : "Answered",
-          },
+          ...CLOSED_VIEWS.map(({ id, label }) => ({
+            id,
+            panelId: `studio-questions-panel-${id}`,
+            label: closed[id].length ? `${label} · ${formatNumber(closed[id].length)}` : label,
+          })),
         ]}
       />
       <div
@@ -473,28 +487,31 @@ export function LiveQuestionsPanel({
           <p class="pk-live-questions__empty">No open questions.</p>
         )}
       </div>
-      <div
-        id="studio-questions-panel-answered"
-        role="tabpanel"
-        aria-labelledby="studio-questions-answered"
-        hidden={view !== "answered"}
-      >
-        {answered.length ? (
-          <ol class="pk-studio-rows">
-            {answered.map((question) => (
-              <AnsweredQuestionRow
-                key={question.id}
-                question={question}
-                targets={targets}
-                send={send}
-                onOpen={() => setInspectedId(question.id)}
-              />
-            ))}
-          </ol>
-        ) : (
-          <p class="pk-live-questions__empty">No answered questions.</p>
-        )}
-      </div>
+      {CLOSED_VIEWS.map(({ id, empty }) => (
+        <div
+          key={id}
+          id={`studio-questions-panel-${id}`}
+          role="tabpanel"
+          aria-labelledby={`studio-questions-${id}`}
+          hidden={view !== id}
+        >
+          {closed[id].length ? (
+            <ol class="pk-studio-rows">
+              {closed[id].map((question) => (
+                <ClosedQuestionRow
+                  key={question.id}
+                  question={question}
+                  targets={targets}
+                  send={send}
+                  onOpen={() => setInspectedId(question.id)}
+                />
+              ))}
+            </ol>
+          ) : (
+            <p class="pk-live-questions__empty">{empty}</p>
+          )}
+        </div>
+      ))}
       {editingPrepared ? (
         <LivePreparedQuestionDialog
           question={editingPrepared}

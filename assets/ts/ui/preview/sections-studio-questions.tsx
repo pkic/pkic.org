@@ -168,6 +168,10 @@ const ANSWERED_TARGETS = {
         status: "answered",
         votes: 6,
       }),
+      asked("40000000-0000-4000-8000-000000000035", "Buy cheap certificates at example.test", {
+        status: "hidden",
+        removal: { reason: "spam", at: "2026-12-01T09:20:00.000Z", byName: "Olga Operator" },
+      }),
     ],
   },
 };
@@ -178,7 +182,7 @@ function QuestionsPanelSpecimen({
 }: {
   targets?: typeof TARGETS;
   /** The tab the panel opens on; Open unless a specimen is of another one. */
-  opensOn?: "answered";
+  opensOn?: "answered" | "hidden";
 }) {
   return (
     <div class="pk-studio-grid-frame" data-density="compact">
@@ -288,6 +292,12 @@ export const studioQuestionSections: PreviewSection[] = [
     title: "Studio: answered questions, with Reopen",
     note: "A question marked answered leaves the open ones for the Answered tab. Reopen puts it back with the open questions. Mark answered is a quiet button, so a slip of the hand is less likely.",
     render: () => <QuestionsPanelSpecimen targets={ANSWERED_TARGETS} opensOn="answered" />,
+  },
+  {
+    id: "studio-questions-hidden",
+    title: "Studio: hidden questions, with Show question",
+    note: "A question a moderator hid waits on the Hidden tab, with who hid it and why. Show question puts it back with the open questions, for everyone.",
+    render: () => <QuestionsPanelSpecimen targets={ANSWERED_TARGETS} opensOn="hidden" />,
   },
   {
     id: "studio-screens-menu-carried",

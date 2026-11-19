@@ -28,6 +28,13 @@ const TRANSITION_LABEL: Record<LiveQuestionStatus, string> = {
   hidden: "Hide question…",
 };
 
+/** A move's name: coming back to the open questions is Reopen after an answer and Show after a moderator hid it. */
+function returnLabel(from: LiveQuestionStatus, to: LiveQuestionStatus): string {
+  if (to === "approved" && from === "answered") return "Reopen";
+  if (to === "approved" && from === "hidden") return "Show question";
+  return TRANSITION_LABEL[to];
+}
+
 /** The status actions a role may take on a question, from the shared moderation policy. */
 export function LiveQuestionTransitions({
   question,
@@ -69,7 +76,7 @@ export function LiveQuestionTransitions({
               ? { ...remove, disabled }
               : {
                   id: status,
-                  label: question.status === "answered" && status === "approved" ? "Reopen" : TRANSITION_LABEL[status],
+                  label: returnLabel(question.status, status),
                   disabled,
                   onSelect: () => onMove(status),
                 },
@@ -90,7 +97,7 @@ export function LiveQuestionTransitions({
           title={status === "hidden" ? remove.tooltip : undefined}
           onClick={() => (status === "hidden" ? remove.onSelect?.() : onMove(status))}
         >
-          {question.status === "answered" && status === "approved" ? "Reopen" : TRANSITION_LABEL[status]}
+          {returnLabel(question.status, status)}
         </Button>
       ))}
     </>

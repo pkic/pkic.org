@@ -366,7 +366,7 @@ describe("live control room panels", () => {
     expect(commands(live)).toEqual([{ type: "preview.set", composition: { lowerThirdMotion: "cut" } }]);
   });
 
-  it("moderates a submitted question, puts an approved one on Program, marks it answered and reopens it", () => {
+  it("moderates a submitted question, puts an approved one on Program, marks it answered, reopens it and shows a hidden one again", () => {
     const pending = liveQuestion({ status: "pending", votes: 0, anonymous: true, authorName: "Ada Attendee" });
     const { host, live } = mountDesk(liveSnapshot({ viewer: OPERATOR, questions: [pending] }));
     const questions = panel(host, "Questions");
@@ -402,6 +402,17 @@ describe("live control room panels", () => {
       expectedRevision: 1,
       status: "approved",
     });
+    // A question a moderator hid waits on the Hidden tab with the reason, and Show question brings it back.
+    const removal = { reason: "spam" as const, at: new Date().toISOString(), byName: "Olga Operator" };
+    void act(() =>
+      live
+        .latest()
+        .deliver({ type: "question.changed", question: liveQuestion({ status: "hidden", revision: 2, removal }) }),
+    );
+    expect(questions.querySelector("#studio-questions-hidden")?.textContent).toBe("Hidden · 1");
+    expect(questions.querySelector("#studio-questions-panel-hidden")?.textContent).toContain("Hidden by Olga Operator");
+    void act(() => labeled(questions, "Show question").click());
+    expect(commands(live).at(-1)).toMatchObject({ type: "question.moderate", expectedRevision: 2, status: "approved" });
   });
 
   it("prepares a question for a speaker, lists it under the open ones and releases it on demand", () => {
