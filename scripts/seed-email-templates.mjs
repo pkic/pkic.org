@@ -318,7 +318,11 @@ The PKI Consortium is a vendor-neutral community of PKI practitioners working to
 > {{/each}}{{#if acceptedTermsText}}**Terms agreed:**<br>
 > - {{acceptedTermsText}}{{/if}}
 
-{{#if hasUnconfirmedVenueDay}}<div class="notice notice-warning"><strong>Only days marked confirmed give you venue entry.</strong>{{#if hasOfferedVenueDay}} Accept your offered seat before the offer expires to confirm that day.{{/if}}{{#if hasExpiredVenueDay}} An expired offer can't be accepted; update your registration to request a place again.{{/if}}{{#if hasWaitingVenueDay}} We'll email you if a seat opens up.{{/if}}{{#each waitlistAlternatives}}<br><br>We recommend <strong>{{label}}</strong> instead{{#if description}}: {{description}}{{/if}}{{#if limited}}, while space lasts{{/if}}.{{#if manageUrl}} To switch, <a href="{{manageUrl}}">change your registration</a>.{{/if}}{{/each}}</div>{{/if}}
+{{#if hasUnconfirmedVenueDay}}<div class="notice notice-warning"><strong>Only days marked confirmed give you venue entry.</strong>{{#if hasOfferedVenueDay}} Accept your offered seat before the offer expires to confirm that day.{{/if}}{{#if hasExpiredVenueDay}} An expired offer can't be accepted; update your registration to request a place again.{{/if}}{{#if hasWaitingVenueDay}} We'll email you if a seat opens up.{{/if}}{{#each waitlistAlternatives}}
+
+We recommend **{{label}}** instead{{#if description}}: {{description}}{{/if}}{{#if limited}}, while space lasts{{/if}}.{{#if manageUrl}} To switch, [change your registration]({{manageUrl}}).{{/if}}{{/each}}
+
+</div>{{/if}}
 `,
   },
   // ─────────────────────────────────────────────────────────────────────────

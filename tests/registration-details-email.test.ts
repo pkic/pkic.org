@@ -99,6 +99,11 @@ describe("registration details email", () => {
     );
     expect(limited.html).toContain('href="https://example.test/manage"');
 
+    // The organizer's words read literally, never as markup.
+    const literal = await render({ label: "Lounge <East>", description: "Seats *nearby*" });
+    expect(literal.text).toContain("We recommend Lounge <East> instead: Seats *nearby*.");
+    expect(literal.html).toContain("Lounge &lt;East&gt;");
+
     const open = await render({ label: "Watch party" });
     expect(open.text).toContain("We recommend Watch party instead.");
     expect(open.text).not.toContain("while space lasts");

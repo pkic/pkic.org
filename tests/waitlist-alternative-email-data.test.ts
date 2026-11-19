@@ -14,6 +14,7 @@ import { getRegistrationDayAttendance } from "../functions/_lib/services/event-d
 import { listDayWaitlistForRegistration } from "../functions/_lib/services/registrations/day-waitlist-queries";
 import { projectAttendeeDayState } from "../functions/_lib/services/event-email-campaign/attendance-projection";
 import { buildAttendanceEmailData } from "../functions/_lib/utils/attendance";
+import { emailPlainText } from "../functions/_lib/email/plain-text";
 
 const lounge = {
   value: "livestream_lounge",
@@ -57,7 +58,13 @@ describe("waitlist alternative email data", () => {
       { value: "in_person", label: "In person", capacity: 1, waitlistAlternative: "livestream_lounge" },
       lounge,
     ]);
-    const expected = [{ label: "Livestream Lounge", description: "Watch together at a partner venue", limited: true }];
+    const expected = [
+      {
+        label: emailPlainText("Livestream Lounge"),
+        description: emailPlainText("Watch together at a partner venue"),
+        limited: true,
+      },
+    ];
 
     const planned = await buildCreateRegistration(env.DB, register("user-2"));
     expect(planned.plannedDayWaitlist).toMatchObject([{ dayDate: "2026-12-01", status: "waiting" }]);

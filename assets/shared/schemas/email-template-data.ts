@@ -22,7 +22,6 @@ export const emailWaitlistAlternativeSchema = z.object({
   /** Whether the alternative has a capacity of its own, so its space can run out too. */
   limited: z.boolean(),
 });
-export type EmailWaitlistAlternative = z.infer<typeof emailWaitlistAlternativeSchema>;
 
 /** Canonical item fields remain available to validation when a recipient's collection is empty. */
 export function emailTemplateCollectionFields(): ReadonlyMap<string, readonly string[]> {

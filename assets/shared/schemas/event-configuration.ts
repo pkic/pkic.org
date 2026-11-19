@@ -2,7 +2,7 @@ import { z } from "zod";
 import { successResponseSchema, termKeySchema, trimmedString, termVersionSchema } from "./api-common";
 import { addDuplicateStringIssues } from "./refinements";
 import { attendanceIconSchema } from "../event-attendance-icons";
-import { eventAttendanceAccessModeSchema } from "../event-attendance-access";
+import { eventAttendanceAccessMode, eventAttendanceAccessModeSchema } from "../event-attendance-access";
 
 /**
  * Configuration contracts shared by every event-management surface. These are
@@ -105,7 +105,13 @@ export const eventDayInputSchema = z
     for (const [index, option] of value.attendanceOptions.entries()) {
       const alternative = option.waitlistAlternative;
       if (alternative === undefined) continue;
-      if (alternative === option.value || !values.has(alternative))
+      if (eventAttendanceAccessMode(option) !== "physical")
+        ctx.addIssue({
+          code: "custom",
+          message: "Only a venue option can suggest another option",
+          path: ["attendanceOptions", index, "waitlistAlternative"],
+        });
+      else if (alternative === option.value || !values.has(alternative))
         ctx.addIssue({
           code: "custom",
           message: "Choose another option offered on this day",
