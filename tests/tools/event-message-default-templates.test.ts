@@ -17,7 +17,7 @@ describe("editable attendee session message examples", () => {
     async (template) => {
       const rendered = await renderEmail(template.content, data, layout, "markdown", baseUrl);
       expect(renderSubject(template.subjectTemplate, "Event message", data)).toContain(data.eventName);
-      expect(rendered.text).toContain("Hello Alex");
+      expect(rendered.text).toContain("Dear Alex");
       expect(rendered.text).toContain(data.eventName);
       expect(rendered.html).toContain(`${baseUrl}/portal/#/events/${data.eventSlug}/agenda`);
       expect(rendered.html).not.toMatch(/\{\{/);

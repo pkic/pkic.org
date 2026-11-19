@@ -81,7 +81,7 @@ describe("the email for an address that already has an account", () => {
       { ...data, _partials: { reg_details: { content: registrationDetails.content, contentType: "markdown" } } },
       "markdown",
     );
-    expect(body).toContain("Hello Ada,");
+    expect(body).toContain("Dear Ada,");
     expect(body).toContain("you're already registered for **PQC Conference**, so there's nothing more to do");
     expect(body).toContain("View or change my registration");
     expect(body).toContain("## Your registration details");

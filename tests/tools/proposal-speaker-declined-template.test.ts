@@ -28,7 +28,7 @@ describe("speaker declined template", () => {
       { ...values, declineReason: "I am traveling that week." },
       "markdown",
     );
-    expect(rendered).toContain("Hello Ada,");
+    expect(rendered).toContain("Dear Ada,");
     expect(rendered).toContain(
       "Grace Hopper declined to speak on your proposal **Post-Quantum Migration Strategies** for **PQC 2026**.",
     );

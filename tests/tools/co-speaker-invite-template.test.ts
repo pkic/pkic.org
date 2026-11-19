@@ -29,7 +29,7 @@ describe("co-speaker invitation template", () => {
       },
       "markdown",
     );
-    expect(rendered).toContain("Hello Co,");
+    expect(rendered).toContain("Dear Co,");
     expect(rendered).toContain("Ada Lovelace (Example Org) has proposed a session for **PQC 2026**");
     expect(rendered).toContain("**Post-Quantum Migration Strategies**");
     expect(rendered).toContain("A practical guide to migrating enterprise PKI.");

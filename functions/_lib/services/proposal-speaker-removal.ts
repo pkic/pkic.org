@@ -386,7 +386,7 @@ async function removeProposalSpeaker(
         __currentRecipient: { userId: context.speaker_user_id, email: context.speaker_email },
         firstName: emailPlainText(context.speaker_first_name ?? ""),
         proposalTitle: emailPlainText(context.proposal_title),
-        ...directEmailBodyPayload(`{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
+        ...directEmailBodyPayload(`{{#if firstName}}Dear {{firstName}},{{else}}Hello,{{/if}}
 
 You have been removed as a speaker from **{{proposalTitle}}** for **{{eventName}}**. Your previous speaker link no longer works.
 

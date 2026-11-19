@@ -242,6 +242,38 @@ describe("buildTemplateSqlStatements", () => {
     expect(rendered.text).toContain(expected);
     expect(rendered.text.includes("is accepted for")).toBe(proposalDecisionStatus === "accepted");
   });
+  it("asks for changes on a proposal that needs work and links to it", async () => {
+    const decision = DEFAULT_TEMPLATES.find((item) => item.key === "proposal_decision")!;
+    const rendered = await renderEmail(
+      decision.content,
+      {
+        firstName: "Alex",
+        finalStatus: "needs-work",
+        proposalTitle: "Forms for organizations",
+        eventName: "User conference",
+        decisionNote: "Please narrow the scope.",
+        manageUrl: "https://example.test/proposal",
+      },
+      DEFAULT_LAYOUT_HTML,
+    );
+    expect(rendered.text).toContain("Dear Alex,");
+    expect(rendered.text).toContain("asks for changes");
+    expect(rendered.text).toContain("Please narrow the scope.");
+    expect(rendered.html).toContain('href="https://example.test/proposal"');
+    expect(rendered.text).not.toContain("wasn't selected");
+  });
+  it.each([
+    [true, true, true],
+    [true, false, false],
+    [false, true, false],
+  ])(
+    "calls a speaker profile complete only with a bio and a headshot (%s, %s)",
+    async (hasBio, hasHeadshot, complete) => {
+      const request = DEFAULT_TEMPLATES.find((item) => item.key === "speaker_profile_request")!;
+      const rendered = await renderEmail(request.content, { hasBio, hasHeadshot }, DEFAULT_LAYOUT_HTML);
+      expect(rendered.text.includes("Your profile looks complete")).toBe(complete);
+    },
+  );
   it("keeps the baseline layout light and separates public branding from action links", () => {
     expect(DEFAULT_LAYOUT_HTML).toContain('content="light only"');
     expect(DEFAULT_LAYOUT_HTML).toContain("{{brandBaseUrl}}/img/logo-white.png");
