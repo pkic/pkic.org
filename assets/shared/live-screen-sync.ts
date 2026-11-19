@@ -3,7 +3,6 @@ import { liveCompositionInput } from "./live-room-preview";
 import type { LiveRoomOutput, LiveRoomOutputRole } from "./schemas/live-room-output-setup";
 import { liveTimerCounts } from "./live-timer-policy";
 import {
-  EMPTY_LIVE_STAGE,
   type LiveCompositionInput,
   type LiveRoomClientMessage,
   type LiveStage,
@@ -120,20 +119,11 @@ export type LiveScreenTake = Extract<LiveRoomClientMessage, { type: "aux.set" }>
 
 /**
  * What a take to a room screen sends: Preview as it is, scene included, so
- * the screen shows exactly what Preview showed. The speaker's screen alone
- * takes the shot without the graphics it shows from Program while it syncs,
- * so none of Preview's shows there before it is on Program.
+ * the screen shows exactly what Preview showed. The speaker's screen is not
+ * taken to (see liveTakeTargets).
  */
-export function liveScreenTake(
-  output: LiveAuxOutput,
-  room: { shot: LiveStage; sync: LiveScreenSync; outputs: readonly LiveRoomOutput[] },
-): LiveScreenTake {
-  const { shot, sync, outputs } = room;
-  const role = followingRole(sync, outputs, output);
-  const taken: Record<string, unknown> = { ...shot };
-  if (role)
-    for (const graphic of follows(role)) for (const field of GRAPHICS[graphic]) taken[field] = EMPTY_LIVE_STAGE[field];
-  return { type: "aux.set", output, composition: liveCompositionInput(taken as LiveStage) };
+export function liveScreenTake(output: LiveAuxOutput, shot: LiveStage): LiveScreenTake {
+  return { type: "aux.set", output, composition: liveCompositionInput(shot) };
 }
 
 /** Whether an output is a screen the room carries Program's changes to now. */

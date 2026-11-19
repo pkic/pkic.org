@@ -7,6 +7,7 @@ import {
   liveScreenTakesProgramChanges,
 } from "../../assets/shared/live-screen-sync";
 import { liveCompositionInput } from "../../assets/shared/live-room-preview";
+import { liveTakeTargets } from "../../assets/shared/live-room-outputs";
 import { EMPTY_LIVE_STAGE, type LiveStage } from "../../assets/shared/schemas/live-session-room";
 import { DEFAULT_LIVE_SCREEN_SYNC } from "../../assets/shared/schemas/live-screen-sync";
 import { DEFAULT_LIVE_ROOM_OUTPUTS, type LiveRoomOutput } from "../../assets/shared/schemas/live-room-output-setup";
@@ -159,39 +160,24 @@ describe("the speaker's screen synced with Program", () => {
 
 describe("a take to a room screen", () => {
   const shot: LiveStage = { ...program, panelists: { layout: "panel" }, topQuestions, scene: "panel" };
-  const room = { shot, sync: DEFAULT_LIVE_SCREEN_SYNC, outputs };
-  const whole = { type: "aux.set", composition: liveCompositionInput(shot) };
 
-  it("sends Preview exactly, scene, picks and switches, to a screen that follows Program", () => {
-    expect(liveScreenTake("projector", room)).toEqual({ ...whole, output: "projector" });
-  });
-
-  it("sends the whole shot to a screen whose sync is off and to one that shows what you take to it", () => {
-    expect(liveScreenTake("projector", { ...room, sync: { projector: false } })).toEqual({
-      ...whole,
-      output: "projector",
-    });
-    const exact: LiveRoomOutput[] = [
-      { key: "foy", name: "Foyer", code: "FOY", role: "exact", scene: null, sceneLocked: false },
-    ];
-    expect(liveScreenTake("foy", { ...room, outputs: exact })).toEqual({ ...whole, output: "foy" });
-    expect(liveScreenTake("stage-preview", room)).toEqual({ ...whole, output: "stage-preview" });
-  });
-
-  it("sends the stage display the shot without the question, poll, timers and agenda it takes from Program", () => {
-    const next = { ...shot, poll: { id: "p1", presentation: { chart: "bar" as const } } };
-    expect(liveScreenTake("stage-display", { ...room, shot: next })).toEqual({
+  it("sends Preview exactly: scene, picks and switches", () => {
+    expect(liveScreenTake("projector", shot)).toEqual({
       type: "aux.set",
-      output: "stage-display",
-      composition: liveCompositionInput({
-        ...next,
-        question: null,
-        questionChange: null,
-        poll: null,
-        pollChange: null,
-        timerGraphics: [],
-        schedule: null,
-      }),
+      output: "projector",
+      composition: liveCompositionInput(shot),
     });
+  });
+
+  it("offers Program and every screen but the speaker's, which draws its own fixed layout", () => {
+    const foyer: LiveRoomOutput = {
+      key: "foy",
+      name: "Foyer",
+      code: "FOY",
+      role: "exact",
+      scene: null,
+      sceneLocked: false,
+    };
+    expect(liveTakeTargets([...outputs, foyer])).toEqual(["program", "projector", "foy"]);
   });
 });

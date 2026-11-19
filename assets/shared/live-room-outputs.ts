@@ -101,11 +101,13 @@ export function liveOutputRole(outputs: readonly LiveRoomOutput[], key: LiveAuxO
 /**
  * Where the studio's Transition puts Preview: Program, then each of the
  * room's screens in order. Each one shows Preview exactly; a screen that
- * follows Program keeps changing with Program afterwards.
+ * follows Program keeps changing with Program afterwards. The speaker's
+ * screen is no target: it draws its own fixed layout, not a scene, and a
+ * graphic reaches it from its row's menu.
  */
 export type LiveTakeTarget = "program" | LiveAuxOutput;
 export function liveTakeTargets(outputs: readonly LiveRoomOutput[]): LiveTakeTarget[] {
-  return ["program", ...outputs.map((output) => output.key)];
+  return ["program", ...outputs.filter((output) => output.role !== "speaker").map((output) => output.key)];
 }
 
 /** The outputs the studio sends graphics to: every one the room lists. */

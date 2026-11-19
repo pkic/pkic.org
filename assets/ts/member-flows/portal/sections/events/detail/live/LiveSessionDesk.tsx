@@ -182,13 +182,7 @@ export function LiveSessionDesk({
     if (!current) return;
     setTakenTo(target);
     if (target === "program") return void sendProgram({ type: "preview.take" });
-    sendProgram(
-      liveScreenTake(target, {
-        shot: current.preview,
-        sync: current.screenSync,
-        outputs: liveRoomOutputs(current.session),
-      }),
-    );
+    sendProgram(liveScreenTake(target, current.preview));
   };
   useTakeShortcut(() => take("program"), live && !broadcasting);
   const phone = useStudioPhone();

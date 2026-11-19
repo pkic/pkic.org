@@ -70,7 +70,7 @@ export const studioOutputSections: PreviewSection[] = [
   {
     id: "studio-transition",
     title: "Transition to Program or to a screen",
-    note: "One take button per screen, stacked, each in its tally color. Program is first and runs on Space. A screen shows Preview exactly; one that follows Program keeps changing with Program afterwards. Labeled, the buttons spell out the screen.",
+    note: "One take button per output that draws a scene, stacked, each in its tally color; the speaker's screen has its own fixed layout and no button. Program is first and runs on Space. A screen shows Preview exactly; one that follows Program keeps changing with Program afterwards. Labeled, the buttons spell out the screen.",
     render: () => (
       <div class="pk-cluster">
         <TransitionControl

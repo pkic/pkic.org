@@ -4,7 +4,6 @@ import {
   LIVE_PROGRAM_OUTPUT_DETAILS,
   liveOutputDetails,
   liveOutputFixedScene,
-  liveOutputRole,
   liveTakeTargets,
   type LiveAuxOutput,
   type LiveTakeTarget,
@@ -25,8 +24,8 @@ export const TAKE_SHORTCUT = "Space";
 /** What the Transition does, said on hover wherever it appears. */
 export const TRANSITION_HINT = "Replace Program with Preview. This changes the overlay output, not the stream.";
 
-/** How a take reaches a screen: Preview as it is, Preview in the scene its room fixed for it, or the speaker screen's own way. */
-type ScreenTake = { scene: "preview" | "fixed" | "speaker"; follows: boolean };
+/** How a take reaches a screen: Preview as it is, or Preview in the scene its room fixed for it. */
+type ScreenTake = { scene: "preview" | "fixed"; follows: boolean };
 
 function screenTake(
   outputs: readonly LiveRoomOutput[],
@@ -34,7 +33,6 @@ function screenTake(
   target: LiveAuxOutput,
 ): ScreenTake {
   const follows = screenSync !== null && liveScreenSyncs(screenSync, outputs, target);
-  if (follows && liveOutputRole(outputs, target) === "speaker") return { scene: "speaker", follows };
   return { scene: liveOutputFixedScene(outputs, target) ? "fixed" : "preview", follows };
 }
 
@@ -42,12 +40,9 @@ function screenTake(
  * What a Transition to a screen does, on hover: its name, then what a click
  * does. A screen shows Preview exactly, in Preview's scene or in the one its
  * room fixed for it. One that follows Program keeps changing with Program
- * afterwards. The speaker's screen draws no scene and keeps taking its
- * question and timers from Program.
+ * afterwards.
  */
 function screenTransitionHint(screen: string, take: ScreenTake): string {
-  if (take.scene === "speaker")
-    return `Transition to ${screen}\nShow Preview on ${screen}. Its question and timer stay Program's.`;
   const shows =
     take.scene === "fixed"
       ? `Show what is on Preview on ${screen}, in ${screen}'s own scene.`
@@ -72,7 +67,7 @@ export function clearHint(output: "preview" | "program" | "screen", label: strin
 }
 
 /**
- * The switcher's Transition: one take button per output, stacked, each an arrow and that output's code in its tally
+ * The switcher's Transition: one take button per output but the speaker's screen, stacked, each an arrow and that output's code in its tally
  * color. Program first; Space is its shortcut. In its own small panel on the
  * desk and between the two pictures on a phone. Labeled, the buttons say the
  * output's full name.

@@ -106,12 +106,7 @@ describe("live control room Transition", () => {
     const credit = snapshot.session.credits[0]!;
     expect(
       [...host.querySelectorAll(".pk-studio-transition button")].map((button) => button.getAttribute("aria-label")),
-    ).toEqual([
-      "Transition to Program",
-      "Transition to Projector",
-      "Transition to Stage display",
-      "Transition to Foyer",
-    ]);
+    ).toEqual(["Transition to Program", "Transition to Projector", "Transition to Foyer"]);
     void act(() =>
       live.latest().deliver({ type: "preview.changed", composition: { ...snapshot.preview, lowerThird: credit } }),
     );
@@ -163,13 +158,8 @@ describe("live control room Transition", () => {
     );
     void act(() => take(host, "Projector").click());
     expect(liveRoomClientMessageSchema.parse(commands(live).at(-1))).toMatchObject(whole);
-    // The speaker's screen takes the shot as before, without the question and the timer it follows from Program.
-    void act(() => take(host, "Stage display").click());
-    expect(liveRoomClientMessageSchema.parse(commands(live).at(-1))).toMatchObject({
-      type: "aux.set",
-      output: "stage-display",
-      composition: { scene: "panel", panelists: { layout: "panel" }, questionId: null, timerGraphics: [] },
-    });
+    // The speaker's screen draws its own fixed layout, so there is no Transition to it.
+    expect(host.querySelector('button[aria-label="Transition to Stage display"]')).toBeNull();
     // With its sync off, the projector takes the same shot and then stays as it is.
     void act(() => live.latest().deliver({ type: "screen.sync.changed", screenSync: { projector: false } }));
     expect(hint("Projector")).toBe(
