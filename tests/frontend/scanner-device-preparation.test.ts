@@ -8,6 +8,7 @@ import {
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
   post: vi.fn(),
+  resume: vi.fn(),
   epoch: {} as Record<string, unknown>,
   put: vi.fn(),
   archives: [] as Record<string, unknown>[],
@@ -18,6 +19,9 @@ vi.mock("../../assets/ts/shared/api-client", async (original) => ({
   ...(await original<typeof import("../../assets/ts/shared/api-client")>()),
   getJson: mocks.get,
   postJson: mocks.post,
+}));
+vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-session-resumption", () => ({
+  resumeScannerServerSession: mocks.resume,
 }));
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/outbox-storage", () => ({
   SCANNER_EPOCH_STORE: "scanner-epochs",
@@ -88,6 +92,7 @@ beforeEach(() => {
   vi.stubGlobal("IDBKeyRange", { only: (value: unknown) => value });
   mocks.get.mockReset();
   mocks.post.mockReset();
+  mocks.resume.mockReset();
   mocks.put.mockReset().mockImplementation((value) => {
     mocks.epoch = value;
   });
@@ -133,7 +138,7 @@ describe("persistent scanner preparation", () => {
     expect(mocks.get).not.toHaveBeenCalled();
     expect(mocks.post).not.toHaveBeenCalled();
   });
-  it.each(["closed", "closing"])("follows the server to %s despite a prepared local lease", async (state) => {
+  it.each(["closed", "closing"])("keeps the saved lease when a %s session cannot be resumed", async (state) => {
     mocks.epoch = { ...mocks.epoch, collectorContext: preparedLease() };
     mocks.get.mockResolvedValue(
       status(
@@ -141,10 +146,21 @@ describe("persistent scanner preparation", () => {
         state === "closing" ? new Date().toISOString() : null,
       ),
     );
+    mocks.resume.mockRejectedValue(new Error("Unavailable"));
     const prepared = await prepareScannerEpoch("synthetic-event", operator, device);
-    expect(prepared.state).toBe(state);
+    expect(prepared.state).toBe("open");
     expect(prepared.issuedHighWater).toBe(17);
-    expect(mocks.epoch.state).toBe(state);
+    expect(mocks.epoch.state).toBe("open");
+    expect(mocks.resume).toHaveBeenCalledOnce();
+  });
+  it("resumes a server-closed session with its original epoch and counter", async () => {
+    mocks.epoch = { ...mocks.epoch, collectorContext: preparedLease() };
+    mocks.get.mockResolvedValue(status(new Date().toISOString()));
+    mocks.resume.mockResolvedValue(status(null));
+    const prepared = await prepareScannerEpoch("synthetic-event", operator, device);
+    expect(prepared.state).toBe("open");
+    expect(prepared.issuedHighWater).toBe(17);
+    expect(mocks.resume).toHaveBeenCalledWith("synthetic-event", epochId, device, undefined);
   });
   it.each([401, 403, 429, 500, 503])("keeps a prepared local lease through HTTP %s", async (httpStatus) => {
     mocks.epoch = { ...mocks.epoch, collectorContext: preparedLease() };

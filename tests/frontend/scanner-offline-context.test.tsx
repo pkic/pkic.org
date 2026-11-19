@@ -307,13 +307,12 @@ describe("scanner-only offline preparation", () => {
     expect(key.length).toBeGreaterThan(200);
     expect(await restoreScannerOfflineContext(longRoute)).toMatchObject({ slug: longSlug, route: longRoute });
   });
-  it.each(["logout", "account", "closed", "tampered", "rollback", "expired", "ambiguous", "transport-restored"])(
+  it.each(["logout", "account", "tampered", "rollback", "expired", "ambiguous", "transport-restored"])(
     "refuses %s without deleting pending epoch evidence",
     async (reason) => {
       retain();
       if (reason === "logout") mocks.suspended.mockResolvedValue(true);
       if (reason === "account") mocks.active.mockResolvedValue({ sessionId: eventId, operatorUserId: operator });
-      if (reason === "closed") mocks.rows[0] = { ...mocks.rows[0], state: "closed", closingOperationId: device };
       if (reason === "tampered")
         mocks.rows[0] = { ...mocks.rows[0], collectorContext: { ...context(), email: "private@example.test" } };
       if (reason === "rollback") vi.setSystemTime(new Date("2026-10-07T08:59:59.999Z"));

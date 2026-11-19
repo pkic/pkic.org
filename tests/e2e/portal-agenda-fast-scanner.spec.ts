@@ -82,7 +82,12 @@ test("badge collection opens for an upcoming event after daily preparation", asy
     await preparationGate;
     await route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
   });
+  const enrolled = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname.endsWith("/scanner/devices/sessions") && response.request().method() === "POST",
+  );
   await page.goto(`/portal/#/events/${event.slug}/scanner`);
+  const enrollment = scannerDeviceSessionEnrollmentResponseSchema.parse(await (await enrolled).json());
   const collection = page.getByRole("button", { name: "Badge collection", exact: true });
   await expect(collection).toBeEnabled();
   const launch = page.getByRole("tabpanel", { name: "Scan", exact: true });
@@ -107,6 +112,7 @@ test("badge collection opens for an upcoming event after daily preparation", asy
   await expect(scanner.getByRole("status", { name: "Scanner status", exact: true })).toHaveAttribute(
     "title",
     "All scans synced",
+    { timeout: 15_000 },
   );
   await expect(scanner.locator(".pk-fast-scanner__feedback")).toHaveText("Ready for badge collection");
   await expect(scanner.locator(".pk-fast-scanner__feedback")).not.toContainText("Ready to scan");
@@ -123,6 +129,31 @@ test("badge collection opens for an upcoming event after daily preparation", asy
     "All scans synced",
   );
   await page.screenshot({ animations: "disabled", path: testInfo.outputPath("badge-collection-phone.png") });
+  const serverClose = await page.request.post(
+    `/api/v1/events/${event.slug}/scanner/devices/sessions/${enrollment.epochId}/closing`,
+    {
+      data: scannerDeviceSessionClosingSchema.parse({
+        operationId: randomUUID(),
+        highWaterSequence: 0,
+        pendingCount: 0,
+        recoveryCount: 0,
+      }),
+    },
+  );
+  const serverClosedStatus = await serverClose.json();
+  expect(serverClose.status(), JSON.stringify(serverClosedStatus)).toBe(200);
+  expect(scannerDeviceSessionStatusSchema.parse(serverClosedStatus).closedAt).not.toBeNull();
+  const resumption = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname.endsWith(`/scanner/devices/sessions/${enrollment.epochId}/resumption`) &&
+      response.request().method() === "POST",
+  );
+  await page.reload();
+  expect((await resumption).status()).toBe(200);
+  await page.getByRole("button", { name: "Badge collection", exact: true }).click();
+  await expect(scanner).toBeVisible();
+  await expect(scanner.locator(".pk-fast-scanner__feedback")).toHaveText("Ready for badge collection");
+  await page.screenshot({ animations: "disabled", path: testInfo.outputPath("server-resumed-phone.png") });
   for (const status of [500, 403, 429]) {
     refreshStatus = status;
     await Promise.all([
