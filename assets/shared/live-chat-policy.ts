@@ -103,6 +103,8 @@ export interface LiveChatActionSubject {
  * The actions one viewer may take on one message. The room checks every
  * request against this set; the message menu offers exactly this set. A
  * viewer kept from posting (`restricted`) still reads and deletes their own.
+ * A moderator takes their own message away by deleting it, as anyone does:
+ * removing with a reason is for someone else's message.
  *
  * | Action     | Participant         | Moderator             | Organizer             |
  * | ---------- | ------------------- | --------------------- | --------------------- |
@@ -110,7 +112,7 @@ export interface LiveChatActionSubject {
  * | react      | unless restricted   | yes                   | yes                   |
  * | report     | others', unrestricted | no (removes instead) | no (removes instead) |
  * | delete     | own messages        | own messages          | own messages          |
- * | remove     | no                  | any shown message     | any shown message     |
+ * | remove     | no                  | others' shown         | others' shown         |
  * | keep       | no                  | held or reported      | held or reported      |
  * | done       | no                  | attendee messages     | attendee messages     |
  * | convert    | no                  | attendee messages     | attendee messages     |
@@ -138,7 +140,7 @@ export function liveChatActions(
   )
     actions.add("report");
   if (staff) {
-    if (!message.hidden || message.held) actions.add("remove");
+    if (!message.mine && (!message.hidden || message.held)) actions.add("remove");
     if (message.hidden || message.reported) actions.add("keep");
     if (message.channel === "attendee" && !message.hidden && !message.converted) actions.add("convert");
     if (message.channel === "attendee" && !message.done) actions.add("done");

@@ -237,6 +237,25 @@ describe("live chat", () => {
       "participation.block:paused",
       "participation.block:session",
     ]);
+    // A moderator's own message is theirs to delete; removing with a reason is for someone else's.
+    const ownAsModerator = mount(
+      <LiveChat
+        state={stateWith({
+          viewer: { role: "operator", name: "Rita", organizer: false },
+          chat: [
+            chatMessage({
+              mine: true,
+              moderation: { ...moderation, reports: 0, reportReasons: {}, authorStaff: true },
+            }),
+          ],
+        })}
+        disabled={false}
+        send={send}
+      />,
+    );
+    const ownEffects = await menuEffects(ownAsModerator, send);
+    expect(ownEffects).toContain("chat.delete");
+    expect(ownEffects).not.toContain("chat.moderate:remove");
     const organizer = mount(
       <LiveChat
         state={stateWith({
