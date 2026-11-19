@@ -152,16 +152,21 @@ describe("room screens", () => {
   /** The projector in the Q&A scene, which includes a question; the Default scene holds no boards. */
   const inQuestions = { ...EMPTY_LIVE_AUX_COMPOSITION, scene: "questions" };
 
-  it("marks each synced screen as following when it shows Program's question, and as put there when it has its own", () => {
+  it("marks a screen as following while it shows Program's question, and as on when it holds one to stay", () => {
     const state = roomState();
     state.outputs = { ...state.outputs, projector: inQuestions };
     expect(liveScreens(liveTargets(state), layer)).toMatchObject({ on: [], following: [] });
+    // The room carried Program's question to the projector; the stage display shows it from Program.
     state.stage = { ...state.stage, question };
+    state.outputs = { ...state.outputs, projector: { ...inQuestions, question } };
     expect(liveScreens(liveTargets(state), layer)).toMatchObject({ on: [], following: ["projector", "stage-display"] });
     // Off air no screen shows Program's question.
     expect(liveScreens(liveTargets(state, { programActive: false }), layer).following).toEqual([]);
     state.outputs = { ...state.outputs, "stage-display": { ...EMPTY_LIVE_AUX_COMPOSITION, question } };
     expect(liveScreens(liveTargets(state), layer)).toMatchObject({ on: ["stage-display"], following: ["projector"] });
+    // A question taken to the projector that Program does not show is there to stay.
+    state.stage = { ...state.stage, question: null };
+    expect(liveScreens(liveTargets(state), layer)).toMatchObject({ on: ["projector", "stage-display"], following: [] });
   });
 
   it("follows Program's graphic on a screen only when the screen's own scene includes it, lower third included", () => {
@@ -169,14 +174,17 @@ describe("room screens", () => {
     const credit = state.session.credits[0]!;
     const lowerThird = { kind: "lowerThird", key: credit.key } as const;
     state.stage = { ...state.stage, question, lowerThird: credit, scene: "questions" };
+    /** The projector with Program's graphics carried to it, in its own scene. */
+    const carried = (scene: string | null) => ({ ...EMPTY_LIVE_AUX_COMPOSITION, question, lowerThird: credit, scene });
     // Nobody took a scene to the projector: it draws Default, which places a lower third and no question.
+    state.outputs = { ...state.outputs, projector: carried(null) };
     expect(liveScreens(liveTargets(state), layer).following).toEqual(["stage-display"]);
     expect(liveScreens(liveTargets(state), lowerThird).following).toEqual(["projector"]);
     // In Q&A it draws both; in Panel, which names its people itself, neither the lower third.
-    state.outputs = { ...state.outputs, projector: inQuestions };
+    state.outputs = { ...state.outputs, projector: carried("questions") };
     expect(liveScreens(liveTargets(state), layer).following).toEqual(["projector", "stage-display"]);
     expect(liveScreens(liveTargets(state), lowerThird).following).toEqual(["projector"]);
-    state.outputs = { ...state.outputs, projector: { ...EMPTY_LIVE_AUX_COMPOSITION, scene: "panel" } };
+    state.outputs = { ...state.outputs, projector: carried("panel") };
     expect(liveScreens(liveTargets(state), lowerThird).following).toEqual([]);
     // The scene its room fixed for the screen wins over the one taken to it.
     state.session = {
@@ -204,10 +212,11 @@ describe("room screens", () => {
   it("does not follow on a screen whose sync is off", () => {
     const state = roomState();
     state.stage = { ...state.stage, question };
-    state.outputs = { ...state.outputs, projector: inQuestions };
+    state.outputs = { ...state.outputs, projector: { ...inQuestions, question } };
     expect(liveScreens(liveTargets(state), layer).following).toEqual(["projector", "stage-display"]);
+    // With sync off the projector keeps the question as its own.
     state.screenSync = { projector: false, "stage-display": true };
-    expect(liveScreens(liveTargets(state), layer).following).toEqual(["stage-display"]);
+    expect(liveScreens(liveTargets(state), layer)).toMatchObject({ on: ["projector"], following: ["stage-display"] });
     state.screenSync = { projector: false, "stage-display": false };
     expect(liveScreens(liveTargets(state), layer).following).toEqual([]);
   });

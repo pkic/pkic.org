@@ -121,7 +121,7 @@ describe("live control room Transition", () => {
     expect(sent).toMatchObject({ type: "aux.set", output: "foy", composition: { creditKey: credit.key } });
   });
 
-  it("takes only Preview's scene to a screen that follows Program, and the whole shot once its sync is off", () => {
+  it("takes Preview exactly to a screen that follows Program, and to one whose sync is off", () => {
     const { host, live } = mountDesk();
     const snapshot = liveSnapshot({ viewer: OPERATOR });
     // A title just written is the current one; the tooltip layer moves it into the hint a moment later.
@@ -147,28 +147,8 @@ describe("live control room Transition", () => {
         },
       }),
     );
-    // The take names the scene and nothing else: no pick and no switch, so those stay Program's.
-    expect(hint("Projector")).toBe(
-      "Transition to Projector\nPut Preview's scene on Projector, with what comes on with that scene. It keeps showing what is on Program; what you put on it yourself goes.",
-    );
-    void act(() => take(host, "Projector").click());
-    expect(liveRoomClientMessageSchema.parse(commands(live).at(-1))).toEqual({
-      type: "aux.scene",
-      output: "projector",
-      scene: "panel",
-    });
-    // The speaker's screen takes the shot as before, without the question and the timer it follows from Program.
-    void act(() => take(host, "Stage display").click());
-    expect(liveRoomClientMessageSchema.parse(commands(live).at(-1))).toMatchObject({
-      type: "aux.set",
-      output: "stage-display",
-      composition: { scene: "panel", panelists: { layout: "panel" }, questionId: null, timerGraphics: [] },
-    });
-    // With its sync off, the projector holds what it is given: the whole of Preview.
-    void act(() => live.latest().deliver({ type: "screen.sync.changed", screenSync: { projector: false } }));
-    expect(hint("Projector")).toBe("Transition to Projector\nShow Preview on Projector. Program stays as it is.");
-    void act(() => take(host, "Projector").click());
-    expect(liveRoomClientMessageSchema.parse(commands(live).at(-1))).toMatchObject({
+    // The take sends the whole shot: scene, picks and switches, so the projector shows what Preview shows.
+    const whole = {
       type: "aux.set",
       output: "projector",
       composition: {
@@ -177,7 +157,26 @@ describe("live control room Transition", () => {
         questionId: LIVE_QUESTION,
         timerGraphics: [timer],
       },
+    };
+    expect(hint("Projector")).toBe(
+      "Transition to Projector\nShow Preview on Projector, exactly as it is. After that, what you change on Program changes on Projector too.",
+    );
+    void act(() => take(host, "Projector").click());
+    expect(liveRoomClientMessageSchema.parse(commands(live).at(-1))).toMatchObject(whole);
+    // The speaker's screen takes the shot as before, without the question and the timer it follows from Program.
+    void act(() => take(host, "Stage display").click());
+    expect(liveRoomClientMessageSchema.parse(commands(live).at(-1))).toMatchObject({
+      type: "aux.set",
+      output: "stage-display",
+      composition: { scene: "panel", panelists: { layout: "panel" }, questionId: null, timerGraphics: [] },
     });
+    // With its sync off, the projector takes the same shot and then stays as it is.
+    void act(() => live.latest().deliver({ type: "screen.sync.changed", screenSync: { projector: false } }));
+    expect(hint("Projector")).toBe(
+      "Transition to Projector\nShow Preview on Projector, exactly as it is. Program stays as it is.",
+    );
+    void act(() => take(host, "Projector").click());
+    expect(liveRoomClientMessageSchema.parse(commands(live).at(-1))).toMatchObject(whole);
   });
 
   it("clears the shared Preview from its monitor to a blank frame in the Default scene", () => {

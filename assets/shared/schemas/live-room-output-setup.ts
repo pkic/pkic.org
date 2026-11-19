@@ -13,7 +13,7 @@ import { authErrors, ok, requiresPermissions } from "./route-contract";
 /**
  * What an output shows. `exact`: only what an operator takes to it, from
  * Preview, with its own take button. `follow`: what is on Program, drawn in
- * the output's own scene, plus what an operator sends to it. `speaker`: the
+ * the output's own scene, and Preview exactly once an operator takes it there. `speaker`: the
  * speaker's screen, with the time, the next question and the messages to the
  * speaker.
  */

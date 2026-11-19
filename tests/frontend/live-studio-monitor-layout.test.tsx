@@ -298,7 +298,7 @@ describe("studio monitor layouts", () => {
     expect(sync("Livestream")).toBeNull();
     const projector = sync("Projector")!;
     expect(projector.getAttribute("aria-pressed")).toBe("true");
-    expect(projector.title).toMatch(/^Sync with Program: on\nShows what is live on Program/);
+    expect(projector.title).toMatch(/^Sync with Program: on\nWhat you change on Program changes here too/);
     void act(() => projector.click());
     expect(switcher.sync).toHaveBeenLastCalledWith("projector", false);
     expect(sync("Stage display")!.getAttribute("aria-pressed")).toBe("true");

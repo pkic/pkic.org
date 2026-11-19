@@ -35,14 +35,16 @@ import "./live-tally.css";
 import "./LiveRowMenu.css";
 
 /**
- * Where a graphic is among the room's screens: the screens it was put on,
- * and the screens that show it anyway because it is on Program and they sync
- * with Program. A synced screen takes a graphic from Program wherever it has
- * none of its own of that kind, and shows it when its own scene includes it.
+ * Where a graphic is among the room's screens: the screens it is on and
+ * stays on, and the screens that show it while it is on Program, because
+ * they sync with Program. A screen that follows Program holds what the room
+ * carried over from Program and shows it when its own scene includes it;
+ * the speaker's screen shows Program's graphic wherever it has none of its
+ * own of that kind.
  */
 export interface LiveScreens {
   on: readonly LiveAuxOutput[];
-  /** Screens that show it from Program, not because it was put on them. */
+  /** Screens that show it while it is on Program, and lose it when it goes off air. */
   following: readonly LiveAuxOutput[];
   /** The room's outputs, which name and color them. */
   outputs: readonly LiveRoomOutput[];
@@ -76,7 +78,26 @@ function draws(
   return liveLayerShown(shown, layer);
 }
 
-/** Whether a screen shows a graphic because it is on Program, not because it was put there. */
+/**
+ * Whether a screen that follows Program holds a graphic that is on Program
+ * too: the room takes it off that screen when it goes off air.
+ */
+function carriedFromProgram(
+  targets: LiveTargets,
+  where: ReturnType<typeof liveLayerTargets>,
+  output: LiveAuxOutput,
+): boolean {
+  const { state } = targets;
+  const outputs = liveRoomOutputs(state.session);
+  return (
+    where.program &&
+    where.aux(output) &&
+    liveOutputRole(outputs, output) === "follow" &&
+    liveScreenSyncs(state.screenSync, outputs, output)
+  );
+}
+
+/** Whether a screen shows a graphic while it is on Program, and loses it when it goes off air. */
 function followsProgram(
   targets: LiveTargets,
   layer: LiveLayer,
@@ -86,11 +107,11 @@ function followsProgram(
   const { state } = targets;
   const outputs = liveRoomOutputs(state.session);
   const role = liveOutputRole(outputs, output);
+  // A screen that follows Program draws in its own scene: a graphic that scene leaves out does not show there.
+  if (carriedFromProgram(targets, where, output))
+    return resolveLiveSceneElements(state, liveOutputScene(state, output))[liveLayerElement(layer)].visible;
   if (!where.program || where.aux(output) || !liveScreenSyncs(state.screenSync, outputs, output)) return false;
   if (!followsKind(role, layer)) return false;
-  // A screen that follows Program draws in its own scene: a graphic that scene leaves out does not show there.
-  const scene = resolveLiveSceneElements(state, liveOutputScene(state, output));
-  if (role === "follow" && !scene[liveLayerElement(layer)].visible) return false;
   const shown = liveScreenComposition(output, {
     own: liveOutputComposition(state.outputs, output),
     program: state.stage,
@@ -107,41 +128,60 @@ export function liveScreens(targets: LiveTargets, layer: LiveLayer): LiveScreens
   const outputs = liveRoomOutputs(targets.state.session);
   const keys = liveStudioOutputs(outputs);
   return {
-    on: keys.filter((output) => where.aux(output)),
+    on: keys.filter((output) => where.aux(output) && !carriedFromProgram(targets, where, output)),
     following: keys.filter((output) => followsProgram(targets, layer, where, output)),
     outputs,
   };
 }
 
+/**
+ * How a graphic stands on one screen: off, on and staying, on a screen that
+ * follows Program while it is live there too (`carried`), kept on the
+ * speaker's screen while it is live, or shown there only because it is live.
+ */
+type ScreenStanding = "off" | "on" | "carried" | "kept" | "following";
+
 /** What a click on a screen's item does, in the words of the room. */
-function screenDescription(name: string, on: boolean, following: boolean, keptWhileLive: boolean): string {
-  const screen = name;
-  if (keptWhileLive) return `Kept on ${screen}. Click to show it there only while it is live.`;
-  if (on) return `On ${screen}. Click to take it off.`;
-  if (following) return `On ${screen} because it is live. Click to keep it there after it goes off air.`;
-  return `Show it on ${screen}.`;
+function screenDescription(screen: string, standing: ScreenStanding): string {
+  const says: Record<ScreenStanding, string> = {
+    off: `Show it on ${screen}.`,
+    on: `On ${screen}. Click to take it off.`,
+    carried: `On ${screen} while it is live. Click to take it off ${screen}.`,
+    kept: `Kept on ${screen}. Click to show it there only while it is live.`,
+    following: `On ${screen} because it is live. Click to keep it there after it goes off air.`,
+  };
+  return says[standing];
 }
 
 /** A switch per screen of the room that can draw the graphic, in its tally color, checked where the graphic was put, each saying what a click does. */
 export function liveScreenItems(targets: LiveTargets, layer: LiveLayer): MenuItem[] {
-  const { on, following } = liveScreens(targets, layer);
-  const live = liveLayerTargets(targets, layer).program;
+  const { following } = liveScreens(targets, layer);
+  const where = liveLayerTargets(targets, layer);
   const outputs = liveRoomOutputs(targets.state.session);
   // A screen that cannot draw the graphic is left out, unless it holds one already and needs a way to take it off.
   const offered = liveStudioOutputs(outputs).filter(
-    (output) => liveScreenDraws(liveOutputRole(outputs, output), graphicOf(layer)) || on.includes(output),
+    (output) => liveScreenDraws(liveOutputRole(outputs, output), graphicOf(layer)) || where.aux(output),
   );
   return offered.map((output) => {
-    const put = on.includes(output);
+    const put = where.aux(output);
     const role = liveOutputRole(outputs, output);
-    const kept = put && live && liveScreenSyncs(targets.state.screenSync, outputs, output) && followsKind(role, layer);
+    const synced = liveScreenSyncs(targets.state.screenSync, outputs, output);
+    const standing: ScreenStanding = carriedFromProgram(targets, where, output)
+      ? "carried"
+      : put && where.program && synced && followsKind(role, layer)
+        ? "kept"
+        : put
+          ? "on"
+          : following.includes(output)
+            ? "following"
+            : "off";
     const { label } = liveOutputDetails(outputs, output);
     return {
       id: `screen-${output}`,
       label,
       // The screen's tally dot, so its name matches the monitor's color without looking up.
       icon: <span class="pk-live-screen-dot" {...liveTallyAttributes(outputs, output)} />,
-      description: screenDescription(label, put, following.includes(output), kept),
+      description: screenDescription(label, standing),
       checked: put,
       multiple: true,
       keepOpen: true,

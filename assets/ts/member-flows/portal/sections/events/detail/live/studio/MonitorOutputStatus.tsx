@@ -1,4 +1,5 @@
 import { formatNumber } from "../../../../../../../../shared/format-number";
+import { liveOutputRole } from "../../../../../../../../shared/live-room-outputs";
 import { liveScreenSyncs } from "../../../../../../../../shared/live-screen-sync";
 import type { LiveRoomOutput } from "../../../../../../../../shared/schemas/live-room-output-setup";
 import type { LiveSyncedScreen } from "../../../../../../../../shared/schemas/live-screen-sync";
@@ -19,10 +20,20 @@ function SyncIcon({ synced }: { synced: boolean }) {
   );
 }
 
-/** What a room screen shows besides its own graphics, said for an operator who is unsure mid-show. */
+/**
+ * What sync does for a room screen, said for an operator who is unsure
+ * mid-show. A screen that follows Program changes with it; the speaker's
+ * screen shows Program's question and timers beside its own.
+ */
 const SYNC_HINTS = {
-  on: "Sync with Program: on\nShows what is live on Program, plus anything you put here. Click to show only what you put here.",
-  off: "Sync with Program: off\nShows only what you put here. Click to also show what is live on Program.",
+  screen: {
+    on: "Sync with Program: on\nWhat you change on Program changes here too. Click to stop that; this screen then stays as it is until you change it.",
+    off: "Sync with Program: off\nThis screen stays as it is until you change it. Click to show what is on Program now and follow it again.",
+  },
+  speaker: {
+    on: "Sync with Program: on\nShows what is live on Program, plus anything you put here. Click to show only what you put here.",
+    off: "Sync with Program: off\nShows only what you put here. Click to also show what is live on Program.",
+  },
 } as const;
 
 /** Whether a room screen follows Program: on by default, a red PGM chip while on. */
@@ -43,7 +54,7 @@ export function SyncToggle({
       data-tally="program"
       aria-pressed={synced}
       aria-label={`Sync ${studioOutputDetails(room, output).label} with Program`}
-      title={synced ? SYNC_HINTS.on : SYNC_HINTS.off}
+      title={SYNC_HINTS[liveOutputRole(room, output) === "speaker" ? "speaker" : "screen"][synced ? "on" : "off"]}
       disabled={switcher.disabled}
       onClick={() => switcher.sync(output, !synced)}
     >

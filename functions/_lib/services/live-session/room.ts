@@ -246,7 +246,12 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
 
   /** Takes over the Program of the session made active after another in this physical room. */
   async adoptProgramStage(stage: LiveStage): Promise<void> {
+    const before = this.store.stage();
     await this.broadcast.all(this.controls.adoptProgram(stage));
+    const room = this.store.session();
+    if (!room) return;
+    for (const message of this.outputs.followProgram(room.session, before, this.store.stage()))
+      await this.broadcast.all(message);
   }
 
   async readProgram(eventId: string, roomId: string): Promise<LiveProgramSelection> {
@@ -521,7 +526,15 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
         return;
     }
     if (!operator) return REFUSALS.operatorOnly;
-    return this.apply(await operateLiveDesk(this.desk, actor, session, message));
+    const program = this.store.stage();
+    return this.apply(this.followed(session, program, await operateLiveDesk(this.desk, actor, session, message)));
+  }
+
+  /** An operator's change to Program also reaches the screens that follow it, in the same outcome. */
+  private followed(session: LiveRoomSession, before: LiveStage, outcome: LiveControlOutcome): LiveControlOutcome {
+    if ("code" in outcome) return outcome;
+    const messages = this.outputs.followProgram(session, before, this.store.stage());
+    return messages.length ? { ...outcome, messages: [...outcome.messages, ...messages] } : outcome;
   }
 
   private async apply(outcome: LiveControlOutcome): Promise<Handled> {

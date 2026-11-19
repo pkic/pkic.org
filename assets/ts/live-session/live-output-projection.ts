@@ -12,10 +12,10 @@ export function isLiveAuxOutput(view: string): view is LiveAuxOutput {
 }
 
 /**
- * The room as one auxiliary output shows it: its own composition, with
- * Program's graphics while it syncs (see live-screen-sync). The stage
- * display also shows the speaker the question lined up next in Preview
- * while it syncs.
+ * The room as one auxiliary output shows it: its own composition, which the
+ * room keeps in step with Program while the output follows it (see
+ * live-screen-sync). The stage display also shows Program's question and
+ * timers, and the question lined up next in Preview, while it syncs.
  */
 export function liveOutputProjection(state: LiveRoomState, output: LiveAuxOutput): LiveRoomState {
   const outputs = liveRoomOutputs(state.session);

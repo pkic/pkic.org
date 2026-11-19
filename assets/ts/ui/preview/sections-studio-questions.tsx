@@ -146,6 +146,17 @@ const SCREENS_ROOM: LiveRoomState = {
   },
 };
 const SCREENS_TARGETS = { ...TARGETS, state: SCREENS_ROOM };
+/** The projector follows Program, so the room carried the question on air to it; its Q&A scene draws it. */
+const CARRIED_TARGETS = {
+  ...TARGETS,
+  state: {
+    ...SCREENS_ROOM,
+    outputs: {
+      ...SCREENS_ROOM.outputs,
+      projector: { ...EMPTY_LIVE_AUX_COMPOSITION, question: SCREENS_ROOM.stage.question, scene: "questions" },
+    },
+  },
+};
 
 function QuestionsPanelSpecimen({ targets = TARGETS }: { targets?: typeof TARGETS }) {
   return (
@@ -243,6 +254,22 @@ export const studioQuestionSections: PreviewSection[] = [
       <div data-density="compact" data-gallery-open class="pk-preview__open-menu">
         <LiveRowMenu
           targets={SCREENS_TARGETS}
+          layer={{ kind: "question", id: ON_AIR }}
+          label="Question actions"
+          heading="Question"
+          items={[{ id: "answered", label: "Mark answered", onSelect: noCommand }]}
+        />
+      </div>
+    ),
+  },
+  {
+    id: "studio-screens-menu-carried",
+    title: "Studio: the row menu while the projector shows a live question",
+    note: "The projector follows Program, so the question on air is on it too: a ring under ⋯, checked, and it leaves the projector when it goes off air. A click takes it off the projector alone.",
+    render: () => (
+      <div data-density="compact" data-gallery-open class="pk-preview__open-menu">
+        <LiveRowMenu
+          targets={CARRIED_TARGETS}
           layer={{ kind: "question", id: ON_AIR }}
           label="Question actions"
           heading="Question"

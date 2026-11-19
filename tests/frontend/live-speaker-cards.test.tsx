@@ -154,13 +154,15 @@ it("shows Program on the row edge, a screen it was put on as a dot on the menu, 
   const state = roomState();
   const credit = state.session.credits[0]!;
   state.stage = { ...state.stage, lowerThird: credit };
+  // The projector follows Program, so the room carried the lower third to it.
+  state.outputs = { ...state.outputs, projector: { ...EMPTY_LIVE_AUX_COMPOSITION, lowerThird: credit } };
   const sendProgram = vi.fn((_message: LiveRoomClientMessage) => true);
   host = document.body.appendChild(document.createElement("div"));
   await act(() => render(<LiveSpeakerCards targets={liveTargets(state, { sendProgram })} />, host!));
   const bands = host.querySelectorAll(".pk-live-person .pk-live-tally-bands > [data-tally]");
   expect([...bands].map((band) => band.getAttribute("data-tally"))).toEqual(["program"]);
   const menu = () => host!.querySelector<HTMLButtonElement>(`button[aria-label="${credit.name} actions"]`)!;
-  // The projector follows Program in its own scene, which places a lower third: a ring, as it was not put there.
+  // It is on the projector while it is live, in a scene that places a lower third: a ring, as it leaves with Program's.
   expect(menu().querySelector('.pk-live-screen-dots > [data-tally="projector"][data-following]')).not.toBeNull();
   expect(menu().querySelector(".pk-live-screen-dots > :not([data-following])")).toBeNull();
   expect(menu().getAttribute("title")).toBe(
@@ -174,7 +176,7 @@ it("shows Program on the row edge, a screen it was put on as a dot on the menu, 
   const projector = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemcheckbox"]')].find((item) =>
     item.textContent?.includes("Projector"),
   )!;
-  expect(projector.getAttribute("aria-checked")).toBe("false");
+  expect(projector.getAttribute("aria-checked")).toBe("true");
   // Each screen leads with its monitor's tally color; the stage display has no place for a lower third, so it is not offered.
   expect(projector.querySelector('.pk-live-screen-dot[data-tally="projector"]')).not.toBeNull();
   expect(
@@ -185,10 +187,11 @@ it("shows Program on the row edge, a screen it was put on as a dot on the menu, 
   expect(aux).toMatchObject({
     type: "aux.set",
     output: "projector",
-    composition: { creditKey: credit.key, lowerThirdMotion: "animated" },
+    composition: { creditKey: null },
   });
   expect(sendProgram.mock.calls.some(([message]) => message.type === "preview.set")).toBe(false);
-  state.outputs = { ...state.outputs, projector: { ...EMPTY_LIVE_AUX_COMPOSITION, lowerThird: credit } };
+  // Off air, a lower third the projector holds is there to stay: a dot.
+  state.stage = { ...state.stage, lowerThird: null };
   await act(() => render(<LiveSpeakerCards targets={liveTargets(state, { sendProgram })} />, host!));
   expect(menu().querySelector('.pk-live-screen-dots > [data-tally="projector"]:not([data-following])')).not.toBeNull();
   expect(menu().getAttribute("title")).toBe(

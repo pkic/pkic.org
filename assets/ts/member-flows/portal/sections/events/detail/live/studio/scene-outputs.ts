@@ -20,7 +20,7 @@ export interface SceneOutput {
  * The outputs showing each scene now, by the scene's slug: Program, then
  * Preview, then the room's screens in their order. An output that names no
  * scene, or one retired since, shows the event's default one, as it is
- * drawn. A screen's scene is its own, also while it follows Program; the
+ * drawn. A screen's scene is its own, the one last taken to it, also while it follows Program; the
  * speaker's screen draws its own layout and no scene. Program and the
  * screens are read from the room on air, as their monitors are.
  */

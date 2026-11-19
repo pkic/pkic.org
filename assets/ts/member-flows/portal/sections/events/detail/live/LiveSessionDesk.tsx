@@ -61,7 +61,6 @@ function changesBroadcast(message: LiveRoomClientMessage): boolean {
     message.type === "program.clear" ||
     message.type === "program.restore" ||
     message.type === "aux.set" ||
-    message.type === "aux.scene" ||
     message.type === "screen.sync" ||
     message.type === "speaker.message"
   );
@@ -171,7 +170,7 @@ export function LiveSessionDesk({
     });
     return true;
   };
-  /** Program takes Preview through the room's Take; a screen that follows Program takes only Preview's scene, any other its whole shot. */
+  /** Program takes Preview through the room's Take; a room screen takes the shot as Preview shows it. */
   const take = (target: LiveTakeTarget = "program") => {
     const current = room.state;
     if (!current) return;

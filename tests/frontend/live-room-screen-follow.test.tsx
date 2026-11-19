@@ -47,14 +47,14 @@ function drawn(state: LiveRoomState, screen = "projector") {
 }
 
 describe("a room screen that follows Program", () => {
-  it("shows Program's lower third where its own scene places one, and not where it leaves it out", () => {
+  it("draws the lower third it holds where its own scene places one, and not where it leaves it out", () => {
     // Program is in Full board, which places no lower third: the screen draws its own scene, never Program's.
     const live = { lowerThird: CREDIT, scene: "full-board" };
-    // Nobody took a scene to the projector, so it draws Default, which places a lower third.
-    expect(drawn(room(live, {})).name).toBe("Sam Speaker");
-    expect(drawn(room(live, { scene: "questions" })).name).toBe("Sam Speaker");
+    // The room carried the lower third to the projector. Nobody took a scene to it, so it draws Default.
+    expect(drawn(room(live, { lowerThird: CREDIT })).name).toBe("Sam Speaker");
+    expect(drawn(room(live, { lowerThird: CREDIT, scene: "questions" })).name).toBe("Sam Speaker");
     // Panel names its people itself and places none.
-    expect(drawn(room(live, { scene: "panel" })).name).toBeNull();
+    expect(drawn(room(live, { lowerThird: CREDIT, scene: "panel" })).name).toBeNull();
     // The scene its room locked the screen to is the one it draws, whatever scene was taken to it.
     const setUp = (scene: string, sceneLocked: boolean): Partial<LiveRoomState> => ({
       session: {
@@ -62,23 +62,27 @@ describe("a room screen that follows Program", () => {
         roomOutputs: [{ key: "projector", name: "Projector", code: "PRJ", role: "follow", scene, sceneLocked }],
       },
     });
-    expect(drawn(room(live, { scene: "questions" }, setUp("panel", true))).name).toBeNull();
-    expect(drawn(room(live, { scene: "panel" }, setUp("questions", true))).name).toBe("Sam Speaker");
+    expect(drawn(room(live, { lowerThird: CREDIT, scene: "questions" }, setUp("panel", true))).name).toBeNull();
+    expect(drawn(room(live, { lowerThird: CREDIT, scene: "panel" }, setUp("questions", true))).name).toBe(
+      "Sam Speaker",
+    );
     // A scene it only starts in gives way to the one taken to it.
-    expect(drawn(room(live, { scene: "questions" }, setUp("panel", false))).name).toBe("Sam Speaker");
+    expect(drawn(room(live, { lowerThird: CREDIT, scene: "questions" }, setUp("panel", false))).name).toBe(
+      "Sam Speaker",
+    );
   });
 
-  it("keeps top questions that came on with its scene while Program has none, and follows Program's switch for ones left to the studio", () => {
-    // The screen holds them itself, as its Q&A scene brought them on: on, whatever Program shows.
+  it("shows exactly what it holds, whatever is on Program", () => {
+    // It holds top questions Program does not show: they are on.
     expect(drawn(room({}, { scene: "questions", topQuestions: TOP })).topQuestions).toBe(true);
-    // It holds none: they are on only while Program has them on.
-    expect(drawn(room({}, { scene: "questions" })).topQuestions).toBe(false);
-    expect(drawn(room({ topQuestions: TOP }, { scene: "questions" })).topQuestions).toBe(true);
-    // A scene that leaves them out draws none, on Program or not.
-    expect(drawn(room({ topQuestions: TOP }, { scene: "break" })).topQuestions).toBe(false);
+    // A take left Program's lower third and top questions out: neither is drawn.
+    const live = { lowerThird: CREDIT, topQuestions: TOP };
+    expect(drawn(room(live, { scene: "questions" }))).toEqual({ name: null, topQuestions: false });
+    // A scene that leaves them out draws none, held or not.
+    expect(drawn(room({}, { scene: "break", topQuestions: TOP })).topQuestions).toBe(false);
   });
 
-  it("holds what it has once its sync is off, and nothing of Program's", () => {
+  it("stays as it is once its sync is off", () => {
     const off = { screenSync: { projector: false } };
     const shown = drawn(room({ lowerThird: CREDIT }, { scene: "questions", topQuestions: TOP }, off));
     expect(shown).toEqual({ name: null, topQuestions: true });

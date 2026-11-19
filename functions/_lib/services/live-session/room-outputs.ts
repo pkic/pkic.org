@@ -1,11 +1,21 @@
 import { withoutLiveTimerGraphic } from "../../../../assets/shared/live-timer-policy";
-import { type LiveAuxOutput, type LiveSpeakerMessageTone } from "../../../../assets/shared/live-room-outputs";
+import {
+  liveRoomOutputs,
+  type LiveAuxOutput,
+  type LiveSpeakerMessageTone,
+} from "../../../../assets/shared/live-room-outputs";
+import {
+  liveScreenAfterProgramChange,
+  liveScreenCaughtUp,
+  liveScreenTakesProgramChanges,
+} from "../../../../assets/shared/live-screen-sync";
 import { LIVE_HELD_OUTPUTS_MAX } from "../../../../assets/shared/schemas/live-session-stage";
 import type {
   LiveAuxComposition,
   LiveRoomClientMessage,
   LiveRoomServerMessage,
   LiveRoomSession,
+  LiveStage,
 } from "../../../../assets/shared/schemas/live-session-room";
 import type { LiveStageDisplaySettingsPatch } from "../../../../assets/shared/schemas/live-stage-display-settings";
 import type { LiveSyncedScreen } from "../../../../assets/shared/schemas/live-screen-sync";
@@ -103,12 +113,58 @@ export class LiveRoomOutputs {
     return { messages: [{ type: "stage.display.settings.changed", settings }] };
   }
 
-  /** Whether one of the room's screens follows Program. */
-  setScreenSync(operator: Operator, output: LiveSyncedScreen, sync: boolean, at: string): LiveControlOutcome {
+  /**
+   * Whether one of the room's screens follows Program. A screen that starts
+   * following again first catches up: it shows every graphic as Program has
+   * it now, in its own scene.
+   */
+  setScreenSync(
+    operator: Operator,
+    session: LiveRoomSession,
+    output: LiveSyncedScreen,
+    sync: boolean,
+    at: string,
+  ): LiveControlOutcome {
     const screenSync = { ...this.store.screenSync(), [output]: sync };
     this.store.saveScreenSync(screenSync);
     this.store.recordStaffAction(operator.userId, "live_session.screen_sync", { output, sync }, at);
-    return { messages: [{ type: "screen.sync.changed", screenSync }] };
+    const messages: LiveRoomServerMessage[] = [{ type: "screen.sync.changed", screenSync }];
+    if (sync && liveScreenTakesProgramChanges(screenSync, liveRoomOutputs(session), output)) {
+      const caughtUp = this.hold(output, liveScreenCaughtUp(this.store.aux(output), this.store.stage()));
+      if (caughtUp) messages.push(caughtUp);
+    }
+    return { messages };
+  }
+
+  /**
+   * Program changed: every screen that follows it takes the graphics that
+   * changed, and keeps the rest of what it holds, its scene included. A
+   * screen nobody composed yet takes all of Program, in the scene its room
+   * set up for it.
+   */
+  followProgram(session: LiveRoomSession, before: LiveStage, after: LiveStage): LiveRoomServerMessage[] {
+    const sync = this.store.screenSync();
+    const outputs = liveRoomOutputs(session);
+    const messages: LiveRoomServerMessage[] = [];
+    for (const { key, scene } of outputs) {
+      if (!liveScreenTakesProgramChanges(sync, outputs, key)) continue;
+      const own = this.store.aux(key);
+      const next = this.store.composed(key)
+        ? liveScreenAfterProgramChange(own, before, after)
+        : liveScreenCaughtUp({ ...own, scene }, after);
+      const message = next && this.hold(key, next);
+      if (message) messages.push(message);
+    }
+    return messages;
+  }
+
+  /** Saves what a screen holds once the room itself changed it; nothing when it holds that already. */
+  private hold(output: LiveAuxOutput, composition: LiveAuxComposition): LiveRoomServerMessage | null {
+    const held = this.store.auxOutputs();
+    if (!held.includes(output) && held.length >= LIVE_HELD_OUTPUTS_MAX) return null;
+    if (JSON.stringify(this.store.aux(output)) === JSON.stringify(composition)) return null;
+    this.store.saveAux(output, composition);
+    return { type: "aux.changed", output, composition: this.store.aux(output) };
   }
 
   /** A rewritten question already on an auxiliary output or Preview shows its new text there too. */

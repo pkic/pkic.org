@@ -2,10 +2,12 @@ import { z } from "zod";
 import { liveRoomOutputKeySchema } from "./live-room-output-setup";
 
 /**
- * Whether each of the room's screens follows Program: shows what is live,
- * plus whatever an operator put on that screen itself. On by default, so a
- * screen nobody touched shows what is live, in its own scene. Turned off, a
- * screen shows only what was put on it. The room keeps one copy.
+ * Whether each of the room's screens follows Program: every change of
+ * Program also changes that screen, in the screen's own scene. On by
+ * default, so a screen nobody touched shows what is live. Turned off, a
+ * screen stays as it is until an operator changes it. The speaker's screen
+ * shows Program's question and timers beside its own while on (see
+ * live-screen-sync). The room keeps one copy.
  */
 
 export const liveSyncedScreenSchema = liveRoomOutputKeySchema;

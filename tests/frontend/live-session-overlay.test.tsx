@@ -446,7 +446,7 @@ describe("broadcast overlays", () => {
     ]);
   });
 
-  it("adds Program to the projector while it syncs, and draws only its own composition once sync is off", () => {
+  it("draws the projector's own composition, which the room keeps in step with Program, whether it syncs or not", () => {
     const projector = mountOverlay("projector");
     const sync = (on: boolean) =>
       void act(() =>
@@ -455,10 +455,13 @@ describe("broadcast overlays", () => {
           .deliver({ type: "screen.sync.changed", screenSync: { projector: on, "stage-display": true } }),
       );
     const questionText = () => projector.host.querySelector(".pk-live-overlay__question-text")?.textContent ?? null;
-    // Sync is on by default: the projector shows what is live.
-    expect(questionText()).toBe("What about hybrid certificates?");
-    sync(false);
+    const hold = (composition: typeof ON_STAGE) =>
+      void act(() => projector.live.latest().deliver({ type: "aux.changed", output: "projector", composition }));
+    // The projector holds nothing yet, so nothing of Program's is drawn there by itself.
     expect(questionText()).toBeNull();
+    // The room carries Program's question to it.
+    hold(ON_STAGE);
+    expect(questionText()).toBe("What about hybrid certificates?");
     void act(() =>
       projector.live.latest().deliver({
         type: "aux.changed",
@@ -469,8 +472,10 @@ describe("broadcast overlays", () => {
     expect(projector.host.querySelector(".pk-live-overlay__name")?.textContent).toBe("Sam Speaker");
     expect(questionText()).toBeNull();
     expect(projector.host.querySelector(".pk-live-overlay__timer")).not.toBeNull();
-    sync(true);
-    expect(questionText()).toBe("What about hybrid certificates?");
+    // With sync off it stays as it is.
+    sync(false);
+    expect(projector.host.querySelector(".pk-live-overlay__name")?.textContent).toBe("Sam Speaker");
+    expect(questionText()).toBeNull();
     // The stage preview follows the room on its own and never takes Program's graphics.
     const preview = mountOverlay("stage-preview");
     expect(preview.host.querySelector(".pk-live-overlay__name")).toBeNull();

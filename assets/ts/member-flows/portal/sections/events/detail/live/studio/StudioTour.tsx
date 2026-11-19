@@ -25,19 +25,19 @@ export const STUDIO_TOUR_STEPS: readonly GuidedTourStep[] = [
     id: "transition",
     target: panel("transition"),
     title: "Go live with your practice",
-    body: `Happy with the practice area? Press Transition, or the ${TAKE_SHORTCUT.toLowerCase()} bar, and it goes live in place of what was live before. The small arrows next to it are for the screens in the room: a screen that follows what is live takes only the practice area’s scene, any other screen takes all of it.`,
+    body: `Happy with the practice area? Press Transition, or the ${TAKE_SHORTCUT.toLowerCase()} bar, and it goes live in place of what was live before. The small arrows next to it are for the screens in the room: each one puts the practice area on that screen, exactly as it is.`,
   },
   {
     id: "sync",
     target: ".pk-studio-monitor__sync",
     title: "Screens follow what is live",
-    body: "The projector and the speaker’s screen show what is live by themselves: that is Sync, the red PGM button on their monitor. The projector draws it in its own scene, and that scene decides which graphics show there. Click the button to turn Sync off, and that screen shows only what you put on it. Click it again to turn Sync back on.",
+    body: "The projector and the speaker’s screen show what is live by themselves: that is Sync, the red PGM button on their monitor. The projector draws it in its own scene, and that scene decides which graphics show there. Click the button to turn Sync off, and that screen no longer changes with what is live. Click it again to turn Sync back on.",
   },
   {
     id: "screens",
     target: ".pk-menu__trigger:has(> .pk-live-screen-dots), .pk-studio-panel__body .pk-menu__trigger",
     title: "Screens in the room",
-    body: "To show something on one screen only, open ⋯ on it and click Projector or Stage display; click again to take it off. A dot under ⋯ means you put it there and it stays after it goes off air. An empty circle means a screen shows it only because it is live.",
+    body: "To show something on one screen only, open ⋯ on it and click Projector or Stage display; click again to take it off. A dot under ⋯ means it is on that screen and stays there. An empty circle means it is there while it is live, and leaves that screen when it goes off air.",
   },
   {
     id: "stage-display",

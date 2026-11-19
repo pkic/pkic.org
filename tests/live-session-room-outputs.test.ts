@@ -49,7 +49,7 @@ async function overlayToken() {
 }
 
 type Client = Awaited<ReturnType<typeof f.connect>>;
-type ScreenCommand = Extract<Parameters<Client["send"]>[0], { type: "aux.set" | "aux.scene" }>;
+type ScreenCommand = Extract<Parameters<Client["send"]>[0], { type: "aux.set" }>;
 /** What a screen holds once the room answered this command: its next change, never an earlier one. */
 async function screenAfter(client: Client, message: ScreenCommand) {
   const after = client.received.length;
@@ -557,52 +557,53 @@ describe("live room auxiliary outputs", () => {
     expect(liveCompositionInput(screen)).toEqual(screenCleared);
   });
 
-  it("starts a screen that follows Program again in the taken scene, with what comes on with it and none of its own", async () => {
+  it("shows Preview exactly on a screen that follows Program, then carries each change of Program to it", async () => {
     const operator = await f.connect({ person: "operator" });
-    const attendee = await f.connect({ person: "attendee" });
-    const onProjector = (message: ScreenCommand) => screenAfter(operator, message);
-    // The operator put a lower third and a timer on the projector themselves, in the Break scene.
-    const own = await onProjector({
+    /** The projector once the room answered a command that changes it. */
+    const projectorAfter = async (message: Parameters<Client["send"]>[0]) => {
+      const after = operator.received.length;
+      operator.send(message);
+      return (await operator.next("aux.changed", (changed) => changed.output === "projector", { after })).composition;
+    };
+    // Program shows the speaker's lower third, and the projector with it.
+    const followed = await projectorAfter({ type: "stage.lowerThird", creditKey: `user:${f.users.speaker}` });
+    expect(followed.lowerThird).toMatchObject({ name: "Sam Speaker" });
+
+    // A take puts Preview on the projector exactly: its scene and its timer, and no lower third though Program has one.
+    const taken = await projectorAfter({
       type: "aux.set",
       output: "projector",
-      composition: {
-        ...EMPTY_COMPOSITION,
-        creditKey: `user:${f.users.speaker}`,
-        timerGraphics: [GRAPHIC],
-        scene: "break",
-      },
+      composition: { ...EMPTY_COMPOSITION, timerGraphics: [GRAPHIC], scene: "break" },
     });
-    expect(own).toMatchObject({ lowerThird: { name: "Sam Speaker" }, timerGraphics: [GRAPHIC], scene: "break" });
-
-    // A take sends the scene alone: Q&A's top questions come on, filled by the room, and no pick or switch stays.
-    await installLiveRoomD1Profile(f.room(), 1000);
-    const taken = await onProjector({ type: "aux.scene", output: "projector", scene: "questions" });
-    // The room fills the scene from its own storage: the take never waits for the database.
-    expect((await liveRoomD1Profile(f.room())).roundTrips).toBe(0);
-    expect(taken.topQuestions).toEqual({ config: DEFAULT_LIVE_TOP_QUESTIONS_CONFIG, questions: [] });
     expect(liveCompositionInput(taken)).toEqual({
       ...liveCompositionInput(EMPTY_LIVE_STAGE),
-      topQuestions: DEFAULT_LIVE_TOP_QUESTIONS_CONFIG,
-      scene: "questions",
+      timerGraphics: [GRAPHIC],
+      scene: "break",
     });
 
-    // What the operator switches off there stays off, until the scene is taken to the screen again.
-    const off = await onProjector({
-      type: "aux.set",
-      output: "projector",
-      composition: { ...EMPTY_COMPOSITION, scene: "questions" },
-    });
-    expect(off.topQuestions).toBeNull();
-    const again = await onProjector({ type: "aux.scene", output: "projector", scene: "questions" });
-    expect(again.topQuestions).not.toBeNull();
+    // A ticker goes on Program and on the projector, which keeps everything Program did not touch.
+    const withTicker = await projectorAfter({ type: "stage.ticker", ticker: DEFAULT_LIVE_TICKER_CONFIG });
+    expect(withTicker.ticker).not.toBeNull();
+    expect(withTicker).toMatchObject({ lowerThird: null, timerGraphics: [GRAPHIC], scene: "break" });
+    // It comes off Program, and off the projector.
+    expect((await projectorAfter({ type: "stage.ticker", ticker: null })).ticker).toBeNull();
 
-    // The Default scene brings nothing on: the screen is left to Program's switches alone.
-    const blank = await onProjector({ type: "aux.scene", output: "projector", scene: null });
-    expect(liveCompositionInput(blank)).toEqual(liveCompositionInput(EMPTY_LIVE_STAGE));
-    // Program and Preview are never touched, and only an operator can take to a screen.
-    expect(operator.received.some((m) => m.type === "stage.changed" || m.type === "preview.changed")).toBe(false);
-    attendee.send({ type: "aux.scene", output: "projector", scene: "questions" });
-    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
+    // With sync off the projector stays as it is, whatever changes on Program.
+    operator.send({ type: "screen.sync", output: "projector", sync: false });
+    await operator.next("screen.sync.changed");
+    const frozen = operator.received.length;
+    operator.send({ type: "stage.panelists", panelists: { layout: "panel" } });
+    await operator.next("stage.changed", (changed) => changed.stage.panelists !== null);
+    expect(operator.received.slice(frozen).some((m) => m.type === "aux.changed")).toBe(false);
+
+    // Following again, it catches up with everything on Program, in its own scene.
+    const caughtUp = await projectorAfter({ type: "screen.sync", output: "projector", sync: true });
+    expect(caughtUp).toMatchObject({
+      lowerThird: { name: "Sam Speaker" },
+      panelists: { layout: "panel" },
+      timerGraphics: [],
+      scene: "break",
+    });
   });
 
   it("loads the scene a room locked a screen that follows Program to before anyone takes to it, once, and keeps it", async () => {
@@ -645,11 +646,8 @@ describe("live room auxiliary outputs", () => {
     const rejoined = await (await f.connect({ person: "operator" })).next("room.snapshot");
     expect(rejoined.outputs.projector).toEqual(off);
 
-    // A take names Preview's scene, yet the screen keeps the one its room locked it to and starts again in it.
-    const taken = await screenAfter(operator, { type: "aux.scene", output: "projector", scene: "break" });
-    expect(taken).toMatchObject({ scene: "questions", schedule: null, timerGraphics: [] });
-    expect(taken.topQuestions).not.toBeNull();
-    // So does a whole shot, which a screen takes while its sync is off, and one taken to any locked screen.
+    // A take names Preview's scene, yet the screen shows the shot in the scene its room locked it to; so does
+    // any locked screen.
     const shot = await screenAfter(operator, {
       type: "aux.set",
       output: "projector",
@@ -699,7 +697,11 @@ describe("live room auxiliary outputs", () => {
     });
 
     // A take changes its scene, and the next join leaves it there.
-    const taken = await screenAfter(operator, { type: "aux.scene", output: "projector", scene: "break" });
+    const taken = await screenAfter(operator, {
+      type: "aux.set",
+      output: "projector",
+      composition: { ...EMPTY_COMPOSITION, scene: "break" },
+    });
     expect(taken.scene).toBe("break");
     const rejoined = await (await f.connect({ person: "operator" })).next("room.snapshot");
     expect(rejoined.outputs.projector.scene).toBe("break");

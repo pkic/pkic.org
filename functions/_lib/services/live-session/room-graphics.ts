@@ -20,7 +20,6 @@ import type { LiveRoomOutputs } from "./room-outputs";
 import type { LiveRoomPreview } from "./room-preview";
 import { liveCompositionInput, mergeLivePreview } from "../../../../assets/shared/live-room-preview";
 import { liveOutputFixedScene, liveRoomOutputs } from "../../../../assets/shared/live-room-outputs";
-import { EMPTY_LIVE_STAGE } from "../../../../assets/shared/schemas/live-session-stage";
 import { nowIso } from "../../utils/time";
 import { resolveLiveSceneElements } from "../../../../assets/shared/live-scene-elements";
 import { liveSceneFill, type LiveSceneFill } from "../../../../assets/shared/live-scene-fill";
@@ -133,23 +132,6 @@ export class LiveRoomGraphics {
     const scene = liveOutputFixedScene(liveRoomOutputs(session), message.output) ?? message.composition.scene;
     const composition = { ...message.composition, scene };
     return this.outputs.setAux(actor, session, message.output, await this.resolve(session, composition, at), at);
-  }
-  /**
-   * A take to a screen that follows Program: the screen starts again in the
-   * scene, the one its room locked it to or else the one taken, with the
-   * graphics that come on with that scene and nothing else of its own. Every
-   * other switch and pick it shows stays Program's.
-   */
-  async setAuxScene(
-    actor: Actor,
-    session: LiveRoomSession,
-    message: Extract<LiveRoomClientMessage, { type: "aux.scene" }>,
-    at: string,
-  ): Promise<LiveControlOutcome> {
-    const scene = liveOutputFixedScene(liveRoomOutputs(session), message.output) ?? message.scene;
-    const empty = { ...liveCompositionInput(EMPTY_LIVE_STAGE), scene };
-    const shot = { ...empty, ...this.comesOn(session, empty) };
-    return this.outputs.setAux(actor, session, message.output, await this.resolve(session, shot, at), at);
   }
   async setPreview(
     actor: Actor,

@@ -46,7 +46,7 @@ export const LIVE_ROOM_OUTPUT_ROLE_COPY: Record<LiveRoomOutputRole, { label: str
   follow: {
     label: "Follow Program",
     shows: "Shows what is on Program, in its own scene",
-    hint: "Its scene decides which graphics show, lower third and ticker included. A take changes its scene only.",
+    hint: "Its scene decides which graphics show, lower third and ticker included. A Transition to it shows Preview exactly; changes on Program still reach it.",
   },
   speaker: {
     label: "Speaker",
@@ -100,8 +100,8 @@ export function liveOutputRole(outputs: readonly LiveRoomOutput[], key: LiveAuxO
 
 /**
  * Where the studio's Transition puts Preview: Program, then each of the
- * room's screens in order. A screen that follows Program takes only
- * Preview's scene, and keeps showing Program's graphics in it.
+ * room's screens in order. Each one shows Preview exactly; a screen that
+ * follows Program keeps changing with Program afterwards.
  */
 export type LiveTakeTarget = "program" | LiveAuxOutput;
 export function liveTakeTargets(outputs: readonly LiveRoomOutput[]): LiveTakeTarget[] {

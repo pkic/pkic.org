@@ -344,11 +344,11 @@ function outputTag(output: StudioOutput, context: MonitorContext): { text: strin
     return liveScreenSyncs(switcher.screenSync, room, output)
       ? {
           text: "Follows PGM",
-          hint: "Follows Program\nShows what is on Program, in this screen's own scene, plus what you send to it. The PGM chip turns this off.",
+          hint: "Follows Program\nWhat you change on Program changes here too, in this screen's own scene. A Transition to it shows Preview exactly. The PGM chip turns this off.",
         }
       : {
           text: "Sync off",
-          hint: "Sync with Program is off\nShows only what you send to it. The PGM chip turns sync back on.",
+          hint: "Sync with Program is off\nThis screen stays as it is until you change it. The PGM chip turns sync back on.",
         };
   const scene = liveOutputScene(projectionOf(output, sources), output);
   const choices = liveOverlayLayoutChoices(sources.preview.overlayLayouts);
