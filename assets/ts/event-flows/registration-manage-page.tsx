@@ -26,6 +26,7 @@ import { Badge } from "../ui/Badge";
 import {
   attendanceTypeLabel,
   dayConfirmation,
+  PAYMENT_PROCESSING_STATUS,
   PAYMENT_REQUIRED_STATUS,
   statusLabel,
   waitlistTone,
@@ -183,17 +184,22 @@ async function main(): Promise<void> {
 
   // ── Greeting ──────────────────────────────────────────────────────────────
   if (greetingEl && greetingText && statusBadge) {
-    const paymentDue = !isCancelled && manageData.paymentDue;
+    const paymentProcessing = !isCancelled && manageData.paymentProcessing;
+    const paymentDue = !isCancelled && manageData.paymentDue && !paymentProcessing;
     greetingText.textContent = isCancelled
       ? `Your registration for ${eventName} is cancelled.`
+      : paymentProcessing
+        ? `Your payment for ${eventName} is being processed. You're registered once it arrives.`
+        : paymentDue
+          ? `Your registration for ${eventName} is saved. You're registered once your ticket is paid.`
+          : firstName
+            ? `Hi ${firstName}, we're looking forward to seeing you at ${eventName}!`
+            : `Your registration for ${eventName}`;
+    const { label, cssClass } = paymentProcessing
+      ? PAYMENT_PROCESSING_STATUS
       : paymentDue
-        ? `Your registration for ${eventName} is saved. You're registered once your ticket is paid.`
-        : firstName
-          ? `Hi ${firstName}, we're looking forward to seeing you at ${eventName}!`
-          : `Your registration for ${eventName}`;
-    const { label, cssClass } = paymentDue
-      ? PAYMENT_REQUIRED_STATUS
-      : statusLabel(registration.status, registration.cancellation_reason_code);
+        ? PAYMENT_REQUIRED_STATUS
+        : statusLabel(registration.status, registration.cancellation_reason_code);
     statusBadge.textContent = label;
     statusBadge.className = `pk-badge ${cssClass}`;
     // The ticket page in the portal says what is owed and takes the payment.

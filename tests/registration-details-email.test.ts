@@ -87,7 +87,7 @@ describe("registration details email", () => {
     });
     expect(rendered.text).toMatch(/Payment:\s*\$395\.00 to pay/);
     expect(rendered.html).toContain("https://example.test/portal/#/events/example/ticket");
-    expect(rendered.text).toMatch(/Day 2:\s*In person — payment required/);
+    expect(rendered.text).toMatch(/Day 2:\s*In person — awaiting payment/);
     expect(rendered.text).toMatch(/Day 3:\s*In person — waitlisted/);
     expect(rendered.text).not.toMatch(/— confirmed/);
     // The seat notice still explains the waiting day, and only that.
@@ -139,12 +139,25 @@ describe("registration details email", () => {
       eventName: "Example Event",
       status: "registered",
       paymentDue: true,
+      payNow: true,
       ticketPrice: "$395.00",
       paymentUrl: "https://example.test/portal/#/events/example/ticket",
     });
     expect(unpaid.subject).toBe("Pay for your ticket to complete your registration — Example Event");
     expect(unpaid.body).toContain("You're not registered until your ticket is paid.");
     expect(unpaid.body).toContain("$395.00 is still to pay");
+    // A payment that takes days is on its way: the email says so and asks for nothing.
+    const processing = await render({
+      eventName: "Example Event",
+      status: "registered",
+      paymentDue: true,
+      paymentProcessing: true,
+      ticketPrice: "$395.00",
+    });
+    expect(processing.subject).toBe("Your registration was updated — Example Event");
+    expect(processing.body).toContain("Your payment of $395.00 is being processed.");
+    expect(processing.body).toMatch(/Payment:\s*\$395\.00, being processed/);
+    expect(processing.body).not.toContain("Pay for your ticket");
   });
 
   it("names a country answer", () => {

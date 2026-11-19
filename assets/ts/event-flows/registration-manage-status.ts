@@ -34,6 +34,8 @@ export function dayConfirmation(
 
 /** A registration whose ticket is still to be paid is not confirmed, whatever its lifecycle status says. */
 export const PAYMENT_REQUIRED_STATUS = { label: "Payment required", cssClass: "pk-badge--warn" } as const;
+/** A payment that takes days was made and has not arrived yet. */
+export const PAYMENT_PROCESSING_STATUS = { label: "Payment processing", cssClass: "pk-badge--info" } as const;
 
 export function statusLabel(
   status: string,

@@ -33,6 +33,17 @@ describe("event home ticket card", () => {
     expect(host.querySelector('a[href="#/events/summit/ticket"]')?.textContent).toBe("Pay for your ticket");
   });
 
+  it("asks for nothing while a payment that takes days is on its way", async () => {
+    const processing = participantEventFixture({
+      ...registeredParticipant,
+      viewer: { ...registeredParticipant.viewer, paymentDue: true, paymentProcessing: true },
+    });
+    await act(() => render(<TicketCard event={processing} ended={false} />, host));
+    expect(host.textContent).toContain("Your payment is being processed");
+    expect(host.textContent).not.toContain("Pay for your ticket");
+    expect(host.querySelector('a[href="#/events/summit/ticket"]')?.textContent).toBe("Show ticket");
+  });
+
   it("shows the ticket to a registration with nothing to pay", async () => {
     await act(() => render(<TicketCard event={participantEventFixture(registeredParticipant)} ended={false} />, host));
     expect(host.textContent).toContain("You're registered");

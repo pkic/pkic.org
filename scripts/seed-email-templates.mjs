@@ -311,7 +311,7 @@ The PKI Consortium is a vendor-neutral community of PKI practitioners working to
 > {{/if}}{{#if email}}**Email:** {{email}}<br>
 > {{/if}}{{#if organizationName}}**Organization:** {{organizationName}}<br>
 > {{/if}}{{#if jobTitle}}**Job title:** {{jobTitle}}<br>
-> {{/if}}{{#if paymentDue}}**Payment:** {{ticketPrice}} to pay{{#if paymentUrl}} — [Pay for your ticket]({{paymentUrl}}){{/if}}<br>
+> {{/if}}{{#if paymentDue}}**Payment:** {{ticketPrice}}{{#if paymentProcessing}}, being processed{{else}} to pay{{#if paymentUrl}} — [Pay for your ticket]({{paymentUrl}}){{/if}}{{/if}}<br>
 > {{/if}}{{#each dayAttendance}}**{{dayLabel}}:** {{attendanceLabel}}{{#if statusNote}} — {{statusNote}}{{/if}}<br>
 > {{/each}}{{#if attendanceLabel}}**Attendance:** {{attendanceLabel}}<br>
 > {{/if}}{{#each customAnswerRows}}**{{label}}:** {{displayValue}}<br>
@@ -521,7 +521,7 @@ Plan the sessions you want to attend in [My agenda &rarr;]({{myAgendaUrl}})
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "registration_updated",
-    subjectTemplate: `{{#if adminAdmitNotice}}Your in-person seat is confirmed — {{eventName}}{{else}}{{#if waitlistOfferNotice}}A seat is available — {{eventName}}{{else}}{{#if eq status "cancelled"}}Your registration is cancelled — {{eventName}}{{else}}{{#if paymentDue}}Pay for your ticket to complete your registration — {{eventName}}{{else}}Your registration was updated — {{eventName}}{{/if}}{{/if}}{{/if}}{{/if}}`,
+    subjectTemplate: `{{#if adminAdmitNotice}}Your in-person seat is confirmed — {{eventName}}{{else}}{{#if waitlistOfferNotice}}A seat is available — {{eventName}}{{else}}{{#if eq status "cancelled"}}Your registration is cancelled — {{eventName}}{{else}}{{#if payNow}}Pay for your ticket to complete your registration — {{eventName}}{{else}}Your registration was updated — {{eventName}}{{/if}}{{/if}}{{/if}}{{/if}}`,
     content: `{{> greeting}}
 
 {{#if eq status "cancelled"}}
@@ -530,8 +530,11 @@ Plan the sessions you want to attend in [My agenda &rarr;]({{myAgendaUrl}})
 Your registration for **{{eventName}}** was updated.
 {{/if}}
 
-{{#if paymentDue}}
+{{#if payNow}}
 <div class="notice notice-warning"><strong>You're not registered until your ticket is paid.</strong> {{ticketPrice}} is still to pay. <a href="{{paymentUrl}}">Pay for your ticket</a>.</div>
+{{/if}}
+{{#if paymentProcessing}}
+<div class="notice notice-info"><strong>Your payment of {{ticketPrice}} is being processed.</strong> Some payment methods take a few days. You're registered once it arrives, and we email your confirmation then.</div>
 {{/if}}
 {{#if adminAdmitNotice}}
 <div class="notice notice-success"><strong>Good news:</strong> you have an in-person seat for the days marked confirmed below.</div>

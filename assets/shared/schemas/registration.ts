@@ -449,6 +449,8 @@ export const registrationManageReadResponseSchema = successResponseSchema.extend
   pendingOrganizationName: z.string().nullable().default(null),
   /** The registration's ticket still waits for payment, so the registration is not complete. */
   paymentDue: z.boolean().default(false),
+  /** That payment was made by a method that takes days and is on its way, so nothing more is asked. */
+  paymentProcessing: z.boolean().default(false),
   shareUrl: httpUrlSchema.nullable(),
   headshotUrl: httpUrlSchema.nullable(),
 });

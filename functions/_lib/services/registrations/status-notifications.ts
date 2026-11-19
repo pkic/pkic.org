@@ -151,6 +151,9 @@ function registrationDetailsData(context: RegistrationEmailContext, recipientEma
   return {
     // An unpaid ticket leaves the registration incomplete, and every email with these details says so.
     paymentDue: Boolean(paymentDue),
+    // A payment that takes days is on its way: the email says so and asks for nothing.
+    paymentProcessing: paymentDue?.processing === 1,
+    payNow: Boolean(paymentDue) && paymentDue?.processing !== 1,
     ticketPrice: paymentDue ? formatCurrencyAmount(paymentDue.amount, paymentDue.currency) : "",
     firstName: user.first_name ?? "",
     lastName: user.last_name ?? "",

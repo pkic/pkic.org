@@ -245,16 +245,24 @@ export async function planRegistrationTicket(
 export const ticketPaymentDueSql = (registrationId: string) =>
   `EXISTS (SELECT 1 FROM registration_tickets due WHERE due.registration_id = ${registrationId} AND due.status = 'pending_payment')`;
 
+/** Whether that payment was made by a method that takes days and is on its way. */
+export const ticketPaymentOnItsWaySql = (registrationId: string) =>
+  `EXISTS (SELECT 1 FROM registration_tickets due WHERE due.registration_id = ${registrationId}
+           AND due.status = 'pending_payment' AND ${ticketPaymentProcessingSql("due.id")})`;
+
 /** What is still owed for a registration's ticket; no row when nothing is. */
 export interface TicketPaymentDue {
   amount: number;
   currency: string;
+  /** The payment was made and has not arrived yet (1), so nothing more is asked. */
+  processing?: number;
 }
 
 export function prepareTicketPaymentDue(db: DatabaseLike, registrationId: string): StatementLike {
   return db
     .prepare(
-      "SELECT amount, currency FROM registration_tickets WHERE registration_id = ? AND status = 'pending_payment'",
+      `SELECT amount, currency, ${ticketPaymentProcessingSql("registration_tickets.id")} AS processing
+       FROM registration_tickets WHERE registration_id = ? AND status = 'pending_payment'`,
     )
     .bind(registrationId);
 }

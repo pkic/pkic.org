@@ -179,7 +179,13 @@ function RegistrationRecord({
         <div class="pk-stack pk-stack--loose">
           {error && <Alert tone="danger">{error}</Alert>}
           {message && <Alert tone="ok">{message}</Alert>}
-          {data.paymentDue && (
+          {data.paymentProcessing && (
+            <Alert title="Your payment is being processed">
+              Some payment methods take a few days. You're registered once the payment arrives, and we email your
+              confirmation then.
+            </Alert>
+          )}
+          {data.paymentDue && !data.paymentProcessing && (
             <Alert tone="warn" title="Your ticket is not paid yet">
               <p>Your registration is saved. You're registered once your ticket is paid.</p>
               <div class="pk-cluster">

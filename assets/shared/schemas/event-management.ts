@@ -222,6 +222,8 @@ export const eventViewerStateSchema = z.object({
    * Absent in an event a device stored before tickets existed, which owes nothing.
    */
   paymentDue: z.boolean().default(false),
+  /** That payment was made by a method that takes days and is on its way, so nothing more is asked. */
+  paymentProcessing: z.boolean().default(false),
   /** Whether any of the viewer's verified addresses, primary or secondary, is a work address. */
   holdsWorkAddress: z.boolean(),
 });

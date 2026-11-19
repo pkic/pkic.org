@@ -27,7 +27,7 @@ import {
   type RegistrationSponsorSharingRow,
 } from "../event-participation/sponsor-consent";
 import { holdsWorkAddress } from "../../email-domains/contact-kind";
-import { prepareTicketPaymentDue } from "../event-tickets/registration-ticket";
+import { prepareTicketPaymentDue, type TicketPaymentDue } from "../event-tickets/registration-ticket";
 import { parseVerifiedAddresses, verifiedAddressesJsonSql } from "../user-emails";
 import { persistedUtcInstant } from "../../utils/time";
 
@@ -101,6 +101,8 @@ export async function buildRegistrationManageView(
   )?.organization_name;
   const headshotUrl = publicUserHeadshotUrl(appBaseUrl, user.id, user.headshot_r2_key);
 
+  const paymentDue = batchFirst<TicketPaymentDue>(paymentDueResult);
+
   return registrationManageReadResponseSchema.parse({
     success: true,
     sponsorSharing,
@@ -134,6 +136,7 @@ export async function buildRegistrationManageView(
     dayWaitlist,
     waitlistHandledLast: !holdsWorkAddress(parseVerifiedAddresses(user.verified_addresses)),
     pendingOrganizationName: user.organization_name ? null : (pendingOrganizationName ?? null),
-    paymentDue: registration.status !== "cancelled" && Boolean(batchFirst(paymentDueResult)),
+    paymentDue: registration.status !== "cancelled" && Boolean(paymentDue),
+    paymentProcessing: registration.status !== "cancelled" && paymentDue?.processing === 1,
   });
 }

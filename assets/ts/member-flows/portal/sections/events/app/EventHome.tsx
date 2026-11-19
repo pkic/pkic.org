@@ -173,13 +173,24 @@ export function TicketCard({ event, ended }: { event: ParticipantEventDetail; en
   const viewer = "viewer" in event ? event.viewer : null;
   const pending = standing.status === "pending_email_confirmation";
   // The ticket page says what is owed and takes the payment; until then nobody is told they are registered.
-  const unpaid = !pending && Boolean(viewer?.paymentDue);
+  // A payment that takes days is on its way: nothing is asked, and nobody is told they are registered yet.
+  const processing = !pending && Boolean(viewer?.paymentProcessing);
+  const unpaid = !pending && !processing && Boolean(viewer?.paymentDue);
   return (
     <EventCard
       eyebrow="Your ticket"
-      title={pending ? "Confirm your email address" : unpaid ? "Pay for your ticket" : "You're registered"}
+      title={
+        pending
+          ? "Confirm your email address"
+          : processing
+            ? "Your payment is being processed"
+            : unpaid
+              ? "Pay for your ticket"
+              : "You're registered"
+      }
     >
       {pending && <p>Check your inbox to complete your registration.</p>}
+      {processing && <p>Some payment methods take a few days. You're registered once the payment arrives.</p>}
       {unpaid && <p>Your registration is saved. You're registered once your ticket is paid.</p>}
       {viewer && <p class="pk-event-card__meta">{attendanceStandingParts(viewer).join(" · ")}</p>}
       {viewer && <PersonalAddressPrompt withoutWorkAddress={!viewer.holdsWorkAddress} />}

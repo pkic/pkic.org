@@ -36,7 +36,7 @@ const VENUE_DAY_NOTES: Record<string, string> = {
 };
 
 /** What a day with a seat says while the registration itself is not settled. */
-const UNSETTLED_DAY_NOTES = { payment_required: "payment required", cancelled: "cancelled" } as const;
+const UNSETTLED_DAY_NOTES = { payment_required: "awaiting payment", cancelled: "cancelled" } as const;
 
 /** Which kinds of unconfirmed venue day a registration has, so one notice explains each next step. */
 export type VenueDayStanding = {

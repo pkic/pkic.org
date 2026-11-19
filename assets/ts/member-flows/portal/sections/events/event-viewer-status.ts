@@ -35,6 +35,7 @@ function registrationStatus({ participation, viewer }: EventStanding): Collectio
   if (status !== "registered") return [];
   if (!viewer) return [{ label: "You're registered" }];
   // An unpaid ticket leaves the registration incomplete, so it is what the viewer does next.
+  if (viewer.paymentProcessing) return [{ label: "Payment being processed", tone: "info" }];
   if (viewer.paymentDue) return [{ label: "Pay for your ticket", tone: "warn" }];
   const parts = attendanceStandingParts(viewer);
   const waiting = parts.filter((part) => part.startsWith("Waitlisted"));

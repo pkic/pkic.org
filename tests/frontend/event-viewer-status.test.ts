@@ -60,17 +60,19 @@ describe("event viewer status", () => {
   });
 
   it("asks for the payment instead of calling an unpaid registration registered", () => {
-    expect(
-      eventViewerStatus({
-        viewer: {
-          registrationStatus: "registered",
-          waitlisted: false,
-          days: [],
-          paymentDue: true,
-          holdsWorkAddress: true,
-        },
-      }),
-    ).toEqual([{ label: "Pay for your ticket", tone: "warn" }]);
+    const viewer = {
+      registrationStatus: "registered" as const,
+      waitlisted: false,
+      days: [],
+      paymentDue: true,
+      paymentProcessing: false,
+      holdsWorkAddress: true,
+    };
+    expect(eventViewerStatus({ viewer })).toEqual([{ label: "Pay for your ticket", tone: "warn" }]);
+    // A payment that takes days is on its way: nothing is asked.
+    expect(eventViewerStatus({ viewer: { ...viewer, paymentProcessing: true } })).toEqual([
+      { label: "Payment being processed", tone: "info" },
+    ]);
   });
 
   it("says nothing for a viewer with no standing", () => {

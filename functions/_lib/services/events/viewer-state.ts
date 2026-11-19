@@ -6,7 +6,7 @@ import { holdsWorkAddress } from "../../email-domains/contact-kind";
 import { dayWaitlistStatusSql, NON_CAPACITY_CONSUMING_DAY_WAITLIST_SQL } from "../registrations/day-waitlist-policy";
 import { parseVerifiedAddresses, verifiedAddressesJsonSql } from "../user-emails";
 import { eventDayOptionAccessSql } from "../event-participation/session-access";
-import { ticketPaymentDueSql } from "../event-tickets/registration-ticket";
+import { ticketPaymentDueSql, ticketPaymentOnItsWaySql } from "../event-tickets/registration-ticket";
 
 /**
  * Day waitlist rows are the sole authoritative waitlist state (see
@@ -45,6 +45,7 @@ const VIEWER_STATE_SELECT = `SELECT r.event_id AS event_id,
       )
     ), '[]') AS days_json,
     ${ticketPaymentDueSql("r.id")} AS payment_due,
+    ${ticketPaymentOnItsWaySql("r.id")} AS payment_processing,
     ${verifiedAddressesJsonSql("r.user_id")} AS verified_addresses
   FROM registrations r`;
 
@@ -54,6 +55,7 @@ export interface EventViewerStateRow {
   waitlisted: number;
   days_json: string;
   payment_due: number;
+  payment_processing: number;
   verified_addresses: string | null;
 }
 
@@ -63,6 +65,7 @@ function mapViewerStateRow(row: EventViewerStateRow): EventViewerState {
     waitlisted: toBool(row.waitlisted),
     days: JSON.parse(row.days_json) as unknown,
     paymentDue: toBool(row.payment_due),
+    paymentProcessing: toBool(row.payment_processing),
     holdsWorkAddress: holdsWorkAddress(parseVerifiedAddresses(row.verified_addresses)),
   });
 }
