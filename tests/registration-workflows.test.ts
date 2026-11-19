@@ -796,7 +796,7 @@ describe("registration workflows", () => {
         dayLabel: "Day 1",
         attendanceLabel: "In person",
         statusLabel: "Waitlisted for in-person attendance",
-        statusNote: "waitlisted",
+        statusNote: "waitlisted, not confirmed",
         waitlistStatus: "waiting",
         isWaitlisted: true,
         isWaitlistOffer: false,

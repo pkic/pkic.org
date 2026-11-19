@@ -762,7 +762,7 @@ describe("event email campaign recipients", () => {
         dayLabel: "Day 2",
         attendanceLabel: "Moon base",
         statusLabel: "Waitlisted",
-        statusNote: "waitlisted",
+        statusNote: "waitlisted, not confirmed",
         waitlistStatus: "waiting",
         isWaitlisted: true,
         isWaitlistOffer: false,

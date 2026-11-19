@@ -1,3 +1,7 @@
+import {
+  eventAttendanceAccessMode,
+  type EventAttendanceAccessMode,
+} from "../../../assets/shared/event-attendance-access";
 import type { EmailDayAttendance, EmailDayWaitlist } from "../../../assets/shared/schemas/email-template-data";
 /**
  * Human-readable labels for registration attendance type values.
@@ -19,11 +23,16 @@ export const STATUS_LABELS: Record<string, string> = {
 
 type DayWaitlistEmailEntry = EmailDayWaitlist;
 
-/** What a day's waitlist adds to its attendance; a confirmed day needs no note. */
-const DAY_WAITLIST_NOTES: Record<string, string> = {
-  waiting: "waitlisted",
-  offered: "place offered",
-  expired: "offer expired",
+/**
+ * Whether a day attended at the venue gets the person in. Only a confirmed day does, so every
+ * venue day says which it is; a day attended remotely needs no note.
+ */
+const VENUE_DAY_NOTES: Record<string, string> = {
+  "": "confirmed",
+  accepted: "confirmed",
+  waiting: "waitlisted, not confirmed",
+  offered: "seat offered, not confirmed until you accept it",
+  expired: "offer expired, not confirmed",
 };
 
 export function hasActiveDayWaitlist(dayWaitlist: DayWaitlistEmailEntry[] = []): boolean {
@@ -67,7 +76,13 @@ export function buildRegistrationEmailStatusData(
  * falling back to the ISO day_date if no label is set.
  */
 export function buildAttendanceEmailData(
-  dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null; optionLabel?: string | null }>,
+  dayAttendance: Array<{
+    dayDate: string;
+    attendanceType: string;
+    label: string | null;
+    optionLabel?: string | null;
+    accessMode?: EventAttendanceAccessMode;
+  }>,
   dayWaitlist: DayWaitlistEmailEntry[] = [],
 ): {
   attendanceLabel: string;
@@ -84,7 +99,10 @@ export function buildAttendanceEmailData(
           dayLabel: d.label ?? d.dayDate,
           attendanceLabel: d.optionLabel ?? ATTENDANCE_TYPE_LABELS[d.attendanceType] ?? d.attendanceType,
           statusLabel: buildDayAttendanceStatusLabel(d.attendanceType, waitlistStatus, d.optionLabel),
-          statusNote: DAY_WAITLIST_NOTES[waitlistStatus] ?? "",
+          statusNote:
+            eventAttendanceAccessMode({ value: d.attendanceType, accessMode: d.accessMode }) === "physical"
+              ? (VENUE_DAY_NOTES[waitlistStatus] ?? "not confirmed")
+              : "",
           waitlistStatus,
           isWaitlisted: waitlistStatus === "waiting",
           isWaitlistOffer: waitlistStatus === "offered",

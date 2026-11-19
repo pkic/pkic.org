@@ -1,3 +1,4 @@
+import type { EventAttendanceAccessMode } from "../../../../assets/shared/event-attendance-access";
 import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../../utils/attendance";
 import { buildCustomAnswerRows, buildCustomAnswerVariables } from "../../utils/registration-email";
 import type { FormFieldDefinition } from "../forms/read";
@@ -73,6 +74,7 @@ function buildAttendeeTemplateData(
     attendanceType: string;
     label: string | null;
     optionLabel?: string | null;
+    accessMode?: EventAttendanceAccessMode;
   }>,
   dayWaitlist: Array<{ dayDate: string; status: string }>,
 ): Record<string, unknown> {

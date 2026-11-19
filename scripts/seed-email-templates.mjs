@@ -316,6 +316,8 @@ The PKI Consortium is a vendor-neutral community of PKI practitioners working to
 > {{/if}}{{#each customAnswerRows}}**{{label}}:** {{displayValue}}<br>
 > {{/each}}{{#if acceptedTermsText}}**Terms agreed:**<br>
 > - {{acceptedTermsText}}{{/if}}
+
+{{#if hasActiveDayWaitlist}}<div class="notice notice-warning"><strong>You can't enter the venue on a waitlisted day.</strong> Only days marked confirmed give you access. We'll email you if a seat opens up.</div>{{/if}}
 `,
   },
   // ─────────────────────────────────────────────────────────────────────────
@@ -559,7 +561,7 @@ Plan the sessions you want to attend in [My agenda &rarr;]({{myAgendaUrl}})
   // ─────────────────────────────────────────────────────────────────────────
   // 3b. Waitlist offer
   // Variables: eventName, firstName, manageUrl, dayAttendance, dayWaitlist,
-  //            waitlistedDayCount
+  //            hasActiveDayWaitlist
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "registration_waitlist_offer",
@@ -579,10 +581,6 @@ No longer coming in person? Change that day to virtual attendance or cancel your
 ---
 
 {{> reg_details}}
-
-{{#if waitlistedDayCount}}
-Some of your in-person days may still be on the waitlist. Your registration shows the latest status for each day.
-{{/if}}
 
 {{> sponsors_block}}
 `,

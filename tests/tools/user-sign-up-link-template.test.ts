@@ -70,7 +70,9 @@ describe("the email for an address that already has an account", () => {
       eventName: "PQC Conference",
       firstName: "Ada",
       lastName: "Lovelace",
-      dayAttendance: [{ dayLabel: "Day 1", attendanceLabel: "In person", statusLabel: "Confirmed", statusNote: "" }],
+      dayAttendance: [
+        { dayLabel: "Day 1", attendanceLabel: "In person", statusLabel: "Confirmed", statusNote: "confirmed" },
+      ],
     };
     expect(compileSimpleTemplate(found.subjectTemplate, data, "text")).toBe(
       "You're already registered for PQC Conference",
@@ -81,7 +83,8 @@ describe("the email for an address that already has an account", () => {
     expect(body).toContain("View or change my registration");
     expect(body).toContain("## Your registration details");
     expect(body).toContain("**Name:** Ada Lovelace");
-    expect(body).toMatch(/\*\*Day 1:\*\* In person<br>/);
+    expect(body).toMatch(/\*\*Day 1:\*\* In person — confirmed<br>/);
+    expect(body).not.toContain("You can't enter the venue");
     expect(body).not.toContain("Sign in and continue");
     expect(body).toContain(link.magicLinkUrl);
   });

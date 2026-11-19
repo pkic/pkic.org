@@ -1,6 +1,6 @@
 import { batchRows } from "../../db/pagination";
 import { stringifyJson } from "../../utils/json";
-import { attendanceOptionLabelSql } from "../event-attendance-option-sql";
+import { attendanceOptionLabelSql, eventDayOptionAccessSql } from "../event-attendance-option-sql";
 import { dayWaitlistStatusSql } from "../registrations/day-waitlist-policy";
 import type { DatabaseLike } from "../../types";
 import type {
@@ -20,6 +20,7 @@ function indexAttendanceRows(rows: AttendeeDayAttendanceRow[]): Map<string, Atte
       attendanceType: row.attendanceType,
       label: row.label,
       optionLabel: row.optionLabel,
+      accessMode: row.accessMode,
     });
     byRegistration.set(row.registration_id, entries);
   }
@@ -42,7 +43,8 @@ function prepareDayAttendance(db: DatabaseLike, registrationIdsJson: string) {
             ed.day_date AS dayDate,
             rda.attendance_type AS attendanceType,
             ed.label AS label,
-            ${attendanceOptionLabelSql("ed", "rda.attendance_type")} AS optionLabel
+            ${attendanceOptionLabelSql("ed", "rda.attendance_type")} AS optionLabel,
+            ${eventDayOptionAccessSql("ed", "rda.attendance_type")} AS accessMode
      FROM registration_day_attendance rda
      JOIN event_days ed ON ed.id = rda.event_day_id
      WHERE rda.registration_id IN (SELECT value FROM json_each(?))

@@ -8,7 +8,7 @@ export const emailDayAttendanceSchema = z.object({
   dayLabel: z.string(),
   attendanceLabel: z.string(),
   statusLabel: z.string(),
-  /** The day's status only when it is not simply confirmed, such as a waitlist place; empty otherwise. */
+  /** Whether an in-person day is confirmed or waitlisted; empty for a day attended online. */
   statusNote: z.string(),
   waitlistStatus: z.string(),
   isWaitlisted: z.boolean(),

@@ -47,12 +47,17 @@ export const PREVIEW_DEFAULTS: Record<string, unknown> = {
   waitlistOfferNotice: false,
   // Day attendance
   dayAttendance: [
-    { dayLabel: "Wednesday 1 October 2026", attendanceLabel: "In person", statusLabel: "Confirmed", statusNote: "" },
+    {
+      dayLabel: "Wednesday 1 October 2026",
+      attendanceLabel: "In person",
+      statusLabel: "Confirmed",
+      statusNote: "confirmed",
+    },
     {
       dayLabel: "Thursday 2 October 2026",
       attendanceLabel: "In person",
       statusLabel: "Waitlisted",
-      statusNote: "waitlisted",
+      statusNote: "waitlisted, not confirmed",
     },
   ],
   // Custom answers

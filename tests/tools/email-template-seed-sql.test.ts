@@ -291,15 +291,22 @@ describe("buildTemplateSqlStatements", () => {
         status: "waitlisted",
         organizationName: "Example Org",
         dayAttendance: [
-          { dayLabel: "Day 1", attendanceLabel: "In person", statusLabel: "Waitlisted", statusNote: "waitlisted" },
+          {
+            dayLabel: "Day 1",
+            attendanceLabel: "In person",
+            statusLabel: "Waitlisted",
+            statusNote: "waitlisted, not confirmed",
+          },
         ],
+        hasActiveDayWaitlist: true,
         manageUrl: "https://example.test/registration",
       }),
       DEFAULT_LAYOUT_HTML,
     );
     expect(rendered.text).toContain("Dear Alex,");
     expect(rendered.text).toContain("Your registration details");
-    expect(rendered.text).toContain("Day 1: In person — waitlisted");
+    expect(rendered.text).toContain("Day 1: In person — waitlisted, not confirmed");
+    expect(rendered.text).toContain("You can't enter the venue on a waitlisted day.");
     expect(rendered.text).toContain("limited by the event budget");
     expect(rendered.html).toContain('href="mailto:contact@pkic.org"');
     expect(rendered.text).not.toMatch(/\{\{/);
