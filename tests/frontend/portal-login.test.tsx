@@ -505,9 +505,13 @@ describe("portal login", () => {
         control.value = "ada@organization.example";
         control.dispatchEvent(new Event("input", { bubbles: true }));
       });
-      // Starting an account asks for the Code of Conduct agreement first.
+      // Starting an account asks for the Code of Conduct agreement first: the action waits for it,
+      // and Enter says why.
+      expect(buttonLabeled("Verify your work email").disabled).toBe(true);
       await act(async () => {
-        buttonLabeled("Verify your work email").click();
+        controlLabeled("Your work email address").dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+        );
         await Promise.resolve();
       });
       expect(container.textContent).toContain(ACCOUNT_POLICIES_COPY.required);

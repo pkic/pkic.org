@@ -442,6 +442,21 @@ describe("local scoped eligibility manifest", () => {
     const failed = await prepareEligibilityManifest("synthetic-event", snapshot.operatorUserId, null, enrolled);
     expect(failed.refreshError).toContain("HTTP 503");
     expect(failed.validUntil).toBe(restored.validUntil);
+    for (const status of [401, 403, 429, 500]) {
+      fetcher.mockResolvedValueOnce(Response.json({}, { status }));
+      const retained = await prepareEligibilityManifest("synthetic-event", snapshot.operatorUserId, null, enrolled);
+      expect(retained.refreshError).toContain(`HTTP ${status}`);
+      expect(retained.validUntil).toBe(restored.validUntil);
+    }
+    fetcher.mockResolvedValueOnce(new Response("{}", { status: 429, headers: { "Retry-After": "120" } }));
+    const limited = await prepareEligibilityManifest("synthetic-event", snapshot.operatorUserId, null, enrolled);
+    expect(limited.retryAfterMs).toBe(120_000);
+    fetcher.mockResolvedValueOnce(
+      Response.json({ error: { code: "SCANNER_PREPARATION_CLOSED", message: "Closed" } }, { status: 409 }),
+    );
+    const closed = await prepareEligibilityManifest("synthetic-event", snapshot.operatorUserId, null, enrolled);
+    expect(closed.refreshError).toContain("session has closed");
+    expect(closed.validUntil).toBe(restored.validUntil);
     fetcher.mockRejectedValueOnce(new Error("Offline"));
     await expect(
       prepareEligibilityManifest("synthetic-event", snapshot.operatorUserId, null, {
@@ -653,7 +668,8 @@ describe("local scoped eligibility manifest", () => {
       snapshot.deviceId,
       true,
     ]);
-    stubManifestStorage(new Map([[key, savedSnapshot]]));
+    const saved = new Map<string, unknown>([[key, savedSnapshot]]);
+    stubManifestStorage(saved);
     const context = scannerOfflineContextSchema.parse({
       eventId: snapshot.eventId,
       operatorUserId: snapshot.operatorUserId,
@@ -674,9 +690,58 @@ describe("local scoped eligibility manifest", () => {
     const manifest = await restoreEligibilityManifest(context, true);
     expect(await manifest?.lookupName?.(badge)).toBe("Zoë 测试");
     expect(await manifest?.lookupName?.("23456789ABCDEFGH")).toBeNull();
-    expect(await restoreEligibilityManifest(context, false)).toBeNull();
+    expect((await restoreEligibilityManifest(context, false))?.lookup).toBeDefined();
+    expect(
+      (
+        await prepareEligibilityManifest(
+          "synthetic-event",
+          snapshot.operatorUserId,
+          null,
+          snapshot,
+          undefined,
+          null,
+          "cache",
+        )
+      ).badgeNamesPrepared,
+    ).toBe(true);
+    saved.set(key, { ...savedSnapshot, badgeNamesPrepared: false, badgeNamesUnavailable: 1 });
+    saved.set(
+      JSON.stringify([snapshot.operatorUserId, "synthetic-event", null, null, snapshot.epochId, snapshot.deviceId]),
+      { ...snapshot, complete: true },
+    );
+    expect(await (await restoreEligibilityManifest(context, true))?.lookupName?.(badge)).toBe("Zoë 测试");
+    saved.set(key, { ...savedSnapshot, complete: false });
+    expect((await (await restoreEligibilityManifest(context, true))?.lookup(badge, "attendance"))?.outcome).toBe(
+      "eligible",
+    );
     vi.mocked(scannerUploadSuspended).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
     expect(await restoreEligibilityManifest(context, true)).toBeNull();
+  });
+  it("keeps venue scanning on the ID roster when badge-name refresh fails", async () => {
+    const snapshot = { ...(await fixture()), complete: true };
+    const scope = [snapshot.operatorUserId, "synthetic-event", null, null, snapshot.epochId, snapshot.deviceId];
+    const key = JSON.stringify(scope);
+    stubManifestStorage(
+      new Map<string, unknown>([
+        [key, snapshot],
+        [JSON.stringify([...scope, true]), { ...snapshot, complete: false, badgeNamesPrepared: false }],
+      ]),
+    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({}, { status: 503 })));
+    const retained = await prepareEligibilityManifest(
+      "synthetic-event",
+      snapshot.operatorUserId,
+      null,
+      snapshot,
+      undefined,
+      null,
+      "refresh",
+      undefined,
+      true,
+    );
+    expect(retained.badgeNamesPrepared).toBeFalsy();
+    expect(retained.refreshError).toContain("HTTP 503");
+    expect((await retained.lookup(badge, "attendance")).outcome).toBe("eligible");
   });
   it("never reports hard-expired encrypted name preparation as ready", async () => {
     const snapshot = await fixture();

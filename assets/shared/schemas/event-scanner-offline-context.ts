@@ -30,7 +30,11 @@ export const scannerOfflineContextSchema = enrolledOfflineEligibilityResponseSch
     slug: eventSlugParamsSchema.shape.eventSlug,
     route: scannerOfflineRouteSchema,
     sessionId: databaseIdSchema,
+    contextId: databaseIdSchema.optional(),
     action: scanActionSchema.exclude(["lead", "exception"]),
+    purpose: z.enum(["scan", "collection"]).optional(),
+    targetLabel: z.string().trim().max(200).optional(),
+    roomLabel: z.string().trim().max(200).optional(),
     savedAt: utcInstantSchema,
     lastObservedAt: utcInstantSchema,
   })

@@ -258,7 +258,6 @@ export function FastScannerView({
       <span class="pk-fast-scanner__tone pk-fast-scanner__tone--error" aria-hidden="true" />
       <div class="pk-fast-scanner__stage" aria-hidden={operatorOpen ? true : undefined}>
         <img class="pk-fast-scanner__brand" src="/img/logo.svg" alt="PKI Consortium" width="1256" height="324" />
-        {connectionStatus}
 
         {!manualEntry && !recentScans && (
           <div class="pk-fast-scanner__feedback" role="status" aria-live="polite" aria-atomic="true">
@@ -278,10 +277,12 @@ export function FastScannerView({
               {collection?.waiting && !helpOpen && (
                 <ScannerCollectionAttendee {...collection} saving={collection.saving || cooldown?.saving} />
               )}
-              {detail && detail !== visibleStatus?.title && <p class="pk-fast-scanner__message">{detail}</p>}
+              {detail && detail !== "Ready to scan" && detail !== visibleStatus?.title && (
+                <p class="pk-fast-scanner__message">{detail}</p>
+              )}
             </div>
             {purpose === "print" && !helpOpen && <div class="pk-fast-scanner__print-status">{statusActions}</div>}
-            {!visibleStatus && context && <p class="pk-fast-scanner__context">{context}</p>}
+            {!visibleStatus && context && !collection && <p class="pk-fast-scanner__context">{context}</p>}
           </div>
         )}
         {cameraError && !helpOpen && (
@@ -429,6 +430,7 @@ export function FastScannerView({
             aria-label="Next badge readiness"
           />
           <div class="pk-fast-scanner__tools">
+            {connectionStatus}
             {!collection?.waiting && cooldown && cooldown.remainingMs > 0 && (
               <button
                 type="button"

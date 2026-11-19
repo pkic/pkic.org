@@ -1,5 +1,5 @@
 import { useMeasuredWidth } from "../../hooks/useMeasuredWidth";
-import { useMemo, useRef, useState } from "preact/hooks";
+import { useMemo, useState } from "preact/hooks";
 import type { BadgePrintingContext } from "../../../shared/schemas/route-contracts-event-badges";
 import { Alert } from "../../ui/Alert";
 import { BadgeDocumentFrame } from "./BadgeDocumentFrame";
@@ -27,14 +27,25 @@ export function BadgeFace({
   side?: "front" | "back";
   onQrClick?: () => void;
 }) {
-  const frame = useRef<HTMLIFrameElement>(null);
   const { element, width: available } = useMeasuredWidth();
   const [error, setError] = useState("");
   // Compiling the template embeds its fonts; do it once per badge, not on every resize.
   const face = useMemo(() => badgeFaceHtml(badge, printing, side), [badge, printing, side]);
   const trueWidth = face.widthMm * PX_PER_MM;
   const scale = available ? Math.min(1, available / trueWidth) : 1;
-  const screenCss = `html,body{margin:0;overflow:hidden;background:transparent}.badge-print-sheet{margin:0;box-shadow:none;transform-origin:0 0;transform:scale(${scale})}.badge-face-qr-action{display:block;inline-size:100%;block-size:100%;border:0;padding:0;background:transparent;cursor:zoom-in}.badge-face-qr-action:focus-visible{outline:2px solid currentColor;outline-offset:2px}`;
+  const screenCss = `html,body{margin:0;overflow:hidden;background:transparent}.badge-print-sheet{margin:0;box-shadow:none;transform-origin:0 0;transform:scale(${scale})}`;
+  const preview = (
+    <BadgeDocumentFrame
+      className="pk-badge-face__frame"
+      title={title}
+      html={face.html}
+      width={Math.floor(trueWidth * scale)}
+      height={Math.floor(face.heightMm * PX_PER_MM * scale)}
+      screenCss={screenCss}
+      decorative={Boolean(onQrClick)}
+      onError={setError}
+    />
+  );
   return (
     <div
       ref={element}
@@ -42,31 +53,14 @@ export function BadgeFace({
       data-badge-width-mm={face.widthMm}
       data-badge-height-mm={face.heightMm}
     >
-      <BadgeDocumentFrame
-        className="pk-badge-face__frame"
-        frameRef={frame}
-        onReady={() => {
-          if (!onQrClick) return;
-          const image = frame.current?.contentDocument?.querySelector<HTMLImageElement>(
-            'img[alt="Attendee badge QR code"]',
-          );
-          if (!image) return;
-          const action = image.ownerDocument.createElement("button");
-          action.type = "button";
-          action.className = "badge-face-qr-action";
-          action.setAttribute("aria-label", "Enlarge check-in code");
-          action.title = "Enlarge check-in code";
-          image.replaceWith(action);
-          action.append(image);
-          action.addEventListener("click", onQrClick);
-        }}
-        title={title}
-        html={face.html}
-        width={Math.floor(trueWidth * scale)}
-        height={Math.floor(face.heightMm * PX_PER_MM * scale)}
-        screenCss={screenCss}
-        onError={setError}
-      />
+      {onQrClick ? (
+        <button type="button" class="pk-badge-face__open" onClick={onQrClick}>
+          {preview}
+          <span>Enlarge check-in code</span>
+        </button>
+      ) : (
+        preview
+      )}
       {error && <Alert tone="danger">{error}</Alert>}
     </div>
   );

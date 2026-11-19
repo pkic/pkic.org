@@ -36,6 +36,7 @@ import { Menu, type MenuItem } from "../ui/Menu";
 import {
   TableOptionsMenu,
   columnFilters,
+  columnKey,
   headLabel,
   useColumnControls,
   type ColumnControls,
@@ -55,6 +56,8 @@ export interface ColumnSort {
 
 export interface Column<T> {
   header: HeadCell;
+  /** Stable identity for column visibility when two headers could share text. Defaults to the header. */
+  key?: string;
   /** Compact symbol; the text header still names menus and assistive technology. */
   headerIcon?: ComponentChildren;
   cell: (row: T, index: number) => ComponentChildren;
@@ -286,7 +289,7 @@ export function DataTable<T>({
 
   const visible = columns
     .map((column, index) => ({ column, index }))
-    .filter(({ column }) => !hidden.has(headLabel(column.header)));
+    .filter(({ column }) => !hidden.has(columnKey(column)));
 
   const systemColumns: DataTableColumn<T>[] = visible.map(({ column, index }) => {
     const label = headLabel(column.header);

@@ -105,4 +105,27 @@ describe("scanner status bar", () => {
     expect(html).toContain("Offline");
     expect(html).toContain("No recent sync");
   });
+  it("uses a compact sync mark during scanning and shows only actionable status text", () => {
+    const ready = render(
+      <ScannerConnectionStatus
+        compact
+        pending={0}
+        online
+        syncing={false}
+        offlinePrepared
+        preparation={{ preparing: false, ready: true, error: "", badgeCollection: true, badgeNamesPrepared: true }}
+      />,
+    );
+    expect(ready).toContain('title="All scans synced"');
+    expect(ready).not.toContain("Badge names ready");
+    expect(ready).not.toContain("No recent sync");
+    const offline = render(
+      <ScannerConnectionStatus compact pending={1} online={false} syncing={false} offlinePrepared />,
+    );
+    expect(offline).toContain("Offline · 1 awaiting upload");
+    const failed = render(
+      <ScannerConnectionStatus compact pending={0} online syncing={false} error="Scan upload failed" />,
+    );
+    expect(failed).toContain("Scan upload failed");
+  });
 });

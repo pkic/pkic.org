@@ -1,0 +1,40 @@
+name: Sync stable preview
+
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: stable-preview-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository == 'pkic/pkic.org'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: stable-preview-sync
+      deployment: false
+    steps:
+      - name: Authenticate the mirror app
+        id: app
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          client-id: ${{ vars.STABLE_PREVIEW_APP_CLIENT_ID }}
+          private-key: ${{ secrets.STABLE_PREVIEW_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-workflows: write
+
+      - name: Fast-forward stable to main
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: |
+          mirror="$RUNNER_TEMP/stable-preview.git"
+          git clone --bare --single-branch --filter=tree:0 --no-tags --branch main -- \
+            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "$mirror"
+          git -C "$mirror" -c credential.helper= -c 'credential.helper=!gh auth git-credential' \
+            push origin refs/heads/main:refs/heads/stable
