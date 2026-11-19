@@ -53,8 +53,8 @@ test("cancelled attendees can restore registration without stale badge or invita
   expect(calendar).not.toContain("/register/manage/");
   expect(calendar).not.toContain(manageToken!);
   await page.goto(`/portal/#/events/${slug}/ticket`);
-  const ticket = page.frameLocator('iframe[title^="Your badge for "]');
-  await expect(ticket.getByRole("button", { name: "Enlarge check-in code", exact: true })).toBeVisible();
+  const enlargeCode = page.getByRole("button", { name: "Enlarge check-in code", exact: true });
+  await expect(enlargeCode).toBeVisible();
   for (const [width, height, device] of [
     [1280, 900, "desktop"],
     [375, 812, "phone"],
@@ -62,9 +62,20 @@ test("cancelled attendees can restore registration without stale badge or invita
     await page.setViewportSize({ width, height });
     await page.screenshot({ path: info.outputPath(`attendee-ticket-${device}.png`), fullPage: true });
   }
-  await ticket.getByRole("button", { name: "Enlarge check-in code", exact: true }).click();
-  await expect(page.getByRole("dialog", { name: "Check-in code", exact: true })).toBeVisible();
+  await enlargeCode.click();
+  const codeViewer = page.getByRole("dialog", { name: "Check-in code", exact: true });
+  await expect(codeViewer).toBeVisible();
+  await expect(codeViewer).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(codeViewer.getByText("Event Attendee", { exact: true })).toBeVisible();
+  await expect(codeViewer.getByText("Conference attendee", { exact: true })).toBeVisible();
+  await expect(codeViewer.getByText("Synthetic Attendee Services", { exact: true })).toBeVisible();
+  expect(
+    (await page.getByRole("img", { name: "Your check-in QR code", exact: true }).boundingBox())?.width,
+  ).toBeGreaterThan(320);
   await expect(page.getByRole("img", { name: "Your check-in QR code", exact: true })).toBeVisible();
+  await page.screenshot({ path: info.outputPath("attendee-ticket-code-phone.png"), animations: "disabled" });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.screenshot({ path: info.outputPath("attendee-ticket-code-desktop.png"), animations: "disabled" });
   await page.getByRole("button", { name: "Close check-in code", exact: true }).click();
 });
 

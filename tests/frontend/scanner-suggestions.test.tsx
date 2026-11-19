@@ -311,7 +311,7 @@ describe("assigned scanner setup", () => {
     );
     await settle();
     expect(choose).not.toHaveBeenCalled();
-    await click("Venue exit");
+    await click("Record checkout");
     expect(choose).toHaveBeenCalledExactlyOnceWith(null);
     expect(onAction).toHaveBeenCalledExactlyOnceWith("checkout");
     expect(onStart).toHaveBeenCalledOnce();

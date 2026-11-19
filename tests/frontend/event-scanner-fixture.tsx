@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(async () => {}),
   manifestReady: true,
   manifestPreparing: false,
+  manifestError: "",
   closedMessage: "",
   epochId: "77777777-7777-4777-8777-777777777777",
   preparationClosed: null as null | (() => void),
@@ -103,7 +104,7 @@ vi.mock(
         eligibilityManifest: { current: { occurrenceId: null, roomId: null, ...mocks.snapshot } },
         manifestReady: mocks.manifestReady,
         manifestPreparing: mocks.manifestPreparing,
-        manifestError: mocks.closedMessage,
+        manifestError: mocks.closedMessage || mocks.manifestError,
         closedMessage: mocks.closedMessage,
         refresh: mocks.refresh,
       };
@@ -154,6 +155,7 @@ afterEach(async () => {
   mocks.preparationClosed = null;
   mocks.manifestReady = true;
   mocks.manifestPreparing = false;
+  mocks.manifestError = "";
   mocks.closedMessage = "";
   mocks.epochId = "77777777-7777-4777-8777-777777777777";
   mocks.error = "";

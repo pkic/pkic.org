@@ -5,6 +5,7 @@ export class EligibilityRefreshFailure extends Error {
     readonly code: "changed" | "invalid" | "http",
     message: string,
     readonly status?: number,
+    readonly retryAfterMs?: number,
   ) {
     super(message);
   }
@@ -57,7 +58,7 @@ export function eligibilityRefreshError(error: unknown): string {
     return "Badge data could not be verified. Reopen the scanner; if this continues, contact support.";
   if (error instanceof EligibilityRefreshFailure && error.code === "http") {
     const status = error.status ?? 0;
-    return status === 429 || status >= 500
+    return status === 401 || status === 403 || status === 429 || status >= 500
       ? `${message} Try again shortly.`
       : `${message} Reopen the scanner; if this continues, contact support.`;
   }

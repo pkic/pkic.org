@@ -1,6 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { formatAge, formatDateTime } from "../../../../../../../shared/format-date";
 import { formatNumber } from "../../../../../../../shared/format-number";
+import { IconCheckmark } from "../../../../../../components/icons";
 
 export function scannerConnectionLabel({
   pending,
@@ -37,18 +38,33 @@ export interface ScannerReadiness {
   badgeNamesPrepared?: boolean;
 }
 
+export function scannerReadinessLabel(preparation: ScannerReadiness): string {
+  const preparing = preparation.preparing && !preparation.ready;
+  return preparing
+    ? `${preparation.badgeCollection ? "Preparing badge names" : "Preparing scanner"}${preparation.checkedBadges == null ? "…" : ` · ${formatNumber(preparation.checkedBadges)} badges checked…`}`
+    : preparation.ready
+      ? preparation.badgeCollection && !preparation.badgeNamesPrepared
+        ? "Some badge names unavailable offline"
+        : preparation.badgeCollection
+          ? "Badge names ready"
+          : "Badge data ready"
+      : preparation.error || "Preparing scanner…";
+}
+
 /** One operator status bar combines readiness, connection, pending uploads and the last acknowledgment. */
 export function ScannerConnectionStatus({
   uploadStatus = "",
   lastSync,
   offlinePrepared,
   preparation,
+  compact = false,
   ...props
 }: Parameters<typeof scannerConnectionLabel>[0] & {
   uploadStatus?: string;
   lastSync?: string | null;
   offlinePrepared?: boolean;
   preparation?: ScannerReadiness;
+  compact?: boolean;
 }) {
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
@@ -79,24 +95,35 @@ export function ScannerConnectionStatus({
     uploadStatus.startsWith("Scan upload")
       ? uploadStatus
       : "");
-  const preparing = preparation?.preparing && !preparation.ready;
-  const readiness = preparation
-    ? preparing
-      ? `${preparation.badgeCollection ? "Preparing badge names" : "Preparing scanner"}${preparation.checkedBadges == null ? "…" : ` · ${formatNumber(preparation.checkedBadges)} badges checked…`}`
-      : preparation.ready
-        ? preparation.badgeCollection && !preparation.badgeNamesPrepared
-          ? "Some badge names unavailable offline"
-          : preparation.badgeCollection
-            ? "Badge names ready"
-            : "Badge data ready"
-        : preparation.error || "Preparing scanner…"
-    : null;
+  const readiness = preparation ? scannerReadinessLabel(preparation) : null;
   const connection = props.online && !props.collector ? "Online" : "Offline";
   const uploads = props.pending
     ? `${formatNumber(props.pending)} awaiting upload${props.syncing ? " · syncing…" : ""}`
     : props.syncing
       ? "Checking uploads…"
       : "All scans synced";
+  if (compact) {
+    const label =
+      error ||
+      (props.ready === false ? "Checking saved scans…" : "") ||
+      (preparation && !preparation.ready ? readiness : "") ||
+      (preparation?.badgeCollection && preparation.ready && !preparation.badgeNamesPrepared ? readiness : "") ||
+      (!props.online || props.collector ? (props.pending ? `Offline · ${uploads}` : "Offline") : "") ||
+      uploads;
+    const synced = label === "All scans synced";
+    return (
+      <span
+        class="pk-scanner-connection pk-scanner-connection--compact"
+        role="status"
+        aria-live="polite"
+        aria-label="Scanner status"
+        title={label}
+      >
+        {synced ? <IconCheckmark aria-hidden="true" /> : label}
+        {synced && <span class="pk-sr-only">{label}</span>}
+      </span>
+    );
+  }
   return (
     <div class="pk-scanner-connection" role="status" aria-live="polite" aria-label="Scanner status">
       {readiness && <span>{readiness}</span>}

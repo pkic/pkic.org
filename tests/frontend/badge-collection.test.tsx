@@ -100,6 +100,28 @@ describe("badge collection name lifecycle", () => {
     await act(() => button!.click());
     expect(next).toHaveBeenCalledOnce();
   });
+  it("shows one badge collection readiness line without a duplicate scope or scan prompt", async () => {
+    await act(() =>
+      render(
+        <FastScannerView
+          context="Badge collection"
+          mode="attendance"
+          result={null}
+          pending={0}
+          message="Ready to scan"
+          cameraActive
+          preview={false}
+          onPreview={() => {}}
+          onExit={() => {}}
+          collection={{ waiting: false, name: null, loading: false, onNext: () => {} }}
+        />,
+        host,
+      ),
+    );
+    expect(host.querySelector(".pk-fast-scanner__feedback")?.textContent?.trim()).toBe("Ready for badge collection");
+    expect(host.querySelector(".pk-fast-scanner__message")).toBeNull();
+    expect(host.querySelector(".pk-fast-scanner__context")).toBeNull();
+  });
   it("never offers badge collection to lead-only scanners", async () => {
     await act(() =>
       render(
