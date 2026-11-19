@@ -96,6 +96,36 @@ describe("the studio's switcher, session bar and phone layout", () => {
     }
   });
 
+  it("shows the outputs an operator picks on the phone's monitor", () => {
+    vi.stubGlobal(
+      "matchMedia",
+      (query: string) =>
+        ({
+          matches: query.includes("max-width"),
+          addEventListener: () => {},
+          removeEventListener: () => {},
+        }) as unknown as MediaQueryList,
+    );
+    try {
+      const { host } = mountDesk();
+      void act(() => {
+        history.replaceState(null, "", "/#/live?panel=monitor");
+        window.dispatchEvent(new HashChangeEvent("hashchange"));
+      });
+      const shown = () =>
+        [...host.querySelectorAll<HTMLElement>(".pk-studio-monitor__tile")].map((tile) => tile.dataset.tally);
+      expect(shown()).toEqual(["preview", "program"]);
+      void act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Outputs on Monitors"]')!.click());
+      const projector = [...document.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]')].find((item) =>
+        item.textContent?.includes("Projector"),
+      )!;
+      void act(() => projector.click());
+      expect(shown()).toEqual(["preview", "program", "projector"]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("clears a ready-made message with a second tap and flashes it with a hold on a phone", () => {
     vi.useFakeTimers();
     vi.stubGlobal(

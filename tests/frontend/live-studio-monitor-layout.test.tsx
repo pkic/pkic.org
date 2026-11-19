@@ -13,6 +13,7 @@ import {
   loadStudioLayouts,
   studioLayoutsSchema,
 } from "../../assets/ts/member-flows/portal/sections/events/detail/live/studio/studio-layout";
+import { useStudioPhonePanels } from "../../assets/ts/member-flows/portal/sections/events/detail/live/studio/StudioPhone";
 import { useStudioLayout } from "../../assets/ts/member-flows/portal/sections/events/detail/live/studio/useStudioLayout";
 import { LIVE_QUESTION, liveSnapshot } from "./helpers/live-room-socket";
 
@@ -239,6 +240,33 @@ describe("studio monitor layouts", () => {
     expect(stored.get(STUDIO_LAYOUT_STORAGE_KEY) ?? "").not.toContain("layouts");
     // The speaker's screen draws its own layout and no scene, so it offers none.
     expect(picker("Stage display")).toBeNull();
+  });
+
+  it("shows the outputs an operator picks on a phone's monitor, apart from the desk's saved arrangement", () => {
+    function PhoneMonitor() {
+      const phone = useStudioPhonePanels();
+      const view = monitorPanelView(phone.panel("monitor"), sources, phone.change, switcher);
+      return (
+        <>
+          {view.heading}
+          {view.body}
+        </>
+      );
+    }
+    host = document.createElement("div");
+    document.body.append(host);
+    void act(() => render(<PhoneMonitor />, host!));
+    const shown = () =>
+      [...host!.querySelectorAll<HTMLElement>(".pk-studio-monitor__tile")].map((tile) => tile.dataset.tally);
+    // A phone's monitor starts on Preview and Program.
+    expect(shown()).toEqual(["preview", "program"]);
+    void act(() => host!.querySelector<HTMLButtonElement>('button[aria-label="Outputs on Monitors"]')!.click());
+    void act(() => menuItem("Projector").click());
+    expect(shown()).toContain("projector");
+    void act(() => menuItem("Preview").click());
+    expect(shown()).not.toContain("preview");
+    // The desk's arrangement in this browser is left alone.
+    expect(stored.has(STUDIO_LAYOUT_STORAGE_KEY)).toBe(false);
   });
 
   it("clears from each card's own header, and fills a free place with an output from the multiview", () => {

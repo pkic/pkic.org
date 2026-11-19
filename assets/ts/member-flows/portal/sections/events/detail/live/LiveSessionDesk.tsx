@@ -47,7 +47,7 @@ import {
   type StudioOutput,
   type StudioPanel,
 } from "./studio/studio-layout";
-import { StudioPhone, useStudioPhone } from "./studio/StudioPhone";
+import { StudioPhone, useStudioPhone, useStudioPhonePanels } from "./studio/StudioPhone";
 import { StudioPhoneHome } from "./studio/StudioPhoneHome";
 import { useStudioFullscreen } from "./studio/useStudioFullscreen";
 import { ProgramUndoToast, TransitionControl, useTakeShortcut } from "./studio/StudioSwitcher";
@@ -191,6 +191,7 @@ export function LiveSessionDesk({
   };
   useTakeShortcut(() => take("program"), live && !broadcasting);
   const phone = useStudioPhone();
+  const phonePanels = useStudioPhonePanels();
   if (!state)
     return room.admissionRefusal ? (
       <Alert tone="danger">{liveRoomOpenFailure(room.admissionRefusal, "operator")}</Alert>
@@ -276,11 +277,13 @@ export function LiveSessionDesk({
       ),
     };
   };
+  // A panel's own choices go to the arrangement that holds it: the phone's panels, or the desk's saved grid.
+  const changePanels = phone ? phonePanels.change : layout.change;
   const renderPanel = (panel: StudioPanel): StudioPanelView => {
     const title = STUDIO_PANEL_LABELS[panel.type];
     switch (panel.type) {
       case "monitor":
-        return monitorPanelView(panel, sources, layout.change, switcher);
+        return monitorPanelView(panel, sources, changePanels, switcher);
       case "transition":
         // A small panel holding only the button; its name truncates in a narrow header, and the button can say it too.
         return {
@@ -290,7 +293,7 @@ export function LiveSessionDesk({
               id: "label",
               label: panel.labeled ? "Hide label" : "Show label",
               tooltip: "Whether each transition button says its output's full name or only its code.",
-              onSelect: () => layout.change((panels) => setStudioPanelLabeled(panels, panel.id, !panel.labeled)),
+              onSelect: () => changePanels((panels) => setStudioPanelLabeled(panels, panel.id, !panel.labeled)),
             },
           ],
           body: (
@@ -467,17 +470,7 @@ export function LiveSessionDesk({
             onScene={switcher.previewScene}
             notice={notice}
             home={<StudioPhoneHome key={shownId} targets={targets} send={sendProgram} />}
-            panel={(type) =>
-              render({
-                id: `phone-${type}`,
-                type,
-                x: 0,
-                y: 0,
-                w: 12,
-                h: 8,
-                ...(type === "monitor" ? { outputs: ["preview", "program"] as StudioOutput[] } : {}),
-              })
-            }
+            panel={(type) => render(phonePanels.panel(type))}
           />
         ) : null}
         <div class="pk-panel pk-studio__bar" hidden={phone}>

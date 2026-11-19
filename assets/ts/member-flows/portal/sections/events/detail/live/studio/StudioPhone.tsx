@@ -20,7 +20,8 @@ import type { StudioPanelView } from "./StudioGrid";
 import { SessionTiming, StudioNotice, type StudioNoticeContent } from "./StudioHeader";
 import { liveSceneName } from "../live-layer-unseen";
 import { clearHint } from "./StudioSwitcher";
-import { STUDIO_PANEL_LABELS, studioOutputDetails, type StudioPanelType } from "./studio-layout";
+import { STUDIO_PANEL_LABELS, studioOutputDetails, type StudioPanel, type StudioPanelType } from "./studio-layout";
+import type { StudioChange } from "./useStudioLayout";
 import "../live-tally.css";
 import "./StudioPhone.css";
 
@@ -37,6 +38,35 @@ export const STUDIO_PHONE_VIEWS = [
   "message",
 ] as const;
 export type StudioPhoneView = (typeof STUDIO_PHONE_VIEWS)[number];
+/** One panel as a phone shows it: a whole view, so its place and size on the desk's grid never matter. */
+const phonePanel = (type: StudioPanelType): StudioPanel => ({
+  id: `phone-${type}`,
+  type,
+  x: 0,
+  y: 0,
+  w: 12,
+  h: 8,
+  // The monitor starts on the two buses an operator switches between.
+  ...(type === "monitor" ? { outputs: ["preview", "program"] } : {}),
+});
+
+/**
+ * The phone's own panels, apart from the arrangement the desk saves: one per
+ * view. A choice made in a panel, such as the outputs a monitor shows, lasts
+ * while the studio is open.
+ */
+export function useStudioPhonePanels(): { panel: (type: StudioPanelType) => StudioPanel; change: StudioChange } {
+  const [panels, setPanels] = useState<readonly StudioPanel[]>(() =>
+    STUDIO_PHONE_VIEWS.flatMap((view) => (view === "home" ? [] : [phonePanel(view)])),
+  );
+  const panel = useCallback(
+    (type: StudioPanelType) => panels.find((each) => each.type === type) ?? phonePanel(type),
+    [panels],
+  );
+  const change = useCallback<StudioChange>((update) => setPanels((current) => update(current)), []);
+  return { panel, change };
+}
+
 /** The views with a tab of their own; the rest sit behind More, so the bar keeps five tabs. */
 const TABBED: readonly StudioPhoneView[] = ["home", "speakers", "graphics", "questions"];
 const MORE = STUDIO_PHONE_VIEWS.filter((view) => !TABBED.includes(view));
