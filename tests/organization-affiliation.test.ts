@@ -6,6 +6,7 @@ import {
   prepareVerifiedOrganizationAffiliation,
 } from "../functions/_lib/services/identities";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
+import { getPublicMemberById } from "../functions/_lib/services/membership/directory";
 import { nowIso } from "../functions/_lib/utils/time";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
@@ -89,23 +90,35 @@ async function prepare(
 beforeEach(resetDb);
 
 describe("canonical organization affiliations", () => {
-  it("publishes a new member affiliation once and keeps owned reuse quiet", async () => {
+  it("publishes a new member affiliation's person once and keeps owned reuse quiet", async () => {
     const person = await verifiedPerson();
     const organizationId = await insertOrganization(env.DB, "Public Affiliation Organization");
     await seedOrganizationAggregate(env.DB, organizationId);
     await claimDomain(organizationId);
     const created = await prepare(person, { organizationId });
     await env.DB.batch(created.statements);
+    // The identity is not listed on the member profile, so only the person's own page changes.
     expect(
       await queryAll(env.DB, "SELECT resource_id,reason_code FROM site_publication_requests ORDER BY sequence"),
-    ).toEqual([
-      { resource_id: created.identityId, reason_code: "identity_profile_changed" },
-      { resource_id: person.userId, reason_code: "user_profile_changed" },
-    ]);
+    ).toEqual([{ resource_id: person.userId, reason_code: "user_profile_changed" }]);
     const reused = await prepare(person, { organizationId });
     expect(reused.identityId).toBe(created.identityId);
     await env.DB.batch(reused.statements);
-    expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests")).toHaveLength(2);
+    expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests")).toHaveLength(1);
+  });
+
+  it("keeps a person who joins through their verified address off the organization's member profile", async () => {
+    const person = await verifiedPerson();
+    const organizationId = await insertOrganization(env.DB, "Unlisted Affiliation Organization");
+    await seedOrganizationAggregate(env.DB, organizationId);
+    await claimDomain(organizationId);
+    const created = await prepare(person, { organizationId });
+    await env.DB.batch(created.statements);
+
+    expect(
+      await queryAll(env.DB, "SELECT show_on_organization_profile FROM identities WHERE id=?", created.identityId),
+    ).toEqual([{ show_on_organization_profile: 0 }]);
+    expect((await getPublicMemberById(env.DB, organizationId))?.identities).toEqual([]);
   });
 
   it("rolls back verified affiliation creation when publication fails and permits the same batch to retry", async () => {
@@ -126,7 +139,6 @@ describe("canonical organization affiliations", () => {
     }
     await env.DB.batch(prepared.statements);
     expect(await queryAll(env.DB, "SELECT resource_id FROM site_publication_requests ORDER BY sequence")).toEqual([
-      { resource_id: prepared.identityId },
       { resource_id: person.userId },
     ]);
   });
@@ -327,13 +339,14 @@ describe("canonical organization affiliations", () => {
     ]);
   });
 
-  it("reuses an approved owned identity's canonical profile and selected email without rewriting them", async () => {
+  it.each([false, true])("preserves an existing affiliation profile and visibility (listed: %s)", async (listed) => {
     const person = await verifiedPerson();
     const organizationId = await insertOrganization(env.DB, "Already represented organization");
     const identity = await buildCreateIdentityStatement(env.DB, {
       userId: person.userId,
       organizationId,
       source: "staff",
+      showOnOrganizationProfile: listed,
       startImmediately: true,
       jobTitle: "Approved position",
       biography: "Approved biography",
@@ -348,7 +361,7 @@ describe("canonical organization affiliations", () => {
       .run();
     const before = await queryAll(
       env.DB,
-      "SELECT email_id,job_title,biography,source,updated_at FROM identities WHERE id=?",
+      "SELECT email_id,job_title,biography,source,show_on_organization_profile,updated_at FROM identities WHERE id=?",
       [identity.identityId],
     );
     const prepared = await prepareVerifiedOrganizationAffiliation(env.DB, {
@@ -364,9 +377,11 @@ describe("canonical organization affiliations", () => {
     expect(prepared.representation).toMatchObject({ jobTitle: "Approved position" });
     await env.DB.batch(prepared.statements);
     expect(
-      await queryAll(env.DB, "SELECT email_id,job_title,biography,source,updated_at FROM identities WHERE id=?", [
-        identity.identityId,
-      ]),
+      await queryAll(
+        env.DB,
+        "SELECT email_id,job_title,biography,source,show_on_organization_profile,updated_at FROM identities WHERE id=?",
+        [identity.identityId],
+      ),
     ).toEqual(before);
   });
 
