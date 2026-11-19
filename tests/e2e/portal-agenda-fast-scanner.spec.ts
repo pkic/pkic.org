@@ -22,9 +22,9 @@ import { createRegistrationEvent, registerStateAttendee } from "./helpers/partic
 import { instantToCalendarDate } from "../../assets/shared/timezone";
 
 test("badge collection opens for an upcoming event after daily preparation", async ({
-  browser,
   page,
   context,
+  browser,
 }, testInfo) => {
   test.setTimeout(240000);
   await context.clearPermissions();
@@ -36,12 +36,10 @@ test("badge collection opens for an upcoming event after daily preparation", asy
     endTime: "17:00",
   });
   const attendeeEmail = ownDomainEmail("badge-collection-offline");
-  // Registering signs a browser in as the attendee, so it runs apart from the staff session.
+  // Registering signs a browser in as the attendee, so it gets its own; this page stays staff.
   const attendeeContext = await browser.newContext({ baseURL: new URL(page.url()).origin });
   try {
-    await registerStateAttendee(await attendeeContext.newPage(), event, attendeeEmail, {
-      organization: "Synthetic Badge Collection Org",
-    });
+    await registerStateAttendee(await attendeeContext.newPage(), event, attendeeEmail);
   } finally {
     await attendeeContext.close();
   }

@@ -165,7 +165,7 @@ export async function registerStateAttendee(
   page: Page,
   fixture: Awaited<ReturnType<typeof createRegistrationEvent>>,
   email: string,
-  { identityId, organization }: { identityId?: string; organization?: string } = {},
+  { identityId }: { identityId?: string } = {},
 ) {
   await page.setExtraHTTPHeaders({ "cf-connecting-ip": clientIpForIdentity(email) });
   const placementResponse = await page.request.get(
@@ -192,6 +192,6 @@ export async function registerStateAttendee(
       customAnswers: answers,
       consents: placement.requiredTerms.map(({ termKey, version }) => ({ termKey, version })),
     }),
-    { identityId, organization },
+    { identityId },
   );
 }

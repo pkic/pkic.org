@@ -173,7 +173,7 @@ describe("event-registration admission", () => {
     };
     expect(outbox.template_key).toBe("registration_updated");
     expect(payload.adminAdmitNotice).toBe(false);
-    expect(payload.attendanceSummary).toContain("Confirmed in-person attendance");
+    expect(payload.attendanceSummary).toBe("Day 1: In-person — confirmed");
     expect(payload.dayWaitlist).toEqual([]);
     expect(payload.dayAttendance?.[0]?.statusLabel).toBe("Confirmed in-person attendance");
   });
