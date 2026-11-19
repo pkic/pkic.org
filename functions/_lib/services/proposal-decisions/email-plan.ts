@@ -1,10 +1,10 @@
+import { buildEventEmailVariables } from "../../email/event-email-variables";
 import type { ProposalDecisionStatus } from "../../../../assets/shared/schemas/proposal-status";
 import { first } from "../../db/queries";
 import { emailMarkdownText, emailPlainText } from "../../email/plain-text";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 import { speakerParticipationPageUrl } from "../frontend-links";
-import { buildEventEmailVariables } from "../events";
 import { listProposalSpeakersWithStatus, type ProposalSpeakerWithUser } from "../proposal-speakers";
 import { eventSessionTypeRequiresPresentation } from "../event-presentation";
 import type { ProposalDecisionEmailMessage, ProposalDecisionEmailPlan } from "./types";

@@ -1,3 +1,4 @@
+import { buildEventEmailVariables } from "../email/event-email-variables";
 import { all, first } from "../db/queries";
 import { prepareQueueEmailStatement } from "../email/outbox";
 import { emailPlainText } from "../email/plain-text";
@@ -6,7 +7,7 @@ import type { DatabaseLike, StatementLike } from "../types";
 import type { AuthAdmin } from "../types";
 import { nowIso } from "../utils/time";
 import { isAuditChangeGuardFailure, prepareScopedAuditLog, prepareScopedAuditLogAfterOneChange } from "./audit";
-import { buildEventEmailVariables, getEventById, type EventRecord } from "./events";
+import { getEventById, type EventRecord } from "./events";
 import { eventSessionTypeRequiresPresentation } from "./event-presentation";
 import { speakerParticipationPageUrl } from "./frontend-links";
 import { buildProposalInviteEmailContext, proposalInviteEmailTextVariables } from "./proposal-invite-email-context";

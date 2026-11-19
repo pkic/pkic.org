@@ -1,3 +1,4 @@
+import { buildEventEmailVariables } from "../email/event-email-variables";
 import type { z } from "zod";
 import type { DatabaseLike, StatementLike } from "../types";
 import type { EventRecord } from "./events";
@@ -15,7 +16,7 @@ import { isStaleInviteTransition } from "./invite-lifecycle";
 import { prepareReferralCodeStatement } from "./referrals";
 import { prepareQueueEmailStatement } from "../email/outbox";
 import { emailPlainText } from "../email/plain-text";
-import { buildEventEmailVariables, getRequiredTerms } from "./events";
+import { getRequiredTerms } from "./events";
 import { proposalManagePageUrl, speakerParticipationPageUrl } from "./frontend-links";
 import { queuedCapabilityToken } from "./capability-links";
 import { requireConfiguredSessionType } from "./events";

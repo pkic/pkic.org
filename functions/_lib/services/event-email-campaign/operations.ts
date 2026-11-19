@@ -1,3 +1,4 @@
+import { buildEventEmailVariables } from "../../email/event-email-variables";
 import { isAttendeeCampaignAudience } from "../../../../assets/shared/schemas/event-email-campaigns";
 import type {
   EventEmailCampaignCreateInput,
@@ -15,7 +16,7 @@ import { loadEmailRenderResources } from "../../email/partials";
 import { renderEmail, renderSubject } from "../../email/render";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
-import { buildEventEmailVariables, type EventRecord } from "../events";
+import { type EventRecord } from "../events";
 import {
   promotionKitPageUrl,
   proposalPageUrl,

@@ -1,3 +1,4 @@
+import { buildEventEmailVariables } from "../../email/event-email-variables";
 import {
   personalPromotionImagePath,
   personalPromotionSharePath,
@@ -17,7 +18,7 @@ import { buildRegistrationIcs, calendarConfirmedDays } from "../../utils/calenda
 import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../../utils/attendance";
 import { buildAcceptedTermsText, buildCustomAnswerRows } from "../../utils/registration-email";
 import { prepareValidatedAttendeeRegistration } from "../attendee-registration";
-import { buildEventEmailVariables, getEventBySlug, recordHugoEventBasePath } from "../events";
+import { getEventBySlug, recordHugoEventBasePath } from "../events";
 import { myAgendaPageUrl } from "../frontend-links";
 import { findInviteByToken, type InviteRecord } from "../invites";
 import { prepareBadgeRenderJob } from "../badge-render-job-statements";

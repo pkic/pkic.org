@@ -1,7 +1,8 @@
+import { buildEventEmailVariables } from "../../email/event-email-variables";
 import { first } from "../../db/queries";
 import { prepareQueueEmailStatementWhen } from "../../email/outbox";
 import type { DatabaseLike } from "../../types";
-import { buildEventEmailVariables, type EventRecord } from "../events";
+import { type EventRecord } from "../events";
 import { normalizeEmail } from "../../validation";
 import {
   REGISTRATION_RECOVERY_RECIPIENT_EMAIL_SQL,

@@ -1,5 +1,6 @@
+import { eventVirtualRoomUrl } from "../assets/shared/event-participation-link";
+import { buildEventEmailVariables } from "../functions/_lib/email/event-email-variables";
 import { describe, expect, it } from "vitest";
-import { resolveEventVirtualUrl, buildEventEmailVariables } from "../functions/_lib/services/event-presentation";
 import { buildManagementLink } from "../functions/_lib/services/management-links";
 
 describe("semantic management links", () => {
@@ -35,17 +36,17 @@ describe("system event virtual room links", () => {
   };
 
   it("uses the authenticated attendee room rather than a stored external override", () => {
-    expect(resolveEventVirtualUrl(event, "https://app.test/")).toBe(
+    expect(eventVirtualRoomUrl(event.slug, "https://app.test/")).toBe(
       "https://app.test/portal/#/events/conference/virtual",
     );
-    expect(resolveEventVirtualUrl({ ...event, slug: "conference/one" }, "https://app.test/")).toBe(
+    expect(eventVirtualRoomUrl("conference/one", "https://app.test/")).toBe(
       "https://app.test/portal/#/events/conference%2Fone/virtual",
     );
   });
 
   it("provides the same canonical room to event email templates", () => {
     expect(buildEventEmailVariables(event, "https://app.test").virtualRoomUrl).toBe(
-      resolveEventVirtualUrl(event, "https://app.test"),
+      eventVirtualRoomUrl(event.slug, "https://app.test"),
     );
   });
 });

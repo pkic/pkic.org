@@ -1,3 +1,4 @@
+import { buildEventEmailVariables } from "../../email/event-email-variables";
 import {
   selectedOrAffiliationOrganizationNameSql,
   selectedOrAffiliationJobTitleSql,
@@ -12,7 +13,6 @@ import { AppError } from "../../errors";
 import { prepareQueueEmailStatement } from "../../email/outbox";
 import { emailPlainText } from "../../email/plain-text";
 import { buildBadgeAttachment } from "../../email/attachments";
-import { buildEventEmailVariables } from "../events";
 import {
   prepareAcceptedRegistrationTerms,
   decodeAcceptedRegistrationTerms,

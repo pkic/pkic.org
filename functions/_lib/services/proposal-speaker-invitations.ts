@@ -1,8 +1,8 @@
+import { buildEventEmailVariables } from "../email/event-email-variables";
 import { prepareQueueEmailStatement } from "../email/outbox";
 import { emailPlainText } from "../email/plain-text";
 import type { DatabaseLike, StatementLike } from "../types";
 import type { EventRecord } from "./events";
-import { buildEventEmailVariables } from "./events";
 import { speakerParticipationPageUrl } from "./frontend-links";
 import { buildProposalInviteEmailContext, proposalInviteEmailTextVariables } from "./proposal-invite-email-context";
 import { buildAddProposalSpeaker } from "./proposal-speakers";

@@ -1,8 +1,8 @@
+import { buildEventEmailVariables } from "../../email/event-email-variables";
 import { all } from "../../db/queries";
 import { eventCommunicationSettingsSql } from "../events/communication-settings";
 import { emailPlainText } from "../../email/plain-text";
 import { speakerParticipationPageUrl } from "../frontend-links";
-import { buildEventEmailVariables } from "../events";
 import { type DueSpeakerInviteRow, type EventRouteRow, type ReminderCandidatePreview } from "../reminders-support";
 import { batchQueueEmailsAndUpdateState, prepareCoSpeakerInviteReminderGuard } from "./shared";
 import { buildProposalInviteEmailContextMap, proposalInviteEmailTextVariables } from "../proposal-invite-email-context";

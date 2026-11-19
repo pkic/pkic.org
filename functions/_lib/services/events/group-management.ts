@@ -1,3 +1,4 @@
+import { deriveEventBasePath } from "../../../../assets/shared/event-flow-paths";
 import type { EventAttendanceRegistrationsQuery } from "../../../../assets/shared/schemas/event-registrations";
 import type {
   GroupEventCreateInput,
@@ -11,13 +12,7 @@ import {
 } from "../../db/authorization-guard";
 import { isAuditChangeGuardFailure, prepareScopedAuditLog } from "../audit";
 import { getGroup, prepareGroupManagementAuthorizationGuard, requireGroupManagement } from "../groups";
-import {
-  deriveEventBasePath,
-  getEventById,
-  prepareEventById,
-  prepareEventCreateStatement,
-  type EventRecord,
-} from "../events";
+import { getEventById, prepareEventById, prepareEventCreateStatement, type EventRecord } from "../events";
 import { prepareEventFormSettingsRead } from "./direct-form-selection";
 import { batchFirst } from "../../db/pagination";
 import { nowIso } from "../../utils/time";

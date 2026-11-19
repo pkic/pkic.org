@@ -7,6 +7,7 @@ import {
 import { runEmailDeliveryPool, type EmailDeliveryAdmission, type EmailDeliveryOutcome } from "./outbox-delivery-pool";
 import {
   createOutboxProcessingContext,
+  loadEventEmailVariablesOnce,
   loadRenderResources,
   resolveTemplateOnce,
   type OutboxProcessingContext,
@@ -257,7 +258,17 @@ async function attemptOutboxDelivery(
     const payload = await materializeQueuedCapabilityLinks(db, env, storedPayload);
     const { partials, layoutHtml } = await loadRenderResources(db, context);
     const emailBaseUrl = resolveEmailBaseUrl(payload, env);
-    const dataWithPartials = { ...payload, _partials: partials };
+    // The event supplies its own name and links under what the sender wrote; its sponsor
+    // image always comes from the event, so an event without one never links a missing image.
+    const eventVariables = row.event_id
+      ? await loadEventEmailVariablesOnce(db, env, context, row.event_id, emailBaseUrl)
+      : null;
+    const dataWithPartials = {
+      ...eventVariables,
+      ...payload,
+      ...(eventVariables ? { sponsorsImageUrl: eventVariables.sponsorsImageUrl } : {}),
+      _partials: partials,
+    };
     const bodyOverride = readDirectEmailBody(payload);
 
     let subject: string;

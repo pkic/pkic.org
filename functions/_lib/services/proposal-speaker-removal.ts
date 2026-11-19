@@ -1,3 +1,4 @@
+import { buildEventEmailVariables } from "../email/event-email-variables";
 import type { ParticipantAuthority } from "./participant-authority";
 import {
   isEligibleReplacementProposerStatus,
@@ -15,7 +16,7 @@ import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { newCapabilityLinkSecret, queuedCapabilityToken } from "./capability-links";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange, prepareScopedAuditLogAfterOneChange } from "./audit";
-import { buildEventEmailVariables, getEventById } from "./events";
+import { getEventById } from "./events";
 import { proposalManagePageUrl } from "./frontend-links";
 import { prepareCancelProposalEmails } from "./proposal-email-cancellation";
 import {
