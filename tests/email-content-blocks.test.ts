@@ -38,6 +38,13 @@ describe("email content blocks", () => {
     expect(html).toContain(">Join PKI: Post-Quantum &amp; more</a>");
   });
 
+  it("keeps a button whose filled-in link is longer than the editor allows", () => {
+    const url = `https://pkic.org/portal/#/verify?token=${"a".repeat(800)}`;
+    const html = renderEmailContent(`Hello.\n\n:::button\n[Sign in and continue →](${url})\n:::`);
+    expect(html).toContain(`<a href="${url}" style=`);
+    expect(html).not.toContain(":::");
+  });
+
   it("splits columns into stacking cells and keeps a heading with its text", () => {
     const html = renderEmailContent(
       ":::columns count=2\n## First\n\nOne paragraph of text here.\n\n## Second\n\nAnother paragraph of text.\n:::",

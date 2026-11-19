@@ -1,5 +1,10 @@
 import { marked } from "marked";
-import { serializeMarkdownContainer, splitMarkdownContainers } from "../../../assets/shared/markdown-aside";
+import {
+  serializeMarkdownContainer,
+  splitMarkdownContainers,
+  type MarkdownContainerOptions,
+} from "../../../assets/shared/markdown-aside";
+import { readFilledMarkdownButton } from "../../../assets/shared/markdown-button";
 import {
   contentButtonVariantSchema,
   contentCardVariantSchema,
@@ -34,6 +39,8 @@ const CARD_GAP = 3;
 const ROW_GAP = 16;
 
 type Cell = { html: string; style: string };
+// Variables are already filled in, so a button may carry a long server-made link.
+const FILLED: MarkdownContainerOptions = { readButton: readFilledMarkdownButton };
 
 function blockToken(nonce: string, index: number): string {
   return `PKICEMAILBLOCK${nonce}N${index}X`;
@@ -43,7 +50,7 @@ function blockToken(nonce: string, index: number): string {
 export function renderEmailContent(markdown: string): string {
   let parts: ReturnType<typeof splitMarkdownContainers>;
   try {
-    parts = splitMarkdownContainers(markdown);
+    parts = splitMarkdownContainers(markdown, FILLED);
   } catch {
     return renderEmailMarkdown(markdown);
   }
@@ -68,7 +75,7 @@ export function renderEmailContent(markdown: string): string {
 }
 
 function childBlocks(markdown: string): ContentContainer[] {
-  return splitMarkdownContainers(markdown).filter((part): part is ContentContainer => typeof part !== "string");
+  return splitMarkdownContainers(markdown, FILLED).filter((part): part is ContentContainer => typeof part !== "string");
 }
 
 function renderBlock(block: ContentContainer): string {
@@ -132,7 +139,7 @@ function columnCount(block: ContentContainer): number {
 
 /** Flowing columns become cells: whole top-level blocks, balanced by length, headings kept with what follows. */
 function renderColumns(block: ContentContainer): string {
-  const units = splitMarkdownContainers(block.markdown).flatMap((part) =>
+  const units = splitMarkdownContainers(block.markdown, FILLED).flatMap((part) =>
     typeof part === "string"
       ? marked
           .lexer(part)
