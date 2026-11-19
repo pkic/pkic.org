@@ -324,8 +324,11 @@ export function ticketCodeExhaustedError(): AppError {
   );
 }
 
-interface TicketReadRow {
+export interface TicketReadRow {
   payment_processing: number;
+  payment_method: string | null;
+  net_amount: number | null;
+  receipt_url: string | null;
   id: string;
   ticket_key: string;
   ticket_name: string;
@@ -346,8 +349,11 @@ interface TicketReadRow {
   refund_fee: number;
 }
 
-export const REGISTRATION_TICKET_READ_SQL = `
-  SELECT ticket.id, type.ticket_key, type.name AS ticket_name, ticket.assignment_source, ticket.status,
+/**
+ * The columns of a ticket's read model and the tables they come from, apart so a list can join and page them.
+ * What arrived after the provider's costs is given only when the provider settled in the ticket's own currency.
+ */
+export const REGISTRATION_TICKET_COLUMNS_SQL = `ticket.id, type.ticket_key, type.name AS ticket_name, ticket.assignment_source, ticket.status,
          ticket.amount, ticket.currency, code.label AS code_label, ticket.paid_at, ticket.dispute_reason,
          ticket.dispute_resolved_at,
          ticket.refunded_amount, ticket.paid_amount,
@@ -364,12 +370,18 @@ export const REGISTRATION_TICKET_READ_SQL = `
          CASE WHEN ticket.paid_at IS NOT NULL THEN ticket.refund_until
               ELSE ${refundDeadlineSql("settings", "event")} END AS refund_deadline,
          CASE WHEN ticket.paid_at IS NOT NULL THEN ticket.refund_fee ELSE COALESCE(settings.refund_fee, 0) END
-           AS refund_fee
+           AS refund_fee,
+         ticket.payment_method, ticket.receipt_url,
+         CASE WHEN ticket.settled_currency = ticket.currency THEN ticket.net_amount END AS net_amount`;
+
+export const REGISTRATION_TICKET_FROM_SQL = `
   FROM registration_tickets ticket
   JOIN event_ticket_types type ON type.id = ticket.ticket_type_id
   JOIN events event ON event.id = ticket.event_id
   LEFT JOIN event_ticket_settings settings ON settings.event_id = ticket.event_id
   LEFT JOIN event_ticket_codes code ON code.id = ticket.code_id`;
+
+export const REGISTRATION_TICKET_READ_SQL = `SELECT ${REGISTRATION_TICKET_COLUMNS_SQL}${REGISTRATION_TICKET_FROM_SQL}`;
 
 export function decodeRegistrationTicket(row: TicketReadRow | null): RegistrationTicket | null {
   if (!row) return null;
@@ -391,6 +403,9 @@ export function decodeRegistrationTicket(row: TicketReadRow | null): Registratio
     refundedAmount: row.refunded_amount,
     paidAmount: row.paid_amount,
     paymentReference: row.payment_reference,
+    paymentMethod: row.payment_method,
+    netAmount: row.net_amount,
+    receiptUrl: row.receipt_url,
     refundableUntil: row.refund_deadline,
     refundFee: row.refund_deadline ? row.refund_fee : 0,
   };

@@ -42,6 +42,11 @@ import {
   requestTicketRefund,
 } from "../functions/_lib/services/event-tickets/refunds";
 import { syncRegistrationTicketWithProvider } from "../functions/_lib/services/event-tickets/provider-sync";
+import {
+  listIssuedTickets,
+  updateIssuedTicketsFromProvider,
+} from "../functions/_lib/services/event-tickets/issued-list";
+import { issuedTicketsQuerySchema } from "../assets/shared/schemas/event-issued-tickets";
 import { listEventTicketCodes } from "../functions/_lib/services/event-tickets/code-list";
 import { reviewDisputedTicket } from "../functions/_lib/services/event-tickets/dispute";
 import { issueSponsorPassCodes, saveSponsorPasses } from "../functions/_lib/services/event-tickets/sponsor-passes";
@@ -1547,7 +1552,8 @@ describe("event tickets", () => {
     expect(await paidEvent(ticketId, "cs_test_ticket", 19500)).toMatchObject({ outcome: "already_paid" });
     asked.length = 0;
     expect(await sync({ session: paid, charge })).toMatchObject({ changed: false });
-    expect(asked).toEqual(["/v1/payment_intents/pi_synthetic"]);
+    // The payment is read for what it returned, and for how it was paid while that is still unknown.
+    expect(asked).toEqual(["/v1/payment_intents/pi_synthetic", "/v1/payment_intents/pi_synthetic"]);
 
     // A refund was sent and its confirmation never arrived.
     await requestTicketRefund(env.DB, admin, { ...input, reason: "Visa refused" });
@@ -1587,5 +1593,96 @@ describe("event tickets", () => {
     expect(
       (await callApi(paymentEnv, path, { method: "POST", body: "{}", ...(await signedIn(other.id)) })).status,
     ).toBe(403);
+  });
+  it("lists the tickets an event issued with their payments and totals, and updates a batch from the provider", async () => {
+    const { event, admin } = await seedTickets();
+    const paidOne = await register(event, "paid-list@gmail.com");
+    const openOne = await register(event, "open-list@gmail.com");
+    const ticketOf = async (registrationId: string) =>
+      (await readRegistrationTicket(env.DB, { eventId: event.id, registrationId }))!;
+    let pages = 0;
+    const checkout = (async () => {
+      const id = `cs_test_list_${++pages}`;
+      return new Response(JSON.stringify({ id, url: `https://checkout.stripe.com/c/pay/${id}` }), { status: 200 });
+    }) as unknown as typeof fetch;
+    for (const person of [paidOne, openOne])
+      await openTicketCheckout(
+        env.DB,
+        paymentEnv,
+        "https://example.test",
+        { eventId: event.id, registrationId: person.registration.id, userId: person.user.id },
+        checkout,
+      );
+    await paidEvent((await ticketOf(paidOne.registration.id)).id, "cs_test_list_1", 19500);
+
+    const openTicketId = (await ticketOf(openOne.registration.id)).id;
+    const list = (query: Record<string, unknown> = {}) =>
+      listIssuedTickets(env.DB, event, issuedTicketsQuerySchema.parse(query));
+    const before = await list();
+    expect(before.page.total).toBe(2);
+    expect(before.summary).toMatchObject({
+      currency: "usd",
+      byPayment: { paid: 1, to_pay: 1 },
+      collected: 19500,
+      providerFees: 0,
+      awaitingAmount: 19500,
+      unread: 1,
+      updatable: 2,
+    });
+    expect((await list({ payment: "to_pay" })).tickets.map((row) => row.registrationId)).toEqual([
+      openOne.registration.id,
+    ]);
+    expect((await list({ q: "paid-list" })).tickets.map((row) => row.payment)).toEqual(["paid"]);
+
+    // The provider says how the first was paid and what arrived, and that the second was paid by a slow method.
+    const provider = (async (url: string) => {
+      const path = new URL(url).pathname;
+      const body = path.startsWith("/v1/payment_intents/")
+        ? {
+            id: "pi_synthetic",
+            status: "succeeded",
+            latest_charge: {
+              id: "ch_1",
+              failure_code: null,
+              amount_refunded: 0,
+              refunded: false,
+              receipt_url: "https://pay.stripe.com/receipts/synthetic",
+              payment_method_details: { type: "ideal" },
+              balance_transaction: { id: "txn_1", net: 18900, amount: 19500, currency: "usd" },
+            },
+          }
+        : path === "/v1/checkout/sessions/cs_test_list_2"
+          ? {
+              id: "cs_test_list_2",
+              status: "complete",
+              payment_status: "unpaid",
+              metadata: { pkic_payment_type: "event", registrationTicketId: openTicketId },
+            }
+          : null;
+      return new Response(JSON.stringify(body ?? {}), { status: body ? 200 : 404 });
+    }) as unknown as typeof fetch;
+    const updated = await updateIssuedTicketsFromProvider(env.DB, paymentEnv, admin, { eventId: event.id }, provider);
+    expect(updated).toMatchObject({ success: true, checked: 2, changed: 2, failed: 0, next: null });
+
+    const after = await list({ sort: "-amount" });
+    expect(after.summary).toMatchObject({
+      byPayment: { paid: 1, processing: 1 },
+      collected: 19500,
+      providerFees: 600,
+      unread: 0,
+    });
+    const paidRow = after.tickets.find((row) => row.registrationId === paidOne.registration.id)!;
+    expect(paidRow.ticket).toMatchObject({
+      paymentMethod: "ideal",
+      netAmount: 18900,
+      receiptUrl: "https://pay.stripe.com/receipts/synthetic",
+    });
+    expect(after.tickets.find((row) => row.registrationId === openOne.registration.id)!.payment).toBe("processing");
+
+    // Only an organizer of the event reads the list.
+    const path = "/api/v1/events/pqc-2026/tickets/issued";
+    expect((await callApi(paymentEnv, path)).status).toBe(401);
+    const token = await createMemberSession(env.DB, openOne.user.id, `session-${crypto.randomUUID()}`);
+    expect((await callApi(paymentEnv, path, { headers: { authorization: `Bearer ${token}` } })).status).toBe(403);
   });
 });

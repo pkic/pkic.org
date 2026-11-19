@@ -6,8 +6,8 @@
 import { TICKET_STANDING_COPY } from "../../../../../../../shared/event-ticket-standing";
 import { useState } from "preact/hooks";
 import { successResponseSchema } from "../../../../../../../shared/schemas/api-common";
+import { TicketRefundDialog, ticketRefundable } from "../../../../../../components/events/tickets/TicketRefundDialog";
 import {
-  registrationTicketRefundSchema,
   registrationTicketResponseSchema,
   registrationTicketSyncResponseSchema,
   type RegistrationTicket,
@@ -15,18 +15,14 @@ import {
 import { TICKET_STATUS_LABELS, type TicketAssignmentSource } from "../../../../../../../shared/event-tickets";
 import { formatTicketAmount, formatTicketMoney } from "../../../../../../../shared/event-ticket-display";
 import { confirmAction } from "../../../../../../components/ConfirmDialog";
-import { useContractForm } from "../../../../../../hooks/useContractForm";
 import { useData } from "../../../../../../hooks/useData";
 import { getJson, postJson } from "../../../../../../shared/api-client";
 import { Alert } from "../../../../../../ui/Alert";
 import { Badge } from "../../../../../../ui/Badge";
 import { Button } from "../../../../../../ui/Button";
 import { DescriptionList } from "../../../../../../ui/DescriptionList";
-import { Dialog } from "../../../../../../ui/Dialog";
-import { Field } from "../../../../../../ui/Field";
 import { Menu, type MenuItem } from "../../../../../../ui/Menu";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
-import { Textarea } from "../../../../../../ui/TextControl";
 import { fmt, toast } from "../../../../ui";
 
 const SOURCE_LABELS: Record<TicketAssignmentSource, string> = {
@@ -62,10 +58,7 @@ export function RegistrationTicketPanel({
   const endpoint = `/api/v1/events/${encodeURIComponent(slug)}/registrations/${encodeURIComponent(registrationId)}/ticket`;
   const loaded = useData(() => getJson(endpoint, registrationTicketResponseSchema), [endpoint]);
   const [refunding, setRefunding] = useState(false);
-  const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const form = useContractForm(registrationTicketRefundSchema, { reason });
   const ticket = loaded.data?.ticket;
   // A failed read is said, with a way to try again; it is not the same as an event without tickets.
   if (!loaded.loading && loaded.error && !loaded.data)
@@ -86,24 +79,6 @@ export function RegistrationTicketPanel({
     await loaded.reload();
     await onChanged?.();
     toast(message, "success");
-  }
-  async function refund() {
-    if (saving) return;
-    const checked = form.submit();
-    if (!checked.data) return setError(checked.formMessage ?? "");
-    setSaving(true);
-    setError("");
-    try {
-      await postJson(`${endpoint}/refunds`, checked.data, successResponseSchema);
-      setRefunding(false);
-      setReason("");
-      form.reset();
-      await changed("Refund requested. The ticket shows as refunded once the payment provider confirms it.");
-    } catch (cause) {
-      setError(form.refuse(cause));
-    } finally {
-      setSaving(false);
-    }
   }
   async function review(decision: "keep" | "move") {
     const confirmed = await confirmAction(
@@ -151,7 +126,7 @@ export function RegistrationTicketPanel({
               { id: "move", label: "Move to the decided ticket", onSelect: () => void review("move") },
             ]
           : []),
-        ...(ticket.status === "paid" && !ticket.refundPending && ticket.paidAmount > ticket.refundedAmount
+        ...(ticketRefundable(ticket)
           ? [{ id: "refund", label: "Refund ticket", onSelect: () => setRefunding(true) }]
           : []),
         // A ticket that never cost anything has no payment to read.
@@ -198,42 +173,16 @@ export function RegistrationTicketPanel({
           ]}
         />
       </PanelBody>
-      <Dialog
+      <TicketRefundDialog
+        slug={slug}
+        registrationId={registrationId}
+        ticket={ticket}
         open={refunding}
-        title="Refund ticket"
-        description={`${formatTicketMoney(ticket.paidAmount - ticket.refundedAmount, ticket.currency)} goes back to the person's payment method. Their in-person place ends when the refund is confirmed.`}
-        confirmLabel="Refund ticket"
-        confirmDisabled={saving}
-        destructive
-        onConfirm={() => void refund()}
-        onCancel={() => {
-          setRefunding(false);
-          setError("");
-        }}
-      >
-        <form
-          noValidate
-          class="pk-stack"
-          {...form.handlers}
-          onSubmit={(submitEvent) => {
-            submitEvent.preventDefault();
-            void refund();
-          }}
-        >
-          <Field {...form.of("reason")} label="Reason" help="Kept with the refund for your records." required>
-            {(control) => (
-              <Textarea
-                {...control}
-                name="reason"
-                rows={3}
-                value={reason}
-                onInput={(event) => setReason(event.currentTarget.value)}
-              />
-            )}
-          </Field>
-          {error && <Alert tone="danger">{error}</Alert>}
-        </form>
-      </Dialog>
+        onClose={() => setRefunding(false)}
+        onRefunded={() =>
+          changed("Refund requested. The ticket shows as refunded once the payment provider confirms it.")
+        }
+      />
     </Panel>
   );
 }

@@ -42,6 +42,14 @@ import {
 import { openTicketCheckout } from "../../../../_lib/services/event-tickets/payment";
 import { issueSponsorPassCodes, saveSponsorPasses } from "../../../../_lib/services/event-tickets/sponsor-passes";
 import { listEventTicketCodes } from "../../../../_lib/services/event-tickets/code-list";
+import {
+  listIssuedTickets,
+  updateIssuedTicketsFromProvider,
+} from "../../../../_lib/services/event-tickets/issued-list";
+import {
+  issuedTicketsGetRouteSchema,
+  issuedTicketsUpdateRouteSchema,
+} from "../../../../../assets/shared/schemas/event-issued-tickets";
 import { requestTicketRefund } from "../../../../_lib/services/event-tickets/refunds";
 import { syncRegistrationTicketWithProvider } from "../../../../_lib/services/event-tickets/provider-sync";
 import {
@@ -211,6 +219,23 @@ const EventTicketSponsorCodesPost = openApiRoute(
   },
 );
 
+const IssuedTicketsGet = openApiRoute(issuedTicketsGetRouteSchema, async (c: AdminContext, data) => {
+  markResponseSensitive(c);
+  const { db, event } = await requireEventPermission(c, data.params.eventSlug, "events:read");
+  return json(await listIssuedTickets(db, event, data.query));
+});
+
+const IssuedTicketsUpdatePost = openApiRoute(issuedTicketsUpdateRouteSchema, async (c: AdminContext, data) => {
+  const { actor, db, event } = await requireEventPermission(c, data.params.eventSlug, "events:write");
+  const { outboxIds, ...updated } = await updateIssuedTicketsFromProvider(db, c.env, actor, {
+    eventId: event.id,
+    after: data.body.after,
+  });
+  // Confirmations that settled payments released go out with this response.
+  if (outboxIds.length > 0) c.executionCtx.waitUntil(processSelectedOutboxBackground(c.env.DB, c.env, outboxIds));
+  return json(updated);
+});
+
 type TicketRouter = Pick<typeof import("./router").openapi, "get" | "post" | "put" | "patch">;
 
 /** Tickets are one resource of the event; a registration's ticket is nested under the registration. */
@@ -222,6 +247,8 @@ export function registerTicketRoutes(openapi: TicketRouter): void {
   openapi.put("/tickets/settings", EventTicketSettingsPut);
   openapi.post("/tickets/types", EventTicketTypePost);
   openapi.put("/tickets/types/:ticketTypeId", EventTicketTypePut);
+  openapi.get("/tickets/issued", IssuedTicketsGet);
+  openapi.post("/tickets/issued/updates", IssuedTicketsUpdatePost);
   openapi.get("/tickets/codes", EventTicketCodesGet);
   openapi.post("/tickets/codes", EventTicketCodePost);
   openapi.put("/tickets/sponsors/passes", EventTicketSponsorPassesPut);

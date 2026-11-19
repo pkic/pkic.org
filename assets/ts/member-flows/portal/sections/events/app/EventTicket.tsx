@@ -20,6 +20,7 @@ import { useData } from "../../../../../hooks/useData";
 import { getJson, putJson } from "../../../../../shared/api-client";
 import { registrationTicketResponseSchema } from "../../../../../../shared/schemas/event-tickets";
 import { Button } from "../../../../../ui/Button";
+import { ExternalLink } from "../../../../../ui/ExternalLink";
 import { EmptyState } from "../../../../../ui/EmptyState";
 import { usePortalHashLocation } from "../../../hash-location";
 import { eventParticipantRecordPath } from "../../../../../../shared/event-participant-paths";
@@ -100,7 +101,16 @@ function SettledTicket({
     );
   // A ticket that could not be read still shows the badge the device holds; if that fails too, both are tried again.
   const unread = Boolean(ticket.error) && !ticket.data;
-  return <BadgeTicket event={event} details={details} retryTicket={unread ? ticket.reload : undefined} />;
+  // The payment provider's own receipt, once it was read for a paid ticket.
+  const settled = held?.receiptUrl ? (
+    <>
+      {details}
+      <ExternalLink href={held.receiptUrl}>Payment receipt</ExternalLink>
+    </>
+  ) : (
+    details
+  );
+  return <BadgeTicket event={event} details={settled} retryTicket={unread ? ticket.reload : undefined} />;
 }
 
 function BadgeTicket({

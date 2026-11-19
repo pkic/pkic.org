@@ -185,6 +185,13 @@ CREATE TABLE registration_tickets (
   -- `amount` is what the ticket costs for its days now; after a move to cheaper days it is less than was paid.
   payment_intent_id     TEXT,
   paid_amount           INTEGER NOT NULL DEFAULT 0,
+  -- What the provider says about that payment, read after it settled: how it was paid, what arrived after the
+  -- provider's own costs and in which currency, and the provider's receipt. Null until read.
+  payment_method        TEXT,
+  net_amount            INTEGER,
+  settled_amount        INTEGER,
+  settled_currency      TEXT,
+  receipt_url           TEXT,
   -- Fees kept from this ticket's refunds: that much of the payment stays here and stands for nothing.
   kept_fee              INTEGER NOT NULL DEFAULT 0,
   -- The refund terms the ticket was paid under, as its payment page stated them: until when, and the fee kept.

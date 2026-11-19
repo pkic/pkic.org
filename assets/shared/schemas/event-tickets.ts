@@ -396,6 +396,10 @@ export const registrationTicketSchema = z.object({
   paymentProcessing: z.boolean().default(false),
   /** The payment provider's reference for the payment, once paid. */
   paymentReference: z.string().nullable(),
+  /** How it was paid and what arrived after the provider's costs, once read from the provider. */
+  paymentMethod: z.string().nullable().default(null),
+  netAmount: z.number().int().nullable().default(null),
+  receiptUrl: z.url().nullable().default(null),
   /** Until when this ticket is refunded on cancellation or a move to cheaper days; null when it never is. */
   refundableUntil: utcInstantSchema.nullable().default(null),
   /** The administration fee kept from such a refund. */

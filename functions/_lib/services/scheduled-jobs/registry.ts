@@ -1,3 +1,4 @@
+import { readTicketPaymentDetails } from "../event-tickets/payment-details";
 import { sendTicketPaymentReminders } from "../event-tickets/payment-emails";
 import { closeUnpayableTicketCheckouts, processTicketRefunds, reconcileTicketRefunds } from "../event-tickets/refunds";
 import { sendUnfinishedRegistrationReminders } from "../registrations/unfinished";
@@ -218,6 +219,7 @@ export const SCHEDULED_JOB_DEFINITIONS: readonly ScheduledJobDefinition[] = [
         refunds: await processTicketRefunds(env.DB, env),
         refundTotals: await reconcileTicketRefunds(env.DB, env),
         checkouts: await closeUnpayableTicketCheckouts(env.DB, env),
+        paymentDetails: await readTicketPaymentDetails(env.DB, env, {}),
       },
     }),
   },

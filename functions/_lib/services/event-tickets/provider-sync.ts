@@ -13,6 +13,7 @@ import { readStripeRefund } from "../../integrations/stripe/refunds";
 import type { DatabaseLike, Env } from "../../types";
 import { prepareAuditLog } from "../audit";
 import { handleEventTicketStripeEvent } from "./payment";
+import { readTicketPaymentDetails } from "./payment-details";
 import { OPEN_REFUND_SQL, reconcileTicketRefunds } from "./refunds";
 import { readRegistrationTicket } from "./registration-ticket";
 
@@ -49,6 +50,8 @@ export async function syncRegistrationTicketWithProvider(
       throw new AppError(502, "STRIPE_ERROR", "The payment provider could not be read. Try again.");
     throw error;
   }
+  // How the payment was made and what arrived, where that was not read yet; a failed read is tried again later.
+  await readTicketPaymentDetails(db, env, { ticketId: before.id }, fetcher);
   const changed = JSON.stringify(await read()) !== JSON.stringify(before);
   if (changed)
     await prepareAuditLog(db, "user", actor.id, "registration_ticket_synced", "registration", input.registrationId, {
