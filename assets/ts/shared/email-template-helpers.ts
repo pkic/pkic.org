@@ -47,8 +47,13 @@ export const PREVIEW_DEFAULTS: Record<string, unknown> = {
   waitlistOfferNotice: false,
   // Day attendance
   dayAttendance: [
-    { dayLabel: "Wednesday 1 October 2026", attendanceLabel: "In-person", statusLabel: "Confirmed" },
-    { dayLabel: "Thursday 2 October 2026", attendanceLabel: "Virtual", statusLabel: "Confirmed" },
+    { dayLabel: "Wednesday 1 October 2026", attendanceLabel: "In person", statusLabel: "Confirmed", statusNote: "" },
+    {
+      dayLabel: "Thursday 2 October 2026",
+      attendanceLabel: "In person",
+      statusLabel: "Waitlisted",
+      statusNote: "waitlisted",
+    },
   ],
   // Custom answers
   customAnswerRows: [
@@ -157,7 +162,8 @@ export const TEMPLATE_HELPERS: TemplateHelperItem[] = [
   {
     category: "Conditions",
     label: "each dayAttendance",
-    snippet: "{{#each dayAttendance}}\n- **{{dayLabel}}:** {{attendanceLabel}} ({{statusLabel}})\n{{/each}}",
+    snippet:
+      "{{#each dayAttendance}}\n- **{{dayLabel}}:** {{attendanceLabel}}{{#if statusNote}} — {{statusNote}}{{/if}}\n{{/each}}",
     target: "body",
   },
 

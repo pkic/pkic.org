@@ -19,6 +19,13 @@ export const STATUS_LABELS: Record<string, string> = {
 
 type DayWaitlistEmailEntry = EmailDayWaitlist;
 
+/** What a day's waitlist adds to its attendance; a confirmed day needs no note. */
+const DAY_WAITLIST_NOTES: Record<string, string> = {
+  waiting: "waitlisted",
+  offered: "place offered",
+  expired: "offer expired",
+};
+
 export function hasActiveDayWaitlist(dayWaitlist: DayWaitlistEmailEntry[] = []): boolean {
   return dayWaitlist.some((entry) => entry.status === "waiting" || entry.status === "offered");
 }
@@ -77,6 +84,7 @@ export function buildAttendanceEmailData(
           dayLabel: d.label ?? d.dayDate,
           attendanceLabel: d.optionLabel ?? ATTENDANCE_TYPE_LABELS[d.attendanceType] ?? d.attendanceType,
           statusLabel: buildDayAttendanceStatusLabel(d.attendanceType, waitlistStatus, d.optionLabel),
+          statusNote: DAY_WAITLIST_NOTES[waitlistStatus] ?? "",
           waitlistStatus,
           isWaitlisted: waitlistStatus === "waiting",
           isWaitlistOffer: waitlistStatus === "offered",

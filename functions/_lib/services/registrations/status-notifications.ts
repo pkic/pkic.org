@@ -192,10 +192,7 @@ export async function prepareRegistrationStatusEmail(
       ...details,
       attendanceSummary: details.dayAttendance.length
         ? details.dayAttendance
-            .map(
-              (day) =>
-                `${day.dayLabel}: ${day.attendanceLabel}${day.statusLabel === day.attendanceLabel ? "" : ` — ${day.statusLabel}`}`,
-            )
+            .map((day) => `${day.dayLabel}: ${day.attendanceLabel}${day.statusNote ? ` — ${day.statusNote}` : ""}`)
             .join("; ")
         : details.attendanceLabel,
       ...statusData,

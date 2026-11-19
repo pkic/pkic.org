@@ -46,7 +46,7 @@ export const DEFAULT_LAYOUT_HTML = `<!doctype html>
     .eb blockquote li{font-size:13px;margin-bottom:3px;line-height:1.55}
     .eb hr{border:none;border-top:1px solid #e5e9ef;margin:28px 0}
     .eb blockquote{margin:20px 0;padding:14px 20px;background:#f8fafc;border-left:4px solid #198754;border-radius:0 6px 6px 0;color:#4b5563}
-    .eb blockquote p{margin:0;color:#4b5563;font-style:italic}
+    .eb blockquote p{margin:0;color:#4b5563}
     .eb blockquote strong{color:#374151}
     .eb blockquote a{color:#374151;text-decoration:underline}
     .eb code{font-family:'Courier New',Courier,monospace;font-size:13px;background:#f1f5f9;padding:2px 7px;border-radius:4px;color:#0d1b2a;border:1px solid #e5e9ef;overflow-wrap:anywhere;word-break:break-word}
@@ -311,7 +311,7 @@ The PKI Consortium is a vendor-neutral community of PKI practitioners working to
 > {{/if}}{{#if email}}**Email:** {{email}}<br>
 > {{/if}}{{#if organizationName}}**Organization:** {{organizationName}}<br>
 > {{/if}}{{#if jobTitle}}**Job title:** {{jobTitle}}<br>
-> {{/if}}{{#each dayAttendance}}**{{dayLabel}}:** {{attendanceLabel}} — {{statusLabel}}<br>
+> {{/if}}{{#each dayAttendance}}**{{dayLabel}}:** {{attendanceLabel}}{{#if statusNote}} — {{statusNote}}{{/if}}<br>
 > {{/each}}{{#if attendanceLabel}}**Attendance:** {{attendanceLabel}}<br>
 > {{/if}}{{#each customAnswerRows}}**{{label}}:** {{displayValue}}<br>
 > {{/each}}{{#if acceptedTermsText}}**Terms agreed:**<br>
@@ -578,15 +578,7 @@ No longer coming in person? Change that day to virtual attendance or cancel your
 
 ---
 
-## Your registration details
-
-> {{#if firstName}}**Name:** {{firstName}} {{lastName}}  
-> {{/if}}{{#if email}}**Email:** {{email}}  
-> {{/if}}{{#if organizationName}}**Organization:** {{organizationName}}  
-> {{/if}}{{#if jobTitle}}**Job title:** {{jobTitle}}  
-> {{/if}}{{#each dayAttendance}}**{{dayLabel}}:** {{attendanceLabel}} — {{statusLabel}}  
-> {{/each}}{{#if attendanceLabel}}**Attendance:** {{attendanceLabel}}  
-> {{/if}}
+{{> reg_details}}
 
 {{#if waitlistedDayCount}}
 Some of your in-person days may still be on the waitlist. Your registration shows the latest status for each day.
