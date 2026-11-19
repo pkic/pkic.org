@@ -12,7 +12,6 @@ import {
 import { eventSettingsUpdateSchema, type EventDetail } from "../../../../../../../shared/schemas/event-management";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
-import { useData } from "../../../../../../hooks/useData";
 import { Alert } from "../../../../../../ui/Alert";
 import { Radio } from "../../../../../../ui/Checkbox";
 import { DescriptionList } from "../../../../../../ui/DescriptionList";
@@ -20,8 +19,8 @@ import { EditActions } from "../../../../../../ui/EditActions";
 import { Field } from "../../../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
 import { Spinner } from "../../../../../../ui/Spinner";
-import { readEventSettings } from "../../../management/event-settings-detail";
 import { useEventSettingsSave } from "./useEventSettingsSave";
+import { useLoadedEventSettings, type EventSettingsSectionProps } from "./useLoadedEventSettings";
 import { hasEventAgendaPermission } from "../../event-agenda-access";
 import { LiveChatArchive } from "./LiveChatArchive";
 
@@ -35,20 +34,9 @@ const CHOICES: Record<KeepDays, { label: string; hint: string }> = {
   },
 };
 
-export function LiveChatRetentionSettings({
-  slug,
-  groupId,
-  canEdit,
-}: {
-  slug: string;
-  groupId?: string;
-  /** Who may change the event's settings; everyone else reads the choice. */
-  canEdit: boolean;
-}) {
-  const loaded = useData(() => readEventSettings(slug, groupId), [slug, groupId]);
-  const [event, setEvent] = useState<EventDetail | null>(null);
-  const current = event ?? loaded.data?.event ?? null;
-  if (loaded.error) return <ErrorAlert error={loaded.error} />;
+export function LiveChatRetentionSettings({ slug, groupId, canEdit }: EventSettingsSectionProps) {
+  const { event: current, error, onUpdated, groupTarget } = useLoadedEventSettings(slug, groupId);
+  if (error) return <ErrorAlert error={error} />;
   if (!current) return <Spinner label="Loading chat settings…" />;
   // The kept chat is downloaded and erased beside the choice of how long it is kept, by the event's organizers.
   return (
@@ -57,12 +45,8 @@ export function LiveChatRetentionSettings({
         key={current.updatedAt}
         event={current}
         canEdit={canEdit}
-        onUpdated={setEvent}
-        groupTarget={
-          groupId
-            ? { groupId, eventId: current.id, canEdit: true, onSaved: () => loaded.reload().then(() => setEvent(null)) }
-            : undefined
-        }
+        onUpdated={onUpdated}
+        groupTarget={groupTarget}
       />
       {hasEventAgendaPermission(current.id, "events:write") ? <LiveChatArchive slug={slug} /> : null}
     </>

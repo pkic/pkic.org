@@ -8,48 +8,32 @@ import type { EventProductionPartnerCredit } from "../../../../../../../shared/s
 import { eventSettingsUpdateSchema, type EventDetail } from "../../../../../../../shared/schemas/event-management";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
-import { useData } from "../../../../../../hooks/useData";
 import { Alert } from "../../../../../../ui/Alert";
 import { DescriptionList } from "../../../../../../ui/DescriptionList";
 import { EditActions } from "../../../../../../ui/EditActions";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
 import { Spinner } from "../../../../../../ui/Spinner";
-import { readEventSettings } from "../../../management/event-settings-detail";
 import { portalHasGlobalPermission } from "../../../../shell/portal-navigation";
 import { portalSession } from "../../../../state";
 import { ProductionPartnerEditor, type ProductionPartnerDraft } from "./ProductionPartnerEditor";
 import { useEventSettingsSave } from "./useEventSettingsSave";
+import { useLoadedEventSettings, type EventSettingsSectionProps } from "./useLoadedEventSettings";
 
 const drafts = (partners: readonly EventProductionPartnerCredit[]): ProductionPartnerDraft[] =>
   partners.map(({ role, organizationId, name }) => ({ role, organizationId, name }));
 
-export function ProductionPartnersSettings({
-  slug,
-  groupId,
-  canEdit,
-}: {
-  slug: string;
-  groupId?: string;
-  /** Who may change the event's settings; everyone else reads the credits. */
-  canEdit: boolean;
-}) {
-  const loaded = useData(() => readEventSettings(slug, groupId), [slug, groupId]);
-  const [event, setEvent] = useState<EventDetail | null>(null);
-  const current = event ?? loaded.data?.event ?? null;
-  if (loaded.error) return <ErrorAlert error={loaded.error} />;
-  if (!current) return <Spinner label="Loading production partners…" />;
+export function ProductionPartnersSettings({ slug, groupId, canEdit }: EventSettingsSectionProps) {
+  const { event, error, onUpdated, groupTarget } = useLoadedEventSettings(slug, groupId);
+  if (error) return <ErrorAlert error={error} />;
+  if (!event) return <Spinner label="Loading production partners…" />;
   return (
     <ProductionPartnersPanel
-      key={current.updatedAt}
-      event={current}
+      key={event.updatedAt}
+      event={event}
       // Choosing an organization reads the organization list, which not every event manager may.
       canEdit={canEdit && portalHasGlobalPermission(portalSession.value, "organizations:read")}
-      onUpdated={setEvent}
-      groupTarget={
-        groupId
-          ? { groupId, eventId: current.id, canEdit: true, onSaved: () => loaded.reload().then(() => setEvent(null)) }
-          : undefined
-      }
+      onUpdated={onUpdated}
+      groupTarget={groupTarget}
     />
   );
 }
