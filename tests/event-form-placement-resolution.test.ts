@@ -4,6 +4,7 @@ import { eventFormsResponseSchema } from "../assets/shared/schemas/forms";
 import { eventManagementDetailResponseSchema } from "../assets/shared/schemas/event-management";
 import { prepareDirectEventFormSelection } from "../functions/_lib/services/events/direct-form-selection";
 import { getEventById } from "../functions/_lib/services/events";
+import { requireManagedEventForm } from "../functions/_lib/services/forms";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { seedEventAndAdmin } from "./helpers/context";
@@ -64,6 +65,52 @@ async function configuration(purpose: string) {
 }
 
 describe("explicit event form placement resolution", () => {
+  it("reads a group's form for the event when the group that owns the event placed it", async () => {
+    const group = "20000000-0000-4000-8000-0000000000f1";
+    const other = "20000000-0000-4000-8000-0000000000f2";
+    const form = (key: string, owner: string) => [
+      env.DB.prepare(`INSERT INTO forms(id,key,scope_type,scope_ref,purpose,status,title,created_at,updated_at)
+        VALUES(?,?,'community',?,'event_registration','active',?,?,?)`).bind(
+        crypto.randomUUID(),
+        key,
+        owner,
+        key,
+        at(),
+        at(),
+      ),
+      env.DB.prepare(`INSERT INTO form_placements(id,form_id,owner_group_id,context_type,context_ref,audience,active,created_at,updated_at)
+        VALUES(?,(SELECT id FROM forms WHERE key=?),?,'event',?,'attendee',1,?,?)`).bind(
+        crypto.randomUUID(),
+        key,
+        owner,
+        eventId,
+        at(),
+        at(),
+      ),
+    ];
+    await env.DB.batch([
+      ...[group, other].map((id) =>
+        env.DB.prepare(
+          `INSERT INTO groups (id, type_key, name, slug, visibility, active, created_at, updated_at)
+           VALUES (?, 'working_group', ?, ?, 'public', 1, ?, ?)`,
+        ).bind(id, `Group ${id.slice(-2)}`, `group-${id.slice(-2)}`, at(), at()),
+      ),
+      env.DB.prepare("UPDATE events SET owner_group_id = ? WHERE id = ?").bind(group, eventId),
+      ...form("owner-group-form", group),
+      ...form("other-group-form", other),
+    ]);
+    await expect(requireManagedEventForm(env.DB, eventId, "owner-group-form")).resolves.toMatchObject({
+      form: { key: "owner-group-form" },
+    });
+    // Another group's placement on the event does not open its form here, and a write still needs ownership.
+    await expect(requireManagedEventForm(env.DB, eventId, "other-group-form")).rejects.toMatchObject({
+      code: "FORM_NOT_FOUND",
+    });
+    await expect(
+      requireManagedEventForm(env.DB, eventId, "owner-group-form", { ownedOnly: true }),
+    ).rejects.toMatchObject({ code: "FORM_NOT_FOUND" });
+  });
+
   it("never inherits unplaced definitions or an installation-wide form", async () => {
     await env.DB.batch([
       env.DB.prepare(`INSERT INTO forms(id,key,scope_type,purpose,status,title,created_at,updated_at)
