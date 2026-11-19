@@ -108,7 +108,7 @@ export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
     key: "ticket_payment_request",
     subjectTemplate: "Pay for your {{eventName}} ticket",
     content:
-      'Thank you for registering for **{{eventName}}**. Your {{ticketName}} ticket costs {{ticketPrice}}.\n\n<div class="cta"><a href="{{paymentUrl}}">Pay for your ticket &rarr;</a></div>\n\nYour registration is confirmed once the payment arrives. To cancel instead, open your registration in the portal.\n\n{{refundPolicy}}',
+      'Thank you for registering for **{{eventName}}**. Your {{ticketName}} ticket costs {{ticketPrice}}.\n\n<div class="cta"><a href="{{paymentUrl}}">Pay for your ticket &rarr;</a></div>\n\nYour registration is confirmed once the payment arrives. To cancel instead, open your registration in the portal.\n\n{{refundPolicy}}\n\n{{> sponsors_block}}',
     contentType: "markdown",
     messageType: "transactional",
   },
@@ -116,7 +116,7 @@ export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
     key: "ticket_payment_reminder",
     subjectTemplate: "Reminder: pay for your {{eventName}} ticket",
     content:
-      'Your {{ticketName}} ticket for **{{eventName}}** is still waiting for payment of {{ticketPrice}}.\n\n<div class="cta"><a href="{{paymentUrl}}">Pay for your ticket &rarr;</a></div>\n\nYour registration is confirmed once the payment arrives. To cancel instead, open your registration in the portal.\n\n{{refundPolicy}}',
+      'Your {{ticketName}} ticket for **{{eventName}}** is still waiting for payment of {{ticketPrice}}.\n\n<div class="cta"><a href="{{paymentUrl}}">Pay for your ticket &rarr;</a></div>\n\nYour registration is confirmed once the payment arrives. To cancel instead, open your registration in the portal.\n\n{{refundPolicy}}\n\n{{> sponsors_block}}',
     contentType: "markdown",
     messageType: "transactional",
   },
@@ -124,7 +124,7 @@ export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
     key: "ticket_changed_payment_request",
     subjectTemplate: "Your {{eventName}} ticket changed",
     content:
-      'The organizers reviewed your registration for **{{eventName}}** and moved it to the {{ticketName}} ticket, which costs {{ticketPrice}}.\n\n<div class="cta"><a href="{{paymentUrl}}">Pay for your ticket &rarr;</a></div>\n\nYour registration is confirmed once the payment arrives. To cancel instead, open your registration in the portal.\n\n{{refundPolicy}}',
+      'The organizers reviewed your registration for **{{eventName}}** and moved it to the {{ticketName}} ticket, which costs {{ticketPrice}}.\n\n<div class="cta"><a href="{{paymentUrl}}">Pay for your ticket &rarr;</a></div>\n\nYour registration is confirmed once the payment arrives. To cancel instead, open your registration in the portal.\n\n{{refundPolicy}}\n\n{{> sponsors_block}}',
     contentType: "markdown",
     messageType: "transactional",
   },
@@ -132,7 +132,7 @@ export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
     key: "registration_unfinished_reminder",
     subjectTemplate: "Finish your registration for {{eventName}}",
     content:
-      'You started registering for **{{eventName}}** and have not finished yet.\n\n<div class="cta"><a href="{{registerUrl}}">Finish your registration &rarr;</a></div>\n\nNot coming? [Tell us you\'re not registering]({{notRegisteringUrl}}) and we will stop reminding you.',
+      'You started registering for **{{eventName}}** and have not finished yet.\n\n<div class="cta"><a href="{{registerUrl}}">Finish your registration &rarr;</a></div>\n\nNot coming? [Tell us you\'re not registering]({{notRegisteringUrl}}) and we will stop reminding you.\n\n{{> sponsors_block}}',
     contentType: "markdown",
     messageType: "transactional",
   },
