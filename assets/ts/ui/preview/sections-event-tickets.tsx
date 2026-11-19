@@ -4,6 +4,7 @@
  */
 import type { PreviewSection } from "./PreviewShell";
 import { TicketAwaitingPayment, TicketUnpaidStanding } from "./sections-event-ticket-payment";
+import { TicketSalesPreview } from "./TicketSalesPreview";
 import { DayAttendancePicker } from "../../components/DayAttendancePicker";
 import { TicketCard, TicketChoice } from "../../components/events/tickets/TicketCard";
 import {
@@ -569,6 +570,7 @@ function TicketPricesEdit() {
 export const eventTicketSections: PreviewSection[] = [
   { id: "ticket-payment", title: "Ticket: awaiting payment", render: () => <TicketAwaitingPayment /> },
   { id: "ticket-unpaid", title: "Ticket: unpaid, on the event home", render: () => <TicketUnpaidStanding /> },
+  { id: "ticket-sales", title: "Organizer: ticket sales", render: () => <TicketSalesPreview /> },
   { id: "ticket-step", title: "Registration: choose a ticket", render: () => <AttendanceWithTicketChoice /> },
   { id: "ticket-step-assigned", title: "Registration: ticket known", render: () => <AttendanceWithAssignedTicket /> },
   {
