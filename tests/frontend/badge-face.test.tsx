@@ -50,4 +50,19 @@ describe("the shared badge face renderer", () => {
     expect(Number(narrow.width)).toBe(300);
     expect(Number(narrow.height) / Number(narrow.width)).toBeCloseTo(148 / 105, 2);
   });
+
+  it("makes the whole ticket a keyboard-accessible check-in code control", async () => {
+    const badge = await badgeFaceBadge();
+    const enlarge = vi.fn();
+    host = document.createElement("div");
+    document.body.append(host);
+    await act(() =>
+      render(<BadgeFace badge={badge} printing={badgeFacePrinting()} title="Your badge" onQrClick={enlarge} />, host!),
+    );
+    const button = host.querySelector<HTMLButtonElement>("button.pk-badge-face__open")!;
+    expect(button.textContent).toContain("Enlarge check-in code");
+    expect(button.querySelector("iframe")?.getAttribute("aria-hidden")).toBe("true");
+    await act(() => button.click());
+    expect(enlarge).toHaveBeenCalledOnce();
+  });
 });

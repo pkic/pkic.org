@@ -25,6 +25,26 @@ function manifest(token = fixture.token, extra: Record<string, string> = {}, slu
 }
 
 describe("one complete D1 call for offline eligibility", () => {
+  it("gives an upcoming event a usable daily scanner and badge collection lease", async () => {
+    const startsAt = new Date(Date.now() + 13 * 24 * 60 * 60_000).toISOString();
+    const endsAt = new Date(Date.parse(startsAt) + 2 * 24 * 60 * 60_000).toISOString();
+    await env.DB.prepare("UPDATE events SET starts_at=?,ends_at=?,timezone='Europe/Amsterdam' WHERE id=?")
+      .bind(startsAt, endsAt, fixture.eventId)
+      .run();
+    await env.DB.prepare("UPDATE users SET first_name='Synthetic',last_name='Attendee' WHERE id=?")
+      .bind(fixture.userId)
+      .run();
+    for (const includeBadgeNames of [false, true]) {
+      const response = await manifest(fixture.token, includeBadgeNames ? { includeBadgeNames: "true" } : {});
+      expect(response.status).toBe(200);
+      const prepared = enrolledOfflineEligibilityResponseSchema.parse(await response.json());
+      expect(prepared.badgeNamesPrepared).toBe(includeBadgeNames ? true : undefined);
+      const leaseMs = Date.parse(prepared.expiresAt) - Date.parse(prepared.serverNow);
+      expect(leaseMs).toBeGreaterThan(0);
+      expect(leaseMs).toBeLessThanOrEqual(26 * 60 * 60_000);
+    }
+  });
+
   it("prepares only encrypted canonical names using the existing printed badge secret", async () => {
     const name = "Élodie 山田";
     await env.DB.prepare("UPDATE users SET first_name=?,last_name=? WHERE id=?")

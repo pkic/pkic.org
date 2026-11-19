@@ -3,6 +3,7 @@ import { beginUserLogout, readPendingUserLogout, readActiveUserSession } from ".
 import { finishUserLogout } from "../../shared/finish-user-logout";
 import { clearOperatorEligibilityManifests } from "./sections/events/detail/scanner/eligibility-manifest";
 import { clearRememberedInvitations } from "../../shared/query-context";
+import { scannerTransportUnavailable } from "./sections/events/detail/scanner/scanner-offline-context";
 import { clearAuth, clearSignOutReturnPath, logoutNotice, portalSession } from "./state";
 import type { PortalSession } from "./types";
 
@@ -35,6 +36,7 @@ export async function signOutPortalSession(session: PortalSession): Promise<void
     expiresAt: session.expiresAt,
   });
   clearRememberedInvitations();
+  scannerTransportUnavailable.value = false;
   // Never clear a different session established while storage was opening.
   if (portalSession.value?.sessionId === session.sessionId) {
     clearSignOutReturnPath();

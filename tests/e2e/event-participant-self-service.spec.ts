@@ -375,8 +375,8 @@ test("a signed-in user registers from event home without another email challenge
   await expect(page.getByRole("heading", { name: "No ticket yet", exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Registration details", exact: true })).toBeVisible();
   await expect(page.locator("[data-og-badge-img]")).toHaveCount(0);
-  const badgeFrame = page.frameLocator("iframe.pk-badge-face__frame");
-  await badgeFrame.getByRole("button", { name: "Enlarge check-in code", exact: true }).click();
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.getByRole("button", { name: "Enlarge check-in code", exact: true }).click();
   const codeViewer = page.getByRole("dialog", { name: "Check-in code", exact: true });
   await expect(codeViewer).toBeVisible();
   for (const [width, height, device] of [

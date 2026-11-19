@@ -9,6 +9,10 @@ import type { ApiErrorPayload } from "../../../shared/schemas/api-common";
 import { PERMISSION_DENIED_WITH_REFRESH_MESSAGE } from "../../../shared/auth-errors";
 import type { MyProfile, PortalSession } from "./types";
 import { personDisplayName } from "../../../shared/person-display";
+import {
+  scannerCollectorPath,
+  scannerTransportUnavailable,
+} from "./sections/events/detail/scanner/scanner-offline-context";
 
 export type AuthStatus = "loading" | "authenticated" | "anonymous";
 
@@ -133,6 +137,8 @@ function restoreReturnPath(): void {
  */
 export function expirePortalSession(): void {
   recordReturnPath();
+  if (typeof window !== "undefined" && scannerCollectorPath(window.location.hash))
+    scannerTransportUnavailable.value = true;
   clearAuth();
 }
 

@@ -117,6 +117,13 @@ const config = {
               test: /node_modules[\\/](pdf-lib|@pdf-lib|pako)[\\/]/,
               maxSize: 100 * 1024,
             },
+            // Gallery specimens grow independently of the shared components they demonstrate.
+            {
+              name: "component-gallery",
+              includeDependenciesRecursively: false,
+              test: /assets[\\/]ts[\\/]ui[\\/]preview[\\/]/,
+              maxSize: 100 * 1024,
+            },
             {
               name: "vendor",
               test: /node_modules[\\/]zod[\\/]/,

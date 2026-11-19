@@ -10,7 +10,7 @@ interface EventOfflineWindow {
   endsAt: string | null;
 }
 
-/** Event preparation lasts through the calendar day following the event, independently of refresh timing. */
+/** Early preparation expires at local midnight; event preparation lasts through the day after the event. */
 export function offlineEligibilityExpiresAt(
   serverNow: string,
   timeZone: string,
@@ -27,7 +27,8 @@ export function offlineEligibilityExpiresAt(
       const startDate = new Date(`${instantToDateTimeLocal(window.startsAt, timeZone).slice(0, 10)}T00:00:00.000Z`);
       startDate.setUTCDate(startDate.getUTCDate() - 1);
       if (instantToDateTimeLocal(serverNow, timeZone).slice(0, 10) < startDate.toISOString().slice(0, 10))
-        return serverNow;
+        // Early staff preparation gets a bounded daily lease rather than an already-expired roster.
+        return offlineEligibilityExpiresAt(serverNow, timeZone);
     }
     let low = start;
     let high = Math.min(Date.parse(end) + 3 * 24 * 60 * 60_000, start + SCANNER_EVENT_OFFLINE_MAXIMUM_MS);

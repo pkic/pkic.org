@@ -7,9 +7,11 @@ import type { ScannerEpoch } from "../../assets/ts/member-flows/portal/sections/
 import { SCANNER_ELIGIBILITY_REFRESH_MS } from "../../assets/shared/event-offline-expiry";
 import { ScannerSyncStatus } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/ScannerPreparationStatus";
 const mocks = vi.hoisted(() => ({
-  prepare: vi.fn(async (..._args: unknown[]): Promise<{ refreshError: string; validUntil?: number }> => ({
-    refreshError: "",
-  })),
+  prepare: vi.fn(
+    async (..._args: unknown[]): Promise<{ refreshError: string; validUntil?: number; retryAfterMs?: number }> => ({
+      refreshError: "",
+    }),
+  ),
 }));
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/eligibility-manifest", () => ({
   prepareEligibilityManifest: mocks.prepare,
@@ -114,6 +116,25 @@ it.each([0, 0.5, 0.999])(
     expect(mocks.prepare).toHaveBeenCalledTimes(4);
   },
 );
+it("backs off automatic roster refresh after a rate limit while retaining prepared data", async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal("navigator", { onLine: true });
+  mocks.prepare.mockResolvedValueOnce({ refreshError: "Badge refresh failed (HTTP 429).", retryAfterMs: 300_000 });
+  await act(async () => render(<Scanner />, host));
+  expect(mocks.prepare).toHaveBeenCalledOnce();
+  expect(current.eligibilityManifest.current).not.toBeNull();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(240_000);
+    window.dispatchEvent(new Event("focus"));
+  });
+  expect(mocks.prepare).toHaveBeenCalledOnce();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(60_001);
+    window.dispatchEvent(new Event("focus"));
+  });
+  expect(mocks.prepare).toHaveBeenCalledTimes(2);
+});
+
 it("restores offline checks from storage without attempting a network refresh", async () => {
   vi.stubGlobal("navigator", { onLine: false });
   await act(async () => render(<Scanner collector />, host));
