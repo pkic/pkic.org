@@ -275,7 +275,15 @@ export function EmailFirstStep<Schema extends WorkEmailContract>({
         ) : (
           <>
             {!controller && (
-              <Button type="button" variant="primary" loading={busy} onClick={() => void proceed()}>
+              // Unavailable until the contract accepts the step, so a click never lands on a button
+              // that the field's message below just pushed down. Enter still shows every reason.
+              <Button
+                type="button"
+                variant="primary"
+                loading={busy}
+                disabled={!form.valid}
+                onClick={() => void proceed()}
+              >
                 {choice.action}
               </Button>
             )}
