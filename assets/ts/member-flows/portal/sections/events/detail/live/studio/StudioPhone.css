@@ -224,26 +224,28 @@
     align-items: center;
     justify-content: center;
     min-inline-size: 0;
+    gap: var(--pk-1);
     padding: var(--pk-1);
     color: var(--pk-ink-muted);
     font-size: var(--pk-text-xs);
   }
-  /* Preview's scene is a button as wide as its name; it shortens before it leaves the picture's width. */
-  .pk-studio-phone__thumb-scene .pk-studio-scene-picker {
-    max-inline-size: 100%;
-  }
-  /* Program's scene is a name, centered where Preview has its button. */
+  /* Each output's tag and its scene's name sit under its picture; Preview's scenes open from the tools on the picture. */
   .pk-studio-phone__thumb-scene .pk-studio-monitor__purpose {
     text-align: center;
   }
-  /* Tag at the start, Clear and Full screen at the end, over the picture's top edge. */
+  /*
+   * The scenes, Clear and Full screen at the end of the picture's top edge. Three thumb-sized tools fit a
+   * picture on most phones; on a narrower one the last wraps under the others instead of leaving the picture.
+   */
   .pk-studio-phone__thumb-tools {
     position: absolute;
     z-index: 1;
     inset-block-start: 2px;
     inset-inline: 2px;
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-start;
+    justify-content: flex-end;
     gap: 2px;
     pointer-events: none;
   }
@@ -251,7 +253,7 @@
     pointer-events: auto;
   }
   .pk-studio-phone__thumb-tag {
-    margin-inline-end: auto;
+    flex: none;
     padding: 0 var(--pk-1);
     border-radius: var(--pk-radius-sm);
     background: var(--tally);

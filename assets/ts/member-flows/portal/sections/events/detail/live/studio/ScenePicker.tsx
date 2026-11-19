@@ -13,7 +13,7 @@ import "./ScenePicker.css";
  * button. Choosing one loads it into Preview and closes; Escape, a press
  * outside or moving focus away closes it too.
  */
-function ScenePopover({
+export function ScenePopover({
   sources,
   anchorRef,
   onScene,

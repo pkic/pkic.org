@@ -12,10 +12,12 @@ import { Dialog } from "../../../../../../../ui/Dialog";
 import { Menu } from "../../../../../../../ui/Menu";
 import { SectionHeading } from "../../../../../../../ui/SectionHeading";
 import { splitHash } from "../../../../../../../ui/url-query";
+import { usePressOutside } from "../../../../../../../ui/use-press-outside";
 import { AppTabBar, isPlainPress } from "../../../../../shell/AppTabBar";
 import type { ClockZone } from "../../../../../../../../shared/event-clock";
-import { ClearIcon, ExpandIcon, StudioOutputScreen, type MonitorSources } from "./MonitorPanel";
-import { ScenePicker } from "./ScenePicker";
+import { ClearIcon, ExpandIcon, LayoutIcon, StudioOutputScreen, type MonitorSources } from "./MonitorPanel";
+import { previewSceneOf } from "./SceneChoices";
+import { ScenePicker, ScenePopover } from "./ScenePicker";
 import type { StudioPanelView } from "./StudioGrid";
 import { SessionTiming, StudioNotice, type StudioNoticeContent } from "./StudioHeader";
 import { liveSceneName } from "../live-layer-unseen";
@@ -105,10 +107,10 @@ const THUMB_TOOLS_MS = 4000;
 type PhoneOutput = "preview" | "program";
 
 /**
- * Preview or Program as the picture, with its scene under it: Preview's opens
- * the scenes to load another, Program names the one on air. A tap on the
- * picture shows the output's tag, Clear and Full screen on the picture
- * itself; they hide again on their own.
+ * Preview or Program as the picture, with its tag and its scene's name under
+ * it. A tap on the picture shows its tools on the picture itself: Preview's
+ * scenes to load another, Clear and Full screen. They hide again on their
+ * own.
  */
 function Thumbnail({
   label,
@@ -127,7 +129,11 @@ function Thumbnail({
 }) {
   const [enlarged, setEnlarged] = useState(false);
   const [tools, setTools] = useState(false);
+  const [scenes, setScenes] = useState(false);
+  const closeScenes = useCallback(() => setScenes(false), []);
   const root = useRef<HTMLDivElement>(null);
+  usePressOutside(scenes, root, closeScenes);
+  const previewScene = previewSceneOf(sources.preview).current.name;
   const toolsId = useId();
   const projection = tally === "preview" ? sources.preview : sources.program;
   useEffect(() => {
@@ -164,12 +170,22 @@ function Thumbnail({
         </button>
         {tools ? (
           <div id={toolsId} class="pk-studio-phone__thumb-tools">
-            <abbr
-              class="pk-studio-phone__thumb-tag"
-              title={`${studioOutputDetails([], tally).short} · ${label}\n${studioOutputDetails([], tally).purpose}`}
-            >
-              {studioOutputDetails([], tally).short}
-            </abbr>
+            {tally === "preview" ? (
+              <Button
+                icon
+                variant="ghost"
+                disabled={disabled}
+                aria-label={`Scene in Preview: ${previewScene}`}
+                title={`Scene in Preview: ${previewScene}\nChoose another to load it into Preview. Transition puts it on Program.`}
+                aria-haspopup="dialog"
+                onClick={() => {
+                  setTools(false);
+                  setScenes(true);
+                }}
+              >
+                <LayoutIcon />
+              </Button>
+            ) : null}
             <Button
               icon
               variant="ghost"
@@ -195,8 +211,21 @@ function Thumbnail({
           </div>
         ) : null}
         <div class="pk-studio-phone__thumb-scene">
-          <ScenePicker output={tally} sources={sources} disabled={disabled} onScene={onScene} />
+          <abbr
+            class="pk-studio-phone__thumb-tag"
+            title={`${studioOutputDetails([], tally).short} · ${label}\n${studioOutputDetails([], tally).purpose}`}
+          >
+            {studioOutputDetails([], tally).short}
+          </abbr>
+          {tally === "preview" ? (
+            <span class="pk-studio-monitor__purpose">{previewScene}</span>
+          ) : (
+            <ScenePicker output={tally} sources={sources} disabled={disabled} onScene={onScene} />
+          )}
         </div>
+        {scenes && !disabled ? (
+          <ScenePopover sources={sources} anchorRef={root} onScene={onScene} onClose={closeScenes} />
+        ) : null}
       </div>
       {enlarged ? (
         <Dialog

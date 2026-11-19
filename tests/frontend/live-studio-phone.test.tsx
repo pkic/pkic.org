@@ -129,10 +129,20 @@ describe("the studio on a phone", () => {
     expect(drawn(large)).toEqual(drawn(thumbnail));
   });
 
-  it("names each output's scene under its picture, and loads another into Preview from there", () => {
+  it("names each output's scene under its picture, and loads another into Preview from the picture's tools", () => {
     const { host, onScene } = mount();
-    const program = host.querySelector<HTMLElement>('.pk-studio-phone__thumb[data-tally="program"]')!;
-    expect(program.querySelector(".pk-studio-phone__thumb-scene")?.textContent).toBe("Q&A");
+    const scene = (tally: string) =>
+      host.querySelector(`.pk-studio-phone__thumb[data-tally="${tally}"] .pk-studio-phone__thumb-scene`);
+    expect([scene("preview")?.textContent, scene("program")?.textContent]).toEqual(["PVWQ&A", "PGMQ&A"]);
+    // The scene is a name, not a control, until the picture is touched; Program offers no scenes at all.
+    expect(scene("preview")?.querySelector("button")).toBeNull();
+    void act(() => {
+      button("Program").click();
+    });
+    expect(button("Scene in Preview: Q&A")).toBeUndefined();
+    void act(() => {
+      button("Preview").click();
+    });
     void act(() => {
       button("Scene in Preview: Q&A").click();
     });

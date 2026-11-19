@@ -281,7 +281,7 @@ function LayoutPicker({ output, context }: { output: StudioOutput; context: Moni
 }
 
 /** A frame with its graphics' boxes: the layout an output is drawn in, named in its tooltip. */
-function LayoutIcon() {
+export function LayoutIcon() {
   return (
     <StrokeIcon>
       <rect x="1.5" y="3" width="13" height="10" rx="1" />

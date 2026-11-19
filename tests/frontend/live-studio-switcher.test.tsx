@@ -36,8 +36,12 @@ describe("the studio's switcher, session bar and phone layout", () => {
     try {
       const { host, live } = mountDesk();
       const bar = host.querySelector(".pk-studio-phone__bar")!;
-      // Preview and Program are the pictures alone until one is touched.
-      expect(bar.querySelector(".pk-studio-phone__thumb-tag")).toBeNull();
+      // Preview and Program are the pictures with their tags under them; the tools wait for a touch.
+      expect([...bar.querySelectorAll(".pk-studio-phone__thumb-tag")].map((tag) => tag.textContent)).toEqual([
+        "PVW",
+        "PGM",
+      ]);
+      expect(bar.querySelector(".pk-studio-phone__thumb-tools")).toBeNull();
       expect(host.querySelector(".pk-studio-grid")).toBeNull();
       const tabs = [...host.querySelectorAll<HTMLElement>(".pk-app-tabbar__link")];
       // Five tabs, each a glyph over a short label; the label is the tab's name.
@@ -58,11 +62,11 @@ describe("the studio's switcher, session bar and phone layout", () => {
       });
       expect(home.textContent).not.toMatch(/Take off air|No message on the stage display/);
 
-      // A touch on Program shows its tag, Clear and Full screen on the picture.
+      // A touch on Program shows Clear and Full screen on the picture.
       const program = bar.querySelector<HTMLButtonElement>('button[aria-label="Program"]')!;
       void act(() => program.click());
       expect(program.getAttribute("aria-expanded")).toBe("true");
-      expect(bar.querySelector(".pk-studio-phone__thumb-tag")?.textContent).toBe("PGM");
+      expect(bar.querySelector(".pk-studio-phone__thumb-tools")).not.toBeNull();
       void act(() => bar.querySelector<HTMLButtonElement>('[aria-label="Clear Program"]')!.click());
       expect(commands(live).at(-1)).toEqual({ type: "program.clear" });
       void act(() => bar.querySelector<HTMLButtonElement>('[aria-label="Full screen Program"]')!.click());
