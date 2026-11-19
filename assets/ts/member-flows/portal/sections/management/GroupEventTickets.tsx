@@ -24,7 +24,6 @@ import { TicketRefundDialog, ticketRefundable } from "../../../../components/eve
 import type { Column } from "../../../../components/Table";
 import { postJson } from "../../../../shared/api-client";
 import { Badge } from "../../../../ui/Badge";
-import { Button } from "../../../../ui/Button";
 import { Menu } from "../../../../ui/Menu";
 import { PersonCell } from "../../../../ui/PersonCell";
 import { StatCard } from "../../../../ui/StatCard";
@@ -257,16 +256,21 @@ export function GroupEventTickets({
         onData={(data) => setSummary(data.summary)}
         paginate
         actionsRef={actionsRef}
+        // A list's own actions sit in its toolbar menu, as on every other list; never a text button beside the icons.
         toolbar={() =>
           canManage && (
-            <Button
-              variant="secondary"
-              loading={updating}
-              disabled={updating || summary.updatable === 0}
-              onClick={() => void updateAll()}
-            >
-              Update from payment provider
-            </Button>
+            <Menu
+              label="Actions for all tickets"
+              align="end"
+              items={[
+                {
+                  id: "update",
+                  label: updating ? "Updating from payment provider…" : "Update from payment provider",
+                  disabled: updating || summary.updatable === 0,
+                  onSelect: () => void updateAll(),
+                },
+              ]}
+            />
           )
         }
         columns={columns}

@@ -8,6 +8,7 @@ import { render } from "preact";
 import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { menuPath } from "./helpers/menu-path";
 import { issuedTicketsResponseSchema } from "../../assets/shared/schemas/event-issued-tickets";
 import { GroupEventTickets } from "../../assets/ts/member-flows/portal/sections/management/GroupEventTickets";
 
@@ -157,11 +158,13 @@ describe("event ticket list", () => {
     );
     await settle();
     await settle();
-    const button = [...host.querySelectorAll("button")].find(
-      (entry) => entry.textContent?.trim() === "Update from payment provider",
-    )!;
+    // The list's own action sits in its toolbar menu, not as a text button beside the icons.
+    expect([...host.querySelectorAll("button")].some((entry) => entry.textContent?.includes("Update from"))).toBe(
+      false,
+    );
+    const update = await menuPath(document.body, "Actions for all tickets", ["Update from payment provider"]);
     await act(async () => {
-      button.click();
+      update.click();
     });
     await settle();
     await settle();

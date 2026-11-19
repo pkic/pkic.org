@@ -8,7 +8,6 @@ import { formatTicketMoney } from "../../../shared/event-ticket-display";
 import { CollectionToolbar } from "../../components/CollectionToolbar";
 import { DataTable, type Column } from "../../components/Table";
 import { Badge } from "../Badge";
-import { Button } from "../Button";
 import { Menu } from "../Menu";
 import { PersonCell } from "../PersonCell";
 import { StatCard } from "../StatCard";
@@ -153,7 +152,11 @@ export function TicketSalesPreview() {
           label: "Search tickets",
         }}
       >
-        <Button variant="secondary">Update from payment provider</Button>
+        <Menu
+          label="Actions for all tickets"
+          align="end"
+          items={[{ id: "update", label: "Update from payment provider", onSelect: () => {} }]}
+        />
       </CollectionToolbar>
       <DataTable caption="Ticket sales" columns={columns} data={ROWS} rowKey={(row) => row.id} />
     </div>
