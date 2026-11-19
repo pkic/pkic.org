@@ -16,6 +16,8 @@ Building your plan for **{{eventName}}**? Star the sessions that interest you to
 A star only saves the session for you. It doesn't reserve a place, so check whether a session needs registration before you go.
 
 [Open my agenda]({{baseUrl}}/portal/#/events/{{eventSlug}}/agenda)
+
+{{> sponsors_block}}
 `,
     contentType: "markdown",
   },
@@ -29,6 +31,8 @@ A star only saves the session for you. It doesn't reserve a place, so check whet
 Your agenda shows the sessions you starred and those you registered for. A star alone doesn't reserve a place. If we announce schedule changes, check your agenda again.
 
 [Review my agenda]({{baseUrl}}/portal/#/events/{{eventSlug}}/agenda)
+
+{{> sponsors_block}}
 `,
     contentType: "markdown",
   },
@@ -42,6 +46,8 @@ Some sessions at **{{eventName}}** need a registration or an organizer's approva
 Starring a session doesn't register you, and this email doesn't confirm a place. If your plans change, cancel the session registrations you no longer need so someone else can take the place.
 
 [Review my session registrations]({{baseUrl}}/portal/#/events/{{eventSlug}}/agenda)
+
+{{> sponsors_block}}
 `,
     contentType: "markdown",
   },
@@ -55,6 +61,8 @@ Waiting for a place in a session at **{{eventName}}**? Open it in your agenda to
 Being on the waitlist doesn't confirm a place, and this email doesn't mean one has opened up. If the session stays full, have a look at other sessions too.
 
 [Check my agenda]({{baseUrl}}/portal/#/events/{{eventSlug}}/agenda)
+
+{{> sponsors_block}}
 `,
     contentType: "markdown",
   },

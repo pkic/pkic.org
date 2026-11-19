@@ -19,6 +19,8 @@ export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
 {{> speaker_confirmation_note}}
 
 [{{#if recipientIsSpeaker}}View your participation{{else}}Review the proposal{{/if}}]({{proposalUrl}})
+
+{{> sponsors_block}}
 `,
   },
 
@@ -90,7 +92,7 @@ export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
     key: "agenda_session_invitation",
     subjectTemplate: "You're invited to {{sessionTitle}}",
     content:
-      "Hello,\n\nYou're invited to the session **{{sessionTitle}}** at **{{eventName}}**. Open the event in the PKI Consortium portal to respond.\n\nThis invitation doesn't register you for the event or reserve you a seat.",
+      "Hello,\n\nYou're invited to the session **{{sessionTitle}}** at **{{eventName}}**. Open the event in the PKI Consortium portal to respond.\n\nThis invitation doesn't register you for the event or reserve you a seat.\n\n{{> sponsors_block}}",
     contentType: "markdown",
     messageType: "transactional",
   },
@@ -98,7 +100,7 @@ export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
     key: "agenda_session_booking",
     subjectTemplate: "Your place in {{sessionTitle}} changed",
     content:
-      "Hello,\n\nYour place in the session **{{sessionTitle}}** at **{{eventName}}** is now **{{participationStatus}}** ({{attendanceMode}}).\n\nCheck the event in the PKI Consortium portal for the latest schedule and what you need to get in. A preference or a waitlist place doesn't guarantee a seat.",
+      "Hello,\n\nYour place in the session **{{sessionTitle}}** at **{{eventName}}** is now **{{participationStatus}}** ({{attendanceMode}}).\n\nCheck the event in the PKI Consortium portal for the latest schedule and what you need to get in. A preference or a waitlist place doesn't guarantee a seat.\n\n{{> sponsors_block}}",
     contentType: "markdown",
     messageType: "transactional",
   },

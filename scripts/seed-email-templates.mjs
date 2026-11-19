@@ -139,7 +139,7 @@ export const DEFAULT_TEMPLATES = [
     key: "agenda_changed",
     subjectTemplate: "Your schedule changed — {{eventName}}",
     content:
-      "Hello,\n\nThe schedule for **{{eventName}}** has changed, and a session in your agenda is affected.\n\nCheck your agenda in the PKI Consortium portal before you go. Your registration hasn't changed.",
+      "Hello,\n\nThe schedule for **{{eventName}}** has changed, and a session in your agenda is affected.\n\nCheck your agenda in the PKI Consortium portal before you go. Your registration hasn't changed.\n\n{{> sponsors_block}}",
     contentType: "markdown",
     messageType: "transactional",
   },
@@ -147,7 +147,7 @@ export const DEFAULT_TEMPLATES = [
     key: "agenda_session_reminder",
     subjectTemplate: "Starting soon: {{sessionTitle}}",
     content:
-      "Hello,\n\nYour session **{{sessionTitle}}** at **{{eventName}}** starts at {{sessionStart}}.\n\nLocation: **{{sessionLocation}}**\n\nCheck your agenda in the PKI Consortium portal for any last-minute changes.",
+      "Hello,\n\nYour session **{{sessionTitle}}** at **{{eventName}}** starts at {{sessionStart}}.\n\nLocation: **{{sessionLocation}}**\n\nCheck your agenda in the PKI Consortium portal for any last-minute changes.\n\n{{> sponsors_block}}",
     contentType: "markdown",
     messageType: "transactional",
   },
@@ -551,6 +551,8 @@ Your registration for **{{eventName}}** was updated.
 Plan the sessions you want to attend in [My agenda &rarr;]({{myAgendaUrl}})
 {{/if}}
 {{/if}}
+
+{{> sponsors_block}}
 `,
   },
 
@@ -589,6 +591,8 @@ No longer coming in person? Change that day to virtual attendance or cancel your
 {{#if waitlistedDayCount}}
 Some of your in-person days may still be on the waitlist. Your registration shows the latest status for each day.
 {{/if}}
+
+{{> sponsors_block}}
 `,
   },
 
@@ -657,6 +661,8 @@ Your registration for **{{eventName}}** isn't complete yet. Confirm your email a
 :::
 
 Didn't register? [Cancel this registration and remove your data]({{manageUrl}}).
+
+{{> sponsors_block}}
 `,
   },
 
@@ -680,6 +686,8 @@ Still coming in person? Please confirm as soon as you can. If you don't, we'll s
 :::
 
 Not coming after all? You don't need to do anything. Only this day changes; your other days stay as they are.
+
+{{> sponsors_block}}
 `,
   },
 
@@ -701,6 +709,8 @@ You declined the calendar invitation for **{{event_name}} on {{event_day}}**, an
 {{/if}}
 
 Is this a mistake, and do you still want to come in person? [Update your registration]({{manage_url}}) while seats remain.
+
+{{> sponsors_block}}
 `,
   },
 
@@ -800,6 +810,8 @@ If you have any questions or would like to discuss your proposal first, please [
     content: `{{> greeting}}
 
 {{message}}
+
+{{> sponsors_block}}
 `,
   },
   {
@@ -878,6 +890,8 @@ Please check the details above. You can view or change your proposal at any time
 
 Thank you for contributing to **{{eventName}}** and the PKI community!
 
+{{> sponsors_block}}
+
 {{> donation_request}}
 `,
   },
@@ -913,6 +927,8 @@ Please choose who you will speak as: yourself, or an organization you represent.
 [Choose who I speak as]({{speakerManageUrl}})
 
 This link is personal and manages only your own speaker profile.
+
+{{> sponsors_block}}
 `,
   },
   {
@@ -933,6 +949,8 @@ You speak as **{{speakerName}}**{{#if organizationName}}, {{organizationName}}{{
 {{/each}}{{/if}}{{> speaker_confirmation_note}}
 
 Don't agree with this{{#if terms}} or with these terms{{/if}}? Email [{{contactEmail}}](mailto:{{contactEmail}}).
+
+{{> sponsors_block}}
 `,
   },
   {
@@ -951,6 +969,8 @@ They gave this reason:
 You can invite another speaker or change the proposal on its page.
 
 [Manage my proposal]({{manageUrl}})
+
+{{> sponsors_block}}
 `,
   },
   {
@@ -967,6 +987,8 @@ Please confirm your work email address and choose the organization you represent
 [Choose my organization]({{speakerManageUrl}})
 
 Do you take part independently? Let the event organizers know. This link is personal and manages only your own speaker profile.
+
+{{> sponsors_block}}
 `,
   },
   {
@@ -979,6 +1001,8 @@ You now manage the proposal **{{proposalTitle}}** for **{{eventName}}**.
 [Manage the proposal &rarr;]({{manageUrl}})
 
 This link is personal; please don't share it. The previous proposer's link no longer works.
+
+{{> sponsors_block}}
 `,
   },
 
@@ -1031,6 +1055,8 @@ You can view or withdraw your proposal at any time: [Manage my proposal &rarr;](
 If you have any questions, please [contact us](mailto:{{contactEmail}}).
 
 Thank you for your interest in contributing to **{{eventName}}**.
+
+{{> sponsors_block}}
 
 {{> donation_request}}
 `,
@@ -1113,6 +1139,8 @@ Please take a moment to complete your speaker profile, so we can introduce you a
 
 You can update your profile at any time before the event.
 
+{{> sponsors_block}}
+
 {{> donation_request}}
 `,
   },
@@ -1134,6 +1162,8 @@ You can update your profile at any time before the event.
 {{#unless hasHeadshot}}Please also upload a headshot so attendees can recognize you.{{/unless}}
 
 [Review my speaker profile]({{profileUrl}})
+
+{{> sponsors_block}}
 `,
   },
 
@@ -1166,6 +1196,8 @@ You can replace your file at any time before the deadline.
 
 If you have any questions, please [contact us](mailto:{{contactEmail}}).
 
+{{> sponsors_block}}
+
 {{> donation_request}}
 `,
   },
@@ -1191,6 +1223,8 @@ We haven't received your slides for **{{proposalTitle}}** at **{{eventName}}** y
 :::
 
 Trouble uploading, or need more time? Please [contact us](mailto:{{contactEmail}}).
+
+{{> sponsors_block}}
 `,
   },
 
