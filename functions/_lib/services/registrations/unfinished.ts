@@ -63,7 +63,7 @@ export function prepareRegistrationStart(
     .bind(eventId, userId, now, nextUnfinishedRegistrationReminderAt(now, 0), eventId, userId);
 }
 
-type DueRow = Pick<EventRecord, "slug" | "base_path" | "starts_at" | "settings_json" | "source_mode"> & {
+type DueRow = Pick<EventRecord, "slug" | "base_path" | "starts_at" | "settings_json" | "source_mode" | "visibility"> & {
   event_id: string;
   user_id: string;
   event_name: string;
@@ -85,7 +85,7 @@ export async function sendUnfinishedRegistrationReminders(
     db,
     `SELECT unfinished.event_id, unfinished.user_id, unfinished.started_at, unfinished.reminders_sent,
             event.name AS event_name, event.slug, event.base_path, event.starts_at, event.settings_json,
-            event.source_mode, person.email,
+            event.source_mode, event.visibility, person.email,
             (${HAS_REGISTRATION}
               OR event.registration_mode IN ('no_registration', 'automatic')
               OR datetime(COALESCE(event.ends_at, event.starts_at)) <= datetime(?)

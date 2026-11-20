@@ -8,6 +8,7 @@ import {
   personalPromotionSharePath,
 } from "../../../../assets/shared/personal-promotion-image";
 import type { CountryCode } from "../../../../assets/shared/countries";
+import type { EventRecord } from "../events";
 import { batchFirst, batchRows } from "../../db/pagination";
 import { AppError } from "../../errors";
 import { prepareQueueEmailStatement } from "../../email/outbox";
@@ -57,6 +58,8 @@ export interface RegistrationStatusEmailEvent {
   /** Where the event takes place; the calendar invite falls back to it without a venue. */
   city?: string | null;
   country?: CountryCode | null;
+  /** Whether the event has public pages; the management link opens in the portal otherwise. */
+  visibility: EventRecord["visibility"];
 }
 
 /** What an email says about a held day; a builder passing its own rows need not carry timestamps. */

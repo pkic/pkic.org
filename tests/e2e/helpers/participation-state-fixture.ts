@@ -38,6 +38,7 @@ export async function createRegistrationEvent(
   staff: Page,
   prefix: string,
   day: FixtureEventDay | FixtureEventDay[] = WORKSHOP_DAY,
+  access: "public" | "invitation_only" = "public",
 ) {
   const days = Array.isArray(day) ? day : [day];
   const firstDay = days[0];
@@ -54,7 +55,7 @@ export async function createRegistrationEvent(
       name: "Synthetic participant status workshop",
       profileKey: "conference",
       timezone: "UTC",
-      visibility: "public",
+      visibility: access,
       registrationPolicy: "no_registration",
       startsAt: `${firstDay.date}T${firstDay.startTime}:00.000Z`,
       endsAt: `${lastDay.date}T${lastDay.endTime}:00.000Z`,
@@ -96,7 +97,7 @@ export async function createRegistrationEvent(
   const registration = await staff.request.put(`${groupEvent}/registration-settings`, {
     data: groupEventRegistrationSettingsUpdateSchema.parse({
       expectedUpdatedAt: configuredDays.eventUpdatedAt,
-      registrationPolicy: "public",
+      registrationPolicy: access,
     }),
   });
   expect(registration.status()).toBe(200);

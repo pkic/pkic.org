@@ -715,7 +715,8 @@ Is this a mistake, and do you still want to come in person? [Update your registr
   // ─────────────────────────────────────────────────────────────────────────
   // 4. Attendee invite
   // Variables: eventName, firstName, lastName, inviterName, registrationUrl, declineUrl,
-  //            sponsorsImageUrl, heroImageUrl
+  //            sponsorsImageUrl, heroImageUrl, invitationHeadline (the event's headline, or
+  //            "You're invited to <event>"), invitationMessage (the event's Markdown, or empty)
   // Partials:  {{> about_pkic}}, {{> sponsors_block}}
   // ─────────────────────────────────────────────────────────────────────────
   {
@@ -729,7 +730,13 @@ Is this a mistake, and do you still want to come in person? [Update your registr
 
 {{#if inviterName}}You have been personally invited by **{{inviterName}}** to attend **{{eventName}}**, an event organized by the [PKI Consortium]({{brandBaseUrl}}).{{else}}You have been personally invited to attend **{{eventName}}**, an event organized by the [PKI Consortium]({{brandBaseUrl}}).{{/if}}
 
+{{#if invitationMessage}}
+**{{invitationHeadline}}**
+
+{{invitationMessage}}
+{{else}}
 Join security experts, researchers, and industry leaders to explore the latest developments in public key infrastructure and post-quantum cryptography.
+{{/if}}
 
 :::button
 [Register now →]({{registrationUrl}})

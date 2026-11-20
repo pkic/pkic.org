@@ -159,7 +159,6 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await page.getByLabel("Timezone").fill("Europe/Amsterdam");
   await page.getByLabel("Event profile").selectOption("workshop");
   await page.getByLabel("Visibility", { exact: true }).selectOption("public");
-  await page.getByLabel("Peer invitation limit").fill("7");
   await page.getByLabel("City").fill("Amsterdam");
   await page.getByLabel("Country").fill("Netherlands");
   await page.getByLabel("Event resource URL").fill("https://example.test/portal-workshop");
@@ -400,8 +399,6 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await page.getByRole("button", { name: "Event actions" }).click();
   await page.getByRole("menuitem", { name: "Edit event", exact: true }).click();
   const editor = page.getByRole("region", { name: "Edit event" });
-  await expect(editor.getByLabel("Peer invitation limit")).toHaveValue("7");
-  await editor.getByLabel("Peer invitation limit").fill("9");
   await editor.getByRole("button", { name: "Save event" }).click();
   await tab(detail, /^Location$/).click();
   await page.getByRole("button", { name: "Event settings actions" }).click();
@@ -410,6 +407,15 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await tab(detail, "Overview").click();
   await expect(detail.getByText("Rotterdam, Netherlands", { exact: true })).toBeVisible();
+
+  // The peer invitation limit is set beside the invitation wording, in its own panel.
+  await page.goto(`/portal/#/groups/${GROUP_ID}/events/${event.id}/settings/invitation`);
+  const peers = page.getByRole("region", { name: "Peer invitations", exact: true });
+  await peers.getByRole("button", { name: "Peer invitation actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Edit settings", exact: true }).click();
+  await peers.getByLabel("Peer invitation limit").fill("9");
+  await peers.getByRole("button", { name: "Save peer invitation limit", exact: true }).click();
+  await expect(peers.getByText("9 per attendee", { exact: true })).toBeVisible();
 
   const stored = await page.evaluate(
     async ({ groupId, query }) => {

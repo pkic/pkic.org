@@ -98,7 +98,11 @@ export function createTestRateLimiter(limit: number): RateLimitBinding {
   };
 }
 
-export async function seedEventAndAdmin(db: DatabaseLike): Promise<{ eventId: string; admin: UserBackedAuthAdmin }> {
+/** Seeds `pqc-2026`; it keeps the schema's default audience unless a test reads it as a public event. */
+export async function seedEventAndAdmin(
+  db: DatabaseLike,
+  options: { visibility?: "public" } = {},
+): Promise<{ eventId: string; admin: UserBackedAuthAdmin }> {
   const eventId = crypto.randomUUID();
   const adminId = crypto.randomUUID();
 
@@ -121,6 +125,8 @@ export async function seedEventAndAdmin(db: DatabaseLike): Promise<{ eventId: st
        ('${crypto.randomUUID()}', '${eventId}', 'speaker', 'speaker-terms', 'v1', 1, '/speaker-terms', 1, datetime('now'))`,
     ),
   ]);
+  if (options.visibility)
+    await db.prepare("UPDATE events SET visibility = ? WHERE id = ?").bind(options.visibility, eventId).run();
   const grants = await grantAdministrator(db, adminId);
   return { eventId, admin: { identityType: "user", id: adminId, email: "admin@pkic.org", grants } };
 }

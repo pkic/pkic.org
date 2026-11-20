@@ -8,7 +8,7 @@ import {
 } from "../../auth/permissions";
 import { scannerCapabilities } from "../../../../assets/shared/event-scanner-permissions";
 import type { UserSessionResult } from "../../auth/user-session";
-import { activeEffectiveInviteExpirySql, effectiveInviteExpirySql } from "../../invite-validity";
+import { heldEventInvitationExistsSql } from "../held-event-invitation";
 import type { AuthAdmin, DatabaseLike, PermissionGrant } from "../../types";
 import { AppError } from "../../errors";
 
@@ -156,18 +156,12 @@ export function buildEventAudiencePredicate(
                  AND audience_participant.user_id = audience_viewer.user_id
                  AND audience_participant.status = 'active'
             )
-            OR EXISTS (
-              SELECT 1 FROM invites audience_invite
-               WHERE audience_invite.event_id = ${eventAlias}.id
-                 AND audience_invite.invitee_email = (
-                   SELECT audience_user.normalized_email FROM users audience_user WHERE audience_user.id = audience_viewer.user_id
-                 )
-                 AND audience_invite.status IN ('sent', 'accepted')
-                 AND ${activeEffectiveInviteExpirySql(
-                   effectiveInviteExpirySql("audience_invite", eventAlias),
-                   "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
-                 )}
-            )
+            OR ${heldEventInvitationExistsSql({
+              inviteAlias: "audience_invite",
+              eventAlias,
+              userIdSql: "audience_viewer.user_id",
+              statuses: ["sent", "accepted"],
+            })}
           )
         )
         OR EXISTS (SELECT 1 FROM registrations own_registration

@@ -55,6 +55,50 @@ export function eventTicketPath(eventSlug: string): string {
   return `/portal/#/events/${encodeURIComponent(eventSlug)}/ticket`;
 }
 
+/** The query an invitation or referral link carries into registration, so the invite stays attached. */
+export interface RegistrationEntryQuery {
+  invite?: string | null;
+  id?: string | null;
+  ref?: string | null;
+  source?: string | null;
+}
+
+/** The event app's registration as a portal hash route, carrying the invitation or referral that brought the reader. */
+export function eventRegisterRoute(eventSlug: string, entry: RegistrationEntryQuery = {}): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(entry)) if (value?.trim()) query.set(key, value);
+  const search = query.toString();
+  return `/events/${encodeURIComponent(eventSlug)}/register${search ? `?${search}` : ""}`;
+}
+
+/** Registration in the portal, relative to the site origin; the portal returns here after sign-in. */
+export function eventPortalRegistrationPath(eventSlug: string, entry: RegistrationEntryQuery = {}): string {
+  return `/portal/#${eventRegisterRoute(eventSlug, entry)}`;
+}
+
+/** The registrant's own registration as a portal hash route. */
+export function eventRegistrationRecordRoute(eventSlug: string, registrationId: string): string {
+  return `/events/${encodeURIComponent(eventSlug)}/registrations/${encodeURIComponent(registrationId)}`;
+}
+
+/** The registrant's own registration in the portal, relative to the site origin. */
+export function eventPortalRegistrationRecordPath(eventSlug: string, registrationId: string): string {
+  return `/portal/#${eventRegistrationRecordRoute(eventSlug, registrationId)}`;
+}
+
+/** The event a portal registration link opens: `/portal/#/events/<slug>/register?…` → `<slug>`. */
+export function eventSlugFromPortalRegistrationUrl(url: URL): string | null {
+  if (url.pathname.replace(/\/$/, "") !== "/portal") return null;
+  const route = url.hash.replace(/^#/, "").split("?", 1)[0];
+  const match = /^\/events\/([^/]+)\/register\/?$/.exec(route);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
+}
+
 /** The participant's own promotion materials in the portal, relative to the site origin. */
 export function eventPromotionKitPath(eventSlug: string): string {
   return `/portal/#/events/${encodeURIComponent(eventSlug)}/promotion`;

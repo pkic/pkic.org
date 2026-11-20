@@ -99,7 +99,7 @@ test("response answer filters, keyboard sorting, and venue CSV links work at des
   await responses.getByLabel("Filter answer field", { exact: true }).selectOption("dietary_restrictions");
   await responses.getByLabel("Filter Dietary restrictions", { exact: true }).selectOption("vegan");
   const download = responses.getByRole("link", { name: "Download Dietary restrictions (CSV)", exact: true });
-  await expect(download).toBeVisible();
+  await expect(download).toHaveAttribute("href", /answerValue=vegan/);
   const href = await download.getAttribute("href");
   const query = formSubmissionsExportQuerySchema.parse(Object.fromEntries(new URL(href!, page.url()).searchParams));
   expect(query).toMatchObject({

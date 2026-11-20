@@ -7,6 +7,7 @@ import { Panel, PanelBody } from "../../../../../ui/Panel";
 import { ButtonLink } from "../../../../../ui/Button";
 import { usePortalHashLocation } from "../../../hash-location";
 import { ticketStanding } from "../../../../../../shared/event-ticket-standing";
+import { portalHashSearch } from "../../../hash-route";
 import { eventParticipantRecordPath } from "../../../../../../shared/event-participant-paths";
 import { eventRegistrationStanding, registrationOffer, type ParticipantEventDetail } from "./event-app-model";
 import { eventPhase } from "./event-timing";
@@ -54,6 +55,7 @@ export function EventRegister({
         <EventTicketPricing slug={event.slug}>
           <EventRegistrationCreate
             slug={event.slug}
+            entrySearch={portalHashSearch(window.location.hash)}
             onRegistered={async (result) => {
               if (await continueToTicketPayment(event.slug, result.registrationId)) return;
               await onRegistered?.();

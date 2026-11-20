@@ -34,6 +34,7 @@ export const NODE_UNIT_TEST_FILES = [
   "tests/email-domain-classification.test.ts",
   "tests/email-content-blocks.test.ts",
   "tests/email-markdown-escape.test.ts",
+  "tests/event-invitation-message.test.ts",
   "tests/email-template-engine.test.ts",
   "tests/event-agenda-pdf-binding-contract.test.ts",
   "tests/event-attendance-capture.test.ts",

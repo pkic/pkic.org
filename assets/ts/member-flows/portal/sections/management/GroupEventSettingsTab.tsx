@@ -97,7 +97,7 @@ export function GroupEventSettingsTab({
         active={
           detailId === "scheduling" && canManage
             ? "session-types"
-            : ["access", "tickets", "terms", "attendance-days", "sponsors"].includes(detailId ?? "")
+            : ["access", "tickets", "invitation", "terms", "attendance-days", "sponsors"].includes(detailId ?? "")
               ? "registration"
               : (detailId ??
                 (canManage ? "general" : hasEventAgendaPermission(event.id, "agenda:live_moderate") ? "live" : "team"))
@@ -116,13 +116,16 @@ export function GroupEventSettingsTab({
         />
       )}
       {canManage &&
-        ["registration", "access", "tickets", "terms", "attendance-days", "sponsors"].includes(detailId ?? "") && (
+        ["registration", "access", "tickets", "invitation", "terms", "attendance-days", "sponsors"].includes(
+          detailId ?? "",
+        ) && (
           <Tabs
             label="Registration settings"
             items={[
               { key: "registration", label: "Policy" },
               { key: "access", label: "Visibility and access" },
               { key: "tickets", label: "Tickets" },
+              { key: "invitation", label: "Invitation" },
               { key: "terms", label: "Terms" },
               { key: "attendance-days", label: "Attendance days" },
               { key: "sponsors", label: "Sponsor tiers" },
@@ -175,6 +178,13 @@ export function GroupEventSettingsTab({
         <GroupEventSettingsSection
           slug={event.slug}
           section="registration"
+          groupSettings={{ groupId, eventId: event.id, canEdit: canManage }}
+          onUpdated={onUpdated}
+        />
+      ) : detailId === "invitation" && canManage ? (
+        <GroupEventSettingsSection
+          slug={event.slug}
+          section="invitation"
           groupSettings={{ groupId, eventId: event.id, canEdit: canManage }}
           onUpdated={onUpdated}
         />
@@ -271,10 +281,7 @@ export function GroupEventSettingsTab({
                           { term: "Location", value: groupEventPlace(event) },
                         ]
                       : detailId === "access"
-                        ? [
-                            { term: "Visibility", value: EVENT_VISIBILITY_LABELS[event.visibility] },
-                            { term: "Peer invitation limit", value: event.inviteLimitAttendee },
-                          ]
+                        ? [{ term: "Visibility", value: EVENT_VISIBILITY_LABELS[event.visibility] }]
                         : detailId === "links"
                           ? [
                               {

@@ -27,6 +27,7 @@ export interface DueInviteRow {
   event_starts_at: string | null;
   event_ends_at: string | null;
   event_settings_json: string;
+  event_visibility: string;
 }
 
 interface EventReminderSettings {
@@ -107,6 +108,7 @@ export interface ConfirmationReminderRow {
   event_starts_at: string | null;
   event_ends_at: string | null;
   event_settings_json: string;
+  event_visibility: string;
 }
 
 export interface ReminderCandidatePreview {

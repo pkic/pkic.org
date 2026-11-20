@@ -289,15 +289,19 @@ describe("event home", () => {
     expect([...host.querySelectorAll("a")].some((link) => link.textContent === "Manage event")).toBe(false);
   });
 
-  it("explains an invitation-only event instead of offering a registration link", async () => {
-    await act(() =>
-      render(
-        <ParticipantEvent event={event({ registrationPolicy: "invitation_only", registrationPath: null })} />,
-        host,
-      ),
-    );
-    expect(host.textContent).toContain("by invitation only");
-    expect([...host.querySelectorAll("a")].some((link) => link.textContent === "Register")).toBe(false);
+  it.each([
+    ["explains an invitation-only event instead of offering a registration link", null, false],
+    ["offers registration to a reader who holds an invitation", "invitation", true],
+  ] as const)("%s", async (_, registrationAccess, offered) => {
+    const participation = { registrationId: null, registrationStatus: null, proposals: 0, speakerProposals: 0 };
+    const invited = event({
+      registrationPolicy: "invitation_only",
+      registrationPath: null,
+      ...(registrationAccess ? { participation: { ...participation, registrationAccess } } : {}),
+    });
+    await act(() => render(<ParticipantEvent event={invited} />, host));
+    expect(host.textContent?.includes("by invitation only")).toBe(!offered);
+    expect([...host.querySelectorAll("a")].some((link) => link.textContent === "Register")).toBe(offered);
   });
 
   it("leaves registration off the home of an event that has ended", async () => {

@@ -57,22 +57,25 @@ export async function inviteSentToAccount(db: DatabaseLike, userId: string, invi
   return Boolean(row);
 }
 
-/** Rechecks selected-group membership and the event's live register capability. */
-function groupEventRegistrationEvidence(input: { eventId: string; groupId?: string; userId: string }) {
-  return {
-    sql: `SELECT registration_group.id AS groupId
+/**
+ * The registration group that gives a user live register access to an event:
+ * a current membership of the owner group or of a group granted `register`.
+ * Expressions are trusted SQL (placeholders or correlated columns), never input.
+ */
+function registrationGroupSelectionSql(eventIdSql: string, userIdSql: string, groupIdSql?: string): string {
+  return `SELECT registration_group.id AS groupId
             FROM events event
             JOIN groups registration_group
               ON registration_group.active = 1
-           WHERE event.id = ?
-             ${input.groupId ? "AND registration_group.id = ?" : ""}
+           WHERE event.id = ${eventIdSql}
+             ${groupIdSql ? `AND registration_group.id = ${groupIdSql}` : ""}
              AND event.owner_group_id IS NOT NULL
              AND event.registration_mode NOT IN ('no_registration', 'automatic')
              AND EXISTS (
                SELECT 1
                  FROM group_memberships membership
                 WHERE membership.group_id = registration_group.id
-                  AND membership.user_id = ?
+                  AND membership.user_id = ${userIdSql}
                   AND membership.left_at IS NULL
              )
              AND (
@@ -84,7 +87,19 @@ function groupEventRegistrationEvidence(input: { eventId: string; groupId?: stri
                     AND grant_row.group_id = registration_group.id
                     AND grant_row.capability = 'register'
                )
-             )
+             )`;
+}
+
+/** Whether the user holds group register access, as a predicate over a correlated event and user. */
+export function groupEventRegistrationAccessExistsSql(eventIdSql: string, userIdSql: string): string {
+  return `EXISTS (${registrationGroupSelectionSql(eventIdSql, userIdSql)})`;
+}
+
+/** Rechecks selected-group membership and the event's live register capability. */
+function groupEventRegistrationEvidence(input: { eventId: string; groupId?: string; userId: string }) {
+  // Placeholders bind in text order: event, then the selected group, then the user.
+  return {
+    sql: `${registrationGroupSelectionSql("?", "?", input.groupId ? "?" : undefined)}
            ORDER BY (event.owner_group_id = registration_group.id) DESC, registration_group.id
            LIMIT 1`,
     bindings: [input.eventId, ...(input.groupId ? [input.groupId] : []), input.userId],

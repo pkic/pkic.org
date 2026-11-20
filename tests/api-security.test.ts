@@ -721,6 +721,8 @@ describe("public endpoints — accessible without credentials", () => {
   );
 
   it("GET /api/v1/events/:slug/forms/placements/:purpose returns 200 without Authorization header", async () => {
+    // Anonymous readers see the forms of a public event only.
+    await env.DB.prepare("UPDATE events SET visibility = 'public' WHERE slug = 'pqc-2026'").run();
     const response = await callApp(
       new Request("https://app.test/api/v1/events/pqc-2026/forms/placements/event_registration"),
     );

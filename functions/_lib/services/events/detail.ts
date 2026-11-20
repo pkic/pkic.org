@@ -8,6 +8,7 @@ import type { AuthorizationEvidence } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
+import { readEventInvitationMessage } from "../../../../assets/shared/schemas/event-invitation-message";
 import { resolveEventSessionTypes } from "../events";
 import { eventColumns, type EventRecord } from "../event-types";
 import { EVENT_FORM_PURPOSES } from "../../../../assets/shared/schemas/forms";
@@ -111,6 +112,7 @@ export function decodeEventDetail(
     venue: typeof settings.venue === "string" ? settings.venue : null,
     virtualUrl: typeof settings.virtualUrl === "string" ? settings.virtualUrl : null,
     heroImageUrl: typeof settings.heroImageUrl === "string" ? settings.heroImageUrl : null,
+    invitationMessage: readEventInvitationMessage(settings),
     sessionTypes: resolveEventSessionTypes(event.settings_json),
     links: parseLinksJson(event.links_json),
     registrationPath: eventRegistrationPath(event),

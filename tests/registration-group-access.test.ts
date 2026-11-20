@@ -101,6 +101,8 @@ describe("group access through the canonical registration route", () => {
 
   it.each(["submission", "confirmation"])("preserves sign-in-free calendar access after %s", async (producer) => {
     const f = await fixture();
+    // The token management page is a public event's; an event without public pages manages in the portal.
+    await env.DB.prepare("UPDATE events SET visibility = 'public' WHERE id = ?").bind(f.eventId).run();
     const response = await f.submit();
     expect(response.status, await response.clone().text()).toBe(200);
     const result = registrationSubmissionResponseSchema.parse(await response.json());
