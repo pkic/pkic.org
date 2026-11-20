@@ -202,11 +202,16 @@
     flex-direction: column;
     gap: var(--pk-1);
   }
+  /*
+   * The field grows with a longer message while Send keeps one line's height at its foot, where the
+   * last line is typed. The field fills the row, so on one line it is as tall as Send, which a touch
+   * screen makes taller.
+   */
   .pk-live-chat__input {
     display: flex;
     align-items: stretch;
+    gap: var(--pk-1);
   }
-  /* The field fills the row, so it is as tall as Send, which a touch screen makes taller. */
   .pk-live-chat__input .pk-field {
     display: flex;
     flex: 1;
@@ -224,14 +229,10 @@
     max-block-size: 8rem;
     overflow-y: auto;
     resize: none;
-    border-start-end-radius: 0;
-    border-end-end-radius: 0;
   }
   .pk-live-chat__input > .pk-btn {
     flex: none;
+    align-self: end;
     min-block-size: 2.5rem;
-    margin-inline-start: -1px;
-    border-start-start-radius: 0;
-    border-end-start-radius: 0;
   }
 }
