@@ -24,6 +24,7 @@ import { AppError } from "../../errors";
 import { permissionsAuthorizationEvidence } from "../../auth/permissions";
 import type { DatabaseLike } from "../../types";
 import { parseLinksJson } from "../../../../assets/shared/schemas/links";
+import { eventMotifPath, eventOwnMotif } from "../../../../assets/shared/schemas/event-promotion-design";
 import { normalizeEventRegistrationPolicy } from "./detail";
 import { buildEventAudiencePredicate, guardEventReadDatabase, type EventAudienceViewer } from "./visibility";
 import { heldEventInvitationExistsSql } from "../held-event-invitation";
@@ -55,12 +56,13 @@ export function mapEventAudience(
   viewer: EventViewerState | null,
   access?: Pick<EventAudienceDetail, "scannerAccess" | "sponsorLeadAccess">,
 ): EventAudienceDetail {
+  const settings = parseJsonSafe<Record<string, unknown>>(row.settings_json, {});
   return eventAudienceDetailSchema.parse({
     id: row.id,
     slug: row.slug,
     name: row.name,
     heroImageUrl: resolveHeroImageUrl(row),
-    invitationMessage: readEventInvitationMessage(parseJsonSafe(row.settings_json, {})),
+    invitationMessage: readEventInvitationMessage(settings),
     timezone: row.timezone,
     startsAt: row.starts_at,
     endsAt: row.ends_at,
@@ -72,6 +74,7 @@ export function mapEventAudience(
     country: row.country,
     links: parseLinksJson(row.links_json),
     basePath: eventPublicPagePath(row),
+    motifUrl: eventOwnMotif(settings) ? eventMotifPath(row.slug) : null,
     scannerAccess: access?.scannerAccess,
     sponsorLeadAccess: access?.sponsorLeadAccess ?? false,
     viewer,

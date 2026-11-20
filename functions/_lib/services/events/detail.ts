@@ -15,7 +15,8 @@ import { EVENT_FORM_PURPOSES } from "../../../../assets/shared/schemas/forms";
 import { placedEventFormSelection } from "../forms/event-placement-read";
 import { readEventAudienceAccess } from "./scanner-access";
 import type { EventAudienceViewer } from "./visibility";
-import { eventRegistrationPath } from "../event-presentation";
+import { eventPublicPagePath, eventRegistrationPath } from "../event-presentation";
+import { eventMotifPath, eventOwnMotif } from "../../../../assets/shared/schemas/event-promotion-design";
 import { persistedUtcInstant } from "../../utils/time";
 
 export interface EventDetailRow extends EventRecord {
@@ -107,7 +108,8 @@ export function decodeEventDetail(
     updatedAt: persistedUtcInstant(event.updated_at),
     ownerGroupId: event.owner_group_id ?? null,
     seriesId: event.series_id,
-    basePath: event.base_path,
+    basePath: eventPublicPagePath(event),
+    motifUrl: eventOwnMotif(settings) ? eventMotifPath(event.slug) : null,
     userRetentionDays: event.user_retention_days,
     venue: typeof settings.venue === "string" ? settings.venue : null,
     virtualUrl: typeof settings.virtualUrl === "string" ? settings.virtualUrl : null,

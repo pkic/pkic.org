@@ -3,7 +3,8 @@
  *
  * The conference kit's field gradient with its soft top-left light, the dot
  * grid masked in from the right, the tri-color mark cropped at the edge, the
- * canal-house outline along the foot, then mono meta, a bold headline and the
+ * event's own decorative artwork along the foot (the canal-house outline
+ * by default), then mono meta, a bold headline and the
  * short stripe under it. One component for every event-app header so the
  * values live in one stylesheet (EventHero.css) and the kit's tokens.
  *
@@ -34,15 +35,30 @@ export interface EventHeroProps {
   back?: { href: string; label: string };
   /** The slim header of an event-app page other than the event home. */
   compact?: boolean;
+  /** The event's own decorative artwork; null keeps the default outline. */
+  motifUrl?: string | null;
 }
 
-export function EventHero({ title, eyebrow, meta = [], status, actions, back, compact = false }: EventHeroProps) {
+export function EventHero({
+  title,
+  eyebrow,
+  meta = [],
+  status,
+  actions,
+  back,
+  compact = false,
+  motifUrl = null,
+}: EventHeroProps) {
   const headingId = useId();
   const Heading = useTitleHeading();
   return (
     <header class={`pk-event-hero${compact ? " pk-event-hero--compact" : ""}`} aria-labelledby={headingId}>
       <div class="pk-event-hero__field">
-        <span class="pk-event-hero__houses" aria-hidden="true" />
+        <span
+          class="pk-event-hero__houses"
+          aria-hidden="true"
+          style={motifUrl ? { "--pk-event-hero-motif": `url(${JSON.stringify(motifUrl)})` } : undefined}
+        />
         <div class="pk-event-hero__top">
           {back ? (
             <a class="pk-event-hero__back" href={back.href}>

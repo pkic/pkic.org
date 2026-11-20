@@ -68,6 +68,7 @@ export function EventAppHero({ event }: { event: ParticipantEventDetail }) {
     <EventHero
       back={{ href: href("/events"), label: "Events" }}
       title={event.name}
+      motifUrl={event.motifUrl}
       eyebrow={event.startsAt ? formatDateRange(event.startsAt, event.endsAt, event.timezone) : undefined}
       status={phase.label ? { label: phase.label, live: phase.kind === "live" } : null}
       meta={place ? [place] : []}

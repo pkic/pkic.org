@@ -248,6 +248,8 @@ export const eventAudienceDetailSchema = eventResourceCoreSchema
     links: linksSchema,
     /** The public page path for this event, when the event has one. */
     basePath: z.string().nullable(),
+    /** The event's own decorative artwork for the event app's header; null uses the default. */
+    motifUrl: z.string().nullable().default(null),
     scannerAccess: eventScannerAccessSchema.optional(),
     /** Discovery only; each contact request independently checks the exact live sponsor scope. */
     sponsorLeadAccess: z.boolean(),
@@ -319,7 +321,10 @@ export const eventDetailSchema = eventResourceCoreSchema.extend({
   scannerAccess: eventScannerAccessSchema.optional(),
   ownerGroupId: groupIdSchema.nullable(),
   seriesId: databaseIdSchema.nullable(),
+  /** The public page path for this event, when the event has one. */
   basePath: z.string().nullable(),
+  /** The event's own decorative artwork for the event app's header; null uses the default. */
+  motifUrl: z.string().nullable().default(null),
   userRetentionDays: z.number().int().positive().nullable(),
   venue: z.string().nullable(),
   virtualUrl: httpUrlSchema.nullable(),
