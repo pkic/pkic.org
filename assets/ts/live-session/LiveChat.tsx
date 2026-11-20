@@ -25,12 +25,15 @@ export function ChatComposer({
   disabled,
   send,
   refusal,
+  note,
 }: {
   channel: LiveChatChannel;
   compact: boolean;
   disabled: boolean;
   send: (message: LiveRoomClientMessage) => boolean;
   refusal: string | null;
+  /** What the status line says while nothing else needs saying, such as when the chat closes. */
+  note?: string;
 }) {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +64,7 @@ export function ChatComposer({
       <FieldStatus id={statusId} state={field.state} message={field.message}>
         {error ??
           refusal ??
+          note ??
           (compact
             ? ""
             : channel === "operator"
@@ -96,12 +100,12 @@ export function ChatComposer({
   );
 }
 
-/** The chat's window before its room opens: the feed says when it does, and the composer waits. */
-export function LiveChatClosed() {
+/** The chat while its room is closed: the feed says why, and the composer waits. */
+export function LiveChatClosed({ note = "Chat opens when the session is live." }: { note?: string }) {
   return (
     <div class="pk-live-chat-workspace pk-live-chat-workspace--compact">
       <div class="pk-live-chat">
-        <p class="pk-small pk-muted pk-live-chat__empty">Chat opens when the session is live.</p>
+        <p class="pk-small pk-muted pk-live-chat__empty">{note}</p>
       </div>
       <ChatComposer channel="attendee" compact disabled send={() => false} refusal={null} />
     </div>
@@ -120,7 +124,10 @@ export function LiveChat({
   compact = false,
   channel = "attendee",
   visible = true,
+  note,
 }: {
+  /** The composer's status line while nothing else needs saying. */
+  note?: string;
   state: LiveRoomState;
   disabled: boolean;
   send: (message: LiveRoomClientMessage) => boolean;
@@ -240,7 +247,14 @@ export function LiveChat({
           {visible ? spoken : ""}
         </p>
         {canSend ? (
-          <ChatComposer channel={channel} compact={compact} disabled={disabled} send={send} refusal={refusal} />
+          <ChatComposer
+            channel={channel}
+            compact={compact}
+            disabled={disabled}
+            send={send}
+            refusal={refusal}
+            note={note}
+          />
         ) : restriction && channel === "attendee" ? (
           <LiveParticipationAlert
             restriction={restriction}

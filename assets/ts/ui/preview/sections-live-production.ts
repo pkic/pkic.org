@@ -12,6 +12,7 @@ import { studioOnScreenSections } from "./sections-studio-on-screen";
 import { studioOutputSections } from "./sections-studio-outputs";
 import { studioPeopleSections } from "./sections-studio-people";
 import { studioPhoneSections } from "./sections-studio-phone";
+import { studioSessionBarSections } from "./sections-studio-session-bar";
 import { studioBoardSections } from "./sections-studio-board";
 import { studioQuestionSections } from "./sections-studio-questions";
 import { studioTimerSections } from "./sections-studio-timers";
@@ -31,6 +32,7 @@ export const liveProductionSections: PreviewSection[] = [
   ...studioPeopleSections,
   ...studioOutputSections,
   ...studioPhoneSections,
+  ...studioSessionBarSections,
   ...roomScreensSections,
   ...studioBoardSections,
   ...studioQuestionSections,

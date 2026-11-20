@@ -219,9 +219,12 @@ export function LiveAttendeeQuestions({
   room,
   occurrenceId,
   askIn,
+  note,
 }: {
   room: LiveRoomConnection;
   occurrenceId: string;
+  /** Said above the questions while nothing else is, such as when they close. */
+  note?: string;
   /** Where the page keeps the Ask a question button, such as the header of the questions' panel. */
   askIn?: HTMLElement | null;
 }) {
@@ -300,7 +303,7 @@ export function LiveAttendeeQuestions({
       ) : null}
       {/* A refused poll answer is said on the poll's question instead. */}
       <p class="pk-live-questions__notice" role="status">
-        {state.refusal && state.refusal.code !== LIVE_POLL_ANSWER_REFUSAL ? state.refusal.message : ""}
+        {state.refusal && state.refusal.code !== LIVE_POLL_ANSWER_REFUSAL ? state.refusal.message : (note ?? "")}
       </p>
       <LiveAuthorProvider authors={state.authors} send={room.send}>
         <LiveQuestionList

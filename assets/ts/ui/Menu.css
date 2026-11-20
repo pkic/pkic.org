@@ -12,7 +12,11 @@
     display: inline-flex;
   }
 
-  .pk-menu__trigger {
+  /*
+   * A trigger that wears a button look (`buttonClasses`) keeps the button's own box, fill and
+   * hover; the rules below shape only a trigger that is not a button. `:where` keeps their weight.
+   */
+  .pk-menu__trigger:where(:not(.pk-btn)) {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -39,15 +43,15 @@
    * and drops the square-icon geometry, so the caller's content defines the
    * shape without having to override anything from outside the component.
    */
-  .pk-menu__trigger--plain {
+  .pk-menu__trigger--plain:where(:not(.pk-btn)) {
     padding: 0;
     aspect-ratio: auto;
     color: inherit;
     text-align: left;
   }
 
-  .pk-menu__trigger:hover,
-  .pk-menu__trigger[aria-expanded="true"] {
+  .pk-menu__trigger:where(:not(.pk-btn)):hover,
+  .pk-menu__trigger:where(:not(.pk-btn))[aria-expanded="true"] {
     background: var(--pk-surface-sunk);
     color: var(--pk-ink);
   }

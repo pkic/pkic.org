@@ -10,6 +10,7 @@ import { StudioPhone } from "../../member-flows/portal/sections/events/detail/li
 import { TransitionControl } from "../../member-flows/portal/sections/events/detail/live/studio/StudioSwitcher";
 import type { StudioPanel } from "../../member-flows/portal/sections/events/detail/live/studio/studio-layout";
 import { MONITOR_SOURCES } from "./sections-studio-on-screen";
+import { RoomOpeningMenu } from "../../member-flows/portal/sections/events/detail/live/studio/RoomOpeningMenu";
 
 const noCommand = () => undefined;
 const PHONE_MONITORS: StudioPanel = {
@@ -39,6 +40,7 @@ function PhoneStudio() {
         sources={MONITOR_SOURCES}
         clock="UTC"
         active
+        sessionStatus={<RoomOpeningMenu opening="scheduled" disabled={false} send={() => true} />}
         transition={
           <TransitionControl
             outputs={DEFAULT_LIVE_ROOM_OUTPUTS}

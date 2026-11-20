@@ -67,6 +67,7 @@ import {
 import { attendancePointSelectionSchema } from "../attendance-points";
 import * as stageDisplaySettings from "./live-stage-display-settings";
 import * as screenSync from "./live-screen-sync";
+import * as roomOpening from "./live-room-opening";
 import * as roomSources from "./live-room-sources";
 import { LIVE_GRAPHIC_THEME_DEFAULTS, liveGraphicThemeSchema } from "../live-graphic-theme";
 import { DEFAULT_LIVE_LOWER_THIRD_MOTION } from "../live-lower-third";
@@ -352,6 +353,8 @@ export const liveRoomSnapshotSchema = z
     stageDisplaySettings: stageDisplaySettings.liveStageDisplaySettingsSnapshotSchema,
     /** Whether the projector and the stage display follow Program. */
     screenSync: screenSync.liveScreenSyncSnapshotSchema,
+    /** Whether attendees take part on schedule, or because an operator opened or closed the room. */
+    opening: roomOpening.liveRoomOpeningSnapshotSchema,
     /** How many sources draw each output now; operators only, zeros for everyone else. */
     sources: roomSources.liveRoomSourcesSnapshotSchema,
   })
@@ -396,6 +399,7 @@ export const liveRoomServerMessageSchema = z.discriminatedUnion("type", [
   stageDisplaySettings.liveStageDisplayNextChangedSchema(liveStageQuestionSchema),
   stageDisplaySettings.liveStageDisplaySettingsChangedSchema,
   screenSync.liveScreenSyncChangedSchema,
+  roomOpening.liveRoomOpeningChangedSchema,
   /** Operators only: a source of one of the room's outputs connected or dropped. */
   roomSources.liveRoomSourcesChangedSchema,
   /** Operators only: Program was cleared, and this snapshot restores it. */
@@ -562,6 +566,7 @@ export const liveRoomClientMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("overlay.mode"), mode: liveOverlayModeSchema }).strict(),
   stageDisplaySettings.liveStageDisplaySettingsCommandSchema,
   screenSync.liveScreenSyncCommandSchema,
+  roomOpening.liveRoomOpeningCommandSchema,
   ...liveChatClientMessageSchemas,
   ...liveModerationClientMessageSchemas,
   ...liveAuthorClientMessageSchemas,

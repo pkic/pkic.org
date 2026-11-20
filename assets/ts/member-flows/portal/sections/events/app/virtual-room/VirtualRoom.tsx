@@ -93,8 +93,10 @@ export function VirtualRoom({
   );
   // A phone opens where attendees take part: the questions and polls of the session on or next, which take
   // questions ahead of time. Only with no session left does it open on the agenda.
-  const moment = roomMoment(sessions, now);
-  const live = useRoomLive(slug, moment);
+  const viewerZone = agendaTimeZones(timeZone, viewerTimeZone(), "remote").primary.zone;
+  // The room may stay on a session its operators keep open after the agenda moved on; it says what it is on.
+  const live = useRoomLive(slug, roomMoment(sessions, now), viewerZone);
+  const moment = live.moment;
   const defaultPanel: RoomPanelId = live.session ? "questions" : "agenda";
   const [panel, setPanel] = useHashQueryParam("roomPanel", defaultPanel, ROOM_PANELS);
   const startsAt = sessions[0]?.startAt;
@@ -116,7 +118,6 @@ export function VirtualRoom({
       />
     );
   const stream = locationStreamOn(room, instantToCalendarDate(new Date(now).toISOString(), timeZone));
-  const viewerZone = agendaTimeZones(timeZone, viewerTimeZone(), "remote").primary.zone;
   const formatTime = (startAt: string, endAt: string) => formatTimeRangeInZone(startAt, endAt, viewerZone);
   const requested = requestedSessionNotice(agenda, query.get("session"), now);
   const href = usePortalHashLocation.hrefs;

@@ -333,6 +333,28 @@ describe("live session questions", () => {
     expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_CLOSED");
   });
 
+  it("lets operators open the virtual room ahead of its time and close it during it, until they change it", async () => {
+    await f.setup({ startOffsetMinutes: 24 * 60, durationMinutes: 30 });
+    const operator = await f.connect({ person: "operator" });
+    const attendee = await f.connect({ person: "attendee" });
+    expect((await attendee.next("room.snapshot")).opening).toBe("scheduled");
+    attendee.send({ type: "room.opening", opening: "open" });
+    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
+
+    operator.send({ type: "room.opening", opening: "open" });
+    expect((await attendee.next("room.opening.changed")).opening).toBe("open");
+    attendee.send({ type: "chat.send", text: "Testing a day early" });
+    await attendee.next("chat.message", (message) => message.message.text === "Testing a day early");
+
+    operator.send({ type: "room.opening", opening: "closed" });
+    expect((await attendee.next("room.opening.changed", (m) => m.opening === "closed")).opening).toBe("closed");
+    const after = attendee.received.length;
+    attendee.send({ type: "question.ask", text: "Still open?", anonymous: false });
+    expect((await attendee.next("room.refused", () => true, { after })).code).toBe("LIVE_ROOM_CLOSED");
+    const late = await f.connect({ person: "secondAttendee" });
+    expect((await late.next("room.snapshot")).opening).toBe("closed");
+  });
+
   it("refuses attendee questions once the room has closed but lets operators prepare", async () => {
     await f.setup({ startOffsetMinutes: -24 * 60, durationMinutes: 30 });
     const attendee = await f.connect({ person: "attendee" });

@@ -487,8 +487,9 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     const actor = { userId: viewer.userId, name: viewer.name };
     const operator = viewer.role === "operator";
     const session = this.session();
-    const open = operator || liveRoomOpen(Date.now(), session.startAt, session.endAt);
-    const asking = operator || liveRoomTakesQuestions(Date.now(), session.endAt);
+    const opening = this.store.opening();
+    const open = operator || liveRoomOpen(Date.now(), session.startAt, session.endAt, opening);
+    const asking = operator || liveRoomTakesQuestions(Date.now(), session.endAt, opening);
     if (!operator && liveCommandParticipates(message.type) && this.decisions.restriction(actor.userId, Date.now()))
       return LIVE_PARTICIPATION_REFUSAL;
     switch (message.type) {

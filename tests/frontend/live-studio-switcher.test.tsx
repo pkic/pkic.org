@@ -183,6 +183,18 @@ describe("the studio's switcher, session bar and phone layout", () => {
     expect(host.querySelector(".pk-studio-header__left")?.textContent).toBe("Starts in 12 min");
   });
 
+  it("lets an operator open or close the session's virtual room from the session bar", () => {
+    const { host, live } = mountDesk();
+    const trigger = host.querySelector<HTMLButtonElement>('button[aria-label="Virtual room: On schedule"]')!;
+    expect(trigger.classList.contains("pk-btn")).toBe(true);
+    void act(() => trigger.click());
+    const choice = [...document.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]')].find((item) =>
+      item.textContent?.startsWith("Open now"),
+    )!;
+    void act(() => choice.click());
+    expect(commands(live)).toEqual([{ type: "room.opening", opening: "open" }]);
+  });
+
   it("transitions with Space while nothing else has the key, never from a field", () => {
     const { host, live } = mountDesk();
     const space = (target: EventTarget) =>

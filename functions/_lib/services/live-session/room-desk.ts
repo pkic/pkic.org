@@ -96,6 +96,8 @@ export async function operateLiveDesk(
       return desk.controls.move(actor, message.view, message.itemId, message.direction, at);
     case "overlay.mode":
       return desk.controls.overlayMode(actor, message.mode, at);
+    case "room.opening":
+      return desk.controls.opening(actor, message.opening, at);
     case "timer.add":
       return desk.timers.add(actor, session, message.timer, Date.now(), at);
     case "timer.remove":

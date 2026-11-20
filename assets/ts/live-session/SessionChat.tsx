@@ -28,7 +28,16 @@ function SessionChatRoom({
 }
 
 /** A session's chat for an attendee, on a room connection its page already holds. */
-export function LiveAttendeeChat({ room, compact = false }: { room: LiveRoomConnection; compact?: boolean }) {
+export function LiveAttendeeChat({
+  room,
+  compact = false,
+  note,
+}: {
+  room: LiveRoomConnection;
+  compact?: boolean;
+  /** Said under the feed while nothing else is, such as when the chat closes. */
+  note?: string;
+}) {
   if (!room.state)
     return room.admissionRefusal || room.status === "offline" ? (
       <Alert tone="warn">{liveRoomOpenFailure(room.admissionRefusal, "chat", room.serverFault)}</Alert>
@@ -38,7 +47,7 @@ export function LiveAttendeeChat({ room, compact = false }: { room: LiveRoomConn
   return (
     <>
       {room.status !== "live" ? <Alert tone="warn">Chat is reconnecting. Sending is paused.</Alert> : null}
-      <LiveChat state={room.state} disabled={room.status !== "live"} send={room.send} compact={compact} />
+      <LiveChat state={room.state} disabled={room.status !== "live"} send={room.send} compact={compact} note={note} />
     </>
   );
 }

@@ -33,7 +33,10 @@
     background: var(--pk-surface);
     box-shadow: var(--pk-shadow-1);
   }
-  /* Room, session title and time on one row; a notice takes a row of its own. */
+  /*
+   * Room and session title on the first row, the title taking at least half of it; the time and the
+   * virtual room move to a second row when they do not fit beside it. A notice takes a row of its own.
+   */
   .pk-studio-phone__session {
     display: flex;
     flex-wrap: wrap;
@@ -43,7 +46,7 @@
     font-size: var(--pk-text-sm);
   }
   .pk-studio-phone__title {
-    flex: 1 1 0;
+    flex: 1 1 50%;
     min-inline-size: 0;
     overflow: hidden;
     white-space: nowrap;

@@ -1,5 +1,6 @@
 import { DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS } from "../../shared/schemas/live-stage-display-settings";
 import { DEFAULT_LIVE_SCREEN_SYNC } from "../../shared/schemas/live-screen-sync";
+import { DEFAULT_LIVE_ROOM_OPENING } from "../../shared/schemas/live-room-opening";
 import type { ScreenAgendaSession } from "../../shared/schemas/event-screens";
 import { DEFAULT_LIVE_TICKER_CONTEXT } from "../../shared/schemas/live-session-ticker";
 import {
@@ -112,6 +113,7 @@ export function screenAutoState(
     stageDisplayNextVotes: null,
     stageDisplaySettings: DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS,
     screenSync: DEFAULT_LIVE_SCREEN_SYNC,
+    opening: DEFAULT_LIVE_ROOM_OPENING,
     sources: NO_LIVE_ROOM_SOURCES,
   };
   return applyLiveRoomMessage(null, snapshot);

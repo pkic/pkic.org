@@ -1,6 +1,7 @@
 import { updateLiveTimerGraphics } from "../../../../assets/shared/live-timer-policy";
 import { DEFAULT_LIVE_POLL_PRESENTATION } from "../../../../assets/shared/schemas/live-session-poll";
 import { EMPTY_LIVE_STAGE } from "../../../../assets/shared/schemas/live-session-room";
+import type { LiveRoomOpening } from "../../../../assets/shared/schemas/live-room-opening";
 import {
   LIVE_ROOM_POLICY,
   type LiveQuestionStatus,
@@ -261,6 +262,13 @@ export class LiveRoomControls {
     this.store.saveOverlayMode(mode);
     this.store.recordStaffAction(operator.userId, "live_session.overlay_mode", { mode }, at);
     return { messages: [{ type: "overlay.mode.changed", mode }] };
+  }
+
+  /** An operator opens or closes the room to attendees now, or hands it back to the agenda. */
+  opening(operator: Operator, opening: LiveRoomOpening, at: string): LiveControlOutcome {
+    this.store.saveOpening(opening);
+    this.store.recordStaffAction(operator.userId, "live_session.opening", { opening }, at);
+    return { messages: [{ type: "room.opening.changed", opening }] };
   }
 
   /** A rewritten question already on air, on Program or any other output, shows its new text at once. */

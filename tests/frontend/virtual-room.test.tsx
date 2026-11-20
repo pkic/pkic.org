@@ -13,6 +13,7 @@ import { VirtualRoom } from "../../assets/ts/member-flows/portal/sections/events
 import { WatchLiveCard } from "../../assets/ts/member-flows/portal/sections/events/app/virtual-room/WatchLiveCard";
 import { chooseLocation } from "../../assets/ts/member-flows/portal/sections/events/app/virtual-room/virtual-room-schedule";
 import { HeadingOutline } from "../../assets/ts/ui/HeadingOutline";
+import { FakeLiveSocket, liveSnapshot } from "./helpers/live-room-socket";
 
 const hashLocation = vi.hoisted(() => ({ current: "/events/summit/virtual", navigate: vi.fn() }));
 vi.mock("wouter/use-hash-location", () => ({
@@ -297,6 +298,59 @@ describe("virtual room", () => {
     });
     expect(nowPlaying()).toContain("Migration panel");
     expect(vi.mocked(fetch).mock.calls.length).toBe(requests);
+  });
+
+  it("says when chat and questions close, and stays on a session its operators keep open until they hand it back", async () => {
+    const sockets: FakeLiveSocket[] = [];
+    vi.stubGlobal(
+      "WebSocket",
+      class extends FakeLiveSocket {
+        static OPEN = 1;
+        constructor(url: string, protocols: string[]) {
+          super(url, protocols);
+          sockets.push(this);
+        }
+      },
+    );
+    const answer = async (opening: "scheduled" | "open" | "closed") => {
+      const socket = sockets.at(-1)!;
+      const id = new URL(socket.url).pathname.split("/").at(-2)!;
+      const session = program.agenda!.occurrences.find((item) => item.id === id)!;
+      await act(async () => {
+        socket.open();
+        socket.deliver(
+          liveSnapshot({
+            opening,
+            session: { ...liveSnapshot().session, occurrenceId: id, startAt: session.startAt!, endAt: session.endAt! },
+          }),
+        );
+      });
+    };
+    const roomOn = () => new URL(sockets.at(-1)!.url).pathname.split("/").at(-2);
+    vi.setSystemTime(new Date("2027-01-20T09:52:00.000Z"));
+    onDesktop();
+    await open();
+    await answer("scheduled");
+    // The viewer reads the time in their own zone, an hour ahead of the agenda's.
+    expect(host.textContent).toContain("Questions for this session close at 11:00");
+    expect(host.textContent).toContain("Chat for this session closes at 11:00");
+
+    await act(async () => sockets.at(-1)!.deliver({ type: "room.opening.changed", opening: "open" }));
+    expect(host.textContent).not.toContain("close at 11:00");
+    await act(async () => {
+      vi.advanceTimersByTime(15 * 60_000);
+    });
+    expect(nowPlaying()).toContain("Opening keynote");
+    expect(roomOn()).toBe(KEYNOTE);
+
+    // Handing the room back moves it on to the session the agenda has running now.
+    await act(async () => sockets.at(-1)!.deliver({ type: "room.opening.changed", opening: "scheduled" }));
+    expect(nowPlaying()).toContain("Migration panel");
+    expect(roomOn()).toBe(PANEL);
+    await answer("closed");
+    expect(host.textContent).toContain("The organizers closed questions.");
+    expect(host.textContent).toContain("The organizers closed the chat.");
+    expect(roomOn()).toBe(PANEL);
   });
 
   it("restores the bookmarked room panel without putting attendee input in the URL", async () => {

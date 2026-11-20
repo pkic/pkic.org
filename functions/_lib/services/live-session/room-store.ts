@@ -38,6 +38,10 @@ import {
   liveScreenSyncSnapshotSchema,
   type LiveScreenSync,
 } from "../../../../assets/shared/schemas/live-screen-sync";
+import {
+  liveRoomOpeningSnapshotSchema,
+  type LiveRoomOpening,
+} from "../../../../assets/shared/schemas/live-room-opening";
 import { copyableLivePolls, type LivePollCopy } from "./room-poll-store";
 import type { LiveRoomSql } from "./room-sql";
 import {
@@ -478,6 +482,16 @@ export class LiveRoomStore {
 
   saveOverlayMode(mode: LiveOverlayMode): void {
     this.saveControl("overlayMode", mode);
+  }
+
+  /** Whether attendees take part on schedule, or because an operator opened or closed the room. */
+  opening(): LiveRoomOpening {
+    const saved = liveRoomOpeningSnapshotSchema.safeParse(this.control("opening") ?? undefined);
+    return saved.success ? saved.data : liveRoomOpeningSnapshotSchema.parse(undefined);
+  }
+
+  saveOpening(opening: LiveRoomOpening): void {
+    this.saveControl("opening", opening);
   }
 
   private control(name: string): unknown {

@@ -33,6 +33,7 @@ import { createLivePresence, livePresenceFocusAt, LivePresenceContext } from "./
 import { LivePanelPresence } from "./presence/LivePresenceTag";
 import { GraphicsPanel, nextInRoom } from "./studio/GraphicsPanel";
 import { monitorPanelView } from "./studio/MonitorPanel";
+import { RoomOpeningMenu } from "./studio/RoomOpeningMenu";
 import { StudioScreensBody, StudioScreensConnection } from "./studio/ScreensPanel";
 import { SpeakerMessagePanel } from "./studio/SpeakerMessagePanel";
 import { stageDisplaySettingsMenu } from "./studio/stage-display-settings-menu";
@@ -206,6 +207,13 @@ export function LiveSessionDesk({
   const programActive = activeOccurrenceId === shownId;
   const disabled = !live || broadcasting || switching;
   const targets: LiveTargets = { state, programActive, disabled, sendProgram, sendPrograms };
+  // Loaded or not, an operator decides here whether attendees take part in this session's virtual room.
+  const status = (
+    <>
+      {sessionStatus}
+      <RoomOpeningMenu opening={state.opening} disabled={!live || switching} send={sendProgram} />
+    </>
+  );
   const agenda = approvedAgenda ?? null;
   const preview = previewProjection(state);
   const outputs = liveRoomOutputs(state.session);
@@ -460,7 +468,7 @@ export function LiveSessionDesk({
             sources={sources}
             clock={clock ?? state.session.timeZone}
             active={programActive}
-            sessionStatus={sessionStatus}
+            sessionStatus={status}
             roomControl={roomControl}
             transition={transition}
             disabled={disabled}
@@ -477,7 +485,7 @@ export function LiveSessionDesk({
             state={state}
             clock={clock ?? state.session.timeZone}
             roomControl={roomControl}
-            sessionStatus={sessionStatus}
+            sessionStatus={status}
             active={programActive}
             notice={notice}
           />

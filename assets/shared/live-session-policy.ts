@@ -3,6 +3,7 @@
  * window, the moderation transitions and the per-person limits. The Durable
  * Object, the Worker and both browser surfaces read these values from here.
  */
+import type { LiveRoomOpening } from "./schemas/live-room-opening";
 
 /**
  * Live rooms validate on admission and refresh access in the background.
@@ -200,8 +201,12 @@ export function liveRoomWindow(startAt: string, endAt: string) {
   };
 }
 
-/** Whether attendees may chat, react and answer questions at `now`: while somebody watches the room. */
-export function liveRoomOpen(now: number, startAt: string, endAt: string): boolean {
+/**
+ * Whether attendees may chat, react and answer questions at `now`: while somebody watches the room. An operator
+ * who opened or closed the room decides instead of the agenda.
+ */
+export function liveRoomOpen(now: number, startAt: string, endAt: string, opening: LiveRoomOpening = "scheduled") {
+  if (opening !== "scheduled") return opening === "open";
   const window = liveRoomWindow(startAt, endAt);
   return now >= window.opensAt && now <= window.closesAt;
 }
@@ -209,9 +214,11 @@ export function liveRoomOpen(now: number, startAt: string, endAt: string): boole
 /**
  * Whether attendees may ask questions, upvote approved ones and answer open polls at `now`. These open as soon as
  * the session is on the agenda: a question waits for a moderator before anyone sees it, and a poll is one an
- * operator chose to open, so neither needs the room watched. They close with the room.
+ * operator chose to open, so neither needs the room watched. They close with the room, or when an operator
+ * closes it.
  */
-export function liveRoomTakesQuestions(now: number, endAt: string): boolean {
+export function liveRoomTakesQuestions(now: number, endAt: string, opening: LiveRoomOpening = "scheduled") {
+  if (opening !== "scheduled") return opening === "open";
   return now <= Date.parse(endAt) + LIVE_ROOM_POLICY.closesAfterEndMinutes * MINUTE;
 }
 
