@@ -12,7 +12,13 @@ import { prepareQueueEmailStatement } from "../../email/outbox";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
-import { HELD_UNTIL_PAID, payableTicketSql, ticketPageUrl, type PayableTicketRow } from "./payment";
+import {
+  HELD_UNTIL_PAID,
+  payableTicketSql,
+  ticketPageUrl,
+  ticketPaymentFailedSql,
+  type PayableTicketRow,
+} from "./payment";
 
 const DAY_MS = 86_400_000;
 
@@ -20,6 +26,7 @@ interface ReminderRow extends PayableTicketRow {
   reminders_sent: number;
   reminders_end_at: string | null;
   reminder_interval_days: number;
+  payment_failed: number;
 }
 
 /** Reminds people with an unpaid ticket, at the event's interval, until its reminder period ends. Nothing is canceled. */
@@ -31,7 +38,7 @@ export async function sendTicketPaymentReminders(
   const now = nowIso();
   const due = await all<ReminderRow>(
     db,
-    `${payableTicketSql(", ticket.reminders_sent, ticket.reminders_end_at, settings.reminder_interval_days")}
+    `${payableTicketSql(`, ticket.reminders_sent, ticket.reminders_end_at, settings.reminder_interval_days, ${ticketPaymentFailedSql("ticket.id")} AS payment_failed`)}
      WHERE ticket.status = 'pending_payment' AND ticket.next_reminder_at IS NOT NULL AND ticket.next_reminder_at <= ?
        AND registration.status NOT IN ('cancelled', 'pending_email_confirmation')
      ORDER BY ticket.next_reminder_at, ticket.id LIMIT ?`,
@@ -86,7 +93,7 @@ export type TicketPaymentEmailTicket = Pick<
   | "timezone"
   | "refund_deadline"
   | "refund_fee"
-> & { pay_by?: string | null };
+> & { pay_by?: string | null; payment_failed?: number };
 
 /** The email that asks for payment: sent with the registration, again as a reminder, and after a ticket was moved. */
 export function prepareTicketPaymentEmail(
@@ -112,6 +119,8 @@ export function prepareTicketPaymentEmail(
       paymentUrl: ticketPageUrl(appBaseUrl, ticket.event_slug),
       // The day the unpaid place is released, on the event's clock; empty for an event that keeps it.
       payBy: ticket.pay_by ? formatDateTimeInZone(ticket.pay_by, ticket.timezone) : "",
+      // Set when the last payment did not go through, so the email says so before asking again.
+      paymentFailed: ticket.payment_failed === 1,
       refundPolicy: ticketRefundNote(
         {
           refundableUntil: ticket.refund_deadline,

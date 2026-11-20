@@ -16,6 +16,8 @@ CREATE TABLE event_ticket_settings (
   reminder_period_days   INTEGER NOT NULL,
   -- How many days an unpaid place is kept before its registration is cancelled; empty keeps it until someone cancels.
   unpaid_hold_days       INTEGER,
+  -- How many days a place is kept after its payment failed, so the person can pay again.
+  payment_retry_days     INTEGER NOT NULL DEFAULT 1,
   -- Whether the payment provider issues an invoice for each paid ticket, besides its receipt.
   send_invoice           INTEGER NOT NULL DEFAULT 1,
   -- The refund policy: empty for no refunds, otherwise refunds until this many days before the event starts.

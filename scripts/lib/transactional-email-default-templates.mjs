@@ -114,9 +114,10 @@ export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
   },
   {
     key: "ticket_payment_reminder",
-    subjectTemplate: "Reminder: pay for your {{eventName}} ticket",
+    subjectTemplate:
+      "{{#if paymentFailed}}Your payment for {{eventName}} did not go through{{else}}Reminder: pay for your {{eventName}} ticket{{/if}}",
     content:
-      'You\'re not registered for **{{eventName}}** yet: your {{ticketName}} ticket is still waiting for payment of {{ticketPrice}}.\n\n<div class="cta"><a href="{{paymentUrl}}">Pay for your ticket &rarr;</a></div>\n\nWe email your confirmation once the payment arrives.{{#if payBy}} Pay by {{payBy}} to keep your place; after that your registration is cancelled.{{/if}} To cancel instead, open your registration in the portal.\n\n{{refundPolicy}}\n\n{{> sponsors_block}}',
+      '{{#if paymentFailed}}Your payment of {{ticketPrice}} for the {{ticketName}} ticket did not go through, so you\'re not registered for **{{eventName}}** yet. You can pay again, with the same or another method.{{else}}You\'re not registered for **{{eventName}}** yet: your {{ticketName}} ticket is still waiting for payment of {{ticketPrice}}.{{/if}}\n\n<div class="cta"><a href="{{paymentUrl}}">Pay for your ticket &rarr;</a></div>\n\nWe email your confirmation once the payment arrives.{{#if payBy}} Pay by {{payBy}} to keep your place; after that your registration is cancelled.{{/if}} To cancel instead, open your registration in the portal.\n\n{{refundPolicy}}\n\n{{> sponsors_block}}',
     contentType: "markdown",
     messageType: "transactional",
   },

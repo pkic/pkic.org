@@ -84,6 +84,12 @@ export const ticketPaymentProcessingSql = (ticketId: string) =>
              WHERE seen.ticket_id = ${ticketId} AND seen.outcome IN (${PAYMENT_STANDING_OUTCOMES})
              ORDER BY seen.rowid DESC LIMIT 1), 0)`;
 
+/** Whether the latest word on a ticket's payment is that it failed, so the next email says so. */
+export const ticketPaymentFailedSql = (ticketId: string) =>
+  `COALESCE((SELECT seen.outcome = 'payment_failed' FROM registration_ticket_payment_events seen
+             WHERE seen.ticket_id = ${ticketId} AND seen.outcome IN (${PAYMENT_STANDING_OUTCOMES})
+             ORDER BY seen.rowid DESC LIMIT 1), 0)`;
+
 /** The short form of a registration's id that people read on an invoice or quote to an organizer. */
 export function registrationReference(registrationId: string): string {
   return registrationId.replace(/-/g, "").slice(0, 8).toUpperCase();
@@ -459,8 +465,14 @@ export async function handleEventTicketStripeEvent(
     statements.push(
       db
         .prepare(
+          // A failed payment is told at once, and the place is kept for the event's retry period from now.
           `UPDATE registration_tickets
-           SET next_reminder_at = CASE WHEN ?1 = 1 AND reminders_end_at > ?2 THEN ?2 ELSE NULL END, updated_at = ?2
+           SET next_reminder_at = CASE WHEN ?1 = 1 THEN ?2 ELSE NULL END,
+               pay_by = CASE WHEN ?1 = 1 THEN MAX(COALESCE(pay_by, ''), (
+                 SELECT strftime('%Y-%m-%dT%H:%M:%fZ', ?2, '+' || settings.payment_retry_days || ' days')
+                 FROM event_ticket_settings settings WHERE settings.event_id = registration_tickets.event_id))
+                 ELSE pay_by END,
+               updated_at = ?2
            WHERE id = ?3 AND status = 'pending_payment'`,
         )
         .bind(failed ? 1 : 0, now, row.ticket_id),

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
 import { callApi } from "./helpers/app";
-import { createMemberSession } from "./helpers/auth";
+import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { hmacSha256Hex } from "../functions/_lib/utils/crypto";
 import {
   eventTicketCodeListQuerySchema,
@@ -502,6 +502,7 @@ describe("event tickets", () => {
         reminderIntervalDays: configuration.settings.reminderIntervalDays,
         reminderPeriodDays: configuration.settings.reminderPeriodDays,
         unpaidHoldDays: configuration.settings.unpaidHoldDays,
+        paymentRetryDays: configuration.settings.paymentRetryDays,
         sendInvoice: configuration.settings.sendInvoice,
         refundDaysBeforeEvent: null,
         refundFee: 0,
@@ -993,6 +994,7 @@ describe("event tickets", () => {
         reminderIntervalDays: configuration.settings.reminderIntervalDays,
         reminderPeriodDays: configuration.settings.reminderPeriodDays,
         unpaidHoldDays: configuration.settings.unpaidHoldDays,
+        paymentRetryDays: configuration.settings.paymentRetryDays,
         sendInvoice: configuration.settings.sendInvoice,
         refundDaysBeforeEvent,
         refundFee,
@@ -1477,7 +1479,15 @@ describe("event tickets", () => {
       outcome: "payment_failed",
     });
     expect(await read()).toMatchObject({ status: "pending_payment", paymentProcessing: false });
+    // The place is kept for the event's retry period, a day unless the event says otherwise, and the email says why.
+    const retryBy = Date.parse((await read())!.payBy!);
+    expect(retryBy - Date.now()).toBeGreaterThan(0.9 * 86_400_000);
+    expect(retryBy - Date.now()).toBeLessThan(1.1 * 86_400_000);
     expect(await sendTicketPaymentReminders(env.DB, "https://example.test")).toEqual({ reminded: 1 });
+    const failedEmail = await env.DB.prepare(
+      "SELECT payload_json FROM email_outbox WHERE idempotency_key LIKE 'ticket-reminder:%' ORDER BY created_at DESC LIMIT 1",
+    ).first<{ payload_json: string }>();
+    expect(JSON.parse(failedEmail!.payload_json)).toMatchObject({ paymentFailed: true, payBy: expect.any(String) });
     await expect(open()).resolves.toMatchObject({ checkoutUrl: expect.any(String) });
 
     // The next one arrives days later and settles the ticket.
@@ -1545,6 +1555,58 @@ describe("event tickets", () => {
     ).toEqual({ n: 1 });
     // A second run finds nothing more to release.
     expect(await releaseUnpaidTickets(env.DB, "https://example.test")).toEqual({ released: 0, failed: 0 });
+  });
+
+  it("runs the scheduled ticket job on request: it reminds, and releases a place that was not paid in time", async () => {
+    const { event, admin } = await seedTickets();
+    const configuration = await readEventTicketsConfiguration(env.DB, event);
+    await updateEventTicketSettings(env.DB, admin, event, {
+      expectedRevision: configuration.revision,
+      ...configuration.settings,
+      unpaidHoldDays: 3,
+    });
+    const reminded = await register(event, "job-reminded@gmail.com");
+    const overdue = await register(event, "job-overdue@gmail.com");
+    const past = new Date(Date.now() - 1000).toISOString();
+    await env.DB.prepare("UPDATE registration_tickets SET next_reminder_at = ? WHERE registration_id = ?")
+      .bind(past, reminded.registration.id)
+      .run();
+    await env.DB.prepare(
+      "UPDATE registration_tickets SET pay_by = ?, next_reminder_at = NULL WHERE registration_id = ?",
+    )
+      .bind(past, overdue.registration.id)
+      .run();
+
+    // An administrator starts the job by hand, as on a system where no schedule runs.
+    const token = await createAdminSession(env.DB, admin.id, `job-${crypto.randomUUID()}`);
+    const response = await callApi(env, "/api/v1/scheduler/jobs/event_ticket_payments/runs", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      success: true,
+      jobKey: "event_ticket_payments",
+      status: "succeeded",
+    });
+
+    const sent = await env.DB.prepare(
+      `SELECT template_key, recipient_email FROM email_outbox
+       WHERE (template_key = 'ticket_payment_reminder' AND recipient_email = ?)
+          OR (template_key = 'registration_updated' AND recipient_email = ?)
+       ORDER BY template_key`,
+    )
+      .bind(reminded.user.email, overdue.user.email)
+      .all<{ template_key: string; recipient_email: string }>();
+    expect(sent.results).toEqual([
+      { template_key: "registration_updated", recipient_email: overdue.user.email },
+      { template_key: "ticket_payment_reminder", recipient_email: reminded.user.email },
+    ]);
+    const status = await env.DB.prepare("SELECT status FROM registrations WHERE id = ?")
+      .bind(overdue.registration.id)
+      .first<{ status: string }>();
+    expect(status!.status).toBe("cancelled");
   });
 
   it("reminds an unpaid ticket once it is due and not a registration that is cancelled", async () => {

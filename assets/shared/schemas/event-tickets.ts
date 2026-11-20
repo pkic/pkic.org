@@ -14,7 +14,12 @@ import {
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { stripeCurrencySchema } from "./stripe";
-import { REGISTRATION_TICKET_STATUSES, TICKET_ASSIGNMENT_SOURCES, TICKET_PRICE_CHARGED } from "../event-tickets";
+import {
+  DEFAULT_PAYMENT_RETRY_DAYS,
+  REGISTRATION_TICKET_STATUSES,
+  TICKET_ASSIGNMENT_SOURCES,
+  TICKET_PRICE_CHARGED,
+} from "../event-tickets";
 
 const calendarDateSchema = z
   .string()
@@ -129,6 +134,13 @@ export const eventTicketSettingsSchema = z.object({
   reminderPeriodDays: z.number().int().min(0, "Enter 0 or more.").max(365, "Enter 365 or less."),
   /** How many days an unpaid place is kept before its registration is cancelled; null keeps it until someone cancels. */
   unpaidHoldDays: z.number().int().min(1, "Enter 1 or more.").max(365, "Enter 365 or less.").nullable().default(null),
+  /** How many days a place is kept after its payment failed, so the person can pay again. */
+  paymentRetryDays: z
+    .number()
+    .int()
+    .min(1, "Enter 1 or more.")
+    .max(365, "Enter 365 or less.")
+    .default(DEFAULT_PAYMENT_RETRY_DAYS),
   /** The payment provider issues an invoice for each paid ticket, besides its receipt. */
   sendInvoice: z.boolean().default(true),
   /**

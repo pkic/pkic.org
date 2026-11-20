@@ -46,6 +46,7 @@ export function TicketPaymentPanel({
   const [period, setPeriod] = useState(String(saved.reminderPeriodDays));
   const holdOf = () => (saved.unpaidHoldDays === null ? "" : String(saved.unpaidHoldDays));
   const [hold, setHold] = useState(holdOf);
+  const [retry, setRetry] = useState(String(saved.paymentRetryDays));
   const [sendInvoice, setSendInvoice] = useState(saved.sendInvoice);
   const refundPolicyOf = (): RefundPolicy =>
     saved.refundDaysBeforeEvent === null ? "none" : saved.refundFee > 0 ? "fee" : "full";
@@ -63,6 +64,7 @@ export function TicketPaymentPanel({
       reminderPeriodDays: period.trim() === "" ? undefined : Number(period),
       // Empty keeps an unpaid place until someone cancels the registration.
       unpaidHoldDays: hold.trim() === "" ? null : Number(hold),
+      paymentRetryDays: retry.trim() === "" ? undefined : Number(retry),
       sendInvoice,
       // An empty period or fee is left out, so the contract asks for it beside its field.
       refundDaysBeforeEvent: refundPolicy === "none" ? null : refundDays.trim() === "" ? undefined : Number(refundDays),
@@ -79,6 +81,7 @@ export function TicketPaymentPanel({
       setInterval(String(saved.reminderIntervalDays));
       setPeriod(String(saved.reminderPeriodDays));
       setHold(holdOf());
+      setRetry(String(saved.paymentRetryDays));
       setSendInvoice(saved.sendInvoice);
       setRefundPolicy(refundPolicyOf());
       setRefundDays(refundDaysOf());
@@ -167,6 +170,23 @@ export function TicketPaymentPanel({
                     inputMode="numeric"
                     value={hold}
                     onInput={(inputEvent) => setHold(inputEvent.currentTarget.value)}
+                  />
+                )}
+              </Field>
+              <Field
+                {...form.of("paymentRetryDays")}
+                label="After a failed payment, keep the place for (days)"
+                help="The person is told the payment failed and can pay again. After this many days the registration is cancelled."
+                required
+              >
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    name="paymentRetryDays"
+                    type="number"
+                    inputMode="numeric"
+                    value={retry}
+                    onInput={(inputEvent) => setRetry(inputEvent.currentTarget.value)}
                   />
                 )}
               </Field>
@@ -267,6 +287,10 @@ export function TicketPaymentPanel({
                     saved.unpaidHoldDays === null
                       ? "Kept until the person or an organizer cancels the registration"
                       : `Kept for ${days(saved.unpaidHoldDays)}, then the registration is cancelled`,
+                },
+                {
+                  term: "After a failed payment",
+                  value: `Kept for ${days(saved.paymentRetryDays)} to pay again, then the registration is cancelled`,
                 },
               ]}
             />

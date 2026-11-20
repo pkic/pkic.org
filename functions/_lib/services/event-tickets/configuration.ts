@@ -7,6 +7,7 @@ import { readSponsorPassTiers } from "./sponsor-pass-tiers";
 import {
   DEFAULT_PAYMENT_REMINDER_INTERVAL_DAYS,
   DEFAULT_PAYMENT_REMINDER_PERIOD_DAYS,
+  DEFAULT_PAYMENT_RETRY_DAYS,
 } from "../../../../assets/shared/event-tickets";
 import type {
   EventTicketCode,
@@ -133,6 +134,7 @@ export async function readEventTicketsConfiguration(
       reminderIntervalDays: snapshot.settings?.reminder_interval_days ?? DEFAULT_PAYMENT_REMINDER_INTERVAL_DAYS,
       reminderPeriodDays: snapshot.settings?.reminder_period_days ?? DEFAULT_PAYMENT_REMINDER_PERIOD_DAYS,
       unpaidHoldDays: snapshot.settings?.unpaid_hold_days ?? null,
+      paymentRetryDays: snapshot.settings?.payment_retry_days ?? DEFAULT_PAYMENT_RETRY_DAYS,
       sendInvoice: (snapshot.settings?.send_invoice ?? 1) === 1,
       refundDaysBeforeEvent: snapshot.settings?.refund_days_before_event ?? null,
       refundFee: snapshot.settings?.refund_fee ?? 0,
@@ -384,7 +386,7 @@ export async function updateEventTicketSettings(
     }),
     db
       .prepare(
-        `UPDATE event_ticket_settings SET currency = ?, reminder_interval_days = ?, reminder_period_days = ?, unpaid_hold_days = ?, send_invoice = ?,
+        `UPDATE event_ticket_settings SET currency = ?, reminder_interval_days = ?, reminder_period_days = ?, unpaid_hold_days = ?, payment_retry_days = ?, send_invoice = ?,
            refund_days_before_event = ?, refund_fee = ?, ticket_intro = COALESCE(?, ticket_intro), attendance_intro = COALESCE(?, attendance_intro)
          WHERE event_id = ?`,
       )
@@ -393,6 +395,7 @@ export async function updateEventTicketSettings(
         input.reminderIntervalDays,
         input.reminderPeriodDays,
         input.unpaidHoldDays,
+        input.paymentRetryDays,
         input.sendInvoice ? 1 : 0,
         input.refundDaysBeforeEvent,
         input.refundFee,
@@ -405,6 +408,7 @@ export async function updateEventTicketSettings(
       reminderIntervalDays: input.reminderIntervalDays,
       reminderPeriodDays: input.reminderPeriodDays,
       unpaidHoldDays: input.unpaidHoldDays,
+      paymentRetryDays: input.paymentRetryDays,
       refundDaysBeforeEvent: input.refundDaysBeforeEvent,
       refundFee: input.refundFee,
     }),
