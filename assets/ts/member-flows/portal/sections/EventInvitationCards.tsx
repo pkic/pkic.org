@@ -28,9 +28,11 @@ const INVITATION_CARD_STEP = 6;
 /** The list endpoint's largest page. */
 const INVITATION_CARD_MAX = 200;
 
-/** How many cards the link asks for: a whole number of steps up to the endpoint's largest page. */
+/** How many cards the link asks for: a whole number of steps, or the endpoint's largest page. */
 function invitationCardLimit(requested: string): number {
-  const steps = Math.trunc(Number(requested) / INVITATION_CARD_STEP);
+  const count = Number(requested);
+  if (count >= INVITATION_CARD_MAX) return INVITATION_CARD_MAX;
+  const steps = Math.trunc(count / INVITATION_CARD_STEP);
   return Number.isFinite(steps) && steps > 1
     ? Math.min(steps * INVITATION_CARD_STEP, INVITATION_CARD_MAX)
     : INVITATION_CARD_STEP;

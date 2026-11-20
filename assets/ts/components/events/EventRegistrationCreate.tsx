@@ -1,4 +1,5 @@
 /** The portal embeds the same registration flow as the public registration page. */
+import { useRef } from "preact/hooks";
 import { eventFormsResponseSchema } from "../../../shared/schemas/forms";
 import type { RegistrationSubmissionResponse } from "../../../shared/schemas/registration";
 import { useData } from "../../hooks/useData";
@@ -26,14 +27,16 @@ export function EventRegistrationCreate({
       ),
     [slug],
   );
+  const query = parseQueryContext(entrySearch);
+  // The invitation gate is built on mount, so another invitation in the link starts the flow afresh.
+  // Dropping a refused invitation, or any other query change such as the step, keeps the form.
+  const invitationKey = useRef("");
+  if (query.inviteToken || query.inviteId) invitationKey.current = `${query.inviteToken ?? ""}:${query.inviteId ?? ""}`;
   if (loaded.loading) return <Spinner label="Loading registration…" />;
   if (!loaded.data) return <Alert tone="danger">{loaded.error}</Alert>;
-  const query = parseQueryContext(entrySearch);
   return (
     <RegistrationFlow
-      // The invitation gate is built on mount; another invitation in the link starts the flow afresh.
-      // Other query changes, such as the step, keep the form.
-      key={`${query.inviteToken ?? ""}:${query.inviteId ?? ""}`}
+      key={invitationKey.current}
       mode="create"
       autoSession
       forms={loaded.data}

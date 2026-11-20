@@ -214,6 +214,24 @@ describe("event invitation cards", () => {
     window.history.replaceState(null, "", "#");
   });
 
+  it("reaches the largest page after the last whole step", async () => {
+    window.history.replaceState(null, "", "#/home?invitations=198");
+    const fetchMock = stub([invitedRow({}, new Date(Date.now() + 86_400_000).toISOString())], {
+      ...page,
+      total: 250,
+      hasMore: true,
+    });
+    const container = await mount();
+    await act(() => button(container, "Show more invitations").click());
+    await settle();
+    const limits = fetchMock.mock.calls
+      .map(([input]) => new URL(String(input), location.origin))
+      .filter((url) => url.pathname === "/api/v1/events")
+      .map((url) => url.searchParams.get("limit"));
+    expect(limits).toEqual(["198", "200"]);
+    window.history.replaceState(null, "", "#");
+  });
+
   it("says so when the upcoming events cannot be read", async () => {
     stub("fail");
     const container = await mount();
