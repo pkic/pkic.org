@@ -26,11 +26,13 @@ export function useScannerDevice(
   const [deviceId, setDeviceId] = useState("");
   const [epoch, setEpoch] = useState<ScannerEpoch | null>(null);
   const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let active = true;
     const collector = context.current;
     setEpoch(null);
     setDeviceId("");
+    setError("");
     void (async () => {
       try {
         const device = collector?.deviceId ?? (await prepareScannerDevice(operatorUserId));
@@ -48,7 +50,7 @@ export function useScannerDevice(
     return () => {
       active = false;
     };
-  }, [slug, operatorUserId, sponsorId, scope]);
+  }, [slug, operatorUserId, sponsorId, scope, attempt]);
   async function reconcile() {
     if (!deviceId || collector) return;
     try {
@@ -61,5 +63,13 @@ export function useScannerDevice(
       );
     }
   }
-  return { deviceId, epoch, setEpoch, reconcile, error, ready: epoch?.state === "open" };
+  return {
+    deviceId,
+    epoch,
+    setEpoch,
+    reconcile,
+    retry: () => setAttempt((value) => value + 1),
+    error,
+    ready: epoch?.state === "open",
+  };
 }

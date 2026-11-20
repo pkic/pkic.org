@@ -1,5 +1,6 @@
 import { readActiveUserSession, scannerUploadSuspended } from "../../../../../../shared/pending-user-logout";
-import { sequenceScannerRecord } from "./scanner-device-ledger";
+import { sequenceScannerRecord } from "./scanner-sequence-record";
+import { resumeScannerServerSession } from "./scanner-session-resumption";
 import type { ScannerOfflineContext } from "../../../../../../../shared/schemas/event-scanner-offline-context";
 import { scannerReceiptMatches } from "./scanner-receipt";
 import {
@@ -128,6 +129,7 @@ async function claimScan(
 
 import type { ScanDrainResult } from "../../../../../../../shared/schemas/event-scan-upload-status";
 import { scannerRetryAfterMs } from "./scanner-retry-after";
+import { apiErrorPayloadSchema } from "../../../../../../../shared/schemas/api-common";
 export type { ScanDrainResult } from "../../../../../../../shared/schemas/event-scan-upload-status";
 /** Shared by foreground and worker. A receipt is required before deleting anything. */
 export async function drainScanOutbox(
@@ -173,11 +175,32 @@ export async function drainScanOutbox(
       try {
         if (!uploadRecord.success) throw new Error("Retained scanner record requires recovery");
         const localSignOut = await scannerUploadSuspended(operatorUserId, active.sessionId);
-        const response = localSignOut
+        let response = localSignOut
           ? new Response(null, { status: 401 })
           : await upload(
               enrolledScannerQueueRecordSchema.parse({ kind: queued.kind, eventId: queued.eventId, scan: queued.scan }),
             );
+        if (!localSignOut && response.status === 409) {
+          const refusal = apiErrorPayloadSchema.safeParse(
+            await response
+              .clone()
+              .json()
+              .catch(() => null),
+          );
+          if (refusal.success && refusal.data.error.code === "SCANNER_SESSION_CLOSED") {
+            if (await scannerUploadSuspended(operatorUserId, active.sessionId)) state = "authentication_required";
+            else {
+              await resumeScannerServerSession(
+                queued.eventId,
+                uploadRecord.data.scan.scannerSession.epochId,
+                queued.scan.deviceId,
+                queued.scan.sponsorId ?? undefined,
+              );
+              if (await scannerUploadSuspended(operatorUserId, active.sessionId)) state = "authentication_required";
+              else response = await upload(uploadRecord.data);
+            }
+          }
+        }
         if (response.status === 429 || response.status === 503) {
           const wait = scannerRetryAfterMs(response.headers);
           if (wait !== null) retryAfterMs = Math.max(retryAfterMs, wait);

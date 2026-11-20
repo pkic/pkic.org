@@ -454,9 +454,9 @@ describe("local scoped eligibility manifest", () => {
     fetcher.mockResolvedValueOnce(
       Response.json({ error: { code: "SCANNER_PREPARATION_CLOSED", message: "Closed" } }, { status: 409 }),
     );
-    await expect(
-      prepareEligibilityManifest("synthetic-event", snapshot.operatorUserId, null, enrolled),
-    ).rejects.toThrow("SCANNER_PREPARATION_CLOSED");
+    const closed = await prepareEligibilityManifest("synthetic-event", snapshot.operatorUserId, null, enrolled);
+    expect(closed.refreshError).toContain("Saved badge data remains available");
+    expect((await closed.lookup(badge, "attendance")).outcome).toBe("eligible");
     fetcher.mockRejectedValueOnce(new Error("Offline"));
     await expect(
       prepareEligibilityManifest("synthetic-event", snapshot.operatorUserId, null, {

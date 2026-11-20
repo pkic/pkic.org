@@ -14,7 +14,7 @@ export interface EventScannerProps {
   canExportLeads?: boolean;
   allowedActions?: readonly EventScanRequest["action"][];
   collectorContext?: ScannerOfflineContext;
-  onCheckSignIn?: () => void;
+  onSignIn?: () => void;
 }
 
 /** Refuse unsupported native browser features before capture hooks initialize. */

@@ -23,12 +23,17 @@ import { useScannerSessionFence } from "./useScannerSessionFence";
 import { ScannerLeadExport } from "./ScannerLeadExport";
 import { useScannerDevice } from "./useScannerDevice";
 import { useScannerHardware } from "./useScannerHardware";
-import { ScannerCaptureControls, ScannerManualControls, scannerStartMessage } from "./ScannerCaptureControls";
+import {
+  ScannerCaptureControls,
+  ScannerManualControls,
+  ScannerOfflineSignInButton,
+  scannerManualControlProps,
+  scannerStartMessage,
+} from "./ScannerCaptureControls";
 import { useScannerPreparation } from "./useScannerPreparation";
 import { ScannerCamera } from "./ScannerCamera";
 import { ScannerRecentScans } from "./ScannerRecentScans";
-import { useContext, useRef, useState } from "preact/hooks";
-import { ScannerTaskNavigation } from "./ScannerTaskNavigation";
+import { useRef, useState } from "preact/hooks";
 import {
   scanActionSchema,
   eventScanCaptureIntentForRoomsSchema,
@@ -44,6 +49,8 @@ import { useScannerPresentation } from "./useScannerPresentation";
 import { useScanCooldown } from "./useScanCooldown";
 import { useScannerSyncHistory } from "./useScannerSyncHistory";
 import { scannerPreparationRefusal } from "./scanner-offline-context";
+import { useScannerCaptureLifecycle } from "./useScannerCaptureLifecycle";
+import { useBadgeCollectionPrinting } from "./useBadgeCollectionPrinting";
 export function EventScannerCapture({
   slug,
   printHref,
@@ -54,21 +61,24 @@ export function EventScannerCapture({
   canExportLeads = false,
   allowedActions = scanActionSchema.options,
   collectorContext,
-  onCheckSignIn,
+  onSignIn,
 }: EventScannerProps) {
-  const taskNavigation = useContext(ScannerTaskNavigation);
   const refusePreparation = scannerPreparationRefusal(portalSession.value, operatorUserId);
   const [badgeId, setBadge] = useState("");
   const [action, setAction] = useScannerAction(allowedActions, collectorContext?.action, !!sponsorId);
   const [scannerTab, setScannerTab] = useHashQueryParam("scannerTab", "scan", ["scan", "recent", "diagnostics"]);
   const recentVisible = scannerTab === "recent" && !collectorContext;
-  const [purpose, setPurpose] = useHashQueryParam("scannerPurpose", "scan", ["scan", "collection"]);
-  const badgeCollection = purpose === "collection" && !sponsorId && action === "attendance";
+  const [selectedPurpose, setPurpose] = useHashQueryParam("scannerPurpose", "scan", ["scan", "collection"]);
+  const badgeCollection =
+    !sponsorId && action === "attendance" && (collectorContext?.purpose ?? selectedPurpose) === "collection";
+  const online = useScannerConnection();
+  const collectionPrinting = useBadgeCollectionPrinting(slug, Boolean(printHref && !collectorContext), online);
   const collectionManifest = useRef<import("./eligibility-manifest").EligibilityManifest | null>(null);
   const collection = useBadgeCollection(
     badgeCollection,
     collectionManifest,
     `${slug}:${operatorUserId}:${collectorContext?.sessionId ?? portalSession.value?.sessionId}:${action}`,
+    () => collectionPrinting.active,
   );
   const [consentConfirmed, setConsent] = useState(false);
   const lastOperation = useRef<string | null>(null);
@@ -79,12 +89,12 @@ export function EventScannerCapture({
   const authorityPaused = useRef(false);
   const [fastMode, setFastMode] = useScannerCaptureActive();
   const preferences = useScannerPreferences();
-  const online = useScannerConnection();
   const {
     result,
     lastResult,
     clearFeedback,
     failed,
+    needsAdvance,
     captureStatus,
     setResult,
     message,
@@ -110,7 +120,7 @@ export function EventScannerCapture({
   const { presentation, enter: enterPresentation, toggle: togglePresentation } = useScannerPresentation(scannerShell);
   const badgeCamera = useScannerCamera((raw) => void scanCredential(raw, true));
   const manual = useScannerManualEntry(fastMode, badgeCamera.stop, () => void camera(), recentVisible);
-  const { open: manualOpen, focusRequested: manualFocusRequested, paused: manualPaused } = manual;
+  const { open: manualOpen, paused: manualPaused } = manual;
   const preparation = useScannerPreparation({
     slug,
     operatorUserId,
@@ -153,6 +163,7 @@ export function EventScannerCapture({
     fastMode,
     scannerShell,
     () => {
+      if (collectionPrinting.active) return;
       manualPaused.current = false;
       manual.setOpen(false);
       setFastMode(false);
@@ -182,7 +193,6 @@ export function EventScannerCapture({
   );
   const syncHistory = useScannerSyncHistory(operatorUserId, slug);
   const capturePause = useScannerCapturePause(badgeCamera.stop, () => autoStart.cancel());
-  const operatorPaused = capturePause.paused;
   useScannerSessionFence(
     operatorUserId,
     () => {
@@ -219,8 +229,9 @@ export function EventScannerCapture({
     stopCamera: badgeCamera.stop,
     refreshHistory: syncHistory.refresh,
   });
-  function clearCurrentScan(message?: string) {
-    badgeCamera.stop();
+  function clearCurrentScan(message?: string, stopCamera = true) {
+    if (stopCamera) badgeCamera.stop();
+    collectionPrinting.clear();
     collection.clear();
     lastOperation.current = null;
     cancelVerification();
@@ -254,10 +265,11 @@ export function EventScannerCapture({
   );
   const persistCapture = (scan: EventScanRequest) =>
     persistScannerCapture(scan, slug, preparation.offlineAdmission.persist, auditFailure);
-  function captureAllowed() {
-    return scannerDevice.ready && !closedMessage && !authorityPaused.current && (!badgeCollection || manifestReady);
-  }
-  /** User gestures report refusals; passive decoder checks stay silent. */
+  const captureAllowed = () =>
+    scannerDevice.ready &&
+    !closedMessage &&
+    !authorityPaused.current &&
+    (!badgeCollection || manifestReady || Boolean(collectorContext));
   function requestCapture() {
     if (captureAllowed()) return true;
     if (closedMessage || authorityPaused.current) setMessage(closedMessage || "Sign in again to upload pending scans.");
@@ -283,11 +295,12 @@ export function EventScannerCapture({
     presentSavedEligibility,
     verifyQueuedScan,
     fastMode,
+    feedbackHeld: needsAdvance,
     manualOpen,
     cooldown,
     camera,
     failure,
-    operatorPaused,
+    operatorPaused: capturePause.paused,
     manualPaused,
     scannerContext,
     badgeCamera,
@@ -324,20 +337,17 @@ export function EventScannerCapture({
     error: preparation.status.error,
     allowUnverified: !badgeCollection,
   });
+  useScannerCaptureLifecycle({ fastMode, collectorContext, ready: captureReady, start: startScanning });
   const preparationStatus = { ...preparation.status, lastSync: syncHistory.lastSync };
   function nextCollectionAttendee() {
-    if (busy || cooldown.saving) return;
-    collection.clear();
-    lastOperation.current = null;
-    cancelVerification();
-    clearFeedback();
-    setMessage("Ready to scan");
-    cooldown.reset();
+    if (busy || cooldown.saving || collectionPrinting.busy) return;
+    clearCurrentScan("Ready to scan", false);
     manualPaused.current = false;
-    manual.setOpen(false);
+    resetCaptureFields();
     if (fastMode && !badgeCamera.active) void camera();
   }
   function stopContinuousScanning() {
+    collectionPrinting.clear();
     collection.clear();
     autoStart.cancel();
     cancelVerification();
@@ -356,43 +366,28 @@ export function EventScannerCapture({
     setScannerTab("recent");
   }
   const collectionDisplay = badgeCollection
-    ? {
-        waiting: collection.waiting,
-        name: collection.name,
-        loading: collection.loading,
-        saving: busy || cooldown.saving,
-        onNext: nextCollectionAttendee,
-        onPrint:
-          !collectorContext && printHref && collection.credential && taskNavigation?.onPrintBadge
-            ? () => taskNavigation.onPrintBadge?.(collection.credential!)
-            : undefined,
-      }
+    ? collection.display(
+        nextCollectionAttendee,
+        busy || cooldown.saving || collectionPrinting.busy,
+        result?.outcome === "eligible" && collectionPrinting.available ? collectionPrinting.print : undefined,
+        result?.outcome,
+      )
     : undefined;
-  const contextLabel = badgeCollection
-    ? "Badge collection"
-    : scannerContextLabel({ ...preparation.location, action, sponsorName });
-  const manualControls = {
-    handlers: form.handlers,
+  const contextLabel = scannerContextLabel({ ...preparation.location, action, sponsorName, badgeCollection });
+  const manualControls = scannerManualControlProps({
+    form,
     action,
     busy,
     ready: captureReady,
-    open: manualOpen,
+    manual,
+    badgeId,
+    onBadge: setBadge,
     onCapture: () => void capture(),
-    consent:
-      action === "lead"
-        ? { confirmed: consentConfirmed, field: form.of("consentConfirmed"), onChange: setConsent }
-        : undefined,
-    onOpen: manual.show,
-    onClose: manual.hide,
-    entry: {
-      focusRequested: manualFocusRequested,
-      onFocusHandled: () => manual.setFocusRequested(false),
-      badgeId,
-      onBadge: setBadge,
-      field: form.of("badgeId"),
-      lookup: action !== "lead" ? { slug, online: !offline, disabled: busy || !captureReady } : undefined,
-    },
-  };
+    consentConfirmed,
+    onConsent: setConsent,
+    slug,
+    offline,
+  });
   const recentScans = (
     <ScannerRecentScans
       active={recentVisible}
@@ -402,15 +397,13 @@ export function EventScannerCapture({
       lastSync={syncHistory.lastSync}
     />
   );
+  const uploadState = { pending, online, syncing, uploadStatus };
   const connection = (
     <ScannerConnectionStatus
       compact={fastMode}
-      pending={pending}
-      online={online}
-      syncing={syncing}
+      {...uploadState}
       ready={pendingReadyScope === `${slug}:${operatorUserId}`}
       collector={Boolean(collectorContext)}
-      uploadStatus={uploadStatus}
       error={failed ? message : scannerDevice.error}
       offlinePrepared={Boolean(collectorContext || preparation.offlinePreparation.context)}
       preparation={fastMode ? preparationStatus : undefined}
@@ -443,9 +436,10 @@ export function EventScannerCapture({
         }}
         launch={
           <ScannerLaunchPanel
+            title={collectorContext ? contextLabel : undefined}
             connection={connection}
             context={
-              collectorContext || action === "lead" || occurrenceId ? { contextLabel, target, timeZone } : undefined
+              !collectorContext && (action === "lead" || occurrenceId) ? { contextLabel, target, timeZone } : undefined
             }
             feedback={
               result || pending > 0 || message !== "Ready to scan"
@@ -456,12 +450,13 @@ export function EventScannerCapture({
             busy={busy}
             capture={() => void capture()}
             pendingStart={autoStart.pending ? preparation.status : undefined}
+            devicePreparation={{ ready: scannerDevice.ready, error: scannerDevice.error }}
             cancelStart={() => autoStart.cancel()}
-            retryStart={() => void preparation.eligibility.refresh()}
+            retryStart={() => (scannerDevice.error ? scannerDevice.retry() : void preparation.eligibility.refresh())}
             controls={
               <ScannerCaptureControls
                 collector={collectorContext}
-                onCheckSignIn={onCheckSignIn}
+                onSignIn={onSignIn}
                 setup={{
                   printHref,
                   operatorUserId,
@@ -532,12 +527,10 @@ export function EventScannerCapture({
             onMessage={setMessage}
             onCapturePause={capturePause.pauseSession}
             status={{
-              pending,
-              uploadStatus,
+              ...uploadState,
               collector: collectorContext,
               offline: preparation.offlinePreparation,
               action,
-              syncing,
             }}
             preparation={preparationStatus}
             unverifiedStart={
@@ -550,6 +543,8 @@ export function EventScannerCapture({
       {fastMode && (
         <FastScannerView
           collection={collectionDisplay}
+          needsAdvance={needsAdvance}
+          onNextBadge={nextCollectionAttendee}
           taskSwitchDisabled={busy || cooldown.saving}
           presentation={presentation}
           onPresentation={togglePresentation}
@@ -557,11 +552,14 @@ export function EventScannerCapture({
           context={contextLabel}
           lastResult={lastResult}
           connectionStatus={connection}
+          operatorControls={
+            collectorContext && onSignIn ? <ScannerOfflineSignInButton onSignIn={onSignIn} /> : undefined
+          }
           soundLabel={sound.label}
           onTourSound={sound.test}
           onSound={() => sound.toggle(preferences.setSound)}
           result={result}
-          status={captureStatus}
+          status={collectionPrinting.status ?? captureStatus}
           preparation={collectorContext ? undefined : preparationStatus}
           mode={action}
           pending={pending}
@@ -575,6 +573,7 @@ export function EventScannerCapture({
           cameraError={badgeCamera.error}
           onCameraRetry={collection.waiting ? undefined : () => void camera()}
           onManual={collection.waiting ? undefined : manualControls.onOpen}
+          manualLabel={offline ? "Enter badge code" : undefined}
           manualEntry={manualOpen ? <ScannerManualControls {...manualControls} inline /> : undefined}
           onRecentScans={collectorContext || badgeCollection ? undefined : showRecentScans}
           recentScans={recentVisible ? recentScans : undefined}
@@ -594,6 +593,7 @@ export function EventScannerCapture({
         fastMode={fastMode && presentation === "fullscreen"}
         preview={preview}
       />
+      {collectionPrinting.job}
     </div>
   );
 }

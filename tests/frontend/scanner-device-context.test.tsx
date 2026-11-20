@@ -35,6 +35,8 @@ const host = document.createElement("div");
 afterEach(async () => {
   await act(() => render(null, host));
   mocks.read.mockClear();
+  mocks.prepare.mockReset();
+  mocks.next.mockReset();
 });
 it("keeps the prepared device ready when the offline clock checkpoint advances", async () => {
   function Scanner({ observedAt }: { observedAt: string }) {
@@ -75,4 +77,18 @@ it("reconciles a server closure and offers the next session without posting anot
   await act(async () => next.click());
   await vi.waitFor(() => expect(scanner.ready).toBe(true));
   expect(mocks.next).toHaveBeenCalledOnce();
+});
+it("retries device preparation after an initial failure", async () => {
+  mocks.prepare.mockRejectedValueOnce(new Error("Server unavailable"));
+  let scanner!: ReturnType<typeof useScannerDevice>;
+  function Scanner() {
+    scanner = useScannerDevice("synthetic", id);
+    return <output>{scanner.ready ? "ready" : scanner.error || "preparing"}</output>;
+  }
+  await act(async () => render(<Scanner />, host));
+  await vi.waitFor(() => expect(scanner.error).toContain("preparation unavailable"));
+  mocks.prepare.mockResolvedValueOnce({ epochId: id, deviceId: id, state: "open" });
+  await act(async () => scanner.retry());
+  await vi.waitFor(() => expect(scanner.ready).toBe(true));
+  expect(mocks.prepare).toHaveBeenCalledTimes(2);
 });

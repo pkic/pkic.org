@@ -25,10 +25,6 @@ function setup() {
     manualCapturePending: { current: false },
     collection: {
       held,
-      waiting: false,
-      name: null,
-      loading: false,
-      credential: null,
       begin: vi.fn(() => {
         held.current = true;
       }),
@@ -51,6 +47,7 @@ function setup() {
     presentSavedEligibility: vi.fn(async () => true),
     verifyQueuedScan: vi.fn(async () => true),
     fastMode: true,
+    feedbackHeld: false,
     manualOpen: true,
     cooldown: {
       remainingMs: 0,

@@ -1,11 +1,11 @@
-import { badgeCode, mocks, host, mount, scannerDialog } from "./event-scanner-fixture";
+import { badgeCode, mocks, host, mount, submit } from "./event-scanner-fixture";
 import { render } from "preact";
 import { EventScanner } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/EventScanner";
 import { scannerOfflineContextSchema } from "../../assets/shared/schemas/event-scanner-offline-context";
 import { act } from "preact/test-utils";
 import { expect, it, vi } from "vitest";
 
-it("holds a manually collected attendee in the normal view and advances without starting the camera", async () => {
+it("holds a manually collected attendee in the saved scanner and advances to the next badge", async () => {
   const previousHash = window.location.hash;
   try {
     window.location.hash = "#/events/synthetic-event/scanner?scannerPurpose=collection";
@@ -47,41 +47,23 @@ it("holds a manually collected attendee in the normal view and advances without 
         host,
       ),
     );
-    expect(host.querySelector(".pk-fast-scanner")).toBeNull();
-    const enterManually = async () => {
-      await act(async () => {
-        Array.from(host.querySelectorAll("button"))
-          .find((button) => button.textContent?.trim() === "Find attendee or badge")!
-          .click();
-      });
-      const dialog = scannerDialog("Enter badge code");
-      Object.defineProperty(dialog, "close", { configurable: true, value: () => dialog.removeAttribute("open") });
-      const input = dialog.querySelector<HTMLInputElement>('input[name="badgeId"]')!;
-      await act(async () => {
-        input.value = badgeCode;
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-      });
-      await act(async () => {
-        Array.from(dialog.querySelectorAll("button"))
-          .find((button) => button.textContent?.trim() === "Record attendance")!
-          .click();
-      });
-    };
-    await enterManually();
+    await vi.waitFor(() => expect(host.querySelector(".pk-fast-scanner")).not.toBeNull());
+    await submit();
     await vi.waitFor(() =>
       expect(host.querySelector('[aria-label="Attendee name"]')?.textContent, host.textContent ?? "").toBe("Zoë 山田"),
     );
     expect(mocks.persist).toHaveBeenCalledOnce();
     expect(lookupName).toHaveBeenCalledWith(badgeCode);
-    expect(host.querySelector(".pk-fast-scanner")).toBeNull();
+    expect(host.querySelector(".pk-fast-scanner")).not.toBeNull();
     const next = () =>
-      Array.from(host.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Next attendee")!;
+      Array.from(host.querySelectorAll("button")).find(
+        (button) => button.getAttribute("aria-label") === "Next attendee",
+      )!;
     await vi.waitFor(() => expect(next().disabled).toBe(false));
     await act(async () => next().click());
     expect(host.querySelector('[aria-label="Attendee name"]')).toBeNull();
-    expect(host.querySelector(".pk-fast-scanner")).toBeNull();
-    expect(mocks.cameraScan).toBeNull();
-    await enterManually();
+    expect(host.querySelector(".pk-fast-scanner")).not.toBeNull();
+    await submit();
     await vi.waitFor(() => expect(mocks.persist).toHaveBeenCalledTimes(2));
     expect(host.querySelector('[aria-label="Attendee name"]')?.textContent).toBe("Zoë 山田");
   } finally {
