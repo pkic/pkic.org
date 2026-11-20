@@ -6,6 +6,7 @@ import { portalVerifyLinkBase, requestUserSignInLink } from "../../../_lib/servi
 import { openApiRoute } from "../../../_lib/openapi/route";
 import type { AdminContext } from "../../../_lib/db/context";
 import { userAuthRequestRouteSchema } from "../../../../assets/shared/schemas/user-auth";
+import { signInReturnHref } from "../../../../assets/shared/sign-in-purpose";
 
 export const UserAuthRequestLink = openApiRoute(userAuthRequestRouteSchema, async (c: AdminContext, data) => {
   const http = await prepareMagicLinkRequestHttp(c, data.body.email, USER_EMAIL_LINK_RATE_LIMIT_NAMESPACE);
@@ -21,7 +22,7 @@ export const UserAuthRequestLink = openApiRoute(userAuthRequestRouteSchema, asyn
     },
     undefined,
     // An address without an account is told so, with the way back to start one where the person was going.
-    `${http.appBaseUrl}${data.body.returnPath ?? "/portal/"}`,
+    `${http.appBaseUrl}${signInReturnHref(data.body.returnPath)}`,
   );
 
   if (!result.outboxId) {

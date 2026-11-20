@@ -50,7 +50,8 @@ import {
   subscribeUserSessionState,
 } from "../../shared/pending-user-logout";
 import { resumePendingUserLogout } from "./logout-session";
-import { eventFlowReturnPath, portalHashPath, portalMagicLinkReturnPath, portalMagicLinkToken } from "./hash-route";
+import { portalHashPath, portalMagicLinkReturnPath, portalMagicLinkToken } from "./hash-route";
+import { siteFlowReturnPath } from "../../../shared/sign-in-purpose";
 import { IdentityInvitationAcceptance } from "./shell/IdentityInvitationAcceptance";
 import { EmailVerificationConfirmation } from "./shell/EmailVerificationConfirmation";
 import { usePortalHashLocation } from "./hash-location";
@@ -106,7 +107,7 @@ function leaveVerifyRoute(session: PortalSession): boolean {
   // over the session's default page.
   if (portalHashPath(window.location.hash) !== "/verify") return true;
   const next = portalMagicLinkReturnPath(window.location.hash);
-  const eventFlow = eventFlowReturnPath(next);
+  const eventFlow = siteFlowReturnPath(next);
   if (eventFlow) {
     window.location.replace(eventFlow);
     return false;
