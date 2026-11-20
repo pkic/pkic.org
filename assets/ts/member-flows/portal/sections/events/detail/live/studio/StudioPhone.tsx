@@ -4,6 +4,7 @@ import { useMediaQuery } from "../../../../../../../hooks/useMediaQuery";
 import { useHashQueryParam } from "../../../../../../../hooks/useHashQueryParam";
 import type { LiveRoomState } from "../../../../../../../live-session/live-room-state";
 import { LiveOverlayPresentation } from "../../../../../../../live-session/LiveOverlayPresentation";
+import { LiveStillPictures } from "../../../../../../../live-session/live-still-pictures";
 import { APP_ICONS, IconVenueExit, type AppIcon } from "../../../../../../../components/icons/app-navigation";
 import { ActionTile, ActionTiles } from "../../../../../../../ui/ActionTile";
 import { BottomSheet } from "../../../../../../../ui/BottomSheet";
@@ -175,13 +176,16 @@ function Thumbnail({
           aria-controls={tools ? toolsId : undefined}
           onClick={() => setTools(!tools)}
         >
+          {/* A thumbnail holds still and its graphics cut (see StudioPhone.css); the monitors move. */}
           {projection ? (
-            <LiveOverlayPresentation
-              view="program"
-              projection={projection}
-              roomId={sources.roomId}
-              eventSlug={sources.slug}
-            />
+            <LiveStillPictures.Provider value={true}>
+              <LiveOverlayPresentation
+                view="program"
+                projection={projection}
+                roomId={sources.roomId}
+                eventSlug={sources.slug}
+              />
+            </LiveStillPictures.Provider>
           ) : null}
         </button>
         {tools ? (

@@ -20,9 +20,7 @@ const PHASE_FALLBACK_MS = 2000;
 
 const EMBLEM = liveLowerThirdEmblemBox();
 const { nameBarSeat, width, height } = LIVE_LOWER_THIRD_DRAWING;
-const { nameBar: NAME_BAR, titleBar: TITLE_BAR, underline: UNDERLINE, nameX } = LIVE_LOWER_THIRD_BRAND;
-/** The title bar's top, where the name bar's foot is. */
-const TITLE_TOP = 233;
+const { nameBar: NAME_BAR, underline: UNDERLINE, nameX } = LIVE_LOWER_THIRD_BRAND;
 
 function Bars({ credit, stripe }: { credit: LiveCredit; stripe: string }) {
   return (
@@ -95,6 +93,15 @@ export function LiveLowerThird({ credit, animate }: { credit: LiveCredit | null;
     <div class="pk-live-overlay__lower-third" data-showing={shown ? "" : undefined}>
       {shown ? (
         <div class="pk-live-overlay__lower-third-graphic" data-phase={state.phase} ref={graphic}>
+          {/*
+           * The title bar's conference field, under the bars and over the frame. It is HTML beside the drawing,
+           * not inside it: Safari paints no HTML inside an SVG, so on its monitors the field went missing.
+           */}
+          {titled ? (
+            <div class="pk-live-overlay__lower-third-title-bar">
+              <div class="pk-live-overlay__title-field" />
+            </div>
+          ) : null}
           <svg class="pk-live-overlay__lower-third-bars" viewBox={`0 0 ${width} ${height}`} aria-label={shown.name}>
             <defs>
               {/* The conference stripe, from the orange of the seat it leaves through blue to green. */}
@@ -103,10 +110,7 @@ export function LiveLowerThird({ credit, animate }: { credit: LiveCredit | null;
                 <stop offset="50%" class="pk-live-overlay__stripe-blue" />
                 <stop offset="100%" class="pk-live-overlay__stripe-green" />
               </linearGradient>
-              {/*
-               * The name bar is revealed from the seat outward, its curved left end in place from the
-               * first frame; the title bar's field shows nothing above the name bar's foot.
-               */}
+              {/* The name bar is revealed from the seat outward, its curved left end in place from the first frame. */}
               <clipPath id={`${clip}-name`}>
                 <rect
                   class="pk-live-overlay__lower-third-name-reveal"
@@ -116,20 +120,7 @@ export function LiveLowerThird({ credit, animate }: { credit: LiveCredit | null;
                   height={height}
                 />
               </clipPath>
-              <clipPath id={`${clip}-title`}>
-                <rect x="0" y={TITLE_TOP} width={width} height={height - TITLE_TOP} />
-              </clipPath>
             </defs>
-            {titled ? (
-              <g clip-path={`url(#${clip}-title)`}>
-                <g class="pk-live-overlay__lower-third-title-bar">
-                  {/* The conference field, painted with the kit's own tokens. */}
-                  <foreignObject {...TITLE_BAR}>
-                    <div class="pk-live-overlay__title-field" />
-                  </foreignObject>
-                </g>
-              </g>
-            ) : null}
             <g clip-path={`url(#${clip}-name)`}>
               <Bars credit={shown} stripe={`${clip}-stripe`} />
             </g>

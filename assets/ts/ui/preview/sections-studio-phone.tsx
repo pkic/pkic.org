@@ -63,7 +63,7 @@ export const studioPhoneSections: PreviewSection[] = [
   {
     id: "studio-phone-monitors",
     title: "Studio on a phone: thumbnails and monitors",
-    note: "Open at phone width. Preview and Program sit at the top as thumbnails, with the Monitors view under them. The ticker still travels and a person's titles still take turns, in a way that costs a phone's browser little memory; a graphic that comes on or goes off cuts instead of playing its motion. The outputs themselves move as always.",
+    note: "Open at phone width. Preview and Program sit at the top as thumbnails, with the Monitors view under them. The monitors and the full-screen view move as the output does, drawn at half size to keep a phone's browser within its memory. The thumbnails hold still: a graphic cuts between its states, while the ticker still travels and a person's titles still take turns.",
     render: () => <PhoneStudio />,
   },
 ];

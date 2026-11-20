@@ -3,6 +3,13 @@
  * the Transition and Program at the top; one panel below; the panel tabs at the thumb.
  * Every primary control takes at least a 44px target.
  */
+/* A number, so a zoomed picture scales by it as computed on its frame. */
+@property --pk-studio-picture-fit {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+
 @layer components {
   .pk-studio-phone {
     display: flex;
@@ -118,27 +125,40 @@
     block-size: 100%;
   }
   /*
-   * On a phone a picture of an output moves without graphics layers: the
-   * thumbnails, the monitors and the large view. A graphic that moves by
-   * transform or opacity, such as the ticker's scroll on a real output, makes
-   * the browser keep several layers per picture at the full broadcast size.
-   * With a few pictures that is over a gigabyte, more than a phone's browser
-   * has, so it reloads the page. Here every such motion is off, and a graphic
-   * cuts between its states (see LiveStillPictures). The two an operator
-   * reads content from keep going in a way that needs no layer: the ticker
-   * travels by its margin, ten steps a second, and a person's titles change
-   * by a cut. The outputs themselves move as always.
+   * A picture of an output is the 1920 × 1080 canvas made small. Scaled down by
+   * a transform alone, anything moving in it (the ticker, a lower third coming
+   * on) makes the browser keep several layers per picture at the full broadcast
+   * size: with a few pictures that is over a gigabyte, more than a phone's
+   * browser has, so it reloads the page. A phone's monitors and its large view
+   * draw the canvas at half size (zoom) and scale that, so those layers are a
+   * quarter of the size and the pictures move as the output does: about 380 MB
+   * with everything moving, against 1,170 MB (Safari engine, four pictures).
+   * Half is as small as zoom goes: Safari draws no zoomed text under 9px, and
+   * the smallest type on an output is 18px. The fit is a number, worked out on
+   * the frame, as the browsers zoom lengths in a transform differently.
    */
-  .pk-studio[data-phone]
-    :is(.pk-studio-phone__thumb-screen, .pk-studio-monitor__screen)
-    *:not(.pk-live-ticker__track, .pk-affiliation-rotation__unit),
-  .pk-studio[data-phone] :is(.pk-studio-phone__thumb-screen, .pk-studio-monitor__screen) *::before,
-  .pk-studio[data-phone] :is(.pk-studio-phone__thumb-screen, .pk-studio-monitor__screen) *::after {
+  .pk-studio[data-phone] .pk-studio-monitor__screen .pk-live-overlay__frame:not([data-crop]) {
+    --pk-studio-picture-fit: min(tan(atan2(100cqi, 1920px)), tan(atan2(100cqb, 1080px)));
+  }
+  .pk-studio[data-phone] .pk-studio-monitor__screen .pk-live-overlay__frame:not([data-crop]) > .pk-live-overlay {
+    zoom: 0.5;
+    transform: scale(calc(var(--pk-studio-picture-fit) * 2));
+  }
+  /*
+   * The thumbnails are too small to draw that way, as text sizes round apart,
+   * so they keep the transform and hold still: a graphic cuts between its
+   * states (see LiveStillPictures). The two an operator reads content from
+   * keep going in a way that needs no layer: the ticker travels by its margin,
+   * ten steps a second, and a person's titles change by a cut.
+   */
+  .pk-studio[data-phone] .pk-studio-phone__thumb-screen *:not(.pk-live-ticker__track, .pk-affiliation-rotation__unit),
+  .pk-studio[data-phone] .pk-studio-phone__thumb-screen *::before,
+  .pk-studio[data-phone] .pk-studio-phone__thumb-screen *::after {
     animation: none !important;
     transition: none !important;
   }
   /* A reaction only exists as its float up the frame; held still it would sit in the picture. */
-  .pk-studio[data-phone] :is(.pk-studio-phone__thumb-screen, .pk-studio-monitor__screen) .pk-live-overlay__reaction {
+  .pk-studio[data-phone] .pk-studio-phone__thumb-screen .pk-live-overlay__reaction {
     display: none;
   }
   /* One pass of the messages, by the length the ticker measured; the loop lasts as long as on the output. */
@@ -147,7 +167,7 @@
       margin-inline-start: calc(var(--pk-live-ticker-travel) * -1);
     }
   }
-  .pk-studio[data-phone] :is(.pk-studio-phone__thumb-screen, .pk-studio-monitor__screen) .pk-live-ticker__track {
+  .pk-studio[data-phone] .pk-studio-phone__thumb-screen .pk-live-ticker__track {
     animation-name: pk-studio-picture-ticker !important;
     animation-timing-function: steps(300) !important;
     transition: none !important;
@@ -209,31 +229,29 @@
       visibility: hidden;
     }
   }
-  .pk-studio[data-phone]
-    :is(.pk-studio-phone__thumb-screen, .pk-studio-monitor__screen)
-    .pk-affiliation-rotation__unit {
+  .pk-studio[data-phone] .pk-studio-phone__thumb-screen .pk-affiliation-rotation__unit {
     transition: none !important;
   }
   .pk-studio[data-phone]
-    :is(.pk-studio-phone__thumb-screen, .pk-studio-monitor__screen)
+    .pk-studio-phone__thumb-screen
     .pk-affiliation-rotation--rotate-2
     .pk-affiliation-rotation__unit {
     animation-name: pk-studio-picture-titles-2 !important;
   }
   .pk-studio[data-phone]
-    :is(.pk-studio-phone__thumb-screen, .pk-studio-monitor__screen)
+    .pk-studio-phone__thumb-screen
     .pk-affiliation-rotation--rotate-3
     .pk-affiliation-rotation__unit {
     animation-name: pk-studio-picture-titles-3 !important;
   }
   .pk-studio[data-phone]
-    :is(.pk-studio-phone__thumb-screen, .pk-studio-monitor__screen)
+    .pk-studio-phone__thumb-screen
     .pk-affiliation-rotation--rotate-4
     .pk-affiliation-rotation__unit {
     animation-name: pk-studio-picture-titles-4 !important;
   }
   .pk-studio[data-phone]
-    :is(.pk-studio-phone__thumb-screen, .pk-studio-monitor__screen)
+    .pk-studio-phone__thumb-screen
     .pk-affiliation-rotation--rotate-5
     .pk-affiliation-rotation__unit {
     animation-name: pk-studio-picture-titles-5 !important;

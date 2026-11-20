@@ -197,6 +197,7 @@
    * so it enters from the frame's edge rather than appearing out of its box.
    */
   .pk-live-overlay__lower-third-bars {
+    position: relative;
     display: block;
     inline-size: 100%;
     block-size: auto;
@@ -206,10 +207,21 @@
     fill: var(--pk-pqc-paper);
   }
   /*
+   * The title bar, set in the drawing's own coordinates (LIVE_LOWER_THIRD_BRAND.titleBar on its 2500 by
+   * 417 box), under the bars. It clips its field, so the field shows nothing above the name bar's foot.
+   */
+  .pk-live-overlay__lower-third-title-bar {
+    position: absolute;
+    inset-block-start: calc(233 / 417 * 100%);
+    inset-inline-start: calc(555 / 2500 * 100%);
+    inline-size: calc(1929 / 2500 * 100%);
+    block-size: calc(184 / 417 * 100%);
+    overflow: hidden;
+  }
+  /*
    * The title bar is the conference field, as on the event app's hero: the
    * field gradient under its soft light, with the fine dot grid fading in
-   * toward the right. Its units are the drawing's, half a pixel each on a
-   * 1080p frame, so the grid's pitch is doubled to the kit's 14px.
+   * toward the right at the kit's 14px pitch.
    */
   .pk-live-overlay__title-field {
     position: relative;
@@ -221,7 +233,7 @@
     content: "";
     position: absolute;
     inset: 0 0 0 40%;
-    background: var(--pk-pqc-dots-fine) 0 0 / 28px 28px repeat;
+    background: var(--pk-pqc-dots-fine) 0 0 / 14px 14px repeat;
     mask-image: linear-gradient(90deg, transparent, black 60%);
   }
   /*

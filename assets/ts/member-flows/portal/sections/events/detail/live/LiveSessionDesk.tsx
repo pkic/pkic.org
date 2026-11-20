@@ -17,7 +17,6 @@ import {
 import type { LiveSyncedScreen } from "../../../../../../../shared/schemas/live-screen-sync";
 import { useBoundaryClock } from "../../../../../../hooks/useBoundaryClock";
 import { liveRoomOpenFailure } from "../../../../../../live-session/live-room-copy";
-import { LiveStillPictures } from "../../../../../../live-session/live-still-pictures";
 import type { LiveRoomState } from "../../../../../../live-session/live-room-state";
 import { useLiveRoom, type LiveSocketFactory } from "../../../../../../live-session/useLiveRoom";
 import { Spinner } from "../../../../../../components/Spinner";
@@ -456,25 +455,22 @@ export function LiveSessionDesk({
       >
         <ControlTooltips scope={studio} />
         {phone ? (
-          // Every picture of an output holds still on a phone (see StudioPhone.css), so its graphics cut.
-          <LiveStillPictures.Provider value={true}>
-            <StudioPhone
-              state={state}
-              sources={sources}
-              clock={clock ?? state.session.timeZone}
-              active={programActive}
-              sessionStatus={sessionStatus}
-              roomControl={roomControl}
-              transition={transition}
-              disabled={disabled}
-              onClear={switcher.clear}
-              onScene={switcher.previewScene}
-              notice={notice}
-              eventPath={eventPath}
-              home={<StudioPhoneHome key={shownId} targets={targets} send={sendProgram} />}
-              panel={(type) => render(phonePanels.panel(type))}
-            />
-          </LiveStillPictures.Provider>
+          <StudioPhone
+            state={state}
+            sources={sources}
+            clock={clock ?? state.session.timeZone}
+            active={programActive}
+            sessionStatus={sessionStatus}
+            roomControl={roomControl}
+            transition={transition}
+            disabled={disabled}
+            onClear={switcher.clear}
+            onScene={switcher.previewScene}
+            notice={notice}
+            eventPath={eventPath}
+            home={<StudioPhoneHome key={shownId} targets={targets} send={sendProgram} />}
+            panel={(type) => render(phonePanels.panel(type))}
+          />
         ) : null}
         <div class="pk-panel pk-studio__bar" hidden={phone}>
           <StudioHeader
