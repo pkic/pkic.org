@@ -98,11 +98,15 @@ export function LiveQuestionThread({
   }
 
   return (
-    <div class="pk-live-answers">
-      {toggle || question.answerCount || question.acceptedAnswer ? (
+    <div>
+      {toggle || question.answerCount ? (
         <div class="pk-live-answers__summary">
-          {question.answerCount ? <span>{liveAnswerCountLabel(question.answerCount)}</span> : null}
-          {question.acceptedAnswer ? <span class="pk-live-answers__accepted-note">Accepted answer</span> : null}
+          {question.answerCount ? (
+            <span>
+              {liveAnswerCountLabel(question.answerCount)}
+              {question.acceptedAnswer ? ", 1 accepted" : ""}
+            </span>
+          ) : null}
           {/* A quiet cue, not a button to aim for: in a question's card the whole card opens its answers. */}
           {toggle ? (
             <button

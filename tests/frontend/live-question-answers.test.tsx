@@ -98,8 +98,7 @@ describe("answer threads", () => {
     const { host, live } = mount(
       liveSnapshot({ questions: [liveQuestion({ mine: true, answerCount: 2, acceptedAnswer: true })] }),
     );
-    expect(host.querySelector(".pk-live-answers__summary")?.textContent).toContain("2 answers");
-    expect(host.querySelector(".pk-live-answers__summary")?.textContent).toContain("Accepted answer");
+    expect(host.querySelector(".pk-live-answers__summary")?.textContent).toContain("2 answers, 1 accepted");
     const other = answer({ votes: 1 });
     const own = answer({ text: "Mine", mine: true });
     openThread(host, live, [other, own], { canAccept: true });

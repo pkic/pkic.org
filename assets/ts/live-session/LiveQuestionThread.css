@@ -1,7 +1,4 @@
 @layer components {
-  .pk-live-answers {
-    margin-block-start: var(--pk-2);
-  }
   /* The thread stands off its summary line; a thread shown without one starts where it stands. */
   .pk-live-answers__summary + .pk-live-answers__thread {
     padding-block-start: var(--pk-3);
@@ -20,10 +17,6 @@
     gap: var(--pk-2);
     color: var(--pk-ink-muted);
     font-size: var(--pk-text-xs);
-  }
-  .pk-live-answers__accepted-note {
-    font-weight: 600;
-    color: var(--pk-ink);
   }
   /* Vote toggle, then the answer, then its accept control and menu in their own column. */
   .pk-live-answers__answer {

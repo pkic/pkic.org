@@ -107,6 +107,10 @@
     flex-wrap: wrap;
     gap: var(--pk-2);
   }
+  /* A viewer with no controls for this question gets no empty row in its card. */
+  .pk-live-question__actions:empty {
+    display: none;
+  }
   /* Asking stays in reach while the poll and the questions scroll under it. */
   /*
    * The questions' bar: how they are ordered, and the button that asks one at its end, on one line that
