@@ -105,7 +105,7 @@ async function callMountedApp(request: Request): Promise<Response> {
 
 describe("full workflow", () => {
   it("runs end-to-end attendee and speaker workflows", async () => {
-    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { eventId } = await seedEventAndAdmin(env.DB, { visibility: "public" });
     await seedSessionAttendanceDays(env.DB, eventId, ["2026-12-01"]);
 
     const adminUser = (
