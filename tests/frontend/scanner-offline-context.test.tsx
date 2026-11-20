@@ -463,8 +463,9 @@ describe("scanner-only offline preparation", () => {
       ),
     );
     await vi.waitFor(() =>
-      expect(host?.querySelector('[aria-label="Scanner status"]')?.textContent).toContain("Offline"),
+      expect(host?.querySelector('[aria-label="Scanner status"]')?.textContent).toContain("Saved scanner"),
     );
+    expect(host?.querySelector('[aria-label="Scanner status"]')?.textContent).not.toContain("Offline");
     expect(host.textContent).not.toContain("Recovery and diagnostics");
     expect(host.textContent).not.toContain("Recent scans");
     expect(host.textContent).not.toContain("Prepare badge data");
