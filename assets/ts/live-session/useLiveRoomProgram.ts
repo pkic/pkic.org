@@ -12,7 +12,7 @@ import {
 } from "../../shared/schemas/live-session-room";
 import { getJson, postJson } from "../shared/api-client";
 import { liveRoomOpenFailure } from "./live-room-copy";
-import type { LiveSocketFactory } from "./useLiveRoom";
+import type { LiveSocketFactory } from "./useLiveSocket";
 import { persistentRetryDelay, retryWhenBack, watchLiveSocket, type LivePersistence } from "./live-socket-retry";
 const socketFactory: LiveSocketFactory = (url, protocols) => new WebSocket(url, protocols);
 export function liveProgramPath(slug: string, roomId: string) {

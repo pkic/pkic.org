@@ -13,7 +13,7 @@ import { VirtualRoom } from "../../assets/ts/member-flows/portal/sections/events
 import { WatchLiveCard } from "../../assets/ts/member-flows/portal/sections/events/app/virtual-room/WatchLiveCard";
 import { chooseLocation } from "../../assets/ts/member-flows/portal/sections/events/app/virtual-room/virtual-room-schedule";
 import { HeadingOutline } from "../../assets/ts/ui/HeadingOutline";
-import { FakeLiveSocket, liveSnapshot } from "./helpers/live-room-socket";
+import { FakeLiveSocket, liveLocationChatSnapshot, liveSnapshot } from "./helpers/live-room-socket";
 
 const hashLocation = vi.hoisted(() => ({ current: "/events/summit/virtual", navigate: vi.fn() }));
 vi.mock("wouter/use-hash-location", () => ({
@@ -210,21 +210,52 @@ function fakeRoomSockets() {
       }
     },
   );
-  const roomOn = () => new URL(sockets.at(-1)!.url).pathname.split("/").at(-2);
+  // A session's room and the location's chat speak on sockets of their own.
+  const rooms = () => sockets.filter((socket) => socket.url.includes("/occurrences/"));
+  const chats = () => sockets.filter((socket) => socket.url.endsWith("/live/chat"));
+  const roomOn = () => new URL(rooms().at(-1)!.url).pathname.split("/").at(-2);
   const answer = async (opening: "scheduled" | "open" | "closed") => {
     const id = roomOn()!;
     const session = program.agenda!.occurrences.find((item) => item.id === id)!;
     await act(async () => {
-      sockets.at(-1)!.open();
-      sockets.at(-1)!.deliver(
-        liveSnapshot({
-          opening,
-          session: { ...liveSnapshot().session, occurrenceId: id, startAt: session.startAt!, endAt: session.endAt! },
-        }),
-      );
+      rooms().at(-1)!.open();
+      rooms()
+        .at(-1)!
+        .deliver(
+          liveSnapshot({
+            opening,
+            session: { ...liveSnapshot().session, occurrenceId: id, startAt: session.startAt!, endAt: session.endAt! },
+          }),
+        );
     });
   };
-  return { sockets, roomOn, answer };
+  /** The main hall's chat answers for its day: the keynote, then the panel. */
+  const answerChat = async (opening: "scheduled" | "open" | "closed") => {
+    const sessions = program.agenda!.occurrences.filter((item) => item.roomId === HALL);
+    await act(async () => {
+      chats().at(-1)!.open();
+      chats()
+        .at(-1)!
+        .deliver(
+          liveLocationChatSnapshot({
+            opening,
+            scope: {
+              eventName: "Summit",
+              roomId: HALL,
+              day: "2027-01-20",
+              timeZone: "UTC",
+              sessions: sessions.map((item) => ({
+                occurrenceId: item.id,
+                title: item.title,
+                startAt: item.startAt!,
+                endAt: item.endAt!,
+              })),
+            },
+          }),
+        );
+    });
+  };
+  return { sockets, rooms, chats, roomOn, answer, answerChat };
 }
 
 const player = () => host.querySelector<HTMLIFrameElement>("iframe");
@@ -317,7 +348,7 @@ describe("virtual room", () => {
     ).not.toBeNull();
   });
 
-  it("holds one live connection for the session, however many of its parts are on screen", async () => {
+  it("holds one connection for the session and one for the location's chat, however many parts are on screen", async () => {
     const opened: string[] = [];
     vi.stubGlobal(
       "WebSocket",
@@ -336,7 +367,10 @@ describe("virtual room", () => {
     await open();
     // Reactions, questions and chat are all on screen beside the stream.
     expect(host.querySelectorAll(".pk-virtual-room__side .pk-panel")).toHaveLength(2);
-    expect(opened).toEqual([`/api/v1/events/summit/agenda/occurrences/${KEYNOTE}/live`]);
+    expect(opened.sort()).toEqual([
+      `/api/v1/events/summit/agenda/occurrences/${KEYNOTE}/live`,
+      `/api/v1/events/summit/agenda/rooms/${HALL}/live/chat`,
+    ]);
   });
 
   it("moves on to the next session at the boundary without asking the server", async () => {
@@ -351,26 +385,35 @@ describe("virtual room", () => {
   });
 
   it("follows the session loaded in the studio past its end, until the studio loads the next one", async () => {
-    const { sockets, roomOn, answer } = fakeRoomSockets();
+    const { rooms, chats, roomOn, answer, answerChat } = fakeRoomSockets();
     // The keynote runs over: the agenda has the panel on, the studio still the keynote.
     loadedInHall = KEYNOTE;
     vi.setSystemTime(new Date("2027-01-20T10:22:00.000Z"));
     onDesktop();
     await open();
     await answer("scheduled");
+    await answerChat("scheduled");
     expect(nowPlaying()).toContain("Opening keynote");
     expect(roomOn()).toBe(KEYNOTE);
     // Its room closes half an hour after its scheduled end, in the viewer's zone an hour ahead of the agenda's.
     expect(host.textContent).toContain("Questions for this session close at 11:30");
-    expect(host.textContent).toContain("Chat for this session closes at 11:30");
+    expect(host.textContent).not.toContain("Chat closes");
 
     // The studio loads the panel: the room goes with it.
-    await act(async () => sockets.at(-1)!.deliver({ type: "room.moved.changed", movedOn: { occurrenceId: PANEL } }));
+    await act(async () =>
+      rooms()
+        .at(-1)!
+        .deliver({ type: "room.moved.changed", movedOn: { occurrenceId: PANEL } }),
+    );
     expect(nowPlaying()).toContain("Migration panel");
     expect(roomOn()).toBe(PANEL);
     await answer("closed");
     expect(host.textContent).toContain("The organizers closed questions.");
-    expect(host.textContent).toContain("The organizers closed the chat.");
+    // The location's chat carries on through the change, on the same connection, until an operator ends it.
+    expect(chats()).toHaveLength(1);
+    expect(host.querySelector<HTMLTextAreaElement>(".pk-live-chat-workspace textarea")?.disabled).toBe(false);
+    await answerChat("closed");
+    expect(host.textContent).toContain("The organizers ended this chat.");
   });
 
   it("moves on at the scheduled end when the studio has nothing loaded, and says when", async () => {
@@ -381,6 +424,15 @@ describe("virtual room", () => {
     await answer("scheduled");
     expect(nowPlaying()).toContain("Opening keynote");
     expect(host.textContent).toContain("Questions for this session close at 11:00");
+  });
+
+  it("says when the location's chat closes, half an hour after its last session", async () => {
+    const { answerChat } = fakeRoomSockets();
+    vi.setSystemTime(new Date("2027-01-20T11:22:00.000Z"));
+    onDesktop();
+    await open();
+    await answerChat("scheduled");
+    expect(host.textContent).toContain("Chat closes at 12:30.");
   });
 
   it("restores the bookmarked room panel without putting attendee input in the URL", async () => {
@@ -469,7 +521,8 @@ describe("virtual room", () => {
     expect(host.querySelector(".pk-alert")).toBeNull();
   });
 
-  it("opens a planned room before a stream is configured, counts down, and keeps the chat closed until it goes live", async () => {
+  it("opens a planned room before a stream is configured, counts down, and says when the chat opens", async () => {
+    const { answerChat } = fakeRoomSockets();
     waiting = true;
     vi.setSystemTime(new Date("2027-01-19T09:00:00.000Z"));
     await open();
@@ -479,8 +532,10 @@ describe("virtual room", () => {
     // The room opens on the next session's questions, which take questions ahead; the chat waits for it to go live.
     expect(host.querySelector('[role="tabpanel"]')?.getAttribute("aria-labelledby")).toBe("virtual-room-tab-questions");
     expect(host.textContent).toContain("Joining the session’s questions");
+    await answerChat("scheduled");
     await act(() => tab("Chat").click());
-    expect(host.textContent).toContain("Chat opens when the session is live.");
+    // A quarter of an hour before the keynote, on the viewer's clock an hour ahead, the next day.
+    expect(host.textContent).toContain("Chat opens Wed, Jan 20 at 09:45.");
     expect(host.querySelector<HTMLTextAreaElement>('textarea[name="text"]')?.disabled).toBe(true);
   });
 

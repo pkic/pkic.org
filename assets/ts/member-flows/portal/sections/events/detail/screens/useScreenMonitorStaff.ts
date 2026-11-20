@@ -18,7 +18,7 @@ import {
 } from "../../../../../../../shared/schemas/live-session-room";
 import type { ScreenRecord } from "../../../../../../../shared/schemas/event-screens";
 import { persistentRetryDelay } from "../../../../../../live-session/live-socket-retry";
-import type { LiveSocketFactory } from "../../../../../../live-session/useLiveRoom";
+import type { LiveSocketFactory } from "../../../../../../live-session/useLiveSocket";
 import { noteSessionPresence } from "../../../../../../shared/session-presence";
 import { toast } from "../../../../ui";
 import {

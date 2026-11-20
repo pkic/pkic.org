@@ -190,6 +190,7 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
   disabled,
   measure,
   timeZone,
+  divider = null,
 }: {
   message: LiveChatMessage;
   viewer: Viewer;
@@ -198,6 +199,8 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
   measure?: (node: HTMLElement | null) => void;
   /** The session's zone: a message reads on the room's own clock, like its agenda. */
   timeZone: string;
+  /** Where the session on changes at this message, what to call the part that starts: a title, or the break. */
+  divider?: string | null;
 }) {
   const [actionError, setActionError] = useState(false);
   const actions = liveChatMessageActions(message, viewer);
@@ -221,6 +224,11 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
       data-mine={message.mine ? "" : undefined}
       data-removed={removedNote(message) ? "" : undefined}
     >
+      {divider !== null ? (
+        <p class="pk-live-chat__divider" role="separator">
+          {divider}
+        </p>
+      ) : null}
       <Avatar name={message.authorName} src={message.authorPhotoUrl ?? undefined} size="sm" />
       <div class="pk-live-chat__body">
         {actionError && <Alert tone="danger">Could not complete the action. Please try again.</Alert>}

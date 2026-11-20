@@ -1,6 +1,7 @@
 import type { LiveOverlayView } from "../../shared/schemas/live-session-room";
 import type { LiveOverlayGraphics } from "./live-overlay-graphics";
-import { useLiveRoom, type LiveSocketFactory } from "./useLiveRoom";
+import { useLiveRoom } from "./useLiveRoom";
+import type { LiveSocketFactory } from "./useLiveSocket";
 import { LiveOverlayPresentation } from "./LiveOverlayPresentation";
 
 const KEEPS_TRYING = {};

@@ -5,7 +5,7 @@ import { Badge } from "../../../../../../ui/Badge";
 import { formatNumber } from "../../../../../../../shared/format-number";
 import { LIVE_CHAT_POLICY } from "../../../../../../../shared/live-chat-policy";
 import type { LiveRoomClientMessage } from "../../../../../../../shared/schemas/live-session-room";
-import type { LiveRoomState } from "../../../../../../live-session/live-room-state";
+import type { LiveChatView } from "../../../../../../live-session/location-chat-state";
 import { LiveChat } from "../../../../../../live-session/LiveChat";
 import { LiveChatMessageRow } from "../../../../../../live-session/LiveChatMessageRow";
 import { LiveAuthorProvider } from "../../../../../../live-session/LiveAuthor";
@@ -23,7 +23,7 @@ export function LiveChatPanel({
   channel = "attendee",
   studio = false,
 }: {
-  state: LiveRoomState;
+  state: LiveChatView;
   channel?: "attendee" | "operator";
   studio?: boolean;
   disabled: boolean;
@@ -41,7 +41,7 @@ export function LiveChatPanel({
 }
 
 /** Reported messages waiting for a moderator, newest report first, with the same row and menu as the chat. */
-function LiveChatReports({ state, disabled, send }: { state: LiveRoomState; disabled: boolean; send: Send }) {
+function LiveChatReports({ state, disabled, send }: { state: LiveChatView; disabled: boolean; send: Send }) {
   const reports = state.chatReports ?? [];
   if (!reports.length)
     return <p class="pk-small pk-muted">No reports. Messages people report appear here for review.</p>;
@@ -57,7 +57,7 @@ function LiveChatReports({ state, disabled, send }: { state: LiveRoomState; disa
                 viewer={state.viewer}
                 send={send}
                 disabled={disabled}
-                timeZone={state.session.timeZone}
+                timeZone={state.scope.timeZone}
               />
             ))}
           </ol>
@@ -72,7 +72,7 @@ function LiveChatReports({ state, disabled, send }: { state: LiveRoomState; disa
   );
 }
 
-function LiveStudioChat({ state, disabled, send }: { state: LiveRoomState; disabled: boolean; send: Send }) {
+function LiveStudioChat({ state, disabled, send }: { state: LiveChatView; disabled: boolean; send: Send }) {
   const [view, setView] = useHashQueryParam("chat", "attendee", VIEWS);
   const known = useRef(new Set(state.chat.map((message) => message.id)));
   const [unread, setUnread] = useState({ attendee: 0, operator: 0 });

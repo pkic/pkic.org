@@ -33,6 +33,7 @@ import { usePortalHashLocation } from "../../../../hash-location";
 import { useAgendaProgram, type AgendaProgram } from "../../detail/participation/useAgendaProgram";
 import { ROOM_PANELS, ROOM_WIDE_QUERY, VirtualRoomFrame, type RoomPanelId } from "./VirtualRoomFrame";
 import { VirtualRoomChat, VirtualRoomQuestions, VirtualRoomReactions, useRoomLive } from "./VirtualRoomPanels";
+import { useLocationChat } from "../../../../../../live-session/useLocationChat";
 import { VirtualRoomPartners } from "./VirtualRoomPartners";
 import { VirtualRoomSponsors } from "./VirtualRoomSponsors";
 import { VirtualRoomNowPlaying, VirtualRoomPlayer } from "./VirtualRoomPlayer";
@@ -96,6 +97,7 @@ export function VirtualRoom({
   const viewerZone = agendaTimeZones(timeZone, viewerTimeZone(), "remote").primary.zone;
   // The room follows the session loaded in the studio, which may run over or start early; it says what it is on.
   const live = useRoomLive(slug, roomMoment(sessions, now), sessions, room?.loadedOccurrenceId ?? null, viewerZone);
+  const chat = useLocationChat({ slug, roomId: room?.id ?? "" });
   const moment = live.moment;
   const defaultPanel: RoomPanelId = live.session ? "questions" : "agenda";
   const [panel, setPanel] = useHashQueryParam("roomPanel", defaultPanel, ROOM_PANELS);
@@ -168,7 +170,7 @@ export function VirtualRoom({
         sponsors={<VirtualRoomSponsors sponsors={sponsors.display} />}
         partners={<VirtualRoomPartners partners={streams.data?.productionPartners ?? []} />}
         questions={(askIn) => <VirtualRoomQuestions live={live} askIn={askIn} />}
-        chat={<VirtualRoomChat live={live} />}
+        chat={<VirtualRoomChat chat={chat} zone={viewerZone} />}
         agenda={agendaView(program)}
         eventHref={href(`/events/${encodeURIComponent(slug)}`)}
         panel={panel}

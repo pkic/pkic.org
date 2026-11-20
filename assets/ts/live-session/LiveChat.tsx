@@ -1,9 +1,9 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import { LIVE_CHAT_POLICY, liveChatCanSend, liveChatCapacity, liveChatPlainText } from "../../shared/live-chat-policy";
 import { liveChatSendSchema, type LiveRoomClientMessage } from "../../shared/schemas/live-session-room";
-import type { LiveChatChannel } from "../../shared/schemas/live-session-chat";
-import type { LiveRoomState } from "./live-room-state";
+import type { LiveChatChannel, LiveChatMessage } from "../../shared/schemas/live-session-chat";
 import { liveChatChannel } from "./live-chat-state";
+import type { LiveChatView } from "./location-chat-state";
 import { LiveChatMessageRow } from "./LiveChatMessageRow";
 import { LiveAuthorProvider } from "./LiveAuthor";
 import { useContractForm } from "../hooks/useContractForm";
@@ -112,6 +112,27 @@ export function LiveChatClosed({ note = "Chat opens when the session is live." }
   );
 }
 
+/** What a reader between sessions sees above the first message there. */
+const BETWEEN_SESSIONS = "Between sessions";
+
+/**
+ * Where the session on changes in the feed, by the message it changes at: the title of the session that starts,
+ * or the break. The feed's first message opens with its session, so a reader always knows which part they read.
+ */
+export function liveChatDividers(
+  messages: readonly LiveChatMessage[],
+  sessions: readonly { occurrenceId: string; title: string }[],
+): Map<string, string> {
+  const titles = new Map(sessions.map((session) => [session.occurrenceId, session.title]));
+  const dividers = new Map<string, string>();
+  messages.forEach((message, index) => {
+    const previous = messages[index - 1];
+    if (previous ? previous.occurrenceId === message.occurrenceId : !message.occurrenceId) return;
+    dividers.set(message.id, (message.occurrenceId && titles.get(message.occurrenceId)) || BETWEEN_SESSIONS);
+  });
+  return dividers;
+}
+
 /**
  * The live chat for attendees and the control room: dense rows rendered a
  * window at a time, a bounded history that pages back from the room on
@@ -128,7 +149,7 @@ export function LiveChat({
 }: {
   /** The composer's status line while nothing else needs saying. */
   note?: string;
-  state: LiveRoomState;
+  state: LiveChatView;
   disabled: boolean;
   send: (message: LiveRoomClientMessage) => boolean;
   compact?: boolean;
@@ -139,6 +160,7 @@ export function LiveChat({
   // Rows read the block in force, so their actions come back when a pause ends, as the composer does.
   const viewer = useMemo(() => ({ ...state.viewer, participation: restriction }), [state.viewer, restriction]);
   const messages = liveChatChannel(state, channel);
+  const dividers = useMemo(() => liveChatDividers(messages, state.scope.sessions), [messages, state.scope.sessions]);
   const list = useWindowedList(messages, (message) => message.id, { estimate: 52, overscan: 400, initial: 40 });
   const following = useRef(true);
   const [unseen, setUnseen] = useState(0);
@@ -214,7 +236,8 @@ export function LiveChat({
                   send={send}
                   disabled={disabled}
                   measure={list.measure(message.id)}
-                  timeZone={state.session.timeZone}
+                  timeZone={state.scope.timeZone}
+                  divider={dividers.get(message.id) ?? null}
                 />
               ))}
               {list.after ? (
@@ -258,8 +281,8 @@ export function LiveChat({
         ) : restriction && channel === "attendee" ? (
           <LiveParticipationAlert
             restriction={restriction}
-            timeZone={state.session.timeZone}
-            eventName={state.session.eventName}
+            timeZone={state.scope.timeZone}
+            eventName={state.scope.eventName}
           />
         ) : (
           <p class="pk-small pk-muted" role="status">

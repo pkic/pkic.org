@@ -7,12 +7,11 @@ import { LIVE_CHAT_POLICY, LIVE_CHAT_REACTIONS } from "../../assets/shared/live-
 import {
   liveRoomClientMessageSchema,
   type LiveChatMessage,
-  type LiveRoomSnapshot,
+  type LiveLocationChatSnapshot,
 } from "../../assets/shared/schemas/live-session-room";
 import { LiveChat } from "../../assets/ts/live-session/LiveChat";
-import { SessionChat } from "../../assets/ts/live-session/SessionChat";
-import { applyLiveRoomMessage, type LiveRoomState } from "../../assets/ts/live-session/live-room-state";
-import { liveSnapshot } from "./helpers/live-room-socket";
+import { applyLocationChatMessage, type LiveLocationChatState } from "../../assets/ts/live-session/location-chat-state";
+import { LIVE_OCCURRENCE, liveLocationChatSnapshot } from "./helpers/live-room-socket";
 
 const hosts: HTMLElement[] = [];
 afterEach(() => {
@@ -41,8 +40,8 @@ function chatMessage(overrides: Partial<LiveChatMessage> = {}): LiveChatMessage 
   };
 }
 
-function stateWith(overrides: Partial<Omit<LiveRoomSnapshot, "type">> = {}): LiveRoomState {
-  const state = applyLiveRoomMessage(null, liveSnapshot({ chat: [chatMessage()], ...overrides }));
+function stateWith(overrides: Partial<Omit<LiveLocationChatSnapshot, "type">> = {}): LiveLocationChatState {
+  const state = applyLocationChatMessage(null, liveLocationChatSnapshot({ chat: [chatMessage()], ...overrides }));
   if (!state) throw new Error("No state");
   return state;
 }
@@ -401,20 +400,37 @@ describe("live chat", () => {
     }
   });
 
-  it("does not connect before the canonical live window", () => {
-    const createSocket = vi.fn();
+  it("marks where the session on changes, and the breaks between", () => {
+    const at = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString();
     const host = mount(
-      <SessionChat
-        slug="pqc"
-        occurrenceId="session"
-        startAt={new Date(Date.now() + 7200000).toISOString()}
-        endAt={new Date(Date.now() + 10800000).toISOString()}
-        createSocket={createSocket}
-        closed={<p>Chat is closed</p>}
+      <LiveChat
+        state={stateWith({
+          chat: [
+            chatMessage({ id: "40000000-0000-4000-8000-000000000021", text: "Early", sentAt: at(-30) }),
+            chatMessage({
+              id: "40000000-0000-4000-8000-000000000022",
+              text: "Hello",
+              sentAt: at(-5),
+              occurrenceId: LIVE_OCCURRENCE,
+            }),
+            chatMessage({
+              id: "40000000-0000-4000-8000-000000000023",
+              text: "Agreed",
+              sentAt: at(-4),
+              occurrenceId: LIVE_OCCURRENCE,
+            }),
+            chatMessage({ id: "40000000-0000-4000-8000-000000000024", text: "Coffee?", sentAt: at(-1) }),
+          ],
+        })}
+        disabled={false}
+        send={vi.fn(() => true)}
       />,
     );
-    expect(createSocket).not.toHaveBeenCalled();
-    expect(host.textContent).toContain("Chat is closed");
+    expect(
+      [...host.querySelectorAll(".pk-live-chat__row")].map(
+        (row) => row.querySelector('[role="separator"]')?.textContent ?? "",
+      ),
+    ).toEqual(["", "Post-quantum migration", "", "Between sessions"]);
   });
 });
 

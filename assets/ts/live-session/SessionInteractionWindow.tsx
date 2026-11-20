@@ -1,5 +1,5 @@
 import type { ComponentChildren } from "preact";
-import type { LiveSocketFactory } from "./useLiveRoom";
+import type { LiveSocketFactory } from "./useLiveSocket";
 import { useLiveWindow } from "./useLiveWindow";
 
 export interface SessionInteractionProps {

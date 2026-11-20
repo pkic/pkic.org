@@ -2,7 +2,7 @@ import type { LiveOverlayView } from "../../shared/schemas/live-session-room";
 import type { LiveOverlayGraphics } from "./live-overlay-graphics";
 import { LiveOverlay } from "./LiveOverlay";
 import { useLiveRoomProgram } from "./useLiveRoomProgram";
-import type { LiveSocketFactory } from "./useLiveRoom";
+import type { LiveSocketFactory } from "./useLiveSocket";
 const KEEPS_TRYING = {};
 
 /** Stable browser source: selection changes replace only the subscribed session, never the browser-source address. */

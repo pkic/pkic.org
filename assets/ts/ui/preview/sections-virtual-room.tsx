@@ -20,7 +20,8 @@ import {
   type RoomPanelId,
 } from "../../member-flows/portal/sections/events/app/virtual-room/VirtualRoomFrame";
 import { LiveChatClosed } from "../../live-session/LiveChat";
-import { LiveAttendeeChat } from "../../live-session/SessionChat";
+import { LiveAttendeeChat } from "../../live-session/LocationChat";
+import type { LiveLocationChatConnection } from "../../live-session/useLocationChat";
 import { LiveAttendeeQuestions, LiveQuestionsClosed } from "../../live-session/SessionQuestions";
 import type { LiveRoomConnection } from "../../live-session/useLiveRoom";
 import {
@@ -136,14 +137,40 @@ const MOMENT = {
 const LOCATIONS = ["Main hall", "Studio"].map((name, index) => ({ id: `room-${index}`, name, href: "#" }));
 const formatTime = () => "10:00 – 10:45";
 
-const said = (id: number, authorName: string, text: string, mine = false) => ({
+const ON = STUDIO_QUESTIONS_ROOM.session;
+const said = (id: number, authorName: string, text: string, mine = false, before = 0) => ({
   channel: "attendee" as const,
   id: `60000000-0000-4000-8000-00000000000${id}`,
   text,
   authorName,
   mine,
-  sentAt: STUDIO_QUESTIONS_ROOM.session.startAt,
+  sentAt: new Date(Date.parse(ON.startAt) - before * 60_000).toISOString(),
+  ...(before ? {} : { occurrenceId: ON.occurrenceId }),
 });
+/** The location's chat as an attendee holds it: a word before the session, then the session under way. */
+const CHAT: LiveLocationChatConnection = {
+  state: {
+    viewer: { role: "attendee", name: "Alex Example" },
+    scope: {
+      eventName: ON.eventName ?? "PQC Conference",
+      roomId: "room-0",
+      day: ON.startAt.slice(0, 10),
+      timeZone: ON.timeZone,
+      sessions: [{ occurrenceId: ON.occurrenceId, title: ON.title, startAt: ON.startAt, endAt: ON.endAt }],
+    },
+    opening: "scheduled",
+    chat: [
+      said(1, "Riley Sample", "Good morning, everyone.", false, 5),
+      said(2, "Jordan Lee", "Is the **hybrid** profile in the draft already?"),
+      said(3, "Alex Example", "Yes, section 4 covers it.", true),
+    ],
+    refusal: null,
+  },
+  status: "live",
+  admissionRefusal: null,
+  serverFault: null,
+  send: () => true,
+};
 /** A session's room as an attendee holds it during the session: questions asked and a chat under way. */
 const LIVE: LiveRoomConnection = {
   state: {
@@ -154,11 +181,6 @@ const LIVE: LiveRoomConnection = {
       poll.status === "open" ? { ...poll, myAnswer: "TLS endpoints" } : poll,
     ),
     questions: STUDIO_QUESTIONS_ROOM.questions.filter((question) => question.status !== "pending"),
-    chat: [
-      said(1, "Riley Sample", "Good morning, everyone."),
-      said(2, "Jordan Lee", "Is the **hybrid** profile in the draft already?"),
-      said(3, "Alex Example", "Yes, section 4 covers it.", true),
-    ],
   },
   status: "live",
   admissionRefusal: null,
@@ -199,7 +221,7 @@ function RoomSpecimen({ opensOn, live = false }: { opensOn: RoomPanelId; live?: 
           <LiveQuestionsClosed askIn={askIn} />
         )
       }
-      chat={live ? <LiveAttendeeChat room={LIVE} compact /> : <LiveChatClosed />}
+      chat={live ? <LiveAttendeeChat chat={CHAT} compact /> : <LiveChatClosed />}
       agenda={<AgendaExample compact />}
       eventHref="#"
       panel={panel}

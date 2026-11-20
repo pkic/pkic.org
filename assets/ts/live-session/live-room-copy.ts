@@ -12,7 +12,7 @@ type FailureCopy = Readonly<Record<LiveRoomAudience, string>>;
 const SIGN_IN_AGAIN: FailureCopy = {
   operator: "Your sign-in has ended. Sign in again to operate this session.",
   attendee: "Your sign-in has ended. Sign in again to ask and vote.",
-  chat: "Your sign-in has ended. Sign in again to join session chat.",
+  chat: "Your sign-in has ended. Sign in again to join the chat.",
 };
 
 const OPEN_FAILURES: Readonly<Record<string, FailureCopy>> = {
@@ -20,6 +20,11 @@ const OPEN_FAILURES: Readonly<Record<string, FailureCopy>> = {
     operator: "This session has no live room yet. Only scheduled sessions on the approved agenda have one.",
     attendee: "This session doesn't take live questions yet.",
     chat: "This session has no live chat yet.",
+  },
+  LIVE_LOCATION_CHAT_NOT_FOUND: {
+    operator: "This location has no sessions on the approved agenda, so it has no chat.",
+    attendee: "This location has no sessions on the approved agenda, so it has no chat.",
+    chat: "This location has no sessions on the approved agenda, so it has no chat.",
   },
   EVENT_NOT_FOUND: {
     operator: "This event no longer exists, so its live rooms are closed.",
@@ -32,14 +37,14 @@ const OPEN_FAILURES: Readonly<Record<string, FailureCopy>> = {
   LIVE_SESSION_ACCESS_REQUIRED: {
     operator: "You don't have live moderation access for this event. Ask an event organizer to grant it.",
     attendee: "Questions are open to registered attendees with access to this session.",
-    chat: "Chat is open to registered attendees with access to this session.",
+    chat: "Chat is open to people registered for a session in this location today.",
   },
 };
 
 const REFUSED: FailureCopy = {
   operator: "The live room refused this session. Reload the page to try again.",
   attendee: "Questions for this session didn't open. Reload the page to try again.",
-  chat: "Chat for this session didn't open. Reload the page to try again.",
+  chat: "The chat didn't open. Reload the page to try again.",
 };
 
 const UNREACHABLE: FailureCopy = {

@@ -56,6 +56,27 @@
     font-size: var(--pk-text-sm);
     line-height: 1.35;
   }
+  /* Where the session on changes: a quiet line across the feed, its title in the middle. */
+  .pk-live-chat__divider {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2);
+    margin: var(--pk-1) 0 0;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+    font-weight: 600;
+    min-inline-size: 0;
+  }
+  .pk-live-chat__divider::before,
+  .pk-live-chat__divider::after {
+    content: "";
+    flex: 1 1 var(--pk-4);
+    border-block-start: 1px solid var(--pk-line-soft);
+  }
+  .pk-live-chat__row:has(> .pk-live-chat__divider):hover {
+    background: none;
+  }
   .pk-live-chat__row .pk-avatar--sm {
     --pk-avatar-size: 1.5rem;
     margin-block-start: 0.1rem;

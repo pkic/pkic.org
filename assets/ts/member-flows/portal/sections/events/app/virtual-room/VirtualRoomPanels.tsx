@@ -1,21 +1,24 @@
 /**
- * What the virtual room shows around its stream of the session it is on: its reactions, its questions and
- * polls, and its chat. The three share one connection to the session's room.
+ * What the virtual room shows around its stream: the reactions, questions and polls of the session it is on,
+ * which share one connection to the session's room, and the location's chat for the day on a connection of
+ * its own, so a change of session never cuts the conversation off.
  */
 import { useEffect, useState } from "preact/hooks";
 import type { ClockZone } from "../../../../../../../shared/event-clock";
-import { formatClockInZone } from "../../../../../../../shared/format-date";
+import { formatClockInZone, formatEventDayInZone } from "../../../../../../../shared/format-date";
 import { liveRoomWindow } from "../../../../../../../shared/live-session-policy";
 import { LiveChatClosed } from "../../../../../../live-session/LiveChat";
 import { useLiveParticipation } from "../../../../../../live-session/LiveParticipationAlert";
 import { LiveReactionBar } from "../../../../../../live-session/LiveReactionBar";
-import { LiveAttendeeChat } from "../../../../../../live-session/SessionChat";
+import { liveLocationChatOpen, liveLocationChatWindow } from "../../../../../../../shared/live-location-chat";
+import { LiveAttendeeChat } from "../../../../../../live-session/LocationChat";
+import type { LiveLocationChatConnection } from "../../../../../../live-session/useLocationChat";
 import { LiveAttendeeQuestions, LiveQuestionsClosed } from "../../../../../../live-session/SessionQuestions";
 import { useLiveRoom, type LiveRoomConnection } from "../../../../../../live-session/useLiveRoom";
 import { useLiveWindow, useMinuteClock } from "../../../../../../live-session/useLiveWindow";
 import type { RoomMoment, RoomSession } from "./virtual-room-schedule";
 
-/** How long before the room moves on attendees read when this session's chat and questions end. */
+/** How long before the room moves on, or the chat closes, attendees read when it does. */
 const ENDING_NOTICE_MS = 10 * 60_000;
 
 /** The room's one live connection: the session it is on, whether its room is open, and the room itself. */
@@ -116,17 +119,31 @@ export function VirtualRoomQuestions({ live, askIn }: { live: RoomLive; askIn: H
   );
 }
 
-/** The chat of the session the location is on, in a window that fills its panel. */
-export function VirtualRoomChat({ live }: { live: RoomLive }) {
-  if (live.closedEarly) return <LiveChatClosed note="The organizers closed the chat." />;
-  if (!live.session || !live.live) return <LiveChatClosed />;
-  return (
-    <LiveAttendeeChat
-      room={live.room}
-      compact
-      note={live.endsSoon ? `Chat for this session closes at ${live.endsSoon}.` : undefined}
-    />
-  );
+/**
+ * The location's chat for the day, in a window that fills its panel. It opens shortly before the day's first
+ * session there and closes a while after its last, whatever the studio does, unless the organizers end it.
+ */
+export function VirtualRoomChat({ chat, zone }: { chat: LiveLocationChatConnection; zone: ClockZone }) {
+  const now = useMinuteClock();
+  const state = chat.state;
+  if (!state) return <LiveAttendeeChat chat={chat} compact />;
+  if (state.opening === "closed") return <LiveChatClosed note="The organizers ended this chat." />;
+  const window = liveLocationChatWindow(state.scope.sessions);
+  const at = (instant: number) => formatClockInZone(new Date(instant).toISOString(), zone);
+  const day = (instant: number) => formatEventDayInZone(new Date(instant).toISOString(), zone);
+  if (!window || !liveLocationChatOpen(now, state.scope.sessions, state.opening)) {
+    // A chat that opens on a later day says which, so a reader the day before does not wait for it tonight.
+    const opens = window && now < window.opensAt ? window.opensAt : null;
+    const note =
+      opens === null
+        ? "Chat has ended for today."
+        : day(opens) === day(now)
+          ? `Chat opens at ${at(opens)}.`
+          : `Chat opens ${day(opens)} at ${at(opens)}.`;
+    return <LiveChatClosed note={note} />;
+  }
+  const closing = state.opening === "scheduled" && window.closesAt - now <= ENDING_NOTICE_MS;
+  return <LiveAttendeeChat chat={chat} compact note={closing ? `Chat closes at ${at(window.closesAt)}.` : undefined} />;
 }
 
 /** The reaction bar, while the session is on air and the viewer may take part. */

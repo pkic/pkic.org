@@ -8,13 +8,14 @@ import {
   EMPTY_LIVE_OUTPUTS,
   liveRoomClientMessageSchema,
   liveRoomServerMessageSchema,
+  type LiveLocationChatSnapshot,
   type LiveRoomClientMessage,
   type LiveRoomServerMessage,
   type LiveRoomSnapshot,
 } from "../../../assets/shared/schemas/live-session-room";
 import { livePollFieldSchema, type LivePoll } from "../../../assets/shared/schemas/live-session-poll";
 import { formFieldStatFromTallies } from "../../../assets/shared/form-field-statistics";
-import type { LiveSocketFactory } from "../../../assets/ts/live-session/useLiveRoom";
+import type { LiveSocketFactory } from "../../../assets/ts/live-session/useLiveSocket";
 import type { LiveRoomState } from "../../../assets/ts/live-session/live-room-state";
 import type { LiveTargets } from "../../../assets/ts/member-flows/portal/sections/events/detail/live/live-output-targets";
 import { NO_LIVE_ROOM_SOURCES } from "../../../assets/shared/schemas/live-room-sources";
@@ -166,6 +167,36 @@ export function liveSnapshot(overrides: Partial<Omit<LiveRoomSnapshot, "type">> 
     opening: DEFAULT_LIVE_ROOM_OPENING,
     movedOn: null,
     sources: NO_LIVE_ROOM_SOURCES,
+    ...overrides,
+  };
+}
+
+export const LIVE_ROOM = "20000000-0000-4000-8000-000000000030";
+
+/** The location's chat for the day, with the one session `liveSnapshot` is on. */
+export function liveLocationChatSnapshot(
+  overrides: Partial<Omit<LiveLocationChatSnapshot, "type">> = {},
+): LiveLocationChatSnapshot {
+  const now = Date.now();
+  return {
+    type: "location.chat.snapshot",
+    viewer: { role: "attendee", name: "Ada Attendee" },
+    scope: {
+      eventName: "PQC Conference",
+      roomId: LIVE_ROOM,
+      day: new Date(now).toISOString().slice(0, 10),
+      timeZone: "Europe/Amsterdam",
+      sessions: [
+        {
+          occurrenceId: LIVE_OCCURRENCE,
+          title: "Post-quantum migration",
+          startAt: new Date(now - 10 * 60_000).toISOString(),
+          endAt: new Date(now + 50 * 60_000).toISOString(),
+        },
+      ],
+    },
+    opening: DEFAULT_LIVE_ROOM_OPENING,
+    chat: [],
     ...overrides,
   };
 }

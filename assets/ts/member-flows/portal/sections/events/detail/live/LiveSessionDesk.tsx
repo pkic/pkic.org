@@ -18,11 +18,14 @@ import type { LiveSyncedScreen } from "../../../../../../../shared/schemas/live-
 import { useBoundaryClock } from "../../../../../../hooks/useBoundaryClock";
 import { liveRoomOpenFailure } from "../../../../../../live-session/live-room-copy";
 import type { LiveRoomState } from "../../../../../../live-session/live-room-state";
-import { useLiveRoom, type LiveSocketFactory } from "../../../../../../live-session/useLiveRoom";
+import { useLiveRoom } from "../../../../../../live-session/useLiveRoom";
+import type { LiveSocketFactory } from "../../../../../../live-session/useLiveSocket";
 import { Spinner } from "../../../../../../components/Spinner";
 import { Alert } from "../../../../../../ui/Alert";
 import { ControlTooltips } from "../../../../../../ui/ControlTooltips";
 import { LiveChatPanel } from "./LiveChatPanel";
+import { LocationChatJoining } from "../../../../../../live-session/LocationChat";
+import { useLocationChat } from "../../../../../../live-session/useLocationChat";
 
 import { LivePollsCreateAction, LivePollsPanel } from "./LivePollsPanel";
 import { LivePreparedQuestionTimes, LiveQuestionsHeader, LiveQuestionsPanel } from "./LiveQuestionsPanel";
@@ -118,6 +121,8 @@ export function LiveSessionDesk({
   const sendPresence = useRef<(message: LiveRoomClientMessage) => boolean>(() => false);
   const presence = useMemo(() => createLivePresence((message) => sendPresence.current(message)), []);
   useEffect(() => () => presence.dispose(), [presence]);
+  // The location's chat for the day: it stays when the studio loads another session.
+  const chat = useLocationChat({ slug, roomId, createSocket });
   const room = useLiveRoom({ slug, occurrenceId, createSocket, onPresence: presence.receive });
   sendPresence.current = room.send;
   const otherProgram = Boolean(activeOccurrenceId && activeOccurrenceId !== occurrenceId);
@@ -411,7 +416,14 @@ export function LiveSessionDesk({
           body: <LivePollsPanel targets={targets} send={sendProgram} />,
         };
       case "chat":
-        return { title, body: <LiveChatPanel studio state={state} disabled={!live} send={sendProgram} /> };
+        return {
+          title,
+          body: chat.state ? (
+            <LiveChatPanel studio state={chat.state} disabled={chat.status !== "live"} send={chat.send} />
+          ) : (
+            <LocationChatJoining chat={chat} />
+          ),
+        };
       case "screens":
         return {
           title,

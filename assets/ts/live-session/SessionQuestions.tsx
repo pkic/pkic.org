@@ -29,7 +29,8 @@ import { LivePollCard } from "./LivePollCard";
 import { liveRoomOpenFailure } from "./live-room-copy";
 import { currentLivePoll, orderLiveQuestions } from "./live-room-state";
 import { useLiveQuestionThread } from "./useLiveQuestionThread";
-import { useLiveRoom, type LiveRoomConnection, type LiveSocketFactory } from "./useLiveRoom";
+import { useLiveRoom, type LiveRoomConnection } from "./useLiveRoom";
+import type { LiveSocketFactory } from "./useLiveSocket";
 import "./SessionQuestions.css";
 import { SectionHeading } from "../ui/SectionHeading";
 
