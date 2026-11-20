@@ -5,13 +5,13 @@
 import { useState, type MutableRef } from "preact/hooks";
 import { patchJson, postJson } from "../../../../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../../../../shared/schemas/api-common";
+import { type EventTicketsConfiguration } from "../../../../../../../../shared/schemas/event-tickets";
 import {
   eventTicketCodeCreateResponseSchema,
   eventTicketCodeCreateSchema,
   eventTicketCodeListSchema,
   type EventTicketCode,
-  type EventTicketsConfiguration,
-} from "../../../../../../../../shared/schemas/event-tickets";
+} from "../../../../../../../../shared/schemas/event-ticket-codes";
 import { formatTicketAmount, parseTicketAmount } from "../../../../../../../../shared/event-ticket-display";
 import { formatNumber } from "../../../../../../../../shared/format-number";
 import { ApiDataTable, type ApiTableActions } from "../../../../../../../components/ApiDataTable";

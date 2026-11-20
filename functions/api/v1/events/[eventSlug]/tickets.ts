@@ -1,7 +1,4 @@
 import {
-  eventTicketCodeCreateRouteSchema,
-  eventTicketCodesGetRouteSchema,
-  eventTicketCodeUpdateRouteSchema,
   eventTicketOfferRouteSchema,
   eventTicketPricesPutRouteSchema,
   eventTicketQuoteRouteSchema,
@@ -17,6 +14,11 @@ import {
   registrationTicketReviewRouteSchema,
   registrationTicketSyncRouteSchema,
 } from "../../../../../assets/shared/schemas/event-tickets";
+import {
+  eventTicketCodeCreateRouteSchema,
+  eventTicketCodesGetRouteSchema,
+  eventTicketCodeUpdateRouteSchema,
+} from "../../../../../assets/shared/schemas/event-ticket-codes";
 import { hasPermission } from "../../../../_lib/auth/permissions";
 import { getUserSessionToken, requireIdentityFromRequest } from "../../../../_lib/auth/user-session";
 import { resolveAppBaseUrl } from "../../../../_lib/config";

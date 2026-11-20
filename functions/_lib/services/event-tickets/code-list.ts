@@ -3,7 +3,7 @@ import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import {
   eventTicketCodeListSchema,
   type EventTicketCodeListQuery,
-} from "../../../../assets/shared/schemas/event-tickets";
+} from "../../../../assets/shared/schemas/event-ticket-codes";
 import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";

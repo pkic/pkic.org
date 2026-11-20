@@ -10,13 +10,12 @@ import {
   DEFAULT_PAYMENT_RETRY_DAYS,
 } from "../../../../assets/shared/event-tickets";
 import type {
-  EventTicketCode,
-  EventTicketCodeCreate,
   EventTicketPricesReplaceInput,
   EventTicketSettingsUpdate,
   EventTicketTypeInput,
   EventTicketsConfiguration,
 } from "../../../../assets/shared/schemas/event-tickets";
+import type { EventTicketCode, EventTicketCodeCreate } from "../../../../assets/shared/schemas/event-ticket-codes";
 import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
 import { isStateGuardFailure, prepareStateGuard } from "../../db/authorization-guard";
 import { batchFirst, batchRows } from "../../db/pagination";

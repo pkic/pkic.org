@@ -12,7 +12,6 @@ import {
   utcInstantSchema,
 } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
-import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { stripeCurrencySchema } from "./stripe";
 import {
   DEFAULT_PAYMENT_RETRY_DAYS,
@@ -30,7 +29,7 @@ const calendarDateSchema = z
     return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
   }, "Enter a date.");
 /** One price, as an organizer enters it. */
-const amountSchema = z.number().int("Enter a whole amount.").min(0, "Enter 0 or more.").max(100_000_00);
+export const ticketAmountSchema = z.number().int("Enter a whole amount.").min(0, "Enter 0 or more.").max(100_000_00);
 /** What prices add up to over the days of an event: a line, a total, or what a ticket costs. */
 const totalAmountSchema = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const revisionSchema = z.number().int().min(0);
@@ -93,7 +92,7 @@ export const eventTicketPriceSchema = z.object({
   dayDate: calendarDateSchema.nullable(),
   charged: ticketPriceChargedSchema,
   /** Amount by period id. */
-  amounts: z.record(z.string(), amountSchema),
+  amounts: z.record(z.string(), ticketAmountSchema),
 });
 export type EventTicketPrice = z.infer<typeof eventTicketPriceSchema>;
 
@@ -155,7 +154,7 @@ export const eventTicketSettingsSchema = z.object({
     .nullable()
     .default(null),
   /** An administration fee kept from each refund the policy gives. An organizer's own refund returns everything. */
-  refundFee: amountSchema.default(0),
+  refundFee: ticketAmountSchema.default(0),
 });
 const stepTextSchema = z.string().trim().max(400, "Use 400 characters or fewer.");
 /** What registrants read above the tickets and above the days; empty shows nothing. */
@@ -174,54 +173,6 @@ export const eventTicketSettingsUpdateSchema = eventTicketSettingsSchema
   });
 export type EventTicketSettingsUpdate = z.infer<typeof eventTicketSettingsUpdateSchema>;
 
-export const eventTicketCodeSchema = z.object({
-  id: databaseIdSchema,
-  ticketTypeId: databaseIdSchema,
-  label: z.string(),
-  code: z.string(),
-  amount: amountSchema.nullable(),
-  percentOff: z.number().int().nullable(),
-  maxUses: z.number().int(),
-  usedCount: z.number().int(),
-  revokedAt: utcInstantSchema.nullable(),
-});
-export type EventTicketCode = z.infer<typeof eventTicketCodeSchema>;
-
-/** Codes are a collection of their own: an event can hold more than one screen of them. */
-export const eventTicketCodeListQuerySchema = listQuerySchema(["label", "used", "created"] as const, {
-  maxLimit: 100,
-});
-export type EventTicketCodeListQuery = z.infer<typeof eventTicketCodeListQuerySchema>;
-export const eventTicketCodeListSchema = paginatedResponseSchema("codes", eventTicketCodeSchema);
-
-export const eventTicketCodeCreateSchema = z
-  .object({
-    ticketTypeId: databaseIdSchema,
-    label: trimmedString(2, 120, "Say who the code is for."),
-    discount: z.enum(["amount", "percent"]),
-    amount: amountSchema.optional(),
-    percentOff: z.number().int().min(1, "Enter 1 or more.").max(100, "Enter 100 or less.").optional(),
-    maxUses: z.number().int().min(1, "Enter 1 or more.").max(10_000, "Enter 10,000 or less."),
-  })
-  .superRefine((value, context) => {
-    if (value.discount === "amount" && value.amount === undefined)
-      context.addIssue({
-        code: "custom",
-        path: ["amount"],
-        message: "Enter the price with this code. Enter 0 for free.",
-      });
-    if (value.discount === "percent" && value.percentOff === undefined)
-      context.addIssue({ code: "custom", path: ["percentOff"], message: "Enter the percentage off." });
-  });
-export type EventTicketCodeCreate = z.infer<typeof eventTicketCodeCreateSchema>;
-
-export const eventTicketCodeUpdateSchema = z.object({
-  maxUses: z.number().int().min(1, "Enter 1 or more.").max(10_000, "Enter 10,000 or less.").optional(),
-  /** Raises the limit by this many, whatever it is by now; two organizers adding uses both count. */
-  addUses: z.number().int().min(1).max(1_000).optional(),
-  revoked: z.boolean().optional(),
-});
-export const eventTicketCodeParamsSchema = eventSlugParamsSchema.extend({ codeId: databaseIdSchema });
 export const eventTicketTypeParamsSchema = eventSlugParamsSchema.extend({ ticketTypeId: databaseIdSchema });
 
 const passCountSchema = z.number().int().min(0, "Enter 0 or more.").max(1000, "Enter 1,000 or less.");
@@ -288,7 +239,6 @@ export const eventTicketsConfigurationSchema = z.object({
 export type EventTicketsConfiguration = z.infer<typeof eventTicketsConfigurationSchema>;
 
 export const eventTicketsChangeResponseSchema = successResponseSchema.extend({ revision: revisionSchema });
-export const eventTicketCodeCreateResponseSchema = successResponseSchema.extend({ code: eventTicketCodeSchema });
 
 // ── Registrant: offer, quote, selection ─────────────────────────────────────
 
@@ -317,7 +267,7 @@ export const eventTicketOfferSchema = z.object({
   /** Until when a paid ticket is refunded on cancellation or a move to cheaper days; null when it never is. */
   refundableUntil: utcInstantSchema.nullable().default(null),
   /** The administration fee kept from such a refund. */
-  refundFee: amountSchema.default(0),
+  refundFee: ticketAmountSchema.default(0),
   ticketIntro: z.string().default(""),
   attendanceIntro: z.string().default(""),
   /** The person registers with a personal mailbox, so a ticket that is free only for work addresses costs them money. */
@@ -328,7 +278,7 @@ export const eventTicketOfferSchema = z.object({
       name: z.string(),
       descriptionMarkdown: z.string(),
       /** What this ticket costs a personal mailbox while it is free for work addresses; null when the rule does not apply. */
-      personalEmailAmount: amountSchema.nullable().default(null),
+      personalEmailAmount: ticketAmountSchema.nullable().default(null),
       /** Whether the person may hold it without a code: chosen freely, or by disputing the decision. */
       selectable: z.boolean(),
       prices: z.array(
@@ -336,10 +286,10 @@ export const eventTicketOfferSchema = z.object({
           attendanceValue: z.string(),
           dayDate: calendarDateSchema.nullable(),
           charged: ticketPriceChargedSchema,
-          amount: amountSchema,
-          nextAmount: amountSchema.nullable(),
+          amount: ticketAmountSchema,
+          nextAmount: ticketAmountSchema.nullable(),
           /** What this price costs a personal address while it is free for a work address. */
-          personalEmailAmount: amountSchema.nullable().default(null),
+          personalEmailAmount: ticketAmountSchema.nullable().default(null),
         }),
       ),
     }),
@@ -419,7 +369,7 @@ export const registrationTicketSchema = z.object({
   /** Until when this ticket is refunded on cancellation or a move to cheaper days; null when it never is. */
   refundableUntil: utcInstantSchema.nullable().default(null),
   /** The administration fee kept from such a refund. */
-  refundFee: amountSchema.default(0),
+  refundFee: ticketAmountSchema.default(0),
   refundedAmount: totalAmountSchema,
   /** What was paid for the ticket; more than `amount` after a move to days that cost less. */
   paidAmount: totalAmountSchema.default(0),
@@ -440,11 +390,11 @@ export const registrationTicketReviewSchema = z.object({
 });
 
 const registrationParams = eventSlugParamsSchema.extend({ registrationId: databaseIdSchema });
-const json = <Schema extends z.ZodType>(schema: Schema) => ({ "application/json": { schema } });
-const organizer = { "x-pkic-auth": { required: true, scopes: ["events:write"] } } as const;
-const reader = { "x-pkic-auth": { required: true, scopes: ["events:read"] } } as const;
+export const ticketRouteJson = <Schema extends z.ZodType>(schema: Schema) => ({ "application/json": { schema } });
+export const ticketOrganizerAuth = { "x-pkic-auth": { required: true, scopes: ["events:write"] } } as const;
+export const ticketReaderAuth = { "x-pkic-auth": { required: true, scopes: ["events:read"] } } as const;
 const member = { "x-pkic-auth": { required: true } } as const;
-const refusals = {
+export const ticketRouteRefusals = {
   "400": jsonErrorResponse("Invalid ticket request."),
   "401": jsonErrorResponse("An authenticated user session is required."),
   "403": jsonErrorResponse("The required event permission is missing."),
@@ -452,125 +402,122 @@ const refusals = {
   "409": jsonErrorResponse("The tickets changed; reload before saving."),
 };
 
-export const eventTicketCodesGetRouteSchema = {
-  tags: ["Events"],
-  summary: "List an event's ticket codes",
-  request: { params: eventSlugParamsSchema, query: eventTicketCodeListQuerySchema },
-  responses: {
-    "200": { description: "A page of codes.", content: json(eventTicketCodeListSchema) },
-    ...refusals,
-  },
-  ...reader,
-};
 export const eventTicketsGetRouteSchema = {
   tags: ["Events"],
   summary: "Get an event's tickets and prices",
   request: { params: eventSlugParamsSchema },
   responses: {
-    "200": { description: "Ticket configuration.", content: json(eventTicketsConfigurationSchema) },
-    ...refusals,
+    "200": { description: "Ticket configuration.", content: ticketRouteJson(eventTicketsConfigurationSchema) },
+    ...ticketRouteRefusals,
   },
-  ...reader,
+  ...ticketReaderAuth,
 };
 export const eventTicketTypeCreateRouteSchema = {
   tags: ["Events"],
   summary: "Add a ticket",
-  request: { params: eventSlugParamsSchema, body: { required: true, content: json(eventTicketTypeInputSchema) } },
-  responses: { "200": { description: "Ticket added.", content: json(eventTicketsChangeResponseSchema) }, ...refusals },
-  ...organizer,
+  request: {
+    params: eventSlugParamsSchema,
+    body: { required: true, content: ticketRouteJson(eventTicketTypeInputSchema) },
+  },
+  responses: {
+    "200": { description: "Ticket added.", content: ticketRouteJson(eventTicketsChangeResponseSchema) },
+    ...ticketRouteRefusals,
+  },
+  ...ticketOrganizerAuth,
 };
 export const eventTicketTypeUpdateRouteSchema = {
   tags: ["Events"],
   summary: "Change a ticket",
-  request: { params: eventTicketTypeParamsSchema, body: { required: true, content: json(eventTicketTypeInputSchema) } },
-  responses: {
-    "200": { description: "Ticket changed.", content: json(eventTicketsChangeResponseSchema) },
-    ...refusals,
+  request: {
+    params: eventTicketTypeParamsSchema,
+    body: { required: true, content: ticketRouteJson(eventTicketTypeInputSchema) },
   },
-  ...organizer,
+  responses: {
+    "200": { description: "Ticket changed.", content: ticketRouteJson(eventTicketsChangeResponseSchema) },
+    ...ticketRouteRefusals,
+  },
+  ...ticketOrganizerAuth,
 };
 export const eventTicketPricesPutRouteSchema = {
   tags: ["Events"],
   summary: "Replace an event's ticket prices",
-  request: { params: eventSlugParamsSchema, body: { required: true, content: json(eventTicketPricesReplaceSchema) } },
-  responses: {
-    "200": { description: "Prices replaced.", content: json(eventTicketsChangeResponseSchema) },
-    ...refusals,
+  request: {
+    params: eventSlugParamsSchema,
+    body: { required: true, content: ticketRouteJson(eventTicketPricesReplaceSchema) },
   },
-  ...organizer,
+  responses: {
+    "200": { description: "Prices replaced.", content: ticketRouteJson(eventTicketsChangeResponseSchema) },
+    ...ticketRouteRefusals,
+  },
+  ...ticketOrganizerAuth,
 };
 export const eventTicketSettingsPutRouteSchema = {
   tags: ["Events"],
   summary: "Change an event's payment settings",
-  request: { params: eventSlugParamsSchema, body: { required: true, content: json(eventTicketSettingsUpdateSchema) } },
-  responses: {
-    "200": { description: "Settings changed.", content: json(eventTicketsChangeResponseSchema) },
-    ...refusals,
-  },
-  ...organizer,
-};
-export const eventTicketCodeCreateRouteSchema = {
-  tags: ["Events"],
-  summary: "Create a ticket code",
-  request: { params: eventSlugParamsSchema, body: { required: true, content: json(eventTicketCodeCreateSchema) } },
-  responses: {
-    "200": { description: "Code created.", content: json(eventTicketCodeCreateResponseSchema) },
-    ...refusals,
-  },
-  ...organizer,
-};
-export const eventTicketCodeUpdateRouteSchema = {
-  tags: ["Events"],
-  summary: "Change a ticket code's limit or revoke it",
   request: {
-    params: eventTicketCodeParamsSchema,
-    body: { required: true, content: json(eventTicketCodeUpdateSchema) },
+    params: eventSlugParamsSchema,
+    body: { required: true, content: ticketRouteJson(eventTicketSettingsUpdateSchema) },
   },
-  responses: { "200": { description: "Code changed.", content: json(successResponseSchema) }, ...refusals },
-  ...organizer,
+  responses: {
+    "200": { description: "Settings changed.", content: ticketRouteJson(eventTicketsChangeResponseSchema) },
+    ...ticketRouteRefusals,
+  },
+  ...ticketOrganizerAuth,
 };
 export const eventTicketSponsorPassesPutRouteSchema = {
   tags: ["Events"],
   summary: "Set how many passes each sponsor tier gets",
   request: {
     params: eventSlugParamsSchema,
-    body: { required: true, content: json(eventTicketSponsorPassesUpdateSchema) },
+    body: { required: true, content: ticketRouteJson(eventTicketSponsorPassesUpdateSchema) },
   },
-  responses: { "200": { description: "Passes saved.", content: json(eventTicketsChangeResponseSchema) }, ...refusals },
-  ...organizer,
+  responses: {
+    "200": { description: "Passes saved.", content: ticketRouteJson(eventTicketsChangeResponseSchema) },
+    ...ticketRouteRefusals,
+  },
+  ...ticketOrganizerAuth,
 };
 export const eventTicketSponsorCodesPostRouteSchema = {
   tags: ["Events"],
   summary: "Create or top up the pass codes of the event's active sponsors",
   request: { params: eventSlugParamsSchema },
   responses: {
-    "200": { description: "Codes created or raised.", content: json(eventTicketSponsorCodesResponseSchema) },
-    ...refusals,
+    "200": { description: "Codes created or raised.", content: ticketRouteJson(eventTicketSponsorCodesResponseSchema) },
+    ...ticketRouteRefusals,
   },
-  ...organizer,
+  ...ticketOrganizerAuth,
 };
 export const eventTicketOfferRouteSchema = {
   tags: ["Events"],
   summary: "Get the tickets offered to the person registering",
   request: { params: eventSlugParamsSchema, query: z.object({ identityId: databaseIdSchema.optional() }) },
   responses: {
-    "200": { description: "The person's ticket offer.", content: json(eventTicketOfferSchema) },
-    ...refusals,
+    "200": { description: "The person's ticket offer.", content: ticketRouteJson(eventTicketOfferSchema) },
+    ...ticketRouteRefusals,
   },
   "x-pkic-auth": { required: false },
 };
 export const eventTicketQuoteRouteSchema = {
   tags: ["Events"],
   summary: "Price the signed-in person's attendance choices",
-  request: { params: eventSlugParamsSchema, body: { required: true, content: json(eventTicketQuoteRequestSchema) } },
-  responses: { "200": { description: "The price.", content: json(eventTicketQuoteSchema) }, ...refusals },
+  request: {
+    params: eventSlugParamsSchema,
+    body: { required: true, content: ticketRouteJson(eventTicketQuoteRequestSchema) },
+  },
+  responses: {
+    "200": { description: "The price.", content: ticketRouteJson(eventTicketQuoteSchema) },
+    ...ticketRouteRefusals,
+  },
   ...member,
 };
 export const registrationTicketGetRouteSchema = {
   tags: ["Events"],
   summary: "Get a registration's ticket",
   request: { params: registrationParams },
-  responses: { "200": { description: "The ticket.", content: json(registrationTicketResponseSchema) }, ...refusals },
+  responses: {
+    "200": { description: "The ticket.", content: ticketRouteJson(registrationTicketResponseSchema) },
+    ...ticketRouteRefusals,
+  },
   ...member,
 };
 export const registrationTicketCheckoutRouteSchema = {
@@ -578,25 +525,31 @@ export const registrationTicketCheckoutRouteSchema = {
   summary: "Open payment for a registration's ticket",
   request: { params: registrationParams },
   responses: {
-    "200": { description: "Where to pay.", content: json(registrationTicketCheckoutResponseSchema) },
-    ...refusals,
+    "200": { description: "Where to pay.", content: ticketRouteJson(registrationTicketCheckoutResponseSchema) },
+    ...ticketRouteRefusals,
   },
   ...member,
 };
 export const registrationTicketRefundRouteSchema = {
   tags: ["Events"],
   summary: "Refund a registration's ticket",
-  request: { params: registrationParams, body: { required: true, content: json(registrationTicketRefundSchema) } },
-  responses: { "200": { description: "Refund requested.", content: json(successResponseSchema) }, ...refusals },
-  ...organizer,
+  request: {
+    params: registrationParams,
+    body: { required: true, content: ticketRouteJson(registrationTicketRefundSchema) },
+  },
+  responses: {
+    "200": { description: "Refund requested.", content: ticketRouteJson(successResponseSchema) },
+    ...ticketRouteRefusals,
+  },
+  ...ticketOrganizerAuth,
 };
 export const registrationTicketSyncRouteSchema = {
   tags: ["Events"],
   summary: "Bring a registration's ticket in line with the payment provider",
   request: { params: registrationParams },
   responses: {
-    "200": { description: "The ticket was checked.", content: json(registrationTicketSyncResponseSchema) },
-    ...refusals,
+    "200": { description: "The ticket was checked.", content: ticketRouteJson(registrationTicketSyncResponseSchema) },
+    ...ticketRouteRefusals,
   },
   // The registrant asks whether their own payment arrived; an organizer of the event brings the whole ticket in line.
   ...member,
@@ -604,7 +557,13 @@ export const registrationTicketSyncRouteSchema = {
 export const registrationTicketReviewRouteSchema = {
   tags: ["Events"],
   summary: "Settle a disputed ticket",
-  request: { params: registrationParams, body: { required: true, content: json(registrationTicketReviewSchema) } },
-  responses: { "200": { description: "Dispute settled.", content: json(successResponseSchema) }, ...refusals },
-  ...organizer,
+  request: {
+    params: registrationParams,
+    body: { required: true, content: ticketRouteJson(registrationTicketReviewSchema) },
+  },
+  responses: {
+    "200": { description: "Dispute settled.", content: ticketRouteJson(successResponseSchema) },
+    ...ticketRouteRefusals,
+  },
+  ...ticketOrganizerAuth,
 };

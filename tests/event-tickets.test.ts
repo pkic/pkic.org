@@ -5,11 +5,11 @@ import { callApi } from "./helpers/app";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { hmacSha256Hex } from "../functions/_lib/utils/crypto";
 import {
-  eventTicketCodeListQuerySchema,
   eventTicketSettingsUpdateSchema,
   registrationTicketCheckoutResponseSchema,
   registrationTicketResponseSchema,
 } from "../assets/shared/schemas/event-tickets";
+import { eventTicketCodeListQuerySchema } from "../assets/shared/schemas/event-ticket-codes";
 import { seedEventAndAdmin } from "./helpers/context";
 import { createScheduledRegistration } from "./helpers/scheduled-registration";
 import { findOrCreateUser } from "../functions/_lib/services/users";
