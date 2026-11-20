@@ -23,7 +23,6 @@ import { LiveChatClosed } from "../../live-session/LiveChat";
 import { LiveAttendeeChat } from "../../live-session/SessionChat";
 import { LiveAttendeeQuestions, LiveQuestionsClosed } from "../../live-session/SessionQuestions";
 import type { LiveRoomConnection } from "../../live-session/useLiveRoom";
-import { VirtualRoomSchedule } from "../../member-flows/portal/sections/events/app/virtual-room/VirtualRoomPanels";
 import {
   VirtualRoomNowPlaying,
   VirtualRoomPlayer,
@@ -188,17 +187,15 @@ function RoomSpecimen({ opensOn, live = false }: { opensOn: RoomPanelId; live?: 
       )}
       sponsors={<VirtualRoomSponsors sponsors={SPONSORS} />}
       partners={<VirtualRoomPartners partners={PARTNERS} />}
-      schedule={<VirtualRoomSchedule slug="preview" moment={MOMENT} formatTime={formatTime} />}
-      questions={
+      questions={(askIn) =>
         live ? (
-          <LiveAttendeeQuestions room={LIVE} occurrenceId={LIVE.state!.session.occurrenceId} />
+          <LiveAttendeeQuestions room={LIVE} occurrenceId={LIVE.state!.session.occurrenceId} askIn={askIn} />
         ) : (
-          <LiveQuestionsClosed />
+          <LiveQuestionsClosed askIn={askIn} />
         )
       }
       chat={live ? <LiveAttendeeChat room={LIVE} compact /> : <LiveChatClosed />}
-      agenda={<AgendaExample />}
-      agendaHref="#"
+      agenda={<AgendaExample compact />}
       eventHref="#"
       panel={panel}
       panelHref={() => "#"}
@@ -211,13 +208,13 @@ export const virtualRoomSections: PreviewSection[] = [
   {
     id: "virtual-room",
     title: "Virtual room",
-    note: "On a desktop the stream is large on the left; questions and polls sit top right with the chat under them, both always open. On a phone the stream, the running session and the sponsors stay at the top, and the bottom bar switches one panel between questions, chat and the agenda.",
+    note: "On a desktop the stream is large on the left with the event's agenda under it; questions and polls sit top right with the chat under them, both always open. On a phone the stream, the running session and the sponsors stay at the top, and the bottom bar switches one panel between questions, chat and the agenda.",
     render: () => <RoomSpecimen opensOn="questions" />,
   },
   {
     id: "virtual-room-live",
     title: "Virtual room: during a session",
-    note: "Questions are asked through the Ask a question button, which opens the form over the list. The chat is a window: the messages scroll and the field stays at its foot.",
+    note: "Ask a question is always in view, in the questions' header on a desktop and at the top of the panel on a phone, and opens the form over the list. The chat is a window: the messages scroll and the field stays at its foot.",
     render: () => <RoomSpecimen opensOn="questions" live />,
   },
   {

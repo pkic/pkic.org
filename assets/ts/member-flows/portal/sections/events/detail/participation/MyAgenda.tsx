@@ -98,6 +98,7 @@ export function MyAgenda({
       mine={mine}
       canPersonalize={canPersonalize}
       calendarHref={embedded ? null : usePortalHashLocation.hrefs(destination({ view: "calendar" }))}
+      compact={embedded}
       onFocusClosed={() => {
         const current = splitHash();
         const next = new URLSearchParams(current.params);
@@ -116,6 +117,8 @@ interface PersonalAgendaProps {
   canPersonalize: boolean;
   /** The calendar and reminder settings, where the agenda may lead away from its page. */
   calendarHref: string | null;
+  /** Shown beside something else: the agenda as a list, with today's finished sessions folded away. */
+  compact?: boolean;
   onFocusClosed: () => void;
 }
 
@@ -133,6 +136,7 @@ function PersonalAgenda({
   mine,
   canPersonalize,
   calendarHref,
+  compact = false,
   onFocusClosed,
 }: PersonalAgendaProps & { program: AgendaProgram }) {
   const snapshot = program.data?.agenda;
@@ -318,6 +322,7 @@ function PersonalAgenda({
           legacySpeakerFragments={content.legacySpeakerFragments}
           personal={canPersonalize ? personal : undefined}
           openOccurrence={focus ?? revised ?? undefined}
+          compact={compact}
         />
       ) : (
         <Panel>

@@ -79,8 +79,8 @@ const agendaDays: ContentAgendaDay[] = ["2025-12-01", "2025-12-02"].map((date, i
   ],
 }));
 
-export function AgendaExample() {
-  return <ContentAgenda days={agendaDays} speakers={[]} timeZone="Europe/Amsterdam" />;
+export function AgendaExample({ compact = false }: { compact?: boolean }) {
+  return <ContentAgenda days={agendaDays} speakers={[]} timeZone="Europe/Amsterdam" compact={compact} />;
 }
 
 /** The reader's own sessions on a day with one more, hours later: what lies between them is cut from the list. */
@@ -138,7 +138,7 @@ export const agendaSections: PreviewSection[] = [
   {
     id: "agenda-mine",
     title: "My agenda",
-    note: "The agenda's own list with only the reader's sessions. Slots holding none of them leave the list, and the next session shown opens under a torn edge, so two sessions hours apart are read together.",
+    note: "The agenda's own list with only the reader's sessions. Slots holding none of them leave the list, and the next session shown opens under a dashed rule that says how long passes, so two sessions hours apart are read together.",
     render: () => <OwnAgendaExample />,
   },
 ];

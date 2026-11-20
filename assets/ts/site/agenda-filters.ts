@@ -1,6 +1,7 @@
 import { mountAgendaToolbarMenu } from "./agenda-toolbar-menu";
 import { filterAgendaLocationColumns, restoreAgendaLocationColumns } from "./agenda-location-columns";
 import { formatNumber } from "../../shared/format-number";
+import { formatDuration } from "../../shared/format-date";
 import { applyPopupPosition, measurePopupPosition } from "../ui/popup-placement";
 
 function locationInputs(group: HTMLElement | undefined): HTMLInputElement[] {
@@ -40,20 +41,24 @@ function setAgendaFiltersExpanded(root: HTMLElement, toggle: HTMLButtonElement, 
 /**
  * The reader's own agenda in the list view leaves out every slot that holds none of their sessions, so two
  * sessions hours apart are read together without scrolling past the day between them. The first slot after
- * such a cut is marked, and the list draws the cut there.
+ * such a cut says how long passes there, and the list draws that on a dashed rule.
  */
 function markOwnAgendaSlots(panel: HTMLElement | null, mine: boolean): void {
   let cut = false;
-  let shown = false;
+  // When the last slot shown ends: its latest session's end, or its start where no end is known.
+  let shownUntil: number | null = null;
   for (const row of panel?.querySelectorAll<HTMLElement>(".pk-content-agenda__slot") ?? []) {
-    const skipped =
-      mine && ![...row.querySelectorAll<HTMLElement>("[data-agenda-session]")].some((card) => !card.hidden);
+    const cards = [...row.querySelectorAll<HTMLElement>("[data-agenda-session]")].filter((card) => !card.hidden);
+    const skipped = mine && !cards.length;
     row.toggleAttribute("data-agenda-skipped", skipped);
-    row.toggleAttribute("data-agenda-gap", !skipped && cut && shown);
+    const start = Date.parse(row.querySelector<HTMLTimeElement>('[data-agenda-clock="venue"] time')?.dateTime ?? "");
+    if (skipped || !cut || shownUntil === null) row.removeAttribute("data-agenda-gap");
+    else row.dataset.agendaGap = start > shownUntil ? `${formatDuration(start - shownUntil)} later` : "Later";
     if (skipped) cut = true;
     else {
       cut = false;
-      shown = true;
+      const ends = cards.map((card) => Date.parse(card.dataset.agendaMediaEnd ?? "")).filter(Number.isFinite);
+      shownUntil = Math.max(start, ...ends);
     }
   }
 }

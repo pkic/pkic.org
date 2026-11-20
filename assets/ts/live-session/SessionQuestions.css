@@ -67,6 +67,14 @@
     flex-wrap: wrap;
     gap: var(--pk-2);
   }
+  /* Asking stays in reach while the poll and the questions scroll under it. */
+  .pk-live-questions__ask {
+    position: sticky;
+    z-index: 1;
+    inset-block-start: 0;
+    padding-block-end: var(--pk-1);
+    background: var(--pk-surface);
+  }
   .pk-live-questions__empty,
   .pk-live-questions__notice {
     margin: 0;

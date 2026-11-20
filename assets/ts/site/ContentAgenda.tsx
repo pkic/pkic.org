@@ -47,6 +47,7 @@ export function ContentAgenda({
   openOccurrence,
   agendaBasePath,
   initialDay,
+  compact = false,
 }: {
   agendaBasePath?: string;
   initialDay?: string;
@@ -54,6 +55,8 @@ export function ContentAgenda({
   speakers: ContentAgendaSpeaker[];
   /** The event's clock: its IANA zone, named by the event's city when the agenda carries one. */
   timeZone: ClockZone;
+  /** Beside something else, as under the virtual room's stream: always a list, today's finished sessions folded. */
+  compact?: boolean;
   /** Only public pages own the URL fragment; portal views use their hash router. */
   fragmentNavigation?: boolean;
   legacySpeakerFragments?: readonly ContentAgendaSpeakerFragment[];
@@ -188,8 +191,8 @@ export function ContentAgenda({
         data-agenda-public-fragments={fragmentNavigation && !editor ? "" : undefined}
         data-agenda-today-focus={editor || openOccurrence ? undefined : ""}
         data-agenda-mine-only={!editor && personal?.mineOnly ? "" : undefined}
-        // My agenda reads as a list on every screen: a grid of the whole day would be mostly empty.
-        data-agenda-view={!editor && personal?.mineOnly ? "list" : undefined}
+        data-agenda-view={!editor && (personal?.mineOnly || compact) ? "list" : undefined}
+        data-agenda-compact={!editor && compact ? "" : undefined}
       >
         <h2 class="pk-sr-only">Event agenda</h2>
         {!editor && (

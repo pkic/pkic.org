@@ -58,8 +58,10 @@
   }
 
   /*
-   * The running session on one line: the location, the title, the reactions. Where the three do not fit a
-   * phone's width the reactions take the line below; the time and speakers are left to the wider layout.
+   * The running session under the stream. Where the viewer picks a location, the picker and the reactions
+   * share the first line and the session has the next one whole: "Live now" and its time, then the title
+   * in full. With one location the title and the reactions share a line. Speakers are left to the wider
+   * layout and the session's details.
    */
   .pk-virtual-room__now {
     display: flex;
@@ -80,23 +82,28 @@
     min-inline-size: 0;
   }
 
-  .pk-virtual-room__now-text p {
-    display: none;
+  .pk-virtual-room__now:has(.pk-virtual-room__location) .pk-virtual-room__now-text {
+    order: 1;
+    flex-basis: 100%;
   }
 
-  .pk-virtual-room__now-text p:only-child {
-    display: block;
+  .pk-virtual-room__now-text p {
     margin: 0;
   }
 
+  .pk-virtual-room__now-text .pk-event-card__meta:not(:only-child) {
+    display: none;
+  }
+
   .pk-virtual-room__title {
+    display: -webkit-box;
     overflow: hidden;
     margin: 0;
     font-size: var(--pk-text-lg);
     font-weight: 700;
     line-height: 1.25;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
 
   .pk-virtual-room__now-actions {
@@ -272,11 +279,6 @@
     }
   }
 
-  /* A session in "Now & next": its time, its title and its speakers, each on a line. */
-  .pk-virtual-room__item {
-    display: grid;
-  }
-
   /* Production partners: one quiet line of credits, each logo smaller than any sponsor's. */
   .pk-virtual-room__partner-list {
     display: flex;
@@ -353,14 +355,13 @@
     padding: 0;
   }
 
-  .pk-virtual-room--wide .pk-virtual-room__now-text p {
+  .pk-virtual-room--wide .pk-virtual-room__now-text .pk-event-card__meta:not(:only-child) {
     display: block;
-    margin: 0;
   }
 
   .pk-virtual-room--wide .pk-virtual-room__title {
+    display: block;
     font-size: var(--pk-text-xl);
-    white-space: normal;
   }
 
   /* On a desktop the notice keeps its own line under the reactions, so nothing beside it moves. */

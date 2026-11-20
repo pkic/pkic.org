@@ -15,7 +15,7 @@ import type { ComponentChildren } from "preact";
 import { useCallback, useEffect, useMemo, useRef } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import { agendaTimeZones } from "../../../../../../../shared/agenda-time-display";
-import { eventAgendaRoute, eventVirtualRoomRoute } from "../../../../../../../shared/event-participation-link";
+import { eventVirtualRoomRoute } from "../../../../../../../shared/event-participation-link";
 import { formatDateTimeWithSchedule, formatTimeRangeInZone } from "../../../../../../../shared/format-date";
 import { locationStreamOn, virtualRoomResponseSchema } from "../../../../../../../shared/schemas/event-live-stream";
 import { instantToCalendarDate, viewerTimeZone } from "../../../../../../../shared/timezone";
@@ -32,13 +32,7 @@ import { useSponsorDisplay } from "../../../../../sponsors-wall-data";
 import { usePortalHashLocation } from "../../../../hash-location";
 import { useAgendaProgram, type AgendaProgram } from "../../detail/participation/useAgendaProgram";
 import { ROOM_PANELS, ROOM_WIDE_QUERY, VirtualRoomFrame, type RoomPanelId } from "./VirtualRoomFrame";
-import {
-  VirtualRoomChat,
-  VirtualRoomQuestions,
-  VirtualRoomReactions,
-  VirtualRoomSchedule,
-  useRoomLive,
-} from "./VirtualRoomPanels";
+import { VirtualRoomChat, VirtualRoomQuestions, VirtualRoomReactions, useRoomLive } from "./VirtualRoomPanels";
 import { VirtualRoomPartners } from "./VirtualRoomPartners";
 import { VirtualRoomSponsors } from "./VirtualRoomSponsors";
 import { VirtualRoomNowPlaying, VirtualRoomPlayer } from "./VirtualRoomPlayer";
@@ -64,8 +58,8 @@ export function VirtualRoom({
 }: {
   slug: string;
   /**
-   * The event's own agenda, for the Agenda tab a phone shows in place of "Now & next". It takes the program
-   * the room has read already, so opening the tab asks the server for nothing.
+   * The event's own agenda, under the stream on a desktop and on a phone's Agenda tab. It takes the program
+   * the room has read already, so showing it asks the server for nothing.
    */
   agenda: (program: AgendaProgram) => ComponentChildren;
 }) {
@@ -171,11 +165,9 @@ export function VirtualRoom({
         )}
         sponsors={<VirtualRoomSponsors sponsors={sponsors.display} />}
         partners={<VirtualRoomPartners partners={streams.data?.productionPartners ?? []} />}
-        schedule={<VirtualRoomSchedule slug={slug} moment={moment} formatTime={formatTime} />}
-        questions={<VirtualRoomQuestions live={live} />}
+        questions={(askIn) => <VirtualRoomQuestions live={live} askIn={askIn} />}
         chat={<VirtualRoomChat live={live} />}
         agenda={agendaView(program)}
-        agendaHref={href(eventAgendaRoute(slug))}
         eventHref={href(`/events/${encodeURIComponent(slug)}`)}
         panel={panel}
         panelHref={(id) => href(panelRoute(location, id, defaultPanel))}

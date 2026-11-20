@@ -245,7 +245,7 @@ describe("virtual room", () => {
     expect(player()).not.toBeNull();
   });
 
-  it("keeps questions and chat both open beside the stream on a desktop, with now and next under it", async () => {
+  it("keeps questions and chat both open beside the stream on a desktop, with the agenda under it", async () => {
     onDesktop();
     await open();
     expect(tabs()).toEqual([]);
@@ -254,15 +254,13 @@ describe("virtual room", () => {
       (title) => title.textContent,
     );
     expect(panels).toEqual(["Questions and polls", "Chat"]);
-    expect(host.querySelector('section[aria-labelledby="virtual-room-questions-title"]')).not.toBeNull();
-    expect(host.querySelector('section[aria-labelledby="virtual-room-chat-title"]')).not.toBeNull();
-    expect(host.textContent).not.toContain("The event’s whole agenda");
-    // The whole agenda opens in its own tab, so the stream keeps playing here.
-    const agenda = [...host.querySelectorAll<HTMLAnchorElement>("a")].find((link) =>
-      link.textContent?.startsWith("Full agenda"),
-    );
-    expect(agenda?.getAttribute("href")).toBe("#/events/summit/agenda");
-    expect(agenda?.getAttribute("target")).toBe("_blank");
+    // Asking is in the questions' header, where it never scrolls away.
+    const ask = [...host.querySelectorAll("button")].find((button) => button.textContent === "Ask a question");
+    expect(ask?.closest(".pk-panel__header")?.textContent).toContain("Questions and polls");
+    // The event's own agenda sits under the stream, handed the program the room read.
+    const main = host.querySelector(".pk-virtual-room__main")!;
+    expect(main.textContent).toContain("The event’s whole agenda, 3 sessions");
+    expect(host.querySelector('[aria-label="Sessions in this room"]')).toBeNull();
     expect(
       host.querySelector('section[aria-label="Production partners"]')?.closest(".pk-virtual-room__main"),
     ).not.toBeNull();
@@ -290,22 +288,14 @@ describe("virtual room", () => {
     expect(opened).toEqual([`/api/v1/events/summit/agenda/occurrences/${KEYNOTE}/live`]);
   });
 
-  it("lists now and next for the location and moves on at the session boundary without asking the server", async () => {
-    onDesktop();
+  it("moves on to the next session at the boundary without asking the server", async () => {
     await open();
-    const schedule = () =>
-      [...host.querySelectorAll('[aria-label="Sessions in this room"] li')].map((item) => item.textContent ?? "");
-    expect(schedule()).toHaveLength(2);
-    expect(schedule()[0]).toContain("Now");
-    expect(schedule()[0]).toContain("Opening keynote");
-    expect(schedule()[1]).toContain("Migration panel");
+    expect(nowPlaying()).toContain("Opening keynote");
     const requests = vi.mocked(fetch).mock.calls.length;
     await act(async () => {
       vi.advanceTimersByTime(31 * 60_000);
     });
     expect(nowPlaying()).toContain("Migration panel");
-    expect(nowPlaying()).toContain("Grace");
-    expect(schedule()).toHaveLength(1);
     expect(vi.mocked(fetch).mock.calls.length).toBe(requests);
   });
 

@@ -1,8 +1,7 @@
 /**
- * What the virtual room shows around its stream: the session's reactions, its questions and polls, its chat,
- * and "Now & next" in this location. The three live parts share one connection to the session's room.
+ * What the virtual room shows around its stream of the session it is on: its reactions, its questions and
+ * polls, and its chat. The three share one connection to the session's room.
  */
-import { eventSessionRoute } from "../../../../../../../shared/event-participation-link";
 import { LiveChatClosed } from "../../../../../../live-session/LiveChat";
 import { useLiveParticipation } from "../../../../../../live-session/LiveParticipationAlert";
 import { LiveReactionBar } from "../../../../../../live-session/LiveReactionBar";
@@ -10,63 +9,7 @@ import { LiveAttendeeChat } from "../../../../../../live-session/SessionChat";
 import { LiveAttendeeQuestions, LiveQuestionsClosed } from "../../../../../../live-session/SessionQuestions";
 import { useLiveRoom, type LiveRoomConnection } from "../../../../../../live-session/useLiveRoom";
 import { useLiveWindow } from "../../../../../../live-session/useLiveWindow";
-import { EmptyState } from "../../../../../../ui/EmptyState";
-import { usePortalHashLocation } from "../../../../hash-location";
-import { sessionSpeakerLine, type RoomMoment, type RoomSession } from "./virtual-room-schedule";
-
-function ScheduleItem({
-  slug,
-  session,
-  live,
-  formatTime,
-}: {
-  slug: string;
-  session: RoomSession;
-  live: boolean;
-  formatTime: (startAt: string, endAt: string) => string;
-}) {
-  const speakers = sessionSpeakerLine(session);
-  return (
-    <li class="pk-virtual-room__item">
-      <span class="pk-event-card__meta">
-        {live ? "Now · " : ""}
-        {formatTime(session.startAt, session.endAt)}
-      </span>
-      <a class="pk-strong" href={usePortalHashLocation.hrefs(eventSessionRoute(slug, session.id))}>
-        {session.title}
-      </a>
-      {speakers && <span class="pk-event-card__meta">{speakers}</span>}
-    </li>
-  );
-}
-
-/** The location's running session and the ones after it. */
-export function VirtualRoomSchedule({
-  slug,
-  moment,
-  formatTime,
-}: {
-  slug: string;
-  moment: RoomMoment;
-  formatTime: (startAt: string, endAt: string) => string;
-}) {
-  const sessions = [...(moment.current ? [moment.current] : []), ...moment.upcoming];
-  if (!sessions.length)
-    return <EmptyState title="Nothing more here today" body="Sessions in this location appear here as they near." />;
-  return (
-    <ol class="pk-plain-list pk-stack pk-stack--snug" aria-label="Sessions in this room">
-      {sessions.map((session) => (
-        <ScheduleItem
-          key={session.id}
-          slug={slug}
-          session={session}
-          live={session === moment.current}
-          formatTime={formatTime}
-        />
-      ))}
-    </ol>
-  );
-}
+import type { RoomMoment, RoomSession } from "./virtual-room-schedule";
 
 /** The room's one live connection: the session it follows, whether its room is open, and the room itself. */
 export interface RoomLive {
@@ -91,9 +34,9 @@ export function useRoomLive(slug: string, moment: RoomMoment): RoomLive {
 }
 
 /** The questions and polls of the session the location is on. */
-export function VirtualRoomQuestions({ live }: { live: RoomLive }) {
-  if (!live.session || !live.open) return <LiveQuestionsClosed />;
-  return <LiveAttendeeQuestions room={live.room} occurrenceId={live.session.id} />;
+export function VirtualRoomQuestions({ live, askIn }: { live: RoomLive; askIn: HTMLElement | null }) {
+  if (!live.session || !live.open) return <LiveQuestionsClosed askIn={askIn} />;
+  return <LiveAttendeeQuestions room={live.room} occurrenceId={live.session.id} askIn={askIn} />;
 }
 
 /** The chat of the session the location is on, in a window that fills its panel. */

@@ -1,14 +1,13 @@
 /**
  * The virtual room's layout, with nothing of its own to load.
  *
- * On a desktop the stream is large on the left with the running session, the sponsors, "Now & next" and the
- * production partners under it; questions and polls sit top right with the chat under them, both always
- * open. On a phone it works like an app: the stream, the running session and the sponsors stay at the top,
+ * On a desktop the stream is large on the left with the running session, the sponsors, the event's agenda
+ * and the production partners under it; questions and polls sit top right with the chat under them, both
+ * always open. On a phone it works like an app: the stream, the running session and the sponsors stay at the top,
  * one panel shows beneath them, and a bottom bar switches between questions, chat and the event's agenda.
  */
 import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
-import { ExternalLink } from "../../../../../../ui/ExternalLink";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
 import { TabList } from "../../../../../../ui/TabList";
 import { Tabs } from "../../../../../../ui/Tabs";
@@ -22,7 +21,6 @@ export const ROOM_WIDE_QUERY = "(min-width: 64rem)";
 
 const PANEL_LABELS = { questions: "Questions", chat: "Chat", agenda: "Agenda" } as const;
 const PANEL_ICONS = { questions: "questions", chat: "chat", agenda: "agenda" } as const;
-const QUESTIONS_TITLE = "virtual-room-questions-title";
 const CHAT_TITLE = "virtual-room-chat-title";
 
 export interface RoomLocationChoice {
@@ -43,12 +41,11 @@ export interface VirtualRoomFrameProps {
   now: (location: ComponentChildren) => ComponentChildren;
   sponsors: ComponentChildren;
   partners: ComponentChildren;
-  schedule: ComponentChildren;
-  questions: ComponentChildren;
+  /** The questions, given the place in their panel's header for the Ask a question button where there is one. */
+  questions: (askIn: HTMLElement | null) => ComponentChildren;
   chat: ComponentChildren;
-  /** The event's own agenda, shown on a phone's Agenda tab. */
+  /** The event's own agenda: under the stream on a desktop, on the Agenda tab of a phone. */
   agenda: ComponentChildren;
-  agendaHref: string;
   eventHref: string;
   panel: RoomPanelId;
   panelHref: (panel: RoomPanelId) => string;
@@ -67,11 +64,12 @@ function WideRoom({
   now,
   sponsors,
   partners,
-  schedule,
   questions,
   chat,
-  agendaHref,
+  agenda,
 }: VirtualRoomFrameProps) {
+  // The Ask a question button sits in the questions' header, where it never scrolls away.
+  const [askIn, setAskIn] = useState<HTMLElement | null>(null);
   return (
     <div class="pk-virtual-room pk-virtual-room--wide">
       {notice}
@@ -82,21 +80,15 @@ function WideRoom({
           {now(null)}
           {sponsors}
         </div>
-        <Panel>
-          <PanelHeader title="Now & next">
-            {/* In its own tab, so the stream keeps playing here. */}
-            <ExternalLink href={agendaHref} external>
-              Full agenda
-            </ExternalLink>
-          </PanelHeader>
-          <PanelBody>{schedule}</PanelBody>
-        </Panel>
+        {agenda}
         {partners}
       </div>
       <div class="pk-virtual-room__side">
-        <Panel class="pk-virtual-room__panel" aria-labelledby={QUESTIONS_TITLE}>
-          <PanelHeader id={QUESTIONS_TITLE} title="Questions and polls" />
-          <PanelBody>{questions}</PanelBody>
+        <Panel class="pk-virtual-room__panel" aria-label="Questions and polls">
+          <PanelHeader title="Questions and polls">
+            <span ref={setAskIn} />
+          </PanelHeader>
+          <PanelBody>{questions(askIn)}</PanelBody>
         </Panel>
         <Panel class="pk-virtual-room__panel" aria-labelledby={CHAT_TITLE}>
           <PanelHeader id={CHAT_TITLE} title="Chat" />
@@ -162,7 +154,7 @@ function NarrowRoom({
       />
       {panel !== "agenda" && (
         <div id={`virtual-room-${panel}`} class="pk-virtual-room__panel" role="tabpanel" aria-labelledby={tab}>
-          {panel === "questions" ? questions : chat}
+          {panel === "questions" ? questions(null) : chat}
         </div>
       )}
       {agendaOpened && (

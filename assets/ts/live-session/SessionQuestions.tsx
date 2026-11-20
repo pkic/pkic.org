@@ -2,6 +2,7 @@ import { LiveOwnQuestionActions } from "./LiveOwnQuestionActions";
 import { LiveQuestionThread } from "./LiveQuestionThread";
 import { useHashQueryParam } from "../hooks/useHashQueryParam";
 import { LIVE_POLL_ANSWER_REFUSAL } from "../../shared/schemas/live-session-poll";
+import { createPortal } from "preact/compat";
 import { useEffect, useId, useRef, useState } from "preact/hooks";
 import { type LiveQuestionOrder } from "../../shared/live-session-policy";
 import {
@@ -152,23 +153,34 @@ function AskQuestionDialog({
   );
 }
 
-/** The one way to ask: a button that opens the question form. */
-function AskQuestionButton({ disabled, onClick }: { disabled: boolean; onClick?: () => void }) {
-  return (
-    <div class="pk-cluster">
-      <Button variant="primary" disabled={disabled} onClick={onClick}>
-        <IconPlus />
-        <span>{ASK}</span>
-      </Button>
-    </div>
+/**
+ * The one way to ask: a button that opens the question form. It is always in view: in the header of the
+ * panel that holds the questions where the page gives it that place (`askIn`), else held at the top of
+ * the questions as they scroll.
+ */
+function AskQuestionButton({
+  disabled,
+  onClick,
+  askIn,
+}: {
+  disabled: boolean;
+  onClick?: () => void;
+  askIn?: HTMLElement | null;
+}) {
+  const button = (
+    <Button variant="primary" disabled={disabled} onClick={onClick}>
+      <IconPlus />
+      <span>{ASK}</span>
+    </Button>
   );
+  return askIn ? createPortal(button, askIn) : <div class="pk-live-questions__ask pk-cluster">{button}</div>;
 }
 
 /** A session's questions before its room opens: where to ask, not yet in use, and when it opens. */
-export function LiveQuestionsClosed() {
+export function LiveQuestionsClosed({ askIn }: { askIn?: HTMLElement | null }) {
   return (
     <div class="pk-stack pk-stack--snug">
-      <AskQuestionButton disabled />
+      <AskQuestionButton disabled askIn={askIn} />
       <p class="pk-live-questions__empty">Questions open when the session is live.</p>
     </div>
   );
@@ -192,7 +204,16 @@ function SessionQuestionsRoom({
  * A session's questions for an attendee, on a room connection its page already holds: answer the poll, ask,
  * upvote, reply, accept answers, and (for a credited speaker) mark questions answered.
  */
-export function LiveAttendeeQuestions({ room, occurrenceId }: { room: LiveRoomConnection; occurrenceId: string }) {
+export function LiveAttendeeQuestions({
+  room,
+  occurrenceId,
+  askIn,
+}: {
+  room: LiveRoomConnection;
+  occurrenceId: string;
+  /** Where the page keeps the Ask a question button, such as the header of the questions' panel. */
+  askIn?: HTMLElement | null;
+}) {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
   const threadVisible = threadId !== null && room.state?.questions.some((question) => question.id === threadId);
@@ -211,12 +232,18 @@ export function LiveAttendeeQuestions({ room, occurrenceId }: { room: LiveRoomCo
   const live = room.status === "live";
   const restriction = useLiveParticipation(state?.viewer.participation);
   if (!state)
-    return room.admissionRefusal ? (
-      <Alert tone="warn">{liveRoomOpenFailure(room.admissionRefusal, "attendee")}</Alert>
-    ) : room.status === "offline" ? (
-      <Alert tone="warn">{liveRoomOpenFailure(null, "attendee", room.serverFault)}</Alert>
-    ) : (
-      <p class="pk-live-questions__empty">Joining the session’s questions…</p>
+    return (
+      <div class="pk-stack pk-stack--snug">
+        {/* The button keeps its place while the room is joined, so nothing moves when it answers. */}
+        <AskQuestionButton disabled askIn={askIn} />
+        {room.admissionRefusal ? (
+          <Alert tone="warn">{liveRoomOpenFailure(room.admissionRefusal, "attendee")}</Alert>
+        ) : room.status === "offline" ? (
+          <Alert tone="warn">{liveRoomOpenFailure(null, "attendee", room.serverFault)}</Alert>
+        ) : (
+          <p class="pk-live-questions__empty">Joining the session’s questions…</p>
+        )}
+      </div>
     );
   const role = state.viewer.role;
   const poll = currentLivePoll(state.polls);
@@ -225,6 +252,15 @@ export function LiveAttendeeQuestions({ room, occurrenceId }: { room: LiveRoomCo
       {!live ? (
         <Alert tone="warn">Live updates are paused while we reconnect. What you see may be out of date.</Alert>
       ) : null}
+      {restriction ? (
+        <LiveParticipationAlert
+          restriction={restriction}
+          timeZone={state.session.timeZone}
+          eventName={state.session.eventName}
+        />
+      ) : (
+        <AskQuestionButton disabled={!live} onClick={() => setAsking(true)} askIn={askIn} />
+      )}
       {poll ? (
         <LivePollCard
           poll={poll}
@@ -233,15 +269,6 @@ export function LiveAttendeeQuestions({ room, occurrenceId }: { room: LiveRoomCo
           onVote={(answer) => room.send({ type: "poll.vote", pollId: poll.id, answer })}
         />
       ) : null}
-      {restriction ? (
-        <LiveParticipationAlert
-          restriction={restriction}
-          timeZone={state.session.timeZone}
-          eventName={state.session.eventName}
-        />
-      ) : (
-        <AskQuestionButton disabled={!live} onClick={() => setAsking(true)} />
-      )}
       {asking && !restriction ? (
         <AskQuestionDialog
           disabled={!live}
