@@ -297,6 +297,29 @@ describe("registration continues with the signed-in session", () => {
     expect(await queryAll(env.DB, "SELECT id FROM registrations WHERE user_id=?", userId)).toEqual([]);
   });
 
+  it("refuses a personal registration when the account's address changes before it is stored", async () => {
+    const email = "invited.guest@changed-during.example";
+    const { userId, session, identityId } = await signInRegistrant(env.DB, email, {
+      firstName: "Casey",
+      lastName: "Fixture",
+    });
+    await recordPersonalAddressAnswer(env.DB, userId);
+    const raced = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.includes("INSERT INTO authorization_guards") && sql.includes("affiliation_offer_dismissals"),
+      () =>
+        env.DB.prepare("UPDATE users SET email=?, normalized_email=? WHERE id=?")
+          .bind("invited.guest@claimed-elsewhere.example", "invited.guest@claimed-elsewhere.example", userId)
+          .run(),
+    );
+    const refused = await submit(registration(email, { unaffiliatedAttestation: true, identityId }), session, {
+      ...env,
+      DB: raced,
+    } as typeof env);
+    expect(refused.status, await refused.clone().text()).toBe(409);
+    expect(await queryAll(env.DB, "SELECT id FROM registrations WHERE user_id=?", userId)).toEqual([]);
+  });
+
   it("refuses an identity chosen by a session that does not own the submitted address", async () => {
     const { session } = await signInRegistrant(env.DB, "owner@gmail.com", { firstName: "Casey", lastName: "Fixture" });
     const response = await submit(

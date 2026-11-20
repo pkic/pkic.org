@@ -8,6 +8,7 @@
  * affiliation preview and registration all read it through this one rule.
  */
 import { first } from "../../db/queries";
+import { normalizeEmail } from "../../validation";
 import { organizationDomainCandidates } from "../../email-domains/classification";
 import type { DatabaseLike } from "../../types";
 
@@ -31,12 +32,15 @@ export function personalAddressSql(userId: string, email: string) {
   return { sql: `(${saidPersonalSql(userId)} AND NOT EXISTS (${claimed.sql}))`, bindings: claimed.bindings };
 }
 
-/** The rule as batch evidence, so a domain claimed after the read refuses the write. */
+/**
+ * The rule as batch evidence: a domain claimed, or an account address
+ * changed, after the read refuses the write.
+ */
 export function personalAddressEvidence(input: { userId: string; email: string }) {
   const personal = personalAddressSql("owner.id", input.email);
   return {
-    sql: `SELECT 1 FROM users owner WHERE owner.id = ? AND ${personal.sql}`,
-    bindings: [input.userId, ...personal.bindings],
+    sql: `SELECT 1 FROM users owner WHERE owner.id = ? AND owner.normalized_email = ? AND ${personal.sql}`,
+    bindings: [input.userId, normalizeEmail(input.email), ...personal.bindings],
   };
 }
 
