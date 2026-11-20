@@ -134,6 +134,7 @@ export async function readEventTicketsConfiguration(
       reminderPeriodDays: snapshot.settings?.reminder_period_days ?? DEFAULT_PAYMENT_REMINDER_PERIOD_DAYS,
       unpaidHoldDays: snapshot.settings?.unpaid_hold_days ?? null,
       paymentRetryDays: snapshot.settings?.payment_retry_days ?? DEFAULT_PAYMENT_RETRY_DAYS,
+      transferable: (snapshot.settings?.tickets_transferable ?? 0) === 1,
       sendInvoice: (snapshot.settings?.send_invoice ?? 1) === 1,
       refundDaysBeforeEvent: snapshot.settings?.refund_days_before_event ?? null,
       refundFee: snapshot.settings?.refund_fee ?? 0,
@@ -385,7 +386,7 @@ export async function updateEventTicketSettings(
     }),
     db
       .prepare(
-        `UPDATE event_ticket_settings SET currency = ?, reminder_interval_days = ?, reminder_period_days = ?, unpaid_hold_days = ?, payment_retry_days = ?, send_invoice = ?,
+        `UPDATE event_ticket_settings SET currency = ?, reminder_interval_days = ?, reminder_period_days = ?, unpaid_hold_days = ?, payment_retry_days = ?, tickets_transferable = ?, send_invoice = ?,
            refund_days_before_event = ?, refund_fee = ?, ticket_intro = COALESCE(?, ticket_intro), attendance_intro = COALESCE(?, attendance_intro)
          WHERE event_id = ?`,
       )
@@ -395,6 +396,7 @@ export async function updateEventTicketSettings(
         input.reminderPeriodDays,
         input.unpaidHoldDays,
         input.paymentRetryDays,
+        input.transferable ? 1 : 0,
         input.sendInvoice ? 1 : 0,
         input.refundDaysBeforeEvent,
         input.refundFee,
@@ -408,6 +410,7 @@ export async function updateEventTicketSettings(
       reminderPeriodDays: input.reminderPeriodDays,
       unpaidHoldDays: input.unpaidHoldDays,
       paymentRetryDays: input.paymentRetryDays,
+      transferable: input.transferable,
       refundDaysBeforeEvent: input.refundDaysBeforeEvent,
       refundFee: input.refundFee,
     }),

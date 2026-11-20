@@ -57,10 +57,23 @@ export function ticketPeriodLabels(periods: ReadonlyArray<{ startsOn: string | n
  * money. The deadline is given on the event's clock when its zone is known,
  * otherwise on the reader's own.
  */
+/** What a ticket holder reads where an event lets a ticket go to another person. Organizers arrange it for now. */
+export const TICKET_TRANSFER_NOTE =
+  "You can transfer your ticket to another person. Contact the organizers to arrange it.";
+
 export function ticketRefundNote(
-  policy: { refundableUntil: string | null; refundFee: number; currency: string },
+  policy: { refundableUntil: string | null; refundFee: number; currency: string; transferable?: boolean },
   timeZone?: string,
   now = Date.now(),
+): string {
+  const refunds = ticketRefundTerms(policy, timeZone, now);
+  return policy.transferable ? `${refunds} ${TICKET_TRANSFER_NOTE}` : refunds;
+}
+
+function ticketRefundTerms(
+  policy: { refundableUntil: string | null; refundFee: number; currency: string },
+  timeZone: string | undefined,
+  now: number,
 ): string {
   if (!policy.refundableUntil) return "Tickets for this event are not refunded.";
   if (Date.parse(policy.refundableUntil) < now) return "The refund period for this event has ended.";

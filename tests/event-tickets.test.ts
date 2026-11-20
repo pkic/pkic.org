@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
+import { ticketRefundNote } from "../assets/shared/event-ticket-display";
 import { callApi } from "./helpers/app";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { hmacSha256Hex } from "../functions/_lib/utils/crypto";
@@ -503,6 +504,7 @@ describe("event tickets", () => {
         reminderPeriodDays: configuration.settings.reminderPeriodDays,
         unpaidHoldDays: configuration.settings.unpaidHoldDays,
         paymentRetryDays: configuration.settings.paymentRetryDays,
+        transferable: configuration.settings.transferable,
         sendInvoice: configuration.settings.sendInvoice,
         refundDaysBeforeEvent: null,
         refundFee: 0,
@@ -995,6 +997,7 @@ describe("event tickets", () => {
         reminderPeriodDays: configuration.settings.reminderPeriodDays,
         unpaidHoldDays: configuration.settings.unpaidHoldDays,
         paymentRetryDays: configuration.settings.paymentRetryDays,
+        transferable: configuration.settings.transferable,
         sendInvoice: configuration.settings.sendInvoice,
         refundDaysBeforeEvent,
         refundFee,
@@ -1607,6 +1610,35 @@ describe("event tickets", () => {
       .bind(overdue.registration.id)
       .first<{ status: string }>();
     expect(status!.status).toBe("cancelled");
+  });
+
+  it("tells ticket holders that a ticket can go to another person when the event says so", async () => {
+    const { event, admin } = await seedTickets();
+    const { registration } = await register(event, "transfer@gmail.com");
+    const read = () => readRegistrationTicket(env.DB, { eventId: event.id, registrationId: registration.id });
+    expect((await read())!.transferable).toBe(false);
+
+    const configuration = await readEventTicketsConfiguration(env.DB, event);
+    await updateEventTicketSettings(env.DB, admin, event, {
+      expectedRevision: configuration.revision,
+      ...configuration.settings,
+      transferable: true,
+    });
+    expect((await readEventTicketsConfiguration(env.DB, event)).settings.transferable).toBe(true);
+    const ticket = (await read())!;
+    expect(ticket.transferable).toBe(true);
+    // No refunds and transferable: both are said, in the words every screen and email uses.
+    expect(ticketRefundNote(ticket)).toBe(
+      "Tickets for this event are not refunded. You can transfer your ticket to another person. Contact the organizers to arrange it.",
+    );
+
+    // The reminder email carries the same terms.
+    await env.DB.prepare("UPDATE registration_tickets SET next_reminder_at = '2000-01-01T00:00:00.000Z'").run();
+    await sendTicketPaymentReminders(env.DB, "https://example.test");
+    const email = await env.DB.prepare(
+      "SELECT payload_json FROM email_outbox WHERE idempotency_key LIKE 'ticket-reminder:%' LIMIT 1",
+    ).first<{ payload_json: string }>();
+    expect(JSON.parse(email!.payload_json).refundPolicy).toContain("You can transfer your ticket to another person.");
   });
 
   it("reminds an unpaid ticket once it is due and not a registration that is cancelled", async () => {

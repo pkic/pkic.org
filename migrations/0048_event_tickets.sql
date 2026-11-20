@@ -18,6 +18,8 @@ CREATE TABLE event_ticket_settings (
   unpaid_hold_days       INTEGER,
   -- How many days a place is kept after its payment failed, so the person can pay again.
   payment_retry_days     INTEGER NOT NULL DEFAULT 1,
+  -- Whether a ticket may go to another person; ticket holders are told so.
+  tickets_transferable   INTEGER NOT NULL DEFAULT 0,
   -- Whether the payment provider issues an invoice for each paid ticket, besides its receipt.
   send_invoice           INTEGER NOT NULL DEFAULT 1,
   -- The refund policy: empty for no refunds, otherwise refunds until this many days before the event starts.

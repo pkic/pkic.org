@@ -50,6 +50,7 @@ export function guestTicketOffer(event: EventRef): EventTicketOffer {
     sendInvoice: false,
     refundableUntil: null,
     refundFee: 0,
+    transferable: false,
     ticketIntro: "",
     attendanceIntro: "",
     personalEmail: false,

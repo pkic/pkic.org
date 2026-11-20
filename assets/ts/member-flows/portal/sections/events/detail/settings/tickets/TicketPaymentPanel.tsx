@@ -48,6 +48,7 @@ export function TicketPaymentPanel({
   const [hold, setHold] = useState(holdOf);
   const [retry, setRetry] = useState(String(saved.paymentRetryDays));
   const [sendInvoice, setSendInvoice] = useState(saved.sendInvoice);
+  const [transferable, setTransferable] = useState(saved.transferable);
   const refundPolicyOf = (): RefundPolicy =>
     saved.refundDaysBeforeEvent === null ? "none" : saved.refundFee > 0 ? "fee" : "full";
   const refundDaysOf = () => (saved.refundDaysBeforeEvent === null ? "" : String(saved.refundDaysBeforeEvent));
@@ -66,6 +67,7 @@ export function TicketPaymentPanel({
       unpaidHoldDays: hold.trim() === "" ? null : Number(hold),
       paymentRetryDays: retry.trim() === "" ? undefined : Number(retry),
       sendInvoice,
+      transferable,
       // An empty period or fee is left out, so the contract asks for it beside its field.
       refundDaysBeforeEvent: refundPolicy === "none" ? null : refundDays.trim() === "" ? undefined : Number(refundDays),
       refundFee:
@@ -83,6 +85,7 @@ export function TicketPaymentPanel({
       setHold(holdOf());
       setRetry(String(saved.paymentRetryDays));
       setSendInvoice(saved.sendInvoice);
+      setTransferable(saved.transferable);
       setRefundPolicy(refundPolicyOf());
       setRefundDays(refundDaysOf());
       setRefundFee(refundFeeOf());
@@ -261,6 +264,13 @@ export function TicketPaymentPanel({
                 </Field>
               )}
               <Checkbox
+                name="transferable"
+                checked={transferable}
+                label="Tickets can be transferred to another person"
+                hint="Ticket holders read this with the refund terms and are asked to contact the organizers. You arrange the transfer yourself."
+                onChange={(event) => setTransferable(event.currentTarget.checked)}
+              />
+              <Checkbox
                 name="sendInvoice"
                 checked={sendInvoice}
                 label="Send an invoice for each paid ticket"
@@ -281,6 +291,12 @@ export function TicketPaymentPanel({
                 },
                 { term: "Invoices", value: saved.sendInvoice ? "Sent for each paid ticket" : "Receipt only" },
                 { term: "Refunds", value: refundSummary(saved) },
+                {
+                  term: "Transfers",
+                  value: saved.transferable
+                    ? "Ticket holders are told they can transfer their ticket; organizers arrange it"
+                    : "Not offered",
+                },
                 {
                   term: "Unpaid tickets",
                   value:

@@ -242,7 +242,9 @@ export async function submitEventRegistration(
 
   const badgeRenderJob = prepareBadgeRenderJob(db, referralCode);
   // The payment request states the refund terms a payment made now falls under.
-  const refundPolicy = awaitingPayment ? await readRefundPolicy(db, event.id) : { refundableUntil: null, refundFee: 0 };
+  const refundPolicy = awaitingPayment
+    ? await readRefundPolicy(db, event.id)
+    : { refundableUntil: null, refundFee: 0, transferable: false };
   // The request for payment goes out with the response, not on the outbox's next run.
   const paymentEmailId = uuid();
   const ticketStatements = ticket
@@ -269,6 +271,7 @@ export async function submitEventRegistration(
                   timezone: event.timezone,
                   refund_deadline: refundPolicy.refundableUntil,
                   refund_fee: refundPolicy.refundFee,
+                  transferable: refundPolicy.transferable,
                   pay_by: ticket.payBy,
                 },
                 {

@@ -360,6 +360,7 @@ export interface TicketReadRow {
   refund_failed: number;
   payment_reference: string | null;
   refund_deadline: string | null;
+  transferable: number;
   refund_fee: number;
 }
 
@@ -385,6 +386,7 @@ export const REGISTRATION_TICKET_COLUMNS_SQL = `ticket.id, type.ticket_key, type
               ELSE ${refundDeadlineSql("settings", "event")} END AS refund_deadline,
          CASE WHEN ticket.paid_at IS NOT NULL THEN ticket.refund_fee ELSE COALESCE(settings.refund_fee, 0) END
            AS refund_fee,
+         COALESCE(settings.tickets_transferable, 0) AS transferable,
          ticket.payment_method, ticket.receipt_url,
          CASE WHEN ticket.status = 'pending_payment' THEN ticket.pay_by END AS pay_by,
          CASE WHEN ticket.settled_currency = ticket.currency THEN ticket.net_amount END AS net_amount`;
@@ -424,6 +426,7 @@ export function decodeRegistrationTicket(row: TicketReadRow | null): Registratio
     payBy: row.pay_by,
     refundableUntil: row.refund_deadline,
     refundFee: row.refund_deadline ? row.refund_fee : 0,
+    transferable: row.transferable === 1,
   };
 }
 

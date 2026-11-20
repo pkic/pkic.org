@@ -184,6 +184,7 @@ export async function reviewDisputedTicket(
           timezone: event.timezone,
           refund_deadline: policy.refundableUntil,
           refund_fee: policy.refundFee,
+          transferable: policy.transferable,
         },
         {
           templateKey: "ticket_changed_payment_request",

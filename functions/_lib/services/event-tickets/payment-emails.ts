@@ -93,7 +93,7 @@ export type TicketPaymentEmailTicket = Pick<
   | "timezone"
   | "refund_deadline"
   | "refund_fee"
-> & { pay_by?: string | null; payment_failed?: number };
+> & { pay_by?: string | null; payment_failed?: number; transferable?: number | boolean };
 
 /** The email that asks for payment: sent with the registration, again as a reminder, and after a ticket was moved. */
 export function prepareTicketPaymentEmail(
@@ -126,6 +126,7 @@ export function prepareTicketPaymentEmail(
           refundableUntil: ticket.refund_deadline,
           refundFee: ticket.refund_deadline ? ticket.refund_fee : 0,
           currency: ticket.currency,
+          transferable: Boolean(ticket.transferable),
         },
         ticket.timezone,
       ),

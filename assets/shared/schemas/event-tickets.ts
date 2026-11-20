@@ -134,6 +134,8 @@ export const eventTicketSettingsSchema = z.object({
   /** How many days an unpaid place is kept before its registration is cancelled; null keeps it until someone cancels. */
   unpaidHoldDays: z.number().int().min(1, "Enter 1 or more.").max(365, "Enter 365 or less.").nullable().default(null),
   /** How many days a place is kept after its payment failed, so the person can pay again. */
+  /** Whether a ticket may go to another person. It says so to ticket holders; organizers arrange the transfer. */
+  transferable: z.boolean().default(false),
   paymentRetryDays: z
     .number()
     .int()
@@ -268,6 +270,8 @@ export const eventTicketOfferSchema = z.object({
   refundableUntil: utcInstantSchema.nullable().default(null),
   /** The administration fee kept from such a refund. */
   refundFee: ticketAmountSchema.default(0),
+  /** The event lets a ticket go to another person; organizers arrange it. */
+  transferable: z.boolean().default(false),
   ticketIntro: z.string().default(""),
   attendanceIntro: z.string().default(""),
   /** The person registers with a personal mailbox, so a ticket that is free only for work addresses costs them money. */
@@ -370,6 +374,8 @@ export const registrationTicketSchema = z.object({
   refundableUntil: utcInstantSchema.nullable().default(null),
   /** The administration fee kept from such a refund. */
   refundFee: ticketAmountSchema.default(0),
+  /** The event lets a ticket go to another person; organizers arrange it. */
+  transferable: z.boolean().default(false),
   refundedAmount: totalAmountSchema,
   /** What was paid for the ticket; more than `amount` after a move to days that cost less. */
   paidAmount: totalAmountSchema.default(0),

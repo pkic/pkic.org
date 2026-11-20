@@ -47,6 +47,7 @@ export interface PayableTicketRow {
   /** The event's refund policy as it stands: what a payment made now is held to. */
   refund_deadline: string | null;
   refund_fee: number;
+  transferable: number;
   /** Until when the unpaid ticket keeps its place; null without a deadline. */
   pay_by: string | null;
 }
@@ -64,7 +65,8 @@ export const payableTicketSql = (columns = "") => `
   SELECT ticket.id, ticket.registration_id, ticket.amount, ticket.currency, ticket.status,
          type.name AS ticket_name, event.id AS event_id, event.name AS event_name, event.slug AS event_slug,
          user.email, settings.send_invoice, registration.status AS registration_status, event.timezone,
-         ${refundDeadlineSql("settings", "event")} AS refund_deadline, settings.refund_fee, ticket.pay_by${columns}
+         ${refundDeadlineSql("settings", "event")} AS refund_deadline, settings.refund_fee, settings.tickets_transferable AS transferable,
+         ticket.pay_by${columns}
   FROM registration_tickets ticket
   JOIN event_ticket_settings settings ON settings.event_id = ticket.event_id
   JOIN event_ticket_types type ON type.id = ticket.ticket_type_id

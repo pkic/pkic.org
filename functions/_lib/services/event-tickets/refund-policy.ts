@@ -20,14 +20,19 @@ export const refundDeadlineSql = (settings: string, event: string) =>
 export async function readRefundPolicy(
   db: DatabaseLike,
   eventId: string,
-): Promise<{ refundableUntil: string | null; refundFee: number }> {
-  const row = await first<{ deadline: string | null; fee: number }>(
+): Promise<{ refundableUntil: string | null; refundFee: number; transferable: boolean }> {
+  const row = await first<{ deadline: string | null; fee: number; transferable: number }>(
     db,
-    `SELECT ${refundDeadlineSql("settings", "event")} AS deadline, settings.refund_fee AS fee
+    `SELECT ${refundDeadlineSql("settings", "event")} AS deadline, settings.refund_fee AS fee,
+            settings.tickets_transferable AS transferable
      FROM events event JOIN event_ticket_settings settings ON settings.event_id = event.id WHERE event.id = ?`,
     [eventId],
   );
-  return { refundableUntil: row?.deadline ?? null, refundFee: row?.deadline ? row.fee : 0 };
+  return {
+    refundableUntil: row?.deadline ?? null,
+    refundFee: row?.deadline ? row.fee : 0,
+    transferable: row?.transferable === 1,
+  };
 }
 
 /**
