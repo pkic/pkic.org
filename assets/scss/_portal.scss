@@ -94,10 +94,15 @@ $portal-sidebar-width: 240px;
 }
 
 // On a phone the room is the whole screen above its bottom bar, stream at the
-// top edge, so its container adds no margin above or below it.
+// top edge. Its containers add no margin around it and no height beyond it, so
+// the page has nothing to scroll and the room stays put.
 @media (max-width: 48rem) {
   #portal-main:has(.pk-virtual-room) {
     padding-block: 0;
+  }
+
+  #portal-root:has(.pk-virtual-room) {
+    min-height: 0;
   }
 }
 
