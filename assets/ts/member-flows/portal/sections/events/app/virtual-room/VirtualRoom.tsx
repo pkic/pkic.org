@@ -91,10 +91,11 @@ export function VirtualRoom({
   const now = useBoundaryClock(
     useCallback((at: number) => nextRoomBoundary(sessions, at, timeZone), [sessions, timeZone]),
   );
-  // While a session is on, a phone opens on its questions; between sessions on the agenda.
+  // A phone opens where attendees take part: the questions and polls of the session on or next, which take
+  // questions ahead of time. Only with no session left does it open on the agenda.
   const moment = roomMoment(sessions, now);
   const live = useRoomLive(slug, moment);
-  const defaultPanel: RoomPanelId = moment.current ? "questions" : "agenda";
+  const defaultPanel: RoomPanelId = live.session ? "questions" : "agenda";
   const [panel, setPanel] = useHashQueryParam("roomPanel", defaultPanel, ROOM_PANELS);
   const startsAt = sessions[0]?.startAt;
   const waiting = Boolean(startsAt && now < Date.parse(startsAt) - ONLINE_JOIN_LEAD_MS);

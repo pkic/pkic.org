@@ -29,7 +29,7 @@ export type LiveReactionId = (typeof LIVE_REACTIONS)[number]["id"];
 export const LIVE_REACTION_IDS = LIVE_REACTIONS.map((reaction) => reaction.id) as [LiveReactionId, ...LiveReactionId[]];
 
 export const LIVE_ROOM_POLICY = {
-  /** Attendees may ask, vote and react from this long before the scheduled start… */
+  /** Attendees may chat and react from this long before the scheduled start… */
   opensBeforeStartMinutes: 15,
   /** …until this long after the scheduled end, so the Q&A can run over. */
   closesAfterEndMinutes: 30,
@@ -200,10 +200,19 @@ export function liveRoomWindow(startAt: string, endAt: string) {
   };
 }
 
-/** Whether attendees may ask, vote and react at `now`. */
+/** Whether attendees may chat, react and answer questions at `now`: while somebody watches the room. */
 export function liveRoomOpen(now: number, startAt: string, endAt: string): boolean {
   const window = liveRoomWindow(startAt, endAt);
   return now >= window.opensAt && now <= window.closesAt;
+}
+
+/**
+ * Whether attendees may ask questions, upvote approved ones and answer open polls at `now`. These open as soon as
+ * the session is on the agenda: a question waits for a moderator before anyone sees it, and a poll is one an
+ * operator chose to open, so neither needs the room watched. They close with the room.
+ */
+export function liveRoomTakesQuestions(now: number, endAt: string): boolean {
+  return now <= Date.parse(endAt) + LIVE_ROOM_POLICY.closesAfterEndMinutes * MINUTE;
 }
 
 /**

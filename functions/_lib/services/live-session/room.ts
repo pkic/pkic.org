@@ -29,7 +29,12 @@ import { LiveRoomPeople } from "./room-people";
 import { LiveRoomAuthors } from "./room-authors";
 import { LiveRoomQuestions } from "./room-questions";
 import { DurableObject } from "cloudflare:workers";
-import { LIVE_ROOM_POLICY, liveRoomOpen, liveRoomPurgeAt } from "../../../../assets/shared/live-session-policy";
+import {
+  LIVE_ROOM_POLICY,
+  liveRoomOpen,
+  liveRoomPurgeAt,
+  liveRoomTakesQuestions,
+} from "../../../../assets/shared/live-session-policy";
 import {
   LIVE_ROOM_PROTOCOL,
   type LiveRoomClientMessage,
@@ -62,7 +67,8 @@ import { refreshLiveCreditCopies } from "./room-credit-refresh";
 
 type Handled = LiveRefusal | void;
 const REFUSALS = {
-  closed: { code: "LIVE_ROOM_CLOSED", message: "Questions and reactions open shortly before the session starts." },
+  closed: { code: "LIVE_ROOM_CLOSED", message: "Chat and reactions open shortly before the session starts." },
+  questionsClosed: { code: "LIVE_ROOM_CLOSED", message: "This session is no longer taking questions." },
   readOnly: { code: "LIVE_ROOM_READ_ONLY", message: "This connection can only watch the room." },
   operatorOnly: { code: "LIVE_ROOM_OPERATOR_REQUIRED", message: "Only the session's operators can do that." },
   invalid: { code: "LIVE_ROOM_INVALID_MESSAGE", message: "The room could not read that request." },
@@ -482,6 +488,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     const operator = viewer.role === "operator";
     const session = this.session();
     const open = operator || liveRoomOpen(Date.now(), session.startAt, session.endAt);
+    const asking = operator || liveRoomTakesQuestions(Date.now(), session.endAt);
     if (!operator && liveCommandParticipates(message.type) && this.decisions.restriction(actor.userId, Date.now()))
       return LIVE_PARTICIPATION_REFUSAL;
     switch (message.type) {
@@ -513,13 +520,15 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       case "question.answer.accept":
       case "question.answer.vote":
       case "question.answer.hide":
-        return this.questionCommands.handle(viewer, actor, message, socket, open);
+        return this.questionCommands.handle(viewer, actor, message, socket, asking);
       case "question.vote":
-        return open ? this.questions.vote(actor.userId, message.questionId, message.voted) : REFUSALS.closed;
+        return asking ? this.questions.vote(actor.userId, message.questionId, message.voted) : REFUSALS.questionsClosed;
       case "reaction.send":
         return open ? this.engagement.react(actor.userId, message.reaction) : REFUSALS.closed;
       case "poll.vote":
-        return open ? this.engagement.votePoll(actor.userId, message.pollId, message.answer, socket) : REFUSALS.closed;
+        return asking
+          ? this.engagement.votePoll(actor.userId, message.pollId, message.answer, socket)
+          : REFUSALS.questionsClosed;
       case "presence.update":
         if (!operator) return REFUSALS.operatorOnly;
         this.presence.update(actor, message);

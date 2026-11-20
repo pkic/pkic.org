@@ -224,7 +224,7 @@ export function LiveQuestionThread({
                         ? "Answers open after a moderator approves this question."
                         : question.status === "hidden"
                           ? "Answers are unavailable while this question is hidden."
-                          : "This session is not taking more answers."}
+                          : "Answers are open while the session is live."}
                   </p>
                   <FieldStatus id={`${id}-status`}>{notice ?? ""}</FieldStatus>
                 </>

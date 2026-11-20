@@ -179,14 +179,20 @@ function AskQuestionButton({
   return askIn ? createPortal(button, askIn) : button;
 }
 
-/** A session's questions before its room opens: where to ask, not yet in use, and when it opens. */
-export function LiveQuestionsClosed({ askIn }: { askIn?: HTMLElement | null }) {
+/** A session's questions once its room has closed, or where no session is on: where to ask, not in use. */
+export function LiveQuestionsClosed({
+  askIn,
+  note = "This session is no longer taking questions.",
+}: {
+  askIn?: HTMLElement | null;
+  note?: string;
+}) {
   return (
     <div class="pk-stack pk-stack--snug">
       <div class="pk-live-questions__bar" data-density="compact">
         <AskQuestionButton disabled askIn={askIn} />
       </div>
-      <p class="pk-live-questions__empty">Questions open when the session is live.</p>
+      <p class="pk-live-questions__empty">{note}</p>
     </div>
   );
 }
@@ -367,13 +373,13 @@ export function LiveAttendeeQuestions({
 }
 
 /**
- * A session's Questions section in its details: present only while the room
- * is open to attendees, from shortly before the start until after the end.
+ * A session's Questions section in its details: open from when the session is scheduled until its room closes,
+ * so attendees can send questions ahead for a moderator to approve.
  */
 export function SessionQuestions(props: SessionInteractionProps) {
   const { slug, occurrenceId, createSocket, labelledBy } = props;
   return (
-    <SessionInteractionWindow {...props} disabledControls={<LiveQuestionsClosed />}>
+    <SessionInteractionWindow {...props} scope="questions" disabledControls={<LiveQuestionsClosed />}>
       <section class="pk-stack pk-stack--snug" aria-labelledby={labelledBy ?? `${occurrenceId}-questions`}>
         {!labelledBy && (
           <SectionHeading level={3} id={`${occurrenceId}-questions`}>

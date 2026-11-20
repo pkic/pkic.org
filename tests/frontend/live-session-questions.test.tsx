@@ -76,10 +76,10 @@ afterEach(() => {
 });
 
 describe("session questions", () => {
-  it("stays out of the session details before the room opens", () => {
-    const { host, live } = mount({ startOffsetMinutes: 120, durationMinutes: 30 });
-    expect(host.textContent).toBe("");
-    expect(live.sockets).toHaveLength(0);
+  it("takes questions ahead of the session, and stays out of its details once the room has closed", () => {
+    expect(mount({ startOffsetMinutes: 24 * 60, durationMinutes: 30 }).live.sockets).toHaveLength(1);
+    const after = mount({ startOffsetMinutes: -120, durationMinutes: 30 });
+    expect([after.host.textContent, after.live.sockets.length]).toEqual(["", 0]);
   });
 
   it("joins the session's room over its own subprotocol", () => {

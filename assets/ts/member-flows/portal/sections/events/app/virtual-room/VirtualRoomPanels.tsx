@@ -15,8 +15,10 @@ import type { RoomMoment, RoomSession } from "./virtual-room-schedule";
 export interface RoomLive {
   /** The session running in the location, or the next one, whose room may already be open. */
   session: RoomSession | null;
-  /** Whether that session's room takes attendees now, from shortly before its start until after its end. */
+  /** Whether that session takes questions and poll answers now: from when it is scheduled until its room closes. */
   open: boolean;
+  /** Whether its chat and reactions are open: from shortly before its start until after its end. */
+  live: boolean;
   room: LiveRoomConnection;
 }
 
@@ -26,22 +28,25 @@ export interface RoomLive {
  */
 export function useRoomLive(slug: string, moment: RoomMoment): RoomLive {
   const session = moment.current ?? moment.upcoming[0] ?? null;
-  const open = useLiveWindow(session?.startAt ?? "", session?.endAt ?? "") && Boolean(session);
+  // Questions and polls take part from when the session is scheduled; chat and reactions wait for it to go live.
+  const open = useLiveWindow(session?.startAt ?? "", session?.endAt ?? "", "questions") && Boolean(session);
+  const live = useLiveWindow(session?.startAt ?? "", session?.endAt ?? "") && open;
   const connection = useLiveRoom({ slug, occurrenceId: session?.id ?? "", enabled: open });
   // What the previous session's room last said is not this session's: until this one answers, there is none.
   const stale = connection.state && connection.state.session.occurrenceId !== session?.id;
-  return { session, open, room: stale ? { ...connection, state: null } : connection };
+  return { session, open, live, room: stale ? { ...connection, state: null } : connection };
 }
 
 /** The questions and polls of the session the location is on. */
 export function VirtualRoomQuestions({ live, askIn }: { live: RoomLive; askIn: HTMLElement | null }) {
-  if (!live.session || !live.open) return <LiveQuestionsClosed askIn={askIn} />;
+  if (!live.session) return <LiveQuestionsClosed askIn={askIn} note="No session ahead in this location." />;
+  if (!live.open) return <LiveQuestionsClosed askIn={askIn} />;
   return <LiveAttendeeQuestions room={live.room} occurrenceId={live.session.id} askIn={askIn} />;
 }
 
 /** The chat of the session the location is on, in a window that fills its panel. */
 export function VirtualRoomChat({ live }: { live: RoomLive }) {
-  if (!live.session || !live.open) return <LiveChatClosed />;
+  if (!live.session || !live.live) return <LiveChatClosed />;
   return <LiveAttendeeChat room={live.room} compact />;
 }
 
@@ -49,6 +54,6 @@ export function VirtualRoomChat({ live }: { live: RoomLive }) {
 export function VirtualRoomReactions({ live }: { live: RoomLive }) {
   const state = live.room.state;
   const restriction = useLiveParticipation(state?.viewer.participation);
-  if (!live.open || !state || restriction) return null;
+  if (!live.live || !state || restriction) return null;
   return <LiveReactionBar send={live.room.send} refusal={state.refusal} disabled={live.room.status !== "live"} />;
 }

@@ -385,23 +385,19 @@ describe("virtual room", () => {
     expect(host.querySelector(".pk-alert")).toBeNull();
   });
 
-  it("opens a planned room before a stream is configured, counts down, and shows disabled interaction controls", async () => {
+  it("opens a planned room before a stream is configured, counts down, and keeps the chat closed until it goes live", async () => {
     waiting = true;
     vi.setSystemTime(new Date("2027-01-19T09:00:00.000Z"));
     await open();
     expect(player()).toBeNull();
     expect(host.querySelector('[role="timer"]')?.textContent).toContain("1d");
     expect(host.textContent).not.toContain("No live streams yet");
-    // The chat is its window already, with the composer waiting; questions show where to ask, not yet in use.
+    // The room opens on the next session's questions, which take questions ahead; the chat waits for it to go live.
+    expect(host.querySelector('[role="tabpanel"]')?.getAttribute("aria-labelledby")).toBe("virtual-room-tab-questions");
+    expect(host.textContent).toContain("Joining the session’s questions");
     await act(() => tab("Chat").click());
     expect(host.textContent).toContain("Chat opens when the session is live.");
     expect(host.querySelector<HTMLTextAreaElement>('textarea[name="text"]')?.disabled).toBe(true);
-    await act(() => tab("Questions").click());
-    expect(host.textContent).toContain("Questions open when the session is live.");
-    const ask = [...host.querySelectorAll("button")].find((button) => button.textContent === "Ask a question");
-    expect(ask?.disabled).toBe(true);
-    // No form sits on the page waiting.
-    expect(host.querySelector("textarea")).toBeNull();
   });
 
   it("refreshes stream configuration when the first join window opens", async () => {

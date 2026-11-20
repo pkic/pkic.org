@@ -40,11 +40,11 @@ export class LiveRoomQuestionCommands {
     actor: Actor,
     message: LiveQuestionCommand,
     socket: WebSocket,
-    open: boolean,
+    asking: boolean,
   ): Promise<LiveRefusal | void> {
     switch (message.type) {
       case "question.ask": {
-        const result = await this.questions.ask(viewer, actor, message, message.operationId, open);
+        const result = await this.questions.ask(viewer, actor, message, message.operationId, asking);
         if (!("questionId" in result)) return result;
         socket.send(
           serializeLiveRoomMessage({
@@ -57,7 +57,7 @@ export class LiveRoomQuestionCommands {
       }
       case "question.edit":
       case "question.withdraw": {
-        const result = await this.questions.changeAuthorQuestion(actor, message, open);
+        const result = await this.questions.changeAuthorQuestion(actor, message, asking);
         if (!("questionId" in result)) return result;
         await this.answers.publish(result.questionId);
         socket.send(
