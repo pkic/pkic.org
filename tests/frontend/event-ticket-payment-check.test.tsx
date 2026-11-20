@@ -7,10 +7,12 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { registrationTicketSchema } from "../../assets/shared/schemas/event-tickets";
+import { EventTicket } from "../../assets/ts/member-flows/portal/sections/events/app/EventTicket";
+import { participantEventFixture, registeredParticipant } from "../helpers/participant-event";
 import { EventTicketPayment } from "../../assets/ts/member-flows/portal/sections/events/app/EventTicketPayment";
 
-const postJson = vi.hoisted(() => vi.fn());
-vi.mock("../../assets/ts/shared/api-client", () => ({ postJson }));
+const { postJson, getJson, putJson } = vi.hoisted(() => ({ postJson: vi.fn(), getJson: vi.fn(), putJson: vi.fn() }));
+vi.mock("../../assets/ts/shared/api-client", () => ({ postJson, getJson, putJson }));
 
 const ticket = registrationTicketSchema.parse({
   id: "20000000-0000-4000-8000-0000000000aa",
@@ -37,6 +39,8 @@ beforeEach(() => {
   host = document.createElement("div");
   document.body.append(host);
   postJson.mockReset();
+  getJson.mockReset();
+  putJson.mockReset();
 });
 
 afterEach(() => {
@@ -91,5 +95,32 @@ describe("ticket payment check", () => {
     await open(vi.fn(), { ...ticket, paymentProcessing: true });
     expect(host.textContent).toContain("Your payment is being processed");
     expect(host.querySelector("button")).toBeNull();
+  });
+});
+
+describe("ticket page after a payment", () => {
+  it("says the payment was received once the provider confirms it during the visit", async () => {
+    getJson.mockResolvedValueOnce({ ticket }).mockResolvedValue({ ticket: { ...ticket, status: "paid" } });
+    postJson.mockResolvedValue({ success: true, changed: true });
+    putJson.mockRejectedValue(new Error("no badge in this test"));
+    const onSettled = vi.fn();
+    await act(async () => {
+      render(<EventTicket event={participantEventFixture(registeredParticipant)} onSettled={onSettled} />, host);
+    });
+    // The page loads the ticket, loads the payment view, asks the provider and reads the ticket again.
+    await vi.waitFor(() => expect(host.textContent).toContain("Payment received"));
+    expect(host.textContent).toContain("You're registered.");
+    expect(onSettled).toHaveBeenCalledTimes(1);
+  });
+
+  it("says nothing about a payment on a ticket that was already paid", async () => {
+    getJson.mockResolvedValue({ ticket: { ...ticket, status: "paid" } });
+    putJson.mockRejectedValue(new Error("no badge in this test"));
+    await act(async () => {
+      render(<EventTicket event={participantEventFixture(registeredParticipant)} />, host);
+    });
+    await vi.waitFor(() => expect(getJson).toHaveBeenCalled());
+    expect(host.textContent).not.toContain("Payment received");
+    expect(postJson).not.toHaveBeenCalled();
   });
 });

@@ -2,6 +2,7 @@
 import { registrationTicketSchema } from "../../../shared/schemas/event-tickets";
 import { TicketCard } from "../../member-flows/portal/sections/events/app/EventHome";
 import type { ParticipantEventDetail } from "../../member-flows/portal/sections/events/app/event-app-model";
+import { EventRegister } from "../../member-flows/portal/sections/events/app/EventRegister";
 import { EventTicketPayment } from "../../member-flows/portal/sections/events/app/EventTicketPayment";
 import { TicketStandingNotice } from "../../components/events/tickets/TicketStandingNotice";
 
@@ -72,6 +73,7 @@ export function TicketUnpaidStanding() {
       <div class="pk-grid pk-grid--cards">
         <TicketCard event={event} ended={false} />
       </div>
+      <EventRegister event={event} />
       <TicketStandingNotice eventSlug="example" paymentDue paymentProcessing={false} />
       <TicketStandingNotice eventSlug="example" paymentDue paymentProcessing />
     </div>

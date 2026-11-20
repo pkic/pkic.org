@@ -51,7 +51,8 @@ export async function syncRegistrationTicketWithProvider(
     throw error;
   }
   // How the payment was made and what arrived, where that was not read yet; a failed read is tried again later.
-  await readTicketPaymentDetails(db, env, { ticketId: before.id }, fetcher);
+  // The registrant waits on this answer, so for them the route reads it after responding.
+  if (!input.paymentOnly) await readTicketPaymentDetails(db, env, { ticketId: before.id }, fetcher);
   const changed = JSON.stringify(await read()) !== JSON.stringify(before);
   if (changed)
     await prepareAuditLog(db, "user", actor.id, "registration_ticket_synced", "registration", input.registrationId, {
@@ -93,6 +94,8 @@ async function applyProviderState(
       data: { object: session },
     });
     outboxIds.push(...applied.outboxIds);
+    // A ticket is paid once; the pages opened before that one have nothing to add.
+    if (session.payment_status === "paid") break;
   }
 
   if (paymentOnly) return;

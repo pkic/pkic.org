@@ -19,6 +19,8 @@ import { Spinner } from "../../../../../components/Spinner";
 import { useData } from "../../../../../hooks/useData";
 import { getJson, putJson } from "../../../../../shared/api-client";
 import { registrationTicketResponseSchema } from "../../../../../../shared/schemas/event-tickets";
+import { useState } from "preact/hooks";
+import { Alert } from "../../../../../ui/Alert";
 import { Button } from "../../../../../ui/Button";
 import { ExternalLink } from "../../../../../ui/ExternalLink";
 import { EmptyState } from "../../../../../ui/EmptyState";
@@ -85,6 +87,8 @@ function SettledTicket({
       ),
     [event.slug, registrationId],
   );
+  // Set when the payment arrived during this visit, so the page says so above the badge.
+  const [received, setReceived] = useState(false);
   if (ticket.loading) return <Spinner label="Loading your ticket…" />;
   const held = ticket.data?.ticket;
   if (held && held.status !== "paid" && held.status !== "free")
@@ -95,7 +99,10 @@ function SettledTicket({
           registrationId={registrationId}
           ticket={held}
           details={details}
-          onSettled={() => Promise.all([ticket.reload(), onSettled?.()])}
+          onSettled={() => {
+            setReceived(true);
+            return Promise.all([ticket.reload(), onSettled?.()]);
+          }}
         />
       </Suspense>
     );
@@ -110,7 +117,16 @@ function SettledTicket({
   ) : (
     details
   );
-  return <BadgeTicket event={event} details={settled} retryTicket={unread ? ticket.reload : undefined} />;
+  return (
+    <div class="pk-stack">
+      {received && held?.status === "paid" && (
+        <Alert tone="ok" title="Payment received">
+          <p>You're registered. We emailed your confirmation.</p>
+        </Alert>
+      )}
+      <BadgeTicket event={event} details={settled} retryTicket={unread ? ticket.reload : undefined} />
+    </div>
+  );
 }
 
 function BadgeTicket({

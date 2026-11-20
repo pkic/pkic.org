@@ -75,7 +75,7 @@ export function EventTicketPayment({
         <div class="pk-cluster">{details}</div>
       </EventCard>
     );
-  if (checking) return <Spinner label="Checking your payment…" />;
+  if (checking) return <Spinner label="Checking your payment. This can take a few seconds…" />;
   if (ticket.paymentProcessing)
     return (
       <EventCard eyebrow={`${ticket.ticketName} ticket`} title={TICKET_STANDING_COPY.processing.title}>

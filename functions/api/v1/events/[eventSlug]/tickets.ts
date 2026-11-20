@@ -52,6 +52,7 @@ import {
 } from "../../../../../assets/shared/schemas/event-issued-tickets";
 import { requestTicketRefund } from "../../../../_lib/services/event-tickets/refunds";
 import { syncRegistrationTicketWithProvider } from "../../../../_lib/services/event-tickets/provider-sync";
+import { readTicketPaymentDetails } from "../../../../_lib/services/event-tickets/payment-details";
 import {
   readRegistrationOwner,
   readRegistrationTicket,
@@ -184,6 +185,9 @@ const RegistrationTicketSyncPost = openApiRoute(registrationTicketSyncRouteSchem
   });
   // A confirmation that the payment released goes out with this response.
   if (outboxIds.length > 0) c.executionCtx.waitUntil(processSelectedOutboxBackground(c.env.DB, c.env, outboxIds));
+  // The registrant is answered first; how they paid and the receipt are read behind the response.
+  if (own && changed)
+    c.executionCtx.waitUntil(readTicketPaymentDetails(c.env.DB, c.env, { eventId: event.id }).catch(() => undefined));
   return json({ success: true, changed });
 });
 
