@@ -7,6 +7,7 @@
  * one panel shows beneath them, and a bottom bar switches between questions, chat and the event's agenda.
  */
 import type { ComponentChildren } from "preact";
+import { useState } from "preact/hooks";
 import { ExternalLink } from "../../../../../../ui/ExternalLink";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
 import { TabList } from "../../../../../../ui/TabList";
@@ -124,6 +125,9 @@ function NarrowRoom({
   onPanel,
 }: VirtualRoomFrameProps) {
   const tab = `virtual-room-tab-${panel}`;
+  // Once opened, the agenda stays in the page behind the other panels, so coming back to it is instant.
+  const [agendaOpened, setAgendaOpened] = useState(panel === "agenda");
+  if (panel === "agenda" && !agendaOpened) setAgendaOpened(true);
   const picker =
     locations.length > 1 ? (
       <Select
@@ -156,16 +160,23 @@ function NarrowRoom({
         activeId={panel}
         onSelect={(id) => onPanel(id as RoomPanelId)}
       />
-      <div id={`virtual-room-${panel}`} class="pk-virtual-room__panel" role="tabpanel" aria-labelledby={tab}>
-        {panel === "questions" && questions}
-        {panel === "chat" && chat}
-        {panel === "agenda" && (
-          <>
-            {agenda}
-            {partners}
-          </>
-        )}
-      </div>
+      {panel !== "agenda" && (
+        <div id={`virtual-room-${panel}`} class="pk-virtual-room__panel" role="tabpanel" aria-labelledby={tab}>
+          {panel === "questions" ? questions : chat}
+        </div>
+      )}
+      {agendaOpened && (
+        <div
+          id="virtual-room-agenda"
+          class="pk-virtual-room__panel"
+          role="tabpanel"
+          aria-labelledby="virtual-room-tab-agenda"
+          hidden={panel !== "agenda"}
+        >
+          {agenda}
+          {partners}
+        </div>
+      )}
       <AppTabBar
         scope="event"
         label="Virtual room"

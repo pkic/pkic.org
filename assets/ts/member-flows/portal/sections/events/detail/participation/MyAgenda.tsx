@@ -4,15 +4,12 @@ import { useSyncExternalStore } from "preact/compat";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 import { databaseIdSchema } from "../../../../../../../shared/schemas/identifiers";
-import {
-  personalAgendaProgramResponseSchema,
-  type personalAgendaMarkSchema,
-  type personalAgendaSessionSchema,
+import type {
+  personalAgendaMarkSchema,
+  personalAgendaSessionSchema,
 } from "../../../../../../../shared/schemas/event-personal-agenda";
 import type { sessionParticipationResponseSchema } from "../../../../../../../shared/schemas/event-participation-scanning";
 import { agendaContent } from "../../../../../../../shared/public-agenda-content";
-import { getJson } from "../../../../../../shared/api-client";
-import { useData } from "../../../../../../hooks/useData";
 import { ContentAgenda } from "../../../../../../site/ContentAgenda";
 import type { AgendaPersonalSession } from "../../../../../../site/AgendaParticipationControls";
 import { AGENDA_CALENDAR_TITLE, AgendaCalendarSettings } from "./AgendaCalendarSettings";
@@ -30,6 +27,7 @@ import {
   sessionSeatAction,
 } from "../../../../../../../shared/event-participation-link";
 import { MyAgendaList } from "./MyAgendaList";
+import { useAgendaProgram, type AgendaProgram } from "./useAgendaProgram";
 import { ButtonLink } from "../../../../../../ui/Button";
 import { IconCalendar } from "../../../../../../ui/MediaIcons";
 import { usePortalHashLocation } from "../../../../hash-location";
@@ -59,6 +57,7 @@ export function MyAgenda({
   mine = false,
   canPersonalize = false,
   embedded = false,
+  program,
 }: {
   slug: string;
   eventId?: string;
@@ -70,6 +69,8 @@ export function MyAgenda({
    * session and no calendar view from it, and offers no link that would leave that page.
    */
   embedded?: boolean;
+  /** The published program, where the page showing the agenda has loaded it already. */
+  program?: AgendaProgram;
 }) {
   const rawLocation = useSyncExternalStore(subscribeHashQuery, hashQuerySnapshot);
   const { path, params: query } = splitHash(rawLocation);
@@ -92,8 +93,10 @@ export function MyAgenda({
       </EmptyState>
     );
   if (view === "calendar") return <AgendaCalendarSettings slug={slug} eventName={eventName} />;
+  const Agenda = program ? PersonalAgenda : LoadedPersonalAgenda;
   return (
-    <PersonalAgenda
+    <Agenda
+      program={program!}
       slug={slug}
       eventId={eventId}
       focus={focus.success ? focus.data : undefined}
@@ -110,16 +113,7 @@ export function MyAgenda({
   );
 }
 
-/** The published agenda, shared with the public site and organizer editor, with the viewer's own marks. */
-function PersonalAgenda({
-  slug,
-  eventId,
-  focus,
-  mine,
-  canPersonalize,
-  calendarHref,
-  onFocusClosed,
-}: {
+interface PersonalAgendaProps {
   slug: string;
   eventId?: string;
   focus?: string;
@@ -128,15 +122,24 @@ function PersonalAgenda({
   /** The calendar and reminder settings, where the agenda may lead away from its page. */
   calendarHref: string | null;
   onFocusClosed: () => void;
-}) {
-  const program = useData(
-    () =>
-      getJson(
-        `/api/v1/events/${encodeURIComponent(slug)}/agenda/participation/program`,
-        personalAgendaProgramResponseSchema,
-      ),
-    [slug],
-  );
+}
+
+/** The agenda on its own page, which reads the program itself. */
+function LoadedPersonalAgenda(props: PersonalAgendaProps) {
+  return <PersonalAgenda {...props} program={useAgendaProgram(props.slug)} />;
+}
+
+/** The published agenda, shared with the public site and organizer editor, with the viewer's own marks. */
+function PersonalAgenda({
+  program,
+  slug,
+  eventId,
+  focus,
+  mine,
+  canPersonalize,
+  calendarHref,
+  onFocusClosed,
+}: PersonalAgendaProps & { program: AgendaProgram }) {
   const snapshot = program.data?.agenda;
   // The server scoped private sessions to the ones this reader is invited to or booked on.
   const content = useMemo(

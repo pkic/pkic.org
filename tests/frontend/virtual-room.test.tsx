@@ -152,7 +152,10 @@ async function open() {
   await act(async () => {
     render(
       <HeadingOutline titleLevel={1}>
-        <VirtualRoom slug="summit" agenda={<p>The event’s whole agenda</p>} />
+        <VirtualRoom
+          slug="summit"
+          agenda={(read) => <p>The event’s whole agenda, {read.data?.agenda?.occurrences.length} sessions</p>}
+        />
       </HeadingOutline>,
       host,
     );
@@ -226,7 +229,13 @@ describe("virtual room", () => {
     expect(location.hash).toContain("roomPanel=agenda");
     // The Agenda tab holds the event's own agenda, with the production partners credited at its foot.
     const panel = host.querySelector('[role="tabpanel"]');
-    expect(panel?.textContent).toContain("The event’s whole agenda");
+    // It is handed the program the room read, and asks the server for nothing itself.
+    expect(panel?.textContent).toContain("The event’s whole agenda, 3 sessions");
+    // Once opened it stays in the page behind the other panels, so coming back to it is instant.
+    await act(async () => bar[1]!.click());
+    expect(host.querySelector<HTMLElement>("#virtual-room-agenda")?.hidden).toBe(true);
+    expect(host.querySelector('[role="tabpanel"]:not([hidden])')?.id).toBe("virtual-room-chat");
+    await act(async () => bar[2]!.click());
     const partner = panel?.querySelector('section[aria-label="Production partners"] li');
     expect(partner?.firstElementChild?.textContent).toBe("Camera Technology Provider");
     expect(partner?.querySelector("img")?.getAttribute("alt")).toBe("Northlight");

@@ -236,6 +236,10 @@
     min-inline-size: 0;
   }
 
+  .pk-virtual-room__panel[hidden] {
+    display: none;
+  }
+
   /*
    * A phone: the room is the whole screen above its bottom bar, as an app is. The stream and its two lines
    * keep their place, the panel takes the rest and scrolls inside itself, and the bottom bar switches it.

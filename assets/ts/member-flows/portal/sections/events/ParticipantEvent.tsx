@@ -38,7 +38,8 @@ import { canInviteColleagues, eventRegistrationStanding } from "./app/event-app-
 import { hasEventProposals, hasEventPromotionMaterials, participantEventAppSubject } from "./app/event-app-tabs";
 
 const EventRegister = lazy(() => import("./app/EventRegister").then((module) => ({ default: module.EventRegister })));
-const MyAgenda = lazy(() => import("./detail/participation/MyAgenda").then((module) => ({ default: module.MyAgenda })));
+const loadMyAgenda = () => import("./detail/participation/MyAgenda");
+const MyAgenda = lazy(() => loadMyAgenda().then((module) => ({ default: module.MyAgenda })));
 const EventCheckIn = lazy(() => import("./app/EventCheckIn").then((module) => ({ default: module.EventCheckIn })));
 const VirtualRoom = lazy(() =>
   import("./app/virtual-room/VirtualRoom").then((module) => ({ default: module.VirtualRoom })),
@@ -105,6 +106,10 @@ export function ParticipantEvent({
   useEffect(() => {
     if (ticketless) navigate(base, { replace: true });
   }, [ticketless, base, navigate]);
+  // The room shows the agenda on a tab: its code is fetched while the room opens, so the tab opens at once.
+  useEffect(() => {
+    if (tab === "virtual") void loadMyAgenda();
+  }, [tab]);
   const registrationId = event.participation?.registrationId;
   const hasProposals = hasEventProposals(event);
   const active =
@@ -240,17 +245,18 @@ export function ParticipantEvent({
         <Suspense fallback={<Spinner />}>
           <VirtualRoom
             slug={event.slug}
-            agenda={
+            agenda={(program) => (
               <Suspense fallback={<Spinner />}>
                 <MyAgenda
                   embedded
+                  program={program}
                   slug={event.slug}
                   eventId={event.id}
                   eventName={event.name}
                   canPersonalize={eventRegistrationStanding(event).status === "registered"}
                 />
               </Suspense>
-            }
+            )}
           />
         </Suspense>
       ) : tab === "ticket" && !ticketless ? (

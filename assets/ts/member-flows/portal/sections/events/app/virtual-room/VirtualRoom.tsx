@@ -18,7 +18,6 @@ import { agendaTimeZones } from "../../../../../../../shared/agenda-time-display
 import { eventAgendaRoute, eventVirtualRoomRoute } from "../../../../../../../shared/event-participation-link";
 import { formatDateTimeWithSchedule, formatTimeRangeInZone } from "../../../../../../../shared/format-date";
 import { locationStreamOn, virtualRoomResponseSchema } from "../../../../../../../shared/schemas/event-live-stream";
-import { personalAgendaProgramResponseSchema } from "../../../../../../../shared/schemas/event-personal-agenda";
 import { instantToCalendarDate, viewerTimeZone } from "../../../../../../../shared/timezone";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import { Spinner } from "../../../../../../components/Spinner";
@@ -31,6 +30,7 @@ import { useHashQueryParam } from "../../../../../../hooks/useHashQueryParam";
 import { useMediaQuery } from "../../../../../../hooks/useMediaQuery";
 import { useSponsorDisplay } from "../../../../../sponsors-wall-data";
 import { usePortalHashLocation } from "../../../../hash-location";
+import { useAgendaProgram, type AgendaProgram } from "../../detail/participation/useAgendaProgram";
 import { ROOM_PANELS, ROOM_WIDE_QUERY, VirtualRoomFrame, type RoomPanelId } from "./VirtualRoomFrame";
 import {
   VirtualRoomChat,
@@ -55,8 +55,7 @@ import "./VirtualRoom.css";
 function useVirtualRoomData(slug: string) {
   const base = `/api/v1/events/${encodeURIComponent(slug)}/agenda`;
   const streams = useData(() => getJson(`${base}/streams`, virtualRoomResponseSchema), [slug]);
-  const program = useData(() => getJson(`${base}/participation/program`, personalAgendaProgramResponseSchema), [slug]);
-  return { streams, program };
+  return { streams, program: useAgendaProgram(slug) };
 }
 
 export function VirtualRoom({
@@ -64,8 +63,11 @@ export function VirtualRoom({
   agenda: agendaView,
 }: {
   slug: string;
-  /** The event's own agenda, for the Agenda tab a phone shows in place of "Now & next". */
-  agenda: ComponentChildren;
+  /**
+   * The event's own agenda, for the Agenda tab a phone shows in place of "Now & next". It takes the program
+   * the room has read already, so opening the tab asks the server for nothing.
+   */
+  agenda: (program: AgendaProgram) => ComponentChildren;
 }) {
   const [location, navigate] = useHashLocation();
   const wide = useMediaQuery(ROOM_WIDE_QUERY);
@@ -172,7 +174,7 @@ export function VirtualRoom({
         schedule={<VirtualRoomSchedule slug={slug} moment={moment} formatTime={formatTime} />}
         questions={<VirtualRoomQuestions live={live} />}
         chat={<VirtualRoomChat live={live} />}
-        agenda={agendaView}
+        agenda={agendaView(program)}
         agendaHref={href(eventAgendaRoute(slug))}
         eventHref={href(`/events/${encodeURIComponent(slug)}`)}
         panel={panel}
