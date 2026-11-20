@@ -22,6 +22,7 @@
  *     translated rather than passed through.
  */
 
+import type { z } from "zod";
 import type { ComponentChildren } from "preact";
 
 import {
@@ -131,6 +132,8 @@ export interface ColumnFilter {
 }
 
 export interface ColumnTextFilter {
+  /** Shared query contract for a typed filter committed with Enter or Done. */
+  schema?: z.ZodType<Record<string, string | undefined>>;
   placeholder?: string;
   /** Said under the control, e.g. where the match runs. */
   hint?: string;
@@ -246,8 +249,7 @@ export interface DataTableProps<T> {
   selection?: DataTableSelection;
   /** The column filters in force, by query parameter. */
   filters?: Record<string, string>;
-  /** Called with the parameter and its new value ("" opens the column back up). */
-  onFilterChange?: (param: string, value: string) => void;
+  /** Applies all changed query parameters together; an empty value clears a filter. */
   onFilterPatch?: (changes: Readonly<Record<string, string>>) => void;
   /**
    * The list's column state, when its owner also draws a toolbar from it —
@@ -274,7 +276,6 @@ export function DataTable<T>({
   loading,
   selection,
   filters = {},
-  onFilterChange,
   onFilterPatch,
   tableOptionsFilters = false,
   controls: sharedControls,
@@ -282,7 +283,7 @@ export function DataTable<T>({
   // A list with a toolbar holds its column state there, so the toolbar's
   // record-card menu and these column menus act on one state; a bare table
   // keeps its own.
-  const ownControls = useColumnControls(columns, { currentSort, onSort, filters, onFilterChange, onFilterPatch });
+  const ownControls = useColumnControls(columns, { currentSort, onSort, filters, onFilterPatch });
   const controls = sharedControls ?? ownControls;
   const { hidden, filterOpen, setFilterOpen, slackIndex, menuFor, filterSummaryFor, columnsMenu, chips } = controls;
   // Row identity is by index when the caller has no key, so `rowKey` here is
@@ -355,7 +356,7 @@ export function DataTable<T>({
   return (
     <>
       <AppliedFilterChips chips={chips} />
-      {openColumn && openFilter && openTextFilter && onFilterChange && (
+      {openColumn && openFilter && openTextFilter && (onFilterPatch || sharedControls) && (
         <ColumnTextFilterRow
           key={filterOpen}
           columnLabel={openFilter?.label ?? headLabel(openColumn.header)}
@@ -363,6 +364,8 @@ export function DataTable<T>({
           suggestions={openTextFilter.suggestions}
           placeholder={openTextFilter.placeholder}
           hint={openTextFilter.hint}
+          schema={openTextFilter.schema}
+          param={openFilter.param}
           onInput={(value) => {
             controls.applyFilter(openFilter, value);
           }}

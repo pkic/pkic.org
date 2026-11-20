@@ -160,3 +160,43 @@ test("response answer filters, keyboard sorting, and venue CSV links work at des
   await expect(download).toHaveCount(0);
   await expect(responses.getByRole("link", { name: "Download responses (CSV)", exact: true })).toBeVisible();
 });
+
+test("exact answers commit on Enter or Done and boolean filters use Yes/No", async ({ page }, testInfo) => {
+  await page.goto(`${gallery.resolvedUrls!.local[0]}?only=form-responses`);
+  const responses = page.locator("section#form-responses");
+  const openNotes = async () => {
+    await responses.getByRole("button", { name: "Notes column options", exact: true }).click();
+    await page.getByRole("menuitem", { name: /^(Filter this column|Edit filter)…$/ }).click();
+  };
+  await openNotes();
+  const input = responses.getByRole("textbox", { name: "Filter notes", exact: true });
+  await input.fill("x".repeat(501));
+  await input.press("Enter");
+  await expect(input).toHaveAttribute("aria-invalid", "true");
+  await expect(page).not.toHaveURL(/form-responses.f.answerValue=/);
+  await input.fill("  Workshop  ");
+  await expect(page).not.toHaveURL(/form-responses.f.answerValue=/);
+  await input.press("Enter");
+  await expect(responses.getByRole("button", { name: "Clear the Notes filter", exact: true })).toBeVisible();
+  const download = responses.getByRole("link", { name: "Download Notes (CSV)", exact: true });
+  const query = formSubmissionsExportQuerySchema.parse(
+    Object.fromEntries(new URL((await download.getAttribute("href"))!, page.url()).searchParams),
+  );
+  expect(query).toMatchObject({ answerField: "notes", answerValue: "Workshop" });
+  await openNotes();
+  for (const width of [1440, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(input).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: testInfo.outputPath(`exact-answer-${width}.png`) });
+  }
+  await input.fill("   ");
+  await responses.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(responses.getByRole("button", { name: "Clear the Notes filter", exact: true })).toHaveCount(0);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await responses.getByRole("button", { name: "Consent column options", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Filter", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: "Yes", exact: true }).click();
+  await expect(page).toHaveURL(/form-responses.f.answerValue=true/);
+  await expect(responses.getByRole("button", { name: "Clear the Consent filter", exact: true })).toBeVisible();
+});
