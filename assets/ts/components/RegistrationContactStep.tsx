@@ -6,16 +6,12 @@ import type { MutableRef } from "preact/hooks";
 import { createPortal } from "preact/compat";
 import type { z } from "zod";
 import type { FieldPresentation } from "../hooks/useContractForm";
-import { emailDomainOf, emailDomainResponseSchema, emailDomainUrl } from "../../shared/schemas/email-domains";
 import type { SessionActingIdentity } from "../../shared/session-acting-identity";
 import { userAuthSessionResponseSchema } from "../../shared/schemas/user-auth";
 import { myProfileSchema, myProfileUpdateSchema } from "../../shared/schemas/me";
 import type { WorkEmailStep } from "../../shared/schemas/work-email";
 import { getJson, patchJson, postJson } from "../shared/api-client";
-import {
-  identityAffiliationPreviewSchema,
-  identityAffiliationPreviewResponseSchema,
-} from "../../shared/schemas/identity-affiliation";
+import { previewAffiliation, readRegistrationAddress, type AddressAffiliation } from "../shared/registration-address";
 import { currentUserIdentityCreateSchema, identityMutationResponseSchema } from "../../shared/schemas/identity";
 import {
   VerifiedOrganizationDetails,
@@ -46,15 +42,13 @@ type Stage =
       kind: "known";
       step: WorkEmailStep;
       person: KnownPerson;
+      /** A work address that registers for an organization; a personal one, as the person said at sign-in, does not. */
       workEmail: boolean;
       /** A work address with no organization identity yet confirms its organization in place. */
       affiliation: Affiliation | null;
     };
 
-type Affiliation = z.infer<typeof identityAffiliationPreviewResponseSchema>;
-const PREVIEW_ENDPOINT = "/api/v1/users/current/identities/preview";
-const previewAffiliation = (input: z.input<typeof identityAffiliationPreviewSchema>) =>
-  postJson(PREVIEW_ENDPOINT, identityAffiliationPreviewSchema.parse(input), identityAffiliationPreviewResponseSchema);
+type Affiliation = AddressAffiliation;
 
 type Session = z.infer<typeof userAuthSessionResponseSchema>;
 
@@ -89,22 +83,16 @@ function likelyOrganizationIdentity(person: KnownPerson): SessionActingIdentity 
 async function readStage(): Promise<Stage> {
   const session = await readSession();
   if (!session) return { kind: "signed-out" };
-  const [known, domain] = await Promise.all([
+  const [known, address] = await Promise.all([
     readKnownPerson(session),
-    getJson(emailDomainUrl(emailDomainOf(session.identity.email)), emailDomainResponseSchema).catch(() => null),
+    readRegistrationAddress(session.identity.email),
   ]);
-  const workEmail = domain?.kind === "work";
+  // A personal address, as the person said at sign-in, registers like any other personal one.
+  const workEmail = address.organizationRequired;
   const person = workEmail ? { ...known, identity: likelyOrganizationIdentity(known) } : known;
   // Without any organization identity, the shared organization details confirm one; otherwise the chooser picks.
   const affiliation =
-    workEmail && !known.identities.some((identity) => identity.organizationId)
-      ? await previewAffiliation({
-          phase: "resolve",
-          email: session.identity.email,
-          emailId: null,
-          unaffiliatedAttestation: false,
-        }).catch(() => null)
-      : null;
+    workEmail && !known.identities.some((identity) => identity.organizationId) ? address.affiliation : null;
   return {
     kind: "known",
     person,
