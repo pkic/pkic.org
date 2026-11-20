@@ -8,7 +8,7 @@ const scannerActions = scannerCapabilities.map((permission) => `'${permission}'`
 
 /** Team-role scanner grants are effective only on an assignment to an event. Aliases are internal SQL names. */
 export function eventTeamScannerRoleScopeSql(roleAlias: string, permissionAlias: string): string {
-  return `(${roleAlias}.role_id NOT IN (${eventTeamRoles})
-    OR ${permissionAlias}.permission NOT IN (${scannerActions})
-    OR ${roleAlias}.context_type='event')`;
+  return `CASE WHEN ${roleAlias}.role_id IN (${eventTeamRoles})
+    AND ${permissionAlias}.permission IN (${scannerActions})
+    THEN ${roleAlias}.context_type='event' ELSE 1 END`;
 }
