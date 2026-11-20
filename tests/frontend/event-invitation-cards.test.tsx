@@ -191,20 +191,27 @@ describe("event invitation cards", () => {
     expect(container.querySelectorAll("li")).toHaveLength(2);
   });
 
-  it("asks the backend for more invitations when more are open", async () => {
+  it("asks the backend for more invitations and keeps the count in the link", async () => {
+    window.history.replaceState(null, "", "#/home");
     const fetchMock = stub([invitedRow({}, new Date(Date.now() + 86_400_000).toISOString())], {
       ...page,
-      total: 7,
+      total: 13,
       hasMore: true,
     });
     const container = await mount();
     await act(() => button(container, "Show more invitations").click());
     await settle();
+    expect(location.hash).toBe("#/home?invitations=12");
+    // A refresh asks for the same count again.
+    await act(() => render(null, container));
+    await act(() => render(<EventInvitationCards />, container));
+    await settle();
     const limits = fetchMock.mock.calls
       .map(([input]) => new URL(String(input), location.origin))
       .filter((url) => url.pathname === "/api/v1/events")
       .map((url) => url.searchParams.get("limit"));
-    expect(limits).toEqual(["6", "12"]);
+    expect(limits).toEqual(["6", "12", "12"]);
+    window.history.replaceState(null, "", "#");
   });
 
   it("says so when the upcoming events cannot be read", async () => {

@@ -6,13 +6,14 @@
  * not postponed also asks in a dialog; one invitation asks per visit. Once registered, the
  * event leaves these cards and sits in the Events panel like any other event.
  */
-import { useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 import { EVENT_INVITATION_ACTIONS, eventInvitationWording } from "../../../../shared/event-invitation-copy";
 import { eventRegisterRoute } from "../../../../shared/event-participation-link";
 import { eventsListResponseSchema } from "../../../../shared/schemas/event-management";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { useData } from "../../../hooks/useData";
+import { useHashQueryParam } from "../../../hooks/useHashQueryParam";
 import { getJson } from "../../../shared/api-client";
 import { Button, ButtonLink } from "../../../ui/Button";
 import { Markdown } from "../../../ui/Markdown";
@@ -26,6 +27,14 @@ type EventRow = z.infer<typeof eventsListResponseSchema>["events"][number];
 const INVITATION_CARD_STEP = 6;
 /** The list endpoint's largest page. */
 const INVITATION_CARD_MAX = 200;
+
+/** How many cards the link asks for: a whole number of steps up to the endpoint's largest page. */
+function invitationCardLimit(requested: string): number {
+  const steps = Math.trunc(Number(requested) / INVITATION_CARD_STEP);
+  return Number.isFinite(steps) && steps > 1
+    ? Math.min(steps * INVITATION_CARD_STEP, INVITATION_CARD_MAX)
+    : INVITATION_CARD_STEP;
+}
 
 /** Whether the invitation should ask again: never postponed, or the postponement has run out. */
 function asksAgain(invitation: { remindersPausedUntil: string | null }, now: number): boolean {
@@ -45,12 +54,21 @@ function InvitationBody({ event }: { event: EventRow }) {
 }
 
 export function EventInvitationCards() {
+  // The shown count is link state (`?invitations=12`), omitted at its default, so a refresh keeps it.
+  const [requestedLimit, setRequestedLimit] = useHashQueryParam("invitations", String(INVITATION_CARD_STEP));
+  const limit = invitationCardLimit(requestedLimit);
   // Read at fetch time, so showing more refreshes in place instead of clearing the cards while it loads.
-  const limit = useRef(INVITATION_CARD_STEP);
+  const fetchedLimit = useRef(limit);
   const invited = useData(
-    () => getJson(`/api/v1/events?invitation=open&sort=starts_at&limit=${limit.current}`, eventsListResponseSchema),
+    () =>
+      getJson(`/api/v1/events?invitation=open&sort=starts_at&limit=${fetchedLimit.current}`, eventsListResponseSchema),
     [],
   );
+  useEffect(() => {
+    if (fetchedLimit.current === limit) return;
+    fetchedLimit.current = limit;
+    void invited.reload();
+  }, [limit]);
   // One invitation asks per visit: once its dialog closes or is answered, no other one opens on its own.
   const [prompted, setPrompted] = useState(false);
   const events = invited.data?.events ?? [];
@@ -84,15 +102,12 @@ export function EventInvitationCards() {
           </li>
         ))}
       </ul>
-      {invited.data?.page.hasMore && limit.current < INVITATION_CARD_MAX && (
+      {invited.data?.page.hasMore && limit < INVITATION_CARD_MAX && (
         <div>
           <Button
             variant="secondary"
             disabled={invited.refreshing}
-            onClick={() => {
-              limit.current = Math.min(limit.current + INVITATION_CARD_STEP, INVITATION_CARD_MAX);
-              void invited.reload();
-            }}
+            onClick={() => setRequestedLimit(String(Math.min(limit + INVITATION_CARD_STEP, INVITATION_CARD_MAX)))}
           >
             Show more invitations
           </Button>

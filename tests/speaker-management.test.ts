@@ -2871,6 +2871,8 @@ describe("speaker nomination by attendees", () => {
 
   async function registerSignedInAttendee(): Promise<string> {
     const { eventId } = await setupWorkflow();
+    // A public event's confirmation email carries the token manage link this test nominates with.
+    await env.DB.prepare("UPDATE events SET visibility = 'public' WHERE id = ?").bind(eventId).run();
     await seedSessionAttendanceDays(env.DB, eventId, ["2026-12-01"]);
     const attendee = await signInRegistrant(env.DB, "nominator@pkic.org", {
       firstName: "Attendee",

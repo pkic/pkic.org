@@ -57,6 +57,18 @@ describe("registration invitation access", () => {
     expect(window.location.search).toBe("");
     expect(boot.form.elements.namedItem("firstName")).toHaveProperty("value", "Guest");
   });
+  it("drops a refused invitation from the portal hash query and keeps the rest of it", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(respond({ status: "expired" })));
+    const { gate } = setup();
+    window.history.replaceState(
+      {},
+      "",
+      `${window.location.pathname}${window.location.search}#/events/test/register?invite=expired-token&id=invitation-id&source=invite&step=2`,
+    );
+    await act(() => gate.check("public"));
+    await act(() => button("Continue without invitation").click());
+    expect(window.location.hash).toBe("#/events/test/register?step=2");
+  });
   it("does not offer public continuation for an invitation-only event", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(respond({ status: "invalid" })));
     const { gate } = setup();

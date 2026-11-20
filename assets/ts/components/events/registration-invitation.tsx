@@ -18,6 +18,7 @@ import { Field } from "../../ui/Field";
 import { TextInput } from "../../ui/TextControl";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
 import { Spinner } from "../Spinner";
+import { splitHash, writeHashQuery } from "../../ui/url-query";
 import type { FlowBoot } from "../../event-flows/boot";
 
 type InviteState = "invalid" | "expired" | "already_processed" | "unavailable";
@@ -141,6 +142,15 @@ function InvitationRecovery({
   );
 }
 
+/** Drops a refused invitation from a link's query; true when it carried one. */
+function withoutInvitation(params: URLSearchParams): boolean {
+  const carried = params.has("invite") || params.has("id");
+  params.delete("invite");
+  params.delete("id");
+  if (["invite", "speaker_invite"].includes(params.get("source") ?? "")) params.delete("source");
+  return carried;
+}
+
 export function registrationInvitation(boot: FlowBoot) {
   let policy: EventRegistrationPolicy | undefined;
   let allowed = !boot.query.inviteToken;
@@ -166,10 +176,11 @@ export function registrationInvitation(boot: FlowBoot) {
     if (boot.query.sourceType === "invite" || boot.query.sourceType === "speaker_invite")
       boot.query.sourceType = "direct";
     const url = new URL(window.location.href);
-    url.searchParams.delete("invite");
-    url.searchParams.delete("id");
-    if (["invite", "speaker_invite"].includes(url.searchParams.get("source") ?? "")) url.searchParams.delete("source");
+    withoutInvitation(url.searchParams);
     window.history.replaceState(window.history.state, "", url);
+    // The portal carries the invitation in its hash route's query instead.
+    const hash = splitHash();
+    if (withoutInvitation(hash.params)) writeHashQuery(hash.path, hash.params);
     allowed = true;
     visible(true);
     clearStatus(boot.statusEl);
