@@ -105,7 +105,14 @@ let waiting = false;
 /** The session the studio has loaded in the main hall. */
 let loadedInHall: string | null = null;
 
+/** The browser's own zone, an hour ahead of the agenda's, whatever zone the machine running the tests is in. */
+const VIEWER_ZONE = "Europe/Amsterdam";
+const resolvedOptions = Intl.DateTimeFormat.prototype.resolvedOptions;
+
 beforeEach(() => {
+  vi.spyOn(Intl.DateTimeFormat.prototype, "resolvedOptions").mockImplementation(function (this: Intl.DateTimeFormat) {
+    return { ...resolvedOptions.call(this), timeZone: VIEWER_ZONE };
+  });
   window.history.replaceState(null, "", "/portal/#/events/summit/virtual");
   vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
   vi.setSystemTime(new Date("2027-01-20T09:30:00.000Z"));
@@ -159,6 +166,7 @@ afterEach(() => {
   host.remove();
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  vi.mocked(Intl.DateTimeFormat.prototype.resolvedOptions).mockRestore();
 });
 
 async function open() {
