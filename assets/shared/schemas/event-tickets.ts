@@ -127,6 +127,8 @@ export const eventTicketSettingsSchema = z.object({
   currency: stripeCurrencySchema,
   reminderIntervalDays: z.number().int().min(1, "Enter 1 or more.").max(30, "Enter 30 or less."),
   reminderPeriodDays: z.number().int().min(0, "Enter 0 or more.").max(365, "Enter 365 or less."),
+  /** How many days an unpaid place is kept before its registration is cancelled; null keeps it until someone cancels. */
+  unpaidHoldDays: z.number().int().min(1, "Enter 1 or more.").max(365, "Enter 365 or less.").nullable().default(null),
   /** The payment provider issues an invoice for each paid ticket, besides its receipt. */
   sendInvoice: z.boolean().default(true),
   /**
@@ -400,6 +402,8 @@ export const registrationTicketSchema = z.object({
   paymentMethod: z.string().nullable().default(null),
   netAmount: z.number().int().nullable().default(null),
   receiptUrl: z.url().nullable().default(null),
+  /** Until when an unpaid ticket keeps its place; null when it has no deadline or nothing to pay. */
+  payBy: utcInstantSchema.nullable().default(null),
   /** Until when this ticket is refunded on cancellation or a move to cheaper days; null when it never is. */
   refundableUntil: utcInstantSchema.nullable().default(null),
   /** The administration fee kept from such a refund. */

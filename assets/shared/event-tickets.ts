@@ -25,19 +25,24 @@ export const DEFAULT_PAYMENT_REMINDER_PERIOD_DAYS = 14;
 const DAY_MS = 86_400_000;
 
 /**
- * When an unpaid ticket is next reminded and when reminders stop. Both are
- * null for a ticket with nothing to pay, or an event that sends no reminders.
+ * What starts when a ticket begins to wait for its payment: when it is next
+ * reminded, when reminders stop, and until when its place is kept. All are
+ * null for a ticket with nothing to pay; the reminders also for an event that
+ * sends none, and the deadline for an event that keeps unpaid places.
  */
 export function ticketReminderSchedule(
-  settings: { intervalDays: number; periodDays: number },
+  settings: { intervalDays: number; periodDays: number; holdDays?: number | null },
   now: string,
   awaitingPayment: boolean,
-): { nextReminderAt: string | null; remindersEndAt: string | null } {
-  if (!awaitingPayment || settings.periodDays <= 0) return { nextReminderAt: null, remindersEndAt: null };
+): { nextReminderAt: string | null; remindersEndAt: string | null; payBy: string | null } {
+  if (!awaitingPayment) return { nextReminderAt: null, remindersEndAt: null, payBy: null };
   const from = Date.parse(now);
+  const after = (days: number) => new Date(from + days * DAY_MS).toISOString();
+  const reminded = settings.periodDays > 0;
   return {
-    nextReminderAt: new Date(from + settings.intervalDays * DAY_MS).toISOString(),
-    remindersEndAt: new Date(from + settings.periodDays * DAY_MS).toISOString(),
+    nextReminderAt: reminded ? after(settings.intervalDays) : null,
+    remindersEndAt: reminded ? after(settings.periodDays) : null,
+    payBy: settings.holdDays ? after(settings.holdDays) : null,
   };
 }
 

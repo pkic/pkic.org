@@ -5,6 +5,7 @@
  * is priced again in the same write: otherwise a person could register for
  * what costs nothing and then move to what costs money.
  */
+import { TICKET_PAY_BY_ON_CHANGE_SQL } from "./pay-by";
 import { formatCurrencyAmount } from "../../../../assets/shared/format-currency";
 import { ticketReminderSchedule } from "../../../../assets/shared/event-tickets";
 import { prepareStateGuard } from "../../db/authorization-guard";
@@ -162,7 +163,11 @@ export async function planRepriceTicketForDays(
   const due = owed(total, settings.currency);
   if (total === held.amount && status === (input.restoring ? restored : held.status)) return { statements: [], due };
   const reminders = ticketReminderSchedule(
-    { intervalDays: settings.reminder_interval_days, periodDays: settings.reminder_period_days },
+    {
+      intervalDays: settings.reminder_interval_days,
+      periodDays: settings.reminder_period_days,
+      holdDays: settings.unpaid_hold_days,
+    },
     input.now,
     status === "pending_payment",
   );
@@ -188,7 +193,8 @@ export async function planRepriceTicketForDays(
     db
       .prepare(
         `UPDATE registration_tickets SET amount = ?, currency = ?, status = ?, reminders_sent = 0,
-           next_reminder_at = ?, reminders_end_at = ?, revision = revision + 1, updated_at = ?
+           next_reminder_at = ?, reminders_end_at = ?, pay_by = ${TICKET_PAY_BY_ON_CHANGE_SQL},
+           revision = revision + 1, updated_at = ?
          WHERE id = ? AND status IN ('free', 'pending_payment')`,
       )
       .bind(
@@ -197,6 +203,8 @@ export async function planRepriceTicketForDays(
         status,
         reminders.remindersEndAt ? input.now : null,
         reminders.remindersEndAt,
+        reminders.payBy,
+        reminders.payBy,
         input.now,
         held.id,
       ),

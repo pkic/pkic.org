@@ -5,6 +5,7 @@
  */
 import { ticketRefundNote } from "../../../../assets/shared/event-ticket-display";
 import { formatCurrencyAmount } from "../../../../assets/shared/format-currency";
+import { formatDateTimeInZone } from "../../../../assets/shared/format-date";
 import { isStateGuardFailure, prepareStateGuard } from "../../db/authorization-guard";
 import { all, first } from "../../db/queries";
 import { prepareQueueEmailStatement } from "../../email/outbox";
@@ -85,7 +86,7 @@ export type TicketPaymentEmailTicket = Pick<
   | "timezone"
   | "refund_deadline"
   | "refund_fee"
->;
+> & { pay_by?: string | null };
 
 /** The email that asks for payment: sent with the registration, again as a reminder, and after a ticket was moved. */
 export function prepareTicketPaymentEmail(
@@ -109,6 +110,8 @@ export function prepareTicketPaymentEmail(
       ticketName: ticket.ticket_name,
       ticketPrice: formatCurrencyAmount(ticket.amount, ticket.currency),
       paymentUrl: ticketPageUrl(appBaseUrl, ticket.event_slug),
+      // The day the unpaid place is released, on the event's clock; empty for an event that keeps it.
+      payBy: ticket.pay_by ? formatDateTimeInZone(ticket.pay_by, ticket.timezone) : "",
       refundPolicy: ticketRefundNote(
         {
           refundableUntil: ticket.refund_deadline,

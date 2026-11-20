@@ -525,7 +525,7 @@ Plan the sessions you want to attend in [My agenda &rarr;]({{myAgendaUrl}})
     content: `{{> greeting}}
 
 {{#if eq status "cancelled"}}
-<div class="notice notice-danger">Your registration for <strong>{{eventName}}</strong> is <strong>cancelled</strong>. If this was a mistake, register again on the event page.</div>
+<div class="notice notice-danger">Your registration for <strong>{{eventName}}</strong> is <strong>cancelled</strong>{{#if unpaidRelease}} because your ticket was not paid in time. You can register again on the event page while places are available{{else}}. If this was a mistake, register again on the event page{{/if}}.</div>
 {{else}}
 Your registration for **{{eventName}}** was updated.
 {{/if}}

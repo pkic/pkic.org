@@ -27,6 +27,8 @@ export interface IssuedRegistrationTicket {
   amount: number;
   currency: string;
   status: Extract<RegistrationTicketStatus, "free" | "pending_payment" | "paid">;
+  /** Until when the unpaid ticket keeps its place; null without a deadline or with nothing to pay. */
+  payBy?: string | null;
   statements: StatementLike[];
   /** The code this plan claims a pass of, when it claims one: its last pass may go to someone else first. */
   claimedCodeId?: string | null;
@@ -151,8 +153,16 @@ export async function planRegistrationTicket(
   const now = nowIso();
   const id = uuid();
   const status = priced.total > 0 ? "pending_payment" : "free";
-  const { nextReminderAt: nextReminder, remindersEndAt: remindersEnd } = ticketReminderSchedule(
-    { intervalDays: settings.reminder_interval_days, periodDays: settings.reminder_period_days },
+  const {
+    nextReminderAt: nextReminder,
+    remindersEndAt: remindersEnd,
+    payBy,
+  } = ticketReminderSchedule(
+    {
+      intervalDays: settings.reminder_interval_days,
+      periodDays: settings.reminder_period_days,
+      holdDays: settings.unpaid_hold_days,
+    },
     now,
     status === "pending_payment",
   );
@@ -197,14 +207,15 @@ export async function planRegistrationTicket(
       .prepare(
         `INSERT INTO registration_tickets
            (id, registration_id, event_id, ticket_type_id, assignment_source, code_id, amount, currency, status,
-            dispute_reason, held_email_id, next_reminder_at, reminders_end_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            dispute_reason, held_email_id, next_reminder_at, reminders_end_at, pay_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(registration_id) DO UPDATE SET
            ticket_type_id = excluded.ticket_type_id, assignment_source = excluded.assignment_source,
            code_id = excluded.code_id, amount = excluded.amount, currency = excluded.currency,
            status = excluded.status, dispute_reason = excluded.dispute_reason, dispute_resolved_at = NULL,
            held_email_id = excluded.held_email_id, reminders_sent = 0,
            next_reminder_at = excluded.next_reminder_at, reminders_end_at = excluded.reminders_end_at,
+           pay_by = excluded.pay_by,
            paid_at = NULL, payment_intent_id = NULL, paid_amount = 0, kept_fee = 0, refunded_amount = 0,
            refund_until = NULL, refund_fee = 0, refunds_seen_at = NULL,
            refund_reconcile_at = NULL,
@@ -225,6 +236,7 @@ export async function planRegistrationTicket(
         status === "pending_payment" ? (input.heldEmailId ?? null) : null,
         nextReminder,
         remindersEnd,
+        payBy,
         now,
         now,
       ),
@@ -236,6 +248,7 @@ export async function planRegistrationTicket(
     amount: priced.total,
     currency: settings.currency,
     status,
+    payBy,
     statements,
     claimedCodeId: resolved.code && resolved.code.id !== held?.code_id ? resolved.code.id : null,
   };
@@ -329,6 +342,7 @@ export interface TicketReadRow {
   payment_method: string | null;
   net_amount: number | null;
   receipt_url: string | null;
+  pay_by: string | null;
   id: string;
   ticket_key: string;
   ticket_name: string;
@@ -372,6 +386,7 @@ export const REGISTRATION_TICKET_COLUMNS_SQL = `ticket.id, type.ticket_key, type
          CASE WHEN ticket.paid_at IS NOT NULL THEN ticket.refund_fee ELSE COALESCE(settings.refund_fee, 0) END
            AS refund_fee,
          ticket.payment_method, ticket.receipt_url,
+         CASE WHEN ticket.status = 'pending_payment' THEN ticket.pay_by END AS pay_by,
          CASE WHEN ticket.settled_currency = ticket.currency THEN ticket.net_amount END AS net_amount`;
 
 export const REGISTRATION_TICKET_FROM_SQL = `
@@ -406,6 +421,7 @@ export function decodeRegistrationTicket(row: TicketReadRow | null): Registratio
     paymentMethod: row.payment_method,
     netAmount: row.net_amount,
     receiptUrl: row.receipt_url,
+    payBy: row.pay_by,
     refundableUntil: row.refund_deadline,
     refundFee: row.refund_deadline ? row.refund_fee : 0,
   };
@@ -485,11 +501,11 @@ export function prepareRestoreRegistrationTicket(
   now: string,
 ): StatementLike[] {
   // The event's reminder interval and period, counted from the restore; no period means no reminders.
-  const reminderAt = (days: string) =>
+  const daysAfter = (days: string, when: string) =>
     `CASE WHEN amount = 0 THEN NULL ELSE (
-       SELECT CASE WHEN settings.reminder_period_days > 0
-                   THEN strftime('%Y-%m-%dT%H:%M:%fZ', ?, '+' || settings.${days} || ' days') END
+       SELECT CASE WHEN ${when} THEN strftime('%Y-%m-%dT%H:%M:%fZ', ?, '+' || settings.${days} || ' days') END
        FROM event_ticket_settings settings WHERE settings.event_id = registration_tickets.event_id) END`;
+  const reminderAt = (days: string) => daysAfter(days, "settings.reminder_period_days > 0");
   return [
     // The pass may have gone to someone else since the check; then the ticket must not come back at the code's price.
     prepareStateGuard(db, {
@@ -508,11 +524,12 @@ export function prepareRestoreRegistrationTicket(
         `UPDATE registration_tickets SET status = CASE WHEN amount = 0 THEN 'free' ELSE 'pending_payment' END,
            reminders_sent = 0, next_reminder_at = ${reminderAt("reminder_interval_days")},
            reminders_end_at = ${reminderAt("reminder_period_days")},
+           pay_by = ${daysAfter("unpaid_hold_days", "settings.unpaid_hold_days > 0")},
            paid_at = NULL, payment_intent_id = NULL, paid_amount = 0, kept_fee = 0, refunded_amount = 0,
            refund_until = NULL, refund_fee = 0, refunds_seen_at = NULL,
            refund_reconcile_at = NULL, revision = revision + 1, updated_at = ?
          WHERE registration_id = ? AND status IN ('canceled', 'refunded') AND refund_reconcile_at IS NULL`,
       )
-      .bind(now, now, now, registrationId),
+      .bind(now, now, now, now, registrationId),
   ];
 }

@@ -30,6 +30,7 @@ export function TicketStepTextsPanel({
       currency: saved.currency,
       reminderIntervalDays: saved.reminderIntervalDays,
       reminderPeriodDays: saved.reminderPeriodDays,
+      unpaidHoldDays: saved.unpaidHoldDays,
       sendInvoice: saved.sendInvoice,
       refundDaysBeforeEvent: saved.refundDaysBeforeEvent,
       refundFee: saved.refundFee,

@@ -44,6 +44,8 @@ export function TicketPaymentPanel({
   const [currency, setCurrency] = useState(saved.currency.toUpperCase());
   const [interval, setInterval] = useState(String(saved.reminderIntervalDays));
   const [period, setPeriod] = useState(String(saved.reminderPeriodDays));
+  const holdOf = () => (saved.unpaidHoldDays === null ? "" : String(saved.unpaidHoldDays));
+  const [hold, setHold] = useState(holdOf);
   const [sendInvoice, setSendInvoice] = useState(saved.sendInvoice);
   const refundPolicyOf = (): RefundPolicy =>
     saved.refundDaysBeforeEvent === null ? "none" : saved.refundFee > 0 ? "fee" : "full";
@@ -59,6 +61,8 @@ export function TicketPaymentPanel({
       currency: currency.trim().toLowerCase(),
       reminderIntervalDays: interval.trim() === "" ? undefined : Number(interval),
       reminderPeriodDays: period.trim() === "" ? undefined : Number(period),
+      // Empty keeps an unpaid place until someone cancels the registration.
+      unpaidHoldDays: hold.trim() === "" ? null : Number(hold),
       sendInvoice,
       // An empty period or fee is left out, so the contract asks for it beside its field.
       refundDaysBeforeEvent: refundPolicy === "none" ? null : refundDays.trim() === "" ? undefined : Number(refundDays),
@@ -74,6 +78,7 @@ export function TicketPaymentPanel({
       setCurrency(saved.currency.toUpperCase());
       setInterval(String(saved.reminderIntervalDays));
       setPeriod(String(saved.reminderPeriodDays));
+      setHold(holdOf());
       setSendInvoice(saved.sendInvoice);
       setRefundPolicy(refundPolicyOf());
       setRefundDays(refundDaysOf());
@@ -135,7 +140,7 @@ export function TicketPaymentPanel({
               <Field
                 {...form.of("reminderPeriodDays")}
                 label="Keep reminding for (days)"
-                help="Reminders stop after this many days. The ticket stays unpaid until the person or an organizer cancels the registration. Enter 0 to send no reminders."
+                help="Reminders stop after this many days. Enter 0 to send no reminders."
                 required
               >
                 {(control) => (
@@ -146,6 +151,22 @@ export function TicketPaymentPanel({
                     inputMode="numeric"
                     value={period}
                     onInput={(inputEvent) => setPeriod(inputEvent.currentTarget.value)}
+                  />
+                )}
+              </Field>
+              <Field
+                {...form.of("unpaidHoldDays")}
+                label="Keep an unpaid place for (days)"
+                help="After this many days without payment the registration is cancelled and the person is told. A payment that is being processed keeps the place. Leave empty to keep unpaid places until someone cancels."
+              >
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    name="unpaidHoldDays"
+                    type="number"
+                    inputMode="numeric"
+                    value={hold}
+                    onInput={(inputEvent) => setHold(inputEvent.currentTarget.value)}
                   />
                 )}
               </Field>
@@ -242,7 +263,10 @@ export function TicketPaymentPanel({
                 { term: "Refunds", value: refundSummary(saved) },
                 {
                   term: "Unpaid tickets",
-                  value: "Stay open until the person or an organizer cancels the registration",
+                  value:
+                    saved.unpaidHoldDays === null
+                      ? "Kept until the person or an organizer cancels the registration"
+                      : `Kept for ${days(saved.unpaidHoldDays)}, then the registration is cancelled`,
                 },
               ]}
             />

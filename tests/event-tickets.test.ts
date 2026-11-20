@@ -47,6 +47,7 @@ import {
   updateIssuedTicketsFromProvider,
 } from "../functions/_lib/services/event-tickets/issued-list";
 import { issuedTicketsQuerySchema } from "../assets/shared/schemas/event-issued-tickets";
+import { releaseUnpaidTickets } from "../functions/_lib/services/event-tickets/unpaid-release";
 import { listEventTicketCodes } from "../functions/_lib/services/event-tickets/code-list";
 import { reviewDisputedTicket } from "../functions/_lib/services/event-tickets/dispute";
 import { issueSponsorPassCodes, saveSponsorPasses } from "../functions/_lib/services/event-tickets/sponsor-passes";
@@ -500,6 +501,7 @@ describe("event tickets", () => {
         currency: "eur",
         reminderIntervalDays: configuration.settings.reminderIntervalDays,
         reminderPeriodDays: configuration.settings.reminderPeriodDays,
+        unpaidHoldDays: configuration.settings.unpaidHoldDays,
         sendInvoice: configuration.settings.sendInvoice,
         refundDaysBeforeEvent: null,
         refundFee: 0,
@@ -990,6 +992,7 @@ describe("event tickets", () => {
         currency: configuration.settings.currency,
         reminderIntervalDays: configuration.settings.reminderIntervalDays,
         reminderPeriodDays: configuration.settings.reminderPeriodDays,
+        unpaidHoldDays: configuration.settings.unpaidHoldDays,
         sendInvoice: configuration.settings.sendInvoice,
         refundDaysBeforeEvent,
         refundFee,
@@ -1481,6 +1484,67 @@ describe("event tickets", () => {
     expect(await session("checkout.session.completed", "unpaid")).toMatchObject({ outcome: "processing" });
     expect(await session("checkout.session.async_payment_succeeded", "paid")).toMatchObject({ outcome: "paid" });
     expect(await read()).toMatchObject({ status: "paid", paymentProcessing: false });
+  });
+
+  it("releases a place that was not paid within the event's hold period, and keeps one being paid", async () => {
+    const { event, admin } = await seedTickets();
+    // Without a hold period an unpaid place has no deadline.
+    const kept = await register(event, "kept@gmail.com");
+    const read = (registrationId: string) => readRegistrationTicket(env.DB, { eventId: event.id, registrationId });
+    expect((await read(kept.registration.id))!.payBy).toBeNull();
+
+    const configuration = await readEventTicketsConfiguration(env.DB, event);
+    await updateEventTicketSettings(env.DB, admin, event, {
+      expectedRevision: configuration.revision,
+      ...configuration.settings,
+      unpaidHoldDays: 3,
+    });
+    const late = await register(event, "late@gmail.com");
+    const slow = await register(event, "slow-hold@gmail.com");
+    const deadline = Date.parse((await read(late.registration.id))!.payBy!);
+    expect(deadline - Date.now()).toBeGreaterThan(2.9 * 86_400_000);
+    expect(deadline - Date.now()).toBeLessThan(3.1 * 86_400_000);
+
+    // Nothing is due yet.
+    expect(await releaseUnpaidTickets(env.DB, "https://example.test")).toEqual({ released: 0, failed: 0 });
+
+    // Both deadlines pass; the second person's payment is on its way.
+    await env.DB.prepare("UPDATE registration_tickets SET pay_by = ? WHERE registration_id IN (?, ?)")
+      .bind(new Date(Date.now() - 1000).toISOString(), late.registration.id, slow.registration.id)
+      .run();
+    const slowTicket = (await read(slow.registration.id))!;
+    await env.DB.prepare(
+      `INSERT INTO registration_ticket_payment_events (provider_event_id, ticket_id, event_type, outcome, created_at)
+       VALUES ('evt_hold_processing', ?, 'checkout.session.completed', 'processing', ?)`,
+    )
+      .bind(slowTicket.id, new Date().toISOString())
+      .run();
+    expect(await releaseUnpaidTickets(env.DB, "https://example.test")).toEqual({ released: 1, failed: 0 });
+
+    const status = async (registrationId: string) =>
+      (await env.DB.prepare("SELECT status FROM registrations WHERE id = ?").bind(registrationId).first<{
+        status: string;
+      }>())!.status;
+    expect(await status(late.registration.id)).toBe("cancelled");
+    expect((await read(late.registration.id))!.status).toBe("canceled");
+    expect(await status(slow.registration.id)).not.toBe("cancelled");
+    expect(await status(kept.registration.id)).not.toBe("cancelled");
+    // The person is told why, and the release is on record.
+    const email = await env.DB.prepare(
+      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_updated' ORDER BY created_at DESC LIMIT 1",
+    ).first<{ payload_json: string }>();
+    expect(JSON.parse(email!.payload_json)).toMatchObject({
+      status: "cancelled",
+      unpaidRelease: true,
+      paymentDue: false,
+    });
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) AS n FROM audit_log WHERE action = 'registration_cancelled_unpaid'",
+      ).first(),
+    ).toEqual({ n: 1 });
+    // A second run finds nothing more to release.
+    expect(await releaseUnpaidTickets(env.DB, "https://example.test")).toEqual({ released: 0, failed: 0 });
   });
 
   it("reminds an unpaid ticket once it is due and not a registration that is cancelled", async () => {

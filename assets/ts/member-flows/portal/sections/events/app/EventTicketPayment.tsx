@@ -10,6 +10,7 @@ import {
   type RegistrationTicket,
 } from "../../../../../../shared/schemas/event-tickets";
 import { TICKET_STANDING_COPY } from "../../../../../../shared/event-ticket-standing";
+import { formatDateTime } from "../../../../../../shared/format-date";
 import { formatTicketMoney, ticketRefundNote } from "../../../../../../shared/event-ticket-display";
 import { postJson } from "../../../../../shared/api-client";
 import { Alert } from "../../../../../ui/Alert";
@@ -91,6 +92,9 @@ export function EventTicketPayment({
         Your registration is saved. Your badge and check-in code appear here once the payment arrives, and we email your
         confirmation then.
       </p>
+      {ticket.payBy && (
+        <p>Pay by {formatDateTime(ticket.payBy)} to keep your place. After that your registration is cancelled.</p>
+      )}
       <p class="pk-small pk-muted">{ticketRefundNote(ticket)}</p>
       {error && <Alert tone="danger">{error}</Alert>}
       <div class="pk-cluster">

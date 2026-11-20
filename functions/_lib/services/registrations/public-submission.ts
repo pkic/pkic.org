@@ -269,6 +269,7 @@ export async function submitEventRegistration(
                   timezone: event.timezone,
                   refund_deadline: refundPolicy.refundableUntil,
                   refund_fee: refundPolicy.refundFee,
+                  pay_by: ticket.payBy,
                 },
                 {
                   templateKey: "ticket_payment_request",

@@ -4,6 +4,7 @@
  * which then becomes the decision for that organization, or moves them to the
  * decided ticket at today's price.
  */
+import { TICKET_PAY_BY_ON_CHANGE_SQL } from "./pay-by";
 import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
 import { isStateGuardFailure, prepareStateGuard } from "../../db/authorization-guard";
 import { all, first } from "../../db/queries";
@@ -126,7 +127,11 @@ export async function reviewDisputedTicket(
   const settings = snapshot.settings!;
   const status = priced.total > 0 ? "pending_payment" : "free";
   const reminders = ticketReminderSchedule(
-    { intervalDays: settings.reminder_interval_days, periodDays: settings.reminder_period_days },
+    {
+      intervalDays: settings.reminder_interval_days,
+      periodDays: settings.reminder_period_days,
+      holdDays: settings.unpaid_hold_days,
+    },
     now,
     status === "pending_payment",
   );
@@ -145,7 +150,7 @@ export async function reviewDisputedTicket(
       .prepare(
         `UPDATE registration_tickets SET ticket_type_id = ?, assignment_source = 'organizer', code_id = NULL, amount = ?, currency = ?,
            status = ?, dispute_resolved_at = ?, reminders_sent = 0, next_reminder_at = ?, reminders_end_at = ?,
-           revision = revision + 1, updated_at = ?
+           pay_by = ${TICKET_PAY_BY_ON_CHANGE_SQL}, revision = revision + 1, updated_at = ?
          WHERE id = ? AND dispute_resolved_at IS NULL AND status <> 'paid'`,
       )
       .bind(
@@ -156,6 +161,8 @@ export async function reviewDisputedTicket(
         now,
         reminders.nextReminderAt,
         reminders.remindersEndAt,
+        reminders.payBy,
+        reminders.payBy,
         now,
         row.id,
       ),

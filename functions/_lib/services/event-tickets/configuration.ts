@@ -132,6 +132,7 @@ export async function readEventTicketsConfiguration(
       currency: snapshot.settings?.currency ?? "usd",
       reminderIntervalDays: snapshot.settings?.reminder_interval_days ?? DEFAULT_PAYMENT_REMINDER_INTERVAL_DAYS,
       reminderPeriodDays: snapshot.settings?.reminder_period_days ?? DEFAULT_PAYMENT_REMINDER_PERIOD_DAYS,
+      unpaidHoldDays: snapshot.settings?.unpaid_hold_days ?? null,
       sendInvoice: (snapshot.settings?.send_invoice ?? 1) === 1,
       refundDaysBeforeEvent: snapshot.settings?.refund_days_before_event ?? null,
       refundFee: snapshot.settings?.refund_fee ?? 0,
@@ -383,7 +384,7 @@ export async function updateEventTicketSettings(
     }),
     db
       .prepare(
-        `UPDATE event_ticket_settings SET currency = ?, reminder_interval_days = ?, reminder_period_days = ?, send_invoice = ?,
+        `UPDATE event_ticket_settings SET currency = ?, reminder_interval_days = ?, reminder_period_days = ?, unpaid_hold_days = ?, send_invoice = ?,
            refund_days_before_event = ?, refund_fee = ?, ticket_intro = COALESCE(?, ticket_intro), attendance_intro = COALESCE(?, attendance_intro)
          WHERE event_id = ?`,
       )
@@ -391,6 +392,7 @@ export async function updateEventTicketSettings(
         input.currency,
         input.reminderIntervalDays,
         input.reminderPeriodDays,
+        input.unpaidHoldDays,
         input.sendInvoice ? 1 : 0,
         input.refundDaysBeforeEvent,
         input.refundFee,
@@ -402,6 +404,7 @@ export async function updateEventTicketSettings(
       currency: input.currency,
       reminderIntervalDays: input.reminderIntervalDays,
       reminderPeriodDays: input.reminderPeriodDays,
+      unpaidHoldDays: input.unpaidHoldDays,
       refundDaysBeforeEvent: input.refundDaysBeforeEvent,
       refundFee: input.refundFee,
     }),

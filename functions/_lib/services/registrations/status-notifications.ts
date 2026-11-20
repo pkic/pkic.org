@@ -186,6 +186,8 @@ export interface RegistrationStatusEmailParams extends RegistrationEmailOverride
   templateKey: string;
   subject: string;
   noticeKind?: "status_update" | "waitlist_offer" | "admin_admit";
+  /** The registration was cancelled because its ticket was not paid within the event's hold period. */
+  unpaidRelease?: boolean;
   /** Override only for a deliberately selected pending/bounce fallback address. */
   recipientEmailOverride?: string;
   /** Stable operation identity for notification enqueueing across retried promotion batches. */
@@ -229,6 +231,7 @@ export async function prepareRegistrationStatusEmail(
       shareUrl: null,
       waitlistOfferNotice: params.noticeKind === "waitlist_offer",
       adminAdmitNotice: params.noticeKind === "admin_admit",
+      unpaidRelease: params.unpaidRelease === true,
     },
   });
   return { outboxId: prepared.id, statement: prepared.statement, manageToken, manageUrl };

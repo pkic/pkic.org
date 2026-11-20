@@ -1,3 +1,4 @@
+import { releaseUnpaidTickets } from "../event-tickets/unpaid-release";
 import { readTicketPaymentDetails } from "../event-tickets/payment-details";
 import { sendTicketPaymentReminders } from "../event-tickets/payment-emails";
 import { closeUnpayableTicketCheckouts, processTicketRefunds, reconcileTicketRefunds } from "../event-tickets/refunds";
@@ -216,6 +217,7 @@ export const SCHEDULED_JOB_DEFINITIONS: readonly ScheduledJobDefinition[] = [
     run: async ({ env }) => ({
       summary: {
         reminders: await sendTicketPaymentReminders(env.DB, resolveAppBaseUrl(env)),
+        released: await releaseUnpaidTickets(env.DB, resolveAppBaseUrl(env)),
         refunds: await processTicketRefunds(env.DB, env),
         refundTotals: await reconcileTicketRefunds(env.DB, env),
         checkouts: await closeUnpayableTicketCheckouts(env.DB, env),

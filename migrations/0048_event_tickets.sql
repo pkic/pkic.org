@@ -14,6 +14,8 @@ CREATE TABLE event_ticket_settings (
   currency               TEXT    NOT NULL,
   reminder_interval_days INTEGER NOT NULL,
   reminder_period_days   INTEGER NOT NULL,
+  -- How many days an unpaid place is kept before its registration is cancelled; empty keeps it until someone cancels.
+  unpaid_hold_days       INTEGER,
   -- Whether the payment provider issues an invoice for each paid ticket, besides its receipt.
   send_invoice           INTEGER NOT NULL DEFAULT 1,
   -- The refund policy: empty for no refunds, otherwise refunds until this many days before the event starts.
@@ -180,6 +182,8 @@ CREATE TABLE registration_tickets (
   reminders_sent        INTEGER NOT NULL DEFAULT 0,
   next_reminder_at      TEXT,
   reminders_end_at      TEXT,
+  -- Until when an unpaid ticket keeps its place, by the event's hold period when it started waiting; empty for no end.
+  pay_by                TEXT,
   paid_at               TEXT,
   -- The payment that settled the ticket: what it was for, and how much of it the provider has returned.
   -- `amount` is what the ticket costs for its days now; after a move to cheaper days it is less than was paid.
