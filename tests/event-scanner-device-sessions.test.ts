@@ -140,6 +140,66 @@ describe("Scanner device enrollment and immutable upload closing barrier", () =>
     expect(stored!.response_json).not.toContain(body.badgeId);
     expect(stored!.response_json).not.toContain(fixture.userId);
   });
+  it("resumes the original receipt chain after server closure and audits the transition", async () => {
+    const first = fixture.scanBody({ badgeId: generateBadgeCredential() });
+    expect((await fixture.scan(first)).status).toBe(200);
+    const closed = await request(`/${first.scannerSession.epochId}/closing`, {
+      operationId: crypto.randomUUID(),
+      highWaterSequence: 1,
+      pendingCount: 0,
+      recoveryCount: 0,
+    });
+    expect(scannerDeviceSessionStatusSchema.parse(await closed.json()).closedAt).toBeTruthy();
+    const next = fixture.scanBody({ badgeId: generateBadgeCredential() });
+    next.scannerSession.sequence = 2;
+    expect((await fixture.scan(next)).status).toBe(409);
+    const profile = profileD1Flow(env.DB);
+    const resumed = await callApi(
+      { ...env, DB: profile.db },
+      `/api/v1/events/scan-test/scanner/devices/sessions/${first.scannerSession.epochId}/resumption`,
+      {
+        method: "POST",
+        headers: { authorization: `Bearer ${fixture.token}`, "content-type": "application/json" },
+        body: JSON.stringify({ deviceId: fixture.deviceId }),
+      },
+    );
+    expect(resumed.status, await resumed.clone().text()).toBe(200);
+    expect(profile.summary().roundTrips).toBe(4);
+    expect(await resumed.json()).toMatchObject({ closedAt: null, closingDeclaredAt: null, highWaterSequence: null });
+    expect((await fixture.scan(next)).status).toBe(200);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM event_scanner_upload_receipts").first()).toEqual({
+      count: 2,
+    });
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS count FROM audit_log WHERE action='scanner_session_resumed'").first(),
+    ).toEqual({ count: 1 });
+    expect((await request(`/${first.scannerSession.epochId}/resumption`, { deviceId: fixture.deviceId })).status).toBe(
+      200,
+    );
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS count FROM audit_log WHERE action='scanner_session_resumed'").first(),
+    ).toEqual({ count: 1 });
+    expect(
+      (await request(`/${first.scannerSession.epochId}/resumption`, { deviceId: crypto.randomUUID() })).status,
+    ).toBe(409);
+  });
+  it("does not resume a closed scanner after event evidence capture closes", async () => {
+    const closing = await request(`/${fixture.epochId}/closing`, {
+      operationId: crypto.randomUUID(),
+      highWaterSequence: 0,
+      pendingCount: 0,
+      recoveryCount: 0,
+    });
+    expect(closing.status).toBe(200);
+    await env.DB.prepare("UPDATE event_evidence_retention_state SET capture_closed_at=? WHERE event_id=?")
+      .bind(new Date().toISOString(), fixture.eventId)
+      .run();
+    const response = await request(`/${fixture.epochId}/resumption`, { deviceId: fixture.deviceId });
+    expect(response.status).toBe(409);
+    expect(
+      scannerDeviceSessionStatusSchema.parse(await (await request(`/${fixture.epochId}`)).json()).closedAt,
+    ).toBeTruthy();
+  });
   it("freezes the declared high water and requires every issued sequence even when received counts are plausible", async () => {
     const first = fixture.scanBody({ badgeId: generateBadgeCredential() });
     const second = fixture.scanBody({ badgeId: generateBadgeCredential() });

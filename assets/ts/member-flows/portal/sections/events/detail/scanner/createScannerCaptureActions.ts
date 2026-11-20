@@ -23,7 +23,7 @@ interface ScannerCaptureActions {
   requestCapture: () => boolean;
   captureAllowed: () => boolean;
   manualCapturePending: MutableRef<boolean>;
-  collection: ReturnType<typeof useBadgeCollection>;
+  collection: Pick<ReturnType<typeof useBadgeCollection>, "held" | "begin" | "clear">;
   form: Pick<ContractForm<EventScanRequest>, "submit">;
   auditFailure: ReturnType<typeof useScannerFailureCapture>;
   badgeId: string;
@@ -39,6 +39,7 @@ interface ScannerCaptureActions {
   presentSavedEligibility: Feedback["presentSavedEligibility"];
   verifyQueuedScan: Outbox["verifyQueuedScan"];
   fastMode: boolean;
+  feedbackHeld: boolean;
   manualOpen: boolean;
   cooldown: ReturnType<typeof useScanCooldown>;
   camera: () => Promise<void>;
@@ -82,6 +83,7 @@ export function createScannerCaptureActions({
   presentSavedEligibility,
   verifyQueuedScan,
   fastMode,
+  feedbackHeld,
   manualOpen,
   cooldown,
   camera,
@@ -137,7 +139,7 @@ export function createScannerCaptureActions({
     }
   }
   async function scanCredential(raw: string, fromCamera = false) {
-    if (!captureAllowed() || collection.held.current) return;
+    if (!captureAllowed() || collection.held.current || feedbackHeld) return;
     if (operatorPaused.current || manualPaused.current || manualCapturePending.current) return;
     const current = scannerContext.current;
     if (current.action === "lead" || current.action === "exception") {

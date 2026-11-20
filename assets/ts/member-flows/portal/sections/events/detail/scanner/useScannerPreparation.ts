@@ -62,6 +62,7 @@ export function useScannerPreparation({
     location.rooms.find((room) => room.id === location.roomId)?.name,
     { occurrenceId: location.targetId, roomId: location.roomId },
     allowedActions,
+    badgeCollection ? "collection" : "scan",
   );
   const status = {
     occurrenceId: location.targetId,

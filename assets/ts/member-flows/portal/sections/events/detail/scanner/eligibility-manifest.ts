@@ -347,10 +347,21 @@ export async function prepareEligibilityManifest(
     if (signal?.aborted) throw error;
     if (await scannerUploadSuspended(operatorUserId, sessionId))
       throw new Error("SCANNER_SIGNED_OUT", { cause: error });
-    // A stopped session is not an outage: the server refuses its scans, so its snapshot must not keep scanning.
-    if (error instanceof Error && eligibilityPreparationStopped(error.message)) throw error;
+    // A device-session close can be resumed with the original scan chain. Event capture closure
+    // and lost enrollment remain final for this cached inventory.
+    if (
+      error instanceof Error &&
+      eligibilityPreparationStopped(error.message) &&
+      error.message !== "SCANNER_PREPARATION_CLOSED" &&
+      error.message !== "SCANNER_PREPARATION_CLOSING"
+    )
+      throw error;
     return Object.assign(restore(error), {
-      refreshError: eligibilityRefreshError(error),
+      refreshError:
+        error instanceof Error &&
+        (error.message === "SCANNER_PREPARATION_CLOSED" || error.message === "SCANNER_PREPARATION_CLOSING")
+          ? "Scanner session interrupted. Saved badge data remains available; uploads will retry."
+          : eligibilityRefreshError(error),
       retryAfterMs: error instanceof EligibilityRefreshFailure ? error.retryAfterMs : undefined,
     });
   }

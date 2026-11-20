@@ -1,5 +1,6 @@
 import type { ComponentChildren, ComponentProps } from "preact";
 import type { ContractForm, FieldPresentation } from "../../../../../../hooks/useContractForm";
+import type { useScannerManualEntry } from "./useScannerManualEntry";
 import type { ScannerOfflineContext } from "../../../../../../../shared/schemas/event-scanner-offline-context";
 import { Button } from "../../../../../../ui/Button";
 import { Checkbox } from "../../../../../../ui/Checkbox";
@@ -60,35 +61,39 @@ export function ScannerDiagnostics({
 }
 
 /** Context and mode controls shared by authenticated capture and the fixed offline collector. */
+export function ScannerOfflineSignInButton({ onSignIn }: { onSignIn: () => void }) {
+  return (
+    <Button type="button" variant="secondary" onClick={onSignIn}>
+      Sign in
+    </Button>
+  );
+}
+
 export function ScannerCaptureControls({
   setup,
   mode,
   collector,
+  onSignIn,
   canStart,
   preparing,
   cameraError,
   start,
-  onCheckSignIn,
   children,
 }: {
   children?: ComponentChildren;
   setup: ComponentProps<typeof ScannerSetup>;
   mode: ComponentProps<typeof ScannerModeSelect>;
   collector?: ScannerOfflineContext;
+  onSignIn?: () => void;
   canStart: boolean;
   preparing: boolean;
   cameraError: string;
   start: () => void;
-  onCheckSignIn?: () => void;
 }) {
   return (
     <>
       {collector ? (
-        onCheckSignIn && (
-          <Button type="button" variant="secondary" onClick={onCheckSignIn}>
-            Check sign-in again
-          </Button>
-        )
+        onSignIn && <ScannerOfflineSignInButton onSignIn={onSignIn} />
       ) : (
         <>
           <ScannerSetup {...setup} allowedActions={mode.allowedActions} onAction={mode.onAction} onStart={start} />
@@ -175,7 +180,7 @@ export function ScannerManualControls({
   return (
     <>
       <Button type="button" variant="secondary" onClick={onOpen}>
-        Find attendee or badge
+        {entry.lookup?.online === false ? "Enter badge code" : "Find attendee or badge"}
       </Button>
       <Dialog
         open={open}
@@ -189,6 +194,57 @@ export function ScannerManualControls({
       </Dialog>
     </>
   );
+}
+
+export function scannerManualControlProps({
+  form,
+  action,
+  busy,
+  ready,
+  manual,
+  badgeId,
+  onBadge,
+  onCapture,
+  consentConfirmed,
+  onConsent,
+  slug,
+  offline,
+}: {
+  form: ContractForm<unknown>;
+  action: EventScanRequest["action"];
+  busy: boolean;
+  ready: boolean;
+  manual: ReturnType<typeof useScannerManualEntry>;
+  badgeId: string;
+  onBadge: (code: string) => void;
+  onCapture: () => void;
+  consentConfirmed: boolean;
+  onConsent: (confirmed: boolean) => void;
+  slug: string;
+  offline: boolean;
+}): ComponentProps<typeof ScannerManualControls> {
+  return {
+    handlers: form.handlers,
+    action,
+    busy,
+    ready,
+    open: manual.open,
+    onCapture,
+    consent:
+      action === "lead"
+        ? { confirmed: consentConfirmed, field: form.of("consentConfirmed"), onChange: onConsent }
+        : undefined,
+    onOpen: manual.show,
+    onClose: manual.hide,
+    entry: {
+      focusRequested: manual.focusRequested,
+      onFocusHandled: () => manual.setFocusRequested(false),
+      badgeId,
+      onBadge,
+      field: form.of("badgeId"),
+      lookup: action !== "lead" ? { slug, online: !offline, disabled: busy || !ready } : undefined,
+    },
+  };
 }
 
 export function scannerStartMessage(prepared: boolean, offline: boolean, action: EventScanRequest["action"]): string {

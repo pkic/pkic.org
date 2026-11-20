@@ -1,7 +1,7 @@
 import { withScannedInput } from "../helpers/scanned-input";
 import { scanRecoverySchema } from "../../assets/shared/schemas/event-scan-recovery";
 import { describe, expect, it, vi } from "vitest";
-import { sequenceScannerRecord } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-device-ledger";
+import { sequenceScannerRecord } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-sequence-record";
 import { scannerReceiptMatches } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-receipt";
 import {
   eventScanRequestSchema,

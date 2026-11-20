@@ -37,6 +37,7 @@ const storedEpochSchema = scannerRecoveryEpochSchema
 
 /** An unavailable online session permits only a bounded saved scanner, never portal authentication. */
 export const scannerTransportUnavailable = signal(false);
+export const scannerCaptureActive = signal(false);
 
 export async function readScannerOfflineEpoch(context: ScannerOfflineContext): Promise<ScannerEpoch> {
   await assertScannerOfflineContext(context);
@@ -127,6 +128,15 @@ function contextMatchesEpoch(epoch: ScannerEpoch, context: ScannerOfflineContext
   return epoch.state === "open" && contextBelongsToEpoch(epoch, context) && scannerContextCurrent(context, now);
 }
 
+function resumableContextMatchesEpoch(epoch: ScannerEpoch, context: ScannerOfflineContext, now = Date.now()): boolean {
+  return (
+    (epoch.state === "open" || epoch.state === "closing" || epoch.state === "closed") &&
+    epoch.key === JSON.stringify([epoch.eventId, epoch.operatorUserId, epoch.deviceId]) &&
+    contextBelongsToEpoch(epoch, context) &&
+    scannerContextCurrent(context, now)
+  );
+}
+
 /** A saved local lease can outlast server availability and the web sign-in session. */
 export function scannerOfflineLeaseCurrent(
   epoch: ScannerEpoch & { collectorContext?: unknown; collectorContexts?: unknown },
@@ -155,9 +165,9 @@ export async function listPreparedScannerContexts(): Promise<ScannerOfflineConte
     if (records.length > SCANNER_RECOVERY_EPOCH_LIMIT) return [];
     return records.flatMap((raw) => {
       const parsed = storedEpochSchema.safeParse(raw);
-      if (!parsed.success || !scannerOfflineLeaseCurrent(parsed.data)) return [];
+      if (!parsed.success) return [];
       return preparedContexts(parsed.data).filter(
-        (context) => context.sessionId === active.sessionId && contextMatchesEpoch(parsed.data, context),
+        (context) => context.sessionId === active.sessionId && resumableContextMatchesEpoch(parsed.data, context),
       );
     });
   } finally {
@@ -171,6 +181,7 @@ export async function saveScannerOfflineContext(input: {
   epoch: ScannerEpoch;
   manifest: EligibilityManifest;
   action: EventScanRequest["action"];
+  purpose?: "scan" | "collection";
   allowedActions?: readonly EventScanRequest["action"][];
   targetLabel?: string;
   roomLabel?: string;
@@ -227,7 +238,8 @@ export async function saveScannerOfflineContext(input: {
     ...(input.roomLabel ? { roomLabel: input.roomLabel } : {}),
     purpose:
       input.action === "attendance" &&
-      new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("scannerPurpose") === "collection"
+      (input.purpose ?? new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("scannerPurpose")) ===
+        "collection"
         ? "collection"
         : "scan",
     occurrenceId: manifest.occurrenceId,
@@ -376,7 +388,7 @@ export async function restoreScannerOfflineContext(route: string): Promise<Scann
         context.route === route &&
         context.operatorUserId === active.operatorUserId &&
         context.sessionId === active.sessionId &&
-        contextMatchesEpoch(epoch, context) &&
+        resumableContextMatchesEpoch(epoch, context) &&
         (selectedId ? context.contextId === selectedId : true) &&
         (selectedAction ? context.action === selectedAction : true) &&
         (selectedPurpose ? (context.purpose ?? "scan") === selectedPurpose : true)
@@ -400,7 +412,13 @@ export async function restoreScannerOfflineContext(route: string): Promise<Scann
     const contexts = preparedContexts(epoch).map((item) =>
       item.contextId === context.contextId && samePreparedTask(item, context) ? next : item,
     );
-    store.put({ ...epoch, collectorContext: next, collectorContexts: contexts });
+    store.put({
+      ...epoch,
+      state: "open",
+      closingOperationId: null,
+      collectorContext: next,
+      collectorContexts: contexts,
+    });
     await done;
     const stillActive = await readActiveUserSession();
     return scannerTransportUnavailable.value &&

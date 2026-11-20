@@ -23,6 +23,7 @@ export function useScannerFeedback({
 }) {
   const [lastResult, setLastResult] = useState<EventScanResponse | null>(null);
   const [result, updateResult] = useState<EventScanResponse | null>(null);
+  const lastDisplayedOperation = useRef<string | null>(null);
   const [message, updateMessage] = useState("Ready to scan");
   const messageOperation = useRef<string | null>(null);
   function setMessage(value: string) {
@@ -41,12 +42,20 @@ export function useScannerFeedback({
     setChecking(null);
     setFailed(false);
     updateResult(value);
-    if (value) setLastResult(value);
+    if (value) {
+      lastDisplayedOperation.current = value.operationId;
+      setLastResult(value);
+    }
   }
   function failure(value: string) {
     setFailed(true);
     setMessage(value);
   }
+  const requiresAdvance = (value: EventScanResponse | null) =>
+    Boolean(
+      value && (value.outcome !== "eligible" || (value.admissionRecorded && value.admissionDecision !== "allowed")),
+    );
+  const needsAdvance = failed || requiresAdvance(result);
   const feedbackOperation = lastOperation.current;
   useScannerFeedbackReset(
     enabled,
@@ -58,12 +67,21 @@ export function useScannerFeedback({
       setResult(null);
       setMessage("Ready to scan");
     },
-    failed,
+    needsAdvance,
   );
   function presentReceipt(receipt: EventScanResponse) {
     if (collector || authorityPaused.current) return;
     setLastResult((last) => (last?.operationId === receipt.operationId ? receipt : last));
-    if (!receiptMatchesOperation(receipt.operationId, lastOperation.current)) return;
+    if (!receiptMatchesOperation(receipt.operationId, lastOperation.current)) {
+      // A late refusal still needs attention if the successful local result
+      // cleared and no newer badge has taken its place.
+      if (
+        lastOperation.current !== null ||
+        lastDisplayedOperation.current !== receipt.operationId ||
+        !requiresAdvance(receipt)
+      )
+        return;
+    }
     lastCommittedOperation.current = receipt.operationId;
     setResult(receipt);
     if (messageOperation.current === receipt.operationId) setMessage("");
@@ -87,7 +105,20 @@ export function useScannerFeedback({
     if (lastCommittedOperation.current === saved.scan.operationId)
       return receiptMatchesOperation(saved.scan.operationId, lastOperation.current);
     if (!receiptMatchesOperation(saved.scan.operationId, lastOperation.current)) return false;
-    if (!collector && (local.outcome === "unknown" || local.outcome === "unverified")) {
+    if (!collector && !navigator.onLine) {
+      showLocalEligibility(
+        saved.scan,
+        local.outcome === "unknown"
+          ? {
+              outcome: "unverified",
+              reason: "verification_required",
+              message: "Badge not found in saved badge data. Reconnect to verify.",
+            }
+          : local,
+      );
+      return true;
+    }
+    if (!collector && local.outcome !== "eligible") {
       setChecking(saved.scan.operationId);
       showProvisionalMessage(saved.scan.operationId, "Checking badge online…");
       if (!(await verifyQueuedScan(saved.scan.operationId)))
@@ -101,10 +132,12 @@ export function useScannerFeedback({
     result,
     lastResult,
     clearFeedback: () => {
+      lastDisplayedOperation.current = null;
       setResult(null);
       setLastResult(null);
     },
     failed,
+    needsAdvance,
     captureStatus: failed
       ? { key: "capture-failure", tone: "denied" as const, title: "Scan not recorded", detail: message, record: false }
       : checking

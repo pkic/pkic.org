@@ -1,6 +1,6 @@
 import { RefreshNotice } from "./RefreshNotice";
 import type { ComponentChildren } from "preact";
-import { useEffect, useRef, useState, type MutableRef } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState, type MutableRef } from "preact/hooks";
 import type { z } from "zod";
 import type { PageInfo } from "../../shared/schemas/pagination";
 import { useOffsetPager } from "../hooks/useOffsetPager";
@@ -202,7 +202,9 @@ export function ApiDataTable<T, Response = unknown>({
   };
   const initialUrl = url.initial;
   const mirrorUrl = url.mirror;
-  useEffect(() => {
+  // Restore and mirror before paint so a newly revealed filter cannot change
+  // while an older URL write is still pending.
+  useLayoutEffect(() => {
     const { search, sort, offset, pageSize, filters, openingSort, restore } = currentTableState.current;
     const next = initialUrl;
     if (
@@ -221,7 +223,7 @@ export function ApiDataTable<T, Response = unknown>({
     setFilters(next.filters);
     restore(next.pageSize, next.offset);
   }, [initialUrl]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (restoringUrl.current) {
       restoringUrl.current = false;
       return;

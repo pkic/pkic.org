@@ -1,9 +1,4 @@
 import {
-  enrolledScannerQueueRecordSchema,
-  type ScannerQueueCapture,
-  type ScannerQueueRecord,
-} from "../../../../../../../shared/schemas/event-scanner-offline-queue";
-import {
   SCANNER_RECOVERY_EPOCH_LIMIT,
   scannerDeviceSessionEnrollmentSchema,
   scannerDeviceSessionEnrollmentResponseSchema,
@@ -11,8 +6,9 @@ import {
   scannerDeviceSessionStatusSchema,
 } from "../../../../../../../shared/schemas/event-scanner-devices";
 import { ApiClientError, getJson, postJson } from "../../../../../../shared/api-client";
-import type { ScannerOfflineContext } from "../../../../../../../shared/schemas/event-scanner-offline-context";
-import { scannerOfflineEpochContextMatches, scannerOfflineLeaseCurrent } from "./scanner-offline-context";
+import { scannerOfflineLeaseCurrent } from "./scanner-offline-context";
+import { resumeScannerServerSession } from "./scanner-session-resumption";
+import { scannerEpochKey } from "./scanner-sequence-record";
 import {
   SCANNER_DEVICE_STORE,
   SCANNER_EPOCH_STORE,
@@ -33,8 +29,6 @@ export type ScannerEpoch = {
   state: "preparing" | "open" | "closing" | "closed";
   closingOperationId: string | null;
 };
-const epochKey = (eventId: string, operatorUserId: string, deviceId: string) =>
-  JSON.stringify([eventId, operatorUserId, deviceId]);
 export async function prepareScannerDevice(operatorUserId: string): Promise<string> {
   const db = await openScanStorage();
   try {
@@ -65,7 +59,7 @@ export async function prepareScannerEpoch(
     const transaction = db.transaction(SCANNER_EPOCH_STORE, "readwrite"),
       done = idbCompletion(transaction);
     const store = transaction.objectStore(SCANNER_EPOCH_STORE),
-      key = epochKey(eventId, operatorUserId, deviceId);
+      key = scannerEpochKey(eventId, operatorUserId, deviceId);
     const existing = await idbRequest<ScannerEpoch | undefined>(store.get(key));
     epoch = existing ?? {
       key,
@@ -120,7 +114,7 @@ export async function startNextScannerEpoch(
     const transaction = db.transaction(SCANNER_EPOCH_STORE, "readwrite"),
       done = idbCompletion(transaction),
       store = transaction.objectStore(SCANNER_EPOCH_STORE);
-    const key = epochKey(eventId, operatorUserId, deviceId),
+    const key = scannerEpochKey(eventId, operatorUserId, deviceId),
       current = await idbRequest<ScannerEpoch | undefined>(store.get(key));
     if (!current || (current.state !== "closed" && current.state !== "preparing")) {
       transaction.abort();
@@ -166,8 +160,7 @@ async function refreshScannerEpoch(db: IDBDatabase, epoch: ScannerEpoch, sponsor
       { signal: AbortSignal.timeout(8000) },
     );
   } catch (error) {
-    // A current local lease survives server outages and refusals; it never renews itself. A close the
-    // server reports is final, because the server refuses scans uploaded to a closed session.
+    // A current local lease survives server outages and refusals; it never renews itself.
     if (
       error instanceof ApiClientError &&
       (error.status === 0 ||
@@ -180,6 +173,15 @@ async function refreshScannerEpoch(db: IDBDatabase, epoch: ScannerEpoch, sponsor
   if (status.epochId !== epoch.epochId) throw new Error("Scanner status belongs to another session");
   if ((status.closedAt || status.closingDeclaredAt) && !status.closingOperationId)
     throw new Error("Scanner status is missing the original closing operation");
+  if ((status.closedAt || status.closingDeclaredAt) && scannerOfflineLeaseCurrent(epoch)) {
+    try {
+      await resumeScannerServerSession(epoch.eventId, epoch.epochId, epoch.deviceId, sponsorId);
+    } catch {
+      // The saved lease still permits local capture. Pending scans keep their original session IDs
+      // until the server permits recovery; a network refusal must not freeze event operations.
+    }
+    return epoch;
+  }
   const transaction = db.transaction(SCANNER_EPOCH_STORE, "readwrite"),
     done = idbCompletion(transaction),
     store = transaction.objectStore(SCANNER_EPOCH_STORE);
@@ -194,58 +196,6 @@ async function refreshScannerEpoch(db: IDBDatabase, epoch: ScannerEpoch, sponsor
   return refreshed;
 }
 
-/** Caller includes this store in the same transaction as queue insertion. */
-export async function sequenceScannerRecord(
-  transaction: IDBTransaction,
-  record: ScannerQueueCapture,
-  collector?: ScannerOfflineContext,
-): Promise<ScannerQueueRecord> {
-  const store = transaction.objectStore(SCANNER_EPOCH_STORE);
-  const epoch = await idbRequest<
-    (ScannerEpoch & { collectorContext?: unknown; collectorContexts?: unknown }) | undefined
-  >(store.get(epochKey(record.eventId, record.scan.operatorUserId, record.scan.deviceId)));
-  if (!epoch || epoch.state !== "open" || !epoch.epochId) {
-    transaction.abort();
-    throw new Error("Prepare an open scanner session before capturing scans");
-  }
-  if (
-    collector &&
-    (epoch.epochId !== collector.epochId ||
-      record.eventId !== collector.slug ||
-      record.scan.operatorUserId !== collector.operatorUserId ||
-      record.scan.deviceId !== collector.deviceId ||
-      record.scan.action !== collector.action ||
-      record.scan.occurrenceId !== collector.occurrenceId ||
-      (record.scan.roomId ?? null) !== collector.roomId ||
-      (record.kind === "scan" &&
-        (record.scan.capturePublicationRevision !== collector.publishedRevision ||
-          JSON.stringify(record.scan.nativeEventContext) !== JSON.stringify(collector.nativeEventContext))) ||
-      !scannerOfflineEpochContextMatches(collector, epoch))
-  ) {
-    transaction.abort();
-    throw new Error("The scanner context changed. Reconnect before continuing.");
-  }
-  const sequence = epoch.issuedHighWater + 1;
-  if (!Number.isSafeInteger(sequence)) {
-    transaction.abort();
-    throw new Error("Scanner sequence exhausted");
-  }
-  let sequenced: ScannerQueueRecord;
-  try {
-    sequenced = enrolledScannerQueueRecordSchema.parse({
-      ...record,
-      scan: {
-        ...record.scan,
-        scannerSession: { epochId: epoch.epochId, sequence },
-      },
-    });
-  } catch (error) {
-    transaction.abort();
-    throw error;
-  }
-  store.put({ ...epoch, issuedHighWater: sequence });
-  return sequenced;
-}
 export async function freezeScannerEpoch(
   eventId: string,
   operatorUserId: string,
@@ -256,7 +206,9 @@ export async function freezeScannerEpoch(
     const transaction = db.transaction(SCANNER_EPOCH_STORE, "readwrite"),
       done = idbCompletion(transaction),
       store = transaction.objectStore(SCANNER_EPOCH_STORE);
-    const epoch = await idbRequest<ScannerEpoch | undefined>(store.get(epochKey(eventId, operatorUserId, deviceId)));
+    const epoch = await idbRequest<ScannerEpoch | undefined>(
+      store.get(scannerEpochKey(eventId, operatorUserId, deviceId)),
+    );
     if (!epoch?.epochId) {
       transaction.abort();
       throw new Error("Scanner session has not been enrolled");
@@ -301,9 +253,21 @@ export async function closeScannerEpoch(epoch: ScannerEpoch, sponsorId?: string)
     )
       throw new Error("Server scanner coverage is incomplete");
     const write = db.transaction(SCANNER_EPOCH_STORE, "readwrite"),
-      written = idbCompletion(write);
-    const closed: ScannerEpoch = { ...epoch, state: "closed" };
-    write.objectStore(SCANNER_EPOCH_STORE).put(closed);
+      written = idbCompletion(write),
+      store = write.objectStore(SCANNER_EPOCH_STORE);
+    void written.catch(() => {});
+    const current = await idbRequest<ScannerEpoch | undefined>(store.get(epoch.key));
+    if (
+      current?.state !== "closing" ||
+      current.epochId !== epoch.epochId ||
+      current.closingOperationId !== epoch.closingOperationId ||
+      current.issuedHighWater !== epoch.issuedHighWater
+    ) {
+      write.abort();
+      throw new Error("Scanner session changed during closing. Pending scans remain on this device.");
+    }
+    const closed: ScannerEpoch = { ...current, state: "closed" };
+    store.put(closed);
     await written;
     return closed;
   } finally {

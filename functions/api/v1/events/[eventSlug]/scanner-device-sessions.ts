@@ -2,6 +2,7 @@ import {
   scannerDeviceEnrollmentRouteSchema,
   scannerDeviceStatusRouteSchema,
   scannerDeviceClosingRouteSchema,
+  scannerDeviceResumptionRouteSchema,
 } from "../../../../../assets/shared/schemas/route-contracts-event-scanner-devices";
 import { guardPermissionDatabase } from "../../../../_lib/auth/permissions";
 import { AppError } from "../../../../_lib/errors";
@@ -12,6 +13,7 @@ import {
   enrollScannerDevice,
   scannerDeviceSessionStatus,
   closeScannerDeviceSession,
+  resumeScannerDeviceSession,
   guardScannerSponsorDatabase,
 } from "../../../../_lib/services/event-participation/scanner-device-sessions";
 import { requireEventScannerPermission } from "./authorization";
@@ -50,3 +52,10 @@ export const ScannerDeviceClosingPost = openApiRoute(scannerDeviceClosingRouteSc
   const { db, actor, event } = await scannerAuthorization(c, data.params.eventSlug, data.body.sponsorId);
   return jsonNoStore(await closeScannerDeviceSession(db, event.id, actor.id, data.params.epochId, data.body));
 });
+export const ScannerDeviceResumptionPost = openApiRoute(
+  scannerDeviceResumptionRouteSchema,
+  async (c: AdminContext, data) => {
+    const { db, actor, event } = await scannerAuthorization(c, data.params.eventSlug, data.body.sponsorId);
+    return jsonNoStore(await resumeScannerDeviceSession(db, event.id, actor.id, data.params.epochId, data.body));
+  },
+);

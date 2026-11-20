@@ -7,6 +7,7 @@ import {
   ScannerDeviceEnrollmentPost,
   ScannerDeviceStatusGet,
   ScannerDeviceClosingPost,
+  ScannerDeviceResumptionPost,
 } from "./scanner-device-sessions";
 
 type ScanningRouter = Pick<typeof import("./router").openapi, "get" | "post">;
@@ -18,6 +19,7 @@ export function registerScanningRoutes(openapi: ScanningRouter): void {
   openapi.post("/scanner/devices/sessions", ScannerDeviceEnrollmentPost);
   openapi.get("/scanner/devices/sessions/:epochId", ScannerDeviceStatusGet);
   openapi.post("/scanner/devices/sessions/:epochId/closing", ScannerDeviceClosingPost);
+  openapi.post("/scanner/devices/sessions/:epochId/resumption", ScannerDeviceResumptionPost);
   openapi.get("/scans/targets", ScannerTargetsGet);
   openapi.get("/scans/attendees", ScannerAttendeesGet);
   openapi.get("/scans/attendees/:userId/badge", ScannerAttendeeBadgeGet);
