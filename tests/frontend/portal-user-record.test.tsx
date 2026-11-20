@@ -51,6 +51,7 @@ describe("portal System Users detail record", () => {
     canWrite: false,
     canGrantAccess: false,
     canAnonymize: false,
+    canDelete: false,
     canManageMembership: false,
     canActivateIdentity: false,
   };
@@ -487,6 +488,7 @@ describe("portal System Users detail record", () => {
       ...READ_ONLY,
       canWrite: true,
       canAnonymize: true,
+      canDelete: false,
     });
 
     const notice = [...container.querySelectorAll('[role="alert"]')].find((node) =>

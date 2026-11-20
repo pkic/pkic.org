@@ -10,6 +10,13 @@ export const PROMOTION_OPEN_SQL =
 /** SQL twin of `!promotionIsRetained` for a row aliased `event`. */
 const PROMOTION_EXPIRED_SQL = `(COALESCE(event.ends_at,event.starts_at) IS NOT NULL AND unixepoch(COALESCE(event.ends_at,event.starts_at))+${PROMOTION_RETENTION_DAYS * 86_400}<=unixepoch())`;
 
+/** Every stored file of one render row, badge or promotion image. */
+export function promotionRenderFileKeys(row: { id: string; format: string; cache_key: string }): string[] {
+  return row.format === BADGE_RENDER_FORMAT
+    ? badgeRenderKeys(badgeRenderReferralCode(row.id))
+    : promotionArtifactKeys(row.cache_key);
+}
+
 /**
  * One bounded pass over every event whose retention ended: removes the stored
  * promotion files and badges, then the rows that point at them, so the next
@@ -24,13 +31,7 @@ export async function purgeExpiredPromotionFiles(db: DatabaseLike, env: Pick<Env
     [limit],
   );
   if (!rows.length) return { renders: 0 };
-  await bucket.delete(
-    rows.flatMap((row) =>
-      row.format === BADGE_RENDER_FORMAT
-        ? badgeRenderKeys(badgeRenderReferralCode(row.id))
-        : promotionArtifactKeys(row.cache_key),
-    ),
-  );
+  await bucket.delete(rows.flatMap(promotionRenderFileKeys));
   await run(
     db,
     "DELETE FROM event_promotion_renders WHERE id IN(SELECT value FROM json_each(?)) AND status<>'rendering'",

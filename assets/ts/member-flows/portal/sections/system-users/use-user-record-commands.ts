@@ -2,7 +2,7 @@
  * What a reader may do to a user record, and the menu that offers it.
  *
  * A command here is something taken deliberately: editing the profile,
- * importing a portrait, copying the record's address, erasing the person.
+ * importing a portrait, copying the record's address, erasing or deleting the person.
  * None of them is a state the record arrives in (#47) and none of them is a
  * control standing open on the page (#46) — they are the entries behind the
  * record's own "…" menu, which is where the portal offers a record's actions
@@ -14,8 +14,13 @@
  */
 import { useState } from "preact/hooks";
 import { confirmAction } from "../../../../components/ConfirmDialog";
-import { postJson } from "../../../../shared/api-client";
+import { deleteJson, getJson, postJson } from "../../../../shared/api-client";
 import { userAnonymizeResponseSchema } from "../../../../../shared/schemas/user-management";
+import {
+  accountDeletionPreviewResponseSchema,
+  accountDeletionResponseSchema,
+} from "../../../../../shared/schemas/account-deletion";
+import { accountDeletionBlockerLabel, accountDeletionRemovedLabel } from "../../../../../shared/account-deletion";
 import { IMPORT_GRAVATAR_LABEL, importUserGravatar } from "../../../../shared/headshot/user-headshot";
 import type { MenuItem } from "../../../../ui/Menu";
 import { toast } from "../../ui";
@@ -31,6 +36,7 @@ export interface UserRecordCommandOptions {
   selfEditable: boolean;
   canWrite: boolean;
   canAnonymize: boolean;
+  canDelete: boolean;
   /** Whether the fields are open right now, so the command that opens them is not offered twice. */
   editing: boolean;
   onEdit: () => void;
@@ -38,6 +44,8 @@ export interface UserRecordCommandOptions {
   onOpenProfile: () => void;
   /** Re-reads the record after a command changes it. */
   reload: () => Promise<void>;
+  /** Leaves the record once it no longer exists. */
+  onDeleted: () => void;
 }
 
 export function useUserRecordCommands(options: UserRecordCommandOptions): MenuItem[] {
@@ -47,12 +55,15 @@ export function useUserRecordCommands(options: UserRecordCommandOptions): MenuIt
     selfEditable,
     canWrite,
     canAnonymize,
+    canDelete,
     editing,
     onEdit,
     onOpenProfile,
     reload,
+    onDeleted,
   } = options;
   const [anonymizing, setAnonymizing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [importingGravatar, setImportingGravatar] = useState(false);
 
   if (!loaded) return [];
@@ -100,6 +111,49 @@ export function useUserRecordCommands(options: UserRecordCommandOptions): MenuIt
     }
   }
 
+  /*
+   * Deleting shows what goes with the account before anything happens, and
+   * confirms that exact list: the server refuses a delete whose records
+   * changed since. An account other records depend on is never deleted; the
+   * reader learns why, and may anonymize it instead.
+   */
+  async function deleteAccount() {
+    const path = `/api/v1/users/${encodeURIComponent(user.id)}`;
+    setDeleting(true);
+    try {
+      const { deletion } = await getJson(`${path}/deletion`, accountDeletionPreviewResponseSchema);
+      if (!deletion.deletable) {
+        const anonymizeInstead = await confirmAction({
+          title: `${user.email} can’t be deleted`,
+          body: canAnonymize
+            ? "Other records still depend on this account. Resolve them first, or anonymize the account instead."
+            : "Other records still depend on this account. Resolve them first.",
+          consequences: deletion.blockers.map(accountDeletionBlockerLabel),
+          confirmLabel: canAnonymize ? "Anonymize instead…" : "Close",
+          cancelLabel: canAnonymize ? "Close" : null,
+          tone: canAnonymize ? "danger" : "primary",
+        });
+        if (anonymizeInstead && canAnonymize) await anonymize();
+        return;
+      }
+      const confirmed = await confirmAction({
+        title: `Delete ${user.email}?`,
+        body: "This permanently deletes the account and everything listed. It cannot be undone.",
+        consequences: deletion.removes.map(accountDeletionRemovedLabel),
+        confirmLabel: "Delete account",
+        typedConfirmation: user.email,
+      });
+      if (!confirmed) return;
+      await deleteJson(`${path}?revision=${encodeURIComponent(deletion.revision)}`, accountDeletionResponseSchema);
+      toast("Account deleted", "success");
+      onDeleted();
+    } catch (cause) {
+      toast((cause as Error).message, "error");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   const commands: MenuItem[] = [];
 
   /*
@@ -138,6 +192,17 @@ export function useUserRecordCommands(options: UserRecordCommandOptions): MenuIt
       separatorBefore: true,
       disabled: anonymizing,
       onSelect: () => void anonymize(),
+    });
+  }
+
+  if (canDelete && !user.pii_redacted_at) {
+    commands.push({
+      id: "delete",
+      label: deleting ? "Checking account…" : "Delete account…",
+      danger: true,
+      separatorBefore: !(canAnonymize && !user.pii_redacted_at),
+      disabled: deleting,
+      onSelect: () => void deleteAccount(),
     });
   }
 

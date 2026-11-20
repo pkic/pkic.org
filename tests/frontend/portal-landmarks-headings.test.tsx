@@ -172,6 +172,7 @@ describe("portal landmarks and headings", () => {
           canWrite: true,
           canGrantAccess: false,
           canAnonymize: false,
+          canDelete: false,
           canManageMembership: false,
           canActivateIdentity: false,
         }}
