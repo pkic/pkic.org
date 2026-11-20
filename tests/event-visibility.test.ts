@@ -376,6 +376,16 @@ describe("event audience viewer state", () => {
     expect(list.events[0]).toMatchObject({ slug: "public-event", viewer: null });
   });
 
+  it("links a public page only for a public event, though another event has a base path", async () => {
+    const member = await insertOrgRepresentative(env.DB, { category: "A" });
+    const memberToken = await createMemberSession(env.DB, member.userId, `viewer-page-${crypto.randomUUID()}`);
+    const eventId = await insertEvent("invited-event", "invitation_only", null, "/events/invited-event/");
+    await registerUserForEvent(eventId, member.userId);
+
+    const detail = await requestAudienceDetail("/api/v1/events/invited-event", memberToken);
+    expect(detail).toMatchObject({ slug: "invited-event", basePath: null });
+  });
+
   it("reports the caller's own registration status, attendance type, and waitlist state", async () => {
     const member = await insertOrgRepresentative(env.DB, { category: "A" });
     const memberToken = await createMemberSession(env.DB, member.userId, `viewer-registered-${crypto.randomUUID()}`);

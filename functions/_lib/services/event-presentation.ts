@@ -133,6 +133,16 @@ const OFFERED_REGISTRATION_MODES = new Set(["open", "invite_or_open", "public", 
  * to them; null when the event has no public page or registration is closed.
  * Every event projection links registration through this one path.
  */
+/** Only a public event has public pages; any other event is visible only after sign-in, in the portal. */
+export function eventHasPublicPages(event: Pick<EventRecord, "visibility">): boolean {
+  return event.visibility === "public";
+}
+
+/** The event's public page, when it has one to link to. */
+export function eventPublicPagePath(event: Pick<EventRecord, "base_path" | "visibility">): string | null {
+  return eventHasPublicPages(event) ? event.base_path : null;
+}
+
 export function eventRegistrationPath(
   event: Pick<EventRecord, "slug" | "base_path" | "starts_at" | "settings_json" | "registration_mode"> &
     Partial<Pick<EventRecord, "source_mode">>,

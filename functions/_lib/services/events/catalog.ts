@@ -2,7 +2,7 @@ import { nowIso } from "../../utils/time";
 import { readEventAudienceAccess } from "./scanner-access";
 import type { CountryCode } from "../../../../assets/shared/countries";
 import { fetchEventParticipation } from "./participation";
-import { eventRegistrationPath, resolveHeroImageUrl } from "../event-presentation";
+import { eventPublicPagePath, eventRegistrationPath, resolveHeroImageUrl } from "../event-presentation";
 import {
   EVENT_LIST_SORT_COLUMNS,
   EVENT_MANAGEMENT_LIST_SORT_COLUMNS,
@@ -71,7 +71,7 @@ export function mapEventAudience(
     city: row.city,
     country: row.country,
     links: parseLinksJson(row.links_json),
-    basePath: row.base_path,
+    basePath: eventPublicPagePath(row),
     scannerAccess: access?.scannerAccess,
     sponsorLeadAccess: access?.sponsorLeadAccess ?? false,
     viewer,

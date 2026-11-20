@@ -1,5 +1,6 @@
 import { logInfo } from "../logging";
 import { resolveEventFrontendRoutes, type EventRecord } from "./events";
+import { eventHasPublicPages } from "./event-presentation";
 import {
   eventMyAgendaPath,
   eventPortalRegistrationPath,
@@ -17,7 +18,7 @@ export type RegistrationRouteSource = EventRouteSource & Pick<EventRecord, "visi
  * registration and management open in the portal.
  */
 export function registrationOpensInPortal(event: Pick<EventRecord, "visibility">): boolean {
-  return event.visibility !== "public";
+  return !eventHasPublicPages(event);
 }
 
 function buildUrl(appBaseUrl: string, path: string, query: Record<string, string | undefined | null>): string {
