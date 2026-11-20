@@ -4,7 +4,7 @@ import { act } from "preact/test-utils";
 import { MyAgenda } from "../../assets/ts/member-flows/portal/sections/events/detail/participation/MyAgenda";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sessionParticipationRequestSchema } from "../../assets/shared/schemas/event-participation-scanning";
-import { initializeAgendaFilters } from "../../assets/ts/site/agenda-filters";
+import { initializeAgendaFilters, refreshAgendaFilters } from "../../assets/ts/site/agenda-filters";
 import {
   OPEN,
   SESSION,
@@ -193,7 +193,7 @@ describe("personal agenda on the shared agenda component", () => {
     );
   });
 
-  it("opens a reserved My agenda row with its live seat management", async () => {
+  it("opens a reserved My agenda session with its live seat management", async () => {
     history.replaceState(null, "", "#/events/workshop/agenda?mine=1");
     setProgram(publishedProgram([{ id: SESSION, saved: true, status: "reserved" }]));
     const opened = stubSessionDialogs();
@@ -202,13 +202,14 @@ describe("personal agenda on the shared agenda component", () => {
       return json({ ...response, sessions: response.sessions.map((entry) => ({ ...entry, status: "reserved" })) });
     });
     const host = mount({ mine: true });
-    await vi.waitFor(() => expect(host.querySelector(".pk-agenda-session-row")).not.toBeNull());
-    const link = [...host.querySelectorAll<HTMLAnchorElement>(".pk-agenda-session-row a")].find(
-      (entry) => entry.textContent === "Original workshop",
-    )!;
-    expect(link.closest("li")?.textContent).toContain("Reserved");
-    await act(async () => link.click());
-    await vi.waitFor(() => expect(opened).toHaveLength(1));
+    await vi.waitFor(() => expect(host.querySelector(".pk-content-agenda")).not.toBeNull());
+    expect(card(host, SESSION).textContent).toContain("Reserved");
+    // The shared agenda's initializer loads on its own; the card opens the details once it has.
+    await vi.waitFor(async () => {
+      if (!opened.length)
+        await act(async () => card(host, SESSION).querySelector<HTMLElement>("[data-agenda-open-session]")!.click());
+      expect(opened).toHaveLength(1);
+    });
     const dialog = opened[0]!;
     await vi.waitFor(() => {
       const manager = dialog.querySelector('section[aria-label="Participation"]');
@@ -219,7 +220,7 @@ describe("personal agenda on the shared agenda component", () => {
     });
   });
 
-  it("shows a starred cancellation as a status and omits an unstarred canceled session", async () => {
+  it("shows a starred cancellation as a status and leaves out an unstarred canceled session", async () => {
     history.replaceState(null, "", "#/events/workshop/agenda?mine=1");
     setProgram(
       publishedProgram([
@@ -229,14 +230,16 @@ describe("personal agenda on the shared agenda component", () => {
     );
     stubFetch(async () => json({ status: "canceled", attendanceMode: "physical" }));
     const host = mount({ mine: true });
-    await vi.waitFor(() => expect(host.querySelector(".pk-agenda-session-row")?.textContent).toContain("Canceled"));
-    expect(host.querySelectorAll(".pk-agenda-session-row")).toHaveLength(1);
-    const star = host.querySelector<HTMLButtonElement>('button[aria-label="Star Original workshop"]')!;
-    await act(async () => star.click());
+    await vi.waitFor(() => expect(host.querySelector(".pk-content-agenda")).not.toBeNull());
+    refreshAgendaFilters(host.querySelector<HTMLElement>(".pk-content-agenda")!);
+    expect(card(host, SESSION).textContent).toContain("Canceled");
+    expect(card(host, SESSION).hidden).toBe(false);
+    expect(card(host, WAITLIST).hidden).toBe(true);
+    await act(async () => starOf(host, "Original workshop").click());
     await vi.waitFor(() => expect(host.textContent).toContain("No saved sessions yet"));
   });
 
-  it("lists only the reader's own sessions compactly, including a private one, and keeps an unstarred row", async () => {
+  it("is the agenda's own list with only the reader's sessions, and marks where the day between them is cut", async () => {
     history.replaceState(null, "", "#/events/workshop/agenda?mine=1");
     const published = publishedProgram([
       { id: WAITLIST, saved: true, status: "waitlisted" },
@@ -251,38 +254,28 @@ describe("personal agenda on the shared agenda component", () => {
         ),
       },
     });
-    stubFetch(async (_input, init) => {
-      if (init?.method !== "PUT") throw new Error("Unexpected read");
-      sessionParticipationRequestSchema.parse(JSON.parse(String(init.body)));
-      // Changing a star without a booking preserves the saved status.
-      return json({ status: "saved", attendanceMode: "physical" });
-    });
+    stubFetch(async () => json(listing(1, "request", true)));
     const host = mount({ mine: true });
-    await vi.waitFor(() => expect(host.querySelector(".pk-agenda-session-rows")).not.toBeNull());
-    // A list of the reader's sessions, not the timetable with its empty rooms, slots and view toggles.
-    expect(host.querySelector(".pk-content-agenda")).toBeNull();
-    expect(host.querySelector("[data-agenda-view], [data-agenda-mine-filter], [data-agenda-tab]")).toBeNull();
-    const rowOf = (title: string) =>
-      [...host.querySelectorAll<HTMLElement>(".pk-agenda-session-row")].find((row) =>
-        row.textContent?.includes(title),
-      )!;
+    await vi.waitFor(() => expect(host.querySelector(".pk-content-agenda")).not.toBeNull());
+    const root = host.querySelector<HTMLElement>(".pk-content-agenda")!;
+    // The agenda's own cards, as a list on every screen, without the toggle the whole agenda has.
+    expect(root.dataset.agendaView).toBe("list");
+    expect(root.hasAttribute("data-agenda-mine-only")).toBe(true);
+    expect(host.querySelector("[data-agenda-mine-filter]")).toBeNull();
+    refreshAgendaFilters(root);
     // The server scoped the private session to this reader; the open keynote is not on their agenda.
-    expect(host.querySelectorAll(".pk-agenda-session-row")).toHaveLength(2);
-    expect(rowOf("Open keynote")).toBeUndefined();
-    expect(rowOf("Popular lab").textContent).toContain("On the waiting list");
-    // The title opens the session's details from My agenda, so closing them returns here.
-    expect(rowOf("Popular lab").querySelector("a")?.getAttribute("href")).toBe(
-      `#/events/workshop/agenda?mine=1&session=${WAITLIST}`,
-    );
-    // The clock is named once for the whole list.
-    expect(host.querySelectorAll(".pk-agenda-session-rows__clock")).toHaveLength(1);
-    const star = () =>
-      rowOf("Original workshop").querySelector<HTMLButtonElement>('button[aria-label="Star Original workshop"]')!;
-    expect(star().getAttribute("aria-pressed")).toBe("true");
-    await act(async () => star().click());
-    await vi.waitFor(() => expect(star().getAttribute("aria-pressed")).toBe("false"));
-    // Un-starring keeps the row where it was, so the reader can star it again.
-    expect(host.querySelectorAll(".pk-agenda-session-row")).toHaveLength(2);
+    expect(card(host, SESSION).hidden).toBe(false);
+    expect(card(host, WAITLIST).hidden).toBe(false);
+    expect(card(host, WAITLIST).textContent).toContain("On the waiting list");
+    expect(card(host, OPEN).hidden).toBe(true);
+    // The keynote's slot leaves the list, and the next session shown opens under the cut.
+    const slot = (id: string) => card(host, id).closest<HTMLElement>(".pk-content-agenda__slot")!;
+    expect(slot(OPEN).hasAttribute("data-agenda-skipped")).toBe(true);
+    expect(slot(SESSION).hasAttribute("data-agenda-gap")).toBe(false);
+    expect(slot(WAITLIST).hasAttribute("data-agenda-gap")).toBe(true);
+    // The whole agenda is one step away.
+    const browse = [...host.querySelectorAll("a")].find((link) => link.textContent === "Browse the agenda");
+    expect(browse?.getAttribute("href")).toBe("#/events/workshop/agenda");
   });
 
   it("opens a deep-linked session's details with live management and clears only its focus on close", async () => {

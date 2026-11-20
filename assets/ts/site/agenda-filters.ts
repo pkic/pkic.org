@@ -37,6 +37,27 @@ function setAgendaFiltersExpanded(root: HTMLElement, toggle: HTMLButtonElement, 
   }
 }
 
+/**
+ * The reader's own agenda in the list view leaves out every slot that holds none of their sessions, so two
+ * sessions hours apart are read together without scrolling past the day between them. The first slot after
+ * such a cut is marked, and the list draws the cut there.
+ */
+function markOwnAgendaSlots(panel: HTMLElement | null, mine: boolean): void {
+  let cut = false;
+  let shown = false;
+  for (const row of panel?.querySelectorAll<HTMLElement>(".pk-content-agenda__slot") ?? []) {
+    const skipped =
+      mine && ![...row.querySelectorAll<HTMLElement>("[data-agenda-session]")].some((card) => !card.hidden);
+    row.toggleAttribute("data-agenda-skipped", skipped);
+    row.toggleAttribute("data-agenda-gap", !skipped && cut && shown);
+    if (skipped) cut = true;
+    else {
+      cut = false;
+      shown = true;
+    }
+  }
+}
+
 /** Location ownership is explicit because its toolbar sits outside the day panel. Returns the active filter count. */
 export function refreshAgendaFilters(root: HTMLElement): number {
   const active = root.querySelector<HTMLElement>("[data-agenda-panel]:not([hidden])");
@@ -85,6 +106,7 @@ export function refreshAgendaFilters(root: HTMLElement): number {
       (mine && !card.hasAttribute("data-agenda-mine")),
     );
   }
+  markOwnAgendaSlots(active, mine);
   for (const entry of active?.querySelectorAll<HTMLElement>(".pk-agenda-speaker-directory__entry") ?? []) {
     const credit = entry.querySelector<HTMLElement>("[data-agenda-open-speaker]");
     entry.hidden = Boolean(query && !(credit?.textContent ?? "").toLocaleLowerCase().includes(query));

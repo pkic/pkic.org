@@ -21,12 +21,7 @@ import { Spinner } from "../../../../../../components/Spinner";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import { EmptyState } from "../../../../../../ui/EmptyState";
 import { Panel, PanelBody } from "../../../../../../ui/Panel";
-import {
-  eventAgendaRoute,
-  eventSessionRoute,
-  sessionSeatAction,
-} from "../../../../../../../shared/event-participation-link";
-import { MyAgendaList } from "./MyAgendaList";
+import { eventAgendaRoute, sessionSeatAction } from "../../../../../../../shared/event-participation-link";
 import { useAgendaProgram, type AgendaProgram } from "./useAgendaProgram";
 import { ButtonLink } from "../../../../../../ui/Button";
 import { IconCalendar } from "../../../../../../ui/MediaIcons";
@@ -312,29 +307,6 @@ function PersonalAgenda({
       </ButtonLink>
     ) : undefined,
   };
-  if (mineOnly && content && snapshot)
-    return (
-      <div class="pk-stack">
-        {program.error && <ErrorAlert error={program.error} />}
-        <div class="pk-cluster">
-          <ButtonLink variant="secondary" href={usePortalHashLocation.hrefs(eventAgendaRoute(slug))}>
-            Browse the agenda
-          </ButtonLink>
-          {calendarHref && (
-            <ButtonLink variant="secondary" href={calendarHref}>
-              <IconCalendar />
-              <span>{AGENDA_CALENDAR_TITLE}</span>
-            </ButtonLink>
-          )}
-        </div>
-        <MyAgendaList
-          days={content.days}
-          clock={contractClock(snapshot)}
-          session={personal.session}
-          sessionHref={(id) => usePortalHashLocation.hrefs(eventSessionRoute(slug, id, { mine: true }))}
-        />
-      </div>
-    );
   return (
     <div class="pk-stack" ref={host}>
       {program.error && <ErrorAlert error={program.error} />}
@@ -354,6 +326,13 @@ function PersonalAgenda({
             {canPersonalize && calendarHref && <ButtonLink href={calendarHref}>{AGENDA_CALENDAR_TITLE}</ButtonLink>}
           </PanelBody>
         </Panel>
+      )}
+      {mineOnly && (
+        <div class="pk-cluster">
+          <ButtonLink variant="secondary" href={usePortalHashLocation.hrefs(eventAgendaRoute(slug))}>
+            Browse the agenda
+          </ButtonLink>
+        </div>
       )}
     </div>
   );

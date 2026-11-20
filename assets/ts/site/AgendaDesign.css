@@ -558,6 +558,17 @@
       padding-block: 0.875rem;
       border-block-end: 1px solid var(--pk-line-soft);
     }
+    /* My agenda: slots without one of the reader's sessions leave the list. */
+    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__slot[data-agenda-skipped] {
+      display: none;
+    }
+    /* Where slots were left out, the next one opens under a torn edge: time passes here. */
+    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__timeline .pk-content-agenda__slot[data-agenda-gap] {
+      padding-block-start: 1.75rem;
+      background:
+        linear-gradient(135deg, var(--pk-line-strong) 25%, transparent 25%) 0 0 / 0.75rem 0.75rem repeat-x,
+        linear-gradient(225deg, var(--pk-line-strong) 25%, transparent 25%) 0 0 / 0.75rem 0.75rem repeat-x;
+    }
     .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__slot > th,
     .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__slot > td {
       border: 0;

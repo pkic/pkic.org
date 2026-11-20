@@ -188,6 +188,8 @@ export function ContentAgenda({
         data-agenda-public-fragments={fragmentNavigation && !editor ? "" : undefined}
         data-agenda-today-focus={editor || openOccurrence ? undefined : ""}
         data-agenda-mine-only={!editor && personal?.mineOnly ? "" : undefined}
+        // My agenda reads as a list on every screen: a grid of the whole day would be mostly empty.
+        data-agenda-view={!editor && personal?.mineOnly ? "list" : undefined}
       >
         <h2 class="pk-sr-only">Event agenda</h2>
         {!editor && (
