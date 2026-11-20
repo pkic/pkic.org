@@ -1,14 +1,15 @@
 import { LIVE_ROOM_POLICY } from "../../../../../../../../shared/live-session-policy";
 import type { LiveRoomOpening } from "../../../../../../../../shared/schemas/live-room-opening";
 import type { LiveRoomClientMessage } from "../../../../../../../../shared/schemas/live-session-room";
-import { buttonClasses } from "../../../../../../../ui/button-classes";
+import { IconVirtual } from "../../../../../../../components/icons";
 import { Menu } from "../../../../../../../ui/Menu";
+import "./RoomOpeningMenu.css";
 
 const OPENINGS: ReadonlyArray<{ id: LiveRoomOpening; label: string; short: string; description: string }> = [
   {
     id: "scheduled",
     label: "On schedule",
-    short: "On schedule",
+    short: "Scheduled",
     description: `Questions and polls now. Chat and reactions from ${LIVE_ROOM_POLICY.opensBeforeStartMinutes} minutes before the start.`,
   },
   {
@@ -44,10 +45,10 @@ export function RoomOpeningMenu({
   return (
     <Menu
       variant="plain"
-      label={`Virtual room: ${current.short}`}
-      title={"Virtual room\nWhether attendees can chat, react, ask questions and answer polls."}
+      label={`Virtual room: ${current.label}`}
+      title={`Virtual room: ${current.label}\nWhether attendees can chat, react, ask questions and answer polls.`}
       heading="Virtual room"
-      triggerClass={buttonClasses({}, undefined)}
+      triggerClass="pk-studio-opening"
       disabled={disabled}
       items={OPENINGS.map((choice) => ({
         id: choice.id,
@@ -57,7 +58,9 @@ export function RoomOpeningMenu({
         onSelect: () => void send({ type: "room.opening", opening: choice.id }),
       }))}
     >
-      Virtual room: {current.short}
+      <IconVirtual />
+      {current.short}
+      <span aria-hidden="true">▾</span>
     </Menu>
   );
 }

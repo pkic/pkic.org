@@ -186,7 +186,6 @@ describe("the studio's switcher, session bar and phone layout", () => {
   it("lets an operator open or close the session's virtual room from the session bar", () => {
     const { host, live } = mountDesk();
     const trigger = host.querySelector<HTMLButtonElement>('button[aria-label="Virtual room: On schedule"]')!;
-    expect(trigger.classList.contains("pk-btn")).toBe(true);
     void act(() => trigger.click());
     const choice = [...document.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]')].find((item) =>
       item.textContent?.startsWith("Open now"),
