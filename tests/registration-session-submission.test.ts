@@ -271,6 +271,32 @@ describe("registration continues with the signed-in session", () => {
     expect(await queryAll(env.DB, "SELECT id FROM registrations WHERE user_id=?", userId)).toEqual([]);
   });
 
+  it("refuses a personal registration when an organization claims the domain before it is stored", async () => {
+    const email = "invited.guest@claimed-during.example";
+    const { userId, session, identityId } = await signInRegistrant(env.DB, email, {
+      firstName: "Casey",
+      lastName: "Fixture",
+    });
+    await recordPersonalAddressAnswer(env.DB, userId);
+    const organizationId = await insertOrganization(env.DB, "Claiming organization");
+    const raced = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.includes("INSERT INTO authorization_guards") && sql.includes("affiliation_offer_dismissals"),
+      () =>
+        env.DB.prepare(
+          "INSERT INTO organization_domain_claims (id, domain, organization_id, created_at, updated_at) VALUES (?, 'claimed-during.example', ?, datetime('now'), datetime('now'))",
+        )
+          .bind(crypto.randomUUID(), organizationId)
+          .run(),
+    );
+    const refused = await submit(registration(email, { unaffiliatedAttestation: true, identityId }), session, {
+      ...env,
+      DB: raced,
+    } as typeof env);
+    expect(refused.status, await refused.clone().text()).toBe(409);
+    expect(await queryAll(env.DB, "SELECT id FROM registrations WHERE user_id=?", userId)).toEqual([]);
+  });
+
   it("refuses an identity chosen by a session that does not own the submitted address", async () => {
     const { session } = await signInRegistrant(env.DB, "owner@gmail.com", { firstName: "Casey", lastName: "Fixture" });
     const response = await submit(

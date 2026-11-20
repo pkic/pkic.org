@@ -3,7 +3,7 @@ import { registrationIdentityChangeSchema } from "../../../../assets/shared/sche
 import type { UserSessionTokenClaims } from "../../auth/user-session-token";
 import { userSessionRequestAuthorizationEvidence } from "../../auth/user-session-evidence";
 import { prepareAuthorizationGuard } from "../../db/authorization-guard";
-import type { DatabaseLike } from "../../types";
+import type { DatabaseLike, StatementLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLogAfterOneChange } from "../audit";
 import { ownedIdentityAtEvidence } from "../identities/selection";
@@ -12,19 +12,22 @@ import { prepareBadgeRenderJobsForUser } from "../badge-render-job-statements";
 export interface RegistrationIdentityChange {
   change: z.infer<typeof registrationIdentityChangeSchema>;
   claims: UserSessionTokenClaims;
+  /** Rechecks, in the same batch, the personal answer that allowed an identity without an organization. */
+  personalAddressGuard?: StatementLike | null;
 }
 
 /** Statements committed only with the registration details and durable notification. */
 export function prepareRegistrationIdentityChange(
   db: DatabaseLike,
   registrationId: string,
-  { change, claims }: RegistrationIdentityChange,
+  { change, claims, personalAddressGuard }: RegistrationIdentityChange,
 ) {
   const userId = claims.sub;
   const now = nowIso();
   return [
     prepareAuthorizationGuard(db, userSessionRequestAuthorizationEvidence(claims)),
     prepareAuthorizationGuard(db, registrationIdentityChangeEvidence(registrationId, { change, claims })),
+    ...(personalAddressGuard ? [personalAddressGuard] : []),
     db
       .prepare(`UPDATE registrations SET registration_identity_id=?, updated_at=?
       WHERE id=? AND user_id=? AND registration_identity_id IS ?`)

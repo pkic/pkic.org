@@ -31,6 +31,15 @@ export function personalAddressSql(userId: string, email: string) {
   return { sql: `(${saidPersonalSql(userId)} AND NOT EXISTS (${claimed.sql}))`, bindings: claimed.bindings };
 }
 
+/** The rule as batch evidence, so a domain claimed after the read refuses the write. */
+export function personalAddressEvidence(input: { userId: string; email: string }) {
+  const personal = personalAddressSql("owner.id", input.email);
+  return {
+    sql: `SELECT 1 FROM users owner WHERE owner.id = ? AND ${personal.sql}`,
+    bindings: [input.userId, ...personal.bindings],
+  };
+}
+
 /** Reads the rule for one person and address. */
 export async function readPersonalAddress(db: DatabaseLike, input: { userId: string; email: string }) {
   const personal = personalAddressSql("subject.id", input.email);
