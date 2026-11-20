@@ -58,7 +58,7 @@ interface ScannerCaptureActions {
   manual: ReturnType<typeof useScannerManualEntry>;
   setBadge: (value: string) => void;
   setFastMode: (value: boolean) => void;
-  setConsent: (value: boolean) => void;
+  consentConfirmed: boolean;
   showProvisionalMessage: Feedback["showProvisionalMessage"];
 }
 
@@ -95,7 +95,7 @@ export function createScannerCaptureActions({
   manual,
   setBadge,
   setFastMode,
-  setConsent,
+  consentConfirmed,
   showProvisionalMessage,
 }: ScannerCaptureActions) {
   async function capture() {
@@ -126,7 +126,7 @@ export function createScannerCaptureActions({
       await scanSaved();
       resetCaptureFields();
       if (!(await presentSavedEligibility(saved, verifyQueuedScan))) return;
-      if (fastMode && manualOpen) {
+      if (fastMode && manualOpen && action !== "lead") {
         cooldown.feedback();
         void camera();
       }
@@ -139,6 +139,7 @@ export function createScannerCaptureActions({
     }
   }
   async function scanCredential(raw: string, fromCamera = false) {
+    if (action === "lead" && !consentConfirmed) return;
     if (!captureAllowed() || collection.held.current || feedbackHeld) return;
     if (operatorPaused.current || manualPaused.current || manualCapturePending.current) return;
     const current = scannerContext.current;
@@ -148,8 +149,7 @@ export function createScannerCaptureActions({
       setBadge(raw);
       manual.setOpen(true);
       manual.setFocusRequested(true);
-      setFastMode(false);
-      if (current.action === "lead") setConsent(false);
+      if (current.action !== "lead") setFastMode(false);
       setMessage("Badge detected. Review and confirm before recording.");
       return;
     }

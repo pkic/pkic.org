@@ -12,6 +12,7 @@ import { eventContactAccessSql } from "./evidence-retention";
 import { sponsorConsentSql } from "./sponsor-consent";
 import {
   sponsorLeadPermissionSql,
+  sponsorLeadPermissionBindings,
   guardSponsorCaptureDatabase,
   sponsorCaptureAuthorizationEvidence,
 } from "./lead-scope";
@@ -132,10 +133,7 @@ export async function captureSponsorLead(
           input.scannedValueTruncated ? 1 : 0,
           sponsorId,
           eventId,
-          operatorUserId,
-          sponsorId,
-          operatorUserId,
-          sponsorId,
+          ...sponsorLeadPermissionBindings("agenda:leads_capture", operatorUserId, sponsorId),
         ),
       receipt,
     ]);
@@ -170,10 +168,7 @@ export async function captureSponsorLead(
         ...capture.values,
         badge.id,
         eventId,
-        operatorUserId,
-        sponsorId,
-        operatorUserId,
-        sponsorId,
+        ...sponsorLeadPermissionBindings("agenda:leads_capture", operatorUserId, sponsorId),
         sponsorId,
       ),
     db

@@ -10,6 +10,7 @@ export function useScannerFeedback({
   enabled,
   durationMs,
   collector,
+  holdEligible = false,
   currentOperation: lastOperation,
   committedOperation: lastCommittedOperation,
   authorityPaused,
@@ -17,6 +18,7 @@ export function useScannerFeedback({
   enabled: boolean;
   durationMs: number;
   collector: boolean;
+  holdEligible?: boolean;
   currentOperation: MutableRef<string | null>;
   committedOperation: MutableRef<string | null>;
   authorityPaused: MutableRef<boolean>;
@@ -53,7 +55,10 @@ export function useScannerFeedback({
   }
   const requiresAdvance = (value: EventScanResponse | null) =>
     Boolean(
-      value && (value.outcome !== "eligible" || (value.admissionRecorded && value.admissionDecision !== "allowed")),
+      value &&
+      (holdEligible ||
+        value.outcome !== "eligible" ||
+        (value.admissionRecorded && value.admissionDecision !== "allowed")),
     );
   const needsAdvance = failed || requiresAdvance(result);
   const feedbackOperation = lastOperation.current;
@@ -101,7 +106,11 @@ export function useScannerFeedback({
     saved: { scan: EventScanRequest; local?: LocalEligibility },
     verifyQueuedScan: (operationId: string) => Promise<boolean>,
   ) {
-    const local = saved.local ?? unverifiedSavedFeedback;
+    const local =
+      saved.local ??
+      (holdEligible
+        ? { ...unverifiedSavedFeedback, message: "The lead will be confirmed after upload." }
+        : unverifiedSavedFeedback);
     if (lastCommittedOperation.current === saved.scan.operationId)
       return receiptMatchesOperation(saved.scan.operationId, lastOperation.current);
     if (!receiptMatchesOperation(saved.scan.operationId, lastOperation.current)) return false;
@@ -112,7 +121,9 @@ export function useScannerFeedback({
           ? {
               outcome: "unverified",
               reason: "verification_required",
-              message: "Badge not found in saved badge data. Reconnect to verify.",
+              message: holdEligible
+                ? "Reconnect to confirm the lead."
+                : "Badge not found in saved badge data. Reconnect to verify.",
             }
           : local,
       );

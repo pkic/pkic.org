@@ -15,7 +15,7 @@ import type { DatabaseLike } from "../../db/types";
 import { AppError } from "../../errors";
 import { assertEventContactAccess, eventContactAccessSql } from "./evidence-retention";
 import { sponsorConsentSql } from "./sponsor-consent";
-import { sponsorLeadPermissionSql } from "./lead-scope";
+import { sponsorLeadPermissionBindings, sponsorLeadPermissionSql } from "./lead-scope";
 import { contactAffiliation } from "../../email-domains/contact-kind";
 
 /** Page and count recheck authorization and current consent in the same native D1 batch. */
@@ -85,7 +85,7 @@ export async function listLeadSponsors(
   const search = query.q ? buildD1TextSearchFilter(query.q, [name]) : null;
   const permissions = ["agenda:leads_view", "agenda:leads_capture", "agenda:leads_export"] as const;
   const expressions = permissions.map((permission) => sponsorLeadPermissionSql(permission, "sponsor.id"));
-  const values = permissions.flatMap(() => [operatorUserId, operatorUserId]);
+  const values = permissions.flatMap((permission) => sponsorLeadPermissionBindings(permission, operatorUserId));
   const { rows, total } = await queryPage<{
     id: string;
     name: string;

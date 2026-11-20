@@ -196,7 +196,7 @@ export async function mount(
   )!;
   await vi.waitFor(async () => {
     await act(async () => {});
-    expect(start.disabled).toBe(!ready);
+    expect(start.disabled).toBe(!ready || actions.includes("lead"));
   });
 }
 export function scannerDialog(title: string) {

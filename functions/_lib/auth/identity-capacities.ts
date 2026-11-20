@@ -16,6 +16,7 @@ import { executiveCouncilSeatSql } from "./executive-council";
 import { activeOrganizationMemberRepresentationPredicate } from "../services/membership/capacity-query";
 import { sqlValue, type SqlId } from "../db/sql-value";
 import { batchRows } from "../db/pagination";
+import { sponsorOrganizationCaptureExistsSql } from "./sponsor-organization-lead-access";
 import { actingIdentitiesSelection, decodeActingIdentities } from "./session-acting-identities";
 import type { D1StatementResult } from "../types";
 
@@ -32,6 +33,7 @@ export const STAFF_ACCESS_CONDITION = `(
       AND pg.revoked_at IS NULL
       AND (pg.expires_at IS NULL OR pg.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   )
+  OR ${sponsorOrganizationCaptureExistsSql("u.id")}
 )`;
 
 export interface EligibleStaffUser {

@@ -176,6 +176,11 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
 }
 
 async function openManualBadgeEntry(page: Page) {
+  const acknowledgement = page.getByRole("checkbox", {
+    name: "I will ask each attendee for permission before scanning.",
+    exact: true,
+  });
+  if (await acknowledgement.isVisible()) await acknowledgement.check();
   await openScannerManualEntry(page);
 }
 
@@ -190,16 +195,16 @@ async function expectDoorScannerReady(page: Page) {
   await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeEnabled();
 }
 
-export async function captureSponsorBadge(page: Page, badgeId: string, sponsorId: string, operatorUserId: string) {
+export async function captureSponsorBadge(
+  page: Page,
+  badgeId: string,
+  sponsorId: string,
+  operatorUserId: string,
+  onResult?: () => Promise<void>,
+) {
   await openManualBadgeEntry(page);
   const manual = page.getByRole("dialog", { name: "Review sponsor lead", exact: true });
   await manual.getByLabel("Badge code", { exact: true }).fill(badgeId);
-  await page
-    .getByRole("checkbox", {
-      name: "The attendee agrees to share their contact details with this sponsor.",
-      exact: true,
-    })
-    .check();
   const receiving = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === `${eventApi}/scans` &&
@@ -228,15 +233,17 @@ export async function captureSponsorBadge(page: Page, badgeId: string, sponsorId
     .poll(async () => (await scannerStorage(page)).history.some((row) => row.scan.operationId === request.operationId))
     .toBe(true);
   await expect(manual).not.toBeVisible();
+  const next = page.getByRole("button", { name: "Next", exact: true });
+  await expect(next).toBeVisible();
+  await onResult?.();
+  await next.click();
+  await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeFocused();
   await openManualBadgeEntry(page);
   await expect(manual.getByLabel("Badge code", { exact: true })).toHaveValue("");
   await expect(manual.getByLabel("Badge code", { exact: true })).not.toHaveAttribute("aria-invalid", "true");
   await expect(
-    manual.getByRole("checkbox", {
-      name: "The attendee agrees to share their contact details with this sponsor.",
-      exact: true,
-    }),
-  ).not.toBeChecked();
+    page.getByRole("checkbox", { name: "I will ask each attendee for permission before scanning." }),
+  ).toHaveCount(0);
   await manual.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(manual).not.toBeVisible();
   return { request, receipt };
@@ -278,20 +285,12 @@ export async function captureOfflineSponsorBadge(
     await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeEnabled();
     await openManualBadgeEntry(page);
     await page.getByLabel("Badge code", { exact: true }).fill(badgeId);
-    await page
-      .getByRole("checkbox", {
-        name: "The attendee agrees to share their contact details with this sponsor.",
-        exact: true,
-      })
-      .check();
     const manual = page.getByRole("dialog", { name: "Review sponsor lead", exact: true });
     const capture = manual.getByRole("button", { name: "Confirm lead", exact: true });
     expect(
       await capture.evaluate((button) => {
         const form = (button as HTMLButtonElement).form;
-        return Boolean(
-          form?.noValidate && form.querySelector('[name="badgeId"]') && form.querySelector('[name="consentConfirmed"]'),
-        );
+        return Boolean(form?.noValidate && form.querySelector('[name="badgeId"]'));
       }),
     ).toBe(true);
     await capture.click();
@@ -364,6 +363,12 @@ export async function captureSponsorViews(page: Page, info: TestInfo, checkpoint
       animations: "disabled",
       path: info.outputPath(`sponsor-${checkpoint}-${name}.png`),
     });
+    const scannerPanel = page
+      .locator(".pk-panel")
+      .filter({ has: page.getByRole("button", { name: /^(Next|Start scanning)$/ }) })
+      .last();
+    if (await scannerPanel.count())
+      await scannerPanel.screenshot({ path: info.outputPath(`sponsor-${checkpoint}-${name}-scanner.png`) });
   }
 }
 

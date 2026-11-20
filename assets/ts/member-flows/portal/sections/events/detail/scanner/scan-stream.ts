@@ -107,7 +107,8 @@ export function scanFeedbackLabel(result: EventScanResponse | null, action: Even
     return "Registered";
   }
   if (result.outcome === "denied" && action === "checkout") return "Checkout not recorded";
-  if (result.outcome === "unverified") return "Verification pending";
+  if (result.outcome === "unverified")
+    return action === "lead" && !result.recorded ? "Saved for upload" : "Verification pending";
   const eligibility = scanEligibilityLabel(result);
   return result.attendanceRecorded ? `Attendance recorded · ${eligibility}` : eligibility;
 }

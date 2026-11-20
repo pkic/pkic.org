@@ -77,7 +77,7 @@ function setup() {
     manual: { setOpen: vi.fn(), setFocusRequested: vi.fn() } as unknown as Options["manual"],
     setBadge: vi.fn(),
     setFastMode: vi.fn(),
-    setConsent: vi.fn(),
+    consentConfirmed: false,
     showProvisionalMessage: vi.fn(),
   } satisfies Options;
   const actions = createScannerCaptureActions(options);

@@ -41,7 +41,11 @@ export const sponsorLeadSponsorsRouteSchema = {
     ...authErrors({ notFound: "Event not found", badRequest: "Invalid page query" }),
   },
 };
-import { sponsorLeadCapturesQuerySchema, sponsorLeadCapturesSchema } from "./event-sponsor-lead-list";
+import {
+  sponsorLeadCapturesQuerySchema,
+  sponsorLeadCapturesSchema,
+  sponsorLeadConfirmationSchema,
+} from "./event-sponsor-lead-list";
 export const sponsorLeadCapturesRouteSchema = {
   ...requiresPermissions("agenda:leads_view"),
   tags: ["Events"],
@@ -53,5 +57,15 @@ export const sponsorLeadCapturesRouteSchema = {
   responses: {
     ...ok("Successful capture provenance without attendance implications", sponsorLeadCapturesSchema),
     ...authErrors({ notFound: "Current consenting lead not found", badRequest: "Invalid page query" }),
+  },
+};
+export const sponsorLeadConfirmationRouteSchema = {
+  ...requiresPermissions("agenda:leads_capture"),
+  tags: ["Events"],
+  summary: "Confirm one already captured sponsor lead for its scanner operator",
+  request: { params: eventSlugParamsSchema.extend({ sponsorId: databaseIdSchema, operationId: databaseIdSchema }) },
+  responses: {
+    ...ok("Current attendee identity after successful lead capture", sponsorLeadConfirmationSchema),
+    ...authErrors({ notFound: "Captured lead not found" }),
   },
 };

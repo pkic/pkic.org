@@ -40,3 +40,9 @@ export const sponsorLeadCaptureSchema = z.object({
 export const sponsorLeadCapturesSchema = paginatedResponseSchema("captures", sponsorLeadCaptureSchema);
 export type SponsorLeadCapture = z.infer<typeof sponsorLeadCaptureSchema>;
 export type SponsorLeadCapturesQuery = z.infer<typeof sponsorLeadCapturesQuerySchema>;
+/** One operator's already captured badge, resolved online; no search or name inventory. */
+export const sponsorLeadConfirmationSchema = z.object({
+  name: z.string().nullable(),
+  title: z.string().nullable(),
+  organization: z.string().nullable(),
+});

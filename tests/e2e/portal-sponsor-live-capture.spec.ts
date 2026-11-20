@@ -83,11 +83,39 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
     await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeVisible();
     await expect(page.getByRole("combobox", { name: "Scan mode", exact: true })).toHaveCount(0);
     await configureFeedbackPause();
+    const setupViewport = page.viewportSize();
+    for (const [name, width, height] of [
+      ["desktop", 1280, 900],
+      ["phone", 375, 812],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      await page
+        .locator(".pk-panel")
+        .filter({ has: page.getByRole("button", { name: "Start scanning", exact: true }) })
+        .last()
+        .screenshot({ path: info.outputPath(`${name}-sponsor-setup-card.png`) });
+    }
+    if (setupViewport) await page.setViewportSize(setupViewport);
     const first = await captureSponsorBadge(
       page,
       fixture.consenting.badgeId,
       fixture.sponsorId,
       fixture.operator.userId,
+      async () => {
+        const confirmedLead = page.locator(".pk-scanner-lead-confirmation");
+        await expect(confirmedLead).toContainText(`${fixture.firstName} ${fixture.lastName}`);
+        await expect(confirmedLead).toContainText("Security engineer");
+        await expect(confirmedLead).toContainText(fixture.organization);
+        await expect(confirmedLead).not.toContainText(fixture.email);
+        const originalViewport = page.viewportSize();
+        await page.setViewportSize({ width: 375, height: 812 });
+        await page
+          .locator(".pk-panel")
+          .filter({ has: page.getByRole("button", { name: "Next", exact: true }) })
+          .last()
+          .screenshot({ path: info.outputPath("phone-sponsor-confirmed-lead.png") });
+        if (originalViewport) await page.setViewportSize(originalViewport);
+      },
     );
     const second = await captureSponsorBadge(
       page,
@@ -113,24 +141,19 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
         await openScannerManualEntry(page);
         const manual = page.getByRole("dialog", { name: "Review sponsor lead", exact: true });
         await manual.getByLabel("Badge code", { exact: true }).fill(fixture.consenting.badgeId);
-        await page
-          .getByRole("checkbox", {
-            name: "The attendee agrees to share their contact details with this sponsor.",
-            exact: true,
-          })
-          .check();
         await manual.getByRole("button", { name: "Confirm lead", exact: true }).click();
         await expect(manual).not.toBeVisible();
-        await openScannerManualEntry(page);
-        await expect(manual.getByLabel("Badge code", { exact: true })).toHaveValue("");
-        await expect(
-          manual.getByRole("checkbox", {
-            name: "The attendee agrees to share their contact details with this sponsor.",
-            exact: true,
-          }),
-        ).not.toBeChecked();
-        await manual.getByRole("button", { name: "Cancel", exact: true }).click();
-        await expect(manual).not.toBeVisible();
+        await expect(page.getByRole("button", { name: "Next", exact: true })).toBeVisible();
+        if (expectedCount === 1) {
+          await page.getByRole("button", { name: "Next", exact: true }).click();
+          await openScannerManualEntry(page);
+          await expect(manual.getByLabel("Badge code", { exact: true })).toHaveValue("");
+          await expect(
+            page.getByRole("checkbox", { name: "I will ask each attendee for permission before scanning." }),
+          ).toHaveCount(0);
+          await manual.getByRole("button", { name: "Cancel", exact: true }).click();
+          await expect(manual).not.toBeVisible();
+        }
         await expect(
           page
             .getByRole("status", { name: "Scanner status", exact: true })
@@ -173,6 +196,7 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
         fixture.organization,
       ]);
       await captureSponsorViews(page, info, "offline-pending");
+      await page.getByRole("button", { name: "Next", exact: true }).click();
     } finally {
       await reconnectScannerBrowser(page.context(), page);
     }

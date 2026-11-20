@@ -1,5 +1,6 @@
 import type { DatabaseLike } from "../../types";
-import { anyPermissionAuthorizationEvidenceForResource } from "../../auth/permissions";
+import { anyPermissionAuthorizationEvidenceForResource, tokenAllowsPermission } from "../../auth/permissions";
+import { sponsorOrganizationCaptureExistsSql } from "../../auth/sponsor-organization-lead-access";
 import { eventReadSelectionSql, type EventReadSelection } from "./read-selection";
 import type { EventAudienceViewer } from "./visibility";
 import type { EventAudienceDetail } from "../../../../assets/shared/schemas/event-management";
@@ -65,19 +66,23 @@ export function prepareEventAudienceSponsors(
     ["agenda:leads_capture", "agenda:leads_view", "agenda:leads_export"],
     { type: "event_sponsor", idSql: "s.id" },
   );
+  const organizationCapture =
+    viewer.userId && !viewer.admin?.scopeRestricted && tokenAllowsPermission(actor, "agenda:leads_capture")
+      ? sponsorOrganizationCaptureExistsSql("?", "s.id")
+      : null;
   const filter = eventReadSelectionSql("s.event_id", selection);
   const withSql = filter.withSql
-    ? `WITH ${filter.withSql}, authorized_event_sponsors AS MATERIALIZED (SELECT s.id FROM sponsorships s WHERE EXISTS(${authority.sql})) `
+    ? `WITH ${filter.withSql}, authorized_event_sponsors AS MATERIALIZED (SELECT s.id FROM sponsorships s WHERE EXISTS(${authority.sql})${organizationCapture ? ` OR ${organizationCapture}` : ""}) `
     : "";
   const authoritySql = filter.withSql
     ? "s.id IN (SELECT id FROM authorized_event_sponsors)"
-    : `EXISTS(${authority.sql})`;
+    : `(EXISTS(${authority.sql})${organizationCapture ? ` OR ${organizationCapture}` : ""})`;
   return db
     .prepare(`${withSql}SELECT s.id,s.event_id,COALESCE(o.name,s.non_member_name,'Sponsor') AS name
     FROM sponsorships s LEFT JOIN organizations o ON o.id=s.organization_id
     WHERE ${filter.sql} AND s.sponsor_type='event' AND s.pipeline_stage='active' AND ${authoritySql}
     ORDER BY s.event_id,name,s.id`)
-    .bind(...filter.bindings, ...authority.bindings);
+    .bind(...filter.bindings, ...authority.bindings, ...(organizationCapture ? [viewer.userId] : []));
 }
 
 export async function readEventAudienceAccess(db: DatabaseLike, viewer: EventAudienceViewer, eventIds: string[]) {

@@ -11,6 +11,7 @@ import type { UserSessionResult } from "../../auth/user-session";
 import { activeEffectiveInviteExpirySql, effectiveInviteExpirySql } from "../../invite-validity";
 import type { AuthAdmin, DatabaseLike, PermissionGrant } from "../../types";
 import { AppError } from "../../errors";
+import { sponsorOrganizationCaptureExistsSql } from "../../auth/sponsor-organization-lead-access";
 
 export interface EventAudienceViewer {
   userId: string | null;
@@ -181,7 +182,14 @@ export function buildEventAudiencePredicate(
       OR EXISTS (SELECT 1 FROM sponsorships sponsor_scope
         WHERE sponsor_scope.event_id=${eventAlias}.id AND sponsor_scope.sponsor_type='event'
           AND sponsor_scope.pipeline_stage='active' AND EXISTS (${sponsorRead.sql}))
+      ${tokenAllowsPermission(actor, "agenda:leads_capture") ? `OR ${sponsorOrganizationCaptureExistsSql("?", undefined, `${eventAlias}.id`)}` : ""}
     )`,
-    bindings: [...globalRead.bindings, userId, ...eventRead.bindings, ...sponsorRead.bindings],
+    bindings: [
+      ...globalRead.bindings,
+      userId,
+      ...eventRead.bindings,
+      ...sponsorRead.bindings,
+      ...(tokenAllowsPermission(actor, "agenda:leads_capture") ? [userId] : []),
+    ],
   };
 }

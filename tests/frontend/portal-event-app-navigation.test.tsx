@@ -129,12 +129,23 @@ describe("event app tab selection", () => {
 
   it("puts the lead scanner on a sponsor representative's bar and moves My agenda to More", () => {
     authority([leadGrant]);
-    const { tabs, more } = navigation({ ...registeredParticipant, scannerAccess: sponsorDiscovery });
+    const { tabs, more } = navigation({
+      ...registeredParticipant,
+      scannerAccess: sponsorDiscovery,
+      sponsorLeadAccess: true,
+    });
     expect(labels(tabs)).toEqual(["Home", "Agenda", "Leads", "Ticket"]);
     expect(tabs.find((tab) => tab.id === "lead-scanner")?.href).toBe(`#/events/summit/sponsors/${sponsorId}/scanner`);
     expect(tabs.find((tab) => tab.id === "lead-scanner")?.icon).toBe("leads");
     expect(ids(more)).toContain("agenda");
     expect(ids(more)).not.toContain("lead-scanner");
+    expect(more.find((item) => item.id === "sponsor-leads")?.href).toBe("#/events/summit/leads");
+  });
+
+  it("offers sponsor lead history only when the event grants lead access", () => {
+    const { more } = navigation({ sponsorLeadAccess: true });
+    expect(more.find((item) => item.id === "sponsor-leads")?.label).toBe("Sponsor leads");
+    expect(ids(navigation().more)).not.toContain("sponsor-leads");
   });
 
   it("lets a representative of several sponsors choose the sponsor first", () => {

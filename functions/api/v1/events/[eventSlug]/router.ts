@@ -82,7 +82,12 @@ import {
   AgendaImport,
 } from "./agenda";
 import { SponsorLeadsExportGet } from "./lead-export";
-import { SponsorLeadSponsorsGet, SponsorLeadsGet, SponsorLeadCapturesGet } from "./lead-list";
+import {
+  SponsorLeadSponsorsGet,
+  SponsorLeadsGet,
+  SponsorLeadCapturesGet,
+  SponsorLeadConfirmationGet,
+} from "./lead-list";
 import { EventAttendanceGet, EventSponsorLeadCreate, SessionAttendancePeopleGet } from "./attendance";
 import { registerAttendanceRoutes } from "./register-attendance-routes";
 import { AgendaScheduleReviewPost, AgendaScheduleApplyPost } from "./agenda/schedule";
@@ -251,6 +256,7 @@ openapi.delete("/push/devices/:deviceId", EventWebPushRevokeDelete);
 openapi.get("/sponsors/:sponsorId/leads.csv", SponsorLeadsExportGet);
 openapi.get("/sponsors/leads", SponsorLeadSponsorsGet);
 openapi.get("/sponsors/:sponsorId/leads", SponsorLeadsGet);
+openapi.get("/sponsors/:sponsorId/leads/confirmations/:operationId", SponsorLeadConfirmationGet);
 openapi.get("/sponsors/:sponsorId/leads/:leadId/captures", SponsorLeadCapturesGet);
 openapi.post("/sponsors/:sponsorId/leads", EventSponsorLeadCreate);
 openapi.route("/email", emailRouter);
