@@ -1,4 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
+import { useHashQueryParam } from "../../../../../../hooks/useHashQueryParam";
 import { Alert } from "../../../../../../ui/Alert";
 import { Spinner } from "../../../../../../ui/Spinner";
 import { Button } from "../../../../../../ui/Button";
@@ -32,7 +33,6 @@ export function OfflineScannerBootstrap({
   const [available, setAvailable] = useState<ScannerOfflineContext[]>([]);
   const [loading, setLoading] = useState(true);
   const [resolvedSelection, setResolvedSelection] = useState<string | null>(null);
-  const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
   const routeQuery = new URLSearchParams(window.location.hash.split("?")[1] ?? "");
   const selectionKey = route
     ? [routeQuery.get("offlineContext"), routeQuery.get("scanAction"), routeQuery.get("scannerPurpose")].join(":")
@@ -71,14 +71,14 @@ export function OfflineScannerBootstrap({
       window.clearInterval(timer);
     };
   }, [route, currentSelection]);
-  if (loading || resolvedSelection !== currentSelection || (context && context.route !== route))
-    return <Spinner label="Checking saved scanner context…" />;
   const eventSlugs = [...new Set(available.map((item) => item.slug))].sort((a, b) => {
     const latest = (slug: string) =>
       Math.max(...available.filter((item) => item.slug === slug).map((item) => Date.parse(item.lastObservedAt)));
     return latest(b) - latest(a) || a.localeCompare(b);
   });
-  const currentEvent = selectedEvent && eventSlugs.includes(selectedEvent) ? selectedEvent : eventSlugs[0];
+  const [currentEvent, setSelectedEvent] = useHashQueryParam("scannerEvent", eventSlugs[0] ?? "", eventSlugs);
+  if (loading || resolvedSelection !== currentSelection || (context && context.route !== route))
+    return <Spinner label="Checking saved scanner context…" />;
   const eventLabel = (slug: string) =>
     slug
       .split("-")

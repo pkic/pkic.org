@@ -21,6 +21,7 @@ const host = document.createElement("div");
 document.body.append(host);
 afterEach(async () => {
   await act(() => render(null, host));
+  window.location.hash = "";
   mocks.list.mockReset();
   mocks.restore.mockReset();
 });
@@ -143,8 +144,12 @@ it("shows one event's prepared scanners at a time when multiple events are saved
     event.value = toronto.slug;
     event.dispatchEvent(new Event("change", { bubbles: true }));
   });
+  await vi.waitFor(() => expect(host.querySelector(".pk-action-tiles a")?.getAttribute("href")).toContain("toronto"));
   expect(host.querySelectorAll(".pk-action-tiles a")).toHaveLength(1);
-  expect(host.querySelector(".pk-action-tiles a")?.getAttribute("href")).toContain("toronto");
+  expect(window.location.hash).toContain(`scannerEvent=${toronto.slug}`);
+  await act(() => render(null, host));
+  await act(() => render(<OfflineScannerBootstrap route={null} onCheckSignIn={() => {}} onSignIn={() => {}} />, host));
+  await vi.waitFor(() => expect(host.querySelector(".pk-action-tiles a")?.getAttribute("href")).toContain("toronto"));
 });
 
 it("hides the previous scanner while a different saved task is being restored", async () => {

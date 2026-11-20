@@ -274,6 +274,13 @@ test("badge collection opens for an upcoming event after daily preparation", asy
   await reopened.screenshot({ animations: "disabled", path: testInfo.outputPath("offline-event-selector-phone.png") });
   await eventSelector.selectOption(syntheticEventSlug);
   await expect(reopened.getByRole("link", { name: /^Badge collection/ })).toHaveAttribute("href", /toronto/);
+  await expect(reopened).toHaveURL(/scannerEvent=pqc-conference-toronto-ca/);
+  await reopened.reload();
+  await expect(reopened.getByRole("link", { name: /^Badge collection/ })).toHaveAttribute("href", /toronto/);
+  await reopened.goBack();
+  await expect(eventSelector).toHaveValue(event.slug);
+  await reopened.goForward();
+  await expect(reopened.getByRole("link", { name: /^Badge collection/ })).toHaveAttribute("href", /toronto/);
   await reopened.setViewportSize({ width: 1280, height: 720 });
   await reopened.screenshot({
     animations: "disabled",
