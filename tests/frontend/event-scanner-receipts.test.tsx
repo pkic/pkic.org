@@ -1,15 +1,30 @@
 import { badgeCode, mocks, host, mount, submit } from "./event-scanner-fixture";
 import { render } from "preact";
 import { act } from "preact/test-utils";
+import { useEffect } from "preact/hooks";
 import { describe, expect, it, vi } from "vitest";
 import { EventScanner } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/EventScanner";
 import { ScannerTaskNavigation } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/ScannerTaskNavigation";
+import { useBadgeCollectionPrinting } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/useBadgeCollectionPrinting";
+import type { ScannerStatus } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/ScannerStatus";
 import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import { portalSessionFixture } from "../helpers/portal-session";
 const printing = vi.hoisted(() => ({ requested: vi.fn() }));
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/BadgeCollectionPrinter", () => ({
-  BadgeCollectionPrinter: ({ credential }: { credential: string }) => {
-    printing.requested(credential);
+  BadgeCollectionPrinter: ({
+    credential,
+    onStatus,
+    onBusy,
+  }: {
+    credential: string;
+    onStatus: (status: ScannerStatus) => void;
+    onBusy: (busy: boolean) => void;
+  }) => {
+    useEffect(() => {
+      printing.requested(credential);
+      onBusy(true);
+      onStatus({ key: `print:${credential}`, tone: "unverified", title: "Print requested", record: false });
+    }, [credential, onBusy, onStatus]);
     return null;
   },
 }));
@@ -111,6 +126,7 @@ describe("scanner foreground receipt and drain lifecycle", () => {
           .click(),
       );
       expect(printing.requested).toHaveBeenCalledWith(badgeCode);
+      expect(host.textContent).toContain("Print requested");
       expect(window.location.hash).toBe("#/events/synthetic-event/scanner?scannerPurpose=collection");
       expect(host.querySelector(".pk-fast-scanner")).not.toBeNull();
       const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
@@ -127,9 +143,36 @@ describe("scanner foreground receipt and drain lifecycle", () => {
       } finally {
         visibility.mockRestore();
       }
+      await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Close scanner"]')!.click());
+      await act(() => start().click());
+      expect(host.textContent).not.toContain("Print requested");
     } finally {
       window.location.hash = previousHash;
     }
+  });
+  it("releases the collection print hold when the portal session changes", async () => {
+    function PrintProbe() {
+      const job = useBadgeCollectionPrinting("synthetic-event", true, true);
+      return (
+        <div>
+          <button onClick={() => job.print(badgeCode)}>Print</button>
+          <span>{job.busy ? "busy" : "idle"}</span>
+          <span>{job.status?.title ?? "No print status"}</span>
+          {job.job}
+        </div>
+      );
+    }
+    portalSession.value = portalSessionFixture({ member: true });
+    await act(() => render(<PrintProbe />, host));
+    await act(() => host.querySelector("button")!.click());
+    expect(host.textContent).toContain("busy");
+    expect(host.textContent).toContain("Print requested");
+    await act(() => {
+      portalSession.value = portalSessionFixture({ member: true });
+      render(<PrintProbe />, host);
+    });
+    expect(host.textContent).toContain("idle");
+    expect(host.textContent).toContain("No print status");
   });
   it("retains the last result after scanning resumes and updates it from a late server receipt", async () => {
     const worker = new EventTarget();

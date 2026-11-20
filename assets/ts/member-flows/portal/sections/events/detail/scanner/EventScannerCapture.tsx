@@ -223,6 +223,7 @@ export function EventScannerCapture({
   });
   function clearCurrentScan(message?: string) {
     badgeCamera.stop();
+    collectionPrinting.clear();
     collection.clear();
     lastOperation.current = null;
     cancelVerification();
@@ -342,6 +343,7 @@ export function EventScannerCapture({
     if (fastMode && !badgeCamera.active) void camera();
   }
   function stopContinuousScanning() {
+    collectionPrinting.clear();
     collection.clear();
     autoStart.cancel();
     cancelVerification();
