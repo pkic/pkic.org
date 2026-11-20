@@ -37,7 +37,11 @@ export interface AccountDeletionState {
   account: AccountDeletionAccount;
   /** Every address on the account, primary first, normalized. */
   addresses: string[];
-  /** Every spelling of those addresses as stored, for redacting earlier audit details. */
+  /**
+   * Every spelling of those addresses as stored, plus any address that earlier
+   * audit details about the account name (a removed or replaced address), for
+   * redacting those details.
+   */
   spellings: string[];
   /** The linked addresses, normalized, sorted, and space-separated; null without any. */
   linkedAddresses: string | null;
@@ -81,23 +85,32 @@ export async function readAccountDeletion(db: DatabaseLike, userId: string): Pro
       .join(",\n");
     countStatements.push(db.prepare(`SELECT ${columns}`).bind(userId));
   }
-  const [accountResult, addressResult, fingerprintResult, renderResult, ...countResults] = await db.batch([
-    db
-      .prepare(
-        "SELECT id, email, normalized_email, updated_at, pii_redacted_at, headshot_r2_key FROM users WHERE id = ?1",
-      )
-      .bind(userId),
-    db
-      .prepare("SELECT email, normalized_email FROM user_emails WHERE user_id = ?1 ORDER BY created_at, id")
-      .bind(userId),
-    db
-      .prepare(
-        `SELECT ${ACCOUNT_DELETION_LINKED_ADDRESSES_SQL} AS linked, ${ACCOUNT_DELETION_RENDER_FILES_SQL} AS render_files`,
-      )
-      .bind(userId),
-    db.prepare("SELECT id, format, cache_key FROM event_promotion_renders WHERE user_id = ?1").bind(userId),
-    ...countStatements,
-  ]);
+  const [accountResult, addressResult, fingerprintResult, renderResult, auditedResult, ...countResults] =
+    await db.batch([
+      db
+        .prepare(
+          "SELECT id, email, normalized_email, updated_at, pii_redacted_at, headshot_r2_key FROM users WHERE id = ?1",
+        )
+        .bind(userId),
+      db
+        .prepare("SELECT email, normalized_email FROM user_emails WHERE user_id = ?1 ORDER BY created_at, id")
+        .bind(userId),
+      db
+        .prepare(
+          `SELECT ${ACCOUNT_DELETION_LINKED_ADDRESSES_SQL} AS linked, ${ACCOUNT_DELETION_RENDER_FILES_SQL} AS render_files`,
+        )
+        .bind(userId),
+      db.prepare("SELECT id, format, cache_key FROM event_promotion_renders WHERE user_id = ?1").bind(userId),
+      db
+        .prepare(
+          `SELECT DISTINCT j.value AS address
+           FROM audit_log a, json_tree(a.details_json) j
+          WHERE a.entity_type = 'user' AND a.entity_id = ?1 AND json_valid(a.details_json)
+            AND j.type = 'text' AND j.value LIKE '%_@_%'`,
+        )
+        .bind(userId),
+      ...countStatements,
+    ]);
   const account = accountResult.results?.[0] as AccountDeletionAccount | undefined;
   if (!account) throw new AppError(404, "NOT_FOUND", "User not found");
   if (account.pii_redacted_at) throw new AppError(409, "ALREADY_ANONYMIZED", "User has already been anonymized");
@@ -110,7 +123,10 @@ export async function readAccountDeletion(db: DatabaseLike, userId: string): Pro
   const fingerprint = fingerprintResult.results?.[0];
   const addressRows = (addressResult.results ?? []) as { email: string; normalized_email: string }[];
   const addresses = [...new Set([account.normalized_email, ...addressRows.map((row) => row.normalized_email)])];
-  const spellings = [...new Set([account.email, ...addresses, ...addressRows.map((row) => row.email)].filter(Boolean))];
+  const audited = (auditedResult.results ?? []).map((row) => String(row.address));
+  const spellings = [
+    ...new Set([account.email, ...addresses, ...addressRows.map((row) => row.email), ...audited].filter(Boolean)),
+  ];
   const linkedAddresses = (fingerprint?.linked as string | null | undefined) ?? null;
   const renderFiles = (fingerprint?.render_files as string | null | undefined) ?? null;
   // Everything the delete batch re-checks, so a preview with a stale revision is refused before the batch.

@@ -367,7 +367,7 @@ describe("account deletion", () => {
     expect(deletion.blockers).toEqual([{ kind: "promotion_render", count: 1 }]);
   });
 
-  it("removes the account's addresses from earlier audit details", async () => {
+  it("removes current and former addresses from earlier audit details about the account", async () => {
     const userId = await insertUser(env.DB, "audited@example.test");
     await env.DB.prepare("UPDATE users SET email = 'Audited@Example.test' WHERE id = ?").bind(userId).run();
     await env.DB.prepare(
@@ -382,6 +382,12 @@ describe("account deletion", () => {
         nowIso(),
       )
       .run();
+    await env.DB.prepare(
+      `INSERT INTO audit_log (id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at)
+       VALUES (?, 'admin', ?, 'user_email_removed', 'user', ?, ?, ?)`,
+    )
+      .bind(crypto.randomUUID(), admin.id, userId, JSON.stringify({ email: "former@example.test" }), nowIso())
+      .run();
 
     const deletion = await preview(userId);
     const response = await request(`/api/v1/users/${userId}?revision=${deletion.revision}`, "DELETE");
@@ -392,6 +398,12 @@ describe("account deletion", () => {
       [userId],
     );
     expect(JSON.parse(earlier.details_json)).toEqual({ from: "[deleted address]", to: "[deleted address]" });
+    const [removed] = await queryAll<{ details_json: string }>(
+      env.DB,
+      "SELECT details_json FROM audit_log WHERE action = 'user_email_removed' AND entity_id = ?",
+      [userId],
+    );
+    expect(JSON.parse(removed.details_json)).toEqual({ email: "[deleted address]" });
   });
 
   it("refuses to delete the signed-in account", async () => {
