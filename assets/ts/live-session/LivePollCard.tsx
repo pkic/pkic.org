@@ -7,7 +7,6 @@ import { useFormAnswers } from "../components/forms/useFormAnswers";
 import type { FormField } from "../shared/types";
 import { CustomFieldList } from "../shared/widgets/custom-fields";
 import { IconPoll } from "../components/icons/app-navigation";
-import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
 import "./LivePollOverlay.css";
 
@@ -88,7 +87,7 @@ export function LivePollCard({
       <span class="pk-live-question__vote pk-live-poll-card__mark" aria-hidden="true">
         <IconPoll width="20" height="20" />
       </span>
-      <div class="pk-live-question__body pk-live-poll-card__body" data-density="compact">
+      <div class="pk-live-question__body pk-live-poll-card__body">
         <div class="pk-live-poll-card__text">
           <p class="pk-live-poll-card__kicker">
             {asked ? "Poll" : "Poll results"}
@@ -96,12 +95,16 @@ export function LivePollCard({
           </p>
           <p>{poll.field.label}</p>
         </div>
-        {choosing ? (
-          <Button variant="primary" disabled={disabled} onClick={() => setShown(true)}>
-            Answer poll
-          </Button>
-        ) : poll.results ? (
-          <Button onClick={() => setShown(true)}>See results</Button>
+        {/* The whole card opens the poll; this names what a click does. */}
+        {choosing || poll.results ? (
+          <button
+            type="button"
+            class="pk-live-question__open"
+            disabled={choosing && disabled}
+            onClick={() => setShown(true)}
+          >
+            {choosing ? "Answer poll" : "See results"}
+          </button>
         ) : (
           <p class="pk-small pk-muted" role="status">
             {asked ? "Your answer is in." : "This poll is closed."}
