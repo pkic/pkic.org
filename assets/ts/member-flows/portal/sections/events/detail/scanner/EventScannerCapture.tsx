@@ -370,7 +370,7 @@ export function EventScannerCapture({
         nextCollectionAttendee,
         busy || cooldown.saving || collectionPrinting.busy,
         result?.outcome === "eligible" && collectionPrinting.available ? collectionPrinting.print : undefined,
-        result?.outcome === "eligible",
+        result?.outcome,
       )
     : undefined;
   const contextLabel = scannerContextLabel({ ...preparation.location, action, sponsorName, badgeCollection });

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type MutableRef } from "preact/hooks";
 import type { EligibilityManifest } from "./eligibility-manifest";
+import type { EventScanResponse } from "../../../../../../../shared/schemas/event-participation-scanning";
 
 /** One attendee name stays in memory until staff explicitly advance. */
 export function useBadgeCollection(
@@ -60,12 +61,17 @@ export function useBadgeCollection(
     document.addEventListener("visibilitychange", hideName);
     return () => document.removeEventListener("visibilitychange", hideName);
   }, []);
-  function display(onNext: () => void, saving: boolean, print?: (credential: string) => void, showName = true) {
+  function display(
+    onNext: () => void,
+    saving: boolean,
+    print?: (credential: string) => void,
+    outcome?: EventScanResponse["outcome"],
+  ) {
     return {
       waiting,
       name,
       loading,
-      showName,
+      showName: outcome === "eligible" || (outcome === "unverified" && name !== null),
       saving,
       onNext,
       onPrint: credential && print ? () => print(credential) : undefined,
