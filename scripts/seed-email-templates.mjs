@@ -722,7 +722,13 @@ Is this a mistake, and do you still want to come in person? [Update your registr
 
 {{#if inviterName}}You have been personally invited by **{{inviterName}}** to attend **{{eventName}}**, an event organized by the [PKI Consortium]({{brandBaseUrl}}).{{else}}You have been personally invited to attend **{{eventName}}**, an event organized by the [PKI Consortium]({{brandBaseUrl}}).{{/if}}
 
+{{#if invitationMessage}}
+**{{invitationHeadline}}**
+
+{{invitationMessage}}
+{{else}}
 Join security experts, researchers, and industry leaders to explore the latest developments in public key infrastructure and post-quantum cryptography.
+{{/if}}
 
 :::button
 [Register now →]({{registrationUrl}})

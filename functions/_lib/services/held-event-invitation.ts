@@ -1,3 +1,4 @@
+import { accountAddressSignsInSql } from "../auth/email-sign-in-policy";
 import { first } from "../db/queries";
 import type { AuthorizationEvidence } from "../db/authorization-guard";
 import { activeEffectiveInviteExpirySql, effectiveInviteExpirySql } from "../invite-validity";
@@ -19,9 +20,10 @@ type HeldInvitationStatus = Extract<InviteRecord["status"], "sent" | "accepted">
  *
  * Aliases and the user expression are trusted source constants; statuses come
  * from the closed union above. The user expression appears once, so a `?`
- * placeholder binds once. Registration applies the full sign-in address rule
- * (`readRegistrationAccessEvidence`); this shallower match keeps visibility within D1's
- * expression depth limit.
+ * placeholder binds once. Acting on an invitation applies the full sign-in
+ * address rule (`readRegistrationAccessEvidence` for registration,
+ * `findHeldAttendeeInvitation` for declining or postponing); this shallower
+ * match keeps visibility and lists within D1's expression depth limit.
  */
 export function heldEventInvitationConditions(input: {
   inviteAlias: string;
@@ -51,23 +53,27 @@ export function heldEventInvitationExistsSql(input: Parameters<typeof heldEventI
 }
 
 /**
- * Selects the user's open attendee invitation to the event, so registering can
- * accept it. An address holds at most one sent invitation of a type per event
- * (`uq_invites_active_recipient`); the lookup seeks the event's sent
+ * Selects the user's open attendee invitation to the event, so declining or
+ * postponing acts on it. The invited address must still sign in to the
+ * account (`accountAddressSignsInSql`), so a retired work address no longer
+ * answers for it. An address holds at most one sent invitation of a type per
+ * event (`uq_invites_active_recipient`); the lookup seeks the event's sent
  * attendee invitations on `idx_invites_event_status`.
  */
 function heldAttendeeInvitationSelection(eventId: string, userId: string, inviteId?: string): AuthorizationEvidence {
   return {
     sql: `SELECT ${inviteColumnProjection("held_invite")}
-            FROM events held_event
+            FROM (SELECT ? AS id) held_user
+            CROSS JOIN events held_event
             JOIN invites held_invite ON ${heldEventInvitationConditions({
               inviteAlias: "held_invite",
               eventAlias: "held_event",
-              userIdSql: "?",
+              userIdSql: "held_user.id",
               statuses: ["sent"],
               attendeeOnly: true,
             })}
            WHERE held_event.id = ? ${inviteId ? "AND held_invite.id = ?" : ""}
+             AND ${accountAddressSignsInSql("held_user.id", "held_invite.invitee_email")}
            LIMIT 1`,
     bindings: [userId, eventId, ...(inviteId ? [inviteId] : [])],
   };
@@ -82,7 +88,7 @@ export async function findHeldAttendeeInvitation(
   return first<InviteRecord>(db, selection.sql, [...selection.bindings]);
 }
 
-/** Rechecks, in the registration batch, that the accepted invitation is still addressed to this user. */
+/** Rechecks, in the response's batch, that the invitation is still open and addressed to this user. */
 export function heldAttendeeInvitationEvidence(input: {
   eventId: string;
   userId: string;

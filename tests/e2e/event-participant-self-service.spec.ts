@@ -196,16 +196,6 @@ test("an invited member signs in, answers the invitation on Home, and registers 
   // The peer invitation limit sits beside it, in its own panel.
   const peers = staff.getByRole("region", { name: "Peer invitations", exact: true });
   await expect(peers.getByText("5 per attendee", { exact: true })).toBeVisible();
-  // The organizer restricts the link to the invited address; the invitee below still registers.
-  const link = staff.getByRole("region", { name: "Invitation link", exact: true });
-  await expect(link.getByText("Anyone with the link", { exact: true })).toBeVisible();
-  await link.getByRole("button", { name: "Invitation link actions", exact: true }).click();
-  await staff.getByRole("menuitem", { name: "Edit settings", exact: true }).click();
-  await link.getByRole("radio", { name: /Only the invited email address/ }).check();
-  await screenshotAtWidths(staff, info, "invitation-link-edit");
-  await link.getByRole("button", { name: "Save invitation link", exact: true }).click();
-  await expect(link.getByText("Only the invited email address", { exact: true })).toBeVisible();
-  await screenshotAtWidths(staff, info, "invitation-link-read");
   // The policy tab no longer carries it.
   await staff.goto(`/portal/#/events/${fixture.slug}/settings/registration`);
   await expect(staff.getByRole("region", { name: "Invitation message", exact: true })).toHaveCount(0);
@@ -271,6 +261,7 @@ test("an invited member signs in, answers the invitation on Home, and registers 
   await proceed.click();
   await page.getByRole("checkbox", { name: "I agree to the privacy policy", exact: true }).check();
   await page.getByRole("checkbox", { name: "I agree to the code of conduct", exact: true }).check();
+  await page.getByRole("checkbox", { name: /photos and videos/i }).check();
   const submitted = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&

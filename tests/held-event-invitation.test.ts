@@ -26,13 +26,16 @@ beforeEach(async () => {
 /** An invitation-only event with one attendee day and a signed-in person who represents one organization. */
 async function fixture() {
   const { eventId } = await seedEventAndAdmin(env.DB);
+  // The event runs a month after the database clock, so the invitation's event window stays open.
+  const dayDate = (await env.DB.prepare("SELECT date('now', '+30 days') AS day").first<{ day: string }>())!.day;
   await env.DB.batch([
     env.DB.prepare(
-      "UPDATE events SET registration_mode = 'invitation_only', visibility = 'invitation_only' WHERE id = ?",
-    ).bind(eventId),
+      `UPDATE events SET registration_mode = 'invitation_only', visibility = 'invitation_only',
+         starts_at = ? || 'T08:00:00.000Z', ends_at = ? || 'T17:00:00.000Z' WHERE id = ?`,
+    ).bind(dayDate, dayDate, eventId),
     env.DB.prepare(
-      "INSERT INTO event_days(id,event_id,day_date,created_at,updated_at) VALUES(?,?,'2026-11-30',datetime('now'),datetime('now'))",
-    ).bind(crypto.randomUUID(), eventId),
+      "INSERT INTO event_days(id,event_id,day_date,created_at,updated_at) VALUES(?,?,?,datetime('now'),datetime('now'))",
+    ).bind(crypto.randomUUID(), eventId, dayDate),
   ]);
   const email = `invited-${crypto.randomUUID()}@example.test`;
   const userId = await insertUser(env.DB, email);
@@ -51,7 +54,7 @@ async function fixture() {
   const body = registrationCreateSchema.parse({
     email,
     identityId: identity.identityId,
-    dayAttendance: [{ dayDate: "2026-11-30", attendanceType: "virtual" }],
+    dayAttendance: [{ dayDate, attendanceType: "virtual" }],
     sourceType: "direct",
     consents: [
       { termKey: "privacy-policy", version: "v1" },

@@ -28,12 +28,16 @@ export function EventRegistrationCreate({
   );
   if (loaded.loading) return <Spinner label="Loading registration…" />;
   if (!loaded.data) return <Alert tone="danger">{loaded.error}</Alert>;
+  const query = parseQueryContext(entrySearch);
   return (
     <RegistrationFlow
+      // The invitation gate is built on mount; another invitation in the link starts the flow afresh.
+      // Other query changes, such as the step, keep the form.
+      key={`${query.inviteToken ?? ""}:${query.inviteId ?? ""}`}
       mode="create"
       autoSession
       forms={loaded.data}
-      context={{ eventSlug: slug, apiBase: "/api/v1", eventPagePath: null, query: parseQueryContext(entrySearch) }}
+      context={{ eventSlug: slug, apiBase: "/api/v1", eventPagePath: null, query }}
       onRegistered={onRegistered}
     />
   );

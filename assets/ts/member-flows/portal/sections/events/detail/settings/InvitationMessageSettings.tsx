@@ -37,8 +37,10 @@ export function InvitationMessageSettings({
   const saved = event.invitationMessage ?? null;
   const [headline, setHeadline] = useState(saved?.headline ?? "");
   const [message, setMessage] = useState(saved?.message ?? "");
+  // The revision this draft started from, so a save made elsewhere meanwhile is refused, not overwritten.
+  const [basedOn, setBasedOn] = useState(event.updatedAt);
   const form = useContractForm(eventSettingsUpdateSchema, {
-    expectedUpdatedAt: event.updatedAt,
+    expectedUpdatedAt: basedOn,
     invitationMessage: { headline: orNull(headline), message: orNull(message) },
   });
   const { editing, setEditing, saving, error, setError, save } = useEventSettingsSave(
@@ -50,6 +52,7 @@ export function InvitationMessageSettings({
   const canEdit = groupTarget ? groupTarget.canEdit : event.capabilities.includes("write");
   const shown = eventInvitationWording(event, saved);
   function reset() {
+    setBasedOn(event.updatedAt);
     setHeadline(saved?.headline ?? "");
     setMessage(saved?.message ?? "");
     form.reset();

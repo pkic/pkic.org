@@ -26,8 +26,10 @@ export function PeerInvitationLimitSettings({
 }) {
   const saved = event.inviteLimitAttendee;
   const [limit, setLimit] = useState(String(saved));
+  // The revision this draft started from, so a save made elsewhere meanwhile is refused, not overwritten.
+  const [basedOn, setBasedOn] = useState(event.updatedAt);
   const form = useContractForm(eventSettingsUpdateSchema, {
-    expectedUpdatedAt: event.updatedAt,
+    expectedUpdatedAt: basedOn,
     inviteLimitAttendee: limit.trim() === "" ? undefined : Number(limit),
   });
   const { editing, setEditing, saving, error, setError, save } = useEventSettingsSave(
@@ -38,6 +40,7 @@ export function PeerInvitationLimitSettings({
   );
   const canEdit = groupTarget ? groupTarget.canEdit : event.capabilities.includes("write");
   function reset() {
+    setBasedOn(event.updatedAt);
     setLimit(String(saved));
     form.reset();
     setError("");

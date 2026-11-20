@@ -3,10 +3,10 @@
  * they are invited to and have not registered for or declined, read from one
  * bounded backend query (`invitation=open`). Each card carries the event's own
  * invitation wording and leads to registration; the first invitation that is
- * not postponed also asks in a dialog, once per visit. Once registered, the
+ * not postponed also asks in a dialog; one invitation asks per visit. Once registered, the
  * event leaves these cards and sits in the Events panel like any other event.
  */
-import { useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 import { EVENT_INVITATION_ACTIONS, eventInvitationWording } from "../../../../shared/event-invitation-copy";
 import { eventRegisterRoute } from "../../../../shared/event-participation-link";
@@ -14,7 +14,7 @@ import { eventsListResponseSchema } from "../../../../shared/schemas/event-manag
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { useData } from "../../../hooks/useData";
 import { getJson } from "../../../shared/api-client";
-import { ButtonLink } from "../../../ui/Button";
+import { Button, ButtonLink } from "../../../ui/Button";
 import { Markdown } from "../../../ui/Markdown";
 import { usePortalHashLocation } from "../hash-location";
 import { EventCollectionCard } from "./events/EventCollectionCard";
@@ -22,7 +22,10 @@ import { EventInvitationDialog } from "./events/EventInvitationDialog";
 
 type EventRow = z.infer<typeof eventsListResponseSchema>["events"][number];
 
-const INVITATION_CARD_LIMIT = 6;
+/** Cards per step; "Show more invitations" asks the backend for the next step. */
+const INVITATION_CARD_STEP = 6;
+/** The list endpoint's largest page. */
+const INVITATION_CARD_MAX = 200;
 
 /** Whether the invitation should ask again: never postponed, or the postponement has run out. */
 function asksAgain(invitation: { remindersPausedUntil: string | null }, now: number): boolean {
@@ -42,19 +45,22 @@ function InvitationBody({ event }: { event: EventRow }) {
 }
 
 export function EventInvitationCards() {
+  // Read at fetch time, so showing more refreshes in place instead of clearing the cards while it loads.
+  const limit = useRef(INVITATION_CARD_STEP);
   const invited = useData(
-    () =>
-      getJson(`/api/v1/events?invitation=open&sort=starts_at&limit=${INVITATION_CARD_LIMIT}`, eventsListResponseSchema),
+    () => getJson(`/api/v1/events?invitation=open&sort=starts_at&limit=${limit.current}`, eventsListResponseSchema),
     [],
   );
-  // Closed for this visit, so the dialog asks once per page load, not on every render.
-  const [closed, setClosed] = useState<ReadonlySet<string>>(new Set());
+  // One invitation asks per visit: once its dialog closes or is answered, no other one opens on its own.
+  const [prompted, setPrompted] = useState(false);
   const events = invited.data?.events ?? [];
   const now = Date.now();
-  const asking = events.find((event) => {
-    const invitation = event.participation?.invitation;
-    return invitation && !closed.has(invitation.id) && asksAgain(invitation, now);
-  });
+  const asking = prompted
+    ? undefined
+    : events.find((event) => {
+        const invitation = event.participation?.invitation;
+        return invitation && asksAgain(invitation, now);
+      });
   const askingInvitation = asking?.participation?.invitation ?? null;
 
   if (invited.error) return <ErrorAlert error={invited.error} />;
@@ -78,13 +84,28 @@ export function EventInvitationCards() {
           </li>
         ))}
       </ul>
+      {invited.data?.page.hasMore && limit.current < INVITATION_CARD_MAX && (
+        <div>
+          <Button
+            variant="secondary"
+            disabled={invited.refreshing}
+            onClick={() => {
+              limit.current = Math.min(limit.current + INVITATION_CARD_STEP, INVITATION_CARD_MAX);
+              void invited.reload();
+            }}
+          >
+            Show more invitations
+          </Button>
+        </div>
+      )}
       {asking && askingInvitation && (
         <EventInvitationDialog
+          key={askingInvitation.id}
           event={asking}
           inviteId={askingInvitation.id}
-          onClose={() => setClosed(new Set([...closed, askingInvitation.id]))}
+          onClose={() => setPrompted(true)}
           onAnswered={() => {
-            setClosed(new Set([...closed, askingInvitation.id]));
+            setPrompted(true);
             void invited.reload();
           }}
         />

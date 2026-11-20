@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * The person's open invitations on Home: each card carries the event's own
- * wording beside its date and place and leads to registration; the first
- * invitation that is not postponed asks once per visit in a dialog.
+ * wording beside its date and place and leads to registration; one invitation
+ * that is not postponed asks per visit in a dialog.
  */
 import { render } from "preact";
 import { act } from "preact/test-utils";
@@ -35,15 +35,17 @@ function json(value: unknown, status = 200): Response {
 }
 
 let served: unknown[] | "fail" = [];
+let servedPage = page;
 
 /** Serves the upcoming events list, and records each invitation answer. */
-function stub(events: unknown[] | "fail") {
+function stub(events: unknown[] | "fail", listPage = page) {
   served = events;
+  servedPage = listPage;
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), location.origin);
     if (url.pathname === "/api/v1/events") {
       expect(url.searchParams.get("invitation")).toBe("open");
-      return served === "fail" ? new Response("", { status: 503 }) : json({ events: served, page });
+      return served === "fail" ? new Response("", { status: 503 }) : json({ events: served, page: servedPage });
     }
     if (url.pathname.endsWith("/reminders")) return json({ success: true, state: "postponed", pausedUntil: null });
     if (url.pathname.endsWith("/decline")) return json({ success: true, forwarded: [] });
@@ -161,6 +163,48 @@ describe("event invitation cards", () => {
     expect(inviteDeclineSchema.parse(JSON.parse(String(declined?.[1]?.body))).reasonCode).toBe("schedule_conflict");
     expect(container.querySelector("dialog")).toBeNull();
     expect(container.textContent).toBe("");
+  });
+
+  it("asks about one invitation per visit, even when another is open", async () => {
+    const second = "30000000-0000-4000-8000-000000000002";
+    stub([
+      invitedRow(),
+      invitedRow({
+        id: "40000000-0000-4000-8000-000000000002",
+        slug: "pqc-2027",
+        participation: {
+          registrationId: null,
+          registrationStatus: null,
+          proposals: 0,
+          speakerProposals: 0,
+          invitation: { id: second, remindersPausedUntil: null },
+        },
+      }),
+    ]);
+    const container = await mount();
+    expect(container.querySelectorAll("dialog")).toHaveLength(1);
+    await act(() =>
+      container.querySelector<HTMLButtonElement>('dialog button[aria-label="Close invitation"]')!.click(),
+    );
+    await settle();
+    expect(container.querySelector("dialog")).toBeNull();
+    expect(container.querySelectorAll("li")).toHaveLength(2);
+  });
+
+  it("asks the backend for more invitations when more are open", async () => {
+    const fetchMock = stub([invitedRow({}, new Date(Date.now() + 86_400_000).toISOString())], {
+      ...page,
+      total: 7,
+      hasMore: true,
+    });
+    const container = await mount();
+    await act(() => button(container, "Show more invitations").click());
+    await settle();
+    const limits = fetchMock.mock.calls
+      .map(([input]) => new URL(String(input), location.origin))
+      .filter((url) => url.pathname === "/api/v1/events")
+      .map((url) => url.searchParams.get("limit"));
+    expect(limits).toEqual(["6", "12"]);
   });
 
   it("says so when the upcoming events cannot be read", async () => {

@@ -65,7 +65,7 @@ export function EventCollectionCard({
       }}
     >
       {body}
-      {(standing.length > 0 || actions) && (
+      {(standing.length > 0 || actions || (body && whenAndWhere)) && (
         <div class="pk-cluster pk-cluster--between">
           {body && whenAndWhere && <p class="pk-muted">{whenAndWhere}</p>}
           {standing.length > 0 && (
