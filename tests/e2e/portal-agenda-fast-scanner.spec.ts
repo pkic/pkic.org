@@ -314,10 +314,11 @@ test("badge collection opens for an upcoming event after daily preparation", asy
       value: async () => canvas.captureStream(8),
     });
   }, cameraFrame);
+  await reopened.setViewportSize({ width: 375, height: 812 });
   await reopened.getByRole("link", { name: /^Badge collection/ }).click();
-  await reopened.getByRole("button", { name: "Start scanning", exact: true }).click();
   const reopenedScanner = reopened.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
   await expect(reopenedScanner).toBeVisible();
+  await reopened.screenshot({ animations: "disabled", path: testInfo.outputPath("offline-scanner-active-phone.png") });
   await expect(reopenedScanner.getByRole("status", { name: "Scanner status", exact: true })).toContainText(
     "Saved scanner",
   );
@@ -325,6 +326,16 @@ test("badge collection opens for an upcoming event after daily preparation", asy
     timeout: 15_000,
   });
   await reopenedScanner.getByRole("button", { name: "Operator controls", exact: true }).click();
+  await reopened.screenshot({
+    animations: "disabled",
+    path: testInfo.outputPath("offline-scanner-controls-phone.png"),
+  });
+  await expect(
+    reopenedScanner.getByRole("dialog", { name: "Scanner operator controls", exact: true }).getByRole("button", {
+      name: "Sign in",
+      exact: true,
+    }),
+  ).toBeVisible();
   await expect(
     reopenedScanner.getByRole("dialog", { name: "Scanner operator controls", exact: true }).getByText(/^2 pending/),
   ).toBeVisible();
@@ -347,14 +358,12 @@ test("badge collection opens for an upcoming event after daily preparation", asy
     }
   });
   await reopened.getByRole("link", { name: /^Badge collection/ }).click();
-  await reopened.getByRole("button", { name: "Start scanning", exact: true }).click();
   await expect(reopenedScanner).toBeVisible();
   await reopened.keyboard.type(badge.credential);
   await reopened.keyboard.press("Enter");
   await expect(reopenedScanner.locator(".pk-fast-scanner__feedback")).toContainText("Verification pending");
   await reopened.goto("/portal/");
   await reopened.getByRole("link", { name: /^Record checkout/ }).click();
-  await reopened.getByRole("button", { name: "Start scanning", exact: true }).click();
   await expect(reopenedScanner).toBeVisible();
   await reopened.keyboard.type(badge.credential);
   await reopened.keyboard.press("Enter");

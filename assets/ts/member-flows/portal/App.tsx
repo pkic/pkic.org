@@ -14,6 +14,7 @@ import {
   scannerCollectorPath,
   clearScannerOfflineContexts,
   listPreparedScannerContexts,
+  scannerCaptureActive,
   scannerTransportUnavailable,
 } from "./sections/events/detail/scanner/scanner-offline-context";
 import { getJson, postJson, ApiClientError } from "../../shared/api-client";
@@ -143,6 +144,7 @@ export function App() {
       setSessionError(null);
     }
     const checkedSessionId = portalSession.value?.sessionId;
+    const activeScannerAtStart = scannerCaptureActive.value;
     let checkedLocalSession: Awaited<ReturnType<typeof readActiveUserSession>> = null;
     try {
       checkedLocalSession = await readActiveUserSession();
@@ -177,8 +179,14 @@ export function App() {
           )
         : false;
       if (!isCurrent()) return portalSession.value !== null;
-      if (preparedScanner) {
+      if (preparedScanner && error instanceof ApiClientError && error.status === 401 && !activeScannerAtStart) {
+        scannerTransportUnavailable.value = false;
+        setShowOfflineSignIn(false);
+        setSessionError(null);
+        if (portalSession.value?.sessionId === checkedSessionId) clearUserSession();
+      } else if (preparedScanner) {
         scannerTransportUnavailable.value = true;
+        setShowOfflineSignIn(!activeScannerAtStart && error instanceof ApiClientError && error.status !== 0);
         setSessionError("We could not check sign-in. Saved scanner preparation remains available on this device.");
         if (portalSession.value?.sessionId === checkedSessionId) clearUserSession();
       } else if (preparedScanner === false && error instanceof ApiClientError && [401, 403].includes(error.status)) {
@@ -294,7 +302,7 @@ export function App() {
     let reconnecting = false;
     let disposed = false;
     function reconnect() {
-      if (reconnecting || !navigator.onLine) return;
+      if (reconnecting) return;
       reconnecting = true;
       void (async () => {
         if (!(await resumePendingUserLogout()) && !portalSession.value)
@@ -308,7 +316,7 @@ export function App() {
         });
     }
     const resumeScanner = () => {
-      if (scannerTransportUnavailable.value && scannerCollectorPath(window.location.hash)) reconnect();
+      if (scannerTransportUnavailable.value && !scannerCaptureActive.value) reconnect();
     };
     const visible = () => {
       if (document.visibilityState === "visible") resumeScanner();
@@ -386,11 +394,7 @@ export function App() {
     return (
       <div class="pk pk-stack">
         <Suspense fallback={<VerifyingOverlay />}>
-          <OfflineScannerBootstrap
-            route={collectorRoute}
-            onCheckSignIn={() => void loadPortalSession(() => true, true)}
-            onSignIn={() => setShowOfflineSignIn(true)}
-          />
+          <OfflineScannerBootstrap route={collectorRoute} onSignIn={() => setShowOfflineSignIn(true)} />
         </Suspense>
       </div>
     );
@@ -398,8 +402,8 @@ export function App() {
     return (
       <Login
         notice={
-          <Alert tone="info" title="Saved scanners available">
-            <p>You can continue scanning with the saved data on this device.</p>
+          <Alert tone="warn" title="Could not check sign-in">
+            <p>If sign-in is unavailable, you can keep scanning with saved data on this device.</p>
             <Button type="button" variant="secondary" onClick={() => setShowOfflineSignIn(false)}>
               Continue scanning offline
             </Button>

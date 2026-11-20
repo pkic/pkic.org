@@ -100,11 +100,11 @@ export async function openScannerManualEntry(page: Page): Promise<void> {
       const controls = page.getByRole("dialog", { name: "Scanner operator controls", exact: true });
       if (await controls.isVisible())
         await controls.getByRole("button", { name: "Close operator controls", exact: true }).click();
-      await continuous.getByRole("button", { name: "Find attendee or badge", exact: true }).click();
+      await continuous.getByRole("button", { name: /^(Find attendee or badge|Enter badge code)$/ }).click();
     } else {
       const scan = page.getByRole("tab", { name: "Scan", exact: true });
       if ((await scan.isVisible()) && (await scan.getAttribute("aria-selected")) === "false") await scan.click();
-      const find = page.getByRole("button", { name: "Find attendee or badge", exact: true });
+      const find = page.getByRole("button", { name: /^(Find attendee or badge|Enter badge code)$/ });
       if (!(await find.isVisible())) {
         const mode = page.locator('select[name="action"]');
         const action = (await mode.count()) ? scanActionSchema.parse(await mode.inputValue()) : "attendance";

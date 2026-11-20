@@ -9,6 +9,7 @@ import { scannerReadinessLabel, type ScannerReadiness } from "./ScannerConnectio
 
 /** The launch screen owns presentation; capture and uploads remain in the scanner controller. */
 export function ScannerLaunchPanel({
+  title = "Start scanning",
   connection,
   context,
   feedback,
@@ -22,6 +23,7 @@ export function ScannerLaunchPanel({
   retryStart,
   children,
 }: {
+  title?: string;
   connection: ComponentChildren;
   context?: ComponentProps<typeof ScannerCaptureContext>;
   feedback?: ComponentProps<typeof ScannerFeedback>;
@@ -47,7 +49,7 @@ export function ScannerLaunchPanel({
       : pendingStart;
   return (
     <Panel>
-      <PanelHeader title="Start scanning" />
+      <PanelHeader title={title} />
       <PanelBody>
         {connection}
         {devicePreparation?.error && !pendingStart && (

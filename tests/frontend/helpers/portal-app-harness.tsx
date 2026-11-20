@@ -58,10 +58,10 @@ vi.mock("../../../assets/ts/shared/passkey-authentication", () => ({
   authenticateWithPasskey: mocks.authenticateWithPasskey,
 }));
 vi.mock("../../../assets/ts/member-flows/portal/sections/events/detail/scanner/OfflineScannerBootstrap", () => ({
-  OfflineScannerBootstrap: ({ route, onCheckSignIn }: { route: string; onCheckSignIn: () => void }) => (
+  OfflineScannerBootstrap: ({ route, onSignIn }: { route: string; onSignIn: () => void }) => (
     <div data-scanner-route={route}>
       Prepared offline scanner
-      <button onClick={onCheckSignIn}>Check sign-in again</button>
+      <button onClick={onSignIn}>Sign in</button>
     </div>
   ),
 }));

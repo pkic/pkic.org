@@ -27,13 +27,14 @@ import { ScannerCaptureControls, ScannerManualControls, scannerStartMessage } fr
 import { useScannerPreparation } from "./useScannerPreparation";
 import { ScannerCamera } from "./ScannerCamera";
 import { ScannerRecentScans } from "./ScannerRecentScans";
-import { useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import {
   scanActionSchema,
   eventScanCaptureIntentForRoomsSchema,
   type EventScanRequest,
 } from "../../../../../../../shared/schemas/event-participation-scanning";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
+import { Button } from "../../../../../../ui/Button";
 import { ScannerLaunchPanel } from "./ScannerLaunchPanel";
 import { useScannerCamera } from "./useScannerCamera";
 import { useScannerOutboxSync } from "./useScannerOutboxSync";
@@ -42,7 +43,7 @@ import { FastScannerView } from "./FastScannerView";
 import { useScannerPresentation } from "./useScannerPresentation";
 import { useScanCooldown } from "./useScanCooldown";
 import { useScannerSyncHistory } from "./useScannerSyncHistory";
-import { scannerPreparationRefusal } from "./scanner-offline-context";
+import { scannerCaptureActive, scannerPreparationRefusal } from "./scanner-offline-context";
 import { useBadgeCollectionPrinting } from "./useBadgeCollectionPrinting";
 export function EventScannerCapture({
   slug,
@@ -54,7 +55,7 @@ export function EventScannerCapture({
   canExportLeads = false,
   allowedActions = scanActionSchema.options,
   collectorContext,
-  onCheckSignIn,
+  onSignIn,
 }: EventScannerProps) {
   const refusePreparation = scannerPreparationRefusal(portalSession.value, operatorUserId);
   const [badgeId, setBadge] = useState("");
@@ -81,6 +82,12 @@ export function EventScannerCapture({
   const [operationId, setOperation] = useState(() => crypto.randomUUID());
   const authorityPaused = useRef(false);
   const [fastMode, setFastMode] = useScannerCaptureActive();
+  useEffect(() => {
+    scannerCaptureActive.value = fastMode;
+    return () => {
+      scannerCaptureActive.value = false;
+    };
+  }, [fastMode]);
   const preferences = useScannerPreferences();
   const {
     result,
@@ -328,6 +335,14 @@ export function EventScannerCapture({
     error: preparation.status.error,
     allowUnverified: !badgeCollection,
   });
+  const collectorStarted = useRef(false);
+  const startCollector = useRef(startScanning);
+  startCollector.current = startScanning;
+  useEffect(() => {
+    if (!collectorContext || !captureReady || collectorStarted.current) return;
+    collectorStarted.current = true;
+    startCollector.current();
+  }, [collectorContext, captureReady]);
   const preparationStatus = { ...preparation.status, lastSync: syncHistory.lastSync };
   function nextCollectionAttendee() {
     if (busy || cooldown.saving || collectionPrinting.busy) return;
@@ -441,9 +456,10 @@ export function EventScannerCapture({
         }}
         launch={
           <ScannerLaunchPanel
+            title={collectorContext ? contextLabel : undefined}
             connection={connection}
             context={
-              collectorContext || action === "lead" || occurrenceId ? { contextLabel, target, timeZone } : undefined
+              !collectorContext && (action === "lead" || occurrenceId) ? { contextLabel, target, timeZone } : undefined
             }
             feedback={
               result || pending > 0 || message !== "Ready to scan"
@@ -460,7 +476,7 @@ export function EventScannerCapture({
             controls={
               <ScannerCaptureControls
                 collector={collectorContext}
-                onCheckSignIn={onCheckSignIn}
+                onSignIn={onSignIn}
                 setup={{
                   printHref,
                   operatorUserId,
@@ -556,6 +572,13 @@ export function EventScannerCapture({
           context={contextLabel}
           lastResult={lastResult}
           connectionStatus={connection}
+          operatorControls={
+            collectorContext && onSignIn ? (
+              <Button type="button" variant="secondary" onClick={onSignIn}>
+                Sign in
+              </Button>
+            ) : undefined
+          }
           soundLabel={sound.label}
           onTourSound={sound.test}
           onSound={() => sound.toggle(preferences.setSound)}
@@ -574,6 +597,7 @@ export function EventScannerCapture({
           cameraError={badgeCamera.error}
           onCameraRetry={collection.waiting ? undefined : () => void camera()}
           onManual={collection.waiting ? undefined : manualControls.onOpen}
+          manualLabel={offline ? "Enter badge code" : undefined}
           manualEntry={manualOpen ? <ScannerManualControls {...manualControls} inline /> : undefined}
           onRecentScans={collectorContext || badgeCollection ? undefined : showRecentScans}
           recentScans={recentVisible ? recentScans : undefined}

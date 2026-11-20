@@ -44,6 +44,7 @@ export function FastScannerView({
   cameraError = "",
   onCameraRetry,
   onManual,
+  manualLabel = "Find attendee or badge",
   manualEntry,
   onRecentScans,
   recentScans,
@@ -94,6 +95,7 @@ export function FastScannerView({
   cameraError?: string;
   onCameraRetry?: () => void;
   onManual?: () => void;
+  manualLabel?: string;
   manualEntry?: ComponentChildren;
   onRecentScans?: () => void;
   recentScans?: ComponentChildren;
@@ -371,8 +373,8 @@ export function FastScannerView({
               variant="secondary"
               icon
               data-scanner-help="find"
-              aria-label="Find attendee or badge"
-              title="Find attendee or badge"
+              aria-label={manualLabel}
+              title={manualLabel}
               onClick={onManual}
             >
               <IconSearch />

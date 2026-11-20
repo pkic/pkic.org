@@ -37,6 +37,7 @@ const storedEpochSchema = scannerRecoveryEpochSchema
 
 /** An unavailable online session permits only a bounded saved scanner, never portal authentication. */
 export const scannerTransportUnavailable = signal(false);
+export const scannerCaptureActive = signal(false);
 
 export async function readScannerOfflineEpoch(context: ScannerOfflineContext): Promise<ScannerEpoch> {
   await assertScannerOfflineContext(context);

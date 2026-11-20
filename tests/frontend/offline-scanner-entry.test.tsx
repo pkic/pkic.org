@@ -47,7 +47,7 @@ it("offers a prepared badge collection link from the portal entry point", async 
     lastObservedAt: now,
   });
   mocks.list.mockResolvedValue([prepared]);
-  await act(() => render(<OfflineScannerBootstrap route={null} onCheckSignIn={() => {}} onSignIn={() => {}} />, host));
+  await act(() => render(<OfflineScannerBootstrap route={null} onSignIn={() => {}} />, host));
   await vi.waitFor(() => expect(host.textContent).toContain("Continue scanning offline"));
   const entry = host.querySelector<HTMLAnchorElement>("a[href*='scannerPurpose=collection']")!;
   expect(entry.textContent).toContain("Badge collection");
@@ -93,7 +93,7 @@ it("lists each prepared scanner task with its own link", async () => {
       roomLabel: "Main hall",
     },
   ]);
-  await act(() => render(<OfflineScannerBootstrap route={null} onCheckSignIn={() => {}} onSignIn={() => {}} />, host));
+  await act(() => render(<OfflineScannerBootstrap route={null} onSignIn={() => {}} />, host));
   await vi.waitFor(() => expect(host.querySelectorAll(".pk-action-tiles a[href*='offlineContext']")).toHaveLength(5));
   const tiles = [...host.querySelectorAll<HTMLAnchorElement>(".pk-action-tiles a[href*='offlineContext']")];
   expect(tiles.every((tile) => tile.classList.contains("pk-action-tile") && tile.querySelector("svg"))).toBe(true);
@@ -135,7 +135,7 @@ it("shows one event's prepared scanners at a time when multiple events are saved
     epochId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
   };
   mocks.list.mockResolvedValue([amsterdam, toronto]);
-  await act(() => render(<OfflineScannerBootstrap route={null} onCheckSignIn={() => {}} onSignIn={() => {}} />, host));
+  await act(() => render(<OfflineScannerBootstrap route={null} onSignIn={() => {}} />, host));
   await vi.waitFor(() => expect(host.querySelectorAll(".pk-action-tiles a")).toHaveLength(1));
   expect(host.querySelector(".pk-action-tiles a")?.getAttribute("href")).toContain("amsterdam");
   const event = host.querySelector<HTMLSelectElement>("select")!;
@@ -148,7 +148,7 @@ it("shows one event's prepared scanners at a time when multiple events are saved
   expect(host.querySelectorAll(".pk-action-tiles a")).toHaveLength(1);
   expect(window.location.hash).toContain(`scannerEvent=${toronto.slug}`);
   await act(() => render(null, host));
-  await act(() => render(<OfflineScannerBootstrap route={null} onCheckSignIn={() => {}} onSignIn={() => {}} />, host));
+  await act(() => render(<OfflineScannerBootstrap route={null} onSignIn={() => {}} />, host));
   await vi.waitFor(() => expect(host.querySelector(".pk-action-tiles a")?.getAttribute("href")).toContain("toronto"));
 });
 
@@ -167,12 +167,12 @@ it("hides the previous scanner while a different saved task is being restored", 
   };
   window.location.hash = `#${route}?offlineContext=${firstId}`;
   mocks.restore.mockResolvedValueOnce(first);
-  await act(() => render(<OfflineScannerBootstrap route={route} onCheckSignIn={() => {}} onSignIn={() => {}} />, host));
+  await act(() => render(<OfflineScannerBootstrap route={route} onSignIn={() => {}} />, host));
   await vi.waitFor(() => expect(host.textContent).toContain("Saved scanner opened"));
   let finish!: (value: typeof first) => void;
   mocks.restore.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)));
   window.location.hash = `#${route}?offlineContext=${secondId}`;
-  await act(() => render(<OfflineScannerBootstrap route={route} onCheckSignIn={() => {}} onSignIn={() => {}} />, host));
+  await act(() => render(<OfflineScannerBootstrap route={route} onSignIn={() => {}} />, host));
   expect(host.textContent).not.toContain("Saved scanner opened");
   expect(host.textContent).toContain("Checking saved scanner context");
   await act(() => finish({ ...first, contextId: secondId }));

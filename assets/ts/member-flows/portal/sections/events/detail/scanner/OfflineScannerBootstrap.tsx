@@ -20,15 +20,7 @@ function preparedTaskOrder(context: ScannerOfflineContext): number {
 }
 
 /** The offline collector deliberately never mounts the authenticated portal shell. */
-export function OfflineScannerBootstrap({
-  route,
-  onCheckSignIn,
-  onSignIn,
-}: {
-  route: string | null;
-  onCheckSignIn: () => void;
-  onSignIn: () => void;
-}) {
+export function OfflineScannerBootstrap({ route, onSignIn }: { route: string | null; onSignIn: () => void }) {
   const [context, setContext] = useState<ScannerOfflineContext | null>(null);
   const [available, setAvailable] = useState<ScannerOfflineContext[]>([]);
   const [loading, setLoading] = useState(true);
@@ -96,11 +88,6 @@ export function OfflineScannerBootstrap({
           title="Continue scanning offline"
           lede="Scans stay on this device until you sign in to upload them."
           copy={{ kicker: "Offline scanning", headline: "Keep event check-in running." }}
-          foot={
-            <Button type="button" variant="ghost" onClick={onCheckSignIn}>
-              Check sign-in again
-            </Button>
-          }
         >
           <div class="pk-cluster">
             <Button type="button" onClick={onSignIn}>
@@ -172,9 +159,6 @@ export function OfflineScannerBootstrap({
           <div class="pk-stack pk-stack--snug">
             <p>The saved scanner session is unavailable or expired. Pending scans remain on this device.</p>
             <div class="pk-cluster">
-              <Button type="button" variant="secondary" onClick={onCheckSignIn}>
-                Check sign-in again
-              </Button>
               <Button type="button" onClick={onSignIn}>
                 Sign in
               </Button>
@@ -189,7 +173,7 @@ export function OfflineScannerBootstrap({
           occurrenceId={context.occurrenceId}
           allowedActions={[context.action]}
           collectorContext={context}
-          onCheckSignIn={onCheckSignIn}
+          onSignIn={onSignIn}
         />
       )}
     </>

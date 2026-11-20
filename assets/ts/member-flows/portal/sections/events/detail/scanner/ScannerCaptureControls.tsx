@@ -64,29 +64,29 @@ export function ScannerCaptureControls({
   setup,
   mode,
   collector,
+  onSignIn,
   canStart,
   preparing,
   cameraError,
   start,
-  onCheckSignIn,
   children,
 }: {
   children?: ComponentChildren;
   setup: ComponentProps<typeof ScannerSetup>;
   mode: ComponentProps<typeof ScannerModeSelect>;
   collector?: ScannerOfflineContext;
+  onSignIn?: () => void;
   canStart: boolean;
   preparing: boolean;
   cameraError: string;
   start: () => void;
-  onCheckSignIn?: () => void;
 }) {
   return (
     <>
       {collector ? (
-        onCheckSignIn && (
-          <Button type="button" variant="secondary" onClick={onCheckSignIn}>
-            Check sign-in again
+        onSignIn && (
+          <Button type="button" variant="secondary" onClick={onSignIn}>
+            Sign in
           </Button>
         )
       ) : (

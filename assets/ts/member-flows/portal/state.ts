@@ -11,6 +11,7 @@ import type { MyProfile, PortalSession } from "./types";
 import { personDisplayName } from "../../../shared/person-display";
 import {
   listPreparedScannerContexts,
+  scannerCaptureActive,
   scannerCollectorPath,
   scannerTransportUnavailable,
 } from "./sections/events/detail/scanner/scanner-offline-context";
@@ -136,11 +137,14 @@ function restoreReturnPath(): void {
  * — since recording the path is a plain sessionStorage write and clearAuth
  * only resets signals to values they may already hold.
  */
-export function expirePortalSession(): void {
+export function expirePortalSession(status?: number): void {
   recordReturnPath();
   const scannerRoute = typeof window === "undefined" ? null : scannerCollectorPath(window.location.hash);
-  if (!scannerRoute) scannerTransportUnavailable.value = false;
+  const keepActiveScanner = Boolean(scannerRoute && scannerCaptureActive.value);
+  if (!scannerRoute || (status === 401 && !keepActiveScanner)) scannerTransportUnavailable.value = false;
+  else if (keepActiveScanner) scannerTransportUnavailable.value = true;
   clearAuth();
+  if (status === 401 && !keepActiveScanner) return;
   if (scannerRoute)
     void listPreparedScannerContexts()
       .then((contexts) => {
