@@ -334,15 +334,22 @@ export async function assignUserRole(
       now,
     ),
   );
-  await commitAccessControlMutation(
-    db,
-    actor,
-    [
-      { permission: "access:grant" },
-      ...bundledPermissions.map(({ permission }) => (context ? { permission, context } : { permission })),
-    ],
-    statements,
-  );
+  try {
+    await commitAccessControlMutation(
+      db,
+      actor,
+      [
+        { permission: "access:grant" },
+        ...bundledPermissions.map(({ permission }) => (context ? { permission, context } : { permission })),
+      ],
+      statements,
+    );
+  } catch (error) {
+    // The index on active assignments is the authority on "already holds it".
+    if (error instanceof Error && error.message.includes("uq_user_roles_active_user_role_context"))
+      throw new AppError(409, "USER_ROLE_EXISTS", "This person already has this role for this target.");
+    throw error;
+  }
 
   return userRoleResponseSchema.parse({
     id,

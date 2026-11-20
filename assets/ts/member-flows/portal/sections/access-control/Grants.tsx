@@ -14,6 +14,7 @@ import { deleteJson, postJson } from "../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import { fmt, fmtDate, toast } from "../../ui";
 import { PERMISSIONS } from "../../../../../shared/schemas/permissions";
+import { permissionAreas } from "../../../../../shared/permission-metadata";
 import { UserPicker, type PickedUser } from "../../../../components/UserPicker";
 import { confirmPrivilegedAccess } from "./confirm-privileged-access";
 import { NO_TARGET, TargetPicker, type PickedTarget } from "./TargetPicker";
@@ -28,6 +29,9 @@ import {
 // component CSS ships in lazy chunks — the surface writing the class name
 // imports the sheet itself.
 import "../../../../ui/Content.css";
+
+/** Every permission by area, with the same labels the role editor and the app consent screen show. */
+const PERMISSION_AREAS = permissionAreas(PERMISSIONS);
 
 /** Reserved grants segment that routes to the create page instead of the list. */
 const NEW_GRANT_SEGMENT = "new";
@@ -194,10 +198,14 @@ export function Grants({
                       disabled={submitting}
                     >
                       <option value="">Select permission…</option>
-                      {PERMISSIONS.map((p) => (
-                        <option key={p} value={p}>
-                          {p}
-                        </option>
+                      {PERMISSION_AREAS.map((area) => (
+                        <optgroup key={area.key} label={area.label}>
+                          {area.permissions.map((item) => (
+                            <option key={item.permission} value={item.permission}>
+                              {item.label} ({item.permission})
+                            </option>
+                          ))}
+                        </optgroup>
                       ))}
                     </Select>
                   )}
