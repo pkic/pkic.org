@@ -96,8 +96,13 @@ test("response answer filters, keyboard sorting, and venue CSV links work at des
   await page.goto(`${gallery.resolvedUrls!.local[0]}?only=form-responses`);
   const responses = page.locator("section#form-responses");
   await expect(responses.getByText("Ada Example", { exact: true })).toBeVisible();
-  await responses.getByLabel("Filter answer field", { exact: true }).selectOption("dietary_restrictions");
-  await responses.getByLabel("Filter Dietary restrictions", { exact: true }).selectOption("vegan");
+  await expect(responses.getByLabel("Filter answer field", { exact: true })).toHaveCount(0);
+  const tableOptions = responses.locator("thead").getByRole("button", { name: "Table options", exact: true });
+  await tableOptions.click();
+  await page.getByRole("menuitem", { name: "Filter", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Dietary restrictions", exact: true }).click();
+  await page.screenshot({ path: testInfo.outputPath("form-responses-filter-menu.png") });
+  await page.getByRole("menuitemradio", { name: "Vegan", exact: true }).click();
   const download = responses.getByRole("link", { name: "Download Dietary restrictions (CSV)", exact: true });
   await expect(download).toBeVisible();
   await expect(download).toHaveAttribute("href", /answerValue=vegan/);
@@ -133,5 +138,26 @@ test("response answer filters, keyboard sorting, and venue CSV links work at des
   expect(hiddenQuery.columns).toEqual(["submitter"]);
   await page.screenshot({ path: testInfo.outputPath("form-responses-hidden-column.png") });
   await page.reload();
-  await expect(responses.getByLabel("Filter Dietary restrictions", { exact: true })).toHaveValue("vegan");
+  await expect(
+    responses.getByRole("button", { name: "Clear the Dietary restrictions filter", exact: true }),
+  ).toBeVisible();
+  await tableOptions.click();
+  await page.getByRole("menuitem", { name: "Filter", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Dietary restrictions", exact: true }).click();
+  await expect(page.getByRole("menuitemradio", { name: "Vegan", exact: true })).toHaveAttribute("aria-checked", "true");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await page.setViewportSize({ width: 375, height: 900 });
+  await responses
+    .getByRole("toolbar", { name: "Form responses controls", exact: true })
+    .getByRole("button", { name: "Table options", exact: true })
+    .click();
+  await page.getByRole("menuitem", { name: "Filter", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Dietary restrictions", exact: true }).click();
+  await expect(page.getByRole("menuitemradio", { name: "Vegan", exact: true })).toHaveAttribute("aria-checked", "true");
+  await page.screenshot({ path: testInfo.outputPath("form-responses-filter-menu-phone.png") });
+  await page.getByRole("menuitemradio", { name: "All answers", exact: true }).click();
+  await expect(download).toHaveCount(0);
+  await expect(responses.getByRole("link", { name: "Download responses (CSV)", exact: true })).toBeVisible();
 });

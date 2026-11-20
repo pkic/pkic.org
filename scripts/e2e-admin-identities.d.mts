@@ -44,6 +44,7 @@ export const E2E_ADMIN_SCOPES: readonly [
   "portal-event-management",
   "portal-event-attendee-management",
   "portal-event-ticketed-attendance",
+  "registration-response-filters",
   "portal-event-proposals",
   "speaker-submission-confirmation",
   "portal-analytics",
