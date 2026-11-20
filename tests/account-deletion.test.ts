@@ -322,6 +322,26 @@ describe("account deletion", () => {
     expect(await accountExists(userId)).toBe(true);
   });
 
+  it("refuses a reviewed delete after a promotion image was regenerated", async () => {
+    const userId = await insertUser(env.DB, "regenerated@example.test");
+    const at = nowIso();
+    const renderId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO event_promotion_renders(id,event_id,user_id,revision,format,origin,cache_key,status,next_attempt_at,created_at,updated_at)
+       VALUES (?, ?, ?, 1, 'square', 'test', ?, 'rendered', ?, ?, ?)`,
+    )
+      .bind(renderId, eventId, userId, crypto.randomUUID(), at, at, at)
+      .run();
+    const deletion = await preview(userId);
+    await env.DB.prepare("UPDATE event_promotion_renders SET cache_key = ? WHERE id = ?")
+      .bind(crypto.randomUUID(), renderId)
+      .run();
+
+    const response = await request(`/api/v1/users/${userId}?revision=${deletion.revision}`, "DELETE");
+    expect(response.status).toBe(409);
+    expect(await accountExists(userId)).toBe(true);
+  });
+
   it("keeps an account while a promotion image for it is being created", async () => {
     const userId = await insertUser(env.DB, "rendering@example.test");
     const at = nowIso();

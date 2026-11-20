@@ -111,13 +111,18 @@ export async function readAccountDeletion(db: DatabaseLike, userId: string): Pro
   const addressRows = (addressResult.results ?? []) as { email: string; normalized_email: string }[];
   const addresses = [...new Set([account.normalized_email, ...addressRows.map((row) => row.normalized_email)])];
   const spellings = [...new Set([account.email, ...addresses, ...addressRows.map((row) => row.email)].filter(Boolean))];
-  const revision = await sha256Hex(JSON.stringify([account.updated_at, account.email, addresses, counts]));
+  const linkedAddresses = (fingerprint?.linked as string | null | undefined) ?? null;
+  const renderFiles = (fingerprint?.render_files as string | null | undefined) ?? null;
+  // Everything the delete batch re-checks, so a preview with a stale revision is refused before the batch.
+  const revision = await sha256Hex(
+    JSON.stringify([account.updated_at, account.email, addresses, linkedAddresses, renderFiles, counts]),
+  );
   return {
     account,
     addresses,
     spellings,
-    linkedAddresses: (fingerprint?.linked as string | null | undefined) ?? null,
-    renderFiles: (fingerprint?.render_files as string | null | undefined) ?? null,
+    linkedAddresses,
+    renderFiles,
     removedCounts,
     renders: (renderResult.results ?? []) as unknown as AccountDeletionRender[],
     preview: {
