@@ -76,7 +76,7 @@ describe("live session polls", () => {
     expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
   });
 
-  it("counts one answer per person, lets them change it while open and refuses votes once closed", async () => {
+  it("counts one answer per person, final once given, and refuses votes once closed", async () => {
     const operator = await f.connect({ person: "operator" });
     const poll = await preparePoll(operator);
     operator.send({ type: "poll.status", pollId: poll.id, status: "open" });
@@ -89,21 +89,23 @@ describe("live session polls", () => {
     // Results shown to attendees reach a voter once they voted.
     expect(mine.poll.myAnswer).toBe("Root CA");
     expect(mine.poll.results?.totalAnswers).toBe(1);
+    // An answer is final: a second one is refused and moves no tally.
     voter.send({ type: "poll.vote", pollId: poll.id, answer: "Code signing" });
+    expect((await voter.next("room.refused")).code).toBe("LIVE_POLL_ANSWERED");
     other.send({ type: "poll.vote", pollId: poll.id, answer: "Code signing" });
-    const tallied = await operator.next("poll.changed", (message) => counts(message.poll)?.["Code signing"] === 2);
-    expect(counts(tallied.poll)).toEqual({ "Root CA": 0, "TLS endpoints": 0, "Code signing": 2 });
+    const tallied = await operator.next("poll.changed", (message) => counts(message.poll)?.["Code signing"] === 1);
+    expect(counts(tallied.poll)).toEqual({ "Root CA": 1, "TLS endpoints": 0, "Code signing": 1 });
     // Someone who has not voted does not see the running count.
     expect((await speaker.next("poll.changed")).poll.results).toBeNull();
     // The forms answer rules judge the answer: a value the question does not offer is refused.
-    voter.send({ type: "poll.vote", pollId: poll.id, answer: "Quantum" });
-    expect((await voter.next("room.refused")).code).toBe("LIVE_POLL_ANSWER");
+    speaker.send({ type: "poll.vote", pollId: poll.id, answer: "Quantum" });
+    expect((await speaker.next("room.refused")).code).toBe("LIVE_POLL_ANSWER");
 
     operator.send({ type: "poll.status", pollId: poll.id, status: "closed" });
     const closed = await speaker.next("poll.changed", (message) => message.poll.status === "closed");
-    expect(counts(closed.poll)).toEqual({ "Root CA": 0, "TLS endpoints": 0, "Code signing": 2 });
-    voter.send({ type: "poll.vote", pollId: poll.id, answer: "Root CA" });
-    expect((await voter.next("room.refused", (message) => message.code !== "LIVE_POLL_ANSWER")).code).toBe(
+    expect(counts(closed.poll)).toEqual({ "Root CA": 1, "TLS endpoints": 0, "Code signing": 1 });
+    speaker.send({ type: "poll.vote", pollId: poll.id, answer: "Root CA" });
+    expect((await speaker.next("room.refused", (message) => message.code !== "LIVE_POLL_ANSWER")).code).toBe(
       "LIVE_POLL_CLOSED",
     );
   });
@@ -158,10 +160,9 @@ describe("live session polls", () => {
       (m) => m.poll.status === "open" && m.poll.results?.totalAnswers === 1,
     );
     expect(counts(reopened.poll)?.["Root CA"]).toBe(1);
+    // The answer given before the poll closed still stands: a new one is refused.
     voter.send({ type: "poll.vote", pollId: poll.id, answer: "TLS endpoints" });
-    const changed = await operator.next("poll.changed", (m) => counts(m.poll)?.["TLS endpoints"] === 1);
-    expect(changed.poll.results?.totalAnswers).toBe(1);
-    expect(counts(changed.poll)?.["Root CA"]).toBe(0);
+    expect((await voter.next("room.refused")).code).toBe("LIVE_POLL_ANSWERED");
     operator.send({
       type: "stage.set",
       schedule: null,

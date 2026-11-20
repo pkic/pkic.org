@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { CustomAnswerValue } from "../../shared/form-answer-rules";
 import { formatNumber } from "../../shared/format-number";
 import { LIVE_POLL_ANSWER_REFUSAL, type LivePoll, type LivePollField } from "../../shared/schemas/live-session-poll";
@@ -7,6 +7,7 @@ import { useFormAnswers } from "../components/forms/useFormAnswers";
 import type { FormField } from "../shared/types";
 import { CustomFieldList } from "../shared/widgets/custom-fields";
 import { Button } from "../ui/Button";
+import { Dialog } from "../ui/Dialog";
 import "./LivePollOverlay.css";
 
 /** A poll's question as the forms respondent controls read a field. */
@@ -20,45 +21,46 @@ export function livePollFormField(field: LivePollField): FormField {
 }
 
 /**
- * The poll an attendee is asked now. The question is answered with the same
- * controls and the same generated answer contract as any form; one answer per
- * person, changeable while the poll is open. It shows one thing at a time:
- * the choices until the person has answered, then the results they may see,
- * with a way back to the choices. Results are drawn as the stream draws them:
- * each answer over its bar, its share at the end, the bars in the brand
- * stripe, and how many voted said once. It sits in its panel without a card
- * of its own.
+ * The poll an attendee is asked now, as one row above the questions so it never pushes them out: what is
+ * asked, and a button that opens it. The poll itself is a dialog. It holds the choices until the person has
+ * answered, with the same controls and the same generated answer contract as any form, and after that the
+ * results they may see: one answer per person, and it is final. When a poll is asked the dialog opens by
+ * itself once, since a poll is for now; closing it leaves the row.
+ *
+ * Results are drawn as the stream draws them: each answer over its bar in the brand stripe, its share at
+ * the end of its line, and how many voted said once.
  */
 export function LivePollCard({
   poll,
   disabled,
   refusal,
   onVote,
+  prompt = true,
 }: {
   poll: LivePoll;
   disabled: boolean;
   /** The room's latest refusal; an answer it refused is marked on the question. */
   refusal: { sequence: number; code: string; message: string } | null;
   onVote: (answer: CustomAnswerValue) => void;
+  /** Whether a poll just asked may open by itself; false while something else has the person's attention. */
+  prompt?: boolean;
 }) {
   const field = useMemo(() => livePollFormField(poll.field), [poll.field]);
   const fields = useMemo(() => [field], [field]);
   const answers = useFormAnswers(fields);
-  const open = poll.status === "open";
+  const asked = poll.status === "open";
   const answered = poll.myAnswer !== null;
-  const mine = JSON.stringify(poll.myAnswer);
-  // Only the person's own answer refills the question: a tally arriving
-  // while they choose must not undo a choice they have not sent yet.
-  const initialValues = useMemo(
-    () => (answered ? { [field.key]: JSON.parse(mine) as CustomAnswerValue } : undefined),
-    [answered, field.key, mine],
-  );
-  const { sync, refuseAnswer } = answers;
-  useLayoutEffect(sync, [mine, sync]);
-  // Once answered, the choices give way to the results; "Change answer" brings them back.
-  const [changing, setChanging] = useState(false);
-  useEffect(() => setChanging(false), [mine]);
-  const choosing = open && (!answered || changing);
+  const choosing = asked && !answered;
+  const { refuseAnswer } = answers;
+
+  const [shown, setShown] = useState(false);
+  // Asked once per poll: someone who closed it is not asked again by every tally that arrives.
+  const prompted = useRef<string | null>(null);
+  useEffect(() => {
+    if (!choosing || !prompt || disabled || prompted.current === poll.id) return;
+    prompted.current = poll.id;
+    setShown(true);
+  }, [choosing, prompt, disabled, poll.id]);
 
   // The room's refusal of an answer is said once, on the question it is about.
   const currentRefusal = useRef({ refusal, fieldKey: field.key, refuseAnswer });
@@ -66,58 +68,85 @@ export function LivePollCard({
   const refusalSequence = refusal?.sequence;
   useEffect(() => {
     const { refusal, fieldKey, refuseAnswer } = currentRefusal.current;
-    if (refusal?.code !== LIVE_POLL_ANSWER_REFUSAL) return;
-    // A refused answer is said on the question, so the choices come back with it.
-    setChanging(true);
-    refuseAnswer(fieldKey, refusal.message);
+    if (refusal?.code === LIVE_POLL_ANSWER_REFUSAL) refuseAnswer(fieldKey, refusal.message);
   }, [refusalSequence]);
 
-  function send(event: Event) {
-    event.preventDefault();
+  function send(event?: Event) {
+    event?.preventDefault();
     const checked = answers.submit();
     const answer = checked.data?.[field.key];
     if (answer !== undefined) onVote(answer);
   }
+  const close = () => setShown(false);
 
-  const respondents = poll.results?.totalAnswers ?? 0;
+  const votes = poll.results?.totalAnswers ?? 0;
+  const tally = poll.results ? ` · ${formatNumber(votes)} ${votes === 1 ? "vote" : "votes"}` : "";
   return (
-    <section class="pk-live-poll-card pk-stack pk-stack--snug" aria-label="Poll">
-      <p class="pk-live-poll-card__kicker">
-        {open ? "Poll" : "Poll results"}
-        {poll.results ? ` · ${formatNumber(respondents)} ${respondents === 1 ? "vote" : "votes"}` : ""}
-      </p>
-      {choosing ? (
-        <form ref={answers.formRef} class="pk-stack pk-stack--snug" noValidate {...answers.handlers} onSubmit={send}>
-          <CustomFieldList
-            key={poll.id}
-            fields={fields}
-            context={{ dayAttendance: [] }}
-            initialValues={initialValues}
-            presentationOf={answers.presentationOf}
-          />
-          <div class="pk-cluster">
-            <Button type="submit" variant="primary" disabled={disabled}>
-              Send answer
-            </Button>
-            {answered ? <Button onClick={() => setChanging(false)}>Keep my answer</Button> : null}
-          </div>
-          <p class="pk-small pk-muted">One answer per person. You can change it until the poll closes.</p>
-        </form>
-      ) : (
+    <section class="pk-live-poll-card" aria-label="Poll">
+      <div class="pk-live-poll-card__text">
+        <p class="pk-live-poll-card__kicker">
+          {asked ? "Poll" : "Poll results"}
+          {tally}
+        </p>
         <p class="pk-strong">{poll.field.label}</p>
+      </div>
+      {choosing ? (
+        <Button variant="primary" disabled={disabled} onClick={() => setShown(true)}>
+          Answer poll
+        </Button>
+      ) : poll.results ? (
+        <Button onClick={() => setShown(true)}>See results</Button>
+      ) : (
+        <p class="pk-small pk-muted" role="status">
+          {asked ? "Your answer is in." : "This poll is closed."}
+        </p>
       )}
-      {!choosing && poll.results ? (
-        <FormFieldStatChart field={poll.field} stat={poll.results} visualization="bar" presentation />
-      ) : null}
-      {open && !choosing ? (
-        <div class="pk-cluster">
-          <p class="pk-small pk-muted" role="status">
-            Your answer is in.
-          </p>
-          <Button disabled={disabled} onClick={() => setChanging(true)}>
-            Change answer
-          </Button>
-        </div>
+      {shown ? (
+        <Dialog
+          open
+          title={choosing ? "Poll" : "Poll results"}
+          closeLabel="Close the poll"
+          confirmLabel={choosing ? "Send answer" : "Close"}
+          cancelLabel={choosing ? "Not now" : null}
+          confirmDisabled={choosing && disabled}
+          onConfirm={choosing ? () => send() : close}
+          onCancel={close}
+        >
+          {choosing ? (
+            <form
+              ref={answers.formRef}
+              class="pk-stack pk-stack--snug"
+              noValidate
+              {...answers.handlers}
+              onSubmit={send}
+            >
+              <CustomFieldList
+                key={poll.id}
+                fields={fields}
+                context={{ dayAttendance: [] }}
+                presentationOf={answers.presentationOf}
+              />
+              <p class="pk-small pk-muted">One answer per person. It cannot be changed once sent.</p>
+            </form>
+          ) : (
+            <div class="pk-live-poll-results pk-stack pk-stack--snug">
+              <p class="pk-strong">{poll.field.label}</p>
+              {poll.results ? (
+                <>
+                  <FormFieldStatChart field={poll.field} stat={poll.results} visualization="bar" presentation />
+                  <p class="pk-small pk-muted">
+                    {formatNumber(votes)} {votes === 1 ? "vote" : "votes"}
+                    {asked ? " so far" : ""}
+                  </p>
+                </>
+              ) : (
+                <p class="pk-small pk-muted" role="status">
+                  Your answer is in.
+                </p>
+              )}
+            </div>
+          )}
+        </Dialog>
       ) : null}
     </section>
   );

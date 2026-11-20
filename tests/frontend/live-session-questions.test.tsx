@@ -504,12 +504,13 @@ describe("session questions", () => {
     ]);
   });
 
-  it("answers the open poll with the form controls, changeably, and shows the results it is allowed to see", () => {
+  it("asks the open poll in a dialog over the questions, takes one final answer and then shows the results", () => {
     const { host, live } = mount();
     connect(live, liveSnapshot({ polls: [livePoll()] }));
-    expect(host.textContent).toContain("Which migration comes first?");
+    // One row above the questions; being asked now, it opens by itself.
+    expect(host.querySelector(".pk-live-poll-card")?.textContent).toContain("Which migration comes first?");
+    expect(host.querySelector("dialog input[type=radio]")).not.toBeNull();
     expect(host.querySelector(".pk-chart__bars")).toBeNull();
-    // Sending nothing is refused by the forms answer rules, on the question, before the room hears of it.
     void act(() => button(host, "Send answer").click());
     expect(host.querySelector("[data-field-error=answer]")?.textContent).toMatch(/required/);
     void act(() => radio(host, "TLS endpoints").click());
@@ -520,19 +521,17 @@ describe("session questions", () => {
         poll: livePoll({ myAnswer: "TLS endpoints", results: livePollResults({ "Root CA": 1, "TLS endpoints": 3 }) }),
       }),
     );
-    // Answered: the choices give way to the results and the vote count, with a way back to the choices.
+    // Answered: the choices give way to the results, and nothing offers to change the answer.
     expect(host.querySelector("input[type=radio]")).toBeNull();
     expect(host.querySelector(".pk-chart__bars")?.textContent).toContain("75% 3");
     expect(host.querySelector(".pk-live-poll-card__kicker")?.textContent).toBe("Poll · 4 votes");
-    void act(() => button(host, "Change answer").click());
-    expect(radio(host, "TLS endpoints").checked).toBe(true);
-    void act(() => radio(host, "Root CA").click());
-    void act(() => button(host, "Send answer").click());
-    const votes = live.latest().messages();
-    expect(votes.map((message) => liveRoomClientMessageSchema.parse(message))).toEqual([
-      { type: "poll.vote", pollId: LIVE_POLL, answer: "TLS endpoints" },
-      { type: "poll.vote", pollId: LIVE_POLL, answer: "Root CA" },
-    ]);
+    expect([...host.querySelectorAll("button")].some((item) => item.textContent === "Change answer")).toBe(false);
+    expect(
+      live
+        .latest()
+        .messages()
+        .map((message) => liveRoomClientMessageSchema.parse(message)),
+    ).toEqual([{ type: "poll.vote", pollId: LIVE_POLL, answer: "TLS endpoints" }]);
   });
 
   it("marks an answer the room refused on the question, and only there", () => {
@@ -562,7 +561,9 @@ describe("session questions", () => {
     const { host, live } = mount();
     const closed = livePoll({ status: "closed", results: livePollResults({ "Root CA": 2 }) });
     connect(live, liveSnapshot({ polls: [closed] }));
-    expect(host.textContent).toContain("Poll results");
+    expect(host.querySelector(".pk-live-poll-card")?.textContent).toContain("Poll results");
+    expect(host.querySelector("dialog")).toBeNull();
+    void act(() => button(host, "See results").click());
     expect(host.querySelector("input[type=radio]")).toBeNull();
     expect(host.querySelector(".pk-chart__bars")?.textContent).toContain("100% 2");
   });

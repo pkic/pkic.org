@@ -266,7 +266,7 @@ export function LiveAttendeeQuestions({
           disabled={!live}
           onClick={() => setAsking(true)}
           askIn={askIn}
-          quiet={poll?.status === "open"}
+          quiet={poll?.status === "open" && poll.myAnswer === null}
         />
       )}
       {poll ? (
@@ -275,6 +275,7 @@ export function LiveAttendeeQuestions({
           disabled={!live || restriction !== null}
           refusal={state.refusal}
           onVote={(answer) => room.send({ type: "poll.vote", pollId: poll.id, answer })}
+          prompt={!asking}
         />
       ) : null}
       {asking && !restriction ? (

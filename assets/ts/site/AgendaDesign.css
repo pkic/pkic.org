@@ -1671,6 +1671,33 @@
       .pk-content-agenda__slot[data-agenda-finished] {
       display: none;
     }
+    /* Beside something else there is no room for a column of times: each is a small line above its card. */
+    .pk-content-agenda[data-agenda-compact][data-agenda-view="list"]
+      .pk-content-agenda__timeline
+      .pk-content-agenda__slot {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0.25rem;
+      padding-block: 0.5rem;
+    }
+    .pk-content-agenda[data-agenda-compact][data-agenda-view="list"]
+      .pk-content-agenda__slot
+      > th.pk-content-agenda__time {
+      grid-row: auto;
+      padding-block: 0;
+    }
+    .pk-content-agenda[data-agenda-compact][data-agenda-view="list"] .pk-content-agenda__slot > td {
+      grid-column: 1;
+    }
+    .pk-content-agenda[data-agenda-compact][data-agenda-view="list"] .pk-content-agenda__clocks {
+      flex-direction: row;
+      align-items: baseline;
+      gap: 0.625rem;
+    }
+    .pk-content-agenda[data-agenda-compact][data-agenda-view="list"] [data-agenda-clock] > time {
+      color: var(--pk-ink-muted);
+      font-size: var(--pk-agenda-type-13);
+      font-weight: 600;
+    }
   }
   @media screen and (max-width: 47.499rem) {
     .pk-content-agenda__toolbar-actions > [data-agenda-filters-toggle] {
