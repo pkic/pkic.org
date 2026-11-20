@@ -164,7 +164,12 @@ export function ParticipantEvent({
       : []),
   ];
   const navigation = (
-    <ParticipantEventNavigation event={participantEventAppSubject(event)} activeId={active} items={tabs} />
+    <ParticipantEventNavigation
+      event={participantEventAppSubject(event)}
+      activeId={active}
+      items={tabs}
+      appBar={active !== "virtual"}
+    />
   );
   // Every page belongs to this event; the section title follows its persistent hero.
   const header = (recordTitle?: string) => (
@@ -179,7 +184,7 @@ export function ParticipantEvent({
     </>
   );
   return (
-    <div class="pk-stack">
+    <div class="pk-stack" data-event-room={tab === "virtual" ? "" : undefined}>
       {kind !== "proposal" && header()}
       {kind === "registration" && resourceId ? (
         <ParticipantRegistration
@@ -233,7 +238,20 @@ export function ParticipantEvent({
         <ParticipantProposals event={event} />
       ) : tab === "virtual" ? (
         <Suspense fallback={<Spinner />}>
-          <VirtualRoom slug={event.slug} />
+          <VirtualRoom
+            slug={event.slug}
+            agenda={
+              <Suspense fallback={<Spinner />}>
+                <MyAgenda
+                  embedded
+                  slug={event.slug}
+                  eventId={event.id}
+                  eventName={event.name}
+                  canPersonalize={eventRegistrationStanding(event).status === "registered"}
+                />
+              </Suspense>
+            }
+          />
         </Suspense>
       ) : tab === "ticket" && !ticketless ? (
         <EventTicket event={event} />

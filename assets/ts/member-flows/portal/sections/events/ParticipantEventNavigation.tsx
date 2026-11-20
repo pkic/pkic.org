@@ -18,10 +18,13 @@ export function ParticipantEventNavigation({
   event,
   items,
   activeId,
+  appBar = true,
 }: {
   event: EventAppSubject;
   items: readonly TabItem[];
   activeId: string;
+  /** False on a page that brings a bottom bar of its own, as the virtual room does on a phone. */
+  appBar?: boolean;
 }) {
   const access = participantScannerAccess(event.id, event.scannerAccess);
   const base = `/events/${encodeURIComponent(event.slug)}`;
@@ -53,7 +56,7 @@ export function ParticipantEventNavigation({
             : []),
         ]}
       />
-      <EventAppBar event={event} activeId={activeId} />
+      {appBar && <EventAppBar event={event} activeId={activeId} />}
     </>
   );
 }

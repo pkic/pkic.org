@@ -400,6 +400,23 @@ describe("personal agenda on the shared agenda component", () => {
     expect(host.querySelector(".pk-content-agenda")).toBeNull();
   });
 
+  it("leaves the address to the page it is shown inside", async () => {
+    setProgram(publishedProgram([]));
+    // The virtual room's own link to a session, and a view that is not the room's.
+    history.replaceState(
+      null,
+      "",
+      "#/events/workshop/virtual?session=10000000-0000-4000-8000-000000000009&view=calendar",
+    );
+    stubFetch(async () => json(listing(1, "request", true)));
+    const host = mount({ embedded: true });
+    await vi.waitFor(() => expect(host.querySelector(".pk-content-agenda")).not.toBeNull());
+    expect(host.textContent).not.toContain("no longer available in the published agenda");
+    const calendar = host.querySelector<HTMLAnchorElement>('a[aria-label="Calendar and reminders"]');
+    expect(calendar?.getAttribute("href")).toBe("#/events/workshop/agenda?view=calendar");
+    expect(location.hash).toContain("/events/workshop/virtual?session=");
+  });
+
   it("explains an unpublished agenda and keeps calendar preferences reachable", async () => {
     history.replaceState(null, "", "#/events/workshop/agenda");
     stubFetch(async (input) =>

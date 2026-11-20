@@ -44,7 +44,7 @@ export function json(value: unknown, status = 200) {
   return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
 }
 const hosts: HTMLElement[] = [];
-export function mount(props: { mine?: boolean; canPersonalize?: boolean } = {}) {
+export function mount(props: { mine?: boolean; canPersonalize?: boolean; embedded?: boolean } = {}) {
   const host = document.createElement("div");
   document.body.append(host);
   hosts.push(host);

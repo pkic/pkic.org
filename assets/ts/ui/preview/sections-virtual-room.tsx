@@ -1,6 +1,6 @@
 /**
- * The event app's virtual room: the strip of sponsors under the stream, which is always in view and changes
- * by itself so that every sponsor is seen.
+ * The event app's virtual room: its layout for a desktop and for a phone, the sponsors' line under the
+ * stream, the production partners' credit, and the settings that name the partners.
  */
 import type { SponsorsDisplayResponse } from "../../../shared/schemas/public-sponsors";
 import { useState } from "preact/hooks";
@@ -12,9 +12,27 @@ import {
 import { ProductionPartnersPanel } from "../../member-flows/portal/sections/events/detail/settings/ProductionPartnersSettings";
 import { Button } from "../Button";
 import { Panel, PanelBody, PanelHeader } from "../Panel";
+import { LiveReactionBar } from "../../live-session/LiveReactionBar";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
+import {
+  ROOM_WIDE_QUERY,
+  VirtualRoomFrame,
+  type RoomPanelId,
+} from "../../member-flows/portal/sections/events/app/virtual-room/VirtualRoomFrame";
+import {
+  VirtualRoomChat,
+  VirtualRoomQuestions,
+  VirtualRoomSchedule,
+} from "../../member-flows/portal/sections/events/app/virtual-room/VirtualRoomPanels";
+import {
+  VirtualRoomNowPlaying,
+  VirtualRoomPlayer,
+} from "../../member-flows/portal/sections/events/app/virtual-room/VirtualRoomPlayer";
+import type { RoomMoment } from "../../member-flows/portal/sections/events/app/virtual-room/virtual-room-schedule";
 import { VirtualRoomPartners } from "../../member-flows/portal/sections/events/app/virtual-room/VirtualRoomPartners";
 import { VirtualRoomSponsors } from "../../member-flows/portal/sections/events/app/virtual-room/VirtualRoomSponsors";
 import "../../member-flows/portal/sections/events/app/virtual-room/VirtualRoom.css";
+import { AgendaExample } from "./agenda-example";
 import type { PreviewSection } from "./PreviewShell";
 
 /** A wordmark on a light page, as a sponsor supplies it: wide or narrow by the length of the name. */
@@ -98,23 +116,90 @@ function PartnerEditorSpecimen() {
   );
 }
 
+const session = (id: string, title: string, startAt: string, endAt: string, speaker: string) => ({
+  id: `d0000000-0000-4000-8000-00000000000${id}`,
+  title,
+  startAt,
+  endAt,
+  speakers: [{ userId: `e0000000-0000-4000-8000-00000000000${id}`, displayName: speaker }],
+});
+// Between sessions, so the questions and the chat show how they wait and nothing connects to a room.
+const MOMENT = {
+  current: null,
+  upcoming: [
+    session("1", "Planning the post-quantum migration", "2027-01-20T09:00:00.000Z", "2027-01-20T09:45:00.000Z", "Ada"),
+    session("2", "Hybrid certificates in practice", "2027-01-20T10:00:00.000Z", "2027-01-20T10:45:00.000Z", "Grace"),
+    session("3", "Inventory before you migrate", "2027-01-20T11:00:00.000Z", "2027-01-20T11:30:00.000Z", "Linus"),
+  ],
+} as RoomMoment;
+const LOCATIONS = ["Main hall", "Studio"].map((name, index) => ({ id: `room-${index}`, name, href: "#" }));
+const formatTime = () => "10:00 – 10:45";
+
+/** The whole room around a stream that has not started, opened on one of a phone's panels. */
+function RoomSpecimen({ opensOn }: { opensOn: RoomPanelId }) {
+  const wide = useMediaQuery(ROOM_WIDE_QUERY);
+  const [panel, setPanel] = useState(opensOn);
+  const [locationId, setLocationId] = useState(LOCATIONS[0]!.id);
+  return (
+    <VirtualRoomFrame
+      wide={wide}
+      locations={LOCATIONS}
+      locationId={locationId}
+      onLocation={setLocationId}
+      player={<VirtualRoomPlayer stream={null} locationName="Main hall" />}
+      now={(picker) => (
+        <VirtualRoomNowPlaying
+          slug="preview"
+          moment={MOMENT}
+          formatTime={formatTime}
+          location={picker}
+          reactions={<LiveReactionBar send={() => true} refusal={null} />}
+        />
+      )}
+      playerHelp={null}
+      sponsors={<VirtualRoomSponsors sponsors={SPONSORS} />}
+      partners={<VirtualRoomPartners partners={PARTNERS} />}
+      schedule={<VirtualRoomSchedule slug="preview" moment={MOMENT} formatTime={formatTime} />}
+      questions={(labelledBy) => (
+        <VirtualRoomQuestions slug="preview" moment={{ current: null, upcoming: [] }} labelledBy={labelledBy} />
+      )}
+      chat={(labelledBy) => (
+        <VirtualRoomChat slug="preview" moment={{ current: null, upcoming: [] }} labelledBy={labelledBy} />
+      )}
+      agenda={<AgendaExample />}
+      agendaHref="#"
+      eventHref="#"
+      panel={panel}
+      panelHref={() => "#"}
+      onPanel={setPanel}
+    />
+  );
+}
+
 export const virtualRoomSections: PreviewSection[] = [
+  {
+    id: "virtual-room",
+    title: "Virtual room",
+    note: "On a desktop the stream is large on the left; questions and polls sit top right with the chat under them, both always open. On a phone the stream, the running session and the sponsors stay at the top, and the bottom bar switches one panel between questions, chat and the agenda.",
+    render: () => <RoomSpecimen opensOn="questions" />,
+  },
+  {
+    id: "virtual-room-agenda",
+    title: "Virtual room: the agenda on a phone",
+    note: "The Agenda tab holds the event's own agenda, so the whole program is at hand while the stream plays. The production partners are credited at its foot.",
+    render: () => <RoomSpecimen opensOn="agenda" />,
+  },
   {
     id: "virtual-room-sponsors",
     title: "Virtual room: sponsors under the stream",
-    note: "Always in view, never behind a tab: six logos at a time beside the stream on a desk, three on a phone. They change by themselves every few seconds, and wait while the pointer or the keyboard is on one. The two highest tiers are larger and come back more often than the rest.",
+    note: "One line of a fixed height, one tier at a time, each tier at its own size and every logo of a tier given the same room. The line changes by itself every few seconds and waits while the pointer or the keyboard is on a logo. On a desktop the highest tier stays at the start of the line; on a phone it takes turns and returns most often. A logo's tier is its tooltip.",
     render: () => <VirtualRoomSponsors sponsors={SPONSORS} />,
   },
   {
     id: "virtual-room-partners",
-    title: "Virtual room: production partners under the sponsors",
-    note: "Someone who helps produce the stream is credited with what they provide, in front of their logo. They stand apart from the sponsors and never take a turn in the sponsors' strip. A partner without a logo is named in words.",
-    render: () => (
-      <div class="pk-stack pk-stack--snug">
-        <VirtualRoomSponsors sponsors={SPONSORS} />
-        <VirtualRoomPartners partners={PARTNERS} />
-      </div>
-    ),
+    title: "Virtual room: production partners",
+    note: "Someone who helps produce the stream is credited with what they provide, then their logo, smaller than any sponsor's. They stand apart from the sponsors and never take a turn in the sponsors' line. A partner without a logo is named in words.",
+    render: () => <VirtualRoomPartners partners={PARTNERS} />,
   },
   {
     id: "production-partners-settings",

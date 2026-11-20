@@ -58,16 +58,23 @@ export function MyAgenda({
   eventName,
   mine = false,
   canPersonalize = false,
+  embedded = false,
 }: {
   slug: string;
   eventId?: string;
   eventName?: string;
   mine?: boolean;
   canPersonalize?: boolean;
+  /**
+   * Shown inside another page, as in the virtual room: that page owns the address, so the agenda opens no
+   * session and no calendar view from it, and its calendar link leads to the agenda's own page.
+   */
+  embedded?: boolean;
 }) {
   const rawLocation = useSyncExternalStore(subscribeHashQuery, hashQuerySnapshot);
   const { path, params: query } = splitHash(rawLocation);
-  const focus = databaseIdSchema.safeParse(query.get("session"));
+  const focus = databaseIdSchema.safeParse(embedded ? null : query.get("session"));
+  const view = embedded ? null : query.get("view");
   const destination = (values: { view?: string }) => {
     const next = splitHash().params;
     next.delete("session");
@@ -75,7 +82,7 @@ export function MyAgenda({
     if (values.view) next.set("view", values.view);
     return path + (next.size ? `?${next}` : "");
   };
-  if (!canPersonalize && (mine || query.get("view") === "calendar"))
+  if (!canPersonalize && (mine || view === "calendar"))
     return (
       <EmptyState
         title="Register to create your agenda"
@@ -84,7 +91,7 @@ export function MyAgenda({
         <ButtonLink href={usePortalHashLocation.hrefs(`/events/${encodeURIComponent(slug)}`)}>View event</ButtonLink>
       </EmptyState>
     );
-  if (query.get("view") === "calendar") return <AgendaCalendarSettings slug={slug} eventName={eventName} />;
+  if (view === "calendar") return <AgendaCalendarSettings slug={slug} eventName={eventName} />;
   return (
     <PersonalAgenda
       slug={slug}
@@ -92,7 +99,9 @@ export function MyAgenda({
       focus={focus.success ? focus.data : undefined}
       mine={mine}
       canPersonalize={canPersonalize}
-      calendarHref={usePortalHashLocation.hrefs(destination({ view: "calendar" }))}
+      calendarHref={usePortalHashLocation.hrefs(
+        embedded ? `${eventAgendaRoute(slug)}?view=calendar` : destination({ view: "calendar" }),
+      )}
       onFocusClosed={() => {
         const current = splitHash();
         const next = new URLSearchParams(current.params);

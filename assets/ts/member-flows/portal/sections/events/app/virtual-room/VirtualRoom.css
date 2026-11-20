@@ -1,36 +1,45 @@
 /*
- * The virtual room: the player large with the running session under it, and the room's panels beside it on a
- * wide screen. On a phone the player stays in view at the top while the panels scroll beneath it.
+ * The virtual room. On a phone it works like an app: the stream, the running session and the sponsors stay
+ * at the top, edge to edge, while one panel scrolls beneath them. On a desktop the stream is large on the
+ * left, and the questions and the chat stand beside it, each scrolling inside its own half.
  */
 
 @layer components {
-  /* Phones and tablets: one column whose player stays in view while the rest scrolls beneath it. */
   .pk-virtual-room {
     display: flex;
     flex-direction: column;
     gap: var(--pk-3);
   }
 
+  /* The stream with its two lines: together they stay in view, over the page's own gutter. */
   .pk-virtual-room__stage {
-    display: contents;
-  }
-
-  .pk-virtual-room__player {
     position: sticky;
     z-index: 10;
     top: var(--pk-viewport-shift-top, 0px);
+    display: grid;
+    margin-inline: calc(-1 * var(--pk-2));
+    border-block-end: 1px solid var(--pk-line);
+    background: var(--pk-surface);
+  }
+
+  /* A screen too low to hold the stream and a panel lets the stream scroll away. */
+  @media (max-height: 30rem) {
+    .pk-virtual-room__stage {
+      position: static;
+    }
+  }
+
+  .pk-virtual-room__player {
     overflow: hidden;
-    border: 1px solid var(--pk-line-soft);
-    border-radius: var(--pk-radius);
     background: var(--pk-surface-sunk);
   }
 
   .pk-virtual-room__player .pk-embed {
     border: 0;
+    border-radius: 0;
   }
 
   .pk-virtual-room__player--idle {
-    position: static;
     display: grid;
     align-items: center;
     aspect-ratio: 16 / 9;
@@ -42,41 +51,90 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .pk-virtual-room__title {
+  /*
+   * The running session on one line: the location, the title, the reactions. Where the three do not fit a
+   * phone's width the reactions take the line below; the time and speakers are left to the wider layout.
+   */
+  .pk-virtual-room__now {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-1) var(--pk-2);
+    padding: var(--pk-1) var(--pk-2);
+  }
+
+  .pk-virtual-room__location {
+    flex: none;
+    inline-size: auto;
+    max-inline-size: 9rem;
+  }
+
+  .pk-virtual-room__now-text {
+    flex: 1 1 8rem;
+    min-inline-size: 0;
+  }
+
+  .pk-virtual-room__now-text p {
+    display: none;
+  }
+
+  .pk-virtual-room__now-text p:only-child {
+    display: block;
     margin: 0;
-    font-size: var(--pk-text-xl);
+  }
+
+  .pk-virtual-room__title {
+    overflow: hidden;
+    margin: 0;
+    font-size: var(--pk-text-lg);
     font-weight: 700;
     line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .pk-virtual-room__now p {
-    margin: 0;
+  .pk-virtual-room__now-actions {
+    flex-basis: 100%;
   }
 
-  .pk-virtual-room__panels {
-    align-content: start;
+  /* The pause notice hangs under the reactions, so the lines that stay in view never change height. */
+  .pk-virtual-room__now .pk-live-reactions {
+    position: relative;
+    flex: none;
+    margin-inline-start: auto;
+  }
+
+  .pk-virtual-room__now .pk-live-reactions__status {
+    position: absolute;
+    z-index: 1;
+    inset-block-start: 100%;
+    inset-inline-end: 0;
+    min-block-size: 0;
+    border-radius: var(--pk-radius-sm);
+    background: var(--pk-surface);
+    white-space: nowrap;
+  }
+
+  .pk-virtual-room__now .pk-live-reactions__status:not(:empty) {
+    padding: var(--pk-1) var(--pk-2);
+    box-shadow: var(--pk-shadow-1);
   }
 
   /*
-   * The sponsors under the stream, always in view: one row of logos that changes by itself. Every logo sits
-   * on a light tile, since a sponsor's mark is drawn for a light page; the highest tiers get the taller one.
+   * The sponsors under the stream, always in view on one line that never changes height: one tier at a time,
+   * spread over the width, each tier at its own size. The line is light in both themes, since a sponsor's
+   * logo is drawn for a light page.
    */
   .pk-virtual-room__sponsors {
+
     display: flex;
     align-items: center;
     gap: var(--pk-3);
-    padding-block: var(--pk-2);
-    border-block: 1px solid var(--pk-line-soft);
-  }
-
-  .pk-virtual-room__sponsors-label,
-  .pk-virtual-room__partner-role {
-    flex: none;
-    color: var(--pk-ink-muted);
-    font-size: var(--pk-text-xs);
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    overflow: hidden;
+    block-size: 2.75rem;
+    padding-inline: var(--pk-3);
+    border-block-start: 1px solid var(--pk-line-soft);
+    background: var(--pk-on-solid);
   }
 
   .pk-virtual-room__sponsor-list {
@@ -84,14 +142,42 @@
     flex: 1;
     align-items: center;
     justify-content: space-around;
-    gap: var(--pk-3);
+    gap: var(--pk-4);
     min-inline-size: 0;
     margin: 0;
     padding: 0;
     list-style: none;
   }
 
-  /* A logo gives way before it leaves the row: on a phone three share the width, each scaled inside its tile. */
+  .pk-virtual-room__sponsor-list[data-rank="0"] {
+    --pk-room-sponsor-size: 1.75rem;
+  }
+
+  .pk-virtual-room__sponsor-list[data-rank="1"] {
+    --pk-room-sponsor-size: 1.25rem;
+  }
+
+  .pk-virtual-room__sponsor-list[data-rank="2"] {
+    --pk-room-sponsor-size: 1.0625rem;
+  }
+
+  .pk-virtual-room__sponsor-list[data-rank="3"] {
+    --pk-room-sponsor-size: 0.9375rem;
+  }
+
+  .pk-virtual-room__sponsor-list[data-rank="4"] {
+    --pk-room-sponsor-size: 0.8125rem;
+  }
+
+  /* The highest tier at the start of a desktop's line, a hairline between it and the tier taking its turn. */
+  .pk-virtual-room__sponsor-list--pinned {
+    flex: none;
+    align-self: stretch;
+    padding-inline-end: var(--pk-4);
+    border-inline-end: 1px solid var(--pk-line-soft);
+  }
+
+  /* A logo gives way before it leaves the line: it is scaled whole inside the room it is left. */
   .pk-virtual-room__sponsor {
     display: flex;
     flex: 0 1 auto;
@@ -104,28 +190,64 @@
     border-radius: var(--pk-radius-sm);
   }
 
+  /*
+   * Every logo of a tier is given the same area: the longer the wordmark, the lower it stands. The step is
+   * tenths of the tier's height, set once the logo's shape is known.
+   */
   .pk-virtual-room__sponsor img {
-    box-sizing: border-box;
+    --pk-room-logo-scale: 0.8;
+
     inline-size: auto;
     max-inline-size: 100%;
-    block-size: 2rem;
-    padding: var(--pk-1) var(--pk-2);
-    border-radius: var(--pk-radius-sm);
-    background: var(--pk-on-solid);
+    block-size: calc(var(--pk-room-sponsor-size) * var(--pk-room-logo-scale));
     object-fit: contain;
   }
 
-  .pk-virtual-room__sponsor[data-top] img {
-    block-size: 2.75rem;
+  .pk-virtual-room__sponsor img[data-step="5"] {
+    --pk-room-logo-scale: 0.5;
   }
 
-  /* Production partners under the sponsors: each a role and a logo, quieter than the sponsors and apart from them. */
+  .pk-virtual-room__sponsor img[data-step="6"] {
+    --pk-room-logo-scale: 0.6;
+  }
+
+  .pk-virtual-room__sponsor img[data-step="7"] {
+    --pk-room-logo-scale: 0.7;
+  }
+
+  .pk-virtual-room__sponsor img[data-step="9"] {
+    --pk-room-logo-scale: 0.9;
+  }
+
+  .pk-virtual-room__sponsor img[data-step="10"] {
+    --pk-room-logo-scale: 1;
+  }
+
+  /* Between a phone and a desktop the panels keep a tab strip; on a phone the bottom bar switches them. */
+  @media (max-width: 48rem) {
+    .pk-virtual-room__tabs {
+      display: none;
+    }
+  }
+
+  /* A session in "Now & next": its time, its title and its speakers, each on a line. */
+  .pk-virtual-room__item {
+    display: grid;
+  }
+
+  .pk-virtual-room__help {
+    margin: 0;
+  }
+
+  /* Production partners: one quiet line of credits, each logo smaller than any sponsor's. */
   .pk-virtual-room__partner-list {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--pk-2) var(--pk-5);
+    gap: var(--pk-1) var(--pk-4);
     margin: 0;
     padding: 0;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
     list-style: none;
   }
 
@@ -142,44 +264,125 @@
   }
 
   .pk-virtual-room__partner img {
-    box-sizing: border-box;
+    box-sizing: content-box;
     inline-size: auto;
-    max-inline-size: 100%;
-    block-size: 1.75rem;
-    padding: var(--pk-1) var(--pk-2);
+    block-size: 0.75rem;
+    padding: var(--pk-1);
     border-radius: var(--pk-radius-sm);
     background: var(--pk-on-solid);
     object-fit: contain;
   }
 
-  /* Wide screens: the player large on the left, the room's panels beside it. */
-  @media (min-width: 64rem) {
-    .pk-virtual-room {
-      display: grid;
-      gap: var(--pk-4);
-      grid-template-areas:
-        "locations locations"
-        "stage panels";
-      grid-template-columns: minmax(0, 2fr) minmax(18rem, 1fr);
-    }
+  /* A desktop: the stream large on the left, questions and polls top right, the chat under them. */
+  .pk-virtual-room--wide {
+    display: grid;
+    align-items: start;
+    gap: var(--pk-4);
+    grid-template-columns: minmax(0, 1fr) minmax(20rem, 24rem);
+  }
 
-    .pk-virtual-room__locations {
-      grid-area: locations;
-    }
+  .pk-virtual-room--wide > :not(.pk-virtual-room__main, .pk-virtual-room__side) {
+    grid-column: 1 / -1;
+  }
 
-    .pk-virtual-room__stage {
-      display: grid;
-      gap: var(--pk-3);
-      grid-area: stage;
-      align-content: start;
-    }
+  .pk-virtual-room__main {
+    display: grid;
+    gap: var(--pk-3);
+    min-inline-size: 0;
+  }
 
-    .pk-virtual-room__player {
-      position: static;
-    }
+  .pk-virtual-room--wide .pk-virtual-room__stage {
+    position: static;
+    gap: var(--pk-3);
+    margin: 0;
+    border: 0;
+    background: none;
+  }
 
-    .pk-virtual-room__panels {
-      grid-area: panels;
-    }
+  .pk-virtual-room--wide .pk-virtual-room__player {
+    border: 1px solid var(--pk-line-soft);
+    border-radius: var(--pk-radius);
+  }
+
+  .pk-virtual-room--wide .pk-virtual-room__now {
+    flex-wrap: nowrap;
+    align-items: start;
+    gap: var(--pk-4);
+    padding: 0;
+  }
+
+  .pk-virtual-room--wide .pk-virtual-room__now-text p {
+    display: block;
+    margin: 0;
+  }
+
+  .pk-virtual-room--wide .pk-virtual-room__title {
+    font-size: var(--pk-text-xl);
+    white-space: normal;
+  }
+
+  /* On a desktop the notice keeps its own line under the reactions, so nothing beside it moves. */
+  .pk-virtual-room--wide .pk-live-reactions {
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
+  .pk-virtual-room--wide .pk-live-reactions__status {
+    position: static;
+    min-block-size: 1lh;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  .pk-virtual-room--wide .pk-virtual-room__sponsors {
+    block-size: 3.75rem;
+    padding-inline: var(--pk-4);
+    border: 1px solid var(--pk-line-soft);
+    border-radius: var(--pk-radius);
+  }
+
+  .pk-virtual-room--wide .pk-virtual-room__sponsor-list[data-rank="0"] {
+    --pk-room-sponsor-size: 2.5rem;
+  }
+
+  .pk-virtual-room--wide .pk-virtual-room__sponsor-list[data-rank="1"] {
+    --pk-room-sponsor-size: 1.625rem;
+  }
+
+  .pk-virtual-room--wide .pk-virtual-room__sponsor-list[data-rank="2"] {
+    --pk-room-sponsor-size: 1.25rem;
+  }
+
+  .pk-virtual-room--wide .pk-virtual-room__sponsor-list[data-rank="3"] {
+    --pk-room-sponsor-size: 1.0625rem;
+  }
+
+  .pk-virtual-room--wide .pk-virtual-room__sponsor-list[data-rank="4"] {
+    --pk-room-sponsor-size: 0.875rem;
+  }
+
+  .pk-virtual-room--wide .pk-virtual-room__partner-list {
+    justify-content: flex-end;
+  }
+
+  /* Both panels stay beside the stream as the page scrolls, each with a half of the window's height. */
+  .pk-virtual-room__side {
+    position: sticky;
+    top: calc(var(--pkic-navbar-height, 0px) + var(--pk-3));
+    display: grid;
+    gap: var(--pk-3);
+    block-size: calc(100dvh - var(--pkic-navbar-height, 0px) - 2 * var(--pk-3));
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .pk-virtual-room--wide .pk-virtual-room__panel {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .pk-virtual-room--wide .pk-virtual-room__panel > .pk-panel__body {
+    flex: 1;
+    min-block-size: 0;
+    overflow-y: auto;
   }
 }

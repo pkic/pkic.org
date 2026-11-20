@@ -2,9 +2,8 @@ import type { EventProductionPartnerCredit } from "../../../../../../../shared/s
 import { ExternalLink } from "../../../../../../ui/ExternalLink";
 
 /**
- * The event's production partners under the sponsors, each with its role in
- * front of its logo. They stand apart from the sponsors and never take a
- * turn in the sponsors' strip.
+ * The event's production partners as one quiet line of credits: what each provides, then its logo, drawn
+ * smaller than any sponsor's. They stand apart from the sponsors and never take a turn in the sponsors' line.
  */
 export function VirtualRoomPartners({ partners }: { partners: readonly EventProductionPartnerCredit[] }) {
   if (!partners.length) return null;
@@ -19,7 +18,7 @@ export function VirtualRoomPartners({ partners }: { partners: readonly EventProd
           );
           return (
             <li key={partner.organizationId} class="pk-virtual-room__partner">
-              <span class="pk-virtual-room__partner-role">{partner.role}</span>
+              <span>{partner.role}</span>
               {partner.website ? (
                 <ExternalLink href={partner.website} external title={partner.name}>
                   {mark}

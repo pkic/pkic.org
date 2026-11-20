@@ -14,8 +14,10 @@ import { WatchLiveCard } from "../../assets/ts/member-flows/portal/sections/even
 import { chooseLocation } from "../../assets/ts/member-flows/portal/sections/events/app/virtual-room/virtual-room-schedule";
 import { HeadingOutline } from "../../assets/ts/ui/HeadingOutline";
 
-const hashLocation = vi.hoisted(() => ({ current: "/events/summit/virtual" }));
-vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => [hashLocation.current, vi.fn()] }));
+const hashLocation = vi.hoisted(() => ({ current: "/events/summit/virtual", navigate: vi.fn() }));
+vi.mock("wouter/use-hash-location", () => ({
+  useHashLocation: () => [hashLocation.current, hashLocation.navigate],
+}));
 
 const HALL = "a0000000-0000-4000-8000-000000000001";
 const STUDIO = "a0000000-0000-4000-8000-000000000002";
@@ -105,6 +107,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
   vi.setSystemTime(new Date("2027-01-20T09:30:00.000Z"));
   hashLocation.current = "/events/summit/virtual";
+  hashLocation.navigate.mockClear();
   streamStatus = 200;
   waiting = false;
   vi.stubGlobal(
@@ -149,7 +152,7 @@ async function open() {
   await act(async () => {
     render(
       <HeadingOutline titleLevel={1}>
-        <VirtualRoom slug="summit" />
+        <VirtualRoom slug="summit" agenda={<p>The event’s whole agenda</p>} />
       </HeadingOutline>,
       host,
     );
@@ -158,6 +161,16 @@ async function open() {
     await act(async () => {
       await Promise.resolve();
     });
+}
+
+/** A desktop's width; without it the room lays itself out for a phone, as jsdom has no screen. */
+function onDesktop() {
+  vi.stubGlobal("matchMedia", (media: string) => ({
+    matches: true,
+    media,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+  }));
 }
 
 const player = () => host.querySelector<HTMLIFrameElement>("iframe");
@@ -177,35 +190,77 @@ describe("virtual room", () => {
     expect(title?.getAttribute("href")).toBe(`#/events/summit/agenda?session=${KEYNOTE}`);
   });
 
-  it("offers the room's question and chat panels alongside its current schedule, with the sponsors always in view", async () => {
+  it("shows one panel at a time on a phone, with the stream and the sponsors always above it", async () => {
     await open();
-    expect(tabs().map((item) => item.textContent)).toEqual(["Questions", "Chat", "Now & next"]);
-    // A session is running in the fixture, so the panels open on its questions.
+    expect(tabs().map((item) => item.textContent)).toEqual(["Questions", "Chat", "Agenda"]);
+    // A session is running in the fixture, so the room opens on its questions.
     expect(tab("Questions").getAttribute("aria-selected")).toBe("true");
-    // The sponsors sit under the stream, outside the tabs: nobody has to look for them.
+    // The sponsors sit under the stream, outside the panel: nobody has to look for them.
     const logo = host.querySelector<HTMLAnchorElement>('section[aria-label="Sponsors"] a');
     expect(logo?.getAttribute("href")).toBe("https://trust.example.test/");
     expect(logo?.getAttribute("target")).toBe("_blank");
+    expect(logo?.getAttribute("title")).toBe("Example Trust, Gold sponsor");
     expect(logo?.closest('[role="tabpanel"]')).toBeNull();
-    // Who helps produce the stream is credited under the sponsors with what they provide, never among them.
-    const partner = host.querySelector('section[aria-label="Production partners"] li');
+    // The player comes before the panel, so a phone shows it first and keeps it above.
+    const order = [...host.querySelectorAll('iframe, [role="tabpanel"]')].map((node) => node.tagName);
+    expect(order).toEqual(["IFRAME", "DIV"]);
+    // A session is running in the fixture, so the panel joins its live questions rather than waiting.
+    const panel = host.querySelector('[role="tabpanel"]');
+    expect(panel?.textContent).not.toContain("Questions open when the session is live");
+    expect(panel?.querySelector('section[aria-labelledby="virtual-room-tab-questions"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Sessions in this room"]')).toBeNull();
+  });
+
+  it("gives a phone a bottom bar of its own that switches the panel in place and leads back to the event", async () => {
+    await open();
+    const bar = [...host.querySelectorAll<HTMLAnchorElement>('nav[aria-label="Virtual room"] a')];
+    expect(bar.map((link) => [link.textContent, link.getAttribute("href")])).toEqual([
+      ["Questions", "#/events/summit/virtual"],
+      ["Chat", "#/events/summit/virtual?roomPanel=chat"],
+      ["Agenda", "#/events/summit/virtual?roomPanel=agenda"],
+      ["Event", "#/events/summit"],
+    ]);
+    expect(bar[0]?.getAttribute("aria-current")).toBe("page");
+    await act(async () => bar[2]!.click());
+    expect(location.hash).toContain("roomPanel=agenda");
+    // The Agenda tab holds the event's own agenda, with the production partners credited at its foot.
+    const panel = host.querySelector('[role="tabpanel"]');
+    expect(panel?.textContent).toContain("The event’s whole agenda");
+    const partner = panel?.querySelector('section[aria-label="Production partners"] li');
     expect(partner?.firstElementChild?.textContent).toBe("Camera Technology Provider");
     expect(partner?.querySelector("img")?.getAttribute("alt")).toBe("Northlight");
     expect(partner?.querySelector("a")?.getAttribute("href")).toBe("https://northlight.example.test/");
     expect(host.querySelector('section[aria-label="Sponsors"]')?.textContent).not.toContain("Camera");
-    // The player comes before the panels, so a phone shows it first and keeps it above them.
-    const order = [...host.querySelectorAll('iframe, [aria-label="In this room"]')].map((node) => node.tagName);
-    expect(order).toEqual(["IFRAME", "SECTION"]);
-    await act(async () => tab("Questions").click());
-    // A session is running in the fixture, so the tab joins its live questions rather than waiting.
-    const panel = host.querySelector('[role="tabpanel"]');
-    expect(panel?.textContent).not.toContain("Questions open when the session is live");
-    expect(panel?.querySelector('section[aria-labelledby="virtual-room-tab-questions"]')).not.toBeNull();
+    // The stream keeps playing above whichever panel is open.
+    expect(player()).not.toBeNull();
+  });
+
+  it("keeps questions and chat both open beside the stream on a desktop, with now and next under it", async () => {
+    onDesktop();
+    await open();
+    expect(tabs()).toEqual([]);
+    expect(host.querySelector('nav[aria-label="Virtual room"]')).toBeNull();
+    const panels = [...host.querySelectorAll(".pk-virtual-room__side .pk-panel__title")].map(
+      (title) => title.textContent,
+    );
+    expect(panels).toEqual(["Questions and polls", "Chat"]);
+    expect(host.querySelector('section[aria-labelledby="virtual-room-questions-title"]')).not.toBeNull();
+    expect(host.querySelector('section[aria-labelledby="virtual-room-chat-title"]')).not.toBeNull();
+    expect(host.textContent).not.toContain("The event’s whole agenda");
+    // The whole agenda opens in its own tab, so the stream keeps playing here.
+    const agenda = [...host.querySelectorAll<HTMLAnchorElement>("a")].find((link) =>
+      link.textContent?.startsWith("Full agenda"),
+    );
+    expect(agenda?.getAttribute("href")).toBe("#/events/summit/agenda");
+    expect(agenda?.getAttribute("target")).toBe("_blank");
+    expect(
+      host.querySelector('section[aria-label="Production partners"]')?.closest(".pk-virtual-room__main"),
+    ).not.toBeNull();
   });
 
   it("lists now and next for the location and moves on at the session boundary without asking the server", async () => {
+    onDesktop();
     await open();
-    await act(async () => tab("Now & next").click());
     const schedule = () =>
       [...host.querySelectorAll('[aria-label="Sessions in this room"] li')].map((item) => item.textContent ?? "");
     expect(schedule()).toHaveLength(2);
@@ -223,14 +278,25 @@ describe("virtual room", () => {
   });
 
   it("restores the bookmarked room panel without putting attendee input in the URL", async () => {
-    window.history.replaceState(null, "", "/portal/#/events/summit/virtual?roomPanel=questions");
+    window.history.replaceState(null, "", "/portal/#/events/summit/virtual?roomPanel=chat");
     await open();
-    expect(tab("Questions").getAttribute("aria-selected")).toBe("true");
-    expect(location.hash).toContain("roomPanel=questions");
-    expect(host.querySelector('[aria-label="Sessions in this room"]')).toBeNull();
+    expect(tab("Chat").getAttribute("aria-selected")).toBe("true");
+    expect(location.hash).toContain("roomPanel=chat");
+    expect(host.querySelector('section[aria-labelledby="virtual-room-tab-questions"]')).toBeNull();
   });
 
   it("switches location through its own address and opens on the session that brought the reader", async () => {
+    await open();
+    // A phone picks the location on the running session's line.
+    const picker = host.querySelector<HTMLSelectElement>('select[aria-label="Location"]')!;
+    expect([...picker.options].map((option) => option.textContent)).toEqual(["Main hall", "Studio"]);
+    picker.value = STUDIO;
+    await act(async () => {
+      picker.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(hashLocation.navigate).toHaveBeenCalledWith(`/events/summit/virtual?room=${STUDIO}`);
+    render(null, host);
+    onDesktop();
     await open();
     const locations = [...host.querySelectorAll<HTMLAnchorElement>('nav[aria-label="Locations"] a')];
     expect(locations.map((link) => [link.textContent, link.getAttribute("href")])).toEqual([
