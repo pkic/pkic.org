@@ -67,6 +67,7 @@ const NO_PERMISSIONS: UserPermissions = {
   canWrite: false,
   canGrantAccess: false,
   canAnonymize: false,
+  canDelete: false,
   canManageMembership: false,
   canActivateIdentity: false,
 };
