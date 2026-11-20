@@ -68,7 +68,7 @@
     flex-wrap: wrap;
     align-items: center;
     gap: var(--pk-1) var(--pk-2);
-    padding: var(--pk-1) var(--pk-2);
+    padding: var(--pk-1) var(--pk-2) var(--pk-2);
   }
 
   .pk-virtual-room__location {

@@ -124,7 +124,10 @@ function BarStat({ stat }: { stat: FieldStat }) {
             value={entry.percent}
             label={`${entry.label}: ${formatNumber(entry.percent)}%`}
           />
-          <span class="pk-chart__bar-count">
+          <span
+            class="pk-chart__bar-count"
+            title={`${formatNumber(entry.count)} ${entry.count === 1 ? "answer" : "answers"}`}
+          >
             {formatNumber(entry.percent)}% <small class="pk-chart__bar-total">{formatNumber(entry.count)}</small>
           </span>
         </div>

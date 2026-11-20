@@ -30,6 +30,7 @@ import {
 import type { RoomMoment } from "../../member-flows/portal/sections/events/app/virtual-room/virtual-room-schedule";
 import { VirtualRoomPartners } from "../../member-flows/portal/sections/events/app/virtual-room/VirtualRoomPartners";
 import { VirtualRoomSponsors } from "../../member-flows/portal/sections/events/app/virtual-room/VirtualRoomSponsors";
+import "../../member-flows/portal/sections/events/app/EventApp.css";
 import "../../member-flows/portal/sections/events/app/virtual-room/VirtualRoom.css";
 import { AgendaExample } from "./agenda-example";
 import { STUDIO_QUESTIONS_ROOM } from "./sections-studio-questions";
@@ -148,6 +149,10 @@ const LIVE: LiveRoomConnection = {
   state: {
     ...STUDIO_QUESTIONS_ROOM,
     viewer: { role: "attendee", name: "Alex Example" },
+    // An attendee sees an open poll's results only once they have answered it.
+    polls: STUDIO_QUESTIONS_ROOM.polls.map((poll) =>
+      poll.status === "open" ? { ...poll, myAnswer: "TLS endpoints" } : poll,
+    ),
     questions: STUDIO_QUESTIONS_ROOM.questions.filter((question) => question.status !== "pending"),
     chat: [
       said(1, "Riley Sample", "Good morning, everyone."),

@@ -162,13 +162,16 @@ function AskQuestionButton({
   disabled,
   onClick,
   askIn,
+  quiet = false,
 }: {
   disabled: boolean;
   onClick?: () => void;
   askIn?: HTMLElement | null;
+  /** Something else is the main action now, such as an open poll's answer. */
+  quiet?: boolean;
 }) {
   const button = (
-    <Button variant="primary" disabled={disabled} onClick={onClick}>
+    <Button variant={quiet ? "secondary" : "primary"} disabled={disabled} onClick={onClick}>
       <IconPlus />
       <span>{ASK}</span>
     </Button>
@@ -259,7 +262,12 @@ export function LiveAttendeeQuestions({
           eventName={state.session.eventName}
         />
       ) : (
-        <AskQuestionButton disabled={!live} onClick={() => setAsking(true)} askIn={askIn} />
+        <AskQuestionButton
+          disabled={!live}
+          onClick={() => setAsking(true)}
+          askIn={askIn}
+          quiet={poll?.status === "open"}
+        />
       )}
       {poll ? (
         <LivePollCard

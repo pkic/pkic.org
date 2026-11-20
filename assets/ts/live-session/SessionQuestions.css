@@ -68,11 +68,14 @@
     gap: var(--pk-2);
   }
   /* Asking stays in reach while the poll and the questions scroll under it. */
+  /* At the end of its own line, as in a panel's header, so it reads as the panel's action and not the poll's. */
   .pk-live-questions__ask {
     position: sticky;
     z-index: 1;
     inset-block-start: 0;
-    padding-block-end: var(--pk-1);
+    justify-content: flex-end;
+    padding-block-end: var(--pk-2);
+    border-block-end: 1px solid var(--pk-line-soft);
     background: var(--pk-surface);
   }
   .pk-live-questions__empty,

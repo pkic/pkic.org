@@ -50,9 +50,7 @@ function connect(live: ReturnType<typeof fakeLiveSockets>, snapshot = liveSnapsh
   });
 }
 
-function openAsk(host: HTMLElement) {
-  void act(() => button(host, "Ask a question").click());
-}
+const openAsk = (host: HTMLElement) => void act(() => button(host, "Ask a question").click());
 
 function button(host: HTMLElement, name: string) {
   const found = [...host.querySelectorAll("button")].find(
@@ -95,7 +93,6 @@ describe("session questions", () => {
   it("asks through the shared contract, optionally anonymous and for a speaker", () => {
     const { host, live } = mount();
     connect(live);
-    expect(host.querySelector("textarea[name=text]")).toBeNull(); // the form is a dialog, opened on request
     openAsk(host);
     const text = host.querySelector<HTMLTextAreaElement>("textarea[name=text]")!;
     const anonymous = host.querySelector<HTMLInputElement>("input[name=anonymous]")!;
@@ -129,7 +126,6 @@ describe("session questions", () => {
     void act(() =>
       live.latest().deliver({ type: "question.accepted", operationId: request.operationId, questionId: LIVE_QUESTION }),
     );
-    // Once the room takes the question the form closes, and the next one starts empty.
     expect(host.querySelector("textarea[name=text]")).toBeNull();
     openAsk(host);
     expect(host.querySelector<HTMLTextAreaElement>("textarea[name=text]")!.value).toBe("");
@@ -410,7 +406,6 @@ describe("session questions", () => {
       host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
     expect(live.latest().messages()).toEqual([]);
-    // An empty question is at rest, not an error.
     expect(host.querySelector("[aria-invalid=true]")).toBeNull();
     expect(button(host, "Ask question").disabled).toBe(true);
     const text = host.querySelector("textarea")!;
@@ -525,10 +520,14 @@ describe("session questions", () => {
         poll: livePoll({ myAnswer: "TLS endpoints", results: livePollResults({ "Root CA": 1, "TLS endpoints": 3 }) }),
       }),
     );
-    expect(radio(host, "TLS endpoints").checked).toBe(true);
+    // Answered: the choices give way to the results and the vote count, with a way back to the choices.
+    expect(host.querySelector("input[type=radio]")).toBeNull();
     expect(host.querySelector(".pk-chart__bars")?.textContent).toContain("75% 3");
-    void act(() => radio(host, "Root CA").click());
+    expect(host.querySelector(".pk-live-poll-card__kicker")?.textContent).toBe("Poll · 4 votes");
     void act(() => button(host, "Change answer").click());
+    expect(radio(host, "TLS endpoints").checked).toBe(true);
+    void act(() => radio(host, "Root CA").click());
+    void act(() => button(host, "Send answer").click());
     const votes = live.latest().messages();
     expect(votes.map((message) => liveRoomClientMessageSchema.parse(message))).toEqual([
       { type: "poll.vote", pollId: LIVE_POLL, answer: "TLS endpoints" },

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef } from "preact/hooks";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { CustomAnswerValue } from "../../shared/form-answer-rules";
 import { formatNumber } from "../../shared/format-number";
 import { LIVE_POLL_ANSWER_REFUSAL, type LivePoll, type LivePollField } from "../../shared/schemas/live-session-poll";
@@ -21,11 +21,13 @@ export function livePollFormField(field: LivePollField): FormField {
 
 /**
  * The poll an attendee is asked now. The question is answered with the same
- * controls and the same generated answer contract as any form; one answer per person, changeable
- * while the poll is open, and the forms results chart when results are shown,
- * drawn as the stream draws it: each answer over its bar, its share at the
- * end, the bars in the brand stripe. It sits in its panel without a card of
- * its own.
+ * controls and the same generated answer contract as any form; one answer per
+ * person, changeable while the poll is open. It shows one thing at a time:
+ * the choices until the person has answered, then the results they may see,
+ * with a way back to the choices. Results are drawn as the stream draws them:
+ * each answer over its bar, its share at the end, the bars in the brand
+ * stripe, and how many voted said once. It sits in its panel without a card
+ * of its own.
  */
 export function LivePollCard({
   poll,
@@ -53,6 +55,10 @@ export function LivePollCard({
   );
   const { sync, refuseAnswer } = answers;
   useLayoutEffect(sync, [mine, sync]);
+  // Once answered, the choices give way to the results; "Change answer" brings them back.
+  const [changing, setChanging] = useState(false);
+  useEffect(() => setChanging(false), [mine]);
+  const choosing = open && (!answered || changing);
 
   // The room's refusal of an answer is said once, on the question it is about.
   const currentRefusal = useRef({ refusal, fieldKey: field.key, refuseAnswer });
@@ -60,7 +66,10 @@ export function LivePollCard({
   const refusalSequence = refusal?.sequence;
   useEffect(() => {
     const { refusal, fieldKey, refuseAnswer } = currentRefusal.current;
-    if (refusal?.code === LIVE_POLL_ANSWER_REFUSAL) refuseAnswer(fieldKey, refusal.message);
+    if (refusal?.code !== LIVE_POLL_ANSWER_REFUSAL) return;
+    // A refused answer is said on the question, so the choices come back with it.
+    setChanging(true);
+    refuseAnswer(fieldKey, refusal.message);
   }, [refusalSequence]);
 
   function send(event: Event) {
@@ -73,8 +82,11 @@ export function LivePollCard({
   const respondents = poll.results?.totalAnswers ?? 0;
   return (
     <section class="pk-live-poll-card pk-stack pk-stack--snug" aria-label="Poll">
-      <p class="pk-live-poll-card__kicker">{open ? "Poll" : "Poll results"}</p>
-      {open ? (
+      <p class="pk-live-poll-card__kicker">
+        {open ? "Poll" : "Poll results"}
+        {poll.results ? ` · ${formatNumber(respondents)} ${respondents === 1 ? "vote" : "votes"}` : ""}
+      </p>
+      {choosing ? (
         <form ref={answers.formRef} class="pk-stack pk-stack--snug" noValidate {...answers.handlers} onSubmit={send}>
           <CustomFieldList
             key={poll.id}
@@ -85,23 +97,28 @@ export function LivePollCard({
           />
           <div class="pk-cluster">
             <Button type="submit" variant="primary" disabled={disabled}>
-              {answered ? "Change answer" : "Send answer"}
+              Send answer
             </Button>
+            {answered ? <Button onClick={() => setChanging(false)}>Keep my answer</Button> : null}
           </div>
+          <p class="pk-small pk-muted">One answer per person. You can change it until the poll closes.</p>
         </form>
       ) : (
         <p class="pk-strong">{poll.field.label}</p>
       )}
-      {poll.results ? (
+      {!choosing && poll.results ? (
         <FormFieldStatChart field={poll.field} stat={poll.results} visualization="bar" presentation />
       ) : null}
-      <p class="pk-small pk-muted" role="status">
-        {open
-          ? answered
-            ? "Your answer is in. You can change it until the poll closes."
-            : "One answer per person. You can change it until the poll closes."
-          : `${formatNumber(respondents)} ${respondents === 1 ? "person" : "people"} answered`}
-      </p>
+      {open && !choosing ? (
+        <div class="pk-cluster">
+          <p class="pk-small pk-muted" role="status">
+            Your answer is in.
+          </p>
+          <Button disabled={disabled} onClick={() => setChanging(true)}>
+            Change answer
+          </Button>
+        </div>
+      ) : null}
     </section>
   );
 }

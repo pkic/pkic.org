@@ -50,6 +50,16 @@
   :is(.pk-live-poll, .pk-live-poll-card) .pk-chart__meter {
     grid-area: bar;
   }
+  /* Every row's share takes the same width, so the bars end together and are read on one scale. */
+  :is(.pk-live-poll, .pk-live-poll-card) .pk-chart__bar-count {
+    min-inline-size: 4ch;
+    text-align: end;
+    font-variant-numeric: tabular-nums;
+  }
+  /* A poll says how many voted once, above its bars; each bar shows its share, with its count on hover. */
+  :is(.pk-live-poll, .pk-live-poll-card) .pk-chart__bar-total {
+    display: none;
+  }
   .pk-live-poll .pk-meter {
     --tone: var(--pk-pqc-on-field);
     --tone-track: color-mix(in srgb, var(--pk-pqc-on-field) 14%, transparent);
