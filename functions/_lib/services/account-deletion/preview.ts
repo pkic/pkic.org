@@ -15,6 +15,11 @@ import {
   ACCOUNT_DELETION_RENDER_FILES_SQL,
 } from "./selection";
 
+/** Former addresses an account's audit history can name; well above any real account. */
+const AUDITED_ADDRESS_LIMIT = 200;
+/** A whole value that is one address, never a note that mentions one. */
+const WHOLE_ADDRESS = /^[^\s@]+@[^\s@]+$/;
+
 /** D1 refuses very wide result rows; 30 counts per statement stays well inside its limits. */
 const COUNTS_PER_STATEMENT = 30;
 
@@ -106,7 +111,8 @@ export async function readAccountDeletion(db: DatabaseLike, userId: string): Pro
           `SELECT DISTINCT j.value AS address
            FROM audit_log a, json_tree(a.details_json) j
           WHERE a.entity_type = 'user' AND a.entity_id = ?1 AND json_valid(a.details_json)
-            AND j.type = 'text' AND j.value LIKE '%_@_%'`,
+            AND j.type = 'text' AND j.value LIKE '%_@_%' AND j.value NOT GLOB '*[ ]*'
+          LIMIT ${AUDITED_ADDRESS_LIMIT}`,
         )
         .bind(userId),
       ...countStatements,
@@ -123,7 +129,9 @@ export async function readAccountDeletion(db: DatabaseLike, userId: string): Pro
   const fingerprint = fingerprintResult.results?.[0];
   const addressRows = (addressResult.results ?? []) as { email: string; normalized_email: string }[];
   const addresses = [...new Set([account.normalized_email, ...addressRows.map((row) => row.normalized_email)])];
-  const audited = (auditedResult.results ?? []).map((row) => String(row.address));
+  const audited = (auditedResult.results ?? [])
+    .map((row) => String(row.address))
+    .filter((value) => WHOLE_ADDRESS.test(value));
   const spellings = [
     ...new Set([account.email, ...addresses, ...addressRows.map((row) => row.email), ...audited].filter(Boolean)),
   ];

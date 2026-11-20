@@ -386,7 +386,13 @@ describe("account deletion", () => {
       `INSERT INTO audit_log (id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at)
        VALUES (?, 'admin', ?, 'user_email_removed', 'user', ?, ?, ?)`,
     )
-      .bind(crypto.randomUUID(), admin.id, userId, JSON.stringify({ email: "former@example.test" }), nowIso())
+      .bind(
+        crypto.randomUUID(),
+        admin.id,
+        userId,
+        JSON.stringify({ email: "former@example.test", note: "Asked billing@example.test about invoice 481" }),
+        nowIso(),
+      )
       .run();
 
     const deletion = await preview(userId);
@@ -403,7 +409,11 @@ describe("account deletion", () => {
       "SELECT details_json FROM audit_log WHERE action = 'user_email_removed' AND entity_id = ?",
       [userId],
     );
-    expect(JSON.parse(removed.details_json)).toEqual({ email: "[deleted address]" });
+    // A note that mentions another address keeps its text.
+    expect(JSON.parse(removed.details_json)).toEqual({
+      email: "[deleted address]",
+      note: "Asked billing@example.test about invoice 481",
+    });
   });
 
   it("refuses to delete the signed-in account", async () => {
