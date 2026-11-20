@@ -279,7 +279,9 @@ describe("scanner foreground receipt and drain lifecycle", () => {
       recorded: true,
       attendanceRecorded: false,
     });
-    await act(() => worker.dispatchEvent(new MessageEvent("message", { data: receipt })));
+    await act(() => {
+      worker.dispatchEvent(new MessageEvent("message", { data: receipt }));
+    });
     expect(host.querySelector(".pk-fast-scanner__trail")?.textContent).toContain("Badge not valid");
     expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Badge not valid");
     expect(host.textContent).toContain("Next badge");
@@ -288,7 +290,9 @@ describe("scanner foreground receipt and drain lifecycle", () => {
         .find((button) => button.textContent?.trim() === "Next badge")!
         .click(),
     );
-    await act(() => worker.dispatchEvent(new MessageEvent("message", { data: receipt })));
+    await act(() => {
+      worker.dispatchEvent(new MessageEvent("message", { data: receipt }));
+    });
     expect(host.querySelector(".pk-fast-scanner__label")?.textContent).not.toBe("Badge not valid");
   });
   it.each([false, true])(
