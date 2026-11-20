@@ -508,7 +508,7 @@ describe("session questions", () => {
     const { host, live } = mount();
     connect(live, liveSnapshot({ polls: [livePoll()] }));
     // One row above the questions; being asked now, it opens by itself.
-    expect(host.querySelector(".pk-live-poll-card")?.textContent).toContain("Which migration comes first?");
+    expect(host.querySelector(".pk-live-question[data-lead]")?.textContent).toContain("Which migration comes first?");
     expect(host.querySelector("dialog input[type=radio]")).not.toBeNull();
     expect(host.querySelector(".pk-chart__bars")).toBeNull();
     void act(() => button(host, "Send answer").click());
@@ -561,7 +561,7 @@ describe("session questions", () => {
     const { host, live } = mount();
     const closed = livePoll({ status: "closed", results: livePollResults({ "Root CA": 2 }) });
     connect(live, liveSnapshot({ polls: [closed] }));
-    expect(host.querySelector(".pk-live-poll-card")?.textContent).toContain("Poll results");
+    expect(host.querySelector(".pk-live-question[data-lead]")?.textContent).toContain("Poll results");
     expect(host.querySelector("dialog")).toBeNull();
     void act(() => button(host, "See results").click());
     expect(host.querySelector("input[type=radio]")).toBeNull();

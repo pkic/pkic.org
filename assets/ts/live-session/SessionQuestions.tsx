@@ -269,15 +269,6 @@ export function LiveAttendeeQuestions({
           quiet={poll?.status === "open" && poll.myAnswer === null}
         />
       )}
-      {poll ? (
-        <LivePollCard
-          poll={poll}
-          disabled={!live || restriction !== null}
-          refusal={state.refusal}
-          onVote={(answer) => room.send({ type: "poll.vote", pollId: poll.id, answer })}
-          prompt={!asking}
-        />
-      ) : null}
       {asking && !restriction ? (
         <AskQuestionDialog
           disabled={!live}
@@ -299,6 +290,17 @@ export function LiveAttendeeQuestions({
       />
       <LiveAuthorProvider authors={state.authors} send={room.send}>
         <LiveQuestionList
+          lead={
+            poll ? (
+              <LivePollCard
+                poll={poll}
+                disabled={!live || restriction !== null}
+                refusal={state.refusal}
+                onVote={(answer) => room.send({ type: "poll.vote", pollId: poll.id, answer })}
+                prompt={!asking}
+              />
+            ) : undefined
+          }
           photos
           credits={state.session.credits}
           questions={orderLiveQuestions(state.questions, order)}

@@ -85,27 +85,14 @@
   }
 
   /*
-   * The attendee's poll, one row above the questions: what is asked, and the button that opens it. It
-   * wraps to two lines where the question and the button do not fit one.
+   * The attendee's poll, listed first among the questions as one of them: its mark where a question has
+   * its votes, then what is asked and the button that opens it.
    */
-  .pk-live-poll-card {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--pk-2) var(--pk-3);
-    padding: var(--pk-2) var(--pk-3);
-    border: 1px solid var(--pk-line-soft);
+  .pk-live-question[data-lead] {
     border-inline-start: 3px solid var(--pk-accent);
-    border-radius: var(--pk-radius-card);
-    background: var(--pk-surface);
   }
-  .pk-live-poll-card__text {
-    flex: 1 1 12rem;
-    min-inline-size: 0;
-  }
-  .pk-live-poll-card__text p {
-    margin: 0;
+  .pk-live-poll-card__mark {
+    cursor: default;
   }
   .pk-live-poll-card__kicker {
     color: var(--pk-ink-muted);

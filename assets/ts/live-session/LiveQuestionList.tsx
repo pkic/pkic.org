@@ -115,8 +115,11 @@ export function LiveQuestionList({
   compact = false,
   photos = false,
   credits = [],
+  lead,
 }: {
   questions: readonly LiveQuestion[];
+  /** Something listed before the questions as one of them, such as the session's poll. */
+  lead?: ComponentChildren;
   /** The session's credits, which name the person a question is for. */
   credits?: readonly LiveCredit[];
   compact?: boolean;
@@ -130,12 +133,24 @@ export function LiveQuestionList({
   actions?: (question: LiveQuestion) => ComponentChildren;
   thread?: (question: LiveQuestion) => ComponentChildren;
 }) {
-  if (!questions.length) return <p class="pk-live-questions__empty">{emptyText}</p>;
+  const leading = lead ? (
+    <li class="pk-live-question" data-lead>
+      {lead}
+    </li>
+  ) : null;
+  if (!questions.length)
+    return (
+      <>
+        {leading ? <ol class="pk-live-questions__list">{leading}</ol> : null}
+        <p class="pk-live-questions__empty">{emptyText}</p>
+      </>
+    );
   const addressee = (question: LiveQuestion) => liveQuestionAddresseeName(credits, question.addressedTo);
   return (
     <>
       <LiveModerationDialogHost />
       <ol class="pk-live-questions__list">
+        {leading}
         {questions.map((question) => (
           <li key={question.id} class="pk-live-question" data-removed={question.removal ? "" : undefined}>
             <button

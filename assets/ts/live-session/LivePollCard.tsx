@@ -6,6 +6,7 @@ import { FormFieldStatChart } from "../components/forms/FormResponseStats";
 import { useFormAnswers } from "../components/forms/useFormAnswers";
 import type { FormField } from "../shared/types";
 import { CustomFieldList } from "../shared/widgets/custom-fields";
+import { IconPoll } from "../components/icons/app-navigation";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
 import "./LivePollOverlay.css";
@@ -21,8 +22,8 @@ export function livePollFormField(field: LivePollField): FormField {
 }
 
 /**
- * The poll an attendee is asked now, as one row above the questions so it never pushes them out: what is
- * asked, and a button that opens it. The poll itself is a dialog. It holds the choices until the person has
+ * The poll an attendee is asked now, listed first among the questions as one of them, since a poll is a
+ * question put to the room: what is asked, and a button that opens it. The poll itself is a dialog. It holds the choices until the person has
  * answered, with the same controls and the same generated answer contract as any form, and after that the
  * results they may see: one answer per person, and it is final. When a poll is asked the dialog opens by
  * itself once, since a poll is for now; closing it leaves the row.
@@ -82,25 +83,31 @@ export function LivePollCard({
   const votes = poll.results?.totalAnswers ?? 0;
   const tally = poll.results ? ` · ${formatNumber(votes)} ${votes === 1 ? "vote" : "votes"}` : "";
   return (
-    <section class="pk-live-poll-card" aria-label="Poll">
-      <div class="pk-live-poll-card__text">
+    <>
+      {/* Where a question has its votes, the poll has its mark. */}
+      <span class="pk-live-question__vote pk-live-poll-card__mark" aria-hidden="true">
+        <IconPoll width="20" height="20" />
+      </span>
+      <div class="pk-live-question__body">
         <p class="pk-live-poll-card__kicker">
           {asked ? "Poll" : "Poll results"}
           {tally}
         </p>
-        <p class="pk-strong">{poll.field.label}</p>
+        <p>{poll.field.label}</p>
+        <div class="pk-live-question__actions">
+          {choosing ? (
+            <Button variant="primary" disabled={disabled} onClick={() => setShown(true)}>
+              Answer poll
+            </Button>
+          ) : poll.results ? (
+            <Button onClick={() => setShown(true)}>See results</Button>
+          ) : (
+            <p class="pk-small pk-muted" role="status">
+              {asked ? "Your answer is in." : "This poll is closed."}
+            </p>
+          )}
+        </div>
       </div>
-      {choosing ? (
-        <Button variant="primary" disabled={disabled} onClick={() => setShown(true)}>
-          Answer poll
-        </Button>
-      ) : poll.results ? (
-        <Button onClick={() => setShown(true)}>See results</Button>
-      ) : (
-        <p class="pk-small pk-muted" role="status">
-          {asked ? "Your answer is in." : "This poll is closed."}
-        </p>
-      )}
       {shown ? (
         <Dialog
           open
@@ -148,6 +155,6 @@ export function LivePollCard({
           )}
         </Dialog>
       ) : null}
-    </section>
+    </>
   );
 }
