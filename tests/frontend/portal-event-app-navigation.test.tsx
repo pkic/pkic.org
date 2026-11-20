@@ -74,11 +74,15 @@ afterEach(() => {
 });
 
 describe("event app tab selection", () => {
-  it("gives a registered attendee My agenda and Ticket, and keeps everything else under More", () => {
+  it("gives a registered attendee My agenda, the virtual room and Ticket, and keeps everything else under More", () => {
     const { tabs, more } = navigation(registeredParticipant);
-    expect(labels(tabs)).toEqual(["Home", "Agenda", "My agenda", "Ticket"]);
-    expect(ids(more)).toEqual(["registration", "virtual", "calendar", "promotion", "venue", "event-page"]);
-    expect(more.find((item) => item.id === "virtual")?.href).toBe("#/events/summit/virtual");
+    expect(labels(tabs)).toEqual(["Home", "My agenda", "Virtual room", "Ticket"]);
+    expect(tabs.find((tab) => tab.id === "virtual")?.href).toBe("#/events/summit/virtual");
+    // The whole agenda is one step from My agenda, and listed first under More.
+    expect(ids(more)).toEqual(["program", "registration", "calendar", "promotion", "venue", "event-page"]);
+    expect(more.find((item) => item.id === "program")?.href).toBe("#/events/summit/agenda");
+    expect(eventAppTabFor("program", tabs)).toBe("agenda");
+    expect(eventAppTabFor("virtual", tabs)).toBe("virtual");
     expect(more.find((item) => item.id === "registration")?.href).toBe(
       `#/events/summit/registrations/${participantRegistrationId}`,
     );
@@ -114,8 +118,8 @@ describe("event app tab selection", () => {
     };
     expect(labels(navigation({ ...registeredParticipant, ...running, viewer: online }).tabs)).toEqual([
       "Home",
-      "Agenda",
       "My agenda",
+      "Virtual room",
       "Ticket",
     ]);
   });
@@ -221,8 +225,8 @@ describe("event app More sheet", () => {
     expect(document.getElementById(sheet.getAttribute("aria-labelledby")!)?.textContent).toBe("More");
     const tiles = [...sheet.querySelectorAll<HTMLAnchorElement>("[data-event-more]")];
     expect(tiles.map((tile) => tile.textContent)).toEqual([
+      "Agenda",
       "Registration",
-      "Virtual room",
       "Calendar and reminders",
       "Share & Invite",
       "Venue & links",
@@ -259,7 +263,7 @@ describe("event app More sheet", () => {
   it("opens on a swipe up the tab bar and closes on a swipe down its handle", async () => {
     const { more, sheet } = await renderAttendee();
     const bar = host.querySelector(".pk-app-tabbar--event")!;
-    const tab = bar.querySelector('[data-app-tab="program"]')!;
+    const tab = bar.querySelector('[data-app-tab="virtual"]')!;
     // A short or sideways movement stays a tap.
     await act(() => {
       pointer(tab, "pointerdown", 800);

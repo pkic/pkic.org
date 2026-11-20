@@ -35,7 +35,7 @@ import { ROOM_PANELS, ROOM_WIDE_QUERY, VirtualRoomFrame, type RoomPanelId } from
 import { VirtualRoomChat, VirtualRoomQuestions, VirtualRoomSchedule } from "./VirtualRoomPanels";
 import { VirtualRoomPartners } from "./VirtualRoomPartners";
 import { VirtualRoomSponsors } from "./VirtualRoomSponsors";
-import { VirtualRoomNowPlaying, VirtualRoomPlayer, VirtualRoomPlayerHelp } from "./VirtualRoomPlayer";
+import { VirtualRoomNowPlaying, VirtualRoomPlayer } from "./VirtualRoomPlayer";
 import { SessionReactions } from "../../../../../../live-session/SessionReactions";
 import {
   chooseLocation,
@@ -171,7 +171,6 @@ export function VirtualRoom({
             }
           />
         )}
-        playerHelp={<VirtualRoomPlayerHelp stream={stream} />}
         sponsors={<VirtualRoomSponsors sponsors={sponsors.display} />}
         partners={<VirtualRoomPartners partners={streams.data?.productionPartners ?? []} />}
         schedule={<VirtualRoomSchedule slug={slug} moment={moment} formatTime={formatTime} />}

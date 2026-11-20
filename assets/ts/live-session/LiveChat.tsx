@@ -63,7 +63,9 @@ export function ChatComposer({
           refusal ??
           (compact
             ? ""
-            : `${channel === "operator" ? "Only operators see this chat." : "Everyone in the session sees this chat."} Use **bold**, *italic* or \`code\`.`)}
+            : channel === "operator"
+              ? "Only operators see this chat."
+              : "Everyone in the session sees this chat.")}
       </FieldStatus>
       <div class="pk-live-chat__input">
         <Field label="Message" labelHidden statusId={statusId} {...field}>

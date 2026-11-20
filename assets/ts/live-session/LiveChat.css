@@ -204,7 +204,7 @@
   }
   .pk-live-chat__input {
     display: flex;
-    align-items: flex-end;
+    align-items: stretch;
   }
   .pk-live-chat__input .pk-field {
     flex: 1;

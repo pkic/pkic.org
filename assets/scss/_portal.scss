@@ -86,6 +86,13 @@ $portal-sidebar-width: 240px;
   min-width: 0;
 }
 
+// The virtual room keeps its stream in view while the page scrolls. That only
+// holds when the page is what scrolls, so the room's container scrolls nothing
+// itself.
+#portal-main:has(.pk-virtual-room) {
+  overflow-y: visible;
+}
+
 .portal-identity-invitation {
   margin-bottom: 1rem;
 }

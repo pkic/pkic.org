@@ -208,15 +208,16 @@ describe("portal-wide bottom tabs", () => {
 describe("event bottom tabs", () => {
   it("shows an attendee's tabs, opens More as a sheet, and files pages without a tab under More", async () => {
     await act(() => render(<ParticipantEvent event={event(registered)} tab="more" />, host));
-    expect(tabLabels("Event app")).toEqual(["Home", "Agenda", "My agenda", "Ticket", "More"]);
+    expect(tabLabels("Event app")).toEqual(["Home", "My agenda", "Virtual room", "Ticket", "More"]);
     const bar = host.querySelector('nav[aria-label="Event app"]')!;
     // More opens the sheet; on a page without a tab it is the current one.
     const more = bar.querySelector<HTMLButtonElement>('button[data-app-tab="more"]')!;
     expect(more.getAttribute("aria-current")).toBe("page");
     expect(more.getAttribute("aria-haspopup")).toBe("dialog");
-    // Agenda stays in the app: the whole program, and the same view pre-filtered to the reader's sessions.
-    expect(bar.querySelector('[data-app-tab="program"]')?.getAttribute("href")).toBe("#/events/summit/agenda");
+    // My agenda is the agenda pre-filtered to the reader's sessions; the whole program is under More.
     expect(bar.querySelector('[data-app-tab="agenda"]')?.getAttribute("href")).toBe("#/events/summit/agenda?mine=1");
+    expect(bar.querySelector('[data-app-tab="virtual"]')?.getAttribute("href")).toBe("#/events/summit/virtual");
+    expect(host.querySelector('[data-event-more="program"]')?.getAttribute("href")).toBe("#/events/summit/agenda");
     expect(bar.querySelector('[data-app-tab="ticket"]')?.getAttribute("href")).toBe("#/events/summit/ticket");
     // Each tab has a decorative glyph over its label; the label stays the accessible name.
     for (const tab of bar.querySelectorAll("a, button"))
@@ -485,7 +486,8 @@ describe("event home", () => {
 
 describe("event app agenda and pages", () => {
   it.each([
-    ["/events/summit/agenda", "Agenda", "program"],
+    // My agenda's tab owns the whole agenda too: it is the same view with the filter off.
+    ["/events/summit/agenda", "Agenda", "agenda"],
     ["/events/summit/agenda?mine=1", "My agenda", "agenda"],
   ])("opens %s as the %s tab under the persistent event hero", async (location, title, tab) => {
     currentLocation.value = location;

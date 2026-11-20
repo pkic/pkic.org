@@ -40,7 +40,6 @@ export interface VirtualRoomFrameProps {
   player: ComponentChildren;
   /** The running session's line, given the location picker where the line carries it. */
   now: (location: ComponentChildren) => ComponentChildren;
-  playerHelp: ComponentChildren;
   sponsors: ComponentChildren;
   partners: ComponentChildren;
   schedule: ComponentChildren;
@@ -65,7 +64,6 @@ function WideRoom({
   locationId,
   player,
   now,
-  playerHelp,
   sponsors,
   partners,
   schedule,
@@ -81,7 +79,6 @@ function WideRoom({
         <div class="pk-virtual-room__stage">
           {player}
           {now(null)}
-          {playerHelp}
           {sponsors}
         </div>
         <Panel>
@@ -116,7 +113,6 @@ function NarrowRoom({
   onLocation,
   player,
   now,
-  playerHelp,
   sponsors,
   partners,
   questions,
@@ -170,7 +166,6 @@ function NarrowRoom({
           </>
         )}
       </div>
-      {playerHelp}
       <AppTabBar
         scope="event"
         label="Virtual room"

@@ -412,8 +412,8 @@ describe("personal agenda on the shared agenda component", () => {
     const host = mount({ embedded: true });
     await vi.waitFor(() => expect(host.querySelector(".pk-content-agenda")).not.toBeNull());
     expect(host.textContent).not.toContain("no longer available in the published agenda");
-    const calendar = host.querySelector<HTMLAnchorElement>('a[aria-label="Calendar and reminders"]');
-    expect(calendar?.getAttribute("href")).toBe("#/events/workshop/agenda?view=calendar");
+    // Nothing in it leads away from the page it is shown inside.
+    expect(host.querySelector('a[aria-label="Calendar and reminders"]')).toBeNull();
     expect(location.hash).toContain("/events/workshop/virtual?session=");
   });
 

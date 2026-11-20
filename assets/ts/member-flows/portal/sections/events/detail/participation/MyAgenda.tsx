@@ -67,7 +67,7 @@ export function MyAgenda({
   canPersonalize?: boolean;
   /**
    * Shown inside another page, as in the virtual room: that page owns the address, so the agenda opens no
-   * session and no calendar view from it, and its calendar link leads to the agenda's own page.
+   * session and no calendar view from it, and offers no link that would leave that page.
    */
   embedded?: boolean;
 }) {
@@ -99,9 +99,7 @@ export function MyAgenda({
       focus={focus.success ? focus.data : undefined}
       mine={mine}
       canPersonalize={canPersonalize}
-      calendarHref={usePortalHashLocation.hrefs(
-        embedded ? `${eventAgendaRoute(slug)}?view=calendar` : destination({ view: "calendar" }),
-      )}
+      calendarHref={embedded ? null : usePortalHashLocation.hrefs(destination({ view: "calendar" }))}
       onFocusClosed={() => {
         const current = splitHash();
         const next = new URLSearchParams(current.params);
@@ -127,7 +125,8 @@ function PersonalAgenda({
   focus?: string;
   mine: boolean;
   canPersonalize: boolean;
-  calendarHref: string;
+  /** The calendar and reminder settings, where the agenda may lead away from its page. */
+  calendarHref: string | null;
   onFocusClosed: () => void;
 }) {
   const program = useData(
@@ -298,7 +297,7 @@ function PersonalAgenda({
           ) : undefined,
       };
     },
-    toolbarControls: (
+    toolbarControls: calendarHref ? (
       <ButtonLink
         icon
         variant="secondary"
@@ -308,17 +307,22 @@ function PersonalAgenda({
       >
         <IconCalendar />
       </ButtonLink>
-    ),
+    ) : undefined,
   };
   if (mineOnly && content && snapshot)
     return (
       <div class="pk-stack">
         {program.error && <ErrorAlert error={program.error} />}
         <div class="pk-cluster">
-          <ButtonLink variant="secondary" href={calendarHref}>
-            <IconCalendar />
-            <span>{AGENDA_CALENDAR_TITLE}</span>
+          <ButtonLink variant="secondary" href={usePortalHashLocation.hrefs(eventAgendaRoute(slug))}>
+            Browse the agenda
           </ButtonLink>
+          {calendarHref && (
+            <ButtonLink variant="secondary" href={calendarHref}>
+              <IconCalendar />
+              <span>{AGENDA_CALENDAR_TITLE}</span>
+            </ButtonLink>
+          )}
         </div>
         <MyAgendaList
           days={content.days}
@@ -344,7 +348,7 @@ function PersonalAgenda({
         <Panel>
           <PanelBody>
             <p>{snapshot ? "No public sessions are scheduled yet." : "The agenda has not been published yet."}</p>
-            {canPersonalize && <ButtonLink href={calendarHref}>{AGENDA_CALENDAR_TITLE}</ButtonLink>}
+            {canPersonalize && calendarHref && <ButtonLink href={calendarHref}>{AGENDA_CALENDAR_TITLE}</ButtonLink>}
           </PanelBody>
         </Panel>
       )}

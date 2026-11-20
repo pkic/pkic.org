@@ -6,7 +6,7 @@ import { useLiveTimerNow } from "../../../../../../live-session/useLiveCountdown
  */
 import type { ComponentChildren } from "preact";
 import type { LiveStream } from "../../../../../../../shared/schemas/event-live-stream";
-import { youtubePrivacyEmbedUrl, youtubeWatchUrl } from "../../../../../../../shared/youtube-video";
+import { youtubePrivacyEmbedUrl } from "../../../../../../../shared/youtube-video";
 import { eventSessionRoute } from "../../../../../../../shared/event-participation-link";
 import { usePortalHashLocation } from "../../../../hash-location";
 import { JoinSessionMeeting } from "../../detail/participation/JoinSessionMeeting";
@@ -14,7 +14,6 @@ import { sessionSpeakerLine, type RoomMoment } from "./virtual-room-schedule";
 import "../../../../../../ui/Content.css";
 import "./VirtualRoom.css";
 import { SectionHeading } from "../../../../../../ui/SectionHeading";
-import { ExternalLink } from "../../../../../../ui/ExternalLink";
 
 export function VirtualRoomPlayer({
   stream,
@@ -110,18 +109,5 @@ export function VirtualRoomNowPlaying({
         </div>
       )}
     </section>
-  );
-}
-
-/** The way out when the embedded player does not start. */
-export function VirtualRoomPlayerHelp({ stream }: { stream: LiveStream | null }) {
-  if (!stream) return null;
-  return (
-    <p class="pk-small pk-muted pk-virtual-room__help">
-      Player not starting?{" "}
-      <ExternalLink href={youtubeWatchUrl(stream.videoId)} external>
-        Watch on YouTube
-      </ExternalLink>
-    </p>
   );
 }

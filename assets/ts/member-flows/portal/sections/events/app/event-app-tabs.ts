@@ -185,26 +185,32 @@ export interface EventAppNavigation {
 }
 
 /**
- * At most five bottom tabs: Home and Agenda; then the reader's most pressing
- * job — the badge scanner for this event's own staff, otherwise the lead
- * scanner for a sponsor's representative, otherwise check-in for an
- * attendee on an event day, otherwise My agenda; then the
- * ticket for a registered reader, or My agenda when the scanner took its
- * place; then More. Whatever loses its tab stays one swipe away in More.
+ * At most five bottom tabs, More included.
+ *
+ * A reader with a scanning job keeps Home and Agenda, then the job — the
+ * badge scanner for this event's own staff, otherwise the lead scanner for a
+ * sponsor's representative, otherwise check-in for an attendee on an event
+ * day — then the ticket, or My agenda without one.
+ *
+ * A registered reader without such a job gets My agenda, the virtual room
+ * and the ticket: the room is one tap away, and My agenda leads to the whole
+ * agenda. Whatever has no tab stays one swipe away in More.
  */
 export function eventAppNavigation(event: EventAppSubject, session: PortalSession | null): EventAppNavigation {
   const destinations = eventAppDestinations(event, session);
   const find = (id: string) => destinations.find((destination) => destination.id === id);
-  const primary = find("scanner") ?? find("lead-scanner") ?? find("check-in") ?? find("agenda");
-  const secondary = find("ticket") ?? (primary?.id === "agenda" ? undefined : find("agenda"));
-  const promoted = [primary, secondary].filter((destination): destination is EventAppDestination =>
-    Boolean(destination),
-  );
-  const base = eventBase(event.slug);
+  const job = find("scanner") ?? find("lead-scanner") ?? find("check-in");
+  const mine = find("agenda");
+  const room = find("virtual");
+  const watching = !job && mine && room;
+  const promoted = (
+    watching ? [mine, room, find("ticket")] : [job ?? mine, find("ticket") ?? (job ? mine : undefined)]
+  ).filter((destination): destination is EventAppDestination => Boolean(destination));
+  const program = { id: "program", label: "Agenda", href: href(eventAgendaRoute(event.slug)), icon: "agenda" } as const;
   return {
     tabs: [
-      { id: "home", label: "Home", href: href(base), icon: "home" },
-      { id: "program", label: "Agenda", href: href(eventAgendaRoute(event.slug)), icon: "agenda" },
+      { id: "home", label: "Home", href: href(eventBase(event.slug)), icon: "home" },
+      ...(watching ? [] : [program]),
       ...promoted.map(({ id, label, tabLabel, href: target, icon }) => ({
         id,
         label: tabLabel ?? label,
@@ -212,12 +218,15 @@ export function eventAppNavigation(event: EventAppSubject, session: PortalSessio
         icon,
       })),
     ],
-    more: destinations.filter((destination) => !promoted.includes(destination)),
+    more: [...(watching ? [program] : []), ...destinations.filter((destination) => !promoted.includes(destination))],
   };
 }
 
 /** Which bottom tab owns a participant page; everything without a tab lives under More. */
 export function eventAppTabFor(active: string, tabs: readonly AppTab[]): string {
   if (active === "overview") return "home";
+  // The whole agenda is My agenda with its filter off, so My agenda's tab owns it where Agenda has none.
+  if (active === "program" && !tabs.some((tab) => tab.id === "program") && tabs.some((tab) => tab.id === "agenda"))
+    return "agenda";
   return tabs.some((tab) => tab.id === active) ? active : "more";
 }

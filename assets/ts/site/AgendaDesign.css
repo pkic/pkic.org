@@ -74,6 +74,12 @@
     block-size: 100%;
     min-block-size: 0;
   }
+  /* Under a finger the buttons beside it grow to the touch size, and the view choice grows with them. */
+  @media (any-pointer: coarse) {
+    .pk-content-agenda__controls .pk-segmented {
+      block-size: var(--pk-toolbar-height);
+    }
+  }
   .pk-content-agenda__controls .pk-btn {
     padding-block: 0;
     background: var(--pk-surface);

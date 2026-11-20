@@ -156,7 +156,6 @@ function RoomSpecimen({ opensOn }: { opensOn: RoomPanelId }) {
           reactions={<LiveReactionBar send={() => true} refusal={null} />}
         />
       )}
-      playerHelp={null}
       sponsors={<VirtualRoomSponsors sponsors={SPONSORS} />}
       partners={<VirtualRoomPartners partners={PARTNERS} />}
       schedule={<VirtualRoomSchedule slug="preview" moment={MOMENT} formatTime={formatTime} />}

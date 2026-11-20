@@ -29,9 +29,15 @@
     }
   }
 
+  /* The player is a screen, black with white text as a monitor is, whether or not the stream has begun. */
   .pk-virtual-room__player {
     overflow: hidden;
-    background: var(--pk-surface-sunk);
+    background: var(--pk-chrome-deep);
+    color: var(--pk-on-solid);
+  }
+
+  .pk-virtual-room__player :is(h2, h3, h4, p) {
+    color: inherit;
   }
 
   .pk-virtual-room__player .pk-embed {
@@ -126,7 +132,6 @@
    * logo is drawn for a light page.
    */
   .pk-virtual-room__sponsors {
-
     display: flex;
     align-items: center;
     gap: var(--pk-3);
@@ -235,10 +240,6 @@
     display: grid;
   }
 
-  .pk-virtual-room__help {
-    margin: 0;
-  }
-
   /* Production partners: one quiet line of credits, each logo smaller than any sponsor's. */
   .pk-virtual-room__partner-list {
     display: flex;
@@ -300,8 +301,12 @@
   }
 
   .pk-virtual-room--wide .pk-virtual-room__player {
-    border: 1px solid var(--pk-line-soft);
     border-radius: var(--pk-radius);
+  }
+
+  /* On a large window the picture stops growing where the session and the sponsors would leave the view. */
+  .pk-virtual-room--wide :is(.pk-virtual-room__player--idle, .pk-virtual-room__player .pk-embed) {
+    max-block-size: calc(100dvh - var(--pkic-navbar-height, 0px) - 16rem);
   }
 
   .pk-virtual-room--wide .pk-virtual-room__now {
