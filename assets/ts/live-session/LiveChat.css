@@ -206,9 +206,16 @@
     display: flex;
     align-items: stretch;
   }
+  /* The field fills the row, so it is as tall as Send, which a touch screen makes taller. */
   .pk-live-chat__input .pk-field {
+    display: flex;
     flex: 1;
+    flex-direction: column;
     min-inline-size: 0;
+  }
+  .pk-live-chat__input :is(.pk-field__control, .pk-input--textarea) {
+    display: flex;
+    flex: 1 1 auto;
   }
   /* One line to start, a few as the message grows, then it scrolls. */
   .pk-live-chat__input .pk-input--textarea {
