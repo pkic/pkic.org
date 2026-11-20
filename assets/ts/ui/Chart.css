@@ -102,6 +102,13 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* The share leads; how many answers it stands for follows, smaller. */
+  .pk-chart__bar-total {
+    font-size: 0.85em;
+    font-weight: 400;
+    opacity: 0.75;
+  }
+
   /* ── Presentation: a chart read from across a room or on a broadcast ── */
 
   .pk-chart--presentation .pk-chart__bars {

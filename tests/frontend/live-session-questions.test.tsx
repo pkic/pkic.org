@@ -526,7 +526,7 @@ describe("session questions", () => {
       }),
     );
     expect(radio(host, "TLS endpoints").checked).toBe(true);
-    expect(host.querySelector(".pk-chart__bars")?.textContent).toContain("3 · 75%");
+    expect(host.querySelector(".pk-chart__bars")?.textContent).toContain("75% 3");
     void act(() => radio(host, "Root CA").click());
     void act(() => button(host, "Change answer").click());
     const votes = live.latest().messages();
@@ -565,7 +565,7 @@ describe("session questions", () => {
     connect(live, liveSnapshot({ polls: [closed] }));
     expect(host.textContent).toContain("Poll results");
     expect(host.querySelector("input[type=radio]")).toBeNull();
-    expect(host.querySelector(".pk-chart__bars")?.textContent).toContain("2 · 100%");
+    expect(host.querySelector(".pk-chart__bars")?.textContent).toContain("100% 2");
   });
 
   it("keeps the last state read-only while the room reconnects", () => {

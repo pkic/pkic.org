@@ -7,7 +7,7 @@ import { useFormAnswers } from "../components/forms/useFormAnswers";
 import type { FormField } from "../shared/types";
 import { CustomFieldList } from "../shared/widgets/custom-fields";
 import { Button } from "../ui/Button";
-import { Panel, PanelBody, PanelHeader } from "../ui/Panel";
+import "./LivePollOverlay.css";
 
 /** A poll's question as the forms respondent controls read a field. */
 export function livePollFormField(field: LivePollField): FormField {
@@ -22,7 +22,10 @@ export function livePollFormField(field: LivePollField): FormField {
 /**
  * The poll an attendee is asked now. The question is answered with the same
  * controls and the same generated answer contract as any form; one answer per person, changeable
- * while the poll is open, and the forms results chart when results are shown.
+ * while the poll is open, and the forms results chart when results are shown,
+ * drawn as the stream draws it: each answer over its bar, its share at the
+ * end, the bars in the brand stripe. It sits in its panel without a card of
+ * its own.
  */
 export function LivePollCard({
   poll,
@@ -69,34 +72,36 @@ export function LivePollCard({
 
   const respondents = poll.results?.totalAnswers ?? 0;
   return (
-    <Panel aria-label="Poll">
-      <PanelHeader title={open ? "Poll" : `Poll results: ${poll.field.label}`} />
-      <PanelBody class="pk-stack pk-stack--snug">
-        {open ? (
-          <form ref={answers.formRef} class="pk-stack pk-stack--snug" noValidate {...answers.handlers} onSubmit={send}>
-            <CustomFieldList
-              key={poll.id}
-              fields={fields}
-              context={{ dayAttendance: [] }}
-              initialValues={initialValues}
-              presentationOf={answers.presentationOf}
-            />
-            <div class="pk-cluster">
-              <Button type="submit" variant="primary" disabled={disabled}>
-                {answered ? "Change answer" : "Send answer"}
-              </Button>
-            </div>
-          </form>
-        ) : null}
-        {poll.results ? <FormFieldStatChart field={poll.field} stat={poll.results} visualization="bar" /> : null}
-        <p class="pk-small pk-muted" role="status">
-          {open
-            ? answered
-              ? "Your answer is in. You can change it until the poll closes."
-              : "One answer per person. You can change it until the poll closes."
-            : `${formatNumber(respondents)} ${respondents === 1 ? "person" : "people"} answered`}
-        </p>
-      </PanelBody>
-    </Panel>
+    <section class="pk-live-poll-card pk-stack pk-stack--snug" aria-label="Poll">
+      <p class="pk-live-poll-card__kicker">{open ? "Poll" : "Poll results"}</p>
+      {open ? (
+        <form ref={answers.formRef} class="pk-stack pk-stack--snug" noValidate {...answers.handlers} onSubmit={send}>
+          <CustomFieldList
+            key={poll.id}
+            fields={fields}
+            context={{ dayAttendance: [] }}
+            initialValues={initialValues}
+            presentationOf={answers.presentationOf}
+          />
+          <div class="pk-cluster">
+            <Button type="submit" variant="primary" disabled={disabled}>
+              {answered ? "Change answer" : "Send answer"}
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <p class="pk-strong">{poll.field.label}</p>
+      )}
+      {poll.results ? (
+        <FormFieldStatChart field={poll.field} stat={poll.results} visualization="bar" presentation />
+      ) : null}
+      <p class="pk-small pk-muted" role="status">
+        {open
+          ? answered
+            ? "Your answer is in. You can change it until the poll closes."
+            : "One answer per person. You can change it until the poll closes."
+          : `${formatNumber(respondents)} ${respondents === 1 ? "person" : "people"} answered`}
+      </p>
+    </section>
   );
 }

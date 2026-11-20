@@ -1,8 +1,8 @@
 /*
- * The poll on the conference board: the forms results chart in white on the
- * field. Each answer is set over its bar with its share large at the end, and
- * the bars wear the event stripe. The chart's own colors read the design
- * system's accent tokens, which the board sets to the event kit's.
+ * A poll's results, on the conference board and in an attendee's panel alike:
+ * each answer is set over its bar with its share large at the end, and the
+ * bars wear the stripe. The board draws them in white on the field at the
+ * frame's size; the attendee's poll at the page's.
  */
 @layer components {
   .pk-live-poll {
@@ -34,20 +34,20 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     column-gap: 72px;
   }
-  .pk-live-poll .pk-chart__bar-row {
+  :is(.pk-live-poll, .pk-live-poll-card) .pk-chart__bar-row {
     display: grid;
     grid-template-areas: "label share" "bar share";
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: end;
     gap: 10px 36px;
   }
-  .pk-live-poll .pk-chart__bar-label {
+  :is(.pk-live-poll, .pk-live-poll-card) .pk-chart__bar-label {
     grid-area: label;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .pk-live-poll .pk-chart__meter {
+  :is(.pk-live-poll, .pk-live-poll-card) .pk-chart__meter {
     grid-area: bar;
   }
   .pk-live-poll .pk-meter {
@@ -72,5 +72,43 @@
   .pk-live-poll .adm-form-pie-legend-item {
     color: var(--pk-pqc-on-field);
     font-size: inherit;
+  }
+
+  /* The attendee's poll: the same bars at the page's size, with no card of its own. */
+  .pk-live-poll-card {
+    padding-block-end: var(--pk-2);
+    border-block-end: 1px solid var(--pk-line-soft);
+  }
+  .pk-live-poll-card__kicker {
+    margin: 0;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .pk-live-poll-card .pk-chart {
+    font-size: var(--pk-text-sm);
+  }
+  .pk-live-poll-card .pk-chart__bars {
+    gap: var(--pk-2);
+  }
+  .pk-live-poll-card .pk-chart__bar-row {
+    gap: var(--pk-1) var(--pk-3);
+  }
+  .pk-live-poll-card .pk-meter__track {
+    block-size: 0.5rem;
+    border-radius: 0;
+  }
+  .pk-live-poll-card .pk-meter__fill {
+    border-radius: 0;
+    background: var(--pk-stripe);
+  }
+  .pk-live-poll-card .pk-chart__bar-count {
+    grid-area: share;
+    align-self: center;
+    color: var(--pk-ink);
+    font-size: var(--pk-text-lg);
+    font-weight: 800;
   }
 }

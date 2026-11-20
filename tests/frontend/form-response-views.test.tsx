@@ -445,7 +445,7 @@ describe("the per-field breakdown", () => {
     const bars = [...page.querySelectorAll("[role=meter]")];
     expect(bars).toHaveLength(2);
     expect(bars.map((bar) => bar.getAttribute("aria-label"))).toEqual(["High: 75%", "Low: 25%"]);
-    expect(page.querySelector(".pk-chart__bars")?.textContent).toContain("3 · 75%");
+    expect(page.querySelector(".pk-chart__bars")?.textContent).toContain("75% 3");
   });
 
   it("distinguishes no responses from responses that cannot be summarized", () => {
