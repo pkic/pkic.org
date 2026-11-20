@@ -16,10 +16,14 @@
  *     menu itself; a name or an organization does not, and typing it is the
  *     only sensible control.
  *
- * Neither owns any filter state. Both render what the table was told and call
- * back — the query lives in the list controller, which sends it to the server.
+ * The query lives in the list controller, which sends it to the server. A
+ * contract-validated exact filter keeps a local draft until submission.
  */
 import type { ComponentChildren } from "preact";
+import { useState } from "preact/hooks";
+import type { z } from "zod";
+import { useContractForm } from "../hooks/useContractForm";
+import { Field } from "../ui/Field";
 
 import { Button } from "../ui/Button";
 import { TextInput } from "../ui/TextControl";
@@ -71,11 +75,68 @@ export interface ColumnTextFilterRowProps {
   placeholder?: string;
   /** Where the matching happens, said plainly under the control. */
   hint?: ComponentChildren;
+  /** A shared query contract opts into explicit submission rather than per-keystroke queries. */
+  schema?: z.ZodType<Record<string, string | undefined>>;
+  param?: string;
   onInput: (value: string) => void;
   onClose: () => void;
 }
 
-export function ColumnTextFilterRow({
+export function ColumnTextFilterRow(props: ColumnTextFilterRowProps) {
+  return props.schema ? (
+    <CommittedColumnTextFilterRow {...props} schema={props.schema} />
+  ) : (
+    <LiveColumnTextFilterRow {...props} />
+  );
+}
+
+function CommittedColumnTextFilterRow({
+  columnLabel,
+  value,
+  schema,
+  param = "value",
+  placeholder,
+  hint,
+  onInput,
+  onClose,
+}: ColumnTextFilterRowProps & { schema: z.ZodType<Record<string, string | undefined>> }) {
+  const [draft, setDraft] = useState(value);
+  const form = useContractForm(schema, { [param]: draft.trim() ? draft : undefined });
+  return (
+    <form
+      class="pk-column-filter"
+      noValidate
+      {...form.handlers}
+      onSubmit={(event) => {
+        event.preventDefault();
+        const checked = form.submit();
+        if (!checked.data) return;
+        onInput(checked.data[param] ?? "");
+        onClose();
+      }}
+    >
+      <div class="pk-column-filter__field">
+        <Field label={`Filter ${columnLabel.toLowerCase()}`} help={hint} {...form.of(param)}>
+          {(control) => (
+            <TextInput
+              {...control}
+              name={param}
+              value={draft}
+              placeholder={placeholder}
+              autofocus
+              onInput={(event) => setDraft(event.currentTarget.value)}
+            />
+          )}
+        </Field>
+      </div>
+      <Button variant="secondary" type="submit">
+        Done
+      </Button>
+    </form>
+  );
+}
+
+function LiveColumnTextFilterRow({
   columnLabel,
   value,
   suggestions = [],

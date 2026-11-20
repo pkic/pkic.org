@@ -4,9 +4,10 @@
  */
 
 import { Fragment } from "preact";
+import { useMemo } from "preact/hooks";
 import type { z } from "zod";
 import { countryOptions } from "../../../shared/countries";
-import { formSubmissionsExportQuerySchema } from "../../../shared/schemas/form-management";
+import { formSubmissionsQuerySchema, formSubmissionsExportQuerySchema } from "../../../shared/schemas/form-management";
 import { DownloadAction } from "../../ui/DownloadAction";
 import type { FormSubmission } from "../../../shared/schemas/form-management";
 import type { FormFieldDefinition } from "../../../shared/schemas/forms";
@@ -80,6 +81,8 @@ function compactAnswer(value: unknown, field: FormFieldDefinition): { text: stri
   return { text: text.length > 90 ? `${text.slice(0, 87)}...` : text, title: text };
 }
 
+const exactAnswerQuerySchema = formSubmissionsQuerySchema.pick({ answerValue: true });
+
 export function FormSubmissionsTable<Response extends { submissions: FormSubmission[]; page: PageInfo }>({
   fields,
   endpoint,
@@ -100,31 +103,49 @@ export function FormSubmissionsTable<Response extends { submissions: FormSubmiss
   params?: Record<string, string>;
   onOpen: (submission: FormSubmission) => void;
 }) {
-  const answerColumns = fields.map((field) => {
-    const options = field.validation?.format === "iso_country" ? countryOptions() : field.options;
-    return {
-      key: `answer:${field.key}`,
-      header: { label: field.label, className: "adm-form-answer-col" },
-      cell: (submission: FormSubmission) => {
-        const answer = compactAnswer(submission.answers?.[field.key], field);
-        return (
-          <span class="pk-small adm-form-answer-cell" title={answer.title}>
-            {answer.text}
-          </span>
-        );
-      },
-      className: "adm-form-answer-col",
-      sort: { asc: `answer:${field.key}`, desc: `-answer:${field.key}` },
-      filter: {
-        key: `answer:${field.key}`,
-        param: "answerValue",
-        scope: { answerField: field.key },
-        ...(options?.length
-          ? { options: [{ value: "", label: "All answers" }, ...options] }
-          : { text: { placeholder: "Exact answer…" } }),
-      },
-    };
-  });
+  const answerColumns = useMemo(
+    () =>
+      fields.map((field) => {
+        const options =
+          field.fieldType === "boolean"
+            ? [
+                { value: "true", label: "Yes" },
+                { value: "false", label: "No" },
+              ]
+            : field.validation?.format === "iso_country"
+              ? countryOptions()
+              : field.options;
+        return {
+          key: `answer:${field.key}`,
+          header: { label: field.label, className: "adm-form-answer-col" },
+          cell: (submission: FormSubmission) => {
+            const answer = compactAnswer(submission.answers?.[field.key], field);
+            return (
+              <span class="pk-small adm-form-answer-cell" title={answer.title}>
+                {answer.text}
+              </span>
+            );
+          },
+          className: "adm-form-answer-col",
+          sort: { asc: `answer:${field.key}`, desc: `-answer:${field.key}` },
+          filter: {
+            key: `answer:${field.key}`,
+            param: "answerValue",
+            scope: { answerField: field.key },
+            ...(options?.length
+              ? { options: [{ value: "", label: "All answers" }, ...options] }
+              : {
+                  text: {
+                    placeholder: "Exact answer…",
+                    schema: exactAnswerQuerySchema,
+                    hint: "Press Enter or Done to apply the exact answer.",
+                  },
+                }),
+          },
+        };
+      }),
+    [fields],
+  );
 
   return (
     <ApiDataTable
@@ -136,11 +157,18 @@ export function FormSubmissionsTable<Response extends { submissions: FormSubmiss
       resolve={(data) => data.submissions}
       resolvePage={(data) => data.page}
       paginate
+      inset={
+        <p class="pk-small pk-muted">
+          Filter answers for one question at a time. Choosing another question replaces the current answer filter.
+        </p>
+      }
       tableOptionsFilters
       initialSort="-submitted_at"
       params={params}
       toolbar={(_actions, query, _sorting, { hidden }) => {
-        const selected = fields.find((field) => field.key === query.answerField);
+        const selected = query.answerValue?.trim()
+          ? fields.find((field) => field.key === query.answerField)
+          : undefined;
         const exportQuery = formSubmissionsExportQuerySchema.safeParse({
           ...query,
           columns: [

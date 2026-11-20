@@ -13,64 +13,28 @@
 import { render, type ComponentChild } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { z } from "zod";
 
 import {
   formSubmissionsQuerySchema,
   formSubmissionsExportQuerySchema,
 } from "../../assets/shared/schemas/form-management";
-import type { FormSubmission } from "../../assets/shared/schemas/form-management";
 import type { FormFieldDefinition } from "../../assets/shared/schemas/forms";
 import { VISUALIZATIONS } from "../../assets/shared/schemas/form-field-rules";
 import { parseFormFieldOptions } from "../../assets/shared/schemas/form-field-rules";
 import { buildFormAnswerRows, formatFormAnswerValue } from "../../assets/ts/components/forms/form-answers";
 import { FormResponseStats, type ServerFieldStat } from "../../assets/ts/components/forms/FormResponseStats";
 import { FormAnswerTable, FormSubmissionsTable } from "../../assets/ts/components/forms/FormResponseViews";
-import { chooseColumnFilter, columnFilterSummary, openColumnMenu } from "./helpers/column-menu";
+import {
+  chooseColumnFilter,
+  columnFilterSummary,
+  openExactFilter,
+  typeExactFilter,
+  commitExactFilter,
+} from "./helpers/column-menu";
 
-const NOW = "2026-08-31T09:00:00.000Z";
+import { field, submission, submissionsSchema } from "./helpers/form-response-fixtures";
+
 const mounted: HTMLElement[] = [];
-
-function field(overrides: Partial<FormFieldDefinition> = {}): FormFieldDefinition {
-  return {
-    id: "90000000-0000-4000-8000-000000000001",
-    key: "priority",
-    label: "Priority",
-    fieldType: "select",
-    required: false,
-    options: [
-      { value: "high", label: "High" },
-      { value: "low", label: "Low" },
-    ],
-    optionSource: null,
-    validation: null,
-    sortOrder: 10,
-    updatedAt: NOW,
-    archivedAt: null,
-    ...overrides,
-  } as FormFieldDefinition;
-}
-
-function submission(overrides: Partial<FormSubmission> = {}): FormSubmission {
-  return {
-    id: "a0000000-0000-4000-8000-000000000001",
-    status: "submitted",
-    submittedAt: NOW,
-    contextType: "group",
-    contextRef: null,
-    submitter: { firstName: "Ada", lastName: "Lovelace", email: "ada@example.test" },
-    answers: { priority: "high" },
-    ...overrides,
-  } as FormSubmission;
-}
-
-const submissionsSchema = z.object({
-  submissions: z.array(z.unknown()),
-  page: z.object({ limit: z.number(), offset: z.number(), total: z.number(), hasMore: z.boolean() }),
-}) as unknown as z.ZodType<{
-  submissions: FormSubmission[];
-  page: { limit: number; offset: number; total: number; hasMore: boolean };
-}>;
 
 function json(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
@@ -275,6 +239,93 @@ describe("the submissions table", () => {
     expect(cleared.status).toBe("registered");
   });
 
+  it("does not narrow an export for a saved question without an answer", async () => {
+    history.replaceState(null, "", "#?form-responses.f.answerField=priority");
+    const page = mount(
+      <FormSubmissionsTable
+        fields={[field()]}
+        endpoint="/api/v1/forms/f/submissions"
+        exportEndpoint="/api/v1/forms/f/submissions/exports"
+        responseSchema={submissionsSchema}
+        onOpen={vi.fn()}
+        load={async (_url, _signal, schema) =>
+          schema.parse({ submissions: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } })
+        }
+      />,
+    );
+    await settle();
+    const link = page.querySelector<HTMLAnchorElement>('a[aria-label="Download responses (CSV)"]')!;
+    expect(link).toBeTruthy();
+    const query = formSubmissionsExportQuerySchema.parse(Object.fromEntries(new URL(link.href).searchParams));
+    expect(query.field).toBeUndefined();
+    expect(query.columns).toEqual(["submitter", "answer:priority", "submitted_at", "status"]);
+  });
+
+  it("offers boolean answer labels with canonical server values", async () => {
+    const requests: URL[] = [];
+    const page = mount(
+      <FormSubmissionsTable
+        fields={[field({ key: "consent", label: "Consent", fieldType: "boolean", options: null })]}
+        endpoint="/api/v1/forms/f/submissions"
+        responseSchema={submissionsSchema}
+        onOpen={vi.fn()}
+        load={async (url, _signal, schema) => {
+          requests.push(new URL(url, "https://example.test"));
+          return schema.parse({ submissions: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } });
+        }}
+      />,
+    );
+    await settle();
+    for (const [label, value] of [
+      ["Yes", "true"],
+      ["No", "false"],
+    ]) {
+      await chooseColumnFilter(page, "Consent", label);
+      const query = formSubmissionsQuerySchema.parse(Object.fromEntries(requests.at(-1)!.searchParams));
+      expect(query).toMatchObject({ answerField: "consent", answerValue: value });
+      expect(columnFilterSummary(page, "Consent")).toBe(label);
+    }
+  });
+
+  it("validates exact answers on commit and clears whitespace without an invalid request", async () => {
+    const requests: URL[] = [];
+    const page = mount(
+      <FormSubmissionsTable
+        fields={[field({ fieldType: "text", options: null })]}
+        endpoint="/api/v1/forms/f/submissions"
+        responseSchema={submissionsSchema}
+        onOpen={vi.fn()}
+        load={async (url, _signal, schema) => {
+          const request = new URL(url, "https://example.test");
+          formSubmissionsQuerySchema.parse(Object.fromEntries(request.searchParams));
+          requests.push(request);
+          return schema.parse({ submissions: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } });
+        }}
+      />,
+    );
+    await settle();
+    await openExactFilter(page, "Priority");
+    let input = page.querySelector<HTMLInputElement>(".pk-column-filter input")!;
+    const beforeTyping = requests.length;
+    await typeExactFilter(input, "x".repeat(501));
+    await commitExactFilter(page);
+    await settle();
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(requests).toHaveLength(beforeTyping);
+    await typeExactFilter(input, "  Engineering  ");
+    await commitExactFilter(page);
+    await settle();
+    expect(requests.at(-1)!.searchParams.get("answerValue")).toBe("Engineering");
+    await openExactFilter(page, "Priority");
+    input = page.querySelector<HTMLInputElement>(".pk-column-filter input")!;
+    await typeExactFilter(input, "   ");
+    await commitExactFilter(page);
+    await settle();
+    expect(requests.at(-1)!.searchParams.has("answerField")).toBe(false);
+    expect(requests.at(-1)!.searchParams.has("answerValue")).toBe(false);
+    expect(page.querySelector('[aria-label="Clear the Priority filter"]')).toBeNull();
+  });
+
   it("keeps country choices and typed answers scoped to their own question", async () => {
     const requests: URL[] = [];
     vi.stubGlobal(
@@ -312,18 +363,13 @@ describe("the submissions table", () => {
       ["Department", "department", "Engineering"],
       ["Notes", "notes", "Workshop"],
     ]) {
-      const menu = openColumnMenu(page, column);
-      await act(() =>
-        [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
-          .find((item) => item.textContent === "Filter this column…")!
-          .click(),
-      );
+      await openExactFilter(page, column);
       const input = page.querySelector<HTMLInputElement>(".pk-column-filter input")!;
       expect(input.value).toBe("");
-      await act(() => {
-        input.value = answer;
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-      });
+      const beforeTyping = requests.length;
+      await typeExactFilter(input, answer);
+      expect(requests).toHaveLength(beforeTyping);
+      await commitExactFilter(page);
       await settle();
       expect(formSubmissionsQuerySchema.parse(Object.fromEntries(requests.at(-1)!.searchParams))).toMatchObject({
         answerField: key,

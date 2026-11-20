@@ -96,8 +96,9 @@ export function AttendeeHeaderFiltersPreview() {
     },
     ...registrationAttendanceColumns<(typeof rows)[number]>(days, filters),
   ];
-  const onFilterChange = (param: string, value: string) => setFilters((current) => ({ ...current, [param]: value }));
-  const controls = useColumnControls(columns, { filters, onFilterChange });
+  const onFilterPatch = (changes: Readonly<Record<string, string>>) =>
+    setFilters((current) => ({ ...current, ...changes }));
+  const controls = useColumnControls(columns, { filters, onFilterPatch });
   return (
     <div class="pk-table-list" data-density="compact">
       <CollectionToolbar
@@ -145,7 +146,7 @@ export function AttendeeHeaderFiltersPreview() {
         })}
         rowKey={(row) => row.name}
         filters={filters}
-        onFilterChange={onFilterChange}
+        onFilterPatch={onFilterPatch}
         controls={controls}
         tableOptionsFilters
       />

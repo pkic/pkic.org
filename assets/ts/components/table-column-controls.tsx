@@ -39,8 +39,6 @@ export interface ColumnControlsOptions {
   onSort?: (nextSort: string) => void;
   /** The column filters in force, by query parameter. */
   filters?: Record<string, string>;
-  /** Called with the parameter and its new value ("" opens the column back up). */
-  onFilterChange?: (param: string, value: string) => void;
   /** Applies a scoped choice and its companion parameters in one query update. */
   onFilterPatch?: (changes: Readonly<Record<string, string>>) => void;
 }
@@ -72,7 +70,7 @@ export interface ColumnControls<T> {
 /** The sort, filter and column-visibility state of one list. */
 export function useColumnControls<T>(
   columns: readonly Column<T>[],
-  { currentSort, onSort, filters = {}, onFilterChange, onFilterPatch }: ColumnControlsOptions,
+  { currentSort, onSort, filters = {}, onFilterPatch }: ColumnControlsOptions,
 ): ColumnControls<T> {
   // Hidden columns are the reader's choice for this visit; they are keyed by
   // `columnKey` so the choice survives a re-render that rebuilds the column list.
@@ -130,8 +128,7 @@ export function useColumnControls<T>(
   }
 
   function filterGroupItems(columnFilter: ColumnFilter, id: string, optionsLabel: string): MenuItem[] {
-    if (!onFilterChange) return [];
-    if (columnFilter.scope && !onFilterPatch) return [];
+    if (!onFilterPatch) return [];
     const current = filterValue(columnFilter);
     const items: MenuItem[] = [];
     if (columnFilter.options) {
@@ -163,7 +160,7 @@ export function useColumnControls<T>(
             checked: (filters[columnFilter.match!.param] ?? "") === option.value,
             separatorBefore: index === 0,
             keepOpen: true,
-            onSelect: () => onFilterChange(columnFilter.match!.param, option.value),
+            onSelect: () => onFilterPatch({ [columnFilter.match!.param]: option.value }),
           })) ?? []),
           ...(columnFilter.optionNavigation ?? []),
         ],
@@ -226,7 +223,7 @@ export function useColumnControls<T>(
   }
 
   function applyChoice(columnFilter: ColumnFilter, value: string) {
-    if (!columnFilter.scope) return onFilterChange?.(columnFilter.param, value);
+    if (!columnFilter.scope) return onFilterPatch?.({ [columnFilter.param]: value });
     // Clearing an inactive field must not clear another field's answer choice.
     if (!value && !scopeMatches(columnFilter)) return;
     onFilterPatch?.({
@@ -279,7 +276,7 @@ export function useColumnControls<T>(
   });
 
   const chips: AppliedFilterChip[] = [];
-  if (onFilterChange) {
+  if (onFilterPatch) {
     for (const column of columns) {
       for (const columnFilter of columnFilters(column)) {
         const summary = summaryForFilter(columnFilter);
