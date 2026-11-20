@@ -95,8 +95,11 @@ describe("badge collection name lifecycle", () => {
       ),
     );
     expect(host.querySelector('[aria-label="Attendee name"]')?.textContent).toBe("Zoë 山田");
-    const button = Array.from(host.querySelectorAll("button")).find((item) => item.textContent === "Next attendee");
+    const button = Array.from(host.querySelectorAll("button")).find(
+      (item) => item.getAttribute("aria-label") === "Next attendee",
+    );
     expect(button).toBeDefined();
+    expect(button?.textContent).toBe("Next");
     await act(() => button!.click());
     expect(next).toHaveBeenCalledOnce();
   });

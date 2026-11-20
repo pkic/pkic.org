@@ -414,7 +414,11 @@ export function BadgeLabelDeskView({
         <div role="status" aria-live="polite">
           {busy ? "Preparing print document…" : status?.title}
           {status?.detail && <p>{status.detail}</p>}
-          {needsAdvance && onNextBadge && <Button onClick={onNextBadge}>Next badge</Button>}
+          {needsAdvance && onNextBadge && (
+            <Button onClick={onNextBadge} aria-label="Next badge">
+              Next
+            </Button>
+          )}
           {cameraError && <ErrorAlert error={cameraError} />}
           {children}
         </div>

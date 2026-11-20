@@ -31,8 +31,8 @@ export function ScannerCollectionAttendee({
             </Button>
           )}
           {onAdvance && (
-            <Button onClick={onAdvance} disabled={saving}>
-              Next attendee
+            <Button onClick={onAdvance} disabled={saving} aria-label="Next attendee">
+              Next
             </Button>
           )}
         </div>

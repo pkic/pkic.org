@@ -56,7 +56,9 @@ it("holds a manually collected attendee in the saved scanner and advances to the
     expect(lookupName).toHaveBeenCalledWith(badgeCode);
     expect(host.querySelector(".pk-fast-scanner")).not.toBeNull();
     const next = () =>
-      Array.from(host.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Next attendee")!;
+      Array.from(host.querySelectorAll("button")).find(
+        (button) => button.getAttribute("aria-label") === "Next attendee",
+      )!;
     await vi.waitFor(() => expect(next().disabled).toBe(false));
     await act(async () => next().click());
     expect(host.querySelector('[aria-label="Attendee name"]')).toBeNull();

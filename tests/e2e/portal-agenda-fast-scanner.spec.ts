@@ -467,6 +467,7 @@ test("scanner warnings stay visible until Next badge on phone and desktop", asyn
   await expect(scanner.locator(".pk-fast-scanner__label")).toHaveText("Unknown badge");
   await page.waitForTimeout(1200);
   await expect(scanner.locator(".pk-fast-scanner__label")).toHaveText("Unknown badge");
+  await expect(scanner.getByRole("button", { name: "Next badge", exact: true })).toHaveText("Next");
   await expect(scanner.getByText(/Camera access is unavailable/)).toBeHidden();
   await page.screenshot({ animations: "disabled", path: testInfo.outputPath("scanner-error-phone.png") });
   await page.evaluate(async () => {

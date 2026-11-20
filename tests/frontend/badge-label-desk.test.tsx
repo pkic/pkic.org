@@ -149,6 +149,7 @@ describe("badge printing desk", () => {
     expect(fetch).toHaveBeenCalledOnce();
     await new Promise((resolve) => setTimeout(resolve, 1100));
     expect(host.textContent).toContain("HTTP 403");
+    expect(host.querySelector('button[aria-label="Next badge"]')?.textContent).toBe("Next");
     await click("Next badge");
     if (fullscreen) expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Ready to scan and print");
     else expect(host.textContent).not.toContain("HTTP 403");

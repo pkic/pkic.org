@@ -97,10 +97,10 @@ describe("scanner foreground receipt and drain lifecycle", () => {
         const nextLabel = mode === "collection" ? "Next attendee" : "Next badge";
         await act(() => mocks.hardwareScan!("ZYXWVUTSRQPNMLKJ"));
         expect(mocks.persist).toHaveBeenCalledOnce();
-        expect(host.textContent).toContain(nextLabel);
+        expect(host.querySelector(`button[aria-label="${nextLabel}"]`)?.textContent).toBe("Next");
         await act(() =>
           Array.from(host.querySelectorAll("button"))
-            .find((button) => button.textContent?.trim() === nextLabel)!
+            .find((button) => button.getAttribute("aria-label") === nextLabel)!
             .click(),
         );
         expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe(
@@ -135,14 +135,16 @@ describe("scanner foreground receipt and drain lifecycle", () => {
         await vi.waitFor(() => expect(host.textContent).toContain("retry the scan"));
         await act(() =>
           Array.from(host.querySelectorAll("button"))
-            .find((button) => button.textContent?.trim() === "Next badge")!
+            .find((button) => button.getAttribute("aria-label") === "Next badge")!
             .click(),
         );
         await act(async () => mocks.hardwareScan!(badgeCode));
       }
       await vi.waitFor(() => expect(mocks.persist).toHaveBeenCalledTimes(2));
       expect(
-        Array.from(host.querySelectorAll("button")).some((button) => button.textContent?.trim() === "Next attendee"),
+        Array.from(host.querySelectorAll("button")).some(
+          (button) => button.getAttribute("aria-label") === "Next attendee",
+        ),
       ).toBe(true);
     } finally {
       window.location.hash = previousHash;
@@ -284,10 +286,10 @@ describe("scanner foreground receipt and drain lifecycle", () => {
     });
     expect(host.querySelector(".pk-fast-scanner__trail")?.textContent).toContain("Badge not valid");
     expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Badge not valid");
-    expect(host.textContent).toContain("Next badge");
+    expect(host.querySelector('button[aria-label="Next badge"]')?.textContent).toBe("Next");
     await act(() =>
       Array.from(host.querySelectorAll("button"))
-        .find((button) => button.textContent?.trim() === "Next badge")!
+        .find((button) => button.getAttribute("aria-label") === "Next badge")!
         .click(),
     );
     await act(() => {

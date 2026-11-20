@@ -240,7 +240,7 @@ describe("Online verification after a local badge miss", () => {
       expect(mocks.persist).toHaveBeenCalledTimes(1);
       await act(async () =>
         Array.from(host.querySelectorAll("button"))
-          .find((button) => button.textContent?.trim() === "Next badge")!
+          .find((button) => button.getAttribute("aria-label") === "Next badge")!
           .click(),
       );
       await act(async () => mocks.hardwareScan!(nextBadge));

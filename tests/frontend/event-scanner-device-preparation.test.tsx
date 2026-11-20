@@ -16,7 +16,9 @@ import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 import { formatDateTime } from "../../assets/shared/format-date";
 const button = (name: string) =>
-  Array.from(host.querySelectorAll("button")).find((control) => control.textContent?.trim() === name)!;
+  Array.from(host.querySelectorAll("button")).find(
+    (control) => control.textContent?.trim() === name || control.getAttribute("aria-label") === name,
+  )!;
 describe("scanner device enrollment and manual capture boundary", () => {
   it("refreshes badge data through the diagnostics Sync now action", async () => {
     await mount(true);

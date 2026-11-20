@@ -187,10 +187,10 @@ export function FastScannerView({
   else if (cameraActive) label = "Ready to scan";
   let readiness = "Ready for the next badge";
   if (cooldown?.saving) readiness = "Checking badge…";
-  else if (cooldown && cooldown.remainingMs > 0)
-    readiness = `Next badge in ${(cooldown.remainingMs / 1000).toFixed(1)} seconds`;
+  else if (cooldown?.remainingMs) readiness = `Next badge in ${(cooldown.remainingMs / 1000).toFixed(1)} seconds`;
   if (needsAdvance) readiness = "Choose Next badge to continue";
   if (collection?.waiting) readiness = "Find this attendee’s badge, then choose Next attendee";
+  const nextDisabled = collection?.saving || cooldown?.saving;
   return (
     <div
       ref={surface}
@@ -330,13 +330,13 @@ export function FastScannerView({
         )}
         <div class="pk-fast-scanner__actions">
           {collection?.waiting && !helpOpen && (
-            <Button onClick={collection.onNext} disabled={collection.saving || cooldown?.saving}>
-              Next attendee
+            <Button onClick={collection.onNext} disabled={nextDisabled} aria-label="Next attendee">
+              Next
             </Button>
           )}
           {needsAdvance && !collection?.waiting && !helpOpen && !manualEntry && !recentScans && onNextBadge && (
-            <Button onClick={onNextBadge} disabled={cooldown?.saving}>
-              Next badge
+            <Button onClick={onNextBadge} disabled={cooldown?.saving} aria-label="Next badge">
+              Next
             </Button>
           )}
           {onPresentation && presentation === "embedded" && (
