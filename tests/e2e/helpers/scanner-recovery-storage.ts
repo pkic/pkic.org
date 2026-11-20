@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { basename } from "node:path";
 import { definitionFor } from "./definition-list";
 import { uploadThroughControl } from "./file-upload";
@@ -301,4 +302,89 @@ export async function expectStaleLogoutRefusal(page: Page, sessionId: string): P
   expect(response.status()).toBe(200);
   expect(response.headers()["set-cookie"]).toBeUndefined();
   expect(userAuthLogoutResponseSchema.parse(await response.json()).outcome).toBe("session_changed");
+}
+
+export async function addSyntheticPreparedScannerEvent(
+  page: Page,
+  originalSlug: string,
+  slug: string,
+): Promise<string> {
+  const syntheticEvent = { eventId: randomUUID(), epochId: randomUUID(), slug };
+  const syntheticKey = await page.evaluate(
+    async ({ originalSlug, eventId, epochId, slug, version }) => {
+      const opening = indexedDB.open("pkic-scanner-outbox", version);
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        opening.onsuccess = () => resolve(opening.result);
+        opening.onerror = () => reject(opening.error ?? new Error("Could not open scanner storage"));
+      });
+      try {
+        const transaction = db.transaction("scanner-epochs", "readwrite");
+        const store = transaction.objectStore("scanner-epochs");
+        const records = await new Promise<
+          Array<{
+            eventId: string;
+            operatorUserId: string;
+            deviceId: string;
+            collectorContexts?: Array<Record<string, unknown>>;
+            [key: string]: unknown;
+          }>
+        >((resolve, reject) => {
+          const request = store.getAll();
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error ?? new Error("Could not read scanner sessions"));
+        });
+        const source = records.find((record) => record.eventId === originalSlug && record.collectorContexts?.length);
+        if (!source?.collectorContexts) throw new Error("Prepared scanner tasks are missing");
+        const contexts = source.collectorContexts.map((context) => ({
+          ...context,
+          contextId: crypto.randomUUID(),
+          eventId,
+          epochId,
+          slug,
+          route: `/events/${slug}/scanner`,
+        }));
+        const key = JSON.stringify([slug, source.operatorUserId, source.deviceId]);
+        store.put({
+          ...source,
+          key,
+          eventId: slug,
+          epochId,
+          collectorContext: contexts[0],
+          collectorContexts: contexts,
+        });
+        await new Promise<void>((resolve, reject) => {
+          transaction.oncomplete = () => resolve();
+          transaction.onerror = () => reject(transaction.error ?? new Error("Could not save synthetic scanner"));
+        });
+        return key;
+      } finally {
+        db.close();
+      }
+    },
+    { originalSlug, ...syntheticEvent, version: SCAN_STORAGE_VERSION },
+  );
+  return syntheticKey;
+}
+
+export async function removeSyntheticPreparedScannerEvent(page: Page, key: string): Promise<void> {
+  await page.evaluate(
+    async ({ key, version }) => {
+      const opening = indexedDB.open("pkic-scanner-outbox", version);
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        opening.onsuccess = () => resolve(opening.result);
+        opening.onerror = () => reject(opening.error ?? new Error("Could not open scanner storage"));
+      });
+      try {
+        const transaction = db.transaction("scanner-epochs", "readwrite");
+        transaction.objectStore("scanner-epochs").delete(key);
+        await new Promise<void>((resolve, reject) => {
+          transaction.oncomplete = () => resolve();
+          transaction.onerror = () => reject(transaction.error ?? new Error("Could not remove synthetic scanner"));
+        });
+      } finally {
+        db.close();
+      }
+    },
+    { key, version: SCAN_STORAGE_VERSION },
+  );
 }

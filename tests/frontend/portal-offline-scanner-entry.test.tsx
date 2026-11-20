@@ -57,10 +57,19 @@ vi.mock("../../assets/ts/member-flows/portal/shell/Login", () => ({
   ),
 }));
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/OfflineScannerBootstrap", () => ({
-  OfflineScannerBootstrap: ({ route, onCheckSignIn }: { route: string; onCheckSignIn: () => void }) => (
+  OfflineScannerBootstrap: ({
+    route,
+    onCheckSignIn,
+    onSignIn,
+  }: {
+    route: string;
+    onCheckSignIn: () => void;
+    onSignIn: () => void;
+  }) => (
     <div data-scanner-route={route}>
       Prepared offline scanner
       <button onClick={onCheckSignIn}>Check sign-in again</button>
+      <button onClick={onSignIn}>Sign in</button>
     </div>
   ),
 }));
@@ -244,6 +253,29 @@ it("offers prepared scanners from the portal entry point without a remembered sc
   await vi.waitFor(() => expect(host.textContent).toContain("Prepared offline scanner"));
   expect(host.textContent).not.toContain("Authenticated portal content");
   expect(scannerTransportUnavailable.value).toBe(true);
+});
+it("opens sign-in from a saved scanner and lets the operator return without clearing it", async () => {
+  window.location.hash = "#/home";
+  prepareLocalScanner();
+  vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+  fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+  await mount();
+  await vi.waitFor(() => expect(host.textContent).toContain("Prepared offline scanner"));
+  await act(() =>
+    Array.from(host.querySelectorAll("button"))
+      .find((button) => button.textContent === "Sign in")!
+      .click(),
+  );
+  expect(host.textContent).toContain("Sign in");
+  expect(host.textContent).toContain("Continue scanning offline");
+  expect(host.textContent).not.toContain("Prepared offline scanner");
+  await act(() =>
+    Array.from(host.querySelectorAll("button"))
+      .find((button) => button.textContent === "Continue scanning offline")!
+      .click(),
+  );
+  expect(host.textContent).toContain("Prepared offline scanner");
+  expect(mocks.clearPreparation).not.toHaveBeenCalled();
 });
 it("keeps the offline return route when local session state changes after the network fails", async () => {
   window.location.hash = "#/home";

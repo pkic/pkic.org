@@ -130,6 +130,7 @@ export function App() {
   const [verifying, setVerifying] = useState(() => Boolean(portalMagicLinkToken(window.location.hash)));
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
+  const [showOfflineSignIn, setShowOfflineSignIn] = useState(false);
   const [organizationStep, setOrganizationStep] = useState<{ token: string; step: OrganizationStep } | null>(null);
 
   async function loadPortalSession(
@@ -163,6 +164,7 @@ export function App() {
       if (portalSession.value?.identity.id !== session.identity.id) clearMemberProfile();
       scannerTransportUnavailable.value = false;
       setSessionError(null);
+      setShowOfflineSignIn(false);
       savePortalSession(session);
       const nextProfile = await getJson("/api/v1/users/current", myProfileSchema);
       if (isCurrent() && portalSession.value === session) saveProfile(nextProfile);
@@ -380,16 +382,33 @@ export function App() {
     </Alert>
   ) : null;
   const collectorRoute = scannerCollectorPath(window.location.hash);
-  if (!isAuthed.value && scannerTransportUnavailable.value)
+  if (!isAuthed.value && scannerTransportUnavailable.value && !showOfflineSignIn)
     return (
       <div class="pk pk-stack">
         <Suspense fallback={<VerifyingOverlay />}>
           <OfflineScannerBootstrap
             route={collectorRoute}
             onCheckSignIn={() => void loadPortalSession(() => true, true)}
+            onSignIn={() => setShowOfflineSignIn(true)}
           />
         </Suspense>
       </div>
+    );
+  if (!isAuthed.value && scannerTransportUnavailable.value && showOfflineSignIn)
+    return (
+      <Login
+        notice={
+          <Alert tone="info" title="Saved scanners available">
+            <p>You can continue scanning with the saved data on this device.</p>
+            <Button type="button" variant="secondary" onClick={() => setShowOfflineSignIn(false)}>
+              Continue scanning offline
+            </Button>
+          </Alert>
+        }
+        onSignedIn={async () => {
+          await loadPortalSession();
+        }}
+      />
     );
   if (sessionError && !isAuthed.value)
     return (

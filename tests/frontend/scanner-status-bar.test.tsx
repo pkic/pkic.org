@@ -135,6 +135,15 @@ describe("scanner status bar", () => {
       <ScannerConnectionStatus compact pending={1} online={false} syncing={false} offlinePrepared />,
     );
     expect(offline).toContain("Offline · 1 awaiting upload");
+    const unauthenticated = render(
+      <ScannerConnectionStatus compact pending={1} online syncing={false} collector offlinePrepared />,
+    );
+    expect(unauthenticated).toContain("Saved scanner · 1 awaiting upload · sign in");
+    expect(unauthenticated).not.toContain("Offline");
+    const disconnected = render(
+      <ScannerConnectionStatus compact pending={1} online={false} syncing={false} collector offlinePrepared />,
+    );
+    expect(disconnected).toContain("Saved scanner · 1 awaiting upload · sign in");
     const failed = render(
       <ScannerConnectionStatus compact pending={0} online syncing={false} error="Scan upload failed" />,
     );

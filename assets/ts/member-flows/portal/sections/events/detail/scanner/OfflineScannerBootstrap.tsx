@@ -3,6 +3,8 @@ import { Alert } from "../../../../../../ui/Alert";
 import { Spinner } from "../../../../../../ui/Spinner";
 import { Button } from "../../../../../../ui/Button";
 import { ActionTiles } from "../../../../../../ui/ActionTile";
+import { Field } from "../../../../../../ui/Field";
+import { Select } from "../../../../../../ui/TextControl";
 import { subscribeUserSessionState } from "../../../../../../shared/pending-user-logout";
 import type { ScannerOfflineContext } from "../../../../../../../shared/schemas/event-scanner-offline-context";
 import { listPreparedScannerContexts, restoreScannerOfflineContext } from "./scanner-offline-context";
@@ -17,11 +19,20 @@ function preparedTaskOrder(context: ScannerOfflineContext): number {
 }
 
 /** The offline collector deliberately never mounts the authenticated portal shell. */
-export function OfflineScannerBootstrap({ route, onCheckSignIn }: { route: string | null; onCheckSignIn: () => void }) {
+export function OfflineScannerBootstrap({
+  route,
+  onCheckSignIn,
+  onSignIn,
+}: {
+  route: string | null;
+  onCheckSignIn: () => void;
+  onSignIn: () => void;
+}) {
   const [context, setContext] = useState<ScannerOfflineContext | null>(null);
   const [available, setAvailable] = useState<ScannerOfflineContext[]>([]);
   const [loading, setLoading] = useState(true);
   const [resolvedSelection, setResolvedSelection] = useState<string | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
   const routeQuery = new URLSearchParams(window.location.hash.split("?")[1] ?? "");
   const selectionKey = route
     ? [routeQuery.get("offlineContext"), routeQuery.get("scanAction"), routeQuery.get("scannerPurpose")].join(":")
@@ -62,14 +73,28 @@ export function OfflineScannerBootstrap({ route, onCheckSignIn }: { route: strin
   }, [route, currentSelection]);
   if (loading || resolvedSelection !== currentSelection || (context && context.route !== route))
     return <Spinner label="Checking saved scanner context…" />;
-  const multipleEvents = available.some((item) => item.slug !== available[0]?.slug);
+  const eventSlugs = [...new Set(available.map((item) => item.slug))].sort((a, b) => {
+    const latest = (slug: string) =>
+      Math.max(...available.filter((item) => item.slug === slug).map((item) => Date.parse(item.lastObservedAt)));
+    return latest(b) - latest(a) || a.localeCompare(b);
+  });
+  const currentEvent = selectedEvent && eventSlugs.includes(selectedEvent) ? selectedEvent : eventSlugs[0];
+  const eventLabel = (slug: string) =>
+    slug
+      .split("-")
+      .map((part, index, parts) =>
+        part === "pqc" || part === "pki" || (index === parts.length - 1 && part.length === 2)
+          ? part.toUpperCase()
+          : `${part.charAt(0).toUpperCase()}${part.slice(1)}`,
+      )
+      .join(" ");
   if (!route)
     return (
       <div class="pk-scanner-offline-entry">
         <LoginFrame
           label="Prepared scanners on this device"
           title="Continue scanning offline"
-          lede="Scans will upload when your connection returns."
+          lede="Scans stay on this device until you sign in to upload them."
           copy={{ kicker: "Offline scanning", headline: "Keep event check-in running." }}
           foot={
             <Button type="button" variant="ghost" onClick={onCheckSignIn}>
@@ -77,13 +102,35 @@ export function OfflineScannerBootstrap({ route, onCheckSignIn }: { route: strin
             </Button>
           }
         >
+          <div class="pk-cluster">
+            <Button type="button" onClick={onSignIn}>
+              Sign in
+            </Button>
+          </div>
           {available.length ? (
             <div class="pk-scanner-destinations">
-              <ActionTiles label="Choose a prepared scanner task">
+              {eventSlugs.length > 1 && (
+                <Field label="Event">
+                  {(control) => (
+                    <Select
+                      {...control}
+                      value={currentEvent}
+                      onChange={(event) => setSelectedEvent(event.currentTarget.value)}
+                    >
+                      {eventSlugs.map((slug) => (
+                        <option key={slug} value={slug}>
+                          {eventLabel(slug)}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </Field>
+              )}
+              <ActionTiles label={`Choose a prepared scanner task for ${eventLabel(currentEvent ?? "")}`}>
                 {[...available]
+                  .filter((saved) => saved.slug === currentEvent)
                   .sort(
                     (a, b) =>
-                      a.slug.localeCompare(b.slug) ||
                       preparedTaskOrder(a) - preparedTaskOrder(b) ||
                       (a.targetLabel ?? "").localeCompare(b.targetLabel ?? "") ||
                       a.action.localeCompare(b.action),
@@ -105,7 +152,6 @@ export function OfflineScannerBootstrap({ route, onCheckSignIn }: { route: strin
                           occurrenceId={saved.occurrenceId}
                           targetLabel={saved.targetLabel}
                           roomLabel={saved.roomLabel}
-                          eventLabel={multipleEvents ? saved.slug.replaceAll("-", " ") : undefined}
                           href={`#${saved.route}?${query}`}
                         />
                       </li>
@@ -128,6 +174,9 @@ export function OfflineScannerBootstrap({ route, onCheckSignIn }: { route: strin
             <div class="pk-cluster">
               <Button type="button" variant="secondary" onClick={onCheckSignIn}>
                 Check sign-in again
+              </Button>
+              <Button type="button" onClick={onSignIn}>
+                Sign in
               </Button>
             </div>
           </div>

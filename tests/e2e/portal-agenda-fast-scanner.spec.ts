@@ -17,7 +17,12 @@ import {
 import { ownDomainEmail, registerInBrowser } from "./helpers/registration";
 import { registerSignedIn } from "./helpers/registrant";
 import { capturedEmailCount, waitForCapturedEmail } from "./helpers/sendgrid";
-import { openScannerSessionDetails, queuedScanSchema } from "./helpers/scanner-recovery-storage";
+import {
+  addSyntheticPreparedScannerEvent,
+  openScannerSessionDetails,
+  queuedScanSchema,
+  removeSyntheticPreparedScannerEvent,
+} from "./helpers/scanner-recovery-storage";
 import { createRegistrationEvent, registerStateAttendee } from "./helpers/participation-state-fixture";
 import { instantToCalendarDate } from "../../assets/shared/timezone";
 import { USER_SESSION_STATE_CHANGED } from "../../assets/ts/shared/pending-user-logout";
@@ -254,6 +259,30 @@ test("badge collection opens for an upcoming event after daily preparation", asy
   await expect(reopened.getByRole("link", { name: /^Admission decision/ })).toBeVisible();
   await expect(reopened.getByRole("link", { name: /^Check registration only/ })).toBeVisible();
   await expect(reopened.getByRole("link", { name: /^Record checkout/ })).toBeVisible();
+  await reopened.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(reopened.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
+  await expect(reopened.getByRole("button", { name: "Continue scanning offline", exact: true })).toBeVisible();
+  await reopened.screenshot({ animations: "disabled", path: testInfo.outputPath("offline-scanner-sign-in-phone.png") });
+  await reopened.getByRole("button", { name: "Continue scanning offline", exact: true }).click();
+  await expect(reopened.getByRole("heading", { name: "Continue scanning offline", exact: true })).toBeVisible();
+  const syntheticEventSlug = "pqc-conference-toronto-ca";
+  const syntheticKey = await addSyntheticPreparedScannerEvent(reopened, event.slug, syntheticEventSlug);
+  await reopened.evaluate((eventName) => window.dispatchEvent(new Event(eventName)), USER_SESSION_STATE_CHANGED);
+  const eventSelector = reopened.getByRole("combobox", { name: "Event", exact: true });
+  await expect(eventSelector).toBeVisible();
+  await expect(reopened.getByRole("link", { name: /^Badge collection/ })).toHaveCount(1);
+  await reopened.screenshot({ animations: "disabled", path: testInfo.outputPath("offline-event-selector-phone.png") });
+  await eventSelector.selectOption(syntheticEventSlug);
+  await expect(reopened.getByRole("link", { name: /^Badge collection/ })).toHaveAttribute("href", /toronto/);
+  await reopened.setViewportSize({ width: 1280, height: 720 });
+  await reopened.screenshot({
+    animations: "disabled",
+    path: testInfo.outputPath("offline-event-selector-desktop.png"),
+  });
+  await removeSyntheticPreparedScannerEvent(reopened, syntheticKey);
+  await reopened.evaluate((eventName) => window.dispatchEvent(new Event(eventName)), USER_SESSION_STATE_CHANGED);
+  await expect(eventSelector).toHaveCount(0);
+  await reopened.setViewportSize({ width: 375, height: 812 });
   await reopened.screenshot({ animations: "disabled", path: testInfo.outputPath("offline-scanner-entry-phone.png") });
   await reopened.setViewportSize({ width: 1280, height: 720 });
   await reopened.screenshot({ animations: "disabled", path: testInfo.outputPath("offline-scanner-entry-desktop.png") });
@@ -282,7 +311,9 @@ test("badge collection opens for an upcoming event after daily preparation", asy
   await reopened.getByRole("button", { name: "Start scanning", exact: true }).click();
   const reopenedScanner = reopened.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
   await expect(reopenedScanner).toBeVisible();
-  await expect(reopenedScanner.getByRole("status", { name: "Scanner status", exact: true })).toContainText("Offline");
+  await expect(reopenedScanner.getByRole("status", { name: "Scanner status", exact: true })).toContainText(
+    "Saved scanner",
+  );
   await expect(reopenedScanner.getByLabel("Attendee name", { exact: true })).toContainText("Synthetic Attendee", {
     timeout: 15_000,
   });
