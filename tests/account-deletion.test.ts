@@ -86,7 +86,7 @@ describe("account deletion registry", () => {
     };
     const deleted = cascades(new Set(["users", ...removedIndex.keys()]));
     const unclassified = keys
-      .filter((key) => deleted.has(key.ref) && !["CASCADE", "SET NULL"].includes(key.on_delete))
+      .filter((key) => deleted.has(key.ref))
       .filter((key) => !classified(key.tbl, key.col, key.ref))
       .map((key) => `${key.tbl}.${key.col} -> ${key.ref}`);
     expect(unclassified).toEqual([]);
@@ -222,6 +222,8 @@ describe("account deletion", () => {
     expect(deletion.removes.map((item) => item.kind)).toEqual(
       expect.arrayContaining(["identity", "registration", "proposal", "group_history"]),
     );
+    // The proposal's speaker row is part of the proposal, not a second one.
+    expect(deletion.removes).toContainEqual({ kind: "proposal", count: 1 });
 
     const response = await request(`/api/v1/users/${userId}?revision=${deletion.revision}`, "DELETE");
     expect(response.status).toBe(200);
@@ -276,6 +278,75 @@ describe("account deletion", () => {
     await expect(pending).rejects.toMatchObject({ status: 409 });
     expect(await accountExists(userId)).toBe(true);
     expect(await queryAll(env.DB, "SELECT 1 FROM audit_log WHERE action = 'user_deleted'")).toEqual([]);
+  });
+
+  it("rolls back when an address is added during the delete", async () => {
+    const userId = await insertUser(env.DB, "late-address@example.test");
+    const { preview: reviewed } = await readAccountDeletion(env.DB, userId);
+    const gate = gateNextBatch(env.DB, 1);
+    const pending = deleteAccount(gate.db, admin, userId, reviewed.revision, "test-signing-secret");
+    await gate.reached;
+    await env.DB.prepare(
+      "INSERT INTO user_emails (id, user_id, email, normalized_email, created_at) VALUES (?, ?, ?, ?, ?)",
+    )
+      .bind(crypto.randomUUID(), userId, "unreviewed@example.test", "unreviewed@example.test", nowIso())
+      .run();
+    gate.release();
+
+    await expect(pending).rejects.toMatchObject({ status: 409 });
+    expect(await accountExists(userId)).toBe(true);
+  });
+
+  it("keeps an account while a promotion image for it is being created", async () => {
+    const userId = await insertUser(env.DB, "rendering@example.test");
+    const at = nowIso();
+    await env.DB.prepare(
+      `INSERT INTO event_promotion_renders(id,event_id,user_id,revision,format,origin,cache_key,status,next_attempt_at,
+         processing_token,lease_expires_at,created_at,updated_at)
+       VALUES (?, ?, ?, 1, 'square', 'test', ?, 'rendering', ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        crypto.randomUUID(),
+        eventId,
+        userId,
+        crypto.randomUUID(),
+        at,
+        crypto.randomUUID(),
+        new Date(Date.now() + 60_000).toISOString(),
+        at,
+        at,
+      )
+      .run();
+
+    const deletion = await preview(userId);
+    expect(deletion.blockers).toEqual([{ kind: "promotion_render", count: 1 }]);
+  });
+
+  it("removes the account's addresses from earlier audit details", async () => {
+    const userId = await insertUser(env.DB, "audited@example.test");
+    await env.DB.prepare("UPDATE users SET email = 'Audited@Example.test' WHERE id = ?").bind(userId).run();
+    await env.DB.prepare(
+      `INSERT INTO audit_log (id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at)
+       VALUES (?, 'admin', ?, 'user_updated', 'user', ?, ?, ?)`,
+    )
+      .bind(
+        crypto.randomUUID(),
+        admin.id,
+        userId,
+        JSON.stringify({ from: "Audited@Example.test", to: "audited@example.test" }),
+        nowIso(),
+      )
+      .run();
+
+    const deletion = await preview(userId);
+    const response = await request(`/api/v1/users/${userId}?revision=${deletion.revision}`, "DELETE");
+    expect(response.status).toBe(200);
+    const [earlier] = await queryAll<{ details_json: string }>(
+      env.DB,
+      "SELECT details_json FROM audit_log WHERE action = 'user_updated' AND entity_id = ?",
+      [userId],
+    );
+    expect(JSON.parse(earlier.details_json)).toEqual({ from: "[deleted address]", to: "[deleted address]" });
   });
 
   it("refuses to delete the signed-in account", async () => {

@@ -9,7 +9,7 @@ import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { sha256Hex } from "../../utils/crypto";
 import { ACCOUNT_DELETION_BLOCKING_RULES, ACCOUNT_DELETION_REMOVED_TABLES } from "./registry";
-import { ACCOUNT_DELETION_COUNT_EXPRESSIONS } from "./selection";
+import { ACCOUNT_DELETION_COUNT_EXPRESSIONS, ACCOUNT_DELETION_LINKED_ADDRESSES_SQL } from "./selection";
 
 /** D1 refuses very wide result rows; 30 counts per statement stays well inside its limits. */
 const COUNTS_PER_STATEMENT = 30;
@@ -17,6 +17,7 @@ const COUNTS_PER_STATEMENT = 30;
 export interface AccountDeletionAccount {
   id: string;
   email: string;
+  normalized_email: string;
   updated_at: string;
   pii_redacted_at: string | null;
   headshot_r2_key: string | null;
@@ -32,20 +33,35 @@ export interface AccountDeletionState {
   account: AccountDeletionAccount;
   /** Every address on the account, primary first, normalized. */
   addresses: string[];
+  /** Every spelling of those addresses as stored, for redacting earlier audit details. */
+  spellings: string[];
+  /** The linked addresses, normalized, sorted, and space-separated; null without any. */
+  linkedAddresses: string | null;
+  /** Rows per removed table, in registry order; the delete batch requires the same counts. */
+  removedCounts: number[];
   /** Badge and promotion renders; their rows go with the account, their files through the outbox. */
   renders: AccountDeletionRender[];
   preview: AccountDeletionPreview;
 }
 
+/**
+ * Sums the counts per kind. A part of another record (`counted: false`) only
+ * counts when its kind has no record of its own, so a proposal with three
+ * speakers is one proposal.
+ */
 function tally<Kind extends string>(
   kinds: readonly Kind[],
-  entries: readonly { kind: Kind }[],
+  entries: readonly { kind: Kind; counted?: false }[],
   counts: readonly number[],
 ): AccountDeletionCount<Kind>[] {
-  const totals = new Map<Kind, number>();
-  entries.forEach((entry, index) => totals.set(entry.kind, (totals.get(entry.kind) ?? 0) + counts[index]));
+  const records = new Map<Kind, number>();
+  const parts = new Map<Kind, number>();
+  entries.forEach((entry, index) => {
+    const totals = entry.counted === false ? parts : records;
+    totals.set(entry.kind, (totals.get(entry.kind) ?? 0) + counts[index]);
+  });
   return kinds.flatMap((kind) => {
-    const count = totals.get(kind) ?? 0;
+    const count = records.get(kind) || parts.get(kind) || 0;
     return count > 0 ? [{ kind, count }] : [];
   });
 }
@@ -59,17 +75,20 @@ export async function readAccountDeletion(db: DatabaseLike, userId: string): Pro
       .join(",\n");
     countStatements.push(db.prepare(`SELECT ${columns}`).bind(userId));
   }
-  const [accountResult, addressResult, renderResult, ...countResults] = await db.batch([
+  const [accountResult, addressResult, linkedResult, renderResult, ...countResults] = await db.batch([
     db
       .prepare(
         "SELECT id, email, normalized_email, updated_at, pii_redacted_at, headshot_r2_key FROM users WHERE id = ?1",
       )
       .bind(userId),
-    db.prepare("SELECT normalized_email FROM user_emails WHERE user_id = ?1 ORDER BY created_at, id").bind(userId),
+    db
+      .prepare("SELECT email, normalized_email FROM user_emails WHERE user_id = ?1 ORDER BY created_at, id")
+      .bind(userId),
+    db.prepare(`SELECT ${ACCOUNT_DELETION_LINKED_ADDRESSES_SQL} AS linked`).bind(userId),
     db.prepare("SELECT id, format, cache_key FROM event_promotion_renders WHERE user_id = ?1").bind(userId),
     ...countStatements,
   ]);
-  const account = accountResult.results?.[0] as (AccountDeletionAccount & { normalized_email: string }) | undefined;
+  const account = accountResult.results?.[0] as AccountDeletionAccount | undefined;
   if (!account) throw new AppError(404, "NOT_FOUND", "User not found");
   if (account.pii_redacted_at) throw new AppError(409, "ALREADY_ANONYMIZED", "User has already been anonymized");
 
@@ -78,13 +97,16 @@ export async function readAccountDeletion(db: DatabaseLike, userId: string): Pro
   const blockerCounts = counts.slice(ACCOUNT_DELETION_REMOVED_TABLES.length);
   const removes = tally(ACCOUNT_DELETION_REMOVED_KINDS, ACCOUNT_DELETION_REMOVED_TABLES, removedCounts);
   const blockers = tally(ACCOUNT_DELETION_BLOCKER_KINDS, ACCOUNT_DELETION_BLOCKING_RULES, blockerCounts);
-  const addresses = [
-    ...new Set([account.normalized_email, ...(addressResult.results ?? []).map((row) => String(row.normalized_email))]),
-  ];
+  const addressRows = (addressResult.results ?? []) as { email: string; normalized_email: string }[];
+  const addresses = [...new Set([account.normalized_email, ...addressRows.map((row) => row.normalized_email)])];
+  const spellings = [...new Set([account.email, ...addresses, ...addressRows.map((row) => row.email)].filter(Boolean))];
   const revision = await sha256Hex(JSON.stringify([account.updated_at, account.email, addresses, counts]));
   return {
     account,
     addresses,
+    spellings,
+    linkedAddresses: (linkedResult.results?.[0]?.linked as string | null | undefined) ?? null,
+    removedCounts,
     renders: (renderResult.results ?? []) as unknown as AccountDeletionRender[],
     preview: {
       userId: account.id,

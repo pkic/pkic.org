@@ -39,11 +39,13 @@ export function blockingRowPredicate(rule: AccountDeletionBlockingRule, alias: s
   return linkPredicate(rule, alias, 0);
 }
 
+const REMOVED_COUNT_EXPRESSIONS = ACCOUNT_DELETION_REMOVED_TABLES.map(
+  ({ table }) => `(SELECT count(*) FROM ${table} r WHERE ${removedRowPredicate(table, "r")})`,
+);
+
 /** One count per removed table, then one per blocking rule, in registry order. */
 export const ACCOUNT_DELETION_COUNT_EXPRESSIONS: readonly string[] = [
-  ...ACCOUNT_DELETION_REMOVED_TABLES.map(
-    ({ table }) => `(SELECT count(*) FROM ${table} r WHERE ${removedRowPredicate(table, "r")})`,
-  ),
+  ...REMOVED_COUNT_EXPRESSIONS,
   ...ACCOUNT_DELETION_BLOCKING_RULES.map(
     (rule) => `(SELECT count(*) FROM ${rule.table} b WHERE ${blockingRowPredicate(rule, "b")})`,
   ),
@@ -62,6 +64,29 @@ export const ACCOUNT_DELETION_UNBLOCKED_SQL = balancedConjunction(
     (rule) => `NOT EXISTS (SELECT 1 FROM ${rule.table} b WHERE ${blockingRowPredicate(rule, "b")})`,
   ),
 );
+
+/** The account's linked addresses, normalized, sorted, and space-separated; NULL without any. */
+export const ACCOUNT_DELETION_LINKED_ADDRESSES_SQL = `(SELECT group_concat(normalized_email, ' ') FROM (
+  SELECT normalized_email FROM user_emails WHERE user_id = ?1 ORDER BY normalized_email
+))`;
+
+/**
+ * True while each removed table still holds the rows the preview counted, so
+ * the batch deletes exactly what staff reviewed. The counts are integers the
+ * preview read from the database, written into the SQL to stay within D1's
+ * bound-parameter limit.
+ */
+export function accountDeletionUnchangedSql(removedCounts: readonly number[]): string {
+  if (
+    removedCounts.length !== REMOVED_COUNT_EXPRESSIONS.length ||
+    !removedCounts.every((count) => Number.isSafeInteger(count) && count >= 0)
+  ) {
+    throw new Error("Account deletion needs one row count per removed table");
+  }
+  return balancedConjunction(
+    REMOVED_COUNT_EXPRESSIONS.map((expression, index) => `${expression} = ${removedCounts[index]}`),
+  );
+}
 
 /**
  * Deletes children before parents: the registry lists parents first, and the

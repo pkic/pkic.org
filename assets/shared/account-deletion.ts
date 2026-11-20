@@ -18,6 +18,7 @@ export const ACCOUNT_DELETION_REMOVED_KINDS = [
   "registration",
   "proposal",
   "form_response",
+  "promotion",
   "group_history",
   "ended_role",
   "affiliation_review",
@@ -46,6 +47,7 @@ export const ACCOUNT_DELETION_BLOCKER_KINDS = [
   "event_participation",
   "vote",
   "mailing_list",
+  "promotion_render",
   "recognition",
   "authored_record",
 ] as const;
@@ -72,6 +74,7 @@ const REMOVED_LABELS: Record<AccountDeletionRemovedKind, (count: number) => stri
   registration: (n) => counted(n, "event registration", "event registrations"),
   proposal: (n) => counted(n, "withdrawn or spam proposal", "withdrawn or spam proposals"),
   form_response: (n) => counted(n, "form response", "form responses"),
+  promotion: (n) => counted(n, "speaker or attendee promotion kit", "speaker and attendee promotion kits"),
   group_history: (n) =>
     counted(n, "ended group or mailing list membership", "ended group and mailing list memberships"),
   ended_role: (n) => counted(n, "ended role", "ended roles"),
@@ -98,6 +101,8 @@ const BLOCKER_LABELS: Record<AccountDeletionBlockerKind, (count: number) => stri
   vote: (n) => counted(n, "vote or ballot", "votes and ballots"),
   mailing_list: (n) =>
     `Still on ${counted(n, "group or mailing list", "groups or mailing lists")}. Deactivate the account, then delete it once Google Groups has removed them.`,
+  promotion_render: (n) =>
+    `${counted(n, "promotion image", "promotion images")} still being created. Try again in a few minutes.`,
   recognition: (n) => counted(n, "recognition or award", "recognitions and awards"),
   authored_record: (n) => `${counted(n, "record", "records")} they created or decided for others`,
 };

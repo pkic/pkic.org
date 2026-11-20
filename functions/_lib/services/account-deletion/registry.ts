@@ -31,6 +31,11 @@ export interface AccountDeletionRemovedTable {
   links: readonly AccountDeletionLink[];
   /** Statements around the delete, for a table whose trigger only allows a sanctioned erasure. */
   erasure?: { before: string; after: string };
+  /**
+   * Rows that are part of another listed record, such as a proposal's
+   * speakers: deleted with it, but not counted as records of their own.
+   */
+  counted?: false;
 }
 
 export interface AccountDeletionBlockingRule extends AccountDeletionLink {
@@ -38,7 +43,11 @@ export interface AccountDeletionBlockingRule extends AccountDeletionLink {
   kind: AccountDeletionBlockerKind;
 }
 
-/** A foreign key whose rows another rule already removes or reports; the key itself refuses anything else. */
+/**
+ * A foreign key whose rows another rule already removes or reports. A
+ * restricting key refuses anything else; a cascading or nulling key is listed
+ * here only once its rows are known to belong to this account.
+ */
 export interface AccountDeletionCoveredReference {
   table: string;
   column: string;
@@ -59,39 +68,97 @@ const notThisAccount =
 
 const user = (column: string, where?: RowPredicate): AccountDeletionLink => ({ column, where });
 const child = (column: string, from: string, key?: string): AccountDeletionLink => ({ column, from, key });
+const part = (entry: AccountDeletionRemovedTable): AccountDeletionRemovedTable => ({ ...entry, counted: false });
+/** A render or batch step that holds a live lease may still write a file for the account. */
+const leased =
+  (status: string): RowPredicate =>
+  (a) =>
+    `(${a}.status = '${status}' AND ${a}.lease_expires_at > ${nowSql})`;
 
 export const ACCOUNT_DELETION_REMOVED_TABLES: readonly AccountDeletionRemovedTable[] = [
   { table: "user_emails", kind: "email_address", links: [user("user_id")] },
+  // Deleting participants and speakers writes these through triggers, so they are listed before both and go last.
+  part({ table: "event_participant_source_revisions", kind: "registration", links: [user("user_id")] }),
+  part({ table: "event_participant_source_revision_guards", kind: "registration", links: [user("user_id")] }),
   { table: "sessions", kind: "sign_in", links: [user("user_id")] },
   { table: "passkey_credentials", kind: "sign_in", links: [user("user_id")] },
   { table: "identities", kind: "identity", links: [user("user_id")] },
+  part({ table: "person_profile_slugs", kind: "identity", links: [user("user_id")] }),
+  part({ table: "oauth_authorizations", kind: "sign_in", links: [user("user_id")] }),
+  part({
+    table: "oauth_authorization_completions",
+    kind: "sign_in",
+    links: [child("authorization_id", "oauth_authorizations")],
+  }),
+  part({
+    table: "oauth_authorization_permissions",
+    kind: "sign_in",
+    links: [child("authorization_id", "oauth_authorizations")],
+  }),
+  part({ table: "session_email_authentication", kind: "sign_in", links: [child("session_id", "sessions")] }),
   { table: "registrations", kind: "registration", links: [user("user_id")] },
-  {
+  part({
     table: "registration_attendance_history",
     kind: "registration",
     links: [child("registration_id", "registrations")],
-  },
-  { table: "registration_day_attendance", kind: "registration", links: [child("registration_id", "registrations")] },
-  { table: "calendar_rsvp_events", kind: "registration", links: [child("registration_id", "registrations")] },
-  {
+  }),
+  part({
+    table: "registration_day_attendance",
+    kind: "registration",
+    links: [child("registration_id", "registrations")],
+  }),
+  part({ table: "calendar_rsvp_events", kind: "registration", links: [child("registration_id", "registrations")] }),
+  part({
     table: "registration_badge_role_overrides",
     kind: "registration",
     links: [child("registration_id", "registrations")],
-  },
-  {
+  }),
+  part({
+    table: "registration_transition_guards",
+    kind: "registration",
+    links: [child("registration_id", "registrations")],
+  }),
+  part({
+    table: "event_day_capacity_guards",
+    kind: "registration",
+    links: [child("claim_registration_id", "registrations")],
+  }),
+  part({
     table: "event_day_waitlist_entries",
     kind: "registration",
     links: [user("user_id"), child("registration_id", "registrations")],
-  },
-  { table: "event_participants", kind: "registration", links: [user("user_id")] },
-  { table: "event_badge_credentials", kind: "registration", links: [user("user_id")] },
+  }),
+  part({ table: "event_participants", kind: "registration", links: [user("user_id")] }),
+  part({ table: "event_badge_credentials", kind: "registration", links: [user("user_id")] }),
   { table: "event_occurrence_rsvps", kind: "registration", links: [{ column: "user_id", foreignKey: false }] },
   { table: "session_proposals", kind: "proposal", links: [user("proposer_user_id", removableProposal)] },
-  { table: "proposal_speakers", kind: "proposal", links: [child("proposal_id", "session_proposals")] },
-  { table: "proposal_speaker_independent_disclosures", kind: "proposal", links: [user("user_id")] },
+  // Deleting a speaker bumps the roster revision, so the revisions are listed before the speakers and go after them.
+  part({
+    table: "proposal_speaker_roster_revisions",
+    kind: "proposal",
+    links: [child("proposal_id", "session_proposals")],
+  }),
+  part({
+    table: "proposal_speaker_roster_revision_guards",
+    kind: "proposal",
+    links: [child("proposal_id", "session_proposals")],
+  }),
+  part({ table: "proposal_speakers", kind: "proposal", links: [child("proposal_id", "session_proposals")] }),
+  part({
+    table: "proposal_speaker_independent_disclosures",
+    kind: "proposal",
+    links: [user("user_id"), child("proposal_speaker_id", "proposal_speakers")],
+  }),
   { table: "form_submissions", kind: "form_response", links: [user("submitted_by_user_id")] },
-  { table: "form_submission_answers", kind: "form_response", links: [child("submission_id", "form_submissions")] },
-  { table: "form_submission_guards", kind: "form_response", links: [child("submission_id", "form_submissions")] },
+  part({
+    table: "form_submission_answers",
+    kind: "form_response",
+    links: [child("submission_id", "form_submissions")],
+  }),
+  part({ table: "form_submission_guards", kind: "form_response", links: [child("submission_id", "form_submissions")] }),
+  { table: "event_promotion_kits", kind: "promotion", links: [user("user_id")] },
+  part({ table: "event_promotion_renders", kind: "promotion", links: [user("user_id")] }),
+  part({ table: "event_promotion_batch_recipients", kind: "promotion", links: [user("user_id")] }),
   {
     table: "group_memberships",
     kind: "group_history",
@@ -105,38 +172,48 @@ export const ACCOUNT_DELETION_REMOVED_TABLES: readonly AccountDeletionRemovedTab
       after: "DELETE FROM group_membership_erasures WHERE json_extract(preimage_json,'$.accountDeletionUserId') = ?1",
     },
   },
-  { table: "google_groups_membership_desired_state", kind: "group_history", links: [user("user_id")] },
-  { table: "google_groups_observed_membership", kind: "group_history", links: [user("user_id")] },
-  { table: "google_groups_sync_queue", kind: "group_history", links: [user("user_id")] },
+  part({ table: "google_groups_membership_desired_state", kind: "group_history", links: [user("user_id")] }),
+  part({ table: "google_groups_observed_membership", kind: "group_history", links: [user("user_id")] }),
+  part({ table: "google_groups_sync_queue", kind: "group_history", links: [user("user_id")] }),
   { table: "user_roles", kind: "ended_role", links: [user("user_id", (a) => `NOT ${liveRole(a)}`)] },
   { table: "affiliation_reviews", kind: "affiliation_review", links: [user("user_id")] },
-  { table: "affiliation_offer_dismissals", kind: "affiliation_review", links: [user("user_id")] },
-  { table: "organization_link_notices", kind: "affiliation_review", links: [user("user_id")] },
+  part({ table: "affiliation_offer_dismissals", kind: "affiliation_review", links: [user("user_id")] }),
+  part({ table: "organization_link_notices", kind: "affiliation_review", links: [user("user_id")] }),
   { table: "account_policy_acceptances", kind: "consent", links: [user("user_id")] },
   { table: "consent_acceptances", kind: "consent", links: [user("user_id")] },
   { table: "event_access_term_acceptances", kind: "consent", links: [user("user_id")] },
   { table: "email_outbox", kind: "email", links: [user("recipient_user_id")] },
-  { table: "organization_content_review_notification_intents", kind: "email", links: [user("recipient_user_id")] },
-  {
+  part({
+    table: "organization_content_review_notification_intents",
+    kind: "email",
+    links: [user("recipient_user_id")],
+  }),
+  part({
     table: "google_groups_enrollment_notification_intents",
     kind: "email",
     links: [user("user_id"), child("queue_id", "google_groups_sync_queue")],
-  },
+  }),
+  part({ table: "event_series_calendar_deliveries", kind: "email", links: [user("user_id")] }),
   { table: "referral_codes", kind: "referral_code", links: [user("created_by_user_id")] },
-  { table: "referral_clicks", kind: "referral_code", links: [child("code", "referral_codes", "code")] },
+  part({ table: "referral_clicks", kind: "referral_code", links: [child("code", "referral_codes", "code")] }),
   { table: "agenda_calendar_entries", kind: "personal_setting", links: [user("user_id")] },
   { table: "agenda_calendar_preferences", kind: "personal_setting", links: [user("user_id")] },
   { table: "agenda_calendar_subscriptions", kind: "personal_setting", links: [user("user_id")] },
   { table: "agenda_push_devices", kind: "personal_setting", links: [user("user_id")] },
-  {
+  part({
+    table: "agenda_push_event_preferences",
+    kind: "personal_setting",
+    links: [child("device_id", "agenda_push_devices")],
+  }),
+  part({
     table: "agenda_push_outbox",
     kind: "personal_setting",
     links: [user("user_id"), child("device_id", "agenda_push_devices")],
-  },
+  }),
   { table: "agenda_session_reminders", kind: "personal_setting", links: [user("user_id")] },
   { table: "user_availability", kind: "personal_setting", links: [user("user_id")] },
   { table: "user_skills", kind: "personal_setting", links: [user("user_id")] },
-  { table: "user_skill_vouches", kind: "personal_setting", links: [child("user_skill_id", "user_skills")] },
+  part({ table: "user_skill_vouches", kind: "personal_setting", links: [child("user_skill_id", "user_skills")] }),
   { table: "individual_job_titles", kind: "personal_setting", links: [user("user_id")] },
   { table: "group_automatic_enrollment_opt_outs", kind: "personal_setting", links: [user("user_id")] },
   { table: "mailing_list_subscription_preferences", kind: "personal_setting", links: [user("user_id")] },
@@ -219,6 +296,9 @@ export const ACCOUNT_DELETION_BLOCKING_RULES: readonly AccountDeletionBlockingRu
   rule("vote", "vote_consultation_responses", "submission_id", { from: "form_submissions" }),
   rule("vote", "vote_proposal_endorsements", "endorser_user_id"),
   rule("vote", "vote_representative_notification_intents", "representative_user_id"),
+  // The file a leased render writes after the delete would have no row left to remove it.
+  rule("promotion_render", "event_promotion_renders", "user_id", { where: leased("rendering") }),
+  rule("promotion_render", "event_promotion_batch_recipients", "user_id", { where: leased("preparing") }),
   rule("recognition", "user_recognitions", "user_id"),
   rule("recognition", "user_standing_awards", "user_id"),
   rule("mailing_list", "group_memberships", "user_id", { where: (a) => `${a}.left_at IS NULL` }),
@@ -250,6 +330,7 @@ export const ACCOUNT_DELETION_BLOCKING_RULES: readonly AccountDeletionBlockingRu
   authored("event_attendance_imports", "actor_user_id"),
   authored("event_attendance_imports", "reviewer_user_id"),
   authored("event_attendance_point_keys", "issued_by_user_id"),
+  authored("event_email_campaigns", "actor_id"),
   authored("event_evidence_retention_chunks", "actor_user_id"),
   authored("event_evidence_retention_policies", "updated_by"),
   authored("event_evidence_retention_policy_operations", "actor_user_id"),
@@ -354,6 +435,12 @@ export const ACCOUNT_DELETION_COVERED_REFERENCES: readonly AccountDeletionCovere
   { table: "vote_representative_notification_intents", column: "identity_id", references: "identities" },
   { table: "affiliation_reviews", column: "resolved_identity_id", references: "identities" },
   { table: "organization_link_notices", column: "identity_id", references: "identities" },
+  { table: "identities", column: "email_id", references: "user_emails" },
+  { table: "user_emails", column: "identity_id", references: "identities" },
+  { table: "registrations", column: "registration_identity_id", references: "identities" },
+  { table: "oauth_authorizations", column: "identity_id", references: "identities" },
+  { table: "oauth_authorizations", column: "session_id", references: "sessions" },
+  { table: "session_email_authentication", column: "email_id", references: "user_emails" },
 ];
 
 /** Account references without a foreign key that stay after the delete, on purpose. */
