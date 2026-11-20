@@ -64,11 +64,12 @@ export function EventInvitationCards() {
       getJson(`/api/v1/events?invitation=open&sort=starts_at&limit=${fetchedLimit.current}`, eventsListResponseSchema),
     [],
   );
+  const { reload } = invited;
   useEffect(() => {
     if (fetchedLimit.current === limit) return;
     fetchedLimit.current = limit;
-    void invited.reload();
-  }, [limit]);
+    void reload();
+  }, [limit, reload]);
   // One invitation asks per visit: once its dialog closes or is answered, no other one opens on its own.
   const [prompted, setPrompted] = useState(false);
   const events = invited.data?.events ?? [];
