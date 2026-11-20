@@ -94,6 +94,18 @@
   .pk-live-poll-card__mark {
     cursor: default;
   }
+  /* One line where it fits: what is asked, and its button at the end. */
+  .pk-live-question__body.pk-live-poll-card__body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--pk-1) var(--pk-3);
+  }
+  .pk-live-poll-card__text {
+    flex: 1 1 9rem;
+    min-inline-size: 0;
+  }
   .pk-live-poll-card__kicker {
     color: var(--pk-ink-muted);
     font-size: var(--pk-text-xs);

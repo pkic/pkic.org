@@ -155,8 +155,8 @@ function AskQuestionDialog({
 
 /**
  * The one way to ask: a button that opens the question form. It is always in view: in the header of the
- * panel that holds the questions where the page gives it that place (`askIn`), else held at the top of
- * the questions as they scroll.
+ * panel that holds the questions where the page gives it that place (`askIn`), else at the end of the
+ * questions' own bar, which stays at the top as they scroll.
  */
 function AskQuestionButton({
   disabled,
@@ -176,14 +176,16 @@ function AskQuestionButton({
       <span>{ASK}</span>
     </Button>
   );
-  return askIn ? createPortal(button, askIn) : <div class="pk-live-questions__ask pk-cluster">{button}</div>;
+  return askIn ? createPortal(button, askIn) : button;
 }
 
 /** A session's questions before its room opens: where to ask, not yet in use, and when it opens. */
 export function LiveQuestionsClosed({ askIn }: { askIn?: HTMLElement | null }) {
   return (
     <div class="pk-stack pk-stack--snug">
-      <AskQuestionButton disabled askIn={askIn} />
+      <div class="pk-live-questions__bar" data-density="compact">
+        <AskQuestionButton disabled askIn={askIn} />
+      </div>
       <p class="pk-live-questions__empty">Questions open when the session is live.</p>
     </div>
   );
@@ -238,7 +240,9 @@ export function LiveAttendeeQuestions({
     return (
       <div class="pk-stack pk-stack--snug">
         {/* The button keeps its place while the room is joined, so nothing moves when it answers. */}
-        <AskQuestionButton disabled askIn={askIn} />
+        <div class="pk-live-questions__bar" data-density="compact">
+          <AskQuestionButton disabled askIn={askIn} />
+        </div>
         {room.admissionRefusal ? (
           <Alert tone="warn">{liveRoomOpenFailure(room.admissionRefusal, "attendee")}</Alert>
         ) : room.status === "offline" ? (
@@ -251,7 +255,7 @@ export function LiveAttendeeQuestions({
   const role = state.viewer.role;
   const poll = currentLivePoll(state.polls);
   return (
-    <div class="pk-stack">
+    <div class="pk-stack pk-stack--snug">
       {!live ? (
         <Alert tone="warn">Live updates are paused while we reconnect. What you see may be out of date.</Alert>
       ) : null}
@@ -261,14 +265,24 @@ export function LiveAttendeeQuestions({
           timeZone={state.session.timeZone}
           eventName={state.session.eventName}
         />
-      ) : (
-        <AskQuestionButton
-          disabled={!live}
-          onClick={() => setAsking(true)}
-          askIn={askIn}
-          quiet={poll?.status === "open" && poll.myAnswer === null}
+      ) : null}
+      {/* One line: how the questions are ordered, and the button that asks one. */}
+      <div class="pk-live-questions__bar" data-density="compact">
+        <TabList
+          label="Order questions"
+          items={ORDERS}
+          activeId={order}
+          onSelect={(id) => setOrder(id as LiveQuestionOrder)}
         />
-      )}
+        {restriction ? null : (
+          <AskQuestionButton
+            disabled={!live}
+            onClick={() => setAsking(true)}
+            askIn={askIn}
+            quiet={poll?.status === "open" && poll.myAnswer === null}
+          />
+        )}
+      </div>
       {asking && !restriction ? (
         <AskQuestionDialog
           disabled={!live}
@@ -282,12 +296,6 @@ export function LiveAttendeeQuestions({
       <p class="pk-live-questions__notice" role="status">
         {state.refusal && state.refusal.code !== LIVE_POLL_ANSWER_REFUSAL ? state.refusal.message : ""}
       </p>
-      <TabList
-        label="Order questions"
-        items={ORDERS}
-        activeId={order}
-        onSelect={(id) => setOrder(id as LiveQuestionOrder)}
-      />
       <LiveAuthorProvider authors={state.authors} send={room.send}>
         <LiveQuestionList
           lead={

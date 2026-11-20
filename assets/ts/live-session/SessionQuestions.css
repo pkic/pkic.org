@@ -68,15 +68,29 @@
     gap: var(--pk-2);
   }
   /* Asking stays in reach while the poll and the questions scroll under it. */
-  /* At the end of its own line, as in a panel's header, so it reads as the panel's action and not the poll's. */
-  .pk-live-questions__ask {
+  /*
+   * The questions' bar: how they are ordered, and the button that asks one at its end, on one line that
+   * stays at the top while the questions scroll under it. Space is scarce beside a stream.
+   */
+  .pk-live-questions__bar {
     position: sticky;
     z-index: 1;
     inset-block-start: 0;
-    justify-content: flex-end;
-    padding-block-end: var(--pk-2);
-    border-block-end: 1px solid var(--pk-line-soft);
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2);
     background: var(--pk-surface);
+  }
+  .pk-live-questions__bar > .pk-tabs {
+    flex: 1;
+    min-inline-size: 0;
+  }
+  .pk-live-questions__bar > .pk-btn {
+    flex: none;
+    margin-inline-start: auto;
+  }
+  .pk-live-questions__bar:empty {
+    display: none;
   }
   .pk-live-questions__empty,
   .pk-live-questions__notice {

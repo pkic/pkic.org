@@ -88,25 +88,25 @@ export function LivePollCard({
       <span class="pk-live-question__vote pk-live-poll-card__mark" aria-hidden="true">
         <IconPoll width="20" height="20" />
       </span>
-      <div class="pk-live-question__body">
-        <p class="pk-live-poll-card__kicker">
-          {asked ? "Poll" : "Poll results"}
-          {tally}
-        </p>
-        <p>{poll.field.label}</p>
-        <div class="pk-live-question__actions">
-          {choosing ? (
-            <Button variant="primary" disabled={disabled} onClick={() => setShown(true)}>
-              Answer poll
-            </Button>
-          ) : poll.results ? (
-            <Button onClick={() => setShown(true)}>See results</Button>
-          ) : (
-            <p class="pk-small pk-muted" role="status">
-              {asked ? "Your answer is in." : "This poll is closed."}
-            </p>
-          )}
+      <div class="pk-live-question__body pk-live-poll-card__body" data-density="compact">
+        <div class="pk-live-poll-card__text">
+          <p class="pk-live-poll-card__kicker">
+            {asked ? "Poll" : "Poll results"}
+            {tally}
+          </p>
+          <p>{poll.field.label}</p>
         </div>
+        {choosing ? (
+          <Button variant="primary" disabled={disabled} onClick={() => setShown(true)}>
+            Answer poll
+          </Button>
+        ) : poll.results ? (
+          <Button onClick={() => setShown(true)}>See results</Button>
+        ) : (
+          <p class="pk-small pk-muted" role="status">
+            {asked ? "Your answer is in." : "This poll is closed."}
+          </p>
+        )}
       </div>
       {shown ? (
         <Dialog
