@@ -21,6 +21,7 @@ import { openScannerSessionDetails, queuedScanSchema } from "./helpers/scanner-r
 import { createRegistrationEvent, registerStateAttendee } from "./helpers/participation-state-fixture";
 import { instantToCalendarDate } from "../../assets/shared/timezone";
 import { USER_SESSION_STATE_CHANGED } from "../../assets/ts/shared/pending-user-logout";
+import QRCode from "qrcode";
 
 test("badge collection opens for an upcoming event after daily preparation", async ({
   page,
@@ -82,12 +83,27 @@ test("badge collection opens for an upcoming event after daily preparation", asy
     await preparationGate;
     await route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
   });
+  let firstEnrollmentRequest = true;
+  await page.route("**/scanner/devices/sessions", async (route) => {
+    if (!firstEnrollmentRequest) return route.continue();
+    firstEnrollmentRequest = false;
+    await route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
+  });
   const enrolled = page.waitForResponse(
     (response) =>
-      new URL(response.url()).pathname.endsWith("/scanner/devices/sessions") && response.request().method() === "POST",
+      new URL(response.url()).pathname.endsWith("/scanner/devices/sessions") &&
+      response.request().method() === "POST" &&
+      response.status() === 200,
   );
-  await page.goto(`/portal/#/events/${event.slug}/scanner`);
+  await page.goto(`/portal/#/groups/${event.ownerGroupId}/events/${event.eventId}/scanner`);
+  const retryDevice = page.getByRole("button", { name: "Retry scanner preparation", exact: true });
+  await expect(retryDevice).toBeVisible();
+  await page.screenshot({ animations: "disabled", path: testInfo.outputPath("scanner-device-error-desktop.png") });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.screenshot({ animations: "disabled", path: testInfo.outputPath("scanner-device-error-phone.png") });
+  await retryDevice.click();
   const enrollment = scannerDeviceSessionEnrollmentResponseSchema.parse(await (await enrolled).json());
+  await page.setViewportSize({ width: 1280, height: 720 });
   const collection = page.getByRole("button", { name: "Badge collection", exact: true });
   await expect(collection).toBeEnabled();
   const launch = page.getByRole("tabpanel", { name: "Scan", exact: true });
@@ -118,6 +134,33 @@ test("badge collection opens for an upcoming event after daily preparation", asy
   await expect(scanner.locator(".pk-fast-scanner__feedback")).not.toContainText("Ready to scan");
   await expect(scanner.getByText("Starting camera…", { exact: true })).toHaveCount(0);
   await page.screenshot({ animations: "disabled", path: testInfo.outputPath("badge-collection-desktop.png") });
+  await page.evaluate(() => {
+    window.print = () => {
+      document.documentElement.dataset.badgePrintCalls = String(
+        Number(document.documentElement.dataset.badgePrintCalls ?? 0) + 1,
+      );
+    };
+  });
+  await page.keyboard.type(badge.credential);
+  await page.keyboard.press("Enter");
+  await expect(scanner.getByLabel("Attendee name", { exact: true })).toContainText("Synthetic Attendee");
+  const labelResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname.endsWith(`/events/${event.slug}/badges/labels`) &&
+      response.request().method() === "POST",
+  );
+  await scanner.getByRole("button", { name: "Print this badge", exact: true }).click();
+  expect((await labelResponse).status()).toBe(200);
+  await expect.poll(() => page.evaluate(() => Number(document.documentElement.dataset.badgePrintCalls ?? 0))).toBe(1);
+  await expect(scanner).toBeVisible();
+  await expect(scanner.locator(".pk-fast-scanner__feedback")).toContainText("Print requested");
+  await expect(page).not.toHaveURL(/\/print(?:\?|$)/);
+  await page.screenshot({ animations: "disabled", path: testInfo.outputPath("badge-collection-print-desktop.png") });
+  await page.evaluate(() => (document.fullscreenElement ? document.exitFullscreen() : Promise.resolve()));
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.screenshot({ animations: "disabled", path: testInfo.outputPath("badge-collection-print-phone.png") });
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await scanner.getByRole("button", { name: "Next attendee", exact: true }).click();
   await scanner.getByRole("button", { name: "Close scanner", exact: true }).click();
   await expect(scanner).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => document.fullscreenElement === null)).toBe(true);
@@ -134,7 +177,7 @@ test("badge collection opens for an upcoming event after daily preparation", asy
     {
       data: scannerDeviceSessionClosingSchema.parse({
         operationId: randomUUID(),
-        highWaterSequence: 0,
+        highWaterSequence: 1,
         pendingCount: 0,
         recoveryCount: 0,
       }),
@@ -214,12 +257,63 @@ test("badge collection opens for an upcoming event after daily preparation", asy
   await reopened.screenshot({ animations: "disabled", path: testInfo.outputPath("offline-scanner-entry-phone.png") });
   await reopened.setViewportSize({ width: 1280, height: 720 });
   await reopened.screenshot({ animations: "disabled", path: testInfo.outputPath("offline-scanner-entry-desktop.png") });
+  const cameraFrame = await QRCode.toDataURL(badge.credential, { width: 100, margin: 4 });
+  await reopened.evaluate(async (frame) => {
+    const image = new Image();
+    image.src = frame;
+    await image.decode();
+    const canvas = document.createElement("canvas");
+    canvas.width = 1920;
+    canvas.height = 1080;
+    const context = canvas.getContext("2d")!;
+    const paint = () => {
+      context.fillStyle = "white";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, (canvas.width - image.width) / 2, (canvas.height - image.height) / 2);
+    };
+    paint();
+    window.setInterval(paint, 125);
+    Object.defineProperty(navigator.mediaDevices, "getUserMedia", {
+      configurable: true,
+      value: async () => canvas.captureStream(8),
+    });
+  }, cameraFrame);
   await reopened.getByRole("link", { name: /^Badge collection/ }).click();
   await reopened.getByRole("button", { name: "Start scanning", exact: true }).click();
   const reopenedScanner = reopened.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
   await expect(reopenedScanner).toBeVisible();
-  await expect(reopenedScanner.locator(".pk-fast-scanner__feedback")).toHaveText("Ready for badge collection");
   await expect(reopenedScanner.getByRole("status", { name: "Scanner status", exact: true })).toContainText("Offline");
+  await expect(reopenedScanner.getByLabel("Attendee name", { exact: true })).toContainText("Synthetic Attendee", {
+    timeout: 15_000,
+  });
+  await reopenedScanner.getByRole("button", { name: "Operator controls", exact: true }).click();
+  await expect(
+    reopenedScanner.getByRole("dialog", { name: "Scanner operator controls", exact: true }).getByText(/^2 pending/),
+  ).toBeVisible();
+  await reopened.goto("/portal/");
+  await reopened.evaluate(async () => {
+    const request = indexedDB.open("pkic-scanner-eligibility", 1);
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error ?? new Error("Could not open saved badge data"));
+    });
+    try {
+      const transaction = db.transaction("manifests", "readwrite");
+      transaction.objectStore("manifests").clear();
+      await new Promise<void>((resolve, reject) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error ?? new Error("Could not clear saved badge data"));
+      });
+    } finally {
+      db.close();
+    }
+  });
+  await reopened.getByRole("link", { name: /^Badge collection/ }).click();
+  await reopened.getByRole("button", { name: "Start scanning", exact: true }).click();
+  await expect(reopenedScanner).toBeVisible();
+  await reopened.keyboard.type(badge.credential);
+  await reopened.keyboard.press("Enter");
+  await expect(reopenedScanner.locator(".pk-fast-scanner__feedback")).toContainText("Verification pending");
   await reopened.goto("/portal/");
   await reopened.getByRole("link", { name: /^Record checkout/ }).click();
   await reopened.getByRole("button", { name: "Start scanning", exact: true }).click();
@@ -228,7 +322,7 @@ test("badge collection opens for an upcoming event after daily preparation", asy
   await reopened.keyboard.press("Enter");
   await reopenedScanner.getByRole("button", { name: "Operator controls", exact: true }).click();
   await expect(
-    reopenedScanner.getByRole("dialog", { name: "Scanner operator controls", exact: true }).getByText(/^2 pending/),
+    reopenedScanner.getByRole("dialog", { name: "Scanner operator controls", exact: true }).getByText(/^4 pending/),
   ).toBeVisible();
 });
 

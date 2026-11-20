@@ -5,6 +5,7 @@ import { formatDateTimeInZone } from "../../../../../../../shared/format-date";
 /** What the scanner records into: the sponsor's leads, or the selected session or entrance and its room. */
 export function scannerContextLabel({
   action,
+  badgeCollection,
   sponsorName,
   targetId,
   targetLabel,
@@ -12,12 +13,14 @@ export function scannerContextLabel({
   rooms,
 }: {
   action: EventScanRequest["action"];
+  badgeCollection?: boolean;
   sponsorName?: string;
   targetId: string | null;
   targetLabel: string;
   roomId: string | null;
   rooms: ReadonlyArray<{ id: string; name: string }>;
 }): string {
+  if (badgeCollection) return "Badge collection";
   if (action === "lead") return `${sponsorName || "Sponsor lead capture"} · Event-wide`;
   const place =
     targetLabel || (targetId ? "Session check-in" : action === "checkout" ? "Venue exit" : "Venue entrance");

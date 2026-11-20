@@ -25,10 +25,6 @@ function setup() {
     manualCapturePending: { current: false },
     collection: {
       held,
-      waiting: false,
-      name: null,
-      loading: false,
-      credential: null,
       begin: vi.fn(() => {
         held.current = true;
       }),

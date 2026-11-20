@@ -1,7 +1,6 @@
 import type { ScannerRole } from "../events/detail/scanner/scanner-role";
 import { scannerEntranceAction, scannerInitialAction } from "../events/detail/scanner/ScannerModeSelect";
-import { badgeCredentialSchema } from "../../../../../shared/schemas/badge-credential";
-import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useRef, useState } from "preact/hooks";
 import {
   ScannerTaskNavigation,
   type ScannerTask,
@@ -31,8 +30,6 @@ export function EventStaffScanner({
   section?: string;
   canPrintLabels?: boolean;
 }) {
-  const pendingPrint = useRef<{ scope: string; credential: string } | null>(null);
-  const previousSection = useRef(section);
   const [launch, setLaunch] = useState<ScannerTask | null>(null);
   const launchScope = useRef<string | null>(null);
   const [gradientFrom, setGradientFrom] = useState<ScannerRole>();
@@ -48,17 +45,6 @@ export function EventStaffScanner({
   const operator = portalSession.value?.identity.id ?? "";
   const sessionId = portalSession.value?.sessionId;
   const printScope = JSON.stringify([eventId, slug, operator, sessionId]);
-  if (!canPrintLabels || pendingPrint.current?.scope !== printScope) pendingPrint.current = null;
-  useEffect(() => {
-    if (previousSection.current === "print" && section !== "print") pendingPrint.current = null;
-    previousSection.current = section;
-  }, [section]);
-  useEffect(
-    () => () => {
-      pendingPrint.current = null;
-    },
-    [],
-  );
   const printHref = canPrintLabels ? `#${basePath}/print` : undefined;
   const entryAction = scannerEntranceAction(actions);
   const entryHref = `#${basePath}${entryAction === scannerInitialAction(actions, undefined, false) ? "" : `?scanAction=${entryAction}`}`;
@@ -74,36 +60,11 @@ export function EventStaffScanner({
   function launchTask(task: ScannerTask, from?: ScannerRole) {
     const destination = tasks.find((item) => item.key === task);
     if (!destination) return;
-    pendingPrint.current = null;
     setGradientFrom(from);
     launchScope.current = printScope;
     setLaunch(task);
     if (task !== "print" && section !== "print") setCaptureVersion((value) => value + 1);
     window.location.hash = destination.href;
-  }
-  function printBadge(credential: string) {
-    if (
-      !canPrintLabels ||
-      !sessionId ||
-      portalSession.value?.sessionId !== sessionId ||
-      portalSession.value?.identity.id !== operator
-    )
-      return;
-    const parsed = badgeCredentialSchema.safeParse(credential);
-    if (!parsed.success) return;
-    launchTask("print", "entry");
-    pendingPrint.current = { scope: printScope, credential: parsed.data };
-  }
-  function consumePrintBadge() {
-    const pending = pendingPrint.current;
-    pendingPrint.current = null;
-    return canPrintLabels &&
-      section === "print" &&
-      pending?.scope === printScope &&
-      portalSession.value?.sessionId === sessionId &&
-      portalSession.value?.identity.id === operator
-      ? pending.credential
-      : null;
   }
   return (
     <ScannerTaskNavigation.Provider
@@ -113,8 +74,6 @@ export function EventStaffScanner({
         tasks,
         onLaunch: launchTask,
         onConsumed: consumeLaunch,
-        onPrintBadge: canPrintLabels ? printBadge : undefined,
-        consumePrintBadge,
       }}
     >
       <div class="pk-stack">

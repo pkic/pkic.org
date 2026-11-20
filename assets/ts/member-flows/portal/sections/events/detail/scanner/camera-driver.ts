@@ -27,6 +27,19 @@ export async function openBadgeCamera(
       {
         preferredCamera: "environment",
         maxScansPerSecond: 8,
+        // Badge codes can occupy a small part of the camera frame. The library's
+        // default 400px scan canvas discards too much detail for printed badges.
+        calculateScanRegion: (source) => {
+          const size = Math.round((2 / 3) * Math.min(source.videoWidth, source.videoHeight));
+          return {
+            x: Math.round((source.videoWidth - size) / 2),
+            y: Math.round((source.videoHeight - size) / 2),
+            width: size,
+            height: size,
+            downScaledWidth: 800,
+            downScaledHeight: 800,
+          };
+        },
         returnDetailedScanResult: true,
       },
     );

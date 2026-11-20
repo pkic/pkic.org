@@ -23,7 +23,7 @@ interface ScannerCaptureActions {
   requestCapture: () => boolean;
   captureAllowed: () => boolean;
   manualCapturePending: MutableRef<boolean>;
-  collection: ReturnType<typeof useBadgeCollection>;
+  collection: Pick<ReturnType<typeof useBadgeCollection>, "held" | "begin" | "clear">;
   form: Pick<ContractForm<EventScanRequest>, "submit">;
   auditFailure: ReturnType<typeof useScannerFailureCapture>;
   badgeId: string;

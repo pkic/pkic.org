@@ -87,6 +87,19 @@ export function useScannerFeedback({
     if (lastCommittedOperation.current === saved.scan.operationId)
       return receiptMatchesOperation(saved.scan.operationId, lastOperation.current);
     if (!receiptMatchesOperation(saved.scan.operationId, lastOperation.current)) return false;
+    if (!collector && !navigator.onLine) {
+      showLocalEligibility(
+        saved.scan,
+        local.outcome === "unknown"
+          ? {
+              outcome: "unverified",
+              reason: "verification_required",
+              message: "Badge not found in saved badge data. Reconnect to verify.",
+            }
+          : local,
+      );
+      return true;
+    }
     if (!collector && (local.outcome === "unknown" || local.outcome === "unverified")) {
       setChecking(saved.scan.operationId);
       showProvisionalMessage(saved.scan.operationId, "Checking badge online…");

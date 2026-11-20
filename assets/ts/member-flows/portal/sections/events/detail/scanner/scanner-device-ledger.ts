@@ -253,9 +253,21 @@ export async function closeScannerEpoch(epoch: ScannerEpoch, sponsorId?: string)
     )
       throw new Error("Server scanner coverage is incomplete");
     const write = db.transaction(SCANNER_EPOCH_STORE, "readwrite"),
-      written = idbCompletion(write);
-    const closed: ScannerEpoch = { ...epoch, state: "closed" };
-    write.objectStore(SCANNER_EPOCH_STORE).put(closed);
+      written = idbCompletion(write),
+      store = write.objectStore(SCANNER_EPOCH_STORE);
+    void written.catch(() => {});
+    const current = await idbRequest<ScannerEpoch | undefined>(store.get(epoch.key));
+    if (
+      current?.state !== "closing" ||
+      current.epochId !== epoch.epochId ||
+      current.closingOperationId !== epoch.closingOperationId ||
+      current.issuedHighWater !== epoch.issuedHighWater
+    ) {
+      write.abort();
+      throw new Error("Scanner session changed during closing. Pending scans remain on this device.");
+    }
+    const closed: ScannerEpoch = { ...current, state: "closed" };
+    store.put(closed);
     await written;
     return closed;
   } finally {

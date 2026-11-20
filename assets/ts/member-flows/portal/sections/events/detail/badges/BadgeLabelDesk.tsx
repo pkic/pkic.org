@@ -1,12 +1,12 @@
 import { usePrintScannerSound } from "../scanner/usePrintScannerSound";
-import { ScannerTaskNavigation, useScannerTaskLaunch } from "../scanner/ScannerTaskNavigation";
+import { useScannerTaskLaunch } from "../scanner/ScannerTaskNavigation";
 import {
   badgePrintDesignSchema,
   type BadgePrintDesign,
 } from "../../../../../../../shared/schemas/event-badge-template";
 import type { z } from "zod";
 import type { ComponentChildren, RefObject } from "preact";
-import { useContext, useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { BADGE_LABEL_COPY_OPTIONS, BADGE_LABEL_DEFAULT_COPIES } from "../../../../../../../shared/badge-label-policy";
 import { badgeAttendeesResponseSchema } from "../../../../../../../shared/schemas/route-contracts-event-badges";
 import { BADGE_PRINT_SIDE_LABELS } from "../../../../../../../shared/badge-print-layout";
@@ -84,16 +84,8 @@ function SessionLabelDesk({ slug, session }: { slug: string; session: PortalSess
   const camera = useScannerCamera((raw) => {
     if (!paused.current && camera.acceptsFrame(raw) && printing.scan(raw)) camera.stop();
   });
-  const taskNavigation = useContext(ScannerTaskNavigation);
   useScannerTaskLaunch("print", () => {
     sound.unlock();
-    const credential = taskNavigation?.consumePrintBadge?.();
-    if (credential) {
-      continuous.current = false;
-      camera.stop();
-      printing.scan(credential);
-      return;
-    }
     continuous.current = true;
     void camera.start();
   });

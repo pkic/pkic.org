@@ -2,8 +2,15 @@ import { useEffect, useRef, useState, type MutableRef } from "preact/hooks";
 import type { EligibilityManifest } from "./eligibility-manifest";
 
 /** One attendee name stays in memory until staff explicitly advance. */
-export function useBadgeCollection(enabled: boolean, manifest: MutableRef<EligibilityManifest | null>, scope: string) {
+export function useBadgeCollection(
+  enabled: boolean,
+  manifest: MutableRef<EligibilityManifest | null>,
+  scope: string,
+  preserveOnHidden?: () => boolean,
+) {
   const held = useRef(false);
+  const preserve = useRef(preserveOnHidden);
+  preserve.current = preserveOnHidden;
   const request = useRef(0);
   const [name, setName] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -44,6 +51,7 @@ export function useBadgeCollection(enabled: boolean, manifest: MutableRef<Eligib
   useEffect(() => {
     function hideName() {
       if (document.visibilityState !== "hidden") return;
+      if (preserve.current?.()) return;
       request.current++;
       setName(null);
       setLoading(false);
@@ -52,5 +60,15 @@ export function useBadgeCollection(enabled: boolean, manifest: MutableRef<Eligib
     document.addEventListener("visibilitychange", hideName);
     return () => document.removeEventListener("visibilitychange", hideName);
   }, []);
-  return { held, waiting, name, loading, credential, begin, clear };
+  function display(onNext: () => void, saving: boolean, print?: (credential: string) => void) {
+    return {
+      waiting,
+      name,
+      loading,
+      saving,
+      onNext,
+      onPrint: credential && print ? () => print(credential) : undefined,
+    };
+  }
+  return { held, waiting, name, loading, credential, begin, clear, display };
 }

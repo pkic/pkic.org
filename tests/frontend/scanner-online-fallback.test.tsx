@@ -344,6 +344,7 @@ describe("Online verification after a local badge miss", () => {
     vi.stubGlobal("fetch", fetcher);
     await scan(true);
     await vi.waitFor(() => expect(host.textContent).toContain("Verification pending"));
+    expect(host.textContent).toContain("Badge not found in saved badge data. Reconnect to verify.");
     expect(host.textContent).not.toContain("Unknown badge");
     expect(host.querySelector(".pk-event-scanner--unknown")).toBeNull();
     expect(mocks.persist).toHaveBeenCalledTimes(1);

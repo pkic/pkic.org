@@ -39,6 +39,7 @@ export function ScannerLaunchPanel({
     pendingStart && devicePreparation
       ? {
           ...pendingStart,
+          ready: pendingStart.ready && devicePreparation.ready,
           preparing:
             pendingStart.preparing || (!devicePreparation.ready && !devicePreparation.error && !pendingStart.error),
           error: devicePreparation.error || pendingStart.error,
@@ -49,6 +50,11 @@ export function ScannerLaunchPanel({
       <PanelHeader title="Start scanning" />
       <PanelBody>
         {connection}
+        {devicePreparation?.error && !pendingStart && (
+          <Button type="button" variant="secondary" onClick={retryStart}>
+            Retry scanner preparation
+          </Button>
+        )}
         {context && <ScannerCaptureContext {...context} />}
         {feedback && <ScannerFeedback {...feedback} compact />}
         <form

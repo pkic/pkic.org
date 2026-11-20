@@ -4,6 +4,15 @@ import { act } from "preact/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import { EventScanner } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/EventScanner";
 import { ScannerTaskNavigation } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/ScannerTaskNavigation";
+import { portalSession } from "../../assets/ts/member-flows/portal/state";
+import { portalSessionFixture } from "../helpers/portal-session";
+const printing = vi.hoisted(() => ({ requested: vi.fn() }));
+vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/BadgeCollectionPrinter", () => ({
+  BadgeCollectionPrinter: ({ credential }: { credential: string }) => {
+    printing.requested(credential);
+    return null;
+  },
+}));
 import {
   eventScanCaptureIntentSchema,
   eventScanRequestSchema,
@@ -44,20 +53,19 @@ describe("scanner foreground receipt and drain lifecycle", () => {
       window.location.hash = previousHash;
     }
   });
-  it("keeps task switching and current-badge printing available after collection saves", async () => {
+  it("prints the held badge without replacing the collection scanner", async () => {
     const previousHash = window.location.hash;
     try {
       window.location.hash = "#/events/synthetic-event/scanner?scannerPurpose=collection";
+      portalSession.value = portalSessionFixture({ member: true });
       await mount(true, ["attendance", "checkout"]);
-      const onLaunch = vi.fn(),
-        onPrintBadge = vi.fn();
+      const onLaunch = vi.fn();
       await act(() =>
         render(
           <ScannerTaskNavigation.Provider
             value={{
               launch: null,
               onLaunch,
-              onPrintBadge,
               onConsumed: vi.fn(),
               tasks: [
                 { key: "entry", label: "Entry", href: "#/scanner" },
@@ -102,7 +110,23 @@ describe("scanner foreground receipt and drain lifecycle", () => {
           .find((button) => button.textContent?.trim() === "Print this badge")!
           .click(),
       );
-      expect(onPrintBadge).toHaveBeenCalledWith(badgeCode);
+      expect(printing.requested).toHaveBeenCalledWith(badgeCode);
+      expect(window.location.hash).toBe("#/events/synthetic-event/scanner?scannerPurpose=collection");
+      expect(host.querySelector(".pk-fast-scanner")).not.toBeNull();
+      const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+      try {
+        await act(() => {
+          document.dispatchEvent(new Event("visibilitychange"));
+        });
+        expect(
+          Array.from(host.querySelectorAll("button")).some(
+            (button) => button.textContent?.trim() === "Print this badge",
+          ),
+        ).toBe(true);
+        expect(host.querySelector(".pk-fast-scanner")).not.toBeNull();
+      } finally {
+        visibility.mockRestore();
+      }
     } finally {
       window.location.hash = previousHash;
     }

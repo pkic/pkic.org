@@ -144,6 +144,31 @@ it("shows preparation progress and retryable errors in a modal", async () => {
       .click(),
   );
   expect(cancel).toHaveBeenCalledOnce();
+  await act(() =>
+    render(
+      <ScannerLaunchPanel
+        {...props}
+        pendingStart={{ preparing: false, ready: true, error: "" }}
+        devicePreparation={{ ready: false, error: "" }}
+      />,
+      host,
+    ),
+  );
+  expect(dialog.textContent).toContain("Preparing scanner");
+  expect(dialog.textContent).not.toContain("Badge data ready");
+  await act(() =>
+    render(
+      <ScannerLaunchPanel {...props} devicePreparation={{ ready: false, error: "Scanner preparation unavailable" }} />,
+      host,
+    ),
+  );
+  expect(dialog.open).toBe(false);
+  const retryWithoutStart = Array.from(host.querySelectorAll("button")).find(
+    (button) => button.textContent?.trim() === "Retry scanner preparation",
+  );
+  expect(retryWithoutStart).toBeDefined();
+  await act(() => retryWithoutStart!.click());
+  expect(retry).toHaveBeenCalledTimes(2);
 });
 
 it("places authorized printing beside the scanner tasks using the shared action tile", async () => {

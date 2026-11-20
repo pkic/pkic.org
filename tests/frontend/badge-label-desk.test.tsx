@@ -121,9 +121,7 @@ afterEach(async () => {
 });
 
 describe("badge printing desk", () => {
-  it("prints a transferred badge once without starting the camera or issuing a new badge", async () => {
-    const credential = "ABCDEFGHJKLMNPQR";
-    const consumePrintBadge = vi.fn().mockReturnValueOnce(credential).mockReturnValue(null);
+  it("opens the print task camera without a transferred badge", async () => {
     const consumed = vi.fn();
     const fetch = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => json(label));
     vi.stubGlobal("fetch", fetch);
@@ -132,7 +130,6 @@ describe("badge printing desk", () => {
       tasks: [{ key: "print" as const, label: "Print", href: "#/print" }],
       onLaunch: vi.fn(),
       onConsumed: consumed,
-      consumePrintBadge,
     };
     const desk = () => (
       <ScannerTaskNavigation.Provider value={navigation}>
@@ -140,17 +137,11 @@ describe("badge printing desk", () => {
       </ScannerTaskNavigation.Provider>
     );
     await act(async () => render(desk(), host));
-    await settle(() => expect(fetch).toHaveBeenCalledOnce());
-    expect(consumePrintBadge).toHaveBeenCalledOnce();
+    await settle(() => expect(capture.starts).toBe(1));
     expect(consumed).toHaveBeenCalledOnce();
-    expect(capture.starts).toBe(0);
-    expect(String(fetch.mock.calls[0]?.[0])).toContain("/badges/labels");
-    const request = badgeLabelRequestSchema.parse(JSON.parse(fetch.mock.calls[0]?.[1]?.body as string));
-    expect(request).toMatchObject({ source: "scan", credential });
+    expect(fetch).not.toHaveBeenCalled();
     await act(async () => render(desk(), host));
-    expect(fetch).toHaveBeenCalledOnce();
-    expect(consumePrintBadge).toHaveBeenCalledOnce();
-    expect(window.location.hash).not.toContain(credential);
+    expect(capture.starts).toBe(1);
   });
   it("pauses QR capture during the tour and resumes the same camera afterward", async () => {
     const fetch = vi.fn(async () => json(label));
