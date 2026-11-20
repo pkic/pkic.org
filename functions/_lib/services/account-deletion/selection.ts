@@ -71,6 +71,14 @@ export const ACCOUNT_DELETION_LINKED_ADDRESSES_SQL = `(SELECT group_concat(norma
 ))`;
 
 /**
+ * The account's renders as id, format, and cache key, which name their stored
+ * files; NULL without any. A replaced render keeps the count but not this.
+ */
+export const ACCOUNT_DELETION_RENDER_FILES_SQL = `(SELECT group_concat(id || ':' || format || ':' || cache_key, ' ') FROM (
+  SELECT id, format, cache_key FROM event_promotion_renders WHERE user_id = ?1 ORDER BY id
+))`;
+
+/**
  * True while each removed table still holds the rows the preview counted, so
  * the batch deletes exactly what staff reviewed. The counts are integers the
  * preview read from the database, written into the SQL to stay within D1's

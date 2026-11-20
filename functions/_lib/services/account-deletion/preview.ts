@@ -9,7 +9,11 @@ import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { sha256Hex } from "../../utils/crypto";
 import { ACCOUNT_DELETION_BLOCKING_RULES, ACCOUNT_DELETION_REMOVED_TABLES } from "./registry";
-import { ACCOUNT_DELETION_COUNT_EXPRESSIONS, ACCOUNT_DELETION_LINKED_ADDRESSES_SQL } from "./selection";
+import {
+  ACCOUNT_DELETION_COUNT_EXPRESSIONS,
+  ACCOUNT_DELETION_LINKED_ADDRESSES_SQL,
+  ACCOUNT_DELETION_RENDER_FILES_SQL,
+} from "./selection";
 
 /** D1 refuses very wide result rows; 30 counts per statement stays well inside its limits. */
 const COUNTS_PER_STATEMENT = 30;
@@ -37,6 +41,8 @@ export interface AccountDeletionState {
   spellings: string[];
   /** The linked addresses, normalized, sorted, and space-separated; null without any. */
   linkedAddresses: string | null;
+  /** The renders whose files the delete queues; the batch refuses if they changed. */
+  renderFiles: string | null;
   /** Rows per removed table, in registry order; the delete batch requires the same counts. */
   removedCounts: number[];
   /** Badge and promotion renders; their rows go with the account, their files through the outbox. */
@@ -75,7 +81,7 @@ export async function readAccountDeletion(db: DatabaseLike, userId: string): Pro
       .join(",\n");
     countStatements.push(db.prepare(`SELECT ${columns}`).bind(userId));
   }
-  const [accountResult, addressResult, linkedResult, renderResult, ...countResults] = await db.batch([
+  const [accountResult, addressResult, fingerprintResult, renderResult, ...countResults] = await db.batch([
     db
       .prepare(
         "SELECT id, email, normalized_email, updated_at, pii_redacted_at, headshot_r2_key FROM users WHERE id = ?1",
@@ -84,7 +90,11 @@ export async function readAccountDeletion(db: DatabaseLike, userId: string): Pro
     db
       .prepare("SELECT email, normalized_email FROM user_emails WHERE user_id = ?1 ORDER BY created_at, id")
       .bind(userId),
-    db.prepare(`SELECT ${ACCOUNT_DELETION_LINKED_ADDRESSES_SQL} AS linked`).bind(userId),
+    db
+      .prepare(
+        `SELECT ${ACCOUNT_DELETION_LINKED_ADDRESSES_SQL} AS linked, ${ACCOUNT_DELETION_RENDER_FILES_SQL} AS render_files`,
+      )
+      .bind(userId),
     db.prepare("SELECT id, format, cache_key FROM event_promotion_renders WHERE user_id = ?1").bind(userId),
     ...countStatements,
   ]);
@@ -97,6 +107,7 @@ export async function readAccountDeletion(db: DatabaseLike, userId: string): Pro
   const blockerCounts = counts.slice(ACCOUNT_DELETION_REMOVED_TABLES.length);
   const removes = tally(ACCOUNT_DELETION_REMOVED_KINDS, ACCOUNT_DELETION_REMOVED_TABLES, removedCounts);
   const blockers = tally(ACCOUNT_DELETION_BLOCKER_KINDS, ACCOUNT_DELETION_BLOCKING_RULES, blockerCounts);
+  const fingerprint = fingerprintResult.results?.[0];
   const addressRows = (addressResult.results ?? []) as { email: string; normalized_email: string }[];
   const addresses = [...new Set([account.normalized_email, ...addressRows.map((row) => row.normalized_email)])];
   const spellings = [...new Set([account.email, ...addresses, ...addressRows.map((row) => row.email)].filter(Boolean))];
@@ -105,7 +116,8 @@ export async function readAccountDeletion(db: DatabaseLike, userId: string): Pro
     account,
     addresses,
     spellings,
-    linkedAddresses: (linkedResult.results?.[0]?.linked as string | null | undefined) ?? null,
+    linkedAddresses: (fingerprint?.linked as string | null | undefined) ?? null,
+    renderFiles: (fingerprint?.render_files as string | null | undefined) ?? null,
     removedCounts,
     renders: (renderResult.results ?? []) as unknown as AccountDeletionRender[],
     preview: {

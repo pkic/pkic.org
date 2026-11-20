@@ -297,6 +297,31 @@ describe("account deletion", () => {
     expect(await accountExists(userId)).toBe(true);
   });
 
+  it("rolls back when a promotion image is replaced during the delete", async () => {
+    const userId = await insertUser(env.DB, "replaced-render@example.test");
+    const insertRender = (id: string) => {
+      const at = nowIso();
+      return env.DB.prepare(
+        `INSERT INTO event_promotion_renders(id,event_id,user_id,revision,format,origin,cache_key,status,next_attempt_at,created_at,updated_at)
+         VALUES (?, ?, ?, 1, 'square', 'test', ?, 'rendered', ?, ?, ?)`,
+      ).bind(id, eventId, userId, crypto.randomUUID(), at, at, at);
+    };
+    const original = crypto.randomUUID();
+    await insertRender(original).run();
+    const { preview: reviewed } = await readAccountDeletion(env.DB, userId);
+    const gate = gateNextBatch(env.DB, 1);
+    const pending = deleteAccount(gate.db, admin, userId, reviewed.revision, "test-signing-secret");
+    await gate.reached;
+    await env.DB.batch([
+      insertRender(crypto.randomUUID()),
+      env.DB.prepare("DELETE FROM event_promotion_renders WHERE id = ?").bind(original),
+    ]);
+    gate.release();
+
+    await expect(pending).rejects.toMatchObject({ status: 409 });
+    expect(await accountExists(userId)).toBe(true);
+  });
+
   it("keeps an account while a promotion image for it is being created", async () => {
     const userId = await insertUser(env.DB, "rendering@example.test");
     const at = nowIso();

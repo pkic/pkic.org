@@ -12,6 +12,7 @@ import { readAccountDeletion } from "./preview";
 import {
   ACCOUNT_DELETION_DELETE_SQL,
   ACCOUNT_DELETION_LINKED_ADDRESSES_SQL,
+  ACCOUNT_DELETION_RENDER_FILES_SQL,
   ACCOUNT_DELETION_UNBLOCKED_SQL,
   accountDeletionUnchangedSql,
 } from "./selection";
@@ -79,10 +80,8 @@ export async function deleteAccount(
   secret: string,
 ) {
   if (userId === actor.id) throw new AppError(403, "FORBIDDEN", "You cannot delete your own account");
-  const { account, addresses, spellings, linkedAddresses, removedCounts, renders, preview } = await readAccountDeletion(
-    db,
-    userId,
-  );
+  const { account, addresses, spellings, linkedAddresses, renderFiles, removedCounts, renders, preview } =
+    await readAccountDeletion(db, userId);
   if (preview.revision !== revision) {
     throw new AppError(409, "ACCOUNT_CHANGED", "The account changed since you reviewed it. Review it again.");
   }
@@ -97,16 +96,17 @@ export async function deleteAccount(
   ].filter((statement): statement is StatementLike => statement !== null);
   const statements: StatementLike[] = [
     prepareUserLifecyclePublication(authorizedDb, account.id, at, "anonymize"),
-    // Refuses the batch when anything staff reviewed changed: the account, its addresses, or a counted row.
+    // Refuses the batch when anything staff reviewed changed: the account, its addresses, its renders, or a counted row.
     authorizedDb
       .prepare(
         `UPDATE users SET updated_at = updated_at
           WHERE id = ?1 AND updated_at = ?2 AND normalized_email = ?3 AND pii_redacted_at IS NULL
             AND ${ACCOUNT_DELETION_LINKED_ADDRESSES_SQL} IS ?4
+            AND ${ACCOUNT_DELETION_RENDER_FILES_SQL} IS ?5
             AND ${ACCOUNT_DELETION_UNBLOCKED_SQL}
             AND ${accountDeletionUnchangedSql(removedCounts)}`,
       )
-      .bind(account.id, account.updated_at, account.normalized_email, linkedAddresses),
+      .bind(account.id, account.updated_at, account.normalized_email, linkedAddresses, renderFiles),
     prepareAuditLogAfterOneChange(authorizedDb, "admin", actor.id, "user_deleted", "user", account.id, {
       emailHashes,
       emailHashVersion: EMAIL_HASH_VERSION,
