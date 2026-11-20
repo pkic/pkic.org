@@ -433,13 +433,8 @@ describe("event screen monitor", () => {
     );
     const changed = await next(watcher.received, "screens.changed", second);
     expect(changed.screen.health?.player?.playback).toEqual(playback);
-    // The worst of the minute, unless both reports straddled a minute boundary.
-    const expected = {
-      routerLatencyMs: 2.5,
-      internetLossPercent: 0,
-      rxBitsPerSecond: 4_500_000,
-      livestreamStalls: 2,
-    };
+    // The worst of the minute. The two reports usually share one, but may straddle a minute boundary.
+    const expected = { routerLatencyMs: 2.5, internetLossPercent: 0, rxBitsPerSecond: 4_500_000 };
     expect(changed.sample).toMatchObject(expected);
     expect(changed.sample?.minute).toMatch(/:00\.000Z$/);
 
@@ -448,7 +443,10 @@ describe("event screen monitor", () => {
     expect(snapshot.quality).toEqual([
       { screenId: "MONQLT", samples: expect.arrayContaining([expect.objectContaining(expected)]) },
     ]);
-    expect(snapshot.quality[0]!.samples.length).toBeLessThanOrEqual(2);
+    const samples = snapshot.quality[0]!.samples;
+    expect(samples.length).toBeLessThanOrEqual(2);
+    // Both stalls started before the first report, so they count once, in whichever minute took that report.
+    expect(samples.reduce((sum, sample) => sum + (sample.livestreamStalls ?? 0), 0)).toBe(2);
   });
 
   it("keeps when a screen's state began across reports that change nothing it draws", async () => {
