@@ -43,8 +43,8 @@ export interface VirtualRoomFrameProps {
   sponsors: ComponentChildren;
   partners: ComponentChildren;
   schedule: ComponentChildren;
-  questions: (labelledBy: string) => ComponentChildren;
-  chat: (labelledBy: string) => ComponentChildren;
+  questions: ComponentChildren;
+  chat: ComponentChildren;
   /** The event's own agenda, shown on a phone's Agenda tab. */
   agenda: ComponentChildren;
   agendaHref: string;
@@ -93,13 +93,13 @@ function WideRoom({
         {partners}
       </div>
       <div class="pk-virtual-room__side">
-        <Panel class="pk-virtual-room__panel">
+        <Panel class="pk-virtual-room__panel" aria-labelledby={QUESTIONS_TITLE}>
           <PanelHeader id={QUESTIONS_TITLE} title="Questions and polls" />
-          <PanelBody>{questions(QUESTIONS_TITLE)}</PanelBody>
+          <PanelBody>{questions}</PanelBody>
         </Panel>
-        <Panel class="pk-virtual-room__panel">
+        <Panel class="pk-virtual-room__panel" aria-labelledby={CHAT_TITLE}>
           <PanelHeader id={CHAT_TITLE} title="Chat" />
-          <PanelBody>{chat(CHAT_TITLE)}</PanelBody>
+          <PanelBody>{chat}</PanelBody>
         </Panel>
       </div>
     </div>
@@ -157,8 +157,8 @@ function NarrowRoom({
         onSelect={(id) => onPanel(id as RoomPanelId)}
       />
       <div id={`virtual-room-${panel}`} class="pk-virtual-room__panel" role="tabpanel" aria-labelledby={tab}>
-        {panel === "questions" && questions(tab)}
-        {panel === "chat" && chat(tab)}
+        {panel === "questions" && questions}
+        {panel === "chat" && chat}
         {panel === "agenda" && (
           <>
             {agenda}

@@ -96,6 +96,18 @@ export function ChatComposer({
   );
 }
 
+/** The chat's window before its room opens: the feed says when it does, and the composer waits. */
+export function LiveChatClosed() {
+  return (
+    <div class="pk-live-chat-workspace pk-live-chat-workspace--compact">
+      <div class="pk-live-chat">
+        <p class="pk-small pk-muted pk-live-chat__empty">Chat opens when the session is live.</p>
+      </div>
+      <ChatComposer channel="attendee" compact disabled send={() => false} refusal={null} />
+    </div>
+  );
+}
+
 /**
  * The live chat for attendees and the control room: dense rows rendered a
  * window at a time, a bounded history that pages back from the room on

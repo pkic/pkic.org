@@ -19,11 +19,11 @@ import {
   VirtualRoomFrame,
   type RoomPanelId,
 } from "../../member-flows/portal/sections/events/app/virtual-room/VirtualRoomFrame";
-import {
-  VirtualRoomChat,
-  VirtualRoomQuestions,
-  VirtualRoomSchedule,
-} from "../../member-flows/portal/sections/events/app/virtual-room/VirtualRoomPanels";
+import { LiveChatClosed } from "../../live-session/LiveChat";
+import { LiveAttendeeChat } from "../../live-session/SessionChat";
+import { LiveAttendeeQuestions, LiveQuestionsClosed } from "../../live-session/SessionQuestions";
+import type { LiveRoomConnection } from "../../live-session/useLiveRoom";
+import { VirtualRoomSchedule } from "../../member-flows/portal/sections/events/app/virtual-room/VirtualRoomPanels";
 import {
   VirtualRoomNowPlaying,
   VirtualRoomPlayer,
@@ -33,6 +33,7 @@ import { VirtualRoomPartners } from "../../member-flows/portal/sections/events/a
 import { VirtualRoomSponsors } from "../../member-flows/portal/sections/events/app/virtual-room/VirtualRoomSponsors";
 import "../../member-flows/portal/sections/events/app/virtual-room/VirtualRoom.css";
 import { AgendaExample } from "./agenda-example";
+import { STUDIO_QUESTIONS_ROOM } from "./sections-studio-questions";
 import type { PreviewSection } from "./PreviewShell";
 
 /** A wordmark on a light page, as a sponsor supplies it: wide or narrow by the length of the name. */
@@ -135,8 +136,37 @@ const MOMENT = {
 const LOCATIONS = ["Main hall", "Studio"].map((name, index) => ({ id: `room-${index}`, name, href: "#" }));
 const formatTime = () => "10:00 – 10:45";
 
-/** The whole room around a stream that has not started, opened on one of a phone's panels. */
-function RoomSpecimen({ opensOn }: { opensOn: RoomPanelId }) {
+const said = (id: number, authorName: string, text: string, mine = false) => ({
+  channel: "attendee" as const,
+  id: `60000000-0000-4000-8000-00000000000${id}`,
+  text,
+  authorName,
+  mine,
+  sentAt: STUDIO_QUESTIONS_ROOM.session.startAt,
+});
+/** A session's room as an attendee holds it during the session: questions asked and a chat under way. */
+const LIVE: LiveRoomConnection = {
+  state: {
+    ...STUDIO_QUESTIONS_ROOM,
+    viewer: { role: "attendee", name: "Alex Example" },
+    questions: STUDIO_QUESTIONS_ROOM.questions.filter((question) => question.status !== "pending"),
+    chat: [
+      said(1, "Riley Sample", "Good morning, everyone."),
+      said(2, "Jordan Lee", "Is the **hybrid** profile in the draft already?"),
+      said(3, "Alex Example", "Yes, section 4 covers it.", true),
+    ],
+  },
+  status: "live",
+  admissionRefusal: null,
+  serverFault: null,
+  send: () => true,
+  questionResult: null,
+  answerResult: null,
+  questionChangeResult: null,
+};
+
+/** The whole room, before its session's room opens or during the session, opened on one of a phone's panels. */
+function RoomSpecimen({ opensOn, live = false }: { opensOn: RoomPanelId; live?: boolean }) {
   const wide = useMediaQuery(ROOM_WIDE_QUERY);
   const [panel, setPanel] = useState(opensOn);
   const [locationId, setLocationId] = useState(LOCATIONS[0]!.id);
@@ -159,12 +189,14 @@ function RoomSpecimen({ opensOn }: { opensOn: RoomPanelId }) {
       sponsors={<VirtualRoomSponsors sponsors={SPONSORS} />}
       partners={<VirtualRoomPartners partners={PARTNERS} />}
       schedule={<VirtualRoomSchedule slug="preview" moment={MOMENT} formatTime={formatTime} />}
-      questions={(labelledBy) => (
-        <VirtualRoomQuestions slug="preview" moment={{ current: null, upcoming: [] }} labelledBy={labelledBy} />
-      )}
-      chat={(labelledBy) => (
-        <VirtualRoomChat slug="preview" moment={{ current: null, upcoming: [] }} labelledBy={labelledBy} />
-      )}
+      questions={
+        live ? (
+          <LiveAttendeeQuestions room={LIVE} occurrenceId={LIVE.state!.session.occurrenceId} />
+        ) : (
+          <LiveQuestionsClosed />
+        )
+      }
+      chat={live ? <LiveAttendeeChat room={LIVE} compact /> : <LiveChatClosed />}
       agenda={<AgendaExample />}
       agendaHref="#"
       eventHref="#"
@@ -181,6 +213,12 @@ export const virtualRoomSections: PreviewSection[] = [
     title: "Virtual room",
     note: "On a desktop the stream is large on the left; questions and polls sit top right with the chat under them, both always open. On a phone the stream, the running session and the sponsors stay at the top, and the bottom bar switches one panel between questions, chat and the agenda.",
     render: () => <RoomSpecimen opensOn="questions" />,
+  },
+  {
+    id: "virtual-room-live",
+    title: "Virtual room: during a session",
+    note: "Questions are asked through the Ask a question button, which opens the form over the list. The chat is a window: the messages scroll and the field stays at its foot.",
+    render: () => <RoomSpecimen opensOn="questions" live />,
   },
   {
     id: "virtual-room-agenda",

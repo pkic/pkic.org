@@ -206,8 +206,9 @@ describe("virtual room", () => {
     expect(order).toEqual(["IFRAME", "DIV"]);
     // A session is running in the fixture, so the panel joins its live questions rather than waiting.
     const panel = host.querySelector('[role="tabpanel"]');
+    expect(panel?.getAttribute("aria-labelledby")).toBe("virtual-room-tab-questions");
     expect(panel?.textContent).not.toContain("Questions open when the session is live");
-    expect(panel?.querySelector('section[aria-labelledby="virtual-room-tab-questions"]')).not.toBeNull();
+    expect(panel?.textContent).toContain("Joining the session’s questions");
     expect(host.querySelector('[aria-label="Sessions in this room"]')).toBeNull();
   });
 
@@ -256,6 +257,28 @@ describe("virtual room", () => {
     expect(
       host.querySelector('section[aria-label="Production partners"]')?.closest(".pk-virtual-room__main"),
     ).not.toBeNull();
+  });
+
+  it("holds one live connection for the session, however many of its parts are on screen", async () => {
+    const opened: string[] = [];
+    vi.stubGlobal(
+      "WebSocket",
+      class {
+        static OPEN = 1;
+        readyState = 0;
+        constructor(url: string) {
+          opened.push(new URL(url).pathname);
+        }
+        addEventListener() {}
+        close() {}
+        send() {}
+      },
+    );
+    onDesktop();
+    await open();
+    // Reactions, questions and chat are all on screen beside the stream.
+    expect(host.querySelectorAll(".pk-virtual-room__side .pk-panel")).toHaveLength(2);
+    expect(opened).toEqual([`/api/v1/events/summit/agenda/occurrences/${KEYNOTE}/live`]);
   });
 
   it("lists now and next for the location and moves on at the session boundary without asking the server", async () => {
@@ -370,10 +393,16 @@ describe("virtual room", () => {
     expect(player()).toBeNull();
     expect(host.querySelector('[role="timer"]')?.textContent).toContain("1d");
     expect(host.textContent).not.toContain("No live streams yet");
+    // The chat is its window already, with the composer waiting; questions show where to ask, not yet in use.
     await act(() => tab("Chat").click());
+    expect(host.textContent).toContain("Chat opens when the session is live.");
     expect(host.querySelector<HTMLTextAreaElement>('textarea[name="text"]')?.disabled).toBe(true);
     await act(() => tab("Questions").click());
-    expect(host.querySelector<HTMLTextAreaElement>("textarea")?.disabled).toBe(true);
+    expect(host.textContent).toContain("Questions open when the session is live.");
+    const ask = [...host.querySelectorAll("button")].find((button) => button.textContent === "Ask a question");
+    expect(ask?.disabled).toBe(true);
+    // No form sits on the page waiting.
+    expect(host.querySelector("textarea")).toBeNull();
   });
 
   it("refreshes stream configuration when the first join window opens", async () => {

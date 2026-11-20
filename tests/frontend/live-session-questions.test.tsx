@@ -50,6 +50,10 @@ function connect(live: ReturnType<typeof fakeLiveSockets>, snapshot = liveSnapsh
   });
 }
 
+function openAsk(host: HTMLElement) {
+  void act(() => button(host, "Ask a question").click());
+}
+
 function button(host: HTMLElement, name: string) {
   const found = [...host.querySelectorAll("button")].find(
     (candidate) => candidate.getAttribute("aria-label") === name || candidate.textContent?.trim() === name,
@@ -91,6 +95,8 @@ describe("session questions", () => {
   it("asks through the shared contract, optionally anonymous and for a speaker", () => {
     const { host, live } = mount();
     connect(live);
+    expect(host.querySelector("textarea[name=text]")).toBeNull(); // the form is a dialog, opened on request
+    openAsk(host);
     const text = host.querySelector<HTMLTextAreaElement>("textarea[name=text]")!;
     const anonymous = host.querySelector<HTMLInputElement>("input[name=anonymous]")!;
     const addressee = host.querySelector<HTMLSelectElement>("select[name=addressedTo]")!;
@@ -123,14 +129,17 @@ describe("session questions", () => {
     void act(() =>
       live.latest().deliver({ type: "question.accepted", operationId: request.operationId, questionId: LIVE_QUESTION }),
     );
-    expect(text.value).toBe("");
-    expect(addressee.value).toBe("");
-    expect(text.disabled).toBe(false);
+    // Once the room takes the question the form closes, and the next one starts empty.
+    expect(host.querySelector("textarea[name=text]")).toBeNull();
+    openAsk(host);
+    expect(host.querySelector<HTMLTextAreaElement>("textarea[name=text]")!.value).toBe("");
+    expect(host.querySelector<HTMLSelectElement>("select[name=addressedTo]")!.value).toBe("");
   });
 
   it("retains a refused draft and ignores acknowledgments for another request", () => {
     const { host, live } = mount();
     connect(live);
+    openAsk(host);
     const text = host.querySelector<HTMLTextAreaElement>("textarea[name=text]")!;
     void act(() => {
       text.value = "Which certificates should we replace first?";
@@ -396,13 +405,14 @@ describe("session questions", () => {
   it("waits for a question the contract accepts and says why on the status line", () => {
     const { host, live } = mount();
     connect(live);
+    openAsk(host);
     void act(() => {
       host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
     expect(live.latest().messages()).toEqual([]);
     // An empty question is at rest, not an error.
     expect(host.querySelector("[aria-invalid=true]")).toBeNull();
-    expect(button(host, "Ask").disabled).toBe(true);
+    expect(button(host, "Ask question").disabled).toBe(true);
     const text = host.querySelector("textarea")!;
     void act(() => {
       text.value = "ab";
@@ -410,7 +420,7 @@ describe("session questions", () => {
     });
     expect(text.getAttribute("aria-invalid")).toBe("true");
     expect(document.getElementById(text.getAttribute("aria-describedby")!)?.textContent).toContain("a few characters");
-    expect(button(host, "Ask").disabled).toBe(true);
+    expect(button(host, "Ask question").disabled).toBe(true);
   });
 
   it("shows a named asker's photo and capacity beside their question, and none for an anonymous one", () => {

@@ -93,6 +93,14 @@ $portal-sidebar-width: 240px;
   overflow-y: visible;
 }
 
+// On a phone the room is the whole screen above its bottom bar, stream at the
+// top edge, so its container adds no margin above or below it.
+@media (max-width: 48rem) {
+  #portal-main:has(.pk-virtual-room) {
+    padding-block: 0;
+  }
+}
+
 .portal-identity-invitation {
   margin-bottom: 1rem;
 }

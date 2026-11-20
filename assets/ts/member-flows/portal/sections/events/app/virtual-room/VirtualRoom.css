@@ -228,8 +228,38 @@
     --pk-room-logo-scale: 1;
   }
 
-  /* Between a phone and a desktop the panels keep a tab strip; on a phone the bottom bar switches them. */
+  /* The panel under the stream: its content fills it, so the chat's composer sits at its foot. */
+  .pk-virtual-room__panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-2);
+    min-inline-size: 0;
+  }
+
+  /*
+   * A phone: the room is the whole screen above its bottom bar, as an app is. The stream and its two lines
+   * keep their place, the panel takes the rest and scrolls inside itself, and the bottom bar switches it.
+   * Between a phone and a desktop the page scrolls under the stream, and the panels keep a tab strip.
+   */
   @media (max-width: 48rem) {
+    .pk-virtual-room {
+      gap: 0;
+      block-size: calc(100dvh - var(--pk-app-tabbar-height) - env(safe-area-inset-bottom, 0px));
+    }
+
+    .pk-virtual-room__stage {
+      position: static;
+      flex: none;
+    }
+
+    .pk-virtual-room__panel {
+      flex: 1;
+      min-block-size: 10rem;
+      padding-block: var(--pk-2);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+
     .pk-virtual-room__tabs {
       display: none;
     }
@@ -381,12 +411,14 @@
   }
 
   .pk-virtual-room--wide .pk-virtual-room__panel {
-    display: flex;
-    flex-direction: column;
+    gap: 0;
   }
 
   .pk-virtual-room--wide .pk-virtual-room__panel > .pk-panel__body {
+    display: flex;
     flex: 1;
+    flex-direction: column;
+    gap: var(--pk-2);
     min-block-size: 0;
     overflow-y: auto;
   }

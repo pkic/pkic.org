@@ -32,11 +32,16 @@ import { useMediaQuery } from "../../../../../../hooks/useMediaQuery";
 import { useSponsorDisplay } from "../../../../../sponsors-wall-data";
 import { usePortalHashLocation } from "../../../../hash-location";
 import { ROOM_PANELS, ROOM_WIDE_QUERY, VirtualRoomFrame, type RoomPanelId } from "./VirtualRoomFrame";
-import { VirtualRoomChat, VirtualRoomQuestions, VirtualRoomSchedule } from "./VirtualRoomPanels";
+import {
+  VirtualRoomChat,
+  VirtualRoomQuestions,
+  VirtualRoomReactions,
+  VirtualRoomSchedule,
+  useRoomLive,
+} from "./VirtualRoomPanels";
 import { VirtualRoomPartners } from "./VirtualRoomPartners";
 import { VirtualRoomSponsors } from "./VirtualRoomSponsors";
 import { VirtualRoomNowPlaying, VirtualRoomPlayer } from "./VirtualRoomPlayer";
-import { SessionReactions } from "../../../../../../live-session/SessionReactions";
 import {
   chooseLocation,
   locationSessions,
@@ -92,6 +97,7 @@ export function VirtualRoom({
   );
   // While a session is on, a phone opens on its questions; between sessions on the agenda.
   const moment = roomMoment(sessions, now);
+  const live = useRoomLive(slug, moment);
   const defaultPanel: RoomPanelId = moment.current ? "questions" : "agenda";
   const [panel, setPanel] = useHashQueryParam("roomPanel", defaultPanel, ROOM_PANELS);
   const startsAt = sessions[0]?.startAt;
@@ -158,24 +164,14 @@ export function VirtualRoom({
             moment={moment}
             formatTime={formatTime}
             location={picker}
-            reactions={
-              onAir && moment.current ? (
-                <SessionReactions
-                  key={moment.current.id}
-                  slug={slug}
-                  occurrenceId={moment.current.id}
-                  startAt={moment.current.startAt}
-                  endAt={moment.current.endAt}
-                />
-              ) : null
-            }
+            reactions={onAir ? <VirtualRoomReactions live={live} /> : null}
           />
         )}
         sponsors={<VirtualRoomSponsors sponsors={sponsors.display} />}
         partners={<VirtualRoomPartners partners={streams.data?.productionPartners ?? []} />}
         schedule={<VirtualRoomSchedule slug={slug} moment={moment} formatTime={formatTime} />}
-        questions={(labelledBy) => <VirtualRoomQuestions slug={slug} moment={moment} labelledBy={labelledBy} />}
-        chat={(labelledBy) => <VirtualRoomChat slug={slug} moment={moment} labelledBy={labelledBy} />}
+        questions={<VirtualRoomQuestions live={live} />}
+        chat={<VirtualRoomChat live={live} />}
         agenda={agendaView}
         agendaHref={href(eventAgendaRoute(slug))}
         eventHref={href(`/events/${encodeURIComponent(slug)}`)}

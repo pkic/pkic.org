@@ -42,6 +42,9 @@ export function liveRoomSocketUrl(
   return `${scheme}//${location.host}/api/v1/events/${encodeURIComponent(slug)}/agenda/occurrences/${encodeURIComponent(occurrenceId)}/live${query}`;
 }
 
+/** A session's live room as `useLiveRoom` hands it out, for components that share one connection. */
+export type LiveRoomConnection = ReturnType<typeof useLiveRoom>;
+
 /** One session's live room over its socket, reconnecting with backoff while mounted and enabled. */
 export function useLiveRoom({
   slug,

@@ -2,7 +2,7 @@ import { LiveOwnQuestionActions } from "./LiveOwnQuestionActions";
 import { LiveQuestionThread } from "./LiveQuestionThread";
 import { useHashQueryParam } from "../hooks/useHashQueryParam";
 import { LIVE_POLL_ANSWER_REFUSAL } from "../../shared/schemas/live-session-poll";
-import { useEffect, useId, useState } from "preact/hooks";
+import { useEffect, useId, useRef, useState } from "preact/hooks";
 import { type LiveQuestionOrder } from "../../shared/live-session-policy";
 import {
   liveQuestionAskSchema,
@@ -12,7 +12,9 @@ import {
 } from "../../shared/schemas/live-session-room";
 import { useContractForm } from "../hooks/useContractForm";
 import { Alert } from "../ui/Alert";
+import { IconPlus } from "../components/icons";
 import { Button } from "../ui/Button";
+import { Dialog } from "../ui/Dialog";
 import { Checkbox } from "../ui/Checkbox";
 import { Field } from "../ui/Field";
 import { FieldStatus } from "../ui/FieldStatus";
@@ -26,7 +28,7 @@ import { LivePollCard } from "./LivePollCard";
 import { liveRoomOpenFailure } from "./live-room-copy";
 import { currentLivePoll, orderLiveQuestions } from "./live-room-state";
 import { useLiveQuestionThread } from "./useLiveQuestionThread";
-import { useLiveRoom, type LiveSocketFactory } from "./useLiveRoom";
+import { useLiveRoom, type LiveRoomConnection, type LiveSocketFactory } from "./useLiveRoom";
 import "./SessionQuestions.css";
 import { SectionHeading } from "../ui/SectionHeading";
 
@@ -37,17 +39,22 @@ const ORDERS = [
 
 import { SessionInteractionWindow, type SessionInteractionProps } from "./SessionInteractionWindow";
 
-function AskQuestion({
+const ASK = "Ask a question";
+
+/** The form behind "Ask a question", in a dialog so the list keeps its place. It closes once the room takes the question. */
+function AskQuestionDialog({
   disabled,
   credits,
   onAsk,
   result,
+  onClose,
 }: {
   disabled: boolean;
   /** The session's credits; its speakers and moderator are whom a question may be for. */
   credits: readonly LiveCredit[];
   onAsk: (message: Extract<LiveRoomClientMessage, { type: "question.ask" }>) => boolean;
   result: Extract<LiveRoomServerMessage, { type: "question.accepted" | "room.refused" }> | null;
+  onClose: () => void;
 }) {
   const [text, setText] = useState("");
   const [anonymous, setAnonymous] = useState(false);
@@ -58,89 +65,116 @@ function AskQuestion({
   const statusId = useId();
   const form = useContractForm(liveQuestionAskSchema, { text, anonymous, addressedTo }, { quietWhenEmpty: true });
   const field = form.of("text");
-  const resetForm = form.reset;
+  const closed = useRef(onClose);
+  closed.current = onClose;
   useEffect(() => {
     if (!pending || result?.operationId !== pending.operationId) return;
-    if (result.type === "question.accepted") {
-      setText("");
-      setAddressedTo(null);
-      resetForm();
-      setError(null);
-    } else setError(result.message);
+    if (result.type === "question.accepted") return closed.current();
+    setError(result.message);
     setPending(null);
-  }, [pending, result, resetForm]);
+  }, [pending, result]);
+  function ask() {
+    // Asking waits for a question: an empty field is at rest, not refused.
+    if (!form.valid) return;
+    const checked = form.submit();
+    if (!checked.data) return setError(checked.formMessage);
+    const request = pending ?? { type: "question.ask", operationId: crypto.randomUUID(), ...checked.data };
+    if (!onAsk(request)) return setError("The room is reconnecting. Please try again in a moment.");
+    setPending(request);
+    setError("Waiting for confirmation. Retry this question if the connection was interrupted.");
+  }
   return (
-    <form
-      class="pk-stack pk-stack--snug"
-      noValidate
-      {...form.handlers}
-      onSubmit={(event) => {
-        event.preventDefault();
-        // Ask waits for a question: an empty field is at rest, not refused.
-        if (!form.valid) return;
-        const checked = form.submit();
-        if (!checked.data) return setError(checked.formMessage);
-        const request = pending ?? { type: "question.ask", operationId: crypto.randomUUID(), ...checked.data };
-        if (!onAsk(request)) return setError("The room is reconnecting. Please try again in a moment.");
-        setPending(request);
-        setError("Waiting for confirmation. Retry this question if the connection was interrupted.");
-      }}
+    <Dialog
+      open
+      title={ASK}
+      closeLabel="Close the question form"
+      confirmLabel={pending ? "Retry question" : "Ask question"}
+      confirmDisabled={disabled || !form.valid}
+      onConfirm={ask}
+      onCancel={onClose}
     >
-      <Field label="Your question" statusId={statusId} {...field}>
-        {(control) => (
-          <Textarea
-            {...control}
-            name="text"
+      <form
+        class="pk-stack pk-stack--snug"
+        noValidate
+        {...form.handlers}
+        onSubmit={(event) => {
+          event.preventDefault();
+          ask();
+        }}
+      >
+        <Field label="Your question" statusId={statusId} {...field}>
+          {(control) => (
+            <Textarea
+              {...control}
+              name="text"
+              disabled={disabled || Boolean(pending)}
+              rows={3}
+              value={text}
+              onInput={(event) => setText(event.currentTarget.value)}
+            />
+          )}
+        </Field>
+        <div class="pk-live-questions__ask-options">
+          {addressees.length ? (
+            <Field label="For" {...form.of("addressedTo")}>
+              {(control) => (
+                <Select
+                  {...control}
+                  name="addressedTo"
+                  disabled={disabled || Boolean(pending)}
+                  value={addressedTo ?? ""}
+                  onChange={(event) => setAddressedTo(event.currentTarget.value || null)}
+                >
+                  <option value="">Anyone</option>
+                  {addressees.map((credit) => (
+                    <option key={credit.key} value={credit.key}>
+                      {credit.name}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+          ) : null}
+          <Checkbox
+            name="anonymous"
             disabled={disabled || Boolean(pending)}
-            rows={2}
-            value={text}
-            onInput={(event) => setText(event.currentTarget.value)}
+            checked={anonymous}
+            onChange={(event) => setAnonymous(event.currentTarget.checked)}
+            label="Ask anonymously"
+            hint="Other attendees will not see your name. Moderators always can."
           />
-        )}
-      </Field>
-      <div class="pk-live-questions__ask-options">
-        {addressees.length ? (
-          <Field label="For" {...form.of("addressedTo")}>
-            {(control) => (
-              <Select
-                {...control}
-                name="addressedTo"
-                disabled={disabled || Boolean(pending)}
-                value={addressedTo ?? ""}
-                onChange={(event) => setAddressedTo(event.currentTarget.value || null)}
-              >
-                <option value="">Anyone</option>
-                {addressees.map((credit) => (
-                  <option key={credit.key} value={credit.key}>
-                    {credit.name}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </Field>
-        ) : null}
-        <Checkbox
-          name="anonymous"
-          disabled={disabled || Boolean(pending)}
-          checked={anonymous}
-          onChange={(event) => setAnonymous(event.currentTarget.checked)}
-          label="Ask anonymously"
-          hint="Other attendees will not see your name. Moderators always can."
-        />
-      </div>
-      <FieldStatus id={statusId} state={field.state} message={field.message}>
-        {error ?? ""}
-      </FieldStatus>
-      <div class="pk-cluster">
-        <Button type="submit" variant="primary" disabled={disabled || !form.valid}>
-          {pending ? "Retry question" : "Ask"}
-        </Button>
-      </div>
-    </form>
+        </div>
+        <FieldStatus id={statusId} state={field.state} message={field.message}>
+          {error ?? ""}
+        </FieldStatus>
+      </form>
+    </Dialog>
   );
 }
 
-/** The room's attendee side: answer the poll, ask, upvote, reply, accept answers, and (for a credited speaker) mark questions answered. */
+/** The one way to ask: a button that opens the question form. */
+function AskQuestionButton({ disabled, onClick }: { disabled: boolean; onClick?: () => void }) {
+  return (
+    <div class="pk-cluster">
+      <Button variant="primary" disabled={disabled} onClick={onClick}>
+        <IconPlus />
+        <span>{ASK}</span>
+      </Button>
+    </div>
+  );
+}
+
+/** A session's questions before its room opens: where to ask, not yet in use, and when it opens. */
+export function LiveQuestionsClosed() {
+  return (
+    <div class="pk-stack pk-stack--snug">
+      <AskQuestionButton disabled />
+      <p class="pk-live-questions__empty">Questions open when the session is live.</p>
+    </div>
+  );
+}
+
+/** The room's attendee side over its own connection, where nothing else on the page holds one. */
 function SessionQuestionsRoom({
   slug,
   occurrenceId,
@@ -151,11 +185,21 @@ function SessionQuestionsRoom({
   createSocket?: LiveSocketFactory;
 }) {
   const room = useLiveRoom({ slug, occurrenceId, createSocket });
+  return <LiveAttendeeQuestions room={room} occurrenceId={occurrenceId} />;
+}
+
+/**
+ * A session's questions for an attendee, on a room connection its page already holds: answer the poll, ask,
+ * upvote, reply, accept answers, and (for a credited speaker) mark questions answered.
+ */
+export function LiveAttendeeQuestions({ room, occurrenceId }: { room: LiveRoomConnection; occurrenceId: string }) {
   const [threadId, setThreadId] = useState<string | null>(null);
+  const [asking, setAsking] = useState(false);
   const threadVisible = threadId !== null && room.state?.questions.some((question) => question.id === threadId);
   useLiveQuestionThread(threadVisible ? threadId : null, room.status === "live", room.send);
   useEffect(() => {
     setThreadId(null);
+    setAsking(false);
   }, [occurrenceId]);
 
   const [order, setOrder] = useHashQueryParam(
@@ -196,14 +240,17 @@ function SessionQuestionsRoom({
           eventName={state.session.eventName}
         />
       ) : (
-        <AskQuestion
-          key={occurrenceId}
+        <AskQuestionButton disabled={!live} onClick={() => setAsking(true)} />
+      )}
+      {asking && !restriction ? (
+        <AskQuestionDialog
           disabled={!live}
           credits={state.session.credits}
           onAsk={room.send}
           result={room.questionResult}
+          onClose={() => setAsking(false)}
         />
-      )}
+      ) : null}
       {/* A refused poll answer is said on the poll's question instead. */}
       <p class="pk-live-questions__notice" role="status">
         {state.refusal && state.refusal.code !== LIVE_POLL_ANSWER_REFUSAL ? state.refusal.message : ""}
@@ -280,10 +327,7 @@ function SessionQuestionsRoom({
 export function SessionQuestions(props: SessionInteractionProps) {
   const { slug, occurrenceId, createSocket, labelledBy } = props;
   return (
-    <SessionInteractionWindow
-      {...props}
-      disabledControls={<AskQuestion disabled credits={[]} onAsk={() => false} result={null} />}
-    >
+    <SessionInteractionWindow {...props} disabledControls={<LiveQuestionsClosed />}>
       <section class="pk-stack pk-stack--snug" aria-labelledby={labelledBy ?? `${occurrenceId}-questions`}>
         {!labelledBy && (
           <SectionHeading level={3} id={`${occurrenceId}-questions`}>

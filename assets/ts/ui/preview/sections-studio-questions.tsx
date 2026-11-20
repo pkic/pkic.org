@@ -94,7 +94,8 @@ const PREPARED: LivePreparedQuestion[] = [
 ];
 
 const BASE = sampleOverlayRoom(SCREEN_FIXTURE_NOW);
-const ROOM: LiveRoomState = {
+/** A room with an open and a waiting question, for the studio's panels and the attendee's room alike. */
+export const STUDIO_QUESTIONS_ROOM: LiveRoomState = {
   ...BASE,
   questions: [
     asked("40000000-0000-4000-8000-000000000031", "Is hybrid signing worth the extra certificate size?", {
@@ -112,15 +113,15 @@ const ROOM: LiveRoomState = {
   preparedQuestions: PREPARED,
   preparedQuestionWindow: { from: at(-15), until: at(20) },
 };
-const TARGETS = { state: ROOM, programActive: true, disabled: false, sendProgram: send };
+const TARGETS = { state: STUDIO_QUESTIONS_ROOM, programActive: true, disabled: false, sendProgram: send };
 const ANSWERS = { connected: true, result: null };
 /** The room as an operator has it with the first question open: its thread, and a moderator's rights on it. */
 const ANSWERED_ROOM: LiveRoomState = {
-  ...ROOM,
-  viewer: { ...ROOM.viewer, role: "operator" },
+  ...STUDIO_QUESTIONS_ROOM,
+  viewer: { ...STUDIO_QUESTIONS_ROOM.viewer, role: "operator" },
   thread: {
     type: "question.answers",
-    questionId: ROOM.questions[0]!.id,
+    questionId: STUDIO_QUESTIONS_ROOM.questions[0]!.id,
     answers: sampleLiveAnswers,
     canAnswer: true,
     canAccept: true,
@@ -135,12 +136,15 @@ const ON_AIR = "40000000-0000-4000-8000-000000000031";
 const PINNED = "40000000-0000-4000-8000-000000000033";
 const stageQuestion = (id: string, text: string) => liveStageQuestionSchema.parse({ id, text, authorName: null });
 const SCREENS_ROOM: LiveRoomState = {
-  ...ROOM,
-  questions: [ROOM.questions[0]!, asked(PINNED, "Can we keep RSA for the root and go hybrid below it?", { votes: 4 })],
+  ...STUDIO_QUESTIONS_ROOM,
+  questions: [
+    STUDIO_QUESTIONS_ROOM.questions[0]!,
+    asked(PINNED, "Can we keep RSA for the root and go hybrid below it?", { votes: 4 }),
+  ],
   preparedQuestions: [],
-  stage: { ...ROOM.stage, question: stageQuestion(ON_AIR, ROOM.questions[0]!.text) },
+  stage: { ...STUDIO_QUESTIONS_ROOM.stage, question: stageQuestion(ON_AIR, STUDIO_QUESTIONS_ROOM.questions[0]!.text) },
   outputs: {
-    ...ROOM.outputs,
+    ...STUDIO_QUESTIONS_ROOM.outputs,
     projector: { ...EMPTY_LIVE_AUX_COMPOSITION, question: stageQuestion(PINNED, "Pinned") },
     "stage-display": EMPTY_LIVE_AUX_COMPOSITION,
   },
@@ -161,9 +165,9 @@ const CARRIED_TARGETS = {
 const ANSWERED_TARGETS = {
   ...TARGETS,
   state: {
-    ...ROOM,
+    ...STUDIO_QUESTIONS_ROOM,
     questions: [
-      ...ROOM.questions,
+      ...STUDIO_QUESTIONS_ROOM.questions,
       asked("40000000-0000-4000-8000-000000000034", "Will the slides be shared after the session?", {
         status: "answered",
         votes: 6,
@@ -249,7 +253,12 @@ export const studioQuestionSections: PreviewSection[] = [
     note: "From the panel's +: the question and, optionally, whom it is for. It comes in anonymously.",
     render: () => (
       <div data-density="compact">
-        <LivePreparedQuestionDialog question={null} credits={ROOM.session.credits} send={send} onClose={noCommand} />
+        <LivePreparedQuestionDialog
+          question={null}
+          credits={STUDIO_QUESTIONS_ROOM.session.credits}
+          send={send}
+          onClose={noCommand}
+        />
       </div>
     ),
   },
@@ -260,8 +269,8 @@ export const studioQuestionSections: PreviewSection[] = [
     render: () => (
       <div data-density="compact">
         <LivePreparedQuestionWindowDialog
-          window={ROOM.preparedQuestionWindow!}
-          session={ROOM.session}
+          window={STUDIO_QUESTIONS_ROOM.preparedQuestionWindow!}
+          session={STUDIO_QUESTIONS_ROOM.session}
           clock="UTC"
           send={send}
           onClose={noCommand}
