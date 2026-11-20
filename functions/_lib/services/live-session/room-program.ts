@@ -88,6 +88,13 @@ export class LiveRoomProgram {
   private async bound(eventId: string, roomId: string) {
     return this.boundValue(eventId, roomId, await this.ctx.storage.get(KEY));
   }
+  /** The session loaded in this physical room, from storage alone, for the virtual room's read; null for none. */
+  async loaded(eventId: string, roomId: string): Promise<string | null> {
+    const saved = await this.ctx.storage.get(KEY);
+    if (saved === undefined) return null;
+    const program = storedProgramSchema.parse(saved);
+    return program.eventId === eventId && program.roomId === roomId ? program.selection.occurrenceId : null;
+  }
   async read(eventId: string, roomId: string): Promise<LiveProgramSelection> {
     try {
       await readPublishedProgramRoom(this.env.DB, eventId, roomId);
@@ -164,7 +171,10 @@ export class LiveRoomProgram {
     if (previousOccurrenceId && previousOccurrenceId !== selection.occurrenceId && this.env.LIVE_SESSION_ROOMS)
       await this.env.LIVE_SESSION_ROOMS.getByName(liveRoomName(eventId, previousOccurrenceId)).endProgramSources(
         roomId,
+        selection.occurrenceId,
       );
+    if (selection.occurrenceId && previousOccurrenceId !== selection.occurrenceId && this.env.LIVE_SESSION_ROOMS)
+      await this.env.LIVE_SESSION_ROOMS.getByName(liveRoomName(eventId, selection.occurrenceId)).enterProgram();
     // Carry room graphics into the newly active session; session-bound questions and polls stay behind.
     if (previousOccurrenceId && selection.occurrenceId && previousOccurrenceId !== selection.occurrenceId) {
       const rooms = this.env.LIVE_SESSION_ROOMS;

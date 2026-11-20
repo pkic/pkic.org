@@ -181,6 +181,8 @@ describe("virtual room access", () => {
             name: "Main hall",
             stream: { provider: "youtube", videoId: usual },
             days: [{ dayDate: "2026-12-03", stream: { provider: "youtube", videoId: dayTwo } }],
+            // The studio has no session loaded, so the room follows the agenda.
+            loadedOccurrenceId: null,
           },
         ],
         productionPartners: [],

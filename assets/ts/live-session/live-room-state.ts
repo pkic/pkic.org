@@ -104,6 +104,8 @@ export function applyLiveRoomMessage(
       return { ...state, screenSync: message.screenSync };
     case "room.opening.changed":
       return { ...state, opening: message.opening };
+    case "room.moved.changed":
+      return { ...state, movedOn: message.movedOn };
     case "sources.changed":
       return { ...state, sources: message.sources };
     case "program.cleared":

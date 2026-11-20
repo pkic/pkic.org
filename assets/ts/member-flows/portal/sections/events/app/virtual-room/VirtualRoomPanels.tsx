@@ -5,6 +5,7 @@
 import { useEffect, useState } from "preact/hooks";
 import type { ClockZone } from "../../../../../../../shared/event-clock";
 import { formatClockInZone } from "../../../../../../../shared/format-date";
+import { liveRoomWindow } from "../../../../../../../shared/live-session-policy";
 import { LiveChatClosed } from "../../../../../../live-session/LiveChat";
 import { useLiveParticipation } from "../../../../../../live-session/LiveParticipationAlert";
 import { LiveReactionBar } from "../../../../../../live-session/LiveReactionBar";
@@ -17,11 +18,11 @@ import type { RoomMoment, RoomSession } from "./virtual-room-schedule";
 /** How long before the room moves on attendees read when this session's chat and questions end. */
 const ENDING_NOTICE_MS = 10 * 60_000;
 
-/** The room's one live connection: the session it follows, whether its room is open, and the room itself. */
+/** The room's one live connection: the session it is on, whether its room is open, and the room itself. */
 export interface RoomLive {
-  /** The session running in the location, or the next one, whose room may already be open. */
+  /** The session the studio has loaded, else the one running in the location or the next one. */
   session: RoomSession | null;
-  /** The location's moment as the room shows it: a session its operators keep open stays the one running. */
+  /** The location's moment as the room shows it: the studio's session is the one running. */
   moment: RoomMoment;
   /** Whether that session takes questions and poll answers now: from when it is scheduled until its room closes. */
   open: boolean;
@@ -36,30 +37,55 @@ export interface RoomLive {
 
 /**
  * One connection to the live room of the session the location is on, shared by the reactions, the questions
- * and the chat, so a viewer holds one however many of them are on screen. The agenda picks the session, and
- * the room moves on at its scheduled end, unless its operators opened its room: then it stays on it until they
- * hand the room back to the agenda or close it, so a session that runs over keeps its questions and chat.
+ * and the chat, so a viewer holds one however many of them are on screen. The room follows the studio: it is
+ * on the session loaded there, early or running over, and moves on when the studio loads another. A session
+ * the studio left loaded holds the room only until its own room closes on schedule, unless an operator opened
+ * it; a location without a loaded session follows the agenda, moving on at each scheduled end.
  */
-export function useRoomLive(slug: string, moment: RoomMoment, zone: ClockZone): RoomLive {
+export function useRoomLive(
+  slug: string,
+  moment: RoomMoment,
+  sessions: readonly RoomSession[],
+  loadedId: string | null,
+  zone: ClockZone,
+): RoomLive {
+  const [followed, follow] = useState(loadedId);
+  useEffect(() => follow(loadedId), [loadedId]);
+  const now = useMinuteClock();
+  const studio = sessions.find((session) => session.id === followed) ?? null;
   const scheduled = moment.current ?? moment.upcoming[0] ?? null;
-  const [held, setHeld] = useState<RoomSession | null>(null);
-  const session = held ?? scheduled;
+  const [kept, keep] = useState(false);
+  const studioCloses = studio ? liveRoomWindow(studio.startAt, studio.endAt).closesAt : -Infinity;
+  const session = studio && (now <= studioCloses || kept) ? studio : scheduled;
   const connection = useLiveRoom({ slug, occurrenceId: session?.id ?? "", enabled: Boolean(session) });
   // What the previous session's room last said is not this session's: until this one answers, there is none.
   const state = connection.state?.session.occurrenceId === session?.id ? connection.state : null;
   const opening = state?.opening ?? "scheduled";
+  const onStudio = Boolean(studio && session === studio);
+  useEffect(() => keep(onStudio && opening === "open"), [onStudio, opening]);
+  // The studio went on from its session: so does the room, to the session loaded next or back to the agenda.
+  const movedOn = onStudio ? state?.movedOn : null;
   useEffect(() => {
-    if (opening === "open" && session && held?.id !== session.id) setHeld(session);
-    else if (held && state && opening !== "open") setHeld(null);
-  }, [opening, session, held, state]);
+    if (movedOn) follow(movedOn.occurrenceId);
+  }, [movedOn]);
   const open = useLiveWindow(session?.startAt ?? "", session?.endAt ?? "", "questions", opening) && Boolean(session);
   const live = useLiveWindow(session?.startAt ?? "", session?.endAt ?? "", "live", opening) && open;
-  const now = useMinuteClock();
-  const ending =
-    session && opening === "scheduled" && session === moment.current ? Date.parse(session.endAt) - now : Infinity;
+  const movesAt =
+    !session || opening !== "scheduled"
+      ? Infinity
+      : onStudio
+        ? studioCloses
+        : session === moment.current
+          ? Date.parse(session.endAt)
+          : Infinity;
   const shown =
-    held && held.id !== moment.current?.id
-      ? { current: held, upcoming: [moment.current, ...moment.upcoming].filter((next) => next !== null) }
+    onStudio && studio && studio.id !== moment.current?.id
+      ? {
+          current: studio,
+          upcoming: [moment.current, ...moment.upcoming].filter(
+            (next): next is RoomSession => next !== null && next.id !== studio.id,
+          ),
+        }
       : moment;
   return {
     session,
@@ -67,7 +93,10 @@ export function useRoomLive(slug: string, moment: RoomMoment, zone: ClockZone): 
     open,
     live,
     closedEarly: opening === "closed",
-    endsSoon: session && ending > 0 && ending <= ENDING_NOTICE_MS ? formatClockInZone(session.endAt, zone) : null,
+    endsSoon:
+      movesAt > now && movesAt - now <= ENDING_NOTICE_MS
+        ? formatClockInZone(new Date(movesAt).toISOString(), zone)
+        : null,
     room: state ? connection : { ...connection, state: null },
   };
 }

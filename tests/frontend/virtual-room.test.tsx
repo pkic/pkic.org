@@ -102,6 +102,8 @@ const sponsors = sponsorsDisplayResponseSchema.parse({
 let host: HTMLDivElement;
 let streamStatus = 200;
 let waiting = false;
+/** The session the studio has loaded in the main hall. */
+let loadedInHall: string | null = null;
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/portal/#/events/summit/virtual");
@@ -111,13 +113,23 @@ beforeEach(() => {
   hashLocation.navigate.mockClear();
   streamStatus = 200;
   waiting = false;
+  loadedInHall = null;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
       const path = new URL(String(input), location.origin).pathname;
       if (path.endsWith("/agenda/streams"))
         return streamStatus === 200
-          ? Response.json(waiting ? { ...streams, locations: [] } : streams)
+          ? Response.json(
+              waiting
+                ? { ...streams, locations: [] }
+                : {
+                    ...streams,
+                    locations: streams.locations.map((location) =>
+                      location.id === HALL ? { ...location, loadedOccurrenceId: loadedInHall } : location,
+                    ),
+                  },
+            )
           : Response.json(
               { error: { code: "VIRTUAL_ROOM_UNAVAILABLE", message: "A registration is required." } },
               { status: streamStatus },
@@ -175,6 +187,36 @@ function onDesktop() {
     addEventListener: () => undefined,
     removeEventListener: () => undefined,
   }));
+}
+
+/** The rooms the virtual room connects to, and a way to answer as the latest one would. */
+function fakeRoomSockets() {
+  const sockets: FakeLiveSocket[] = [];
+  vi.stubGlobal(
+    "WebSocket",
+    class extends FakeLiveSocket {
+      static OPEN = 1;
+      constructor(url: string, protocols: string[]) {
+        super(url, protocols);
+        sockets.push(this);
+      }
+    },
+  );
+  const roomOn = () => new URL(sockets.at(-1)!.url).pathname.split("/").at(-2);
+  const answer = async (opening: "scheduled" | "open" | "closed") => {
+    const id = roomOn()!;
+    const session = program.agenda!.occurrences.find((item) => item.id === id)!;
+    await act(async () => {
+      sockets.at(-1)!.open();
+      sockets.at(-1)!.deliver(
+        liveSnapshot({
+          opening,
+          session: { ...liveSnapshot().session, occurrenceId: id, startAt: session.startAt!, endAt: session.endAt! },
+        }),
+      );
+    });
+  };
+  return { sockets, roomOn, answer };
 }
 
 const player = () => host.querySelector<HTMLIFrameElement>("iframe");
@@ -300,57 +342,37 @@ describe("virtual room", () => {
     expect(vi.mocked(fetch).mock.calls.length).toBe(requests);
   });
 
-  it("says when chat and questions close, and stays on a session its operators keep open until they hand it back", async () => {
-    const sockets: FakeLiveSocket[] = [];
-    vi.stubGlobal(
-      "WebSocket",
-      class extends FakeLiveSocket {
-        static OPEN = 1;
-        constructor(url: string, protocols: string[]) {
-          super(url, protocols);
-          sockets.push(this);
-        }
-      },
-    );
-    const answer = async (opening: "scheduled" | "open" | "closed") => {
-      const socket = sockets.at(-1)!;
-      const id = new URL(socket.url).pathname.split("/").at(-2)!;
-      const session = program.agenda!.occurrences.find((item) => item.id === id)!;
-      await act(async () => {
-        socket.open();
-        socket.deliver(
-          liveSnapshot({
-            opening,
-            session: { ...liveSnapshot().session, occurrenceId: id, startAt: session.startAt!, endAt: session.endAt! },
-          }),
-        );
-      });
-    };
-    const roomOn = () => new URL(sockets.at(-1)!.url).pathname.split("/").at(-2);
-    vi.setSystemTime(new Date("2027-01-20T09:52:00.000Z"));
+  it("follows the session loaded in the studio past its end, until the studio loads the next one", async () => {
+    const { sockets, roomOn, answer } = fakeRoomSockets();
+    // The keynote runs over: the agenda has the panel on, the studio still the keynote.
+    loadedInHall = KEYNOTE;
+    vi.setSystemTime(new Date("2027-01-20T10:22:00.000Z"));
     onDesktop();
     await open();
     await answer("scheduled");
-    // The viewer reads the time in their own zone, an hour ahead of the agenda's.
-    expect(host.textContent).toContain("Questions for this session close at 11:00");
-    expect(host.textContent).toContain("Chat for this session closes at 11:00");
-
-    await act(async () => sockets.at(-1)!.deliver({ type: "room.opening.changed", opening: "open" }));
-    expect(host.textContent).not.toContain("close at 11:00");
-    await act(async () => {
-      vi.advanceTimersByTime(15 * 60_000);
-    });
     expect(nowPlaying()).toContain("Opening keynote");
     expect(roomOn()).toBe(KEYNOTE);
+    // Its room closes half an hour after its scheduled end, in the viewer's zone an hour ahead of the agenda's.
+    expect(host.textContent).toContain("Questions for this session close at 11:30");
+    expect(host.textContent).toContain("Chat for this session closes at 11:30");
 
-    // Handing the room back moves it on to the session the agenda has running now.
-    await act(async () => sockets.at(-1)!.deliver({ type: "room.opening.changed", opening: "scheduled" }));
+    // The studio loads the panel: the room goes with it.
+    await act(async () => sockets.at(-1)!.deliver({ type: "room.moved.changed", movedOn: { occurrenceId: PANEL } }));
     expect(nowPlaying()).toContain("Migration panel");
     expect(roomOn()).toBe(PANEL);
     await answer("closed");
     expect(host.textContent).toContain("The organizers closed questions.");
     expect(host.textContent).toContain("The organizers closed the chat.");
-    expect(roomOn()).toBe(PANEL);
+  });
+
+  it("moves on at the scheduled end when the studio has nothing loaded, and says when", async () => {
+    const { answer } = fakeRoomSockets();
+    vi.setSystemTime(new Date("2027-01-20T09:52:00.000Z"));
+    onDesktop();
+    await open();
+    await answer("scheduled");
+    expect(nowPlaying()).toContain("Opening keynote");
+    expect(host.textContent).toContain("Questions for this session close at 11:00");
   });
 
   it("restores the bookmarked room panel without putting attendee input in the URL", async () => {

@@ -15,19 +15,21 @@ const OPENINGS: ReadonlyArray<{ id: LiveRoomOpening; label: string; short: strin
     id: "open",
     label: "Open now",
     short: "Open",
-    description: "Everything opens. The virtual room stays on this session until you change this.",
+    description: "Everything opens, until you change this or load another session.",
   },
   {
     id: "closed",
     label: "Closed",
     short: "Closed",
-    description: "Attendees cannot chat, react, ask questions or answer polls.",
+    description:
+      "Attendees cannot chat, react, ask questions or answer polls, until you change this or load another session.",
   },
 ];
 
 /**
  * Whether attendees take part in this session's virtual room: on schedule, or opened or closed by an
- * operator, to test the room, let a discussion run on, or stop it. The choice holds until changed.
+ * operator, to test the room, let a discussion run on, or stop it. The choice holds until changed or until
+ * the studio loads another session, which hands it back to the schedule.
  */
 export function RoomOpeningMenu({
   opening,

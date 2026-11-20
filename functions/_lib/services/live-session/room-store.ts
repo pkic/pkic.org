@@ -41,6 +41,8 @@ import {
 import {
   liveRoomOpeningSnapshotSchema,
   type LiveRoomOpening,
+  liveRoomMovedOnSnapshotSchema,
+  type LiveRoomMovedOn,
 } from "../../../../assets/shared/schemas/live-room-opening";
 import { copyableLivePolls, type LivePollCopy } from "./room-poll-store";
 import type { LiveRoomSql } from "./room-sql";
@@ -492,6 +494,16 @@ export class LiveRoomStore {
 
   saveOpening(opening: LiveRoomOpening): void {
     this.saveControl("opening", opening);
+  }
+
+  /** Where the studio went on from this session, or null while it has not. */
+  movedOn(): LiveRoomMovedOn | null {
+    const saved = liveRoomMovedOnSnapshotSchema.safeParse(this.control("moved-on") ?? undefined);
+    return saved.success ? saved.data : null;
+  }
+
+  saveMovedOn(movedOn: LiveRoomMovedOn | null): void {
+    this.saveControl("moved-on", movedOn);
   }
 
   private control(name: string): unknown {

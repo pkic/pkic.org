@@ -81,7 +81,7 @@ export function VirtualRoom({
               (session) => session.roomId === room.id && agendaOccurrenceMedia(agenda.rooms, session).liveStreaming,
             )),
       )
-      .map((room) => ({ id: room.id, name: room.name, stream: null, days: [] }));
+      .map((room) => ({ id: room.id, name: room.name, stream: null, days: [], loadedOccurrenceId: null }));
     return [...configured, ...waiting];
   }, [streams.data, agenda]);
   const roomId = chooseLocation(locations, agenda, { room: query.get("room"), session: query.get("session") });
@@ -94,8 +94,8 @@ export function VirtualRoom({
   // A phone opens where attendees take part: the questions and polls of the session on or next, which take
   // questions ahead of time. Only with no session left does it open on the agenda.
   const viewerZone = agendaTimeZones(timeZone, viewerTimeZone(), "remote").primary.zone;
-  // The room may stay on a session its operators keep open after the agenda moved on; it says what it is on.
-  const live = useRoomLive(slug, roomMoment(sessions, now), viewerZone);
+  // The room follows the session loaded in the studio, which may run over or start early; it says what it is on.
+  const live = useRoomLive(slug, roomMoment(sessions, now), sessions, room?.loadedOccurrenceId ?? null, viewerZone);
   const moment = live.moment;
   const defaultPanel: RoomPanelId = live.session ? "questions" : "agenda";
   const [panel, setPanel] = useHashQueryParam("roomPanel", defaultPanel, ROOM_PANELS);

@@ -242,8 +242,15 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
   }
 
-  async endProgramSources(roomId: string): Promise<void> {
+  /** The studio loaded another session in this physical room, `next`, or none. */
+  async endProgramSources(roomId: string, next: string | null): Promise<void> {
     closeLiveRoomProgramSources(this.ctx, roomId);
+    for (const message of this.controls.programLeft(next)) await this.broadcast.all(message);
+  }
+
+  /** The studio loaded this session in its physical room. */
+  async enterProgram(): Promise<void> {
+    for (const message of this.controls.programEntered()) await this.broadcast.all(message);
   }
 
   async programStage(): Promise<LiveStage> {
@@ -262,6 +269,9 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
 
   async readProgram(eventId: string, roomId: string): Promise<LiveProgramSelection> {
     return this.program.read(eventId, roomId);
+  }
+  async loadedProgram(eventId: string, roomId: string): Promise<string | null> {
+    return this.program.loaded(eventId, roomId);
   }
   async selectProgram(
     eventId: string,

@@ -108,6 +108,7 @@ export class LiveRoomBroadcast {
       stageDisplaySettings: this.store.stageDisplaySettings(),
       screenSync: this.store.screenSync(),
       opening: this.store.opening(),
+      movedOn: this.store.movedOn(),
       sources: operator ? this.sources() : NO_LIVE_ROOM_SOURCES,
     });
   }

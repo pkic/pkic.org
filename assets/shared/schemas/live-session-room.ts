@@ -355,6 +355,7 @@ export const liveRoomSnapshotSchema = z
     screenSync: screenSync.liveScreenSyncSnapshotSchema,
     /** Whether attendees take part on schedule, or because an operator opened or closed the room. */
     opening: roomOpening.liveRoomOpeningSnapshotSchema,
+    movedOn: roomOpening.liveRoomMovedOnSnapshotSchema,
     /** How many sources draw each output now; operators only, zeros for everyone else. */
     sources: roomSources.liveRoomSourcesSnapshotSchema,
   })
@@ -400,6 +401,7 @@ export const liveRoomServerMessageSchema = z.discriminatedUnion("type", [
   stageDisplaySettings.liveStageDisplaySettingsChangedSchema,
   screenSync.liveScreenSyncChangedSchema,
   roomOpening.liveRoomOpeningChangedSchema,
+  roomOpening.liveRoomMovedOnChangedSchema,
   /** Operators only: a source of one of the room's outputs connected or dropped. */
   roomSources.liveRoomSourcesChangedSchema,
   /** Operators only: Program was cleared, and this snapshot restores it. */

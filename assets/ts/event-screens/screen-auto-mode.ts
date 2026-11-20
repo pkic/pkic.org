@@ -114,6 +114,7 @@ export function screenAutoState(
     stageDisplaySettings: DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS,
     screenSync: DEFAULT_LIVE_SCREEN_SYNC,
     opening: DEFAULT_LIVE_ROOM_OPENING,
+    movedOn: null,
     sources: NO_LIVE_ROOM_SOURCES,
   };
   return applyLiveRoomMessage(null, snapshot);

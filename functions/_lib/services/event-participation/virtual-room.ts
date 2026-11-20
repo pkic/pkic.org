@@ -16,6 +16,7 @@ import { permissionAuthorizationEvidenceForResource } from "../../auth/permissio
 import { eventReadIdSql, type EventReadSelection } from "../events/selection";
 import { readParticipantEvent } from "./participant-read-context";
 import { decodeEventProductionPartners, eventProductionPartnersJsonSql } from "../events/production-partners";
+import { liveProgramName } from "../live-session/room-program";
 
 /** Canonical permission evidence remains server-owned and live in this read snapshot. */
 function viewerMayWatchSql(staff: string) {
@@ -47,7 +48,9 @@ export function prepareVirtualRoom(
         .bind(...bindings),
     ],
     decode(loaded: D1StatementResult[]) {
-      const allowed = batchFirst<{ allowed: number; timezone: string; partners_json: string | null }>(loaded[0]);
+      const allowed = batchFirst<{ id: string; allowed: number; timezone: string; partners_json: string | null }>(
+        loaded[0],
+      );
       if (!allowed?.allowed)
         throw new AppError(
           403,
@@ -61,20 +64,47 @@ export function prepareVirtualRoom(
         location.rows.push(row);
         locations.set(row.id, location);
       }
-      return virtualRoomResponseSchema.parse({
-        timeZone: allowed.timezone,
-        locations: [...locations.values()].map(({ id, name, rows: streams }) => ({
-          id,
-          name,
-          ...locationStreams(streams),
-        })),
-        productionPartners: decodeEventProductionPartners(allowed.partners_json),
-      });
+      return {
+        eventId: allowed.id,
+        room: virtualRoomResponseSchema.parse({
+          timeZone: allowed.timezone,
+          locations: [...locations.values()].map(({ id, name, rows: streams }) => ({
+            id,
+            name,
+            ...locationStreams(streams),
+          })),
+          productionPartners: decodeEventProductionPartners(allowed.partners_json),
+        }),
+      };
     },
   };
 }
 
-export function readVirtualRoomRequest(
+/**
+ * The virtual room's read with the session the studio has loaded in each location, which the room follows.
+ * One storage read per streamed location's program; a location without one follows the agenda.
+ */
+export async function readVirtualRoomRequest(
+  db: DatabaseLike,
+  request: Request,
+  env: Pick<Env, "INTERNAL_SIGNING_SECRET" | "LIVE_SESSION_ROOMS">,
+  slug: string,
+) {
+  const { eventId, room } = await readVirtualRoomStreams(db, request, env, slug);
+  const rooms = env.LIVE_SESSION_ROOMS;
+  if (!rooms) return room;
+  const loaded = await Promise.all(
+    room.locations.map((location) =>
+      rooms.getByName(liveProgramName(eventId, location.id)).loadedProgram(eventId, location.id),
+    ),
+  );
+  return {
+    ...room,
+    locations: room.locations.map((location, index) => ({ ...location, loadedOccurrenceId: loaded[index] })),
+  };
+}
+
+function readVirtualRoomStreams(
   db: DatabaseLike,
   request: Request,
   env: Pick<Env, "INTERNAL_SIGNING_SECRET">,

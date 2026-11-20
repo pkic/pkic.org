@@ -43,8 +43,13 @@ export interface LiveSessionRoomRpc extends Rpc.DurableObjectBranded {
   chatArchive(): Promise<LiveChatArchiveRow[]>;
   /** Erases the room's chat once its session has closed; false while it is still open. */
   eraseChat(): Promise<boolean>;
-  endProgramSources(roomId: string): Promise<void>;
+  /** The studio loaded another session in the physical room, or none: attendees follow it there. */
+  endProgramSources(roomId: string, next: string | null): Promise<void>;
+  /** The studio loaded this session in its physical room. */
+  enterProgram(): Promise<void>;
   readProgram(eventId: string, roomId: string): Promise<LiveProgramSelection>;
+  /** The session loaded in a physical room, for the virtual room; null for none. */
+  loadedProgram(eventId: string, roomId: string): Promise<string | null>;
   /** The composition this session's room has on Program. */
   programStage(): Promise<LiveStage>;
   /** Takes over another session's Program as it is, so making a session active never changes the picture. */

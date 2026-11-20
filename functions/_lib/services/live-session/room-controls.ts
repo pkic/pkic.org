@@ -271,6 +271,26 @@ export class LiveRoomControls {
     return { messages: [{ type: "room.opening.changed", opening }] };
   }
 
+  /**
+   * The studio loaded another session in this physical room, or none. Attendees still on this session follow
+   * it there, and an operator's opening goes back to the schedule, so it never outlives the session it was set on.
+   */
+  programLeft(occurrenceId: string | null): LiveRoomServerMessage[] {
+    const movedOn = { occurrenceId };
+    this.store.saveMovedOn(movedOn);
+    const messages: LiveRoomServerMessage[] = [{ type: "room.moved.changed", movedOn }];
+    if (this.store.opening() === "scheduled") return messages;
+    this.store.saveOpening("scheduled");
+    return [...messages, { type: "room.opening.changed", opening: "scheduled" }];
+  }
+
+  /** The studio loaded this session again: attendees stay on it. */
+  programEntered(): LiveRoomServerMessage[] {
+    if (!this.store.movedOn()) return [];
+    this.store.saveMovedOn(null);
+    return [{ type: "room.moved.changed", movedOn: null }];
+  }
+
   /** A rewritten question already on air, on Program or any other output, shows its new text at once. */
   refreshQuestionOnStage(questionId: string): LiveRoomServerMessage[] {
     const stage = this.store.stage();
