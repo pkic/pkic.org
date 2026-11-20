@@ -15,10 +15,12 @@ export function scannerImmersiveLifecycle(
   // Native document scrolling remains disabled while the scanner owns the viewport.
   document.body.classList.add("pk-scanner-immersive");
   const visibility = () => {
-    if (document.visibilityState !== "visible") {
-      wakeLock.release();
-      onExit();
+    if (document.visibilityState === "visible") {
+      void wakeLock.acquire();
+      return;
     }
+    wakeLock.release();
+    onExit();
   };
   const escape = (event: KeyboardEvent) => {
     if (event.key === "Escape") onExit();

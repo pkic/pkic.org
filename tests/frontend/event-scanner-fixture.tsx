@@ -164,7 +164,12 @@ afterEach(async () => {
   vi.clearAllMocks();
   vi.unstubAllGlobals();
 });
-export async function mount(ready: boolean, actions: EventScanRequest["action"][] = ["check"], sponsorId?: string) {
+export async function mount(
+  ready: boolean,
+  actions: EventScanRequest["action"][] = ["check"],
+  sponsorId?: string,
+  printHref?: string,
+) {
   mocks.ready = ready;
   mocks.state = ready ? "open" : "preparing";
   host = document.createElement("div");
@@ -180,6 +185,7 @@ export async function mount(ready: boolean, actions: EventScanRequest["action"][
         operatorUserId="11111111-1111-4111-8111-111111111111"
         allowedActions={actions}
         sponsorId={sponsorId}
+        printHref={printHref}
       />,
       host,
     );
@@ -204,8 +210,10 @@ export async function openManual(title = "Enter badge code") {
     Object.defineProperty(dialog, "close", { configurable: true, value: () => dialog.removeAttribute("open") });
     await act(async () =>
       Array.from(host.querySelectorAll("button"))
-        .find(
-          (button) => (button.getAttribute("aria-label") ?? button.textContent?.trim()) === "Find attendee or badge",
+        .find((button) =>
+          /^(Find attendee or badge|Enter badge code)$/.test(
+            button.getAttribute("aria-label") ?? button.textContent?.trim() ?? "",
+          ),
         )!
         .click(),
     );
@@ -221,8 +229,10 @@ export async function openManual(title = "Enter badge code") {
   if (!host.querySelector('.pk-fast-scanner input[name="badgeId"]')) {
     await act(async () =>
       Array.from(host.querySelectorAll("button"))
-        .find(
-          (button) => (button.getAttribute("aria-label") ?? button.textContent?.trim()) === "Find attendee or badge",
+        .find((button) =>
+          /^(Find attendee or badge|Enter badge code)$/.test(
+            button.getAttribute("aria-label") ?? button.textContent?.trim() ?? "",
+          ),
         )!
         .click(),
     );

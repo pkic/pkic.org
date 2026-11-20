@@ -20,7 +20,11 @@ export function scannerConnectionLabel({
 }) {
   if (error) return error;
   if (!ready) return "Checking saved scans…";
-  if (!online || collector)
+  if (collector)
+    return pending
+      ? `${formatNumber(pending)} saved on this device · sign in to upload`
+      : "Saved scanner · sign in to upload";
+  if (!online)
     return pending ? `Offline · ${formatNumber(pending)} saved on this device` : "Offline · no pending scans";
   if (pending)
     return syncing
@@ -96,19 +100,25 @@ export function ScannerConnectionStatus({
       ? uploadStatus
       : "");
   const readiness = preparation ? scannerReadinessLabel(preparation) : null;
-  const connection = props.online && !props.collector ? "Online" : "Offline";
-  const uploads = props.pending
-    ? `${formatNumber(props.pending)} awaiting upload${props.syncing ? " · syncing…" : ""}`
-    : props.syncing
-      ? "Checking uploads…"
-      : "All scans synced";
+  const connection = props.collector ? "Saved scanner" : props.online ? "Online" : "Offline";
+  const uploads = props.collector
+    ? props.pending
+      ? `${formatNumber(props.pending)} awaiting upload · sign in`
+      : "Sign in to upload scans"
+    : props.pending
+      ? `${formatNumber(props.pending)} awaiting upload${props.syncing ? " · syncing…" : ""}`
+      : props.syncing
+        ? "Checking uploads…"
+        : "All scans synced";
   if (compact) {
     const label =
       error ||
       (props.ready === false ? "Checking saved scans…" : "") ||
       (preparation && !preparation.ready ? readiness : "") ||
       (preparation?.badgeCollection && preparation.ready && !preparation.badgeNamesPrepared ? readiness : "") ||
-      (!props.online || props.collector ? (props.pending ? `Offline · ${uploads}` : "Offline") : "") ||
+      (offlinePrepared === false && preparation?.ready ? "Keep open to scan offline" : "") ||
+      (props.collector ? `${connection} · ${uploads}` : "") ||
+      (!props.online ? (props.pending ? `Offline · ${uploads}` : "Offline") : "") ||
       uploads;
     const synced = label === "All scans synced";
     return (

@@ -34,6 +34,12 @@ export const scannerDeviceSessionClosingSchema = z
     sponsorId: databaseIdSchema.optional(),
   })
   .strict();
+export const scannerDeviceSessionResumptionSchema = z
+  .object({
+    deviceId: databaseIdSchema,
+    sponsorId: databaseIdSchema.optional(),
+  })
+  .strict();
 export const scannerDeviceSessionStatusSchema = z
   .object({
     epochId: databaseIdSchema,

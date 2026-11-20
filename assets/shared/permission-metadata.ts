@@ -46,6 +46,7 @@ export const PERMISSION_METADATA = {
   "users:read": { domain: "users", access: "read", label: "View user records" },
   "users:write": { domain: "users", access: "write", label: "Update user records" },
   "users:anonymize": { domain: "users", access: "write", label: "Anonymize user data" },
+  "users:delete": { domain: "users", access: "write", label: "Delete user accounts" },
   "audit:read": { domain: "audit", access: "read", label: "View audit history" },
   "analytics:read": { domain: "analytics", access: "read", label: "View analytics" },
   "retention:read": { domain: "retention", access: "read", label: "View retention policies" },

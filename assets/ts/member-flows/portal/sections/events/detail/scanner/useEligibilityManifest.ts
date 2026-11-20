@@ -229,6 +229,7 @@ export function useScannerOfflinePreparation(
   roomLabel?: string,
   expectedScope?: { occurrenceId: string | null; roomId: string | null },
   allowedActions?: readonly EventScanRequest["action"][],
+  purpose: "scan" | "collection" = "scan",
 ) {
   const preparedActions = useMemo(() => allowedActions ?? [action], [allowedActions, action]);
   const prepareCode = useContext(ScannerCodePreparation);
@@ -260,6 +261,7 @@ export function useScannerOfflinePreparation(
         epoch,
         manifest,
         action,
+        purpose,
         allowedActions: preparedActions,
         targetLabel,
         roomLabel,
@@ -283,6 +285,7 @@ export function useScannerOfflinePreparation(
   }, [
     slug,
     action,
+    purpose,
     preparedActions,
     targetLabel,
     roomLabel,
@@ -308,6 +311,7 @@ export function useScannerOfflinePreparation(
     prepared.route === route &&
     prepared.slug === slug &&
     prepared.action === action &&
+    (prepared.purpose ?? "scan") === purpose &&
     prepared.operatorUserId === session.identity.id &&
     prepared.sessionId === session.sessionId &&
     prepared.epochId === epoch.epochId &&

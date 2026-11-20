@@ -18,8 +18,8 @@ function interceptDatabase(database: DatabaseLike, handler: ProxyHandler<Databas
   });
 }
 
-/** Pauses the next D1 batch after all pre-batch reads have completed. */
-export function gateNextBatch(database: DatabaseLike): BatchGate {
+/** Pauses the next D1 batch after all pre-batch reads have completed; `skip` lets earlier batches (a batched read) through. */
+export function gateNextBatch(database: DatabaseLike, skip = 0): BatchGate {
   let signalReached!: () => void;
   let release!: () => void;
   const reached = new Promise<void>((resolve) => {
@@ -29,11 +29,12 @@ export function gateNextBatch(database: DatabaseLike): BatchGate {
     release = resolve;
   });
   let gated = false;
+  let passed = 0;
   const db = interceptDatabase(database, {
     get(target, property, receiver) {
       if (property !== "batch") return Reflect.get(target, property, receiver);
       return async (...args: Parameters<DatabaseLike["batch"]>) => {
-        if (!gated) {
+        if (!gated && passed++ >= skip) {
           gated = true;
           signalReached();
           await released;

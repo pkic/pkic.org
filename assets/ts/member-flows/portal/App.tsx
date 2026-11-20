@@ -14,6 +14,7 @@ import {
   scannerCollectorPath,
   clearScannerOfflineContexts,
   listPreparedScannerContexts,
+  scannerCaptureActive,
   scannerTransportUnavailable,
 } from "./sections/events/detail/scanner/scanner-offline-context";
 import { getJson, postJson, ApiClientError } from "../../shared/api-client";
@@ -130,6 +131,7 @@ export function App() {
   const [verifying, setVerifying] = useState(() => Boolean(portalMagicLinkToken(window.location.hash)));
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
+  const [showOfflineSignIn, setShowOfflineSignIn] = useState(false);
   const [organizationStep, setOrganizationStep] = useState<{ token: string; step: OrganizationStep } | null>(null);
 
   async function loadPortalSession(
@@ -142,6 +144,7 @@ export function App() {
       setSessionError(null);
     }
     const checkedSessionId = portalSession.value?.sessionId;
+    const activeScannerAtStart = scannerCaptureActive.value;
     let checkedLocalSession: Awaited<ReturnType<typeof readActiveUserSession>> = null;
     try {
       checkedLocalSession = await readActiveUserSession();
@@ -163,30 +166,30 @@ export function App() {
       if (portalSession.value?.identity.id !== session.identity.id) clearMemberProfile();
       scannerTransportUnavailable.value = false;
       setSessionError(null);
+      setShowOfflineSignIn(false);
       savePortalSession(session);
       const nextProfile = await getJson("/api/v1/users/current", myProfileSchema);
       if (isCurrent() && portalSession.value === session) saveProfile(nextProfile);
     } catch (error) {
       if (!isCurrent()) return portalSession.value !== null;
-      const scannerFallback =
-        Boolean(checkedLocalSession) &&
-        error instanceof ApiClientError &&
-        (error.status === 0 ||
-          error.status === 401 ||
-          error.status === 403 ||
-          error.status === 429 ||
-          error.status >= 500) &&
-        // An HTTP refusal must not replace normal sign-in with an empty scanner chooser.
-        (error.status === 0 ||
-          (await listPreparedScannerContexts().then(
+      const preparedScanner = checkedLocalSession
+        ? await listPreparedScannerContexts().then(
             (contexts) => contexts.length > 0,
-            () => true,
-          )));
-      if (scannerFallback) {
+            () => null,
+          )
+        : false;
+      if (!isCurrent()) return portalSession.value !== null;
+      if (preparedScanner && error instanceof ApiClientError && error.status === 401 && !activeScannerAtStart) {
+        scannerTransportUnavailable.value = false;
+        setShowOfflineSignIn(false);
+        setSessionError(null);
+        if (portalSession.value?.sessionId === checkedSessionId) clearUserSession();
+      } else if (preparedScanner) {
         scannerTransportUnavailable.value = true;
+        setShowOfflineSignIn(!activeScannerAtStart && error instanceof ApiClientError && error.status !== 0);
         setSessionError("We could not check sign-in. Saved scanner preparation remains available on this device.");
         if (portalSession.value?.sessionId === checkedSessionId) clearUserSession();
-      } else if (error instanceof ApiClientError && [401, 403].includes(error.status)) {
+      } else if (preparedScanner === false && error instanceof ApiClientError && [401, 403].includes(error.status)) {
         scannerTransportUnavailable.value = false;
         await clearScannerOfflineContexts(checkedLocalSession).catch(() => {
           if (isCurrent())
@@ -195,8 +198,7 @@ export function App() {
         if (!isCurrent()) return portalSession.value !== null;
         if (portalSession.value?.sessionId === checkedSessionId) clearUserSession();
       } else {
-        scannerTransportUnavailable.value =
-          error instanceof ApiClientError && error.status === 0 && error.code === "NETWORK_UNAVAILABLE";
+        scannerTransportUnavailable.value = false;
         setSessionError("We could not refresh your sign-in information. Keep this page open and try again shortly.");
       }
     }
@@ -286,7 +288,6 @@ export function App() {
 
   useEffect(() => {
     async function changed() {
-      scannerTransportUnavailable.value = false;
       const current = portalSession.value;
       if (!current) return;
       try {
@@ -301,7 +302,7 @@ export function App() {
     let reconnecting = false;
     let disposed = false;
     function reconnect() {
-      if (reconnecting || !navigator.onLine) return;
+      if (reconnecting) return;
       reconnecting = true;
       void (async () => {
         if (!(await resumePendingUserLogout()) && !portalSession.value)
@@ -315,7 +316,7 @@ export function App() {
         });
     }
     const resumeScanner = () => {
-      if (scannerTransportUnavailable.value && scannerCollectorPath(window.location.hash)) reconnect();
+      if (scannerTransportUnavailable.value && !scannerCaptureActive.value) reconnect();
     };
     const visible = () => {
       if (document.visibilityState === "visible") resumeScanner();
@@ -389,13 +390,29 @@ export function App() {
     </Alert>
   ) : null;
   const collectorRoute = scannerCollectorPath(window.location.hash);
-  if (!isAuthed.value && scannerTransportUnavailable.value)
+  if (!isAuthed.value && scannerTransportUnavailable.value && !showOfflineSignIn)
     return (
       <div class="pk pk-stack">
         <Suspense fallback={<VerifyingOverlay />}>
-          <OfflineScannerBootstrap route={collectorRoute} onCheckSignIn={() => void loadPortalSession()} />
+          <OfflineScannerBootstrap route={collectorRoute} onSignIn={() => setShowOfflineSignIn(true)} />
         </Suspense>
       </div>
+    );
+  if (!isAuthed.value && scannerTransportUnavailable.value && showOfflineSignIn)
+    return (
+      <Login
+        notice={
+          <Alert tone="warn" title="Could not check sign-in">
+            <p>If sign-in is unavailable, you can keep scanning with saved data on this device.</p>
+            <Button type="button" variant="secondary" onClick={() => setShowOfflineSignIn(false)}>
+              Continue scanning offline
+            </Button>
+          </Alert>
+        }
+        onSignedIn={async () => {
+          await loadPortalSession();
+        }}
+      />
     );
   if (sessionError && !isAuthed.value)
     return (

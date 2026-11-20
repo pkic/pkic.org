@@ -72,6 +72,7 @@ describe("portal System Users anonymize confirmation", () => {
               canWrite: true,
               canGrantAccess: false,
               canAnonymize: true,
+              canDelete: false,
               canManageMembership: false,
               canActivateIdentity: false,
             }}

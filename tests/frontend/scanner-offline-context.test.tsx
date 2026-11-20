@@ -307,13 +307,12 @@ describe("scanner-only offline preparation", () => {
     expect(key.length).toBeGreaterThan(200);
     expect(await restoreScannerOfflineContext(longRoute)).toMatchObject({ slug: longSlug, route: longRoute });
   });
-  it.each(["logout", "account", "closed", "tampered", "rollback", "expired", "ambiguous", "transport-restored"])(
+  it.each(["logout", "account", "tampered", "rollback", "expired", "ambiguous", "transport-restored"])(
     "refuses %s without deleting pending epoch evidence",
     async (reason) => {
       retain();
       if (reason === "logout") mocks.suspended.mockResolvedValue(true);
       if (reason === "account") mocks.active.mockResolvedValue({ sessionId: eventId, operatorUserId: operator });
-      if (reason === "closed") mocks.rows[0] = { ...mocks.rows[0], state: "closed", closingOperationId: device };
       if (reason === "tampered")
         mocks.rows[0] = { ...mocks.rows[0], collectorContext: { ...context(), email: "private@example.test" } };
       if (reason === "rollback") vi.setSystemTime(new Date("2026-10-07T08:59:59.999Z"));
@@ -464,8 +463,9 @@ describe("scanner-only offline preparation", () => {
       ),
     );
     await vi.waitFor(() =>
-      expect(host?.querySelector('[aria-label="Scanner status"]')?.textContent).toContain("Offline"),
+      expect(host?.querySelector('[aria-label="Scanner status"]')?.textContent).toContain("Saved scanner"),
     );
+    expect(host?.querySelector('[aria-label="Scanner status"]')?.textContent).not.toContain("Offline");
     expect(host.textContent).not.toContain("Recovery and diagnostics");
     expect(host.textContent).not.toContain("Recent scans");
     expect(host.textContent).not.toContain("Prepare badge data");
@@ -481,6 +481,24 @@ describe("scanner-only offline preparation", () => {
     expect(mocks.drain).not.toHaveBeenCalled();
     expect(mocks.backgroundSync).not.toHaveBeenCalled();
     expect(portalSession.value).toBeNull();
+  });
+  it("opens a saved badge collection in collection mode from a bare scanner link", async () => {
+    retain();
+    host = document.createElement("div");
+    document.body.append(host);
+    await act(async () =>
+      render(
+        <EventScanner
+          slug={slug}
+          operatorUserId={operator}
+          occurrenceId={occurrenceId}
+          allowedActions={["attendance"]}
+          collectorContext={{ ...context(), purpose: "collection" }}
+        />,
+        host!,
+      ),
+    );
+    await vi.waitFor(() => expect(host!.textContent).toContain("Badge collection"));
   });
   it("queues only the fixed original context and verifies using its prepared eligibility snapshot", async () => {
     retain();
