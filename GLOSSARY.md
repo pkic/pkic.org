@@ -50,7 +50,7 @@ Vendor-neutral: never name a specific production tool.
 - **Comes on with the scene**: a scene's setting for a graphic that fills itself from the room (news ticker, Up next, panel, top questions, chat, reactions): loading the scene on an output switches the graphic on there. The operator can still switch it off. Loading a scene never switches a graphic off.
 - **Switched in the studio**: the other setting for such a graphic: the scene only places it, and it stays on or off as the operator left it on that output.
 - **Pick**: what an operator chooses for a graphic that cannot fill itself: which person the lower third names, which question, poll, timer, or check-in code. Such a graphic is on only while it has a pick, and a scene never picks. The background and the QR code have neither a pick nor a switch: they are on whenever a scene that includes them is on.
-- **Lower third**: the name and title graphic for the current speaker, taken from their identity.
+- **Lower third**: the name and title graphic for the current speaker, taken from their identity. A person added without an account has no identity, so an operator types their name and second line.
 - **Ticker**: the scrolling message line.
 - **Switcher**: the production software, or the studio control that mirrors it.
 - **Livestream**: the room's live stream, as online viewers see it. A screen can show it full screen. Never "overflow".
