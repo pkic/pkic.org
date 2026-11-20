@@ -1,5 +1,6 @@
 import { activeOauthAuthorizationSql, oauthPermissionCeilingSql } from "./oauth/authorization-ceiling-query";
 import { scannerCapabilities } from "../../../assets/shared/event-scanner-permissions";
+import { eventTeamScannerRoleScopeSql } from "./event-team-scanner-scope";
 /**
  * Context-aware permission checking.
  *
@@ -57,6 +58,7 @@ function contextGrantSelection(requested: string, bindings: unknown[]) {
      FROM requested JOIN user_roles ur ON ur.user_id=requested.user_id
      JOIN role_permissions rp ON rp.role_id=ur.role_id
      WHERE ur.revoked_at IS NULL
+       AND ${eventTeamScannerRoleScopeSql("ur", "rp")}
        AND (ur.expires_at IS NULL OR ur.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))
        AND (ur.member_id IS NULL OR (ur.member_id=requested.member_id AND ur.context_type='group'
          AND EXISTS(SELECT 1 FROM group_memberships gm WHERE gm.group_id=ur.context_id
@@ -161,6 +163,7 @@ export async function computeGrantsForUser(
      FROM user_roles ur
      JOIN role_permissions rp ON rp.role_id = ur.role_id
      WHERE ur.user_id = ?
+       AND ${eventTeamScannerRoleScopeSql("ur", "rp")}
        AND ur.revoked_at IS NULL
        AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
        AND (
@@ -399,6 +402,7 @@ function buildPermissionsAuthorizationEvidence(
                       FROM user_roles role
                       JOIN role_permissions role_permission ON role_permission.role_id = role.role_id
                      WHERE role.user_id = actor.id
+                       AND ${eventTeamScannerRoleScopeSql("role", "role_permission")}
                        AND (role_permission.permission = requirement.permission OR (requirement.scanner_legacy_compatible=1 AND role_permission.permission='agenda:scan'))
                        AND role.revoked_at IS NULL
                        AND (role.expires_at IS NULL OR role.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
@@ -504,6 +508,7 @@ export function staffPermissionPredicate(userAlias = "u", globalOnly = false): s
       JOIN role_permissions rp ON rp.role_id = ur.role_id
       WHERE ur.user_id = ${userAlias}.id
         AND rp.permission = ?
+        AND ${eventTeamScannerRoleScopeSql("ur", "rp")}
         ${globalOnly ? "AND ur.context_type IS NULL AND ur.context_id IS NULL AND ur.member_id IS NULL" : ""}
         AND ur.revoked_at IS NULL
         AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
@@ -545,6 +550,7 @@ export async function findUsersWithPermission(db: DatabaseLike, permission: stri
        JOIN user_roles ur ON ur.user_id = u.id
        JOIN role_permissions rp ON rp.role_id = ur.role_id
      WHERE rp.permission = ?
+       AND ${eventTeamScannerRoleScopeSql("ur", "rp")}
        AND ur.revoked_at IS NULL
        AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
      UNION

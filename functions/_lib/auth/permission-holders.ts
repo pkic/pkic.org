@@ -2,6 +2,7 @@ import { all } from "../db/queries";
 import type { DatabaseLike } from "../types";
 import type { Permission } from "../../../assets/shared/schemas/permissions";
 import type { PermissionContext } from "./permissions";
+import { eventTeamScannerRoleScopeSql } from "./event-team-scanner-scope";
 
 export interface PermissionHolder {
   id: string;
@@ -34,6 +35,7 @@ export function listPermissionHolders(
             SELECT 1 FROM user_roles role
               JOIN role_permissions role_permission ON role_permission.role_id = role.role_id
              WHERE role.user_id = person.id AND role_permission.permission = ?
+               AND ${eventTeamScannerRoleScopeSql("role", "role_permission")}
                AND role.revoked_at IS NULL
                AND (role.expires_at IS NULL OR role.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
                AND (
