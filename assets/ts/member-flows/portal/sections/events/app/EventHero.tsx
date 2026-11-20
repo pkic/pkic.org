@@ -16,7 +16,7 @@
  * tab reads as part of the same app without repeating the event's name.
  */
 import type { ComponentChildren } from "preact";
-import { useId } from "preact/hooks";
+import { useId, useLayoutEffect, useRef } from "preact/hooks";
 import { useTitleHeading } from "../../../../../ui/HeadingOutline";
 import "../../../../../../design/tokens.event.generated.css";
 import "./EventHero.css";
@@ -51,14 +51,18 @@ export function EventHero({
 }: EventHeroProps) {
   const headingId = useId();
   const Heading = useTitleHeading();
+  const motifRef = useRef<HTMLSpanElement>(null);
+  // The event's own artwork replaces the default motif through a custom property the stylesheet reads.
+  useLayoutEffect(() => {
+    const motif = motifRef.current;
+    if (!motif) return;
+    if (motifUrl) motif.style.setProperty("--pk-event-hero-motif", `url(${JSON.stringify(motifUrl)})`);
+    else motif.style.removeProperty("--pk-event-hero-motif");
+  }, [motifUrl]);
   return (
     <header class={`pk-event-hero${compact ? " pk-event-hero--compact" : ""}`} aria-labelledby={headingId}>
       <div class="pk-event-hero__field">
-        <span
-          class="pk-event-hero__houses"
-          aria-hidden="true"
-          style={motifUrl ? { "--pk-event-hero-motif": `url(${JSON.stringify(motifUrl)})` } : undefined}
-        />
+        <span class="pk-event-hero__houses" aria-hidden="true" ref={motifRef} />
         <div class="pk-event-hero__top">
           {back ? (
             <a class="pk-event-hero__back" href={back.href}>
