@@ -1,55 +1,22 @@
 import { json } from "../../../../_lib/http";
-import { addHours, nowIso } from "../../../../_lib/utils/time";
-import {
-  clearInviteRemindersPause,
-  declineInvite,
-  findInviteByToken,
-  setInviteRemindersPausedUntil,
-} from "../../../../_lib/services/invites";
+import { findInviteByToken } from "../../../../_lib/services/invites";
+import { updateInviteReminderPreference } from "../../../../_lib/services/invite-reminder-preference";
 import { inviteReminderPreferenceRouteSchema } from "../../../../../assets/shared/schemas/invites";
 import { requireInternalSecret } from "../../../../_lib/request";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import type { AdminContext } from "../../../../_lib/db/context";
 
-type ReminderAction = "postpone_7d" | "pause_30d" | "resume" | "unsubscribe";
-
-async function updateInviteReminderPreference(
-  c: AdminContext,
-  token: string,
-  inviteId: string | undefined,
-  body: { action: ReminderAction },
-): Promise<Response> {
-  c.set?.("sensitive", true);
-  const invite = await findInviteByToken(c.env.DB, token, requireInternalSecret(c.env), inviteId ?? null);
-
-  if (body.action === "unsubscribe") {
-    await declineInvite(c.env.DB, {
-      inviteId: invite.id,
-      reasonCode: "not_interested",
-      unsubscribeFuture: true,
-    });
-    return json({ success: true, state: "unsubscribed" });
-  }
-
-  if (body.action === "resume") {
-    await clearInviteRemindersPause(c.env.DB, invite.id);
-    return json({ success: true, state: "active", pausedUntil: null });
-  }
-
-  const now = nowIso();
-  const pausedUntil = body.action === "postpone_7d" ? addHours(now, 24 * 7) : addHours(now, 24 * 30);
-
-  await setInviteRemindersPausedUntil(c.env.DB, invite.id, pausedUntil);
-
-  return json({
-    success: true,
-    state: body.action === "postpone_7d" ? "postponed" : "paused",
-    pausedUntil,
-  });
-}
-
 export const InviteRemindersPost = openApiRoute(
   inviteReminderPreferenceRouteSchema,
-  (c: AdminContext, data) => updateInviteReminderPreference(c, data.params.token, data.query.id, data.body),
+  async (c: AdminContext, data) => {
+    c.set?.("sensitive", true);
+    const invite = await findInviteByToken(
+      c.env.DB,
+      data.params.token,
+      requireInternalSecret(c.env),
+      data.query.id ?? null,
+    );
+    return json({ success: true, ...(await updateInviteReminderPreference(c.env.DB, invite, data.body.action)) });
+  },
   (c: AdminContext) => c.set?.("sensitive", true),
 );

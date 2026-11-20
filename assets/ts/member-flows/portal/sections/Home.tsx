@@ -37,6 +37,10 @@ import { fmt, formatRelativeDays } from "../ui";
 import { portalHasCapacity, portalSectionEnabled } from "../shell/portal-navigation";
 import { AccountOnlyHome } from "./AccountOnlyHome";
 import { AffiliationOfferCard } from "./AffiliationOfferCard";
+import { EventInvitationCards } from "./EventInvitationCards";
+import { eventParticipantRecordPath } from "../../../../shared/event-participant-paths";
+import { usePortalHashLocation } from "../hash-location";
+import { EVENT_INVITATION_ACTIONS } from "../../../../shared/event-invitation-copy";
 
 type MemberVote = z.infer<typeof currentUserVotesListResponseSchema>["votes"][number];
 type MemberForm = z.infer<typeof currentUserFormsListResponseSchema>["forms"][number];
@@ -243,15 +247,45 @@ function MeetingsPanel() {
 /** Events shown on Home: the ones under way, then the next ones, in the order they take place. */
 const HOME_EVENT_COUNT = 4;
 
+type EventRow = z.infer<typeof eventsListResponseSchema>["events"][number];
+
+/** A registered event's own actions: the personal calendar and the registration. */
+function RegisteredEventActions({ event }: { event: EventRow }) {
+  const participation = event.participation;
+  if (!participation?.registrationId || participation.registrationStatus === "cancelled") return null;
+  return (
+    <div class="pk-cluster">
+      {participation.registrationStatus === "registered" && participation.calendarAvailable && (
+        <ButtonLink
+          variant="ghost"
+          icon
+          aria-label={`Download your personal calendar for ${event.name} (.ics)`}
+          title="Download your personal event calendar (.ics)"
+          href={registrationCalendarPath(event.slug, participation.registrationId)}
+        >
+          <IconCalendarDownload />
+        </ButtonLink>
+      )}
+      <ButtonLink
+        href={usePortalHashLocation.hrefs(
+          eventParticipantRecordPath(event.slug, "registration", participation.registrationId),
+        )}
+      >
+        {EVENT_INVITATION_ACTIONS.manage}
+      </ButtonLink>
+    </div>
+  );
+}
+
 function EventsPanel() {
   const events = useData(async () => {
     const [current, next] = await Promise.all([
       getJson(
-        `/api/v1/events?kind=standalone&phase=now&sort=starts_at&limit=${HOME_EVENT_COUNT}`,
+        `/api/v1/events?kind=standalone&phase=now&invitation=none&sort=starts_at&limit=${HOME_EVENT_COUNT}`,
         eventsListResponseSchema,
       ),
       getJson(
-        `/api/v1/events?kind=standalone&phase=upcoming&sort=starts_at&limit=${HOME_EVENT_COUNT}`,
+        `/api/v1/events?kind=standalone&phase=upcoming&invitation=none&sort=starts_at&limit=${HOME_EVENT_COUNT}`,
         eventsListResponseSchema,
       ),
     ]);
@@ -294,25 +328,7 @@ function EventsPanel() {
         <ul class="pk-plain-list pk-stack pk-stack--snug" aria-label="Now and next events">
           {rows.map((event) => (
             <li key={event.id}>
-              <EventCollectionCard
-                headingLevel={4}
-                event={event}
-                actions={
-                  event.participation?.registrationId &&
-                  event.participation.registrationStatus === "registered" &&
-                  event.participation.calendarAvailable ? (
-                    <ButtonLink
-                      variant="ghost"
-                      icon
-                      aria-label={`Download your personal calendar for ${event.name} (.ics)`}
-                      title="Download your personal event calendar (.ics)"
-                      href={registrationCalendarPath(event.slug, event.participation.registrationId)}
-                    >
-                      <IconCalendarDownload />
-                    </ButtonLink>
-                  ) : undefined
-                }
-              />
+              <EventCollectionCard headingLevel={4} event={event} actions={<RegisteredEventActions event={event} />} />
             </li>
           ))}
         </ul>
@@ -404,6 +420,7 @@ function MemberHome() {
         </PanelBody>
       </Panel>
       <AffiliationOfferCard />
+      <EventInvitationCards />
       <JoinPrompt />
       {isMember && <AttentionPanel />}
       <div class="pk-home-grid">

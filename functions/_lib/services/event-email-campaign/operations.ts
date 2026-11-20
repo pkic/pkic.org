@@ -131,7 +131,10 @@ export async function previewEventEmailCampaign(
   assertCampaignAuthoredReferences(input, known, templateReferences);
   const sampleData = buildPersonalCampaignTemplateData(sample, canonicalData, known);
   if (input.filter.audience === "attendees") {
-    sampleData.manageUrl = registrationManagePageUrl(options.appBaseUrl, event, "preview-token");
+    sampleData.manageUrl = registrationManagePageUrl(options.appBaseUrl, event, {
+      token: "preview-token",
+      registrationId: "preview-registration",
+    });
   }
 
   let subject: string;

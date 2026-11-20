@@ -20,7 +20,7 @@ const at = () => new Date().toISOString();
 
 beforeEach(async () => {
   await resetDb();
-  const fixture = await seedEventAndAdmin(env.DB);
+  const fixture = await seedEventAndAdmin(env.DB, { visibility: "public" });
   eventId = fixture.eventId;
   userId = fixture.admin.id;
   token = await createAdminSession(env.DB, userId, crypto.randomUUID());

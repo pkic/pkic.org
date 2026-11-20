@@ -23,10 +23,16 @@ export function eventWhen(event: EventRow): string {
 export function EventCollectionCard({
   event,
   actions,
+  body,
   headingLevel = 3,
 }: {
   event: EventRow;
   actions?: ComponentChildren;
+  /**
+   * Content above the actions, such as an invitation's message. A card with a
+   * body sets its date and place beside the actions instead of in the header.
+   */
+  body?: ComponentChildren;
   headingLevel?: HeadingLevel;
 }) {
   const Heading = useSectionHeading(headingLevel);
@@ -43,6 +49,9 @@ export function EventCollectionCard({
   });
   const standing = eventViewerStatus(event);
   const place = formatEventPlace(event);
+  const whenAndWhere = [event.startsAt ? formatDateRange(event.startsAt, event.endsAt, event.timezone) : null, place]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <EventCard
       heading={Heading}
@@ -52,13 +61,13 @@ export function EventCollectionCard({
         date: event.startsAt ?? undefined,
         href: eventDestination(event),
         imageSrc: event.heroImageUrl ?? undefined,
-        location: [event.startsAt ? formatDateRange(event.startsAt, event.endsAt, event.timezone) : null, place]
-          .filter(Boolean)
-          .join(" · "),
+        location: body ? undefined : whenAndWhere,
       }}
     >
+      {body}
       {(standing.length > 0 || actions) && (
         <div class="pk-cluster pk-cluster--between">
+          {body && whenAndWhere && <p class="pk-muted">{whenAndWhere}</p>}
           {standing.length > 0 && (
             <div role="group" aria-label="Your status">
               <CollectionStatusLine items={standing} />

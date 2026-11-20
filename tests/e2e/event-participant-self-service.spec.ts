@@ -5,9 +5,11 @@ import { uploadThroughControl } from "./helpers/file-upload";
 import { eventTermsResponseSchema } from "../../assets/shared/schemas/forms";
 import { eventDetailResponseSchema } from "../../assets/shared/schemas/event-management";
 import {
+  groupEventDetailResponseSchema,
   groupEventRegistrationSettingsResponseSchema,
   groupEventRegistrationSettingsUpdateSchema,
 } from "../../assets/shared/schemas/group-events";
+import { eventSettingsUpdateSchema } from "../../assets/shared/schemas/event-management";
 import {
   agendaSnapshotSchema,
   agendaRoomCreateSchema,
@@ -18,7 +20,7 @@ import { PERSONAL_PROMOTION_RENDERER } from "../../assets/shared/personal-promot
 import sharp from "sharp";
 import { userCreateSchema } from "../../assets/shared/schemas/user-create";
 import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import {
   speakerProfileUpdateResponseSchema,
   speakerSelfServiceReadResponseSchema,
@@ -31,7 +33,9 @@ import {
 } from "../../assets/shared/schemas/registration";
 import { speakerSelfProfilePatchSchema } from "../../assets/shared/schemas/proposal-management";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
-import { signInToPortal } from "./helpers/portal-auth";
+import { clientIpForIdentity, declinePasskeyOffer, openEmailSignIn, signInToPortal } from "./helpers/portal-auth";
+import { eventInvitePreviewResponseSchema } from "../../assets/shared/schemas/event-invite-bulk";
+import { eventAttendeeInvitesListResponseSchema } from "../../assets/shared/schemas/event-invites";
 import { submitProposal, inviteCoSpeaker, decideProposal, PROPOSAL_EVENT_SLUG } from "./helpers/proposals";
 import { registerInBrowser } from "./helpers/registration";
 import { completeIndependentCapacityDisclosure } from "./helpers/independent-capacity";
@@ -112,6 +116,195 @@ test("a signed-in group member completes required registration through the porta
       .getByRole("button", { name: "Enlarge check-in code", exact: true }),
   ).toBeVisible();
   await page.screenshot({ path: info.outputPath("group-registration-ticket.png"), fullPage: true });
+});
+
+const INVITATION_HEADLINE = "Join the people leading the PQC migration";
+const INVITATION_MESSAGE = "Two days of **hands-on** sessions with the teams already migrating.";
+
+/** Saves a full-page screenshot at desktop and phone width, and checks the page never scrolls sideways. */
+async function screenshotAtWidths(page: Page, info: TestInfo, name: string, widths = [1280, 375]) {
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.screenshot({ path: info.outputPath(`${name}-${width}.png`), fullPage: true, animations: "disabled" });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+}
+
+/** The event's banner, as the seeded conference uses it, so invitation cards show a real photo. */
+const EVENT_BANNER = "/events/2026/pqc-conference-amsterdam-nl/amsterdam-nl.png";
+
+type InvitationFixture = Awaited<ReturnType<typeof createRegistrationEvent>>;
+
+async function setEventBanner(staff: Page, fixture: InvitationFixture) {
+  const groupEvent = `/api/v1/groups/${fixture.ownerGroupId}/events/${fixture.eventId}`;
+  const current = groupEventDetailResponseSchema.parse(await (await staff.request.get(groupEvent)).json()).event;
+  const saved = await staff.request.patch(`${groupEvent}/settings`, {
+    data: eventSettingsUpdateSchema.parse({ expectedUpdatedAt: current.updatedAt, heroImageUrl: EVENT_BANNER }),
+  });
+  expect(saved.status(), await saved.text()).toBe(200);
+}
+
+/** Invites one address the way an organizer does, and returns the link the invitation email carries. */
+async function sendAttendeeInvitation(staff: Page, fixture: InvitationFixture, email: string) {
+  const invitePath = `/api/v1/groups/${fixture.ownerGroupId}/events/${fixture.eventId}/invites`;
+  const invites = [{ email, firstName: "Invited", lastName: "Person" }];
+  const previewResponse = await staff.request.post(`${invitePath}/attendees/preview`, { data: { invites } });
+  expect(previewResponse.status(), await previewResponse.text()).toBe(200);
+  const preview = eventInvitePreviewResponseSchema.parse(await previewResponse.json());
+  const inboxStart = await capturedEmailCount();
+  const bulk = await staff.request.post(`${invitePath}/attendees/bulk`, {
+    data: { invites, previewToken: preview.previewToken, inviteDigest: preview.inviteDigest },
+  });
+  expect(bulk.status(), await bulk.text()).toBe(200);
+  // The local server has no scheduled outbox drain; process the queued invitation as the scheduler would.
+  const drained = await staff.request.post("/api/v1/email/outbox/process", { data: { limit: 100 } });
+  expect(drained.status(), await drained.text()).toBe(200);
+  const invitation = await waitForCapturedEmail(email, "invited to", { since: inboxStart });
+  const invitationUrl = extractEmailUrl(invitation, `/portal/#/events/${fixture.slug}/register`);
+  expect(invitationUrl).toContain("invite=");
+  return { invitePath, invitationUrl };
+}
+
+test("an invited member signs in, answers the invitation on Home, and registers in the portal", async ({
+  page: staff,
+  browser,
+}, info) => {
+  await signInToPortal(staff, e2eAdminEmail("portal-event-management"));
+  const fixture = await createRegistrationEvent(staff, "invitation-only", undefined, "invitation_only");
+  const email = `invitee@invited-${crypto.randomUUID()}.test`;
+  await approveMemberThroughReview(staff, {
+    email,
+    name: "Invited Member",
+    organizationName: `Synthetic Invited ${crypto.randomUUID()}`,
+  });
+  await setEventBanner(staff, fixture);
+  // The organizer words the invitation in its own registration settings tab.
+  await staff.goto(`/portal/#/events/${fixture.slug}/settings/invitation`);
+  const subTabs = staff.getByRole("navigation", { name: "Registration settings", exact: true });
+  await expect(subTabs.getByRole("link", { name: "Invitation", exact: true })).toHaveAttribute("aria-current", "page");
+  const wording = staff.getByRole("region", { name: "Invitation message", exact: true });
+  await expect(wording.getByText("No message.", { exact: true })).toBeVisible();
+  await screenshotAtWidths(staff, info, "invitation-panel-read");
+  await wording.getByRole("button", { name: "Invitation message actions", exact: true }).click();
+  await staff.getByRole("menuitem", { name: "Edit settings", exact: true }).click();
+  await wording.getByRole("textbox", { name: "Headline", exact: true }).fill(INVITATION_HEADLINE);
+  await wording.getByRole("textbox", { name: "Message", exact: true }).fill(INVITATION_MESSAGE);
+  await screenshotAtWidths(staff, info, "invitation-panel-edit");
+  await wording.getByRole("button", { name: "Save invitation message", exact: true }).click();
+  await expect(wording.getByText(INVITATION_HEADLINE, { exact: true })).toBeVisible();
+  // The peer invitation limit sits beside it, in its own panel.
+  const peers = staff.getByRole("region", { name: "Peer invitations", exact: true });
+  await expect(peers.getByText("5 per attendee", { exact: true })).toBeVisible();
+  // The organizer restricts the link to the invited address; the invitee below still registers.
+  const link = staff.getByRole("region", { name: "Invitation link", exact: true });
+  await expect(link.getByText("Anyone with the link", { exact: true })).toBeVisible();
+  await link.getByRole("button", { name: "Invitation link actions", exact: true }).click();
+  await staff.getByRole("menuitem", { name: "Edit settings", exact: true }).click();
+  await link.getByRole("radio", { name: /Only the invited email address/ }).check();
+  await screenshotAtWidths(staff, info, "invitation-link-edit");
+  await link.getByRole("button", { name: "Save invitation link", exact: true }).click();
+  await expect(link.getByText("Only the invited email address", { exact: true })).toBeVisible();
+  await screenshotAtWidths(staff, info, "invitation-link-read");
+  // The policy tab no longer carries it.
+  await staff.goto(`/portal/#/events/${fixture.slug}/settings/registration`);
+  await expect(staff.getByRole("region", { name: "Invitation message", exact: true })).toHaveCount(0);
+
+  const { invitePath } = await sendAttendeeInvitation(staff, fixture, email);
+
+  // The invitee signs in to the portal in their own browser and lands on Home, where the invitation asks.
+  const inviteeContext = await browser.newContext();
+  const page = await inviteeContext.newPage();
+  await page.setExtraHTTPHeaders({ "cf-connecting-ip": clientIpForIdentity(email) });
+  await page.goto("/portal/");
+  await openEmailSignIn(page);
+  await page.getByLabel("Email").fill(email);
+  const signInStart = await capturedEmailCount();
+  await page.getByRole("button", { name: "Send sign-in link" }).click();
+  const signInEmail = await waitForCapturedEmail(email, "sign-in link", { since: signInStart });
+  await page.goto("about:blank");
+  await page.goto(extractEmailUrl(signInEmail, "/portal/"));
+  await declinePasskeyOffer(page);
+  await expect(page).toHaveURL(/\/portal\/#\/home$/, { timeout: 15_000 });
+  const dialog = page.getByRole("dialog", { name: INVITATION_HEADLINE, exact: true });
+  await expect(dialog.getByText("hands-on", { exact: true })).toBeVisible();
+  await screenshotAtWidths(page, info, "invitation-dialog");
+
+  // Declining asks why first; going back keeps the invitation open.
+  await dialog.getByRole("button", { name: "I can't attend", exact: true }).click();
+  const survey = page.getByRole("dialog", { name: "Not able to make it?", exact: true });
+  await expect(survey.getByRole("radio", { name: "Schedule conflict - I have another commitment" })).toBeVisible();
+  await screenshotAtWidths(page, info, "invitation-decline-survey");
+  await survey.getByRole("button", { name: "Back", exact: true }).click();
+  await dialog.getByRole("button", { name: "Close invitation", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+
+  // The card stays on Home with the event's own wording and one action; the Events panel does not repeat it.
+  const invitations = page.getByRole("region", { name: "Your invitations", exact: true });
+  const events = page.getByRole("region", { name: "Events", exact: true });
+  const eventLink = (scope: Page | typeof events) =>
+    scope.getByRole("link", { name: "Synthetic participant status workshop", exact: true });
+  await expect(invitations.getByText(INVITATION_HEADLINE, { exact: true })).toBeVisible();
+  await expect(invitations.getByText("hands-on", { exact: true })).toBeVisible();
+  await expect(invitations.getByRole("link", { name: "Register now", exact: true })).toHaveAttribute(
+    "href",
+    `#/events/${fixture.slug}/register`,
+  );
+  await expect(events).toBeVisible();
+  await expect(eventLink(events)).toHaveCount(0);
+  await screenshotAtWidths(page, info, "invitation-card");
+
+  // A new visit asks again; registering starts from the dialog.
+  await page.reload();
+  await dialog.getByRole("link", { name: "Register now", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/portal/#/events/${fixture.slug}/register$`));
+  const form = page.getByRole("region", { name: "Event registration", exact: true });
+  await expect(form).toBeVisible();
+  const inPerson = page.getByRole("radio", { name: "In person — Workshop day", exact: true });
+  const proceed = page.getByRole("button", { name: "Continue", exact: true });
+  await expect(inPerson.or(proceed).first()).toBeVisible();
+  // The "You" step confirms who registers; continue through it to attendance.
+  if (!(await inPerson.isVisible())) await proceed.click();
+  await expect(inPerson).toBeVisible();
+  await inPerson.check();
+  await proceed.click();
+  await proceed.click();
+  await page.getByRole("checkbox", { name: "I agree to the privacy policy", exact: true }).check();
+  await page.getByRole("checkbox", { name: "I agree to the code of conduct", exact: true }).check();
+  const submitted = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname === `/api/v1/events/${fixture.slug}/registrations`,
+  );
+  await page.getByRole("button", { name: "Register", exact: true }).click();
+  const response = await submitted;
+  expect(response.status(), await response.text()).toBe(200);
+  const registered = registrationSubmissionResponseSchema.parse(await response.json());
+  expect(registered.status).toBe("registered");
+  expect(registered.dayWaitlist).toEqual([]);
+  await expect(page).toHaveURL(new RegExp(`/events/${fixture.slug}/ticket$`));
+
+  // Registered, the invitation card is gone and the event sits in the Events panel with its registration.
+  await page.goto("/portal/#/home");
+  const row = events.getByRole("listitem").filter({ has: eventLink(page) });
+  const manage = row.getByRole("link", { name: "Manage registration", exact: true });
+  await expect(manage).toHaveAttribute(
+    "href",
+    `#${eventParticipantRecordPath(fixture.slug, "registration", registered.registrationId)}`,
+  );
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(invitations).toHaveCount(0);
+  await screenshotAtWidths(page, info, "registered-in-events-panel");
+  // The manage link opens the registration of this invitation-only event.
+  await manage.click();
+  await expect(page).toHaveURL(new RegExp(`/registrations/${registered.registrationId}$`));
+  await expect(page.getByText("Synthetic participant status workshop").first()).toBeVisible();
+  await expect(page.getByText(/not found/i)).toHaveCount(0);
+  await screenshotAtWidths(page, info, "registration-record");
+
+  await inviteeContext.close();
+  const listed = eventAttendeeInvitesListResponseSchema.parse(await (await staff.request.get(invitePath)).json());
+  expect(listed.invites.filter((row) => row.inviteeEmail === email).map((row) => row.status)).toEqual(["accepted"]);
 });
 
 test("a signed-in user registers from event home without another email challenge", async ({ page, browser }, info) => {

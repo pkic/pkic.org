@@ -14,6 +14,8 @@ import {
   type EventViewerState,
 } from "../../../../assets/shared/schemas/event-management";
 import { queryPage } from "../../db/pagination";
+import { parseJsonSafe } from "../../utils/json";
+import { readEventInvitationMessage } from "../../../../assets/shared/schemas/event-invitation-message";
 import { eventReadSelectionSql, type EventReadSelection } from "./read-selection";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
@@ -24,6 +26,7 @@ import type { DatabaseLike } from "../../types";
 import { parseLinksJson } from "../../../../assets/shared/schemas/links";
 import { normalizeEventRegistrationPolicy } from "./detail";
 import { buildEventAudiencePredicate, guardEventReadDatabase, type EventAudienceViewer } from "./visibility";
+import { heldEventInvitationExistsSql } from "../held-event-invitation";
 import { fetchViewerEventState, fetchViewerEventStates } from "./viewer-state";
 
 export interface EventAudienceRow {
@@ -57,6 +60,7 @@ export function mapEventAudience(
     slug: row.slug,
     name: row.name,
     heroImageUrl: resolveHeroImageUrl(row),
+    invitationMessage: readEventInvitationMessage(parseJsonSafe(row.settings_json, {})),
     timezone: row.timezone,
     startsAt: row.starts_at,
     endsAt: row.ends_at,
@@ -118,6 +122,29 @@ function buildEventsListPredicate(
   if (query.to) {
     conditions.push("COALESCE(event.starts_at, event.ends_at) <= ?");
     bindings.push(query.to);
+  }
+  if (query.invitation) {
+    // The reader's own invitations, never a delegated account's.
+    const userId = viewer.admin?.scopeRestricted ? null : viewer.userId;
+    if (!userId) {
+      // No reader holds no invitation: `open` matches nothing and `none` everything.
+      if (query.invitation === "open") conditions.push("0");
+    } else {
+      const open = `(COALESCE(event.ends_at, event.starts_at) >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+        AND event.registration_mode NOT IN ('no_registration', 'automatic')
+        AND ${heldEventInvitationExistsSql({
+          inviteAlias: "open_invite",
+          eventAlias: "event",
+          userIdSql: "?",
+          statuses: ["sent"],
+          attendeeOnly: true,
+        })}
+        AND NOT EXISTS (SELECT 1 FROM registrations own_registration
+              WHERE own_registration.event_id = event.id AND own_registration.user_id = ?
+                AND own_registration.status <> 'cancelled'))`;
+      conditions.push(query.invitation === "open" ? open : `NOT ${open}`);
+      bindings.push(userId, userId);
+    }
   }
   if (query.q) {
     const search = buildD1TextSearchFilter(query.q, ["event.name", "event.slug"]);
@@ -328,6 +355,7 @@ export function mapEventManagementSummary(
     slug: row.slug,
     name: row.name,
     heroImageUrl: resolveHeroImageUrl(row),
+    invitationMessage: readEventInvitationMessage(parseJsonSafe(row.settings_json, {})),
     timezone: row.timezone,
     startsAt: row.starts_at,
     endsAt: row.ends_at,

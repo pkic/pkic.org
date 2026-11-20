@@ -64,7 +64,7 @@ export async function runConfirmationReminders(
            ${REGISTRATION_RECIPIENT_EMAIL_SQL} AS email,
            r.confirmation_link_secret,
            r.confirmation_reminder_sent_at, r.pending_confirmation_deadline_at, r.transition_revision, r.created_at,
-           e.name AS event_name, e.slug AS event_slug, e.base_path AS event_base_path,
+           e.name AS event_name, e.slug AS event_slug, e.base_path AS event_base_path, e.visibility AS event_visibility,
            e.timezone AS event_timezone, e.starts_at AS event_starts_at,
            e.ends_at AS event_ends_at, ${eventCommunicationSettingsSql("e.settings_json")} AS event_settings_json,
            ? AS reminder_count
@@ -157,6 +157,7 @@ export async function runConfirmationReminders(
         starts_at: row.event_starts_at,
         ends_at: row.event_ends_at,
         settings_json: row.event_settings_json,
+        visibility: row.event_visibility,
       };
       await queueRegistrationStatusEmail(db, {
         event,
@@ -181,7 +182,7 @@ export async function runConfirmationReminders(
            ${REGISTRATION_CONFIRMATION_RECIPIENT_EMAIL_SQL} AS email,
            r.confirmation_link_secret,
            r.confirmation_reminder_sent_at, r.pending_confirmation_deadline_at, r.transition_revision, r.created_at,
-           e.name AS event_name, e.slug AS event_slug, e.base_path AS event_base_path,
+           e.name AS event_name, e.slug AS event_slug, e.base_path AS event_base_path, e.visibility AS event_visibility,
            e.timezone AS event_timezone, e.ends_at AS event_ends_at,
            e.starts_at AS event_starts_at, ${eventCommunicationSettingsSql("e.settings_json")} AS event_settings_json,
            MAX(0, MIN(?, CAST(((julianday(?) - julianday(r.created_at)) / ?) AS INTEGER) - 1)) AS reminder_count

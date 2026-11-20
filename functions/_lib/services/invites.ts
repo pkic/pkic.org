@@ -18,11 +18,10 @@ export {
   revokeDuplicateInvitesForEmail,
 } from "./invite-lifecycle";
 export {
-  clearInviteRemindersPause,
   listPendingInviteReminders,
   markInviteReminderSent,
+  prepareInviteRemindersPausedUntil,
   refreshInviteToken,
-  setInviteRemindersPausedUntil,
 } from "./invite-reminder-state";
 export { revokeEventInvite } from "./invite-revoke";
 export { resendEventInvite } from "./invite-resend";

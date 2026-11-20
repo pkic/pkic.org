@@ -1,4 +1,5 @@
 import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
+import { portalReturnPathSchema } from "../assets/shared/schemas/user-auth";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:test";
 import { materializeQueuedCapabilityLinks } from "../functions/_lib/services/capability-links";
@@ -61,7 +62,13 @@ describe("invite resend-link endpoint", () => {
       testEnv,
       JSON.parse(queued.payload_json) as Record<string, unknown>,
     );
-    const freshToken = new URL(delivered.registrationUrl as string).searchParams.get("invite")!;
+    // The seeded event is not public, so the link opens portal registration; sign-in must carry it back intact.
+    const registrationUrl = new URL(delivered.registrationUrl as string);
+    expect(registrationUrl.pathname).toBe("/portal/");
+    expect(portalReturnPathSchema.safeParse(registrationUrl.hash.slice(1)).success).toBe(true);
+    const freshToken = new URLSearchParams(registrationUrl.hash.slice(registrationUrl.hash.indexOf("?") + 1)).get(
+      "invite",
+    )!;
 
     await expect(findInviteByToken(env.DB, created.token, signingSecret, created.invite.id)).rejects.toMatchObject({
       code: "INVITE_NOT_FOUND",

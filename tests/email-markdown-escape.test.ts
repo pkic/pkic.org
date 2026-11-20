@@ -3,7 +3,10 @@ import { escapeMarkdownText } from "../functions/_lib/email/markdown";
 import { emailMarkdownText, emailPlainText } from "../functions/_lib/email/plain-text";
 import { renderEmail, renderSubject } from "../functions/_lib/email/render";
 import { buildInviteEmailQueueRow } from "../functions/_lib/services/invite-email";
-import { buildEventInviteRecipientVariables } from "../functions/_lib/services/event-invite-email-variables";
+import {
+  buildEventInvitationMessageVariables,
+  buildEventInviteRecipientVariables,
+} from "../functions/_lib/services/event-invite-email-variables";
 import {
   buildAttendeeCampaignRecipients,
   buildPersonalCampaignTemplateData,
@@ -102,6 +105,7 @@ describe("untrusted Markdown email text", () => {
         base_path: null,
         starts_at: "2027-01-01T09:00:00.000Z",
         settings_json: "{}",
+        visibility: "public",
       },
       invite: {
         id: "email-security-invite",
@@ -258,5 +262,36 @@ describe("untrusted Markdown email text", () => {
       expect(rendered.html).toContain("https://app.test/events/security/register");
       expect(rendered.html).not.toContain("https://attacker.invalid/shadowed-route");
     }
+  });
+});
+
+describe("the event's invitation wording in an invitation email", () => {
+  const template = "# {{invitationHeadline}}\n\n{{#if invitationMessage}}{{invitationMessage}}{{/if}}";
+
+  it("renders the organizer's headline as text and their message as Markdown, escaping raw HTML", async () => {
+    const variables = buildEventInvitationMessageVariables({
+      name: "PQC Conference",
+      settings_json: JSON.stringify({
+        invitationMessage: {
+          headline: 'Join <b>us</b> & "friends"',
+          message: '**Two days** of sessions. <img src="https://attacker.invalid/pixel.gif">',
+        },
+      }),
+    });
+    const rendered = await renderEmail(template, variables, LAYOUT, "markdown");
+    expect(rendered.html).toContain("Join &lt;b&gt;us&lt;/b&gt; &amp; &quot;friends&quot;");
+    expect(rendered.html).not.toContain("<b>us</b>");
+    expect(rendered.html).toContain("<strong>Two days</strong>");
+    expect(rendered.html).not.toMatch(/<img\b/i);
+    expect(rendered.text).toContain('Join <b>us</b> & "friends"');
+    expect(rendered.text).toContain("Two days");
+  });
+
+  it("falls back to a neutral headline from the event's name and skips an unset message", async () => {
+    const variables = buildEventInvitationMessageVariables({ name: "PQC Conference", settings_json: "{}" });
+    const rendered = await renderEmail(template, variables, LAYOUT, "markdown");
+    expect(rendered.text).toContain("You're invited to PQC Conference");
+    expect(rendered.text).not.toContain("{{");
+    expect(rendered.html).not.toContain("invitationMessage");
   });
 });

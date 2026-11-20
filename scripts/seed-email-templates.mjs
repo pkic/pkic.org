@@ -707,7 +707,8 @@ Is this a mistake, and do you still want to come in person? [Update your registr
   // ─────────────────────────────────────────────────────────────────────────
   // 4. Attendee invite
   // Variables: eventName, firstName, lastName, inviterName, registrationUrl, declineUrl,
-  //            sponsorsImageUrl, heroImageUrl
+  //            sponsorsImageUrl, heroImageUrl, invitationHeadline (the event's headline, or
+  //            "You're invited to <event>"), invitationMessage (the event's Markdown, or empty)
   // Partials:  {{> about_pkic}}, {{> sponsors_block}}
   // ─────────────────────────────────────────────────────────────────────────
   {

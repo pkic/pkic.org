@@ -1,16 +1,14 @@
 import { AppError } from "../../errors";
 import { queuedCapabilityTokenBoundToSecret } from "../capability-links";
-import { registrationConfirmPageUrl, registrationManagePageUrl } from "../frontend-links";
+import { registrationConfirmPageUrl, registrationManagePageUrl, type RegistrationRouteSource } from "../frontend-links";
 import type { RegistrationRecord } from "./types";
 
 const REGISTRATION_MANAGE_CAPABILITY_TTL_SECONDS = 30 * 24 * 60 * 60;
 
-type RegistrationCapabilityEvent = {
-  slug: string;
-  base_path: string | null;
-  starts_at: string | null;
-  settings_json: string;
-};
+type RegistrationConfirmationEvent = Pick<
+  RegistrationRouteSource,
+  "slug" | "base_path" | "starts_at" | "settings_json"
+>;
 
 /**
  * Creates an outbox-only registration-management capability bound to the
@@ -19,7 +17,7 @@ type RegistrationCapabilityEvent = {
  */
 export async function registrationManageCapability(
   appBaseUrl: string,
-  event: RegistrationCapabilityEvent,
+  event: RegistrationRouteSource,
   registration: Pick<RegistrationRecord, "id" | "manage_link_secret">,
 ): Promise<{ manageToken: string; manageUrl: string }> {
   if (!registration.manage_link_secret) {
@@ -31,13 +29,16 @@ export async function registrationManageCapability(
     registration.manage_link_secret,
     REGISTRATION_MANAGE_CAPABILITY_TTL_SECONDS,
   );
-  return { manageToken, manageUrl: registrationManagePageUrl(appBaseUrl, event, manageToken) };
+  return {
+    manageToken,
+    manageUrl: registrationManagePageUrl(appBaseUrl, event, { token: manageToken, registrationId: registration.id }),
+  };
 }
 
 /** Creates a confirmation URL bound to the exact confirmation-secret generation at enqueue time. */
 export async function registrationConfirmationUrl(
   appBaseUrl: string,
-  event: RegistrationCapabilityEvent,
+  event: RegistrationConfirmationEvent,
   registration: Pick<RegistrationRecord, "id" | "confirmation_link_secret">,
   confirmationTtlHours: number,
 ): Promise<string> {

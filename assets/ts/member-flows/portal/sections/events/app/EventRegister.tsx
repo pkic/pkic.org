@@ -3,6 +3,7 @@ import { EventRegistrationCreate } from "../../../../../components/events/EventR
 import { Panel, PanelBody } from "../../../../../ui/Panel";
 import { ButtonLink } from "../../../../../ui/Button";
 import { usePortalHashLocation } from "../../../hash-location";
+import { portalHashSearch } from "../../../hash-route";
 import { eventParticipantRecordPath } from "../../../../../../shared/event-participant-paths";
 import { eventRegistrationStanding, registrationOffer, type ParticipantEventDetail } from "./event-app-model";
 import { eventPhase } from "./event-timing";
@@ -38,6 +39,7 @@ export function EventRegister({
       <PanelBody>
         <EventRegistrationCreate
           slug={event.slug}
+          entrySearch={portalHashSearch(window.location.hash)}
           onRegistered={async () => {
             await onRegistered?.();
             navigate(`/events/${encodeURIComponent(event.slug)}/ticket`);

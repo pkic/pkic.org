@@ -683,7 +683,8 @@ describe("registration workflows", () => {
   });
 
   it("returns day confirmation details when only some selected days are confirmed", async () => {
-    const { eventId } = await seedEventAndAdmin(env.DB);
+    // The emailed token management page belongs to a public event; other events manage in the portal.
+    const { eventId } = await seedEventAndAdmin(env.DB, { visibility: "public" });
 
     await env.DB.batch([
       env.DB.prepare(`
@@ -895,7 +896,8 @@ describe("registration workflows", () => {
   });
 
   it("sends accepted-offer email state and rejects an expired offer without queuing an update", async () => {
-    const { eventId } = await seedEventAndAdmin(env.DB);
+    // The emailed token management page belongs to a public event; other events manage in the portal.
+    const { eventId } = await seedEventAndAdmin(env.DB, { visibility: "public" });
 
     await env.DB.batch([
       env.DB.prepare(`

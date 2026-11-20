@@ -18,8 +18,13 @@ export function portalHashPath(hash: string): string {
   return (hash.replace(/^#/, "").split("?", 1)[0] || "/").replace(/\/$/, "") || "/";
 }
 
+/** The query part of a hash location: `#/a?day=2026-12-01` → `day=2026-12-01`. */
+export function portalHashSearch(hash: string): string {
+  return hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "";
+}
+
 function hashQuery(hash: string): URLSearchParams {
-  return new URLSearchParams(hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "");
+  return new URLSearchParams(portalHashSearch(hash));
 }
 
 /** One named query parameter of a hash location: `#/a?day=2026-12-01` → `2026-12-01`. */

@@ -10,9 +10,12 @@ import { RegistrationFlow } from "./RegistrationFlow";
 
 export function EventRegistrationCreate({
   slug,
+  entrySearch = "",
   onRegistered,
 }: {
   slug: string;
+  /** The query of the link that opened registration (`invite`, `id`, `ref`, `source`), so the invitation stays attached. */
+  entrySearch?: string;
   onRegistered: (result: RegistrationSubmissionResponse) => Promise<void>;
 }) {
   const loaded = useData(
@@ -30,7 +33,7 @@ export function EventRegistrationCreate({
       mode="create"
       autoSession
       forms={loaded.data}
-      context={{ eventSlug: slug, apiBase: "/api/v1", eventPagePath: null, query: parseQueryContext("") }}
+      context={{ eventSlug: slug, apiBase: "/api/v1", eventPagePath: null, query: parseQueryContext(entrySearch) }}
       onRegistered={onRegistered}
     />
   );

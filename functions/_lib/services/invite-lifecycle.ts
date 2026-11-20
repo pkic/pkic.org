@@ -200,6 +200,8 @@ export async function declineInvite(
     unsubscribeFuture?: boolean;
     npsScore?: number | null;
   },
+  /** Caller authorization rechecked in the same batch, such as the signed-in invitee's own address. */
+  guards: StatementLike[] = [],
 ): Promise<void> {
   const invite = await first<InviteRecord>(db, `SELECT ${INVITE_COLUMNS} FROM invites WHERE id = ?`, [
     payload.inviteId,
@@ -208,9 +210,9 @@ export async function declineInvite(
   if (invite.status === "declined") return;
   if (invite.status !== "sent") throw new AppError(409, "INVITE_NOT_ACTIVE", "Invite is not active anymore");
   try {
-    await db.batch(prepareDeclineInviteStatements(db, invite, payload));
+    await db.batch([...guards, ...prepareDeclineInviteStatements(db, invite, payload)]);
   } catch (error) {
-    if (!isStaleInviteTransition(error)) throw error;
+    if (!isStaleInviteTransition(error) && !isAuthorizationGuardFailure(error)) throw error;
     throw new AppError(409, "INVITE_CHANGED", "Invite state changed; please retry");
   }
 }

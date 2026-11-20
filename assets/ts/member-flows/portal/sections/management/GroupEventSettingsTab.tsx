@@ -96,7 +96,7 @@ export function GroupEventSettingsTab({
         active={
           detailId === "scheduling" && canManage
             ? "session-types"
-            : ["access", "terms", "attendance-days", "sponsors"].includes(detailId ?? "")
+            : ["access", "invitation", "terms", "attendance-days", "sponsors"].includes(detailId ?? "")
               ? "registration"
               : (detailId ??
                 (canManage ? "general" : hasEventAgendaPermission(event.id, "agenda:live_moderate") ? "live" : "team"))
@@ -114,20 +114,22 @@ export function GroupEventSettingsTab({
           hrefFor={(key) => `${settingsPath}/${key}`}
         />
       )}
-      {canManage && ["registration", "access", "terms", "attendance-days", "sponsors"].includes(detailId ?? "") && (
-        <Tabs
-          label="Registration settings"
-          items={[
-            { key: "registration", label: "Policy" },
-            { key: "access", label: "Visibility and access" },
-            { key: "terms", label: "Terms" },
-            { key: "attendance-days", label: "Attendance days" },
-            { key: "sponsors", label: "Sponsor tiers" },
-          ]}
-          active={detailId ?? "registration"}
-          hrefFor={(key) => `${settingsPath}/${key}`}
-        />
-      )}
+      {canManage &&
+        ["registration", "access", "invitation", "terms", "attendance-days", "sponsors"].includes(detailId ?? "") && (
+          <Tabs
+            label="Registration settings"
+            items={[
+              { key: "registration", label: "Policy" },
+              { key: "access", label: "Visibility and access" },
+              { key: "invitation", label: "Invitation" },
+              { key: "terms", label: "Terms" },
+              { key: "attendance-days", label: "Attendance days" },
+              { key: "sponsors", label: "Sponsor tiers" },
+            ]}
+            active={detailId ?? "registration"}
+            hrefFor={(key) => `${settingsPath}/${key}`}
+          />
+        )}
       {(detailId === "team" && (canManage || hasEventAgendaPermission(event.id, "agenda:read"))) ||
       (!canManage && !detailId && !hasEventAgendaPermission(event.id, "agenda:live_moderate")) ? (
         <Suspense fallback={<Spinner label="Loading team…" />}>
@@ -172,6 +174,13 @@ export function GroupEventSettingsTab({
         <GroupEventSettingsSection
           slug={event.slug}
           section="registration"
+          groupSettings={{ groupId, eventId: event.id, canEdit: canManage }}
+          onUpdated={onUpdated}
+        />
+      ) : detailId === "invitation" && canManage ? (
+        <GroupEventSettingsSection
+          slug={event.slug}
+          section="invitation"
           groupSettings={{ groupId, eventId: event.id, canEdit: canManage }}
           onUpdated={onUpdated}
         />
@@ -261,10 +270,7 @@ export function GroupEventSettingsTab({
                           { term: "Location", value: groupEventPlace(event) },
                         ]
                       : detailId === "access"
-                        ? [
-                            { term: "Visibility", value: EVENT_VISIBILITY_LABELS[event.visibility] },
-                            { term: "Peer invitation limit", value: event.inviteLimitAttendee },
-                          ]
+                        ? [{ term: "Visibility", value: EVENT_VISIBILITY_LABELS[event.visibility] }]
                         : detailId === "links"
                           ? [
                               {

@@ -218,7 +218,8 @@ describe("runReminderCycle", () => {
 
   it("queues a full reminder pass without repeating the event's large badge template", async () => {
     await db
-      .prepare("UPDATE events SET settings_json = ? WHERE id = ?")
+      // A public event keeps its configured public routes; any other event registers in the portal.
+      .prepare("UPDATE events SET settings_json = ?, visibility = 'public' WHERE id = ?")
       .bind(
         JSON.stringify({
           badgeTemplate: { background: "x".repeat(350_000) },

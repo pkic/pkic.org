@@ -15,8 +15,8 @@ import {
 } from "../event-days";
 import { eventDayReadModels, requiredTermReadModel } from "../event-read-models";
 import {
+  EVENT_COLUMNS,
   prepareRequiredTerms,
-  prepareEventBySlug,
   resolveEventSessionTypes,
   type EventRecord,
   type EventTermRecord,
@@ -25,6 +25,8 @@ import { toEventFormResolutionEvent, prepareEventFormDefinitionRead, type Active
 import { preparePlacedEventFormDefinition } from "../forms/read";
 import type { EventReadSelection } from "./selection";
 import { AppError } from "../../errors";
+import type { PreparedRequestViewerRead } from "../../auth/optional-request-viewer";
+import { buildEventAudiencePredicate } from "./visibility";
 
 type EventConfigurationEvent = Pick<
   EventRecord,
@@ -44,18 +46,37 @@ export async function getEventRegistrationConfiguration(
   return registrationConfiguration(event, purpose, snapshot, snapshot.form);
 }
 
-/** Resolve the public slug and event configuration in one complete request batch. */
+/**
+ * Resolve the slug and event configuration in one complete request batch.
+ * The event is selected through the canonical audience predicate, so a
+ * caller who cannot read the event cannot read its forms either; the
+ * viewer's session is decoded from the same batch before anything is released.
+ */
 export async function getEventRegistrationConfigurationBySlug(
   db: DatabaseLike,
   eventSlug: string,
   purpose: EventFormsPurpose,
+  auth: PreparedRequestViewerRead | null = null,
 ): Promise<EventFormsResponse> {
   const selection = { slug: eventSlug };
   const formRead = preparePlacedEventFormDefinition(db, selection, purpose);
   const read = prepareRegistrationConfiguration(db, selection, purpose, formRead);
-  const [eventResult, ...details] = await db.batch([prepareEventBySlug(db, eventSlug), ...read.statements]);
+  const audience = buildEventAudiencePredicate("events", {
+    userId: auth?.userId ?? null,
+    ...(auth ? { admin: auth.permissionActor } : {}),
+  });
+  const authentication = auth?.statements ?? [];
+  const loaded = await db.batch([
+    ...authentication,
+    db
+      .prepare(`SELECT ${EVENT_COLUMNS} FROM events WHERE slug = ? AND ${audience.sql}`)
+      .bind(eventSlug, ...audience.bindings),
+    ...read.statements,
+  ]);
+  if (auth) await auth.decode(loaded.slice(0, authentication.length));
+  const [eventResult, ...details] = loaded.slice(authentication.length);
   const event = batchFirst<EventRecord>(eventResult);
-  if (!event) throw new AppError(404, "EVENT_NOT_FOUND", `Event '${eventSlug}' not found`);
+  if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found or not visible to this caller");
   const snapshot = read.decode(details);
   return registrationConfiguration(event, purpose, snapshot, snapshot.form);
 }

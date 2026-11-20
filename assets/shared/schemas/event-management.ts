@@ -24,6 +24,7 @@ import { eventPromotionDesignSchema } from "./event-promotion-design";
 import { countryCodeSchema } from "../countries";
 import { eventCitySchema, eventPlaceSchema } from "../event-place";
 import { eventAttendanceSettingsSchema } from "../attendance-attribution";
+import { eventInvitationMessageSchema } from "./event-invitation-message";
 
 /**
  * D1-backed event profile catalog projection. The key remains a validated
@@ -55,6 +56,7 @@ export const EVENT_MANAGED_SETTING_KEYS = [
   "forms",
   "frontend",
   "heroImageUrl",
+  "invitationMessage",
   "proposal",
   "venue",
   "virtualUrl",
@@ -102,6 +104,8 @@ export const eventSettingsSchema = z.object({
   venue: trimmedString(2, 500).nullable().optional(),
   virtualUrl: httpUrlSchema.nullable().optional(),
   heroImageUrl: httpOrSameOriginUrlSchema.nullable().optional(),
+  /** The event's own invitation wording; null restores the neutral default. */
+  invitationMessage: eventInvitationMessageSchema.nullable().optional(),
   city: eventCitySchema.nullable().optional(),
   country: countryCodeSchema.nullable().optional(),
   sessionTypes: proposalSessionTypesSchema.nullable().optional(),
@@ -174,6 +178,8 @@ export const eventResourceCoreSchema = z.object({
   name: z.string(),
   /** Existing event hero used by bounded discovery cards. */
   heroImageUrl: httpOrSameOriginUrlSchema.nullable().optional(),
+  /** The event's own invitation wording for invitation cards, dialogs and emails; null uses the default. */
+  invitationMessage: eventInvitationMessageSchema.nullable().optional(),
   timezone: z.string(),
   startsAt: z.string().nullable(),
   endsAt: z.string().nullable(),
@@ -279,6 +285,13 @@ export const eventsListQuerySchema = listQuerySchema(EVENT_MANAGEMENT_LIST_SORT_
   phase: z.enum(EVENT_PHASES).optional(),
   from: utcInstantSchema.optional(),
   to: utcInstantSchema.optional(),
+  /**
+   * The signed-in reader's open attendee invitations. `open`: events not yet
+   * ended that invite the reader, who has not registered or declined; Home
+   * shows one invitation card per event from it. `none`: every other event,
+   * so a list beside those cards does not repeat them.
+   */
+  invitation: z.enum(["open", "none"]).optional(),
 });
 export type EventsListQuery = z.infer<typeof eventsListQuerySchema>;
 /**

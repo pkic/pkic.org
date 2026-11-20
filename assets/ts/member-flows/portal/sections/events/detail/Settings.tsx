@@ -11,12 +11,14 @@ import { SeriesManagedNotice } from "./settings/SeriesManagedNotice";
 import { LazySponsorTiersTab } from "./settings/LazySponsorTiersTab";
 import { RawEvidenceRetentionPolicy } from "./settings/RawEvidenceRetentionPolicy";
 import { AttendanceSettings } from "./settings/AttendanceSettings";
+import { InvitationSettingsTab } from "./settings/InvitationSettingsTab";
 
 type SettingsTab =
   | "general"
   | "location"
   | "session-types"
   | "registration"
+  | "invitation"
   | "cfp"
   | "attendance"
   | "retention"
@@ -30,6 +32,7 @@ const SETTINGS_TABS: Array<{ key: SettingsTab; label: string; capability?: "mana
   { key: "location", label: "Location" },
   { key: "session-types", label: "Session types" },
   { key: "registration", label: "Registration" },
+  { key: "invitation", label: "Invitation" },
   { key: "cfp", label: "CFP" },
   { key: "attendance", label: "Attendance" },
   { key: "retention", label: "Retention" },
@@ -60,9 +63,15 @@ export function Settings({
     <div class="pk-stack">
       <Tabs
         items={visibleTabs
-          .filter(({ key }) => !["scheduling", "sponsor-tiers"].includes(key))
+          .filter(({ key }) => !["scheduling", "sponsor-tiers", "invitation"].includes(key))
           .map((item) => (item.key === "session-types" ? { ...item, label: "Program" } : item))}
-        active={tab === "scheduling" ? "session-types" : tab === "sponsor-tiers" ? "registration" : tab}
+        active={
+          tab === "scheduling"
+            ? "session-types"
+            : tab === "sponsor-tiers" || tab === "invitation"
+              ? "registration"
+              : tab
+        }
         hrefFor={(key) =>
           key === "general" ? `/events/${event.slug}/settings` : `/events/${event.slug}/settings/${key}`
         }
@@ -78,11 +87,12 @@ export function Settings({
           hrefFor={(key) => `/events/${event.slug}/settings/${key}`}
         />
       )}
-      {(tab === "registration" || tab === "sponsor-tiers") && (
+      {(tab === "registration" || tab === "invitation" || tab === "sponsor-tiers") && (
         <Tabs
           label="Registration settings"
           items={[
             { key: "registration", label: "Policy" },
+            { key: "invitation", label: "Invitation" },
             { key: "sponsor-tiers", label: "Sponsor tiers" },
           ]}
           active={tab}
@@ -99,6 +109,7 @@ export function Settings({
       {(tab === "location" || tab === "session-types" || tab === "registration") && (
         <GeneralTab event={event} section={tab} onUpdated={onUpdated} />
       )}
+      {tab === "invitation" && <InvitationSettingsTab event={event} onUpdated={onUpdated} />}
       {tab === "retention" && <RawEvidenceRetentionPolicy event={event} />}
       {tab === "cfp" && <ProposalCallSettings event={event} onUpdated={onUpdated} />}
       {tab === "attendance" && <AttendanceSettings event={event} onUpdated={onUpdated} />}

@@ -1,8 +1,24 @@
 import { logInfo } from "../logging";
 import { resolveEventFrontendRoutes, type EventRecord } from "./events";
-import { eventMyAgendaPath, eventPromotionKitPath } from "../../../assets/shared/event-participation-link";
+import {
+  eventMyAgendaPath,
+  eventPortalRegistrationPath,
+  eventPortalRegistrationRecordPath,
+  eventPromotionKitPath,
+} from "../../../assets/shared/event-participation-link";
 
 type EventRouteSource = Pick<EventRecord, "slug" | "base_path" | "starts_at" | "settings_json" | "source_mode">;
+/** Registration links also need the audience: only a public event has public registration pages. */
+export type RegistrationRouteSource = EventRouteSource & Pick<EventRecord, "visibility">;
+
+/**
+ * The one rule for where registration links open: a public event has public
+ * registration pages; any other event is visible only after sign-in, so its
+ * registration and management open in the portal.
+ */
+export function registrationOpensInPortal(event: Pick<EventRecord, "visibility">): boolean {
+  return event.visibility !== "public";
+}
 
 function buildUrl(appBaseUrl: string, path: string, query: Record<string, string | undefined | null>): string {
   const url = new URL(path, appBaseUrl);
@@ -28,16 +44,43 @@ function routesForEvent(event: EventRouteSource): ReturnType<typeof resolveEvent
   return routes;
 }
 
+type RegistrationEntryLinkQuery = {
+  invite?: string;
+  inviteId?: string | null;
+  ref?: string;
+  source?: string;
+  event?: string;
+};
+
+/**
+ * Where an invitation, reminder or referral sends someone to register. A
+ * public event registers on its public page; any other event is visible only
+ * after sign-in, so the link opens registration in the portal, which returns
+ * there after sign-in with the invitation still attached.
+ */
 export function registrationPageUrl(
   appBaseUrl: string,
+  event: RegistrationRouteSource,
+  query: RegistrationEntryLinkQuery = {},
+): string {
+  if (registrationOpensInPortal(event))
+    return new URL(
+      eventPortalRegistrationPath(event.slug, {
+        invite: query.invite,
+        id: query.inviteId,
+        ref: query.ref,
+        source: query.source,
+      }),
+      appBaseUrl,
+    ).toString();
+  return publicRegistrationPageUrl(appBaseUrl, event, query);
+}
+
+/** The public event's own registration page. */
+function publicRegistrationPageUrl(
+  appBaseUrl: string,
   event: EventRouteSource,
-  query: {
-    invite?: string;
-    inviteId?: string | null;
-    ref?: string;
-    source?: string;
-    event?: string;
-  } = {},
+  query: RegistrationEntryLinkQuery = {},
 ): string {
   const routes = routesForEvent(event);
   return buildUrl(appBaseUrl, routes.registrationPath, {
@@ -63,7 +106,23 @@ export function registrationConfirmPageUrl(
   });
 }
 
-export function registrationManagePageUrl(appBaseUrl: string, event: EventRouteSource, token: string): string {
+/**
+ * Where a registrant manages their registration. A public event's page opens
+ * with the emailed token; any other event opens the registration in the
+ * portal, which the registrant reaches by signing in with the same address.
+ */
+export function registrationManagePageUrl(
+  appBaseUrl: string,
+  event: RegistrationRouteSource,
+  capability: { token: string; registrationId: string },
+): string {
+  if (registrationOpensInPortal(event))
+    return new URL(eventPortalRegistrationRecordPath(event.slug, capability.registrationId), appBaseUrl).toString();
+  return registrationTokenManagePageUrl(appBaseUrl, event, capability.token);
+}
+
+/** The token management page itself, for staff opening a registration with delegated access. */
+export function registrationTokenManagePageUrl(appBaseUrl: string, event: EventRouteSource, token: string): string {
   const routes = routesForEvent(event);
   return buildUrl(appBaseUrl, routes.registrationManagePath, {
     event: event.slug,

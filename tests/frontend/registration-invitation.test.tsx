@@ -89,6 +89,30 @@ describe("registration invitation access", () => {
     expect(gate.canSubmit()).toBe(false);
     expect(document.body.textContent).toContain("This invitation link is not valid");
   });
+  it("accepts a valid invitation whose link opens this event's registration in the portal", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          respond({ ...valid, registrationUrl: "https://app.test/portal/#/events/test/register?invite=t&id=i" }),
+        ),
+    );
+    const { gate } = setup();
+    await act(() => gate.check("invitation_only"));
+    expect(gate.canSubmit()).toBe(true);
+  });
+  it("refuses a portal invitation link for a different event", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(respond({ ...valid, registrationUrl: "https://app.test/portal/#/events/other/register" })),
+    );
+    const { gate } = setup();
+    await act(() => gate.check("invitation_only"));
+    expect(gate.canSubmit()).toBe(false);
+  });
   it("keeps signup blocked on a failed lookup and allows a retry", async () => {
     const fetch = vi.fn().mockRejectedValueOnce(new TypeError("offline")).mockResolvedValueOnce(respond(valid));
     vi.stubGlobal("fetch", fetch);

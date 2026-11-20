@@ -1,12 +1,40 @@
 import type { PreviewSection } from "./PreviewShell";
 import { AttendanceSettingsPreview } from "./AttendanceSettingsPreview";
 import { EventCard } from "../../site/EventCard";
+import { ButtonLink } from "../Button";
+import { Markdown } from "../Markdown";
+import { EventCollectionCard } from "../../member-flows/portal/sections/events/EventCollectionCard";
+import { eventAudienceDetailSchema } from "../../../shared/schemas/event-management";
+import { EVENT_INVITATION_ACTIONS } from "../../../shared/event-invitation-copy";
 import { InviteColleagueButton } from "../../components/event-invites/InviteColleagueButton";
 import { DayAttendancePicker } from "../../components/DayAttendancePicker";
 import { eventDayReadModelSchema } from "../../../shared/schemas/event-read-models";
 import { ATTENDANCE_ICON_LABELS, type AttendanceIconName } from "../../../shared/event-attendance-icons";
 import "../../../design/tokens.public.generated.css";
 import "../../member-flows/portal/sections/DiscoveryView.css";
+
+/** A synthetic event as the audience list returns it, with the viewer's participation. */
+function sampleEvent(participation: Record<string, unknown>) {
+  return eventAudienceDetailSchema.parse({
+    id: "10000000-0000-4000-8000-000000000002",
+    slug: "pqc-2027",
+    name: "Post-Quantum Cryptography Conference",
+    timezone: "America/Chicago",
+    startsAt: "2027-09-14T13:00:00.000Z",
+    endsAt: "2027-09-15T21:00:00.000Z",
+    profileKey: null,
+    registrationPolicy: "invitation_only",
+    visibility: "invitation_only",
+    accessLevel: "public",
+    sponsorLeadAccess: false,
+    city: "Austin",
+    country: "US",
+    links: [],
+    basePath: "/events/pqc-2027",
+    viewer: null,
+    participation: { proposals: 0, speakerProposals: 0, ...participation },
+  });
+}
 
 export const eventParticipationSections: PreviewSection[] = [
   {
@@ -50,6 +78,43 @@ export const eventParticipationSections: PreviewSection[] = [
           />
         ))}
       </div>
+    ),
+  },
+  {
+    id: "event-card-invitation",
+    title: "Event card with a body",
+    note: "An invitation on Home: the event's own wording, then date and place beside the action. A registered event keeps the plain status line and its own action.",
+    render: () => (
+      <ul class="pk-plain-list pk-stack pk-stack--snug">
+        <li>
+          <EventCollectionCard
+            event={sampleEvent({ registrationId: null, registrationStatus: null })}
+            body={
+              <div class="pk-stack pk-stack--snug">
+                <p>
+                  <strong>Join the people leading the PQC migration</strong>
+                </p>
+                <Markdown markdown="Two days of **hands-on** sessions with the teams already migrating." />
+              </div>
+            }
+            actions={
+              <ButtonLink variant="primary" href="#event-card-invitation">
+                {EVENT_INVITATION_ACTIONS.register}
+              </ButtonLink>
+            }
+          />
+        </li>
+        <li>
+          <EventCollectionCard
+            headingLevel={4}
+            event={sampleEvent({
+              registrationId: "40000000-0000-4000-8000-000000000001",
+              registrationStatus: "registered",
+            })}
+            actions={<ButtonLink href="#event-card-invitation">{EVENT_INVITATION_ACTIONS.manage}</ButtonLink>}
+          />
+        </li>
+      </ul>
     ),
   },
   {

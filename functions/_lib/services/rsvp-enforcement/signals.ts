@@ -25,6 +25,7 @@ async function manageUrl(candidate: RsvpEnforcementCandidate, env: Env): Promise
         base_path: candidate.event_base_path,
         starts_at: candidate.event_starts_at,
         settings_json: candidate.event_settings_json,
+        visibility: candidate.event_visibility,
       },
       { id: candidate.registration_id, manage_link_secret: candidate.manage_link_secret },
     )

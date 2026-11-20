@@ -118,7 +118,6 @@ export function GeneralTab({
   );
   const [mode, setMode] = useState(event.registrationPolicy);
   const [visibility, setVisibility] = useState<EventVisibility>(event.visibility);
-  const [inviteLimit, setInviteLimit] = useState(event.inviteLimitAttendee);
   const [retentionDays, setRetentionDays] = useState(event.userRetentionDays ? String(event.userRetentionDays) : "");
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -154,21 +153,13 @@ export function GeneralTab({
     ...(event.sourceMode === "portal"
       ? {}
       : { proposalFormKey: proposalFormMode === "none" ? null : proposalFormKey.trim() || null }),
-    inviteLimitAttendee: inviteLimit,
   };
   if (retentionDays.trim()) draft.userRetentionDays = Number(retentionDays);
   const sectionFields =
     section === "session-types"
       ? ["sessionTypes"]
       : section === "registration"
-        ? [
-            "visibility",
-            "registrationPolicy",
-            "registrationFormKey",
-            "proposalFormKey",
-            "inviteLimitAttendee",
-            "userRetentionDays",
-          ]
+        ? ["visibility", "registrationPolicy", "registrationFormKey", "proposalFormKey", "userRetentionDays"]
         : section === "location"
           ? ["timezone", "startsAt", "endsAt", "venue", "city", "country"]
           : ["name", "slug", "heroImageUrl"];
@@ -277,7 +268,6 @@ export function GeneralTab({
     setProposalFormMode(nextProposalLink === undefined ? "unset" : nextProposalLink === null ? "none" : "explicit");
     setMode(event.registrationPolicy);
     setVisibility(event.visibility);
-    setInviteLimit(event.inviteLimitAttendee);
     setRetentionDays(event.userRetentionDays ? String(event.userRetentionDays) : "");
   }, [event]);
   useEffect(() => {
@@ -509,17 +499,6 @@ export function GeneralTab({
                       )}
                     </Field>
                   )}
-                  <Field {...form.of("inviteLimitAttendee")} label="Invite limit per attendee">
-                    {(control) => (
-                      <TextInput
-                        {...control}
-                        name="inviteLimitAttendee"
-                        type="number"
-                        value={inviteLimit}
-                        onInput={(inputEvent) => setInviteLimit(Number((inputEvent.target as HTMLInputElement).value))}
-                      />
-                    )}
-                  </Field>
                   <Field {...form.of("userRetentionDays")} label="User retention (days)">
                     {(control) => (
                       <TextInput

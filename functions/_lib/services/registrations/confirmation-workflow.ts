@@ -80,7 +80,10 @@ function confirmationResult(
     manageToken: prepared.manageToken,
     // The email outbox stores queued capability placeholders, while this
     // synchronous response must expose the already signed manage token.
-    manageUrl: registrationManagePageUrl(payload.appBaseUrl, payload.event, prepared.manageToken),
+    manageUrl: registrationManagePageUrl(payload.appBaseUrl, payload.event, {
+      token: prepared.manageToken,
+      registrationId: prepared.registration.id,
+    }),
     shareUrl,
     outboxId,
     organizationOutcome,
