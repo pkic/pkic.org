@@ -80,8 +80,8 @@ describe("the studio's switcher, session bar and phone layout", () => {
       // The views without a tab of their own are behind More, the app's sheet of tiles; More is marked while one is open.
       await act(async () => tabs[4]!.click());
       const more = [...document.querySelectorAll<HTMLElement>(".pk-action-tiles .pk-action-tile")];
-      expect(more.map((item) => item.textContent)).toEqual(["Polls", "Chat", "Monitors", "Time", "Message"]);
-      void act(() => more[3]!.click());
+      expect(more.map((item) => item.textContent)).toEqual(["Polls", "Chat", "Monitors", "Screens", "Time", "Message"]);
+      void act(() => more[4]!.click());
       expect(location.hash).toContain("panel=time");
       expect(tabs[4]!.getAttribute("aria-current")).toBe("page");
 
