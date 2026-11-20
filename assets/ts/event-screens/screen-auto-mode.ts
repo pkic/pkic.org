@@ -95,7 +95,6 @@ export function screenAutoState(
     },
     viewer: { role: "overlay", name: null },
     overlayMode: "direct",
-    chat: [],
     questions: [],
     polls: [],
     preparedQuestions: [],

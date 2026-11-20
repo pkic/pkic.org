@@ -69,12 +69,6 @@ export interface LiveRoomPendingCopy {
   questions: LiveQuestionRow[];
   polls: LivePollCopy[];
   reactions: Array<{ reaction: string; total: number }>;
-  /**
-   * The attendee chat's running counts when they changed: every message
-   * sent, and how many people sent one. Messages the room later drops still
-   * count; a person forgotten no longer does. Never any message text.
-   */
-  chat: { messages: number; people: number } | null;
   answers: LiveAnswerCopyRow[];
   staffActions: LiveStaffActionRow[];
 }
@@ -551,11 +545,6 @@ export class LiveRoomStore {
       ),
       polls: copyableLivePolls(this.sql, copiedSeq),
       reactions: this.sql.rows("SELECT reaction, total FROM reaction_totals WHERE change_seq > ?", copiedSeq),
-      chat:
-        this.sql.rows<{ messages: number; people: number }>(
-          "SELECT messages, (SELECT COUNT(*) FROM room_chat_senders) AS people FROM room_chat_totals WHERE id = 1 AND change_seq > ?",
-          copiedSeq,
-        )[0] ?? null,
       answers: this.sql.rows<LiveAnswerCopyRow>(
         `SELECT a.id, a.question_id, a.author_user_id, a.body, a.created_at,
            (SELECT COUNT(*) FROM question_answer_votes v WHERE v.answer_id = a.id) AS vote_count,

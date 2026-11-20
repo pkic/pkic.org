@@ -2,6 +2,11 @@ import type { LiveStage } from "../../assets/shared/schemas/live-session-room";
 import type { UserSessionTokenClaims } from "./auth/user-session-token";
 import type { LiveProgramSelection, LiveProgramSelectResult } from "../../assets/shared/schemas/live-room-program";
 import type { LiveChatArchiveRow } from "./services/live-session/room-chat";
+import type {
+  LiveChatOnAirMessage,
+  LiveChatOnAirOptions,
+  LiveChatQuestion,
+} from "./services/live-session/location-chat-on-air";
 import type { RateLimitBinding } from "./rate-limit";
 
 import type { DatabaseLike } from "./db/types";
@@ -51,6 +56,18 @@ export interface LiveSessionRoomRpc extends Rpc.DurableObjectBranded {
   /** The session loaded in a physical room, for the virtual room; null for none. */
   loadedProgram(eventId: string, roomId: string): Promise<string | null>;
   locationChatLoaded(occurrenceId: string | null): Promise<void>;
+  /** A location's chat: the latest attendee messages a broadcast may show, after their wait. */
+  locationChatOnAir(limit: number, options: LiveChatOnAirOptions): Promise<LiveChatOnAirMessage[]>;
+  /** A location's chat: when its first message after `since` was sent; null for none. */
+  locationChatFirstSentAfter(since: string): Promise<string | null>;
+  /** A session's room: its location's chat changed what a broadcast may show. */
+  locationChatChanged(): Promise<void>;
+  /** A session's room: asks a converted chat message, approved; null when the room never opened. */
+  questionFromChat(
+    question: LiveChatQuestion,
+    by: { userId: string; name: string },
+    at: string,
+  ): Promise<string | null>;
   /** The composition this session's room has on Program. */
   programStage(): Promise<LiveStage>;
   /** Takes over another session's Program as it is, so making a session active never changes the picture. */

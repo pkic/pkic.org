@@ -3,12 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { liveRoomClientMessageSchema, type LiveRoomServerMessage } from "../assets/shared/schemas/live-session-room";
 import type { LiveRoomOnScreenLists } from "../functions/_lib/services/live-session/room-on-screen-lists";
 import { LIVE_CHAT_POLICY } from "../assets/shared/live-chat-policy";
-import type { LiveRoomChat } from "../functions/_lib/services/live-session/room-chat";
+import type { LiveOnAirChat } from "../functions/_lib/services/live-session/location-chat-on-air";
 import { liveChatTickerLines } from "../functions/_lib/services/live-session/room-ticker";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
 
 const f = createLiveRoomFixture();
 type Client = Awaited<ReturnType<typeof f.connect>>;
+type ChatClient = Awaited<ReturnType<typeof f.connectChat>>;
 type AuxChanged = Extract<LiveRoomServerMessage, { type: "aux.changed" }>;
 
 /** The projector's composition with one audience list, or reactions, on it, as the studio sends it. */
@@ -47,7 +48,12 @@ async function ask(author: Client, operator: Client, text: string, anonymous = f
   return (await operator.next("question.changed", (message) => message.question.text === text)).question;
 }
 
-async function say(author: Client, reader: Client, text: string, channel: "attendee" | "operator" = "attendee") {
+async function say(
+  author: ChatClient,
+  reader: ChatClient,
+  text: string,
+  channel: "attendee" | "operator" = "attendee",
+) {
   author.send({ type: "chat.send", text, channel });
   return (await reader.next("chat.message", (message) => message.message.text === text)).message;
 }
@@ -124,9 +130,10 @@ describe("audience lists on an output", () => {
   });
 
   it("shows only attendee chat the broadcast may show, and takes moderated messages off at once", async () => {
-    const attendee = await f.connect({ person: "attendee" });
-    const second = await f.connect({ person: "secondAttendee" });
-    const operator = await f.connect({ person: "operator" });
+    const attendee = await f.connectChat("attendee");
+    const second = await f.connectChat("secondAttendee");
+    const operator = await f.connectChat("operator");
+    const studio = await f.connect({ person: "operator" });
     const source = await f.connectSource("projector");
 
     const kept = await say(attendee, operator, "Great overview of the inventory step");
@@ -140,7 +147,7 @@ describe("audience lists on an output", () => {
     operator.send({ type: "chat.moderate", messageId: toHide.id, decision: "remove", reason: "spam" });
     await operator.next("chat.message", (m) => m.message.id === toHide.id && m.message.moderation?.hidden !== null);
 
-    operator.send(projectorWith({ chatFeed: { count: 6, delaySeconds: 0 } }));
+    studio.send(projectorWith({ chatFeed: { count: 6, delaySeconds: 0 } }));
     const listed = await projector(source, (composition) => composition.chatFeed !== null);
     // Oldest first; the operators' channel, hidden and reported messages never reach an output.
     expect(listed.chatFeed?.messages).toEqual([
@@ -169,8 +176,10 @@ describe("audience lists on an output", () => {
   });
 
   it("gives the chat graphic each message whole, and cuts only the ticker's line", async () => {
-    const attendee = await f.connect({ person: "attendee" });
-    const operator = await f.connect({ person: "operator" });
+    const attendee = await f.connectChat("attendee");
+    const operator = await f.connectChat("operator");
+    // The session's room reads the location's chat for its graphics.
+    await f.connect({ person: "operator" });
     const long = await say(
       attendee,
       operator,
@@ -181,7 +190,7 @@ describe("audience lists on an output", () => {
       const room = lists(instance);
       return [
         await room.chatFeed({ count: 6, delaySeconds: 0 }),
-        await liveChatTickerLines(Reflect.get(room, "chat") as LiveRoomChat),
+        await liveChatTickerLines(Reflect.get(room, "chat") as LiveOnAirChat),
       ] as const;
     });
     // The board clamps the message to whole lines itself; the ticker has no lines to clamp, so the room cuts it.
@@ -194,12 +203,13 @@ describe("audience lists on an output", () => {
     "holds each new message for the chat's wait, and never shows one moderated during it",
     { timeout: 30_000 },
     async () => {
-      const attendee = await f.connect({ person: "attendee" });
-      const second = await f.connect({ person: "secondAttendee" });
-      const operator = await f.connect({ person: "operator" });
+      const attendee = await f.connectChat("attendee");
+      const second = await f.connectChat("secondAttendee");
+      const operator = await f.connectChat("operator");
+      const studio = await f.connect({ person: "operator" });
       const source = await f.connectSource("projector");
       const delayed = { count: 6, delaySeconds: 10 };
-      operator.send(projectorWith({ chatFeed: delayed }));
+      studio.send(projectorWith({ chatFeed: delayed }));
       await projector(source, (composition) => composition.chatFeed?.config.delaySeconds === 10);
 
       const kept = await say(attendee, operator, "Worth the wait");

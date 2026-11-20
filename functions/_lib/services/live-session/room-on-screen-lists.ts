@@ -8,16 +8,15 @@ import type {
 } from "../../../../assets/shared/schemas/live-session-on-screen";
 import type { LiveStage } from "../../../../assets/shared/schemas/live-session-room";
 import type { LiveRoomBroadcast } from "./room-broadcast";
-import type { LiveRoomChat } from "./room-chat";
+import type { LiveOnAirChat } from "./location-chat-on-air";
 import type { LiveRoomStore } from "./room-store";
-import { liveChatOnAirMessages } from "./room-ticker";
 
 /**
  * The audience lists an output shows: the open questions with the most
- * votes and the latest attendee chat. The room fills them from its own
- * storage, never from D1, under the same moderation as everything else on
- * air, and fills them again whenever a vote, a moderation decision or a chat
- * message changes what they hold.
+ * votes and the latest attendee chat. The room fills questions from its own
+ * storage and chat from its location's chat, never from D1, under the same
+ * moderation as everything else on air, and fills them again whenever a vote,
+ * a moderation decision or a chat message changes what they hold.
  */
 export class LiveRoomOnScreenLists {
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -27,7 +26,7 @@ export class LiveRoomOnScreenLists {
   constructor(
     private readonly ctx: DurableObjectState,
     private readonly store: LiveRoomStore,
-    private readonly chat: LiveRoomChat,
+    private readonly chat: LiveOnAirChat,
     private readonly broadcast: LiveRoomBroadcast,
   ) {}
 
@@ -59,7 +58,7 @@ export class LiveRoomOnScreenLists {
    */
   async chatFeed(config: LiveChatFeedConfig, now = Date.now()): Promise<LiveChatFeedOnAir> {
     const sentBy = config.delaySeconds ? new Date(now - config.delaySeconds * 1000).toISOString() : null;
-    return { config, messages: await liveChatOnAirMessages(this.chat, config.count, { sentBy }) };
+    return { config, messages: await this.chat.messages(config.count, { sentBy }) };
   }
 
   /** The room's storage is being erased: no refill may run afterwards and recreate it. */
@@ -81,23 +80,23 @@ export class LiveRoomOnScreenLists {
   /** Fills every composition's lists again and tells viewers about those that changed. */
   async refresh(now = Date.now()): Promise<void> {
     if (!this.store.session()) return;
-    const program = await this.refilled(this.store.stage(), now);
+    const program = await this.refilled(() => this.store.stage(), now);
     if (program) {
       this.store.saveStage(program);
       await this.broadcast.all({ type: "stage.changed", stage: this.store.stage() });
     }
     for (const output of this.store.auxOutputs()) {
-      const composition = await this.refilled(this.store.aux(output), now);
+      const composition = await this.refilled(() => this.store.aux(output), now);
       if (!composition) continue;
       this.store.saveAux(output, composition);
       await this.broadcast.all({ type: "aux.changed", output, composition: this.store.aux(output) });
     }
-    const preview = await this.refilled(this.store.preview(), now);
+    const preview = await this.refilled(() => this.store.preview(), now);
     if (preview) {
       this.store.savePreview(preview);
       await this.broadcast.all({ type: "preview.changed", composition: this.store.preview() });
     }
-    this.wakeForWaitingChat(now);
+    await this.wakeForWaitingChat(now);
   }
 
   /**
@@ -105,15 +104,16 @@ export class LiveRoomOnScreenLists {
    * refills the lists on its own cadence too, so a room that sleeps in
    * between catches up there.
    */
-  private wakeForWaitingChat(now: number): void {
+  private async wakeForWaitingChat(now: number): Promise<void> {
     const outputs = this.store.outputs();
     const delays = [this.store.stage(), this.store.preview(), ...Object.values(outputs)].flatMap((composition) =>
       composition.chatFeed?.config.delaySeconds ? [composition.chatFeed.config.delaySeconds] : [],
     );
-    const waits = delays.flatMap((delay) => {
-      const sent = this.chat.firstSentAfter(new Date(now - delay * 1000).toISOString());
-      return sent ? [Date.parse(sent) + delay * 1000] : [];
-    });
+    const waits: number[] = [];
+    for (const delay of new Set(delays)) {
+      const sent = await this.chat.firstSentAfter(new Date(now - delay * 1000).toISOString());
+      if (sent) waits.push(Date.parse(sent) + delay * 1000);
+    }
     if (!waits.length) return;
     const at = Math.min(...waits) + 1;
     if (this.wake && this.wake.at <= at && this.wake.at > now) return;
@@ -127,11 +127,21 @@ export class LiveRoomOnScreenLists {
     };
   }
 
-  /** The composition with its lists filled again, or null when they hold what they held. */
-  private async refilled(composition: LiveStage, now: number): Promise<LiveStage | null> {
+  /**
+   * The composition with its lists filled again, or null when they hold what they held. The chat is read from
+   * the location's chat, so an operator may change the composition meanwhile: the lists go into the
+   * composition as it is after the read, and a chat list set up anew in between waits for its own refill.
+   */
+  private async refilled(read: () => LiveStage, now: number): Promise<LiveStage | null> {
+    const asked = read().chatFeed;
+    const fed = asked && (await this.chatFeed(asked.config, now));
+    const composition = read();
     if (!composition.topQuestions && !composition.chatFeed) return null;
     const topQuestions = composition.topQuestions && this.topQuestions(composition.topQuestions.config);
-    const chatFeed = composition.chatFeed && (await this.chatFeed(composition.chatFeed.config, now));
+    const chatFeed =
+      composition.chatFeed && JSON.stringify(composition.chatFeed.config) === JSON.stringify(asked?.config)
+        ? fed
+        : composition.chatFeed;
     const same =
       JSON.stringify(topQuestions) === JSON.stringify(composition.topQuestions) &&
       JSON.stringify(chatFeed) === JSON.stringify(composition.chatFeed);

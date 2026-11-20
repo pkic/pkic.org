@@ -10,12 +10,12 @@ import { DownloadAction } from "../../../../../../ui/DownloadAction";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
 import { toast } from "../../../../ui";
 
-function sessions(count: number) {
-  return `${formatNumber(count)} ${count === 1 ? "session" : "sessions"}`;
+function chats(count: number) {
+  return `${formatNumber(count)} ${count === 1 ? "chat" : "chats"}`;
 }
 
 /**
- * Organizers download every session's kept attendee chat in one file,
+ * Organizers download every room's kept attendee chat in one file,
  * then erase it. Erasing is its own confirmed step, so a download that failed
  * never costs the messages, and a failed download stays on this page.
  */
@@ -33,11 +33,11 @@ export function LiveChatArchive({ slug }: { slug: string }) {
 
   async function erase() {
     const confirmed = await confirmAction({
-      title: "Erase the chat of every session?",
+      title: "Erase every room's chat?",
       body: "Download the chat first if you want to keep a copy.",
       consequences: [
-        "The attendee and operator chat of every session that has ended is removed.",
-        "Sessions that are still live keep their chat.",
+        "The attendee and operator chat of every room is removed once its day is over.",
+        "A chat that is still open today keeps its messages.",
         "The message counts in Session popularity stay.",
         "This cannot be undone.",
       ],
@@ -49,9 +49,9 @@ export function LiveChatArchive({ slug }: { slug: string }) {
     try {
       const result = await deleteJson(endpoint, liveChatEraseResponseSchema);
       toast(
-        result.openSessions > 0
-          ? `Chat erased for ${sessions(result.erasedSessions)}. ${sessions(result.openSessions)} still live kept theirs.`
-          : `Chat erased for ${sessions(result.erasedSessions)}.`,
+        result.openChats > 0
+          ? `Erased ${chats(result.erasedChats)}. ${chats(result.openChats)} still open kept ${result.openChats === 1 ? "its" : "their"} messages.`
+          : `Erased ${chats(result.erasedChats)}.`,
         "success",
       );
     } catch (error) {
@@ -71,8 +71,8 @@ export function LiveChatArchive({ slug }: { slug: string }) {
       </PanelHeader>
       <PanelBody>
         <p class="pk-small pk-muted">
-          Download the chat every session still keeps in one file, then erase it. The message counts in Session
-          popularity stay.
+          Download the chat every room still keeps in one file, then erase it. The message counts in Session popularity
+          stay.
         </p>
       </PanelBody>
     </Panel>

@@ -138,16 +138,6 @@ export async function copyLiveRoomToD1(db: DatabaseLike, copy: LiveRoomPendingCo
         )
         .bind(copy.eventId, copy.occurrenceId, reaction.reaction, reaction.total, copiedAt),
     ),
-    ...(copy.chat
-      ? [
-          db
-            .prepare(
-              `INSERT INTO event_session_chat_totals(event_id,occurrence_id,messages,people,copied_at) VALUES(?,?,?,?,?)
-               ON CONFLICT(event_id,occurrence_id) DO UPDATE SET messages=excluded.messages,people=excluded.people,copied_at=excluded.copied_at`,
-            )
-            .bind(copy.eventId, copy.occurrenceId, copy.chat.messages, copy.chat.people, copiedAt),
-        ]
-      : []),
     ...copy.staffActions.map((action) =>
       prepareScopedAuditLog(
         db,

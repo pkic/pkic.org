@@ -10,7 +10,7 @@ import { operateLiveDesk, type LiveDesk } from "./room-desk";
 import { LiveRoomGraphics } from "./room-graphics";
 import { LiveRoomGraphicBasis } from "./room-graphic-basis";
 import { LiveRoomOnScreenLists } from "./room-on-screen-lists";
-import { LIVE_TICKER_REFRESH_MS, liveChatTickerLines } from "./room-ticker";
+import { LIVE_TICKER_REFRESH_MS, liveChatOnAirMessages, liveChatTickerLines } from "./room-ticker";
 import { LiveRoomProgram, LIVE_PROGRAM_SOCKET_TAG, closeLiveRoomProgramSources } from "./room-program";
 import type {
   LiveProgramSelection,
@@ -29,12 +29,7 @@ import { LiveRoomPeople } from "./room-people";
 import { LiveRoomAuthors } from "./room-authors";
 import { LiveRoomQuestions } from "./room-questions";
 import { DurableObject } from "cloudflare:workers";
-import {
-  LIVE_ROOM_POLICY,
-  liveRoomOpen,
-  liveRoomPurgeAt,
-  liveRoomTakesQuestions,
-} from "../../../../assets/shared/live-session-policy";
+import { LIVE_ROOM_POLICY, liveRoomPurgeAt } from "../../../../assets/shared/live-session-policy";
 import {
   LIVE_ROOM_PROTOCOL,
   type LiveRoomClientMessage,
@@ -66,14 +61,18 @@ import { LiveRoomAddedCredits } from "./room-added-credits";
 import { refreshLiveCreditCopies } from "./room-credit-refresh";
 import { LiveLocationChatStore } from "./location-chat-store";
 import { LiveLocationChatRoom } from "./location-chat-room";
+import { LiveSessionCommands } from "./room-session-commands";
 import { liveRoomChatScope } from "./room-chat-scope";
+import {
+  liveLocationOnAirChat,
+  type LiveChatOnAirMessage,
+  type LiveChatOnAirOptions,
+  type LiveChatQuestion,
+} from "./location-chat-on-air";
 
 type Handled = LiveRefusal | void;
 const REFUSALS = {
-  closed: { code: "LIVE_ROOM_CLOSED", message: "Chat and reactions open shortly before the session starts." },
-  questionsClosed: { code: "LIVE_ROOM_CLOSED", message: "This session is no longer taking questions." },
   readOnly: { code: "LIVE_ROOM_READ_ONLY", message: "This connection can only watch the room." },
-  operatorOnly: { code: "LIVE_ROOM_OPERATOR_REQUIRED", message: "Only the session's operators can do that." },
   invalid: { code: "LIVE_ROOM_INVALID_MESSAGE", message: "The room could not read that request." },
 } satisfies Record<string, LiveRefusal>;
 
@@ -116,6 +115,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
   private readonly onScreenLists: LiveRoomOnScreenLists;
   private readonly location: LiveLocationChatStore;
   private readonly locationChat: LiveLocationChatRoom;
+  private readonly sessionCommands: LiveSessionCommands;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -168,7 +168,9 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       () => this.graphics.tickerContext,
       (work) => this.access.run(work),
     );
-    this.onScreenLists = new LiveRoomOnScreenLists(ctx, this.store, this.chat, this.broadcast);
+    // A session shows its location's chat on air; it holds no chat of its own.
+    const onAirChat = liveLocationOnAirChat(this.sessionEnv, () => this.store.session());
+    this.onScreenLists = new LiveRoomOnScreenLists(ctx, this.store, onAirChat, this.broadcast);
     this.graphics = new LiveRoomGraphics(
       this.sessionEnv,
       this.store,
@@ -179,7 +181,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       new LiveRoomGraphicBasis(this.sql),
       this.onScreenLists,
     );
-    this.graphics.chatTicker = () => liveChatTickerLines(this.chat);
+    this.graphics.chatTicker = () => liveChatTickerLines(onAirChat);
     this.chatActions = new LiveRoomChatActions(
       ctx,
       this.chat,
@@ -188,9 +190,10 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       this.broadcast,
       this.authors,
       {
-        tickerChanged: () => this.graphics.refreshLocal(),
-        listed: () => this.graphics.lists.due(),
-        stamp: () => (this.store.session() ? null : this.location.stamp(Date.now())),
+        tickerChanged: async () => this.locationChat.onAirChanged(),
+        listed: () => this.locationChat.onAirChanged(),
+        stamp: () => this.location.stamp(Date.now()),
+        ask: (question, by, at, sentDuring) => this.locationChat.ask(question, by, at, sentDuring),
         audited: () => this.scheduleCopy(),
         counted: () => this.scheduleCopy(),
       },
@@ -258,6 +261,19 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       timers: this.timers,
       broadcast: this.broadcast,
     };
+    this.sessionCommands = new LiveSessionCommands(
+      this.store,
+      this.chatActions,
+      this.participation,
+      this.questionCommands,
+      this.questions,
+      this.engagement,
+      this.presence,
+      async (actor, session, message) => {
+        const program = this.store.stage();
+        return this.apply(this.followed(session, program, await operateLiveDesk(this.desk, actor, session, message)));
+      },
+    );
     // Keep-alive pings are answered without waking the room.
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
   }
@@ -290,6 +306,26 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
   /** The studio loaded a session in this location's chat's location, or none: later messages are dated by it. */
   async locationChatLoaded(occurrenceId: string | null): Promise<void> {
     this.locationChat.loaded(occurrenceId);
+  }
+
+  /** A location's chat: its latest messages a broadcast may show, and when the first after `since` was sent. */
+  async locationChatOnAir(limit: number, options: LiveChatOnAirOptions): Promise<LiveChatOnAirMessage[]> {
+    return this.location.state() ? liveChatOnAirMessages(this.chat, limit, options) : [];
+  }
+  async locationChatFirstSentAfter(since: string): Promise<string | null> {
+    return this.location.state() ? this.chat.firstSentAfter(since) : null;
+  }
+
+  /** A session's room: its location's chat changed, so its chat feed and ticker fill again. */
+  async locationChatChanged(): Promise<void> {
+    if (!this.store.session()) return;
+    this.graphics.lists.due();
+    await this.graphics.refreshLocal();
+  }
+
+  /** A session's room: asks a chat message an operator converted; null when the room never opened. */
+  async questionFromChat(question: LiveChatQuestion, by: { userId: string; name: string }, at: string) {
+    return this.store.session() ? this.questions.fromChat(question, by, at) : null;
   }
 
   async readProgram(eventId: string, roomId: string): Promise<LiveProgramSelection> {
@@ -529,56 +565,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     if (!operator && liveCommandParticipates(message.type) && this.decisions.restriction(actor.userId, Date.now()))
       return LIVE_PARTICIPATION_REFUSAL;
     if (!this.store.session()) return this.locationChat.handle(viewer, actor, message, socket);
-    const session = this.session();
-    const opening = this.store.opening();
-    const open = operator || liveRoomOpen(Date.now(), session.startAt, session.endAt, opening);
-    const asking = operator || liveRoomTakesQuestions(Date.now(), session.endAt, opening);
-    switch (message.type) {
-      case "chat.send":
-      case "chat.react":
-      case "chat.report":
-        return open ? this.chatActions.handle(viewer, actor, message, socket) : REFUSALS.closed;
-      case "chat.delete":
-      case "chat.history":
-        return this.chatActions.handle(viewer, actor, message, socket);
-      case "author.lookup":
-        return this.chatActions.lookupAuthor(viewer, actor, message.handle, socket);
-      case "chat.moderate":
-      case "chat.convert":
-        if (!operator) return REFUSALS.operatorOnly;
-        return this.chatActions.handle(viewer, actor, message, socket);
-      case "moderation.done":
-        return this.participation.done(viewer, actor, message.item, message.done);
-      case "participation.block":
-        return this.participation.block(viewer, actor, message);
-      case "participation.lift":
-        return this.participation.lift(viewer, actor, message.item);
-      case "question.ask":
-      case "question.edit":
-      case "question.withdraw":
-      case "question.moderate":
-      case "question.answers.watch":
-      case "question.answer":
-      case "question.answer.accept":
-      case "question.answer.vote":
-      case "question.answer.hide":
-        return this.questionCommands.handle(viewer, actor, message, socket, asking);
-      case "question.vote":
-        return asking ? this.questions.vote(actor.userId, message.questionId, message.voted) : REFUSALS.questionsClosed;
-      case "reaction.send":
-        return open ? this.engagement.react(actor.userId, message.reaction) : REFUSALS.closed;
-      case "poll.vote":
-        return asking
-          ? this.engagement.votePoll(actor.userId, message.pollId, message.answer, socket)
-          : REFUSALS.questionsClosed;
-      case "presence.update":
-        if (!operator) return REFUSALS.operatorOnly;
-        this.presence.update(actor, message);
-        return;
-    }
-    if (!operator) return REFUSALS.operatorOnly;
-    const program = this.store.stage();
-    return this.apply(this.followed(session, program, await operateLiveDesk(this.desk, actor, session, message)));
+    return this.sessionCommands.handle(viewer, actor, this.session(), message, socket);
   }
 
   /** An operator's change to Program also reaches the screens that follow it, in the same outcome. */

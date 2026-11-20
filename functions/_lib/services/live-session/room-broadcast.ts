@@ -93,7 +93,6 @@ export class LiveRoomBroadcast {
       preparedQuestions: operator ? this.prepared.list().map(projectLivePreparedQuestion) : [],
       preparedQuestionWindow: operator ? this.prepared.window(session) : null,
       overlayMode: this.store.overlayMode(),
-      ...this.chat.snapshot(viewer),
       stage,
       outputs: seesRoomOutputs(viewer) ? this.store.outputs() : EMPTY_LIVE_OUTPUTS,
       speakerMessage: seesRoomOutputs(viewer) ? this.store.speakerMessage() : null,

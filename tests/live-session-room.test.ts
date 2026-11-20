@@ -322,13 +322,11 @@ describe("live session questions", () => {
     expect((await author.next("room.refused")).code).toBe("LIVE_ROOM_RATE_LIMITED");
   });
 
-  it("takes attendee questions ahead of the session while chat and reactions wait for it to go live", async () => {
+  it("takes attendee questions ahead of the session while reactions wait for it to go live", async () => {
     await f.setup({ startOffsetMinutes: 24 * 60, durationMinutes: 30 });
     const attendee = await f.connect({ person: "attendee" });
     attendee.send({ type: "question.ask", text: "Asked a day early", anonymous: false });
     expect((await attendee.next("question.accepted")).questionId).toBeTruthy();
-    attendee.send({ type: "chat.send", text: "Too early to chat" });
-    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_CLOSED");
     attendee.send({ type: "reaction.send", reaction: "applause" });
     expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_CLOSED");
   });
@@ -343,8 +341,6 @@ describe("live session questions", () => {
 
     operator.send({ type: "room.opening", opening: "open" });
     expect((await attendee.next("room.opening.changed")).opening).toBe("open");
-    attendee.send({ type: "chat.send", text: "Testing a day early" });
-    await attendee.next("chat.message", (message) => message.message.text === "Testing a day early");
 
     operator.send({ type: "room.opening", opening: "closed" });
     expect((await attendee.next("room.opening.changed", (m) => m.opening === "closed")).opening).toBe("closed");
@@ -532,9 +528,9 @@ describe("live session durable copy", () => {
   });
 
   it("copies how many attendee messages were sent and by how many people, never the messages", async () => {
-    const first = await f.connect({ person: "attendee" });
-    const second = await f.connect({ person: "secondAttendee" });
-    const operator = await f.connect({ person: "operator" });
+    const first = await f.connectChat("attendee");
+    const second = await f.connectChat("secondAttendee");
+    const operator = await f.connectChat("operator");
     for (const [socket, text] of [
       [first, "Hello"],
       [first, "Great slides"],
@@ -545,15 +541,15 @@ describe("live session durable copy", () => {
     }
     operator.send({ type: "chat.send", text: "Staff only", channel: "operator" });
     await operator.next("chat.message", (message) => message.message.text === "Staff only");
-    expect(await runDurableObjectAlarm(f.room())).toBe(true);
+    expect(await runDurableObjectAlarm(f.chatRoom())).toBe(true);
     const totals = () =>
       queryAll(env.DB, "SELECT messages,people FROM event_session_chat_totals WHERE event_id=? AND occurrence_id=?", [
         f.eventId,
         f.occurrenceId,
       ]);
     expect(await totals()).toEqual([{ messages: 3, people: 2 }]);
-    await runInDurableObject(f.room(), (room) => room.forgetParticipant(f.users.secondAttendee));
-    await runDurableObjectAlarm(f.room());
+    await runInDurableObject(f.chatRoom(), (room) => room.forgetParticipant(f.users.secondAttendee));
+    await runDurableObjectAlarm(f.chatRoom());
     expect(await totals()).toEqual([{ messages: 3, people: 1 }]);
   });
 });

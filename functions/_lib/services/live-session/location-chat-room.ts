@@ -1,5 +1,9 @@
 import { liveLocationChatOpen } from "../../../../assets/shared/live-location-chat";
-import { LIVE_ROOM_POLICY, liveRoomPurgeAt } from "../../../../assets/shared/live-session-policy";
+import {
+  LIVE_INTERACTION_BROADCAST_MILLISECONDS,
+  LIVE_ROOM_POLICY,
+  liveRoomPurgeAt,
+} from "../../../../assets/shared/live-session-policy";
 import { LIVE_ROOM_PROTOCOL, type LiveRoomClientMessage } from "../../../../assets/shared/schemas/live-session-room";
 import type { Env } from "../../types";
 import { nowIso } from "../../utils/time";
@@ -8,12 +12,13 @@ import { copyLiveLocationChatToD1 } from "./location-chat-copy";
 import type { LiveLocationChatStore } from "./location-chat-store";
 import { liveProgramName } from "./room-program";
 import type { LiveRoomAccessLease } from "./room-access-lease";
-import type { LiveRoomParticipant } from "./room-admission";
+import { liveRoomName, type LiveRoomParticipant } from "./room-admission";
 import type { LiveRoomBroadcast } from "./room-broadcast";
 import type { LiveRoomChatActions } from "./room-chat-actions";
 import type { LiveChatFeed } from "./room-chat-feed";
 import type { LiveRefusal } from "./room-controls";
 import type { LiveRoomParticipation } from "./room-participation";
+import type { LiveChatQuestion } from "./location-chat-on-air";
 import type { LiveRoomStore } from "./room-store";
 import { serializeLiveRoomMessage } from "./room-projection";
 
@@ -25,6 +30,10 @@ const REFUSALS = {
   ended: { code: "LIVE_ROOM_CLOSED", message: "The organizers ended this chat." },
   operatorOnly: { code: "LIVE_ROOM_OPERATOR_REQUIRED", message: "Only the event's operators can do that." },
   unsupported: { code: "LIVE_ROOM_INVALID_MESSAGE", message: "A location's chat does not take that request." },
+  noSession: {
+    code: "LIVE_CHAT_NO_SESSION",
+    message: "Load a session in the studio first, so the question has a session to go to.",
+  },
 } satisfies Record<string, LiveRefusal>;
 
 type Actor = { userId: string; name: string };
@@ -53,7 +62,45 @@ export interface LiveLocationChatParts {
  * each session's room.
  */
 export class LiveLocationChatRoom {
+  private onAirTimer: ReturnType<typeof setTimeout> | null = null;
+
   constructor(private readonly parts: LiveLocationChatParts) {}
+
+  /** The session on in the location now: the one the studio has loaded, else the agenda's, else none. */
+  private sessionOn(): string | null {
+    const { store } = this.parts;
+    return store.state()?.loadedOccurrenceId ?? store.stamp(Date.now());
+  }
+
+  /** Attendee chat changed: the session on air fills its chat feed and ticker again, once the moment's changes are in. */
+  onAirChanged(): void {
+    this.onAirTimer ??= setTimeout(() => {
+      this.onAirTimer = null;
+      const state = this.parts.store.state();
+      const occurrenceId = this.sessionOn();
+      const rooms = this.parts.env.LIVE_SESSION_ROOMS;
+      if (!state || !occurrenceId || !rooms) return;
+      this.parts.ctx.waitUntil(
+        rooms
+          .getByName(liveRoomName(state.eventId, occurrenceId))
+          .locationChatChanged()
+          .catch((error: unknown) => console.error("Live location chat on air notice failed", error)),
+      );
+    }, LIVE_INTERACTION_BROADCAST_MILLISECONDS);
+  }
+
+  /**
+   * Asks a converted message in a session's room: the one the studio has loaded, else the one it was sent
+   * during, else the one on now. Between sessions with nothing loaded there is no room to ask it in.
+   */
+  async ask(question: LiveChatQuestion, by: Actor, at: string, sentDuring: string | null) {
+    const state = this.parts.store.state();
+    const occurrenceId = state?.loadedOccurrenceId ?? sentDuring ?? this.sessionOn();
+    const rooms = this.parts.env.LIVE_SESSION_ROOMS;
+    if (!state || !occurrenceId || !rooms) return REFUSALS.noSession;
+    const id = await rooms.getByName(liveRoomName(state.eventId, occurrenceId)).questionFromChat(question, by, at);
+    return id ?? REFUSALS.noSession;
+  }
 
   async connect(request: Request): Promise<Response> {
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket")
@@ -86,7 +133,10 @@ export class LiveLocationChatRoom {
 
   /** The studio loaded a session in the location, or none. A chat nobody joined yet learns it on its first join. */
   loaded(occurrenceId: string | null): void {
-    if (this.parts.store.state()) this.parts.store.loaded(occurrenceId);
+    if (!this.parts.store.state()) return;
+    this.parts.store.loaded(occurrenceId);
+    // The session now on air shows this chat from the start.
+    this.onAirChanged();
   }
 
   private snapshot(socket: WebSocket): Promise<string | null> {
@@ -130,6 +180,7 @@ export class LiveLocationChatRoom {
       case "chat.history":
         return chatActions.handle(viewer, actor, message, socket);
       case "chat.moderate":
+      case "chat.convert":
         return operator ? chatActions.handle(viewer, actor, message, socket) : REFUSALS.operatorOnly;
       case "author.lookup":
         return chatActions.lookupAuthor(viewer, actor, message.handle, socket);

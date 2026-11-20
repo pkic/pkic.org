@@ -100,7 +100,6 @@ export function timersRoomState(
     session: TIMERS_FIXTURE_SESSION,
     viewer: { role: "operator", name: "Studio operator" },
     overlayMode: "direct",
-    chat: [],
     questions: [],
     polls: [],
     preparedQuestions: [],

@@ -8,6 +8,7 @@ import { readLiveTickerContext } from "./room-ticker-context";
 import { readPublishedLiveAgenda } from "./approved-agenda";
 import type { LiveRoomChat } from "./room-chat";
 import { filterLiveChatForAir } from "./room-chat-on-air-filter";
+import type { LiveChatOnAirMessage, LiveChatOnAirOptions, LiveOnAirChat } from "./location-chat-on-air";
 export const LIVE_TICKER_REFRESH_MS = 30000;
 
 /**
@@ -19,10 +20,10 @@ export const LIVE_TICKER_REFRESH_MS = 30000;
  * back: the chat ticker and the chat graphic both read them here.
  */
 export async function liveChatOnAirMessages(
-  chat: LiveRoomChat,
+  chat: Pick<LiveRoomChat, "tickerRows">,
   limit: number,
-  { sentBy = null, cutAt = null }: { sentBy?: string | null; cutAt?: number | null } = {},
-) {
+  { sentBy = null, cutAt = null }: LiveChatOnAirOptions = {},
+): Promise<LiveChatOnAirMessage[]> {
   const messages = chat
     .tickerRows(limit, sentBy)
     .reverse()
@@ -36,10 +37,10 @@ export async function liveChatOnAirMessages(
 }
 
 /** The chat ticker's lines: the latest messages a broadcast may show, each after its author's name. */
-export async function liveChatTickerLines(chat: LiveRoomChat): Promise<string[]> {
-  return (
-    await liveChatOnAirMessages(chat, LIVE_CHAT_POLICY.tickerMessages, { cutAt: LIVE_CHAT_POLICY.tickerMessageLength })
-  ).map((message) => `${message.authorName}: ${message.text}`);
+export async function liveChatTickerLines(chat: LiveOnAirChat): Promise<string[]> {
+  return (await chat.messages(LIVE_CHAT_POLICY.tickerMessages, { cutAt: LIVE_CHAT_POLICY.tickerMessageLength })).map(
+    (message) => `${message.authorName}: ${message.text}`,
+  );
 }
 
 export async function resolveLiveTicker(

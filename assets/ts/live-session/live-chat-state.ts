@@ -1,8 +1,8 @@
 import { LIVE_CHAT_POLICY } from "../../shared/live-chat-policy";
 import type { LiveChatChannel, LiveChatMessage } from "../../shared/schemas/live-session-chat";
-import type { LiveRoomServerMessage, LiveRoomSnapshot } from "../../shared/schemas/live-session-room";
+import type { LiveLocationChatSnapshot, LiveRoomServerMessage } from "../../shared/schemas/live-session-room";
 
-type ChatState = Pick<LiveRoomSnapshot, "chat" | "chatEarlier" | "chatReports" | "viewer">;
+type ChatState = Pick<LiveLocationChatSnapshot, "chat" | "chatEarlier" | "chatReports" | "viewer">;
 type ChatServerMessage = Extract<LiveRoomServerMessage, { type: `chat.${string}` }>;
 
 /** A message awaits a moderator's review while it is reported and either shown or held. */

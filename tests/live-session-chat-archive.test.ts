@@ -2,7 +2,7 @@ import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  LIVE_CHAT_ARCHIVE_MAX_SESSIONS,
+  LIVE_CHAT_ARCHIVE_MAX_CHATS,
   liveChatEraseResponseSchema,
 } from "../assets/shared/schemas/event-live-chat-archive";
 import { callApi } from "./helpers/app";
@@ -15,10 +15,10 @@ const DAY = 24 * 60 * 60 * 1000;
 // Due later than the test runs it by hand, so workerd never fires the same alarm on its own as well.
 const MINUTE = 60 * 1000;
 
-/** A chat with one shown and one hidden attendee message, operator chat and a question, copied to D1. */
+/** A location's chat with one shown and one hidden attendee message and operator chat, copied to D1. */
 async function chatInRoom() {
-  const attendee = await f.connect({ person: "attendee" });
-  const operator = await f.connect({ person: "operator" });
+  const attendee = await f.connectChat("attendee");
+  const operator = await f.connectChat("operator");
   attendee.send({ type: "chat.send", text: "Hello, everyone" });
   await attendee.next("chat.message", (message) => message.message.text === "Hello, everyone");
   attendee.send({ type: "chat.send", text: "Buy cheap tokens" });
@@ -30,23 +30,28 @@ async function chatInRoom() {
   );
   operator.send({ type: "chat.send", text: "Staff only", channel: "operator" });
   await operator.next("chat.message", (message) => message.message.text === "Staff only");
-  attendee.send({ type: "question.ask", text: "What comes next?", anonymous: false });
-  await attendee.next("question.changed");
-  expect(await runDurableObjectAlarm(f.room())).toBe(true);
+  expect(await runDurableObjectAlarm(f.chatRoom())).toBe(true);
 }
 
-/** Moves the room's session into the past, as if it ended `daysAgo` days ago. */
+/** Moves the location's day into the past, as if its last session ended `daysAgo` days ago. */
 async function sessionEnded(daysAgo: number) {
   const endAt = new Date(Date.now() - daysAgo * DAY).toISOString();
   const startAt = new Date(Date.parse(endAt) - 60 * 60 * 1000).toISOString();
-  await runInDurableObject(f.room(), (_room, state) => {
-    state.storage.sql.exec(
-      "UPDATE room_session SET session_json = json_set(session_json, '$.startAt', ?, '$.endAt', ?)",
-      startAt,
-      endAt,
-    );
+  await runInDurableObject(f.chatRoom(), (_room, state) => {
+    const { record_json } = state.storage.sql
+      .exec<{ record_json: string }>("SELECT record_json FROM location_chat")
+      .one();
+    const record = JSON.parse(record_json) as { scope: { sessions: { startAt: string; endAt: string }[] } };
+    record.scope.sessions = record.scope.sessions.map((session) => ({ ...session, startAt, endAt }));
+    state.storage.sql.exec("UPDATE location_chat SET record_json = ?", JSON.stringify(record));
   });
-  await runInDurableObject(f.room(), (_room, state) => state.storage.setAlarm(Date.now() + MINUTE));
+  // The room caches its day; a fresh instance reads the moved one.
+  await runInDurableObject(f.chatRoom(), (room, state) => {
+    Reflect.get(Reflect.get(room as object, "location") as object, "erased").call(
+      Reflect.get(room as object, "location"),
+    );
+    return state.storage.setAlarm(Date.now() + MINUTE);
+  });
 }
 
 async function keepChatFor(days: number) {
@@ -57,16 +62,16 @@ async function keepChatFor(days: number) {
 
 function rowCount(table: string) {
   return runInDurableObject(
-    f.room(),
+    f.chatRoom(),
     (_room, state) => state.storage.sql.exec(`SELECT COUNT(*) AS total FROM ${table}`).one().total,
   );
 }
 
 function holdsRoom() {
   return runInDurableObject(
-    f.room(),
+    f.chatRoom(),
     (_room, state) =>
-      state.storage.sql.exec("SELECT 1 FROM sqlite_master WHERE type='table' AND name='room_session'").toArray()
+      state.storage.sql.exec("SELECT 1 FROM sqlite_master WHERE type='table' AND name='location_chat'").toArray()
         .length > 0,
   );
 }
@@ -103,10 +108,10 @@ describe("live chat retention", () => {
     ).toEqual([{ keepDays: 90 }]);
   });
 
-  it("erases the whole room a week after the session by default", async () => {
+  it("erases the whole chat a week after the day's last session by default", async () => {
     await chatInRoom();
     await sessionEnded(8);
-    await runDurableObjectAlarm(f.room());
+    await runDurableObjectAlarm(f.chatRoom());
     expect(await holdsRoom()).toBe(false);
     expect(
       await queryAll(env.DB, "SELECT messages,people FROM event_session_chat_totals WHERE occurrence_id=?", [
@@ -119,19 +124,18 @@ describe("live chat retention", () => {
     await chatInRoom();
     await keepChatFor(90);
     await sessionEnded(8);
-    await runDurableObjectAlarm(f.room());
+    await runDurableObjectAlarm(f.chatRoom());
     expect(await rowCount("room_chat")).toBe(2);
     expect(await rowCount("room_operator_chat")).toBe(0);
-    expect(await rowCount("questions")).toBe(0);
-    const archive = await runInDurableObject(f.room(), (room) => room.chatArchive());
+    const archive = await runInDurableObject(f.chatRoom(), (room) => room.chatArchive());
     expect(archive.map(({ author_name, body, status }) => ({ author_name, body, status }))).toEqual([
       { author_name: "Ada Attendee", body: "Hello, everyone", status: "shown" },
       { author_name: "Ada Attendee", body: "Buy cheap tokens", status: "hidden" },
     ]);
     // A shorter choice applies at the next daily check.
     await keepChatFor(7);
-    await runInDurableObject(f.room(), (_room, state) => state.storage.setAlarm(Date.now() + MINUTE));
-    await runDurableObjectAlarm(f.room());
+    await runInDurableObject(f.chatRoom(), (_room, state) => state.storage.setAlarm(Date.now() + MINUTE));
+    await runDurableObjectAlarm(f.chatRoom());
     expect(await holdsRoom()).toBe(false);
   });
 
@@ -139,7 +143,7 @@ describe("live chat retention", () => {
     await chatInRoom();
     await keepChatFor(90);
     await sessionEnded(91);
-    await runDurableObjectAlarm(f.room());
+    await runDurableObjectAlarm(f.chatRoom());
     expect(await holdsRoom()).toBe(false);
   });
 });
@@ -147,27 +151,32 @@ describe("live chat retention", () => {
 describe("event chat download and erasure", () => {
   beforeEach(() => f.setup());
 
-  it("downloads every kept attendee message and erases closed rooms' chat only", async () => {
+  it("downloads every kept attendee message and erases closed chats only", async () => {
     await chatInRoom();
     const download = await request("GET");
     expect(download.status, await download.clone().text()).toBe(200);
     expect(download.headers.get("content-disposition")).toContain("live-chat.csv");
     const lines = (await download.text()).split("\r\n");
-    expect(lines[0]).toBe("Session,Session start (UTC),Sent (UTC),Author,Message,Status");
-    expect(lines.slice(1).map((line) => line.split(",").slice(3).join(","))).toEqual([
-      'Ada Attendee,"Hello, everyone",Shown',
-      "Ada Attendee,Buy cheap tokens,Hidden by a moderator",
+    expect(lines[0]).toBe("Room,Day,Session,Sent (UTC),Author,Message,Status");
+    // Each message is dated by the session on when it was sent.
+    const dated = lines.slice(1).map((line) => {
+      const [room, , session, , ...rest] = line.split(",");
+      return [room, session, ...rest].join(",");
+    });
+    expect(dated).toEqual([
+      'Physical room,Post-quantum migration,Ada Attendee,"Hello, everyone",Shown',
+      "Physical room,Post-quantum migration,Ada Attendee,Buy cheap tokens,Hidden by a moderator",
     ]);
     expect(lines.join("\n")).not.toContain("Staff only");
 
     const open = await request("DELETE");
     expect(open.status).toBe(200);
-    expect(liveChatEraseResponseSchema.parse(await open.json())).toEqual({ erasedSessions: 0, openSessions: 1 });
+    expect(liveChatEraseResponseSchema.parse(await open.json())).toEqual({ erasedChats: 0, openChats: 1 });
     expect(await rowCount("room_chat")).toBe(2);
 
     await sessionEnded(1);
     const erased = await request("DELETE");
-    expect(liveChatEraseResponseSchema.parse(await erased.json())).toEqual({ erasedSessions: 1, openSessions: 0 });
+    expect(liveChatEraseResponseSchema.parse(await erased.json())).toEqual({ erasedChats: 1, openChats: 0 });
     expect(await rowCount("room_chat")).toBe(0);
     expect(await rowCount("room_operator_chat")).toBe(0);
     expect((await (await request("GET")).text()).split("\r\n")).toHaveLength(1);
@@ -186,22 +195,24 @@ describe("event chat download and erasure", () => {
     ]);
   });
 
-  it("refuses an event with more sessions than one request covers, rather than skip any", async () => {
-    const statements = Array.from({ length: LIVE_CHAT_ARCHIVE_MAX_SESSIONS + 1 }, () => crypto.randomUUID()).flatMap(
-      (id) => [
-        env.DB.prepare(
-          "INSERT INTO event_agenda_occurrences(id,event_id,title,start_at,end_at) VALUES(?,?,'Session',?,?)",
-        ).bind(id, f.eventId, "2026-12-01T09:00:00.000Z", "2026-12-01T10:00:00.000Z"),
-        env.DB.prepare(
-          "INSERT INTO event_session_chat_totals(event_id,occurrence_id,messages,people,copied_at) VALUES(?,?,1,1,?)",
-        ).bind(f.eventId, id, "2026-12-01T10:00:00.000Z"),
-      ],
-    );
-    await env.DB.batch(statements);
+  it("refuses an event with more chats than one request covers, rather than skip any", async () => {
+    const publication = await env.DB.prepare("SELECT snapshot_json FROM event_agenda_publications WHERE event_id=?")
+      .bind(f.eventId)
+      .first<{ snapshot_json: string }>();
+    const snapshot = JSON.parse(publication!.snapshot_json) as { occurrences: Record<string, unknown>[] };
+    const [session] = snapshot.occurrences;
+    // One session a day in the same room: each day is a chat of its own.
+    snapshot.occurrences = Array.from({ length: LIVE_CHAT_ARCHIVE_MAX_CHATS + 1 }, (_, day) => {
+      const startAt = new Date(Date.UTC(2027, 0, 1 + day, 9)).toISOString();
+      return { ...session, id: crypto.randomUUID(), startAt, endAt: startAt.replace("T09", "T10") };
+    });
+    await env.DB.prepare("UPDATE event_agenda_publications SET snapshot_json=? WHERE event_id=?")
+      .bind(JSON.stringify(snapshot), f.eventId)
+      .run();
     for (const method of ["GET", "DELETE"] as const) {
       const response = await request(method);
       expect(response.status).toBe(413);
-      expect(await response.json()).toMatchObject({ error: { code: "LIVE_CHAT_TOO_MANY_SESSIONS" } });
+      expect(await response.json()).toMatchObject({ error: { code: "LIVE_CHAT_TOO_MANY_CHATS" } });
     }
   });
 

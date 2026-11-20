@@ -21,6 +21,7 @@ import { serializeLiveRoomMessage } from "./room-projection";
 import type { LiveRoomStore } from "./room-store";
 import type { LiveRoomAuthors } from "./room-authors";
 import { LIVE_PARTICIPATION_REFUSAL } from "./room-participation-refusal";
+import type { LiveChatQuestion } from "./location-chat-on-air";
 
 type ChatCommand = Extract<LiveRoomClientMessage, { type: `chat.${string}` }>;
 type Actor = { userId: string; name: string };
@@ -78,6 +79,13 @@ export class LiveRoomChatActions {
       listed: () => void;
       /** The session a message sent now is dated by, in a location's chat; null in a session's room. */
       stamp: () => string | null;
+      /** Asks a converted message in a session's room; answers the question's id or why it could not. */
+      ask: (
+        question: LiveChatQuestion,
+        by: Actor,
+        at: string,
+        sentDuring: string | null,
+      ) => Promise<string | LiveRefusal>;
       /** A moderator acted or a question was created; the durable copy, with its audit rows, is due. */
       audited: () => Promise<void>;
       /** An attendee message changed the chat counts; their durable copy is due. */
@@ -274,26 +282,26 @@ export class LiveRoomChatActions {
   private async convert(actor: Actor, row: LiveChatRow, at: string) {
     const text = liveChatPlainText(row.body);
     if (text.length < LIVE_ROOM_POLICY.questionMinLength) return REFUSALS.tooShort;
-    const questionId = crypto.randomUUID();
-    this.store.addQuestion({
-      id: questionId,
-      authorUserId: row.author_user_id,
-      authorName: row.author_name,
-      anonymous: false,
-      body:
-        text.length > LIVE_ROOM_POLICY.questionMaxLength
-          ? `${text.slice(0, LIVE_ROOM_POLICY.questionMaxLength - 1).trimEnd()}…`
-          : text,
-      askedAt: row.sent_at,
-      // The question keeps the photo the author had when they wrote in the chat.
-      authorPhotoUrl: this.feed.people.people([row.author_user_id]).get(row.author_user_id)?.photoUrl ?? null,
-    });
-    this.store.moderate(questionId, "approved", actor, at);
-    const stamp = this.authors.messageStamps([row.id]).get(row.id);
-    if (stamp) this.authors.recordQuestion(questionId, stamp);
-    this.feed.moderation.linkQuestion(row.id, questionId);
-    this.audit(actor.userId, "live_session.chat.converted", { messageId: row.id, questionId }, at);
-    await this.broadcast.question(questionId);
+    const asked = await this.hooks.ask(
+      {
+        authorUserId: row.author_user_id,
+        authorName: row.author_name,
+        body:
+          text.length > LIVE_ROOM_POLICY.questionMaxLength
+            ? `${text.slice(0, LIVE_ROOM_POLICY.questionMaxLength - 1).trimEnd()}…`
+            : text,
+        askedAt: row.sent_at,
+        // The question keeps the photo the author had when they wrote in the chat.
+        authorPhotoUrl: this.feed.people.people([row.author_user_id]).get(row.author_user_id)?.photoUrl ?? null,
+        stamp: this.authors.messageStamps([row.id]).get(row.id) ?? null,
+      },
+      actor,
+      at,
+      row.occurrence_id ?? null,
+    );
+    if (typeof asked !== "string") return asked;
+    this.feed.moderation.linkQuestion(row.id, asked);
+    this.audit(actor.userId, "live_session.chat.converted", { messageId: row.id, questionId: asked }, at);
     await this.deliver([row], { removeWhenHidden: false, only: staff });
   }
 

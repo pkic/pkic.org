@@ -39,11 +39,7 @@ import {
 import { liveOverlayLayoutGeometriesSchema, liveOverlayLayoutSlugSchema } from "./live-overlay-layout";
 import { z } from "zod";
 import { liveAuthorClientMessageSchemas, liveAuthorServerMessageSchemas } from "./live-session-author";
-import {
-  liveChatClientMessageSchemas,
-  liveChatServerMessageSchemas,
-  liveChatSnapshotFields,
-} from "./live-session-chat";
+import { liveChatClientMessageSchemas, liveChatServerMessageSchemas } from "./live-session-chat";
 import { databaseIdSchema } from "./identifiers";
 import { liveRoomOutputKeySchema, liveRoomOutputsSchema } from "./live-room-output-setup";
 import { eventSlugParamsSchema, utcInstantSchema } from "./api-common";
@@ -275,6 +271,8 @@ export const liveRoomSessionSchema = z
     startAt: utcInstantSchema,
     endAt: utcInstantSchema,
     timeZone: z.string().min(1),
+    /** The location the session takes place in, whose chat it shows on air; a room admitted before this field has none. */
+    roomId: databaseIdSchema.nullable().optional(),
     credits: z.array(liveCreditSchema).max(50),
     /** The outputs its physical room sets up beside Program; a room admitted before this field reads the built-in ones. */
     roomOutputs: liveRoomOutputsSchema.optional(),
@@ -326,7 +324,6 @@ export const liveRoomSnapshotSchema = z
     /** The event's saved overlay layouts; a browser source draws the one it names, else a built-in one. */
     overlayLayouts: liveOverlayLayoutGeometriesSchema.default([]),
     tickerContext: liveTickerContextSchema.default(DEFAULT_LIVE_TICKER_CONTEXT),
-    ...liveChatSnapshotFields,
     stage: liveStageSchema,
     /** Operators, speakers and overlays only; empty for attendees. */
     outputs: liveOutputsSchema.default(EMPTY_LIVE_OUTPUTS),

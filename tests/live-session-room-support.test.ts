@@ -62,9 +62,9 @@ describe("live room configured controls and participant chat", () => {
   });
 
   it("broadcasts real chat with per-viewer ownership, excludes overlays and lets moderators hide it", async () => {
-    const author = await f.connect({ person: "attendee" });
-    const reader = await f.connect({ person: "secondAttendee" });
-    const operator = await f.connect({ person: "operator" });
+    const author = await f.connectChat("attendee");
+    const reader = await f.connectChat("secondAttendee");
+    const operator = await f.connectChat("operator");
     const screen = await overlay();
     author.send({ type: "chat.send", text: "Welcome to the session" });
     const own = await author.next("chat.message");
@@ -72,9 +72,10 @@ describe("live room configured controls and participant chat", () => {
     expect(own.message).toMatchObject({ text: "Welcome to the session", authorName: "Ada Attendee", mine: true });
     expect(other.message.mine).toBe(false);
     expect(Object.keys(other.message)).not.toContain("userId");
-    const joined = await f.connect({ person: "secondAttendee" });
-    expect((await joined.next("room.snapshot")).chat).toHaveLength(1);
-    expect((await screen.next("room.snapshot")).chat).toEqual([]);
+    const joined = await f.connectChat("secondAttendee");
+    expect((await joined.next("location.chat.snapshot")).chat).toHaveLength(1);
+    // Screens never join the location's chat: their session room carries none.
+    expect(Object.keys((await screen.next("room.snapshot")) as object)).not.toContain("chat");
     expect(screen.received.some((message) => message.type === "chat.message")).toBe(false);
     reader.send({ type: "chat.moderate", messageId: own.message.id, decision: "remove", reason: "spam" });
     expect((await reader.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
@@ -82,17 +83,21 @@ describe("live room configured controls and participant chat", () => {
     // The author keeps their removed message, with the reason and no moderator name.
     const removed = await author.next("chat.message", (update) => update.message.removal !== null);
     expect(removed.message.removal).toMatchObject({ reason: "spam", byName: null });
-    const restored = await f.connect({ person: "attendee" });
-    expect((await restored.next("room.snapshot")).chat.map((entry) => entry.removal?.reason)).toEqual(["spam"]);
-    const moderator = await f.connect({ person: "operator" });
-    expect((await moderator.next("room.snapshot")).chat[0].moderation?.hidden?.operatorName).toBe("Olga Operator");
+    const restored = await f.connectChat("attendee");
+    expect((await restored.next("location.chat.snapshot")).chat.map((entry) => entry.removal?.reason)).toEqual([
+      "spam",
+    ]);
+    const moderator = await f.connectChat("operator");
+    expect((await moderator.next("location.chat.snapshot")).chat[0].moderation?.hidden?.operatorName).toBe(
+      "Olga Operator",
+    );
   });
 
   it("keeps operator chat and removal identifiers private while refusing crafted attendee commands", async () => {
-    const operator = await f.connect({ person: "operator" });
-    const second = await f.connect({ person: "operator" });
-    const attendee = await f.connect({ person: "attendee" });
-    const speaker = await f.connect({ person: "speaker" });
+    const operator = await f.connectChat("operator");
+    const second = await f.connectChat("operator");
+    const attendee = await f.connectChat("attendee");
+    const speaker = await f.connectChat("speaker");
     const screen = await overlay();
     attendee.send({ type: "chat.send", channel: "operator", text: "Crafted private command" });
     await attendee.next("room.refused");
@@ -101,12 +106,12 @@ describe("live room configured controls and participant chat", () => {
     expect(privateMessage.message).toMatchObject({ channel: "operator", text: "Private production cue" });
     for (const viewer of [attendee, speaker, screen])
       expect(viewer.received.some((message) => message.type === "chat.message")).toBe(false);
-    const privateJoined = await f.connect({ person: "operator" });
-    expect((await privateJoined.next("room.snapshot")).chat).toEqual([
+    const privateJoined = await f.connectChat("operator");
+    expect((await privateJoined.next("location.chat.snapshot")).chat).toEqual([
       expect.objectContaining({ channel: "operator" }),
     ]);
-    const publicJoined = await f.connect({ person: "attendee" });
-    expect((await publicJoined.next("room.snapshot")).chat).toEqual([]);
+    const publicJoined = await f.connectChat("attendee");
+    expect((await publicJoined.next("location.chat.snapshot")).chat).toEqual([]);
     operator.send({ type: "chat.delete", messageId: privateMessage.message.id });
     expect((await second.next("chat.removed")).channel).toBe("operator");
     for (const viewer of [attendee, speaker, screen, publicJoined])
@@ -114,63 +119,74 @@ describe("live room configured controls and participant chat", () => {
   });
 
   it("forgets both chat channels without exposing private removal IDs", async () => {
-    const author = await f.connect({ person: "operator" });
-    const attendee = await f.connect({ person: "attendee" });
+    const author = await f.connectChat("operator");
+    const attendee = await f.connectChat("attendee");
     author.send({ type: "chat.send", channel: "operator", text: "Private cue to erase" });
     const privateMessage = await author.next("chat.message");
     author.send({ type: "chat.send", text: "Public note to erase" });
     const publicMessage = await attendee.next("chat.message");
-    await f.room().forgetParticipant(f.users.operator);
+    await f.chatRoom().forgetParticipant(f.users.operator);
     await attendee.next("chat.removed", (message) => message.messageId === publicMessage.message.id);
     expect(
       attendee.received.some(
         (message) => message.type === "chat.removed" && message.messageId === privateMessage.message.id,
       ),
     ).toBe(false);
-    const joined = await f.connect({ person: "attendee" });
-    expect((await joined.next("room.snapshot")).chat).toEqual([]);
-    await runInDurableObject(f.room(), (_room, state) => {
+    const joined = await f.connectChat("attendee");
+    expect((await joined.next("location.chat.snapshot")).chat).toEqual([]);
+    await runInDurableObject(f.chatRoom(), (_room, state) => {
       const chat = new LiveRoomChat(new LiveRoomSql(state.storage.sql));
       for (const channel of ["attendee", "operator"] as const)
         expect(chat.page(channel, { before: null, limit: 10, shownOnly: false }).rows).toEqual([]);
     });
   });
 
+  it("refuses chat on the session's own room, where chat no longer takes place", async () => {
+    const attendee = await f.connect({ person: "attendee" });
+    attendee.send({ type: "chat.send", text: "Wrong room" });
+    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_INVALID_MESSAGE");
+    expect(attendee.received.some((message) => message.type === "chat.message")).toBe(false);
+  });
+
   it("closes a revoked operator before a private snapshot is disclosed", async () => {
-    const removed = await f.connect({ person: "operator" });
+    const removed = await f.connectChat("operator");
     removed.send({ type: "chat.send", channel: "operator", text: "Authorized before revocation" });
     await removed.next("chat.message");
     await env.DB.prepare("UPDATE user_roles SET revoked_at=? WHERE user_id=?")
       .bind(new Date().toISOString(), f.users.operator)
       .run();
-    await runDurableObjectAlarm(f.room());
-    const publicJoined = await f.connect({ person: "attendee" });
-    expect((await publicJoined.next("room.snapshot")).chat).toEqual([]);
+    await runDurableObjectAlarm(f.chatRoom());
+    const publicJoined = await f.connectChat("attendee");
+    expect((await publicJoined.next("location.chat.snapshot")).chat).toEqual([]);
     expect(removed.received.filter((message) => message.type === "chat.message")).toHaveLength(1);
-    expect((await f.refusal({ person: "operator" })).code).toBeGreaterThanOrEqual(4401);
+    const response = await f.upgrade({ person: "operator" }, {}, f.chatPath());
+    const socket = response.webSocket!;
+    const closed = new Promise<number>((resolve) => socket.addEventListener("close", (event) => resolve(event.code)));
+    socket.accept();
+    expect(await closed).toBeGreaterThanOrEqual(4401);
   });
 
   it("retains the chat rate allowance across reconnects and removes authors' messages on erasure", async () => {
-    const author = await f.connect({ person: "attendee" });
+    const author = await f.connectChat("attendee");
     for (let i = 0; i < LIVE_ROOM_POLICY.chatPerPerson.limit; i++) {
       author.send({ type: "chat.send", text: `Message ${i}` });
       await author.next("chat.message", (message) => message.message.text === `Message ${i}`);
     }
-    const rejoined = await f.connect({ person: "attendee" });
+    const rejoined = await f.connectChat("attendee");
     rejoined.send({ type: "chat.send", text: "Too soon after reconnect" });
     expect((await rejoined.next("room.refused")).code).toBe("LIVE_CHAT_RATE_LIMITED");
-    const reader = await f.connect({ person: "secondAttendee" });
-    await f.room().forgetParticipant(f.users.attendee);
-    const cleared = await f.connect({ person: "secondAttendee" });
-    expect((await cleared.next("room.snapshot")).chat).toEqual([]);
+    const reader = await f.connectChat("secondAttendee");
+    await f.chatRoom().forgetParticipant(f.users.attendee);
+    const cleared = await f.connectChat("secondAttendee");
+    expect((await cleared.next("location.chat.snapshot")).chat).toEqual([]);
     expect(reader.received.filter((message) => message.type === "chat.removed")).toHaveLength(
       LIVE_ROOM_POLICY.chatPerPerson.limit,
     );
   });
 
   it("forgets an anonymized chat-only author before a new snapshot or fanout", async () => {
-    const author = await f.connect({ person: "attendee" });
-    const reader = await f.connect({ person: "secondAttendee" });
+    const author = await f.connectChat("attendee");
+    const reader = await f.connectChat("secondAttendee");
     author.send({ type: "chat.send", text: "Room-local words from a chat-only author" });
     const sent = await reader.next("chat.message");
     expect(
@@ -181,16 +197,16 @@ describe("live room configured controls and participant chat", () => {
     await env.DB.prepare("UPDATE users SET active=0,pii_redacted_at=? WHERE id=?")
       .bind(new Date().toISOString(), f.users.attendee)
       .run();
-    const joined = await f.connect({ person: "secondAttendee" });
-    expect((await joined.next("room.snapshot")).chat).toEqual([]);
+    const joined = await f.connectChat("secondAttendee");
+    expect((await joined.next("location.chat.snapshot")).chat).toEqual([]);
     await reader.next("chat.removed", (message) => message.messageId === sent.message.id);
-    const reconnect = await f.connect({ person: "secondAttendee" });
-    expect((await reconnect.next("room.snapshot")).chat).toEqual([]);
+    const reconnect = await f.connectChat("secondAttendee");
+    expect((await reconnect.next("location.chat.snapshot")).chat).toEqual([]);
   });
 
   it("bounds the stored feed independently of the number of authors", async () => {
-    await f.connect({ person: "operator" });
-    await runInDurableObject(f.room(), (_room, state) => {
+    await f.connectChat("operator");
+    await runInDurableObject(f.chatRoom(), (_room, state) => {
       const chat = new LiveRoomChat(new LiveRoomSql(state.storage.sql));
       const now = Date.now();
       for (let index = 0; index < LIVE_CHAT_POLICY.storedMessages + 1; index++)
@@ -207,16 +223,16 @@ describe("live room configured controls and participant chat", () => {
   });
 
   it("closes a revoked attendee before accepting or delivering chat", async () => {
-    const removed = await f.connect({ person: "attendee" });
-    const remaining = await f.connect({ person: "secondAttendee" });
+    const removed = await f.connectChat("attendee");
+    const remaining = await f.connectChat("secondAttendee");
     await env.DB.prepare("UPDATE registrations SET status='cancelled' WHERE event_id=? AND user_id=?")
       .bind(f.eventId, f.users.attendee)
       .run();
-    await runDurableObjectAlarm(f.room());
+    await runDurableObjectAlarm(f.chatRoom());
     remaining.send({ type: "chat.send", text: "Visible only to current participants" });
     await remaining.next("chat.message");
     expect(removed.received.some((message) => message.type === "chat.message")).toBe(false);
-    const joined = await f.connect({ person: "secondAttendee" });
-    expect((await joined.next("room.snapshot")).chat).toHaveLength(1);
+    const joined = await f.connectChat("secondAttendee");
+    expect((await joined.next("location.chat.snapshot")).chat).toHaveLength(1);
   });
 });

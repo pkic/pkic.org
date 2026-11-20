@@ -21,6 +21,7 @@ import type { LiveRoomBroadcast } from "./room-broadcast";
 import type { LiveControlOutcome, LiveRefusal, LiveRoomControls } from "./room-controls";
 import type { LiveQuestionAddressee } from "./room-question-rows";
 import type { LiveRoomStore } from "./room-store";
+import type { LiveChatQuestion } from "./location-chat-on-air";
 
 type Handled = LiveRefusal | void;
 type Actor = { userId: string; name: string };
@@ -90,6 +91,26 @@ export class LiveRoomQuestions {
       listed: () => void;
     },
   ) {}
+
+  /** An operator turned a chat message into a question: asked as its author wrote it, and approved. */
+  async fromChat(question: LiveChatQuestion, by: Actor, at: string): Promise<string> {
+    const id = crypto.randomUUID();
+    this.store.addQuestion({
+      id,
+      authorUserId: question.authorUserId,
+      authorName: question.authorName,
+      anonymous: false,
+      body: question.body,
+      askedAt: question.askedAt,
+      authorPhotoUrl: question.authorPhotoUrl,
+    });
+    this.store.moderate(id, "approved", by, at);
+    if (question.stamp) this.authors.recordQuestion(id, question.stamp);
+    await this.broadcast.question(id);
+    this.hooks.listed();
+    await this.hooks.changed();
+    return id;
+  }
 
   /** The existing question row is the bounded durable receipt for this actor's request. */
   async ask(

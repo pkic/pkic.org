@@ -1,9 +1,6 @@
 import { env } from "cloudflare:workers";
-import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import { afterEach, beforeEach, expect, it, onTestFinished } from "vitest";
-import { instantToCalendarDate } from "../assets/shared/timezone";
-import { liveLocationChatName } from "../functions/_lib/services/live-session/room-admission";
-import { closeLiveRoomSocket } from "../functions/_lib/services/live-session/room-socket-close";
+import { runDurableObjectAlarm } from "cloudflare:test";
+import { afterEach, beforeEach, expect, it } from "vitest";
 import { callApi } from "./helpers/app";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
 
@@ -16,23 +13,7 @@ afterEach(() => {
 });
 
 /** The location's session starts in ten minutes: its chat is already open, and no session is on. */
-beforeEach(async () => {
-  await fixture.setup({ startOffsetMinutes: 10, durationMinutes: 60 });
-  const chat = chatRoom();
-  onTestFinished(() =>
-    runInDurableObject(chat, async (_instance, state) => {
-      for (const socket of state.getWebSockets()) closeLiveRoomSocket(socket, 1000, "Fixture complete");
-      await state.storage.deleteAlarm();
-    }),
-  );
-});
-
-function chatRoom() {
-  const row = { startAt: new Date(Date.now() + 10 * 60_000).toISOString() };
-  return env.LIVE_SESSION_ROOMS!.getByName(
-    liveLocationChatName(fixture.eventId, fixture.roomId, instantToCalendarDate(row.startAt, "Europe/Amsterdam")),
-  );
-}
+beforeEach(() => fixture.setup({ startOffsetMinutes: 10, durationMinutes: 60 }));
 
 async function join(person: Parameters<typeof fixture.connectChat>[0]) {
   const client = await fixture.connectChat(person);
@@ -88,7 +69,7 @@ it("admits the day's attendees and speakers, and dates each message by the sessi
   const after = await speaker.next("chat.message", (message) => message.message.text === "Back to the break");
   expect(after.message.occurrenceId).toBeUndefined();
 
-  await runDurableObjectAlarm(chatRoom());
+  await runDurableObjectAlarm(fixture.chatRoom());
   const totals = await env.DB.prepare(
     "SELECT messages, people FROM event_session_chat_totals WHERE event_id=? AND occurrence_id=?",
   )
@@ -118,9 +99,27 @@ it("keeps running without an operator, and stops only when an operator ends it",
     "LIVE_ROOM_INVALID_MESSAGE",
   );
 
-  await runDurableObjectAlarm(chatRoom());
+  await runDurableObjectAlarm(fixture.chatRoom());
   const audit = await env.DB.prepare(
     "SELECT entity_type, entity_id FROM audit_log WHERE action='live_session.location_chat.opening'",
   ).first<{ entity_type: string; entity_id: string }>();
   expect(audit).toEqual({ entity_type: "event_agenda_room", entity_id: fixture.roomId });
+});
+
+it("turns a chat message into a question in the session the studio has loaded, and none between sessions", async () => {
+  const attendee = await join("attendee");
+  const operator = await join("operator");
+  attendee.send({ type: "chat.send", text: "Will the slides be shared afterwards?" });
+  const sent = await operator.next("chat.message", (message) => message.message.text.startsWith("Will the slides"));
+
+  // Nothing is loaded and nothing is on: the question has no session to go to.
+  operator.send({ type: "chat.convert", messageId: sent.message.id });
+  expect((await operator.next("room.refused")).code).toBe("LIVE_CHAT_NO_SESSION");
+
+  await load(fixture.occurrenceId, 0);
+  const studio = await fixture.connect({ person: "operator" });
+  operator.send({ type: "chat.convert", messageId: sent.message.id });
+  const asked = await studio.next("question.changed", (message) => message.question.text.startsWith("Will the slides"));
+  expect(asked.question).toMatchObject({ status: "approved", authorName: "Ada Attendee" });
+  studio.socket.close();
 });

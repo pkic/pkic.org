@@ -160,6 +160,7 @@ export function prepareLiveRoomSessionRead(
           startAt: occurrence.startAt,
           endAt: occurrence.endAt,
           timeZone: row.timezone,
+          roomId: occurrence.roomId,
           credits: [...credits, ...hosts].slice(0, LIVE_ROOM_SESSION_CREDITS_MAX),
           roomOutputs: decodeLiveRoomOutputs(row.room_outputs_json),
         }),

@@ -108,7 +108,6 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
     overlayMode: "switcher",
     overlayLayouts: [],
     tickerContext: DEFAULT_LIVE_TICKER_CONTEXT,
-    chat: [],
     stage: {
       question: {
         id: QUESTION,

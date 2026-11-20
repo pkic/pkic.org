@@ -62,14 +62,11 @@ it("saves the event's chat as a file, and keeps a refused download on the page a
 it("erases after confirmation and reports the counts", async () => {
   await mount((url, method) => {
     expect([url, method]).toEqual(["/api/v1/events/event-one/agenda/chat", "DELETE"]);
-    return Response.json({ erasedSessions: 1200, openSessions: 1 });
+    return Response.json({ erasedChats: 1200, openChats: 1 });
   });
   await act(async () => button("Erase chat…").click());
   await vi.waitFor(() =>
-    expect(mocks.toast).toHaveBeenCalledWith(
-      "Chat erased for 1,200 sessions. 1 session still live kept theirs.",
-      "success",
-    ),
+    expect(mocks.toast).toHaveBeenCalledWith("Erased 1,200 chats. 1 chat still open kept its messages.", "success"),
   );
   expect(mocks.confirm).toHaveBeenCalledOnce();
 });

@@ -1,6 +1,5 @@
 import type { liveQuestionAnswersSchema } from "../../shared/schemas/live-session-answer";
 import type { z } from "zod";
-import { applyLiveChatMessage } from "./live-chat-state";
 import type { LiveAuthorDetails } from "../../shared/schemas/live-session-author";
 import { compareLiveQuestions, type LiveQuestionOrder, type LiveReactionId } from "../../shared/live-session-policy";
 import { compareLivePolls, type LivePoll } from "../../shared/schemas/live-session-poll";
@@ -62,7 +61,11 @@ export function applyLiveRoomMessage(
     case "question.accepted":
     case "question.updated":
     case "location.chat.snapshot":
-      // A location's chat speaks on its own connection; a session's room never sends its snapshot.
+    case "chat.message":
+    case "chat.removed":
+    case "chat.reactions":
+    case "chat.history":
+      // A session's chat is its location's, which speaks on a connection of its own.
       return state;
     case "question.changed":
       return {
@@ -116,11 +119,6 @@ export function applyLiveRoomMessage(
       return { ...state, addedCredits: message.addedCredits };
     case "question.prepared.changed":
       return { ...state, preparedQuestions: message.preparedQuestions, preparedQuestionWindow: message.window };
-    case "chat.message":
-    case "chat.removed":
-    case "chat.reactions":
-    case "chat.history":
-      return applyLiveChatMessage(state, message);
     case "participation.access":
       return { ...state, viewer: { ...state.viewer, participation: message.restriction } };
     case "overlay.mode.changed":

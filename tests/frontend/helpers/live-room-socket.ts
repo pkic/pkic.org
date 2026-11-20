@@ -128,7 +128,6 @@ export function liveSnapshot(overrides: Partial<Omit<LiveRoomSnapshot, "type">> 
     },
     viewer: { role: "attendee", name: "Ada Attendee" },
     overlayMode: "direct",
-    chat: [],
     questions: [],
     polls: [],
     preparedQuestions: [],

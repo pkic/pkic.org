@@ -91,7 +91,6 @@ function stageDisplayState(
     session: { ...session, timeZone: SCREEN_FIXTURE.timeZone, credits: [] },
     viewer: { role: "attendee", name: "Stage display" },
     overlayMode: "direct",
-    chat: [],
     questions: [],
     polls: [],
     preparedQuestions: [],
