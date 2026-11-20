@@ -40,7 +40,8 @@ async function handlePublicRegistration(
     ? await selectRegistrationIdentity(c.env.DB, actor.userId, data.body.identityId)
     : undefined;
   const config = getConfig(c.env, request);
-  requireRegistrationWorkRepresentation({
+  await requireRegistrationWorkRepresentation(c.env.DB, {
+    userId: actor.userId,
     email: data.body.email,
     verified: true,
     organizationId: selectedIdentity?.organizationId,

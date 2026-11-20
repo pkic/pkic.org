@@ -51,6 +51,11 @@ export const identityAffiliationPreviewResponseSchema = z.object({
     .max(256),
   contextToken: identityAffiliationContextSchema.optional(),
   identityId: databaseIdSchema.optional(),
+  /**
+   * The person already said this is their personal address and no organization claims its domain:
+   * it takes part without an organization, as sign-in accepts. Only the signed-in person's own preview answers it.
+   */
+  personalAddress: z.boolean().optional(),
 });
 export const identityAffiliationPreviewRouteSchema = {
   ...requiresSession(),

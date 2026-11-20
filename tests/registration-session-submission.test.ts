@@ -6,6 +6,7 @@ import { callApi } from "./helpers/app";
 import { insertOrganization } from "./helpers/membership";
 import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
 import { signInRegistrant } from "./helpers/auth";
+import { recordPersonalAddressAnswer } from "./helpers/account-organization";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { registrationCreateSchema, registrationSubmissionResponseSchema } from "../assets/shared/schemas/registration";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
@@ -237,6 +238,37 @@ describe("registration continues with the signed-in session", () => {
     await identity.statement.run();
     const accepted = await send(identity.identityId);
     expect(accepted.status, await accepted.clone().text()).toBe(200);
+  });
+
+  it("registers a work address the person said is personal at sign-in as their individual identity", async () => {
+    const email = "invited.guest@unclaimed.example";
+    const { userId, session, identityId } = await signInRegistrant(env.DB, email, {
+      firstName: "Casey",
+      lastName: "Fixture",
+    });
+    await recordPersonalAddressAnswer(env.DB, userId);
+    const response = await submit(registration(email, { unaffiliatedAttestation: true, identityId }), session);
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(registrationSubmissionResponseSchema.parse(await response.json()).status).toBe("registered");
+  });
+
+  it("still asks for an organization once an organization claims a domain the person said is personal", async () => {
+    const email = "invited.guest@claimed-later.example";
+    const { userId, session, identityId } = await signInRegistrant(env.DB, email, {
+      firstName: "Casey",
+      lastName: "Fixture",
+    });
+    await recordPersonalAddressAnswer(env.DB, userId);
+    const organizationId = await insertOrganization(env.DB, "Claiming organization");
+    await env.DB.prepare(
+      "INSERT INTO organization_domain_claims (id, domain, organization_id, created_at, updated_at) VALUES (?, 'claimed-later.example', ?, datetime('now'), datetime('now'))",
+    )
+      .bind(crypto.randomUUID(), organizationId)
+      .run();
+    const refused = await submit(registration(email, { unaffiliatedAttestation: true, identityId }), session);
+    expect(refused.status).toBe(422);
+    expect(await refused.json()).toMatchObject({ error: { code: "REGISTRATION_REPRESENTATION_REQUIRED" } });
+    expect(await queryAll(env.DB, "SELECT id FROM registrations WHERE user_id=?", userId)).toEqual([]);
   });
 
   it("refuses an identity chosen by a session that does not own the submitted address", async () => {

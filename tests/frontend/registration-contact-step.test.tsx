@@ -98,7 +98,11 @@ interface Recorded {
 const CONTEXT_TOKEN = "context-token-".padEnd(40, "x");
 
 /** The domain's organizations as the shared affiliation preview answers them; null fails the preview. */
-function affiliationPreview(organizations: { id: string; name: string }[] | null, prepare = false) {
+function affiliationPreview(
+  organizations: { id: string; name: string }[] | null,
+  prepare = false,
+  personalAddress = false,
+) {
   return organizations
     ? identityAffiliationPreviewResponseSchema.parse({
         email: "ada@example.test",
@@ -107,6 +111,7 @@ function affiliationPreview(organizations: { id: string; name: string }[] | null
         organization: null,
         organizations: organizations.map((item) => ({ ...item, identityId: null, jobTitle: null })),
         contextToken: prepare ? CONTEXT_TOKEN : undefined,
+        personalAddress,
       })
     : null;
 }
@@ -114,12 +119,14 @@ function affiliationPreview(organizations: { id: string; name: string }[] | null
 /**
  * `signedIn` false answers the session with 401; `organizationName` undefined holds no identity.
  * `organizations` is what the domain resolves to for an account without an organization identity.
+ * `personalAddress` is the Worker's answer that the person said at sign-in the address is personal.
  */
 function installResponses(
   organizationName: string | null | undefined,
   signedIn = true,
   actingIdentityId: string = IDENTITY_ID,
   organizations: { id: string; name: string }[] | null = null,
+  personalAddress = false,
 ): Recorded[] {
   const recorded: Recorded[] = [];
   let saved = profile();
@@ -140,7 +147,7 @@ function installResponses(
       let status = 200;
       if (url.pathname === "/api/v1/users/current/identities/preview") {
         const input = identityAffiliationPreviewSchema.parse(JSON.parse(String(init.body)));
-        body = affiliationPreview(organizations, input.phase === "prepare") ?? {
+        body = affiliationPreview(organizations, input.phase === "prepare", personalAddress) ?? {
           error: { code: "UNAVAILABLE", message: "Unavailable" },
         };
         status = organizations ? 200 : 503;
@@ -369,6 +376,23 @@ describe("registration contact step", () => {
     const chooser = document.querySelector<HTMLDialogElement>("dialog[open]")!;
     expect(form.contains(chooser)).toBe(false);
     expect(chooser.querySelector('button[aria-label="Add identity"]')).not.toBeNull();
+  });
+
+  it("registers a work address the person said is personal at sign-in as their personal identity", async () => {
+    window.history.replaceState({}, "", "/events/2026/pqc/register/");
+    // The domain resolves to an organization nobody has claimed; the person already said the address is personal.
+    installResponses(null, true, PERSONAL_IDENTITY_ID, [{ id: ORGANIZATION_ID, name: "Example Corp" }], true);
+    let missing = true;
+    const confirm: { current: (() => Promise<boolean>) | null } = { current: null };
+    const form = await mount(contactStep(undefined, undefined, (next) => (missing = next), confirm));
+    expect(missing).toBe(false);
+    expect(confirm.current).toBeNull();
+    expect(value(form, "identityId")).toBe(PERSONAL_IDENTITY_ID);
+    expect(value(form, "unaffiliatedAttestation")).toBe("true");
+    expect(value(form, "organizationRepresentationMissing")).toBe("false");
+    expect(form.querySelector('[name="organizationName"], [name="jobTitle"]')).toBeNull();
+    expect(form.textContent).not.toContain("Job title");
+    expect(form.textContent).not.toContain("uses an organization domain");
   });
 
   it("selects the organization a work address most likely registers for while the session acts personally", async () => {

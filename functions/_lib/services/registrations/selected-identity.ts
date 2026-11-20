@@ -10,21 +10,26 @@ import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { workEmailDomain } from "../../email-domains/classification";
+import { readPersonalAddress } from "../identities/personal-address";
 import { WORK_EMAIL_REPRESENTATION_REQUIRED } from "../../../../assets/shared/schemas/registration";
 
-/** A verified organization address needs an organization representation before registering. */
-export function requireRegistrationWorkRepresentation(input: {
-  email: string;
-  verified: boolean;
-  organizationId?: string | null;
-}) {
-  if (input.verified && workEmailDomain(input.email) && !input.organizationId)
-    throw new AppError(422, "REGISTRATION_REPRESENTATION_REQUIRED", WORK_EMAIL_REPRESENTATION_REQUIRED);
+/**
+ * A verified organization address needs an organization representation before
+ * registering, unless it is the person's personal address: the shared rule
+ * sign-in applies, so a person who said so there is not asked again.
+ */
+export async function requireRegistrationWorkRepresentation(
+  db: DatabaseLike,
+  input: { userId: string; email: string; verified: boolean; organizationId?: string | null },
+) {
+  if (!input.verified || !workEmailDomain(input.email) || input.organizationId) return;
+  if (await readPersonalAddress(db, { userId: input.userId, email: input.email })) return;
+  throw new AppError(422, "REGISTRATION_REPRESENTATION_REQUIRED", WORK_EMAIL_REPRESENTATION_REQUIRED);
 }
 
 /**
  * A changed registration holds to the same rule: an account on a work address
- * moves only to another organization identity, never to a personal one.
+ * moves to a personal identity only when the address is personal.
  */
 export async function requireRegistrationIdentityChangeRepresentation(
   db: DatabaseLike,
@@ -38,7 +43,8 @@ export async function requireRegistrationIdentityChangeRepresentation(
     [input.identityId, input.userId],
   );
   if (row)
-    requireRegistrationWorkRepresentation({
+    await requireRegistrationWorkRepresentation(db, {
+      userId: input.userId,
       email: row.email,
       verified: Boolean(row.verified),
       organizationId: row.organization_id,
