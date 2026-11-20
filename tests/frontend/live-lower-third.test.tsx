@@ -27,6 +27,7 @@ const credit = (key: string, name: string): LiveCredit => ({
   identity: { title: name, organization: "Example" },
   additionalIdentities: [],
   roleLabel: null,
+  titleLine: null,
 });
 const SAM = credit("user:sam", "Sam Speaker");
 const PAT = credit("user:pat", "Pat Panelist");
@@ -182,6 +183,23 @@ describe("the lower third on screen", () => {
     void view.finish();
     void view.finish();
     expect([units(), title().textContent]).toEqual([[], "Pat Panelist, Example"]);
+  });
+
+  it("draws the line an operator typed for someone without an account, and the name bar alone without one", () => {
+    const guest = { ...credit("added:guest", "Grace Guest"), identity: null };
+    const view = mount({ ...guest, titleLine: "Author, Example Press" });
+    const title = () => document.querySelector(".pk-live-overlay__title");
+    expect(title()?.textContent).toBe("Author, Example Press");
+    expect(view.graphic()!.querySelector(".pk-live-overlay__lower-third-title-bar")).not.toBeNull();
+    // An edit of the person on air redraws the same lower third with the new line.
+    void view.draw({ ...guest, titleLine: "Editor, Example Press" });
+    void view.finish();
+    void view.finish();
+    expect(title()?.textContent).toBe("Editor, Example Press");
+    void view.draw({ ...guest, key: "added:other" });
+    void view.finish();
+    void view.finish();
+    expect(title()).toBeNull();
   });
 
   it("underlines the name bar with the conference stripe, revealed with the bar", () => {

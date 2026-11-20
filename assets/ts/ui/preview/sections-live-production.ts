@@ -10,6 +10,7 @@ import { eventScreenStaffSections } from "./sections-event-screens-staff";
 import { eventScreenMonitorSections } from "./sections-event-screens-monitor";
 import { studioOnScreenSections } from "./sections-studio-on-screen";
 import { studioOutputSections } from "./sections-studio-outputs";
+import { studioPeopleSections } from "./sections-studio-people";
 import { studioPhoneSections } from "./sections-studio-phone";
 import { studioBoardSections } from "./sections-studio-board";
 import { studioQuestionSections } from "./sections-studio-questions";
@@ -27,6 +28,7 @@ export const liveProductionSections: PreviewSection[] = [
   ...eventScreenStaffSections,
   ...eventScreenMonitorSections,
   ...studioOnScreenSections,
+  ...studioPeopleSections,
   ...studioOutputSections,
   ...studioPhoneSections,
   ...roomScreensSections,

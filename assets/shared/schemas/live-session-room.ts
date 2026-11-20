@@ -33,6 +33,7 @@ import {
   liveAddedCreditsSchema,
   liveCreditFieldsSchema,
   liveCreditSchema,
+  liveTypedCreditInputSchema,
 } from "./live-session-credit";
 import { liveOverlayLayoutGeometriesSchema, liveOverlayLayoutSlugSchema } from "./live-overlay-layout";
 import { z } from "zod";
@@ -163,9 +164,11 @@ export {
   liveCreditFieldsSchema,
   liveCreditIdentitySchema,
   liveCreditSchema,
+  liveTypedCreditInputSchema,
   type LiveAddedCreditInput,
   type LiveCredit,
   type LiveCreditIdentity,
+  type LiveTypedCreditInput,
 } from "./live-session-credit";
 
 export {
@@ -534,6 +537,14 @@ export const liveRoomClientMessageSchema = z.discriminatedUnion("type", [
     })
     .strict(),
   z.object({ type: z.literal("credit.add"), person: liveAddedCreditInputSchema }).strict(),
+  /** Changes what an operator typed for someone without an account; a person from an identity is not edited here. */
+  z
+    .object({
+      type: z.literal("credit.update"),
+      creditKey: liveCreditFieldsSchema.shape.key,
+      person: liveTypedCreditInputSchema,
+    })
+    .strict(),
   z.object({ type: z.literal("credit.remove"), creditKey: liveCreditFieldsSchema.shape.key }).strict(),
   /** Puts the first lined-up item of a view on air. */
   z.object({ type: z.literal("stage.next"), view: liveStageViewSchema }).strict(),

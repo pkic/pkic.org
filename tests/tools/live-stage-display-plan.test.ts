@@ -182,6 +182,7 @@ describe("stage display plan", () => {
       roleLabel: null,
       identity: { title: "Architect", organization: "Example" },
       additionalIdentities: [],
+      titleLine: null,
     };
     const base = input(-10 * MINUTE, 20 * MINUTE, {
       program: { ...EMPTY_LIVE_STAGE, question: { ...question, addressedTo: "user:sam" } },

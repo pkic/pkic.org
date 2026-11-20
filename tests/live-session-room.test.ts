@@ -64,6 +64,7 @@ describe("live session room admission", () => {
           photoUrl: null,
           identity: null,
           additionalIdentities: [],
+          titleLine: null,
         },
       ]);
       client.socket.close(1000, "done");
@@ -382,6 +383,7 @@ describe("live session control room", () => {
       photoUrl: null,
       identity: null,
       additionalIdentities: [],
+      titleLine: null,
     });
     expect(lowerThird.stage.lowerThirdChange?.operatorName).toBe("Olga Operator");
 

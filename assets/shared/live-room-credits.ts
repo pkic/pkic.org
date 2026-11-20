@@ -58,6 +58,16 @@ export function isAddedLiveCreditKey(key: string): boolean {
 }
 
 /**
+ * Whether an added person was typed in, someone without an account: their
+ * key names no account, where a person from the event's people is keyed by
+ * account and identity. Only they can be edited; everyone else reads as
+ * their identity has them.
+ */
+export function isTypedLiveCreditKey(key: string): boolean {
+  return isAddedLiveCreditKey(key) && !key.slice(ADDED_KEY_PREFIX.length).includes(":");
+}
+
+/**
  * The capacity a credit appears in, on one line: the identity's job title and
  * organization, "Chief Cryptographer, Northwind Trust". Empty for someone who
  * appears as themselves.
@@ -71,15 +81,17 @@ export function liveCreditAffiliation(credit: {
 /**
  * Every capacity a lower third shows for a person, primary first, each as its
  * title line; a person who speaks for more than one identity has several.
+ * Someone without an account has the one line an operator typed for them.
  */
 export function liveCreditAffiliations(credit: {
   identity: { title: string | null; organization: string | null } | null;
   additionalIdentities?: readonly { title: string | null; organization: string | null }[];
+  titleLine?: string | null;
 }): string[] {
   const lines = [credit.identity, ...(credit.additionalIdentities ?? [])].map((identity) =>
     liveCreditAffiliation({ identity }),
   );
-  return [...new Set(lines.filter(Boolean))];
+  return [...new Set([...lines, credit.titleLine ?? ""].filter(Boolean))];
 }
 
 /** A credit that names its role, a host's or the moderator's: shown compact, under the speakers. */

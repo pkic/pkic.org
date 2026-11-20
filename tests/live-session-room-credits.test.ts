@@ -1,6 +1,9 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { liveSpeakerCandidatesResponseSchema } from "../assets/shared/schemas/live-session-credit";
+import {
+  liveAddedCreditInputSchema,
+  liveSpeakerCandidatesResponseSchema,
+} from "../assets/shared/schemas/live-session-credit";
 import { callApi } from "./helpers/app";
 import { insertOrganization } from "./helpers/membership";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
@@ -48,6 +51,71 @@ describe("people operators add to a session's lower thirds", () => {
     await remote.next("preview.changed", (m) => m.composition.lowerThird === null);
     operator.send({ type: "preview.set", composition: { creditKey: guest.key } });
     await operator.next("room.refused", (m) => m.code === "LIVE_CREDIT_NOT_FOUND");
+  });
+
+  it("keeps the line typed for someone without an account, and changes it everywhere when an operator edits them", async () => {
+    const operator = await f.connect({ person: "operator" });
+    const remote = await f.connect({ person: "secondOperator" });
+    const attendee = await f.connect({ person: "attendee" });
+    operator.send({
+      type: "credit.add",
+      person: { userId: null, identityId: null, name: "Grace Guest", titleLine: "Author, Example Press" },
+    });
+    const guest = (await remote.next("credits.added.changed", (m) => m.addedCredits.length === 1)).addedCredits[0]!;
+    expect(guest).toMatchObject({ name: "Grace Guest", identity: null, titleLine: "Author, Example Press" });
+
+    // On air and in Preview, each output keeps its own copy of the person.
+    operator.send({ type: "stage.lowerThird", creditKey: guest.key });
+    expect((await attendee.next("stage.changed")).stage.lowerThird).toMatchObject({
+      name: "Grace Guest",
+      titleLine: "Author, Example Press",
+    });
+    operator.send({ type: "preview.set", composition: { creditKey: guest.key } });
+    await operator.next("preview.changed", (m) => m.composition.lowerThird?.key === guest.key);
+
+    // Another operator puts the name right and takes the line away: every copy follows, on air too.
+    remote.send({ type: "credit.update", creditKey: guest.key, person: { name: "Grace Guest-Lee", titleLine: null } });
+    const edited = await operator.next("credits.added.changed", (m) => m.addedCredits[0]?.name === "Grace Guest-Lee");
+    expect(edited.addedCredits).toEqual([{ ...guest, name: "Grace Guest-Lee", titleLine: null }]);
+    const onAir = await attendee.next("stage.changed", (m) => m.stage.lowerThird?.name === "Grace Guest-Lee");
+    expect(onAir.stage.lowerThird).toEqual(edited.addedCredits[0]);
+    const inPreview = await operator.next("preview.changed", (m) => m.composition.lowerThird?.titleLine === null);
+    expect(inPreview.composition.lowerThird?.name).toBe("Grace Guest-Lee");
+    expect(attendee.received.some((m) => m.type === "credits.added.changed")).toBe(false);
+    const rejoined = await f.connect({ person: "secondOperator" });
+    expect((await rejoined.next("room.snapshot")).addedCredits).toEqual(edited.addedCredits);
+
+    // Someone removed in the meantime is refused, not put back.
+    operator.send({ type: "stage.lowerThird", creditKey: null });
+    await operator.next("stage.changed", (m) => m.stage.lowerThird === null);
+    operator.send({ type: "credit.remove", creditKey: guest.key });
+    await remote.next("credits.added.changed", (m) => m.addedCredits.length === 0);
+    remote.send({ type: "credit.update", creditKey: guest.key, person: { name: "Grace Again", titleLine: null } });
+    expect((await remote.next("room.refused")).code).toBe("LIVE_CREDIT_NOT_FOUND");
+  });
+
+  it("never takes a typed line or an edit for a person whose identity is the source", async () => {
+    const operator = await f.connect({ person: "operator" });
+    // The contract refuses a typed line for a person picked from the event's people.
+    const typedForAccount = liveAddedCreditInputSchema.safeParse({
+      userId: f.users.secondAttendee,
+      identityId: null,
+      name: "Bea Attendee",
+      titleLine: "Typed title",
+    });
+    expect(typedForAccount.error?.issues.map((issue) => issue.path)).toEqual([["titleLine"]]);
+    operator.send({ type: "credit.add", person: { userId: f.users.secondAttendee, identityId: null, name: "Typed" } });
+    const person = (await operator.next("credits.added.changed", (m) => m.addedCredits.length === 1)).addedCredits[0]!;
+    expect(person).toMatchObject({ name: "Bea Attendee", titleLine: null });
+    const typed = { name: "Typed over", titleLine: "Typed title" };
+    for (const creditKey of [person.key, `user:${f.users.speaker}`]) {
+      const before = operator.received.length;
+      operator.send({ type: "credit.update", creditKey, person: typed });
+      const refused = await operator.next("room.refused", () => true, { after: before });
+      expect(refused.code).toBe("LIVE_CREDIT_NOT_EDITABLE");
+    }
+    const rejoined = await f.connect({ person: "operator" });
+    expect((await rejoined.next("room.snapshot")).addedCredits).toEqual([person]);
   });
 
   it("names and pictures a person picked from the event's people, as the identity picked", async () => {

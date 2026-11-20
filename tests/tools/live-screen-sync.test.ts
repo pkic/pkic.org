@@ -32,6 +32,7 @@ const credit = {
   photoUrl: null,
   identity: null,
   additionalIdentities: [],
+  titleLine: null,
 };
 const topQuestions = { config: { count: 3 }, questions: [] };
 const program: LiveStage = {

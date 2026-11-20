@@ -297,11 +297,19 @@ it("groups the host and moderator after the speakers, each named by their role",
   });
 });
 
-it("adds someone without an account by name alone, never a typed title, and removes an added one", async () => {
+const GRACE = addedLivePersonKey("7b0c9d5e-1a2b-4c3d-8e4f-5a6b7c8d9e02", "7b0c9d5e-1a2b-4c3d-8e4f-5a6b7c8d9f03");
+
+/** The row menu's own actions for a person, by their labels. */
+async function openActions(name: string) {
+  await act(() => host!.querySelector<HTMLButtonElement>(`button[aria-label="${name} actions"]`)!.click());
+  return [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')];
+}
+
+it("adds someone without an account by name and an optional second line, and removes an added one", async () => {
   const state = roomState();
   state.addedCredits = [
     liveCreditSchema.parse({
-      key: "added:1",
+      key: GRACE,
       name: "Grace Guest",
       identity: { title: "Engineer", organization: "Lattice Labs" },
     }),
@@ -321,28 +329,99 @@ it("adds someone without an account by name alone, never a typed title, and remo
   expect(host.querySelector('[aria-label="Added for this session"]')?.textContent).toContain(
     "Engineer at Lattice Labs",
   );
-  await act(() => host!.querySelector<HTMLButtonElement>('button[aria-label="Grace Guest actions"]')!.click());
-  [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
-    .find((item) => item.textContent?.includes("Remove from this session"))!
-    .click();
+  const actions = await openActions("Grace Guest");
+  // Her details are her identity's, so there is nothing to edit here.
+  expect(actions.map((item) => item.textContent)).toEqual(["Remove from this session"]);
+  actions[0]!.click();
   expect(liveRoomClientMessageSchema.parse(sendProgram.mock.calls.at(-1)![0])).toEqual({
     type: "credit.remove",
-    creditKey: "added:1",
+    creditKey: GRACE,
   });
 
   await act(() => host!.querySelector<HTMLButtonElement>('button[aria-label="Add person"]')!.click());
   const dialog = document.querySelector("dialog")!;
-  expect(dialog.querySelector("input[name=title]")).toBeNull();
   const confirm = () =>
     [...dialog.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Add person")!.click();
   await act(() => confirm());
   expect(dialog.textContent).toContain("Enter a name.");
   await act(() => typeInto(dialog.querySelector<HTMLInputElement>("input[name=name]")!, "Pat Presenter"));
   await act(() => confirm());
+  // The second line is optional: a name alone is a person.
   expect(liveRoomClientMessageSchema.parse(sendProgram.mock.calls.at(-1)![0])).toEqual({
     type: "credit.add",
-    person: { userId: null, identityId: null, name: "Pat Presenter" },
+    person: { userId: null, identityId: null, name: "Pat Presenter", titleLine: null },
   });
+});
+
+it("takes the second line an operator types for someone without an account, through the room's contract", async () => {
+  const state = roomState();
+  const sendProgram = vi.fn((_message: LiveRoomClientMessage) => true);
+  host = document.body.appendChild(document.createElement("div"));
+  await act(() => render(<LiveAddPersonAction targets={liveTargets(state, { sendProgram })} slug="pqc-2026" />, host!));
+  await act(() => host!.querySelector<HTMLButtonElement>('button[aria-label="Add person"]')!.click());
+  const dialog = document.querySelector("dialog")!;
+  const line = dialog.querySelector<HTMLInputElement>("input[name=titleLine]")!;
+  expect(line.labels?.[0]?.textContent).toContain("Second line");
+  const confirm = () =>
+    [...dialog.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Add person")!.click();
+  await act(() => typeInto(dialog.querySelector<HTMLInputElement>("input[name=name]")!, "Pat Presenter"));
+  await act(() => typeInto(line, "x".repeat(201)));
+  await act(() => confirm());
+  expect(dialog.textContent).toContain("Keep this line under 200 characters.");
+  expect(sendProgram).not.toHaveBeenCalled();
+  await act(() => typeInto(line, "  Author, Example Press "));
+  await act(() => confirm());
+  expect(liveRoomClientMessageSchema.parse(sendProgram.mock.calls.at(-1)![0])).toEqual({
+    type: "credit.add",
+    person: { userId: null, identityId: null, name: "Pat Presenter", titleLine: "Author, Example Press" },
+  });
+});
+
+it("edits someone added without an account in a dialog opened from their menu, prefilled", async () => {
+  const state = roomState();
+  state.addedCredits = [
+    liveCreditSchema.parse({ key: "added:typed-guest", name: "Pat Presenter", titleLine: "Author, Example Press" }),
+  ];
+  const sendProgram = vi.fn((_message: LiveRoomClientMessage) => true);
+  host = document.body.appendChild(document.createElement("div"));
+  const draw = () => act(() => render(<LiveSpeakerCards targets={liveTargets(state, { sendProgram })} />, host!));
+  await draw();
+  // The row reads the typed line where an identity's title would be.
+  expect(host.querySelector('[aria-label="Added for this session"] .pk-live-person__text')?.textContent).toBe(
+    "Pat PresenterAuthor, Example Press",
+  );
+  expect(document.querySelector("dialog")).toBeNull();
+  const actions = await openActions("Pat Presenter");
+  expect(actions.map((item) => item.textContent)).toEqual(["Edit person", "Remove from this session"]);
+  await act(() => actions[0]!.click());
+  const dialog = document.querySelector("dialog")!;
+  expect(dialog.textContent).toContain("Edit person");
+  // Editing is for what was typed: there is no search for someone at the event.
+  expect(dialog.querySelector('input[placeholder="Name or organization"]')).toBeNull();
+  const name = dialog.querySelector<HTMLInputElement>("input[name=name]")!;
+  const line = dialog.querySelector<HTMLInputElement>("input[name=titleLine]")!;
+  expect([name.value, line.value]).toEqual(["Pat Presenter", "Author, Example Press"]);
+  const save = () =>
+    [...dialog.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Save changes")!.click();
+  await act(() => typeInto(name, " "));
+  await act(() => save());
+  expect(dialog.textContent).toContain("Enter a name.");
+  expect(sendProgram).not.toHaveBeenCalled();
+  await act(() => typeInto(name, "Pat Presenter-Lee"));
+  await act(() => typeInto(line, ""));
+  await act(() => save());
+  expect(liveRoomClientMessageSchema.parse(sendProgram.mock.calls.at(-1)![0])).toEqual({
+    type: "credit.update",
+    creditKey: "added:typed-guest",
+    person: { name: "Pat Presenter-Lee", titleLine: null },
+  });
+  expect(document.querySelector("dialog")).toBeNull();
+  // The room's answer redraws the row for every operator.
+  state.addedCredits = [{ ...state.addedCredits[0]!, name: "Pat Presenter-Lee", titleLine: null }];
+  await draw();
+  expect(host.querySelector('[aria-label="Added for this session"] .pk-live-person__text')?.textContent).toBe(
+    "Pat Presenter-Lee",
+  );
 });
 
 it("finds each identity of a person as its own result and adds the one picked", async () => {
@@ -416,6 +495,7 @@ it("finds each identity of a person as its own result and adds the one picked", 
       userId: "7b0c9d5e-1a2b-4c3d-8e4f-5a6b7c8d9e01",
       identityId: "7b0c9d5e-1a2b-4c3d-8e4f-5a6b7c8d9f02",
       name: "Cleo Chair",
+      titleLine: null,
     },
   });
 });
@@ -436,5 +516,6 @@ it("reads credits a room stored before identities, dropping their copied title",
     identity: null,
     additionalIdentities: [],
     roleLabel: null,
+    titleLine: null,
   });
 });

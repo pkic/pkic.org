@@ -47,6 +47,7 @@ const ON_STAGE = {
     key: "user:speaker",
     moderator: false,
     roleLabel: null,
+    titleLine: null,
     name: "Sam Speaker",
     photoUrl: null,
     identity: { title: "Architect", organization: "Example" },

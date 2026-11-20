@@ -80,6 +80,8 @@ export async function operateLiveDesk(
       return desk.controls.restoreProgram(actor, message.snapshotId, at);
     case "credit.add":
       return desk.addedCredits.add(actor, message.person, at);
+    case "credit.update":
+      return desk.addedCredits.update(actor, session, message.creditKey, message.person, at);
     case "credit.remove":
       return desk.addedCredits.remove(actor, message.creditKey, at);
     case "stage.poll":

@@ -118,6 +118,7 @@ export function liveSnapshot(overrides: Partial<Omit<LiveRoomSnapshot, "type">> 
           photoUrl: null,
           moderator: false,
           roleLabel: null,
+          titleLine: null,
           identity: { title: "Architect", organization: "Example" },
           additionalIdentities: [],
         },

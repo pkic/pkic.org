@@ -35,6 +35,7 @@ const credit = (key: string, name: string, organization: string | null = null): 
   identity: organization ? { title: null, organization } : null,
   additionalIdentities: [],
   roleLabel: null,
+  titleLine: null,
 });
 
 /** A session that runs from `startMs` to `endMs` around the specimens' instant. */

@@ -56,6 +56,7 @@ function credit(
     identity: { title, organization },
     additionalIdentities,
     roleLabel: moderator ? LIVE_MODERATOR_ROLE_LABEL : null,
+    titleLine: null,
   };
 }
 

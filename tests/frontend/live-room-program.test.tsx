@@ -66,6 +66,7 @@ describe("continuous physical-room source", () => {
               key: "first",
               moderator: false,
               roleLabel: null,
+              titleLine: null,
               name: "First presenter",
               photoUrl: null,
               identity: null,

@@ -18,7 +18,6 @@ import type { LiveOverlayLayout } from "../../../shared/schemas/live-overlay-lay
 import { OverlayLayoutEditor } from "../../member-flows/portal/sections/events/detail/settings/live-layouts/OverlayLayoutEditor";
 import { LiveReactionBar } from "../../live-session/LiveReactionBar";
 import type { LiveRoomState } from "../../live-session/live-room-state";
-import { LiveSpeakerCards } from "../../member-flows/portal/sections/events/detail/live/LiveSpeakerCards";
 import { GraphicsPanel } from "../../member-flows/portal/sections/events/detail/live/studio/GraphicsPanel";
 import { monitorPanelView } from "../../member-flows/portal/sections/events/detail/live/studio/MonitorPanel";
 import { StudioPanelFrame } from "../../member-flows/portal/sections/events/detail/live/studio/StudioPanelFrame";
@@ -485,34 +484,6 @@ export const studioOnScreenSections: PreviewSection[] = [
         state={roomWith({}, { chatFeed: CHAT_MIXED })}
         elements={presetWith("questions", ["background", "chat"])}
       />
-    ),
-  },
-  {
-    id: "studio-speakers-identities",
-    title: "Speakers in the studio, one with two identities",
-    note: "The row stays still: it shows the first identity and counts the rest.",
-    render: () => (
-      <LiveSpeakerCards targets={{ state: ROOM, programActive: true, disabled: false, sendProgram: () => true }} />
-    ),
-  },
-  {
-    id: "studio-speakers-added",
-    title: "Speakers in a studio panel, one added for this session",
-    note: "One row per person like every studio list: PVW, PGM and the menu at the end, which holds the screens and Remove for someone added.",
-    render: () => (
-      <div class="pk-preview__studio-panel">
-        <LiveSpeakerCards
-          targets={{
-            state: {
-              ...ROOM,
-              addedCredits: [{ ...ROOM.session.credits[0]!, key: "added:chris", name: "Chris Bailey" }],
-            },
-            programActive: true,
-            disabled: false,
-            sendProgram: () => true,
-          }}
-        />
-      </div>
     ),
   },
   {
