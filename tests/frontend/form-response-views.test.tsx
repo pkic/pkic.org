@@ -26,6 +26,7 @@ import { parseFormFieldOptions } from "../../assets/shared/schemas/form-field-ru
 import { buildFormAnswerRows, formatFormAnswerValue } from "../../assets/ts/components/forms/form-answers";
 import { FormResponseStats, type ServerFieldStat } from "../../assets/ts/components/forms/FormResponseStats";
 import { FormAnswerTable, FormSubmissionsTable } from "../../assets/ts/components/forms/FormResponseViews";
+import { chooseColumnFilter, columnFilterSummary, openColumnMenu } from "./helpers/column-menu";
 
 const NOW = "2026-08-31T09:00:00.000Z";
 const mounted: HTMLElement[] = [];
@@ -104,6 +105,7 @@ afterEach(() => {
     container.remove();
   }
   vi.unstubAllGlobals();
+  history.replaceState(null, "", location.pathname);
 });
 
 describe("form answer rows", () => {
@@ -213,7 +215,7 @@ describe("the submissions table", () => {
     );
     const page = mount(
       <FormSubmissionsTable
-        fields={[field()]}
+        fields={[field(), field({ key: "severity", label: "Severity" })]}
         endpoint="/api/v1/events/pqc/forms/f/submissions"
         exportEndpoint="/api/v1/events/pqc/forms/f/submissions/exports"
         params={{ status: "registered", attendanceType: "in_person" }}
@@ -222,21 +224,29 @@ describe("the submissions table", () => {
       />,
     );
     await settle();
-    const choose = async (label: string, value: string) => {
-      const select = page.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`)!;
-      expect(select).toBeTruthy();
-      await act(() => {
-        select.value = value;
-        select.dispatchEvent(new Event("change", { bubbles: true }));
-      });
-      await settle();
+    expect(page.querySelector('select[aria-label="Filter answer field"]')).toBeNull();
+    const trigger = page.querySelector<HTMLButtonElement>('thead button[aria-label="Table options"]')!;
+    expect(trigger).toBeTruthy();
+    await act(() => trigger.click());
+    const clickMenu = async (label: string) => {
+      const item = [...page.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]')].find(
+        (button) => button.textContent!.replace(/[✓›]/g, "").trim() === label,
+      );
+      expect(item).toBeTruthy();
+      await act(() => item!.click());
     };
-    await choose("Filter answer field", "priority");
-    await choose("Filter Priority", "high");
+    await clickMenu("Filter");
+    await clickMenu("Priority");
+    const beforeChoice = requests.length;
+    await clickMenu("High");
+    await settle();
+    expect(requests).toHaveLength(beforeChoice + 1);
     const query = formSubmissionsQuerySchema.parse(Object.fromEntries(requests.at(-1)!.searchParams));
     expect(query.answerField).toBe("priority");
     expect(query.answerValue).toBe("high");
     expect(query.status).toBe("registered");
+    expect(columnFilterSummary(page, "Priority")).toBe("High");
+    expect(columnFilterSummary(page, "Severity")).toBeUndefined();
     const link = page.querySelector<HTMLAnchorElement>('a[aria-label="Download Priority (CSV)"]')!;
     expect(link).toBeTruthy();
     const url = new URL(link.href);
@@ -248,9 +258,81 @@ describe("the submissions table", () => {
     expect(exported.attendanceType).toBe("in_person");
     expect(url.searchParams.has("limit")).toBe(false);
     expect(url.searchParams.has("offset")).toBe(false);
-    await choose("Filter answer field", "");
+    await chooseColumnFilter(page, "Severity", "Low");
+    const switched = formSubmissionsQuerySchema.parse(Object.fromEntries(requests.at(-1)!.searchParams));
+    expect(switched.answerField).toBe("severity");
+    expect(switched.answerValue).toBe("low");
+    expect(columnFilterSummary(page, "Priority")).toBeUndefined();
+    expect(columnFilterSummary(page, "Severity")).toBe("Low");
+    // An inactive field's open choice cannot clear the active field's filter.
+    await chooseColumnFilter(page, "Priority", "All answers");
+    expect(page.querySelector('button[aria-label="Clear the Severity filter"]')).toBeTruthy();
+    await act(() => page.querySelector<HTMLButtonElement>('button[aria-label="Clear the Severity filter"]')!.click());
+    await settle();
     const cleared = formSubmissionsQuerySchema.parse(Object.fromEntries(requests.at(-1)!.searchParams));
     expect(cleared.answerValue).toBeUndefined();
+    expect(cleared.answerField).toBeUndefined();
+    expect(cleared.status).toBe("registered");
+  });
+
+  it("keeps country choices and typed answers scoped to their own question", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        requests.push(new URL(url, "https://example.test"));
+        return json({ submissions: [submission()], page: { limit: 50, offset: 0, total: 1, hasMore: false } });
+      }),
+    );
+    const page = mount(
+      <FormSubmissionsTable
+        fields={[
+          field({
+            key: "country",
+            label: "Country",
+            fieldType: "text",
+            options: null,
+            validation: { format: "iso_country" },
+          }),
+          field({ key: "department", label: "Department", fieldType: "text", options: null }),
+          field({ key: "notes", label: "Notes", fieldType: "text", options: null }),
+        ]}
+        endpoint="/api/v1/forms/f/submissions"
+        responseSchema={submissionsSchema}
+        onOpen={vi.fn()}
+      />,
+    );
+    await settle();
+    await chooseColumnFilter(page, "Country", "Netherlands");
+    expect(formSubmissionsQuerySchema.parse(Object.fromEntries(requests.at(-1)!.searchParams))).toMatchObject({
+      answerField: "country",
+      answerValue: "NL",
+    });
+    for (const [column, key, answer] of [
+      ["Department", "department", "Engineering"],
+      ["Notes", "notes", "Workshop"],
+    ]) {
+      const menu = openColumnMenu(page, column);
+      await act(() =>
+        [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
+          .find((item) => item.textContent === "Filter this column…")!
+          .click(),
+      );
+      const input = page.querySelector<HTMLInputElement>(".pk-column-filter input")!;
+      expect(input.value).toBe("");
+      await act(() => {
+        input.value = answer;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await settle();
+      expect(formSubmissionsQuerySchema.parse(Object.fromEntries(requests.at(-1)!.searchParams))).toMatchObject({
+        answerField: key,
+        answerValue: answer,
+      });
+      expect(columnFilterSummary(page, column)).toBe(answer);
+      expect(columnFilterSummary(page, "Country")).toBeUndefined();
+    }
+    expect(page.querySelectorAll('button[aria-label^="Clear the "]')).toHaveLength(1);
   });
 
   it.each([

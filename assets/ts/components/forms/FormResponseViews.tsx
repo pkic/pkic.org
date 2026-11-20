@@ -5,8 +5,8 @@
 
 import { Fragment } from "preact";
 import type { z } from "zod";
+import { countryOptions } from "../../../shared/countries";
 import { formSubmissionsExportQuerySchema } from "../../../shared/schemas/form-management";
-import { FilterSelect } from "../FilterSelect";
 import { DownloadAction } from "../../ui/DownloadAction";
 import type { FormSubmission } from "../../../shared/schemas/form-management";
 import type { FormFieldDefinition } from "../../../shared/schemas/forms";
@@ -100,20 +100,31 @@ export function FormSubmissionsTable<Response extends { submissions: FormSubmiss
   params?: Record<string, string>;
   onOpen: (submission: FormSubmission) => void;
 }) {
-  const answerColumns = fields.map((field) => ({
-    key: `answer:${field.key}`,
-    header: { label: field.label, className: "adm-form-answer-col" },
-    cell: (submission: FormSubmission) => {
-      const answer = compactAnswer(submission.answers?.[field.key], field);
-      return (
-        <span class="pk-small adm-form-answer-cell" title={answer.title}>
-          {answer.text}
-        </span>
-      );
-    },
-    className: "adm-form-answer-col",
-    sort: { asc: `answer:${field.key}`, desc: `-answer:${field.key}` },
-  }));
+  const answerColumns = fields.map((field) => {
+    const options = field.validation?.format === "iso_country" ? countryOptions() : field.options;
+    return {
+      key: `answer:${field.key}`,
+      header: { label: field.label, className: "adm-form-answer-col" },
+      cell: (submission: FormSubmission) => {
+        const answer = compactAnswer(submission.answers?.[field.key], field);
+        return (
+          <span class="pk-small adm-form-answer-cell" title={answer.title}>
+            {answer.text}
+          </span>
+        );
+      },
+      className: "adm-form-answer-col",
+      sort: { asc: `answer:${field.key}`, desc: `-answer:${field.key}` },
+      filter: {
+        key: `answer:${field.key}`,
+        param: "answerValue",
+        scope: { answerField: field.key },
+        ...(options?.length
+          ? { options: [{ value: "", label: "All answers" }, ...options] }
+          : { text: { placeholder: "Exact answer…" } }),
+      },
+    };
+  });
 
   return (
     <ApiDataTable
@@ -125,11 +136,11 @@ export function FormSubmissionsTable<Response extends { submissions: FormSubmiss
       resolve={(data) => data.submissions}
       resolvePage={(data) => data.page}
       paginate
+      tableOptionsFilters
       initialSort="-submitted_at"
       params={params}
-      toolbar={(actions, query, _sorting, { hidden }) => {
+      toolbar={(_actions, query, _sorting, { hidden }) => {
         const selected = fields.find((field) => field.key === query.answerField);
-        const options = selected?.options ?? [];
         const exportQuery = formSubmissionsExportQuerySchema.safeParse({
           ...query,
           columns: [
@@ -147,25 +158,6 @@ export function FormSubmissionsTable<Response extends { submissions: FormSubmiss
         );
         return (
           <>
-            <FilterSelect
-              ariaLabel="Filter answer field"
-              value={query.answerField ?? ""}
-              options={[
-                { value: "", label: "All answer fields" },
-                ...fields
-                  .filter((field) => (field.options?.length ?? 0) > 0)
-                  .map((field) => ({ value: field.key, label: field.label })),
-              ]}
-              onChange={(value) => actions.setFilters?.({ answerField: value, answerValue: "" })}
-            />
-            {options.length > 0 && (
-              <FilterSelect
-                ariaLabel={`Filter ${selected?.label}`}
-                value={query.answerValue ?? ""}
-                options={[{ value: "", label: "All answers" }, ...options]}
-                onChange={(value) => actions.setFilter?.("answerValue", value)}
-              />
-            )}
             {exportEndpoint && (
               <DownloadAction
                 label={selected ? `Download ${selected.label} (CSV)` : "Download responses (CSV)"}
