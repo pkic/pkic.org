@@ -76,6 +76,8 @@ export class LiveRoomChatActions {
       tickerChanged: () => Promise<void>;
       /** Attendee chat changed; a chat list on air may show something else now. */
       listed: () => void;
+      /** The session a message sent now is dated by, in a location's chat; null in a session's room. */
+      stamp: () => string | null;
       /** A moderator acted or a question was created; the durable copy, with its audit rows, is due. */
       audited: () => Promise<void>;
       /** An attendee message changed the chat counts; their durable copy is due. */
@@ -158,7 +160,7 @@ export class LiveRoomChatActions {
     // Author resolution yields: a moderator may have blocked this person meanwhile.
     if (viewer.role !== "operator" && this.feed.decisions.restriction(actor.userId, Date.now()))
       return REFUSALS.blocked;
-    const row = this.chat.send(actor, text, Date.now(), channel);
+    const row = this.chat.send(actor, text, Date.now(), channel, this.hooks.stamp());
     if (!row) return REFUSALS.tooFast;
     this.authors.recordMessage(row.id, stamp);
     await this.deliver([row], { removeWhenHidden: false });

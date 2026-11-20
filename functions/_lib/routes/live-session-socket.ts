@@ -6,6 +6,7 @@ import {
 import { AppError, isAppError } from "../errors";
 import { assertLiveSocketHandshake, failedLiveSocket, refusedLiveSocket } from "./live-socket-handshake";
 import { isLiveProgramSocketPath, liveProgramSocketRequest } from "./live-program-socket";
+import { isLiveLocationChatSocketPath, liveLocationChatSocketRequest } from "./live-location-chat-socket";
 import { admitLiveRoomParticipant } from "../services/live-session/room-access";
 import {
   LIVE_ROOM_ADMISSION_HEADER,
@@ -26,11 +27,16 @@ const LIVE_ROOM_PATH = /^\/api\/v1\/events\/([^/]+)\/agenda\/occurrences\/([^/]+
  * no other request opens a database session here.
  */
 export function isLiveRoomSocketPath(request: Request): boolean {
-  return LIVE_ROOM_PATH.test(new URL(request.url).pathname) || isLiveProgramSocketPath(request);
+  return (
+    LIVE_ROOM_PATH.test(new URL(request.url).pathname) ||
+    isLiveProgramSocketPath(request) ||
+    isLiveLocationChatSocketPath(request)
+  );
 }
 
 export async function liveRoomSocketRequest(request: Request, env: Env): Promise<Response> {
   if (isLiveProgramSocketPath(request)) return liveProgramSocketRequest(request, env);
+  if (isLiveLocationChatSocketPath(request)) return liveLocationChatSocketRequest(request, env);
   try {
     const match = LIVE_ROOM_PATH.exec(new URL(request.url).pathname);
     if (!match) throw new AppError(404, "NOT_FOUND", "Not found");

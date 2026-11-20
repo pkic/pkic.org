@@ -5,7 +5,9 @@ import { liveRoomAccessGrantSchema, type LiveRoomParticipant } from "./room-admi
 import { loadLiveRoomCommandRead } from "./room-command-read";
 import {
   liveParticipantReadKey,
+  liveRoomAccessScopeKey,
   runWithLiveRoomCommandRead,
+  type LiveRoomAccessScope,
   type LiveRoomCommandRead,
   type LiveParticipantReadResult,
 } from "./room-command-read-scope";
@@ -15,7 +17,7 @@ import { authorizeLiveRoomRecipients } from "./room-recipients";
 import { closeLiveRoomSocket } from "./room-socket-close";
 import type { LiveRoomSql } from "./room-sql";
 
-type Room = { eventId: string; session: { occurrenceId: string } };
+type Room = LiveRoomAccessScope;
 
 /** Connection leases survive hibernation in socket attachments; only the alarm refreshes D1 access. */
 export class LiveRoomAccessLease {
@@ -193,7 +195,7 @@ export class LiveRoomAccessLease {
     const read: LiveRoomCommandRead = {
       active: true,
       eventId: room.eventId,
-      occurrenceId: room.session.occurrenceId,
+      scopeKey: liveRoomAccessScopeKey(room),
       participants: new Map(),
       authors: new Map(),
       erased,

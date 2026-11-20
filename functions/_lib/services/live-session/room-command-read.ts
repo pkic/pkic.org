@@ -8,7 +8,9 @@ import { prepareAnonymizedLiveParticipantIds } from "./room-erasure";
 import { prepareEventParticipationBlocked } from "./event-participation-blocks";
 import {
   liveParticipantReadKey,
+  liveRoomAccessScopeKey,
   runWithLiveRoomCommandRead,
+  type LiveRoomAccessScope,
   type LiveRoomCommandRead,
 } from "./room-command-read-scope";
 
@@ -16,18 +18,15 @@ import {
 export async function loadLiveRoomCommandRead(
   db: DatabaseLike,
   rooms: Env["LIVE_SESSION_ROOMS"],
-  room: { eventId: string; session: { occurrenceId: string } },
+  room: LiveRoomAccessScope,
   participants: readonly LiveRoomParticipant[],
   authors: readonly LiveRoomParticipant[],
   erasureCandidates: readonly string[],
 ): Promise<LiveRoomCommandRead> {
-  const {
-    eventId,
-    session: { occurrenceId },
-  } = room;
+  const { eventId } = room;
   const reads = [];
   for (let offset = 0; offset < participants.length; offset += 512)
-    reads.push(prepareLiveRoomParticipants(db, participants.slice(offset, offset + 512), eventId, occurrenceId, rooms));
+    reads.push(prepareLiveRoomParticipants(db, participants.slice(offset, offset + 512), room, rooms));
   const statements = reads.flatMap((read) => read.statements);
   const authorIndex = statements.length;
   const authorIds = [...new Set(authors.flatMap((author) => (author.userId ? [author.userId] : [])))];
@@ -40,7 +39,7 @@ export async function loadLiveRoomCommandRead(
   const snapshot: LiveRoomCommandRead = {
     active: true,
     eventId,
-    occurrenceId,
+    scopeKey: liveRoomAccessScopeKey(room),
     participants: new Map(),
     authors: new Map(),
     erasureCandidates: new Set(erasureCandidates),
@@ -87,7 +86,7 @@ export async function loadLiveRoomCommandRead(
 export async function withLiveRoomCommandRead<T>(
   db: DatabaseLike,
   rooms: Env["LIVE_SESSION_ROOMS"],
-  room: { eventId: string; session: { occurrenceId: string } },
+  room: LiveRoomAccessScope,
   participants: readonly LiveRoomParticipant[],
   author: LiveRoomParticipant | null,
   erasureCandidates: readonly string[],

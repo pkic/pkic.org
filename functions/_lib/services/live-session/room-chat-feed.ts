@@ -93,6 +93,7 @@ export class LiveChatFeed {
           authorRoles: stamps.get(row.id)?.roles ?? [],
           mine: mineRow,
           sentAt: row.sent_at,
+          ...(row.occurrence_id ? { occurrenceId: row.occurrence_id } : {}),
           reactions: counts.get(row.id) ?? {},
           myReactions: (viewer.userId && mine.get(viewer.userId)?.get(row.id)) || [],
           reportedByMe: Boolean(viewer.userId && reportedBy.get(viewer.userId)?.has(row.id)),

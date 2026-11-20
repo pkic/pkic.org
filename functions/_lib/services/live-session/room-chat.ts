@@ -16,6 +16,8 @@ export interface LiveChatRow extends LiveChatRemoval {
   sent_at: string;
   /** Insertion order, the tie-break after the send time. */
   seq: number;
+  /** In a location's chat, the session on there when it was sent; null in a break and in a session's room. */
+  occurrence_id: string | null;
 }
 /** One attendee message as an organizer's archive keeps it. */
 export interface LiveChatArchiveRow {
@@ -34,12 +36,14 @@ const ANNOTATIONS = [
   "room_chat_hidden",
   "room_chat_questions",
   "room_chat_authorship",
+  "room_chat_sessions",
 ];
 /** Shown to attendees: not removed by a moderator or held after reports. */
 const HIDDEN = `id NOT IN (SELECT message_id FROM room_chat_hidden)`;
 
 function select(channel: LiveChatChannel): string {
-  return `SELECT id, author_user_id, author_name, body, sent_at, rowid AS seq, '${channel}' AS channel FROM ${TABLES[channel]}`;
+  return `SELECT id, author_user_id, author_name, body, sent_at, rowid AS seq, '${channel}' AS channel,
+    (SELECT occurrence_id FROM room_chat_sessions WHERE message_id = id) AS occurrence_id FROM ${TABLES[channel]}`;
 }
 
 /**
@@ -129,12 +133,16 @@ export class LiveRoomChat {
     return row?.sent_at ?? null;
   }
 
-  /** One persistent per-person allowance covers both channels, so switching channels cannot reset it. */
+  /**
+   * One persistent per-person allowance covers both channels, so switching channels cannot reset it. A
+   * location's chat dates the message by `occurrenceId`, the session on when it was sent, and counts it there.
+   */
   send(
     actor: { userId: string; name: string },
     text: string,
     now: number,
     channel: LiveChatChannel = "attendee",
+    occurrenceId: string | null = null,
   ): LiveChatRow | null {
     const cutoff = now - LIVE_ROOM_POLICY.chatPerPerson.windowSeconds * 1000;
     this.sql.exec("DELETE FROM room_chat_limits WHERE last_sent_at<=?", cutoff);
@@ -161,12 +169,26 @@ export class LiveRoomChat {
       text,
       sentAt,
     );
+    if (occurrenceId)
+      this.sql.exec("INSERT INTO room_chat_sessions(message_id,occurrence_id) VALUES(?,?)", id, occurrenceId);
     if (channel === "attendee") {
       this.sql.exec(
         "INSERT INTO room_chat_totals(id,messages,change_seq) VALUES(1,1,?) ON CONFLICT(id) DO UPDATE SET messages=messages+1,change_seq=excluded.change_seq",
         this.sql.nextChange(),
       );
       this.sql.exec("INSERT OR IGNORE INTO room_chat_senders(user_id) VALUES(?)", actor.userId);
+      if (occurrenceId) {
+        this.sql.exec(
+          "INSERT INTO room_chat_session_totals(occurrence_id,messages,change_seq) VALUES(?,1,?) ON CONFLICT(occurrence_id) DO UPDATE SET messages=messages+1,change_seq=excluded.change_seq",
+          occurrenceId,
+          this.sql.nextChange(),
+        );
+        this.sql.exec(
+          "INSERT OR IGNORE INTO room_chat_session_senders(occurrence_id,user_id) VALUES(?,?)",
+          occurrenceId,
+          actor.userId,
+        );
+      }
     }
     const dropped = this.sql
       .rows<{ id: string }>(
@@ -238,6 +260,15 @@ export class LiveRoomChat {
       this.sql.exec(`DELETE FROM ${table} WHERE user_id = ?`, userId);
     if (this.sql.rows("DELETE FROM room_chat_senders WHERE user_id = ? RETURNING user_id", userId).length)
       this.sql.exec("UPDATE room_chat_totals SET change_seq=? WHERE id=1", this.sql.nextChange());
+    for (const { occurrence_id } of this.sql.rows<{ occurrence_id: string }>(
+      "DELETE FROM room_chat_session_senders WHERE user_id = ? RETURNING occurrence_id",
+      userId,
+    ))
+      this.sql.exec(
+        "UPDATE room_chat_session_totals SET change_seq=? WHERE occurrence_id=?",
+        this.sql.nextChange(),
+        occurrence_id,
+      );
     return removed;
   }
 }

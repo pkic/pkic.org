@@ -129,13 +129,13 @@ export function createLiveRoomFixture() {
 
   /** A signed-in person, or a read-only source with its access and the output it draws. */
   type Credential = { person: Person } | { overlay: string; output?: string };
-  function upgrade(credential: Credential | null, headers: Record<string, string> = {}) {
+  function upgrade(credential: Credential | null, headers: Record<string, string> = {}, socketPath = path()) {
     const protocols = [
       LIVE_ROOM_PROTOCOL,
       ...(credential && "overlay" in credential ? [LIVE_OVERLAY_PROTOCOL_PREFIX + credential.overlay] : []),
     ];
     const output = credential && "output" in credential && credential.output ? `?output=${credential.output}` : "";
-    return callApi(env, path(output), {
+    return callApi(env, `${socketPath}${output}`, {
       headers: {
         upgrade: "websocket",
         origin: ORIGIN,
@@ -169,7 +169,19 @@ export function createLiveRoomFixture() {
 
   /** An accepted socket that records every message the room sends it. */
   async function connect(credential: Credential) {
-    const response = await upgrade(credential);
+    return accept(await upgrade(credential), "room.snapshot");
+  }
+
+  /** A signed-in person in the location's chat of the day, after its snapshot. */
+  async function connectChat(person: Person) {
+    return accept(await upgrade({ person }, {}, chatPath()), "location.chat.snapshot");
+  }
+
+  function chatPath() {
+    return `/api/v1/events/${EVENT_SLUG}/agenda/rooms/${roomId}/live/chat`;
+  }
+
+  async function accept(response: Response, first: "room.snapshot" | "location.chat.snapshot") {
     if (response.status !== 101) throw new Error(`Expected 101, got ${response.status}: ${await response.text()}`);
     const socket = response.webSocket!;
     const received: LiveRoomServerMessage[] = [];
@@ -230,7 +242,7 @@ export function createLiveRoomFixture() {
         );
       },
     };
-    await client.next("room.snapshot");
+    await client.next(first);
     return client;
   }
 
@@ -258,6 +270,8 @@ export function createLiveRoomFixture() {
     upgrade,
     refusal,
     connect,
+    connectChat,
+    chatPath,
     connectSource,
     get roomId() {
       return roomId;

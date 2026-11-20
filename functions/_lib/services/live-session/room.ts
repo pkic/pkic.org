@@ -64,6 +64,9 @@ import { LiveRoomPreview } from "./room-preview";
 import { LiveRoomPresence } from "./room-presence";
 import { LiveRoomAddedCredits } from "./room-added-credits";
 import { refreshLiveCreditCopies } from "./room-credit-refresh";
+import { LiveLocationChatStore } from "./location-chat-store";
+import { LiveLocationChatRoom } from "./location-chat-room";
+import { liveRoomChatScope } from "./room-chat-scope";
 
 type Handled = LiveRefusal | void;
 const REFUSALS = {
@@ -111,11 +114,14 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
   private readonly desk: LiveDesk;
   private readonly engagement: LiveRoomEngagement;
   private readonly onScreenLists: LiveRoomOnScreenLists;
+  private readonly location: LiveLocationChatStore;
+  private readonly locationChat: LiveLocationChatRoom;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.sql = new LiveRoomSql(ctx.storage.sql);
     this.store = new LiveRoomStore(this.sql);
+    this.location = new LiveLocationChatStore(this.sql);
     this.databaseSession = new LiveRoomDatabaseSession(env.DB, this.store);
     this.sessionEnv = { ...env, DB: this.databaseSession };
     this.program = new LiveRoomProgram(ctx, this.sessionEnv, (bookmark) => this.databaseSession.seedBookmark(bookmark));
@@ -127,7 +133,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       ctx,
       this.sessionEnv,
       this.sql,
-      () => this.store.session(),
+      () => this.store.session() ?? this.location.accessScope(),
       () => [
         ...this.chat.authors(),
         ...this.store.questions().map((row) => row.author_user_id),
@@ -136,10 +142,9 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       (userId) => this.forgetParticipant(userId),
       (checked, blocked, readAt) => this.participation.eventBlocksRead(checked, blocked, readAt),
     );
-    this.authors = new LiveRoomAuthors(this.sql, new LiveRoomPeople(this.sql), this.sessionEnv, () => {
-      const room = this.store.session();
-      return room ? { eventId: room.eventId, occurrenceId: room.session.occurrenceId } : null;
-    });
+    this.authors = new LiveRoomAuthors(this.sql, new LiveRoomPeople(this.sql), this.sessionEnv, () =>
+      liveRoomChatScope(this.store, this.location),
+    );
     this.chatFeed = new LiveChatFeed(
       this.chat,
       new LiveChatModerationStore(this.sql),
@@ -185,6 +190,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       {
         tickerChanged: () => this.graphics.refreshLocal(),
         listed: () => this.graphics.lists.due(),
+        stamp: () => (this.store.session() ? null : this.location.stamp(Date.now())),
         audited: () => this.scheduleCopy(),
         counted: () => this.scheduleCopy(),
       },
@@ -223,7 +229,21 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       this.decisions,
       this.authors.people,
       this.broadcast,
+      () => liveRoomChatScope(this.store, this.location)?.eventId ?? null,
     );
+    this.locationChat = new LiveLocationChatRoom({
+      ctx,
+      env: this.sessionEnv,
+      store: this.location,
+      access: this.access,
+      broadcast: this.broadcast,
+      feed: this.chatFeed,
+      chatActions: this.chatActions,
+      participation: this.participation,
+      staff: this.store,
+      seedBookmark: (bookmark) => this.databaseSession.seedBookmark(bookmark),
+      purge: () => this.purge(),
+    });
     this.presence = new LiveRoomPresence(ctx, (sockets) => this.access.eligible(sockets));
     this.addedCredits = new LiveRoomAddedCredits(this.sessionEnv.DB, this.store);
     this.engagement = new LiveRoomEngagement(ctx, this.store, this.polls, this.broadcast, () => this.scheduleCopy());
@@ -267,6 +287,11 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       await this.broadcast.all(message);
   }
 
+  /** The studio loaded a session in this location's chat's location, or none: later messages are dated by it. */
+  async locationChatLoaded(occurrenceId: string | null): Promise<void> {
+    this.locationChat.loaded(occurrenceId);
+  }
+
   async readProgram(eventId: string, roomId: string): Promise<LiveProgramSelection> {
     return this.program.read(eventId, roomId);
   }
@@ -283,7 +308,9 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
   }
 
   async fetch(request: Request): Promise<Response> {
-    if (new URL(request.url).pathname === "/program/connect") return this.program.connect(request);
+    const path = new URL(request.url).pathname;
+    if (path === "/program/connect") return this.program.connect(request);
+    if (path === "/chat/connect") return this.locationChat.connect(request);
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket")
       return new Response("Expected a WebSocket upgrade", { status: 426 });
     const admission = liveRoomAdmissionSchema.parse(JSON.parse(request.headers.get(LIVE_ROOM_ADMISSION_HEADER) ?? ""));
@@ -337,8 +364,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     threadRequestId: string | null,
   ): Promise<void> {
     if (message && viewer.role !== "overlay") {
-      const room = this.store.session();
-      if (!room) return;
+      if (!this.store.session() && !this.location.state()) return;
       const authorized = await this.access.authorize([socket]);
       if (!authorized.length) {
         await this.left(socket);
@@ -384,6 +410,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
    * is copied and the session is long over, the room erases its own storage.
    */
   async alarm(): Promise<void> {
+    if (!this.store.session() && this.location.state()) return this.locationChat.alarm();
     return runLiveRoomAlarm({
       ctx: this.ctx,
       program: this.program,
@@ -436,7 +463,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     for (const questionId of recounted) await this.broadcast.question(questionId);
     for (const pollId of polls) await this.broadcast.poll(pollId);
     if (removed.length || recounted.length || chat.length) this.graphics.lists.due();
-    if (this.store.hasPendingCopy()) await this.scheduleAlarm(this.copyDue(), true);
+    if (this.store.hasPendingCopy() || this.location.pendingCopy()) await this.scheduleAlarm(this.copyDue(), true);
   }
 
   /** The attendee chat the room still holds, oldest first, for the event's chat download. */
@@ -447,7 +474,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
   /** Erases both chat channels, keeping the counts; false while the room is still open. */
   async eraseChat(): Promise<boolean> {
     if (!this.sql.holdsData()) return true;
-    if (!liveChatErasable(this.store.session())) return false;
+    if (!liveChatErasable(liveRoomChatScope(this.store, this.location))) return false;
     for (const removed of this.chat.eraseAll())
       await this.broadcast.all({ type: "chat.removed", messageId: removed.id, channel: removed.channel });
     this.graphics.lists.due();
@@ -472,14 +499,17 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
   private async purge(): Promise<void> {
     this.engagement.clear();
     this.onScreenLists.stop();
-    const erased = await purgeLiveRoom(this.ctx, this.env.DB, this.store.session(), this.sql, this.chat);
-    if (erased) this.databaseSession.reset();
+    const scope = liveRoomChatScope(this.store, this.location);
+    const erased = await purgeLiveRoom(this.ctx, this.env.DB, scope, this.sql, this.chat);
+    if (!erased) return;
+    this.databaseSession.reset();
+    this.location.erased();
   }
 
   private async left(socket: WebSocket): Promise<void> {
     const viewer = socket.deserializeAttachment() as LiveRoomParticipant | null;
     // A socket the purge closed can report closing after the erase; telling the others must not recreate the room.
-    if (!this.sql.holdsData()) return;
+    if (!this.sql.holdsData() || !this.store.session()) return;
     if (viewer?.role === "overlay") return this.broadcast.sourcesChanged(socket);
     if (viewer?.role !== "operator") return;
     this.presence.left(viewer);
@@ -496,12 +526,13 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     if (viewer.role === "overlay" || viewer.userId === null || viewer.name === null) return REFUSALS.readOnly;
     const actor = { userId: viewer.userId, name: viewer.name };
     const operator = viewer.role === "operator";
+    if (!operator && liveCommandParticipates(message.type) && this.decisions.restriction(actor.userId, Date.now()))
+      return LIVE_PARTICIPATION_REFUSAL;
+    if (!this.store.session()) return this.locationChat.handle(viewer, actor, message, socket);
     const session = this.session();
     const opening = this.store.opening();
     const open = operator || liveRoomOpen(Date.now(), session.startAt, session.endAt, opening);
     const asking = operator || liveRoomTakesQuestions(Date.now(), session.endAt, opening);
-    if (!operator && liveCommandParticipates(message.type) && this.decisions.restriction(actor.userId, Date.now()))
-      return LIVE_PARTICIPATION_REFUSAL;
     switch (message.type) {
       case "chat.send":
       case "chat.react":

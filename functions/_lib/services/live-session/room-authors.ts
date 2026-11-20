@@ -11,7 +11,7 @@ import { AppError } from "../../errors";
 import { currentLiveRoomCommandRead } from "./room-command-read-scope";
 import { first } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
-import { liveRoomName, type LiveRoomParticipant } from "./room-admission";
+import type { LiveRoomParticipant } from "./room-admission";
 import { readLiveAuthorStamp } from "./room-author-stamp";
 import type { LiveRoomPeople } from "./room-people";
 import type { LiveRoomSql } from "./room-sql";
@@ -47,7 +47,8 @@ export class LiveRoomAuthors {
     private readonly sql: LiveRoomSql,
     readonly people: LiveRoomPeople,
     private readonly env: { DB: DatabaseLike; INTERNAL_SIGNING_SECRET?: string },
-    private readonly room: () => { eventId: string; occurrenceId: string } | null,
+    /** The room handles are keyed by, as its object is named, and its event. */
+    private readonly room: () => { eventId: string; name: string } | null,
   ) {}
 
   /** The person's handle in this room: a keyed digest of the room and the person, never their id. */
@@ -58,8 +59,7 @@ export class LiveRoomAuthors {
     const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, [
       "sign",
     ]);
-    const name = liveRoomName(room.eventId, room.occurrenceId);
-    const digest = await crypto.subtle.sign("HMAC", key, encoder.encode(`live-author:v1:${name}:${userId}`));
+    const digest = await crypto.subtle.sign("HMAC", key, encoder.encode(`live-author:v1:${room.name}:${userId}`));
     return base64url(new Uint8Array(digest).slice(0, 24));
   }
 

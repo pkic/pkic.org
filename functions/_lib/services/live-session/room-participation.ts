@@ -52,6 +52,8 @@ export class LiveRoomParticipation {
     private readonly decisions: LiveRoomModerationStore,
     private readonly people: LiveRoomPeople,
     private readonly broadcast: LiveRoomBroadcast,
+    /** The event the room's people act in, whether it holds a session or a location's chat. */
+    private readonly eventId: () => string | null,
   ) {}
 
   /** Who wrote the item, or null when it is gone. */
@@ -94,11 +96,11 @@ export class LiveRoomParticipation {
     if (!userId) return REFUSALS.missing;
     if (userId === actor.userId || this.people.people([userId]).get(userId)?.staff) return REFUSALS.staff;
     const at = nowIso();
-    const room = this.store.session();
+    const eventId = this.eventId();
     if (input.block === "event") {
-      if (!room) return REFUSALS.missing;
+      if (!eventId) return REFUSALS.missing;
       await blockEventParticipation(this.db, {
-        eventId: room.eventId,
+        eventId,
         userId,
         reason: input.reason,
         by: actor.userId,
@@ -125,10 +127,10 @@ export class LiveRoomParticipation {
     if (!canSetLiveParticipationBlock({ role: viewer.role, organizer: viewer.organizer }, current.block))
       return REFUSALS.forbidden;
     const at = nowIso();
-    const room = this.store.session();
+    const eventId = this.eventId();
     if (current.block === "event") {
-      if (!room) return REFUSALS.missing;
-      await liftEventParticipationBlock(this.db, { eventId: room.eventId, userId, by: actor.userId, at });
+      if (!eventId) return REFUSALS.missing;
+      await liftEventParticipationBlock(this.db, { eventId, userId, by: actor.userId, at });
       this.decisions.decideEventBlock(userId, false);
     }
     this.decisions.lift(userId);

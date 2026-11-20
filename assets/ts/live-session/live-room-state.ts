@@ -61,6 +61,8 @@ export function applyLiveRoomMessage(
     case "question.answer.result":
     case "question.accepted":
     case "question.updated":
+    case "location.chat.snapshot":
+      // A location's chat speaks on its own connection; a session's room never sends its snapshot.
       return state;
     case "question.changed":
       return {

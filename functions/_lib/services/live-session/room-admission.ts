@@ -77,6 +77,11 @@ export function liveRoomName(eventId: string, occurrenceId: string): string {
   return `${eventId}:${occurrenceId}`;
 }
 
+/** One chat per location and event day; it lives in the room class beside the sessions' rooms. */
+export function liveLocationChatName(eventId: string, roomId: string, day: string): string {
+  return `chat:${eventId}:${roomId}:${day}`;
+}
+
 /** Preserve server-owned connection metadata when fresh canonical admission replaces an attachment. */
 export function preserveLiveRoomAttachmentState(
   participant: LiveRoomParticipant,

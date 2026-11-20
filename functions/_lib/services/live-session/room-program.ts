@@ -26,6 +26,7 @@ import { nowIso } from "../../utils/time";
 import { readPublishedProgramRoom } from "./program-room";
 import { readLiveRoomSession } from "./room-session";
 import { liveRoomName, type LiveRoomParticipant } from "./room-admission";
+import { tellLiveLocationChats } from "./location-chat-loaded";
 import { closeLiveRoomSocket } from "./room-socket-close";
 export const LIVE_PROGRAM_ADMISSION_HEADER = "x-pkic-live-program-admission";
 export const LIVE_PROGRAM_SOCKET_TAG = "program";
@@ -183,6 +184,14 @@ export class LiveRoomProgram {
         await rooms.getByName(liveRoomName(eventId, selection.occurrenceId)).adoptProgramStage(stage);
       }
     }
+    if (previousOccurrenceId !== selection.occurrenceId)
+      await tellLiveLocationChats(
+        this.env,
+        eventId,
+        roomId,
+        [previousOccurrenceId, selection.occurrenceId],
+        selection.occurrenceId,
+      );
     await this.broadcast(selection);
     return selection;
   }
@@ -321,6 +330,13 @@ export class LiveRoomProgram {
             return selection;
           });
           await this.broadcast(cleared);
+          await tellLiveLocationChats(
+            this.env,
+            program.eventId,
+            program.roomId,
+            [program.selection.occurrenceId],
+            null,
+          );
         }
       }
       const current = await this.bound(program.eventId, program.roomId);

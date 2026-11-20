@@ -28,6 +28,12 @@ CREATE TABLE IF NOT EXISTS room_people (user_id TEXT PRIMARY KEY,handle TEXT,pho
 CREATE UNIQUE INDEX IF NOT EXISTS room_people_handle ON room_people(handle);
 CREATE TABLE IF NOT EXISTS room_chat_totals (id INTEGER PRIMARY KEY,messages INTEGER NOT NULL,change_seq INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS room_chat_senders (user_id TEXT PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS room_chat_sessions (message_id TEXT PRIMARY KEY, occurrence_id TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS room_chat_session_totals (occurrence_id TEXT PRIMARY KEY, messages INTEGER NOT NULL, change_seq INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS room_chat_session_senders (occurrence_id TEXT NOT NULL, user_id TEXT NOT NULL, PRIMARY KEY(occurrence_id, user_id));
+CREATE INDEX IF NOT EXISTS room_chat_session_senders_user ON room_chat_session_senders(user_id);
+CREATE TABLE IF NOT EXISTS location_chat (id INTEGER PRIMARY KEY, event_id TEXT NOT NULL, room_id TEXT NOT NULL, day TEXT NOT NULL,
+  record_json TEXT NOT NULL, loaded_occurrence_id TEXT, opening TEXT NOT NULL DEFAULT 'scheduled');
 CREATE TABLE IF NOT EXISTS room_chat_authorship (message_id TEXT PRIMARY KEY,author_json TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS question_authorship (question_id TEXT PRIMARY KEY,author_json TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS room_access_erasures (user_id TEXT PRIMARY KEY);

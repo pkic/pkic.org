@@ -1,6 +1,4 @@
 import { eventLiveChatSettings, liveChatKeptUntil } from "../../../../assets/shared/live-chat-retention";
-import { liveRoomWindow } from "../../../../assets/shared/live-session-policy";
-import type { LiveRoomSession } from "../../../../assets/shared/schemas/live-session-room";
 import { first } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
@@ -18,6 +16,10 @@ const LIVE_CHAT_KEPT_TABLES = [
   "room_chat_hidden",
   "room_chat_totals",
   "room_chat_senders",
+  "room_chat_sessions",
+  "room_chat_session_totals",
+  "room_chat_session_senders",
+  "location_chat",
 ] as const;
 
 /** How often a room keeping its chat checks the event's setting again, so a shorter choice applies within a day. */
@@ -42,7 +44,7 @@ async function readLiveChatKeptUntil(db: DatabaseLike, eventId: string, endAt: s
 export async function purgeLiveRoom(
   ctx: Pick<DurableObjectState, "getWebSockets" | "storage">,
   db: DatabaseLike,
-  session: { eventId: string; session: LiveRoomSession } | null,
+  room: { eventId: string; endAt: string } | null,
   sql: { emptyExcept(kept: readonly string[]): void; erased(): void },
   chat: { holdsMessages(): boolean },
 ): Promise<boolean> {
@@ -53,8 +55,7 @@ export async function purgeLiveRoom(
       // Already closed.
     }
   }
-  const keepUntil =
-    session && chat.holdsMessages() ? await readLiveChatKeptUntil(db, session.eventId, session.session.endAt) : 0;
+  const keepUntil = room && chat.holdsMessages() ? await readLiveChatKeptUntil(db, room.eventId, room.endAt) : 0;
   if (Date.now() < keepUntil) {
     sql.emptyExcept(LIVE_CHAT_KEPT_TABLES);
     await ctx.storage.setAlarm(Math.min(keepUntil, Date.now() + LIVE_CHAT_RECHECK_MS));
@@ -65,7 +66,7 @@ export async function purgeLiveRoom(
   return true;
 }
 
-/** Whether a room's chat may be erased: never while its session's room is still open. */
-export function liveChatErasable(session: { session: LiveRoomSession } | null): boolean {
-  return !session || Date.now() >= liveRoomWindow(session.session.startAt, session.session.endAt).closesAt;
+/** Whether a room's chat may be erased: never while it is still open on schedule. */
+export function liveChatErasable(scope: { closesAt: number } | null): boolean {
+  return !scope || Date.now() >= scope.closesAt;
 }

@@ -63,6 +63,8 @@ export const liveChatMessageSchema = z
     ...liveAuthorFields,
     mine: z.boolean(),
     sentAt: utcInstantSchema,
+    /** In a location's chat, the session on there when it was sent; absent in a break. */
+    occurrenceId: databaseIdSchema.optional(),
     reactions: liveChatReactionCountsSchema.optional(),
     myReactions: myReactionsSchema.optional(),
     reportedByMe: z.boolean().optional(),

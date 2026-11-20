@@ -1,3 +1,4 @@
+import { liveLocationChatSnapshotFields } from "./live-location-chat";
 import {
   liveQuestionSchema,
   liveQuestionAskSchema,
@@ -362,8 +363,19 @@ export const liveRoomSnapshotSchema = z
   .strict();
 export type LiveRoomSnapshot = z.infer<typeof liveRoomSnapshotSchema>;
 
+/** What a viewer receives on joining a location's chat, which speaks this protocol's chat and moderation. */
+export const liveLocationChatSnapshotSchema = z
+  .object({
+    type: z.literal("location.chat.snapshot"),
+    viewer: liveRoomViewerSchema,
+    ...liveLocationChatSnapshotFields,
+  })
+  .strict();
+export type LiveLocationChatSnapshot = z.infer<typeof liveLocationChatSnapshotSchema>;
+
 export const liveRoomServerMessageSchema = z.discriminatedUnion("type", [
   liveRoomSnapshotSchema,
+  liveLocationChatSnapshotSchema,
   liveQuestionAnswersSchema,
   liveQuestionAnswerResultSchema,
   z.object({ type: z.literal("question.changed"), question: liveQuestionSchema }).strict(),
