@@ -1235,17 +1235,19 @@ Trouble uploading, or need more time? Please [contact us](mailto:{{contactEmail}
 
   // ─────────────────────────────────────────────────────────────────────────
   // 8. User magic link
-  // Variables: email, magicLinkUrl, expiresInMinutes
+  // Variables: email, magicLinkUrl, expiresInMinutes; registration/proposal + eventName, or join, name
+  // what the person came for when the link returns them to it.
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "user_magic_link",
-    subjectTemplate: "Your PKI Consortium sign-in link",
+    subjectTemplate:
+      "{{#if registration}}Sign in to register for {{eventName}}{{else}}{{#if proposal}}Sign in to submit a proposal for {{eventName}}{{else}}{{#if join}}Sign in to continue your membership application{{else}}Your PKI Consortium sign-in link{{/if}}{{/if}}{{/if}}",
     content: `Hello,
 
-Here's your link to sign in to the **PKI Consortium portal**.
+{{#if registration}}Here's your link to sign in and register for **{{eventName}}**.{{else}}{{#if proposal}}Here's your link to sign in and submit a proposal for **{{eventName}}**.{{else}}{{#if join}}Here's your link to sign in and continue your application to join the **PKI Consortium**.{{else}}Here's your link to sign in to the **PKI Consortium portal**.{{/if}}{{/if}}{{/if}}
 
 :::button
-[Sign in →]({{magicLinkUrl}})
+[{{#if registration}}Sign in and register{{else}}{{#if proposal}}Sign in and continue{{else}}{{#if join}}Sign in and continue{{else}}Sign in{{/if}}{{/if}}{{/if}} →]({{magicLinkUrl}})
 :::
 
 {{> link_safety_notice}}

@@ -337,6 +337,41 @@ describe("account sign-up", () => {
     expect(payload.registration).toBeUndefined();
   });
 
+  it("says in the sign-in email that it continues a registration, naming an invitation-only event only to an invited account", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    await env.DB.prepare("UPDATE events SET visibility = 'invitation_only' WHERE id = ?").bind(eventId).run();
+    const invited = await insertUser(env.DB, "invited@organization.example");
+    await insertUser(env.DB, "stranger@organization.example");
+    await env.DB.prepare(
+      `INSERT INTO invites (id, event_id, invitee_email, invite_type, link_secret, status, source_type, created_at)
+       VALUES (?, ?, 'invited@organization.example', 'attendee', ?, 'sent', 'direct', strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+    )
+      .bind(crypto.randomUUID(), eventId, crypto.randomUUID())
+      .run();
+    const limited = {
+      ...env,
+      EMAIL_RATE_LIMITER: createTestRateLimiter(50),
+      IP_RATE_LIMITER: createTestRateLimiter(50),
+    };
+    // The portal's own registration route, as an emailed invitation opens it.
+    const returnPath = "/events/pqc-2026/register?id=inv-1&source=invite_resend";
+    const sent = async (email: string) => {
+      expect((await call("/api/v1/auth/request-link", { email, returnPath }, limited)).status, email).toBe(200);
+      const [outbox] = await queryAll<{ template_key: string; recipient_user_id: string; payload_json: string }>(
+        env.DB,
+        "SELECT template_key, recipient_user_id, payload_json FROM email_outbox ORDER BY rowid DESC LIMIT 1",
+      );
+      expect(outbox!.template_key).toBe("user_magic_link");
+      return outbox!;
+    };
+    const forInvited = await sent("invited@organization.example");
+    expect(forInvited.recipient_user_id).toBe(invited);
+    expect(JSON.parse(forInvited.payload_json)).toMatchObject({ registration: true, eventName: "PQC Conference 2026" });
+    const forStranger = JSON.parse((await sent("stranger@organization.example")).payload_json);
+    expect(forStranger.eventName).toBeUndefined();
+    expect(forStranger.registration).toBeUndefined();
+  });
+
   it("holds the address to the shared work-email rule", async () => {
     expect((await call("/api/v1/auth/sign-up", { email: "ada@gmail.com" })).status).toBe(400);
     expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);

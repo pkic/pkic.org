@@ -2,7 +2,7 @@ import { processOutboxByIdBackground } from "../../../_lib/email/outbox";
 import { json } from "../../../_lib/http";
 import { logInfo } from "../../../_lib/logging";
 import { prepareMagicLinkRequestHttp, USER_EMAIL_LINK_RATE_LIMIT_NAMESPACE } from "../../../_lib/auth/http-flow";
-import { portalVerifyLinkBase, requestUserSignInLink } from "../../../_lib/services/user-auth-flow";
+import { portalVerifyLinkBase, requestUserSignInLink, signInLinkMessage } from "../../../_lib/services/user-auth-flow";
 import { openApiRoute } from "../../../_lib/openapi/route";
 import type { AdminContext } from "../../../_lib/db/context";
 import { userAuthRequestRouteSchema } from "../../../../assets/shared/schemas/user-auth";
@@ -20,7 +20,7 @@ export const UserAuthRequestLink = openApiRoute(userAuthRequestRouteSchema, asyn
       signingSecret: http.secret,
       magicLinkBaseUrl: portalVerifyLinkBase(http.appBaseUrl, data.body.returnPath),
     },
-    undefined,
+    signInLinkMessage(http.db, data.body.returnPath),
     // An address without an account is told so, with the way back to start one where the person was going.
     `${http.appBaseUrl}${signInReturnHref(data.body.returnPath)}`,
   );
