@@ -11,6 +11,7 @@ import {
 import { databaseIdSchema } from "../../../../assets/shared/schemas/identifiers";
 import { liveRoomRefusalCloseCode } from "../../../../assets/shared/schemas/live-session-room";
 import { resolveUserSessionClaims } from "../../auth/user-session";
+import { connectedSessionClaims } from "../../auth/user-session-activity";
 import { resolveUserSessionClaimsBatch } from "../../auth/user-session-live-data";
 import type { UserSessionTokenClaims } from "../../auth/user-session-token";
 import { hasPermission } from "../../auth/permissions";
@@ -208,7 +209,7 @@ export class LiveRoomProgram {
   private async authorized(sockets: WebSocket[]): Promise<WebSocket[]> {
     sockets = sockets.filter((s) => s.readyState === WebSocket.OPEN);
     const admissions = sockets.map((s) => liveProgramAdmissionSchema.parse(s.deserializeAttachment()));
-    const staff = admissions.filter((a) => a.sessionClaims).map((a) => a.sessionClaims!);
+    const staff = admissions.filter((a) => a.sessionClaims).map((a) => connectedSessionClaims(a.sessionClaims!));
     let results: Awaited<ReturnType<typeof resolveUserSessionClaimsBatch>>;
     try {
       results = await resolveUserSessionClaimsBatch(this.env.DB, staff);

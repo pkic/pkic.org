@@ -1,3 +1,5 @@
+import { noteSessionPresence } from "../shared/session-presence";
+
 /** The longest a persistent live connection waits before it tries again. */
 export const LIVE_PERSISTENT_RETRY_MAX_MS = 30_000;
 
@@ -36,7 +38,8 @@ export const LIVE_SILENCE_MS = 20_000;
  * close. It times only a question still waiting for its answer, so a page
  * in the background, whose timers the browser runs a minute late, keeps a
  * connection that answers. Back online or shown again, it asks at once.
- * `heard` marks every message; `stop` ends the watch.
+ * `heard` marks every message, which also says the person is still there;
+ * `stop` ends the watch.
  */
 export function watchLiveSocket(
   socket: WebSocket,
@@ -61,6 +64,7 @@ export function watchLiveSocket(
   return {
     heard: () => {
       asked = null;
+      noteSessionPresence();
     },
     stop: () => {
       clearInterval(timer);

@@ -3,6 +3,7 @@ import {
   liveParticipantReadKey,
   type LiveParticipantReadResult,
 } from "./room-command-read-scope";
+import { connectedSessionClaims } from "../../auth/user-session-activity";
 import { prepareUserSessionClaimsBatch } from "../../auth/user-session-live-data";
 import type { LiveRoomRole } from "../../../../assets/shared/live-session-policy";
 import { liveRoomOutputs } from "../../../../assets/shared/live-room-outputs";
@@ -187,7 +188,7 @@ export function prepareLiveRoomParticipants(
   rooms?: Env["LIVE_SESSION_ROOMS"],
 ) {
   const valid = slice.filter((p) => p.role !== "overlay" && p.sessionClaims && p.sessionClaims.sub === p.userId);
-  const claims = valid.map((p) => p.sessionClaims!);
+  const claims = valid.map((p) => connectedSessionClaims(p.sessionClaims!));
   const roomRead = prepareLiveRoomSessionRead(db, eventId, occurrenceId);
   const sessionRead = prepareUserSessionClaimsBatch(db, claims);
   const statements = [

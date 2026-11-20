@@ -19,6 +19,7 @@ import {
 import type { ScreenRecord } from "../../../../../../../shared/schemas/event-screens";
 import { persistentRetryDelay } from "../../../../../../live-session/live-socket-retry";
 import type { LiveSocketFactory } from "../../../../../../live-session/useLiveRoom";
+import { noteSessionPresence } from "../../../../../../shared/session-presence";
 import { toast } from "../../../../ui";
 import {
   applyScreenMonitorMessage,
@@ -83,7 +84,10 @@ export function useScreenMonitorStaff({
         keepAlive = setInterval(() => current.send("ping"), KEEP_ALIVE_MS);
       });
       current.addEventListener("message", (event) => {
-        if (stopped || socket.current !== current || event.data === "pong") return;
+        if (stopped || socket.current !== current) return;
+        // The monitor answers each keep-alive question, as it does while nobody touches the page.
+        noteSessionPresence();
+        if (event.data === "pong") return;
         let parsed;
         try {
           parsed = screenMonitorServerMessageSchema.safeParse(JSON.parse(String(event.data)));
