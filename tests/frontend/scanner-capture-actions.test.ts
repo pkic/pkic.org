@@ -47,6 +47,7 @@ function setup() {
     presentSavedEligibility: vi.fn(async () => true),
     verifyQueuedScan: vi.fn(async () => true),
     fastMode: true,
+    feedbackHeld: false,
     manualOpen: true,
     cooldown: {
       remainingMs: 0,

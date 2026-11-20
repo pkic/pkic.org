@@ -69,8 +69,12 @@ export function FastScannerView({
   onTourSound,
   helpOnStart = false,
   collection,
+  needsAdvance = false,
+  onNextBadge,
 }: {
   collection?: ComponentProps<typeof ScannerCollectionAttendee> & { waiting: boolean; onNext: () => void };
+  needsAdvance?: boolean;
+  onNextBadge?: () => void;
   helpOnStart?: boolean;
   onTourSound?: (sound: ScannerSound) => void;
   presentation?: "embedded" | "fullscreen";
@@ -177,20 +181,16 @@ export function FastScannerView({
       }[visualRole];
   const visibleUploadStatus =
     pending > 0 && uploadStatus === "All pending scans uploaded." ? "Uploading scans in the background…" : uploadStatus;
-  const label = result
-    ? scanFeedbackLabel(result, mode)
-    : pending
-      ? "Verification pending"
-      : cameraActive
-        ? "Ready to scan"
-        : "Camera unavailable";
-  const readiness = collection?.waiting
-    ? "Find this attendee’s badge, then choose Next attendee"
-    : cooldown?.saving
-      ? "Checking badge…"
-      : cooldown && cooldown.remainingMs > 0
-        ? `Next badge in ${(cooldown.remainingMs / 1000).toFixed(1)} seconds`
-        : "Ready for the next badge";
+  let label = "Camera unavailable";
+  if (result) label = scanFeedbackLabel(result, mode);
+  else if (pending) label = "Verification pending";
+  else if (cameraActive) label = "Ready to scan";
+  let readiness = "Ready for the next badge";
+  if (cooldown?.saving) readiness = "Checking badge…";
+  else if (cooldown && cooldown.remainingMs > 0)
+    readiness = `Next badge in ${(cooldown.remainingMs / 1000).toFixed(1)} seconds`;
+  if (needsAdvance) readiness = "Choose Next badge to continue";
+  if (collection?.waiting) readiness = "Find this attendee’s badge, then choose Next attendee";
   return (
     <div
       ref={surface}
@@ -272,7 +272,7 @@ export function FastScannerView({
                 )}
               </span>
               <strong class="pk-fast-scanner__label" data-scanner-help="mode">
-                {collection?.waiting && collection.loading
+                {collection?.waiting && collection.showName && collection.loading
                   ? "Finding attendee…"
                   : (visibleStatus?.title ?? (cameraStarting ? "Starting camera…" : readyLabel))}
               </strong>
@@ -287,7 +287,7 @@ export function FastScannerView({
             {!visibleStatus && context && !collection && <p class="pk-fast-scanner__context">{context}</p>}
           </div>
         )}
-        {cameraError && !helpOpen && (
+        {cameraError && !needsAdvance && !helpOpen && (
           <p class="pk-fast-scanner__message" role="status">
             {cameraError}
           </p>
@@ -330,11 +330,14 @@ export function FastScannerView({
         )}
         <div class="pk-fast-scanner__actions">
           {collection?.waiting && !helpOpen && (
-            <>
-              <Button onClick={collection.onNext} disabled={collection.saving || cooldown?.saving}>
-                Next attendee
-              </Button>
-            </>
+            <Button onClick={collection.onNext} disabled={collection.saving || cooldown?.saving}>
+              Next attendee
+            </Button>
+          )}
+          {needsAdvance && !collection?.waiting && !helpOpen && !manualEntry && !recentScans && onNextBadge && (
+            <Button onClick={onNextBadge} disabled={cooldown?.saving}>
+              Next badge
+            </Button>
           )}
           {onPresentation && presentation === "embedded" && (
             <Button variant="secondary" onClick={onPresentation}>
@@ -424,7 +427,7 @@ export function FastScannerView({
         <div class="pk-fast-scanner__next">
           <span class="pk-sr-only">{readiness}</span>
           <progress
-            hidden={collection?.waiting}
+            hidden={collection?.waiting || needsAdvance}
             max={cooldown?.durationMs || 600}
             value={
               cooldown?.saving ? undefined : cooldown ? Math.max(0, cooldown.durationMs - cooldown.remainingMs) : 600
@@ -433,7 +436,7 @@ export function FastScannerView({
           />
           <div class="pk-fast-scanner__tools">
             {connectionStatus}
-            {!collection?.waiting && cooldown && cooldown.remainingMs > 0 && (
+            {!collection?.waiting && !needsAdvance && cooldown && cooldown.remainingMs > 0 && (
               <button
                 type="button"
                 class="pk-fast-scanner__tool"

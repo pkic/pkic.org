@@ -60,11 +60,12 @@ export function useBadgeCollection(
     document.addEventListener("visibilitychange", hideName);
     return () => document.removeEventListener("visibilitychange", hideName);
   }, []);
-  function display(onNext: () => void, saving: boolean, print?: (credential: string) => void) {
+  function display(onNext: () => void, saving: boolean, print?: (credential: string) => void, showName = true) {
     return {
       waiting,
       name,
       loading,
+      showName,
       saving,
       onNext,
       onPrint: credential && print ? () => print(credential) : undefined,

@@ -35,6 +35,82 @@ import {
   type EventScanRequest,
 } from "../../assets/shared/schemas/event-participation-scanning";
 describe("scanner foreground receipt and drain lifecycle", () => {
+  it.each(["collection", "entry"] as const)(
+    "shows one persistent canceled-registration result in %s scanning",
+    async (mode) => {
+      const previousHash = window.location.hash;
+      try {
+        window.location.hash =
+          mode === "collection"
+            ? "#/events/synthetic-event/scanner?scannerPurpose=collection"
+            : "#/events/synthetic-event/scanner";
+        portalSession.value = portalSessionFixture({ member: true });
+        await mount(true, ["attendance"], undefined, mode === "collection" ? "#/scanner/print" : undefined);
+        let captured: EventScanRequest | undefined;
+        mocks.persist.mockImplementation(async (intent) => {
+          captured = eventScanRequestSchema.parse({
+            ...intent,
+            scannerSession: { epochId: "99999999-9999-4999-8999-999999999999", sequence: 1 },
+          });
+          return {
+            scan: captured,
+            local: { outcome: "warning", reason: "missing_registration", message: "Known badge is not registered" },
+          };
+        });
+        mocks.drain.mockImplementation(async (send) => {
+          if (!captured || !send) return { uploaded: 0, state: "complete" };
+          const response = await send({ kind: "scan", eventId: "synthetic-event", scan: captured });
+          return { uploaded: response.ok ? 1 : 0, state: response.ok ? "complete" : "retry" };
+        });
+        vi.stubGlobal(
+          "fetch",
+          vi.fn(async () =>
+            Response.json({
+              operationId: captured!.operationId,
+              outcome: "warning",
+              reason: "canceled_registration",
+              recorded: true,
+              attendanceRecorded: true,
+              scannerReceipt: {
+                ...captured!.scannerSession!,
+                operationId: captured!.operationId,
+                receivedAt: "2026-11-20T12:00:00.000Z",
+              },
+            }),
+          ),
+        );
+        await act(() =>
+          Array.from(host.querySelectorAll("button"))
+            .find((button) => button.textContent?.trim() === "Start scanning")!
+            .click(),
+        );
+        await act(() => mocks.hardwareScan!(badgeCode));
+        await vi.waitFor(() =>
+          expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Registration canceled"),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+        expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Registration canceled");
+        expect(host.textContent).not.toContain("Ask the attendee");
+        expect(host.textContent).not.toContain("Known badge is not registered");
+        expect(host.textContent).not.toContain("Print this badge");
+        expect(host.querySelector('[aria-label="Attendee name"]')).toBeNull();
+        const nextLabel = mode === "collection" ? "Next attendee" : "Next badge";
+        await act(() => mocks.hardwareScan!("ZYXWVUTSRQPNMLKJ"));
+        expect(mocks.persist).toHaveBeenCalledOnce();
+        expect(host.textContent).toContain(nextLabel);
+        await act(() =>
+          Array.from(host.querySelectorAll("button"))
+            .find((button) => button.textContent?.trim() === nextLabel)!
+            .click(),
+        );
+        expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe(
+          mode === "collection" ? "Ready for badge collection" : "Ready for entry",
+        );
+      } finally {
+        window.location.hash = previousHash;
+      }
+    },
+  );
   it.each(["manual", "hardware"] as const)("retries an unsaved collection scan through %s input", async (input) => {
     const previousHash = window.location.hash;
     try {
@@ -57,7 +133,11 @@ describe("scanner foreground receipt and drain lifecycle", () => {
         await act(async () => start.click());
         await act(async () => mocks.hardwareScan!(badgeCode));
         await vi.waitFor(() => expect(host.textContent).toContain("retry the scan"));
-        await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Scan next now"]')!.click());
+        await act(() =>
+          Array.from(host.querySelectorAll("button"))
+            .find((button) => button.textContent?.trim() === "Next badge")!
+            .click(),
+        );
         await act(async () => mocks.hardwareScan!(badgeCode));
       }
       await vi.waitFor(() => expect(mocks.persist).toHaveBeenCalledTimes(2));
@@ -74,6 +154,10 @@ describe("scanner foreground receipt and drain lifecycle", () => {
       window.location.hash = "#/events/synthetic-event/scanner?scannerPurpose=collection";
       portalSession.value = portalSessionFixture({ member: true });
       await mount(true, ["attendance", "checkout"]);
+      mocks.persist.mockImplementation(async (scan) => ({
+        scan: eventScanCaptureIntentSchema.parse(scan),
+        local: { outcome: "eligible", reason: "eligible", message: "Registered" },
+      }));
       const onLaunch = vi.fn();
       await act(() =>
         render(
@@ -188,21 +272,24 @@ describe("scanner foreground receipt and drain lifecycle", () => {
       timeout: 1500,
     });
     expect(host.querySelector(".pk-fast-scanner__trail")?.textContent).toContain("scan saved on device");
-    await act(async () => {
-      worker.dispatchEvent(
-        new MessageEvent("message", {
-          data: eventScanResponseSchema.parse({
-            operationId: scan.operationId,
-            outcome: "denied",
-            reason: "revoked_badge",
-            recorded: true,
-            attendanceRecorded: false,
-          }),
-        }),
-      );
+    const receipt = eventScanResponseSchema.parse({
+      operationId: scan.operationId,
+      outcome: "denied",
+      reason: "revoked_badge",
+      recorded: true,
+      attendanceRecorded: false,
     });
+    await act(() => worker.dispatchEvent(new MessageEvent("message", { data: receipt })));
     expect(host.querySelector(".pk-fast-scanner__trail")?.textContent).toContain("Badge not valid");
-    expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Ready for entry");
+    expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Badge not valid");
+    expect(host.textContent).toContain("Next badge");
+    await act(() =>
+      Array.from(host.querySelectorAll("button"))
+        .find((button) => button.textContent?.trim() === "Next badge")!
+        .click(),
+    );
+    await act(() => worker.dispatchEvent(new MessageEvent("message", { data: receipt })));
+    expect(host.querySelector(".pk-fast-scanner__label")?.textContent).not.toBe("Badge not valid");
   });
   it.each([false, true])(
     "replaces provisional helper text with a matching foreground receipt (continuous=%s)",

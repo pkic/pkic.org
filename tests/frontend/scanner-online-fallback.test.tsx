@@ -188,7 +188,7 @@ describe("Online verification after a local badge miss", () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
-  it("accepts another badge after the verification and feedback deadlines while the first upload is pending", async () => {
+  it("accepts another badge after Next badge while the first upload is pending", async () => {
     await mount(true, ["attendance"]);
     captureMissingBadge();
     const requests: EventScanRequest[] = [];
@@ -237,6 +237,13 @@ describe("Online verification after a local badge miss", () => {
         await vi.advanceTimersByTimeAsync(1);
         mocks.hardwareScan!(nextBadge);
       });
+      expect(mocks.persist).toHaveBeenCalledTimes(1);
+      await act(async () =>
+        Array.from(host.querySelectorAll("button"))
+          .find((button) => button.textContent?.trim() === "Next badge")!
+          .click(),
+      );
+      await act(async () => mocks.hardwareScan!(nextBadge));
       expect(mocks.persist).toHaveBeenCalledTimes(2);
       await vi.waitFor(() => expect(requests).toHaveLength(2));
       expect(requests[1]!.badgeId).toBe(nextBadge);

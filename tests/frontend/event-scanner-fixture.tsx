@@ -164,7 +164,12 @@ afterEach(async () => {
   vi.clearAllMocks();
   vi.unstubAllGlobals();
 });
-export async function mount(ready: boolean, actions: EventScanRequest["action"][] = ["check"], sponsorId?: string) {
+export async function mount(
+  ready: boolean,
+  actions: EventScanRequest["action"][] = ["check"],
+  sponsorId?: string,
+  printHref?: string,
+) {
   mocks.ready = ready;
   mocks.state = ready ? "open" : "preparing";
   host = document.createElement("div");
@@ -180,6 +185,7 @@ export async function mount(ready: boolean, actions: EventScanRequest["action"][
         operatorUserId="11111111-1111-4111-8111-111111111111"
         allowedActions={actions}
         sponsorId={sponsorId}
+        printHref={printHref}
       />,
       host,
     );

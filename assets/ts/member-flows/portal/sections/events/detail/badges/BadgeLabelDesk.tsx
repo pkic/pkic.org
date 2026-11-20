@@ -106,6 +106,8 @@ function SessionLabelDesk({ slug, session }: { slug: string; session: PortalSess
         cameraError={camera.error}
         starting={camera.starting}
         busy={printing.busy}
+        needsAdvance={printing.needsAdvance}
+        onNextBadge={printing.advance}
         status={
           printing.error
             ? {
@@ -137,6 +139,7 @@ function SessionLabelDesk({ slug, session }: { slug: string; session: PortalSess
         onSides={setSides}
         onCopies={(value) => setCopies(String(value))}
         start={() => {
+          if (printing.needsAdvance) return;
           sound.unlock();
           continuous.current = true;
           void camera.start();
@@ -180,7 +183,7 @@ function SessionLabelDesk({ slug, session }: { slug: string; session: PortalSess
             resultsLabel="Matching attendees"
             sort="email"
             placeholder="Name, email, or organization"
-            disabled={printing.busy}
+            disabled={printing.busy || printing.needsAdvance}
             emptyMessage="No registered attendees found."
             errorMessage="Could not search attendees."
           />
@@ -190,7 +193,7 @@ function SessionLabelDesk({ slug, session }: { slug: string; session: PortalSess
 
         {printing.job && (
           <div class="pk-cluster">
-            <Button disabled={printing.busy} onClick={printing.reprint}>
+            <Button disabled={printing.busy || printing.needsAdvance} onClick={printing.reprint}>
               {design === "name_qr" ? "Print labels again" : "Print badges again"}
             </Button>
           </div>
@@ -218,6 +221,8 @@ export function BadgeLabelDeskView({
   cameraError,
   starting,
   busy,
+  needsAdvance = false,
+  onNextBadge,
   copies,
   onCopies,
   design,
@@ -236,6 +241,8 @@ export function BadgeLabelDeskView({
 }: {
   onOperatorPause?: (value: boolean) => void;
   status?: ScannerStatus;
+  needsAdvance?: boolean;
+  onNextBadge?: () => void;
   sound?: Pick<ReturnType<typeof usePrintScannerSound>, "label" | "toggleSound" | "test">;
   format?: "html" | "pdf";
   onFormat?: (value: "html" | "pdf") => void;
@@ -275,7 +282,7 @@ export function BadgeLabelDeskView({
                 label: "Use PDF",
                 multiple: true,
                 checked: format === "pdf",
-                disabled: busy,
+                disabled: busy || needsAdvance,
                 onSelect: () => onFormat(format === "pdf" ? "html" : "pdf"),
               },
             ]
@@ -284,14 +291,14 @@ export function BadgeLabelDeskView({
           id: "labels",
           label: "Labels",
           checked: design === "name_qr",
-          disabled: busy,
+          disabled: busy || needsAdvance,
           onSelect: () => onDesign("name_qr"),
         },
         {
           id: "badges",
           label: "Full badges",
           checked: design === "event_badge",
-          disabled: busy,
+          disabled: busy || needsAdvance,
           onSelect: () => onDesign("event_badge"),
         },
         ...(design === "name_qr"
@@ -300,7 +307,7 @@ export function BadgeLabelDeskView({
               id: String(count),
               label: `${formatNumber(count)} ${count === 1 ? "label" : "labels"}`,
               checked: copies === count,
-              disabled: busy,
+              disabled: busy || needsAdvance,
               onSelect: () => onCopies(count),
             }))
           : (["front_back", "front", "back"] as const).map((side, index) => ({
@@ -308,7 +315,7 @@ export function BadgeLabelDeskView({
               id: side,
               label: BADGE_PRINT_SIDE_LABELS[side],
               checked: sides === side,
-              disabled: busy,
+              disabled: busy || needsAdvance,
               onSelect: () => onSides(side),
             }))),
       ]}
@@ -368,12 +375,14 @@ export function BadgeLabelDeskView({
                 : status
             }
             statusActions={children}
+            needsAdvance={needsAdvance}
+            onNextBadge={onNextBadge}
             operatorControls={settings}
             message={busy || status ? "" : "Scan an attendee’s ticket."}
             cameraActive={cameraActive}
             cameraError={cameraError}
             cameraStarting={starting}
-            onCameraRetry={start}
+            onCameraRetry={needsAdvance ? undefined : start}
             preview={preview}
             onPreview={() => setPreview((value) => !value)}
             onExit={() => {
@@ -389,7 +398,7 @@ export function BadgeLabelDeskView({
         {!fullscreen && !cameraActive && (
           <>
             <p>{starting ? "Starting camera…" : "Camera off"}</p>
-            <Button variant="primary" disabled={busy || starting} onClick={start}>
+            <Button variant="primary" disabled={busy || starting || needsAdvance} onClick={start}>
               <IconVirtual /> Start camera
             </Button>
           </>
@@ -405,6 +414,7 @@ export function BadgeLabelDeskView({
         <div role="status" aria-live="polite">
           {busy ? "Preparing print document…" : status?.title}
           {status?.detail && <p>{status.detail}</p>}
+          {needsAdvance && onNextBadge && <Button onClick={onNextBadge}>Next badge</Button>}
           {cameraError && <ErrorAlert error={cameraError} />}
           {children}
         </div>

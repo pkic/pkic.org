@@ -80,6 +80,7 @@ export function scanFeedbackOutcome(
 
 export function scanEligibilityLabel(result: EventScanResponse): string {
   if (result.reason === "consent_required") return "Consent required";
+  if (result.reason === "canceled_registration") return "Registration canceled";
   if (result.outcome === "warning") {
     if (result.reason === "wrong_location") return "Known badge · location notice";
     if (result.reason === "wrong_attendance_mode") return "Check registration for this date or attendance mode";
@@ -91,6 +92,7 @@ export function scanEligibilityLabel(result: EventScanResponse): string {
 /** Registration feedback is shared by manual and fullscreen scanning. */
 export function scanFeedbackLabel(result: EventScanResponse | null, action: EventScanRequest["action"]): string {
   if (!result) return "Ready to scan";
+  if (result.reason === "canceled_registration") return "Registration canceled";
   if (result.admissionRecorded && result.admissionDecision) {
     const decision = `Admission ${admissionDecisionLabel(result.admissionDecision).toLowerCase()}`;
     return result.attendanceRecorded ? `${decision} · attendance recorded` : decision;

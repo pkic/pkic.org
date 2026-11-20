@@ -455,6 +455,30 @@ test("phone scanner guides staff through venue, search, offline entry and diagno
   ).toHaveAttribute("aria-selected", "true");
 });
 
+test("scanner warnings stay visible until Next badge on phone and desktop", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await signInAsE2eStaff(page, e2eAdminEmail("portal-agenda-fast-scanner-idle"));
+  await page.goto("/portal/#/events/pqc-conference-amsterdam-nl/scanner");
+  await page.getByRole("button", { name: "Record attendance", exact: true }).click();
+  const scanner = page.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
+  await expect(scanner).toBeVisible();
+  await page.keyboard.type("invalid-badge-code");
+  await page.keyboard.press("Enter");
+  await expect(scanner.locator(".pk-fast-scanner__label")).toHaveText("Unknown badge");
+  await page.waitForTimeout(1200);
+  await expect(scanner.locator(".pk-fast-scanner__label")).toHaveText("Unknown badge");
+  await expect(scanner.getByText(/Camera access is unavailable/)).toBeHidden();
+  await page.screenshot({ animations: "disabled", path: testInfo.outputPath("scanner-error-phone.png") });
+  await page.evaluate(async () => {
+    if (document.fullscreenElement) await document.exitFullscreen();
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.screenshot({ animations: "disabled", path: testInfo.outputPath("scanner-error-desktop.png") });
+  await scanner.getByRole("button", { name: "Next badge", exact: true }).click();
+  await expect(scanner.getByText("Ready for entry", { exact: true })).toBeVisible();
+  await expect(scanner.getByText(/Camera access is unavailable/)).toBeVisible();
+});
+
 test("continuous local eligibility checks queue a burst while attempt uploads are stalled", async ({
   page,
 }, testInfo) => {

@@ -94,6 +94,7 @@ export function EventScannerCapture({
     lastResult,
     clearFeedback,
     failed,
+    needsAdvance,
     captureStatus,
     setResult,
     message,
@@ -228,8 +229,8 @@ export function EventScannerCapture({
     stopCamera: badgeCamera.stop,
     refreshHistory: syncHistory.refresh,
   });
-  function clearCurrentScan(message?: string) {
-    badgeCamera.stop();
+  function clearCurrentScan(message?: string, stopCamera = true) {
+    if (stopCamera) badgeCamera.stop();
     collectionPrinting.clear();
     collection.clear();
     lastOperation.current = null;
@@ -294,6 +295,7 @@ export function EventScannerCapture({
     presentSavedEligibility,
     verifyQueuedScan,
     fastMode,
+    feedbackHeld: needsAdvance,
     manualOpen,
     cooldown,
     camera,
@@ -339,15 +341,9 @@ export function EventScannerCapture({
   const preparationStatus = { ...preparation.status, lastSync: syncHistory.lastSync };
   function nextCollectionAttendee() {
     if (busy || cooldown.saving || collectionPrinting.busy) return;
-    collectionPrinting.clear();
-    collection.clear();
-    lastOperation.current = null;
-    cancelVerification();
-    clearFeedback();
-    setMessage("Ready to scan");
-    cooldown.reset();
+    clearCurrentScan("Ready to scan", false);
     manualPaused.current = false;
-    manual.setOpen(false);
+    resetCaptureFields();
     if (fastMode && !badgeCamera.active) void camera();
   }
   function stopContinuousScanning() {
@@ -369,9 +365,13 @@ export function EventScannerCapture({
     manual.setOpen(false);
     setScannerTab("recent");
   }
-  const collectionPrint = collectionPrinting.available ? collectionPrinting.print : undefined;
   const collectionDisplay = badgeCollection
-    ? collection.display(nextCollectionAttendee, busy || cooldown.saving || collectionPrinting.busy, collectionPrint)
+    ? collection.display(
+        nextCollectionAttendee,
+        busy || cooldown.saving || collectionPrinting.busy,
+        result?.outcome === "eligible" && collectionPrinting.available ? collectionPrinting.print : undefined,
+        result?.outcome === "eligible",
+      )
     : undefined;
   const contextLabel = scannerContextLabel({ ...preparation.location, action, sponsorName, badgeCollection });
   const manualControls = scannerManualControlProps({
@@ -543,6 +543,8 @@ export function EventScannerCapture({
       {fastMode && (
         <FastScannerView
           collection={collectionDisplay}
+          needsAdvance={needsAdvance}
+          onNextBadge={nextCollectionAttendee}
           taskSwitchDisabled={busy || cooldown.saving}
           presentation={presentation}
           onPresentation={togglePresentation}

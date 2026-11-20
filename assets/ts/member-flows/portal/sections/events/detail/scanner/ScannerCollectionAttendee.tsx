@@ -5,20 +5,24 @@ export function ScannerCollectionAttendee({
   name,
   loading,
   saving,
+  showName = true,
   onPrint,
   onAdvance,
 }: {
   name: string | null;
   loading: boolean;
   saving?: boolean;
+  showName?: boolean;
   onPrint?: () => void;
   onAdvance?: () => void;
 }) {
   return (
     <>
-      <p class={onAdvance ? undefined : "pk-fast-scanner__attendee"} aria-label="Attendee name">
-        {name ?? (loading ? "Loading name…" : "Name unavailable. Ask the attendee or use staff search.")}
-      </p>
+      {showName && (
+        <p class={onAdvance ? undefined : "pk-fast-scanner__attendee"} aria-label="Attendee name">
+          {name ?? (loading ? "Loading name…" : "Name unavailable. Ask the attendee or use staff search.")}
+        </p>
+      )}
       {(onPrint || onAdvance) && (
         <div class="pk-cluster">
           {onPrint && (
