@@ -64,6 +64,7 @@ export interface AttendeeDayAttendanceRow {
   label: string | null;
   optionLabel: string | null;
   accessMode: EventAttendanceAccessMode;
+  waitlistAlternativeJson: string | null;
 }
 
 export interface AttendeeDayWaitlistRow {
@@ -78,6 +79,7 @@ export type AttendeeDayAttendance = {
   label: string | null;
   optionLabel: string | null;
   accessMode: EventAttendanceAccessMode;
+  waitlistAlternativeJson: string | null;
 };
 
 export type AttendeeDayWaitlist = {

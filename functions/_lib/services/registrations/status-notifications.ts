@@ -63,6 +63,7 @@ type DayAttendanceForEmail = Array<{
   label: string | null;
   optionLabel?: string | null;
   accessMode?: import("../../../../assets/shared/event-attendance-access").EventAttendanceAccessMode;
+  waitlistAlternativeJson?: string | null;
   startsAt?: string | null;
   endsAt?: string | null;
 }>;
@@ -137,6 +138,7 @@ function registrationDetailsData(context: RegistrationEmailContext, recipientEma
     attendanceLabel: attendanceData.attendanceLabel,
     dayAttendance: attendanceData.dayAttendance,
     ...attendanceData.venueDayStanding,
+    waitlistAlternatives: attendanceData.waitlistAlternatives,
     dayWaitlist,
     customAnswerRows,
     acceptedTermsText: acceptedTermsText || undefined,

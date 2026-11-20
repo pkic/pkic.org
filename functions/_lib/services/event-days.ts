@@ -10,12 +10,15 @@ import {
   eventDaysNotScheduledError,
 } from "./event-day-refusals";
 import { uuid } from "../utils/ids";
+import { stringifyJson } from "../utils/json";
+import { eventAttendanceAccessMode } from "../../../assets/shared/event-attendance-access";
 import { nowIso } from "../utils/time";
 import type { DatabaseLike, StatementLike } from "../types";
 import type { EventAttendanceOption } from "../../../assets/shared/schemas/event-configuration";
 import {
   attendanceOptionLabelSql,
   eventDayOptionAccessSql,
+  waitlistAlternativeOptionSql,
   registrationDayHoldsOptionSql,
 } from "./event-attendance-option-sql";
 
@@ -91,6 +94,31 @@ export function attendanceOptionLabel(days: readonly EventDayRecord[], value: st
     if (option) return option.label;
   }
   return null;
+}
+
+/**
+ * What an email says about a day selected in this request, before it is stored: the same
+ * fields `prepareRegistrationDayAttendance` reads for a stored day.
+ */
+export function selectedDayEmailAttendance(
+  day:
+    | Pick<EventDayRecord, "attendance_options_json" | "in_person_capacity" | "label" | "starts_at" | "ends_at">
+    | undefined,
+  attendanceType: string,
+) {
+  const options = day ? configuredAttendanceOptions(day) : [];
+  const option = options.find((candidate) => candidate.value === attendanceType);
+  const alternative = option?.waitlistAlternative
+    ? options.find((candidate) => candidate.value === option.waitlistAlternative && candidate.enabled !== false)
+    : undefined;
+  return {
+    label: day?.label ?? null,
+    optionLabel: option?.label ?? null,
+    accessMode: eventAttendanceAccessMode(option ?? { value: attendanceType }),
+    waitlistAlternativeJson: alternative ? stringifyJson(alternative) : null,
+    startsAt: day?.starts_at ?? null,
+    endsAt: day?.ends_at ?? null,
+  };
 }
 
 /** Recheck the schedule after a concurrent registration transition. */
@@ -169,6 +197,8 @@ export interface RegistrationDayAttendanceRow {
   label: string | null;
   optionLabel: string | null;
   accessMode: import("../../../assets/shared/event-attendance-access").EventAttendanceAccessMode;
+  /** The stored option suggested when this day's option is full. */
+  waitlistAlternativeJson: string | null;
   startsAt: string | null;
   endsAt: string | null;
   /** When the day was first held on this registration. */
@@ -181,7 +211,9 @@ export function prepareRegistrationDayAttendance(db: DatabaseLike, registrationI
   return db
     .prepare(`SELECT ed.day_date AS dayDate, rda.attendance_type AS attendanceType, ed.label AS label,
             ${attendanceOptionLabelSql("ed", "rda.attendance_type")} AS optionLabel,
-            ${eventDayOptionAccessSql("ed", "rda.attendance_type")} AS accessMode, ed.starts_at AS startsAt, ed.ends_at AS endsAt,
+            ${eventDayOptionAccessSql("ed", "rda.attendance_type")} AS accessMode,
+            ${waitlistAlternativeOptionSql("ed", "rda.attendance_type")} AS waitlistAlternativeJson,
+            ed.starts_at AS startsAt, ed.ends_at AS endsAt,
             rda.created_at AS heldSince, rda.updated_at AS changedAt
      FROM registration_day_attendance rda
      JOIN event_days ed ON ed.id = rda.event_day_id

@@ -156,6 +156,7 @@ export async function submitEventRegistration(
     attendanceLabel: attendanceData.attendanceLabel,
     dayAttendance: attendanceData.dayAttendance,
     ...attendanceData.venueDayStanding,
+    waitlistAlternatives: attendanceData.waitlistAlternatives,
     dayWaitlist,
     customAnswerRows,
     acceptedTermsText: acceptedTermsText || undefined,
