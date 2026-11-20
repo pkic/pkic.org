@@ -61,7 +61,11 @@ export function validateAuthorizationContext(
 export const accessGrantCreateSchema = z
   .object({
     userId: databaseIdSchema,
-    permission: permissionSchema,
+    /** Each one becomes a grant of its own; all are created together or none is. */
+    permissions: z
+      .array(permissionSchema)
+      .min(1, "Choose at least one permission.")
+      .max(64, "Choose 64 permissions or fewer."),
     ...scopedContextFields,
   })
   .superRefine(validateAuthorizationContext);
@@ -79,14 +83,14 @@ export const accessGrantResponseSchema = z.object({
 });
 export type AccessGrant = z.infer<typeof accessGrantResponseSchema>;
 export const accessGrantCreateResponseSchema = z.object({
-  grant: accessGrantResponseSchema,
+  grants: z.array(accessGrantResponseSchema),
 });
 
 // Implements permission_grants.
 export const accessGrantsCreateRouteSchema = {
   tags: ["Permissions"],
-  summary: "Create a permission grant",
-  description: "Grants a single permission to a user, optionally scoped and time-bounded.",
+  summary: "Create permission grants",
+  description: "Grants one or more permissions to a user, optionally scoped and time-bounded, in one command.",
   "x-pkic-auth": { required: true, scopes: ["access:grant"] },
   request: {
     body: {
@@ -96,7 +100,7 @@ export const accessGrantsCreateRouteSchema = {
   },
   responses: {
     "201": {
-      description: "Grant created.",
+      description: "Grants created.",
       content: {
         "application/json": { schema: accessGrantCreateResponseSchema },
       },
