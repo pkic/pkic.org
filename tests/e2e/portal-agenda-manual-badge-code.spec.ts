@@ -429,7 +429,7 @@ test("the protected printed short code works through manual offline capture and 
     await page.reload();
     await expect(page.getByRole("heading", { name: "Start scanning", exact: true })).toBeVisible();
     await expect(
-      page.getByRole("status", { name: "Scanner status", exact: true }).getByText("Offline", { exact: true }),
+      page.getByRole("status", { name: "Scanner status", exact: true }).getByText("Saved scanner", { exact: true }),
     ).toBeVisible();
     await expect(page.getByRole("button", { name: "Sync now", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Export sponsor leads", exact: true })).toHaveCount(0);
