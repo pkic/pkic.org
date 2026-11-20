@@ -48,7 +48,7 @@ import {
   type StudioOutput,
   type StudioPanel,
 } from "./studio/studio-layout";
-import { StudioPhone, useStudioPhone, useStudioPhonePanels } from "./studio/StudioPhone";
+import { StudioPhone, useStudioPhone, useStudioPhonePanels, useStudioPhoneView } from "./studio/StudioPhone";
 import { StudioPhoneHome } from "./studio/StudioPhoneHome";
 import { useStudioFullscreen } from "./studio/useStudioFullscreen";
 import { ProgramUndoToast, TransitionControl, useTakeShortcut } from "./studio/StudioSwitcher";
@@ -95,7 +95,10 @@ export function LiveSessionDesk({
   clock,
   approvedAgenda,
   agendaNotice = null,
+  eventPath,
 }: {
+  /** The event's own page, which the phone studio links back to. */
+  eventPath?: string;
   /** How the session stands against the agenda, or why the desk could not act, for the session bar. */
   agendaNotice?: StudioNoticeContent | null;
   slug: string;
@@ -127,11 +130,14 @@ export function LiveSessionDesk({
   const live = room.status === "live";
   const now = useBoundaryClock(useCallback((at: number) => at + 30000, []));
   const layout = useStudioLayout();
-  // The room's screens connect only while a Screens panel is open.
+  const phone = useStudioPhone();
+  const phonePanels = useStudioPhonePanels();
+  const [phoneView] = useStudioPhoneView();
+  // The room's screens connect only while a Screens panel is open: on the desk's grid, or as the phone's view.
   const roomScreens = useStudioScreens({
     slug,
     roomId,
-    enabled: layout.panels.some((panel) => panel.type === "screens"),
+    enabled: phone ? phoneView === "screens" : layout.panels.some((panel) => panel.type === "screens"),
   });
   const fullscreen = useStudioFullscreen();
   const studio = useRef<HTMLDivElement>(null);
@@ -185,8 +191,6 @@ export function LiveSessionDesk({
     sendProgram(liveScreenTake(target, current.preview));
   };
   useTakeShortcut(() => take("program"), live && !broadcasting);
-  const phone = useStudioPhone();
-  const phonePanels = useStudioPhonePanels();
   if (!state)
     return room.admissionRefusal ? (
       <Alert tone="danger">{liveRoomOpenFailure(room.admissionRefusal, "operator")}</Alert>
@@ -466,6 +470,7 @@ export function LiveSessionDesk({
               onClear={switcher.clear}
               onScene={switcher.previewScene}
               notice={notice}
+              eventPath={eventPath}
               home={<StudioPhoneHome key={shownId} targets={targets} send={sendProgram} />}
               panel={(type) => render(phonePanels.panel(type))}
             />

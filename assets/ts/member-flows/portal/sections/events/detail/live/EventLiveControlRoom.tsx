@@ -36,7 +36,10 @@ export function SelectedSessionDesk({
   sessions = [],
   agendaSession,
   onBrowse,
+  eventPath,
 }: {
+  /** The event's own page, which the phone studio links back to. */
+  eventPath?: string;
   slug: string;
   occurrenceId: string;
   roomId: string;
@@ -131,6 +134,7 @@ export function SelectedSessionDesk({
         clock={clock}
         broadcast={broadcast}
         activeOccurrenceId={activeId}
+        eventPath={eventPath}
       />
     </div>
   );
@@ -362,6 +366,7 @@ export function EventLiveControlRoom({
           sessions={ordered}
           agendaSession={agendaNow}
           onBrowse={(id) => choose(id)}
+          eventPath={eventPath}
         />
       ) : null}
     </div>

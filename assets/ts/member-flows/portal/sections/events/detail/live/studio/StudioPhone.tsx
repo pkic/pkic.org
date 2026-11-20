@@ -1,14 +1,15 @@
-import type { ComponentChildren } from "preact";
+import type { ComponentChildren, JSX } from "preact";
 import { useCallback, useEffect, useId, useRef, useState } from "preact/hooks";
 import { useMediaQuery } from "../../../../../../../hooks/useMediaQuery";
 import { useHashQueryParam } from "../../../../../../../hooks/useHashQueryParam";
 import type { LiveRoomState } from "../../../../../../../live-session/live-room-state";
 import { LiveOverlayPresentation } from "../../../../../../../live-session/LiveOverlayPresentation";
-import { APP_ICONS, type AppIcon } from "../../../../../../../components/icons/app-navigation";
+import { APP_ICONS, IconVenueExit, type AppIcon } from "../../../../../../../components/icons/app-navigation";
 import { ActionTile, ActionTiles } from "../../../../../../../ui/ActionTile";
 import { BottomSheet } from "../../../../../../../ui/BottomSheet";
 import { Button } from "../../../../../../../ui/Button";
 import { Dialog } from "../../../../../../../ui/Dialog";
+import { IconDemo } from "../../../../../../../ui/MediaIcons";
 import { Menu } from "../../../../../../../ui/Menu";
 import { SectionHeading } from "../../../../../../../ui/SectionHeading";
 import { splitHash } from "../../../../../../../ui/url-query";
@@ -36,6 +37,7 @@ export const STUDIO_PHONE_VIEWS = [
   "polls",
   "chat",
   "monitor",
+  "screens",
   "time",
   "message",
 ] as const;
@@ -72,7 +74,14 @@ export function useStudioPhonePanels(): { panel: (type: StudioPanelType) => Stud
 /** The views with a tab of their own; the rest sit behind More, so the bar keeps five tabs. */
 const TABBED: readonly StudioPhoneView[] = ["home", "speakers", "graphics", "questions"];
 const MORE = STUDIO_PHONE_VIEWS.filter((view) => !TABBED.includes(view));
-const PHONE_TABS: Record<StudioPhoneView, { label: string; icon: AppIcon }> = {
+/**
+ * Each view's name and the tab bar's glyph for it. A view behind More may draw its tile with a glyph of its own,
+ * where the app's glyph would look like another tile's.
+ */
+const PHONE_TABS: Record<
+  StudioPhoneView,
+  { label: string; icon: AppIcon; tile?: (props: JSX.SVGAttributes<SVGSVGElement>) => JSX.Element }
+> = {
   home: { label: "Home", icon: "home" },
   speakers: { label: STUDIO_PANEL_LABELS.speakers, icon: "speakers" },
   graphics: { label: STUDIO_PANEL_LABELS.graphics, icon: "graphics" },
@@ -80,6 +89,8 @@ const PHONE_TABS: Record<StudioPhoneView, { label: string; icon: AppIcon }> = {
   polls: { label: STUDIO_PANEL_LABELS.polls, icon: "polls" },
   chat: { label: STUDIO_PANEL_LABELS.chat, icon: "chat" },
   monitor: { label: "Monitors", icon: "monitors" },
+  // A screen showing a picture, apart from the monitors an operator watches.
+  screens: { label: STUDIO_PANEL_LABELS.screens, icon: "monitors", tile: IconDemo },
   time: { label: STUDIO_PANEL_LABELS.time, icon: "time" },
   message: { label: "Message", icon: "message" },
 };
@@ -91,6 +102,11 @@ function viewHref(view: StudioPhoneView): string {
   else params.set("panel", view);
   const query = params.toString();
   return `#${path}${query ? `?${query}` : ""}`;
+}
+
+/** The view a phone shows, which the address holds as `panel`. */
+export function useStudioPhoneView(): [StudioPhoneView, (view: StudioPhoneView) => void] {
+  return useHashQueryParam("panel", "home", STUDIO_PHONE_VIEWS);
 }
 
 /** Below this viewport width the studio is the one-handed phone layout. */
@@ -270,7 +286,10 @@ export function StudioPhone({
   panel,
   home,
   notice,
+  eventPath,
 }: {
+  /** The event's own page, which the More sheet links back to. */
+  eventPath?: string;
   /** The quick actions of the first tab. */
   home: ComponentChildren;
   /** The room's status line, if anything needs saying. */
@@ -292,7 +311,7 @@ export function StudioPhone({
   /** Draws one panel: its title, actions, menu and body. */
   panel: (type: StudioPanelType) => StudioPanelView;
 }) {
-  const [shown, show] = useHashQueryParam("panel", "home", STUDIO_PHONE_VIEWS);
+  const [shown, show] = useStudioPhoneView();
   const view = shown === "home" ? null : panel(shown);
   const sessionTimer = state.timers.find((timer) => timer.kind === "session");
   const [more, setMore] = useState(false);
@@ -384,7 +403,7 @@ export function StudioPhone({
         {more ? (
           <ActionTiles label="More studio panels">
             {MORE.map((type) => {
-              const Icon = APP_ICONS[PHONE_TABS[type].icon];
+              const Icon = PHONE_TABS[type].tile ?? APP_ICONS[PHONE_TABS[type].icon];
               return (
                 <li key={type}>
                   <ActionTile
@@ -403,6 +422,16 @@ export function StudioPhone({
                 </li>
               );
             })}
+            {eventPath ? (
+              <li>
+                <ActionTile
+                  href={`#${eventPath}`}
+                  icon={<IconVenueExit width="26" height="26" />}
+                  label="Back to the event"
+                  onClick={closeMore}
+                />
+              </li>
+            ) : null}
           </ActionTiles>
         ) : null}
       </BottomSheet>

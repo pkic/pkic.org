@@ -51,6 +51,7 @@ function PhoneStudio() {
         onClear={noCommand}
         onScene={noCommand}
         notice={null}
+        eventPath="/events/pqc-2026"
         home={view.body}
         panel={() => view}
       />

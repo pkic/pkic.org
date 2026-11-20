@@ -41,7 +41,7 @@ const sources = {
 };
 
 const hosts: HTMLElement[] = [];
-function mount(onScene = vi.fn()) {
+function mount(onScene = vi.fn(), eventPath?: string) {
   const host = document.createElement("div");
   document.body.append(host);
   hosts.push(host);
@@ -57,6 +57,7 @@ function mount(onScene = vi.fn()) {
         onClear={vi.fn()}
         onScene={onScene}
         notice={null}
+        eventPath={eventPath}
         home={null}
         panel={(type) => ({ title: type, body: null })}
       />,
@@ -164,7 +165,7 @@ describe("the studio on a phone", () => {
       tabs.at(-1)!.click();
     });
     const tiles = [...document.querySelectorAll<HTMLAnchorElement>(".pk-action-tiles .pk-action-tile")];
-    expect(tiles.map((tile) => tile.textContent)).toEqual(["Polls", "Chat", "Monitors", "Time", "Message"]);
+    expect(tiles.map((tile) => tile.textContent)).toEqual(["Polls", "Chat", "Monitors", "Screens", "Time", "Message"]);
     // A tile switches the panel in place and closes the sheet; its link carries the view for a new tab.
     expect(tiles[0]!.getAttribute("href")).toContain("panel=polls");
     void act(() => {
@@ -173,5 +174,23 @@ describe("the studio on a phone", () => {
     expect(host.querySelector('section[aria-label="polls"]')).not.toBeNull();
     expect(document.querySelector(".pk-action-tiles")).toBeNull();
     expect(tabs.at(-1)!.getAttribute("aria-current")).toBe("page");
+  });
+
+  it("offers the room's screens and a way back to the event at the end of More", () => {
+    expect(STUDIO_PHONE_VIEWS).toContain("screens");
+    const { host } = mount(vi.fn(), "/events/pqc-2026");
+    void act(() => {
+      [...host.querySelectorAll<HTMLElement>(".pk-app-tabbar__link")].at(-1)!.click();
+    });
+    const tiles = [...document.querySelectorAll<HTMLAnchorElement>(".pk-action-tiles .pk-action-tile")];
+    expect(tiles.map((tile) => tile.textContent).slice(-3)).toEqual(["Time", "Message", "Back to the event"]);
+    expect(tiles.find((tile) => tile.textContent === "Screens")!.getAttribute("href")).toContain("panel=screens");
+    // A real link to the event's page, which also closes the sheet.
+    const back = tiles.at(-1)!;
+    expect(back.getAttribute("href")).toBe("#/events/pqc-2026");
+    void act(() => {
+      back.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    expect(document.querySelector(".pk-action-tiles")).toBeNull();
   });
 });
