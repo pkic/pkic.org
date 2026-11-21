@@ -68,9 +68,6 @@ const EventStaffScanner = lazy(() =>
 const BadgeCredentials = lazy(() =>
   import("../events/detail/badges/BadgeCredentials").then((module) => ({ default: module.BadgeCredentials })),
 );
-const SponsorLeads = lazy(() =>
-  import("../events/detail/agenda/SponsorLeads").then((module) => ({ default: module.SponsorLeads })),
-);
 const AgendaEditor = lazy(() =>
   import("../events/detail/agenda/AgendaEditor").then((module) => ({ default: module.AgendaEditor })),
 );
@@ -423,11 +420,6 @@ export function GroupEventWorkspace({
                     slug={event.slug}
                     canManage={canManageScreens((permission) => hasEventAgendaPermission(event.id, permission))}
                   />
-                </Suspense>
-              )}
-              {activeTab === "leads" && (
-                <Suspense fallback={<Spinner />}>
-                  <SponsorLeads slug={event.slug} timeZone={event.timezone} />
                 </Suspense>
               )}
               {activeTab === "stats" && (

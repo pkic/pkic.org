@@ -14,15 +14,25 @@ export const sponsorLeadSchema = z.object({
   personalEmail: z.boolean(),
   capturedAt: utcInstantSchema,
   operatorName: z.string(),
+  sponsorName: z.string().optional(),
 });
 export const sponsorLeadListSchema = paginatedResponseSchema("leads", sponsorLeadSchema);
-export const sponsorLeadSponsorsQuerySchema = listQuerySchema(["name"] as const, { maxLimit: 100 });
+export const sponsorLeadDetailSchema = z.object({ lead: sponsorLeadSchema, sponsorName: z.string() });
+export const sponsorLeadRemovalResponseSchema = z.object({
+  removedCaptures: z.number().int().positive(),
+  remainingCaptures: z.number().int().nonnegative(),
+});
+export const sponsorLeadSponsorsQuerySchema = listQuerySchema(["name"] as const, { maxLimit: 100 }).extend({
+  sponsorId: databaseIdSchema.optional(),
+});
 export const sponsorLeadSponsorSchema = z.object({
   id: databaseIdSchema,
   name: z.string(),
+  capturedCount: z.number().int().nonnegative(),
   canView: z.boolean(),
   canCapture: z.boolean(),
   canExport: z.boolean(),
+  canRemoveAll: z.boolean(),
 });
 export const sponsorLeadSponsorsSchema = paginatedResponseSchema("sponsors", sponsorLeadSponsorSchema);
 export type SponsorLeadQuery = z.infer<typeof sponsorLeadQuerySchema>;
@@ -40,3 +50,9 @@ export const sponsorLeadCaptureSchema = z.object({
 export const sponsorLeadCapturesSchema = paginatedResponseSchema("captures", sponsorLeadCaptureSchema);
 export type SponsorLeadCapture = z.infer<typeof sponsorLeadCaptureSchema>;
 export type SponsorLeadCapturesQuery = z.infer<typeof sponsorLeadCapturesQuerySchema>;
+/** One operator's already captured badge, resolved online; no search or name inventory. */
+export const sponsorLeadConfirmationSchema = z.object({
+  name: z.string().nullable(),
+  title: z.string().nullable(),
+  organization: z.string().nullable(),
+});

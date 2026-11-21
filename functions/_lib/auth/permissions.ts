@@ -1,6 +1,13 @@
 import { activeOauthAuthorizationSql, oauthPermissionCeilingSql } from "./oauth/authorization-ceiling-query";
 import { scannerCapabilities } from "../../../assets/shared/event-scanner-permissions";
 import { eventTeamScannerRoleScopeSql } from "./event-team-scanner-scope";
+import {
+  sponsorLeadViewerExistsSql,
+  sponsorLeadViewerPredicateSql,
+  sponsorOrganizationCaptureExistsSql,
+  sponsorOrganizationCapturePredicateSql,
+} from "./sponsor-organization-lead-access";
+import { all } from "../db/queries";
 /**
  * Context-aware permission checking.
  *
@@ -8,7 +15,6 @@ import { eventTeamScannerRoleScopeSql } from "./event-team-scanner-scope";
  * permission vocabulary. Contextual grants come from D1; an OAuth/MCP token
  * can further restrict (never expand) those effective permissions.
  */
-import { all } from "../db/queries";
 import {
   guardAuthorizedDatabase,
   prepareAuthorizationGuard,
@@ -67,7 +73,20 @@ function contextGrantSelection(requested: string, bindings: unknown[]) {
      SELECT requested.request_index,requested.member_id,pg.permission,pg.context_type,pg.context_id
      FROM requested JOIN permission_grants pg ON pg.user_id=requested.user_id
      WHERE pg.revoked_at IS NULL
-       AND (pg.expires_at IS NULL OR pg.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+       AND (pg.expires_at IS NULL OR pg.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+     UNION ALL
+     SELECT DISTINCT requested.request_index,requested.member_id,'agenda:leads_capture','event_sponsor',sponsor.id
+     FROM requested JOIN identities linked_identity ON linked_identity.user_id=requested.user_id
+     JOIN users linked_operator ON linked_operator.id=linked_identity.user_id
+     JOIN sponsorships sponsor ON sponsor.organization_id=linked_identity.organization_id
+     WHERE linked_operator.active=1 AND linked_operator.pii_redacted_at IS NULL
+       AND linked_operator.merged_into_user_id IS NULL
+       AND ${sponsorOrganizationCapturePredicateSql("linked_identity", "sponsor")}
+     UNION ALL
+     SELECT DISTINCT requested.request_index,requested.member_id,lead_permission.value,'event_sponsor',sponsor.id
+     FROM requested JOIN sponsorships sponsor
+       ON ${sponsorLeadViewerPredicateSql("requested.user_id", "sponsor")}
+     JOIN json_each('["agenda:leads_view","agenda:leads_export"]') lead_permission`,
     bindings,
   };
 }
@@ -157,37 +176,12 @@ export async function computeGrantsForUser(
   userId: string,
   activeMemberId: string | null = null,
 ): Promise<PermissionGrant[]> {
-  const rows = await all<GrantRow>(
-    db,
-    `SELECT rp.permission AS permission, ur.context_type AS context_type, ur.context_id AS context_id
-     FROM user_roles ur
-     JOIN role_permissions rp ON rp.role_id = ur.role_id
-     WHERE ur.user_id = ?
-       AND ${eventTeamScannerRoleScopeSql("ur", "rp")}
-       AND ur.revoked_at IS NULL
-       AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-       AND (
-         ur.member_id IS NULL
-         OR (
-           ur.member_id = ?
-           AND ur.context_type = 'group'
-           AND EXISTS (
-             SELECT 1 FROM group_memberships gm
-              WHERE gm.group_id = ur.context_id
-                AND gm.user_id = ur.user_id
-                AND gm.member_id = ur.member_id
-                AND gm.left_at IS NULL
-           )
-         )
-       )
-     UNION ALL
-     SELECT pg.permission AS permission, pg.context_type AS context_type, pg.context_id AS context_id
-     FROM permission_grants pg
-     WHERE pg.user_id = ?
-       AND pg.revoked_at IS NULL
-       AND (pg.expires_at IS NULL OR pg.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
-    [userId, activeMemberId, userId],
-  );
+  const rows = (
+    await contextGrantStatement(db, "SELECT 0 AS request_index,? AS user_id,? AS member_id", [
+      userId,
+      activeMemberId,
+    ]).all<ContextGrantRow>()
+  ).results;
 
   return rows.map((row) => ({
     permission: row.permission,
@@ -213,6 +207,9 @@ export function tokenAllowsPermission(actor: AuthAdmin, permission: string): boo
     actor.scopes?.includes(permission) === true ||
     (scannerLegacyCompatible(permission) && actor.scopes?.includes("agenda:scan") === true)
   );
+}
+export function requireTokenPermission(actor: AuthAdmin, permission: string): void {
+  if (!tokenAllowsPermission(actor, permission)) throw new AppError(403, "SCOPE_REQUIRED", PERMISSION_DENIED_MESSAGE);
 }
 export function hasPermission(actor: AuthAdmin, permission: string, context?: PermissionContext): boolean {
   if (!tokenAllowsPermission(actor, permission)) {
@@ -283,21 +280,30 @@ export function permissionsAuthorizationEvidence(
       ]),
     ).values(),
   ];
-  return buildPermissionsAuthorizationEvidence(actor, unique, {
-    sql: `SELECT json_extract(value, '$.permission') AS permission,
+  return buildPermissionsAuthorizationEvidence(
+    actor,
+    unique,
+    {
+      sql: `SELECT json_extract(value, '$.permission') AS permission,
                  json_extract(value, '$.contextType') AS context_type,
                  json_extract(value, '$.contextId') AS context_id
             FROM json_each(?)`,
-    bindings: [
-      JSON.stringify(
-        unique.map(({ permission, context }) => ({
-          permission,
-          contextType: context?.type ?? null,
-          contextId: context?.id ?? null,
-        })),
-      ),
-    ],
-  });
+      bindings: [
+        JSON.stringify(
+          unique.map(({ permission, context }) => ({
+            permission,
+            contextType: context?.type ?? null,
+            contextId: context?.id ?? null,
+          })),
+        ),
+      ],
+    },
+    "all",
+    undefined,
+    unique.some(
+      ({ permission, context }) => permission === "agenda:leads_capture" && context?.type === "event_sponsor",
+    ),
+  );
 }
 
 /** The resource ID expression is a trusted source column, never request input. */
@@ -317,6 +323,8 @@ export function permissionAuthorizationEvidenceForResource(
     },
     "all",
     memberSelection,
+    ["agenda:leads_capture", "agenda:leads_view", "agenda:leads_export"].includes(permission) &&
+      context.type === "event_sponsor",
   );
 }
 
@@ -335,6 +343,7 @@ export function anyPermissionAuthorizationEvidenceFromSelection(
     required,
     "any",
     memberSelection,
+    false,
   );
 }
 /** Live alternatives for a trusted resource column, with delegated scopes still limiting each alternative. */
@@ -357,6 +366,8 @@ export function anyPermissionAuthorizationEvidenceForResource(
       bindings: [context.type, JSON.stringify(allowed)],
     },
     "any",
+    undefined,
+    false,
   );
 }
 
@@ -366,6 +377,7 @@ function buildPermissionsAuthorizationEvidence(
   required: AuthorizationEvidence,
   match: "all" | "any" = "all",
   memberSelection?: AuthorizationEvidence,
+  includeSponsorLeadCapacity = false,
 ): AuthorizationEvidence {
   if (unique.length === 0) return { sql: "SELECT 1", bindings: [] };
   if (unique.some(({ permission }) => !tokenAllowsPermission(actor, permission))) {
@@ -441,6 +453,20 @@ function buildPermissionsAuthorizationEvidence(
                              AND grant_row.context_id = requirement.context_id)
                        )
                   )
+                  ${
+                    includeSponsorLeadCapacity && unique.some(({ permission }) => permission === "agenda:leads_capture")
+                      ? `OR (requirement.permission='agenda:leads_capture' AND requirement.context_type='event_sponsor'
+                      AND ${sponsorOrganizationCaptureExistsSql("actor.id", "requirement.context_id")})`
+                      : ""
+                  }
+                  ${
+                    includeSponsorLeadCapacity &&
+                    unique.some(({ permission }) => ["agenda:leads_view", "agenda:leads_export"].includes(permission))
+                      ? `OR (requirement.permission IN ('agenda:leads_view','agenda:leads_export')
+                      AND requirement.context_type='event_sponsor'
+                      AND ${sponsorLeadViewerExistsSql("actor.id", "requirement.context_id")})`
+                      : ""
+                  }
                   ${actor.oauthAuthorizationId ? ")" : ""}
                 )
              )

@@ -23,7 +23,13 @@ function json(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
 }
 
-async function mount(access: boolean, canView = true, canExport = false, refused = false): Promise<string[]> {
+async function mount(
+  access: boolean,
+  canView = true,
+  canExport = false,
+  refused = false,
+  canCapture = false,
+): Promise<string[]> {
   const requests: string[] = [];
   const event = eventDetailResponseSchema.parse({
     event: {
@@ -57,7 +63,17 @@ async function mount(access: boolean, canView = true, canExport = false, refused
           return json({ error: { code: "FORBIDDEN", message: "Sponsor access is no longer available." } }, 403);
         return json(
           sponsorLeadSponsorsSchema.parse({
-            sponsors: [{ id: sponsorId, name: "Authorized sponsor", canView, canExport, canCapture: false }],
+            sponsors: [
+              {
+                id: sponsorId,
+                name: "Authorized sponsor",
+                capturedCount: 0,
+                canView,
+                canExport,
+                canCapture,
+                canRemoveAll: canView,
+              },
+            ],
             page,
           }),
         );
@@ -108,15 +124,9 @@ describe("sponsor-only event contacts route", () => {
     [false, true],
   ])("opens permitted view/export scope without the owning group workspace", async (canView, canExport) => {
     const requests = await mount(true, canView, canExport);
-    const open = await vi.waitFor(() => {
-      const button = host!.querySelector<HTMLButtonElement>('button[aria-label="Open leads for Authorized sponsor"]');
-      expect(button).not.toBeNull();
-      return button!;
-    });
+    await vi.waitFor(() => expect(host!.textContent).toContain("Authorized sponsor"));
     expect(host!.querySelector("h2")?.textContent).toBe("Sponsor-scoped event");
-    await act(() => {
-      open.click();
-    });
+    expect(host!.querySelector('button[aria-label="Open leads for Authorized sponsor"]')).toBeNull();
     if (canView) {
       await vi.waitFor(() => expect(host!.textContent).toContain("Consenting attendee"));
       expect(requests).toContain(contactsPath);
@@ -124,9 +134,11 @@ describe("sponsor-only event contacts route", () => {
       expect(requests).not.toContain(contactsPath);
       expect(host!.textContent).not.toContain("attendee@example.test");
     }
-    await act(() => {
-      host!.querySelector<HTMLButtonElement>('button[aria-label="Sponsor actions"]')!.click();
-    });
+    if (canExport)
+      await act(() => {
+        host!.querySelector<HTMLButtonElement>('button[aria-label="Sponsor actions"]')!.click();
+      });
+    else expect(host!.querySelector('button[aria-label="Sponsor actions"]')).toBeNull();
     expect(Boolean(host!.querySelector('a[href$="/leads.csv"]'))).toBe(canExport);
     expect(requests).toContain(eventPath);
     expect(requests).toContain(discoveryPath);
@@ -134,9 +146,16 @@ describe("sponsor-only event contacts route", () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
-  it("refuses capture-only access before requesting contact discovery", async () => {
+  it("opens the sponsor leads page for a capture-only operator's own scans", async () => {
+    const requests = await mount(true, false, false, false, true);
+    await vi.waitFor(() => expect(host!.textContent).toContain("My lead scans"));
+    expect(host!.querySelector('button[aria-label="Open leads for Authorized sponsor"]')).toBeNull();
+    await vi.waitFor(() => expect(requests).toContain(contactsPath));
+  });
+
+  it("refuses a route without sponsor lead access before requesting discovery", async () => {
     const requests = await mount(false);
-    await vi.waitFor(() => expect(host!.querySelector('[role="alert"]')?.textContent).toContain("view or export"));
+    await vi.waitFor(() => expect(host!.querySelector('[role="alert"]')).not.toBeNull());
     expect(requests).toEqual([eventPath]);
     expect(host!.querySelector("table")).toBeNull();
     expect(navigate).not.toHaveBeenCalled();

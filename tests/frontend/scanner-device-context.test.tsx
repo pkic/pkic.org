@@ -7,6 +7,8 @@ import { useScannerDevice } from "../../assets/ts/member-flows/portal/sections/e
 const mocks = vi.hoisted(() => ({ read: vi.fn(async () => ({ state: "open" })), prepare: vi.fn(), next: vi.fn() }));
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-offline-context", () => ({
   readScannerOfflineEpoch: mocks.read,
+  scannerOfflineLeaseCurrent: (epoch: { leadLease?: { expiresAt: string } }) =>
+    Boolean(epoch.leadLease && Date.parse(epoch.leadLease.expiresAt) > Date.now()),
 }));
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-device-ledger", () => ({
   prepareScannerDevice: async () => "11111111-1111-4111-8111-111111111111",
@@ -91,4 +93,22 @@ it("retries device preparation after an initial failure", async () => {
   await act(async () => scanner.retry());
   await vi.waitFor(() => expect(scanner.ready).toBe(true));
   expect(mocks.prepare).toHaveBeenCalledTimes(2);
+});
+
+it("keeps a sponsor scanner unready without a current lease for that sponsor", async () => {
+  const sponsorId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const otherSponsorId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  mocks.prepare.mockResolvedValueOnce({
+    epochId: id,
+    deviceId: id,
+    state: "open",
+    leadLease: { sponsorId: otherSponsorId, expiresAt: "2030-01-01T00:00:00.000Z" },
+  });
+  function Scanner() {
+    const scanner = useScannerDevice("synthetic", id, sponsorId);
+    return <output>{scanner.ready ? "ready" : "preparing"}</output>;
+  }
+  await act(async () => render(<Scanner />, host));
+  await vi.waitFor(() => expect(mocks.prepare).toHaveBeenCalledOnce());
+  expect(host.textContent).toBe("preparing");
 });

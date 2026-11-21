@@ -6,6 +6,7 @@
  * normal user session, and every sponsor request re-derives capacity from D1.
  */
 import type { SponsorCapacity } from "../../../assets/shared/schemas/sponsor-access";
+import { activeEventSponsorSql } from "./sponsor-organization-lead-access";
 import { all, first } from "../db/queries";
 import type { AuthorizationEvidence } from "../db/authorization-guard";
 import { AppError } from "../errors";
@@ -26,14 +27,7 @@ export interface SponsorshipCapacityRow {
   contact_email: string;
 }
 
-export const ACTIVE_EVENT_SPONSORSHIP_SQL = `
-  s.sponsor_type = 'event'
-  AND s.pipeline_stage = 'active'
-  AND s.ended_reason IS NULL
-  AND (s.renewal_date IS NULL OR s.renewal_date > strftime('%Y-%m-%d','now'))
-  AND s.event_id IS NOT NULL
-  AND s.contact_email IS NOT NULL
-`;
+export const ACTIVE_EVENT_SPONSORSHIP_SQL = `${activeEventSponsorSql("s")} AND s.contact_email IS NOT NULL`;
 
 const USER_SPONSOR_EMAILS_CTE = `
   user_sponsor_emails(normalized_email) AS (

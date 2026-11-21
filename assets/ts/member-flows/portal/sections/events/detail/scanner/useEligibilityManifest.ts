@@ -1,5 +1,5 @@
 import { SCANNER_ELIGIBILITY_REFRESH_MS } from "../../../../../../../shared/event-offline-expiry";
-import { saveScannerOfflineContext } from "./scanner-offline-context";
+import { saveScannerOfflineContext, type ScannerOfflinePreparation } from "./scanner-offline-context";
 import type { ScannerOfflineContext } from "../../../../../../../shared/schemas/event-scanner-offline-context";
 import { scannerCollectorPath, scannerContextCurrent } from "./scanner-offline-context";
 import type { EventScanRequest } from "../../../../../../../shared/schemas/event-participation-scanning";
@@ -230,8 +230,37 @@ export function useScannerOfflinePreparation(
   expectedScope?: { occurrenceId: string | null; roomId: string | null },
   allowedActions?: readonly EventScanRequest["action"][],
   purpose: "scan" | "collection" = "scan",
+  sponsorId?: string,
 ) {
   const preparedActions = useMemo(() => allowedActions ?? [action], [allowedActions, action]);
+  const source = useMemo<ScannerOfflinePreparation | null>(() => {
+    if (action !== "lead") return manifest;
+    const lease = epoch?.leadLease;
+    if (!lease || lease.sponsorId !== sponsorId || !epoch?.epochId || !session) return null;
+    return {
+      operatorUserId: session.identity.id,
+      enrollment: {
+        eventId: lease.eventId,
+        deviceId: epoch.deviceId,
+        epochId: epoch.epochId,
+        writtenAt: epoch.leadLeaseReceivedAt ?? Math.min(Date.now(), Date.parse(lease.serverNow)),
+      },
+      occurrenceId: null,
+      roomId: null,
+      publishedRevision: null,
+      serverNow: lease.serverNow,
+      expiresAt: lease.expiresAt,
+    };
+  }, [
+    action,
+    manifest,
+    epoch?.leadLease,
+    epoch?.leadLeaseReceivedAt,
+    epoch?.epochId,
+    epoch?.deviceId,
+    session,
+    sponsorId,
+  ]);
   const prepareCode = useContext(ScannerCodePreparation);
   const route = scannerCollectorPath(window.location.hash);
   const hasExpectedScope = expectedScope !== undefined;
@@ -250,17 +279,18 @@ export function useScannerOfflinePreparation(
       prepareCode &&
       session &&
       epoch &&
-      manifest &&
+      source &&
       (!hasExpectedScope ||
-        (manifest.occurrenceId === expectedOccurrenceId && (manifest.roomId ?? null) === expectedRoomId))
+        (source.occurrenceId === expectedOccurrenceId && (source.roomId ?? null) === expectedRoomId))
     ) {
       setPreparing(true);
       void saveScannerOfflineContext({
         slug,
         session,
         epoch,
-        manifest,
+        manifest: source,
         action,
+        sponsorId,
         purpose,
         allowedActions: preparedActions,
         targetLabel,
@@ -285,6 +315,7 @@ export function useScannerOfflinePreparation(
   }, [
     slug,
     action,
+    sponsorId,
     purpose,
     preparedActions,
     targetLabel,
@@ -294,7 +325,7 @@ export function useScannerOfflinePreparation(
     expectedRoomId,
     session,
     epoch,
-    manifest,
+    source,
     prepareCode,
     attempt,
     route,
@@ -311,13 +342,14 @@ export function useScannerOfflinePreparation(
     prepared.route === route &&
     prepared.slug === slug &&
     prepared.action === action &&
+    prepared.sponsorId === sponsorId &&
     (prepared.purpose ?? "scan") === purpose &&
     prepared.operatorUserId === session.identity.id &&
     prepared.sessionId === session.sessionId &&
     prepared.epochId === epoch.epochId &&
     prepared.deviceId === epoch.deviceId &&
-    prepared.occurrenceId === manifest?.occurrenceId &&
-    prepared.roomId === (manifest?.roomId ?? null) &&
+    prepared.occurrenceId === source?.occurrenceId &&
+    prepared.roomId === (source?.roomId ?? null) &&
     (!hasExpectedScope || (prepared.occurrenceId === expectedOccurrenceId && prepared.roomId === expectedRoomId)) &&
     scannerContextCurrent(prepared)
       ? prepared
