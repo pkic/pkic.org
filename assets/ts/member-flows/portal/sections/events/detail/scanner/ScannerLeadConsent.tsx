@@ -11,14 +11,14 @@ export interface ScannerLeadConsentProps {
 /** One operator acknowledgement gates this lead scanner run. */
 export function ScannerLeadConsent({ confirmed, field, onChange }: ScannerLeadConsentProps) {
   return (
-    <Field label="Before you start" {...field} required group>
+    <Field label="Attendee permission" labelHidden {...field} required group>
       {(control) => (
         <Checkbox
           {...control}
           name="consentConfirmed"
           checked={confirmed}
           onChange={(event) => onChange(event.currentTarget.checked)}
-          label="I will ask each attendee for permission before scanning."
+          label="I will ask permission before scanning each attendee’s badge."
         />
       )}
     </Field>

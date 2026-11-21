@@ -144,22 +144,21 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
         await manual.getByRole("button", { name: "Confirm lead", exact: true }).click();
         await expect(manual).not.toBeVisible();
         await expect(page.getByRole("button", { name: "Next", exact: true })).toBeVisible();
+        await expect(page.getByText("Saved for upload", { exact: true })).toBeVisible();
+        await expect.poll(async () => (await scannerStorage(page)).pending.length).toBe(expectedCount);
         if (expectedCount === 1) {
           await page.getByRole("button", { name: "Next", exact: true }).click();
+          await expect(
+            page.getByRole("status", { name: "Scanner status", exact: true }).getByText("Offline · 1 awaiting upload"),
+          ).toBeVisible();
           await openScannerManualEntry(page);
           await expect(manual.getByLabel("Badge code", { exact: true })).toHaveValue("");
           await expect(
-            page.getByRole("checkbox", { name: "I will ask each attendee for permission before scanning." }),
+            page.getByRole("checkbox", { name: "I will ask permission before scanning each attendee’s badge." }),
           ).toHaveCount(0);
           await manual.getByRole("button", { name: "Cancel", exact: true }).click();
           await expect(manual).not.toBeVisible();
         }
-        await expect(
-          page
-            .getByRole("status", { name: "Scanner status", exact: true })
-            .getByText(new RegExp(`^${expectedCount} awaiting upload(?: · syncing…)?$`)),
-        ).toBeVisible();
-        await expect.poll(async () => (await scannerStorage(page)).pending.length).toBe(expectedCount);
       }
       offlineRecords = (await scannerStorage(page)).pending
         .map((record) => ({ ...record, scan: enrolledEventScanRequestSchema.parse(record.scan) }))
@@ -226,9 +225,7 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
       expect(replay.status()).toBe(200);
       expect(eventScanResponseSchema.parse(await replay.json())).toEqual(archived!.receipt);
     }
-    await expect(
-      page.getByRole("status", { name: "Scanner status", exact: true }).getByText("All scans synced", { exact: true }),
-    ).toBeVisible();
+    await expect(page.getByRole("status", { name: "Scanner status", exact: true })).toHaveCount(0);
     const attendanceAfterResponse = await staff.request.get(attendancePath);
     expect(attendanceAfterResponse.status()).toBe(200);
     expect(attendanceSummarySchema.parse(await attendanceAfterResponse.json()).observed).toEqual(attendanceBefore);

@@ -160,15 +160,6 @@ function ScopedScannerRoute({ slug, sponsorId }: { slug: string; sponsorId?: str
           }
           sponsorId={sponsorId}
           sponsorName={scannerAccess?.sponsors.find((sponsor) => sponsor.id === sponsorId)?.name}
-          canExportLeads={Boolean(
-            sponsorId &&
-            portalSession.value?.staff?.grants.some(
-              (grant) =>
-                grant.permission === "agenda:leads_export" &&
-                grant.contextType === "event_sponsor" &&
-                grant.contextId === sponsorId,
-            ),
-          )}
           operatorUserId={portalSession.value?.identity.id ?? ""}
           canAdmitExceptions={
             !sponsorId && can("agenda:admit_exceptions") && Boolean(scannerPermission(can, "agenda:admit"))

@@ -45,7 +45,6 @@ export function useEventScannerCaptureController({
   occurrenceId = null,
   sponsorId,
   sponsorName,
-  canExportLeads = false,
   allowedActions = scanActionSchema.options,
   collectorContext,
   onSignIn,
@@ -423,7 +422,7 @@ export function useEventScannerCaptureController({
   const uploadState = { pending, online, syncing, uploadStatus };
   const connection = (
     <ScannerConnectionStatus
-      compact={fastMode}
+      compact={fastMode || action === "lead"}
       {...uploadState}
       ready={pendingReadyScope === `${slug}:${operatorUserId}`}
       collector={Boolean(collectorContext)}
@@ -515,7 +514,6 @@ export function useEventScannerCaptureController({
       manualOpen,
       recentVisible,
       collectionDisplay,
-      canExportLeads,
     },
     status: {
       preferences,

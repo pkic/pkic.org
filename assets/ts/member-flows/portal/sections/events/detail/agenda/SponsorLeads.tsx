@@ -146,7 +146,6 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
                   sponsorName={selected.name}
                   operatorUserId={portalSession.value?.identity.id ?? ""}
                   allowedActions={["lead"]}
-                  canExportLeads={selected.canExport}
                 />
               </Suspense>
             ) : selected.canView ? (

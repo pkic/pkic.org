@@ -11,7 +11,6 @@ export interface EventScannerProps {
   sponsorId?: string;
   sponsorName?: string;
   canAdmitExceptions?: boolean;
-  canExportLeads?: boolean;
   allowedActions?: readonly EventScanRequest["action"][];
   collectorContext?: ScannerOfflineContext;
   onSignIn?: () => void;

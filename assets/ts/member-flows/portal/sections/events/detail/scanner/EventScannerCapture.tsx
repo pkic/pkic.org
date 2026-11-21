@@ -1,7 +1,6 @@
 import { ScannerCollectionAttendee } from "./ScannerCollectionAttendee";
 import { ScannerDiagnosticsView } from "./ScannerDiagnosticsView";
 import { ScannerWorkspace } from "./ScannerWorkspace";
-import { ScannerLeadExport } from "./ScannerLeadExport";
 import { ScannerCaptureControls, ScannerManualControls, ScannerOfflineSignInButton } from "./ScannerCaptureControls";
 import { ScannerCamera } from "./ScannerCamera";
 import { ScannerLaunchPanel } from "./ScannerLaunchPanel";
@@ -84,7 +83,6 @@ export function EventScannerCapture(props: EventScannerProps) {
     manualOpen,
     recentVisible,
     collectionDisplay,
-    canExportLeads,
   } = controls;
   const {
     preferences,
@@ -105,6 +103,8 @@ export function EventScannerCapture(props: EventScannerProps) {
     offline,
     collectionPrinting,
   } = status;
+  const leadSetup = action === "lead" && !fastMode && !leadRunStarted;
+  const leadStatusNeeded = action !== "lead" || (!result && (offline || pending > 0));
   return (
     <div ref={scannerShell}>
       <ScannerWorkspace
@@ -121,13 +121,26 @@ export function EventScannerCapture(props: EventScannerProps) {
         }}
         launch={
           <ScannerLaunchPanel
-            title={action === "lead" ? "Lead scanner" : collectorContext ? contextLabel : undefined}
-            connection={connection}
+            title={
+              action === "lead"
+                ? leadSetup
+                  ? "Before you start"
+                  : "Sponsor leads"
+                : collectorContext
+                  ? contextLabel
+                  : undefined
+            }
+            connection={leadStatusNeeded ? connection : null}
+            connectionBelow={action === "lead"}
             context={
-              !collectorContext && (action === "lead" || occurrenceId) ? { contextLabel, target, timeZone } : undefined
+              !collectorContext && action === "lead" && props.sponsorName
+                ? { contextLabel: props.sponsorName, target: null, timeZone: null, quiet: true }
+                : !collectorContext && occurrenceId
+                  ? { contextLabel, target, timeZone }
+                  : undefined
             }
             feedback={
-              result || pending > 0 || message !== "Ready to scan"
+              result || message !== "Ready to scan" || (action !== "lead" && pending > 0)
                 ? {
                     result,
                     action,
@@ -192,7 +205,7 @@ export function EventScannerCapture(props: EventScannerProps) {
                 mode={mode}
                 canStart={captureReady}
                 leadConsent={
-                  action === "lead" && !fastMode && !leadRunStarted
+                  leadSetup
                     ? { confirmed: consentConfirmed, field: form.of("consentConfirmed"), onChange: setConsent }
                     : undefined
                 }
@@ -213,9 +226,6 @@ export function EventScannerCapture(props: EventScannerProps) {
           >
             {!fastMode && collectionDisplay?.waiting && (
               <ScannerCollectionAttendee {...collectionDisplay} onAdvance={nextCollectionAttendee} />
-            )}
-            {!collectorContext && sponsorId && canExportLeads && (
-              <ScannerLeadExport slug={slug} sponsorId={sponsorId} />
             )}
           </ScannerLaunchPanel>
         }

@@ -21,7 +21,7 @@ export function scannerContextLabel({
   rooms: ReadonlyArray<{ id: string; name: string }>;
 }): string {
   if (badgeCollection) return "Badge collection";
-  if (action === "lead") return `${sponsorName || "Sponsor lead capture"} · Event-wide`;
+  if (action === "lead") return sponsorName || "Sponsor leads";
   const place =
     targetLabel || (targetId ? "Session check-in" : action === "checkout" ? "Venue exit" : "Venue entrance");
   return roomId ? `${place} · ${rooms.find((room) => room.id === roomId)?.name ?? "Room"}` : place;
@@ -32,12 +32,15 @@ export function ScannerCaptureContext({
   contextLabel,
   target,
   timeZone,
+  quiet = false,
 }: {
   contextLabel: string;
   target: ScannerTarget | null;
   /** The event's clock the session times are on. */
   timeZone: ClockZone | null;
+  quiet?: boolean;
 }) {
+  if (quiet) return <p class="pk-muted">For {contextLabel}</p>;
   return (
     <div class="pk-stack pk-stack--snug">
       <strong>{contextLabel}</strong>

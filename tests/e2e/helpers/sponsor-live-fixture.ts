@@ -115,7 +115,7 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
       sponsorType: "event",
       eventId: event.id,
       tier: "Leader",
-      nonMemberName: `Synthetic lead sponsor ${stamp}`,
+      nonMemberName: `Synthetic sponsor ${stamp.slice(0, 8)}`,
       contactName: "Sponsor fixture contact",
       contactEmail: `lead-sponsor-${stamp}@example.test`,
       renewalDate: "2027-12-31",
@@ -177,7 +177,7 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
 
 async function openManualBadgeEntry(page: Page) {
   const acknowledgement = page.getByRole("checkbox", {
-    name: "I will ask each attendee for permission before scanning.",
+    name: "I will ask permission before scanning each attendee’s badge.",
     exact: true,
   });
   if (await acknowledgement.isVisible()) await acknowledgement.check();
@@ -242,7 +242,7 @@ export async function captureSponsorBadge(
   await expect(manual.getByLabel("Badge code", { exact: true })).toHaveValue("");
   await expect(manual.getByLabel("Badge code", { exact: true })).not.toHaveAttribute("aria-invalid", "true");
   await expect(
-    page.getByRole("checkbox", { name: "I will ask each attendee for permission before scanning." }),
+    page.getByRole("checkbox", { name: "I will ask permission before scanning each attendee’s badge." }),
   ).toHaveCount(0);
   await manual.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(manual).not.toBeVisible();
