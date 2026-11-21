@@ -127,7 +127,7 @@ export function eventAppDestinations(event: EventAppSubject, session: PortalSess
     destinations.push({
       id: "lead-scanner",
       label: "Lead scanner",
-      tabLabel: "Leads",
+      tabLabel: "Scanner",
       // One sponsor opens its scanner directly; several are chosen between explicitly.
       href: href(
         scanners.sponsors.length === 1
@@ -139,7 +139,7 @@ export function eventAppDestinations(event: EventAppSubject, session: PortalSess
   if (event.sponsorLeadAccess)
     destinations.push({
       id: "sponsor-leads",
-      label: "Sponsor leads",
+      label: "Leads",
       href: href(base + "/leads"),
       icon: "leads",
     });

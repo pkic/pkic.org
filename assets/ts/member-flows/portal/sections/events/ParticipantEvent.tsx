@@ -9,6 +9,7 @@ import {
 } from "../../../../../shared/event-participation-link";
 import type { ComponentChildren } from "preact";
 import { eventParticipantRecordPath } from "../../../../../shared/event-participant-paths";
+import { eventClock } from "../../../../../shared/event-clock";
 import { useBoundaryClock } from "../../../../hooks/useBoundaryClock";
 import { useData } from "../../../../hooks/useData";
 import { getJson, ApiClientError } from "../../../../shared/api-client";
@@ -49,6 +50,9 @@ const MyPromotionKits = lazy(() =>
 const MySessionManagement = lazy(() =>
   import("./detail/participation/MySessionManagement").then((module) => ({ default: module.MySessionManagement })),
 );
+const SponsorLeads = lazy(() =>
+  import("./detail/agenda/SponsorLeads").then((module) => ({ default: module.SponsorLeads })),
+);
 type EventDetail = z.infer<typeof eventDetailResponseSchema>["event"];
 type Selection = {
   kind?: "registration" | "proposal";
@@ -64,6 +68,7 @@ const PAGE_LABELS: Record<string, string> = {
   agenda: "My agenda",
   promotion: "Share & Invite",
   "lead-scanner": "Lead scanner",
+  "sponsor-leads": "Leads",
   "session-management": "My sessions",
   ticket: "Ticket",
   "check-in": "Check in",
@@ -122,11 +127,13 @@ export function ParticipantEvent({
               ? "promotion"
               : tab === "lead-scanner"
                 ? "lead-scanner"
-                : tab === "session-management"
-                  ? "session-management"
-                  : (tab === "ticket" && !ticketless) || tab === "more" || tab === "virtual" || tab === "check-in"
-                    ? tab
-                    : "overview";
+                : tab === "leads"
+                  ? "sponsor-leads"
+                  : tab === "session-management"
+                    ? "session-management"
+                    : (tab === "ticket" && !ticketless) || tab === "more" || tab === "virtual" || tab === "check-in"
+                      ? tab
+                      : "overview";
   const tabs = [
     { id: "overview", label: "Overview", href: href(base) },
     { id: "program", label: "Agenda", href: href(eventAgendaRoute(event.slug)) },
@@ -229,6 +236,14 @@ export function ParticipantEvent({
         </Suspense>
       ) : tab === "lead-scanner" ? (
         <ParticipantLeadScanner eventId={event.id} slug={event.slug} scannerAccess={event.scannerAccess} />
+      ) : tab === "leads" ? (
+        "sponsorLeadAccess" in event && event.sponsorLeadAccess ? (
+          <Suspense fallback={<Spinner label="Loading sponsor leads…" />}>
+            <SponsorLeads slug={event.slug} timeZone={eventClock(event)} />
+          </Suspense>
+        ) : (
+          <Alert tone="danger">Sponsor leads are not available for your current identity.</Alert>
+        )
       ) : tab === "submissions" ? (
         <ParticipantProposals event={event} />
       ) : tab === "virtual" ? (

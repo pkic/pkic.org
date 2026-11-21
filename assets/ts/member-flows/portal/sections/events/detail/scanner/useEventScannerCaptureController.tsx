@@ -22,7 +22,7 @@ import { useScannerHardware } from "./useScannerHardware";
 import { scannerManualControlProps, scannerStartMessage } from "./ScannerCaptureControls";
 import { useScannerPreparation } from "./useScannerPreparation";
 import { ScannerRecentScans } from "./ScannerRecentScans";
-import { useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import {
   scanActionSchema,
   eventScanCaptureIntentForRoomsSchema,
@@ -48,6 +48,7 @@ export function useEventScannerCaptureController({
   allowedActions = scanActionSchema.options,
   collectorContext,
   onSignIn,
+  onExit,
 }: EventScannerProps) {
   const refusePreparation = scannerPreparationRefusal(portalSession.value, operatorUserId);
   const [badgeId, setBadge] = useState("");
@@ -154,9 +155,8 @@ export function useEventScannerCaptureController({
     scannerShell,
     () => {
       if (collectionPrinting.active) return;
-      manualPaused.current = false;
-      manual.setOpen(false);
-      setFastMode(false);
+      stopContinuousScanning();
+      onExit?.();
     },
     () => {
       badgeCamera.stop();
@@ -328,6 +328,42 @@ export function useEventScannerCaptureController({
     if (closedMessage || authorityPaused.current) return;
     await badgeCamera.start();
   }
+  const resumeCamera = useRef<() => void>(() => {});
+  const pauseCamera = useRef<() => void>(() => {});
+  resumeCamera.current = () => {
+    if (fastMode && !manualOpen && !recentVisible && !collection.waiting && captureReady) void camera();
+  };
+  pauseCamera.current = badgeCamera.stop;
+  useEffect(() => {
+    let backgrounded = document.visibilityState === "hidden";
+    const hidden = () => {
+      backgrounded = true;
+      pauseCamera.current();
+    };
+    const visible = () => {
+      if (document.visibilityState !== "visible" || !backgrounded) return;
+      backgrounded = false;
+      resumeCamera.current();
+    };
+    const pageShown = (event: PageTransitionEvent) => {
+      if (event.persisted) backgrounded = true;
+      visible();
+    };
+    const visibilityChanged = () => {
+      if (document.visibilityState === "hidden") hidden();
+      else visible();
+    };
+    document.addEventListener("visibilitychange", visibilityChanged);
+    window.addEventListener("pagehide", hidden);
+    window.addEventListener("pageshow", pageShown);
+    window.addEventListener("focus", visible);
+    return () => {
+      document.removeEventListener("visibilitychange", visibilityChanged);
+      window.removeEventListener("pagehide", hidden);
+      window.removeEventListener("pageshow", pageShown);
+      window.removeEventListener("focus", visible);
+    };
+  }, []);
   function startScanning() {
     if (!requestCapture() || !allowedActions.includes(action)) return;
     if (action === "lead") setLeadRunStarted(true);

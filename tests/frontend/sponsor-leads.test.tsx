@@ -41,11 +41,13 @@ async function mount(canView: boolean, canCapture = false, canExport = false) {
   document.body.append(host);
   hosts.push(host);
   await act(() => render(<SponsorLeads slug="event" timeZone="UTC" />, host));
-  await settle();
-  const open = host.querySelector<HTMLButtonElement>('button[aria-label="Open leads for Sponsor"]')!;
-  expect(open).not.toBeNull();
-  await act(() => open.click());
-  await settle();
+  await vi.waitFor(async () => {
+    await settle();
+    expect(host.textContent).toContain("1 saved lead");
+    if (canView || canCapture) expect(host.textContent).toContain("Private person");
+  });
+  expect(host.querySelector('button[aria-label="Open leads for Sponsor"]')).toBeNull();
+  expect(host.querySelector("h2, h3, h4")?.textContent).toContain("Sponsor");
   return { host, requests, fetcher };
 }
 async function openSponsorActions(host: HTMLElement): Promise<void> {
@@ -62,25 +64,52 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 describe("Live sponsor leads", () => {
+  it("offers a sponsor choice only when the operator represents several sponsors", async () => {
+    const secondId = "10000000-0000-4000-8000-000000000002";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL | Request) => {
+        const sponsors = [
+          { id, name: "First sponsor", capturedCount: 1, canView: false, canCapture: true, canExport: false },
+          {
+            id: secondId,
+            name: "Second sponsor",
+            capturedCount: 2,
+            canView: true,
+            canCapture: false,
+            canExport: false,
+          },
+        ];
+        return String(url).includes(`/sponsors/${secondId}/leads`)
+          ? json({ leads: [], page: { ...page, total: 0 } })
+          : json({ sponsors, page: { ...page, total: 2 } });
+      }),
+    );
+    const host = document.createElement("div");
+    document.body.append(host);
+    hosts.push(host);
+    await act(() => render(<SponsorLeads slug="event" timeZone="UTC" />, host));
+    await vi.waitFor(() =>
+      expect(host.querySelector('button[aria-label="Open leads for Second sponsor"]')).not.toBeNull(),
+    );
+    await act(() =>
+      host.querySelector<HTMLButtonElement>('button[aria-label="Open leads for Second sponsor"]')!.click(),
+    );
+    await vi.waitFor(() => expect(host.textContent).toContain("Consenting leads"));
+    expect(host.textContent).toContain("2 saved leads");
+  });
   it("shows an operator only their own scans and keeps export separate", async () => {
     const first = await mount(false, true);
     expect(first.requests.some((url) => url.includes(`/sponsors/${id}/leads`))).toBe(true);
     expect(first.host.textContent).toContain("My lead scans");
     expect(first.host.textContent).toContain("1 saved lead");
     expect(first.host.textContent).toContain("Scan leads");
-    await openSponsorActions(first.host);
-    expect(first.host.querySelector('a[href$="leads.csv"]')).toBeNull();
+    expect(first.host.querySelector('button[aria-label="Sponsor actions"]')).toBeNull();
     const second = await mount(false, false, true);
     expect(second.requests.some((url) => url.includes(`/sponsors/${id}/leads`))).toBe(false);
     await openSponsorActions(second.host);
     expect(second.host.querySelector('a[href$="leads.csv"]')?.textContent).toBe("Export consenting leads");
-    await act(() => {
-      [...second.host.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
-        .find((button) => button.textContent === "Close sponsor")!
-        .click();
-    });
-    expect(second.host.querySelector('button[aria-label="Sponsor actions"]')).toBeNull();
-    expect(second.host.querySelector('button[aria-label="Open leads for Sponsor"]')).not.toBeNull();
+    expect(second.host.textContent).not.toContain("Close sponsor");
   });
   it("fetches current contacts without caching and clears them when offline", async () => {
     const { host, requests } = await mount(true);

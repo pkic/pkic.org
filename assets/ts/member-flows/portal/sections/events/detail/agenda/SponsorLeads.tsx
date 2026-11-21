@@ -11,13 +11,17 @@ import {
 import { formatDateTimeInZone } from "../../../../../../../shared/format-date";
 import { formatNumber } from "../../../../../../../shared/format-number";
 import { ApiDataTable } from "../../../../../../components/ApiDataTable";
+import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import { Spinner } from "../../../../../../components/Spinner";
+import { useData } from "../../../../../../hooks/useData";
 import { Button } from "../../../../../../ui/Button";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
 import { Menu } from "../../../../../../ui/Menu";
 
 import { loadLiveSponsorLeads } from "./sponsor-lead-loader";
 import { portalSession } from "../../../../state";
+import { requestJson } from "../../../../../../shared/api-client";
+import { scannerTransportUnavailable } from "../scanner/scanner-offline-context";
 const EventScanner = lazy(() => import("../scanner/EventScanner").then((module) => ({ default: module.EventScanner })));
 
 export function SponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZone }) {
@@ -33,6 +37,11 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
   const [listVersion, setListVersion] = useState(0);
   const [live, setLive] = useState(() => navigator.onLine && document.visibilityState !== "hidden");
   const [epoch, setEpoch] = useState(0);
+  const base = `/api/v1/events/${encodeURIComponent(slug)}/sponsors`;
+  const sponsorOptions = useData(
+    () => requestJson(`${base}/leads?limit=2`, sponsorLeadSponsorsSchema, { method: "GET", cache: "no-store" }),
+    [slug, listVersion],
+  );
   useEffect(() => {
     const changed = () => {
       setLive(navigator.onLine && document.visibilityState !== "hidden");
@@ -49,91 +58,101 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
       document.removeEventListener("visibilitychange", changed);
     };
   }, []);
-  const base = `/api/v1/events/${encodeURIComponent(slug)}/sponsors`;
+  if (sponsorOptions.loading) return <Spinner label="Loading sponsor leads…" />;
+  if (sponsorOptions.error || !sponsorOptions.data)
+    return <ErrorAlert error={sponsorOptions.error ?? "Sponsor leads are unavailable."} />;
+  const oneSponsor = sponsorOptions.data.page.total === 1;
+  const current = oneSponsor ? (sponsorOptions.data.sponsors[0] ?? null) : selected;
   return (
     <div class="pk-stack">
-      <Panel>
-        <PanelHeader title="Sponsor leads" />
-        <PanelBody>
-          <p>Uploaded scans appear here. Contact details are shown only while the person still agrees to share them.</p>
-        </PanelBody>
-      </Panel>
-      <ApiDataTable
-        key={`${slug}:${listVersion}`}
-        urlState="lead-sponsors"
-        endpoint={`${base}/leads`}
-        responseSchema={sponsorLeadSponsorsSchema}
-        resolve={(value) => value.sponsors}
-        resolvePage={(value) => value.page}
-        caption="Authorized sponsors"
-        paginate
-        searchPlaceholder="Find a sponsor…"
-        load={loadLiveSponsorLeads}
-        clearDataOnReload
-        retainDataOnError={false}
-        rowKey={(row) => row.id}
-        empty="No sponsor lead permissions are available for this event."
-        columns={[
-          { header: "Sponsor", cell: (row) => row.name, sort: { asc: "name", desc: "-name" }, hideable: false },
-          {
-            header: "Access",
-            cell: (row) =>
-              [
-                `${formatNumber(row.capturedCount)} saved ${row.capturedCount === 1 ? "lead" : "leads"}`,
-                row.canView ? "All leads" : row.canCapture && "My scans",
-                row.canExport && "Export",
-              ]
-                .filter(Boolean)
-                .join(" · "),
-          },
-          {
-            header: "Open",
-            cell: (row) => (
-              <Button
-                aria-label={`Open leads for ${row.name}`}
-                onClick={() => {
-                  setSelected(row);
-                  setScanning(false);
-                }}
-              >
-                {selected?.id === row.id ? "Selected" : "Open"}
-              </Button>
-            ),
-            hideable: false,
-          },
-        ]}
-      />
-      {selected && (
+      {sponsorOptions.data.page.total > 1 && (
+        <ApiDataTable
+          key={`${slug}:${listVersion}`}
+          urlState="lead-sponsors"
+          endpoint={`${base}/leads`}
+          responseSchema={sponsorLeadSponsorsSchema}
+          resolve={(value) => value.sponsors}
+          resolvePage={(value) => value.page}
+          caption="Authorized sponsors"
+          paginate
+          searchPlaceholder="Find a sponsor…"
+          load={loadLiveSponsorLeads}
+          clearDataOnReload
+          retainDataOnError={false}
+          rowKey={(row) => row.id}
+          empty="No sponsor lead permissions are available for this event."
+          columns={[
+            { header: "Sponsor", cell: (row) => row.name, sort: { asc: "name", desc: "-name" }, hideable: false },
+            {
+              header: "Access",
+              cell: (row) =>
+                [
+                  `${formatNumber(row.capturedCount)} saved ${row.capturedCount === 1 ? "lead" : "leads"}`,
+                  row.canView ? "All leads" : row.canCapture && "My scans",
+                  row.canExport && "Export",
+                ]
+                  .filter(Boolean)
+                  .join(" · "),
+            },
+            {
+              header: "Open",
+              cell: (row) => (
+                <Button
+                  aria-label={`Open leads for ${row.name}`}
+                  onClick={() => {
+                    setSelected(row);
+                    setScanning(false);
+                  }}
+                >
+                  {selected?.id === row.id ? "Selected" : "Open"}
+                </Button>
+              ),
+              hideable: false,
+            },
+          ]}
+        />
+      )}
+      {sponsorOptions.data.page.total === 0 && <p>No sponsor lead access is available for this event.</p>}
+      {current && (
         <Panel>
           <PanelHeader
-            title={selected.name}
+            title={current.name}
             menu={
-              <Menu
-                label="Sponsor actions"
-                align="end"
-                items={[
-                  ...(selected.canExport && live
-                    ? [
-                        {
-                          id: "export",
-                          label: "Export consenting leads",
-                          href: `${base}/${encodeURIComponent(selected.id)}/leads.csv`,
-                        },
-                      ]
-                    : []),
-                  {
-                    id: "close",
-                    label: "Close sponsor",
-                    onSelect: () => {
-                      setSelected(null);
-                      setScanning(false);
-                    },
-                  },
-                ]}
-              />
+              current.canExport || !oneSponsor ? (
+                <Menu
+                  label="Sponsor actions"
+                  align="end"
+                  items={[
+                    ...(current.canExport && live
+                      ? [
+                          {
+                            id: "export",
+                            label: "Export consenting leads",
+                            href: `${base}/${encodeURIComponent(current.id)}/leads.csv`,
+                          },
+                        ]
+                      : []),
+                    ...(!oneSponsor
+                      ? [
+                          {
+                            id: "close",
+                            label: "Close sponsor",
+                            onSelect: () => {
+                              setSelected(null);
+                              setScanning(false);
+                            },
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+              ) : undefined
             }
           >
-            {selected.canCapture && (
+            <span class="pk-small pk-muted">
+              {formatNumber(current.capturedCount)} saved {current.capturedCount === 1 ? "lead" : "leads"}
+            </span>
+            {current.canCapture && (
               <Button
                 variant="primary"
                 onClick={() => {
@@ -145,44 +164,49 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
               </Button>
             )}
           </PanelHeader>
-          <PanelBody flush={!(scanning && selected.canCapture) && (selected.canView || selected.canCapture) && live}>
-            {scanning && selected.canCapture ? (
+          <PanelBody flush={!(scanning && current.canCapture) && (current.canView || current.canCapture) && live}>
+            {scanning && current.canCapture ? (
               <Suspense fallback={<Spinner />}>
                 <EventScanner
-                  key={`${slug}:${selected.id}:${portalSession.value?.identity.id ?? ""}`}
+                  key={`${slug}:${current.id}:${portalSession.value?.identity.id ?? ""}`}
                   slug={slug}
-                  sponsorId={selected.id}
-                  sponsorName={selected.name}
+                  sponsorId={current.id}
+                  sponsorName={current.name}
+                  onExit={() => {
+                    if (!navigator.onLine || scannerTransportUnavailable.value) return;
+                    setScanning(false);
+                    setListVersion((value) => value + 1);
+                  }}
                   operatorUserId={portalSession.value?.identity.id ?? ""}
                   allowedActions={["lead"]}
                 />
               </Suspense>
-            ) : selected.canView || selected.canCapture ? (
+            ) : current.canView || current.canCapture ? (
               live ? (
                 <ApiDataTable
                   urlState="sponsor-leads"
-                  key={`${selected.id}:${epoch}`}
-                  endpoint={`${base}/${encodeURIComponent(selected.id)}/leads`}
+                  key={`${current.id}:${epoch}:${listVersion}`}
+                  endpoint={`${base}/${encodeURIComponent(current.id)}/leads`}
                   responseSchema={sponsorLeadListSchema}
                   resolve={(value) => value.leads}
                   resolvePage={(value) => value.page}
-                  caption={selected.canView ? "Consenting leads" : "My lead scans"}
+                  caption={current.canView ? "Consenting leads" : "My lead scans"}
                   paginate
-                  searchPlaceholder={selected.canView ? "Search contacts…" : "Search my scans…"}
+                  searchPlaceholder={current.canView ? "Search contacts…" : "Search my scans…"}
                   initialSort="-capturedAt"
                   load={loadLiveSponsorLeads}
                   clearDataOnReload
                   retainDataOnError={false}
                   rowKey={(row) => row.id}
                   empty={
-                    selected.canView
+                    current.canView
                       ? "No currently consenting leads match this search."
                       : "No saved scans with current contact sharing match this search."
                   }
                   detailRow={(row) =>
                     captureHistory === row.id ? (
                       <SponsorLeadCaptures
-                        endpoint={`${base}/${encodeURIComponent(selected.id)}/leads/${encodeURIComponent(row.id)}/captures`}
+                        endpoint={`${base}/${encodeURIComponent(current.id)}/leads/${encodeURIComponent(row.id)}/captures`}
                         timeZone={timeZone}
                       />
                     ) : undefined
@@ -235,7 +259,7 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
               )
             ) : (
               <p>
-                Your sponsor scope permits {selected.canCapture ? "lead scanning" : "export"}. Viewing contact details
+                Your sponsor scope permits {current.canCapture ? "lead scanning" : "export"}. Viewing contact details
                 requires a separate permission.
               </p>
             )}

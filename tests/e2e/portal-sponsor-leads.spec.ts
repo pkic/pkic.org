@@ -3,7 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
-import { eventDetailResponseSchema } from "../../assets/shared/schemas/event-management";
+import { eventAudienceDetailSchema, eventDetailResponseSchema } from "../../assets/shared/schemas/event-management";
 import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 import {
   sponsorLeadListSchema,
@@ -20,8 +20,21 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
 }, info) => {
   await signInAsE2eStaff(page, e2eAdminEmail("portal-sponsor-leads"));
   const event = eventDetailResponseSchema.parse(await (await page.request.get(`/api/v1/events/${slug}`)).json()).event;
-  const ownerGroupId = "ownerGroupId" in event ? event.ownerGroupId : null;
-  expect(ownerGroupId, "Seeded event must have its group workspace").toBeTruthy();
+  expect(event.name).toBeTruthy();
+  await page.route(`**/api/v1/events/${slug}`, (route) =>
+    route.fulfill({
+      json: {
+        event: eventAudienceDetailSchema.parse({
+          ...event,
+          accessLevel: "participant",
+          links: [],
+          basePath: null,
+          viewer: null,
+          sponsorLeadAccess: true,
+        }),
+      },
+    }),
+  );
   await page.route("**/api/v1/auth/session", async (route) => {
     const response = await route.fetch();
     const session = userAuthSessionResponseSchema.parse(await response.json());
@@ -66,7 +79,7 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
               {
                 id: sponsorId,
                 name: "Example sponsor",
-                capturedCount: 0,
+                capturedCount: 1,
                 canView: true,
                 canCapture: false,
                 canExport: false,
@@ -76,10 +89,12 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
           });
     await route.fulfill({ json: payload, headers: { "cache-control": "private, no-store" } });
   });
-  await page.goto(`/portal/#/groups/${encodeURIComponent(ownerGroupId!)}/events/${encodeURIComponent(event.id)}/leads`);
+  await page.goto(`/portal/#/events/${slug}/leads`);
   // Hash navigation can reuse the authenticated shell; reload to hydrate the synthetic contextual grant.
   await page.reload();
-  await page.getByRole("button", { name: "Open leads for Example sponsor", exact: true }).click();
+  await expect(page.locator(".pk-event-hero").getByRole("heading")).toHaveText(event.name);
+  await expect(page.getByRole("navigation", { name: "Event", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open leads for Example sponsor" })).toHaveCount(0);
   const contacts = page.getByRole("region", { name: "Consenting leads", exact: true });
   await expect(contacts.getByText("Synthetic attendee", { exact: true })).toBeVisible();
   await expect(contacts.getByText("Personal email address", { exact: true })).toBeVisible();
@@ -88,6 +103,9 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
     [375, 812, "phone"],
   ] as const) {
     await page.setViewportSize({ width, height });
+    await expect(
+      page.getByRole("navigation", { name: device === "phone" ? "Event app" : "Event", exact: true }),
+    ).toBeVisible();
     await page.screenshot({ path: info.outputPath(`sponsor-lead-organization-${device}.png`), fullPage: true });
   }
   await page.getByRole("searchbox", { name: "Search consenting leads", exact: true }).fill("Synthetic");

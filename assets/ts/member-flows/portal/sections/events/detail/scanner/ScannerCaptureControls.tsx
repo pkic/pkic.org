@@ -174,7 +174,18 @@ export function ScannerManualControls({
           <Button type="submit" disabled={busy || !ready || (action === "lead" && !consent?.confirmed)}>
             {action === "lead" ? "Confirm lead" : scannerActionLabel(action)}
           </Button>
-          <Button type="button" variant="secondary" onClick={onClose}>
+          <Button
+            type="button"
+            variant="secondary"
+            onPointerDown={(event) => {
+              // Close before an empty badge field can rerender this button on blur.
+              event.preventDefault();
+              onClose();
+            }}
+            onClick={(event) => {
+              if (event.detail === 0) onClose();
+            }}
+          >
             Return to scanning
           </Button>
         </div>

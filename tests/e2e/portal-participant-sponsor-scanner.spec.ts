@@ -45,27 +45,31 @@ test("participant sponsor scanner keeps its sponsor context and manual exit cont
       await page.setViewportSize(viewport);
       await page.goto(route);
       await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeVisible();
+      await expect(page.getByRole("dialog", { name: "Lead scanner setup" })).toBeVisible();
       await page.screenshot({ path: info.outputPath(`${viewport.name}-sponsor-initial-setup.png`), fullPage: true });
       const phone = viewport.name === "phone";
       const navigation = page.getByRole("navigation", { name: phone ? "Event app" : "Event", exact: true });
+      await page.getByRole("button", { name: "Close scanner", exact: true }).click();
+      await expect(page).toHaveURL(`/portal/#/events/${sponsorEventSlug}/leads`);
       await navigation.getByRole("link", { name: phone ? "Home" : "Overview", exact: true }).click();
       await expect(page).toHaveURL(`/portal/#/events/${sponsorEventSlug}`);
       if (phone) {
         await navigation.getByRole("button", { name: "More", exact: true }).click();
         const leads = page.getByRole("dialog", { name: "More", exact: true }).getByRole("link", {
-          name: "Sponsor leads",
+          name: "Leads",
         });
         await expect(leads).toBeVisible();
         await page.screenshot({ path: info.outputPath("phone-sponsor-leads-menu.png"), fullPage: true });
         await leads.click();
       } else {
         await page.screenshot({ path: info.outputPath("tablet-sponsor-leads-tab.png"), fullPage: true });
-        await navigation.getByRole("link", { name: "Sponsor leads", exact: true }).click();
+        await navigation.getByRole("link", { name: "Leads", exact: true }).click();
       }
       await expect(page).toHaveURL(`/portal/#/events/${sponsorEventSlug}/leads`);
-      await expect(page.getByRole("heading", { name: "Sponsor leads", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Leads", exact: true })).toBeVisible();
+      await expect(page.locator(".pk-event-hero").getByRole("heading")).toContainText("Conference");
       await page.goto(`/portal/#/events/${sponsorEventSlug}`);
-      const leadEntry = navigation.getByRole("link", { name: phone ? "Leads" : "Lead scanner", exact: true });
+      const leadEntry = navigation.getByRole("link", { name: phone ? "Scanner" : "Lead scanner", exact: true });
       await expect(leadEntry).toHaveAttribute(
         "href",
         `#/events/${sponsorEventSlug}/sponsors/${fixture.sponsorId}/scanner`,
@@ -79,17 +83,12 @@ test("participant sponsor scanner keeps its sponsor context and manual exit cont
       await expect(page.getByRole("combobox", { name: "Scan mode", exact: true })).toHaveCount(0);
       const start = page.getByRole("button", { name: "Start scanning", exact: true });
       const enter = page.getByRole("button", { name: "Enter badge code", exact: true });
-      await expect(enter).toBeVisible();
-      await expect(enter).toBeDisabled();
+      await expect(enter).toHaveCount(0);
       const startBounds = await start.boundingBox();
-      const enterBounds = await enter.boundingBox();
-      if (!startBounds || !enterBounds) throw new Error("Scanner action buttons need visible bounds");
-      expect(Math.abs(startBounds.y - enterBounds.y)).toBeLessThanOrEqual(1);
+      if (!startBounds) throw new Error("Start scanning needs visible bounds");
       if (viewport.name === "phone") {
-        for (const bounds of [startBounds, enterBounds]) {
-          expect(bounds.y).toBeGreaterThanOrEqual(0);
-          expect(bounds.y + bounds.height).toBeLessThanOrEqual(viewport.height);
-        }
+        expect(startBounds.y).toBeGreaterThanOrEqual(0);
+        expect(startBounds.y + startBounds.height).toBeLessThanOrEqual(viewport.height);
       }
       await page.screenshot({ path: info.outputPath(`${viewport.name}-sponsor-setup.png`), fullPage: true });
 
@@ -107,15 +106,6 @@ test("participant sponsor scanner keeps its sponsor context and manual exit cont
         }),
       ).toBeChecked();
       await expect(start).toBeEnabled();
-      await expect(enter).toBeEnabled();
-      await enter.click();
-      const manual = page.getByRole("dialog", { name: "Review sponsor lead", exact: true });
-      await manual.getByLabel("Badge code", { exact: true }).fill(fixture.consenting.badgeId);
-      await expect(manual.getByRole("searchbox")).toHaveCount(0);
-      await page.screenshot({ path: info.outputPath(`${viewport.name}-sponsor-manual.png`), fullPage: true });
-      await manual.getByRole("button", { name: "Cancel", exact: true }).click();
-      await expect(manual).toHaveCount(0);
-
       await page.getByRole("button", { name: "Start scanning", exact: true }).click();
       const scanner = page.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
       await expect(scanner).toBeVisible();
@@ -132,10 +122,16 @@ test("participant sponsor scanner keeps its sponsor context and manual exit cont
       // Inside the full-screen scanner, manual entry replaces the camera view instead of opening a second dialog.
       const inlineEntry = scanner.getByRole("heading", { name: "Enter badge code", level: 2, exact: true });
       await expect(inlineEntry).toBeVisible();
+      await scanner.getByLabel("Badge code", { exact: true }).fill(fixture.consenting.badgeId);
+      await expect(scanner.getByRole("searchbox")).toHaveCount(0);
+      await page.screenshot({ path: info.outputPath(`${viewport.name}-sponsor-manual.png`), fullPage: true });
       await scanner.getByRole("button", { name: "Return to scanning", exact: true }).click();
       await expect(inlineEntry).toHaveCount(0);
       await scanner.getByRole("button", { name: "Close scanner", exact: true }).click();
       await expect(scanner).toHaveCount(0);
+      await expect(page).toHaveURL(`/portal/#/events/${sponsorEventSlug}/leads`);
+      await expect(page.locator(".pk-event-hero").getByRole("heading")).toContainText("Conference");
+      await page.goto(route);
       await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Before you start", exact: true })).toBeVisible();
       await page.screenshot({ path: info.outputPath(`${viewport.name}-sponsor-after-manual.png`), fullPage: true });
@@ -151,8 +147,9 @@ test("participant sponsor scanner keeps its sponsor context and manual exit cont
       await expect(scanner).toBeVisible();
       await scanner.getByRole("button", { name: "Close scanner", exact: true }).click();
       await expect(scanner).toHaveCount(0);
+      await expect(page).toHaveURL(`/portal/#/events/${sponsorEventSlug}/leads`);
       await expect.poll(() => page.evaluate(() => document.fullscreenElement === null)).toBe(true);
-      await expect(page.getByRole("heading", { name: "Before you start", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Leads", exact: true })).toBeVisible();
     }
   } finally {
     await endFixture?.();
@@ -358,6 +355,7 @@ test("dual staff and sponsor identity reaches both event scanners across phone t
       await expect(scanner.getByText(/Capture sponsor lead/)).toHaveCount(0);
       await scanner.getByRole("button", { name: "Close scanner", exact: true }).click();
       await expect(scanner).toHaveCount(0);
+      await expect(page).toHaveURL(`/portal/#/events/${sponsorEventSlug}/leads`);
       await expect
         .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
         .toBeLessThanOrEqual(viewport.width);

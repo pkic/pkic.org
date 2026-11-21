@@ -134,8 +134,6 @@ describe("scanner hosts", () => {
     document.body.append(host);
     await act(() => render(<SponsorLeads slug="event" timeZone="UTC" />, host));
     await settle();
-    await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Open leads for Sponsor"]')!.click());
-    await settle();
     await act(() =>
       [...host.querySelectorAll<HTMLButtonElement>("button")]
         .find((button) => button.textContent === "Scan leads")!
@@ -150,8 +148,6 @@ describe("scanner hosts", () => {
     await settle();
     expect(host.textContent).not.toContain("Scoped scanner");
     expect(mounts.count).toBe(initial);
-    await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Open leads for Sponsor"]')!.click());
-    await settle();
     await act(() =>
       [...host.querySelectorAll<HTMLButtonElement>("button")]
         .find((button) => button.textContent === "Scan leads")!

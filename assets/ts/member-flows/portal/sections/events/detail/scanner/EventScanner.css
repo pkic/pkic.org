@@ -1,4 +1,42 @@
 @layer components {
+  .pk-lead-scanner-setup {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--pk-4);
+    min-height: 100dvh;
+    padding: max(var(--pk-6), env(safe-area-inset-top)) var(--pk-4)
+      max(var(--pk-6), env(safe-area-inset-bottom));
+    overflow: auto;
+    background: var(--pk-pqc-field);
+    box-sizing: border-box;
+  }
+  .pk-lead-scanner-setup > .pk-stack {
+    width: min(100%, 34rem);
+  }
+  .pk-lead-scanner-setup__brand {
+    position: absolute;
+    inset-block-start: max(var(--pk-5), env(safe-area-inset-top));
+    inset-inline-start: 50%;
+    width: 8rem;
+    height: auto;
+    transform: translateX(-50%);
+  }
+  .pk-lead-scanner-setup__close {
+    position: absolute;
+    inset-block-start: max(var(--pk-4), env(safe-area-inset-top));
+    inset-inline-end: max(var(--pk-4), env(safe-area-inset-right));
+  }
+  .pk-lead-scanner-setup__sponsor {
+    width: min(100%, 34rem);
+    margin: 0;
+    color: var(--pk-pqc-on-field);
+    font-size: var(--pk-text-sm);
+  }
   .pk-scanner-offline-entry {
     display: flex;
     flex: 1;

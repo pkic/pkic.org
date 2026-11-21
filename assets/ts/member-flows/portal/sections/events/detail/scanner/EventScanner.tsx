@@ -14,6 +14,8 @@ export interface EventScannerProps {
   allowedActions?: readonly EventScanRequest["action"][];
   collectorContext?: ScannerOfflineContext;
   onSignIn?: () => void;
+  /** Return to the sponsor's lead list when the full-screen lead scanner closes. */
+  onExit?: () => void;
 }
 
 /** Refuse unsupported native browser features before capture hooks initialize. */

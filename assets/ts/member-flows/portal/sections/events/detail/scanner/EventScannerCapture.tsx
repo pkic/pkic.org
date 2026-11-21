@@ -4,10 +4,13 @@ import { ScannerWorkspace } from "./ScannerWorkspace";
 import { ScannerCaptureControls, ScannerManualControls, ScannerOfflineSignInButton } from "./ScannerCaptureControls";
 import { ScannerCamera } from "./ScannerCamera";
 import { ScannerLaunchPanel } from "./ScannerLaunchPanel";
+import { trapScannerDrawerTab } from "./scanner-gestures";
+import { CloseButton } from "../../../../../../ui/CloseButton";
 import { FastScannerView } from "./FastScannerView";
 import { portalSession } from "../../../../state";
 import type { EventScannerProps } from "./EventScanner";
 import { useEventScannerCaptureController } from "./useEventScannerCaptureController";
+import { useEffect } from "preact/hooks";
 import "./EventScanner.css";
 
 export function EventScannerCapture(props: EventScannerProps) {
@@ -104,12 +107,36 @@ export function EventScannerCapture(props: EventScannerProps) {
     collectionPrinting,
   } = status;
   const leadSetup = action === "lead" && !fastMode && !leadRunStarted;
+  const immersiveLeadSetup = leadSetup && !collectorContext && !offline;
   const leadStatusNeeded = action !== "lead" || (!result && (offline || pending > 0));
+  useEffect(() => {
+    if (immersiveLeadSetup) scannerShell.current?.querySelector<HTMLButtonElement>("button")?.focus();
+  }, [immersiveLeadSetup, scannerShell]);
   return (
-    <div ref={scannerShell}>
+    <div
+      ref={scannerShell}
+      class={immersiveLeadSetup ? "pk-lead-scanner-setup" : undefined}
+      role={immersiveLeadSetup ? "dialog" : undefined}
+      aria-modal={immersiveLeadSetup ? "true" : undefined}
+      aria-label={immersiveLeadSetup ? "Lead scanner setup" : undefined}
+      onKeyDown={(event) => {
+        if (!immersiveLeadSetup) return;
+        if (event.key === "Escape" && props.onExit) props.onExit();
+        else trapScannerDrawerTab(event.currentTarget, event);
+      }}
+    >
+      {immersiveLeadSetup && (
+        <>
+          <img class="pk-lead-scanner-setup__brand" src="/img/logo.svg" alt="PKI Consortium" />
+          {props.onExit && (
+            <CloseButton class="pk-lead-scanner-setup__close" label="Close scanner" overMedia onClick={props.onExit} />
+          )}
+          {props.sponsorName && <p class="pk-lead-scanner-setup__sponsor">{props.sponsorName}</p>}
+        </>
+      )}
       <ScannerWorkspace
         hidden={fastMode}
-        collector={Boolean(collectorContext)}
+        collector={Boolean(collectorContext) || immersiveLeadSetup}
         view={scannerTab}
         onView={(view) => {
           if (view === "recent") showRecentScans();
@@ -216,7 +243,9 @@ export function EventScannerCapture(props: EventScannerProps) {
                   else autoStart.request();
                 }}
               >
-                {!collection.waiting && <ScannerManualControls {...manualControls} open={manualOpen && !fastMode} />}
+                {action !== "lead" && !collection.waiting && (
+                  <ScannerManualControls {...manualControls} open={manualOpen && !fastMode} />
+                )}
               </ScannerCaptureControls>
             }
           >
@@ -295,7 +324,10 @@ export function EventScannerCapture(props: EventScannerProps) {
           }}
           preview={preview}
           onPreview={() => setPreview(!preview)}
-          onExit={stopContinuousScanning}
+          onExit={() => {
+            stopContinuousScanning();
+            props.onExit?.();
+          }}
         />
       )}
       <ScannerCamera

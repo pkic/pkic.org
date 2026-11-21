@@ -138,11 +138,7 @@ describe("scanner device enrollment and manual capture boundary", () => {
   });
   it("switches continuous scanning to Recent scans, stops the camera and retains the selected mode", async () => {
     await mount(true, ["check"]);
-    await act(async () =>
-      Array.from(host.querySelectorAll("button"))
-        .find((button) => button.textContent?.trim() === "Start scanning")!
-        .click(),
-    );
+    await act(async () => button("Start scanning").click());
     await vi.waitFor(async () => {
       await act(async () => {});
       expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Ready to check registration");
@@ -220,16 +216,18 @@ describe("scanner device enrollment and manual capture boundary", () => {
     await act(async () => button("Close scanner").click());
     expect(host.querySelector<HTMLInputElement>('input[name="consentConfirmed"]')?.checked).toBe(false);
     expect(button("Start scanning").disabled).toBe(true);
+    expect(button("Enter badge code")).toBeUndefined();
   });
   it("keeps the accepted lead pledge active after canceling badge entry", async () => {
     await mount(true, ["lead"], "99999999-9999-4999-8999-999999999999");
     await act(async () => host.querySelector<HTMLInputElement>('input[name="consentConfirmed"]')!.click());
+    expect(button("Enter badge code")).toBeUndefined();
+    await act(async () => button("Start scanning").click());
     await act(async () => button("Enter badge code").click());
     expect(host.querySelector('input[name="consentConfirmed"]')).toBeNull();
-    await act(async () => button("Cancel").click());
-    expect(button("Start scanning").disabled).toBe(false);
-    await act(async () => button("Start scanning").click());
+    await act(async () => button("Return to scanning").click());
     expect(host.querySelector(".pk-fast-scanner")).not.toBeNull();
+    expect(host.querySelector(".pk-fast-scanner__manual")).toBeNull();
   });
   it("refuses an open lead review after the canonical session owner changes", async () => {
     const session = (id: string, person: string) =>

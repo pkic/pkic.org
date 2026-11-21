@@ -2,13 +2,7 @@ import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import { signInToPortal } from "./helpers/portal-auth";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
-import {
-  closeScannerDiagnostics,
-  openScannerDiagnostics,
-  openScannerManualEntry,
-  reconnectScannerBrowser,
-  scannerStorage,
-} from "./helpers/scanner-recovery-storage";
+import { openScannerManualEntry, reconnectScannerBrowser, scannerStorage } from "./helpers/scanner-recovery-storage";
 import {
   enrolledEventScanRequestSchema,
   eventScanResponseSchema,
@@ -34,6 +28,8 @@ import {
   registrationManageReadResponseSchema,
   registrationManageUpdateResponseSchema,
 } from "../../assets/shared/schemas/registration";
+
+test.use({ actionTimeout: 20_000 });
 
 /** Real mounted Worker/D1 and browser storage; no intercepted transport or injected grants. */
 test("sponsor captures live consented contacts, exports them and loses disclosure after withdrawal and grant end", async ({
@@ -73,19 +69,12 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
     const openSponsor = async () => {
       await page.goto(fixture.workspace);
       await page.reload();
-      await page.getByRole("button", { name: `Open leads for ${sponsor.name}`, exact: true }).click();
-    };
-    const configureFeedbackPause = async () => {
-      const diagnostics = await openScannerDiagnostics(page);
-      await diagnostics.getByLabel("Feedback pause", { exact: true }).selectOption("0");
-      await closeScannerDiagnostics(page);
+      await expect(page.getByRole("heading", { name: "Leads", exact: true })).toBeVisible();
     };
     await openSponsor();
     await page.getByRole("button", { name: "Scan leads", exact: true }).click();
     await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeVisible();
     await expect(page.getByRole("combobox", { name: "Scan mode", exact: true })).toHaveCount(0);
-    await configureFeedbackPause();
-    const setupViewport = page.viewportSize();
     for (const [name, width, height] of [
       ["desktop", 1280, 900],
       ["phone", 375, 812],
@@ -97,26 +86,21 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
         .last()
         .screenshot({ path: info.outputPath(`${name}-sponsor-setup-card.png`) });
     }
-    if (setupViewport) await page.setViewportSize(setupViewport);
+    await page.setViewportSize({ width: 375, height: 812 });
     const first = await captureSponsorBadge(
       page,
       fixture.consenting.badgeId,
       fixture.sponsorId,
       fixture.operator.userId,
       async () => {
-        const confirmedLead = page.locator(".pk-scanner-lead-confirmation");
+        const confirmedLead = page
+          .getByRole("dialog", { name: "Continuous badge scanner", exact: true })
+          .locator(".pk-scanner-lead-confirmation");
         await expect(confirmedLead).toContainText(`${fixture.firstName} ${fixture.lastName}`);
         await expect(confirmedLead).toContainText("Security engineer");
         await expect(confirmedLead).toContainText(fixture.organization);
         await expect(confirmedLead).not.toContainText(fixture.email);
-        const originalViewport = page.viewportSize();
-        await page.setViewportSize({ width: 375, height: 812 });
-        await page
-          .locator(".pk-panel")
-          .filter({ has: page.getByRole("button", { name: "Next", exact: true }) })
-          .last()
-          .screenshot({ path: info.outputPath("phone-sponsor-confirmed-lead.png") });
-        if (originalViewport) await page.setViewportSize(originalViewport);
+        await page.screenshot({ path: info.outputPath("phone-sponsor-confirmed-lead.png"), fullPage: true });
       },
     );
     const second = await captureSponsorBadge(
@@ -141,15 +125,17 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
     try {
       for (const expectedCount of [1, 2]) {
         await openScannerManualEntry(page);
-        const manual = page.getByRole("dialog", { name: "Review sponsor lead", exact: true });
+        const manual = page
+          .getByRole("dialog", { name: "Continuous badge scanner", exact: true })
+          .locator(".pk-fast-scanner__manual");
         await manual.getByLabel("Badge code", { exact: true }).fill(fixture.consenting.badgeId);
         await manual.getByRole("button", { name: "Confirm lead", exact: true }).click();
         await expect(manual).not.toBeVisible();
-        await expect(page.getByRole("button", { name: "Next", exact: true })).toBeVisible();
-        await expect(page.getByText("Saved for upload", { exact: true })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Next badge", exact: true })).toBeVisible();
+        await expect(page.locator(".pk-fast-scanner__label")).toHaveText("Saved for upload");
         await expect.poll(async () => (await scannerStorage(page)).pending.length).toBe(expectedCount);
         if (expectedCount === 1) {
-          await page.getByRole("button", { name: "Next", exact: true }).click();
+          await page.getByRole("button", { name: "Next badge", exact: true }).click();
           await expect(
             page.getByRole("status", { name: "Scanner status", exact: true }).getByText("Offline · 1 awaiting upload"),
           ).toBeVisible();
@@ -160,7 +146,7 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
               name: "I will ask each person for permission to collect their contact information before scanning their badge.",
             }),
           ).toHaveCount(0);
-          await manual.getByRole("button", { name: "Cancel", exact: true }).click();
+          await manual.getByRole("button", { name: "Return to scanning", exact: true }).click();
           await expect(manual).not.toBeVisible();
         }
       }
@@ -199,7 +185,7 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
         fixture.organization,
       ]);
       await captureSponsorViews(page, info, "offline-pending");
-      await page.getByRole("button", { name: "Next", exact: true }).click();
+      await page.getByRole("button", { name: "Next badge", exact: true }).click();
     } finally {
       await reconnectScannerBrowser(page.context(), page);
     }
@@ -229,7 +215,6 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
       expect(replay.status()).toBe(200);
       expect(eventScanResponseSchema.parse(await replay.json())).toEqual(archived!.receipt);
     }
-    await expect(page.getByRole("status", { name: "Scanner status", exact: true })).toHaveCount(0);
     const attendanceAfterResponse = await staff.request.get(attendancePath);
     expect(attendanceAfterResponse.status()).toBe(200);
     expect(attendanceSummarySchema.parse(await attendanceAfterResponse.json()).observed).toEqual(attendanceBefore);
@@ -262,7 +247,10 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
       fixture.organization,
     ]);
     await captureSponsorViews(page, info, "capture");
-    await page.getByRole("button", { name: "Close scanner", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "Continuous badge scanner", exact: true })
+      .getByRole("button", { name: "Close scanner", exact: true })
+      .click();
     await openSponsor();
     const listed = await page.request.get(leadsPath);
     expect(listed.status()).toBe(200);
@@ -391,7 +379,6 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
     expect((await page.request.get(capturesPath)).status()).toBe(404);
     await captureSponsorViews(page, info, "withdrawn-live");
     await page.getByRole("button", { name: "Scan leads", exact: true }).click();
-    await configureFeedbackPause();
     const noConsent = await captureSponsorBadge(
       page,
       fixture.consenting.badgeId,

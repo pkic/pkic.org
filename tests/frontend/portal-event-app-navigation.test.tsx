@@ -134,7 +134,7 @@ describe("event app tab selection", () => {
       scannerAccess: sponsorDiscovery,
       sponsorLeadAccess: true,
     });
-    expect(labels(tabs)).toEqual(["Home", "Agenda", "Leads", "Ticket"]);
+    expect(labels(tabs)).toEqual(["Home", "Agenda", "Scanner", "Ticket"]);
     expect(tabs.find((tab) => tab.id === "lead-scanner")?.href).toBe(`#/events/summit/sponsors/${sponsorId}/scanner`);
     expect(tabs.find((tab) => tab.id === "lead-scanner")?.icon).toBe("leads");
     expect(ids(more)).toContain("agenda");
@@ -144,7 +144,7 @@ describe("event app tab selection", () => {
 
   it("offers sponsor lead history only when the event grants lead access", () => {
     const { more } = navigation({ sponsorLeadAccess: true });
-    expect(more.find((item) => item.id === "sponsor-leads")?.label).toBe("Sponsor leads");
+    expect(more.find((item) => item.id === "sponsor-leads")?.label).toBe("Leads");
     expect(ids(navigation().more)).not.toContain("sponsor-leads");
   });
 
@@ -157,7 +157,7 @@ describe("event app tab selection", () => {
       },
     });
     // Personal agenda and calendar tools require a confirmed event registration.
-    expect(labels(tabs)).toEqual(["Home", "Agenda", "Leads"]);
+    expect(labels(tabs)).toEqual(["Home", "Agenda", "Scanner"]);
     expect(tabs.find((tab) => tab.id === "lead-scanner")?.href).toBe("#/events/summit/lead-scanner");
   });
 
@@ -321,7 +321,7 @@ describe("event app More sheet", () => {
     expect([...bar.querySelectorAll("a, button")].map((tab) => tab.textContent)).toEqual([
       "Home",
       "Agenda",
-      "Leads",
+      "Scanner",
       "Ticket",
       "More",
     ]);

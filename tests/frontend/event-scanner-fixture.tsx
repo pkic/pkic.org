@@ -42,6 +42,7 @@ const mocks = vi.hoisted(() => ({
     state: "complete",
   })),
   cameraDestroyed: vi.fn(),
+  cameraStarted: vi.fn(),
   cameraScan: null as null | ((code: { data: string }) => void),
   suspended: vi.fn(async (_operatorUserId?: string, _sessionId?: string) => false),
   sessionListeners: new Set<() => void>(),
@@ -55,7 +56,9 @@ vi.mock("qr-scanner", () => ({
     constructor(_video: HTMLVideoElement, onDecode: (code: { data: string }) => void) {
       mocks.cameraScan = onDecode;
     }
-    async start() {}
+    async start() {
+      mocks.cameraStarted();
+    }
     destroy() {
       mocks.cameraDestroyed();
     }
