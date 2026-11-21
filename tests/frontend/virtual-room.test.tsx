@@ -268,6 +268,11 @@ describe("virtual room", () => {
     );
     expect(nowPlaying()).toContain("Opening keynote");
     expect(nowPlaying()).toContain("Ada");
+    // A dot marks the running session; its people sit as portraits at the end of the time line.
+    expect(host.querySelector(".pk-virtual-room__live-dot")).not.toBeNull();
+    expect(nowPlaying()).toContain("Live now");
+    const face = host.querySelector<HTMLButtonElement>('[role="group"][aria-label="Speakers"] button');
+    expect(face?.getAttribute("aria-label")).toBe("Ada");
     const title = host.querySelector<HTMLAnchorElement>('[aria-label="Now in this room"] h2 a');
     expect(title?.getAttribute("href")).toBe(`#/events/summit/agenda?session=${KEYNOTE}`);
   });

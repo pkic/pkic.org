@@ -180,6 +180,7 @@ export function VirtualRoom({
             slug={slug}
             moment={moment}
             formatTime={formatTime}
+            organizations={agenda?.speakerOrganizations}
             location={picker}
             reactions={onAir ? <VirtualRoomReactions live={live} compact={!wide} /> : null}
           />

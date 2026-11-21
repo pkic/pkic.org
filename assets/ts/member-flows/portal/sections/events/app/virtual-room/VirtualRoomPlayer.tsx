@@ -10,7 +10,9 @@ import { youtubePrivacyEmbedUrl } from "../../../../../../../shared/youtube-vide
 import { eventSessionRoute } from "../../../../../../../shared/event-participation-link";
 import { usePortalHashLocation } from "../../../../hash-location";
 import { JoinSessionMeeting } from "../../detail/participation/JoinSessionMeeting";
+import type { AgendaSnapshot } from "../../../../../../../shared/schemas/event-agenda";
 import { sessionSpeakerLine, type RoomMoment } from "./virtual-room-schedule";
+import { VirtualRoomSpeakerFaces } from "./VirtualRoomSpeakerFaces";
 import "../../../../../../ui/Content.css";
 import "./VirtualRoom.css";
 import { SectionHeading } from "../../../../../../ui/SectionHeading";
@@ -64,18 +66,22 @@ function WaitingRoomPlayer({ locationName, startsAt }: { locationName: string; s
 }
 
 /**
- * The running session under the player, or what comes next between sessions. On a phone it is one line:
- * the location, the title and the reactions; the time and speakers are in the agenda and the session details.
+ * The running session under the player, or what comes next between sessions: its time, behind a live dot
+ * while it runs, with its people's portraits, then the title and the reactions. A wide window also names
+ * the speakers under the title.
  */
 export function VirtualRoomNowPlaying({
   slug,
   moment,
   formatTime,
+  organizations,
   location,
   reactions,
 }: {
   slug: string;
   moment: RoomMoment;
+  /** The agenda's organizations, for the people's cards. */
+  organizations?: AgendaSnapshot["speakerOrganizations"];
   formatTime: (startAt: string, endAt: string) => string;
   /** The location picker, where the line carries it. */
   location?: ComponentChildren;
@@ -90,9 +96,20 @@ export function VirtualRoomNowPlaying({
       <div class="pk-virtual-room__now-text" aria-live="polite">
         {shown ? (
           <>
-            <p class="pk-event-card__eyebrow">
-              {session ? "Live now" : "Up next"} · {formatTime(shown.startAt, shown.endAt)}
-            </p>
+            <div class="pk-virtual-room__when">
+              <p class="pk-event-card__eyebrow">
+                {session ? (
+                  <>
+                    <span class="pk-virtual-room__live-dot" aria-hidden="true" />
+                    <span class="pk-sr-only">Live now, </span>
+                  </>
+                ) : (
+                  "Up next · "
+                )}
+                {formatTime(shown.startAt, shown.endAt)}
+              </p>
+              <VirtualRoomSpeakerFaces session={shown} organizations={organizations} />
+            </div>
             <SectionHeading level={3} class="pk-virtual-room__title">
               <a href={usePortalHashLocation.hrefs(eventSessionRoute(slug, shown.id))}>{shown.title}</a>
             </SectionHeading>

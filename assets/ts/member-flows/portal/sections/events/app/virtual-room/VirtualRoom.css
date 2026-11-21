@@ -59,7 +59,7 @@
 
   /*
    * The running session under the stream. Where the viewer picks a location, the picker and the reactions
-   * share the first line and the session has the next one whole: "Live now" and its time, then the title
+   * share the first line and the session has the next one whole: its time and its people, then the title
    * in full. With one location the title and the reactions share a line. Speakers are left to the wider
    * layout and the session's details.
    */
@@ -95,7 +95,7 @@
   }
 
   /*
-   * One location on a phone: the line opens up, so "Live now" and its time keep the whole first line and the
+   * One location on a phone: the line opens up, so the time and the people keep the whole first line and the
    * reactions sit beside the title, at its foot.
    */
   .pk-virtual-room:not(.pk-virtual-room--wide)
@@ -106,7 +106,7 @@
 
   .pk-virtual-room:not(.pk-virtual-room--wide)
     .pk-virtual-room__now:not(:has(.pk-virtual-room__location))
-    :is(.pk-event-card__eyebrow, .pk-event-card__meta) {
+    :is(.pk-virtual-room__when, .pk-event-card__meta) {
     flex-basis: 100%;
   }
 
@@ -119,6 +119,70 @@
 
   .pk-virtual-room__now-text .pk-event-card__meta:not(:only-child) {
     display: none;
+  }
+
+  /* The time, behind a live dot while the session runs, with the session's people at the line's end. */
+  .pk-virtual-room__when {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2);
+    min-block-size: 1.5rem;
+  }
+
+  .pk-virtual-room__when .pk-event-card__eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pk-1);
+  }
+
+  .pk-virtual-room__live-dot {
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: 50%;
+    background: var(--pk-danger);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .pk-virtual-room__live-dot {
+      animation: pk-virtual-room-live 2s ease-in-out infinite;
+    }
+  }
+
+  @keyframes pk-virtual-room-live {
+    50% {
+      opacity: 0.35;
+    }
+  }
+
+  .pk-virtual-room__faces {
+    display: inline-flex;
+    align-items: center;
+    margin-inline-start: auto;
+  }
+
+  .pk-virtual-room__face + .pk-virtual-room__face {
+    margin-inline-start: -0.25rem;
+  }
+
+  .pk-virtual-room__face-button {
+    display: block;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    cursor: pointer;
+  }
+
+  .pk-virtual-room__face .pk-avatar {
+    --pk-avatar-size: 1.5rem;
+
+    box-shadow: 0 0 0 2px var(--pk-surface);
+  }
+
+  .pk-virtual-room__faces-more {
+    margin-inline-start: var(--pk-1);
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
   }
 
   .pk-virtual-room__title {
