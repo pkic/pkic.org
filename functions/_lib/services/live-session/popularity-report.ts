@@ -41,7 +41,8 @@ const SORTS: Readonly<Record<string, string>> = {
 
 /**
  * One row per agenda session that received any reaction, chat message,
- * question or poll answer, from the live rooms' durable copies. Each source is aggregated
+ * question or poll answer, from the live rooms' durable copies. Questions an
+ * operator prepared count their votes, not as asked. Each source is aggregated
  * through its event-and-session index before the join, and the page and its
  * total share one source, so sorting, search and paging stay in D1.
  */
@@ -60,7 +61,7 @@ function prepareSessionPopularityReport(
       withSql: `WITH r AS (SELECT occurrence_id,${pivot},SUM(total) AS total FROM event_session_reaction_totals
           WHERE event_id=${scope.sql} AND reaction IN (SELECT value FROM json_each(?)) GROUP BY occurrence_id),
         c AS (SELECT occurrence_id,messages,people FROM event_session_chat_totals WHERE event_id=${scope.sql}),
-        q AS (SELECT occurrence_id,COUNT(*) AS asked,SUM(vote_count) AS votes FROM event_session_questions
+        q AS (SELECT occurrence_id,SUM(prepared=0) AS asked,SUM(vote_count) AS votes FROM event_session_questions
           WHERE event_id=${scope.sql} GROUP BY occurrence_id),
         p AS (SELECT occurrence_id,SUM(respondents) AS answers FROM event_session_polls
           WHERE event_id=${scope.sql} GROUP BY occurrence_id),

@@ -36,11 +36,12 @@ function reactions(owner: string, occurrenceId: string, values: Record<string, n
   );
 }
 
-function question(occurrenceId: string, votes: number) {
+/** An attendee's question, or one an operator prepared, which counts its votes but not as asked. */
+function question(occurrenceId: string, votes: number, prepared = false) {
   return env.DB.prepare(
-    `INSERT INTO event_session_questions(id,event_id,occurrence_id,author_user_id,anonymous,body,status,vote_count,asked_at,copied_at)
-     VALUES(?,?,?,?,0,'A synthetic question','approved',?,?,?)`,
-  ).bind(crypto.randomUUID(), eventId, occurrenceId, adminId, votes, at, at);
+    `INSERT INTO event_session_questions(id,event_id,occurrence_id,author_user_id,anonymous,body,status,vote_count,asked_at,copied_at,prepared)
+     VALUES(?,?,?,?,0,'A synthetic question','approved',?,?,?,?)`,
+  ).bind(crypto.randomUUID(), eventId, occurrenceId, adminId, votes, at, at, prepared ? 1 : 0);
 }
 
 function poll(occurrenceId: string, respondents: number) {
@@ -87,6 +88,7 @@ describe("Session popularity report", () => {
       ).bind(otherEvent, elsewhere, 900, 90, at),
       question(panel, 7),
       question(panel, 3),
+      question(panel, 4, true),
       question(workshop, 1),
       poll(workshop, 25),
       poll(workshop, 5),
@@ -116,7 +118,7 @@ describe("Session popularity report", () => {
       questionVotes: 0,
       pollAnswers: 0,
     });
-    expect(result.sessions[1]).toMatchObject({ reactionTotal: 44, questions: 2, questionVotes: 10, pollAnswers: 0 });
+    expect(result.sessions[1]).toMatchObject({ reactionTotal: 44, questions: 2, questionVotes: 14, pollAnswers: 0 });
     expect(result.sessions[2]).toMatchObject({
       reactionTotal: 0,
       chatMessages: 60,
