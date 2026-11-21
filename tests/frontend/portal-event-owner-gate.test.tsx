@@ -182,11 +182,11 @@ describe("standalone event views redirect to the owning group", () => {
 
   it.each([
     {
-      label: "an event-scoped staff identity",
+      label: "a staff identity scoped to another event",
       session: () =>
         portalSessionFixture({
           staff: true,
-          grants: [{ permission: "events:manage", contextType: "event", contextId: EVENT_ID }],
+          grants: [{ permission: "events:manage", contextType: "event", contextId: "other-event" }],
         }),
     },
     {
@@ -204,6 +204,17 @@ describe("standalone event views redirect to the owning group", () => {
     await settle();
     await vi.waitFor(() => expect(container.querySelector(".pk-event-hero__title")?.textContent).toBe("Summit"));
     expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("redirects the event's team into the owning group, which they open as a guest", async () => {
+    portalSession.value = portalSessionFixture({
+      staff: true,
+      grants: [{ permission: "events:manage", contextType: "event", contextId: EVENT_ID }],
+    });
+    stubDetail(GROUP_ID);
+    await act(() => render(<EventWorkspace view="detail" slug="summit" tab="registrations" />, container));
+    await settle();
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/events/${EVENT_ID}/registrations`, { replace: true });
   });
 
   it("redirects a staff identity granted on the owning group into its workspace", async () => {
