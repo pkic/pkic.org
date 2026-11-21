@@ -264,7 +264,7 @@ export const eventTicketOfferSchema = z.object({
     .nullable(),
   currentPeriodStartsOn: calendarDateSchema.nullable(),
   nextPeriodStartsOn: calendarDateSchema.nullable(),
-  /** A paid ticket is followed by an invoice from the payment provider. */
+  /** A paid ticket is followed by an invoice from the payment provider; never for an individual registration. */
   sendInvoice: z.boolean().default(false),
   /** Until when a paid ticket is refunded on cancellation or a move to cheaper days; null when it never is. */
   refundableUntil: utcInstantSchema.nullable().default(null),

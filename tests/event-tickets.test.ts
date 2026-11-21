@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
+import { insertOrganization } from "./helpers/membership";
+import { nowIso } from "../functions/_lib/utils/time";
 import { ticketRefundNote } from "../assets/shared/event-ticket-display";
 import { callApi } from "./helpers/app";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
@@ -1231,6 +1233,57 @@ describe("event tickets", () => {
     expect(await eligible()).toBe(1);
   });
 
+  it("sends an invoice only for a registration on behalf of an organization", async () => {
+    const { event } = await seedTickets();
+    const { registration, user } = await register(event, "buyer@gmail.com");
+    const organizationId = await insertOrganization(env.DB, "Invoice Works");
+    const identityId = crypto.randomUUID();
+    const at = nowIso();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO identities (id, user_id, organization_id, source, invited_at, started_at, created_at, updated_at)
+         VALUES (?, ?, ?, 'verified_domain', ?, ?, ?, ?)`,
+      ).bind(identityId, user.id, organizationId, at, at, at, at),
+      env.DB.prepare("UPDATE registrations SET registration_identity_id = ? WHERE id = ?").bind(
+        identityId,
+        registration.id,
+      ),
+    ]);
+    let request: URLSearchParams | null = null;
+    const capture = (async (_url: string, init: RequestInit) => {
+      request = new URLSearchParams(String(init.body));
+      return Response.json({ id: "cs_test_org", url: "https://checkout.stripe.com/c/pay/cs_test_org" });
+    }) as typeof fetch;
+    await openTicketCheckout(
+      env.DB,
+      paymentEnv,
+      "https://example.test",
+      { eventId: event.id, registrationId: registration.id, userId: user.id },
+      capture,
+    );
+    expect(request!.get("invoice_creation[enabled]")).toBe("true");
+    expect(request!.get("tax_id_collection[enabled]")).toBe("true");
+    const offer = await readEventTicketOffer(
+      env.DB,
+      {},
+      event,
+      { userId: user.id, email: "buyer@gmail.com" },
+      identityId,
+    );
+    expect(offer.sendInvoice).toBe(true);
+    const individual = await env.DB.prepare("SELECT id FROM identities WHERE user_id = ? AND organization_id IS NULL")
+      .bind(user.id)
+      .first<{ id: string }>();
+    const personal = await readEventTicketOffer(
+      env.DB,
+      {},
+      event,
+      { userId: user.id, email: "buyer@gmail.com" },
+      individual!.id,
+    );
+    expect(personal.sendInvoice).toBe(false);
+  });
+
   it("takes a registrant from the mounted checkout route through the signed webhook to a paid ticket", async () => {
     const { event } = await seedTickets();
     const { registration, user } = await register(event, "journey@gmail.com");
@@ -1270,9 +1323,10 @@ describe("event tickets", () => {
     expect(stripeRequest!.get("client_reference_id")).toBe(registration.id);
     expect(stripeRequest!.get("metadata[registrationId]")).toBe(registration.id);
     expect(stripeRequest!.get("custom_fields[0][optional]")).toBe("true");
-    // Invoices are on unless the event turns them off, and then the buyer's business details are asked for.
-    expect(stripeRequest!.get("invoice_creation[enabled]")).toBe("true");
-    expect(stripeRequest!.get("tax_id_collection[enabled]")).toBe("true");
+    // An individual registration gets the provider's receipt, never an invoice.
+    expect(stripeRequest!.get("invoice_creation[enabled]")).toBeNull();
+    expect(stripeRequest!.get("tax_id_collection[enabled]")).toBeNull();
+    expect(stripeRequest!.get("payment_intent_data[receipt_email]")).toBe("journey@gmail.com");
     const timestamp = Math.floor(Date.now() / 1000);
     const body = JSON.stringify({
       id: "evt_route_paid",

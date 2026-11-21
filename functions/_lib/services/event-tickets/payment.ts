@@ -15,6 +15,7 @@ import { nowIso } from "../../utils/time";
 import { ticketRefundNote } from "../../../../assets/shared/event-ticket-display";
 import { eventTicketPath } from "../../../../assets/shared/event-participation-link";
 import { prepareStripePaymentEvent } from "../payments/ledger";
+import { primaryIdentityIdSql } from "../identities/affiliation-projection";
 import { readRefundPolicy, refundDeadlineSql } from "./refund-policy";
 import {
   prepareCompleteRefund,
@@ -60,11 +61,20 @@ interface CheckoutRow {
   expires_at: string;
 }
 
+/**
+ * Whether a paid ticket gets an invoice besides its receipt: only when the event sends invoices and the person
+ * registers for an organization. A registration as an individual gets the receipt alone.
+ */
+const ticketInvoiceSql = `(settings.send_invoice = 1 AND EXISTS (
+    SELECT 1 FROM identities identity
+    WHERE identity.id = COALESCE(registration.registration_identity_id, ${primaryIdentityIdSql("registration.user_id")})
+      AND identity.organization_id IS NOT NULL))`;
+
 /** A ticket with what a payment page or a payment email needs; `columns` adds to the selection. */
 export const payableTicketSql = (columns = "") => `
   SELECT ticket.id, ticket.registration_id, ticket.amount, ticket.currency, ticket.status,
          type.name AS ticket_name, event.id AS event_id, event.name AS event_name, event.slug AS event_slug,
-         user.email, settings.send_invoice, registration.status AS registration_status, event.timezone,
+         user.email, ${ticketInvoiceSql} AS send_invoice, registration.status AS registration_status, event.timezone,
          ${refundDeadlineSql("settings", "event")} AS refund_deadline, settings.refund_fee, settings.tickets_transferable AS transferable,
          ticket.pay_by${columns}
   FROM registration_tickets ticket

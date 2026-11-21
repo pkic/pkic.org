@@ -369,7 +369,9 @@ export function EventTicketPricing({ slug, children }: { slug: string; children:
           {quote && quote.total > 0 && (
             <p class="pk-small pk-muted">
               You pay on the next page after you register. Your place is confirmed once the payment arrives.
-              {data.sendInvoice && " You get an invoice by email after payment."}{" "}
+              {data.sendInvoice
+                ? " You get an invoice by email after payment."
+                : " You get a receipt by email after payment, not an invoice."}{" "}
               {ticketRefundNote(data, data.timeZone)}
             </p>
           )}

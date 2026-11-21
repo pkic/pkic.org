@@ -110,7 +110,8 @@ export async function readEventTicketOffer(
         : null,
     currentPeriodStartsOn: snapshot.current?.startsOn ?? null,
     nextPeriodStartsOn: snapshot.next?.startsOn ?? null,
-    sendInvoice: snapshot.settings!.send_invoice === 1,
+    // An individual registration gets the receipt alone; invoices go to organizations.
+    sendInvoice: snapshot.settings!.send_invoice === 1 && person.organizationName !== null,
     ...(await readRefundPolicy(db, event.id)),
     ticketIntro: snapshot.settings!.ticket_intro ?? "",
     attendanceIntro: snapshot.settings!.attendance_intro ?? "",
