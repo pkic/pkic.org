@@ -154,7 +154,9 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
           await openScannerManualEntry(page);
           await expect(manual.getByLabel("Badge code", { exact: true })).toHaveValue("");
           await expect(
-            page.getByRole("checkbox", { name: "I will ask permission before scanning each attendee’s badge." }),
+            page.getByRole("checkbox", {
+              name: "I will ask each person for permission to collect their contact information before scanning their badge.",
+            }),
           ).toHaveCount(0);
           await manual.getByRole("button", { name: "Cancel", exact: true }).click();
           await expect(manual).not.toBeVisible();

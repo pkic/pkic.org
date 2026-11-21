@@ -133,11 +133,7 @@ export function EventScannerCapture(props: EventScannerProps) {
             connection={leadStatusNeeded ? connection : null}
             connectionBelow={action === "lead"}
             context={
-              !collectorContext && action === "lead" && props.sponsorName
-                ? { contextLabel: props.sponsorName, target: null, timeZone: null, quiet: true }
-                : !collectorContext && occurrenceId
-                  ? { contextLabel, target, timeZone }
-                  : undefined
+              !collectorContext && action !== "lead" && occurrenceId ? { contextLabel, target, timeZone } : undefined
             }
             feedback={
               result || message !== "Ready to scan" || (action !== "lead" && pending > 0)

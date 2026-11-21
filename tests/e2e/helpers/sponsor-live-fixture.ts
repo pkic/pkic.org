@@ -177,7 +177,7 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
 
 async function openManualBadgeEntry(page: Page) {
   const acknowledgement = page.getByRole("checkbox", {
-    name: "I will ask permission before scanning each attendee’s badge.",
+    name: "I will ask each person for permission to collect their contact information before scanning their badge.",
     exact: true,
   });
   if (await acknowledgement.isVisible()) await acknowledgement.check();
@@ -242,7 +242,9 @@ export async function captureSponsorBadge(
   await expect(manual.getByLabel("Badge code", { exact: true })).toHaveValue("");
   await expect(manual.getByLabel("Badge code", { exact: true })).not.toHaveAttribute("aria-invalid", "true");
   await expect(
-    page.getByRole("checkbox", { name: "I will ask permission before scanning each attendee’s badge." }),
+    page.getByRole("checkbox", {
+      name: "I will ask each person for permission to collect their contact information before scanning their badge.",
+    }),
   ).toHaveCount(0);
   await manual.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(manual).not.toBeVisible();
