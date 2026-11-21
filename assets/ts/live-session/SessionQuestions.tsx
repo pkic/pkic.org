@@ -266,7 +266,10 @@ export function LiveAttendeeQuestions({
   const poll = currentLivePoll(state.polls);
   return (
     <div class="pk-stack pk-stack--snug">
-      {!live ? (
+      {/* A refused rejoin is final: say why rather than promise a reconnect. */}
+      {room.admissionRefusal ? (
+        <Alert tone="warn">{liveRoomOpenFailure(room.admissionRefusal, "attendee")}</Alert>
+      ) : !live ? (
         <Alert tone="warn">Live updates are paused while we reconnect. What you see may be out of date.</Alert>
       ) : null}
       {restriction ? (

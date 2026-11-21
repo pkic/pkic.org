@@ -5,9 +5,11 @@
  *
  * Promise-based like `confirmAction`: call `askModerationReason()` from a
  * menu item; every surface that offers moderation mounts the host, and the
- * first host to render a request claims it.
+ * first host to render a request claims it. The dialog renders at the page
+ * level, so a host inside a hidden tab still shows it.
  */
 import { signal } from "@preact/signals";
+import { createPortal } from "preact/compat";
 import { useEffect, useState } from "preact/hooks";
 import { LIVE_MODERATION_REASONS, type LiveModerationReason } from "../../shared/live-moderation-policy";
 import { liveModerationReasonFormSchema } from "../../shared/schemas/live-session-moderation";
@@ -65,7 +67,7 @@ export function LiveModerationDialogHost() {
   if (!request) return null;
   request.host ??= host;
   if (request.host !== host) return null;
-  return <LiveModerationDialogBody request={request} />;
+  return createPortal(<LiveModerationDialogBody request={request} />, document.body);
 }
 
 function LiveModerationDialogBody({ request }: { request: ActiveRequest }) {

@@ -26,7 +26,12 @@ export function LiveAttendeeChat({
   if (!chat.state) return <LocationChatJoining chat={chat} />;
   return (
     <>
-      {chat.status !== "live" ? <Alert tone="warn">Chat is reconnecting. Sending is paused.</Alert> : null}
+      {/* A refused rejoin is final: say why rather than promise a reconnect. */}
+      {chat.admissionRefusal ? (
+        <Alert tone="warn">{liveRoomOpenFailure(chat.admissionRefusal, "chat", chat.serverFault)}</Alert>
+      ) : chat.status !== "live" ? (
+        <Alert tone="warn">Chat is reconnecting. Sending is paused.</Alert>
+      ) : null}
       <LiveChat state={chat.state} disabled={chat.status !== "live"} send={chat.send} compact={compact} note={note} />
     </>
   );

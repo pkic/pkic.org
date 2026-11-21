@@ -31,8 +31,9 @@ function answerMenu(
   timeZone: string,
   onError: () => void,
 ): MenuItem[] {
-  const hide = (hidden: boolean, reason?: LiveModerationReason) =>
-    send({
+  // A change that cannot be sent says so, as the chat's own Hide does.
+  const hide = (hidden: boolean, reason?: LiveModerationReason) => {
+    const sent = send({
       type: "question.answer.hide",
       questionId,
       answerId: answer.id,
@@ -40,6 +41,8 @@ function answerMenu(
       reason,
       expectedRevision: answer.revision,
     });
+    if (!sent) onError();
+  };
   const items: MenuItem[] = [
     answer.removal
       ? { id: "show", label: "Show answer", tooltip: "Shows it to everyone again.", onSelect: () => hide(false) }
