@@ -356,6 +356,7 @@ export const ACCOUNT_DELETION_BLOCKING_RULES: readonly AccountDeletionBlockingRu
   authored("event_session_polls", "opened_by"),
   authored("event_session_questions", "moderated_by"),
   authored("event_session_questions", "rewritten_by"),
+  authored("event_sponsor_lead_removed_attempts", "removed_by_user_id"),
   authored("event_sponsor_leads", "operator_user_id"),
   authored("form_placement_group_grants", "created_by_user_id"),
   authored("group_memberships", "created_by_user_id", notThisAccount("user_id")),
