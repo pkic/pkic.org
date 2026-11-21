@@ -12,6 +12,7 @@ import {
 } from "../../assets/shared/schemas/event-sponsor-lead-list";
 const slug = "pqc-conference-amsterdam-nl";
 const sponsorId = "10000000-0000-4000-8000-000000000041";
+const secondSponsorId = "10000000-0000-4000-8000-000000000043";
 const leadId = "10000000-0000-4000-8000-000000000042";
 const pageInfo = { limit: 50, offset: 0, total: 1, hasMore: false };
 test.use({ actionTimeout: 20_000 });
@@ -43,6 +44,7 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
     await route.fulfill({ response, json: session });
   });
   const requests: URL[] = [];
+  let multipleSponsors = false;
   await page.route(`**/api/v1/events/${slug}/sponsors/**`, async (route) => {
     const url = new URL(route.request().url());
     requests.push(url);
@@ -59,34 +61,48 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
           ],
           page: pageInfo,
         })
-      : path.endsWith(`/sponsors/${sponsorId}/leads`)
-        ? sponsorLeadListSchema.parse({
-            leads: [
-              {
-                id: leadId,
-                name: "Synthetic attendee",
-                email: "synthetic-lead@gmail.com",
-                organization: null,
-                personalEmail: true,
-                capturedAt: "2026-12-01T09:30:00.000Z",
-                operatorName: "Demo operator",
-              },
-            ],
-            page: pageInfo,
-          })
-        : sponsorLeadSponsorsSchema.parse({
-            sponsors: [
-              {
-                id: sponsorId,
-                name: "Example sponsor",
-                capturedCount: 1,
-                canView: true,
-                canCapture: false,
-                canExport: false,
-              },
-            ],
-            page: pageInfo,
-          });
+      : path.endsWith(`/sponsors/${secondSponsorId}/leads`)
+        ? sponsorLeadListSchema.parse({ leads: [], page: { ...pageInfo, total: 0 } })
+        : path.endsWith(`/sponsors/${sponsorId}/leads`)
+          ? sponsorLeadListSchema.parse({
+              leads: [
+                {
+                  id: leadId,
+                  name: "Synthetic attendee",
+                  email: "synthetic-lead@gmail.com",
+                  organization: null,
+                  personalEmail: true,
+                  capturedAt: "2026-12-01T09:30:00.000Z",
+                  operatorName: "Demo operator",
+                },
+              ],
+              page: pageInfo,
+            })
+          : sponsorLeadSponsorsSchema.parse({
+              sponsors: [
+                {
+                  id: sponsorId,
+                  name: "Example sponsor",
+                  capturedCount: 1,
+                  canView: true,
+                  canCapture: false,
+                  canExport: false,
+                },
+                ...(multipleSponsors
+                  ? [
+                      {
+                        id: secondSponsorId,
+                        name: "Second sponsor",
+                        capturedCount: 0,
+                        canView: true,
+                        canCapture: false,
+                        canExport: false,
+                      },
+                    ]
+                  : []),
+              ],
+              page: { ...pageInfo, total: multipleSponsors ? 2 : 1 },
+            });
     await route.fulfill({ json: payload, headers: { "cache-control": "private, no-store" } });
   });
   await page.goto(`/portal/#/events/${slug}/leads`);
@@ -108,6 +124,21 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
     ).toBeVisible();
     await page.screenshot({ path: info.outputPath(`sponsor-lead-organization-${device}.png`), fullPage: true });
   }
+  multipleSponsors = true;
+  await page.reload();
+  const sponsorPicker = page.getByRole("combobox", { name: "Sponsor", exact: true });
+  await expect(sponsorPicker).toBeVisible();
+  await sponsorPicker.click();
+  await page.getByRole("option", { name: "Second sponsor", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Second sponsor", exact: true })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Event app", exact: true })).toBeVisible();
+  await page.screenshot({ path: info.outputPath("sponsor-lead-switcher-phone.png") });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(page.getByRole("navigation", { name: "Event", exact: true })).toBeVisible();
+  await page.mouse.move(0, 0);
+  await page.screenshot({ path: info.outputPath("sponsor-lead-switcher-desktop.png") });
+  multipleSponsors = false;
+  await page.reload();
   await page.getByRole("searchbox", { name: "Search consenting leads", exact: true }).fill("Synthetic");
   await page.getByRole("searchbox", { name: "Search consenting leads", exact: true }).press("Enter");
   await expect

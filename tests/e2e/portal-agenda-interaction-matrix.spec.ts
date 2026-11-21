@@ -1,4 +1,3 @@
-import { closeScannerDiagnostics, openScannerDiagnostics } from "./helpers/scanner-recovery-storage";
 import { enableAgendaEditing, openOrganizerAgenda } from "./helpers/organizer-agenda";
 import { expect, test, type Locator } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
@@ -369,13 +368,12 @@ test("expanded sponsor history prose and inner history fit their visible desktop
     liveSponsor = fixture;
     await signInToPortal(page, fixture.operator.email);
     await page.goto(fixture.workspace);
-    await page.getByRole("button", { name: /^Open leads for/ }).click();
     await page.getByRole("button", { name: "Scan leads", exact: true }).click();
-    const diagnostics = await openScannerDiagnostics(page);
-    await diagnostics.getByLabel("Feedback pause", { exact: true }).selectOption("0");
-    await closeScannerDiagnostics(page);
     await captureSponsorBadge(page, fixture.consenting.badgeId, fixture.sponsorId, fixture.operator.userId);
-    await page.getByRole("button", { name: "Close scanner", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "Continuous badge scanner", exact: true })
+      .getByRole("button", { name: "Close scanner", exact: true })
+      .click();
     const leads = sponsorLeadListSchema.parse(
       await (await page.request.get(`/api/v1/events/${sponsorEventSlug}/sponsors/${fixture.sponsorId}/leads`)).json(),
     );

@@ -86,6 +86,19 @@ afterEach(() => {
 });
 
 describe("group event workspace", () => {
+  it("keeps sponsor leads in the event app even for a sponsor contact with organizer access", () => {
+    const previous = portalSession.value;
+    try {
+      portalSession.value = portalSessionFixture({
+        staff: true,
+        grants: [{ permission: "agenda:leads_view", contextType: "event_sponsor", contextId: "sponsorship-1" }],
+      });
+      expect(visibleEventWorkspaceTabs(baseEvent()).map((tab) => tab.key)).not.toContain("leads");
+    } finally {
+      portalSession.value = previous;
+    }
+  });
+
   it("keeps Live settings reachable only for the event's explicit live moderator scope", async () => {
     const previous = portalSession.value;
     try {

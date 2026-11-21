@@ -89,14 +89,23 @@ describe("Live sponsor leads", () => {
     document.body.append(host);
     hosts.push(host);
     await act(() => render(<SponsorLeads slug="event" timeZone="UTC" />, host));
-    await vi.waitFor(() =>
-      expect(host.querySelector('button[aria-label="Open leads for Second sponsor"]')).not.toBeNull(),
-    );
-    await act(() =>
-      host.querySelector<HTMLButtonElement>('button[aria-label="Open leads for Second sponsor"]')!.click(),
-    );
+    const selector = await vi.waitFor(() => {
+      const control = host.querySelector<HTMLInputElement>('input[role="combobox"]');
+      expect(control).not.toBeNull();
+      return control!;
+    });
+    await act(() => selector.click());
+    const second = await vi.waitFor(() => {
+      const option = [...host.querySelectorAll<HTMLElement>('[role="option"]')].find(
+        (item) => item.textContent === "Second sponsor",
+      );
+      expect(option).toBeDefined();
+      return option!;
+    });
+    await act(() => second.click());
     await vi.waitFor(() => expect(host.textContent).toContain("Consenting leads"));
     expect(host.textContent).toContain("2 saved leads");
+    expect(selector.value).toBe("Second sponsor");
   });
   it("shows an operator only their own scans and keeps export separate", async () => {
     const first = await mount(false, true);

@@ -1,7 +1,7 @@
 import { ContactOrganization } from "../../../../../../components/ContactOrganization";
 import { type ClockZone } from "../../../../../../../shared/event-clock";
 import { SponsorLeadCaptures } from "./SponsorLeadCaptures";
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useMemo, useState } from "preact/hooks";
 import { lazy, Suspense } from "preact/compat";
 import {
   sponsorLeadListSchema,
@@ -15,8 +15,12 @@ import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import { Spinner } from "../../../../../../components/Spinner";
 import { useData } from "../../../../../../hooks/useData";
 import { Button } from "../../../../../../ui/Button";
+import { Field } from "../../../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
 import { Menu } from "../../../../../../ui/Menu";
+import { ServerSearchSelect } from "../../../../../../components/ServerSearchSelect";
+import type { ServerCatalog } from "../../../../../../shared/server-catalog";
+import type { z } from "zod";
 
 import { loadLiveSponsorLeads } from "./sponsor-lead-loader";
 import { portalSession } from "../../../../state";
@@ -38,6 +42,18 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
   const [live, setLive] = useState(() => navigator.onLine && document.visibilityState !== "hidden");
   const [epoch, setEpoch] = useState(0);
   const base = `/api/v1/events/${encodeURIComponent(slug)}/sponsors`;
+  const sponsorCatalog = useMemo(
+    (): ServerCatalog<SponsorLeadSponsor, z.infer<typeof sponsorLeadSponsorsSchema>> => ({
+      endpoint: `${base}/leads`,
+      responseSchema: sponsorLeadSponsorsSchema,
+      resolveItems: (response) => response.sponsors,
+      resolvePage: (response) => response.page,
+      itemKey: (sponsor) => sponsor.id,
+      itemLabel: (sponsor) => sponsor.name,
+      sort: "name",
+    }),
+    [base],
+  );
   const sponsorOptions = useData(
     () => requestJson(`${base}/leads?limit=2`, sponsorLeadSponsorsSchema, { method: "GET", cache: "no-store" }),
     [slug, listVersion],
@@ -62,55 +78,31 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
   if (sponsorOptions.error || !sponsorOptions.data)
     return <ErrorAlert error={sponsorOptions.error ?? "Sponsor leads are unavailable."} />;
   const oneSponsor = sponsorOptions.data.page.total === 1;
-  const current = oneSponsor ? (sponsorOptions.data.sponsors[0] ?? null) : selected;
+  const current = oneSponsor
+    ? (sponsorOptions.data.sponsors[0] ?? null)
+    : (selected ?? sponsorOptions.data.sponsors[0] ?? null);
   return (
     <div class="pk-stack">
       {sponsorOptions.data.page.total > 1 && (
-        <ApiDataTable
-          key={`${slug}:${listVersion}`}
-          urlState="lead-sponsors"
-          endpoint={`${base}/leads`}
-          responseSchema={sponsorLeadSponsorsSchema}
-          resolve={(value) => value.sponsors}
-          resolvePage={(value) => value.page}
-          caption="Authorized sponsors"
-          paginate
-          searchPlaceholder="Find a sponsor…"
-          load={loadLiveSponsorLeads}
-          clearDataOnReload
-          retainDataOnError={false}
-          rowKey={(row) => row.id}
-          empty="No sponsor lead permissions are available for this event."
-          columns={[
-            { header: "Sponsor", cell: (row) => row.name, sort: { asc: "name", desc: "-name" }, hideable: false },
-            {
-              header: "Access",
-              cell: (row) =>
-                [
-                  `${formatNumber(row.capturedCount)} saved ${row.capturedCount === 1 ? "lead" : "leads"}`,
-                  row.canView ? "All leads" : row.canCapture && "My scans",
-                  row.canExport && "Export",
-                ]
-                  .filter(Boolean)
-                  .join(" · "),
-            },
-            {
-              header: "Open",
-              cell: (row) => (
-                <Button
-                  aria-label={`Open leads for ${row.name}`}
-                  onClick={() => {
-                    setSelected(row);
-                    setScanning(false);
-                  }}
-                >
-                  {selected?.id === row.id ? "Selected" : "Open"}
-                </Button>
-              ),
-              hideable: false,
-            },
-          ]}
-        />
+        <Field label="Sponsor">
+          {(control) => (
+            <ServerSearchSelect
+              {...control}
+              catalog={sponsorCatalog}
+              load={loadLiveSponsorLeads}
+              searchLabel="Sponsor"
+              allowEmpty={false}
+              value={current?.id ?? null}
+              selectedLabel={current?.name}
+              onChange={(sponsor) => {
+                if (!sponsor) return;
+                setSelected(sponsor);
+                setScanning(false);
+                setCaptureHistory(null);
+              }}
+            />
+          )}
+        </Field>
       )}
       {sponsorOptions.data.page.total === 0 && <p>No sponsor lead access is available for this event.</p>}
       {current && (
@@ -118,32 +110,16 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
           <PanelHeader
             title={current.name}
             menu={
-              current.canExport || !oneSponsor ? (
+              current.canExport && live ? (
                 <Menu
                   label="Sponsor actions"
                   align="end"
                   items={[
-                    ...(current.canExport && live
-                      ? [
-                          {
-                            id: "export",
-                            label: "Export consenting leads",
-                            href: `${base}/${encodeURIComponent(current.id)}/leads.csv`,
-                          },
-                        ]
-                      : []),
-                    ...(!oneSponsor
-                      ? [
-                          {
-                            id: "close",
-                            label: "Close sponsor",
-                            onSelect: () => {
-                              setSelected(null);
-                              setScanning(false);
-                            },
-                          },
-                        ]
-                      : []),
+                    {
+                      id: "export",
+                      label: "Export consenting leads",
+                      href: `${base}/${encodeURIComponent(current.id)}/leads.csv`,
+                    },
                   ]}
                 />
               ) : undefined
