@@ -54,7 +54,7 @@ export function Settings({
 }) {
   const visibleTabs = [
     ...SETTINGS_TABS.filter(({ capability }) => !capability || event.capabilities.includes(capability)),
-    ...(hasEventAgendaPermission(event.id, "agenda:live_moderate") ? [{ key: "live" as const, label: "Studio" }] : []),
+    ...(hasEventAgendaPermission(event.id, "agenda:live_studio") ? [{ key: "live" as const, label: "Studio" }] : []),
   ];
   const tab: SettingsTab = visibleTabs.find(({ key }) => key === subTab)?.key ?? "general";
 

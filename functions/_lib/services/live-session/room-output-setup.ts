@@ -109,7 +109,7 @@ export async function saveLiveRoomOutputs(
   const context = { type: "event", id: event.id };
   try {
     await db.batch([
-      preparePermissionsAuthorizationGuard(db, actor, [{ permission: "agenda:live_moderate", context }]),
+      preparePermissionsAuthorizationGuard(db, actor, [{ permission: "agenda:live_studio", context }]),
       db.prepare("DELETE FROM event_agenda_room_outputs WHERE event_id=? AND room_id=?").bind(event.id, roomId),
       ...checked.data.map((output, position) =>
         db

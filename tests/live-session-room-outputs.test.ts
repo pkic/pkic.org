@@ -112,7 +112,7 @@ describe("live room auxiliary outputs", () => {
     operator.send({ type: "stage.display.settings", settings });
     expect((await overlay.next("stage.display.settings.changed")).settings).toEqual(settings);
     attendee.send({ type: "stage.display.settings", settings: DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS });
-    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
+    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_STUDIO_REQUIRED");
     expect(attendee.received.some((m) => m.type === "stage.display.settings.changed")).toBe(false);
     const rejoined = await f.connect({ person: "operator" });
     expect((await rejoined.next("room.snapshot")).stageDisplaySettings).toEqual(settings);
@@ -128,7 +128,7 @@ describe("live room auxiliary outputs", () => {
     const changed = { projector: false };
     expect((await overlay.next("screen.sync.changed")).screenSync).toEqual(changed);
     attendee.send({ type: "screen.sync", output: "stage-display", sync: false });
-    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
+    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_STUDIO_REQUIRED");
     expect(attendee.received.some((m) => m.type === "screen.sync.changed")).toBe(false);
     const rejoined = await f.connect({ person: "operator" });
     expect((await rejoined.next("room.snapshot")).screenSync).toEqual(changed);
@@ -156,7 +156,7 @@ describe("live room auxiliary outputs", () => {
     expect((await operator.next("room.refused")).code).toBe("LIVE_QUESTION_NOT_FOUND");
     const attendee = await f.connect({ person: "attendee" });
     attendee.send({ type: "aux.set", output: "projector", composition: EMPTY_COMPOSITION });
-    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
+    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_STUDIO_REQUIRED");
     const rejoined = await f.connect({ person: "operator" });
     expect((await rejoined.next("room.snapshot")).outputs["stage-display"]).toMatchObject({
       timerGraphics: [],
@@ -273,7 +273,7 @@ describe("live room auxiliary outputs", () => {
     expect((await operator.next("room.refused")).code).toBe("LIVE_ROOM_INVALID_MESSAGE");
     const attendee = await f.connect({ person: "attendee" });
     attendee.send({ type: "preview.set", composition: { checkInText: { visible: false, template: "Hidden" } } });
-    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
+    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_STUDIO_REQUIRED");
     const rejoined = await f.connect({ person: "operator" });
     expect((await rejoined.next("room.snapshot")).preview).toMatchObject({
       lowerThird: null,
@@ -626,7 +626,7 @@ describe("live room auxiliary outputs", () => {
     // Program and Preview are never touched, and only an operator changes a screen's scene.
     expect(operator.received.some((m) => m.type === "stage.changed" || m.type === "preview.changed")).toBe(false);
     attendee.send({ type: "aux.scene", output: "projector", scene: "break" });
-    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
+    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_STUDIO_REQUIRED");
   });
 
   it("loads the scene a room locked a screen that follows Program to before anyone takes to it, once, and keeps it", async () => {

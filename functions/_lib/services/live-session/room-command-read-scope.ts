@@ -37,6 +37,7 @@ const commandRead = new AsyncLocalStorage<LiveRoomCommandRead>();
 export function liveParticipantReadKey(participant: LiveRoomParticipant): string {
   return JSON.stringify([
     participant.role,
+    participant.studio === true,
     participant.userId,
     participant.sessionClaims,
     participant.overlayRoomId,

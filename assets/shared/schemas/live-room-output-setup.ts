@@ -112,7 +112,7 @@ export const liveRoomOutputsResponseSchema = z.object({ outputs: liveRoomOutputs
 export type LiveRoomOutputsResponse = z.infer<typeof liveRoomOutputsResponseSchema>;
 
 export const liveRoomOutputsGetRouteSchema = {
-  ...requiresPermissions("agenda:live_moderate"),
+  ...requiresPermissions("agenda:live_studio"),
   tags: ["Events"],
   summary: "List the outputs a physical room sets up beside Program",
   request: { params: liveProgramParamsSchema },
@@ -123,7 +123,7 @@ export const liveRoomOutputsGetRouteSchema = {
 };
 
 export const liveRoomOutputsPutRouteSchema = {
-  ...requiresPermissions("agenda:live_moderate"),
+  ...requiresPermissions("agenda:live_studio"),
   tags: ["Events"],
   summary: "Replace the outputs a physical room sets up beside Program",
   request: {

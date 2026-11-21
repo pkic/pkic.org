@@ -210,7 +210,7 @@ describe("searching people for a lower third", () => {
 
   it("finds each identity of the event's people for a live operator without agenda editing, and nobody else", async () => {
     await env.DB.prepare(
-      "INSERT INTO permission_grants (id,user_id,permission,context_type,context_id,created_at) VALUES (?,?,'agenda:live_moderate','event',?,?)",
+      "INSERT INTO permission_grants (id,user_id,permission,context_type,context_id,created_at) VALUES (?,?,'agenda:live_studio','event',?,?)",
     )
       .bind(crypto.randomUUID(), f.users.secondAttendee, f.eventId, new Date().toISOString())
       .run();

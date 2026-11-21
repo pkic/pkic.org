@@ -327,4 +327,20 @@ describe("live chat reactions, reports and moderation", () => {
     expect(stage.ticker?.segments[0].markdown).toContain("Ada Attendee: Great talk");
     expect(stage.ticker?.segments[0].markdown).not.toContain("spam");
   });
+
+  it("lets a moderator who does not run the studio moderate the chat but not change what is on air", async () => {
+    const author = await f.connectChat("attendee");
+    const message = await say(author, "Pin me");
+    await demoteSecondOperator();
+    const moderator = await f.connectChat("secondOperator");
+    moderator.send({ type: "chat.pin", messageId: message.id });
+    expect((await author.next("chat.pinned")).message?.id).toBe(message.id);
+
+    const desk = await f.connect({ person: "secondOperator" });
+    desk.send({ type: "timer.control", timerId: "session", action: "pause" });
+    expect((await desk.next("room.refused")).code).toBe("LIVE_ROOM_STUDIO_REQUIRED");
+    const studio = await f.connect({ person: "operator" });
+    studio.send({ type: "timer.control", timerId: "session", action: "pause" });
+    await studio.next("timers.changed");
+  });
 });

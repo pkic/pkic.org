@@ -9,7 +9,7 @@ import { authErrors, ok, requiresPermissions } from "./route-contract";
 
 const tags = ["Event live settings"];
 /** Room operators load the event's layouts. */
-const read = { tags, ...requiresPermissions("agenda:live_moderate") };
+const read = { tags, ...requiresPermissions("agenda:live_studio") };
 /** Every room shares the layouts, so changing them is for the people who set up the live studio. */
 const write = { tags, ...requiresPermissions("agenda:live_setup") };
 

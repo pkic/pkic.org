@@ -137,6 +137,6 @@ it("offers the chat download and erase to the event's organizers, not to a room 
     root.remove();
     return actions;
   };
-  expect(await archive("agenda:live_moderate")).toEqual([]);
+  expect(await archive("agenda:live_studio")).toEqual([]);
   expect(await archive("events:write")).toEqual(["Download chat (CSV)", "Erase chat…"]);
 });

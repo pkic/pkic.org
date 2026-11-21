@@ -55,7 +55,7 @@ async function seed() {
       .run();
   const grants: Record<Staff, string> = {
     manager: "agenda:screens_manage",
-    moderator: "agenda:live_moderate",
+    moderator: "agenda:live_studio",
     reader: "agenda:read",
   };
   for (const person of Object.keys(users) as Staff[]) {

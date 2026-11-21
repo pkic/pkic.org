@@ -337,7 +337,7 @@ describe("live session questions", () => {
     const attendee = await f.connect({ person: "attendee" });
     expect((await attendee.next("room.snapshot")).opening).toBe("scheduled");
     attendee.send({ type: "room.opening", opening: "open" });
-    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
+    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_STUDIO_REQUIRED");
 
     operator.send({ type: "room.opening", opening: "open" });
     expect((await attendee.next("room.opening.changed")).opening).toBe("open");
@@ -427,7 +427,7 @@ describe("live session control room", () => {
     expect((await first.next("room.refused")).code).toBe("LIVE_CREDIT_NOT_FOUND");
     const attendee = await f.connect({ person: "attendee" });
     attendee.send({ type: "timer.control", timerId: "session", action: "reset" });
-    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
+    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_STUDIO_REQUIRED");
   });
 
   it("issues overlays read-only access to this room only", async () => {

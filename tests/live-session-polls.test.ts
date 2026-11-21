@@ -73,7 +73,7 @@ describe("live session polls", () => {
     expect((await operator.next("poll.removed")).pollId).toBe(second.id);
 
     attendee.send({ type: "poll.status", pollId: second.id, status: "open" });
-    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
+    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_STUDIO_REQUIRED");
   });
 
   it("counts one answer per person, final once given, and refuses votes once closed", async () => {
@@ -228,7 +228,7 @@ describe("live session polls", () => {
       pollId: null,
       pollPresentation: { chart: "bar" },
     });
-    expect((await voter.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
+    expect((await voter.next("room.refused")).code).toBe("LIVE_ROOM_STUDIO_REQUIRED");
   });
 
   it("publishes and clears plain ticker text only through operator commands and includes it in atomic shots", async () => {
@@ -244,7 +244,7 @@ describe("live session polls", () => {
     const updated = await voter.next("stage.changed");
     expect(updated.stage.ticker?.segments[0]?.markdown).toBe("Next session: Trust & <questions>");
     voter.send({ type: "stage.ticker", ticker: null });
-    expect((await voter.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
+    expect((await voter.next("room.refused")).code).toBe("LIVE_ROOM_STUDIO_REQUIRED");
     operator.send({
       type: "stage.set",
       schedule: null,
@@ -415,7 +415,7 @@ describe("live session control desk lineup", () => {
     await operator.next("poll.changed", (message) => message.poll.id === first.id && message.poll.status === "open");
 
     author.send({ type: "queue.add", view: "question", itemId: asked.question.id });
-    expect((await author.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
+    expect((await author.next("room.refused")).code).toBe("LIVE_ROOM_STUDIO_REQUIRED");
   });
 
   it("shows only the poll on air to a broadcast overlay, with its tallies", async () => {
@@ -483,7 +483,7 @@ describe("live session question rewrite", () => {
     ).toBe("What about hybrid certificates?");
 
     attendee.send({ type: "question.rewrite", questionId, text: "Mine now" });
-    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
+    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_STUDIO_REQUIRED");
 
     await runDurableObjectAlarm(f.room());
     expect(

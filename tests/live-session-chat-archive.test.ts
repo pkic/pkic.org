@@ -227,7 +227,7 @@ describe("event chat download and erasure", () => {
     await env.DB.batch([
       env.DB.prepare("UPDATE user_roles SET revoked_at=? WHERE user_id=?").bind(now, f.users.secondOperator),
       env.DB.prepare(
-        "INSERT INTO permission_grants (id,user_id,permission,context_type,context_id,granted_by_user_id,created_at) VALUES (?,?,'agenda:live_moderate','event',?,?,?)",
+        "INSERT INTO permission_grants (id,user_id,permission,context_type,context_id,granted_by_user_id,created_at) VALUES (?,?,'agenda:live_studio','event',?,?,?)",
       ).bind(crypto.randomUUID(), f.users.secondOperator, f.eventId, f.users.operator, now),
     ]);
     const roomOperator = await createAdminSession(env.DB, f.users.secondOperator, crypto.randomUUID());

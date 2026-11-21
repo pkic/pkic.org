@@ -101,7 +101,7 @@ export function GroupEventSettingsTab({
           ...(!canManage && hasEventAgendaPermission(event.id, "agenda:write")
             ? [{ key: "scheduling", label: "Scheduling" }]
             : []),
-          ...(hasEventAgendaPermission(event.id, "agenda:live_moderate") ? [{ key: "live", label: "Studio" }] : []),
+          ...(hasEventAgendaPermission(event.id, "agenda:live_studio") ? [{ key: "live", label: "Studio" }] : []),
         ]}
         active={
           detailId === "scheduling" && canManage
@@ -109,7 +109,7 @@ export function GroupEventSettingsTab({
             : ["access", "terms", "attendance-days", "sponsors"].includes(detailId ?? "")
               ? "registration"
               : (detailId ??
-                (canManage ? "general" : hasEventAgendaPermission(event.id, "agenda:live_moderate") ? "live" : "team"))
+                (canManage ? "general" : hasEventAgendaPermission(event.id, "agenda:live_studio") ? "live" : "team"))
         }
         hrefFor={(key) => (key === "general" ? settingsPath : `${settingsPath}/${key}`)}
       />
@@ -139,7 +139,7 @@ export function GroupEventSettingsTab({
         />
       )}
       {(detailId === "team" && (canManage || hasEventAgendaPermission(event.id, "agenda:read"))) ||
-      (!canManage && !detailId && !hasEventAgendaPermission(event.id, "agenda:live_moderate")) ? (
+      (!canManage && !detailId && !hasEventAgendaPermission(event.id, "agenda:live_studio")) ? (
         <Suspense fallback={<Spinner label="Loading team…" />}>
           <EventTeamSettings
             slug={event.slug}
@@ -162,7 +162,7 @@ export function GroupEventSettingsTab({
           />
         </Suspense>
       ) : (detailId === "live" || (!canManage && !detailId)) &&
-        hasEventAgendaPermission(event.id, "agenda:live_moderate") ? (
+        hasEventAgendaPermission(event.id, "agenda:live_studio") ? (
         <Suspense fallback={<Spinner label="Loading live settings…" />}>
           <div class="pk-stack">
             <EventLiveSettings slug={event.slug} canEdit={hasEventAgendaPermission(event.id, "agenda:live_setup")} />

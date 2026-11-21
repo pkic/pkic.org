@@ -70,7 +70,7 @@ const audits = () =>
   queryAll<{ action: string }>(env.DB, "SELECT action FROM audit_log WHERE entity_id=? ORDER BY created_at", f.eventId);
 
 /** Leaves the second operator with exactly these permissions on the event, in place of administrator access. */
-async function secondOperatorHolds(...permissions: Array<"agenda:live_moderate" | "agenda:live_setup">) {
+async function secondOperatorHolds(...permissions: Array<"agenda:live_studio" | "agenda:live_setup">) {
   const now = new Date().toISOString();
   await env.DB.batch([
     env.DB.prepare("UPDATE user_roles SET revoked_at=? WHERE user_id=?").bind(now, f.users.secondOperator),
@@ -217,7 +217,7 @@ describe("event overlay layouts", () => {
     expect(created.status).toBe(200);
     const saved = eventLiveOverlayLayoutsResponseSchema.parse(await created.json());
     const keynote = saved.layouts.find((layout) => layout.slug === "keynote")!;
-    await secondOperatorHolds("agenda:live_moderate");
+    await secondOperatorHolds("agenda:live_studio");
 
     const listed = await api("GET", null, undefined, "secondOperator");
     expect(listed.status).toBe(200);
@@ -245,7 +245,7 @@ describe("event overlay layouts", () => {
   });
 
   it("lets someone who sets up the live studio create, save, reset and delete layouts and shared positions", async () => {
-    await secondOperatorHolds("agenda:live_moderate", "agenda:live_setup");
+    await secondOperatorHolds("agenda:live_studio", "agenda:live_setup");
     const asSetup = (method: "PUT" | "DELETE", slug: string | null, body?: unknown) =>
       api(method, slug, body, "secondOperator", env.DB, slug ? undefined : positionsPath());
     const version = async (slug: string) =>

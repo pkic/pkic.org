@@ -44,7 +44,7 @@ export async function liveProgramSocketRequest(request: Request, env: Env): Prom
         if (!getUserSessionToken(request))
           throw new AppError(401, "AUTH_REQUIRED", "Sign in to operate the physical room.");
         const { session, claims } = await resolveUserSessionContext(env.DB, request, env);
-        if (!session.staff || !hasPermission(session.staff, "agenda:live_moderate", { type: "event", id: event.id }))
+        if (!session.staff || !hasPermission(session.staff, "agenda:live_studio", { type: "event", id: event.id }))
           throw new AppError(
             403,
             "LIVE_ROOM_OPERATOR_REQUIRED",

@@ -83,7 +83,7 @@ describe("prepared questions", () => {
     expect(audience).toMatchObject({ preparedQuestions: [], preparedQuestionWindow: null });
     expect(attendee.received.some((message) => message.type === "question.prepared.changed")).toBe(false);
     attendee.send({ type: "question.prepared.release", preparedId: prepared.id });
-    expect(await attendee.next("room.refused")).toMatchObject({ code: "LIVE_ROOM_OPERATOR_REQUIRED" });
+    expect(await attendee.next("room.refused")).toMatchObject({ code: "LIVE_ROOM_STUDIO_REQUIRED" });
   });
 
   it("releases now as an approved anonymous question that only operators can tell was prepared", async () => {

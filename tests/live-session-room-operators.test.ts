@@ -53,7 +53,7 @@ describe("live room shared Preview", () => {
     expect((await olga.next("room.refused")).code).toBe("LIVE_CREDIT_NOT_FOUND");
     const attendee = await f.connect({ person: "attendee" });
     attendee.send({ type: "preview.set", composition: { timerGraphics: [GRAPHIC] } });
-    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
+    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_STUDIO_REQUIRED");
     const joined = await f.connect({ person: "operator" });
     expect((await joined.next("room.snapshot")).preview).toMatchObject({ lowerThird: null, timerGraphics: [] });
   });

@@ -23,6 +23,8 @@ export const liveRoomParticipantSchema = z
     name: z.string().min(1).max(200).nullable(),
     /** An operator who also manages the event: the chat policy's organizer. */
     organizer: z.boolean().optional(),
+    /** An operator who also runs the studio: only they use the control desk, its screens and what is on air. */
+    studio: z.boolean().optional(),
     /** The person's profile photo, which a question they ask by name may show. */
     photoUrl: z.string().min(1).max(500).nullable().optional(),
     /** The identity the person acts as now, whose title and organization label what they write. */

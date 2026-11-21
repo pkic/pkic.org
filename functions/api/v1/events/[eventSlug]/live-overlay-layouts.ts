@@ -21,7 +21,7 @@ export const EventLiveOverlayLayoutsGet = openApiRoute(
   eventLiveOverlayLayoutsGetRouteSchema,
   async (c: AdminContext, data) => {
     markResponseSensitive(c);
-    const { db, event } = await requireEventPermission(c, data.params.eventSlug, "agenda:live_moderate");
+    const { db, event } = await requireEventPermission(c, data.params.eventSlug, "agenda:live_studio");
     return jsonNoStore(await readEventLiveOverlayLayouts(db, event.id));
   },
 );

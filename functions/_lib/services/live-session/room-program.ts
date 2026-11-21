@@ -140,7 +140,7 @@ export class LiveRoomProgram {
         );
     }
     const operator = await resolveUserSessionClaims(this.env.DB, claims);
-    if (!operator.staff || !hasPermission(operator.staff, "agenda:live_moderate", { type: "event", id: eventId }))
+    if (!operator.staff || !hasPermission(operator.staff, "agenda:live_studio", { type: "event", id: eventId }))
       throw new AppError(
         403,
         "LIVE_ROOM_OPERATOR_REQUIRED",
@@ -252,7 +252,7 @@ export class LiveRoomProgram {
           allowed &&
           result.ok &&
           result.session.staff !== undefined &&
-          hasPermission(result.session.staff, "agenda:live_moderate", { type: "event", id: admission.eventId });
+          hasPermission(result.session.staff, "agenda:live_studio", { type: "event", id: admission.eventId });
       }
       if (!allowed) {
         try {

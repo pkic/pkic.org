@@ -135,10 +135,11 @@ async function participantFromSession(
           userId,
         ]).first<LiveRoomPerson>();
   if (!person) throw new AppError(401, "AUTH_REQUIRED", "Sign in again to join this session.");
-  // Operating the room is a staff capacity, exactly as on the control room's other staff routes.
+  // Operating the room is a staff capacity: the event team moderates it, and organizers also run the studio.
+  const scope = { type: "event", id: record.eventId } as const;
+  const studio = session.staff !== undefined && hasPermission(session.staff, "agenda:live_studio", scope);
   const operator =
-    session.staff !== undefined &&
-    hasPermission(session.staff, "agenda:live_moderate", { type: "event", id: record.eventId });
+    studio || (session.staff !== undefined && hasPermission(session.staff, "agenda:live_moderate", scope));
   const role: LiveRoomRole | null = operator
     ? "operator"
     : record.speakerUserIds.includes(userId)
@@ -153,9 +154,10 @@ async function participantFromSession(
       "A confirmed event registration and access to this session are required to join its questions.",
     );
   // Restricting people from chat is the organizers' call, as their other event-wide decisions are.
-  const organizer = operator && hasPermission(session.staff!, "events:manage", { type: "event", id: record.eventId });
+  const organizer = operator && hasPermission(session.staff!, "events:manage", scope);
   return {
     role,
+    ...(studio ? { studio } : {}),
     userId,
     name: person.name,
     organizer,

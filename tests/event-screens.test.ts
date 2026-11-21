@@ -55,7 +55,7 @@ async function seed() {
   }
   const grants: Record<Staff, [string, string]> = {
     manager: ["agenda:screens_manage", EVENT.id],
-    moderator: ["agenda:live_moderate", EVENT.id],
+    moderator: ["agenda:live_studio", EVENT.id],
     reader: ["agenda:read", EVENT.id],
     otherManager: ["agenda:screens_manage", OTHER_EVENT.id],
   };

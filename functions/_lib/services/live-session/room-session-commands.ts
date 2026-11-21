@@ -17,6 +17,7 @@ const REFUSALS = {
   closed: { code: "LIVE_ROOM_CLOSED", message: "Reactions open shortly before the session starts." },
   questionsClosed: { code: "LIVE_ROOM_CLOSED", message: "This session is no longer taking questions." },
   operatorOnly: { code: "LIVE_ROOM_OPERATOR_REQUIRED", message: "Only the session's operators can do that." },
+  studioOnly: { code: "LIVE_ROOM_STUDIO_REQUIRED", message: "Only the studio's operators can do that." },
   chatInLocation: { code: "LIVE_ROOM_INVALID_MESSAGE", message: "Chat takes place in the location's chat." },
 } satisfies Record<string, LiveRefusal>;
 
@@ -95,7 +96,8 @@ export class LiveSessionCommands {
         this.presence.update(actor, message);
         return;
     }
-    return operator ? this.inTurn(() => this.operate(actor, session, message)) : REFUSALS.operatorOnly;
+    // The control desk changes what is on air and on the room's screens: the studio's, not every moderator's.
+    return viewer.studio ? this.inTurn(() => this.operate(actor, session, message)) : REFUSALS.studioOnly;
   }
 
   /**
