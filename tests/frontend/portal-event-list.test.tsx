@@ -441,6 +441,31 @@ describe("portal event list", () => {
     expect(container.textContent).toContain("Amsterdam");
   });
 
+  it("lets a volunteer who is not a group member open their event's record from an audience row", async () => {
+    portalSession.value = portalSessionFixture({
+      staff: true,
+      grants: [{ permission: "agenda:scan", contextType: "event", contextId: "10000000-0000-4000-8000-000000000002" }],
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json({
+          events: [audienceEventRow({ ownerGroupId: "20000000-0000-4000-8000-000000000001" })],
+          page: { limit: 25, offset: 0, total: 1, hasMore: false },
+        }),
+      ),
+    );
+
+    const container = mount(<EventList />);
+    await settle();
+    await settle();
+
+    await runRowAction(container, "PQC Conference 2026", "Open in group");
+    expect(navigateMock).toHaveBeenCalledWith(
+      "/groups/20000000-0000-4000-8000-000000000001/events/10000000-0000-4000-8000-000000000002",
+    );
+  });
+
   it("shows no workspace menu action for an audience entry", async () => {
     vi.stubGlobal(
       "fetch",

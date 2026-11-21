@@ -171,7 +171,11 @@ export function GroupWorkspace({
   const trail = group
     ? [
         { label: "Groups", href: usePortalHashLocation.hrefs("/groups") },
-        { label: group.name, href: usePortalHashLocation.hrefs(`/groups/${encodeURIComponent(group.id)}`) },
+        // A guest who cannot view the group itself sees its name, not a link into a refusal.
+        {
+          label: group.name,
+          href: canView ? usePortalHashLocation.hrefs(`/groups/${encodeURIComponent(group.id)}`) : undefined,
+        },
         // A guest reaches one event's record, not the group's list of events.
         ...(view !== OVERVIEW_VIEW && shownView
           ? [{ label: shownView.label, href: usePortalHashLocation.hrefs(viewPath(view)) }]
