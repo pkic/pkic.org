@@ -1,4 +1,9 @@
 @layer components {
+  /* The virtual room stays in the page while its attendee is elsewhere in the event; shown, it lays out as
+     the page's own content. */
+  .pk-participant-event__room {
+    display: contents;
+  }
   /* On phones the event app's bottom bar (AppTabBar) carries this navigation;
      the destinations without a bottom tab are listed under its "More". */
   @media (max-width: 48rem) {

@@ -35,6 +35,20 @@ vi.mock("wouter", () => ({
     </a>
   ),
 }));
+/** The virtual room as the event app holds it: each time it mounts, and whether the attendee is away. */
+const roomStub = vi.hoisted(() => ({ mounts: 0, away: null as boolean | null }));
+vi.mock("../../assets/ts/member-flows/portal/sections/events/app/virtual-room/VirtualRoom", async () => {
+  const { useEffect } = await import("preact/hooks");
+  return {
+    VirtualRoom: ({ away = false }: { away?: boolean }) => {
+      useEffect(() => {
+        roomStub.mounts += 1;
+      }, []);
+      roomStub.away = away;
+      return <p>Room stub</p>;
+    },
+  };
+});
 const currentLocation = { value: "/home" };
 const navigateHash = vi.fn();
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => [currentLocation.value, navigateHash] }));
@@ -481,6 +495,33 @@ describe("event home", () => {
     expect(host.querySelector('a[href="#/events/summit/ticket"]')).toBeNull();
     expect(host.querySelector('a[href="#/events/summit/register/"]')).not.toBeNull();
     expect(requests).toEqual([]);
+  });
+});
+
+describe("event app virtual room", () => {
+  it("keeps the room connected for ten minutes while the attendee looks at another page of the event", async () => {
+    roomStub.mounts = 0;
+    const shown = (tab: string) => act(() => render(<ParticipantEvent event={event(registered)} tab={tab} />, host));
+    const room = () => host.querySelector<HTMLElement>(".pk-participant-event__room");
+    await shown("virtual");
+    await vi.waitFor(() => expect(host.textContent).toContain("Room stub"));
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    await shown("more");
+    expect(room()?.hidden).toBe(true);
+    expect(roomStub).toEqual({ mounts: 1, away: true });
+    await shown("virtual");
+    expect(room()?.hidden).toBe(false);
+    expect(roomStub).toEqual({ mounts: 1, away: false });
+    await shown("more");
+    await act(() => {
+      vi.advanceTimersByTime(10 * 60_000 - 1);
+    });
+    expect(room()).not.toBeNull();
+    await act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(room()).toBeNull();
+    vi.useRealTimers();
   });
 });
 

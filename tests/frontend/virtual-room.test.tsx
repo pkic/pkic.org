@@ -169,12 +169,13 @@ afterEach(() => {
   vi.mocked(Intl.DateTimeFormat.prototype.resolvedOptions).mockRestore();
 });
 
-async function open() {
+async function open(away = false) {
   await act(async () => {
     render(
       <HeadingOutline titleLevel={1}>
         <VirtualRoom
           slug="summit"
+          away={away}
           agenda={(read) => <p>The event’s whole agenda, {read.data?.agenda?.occurrences.length} sessions</p>}
         />
       </HeadingOutline>,
@@ -467,6 +468,26 @@ describe("virtual room", () => {
     expect(player()?.getAttribute("src")).toContain(STUDIO_STREAM);
     expect(nowPlaying()).toContain("Hands-on lab");
     expect(chooseLocation(streams.locations, program.agenda, { room: "unknown", session: null })).toBe(HALL);
+  });
+
+  it("stays connected while the attendee is elsewhere in the event, and comes back where they left", async () => {
+    const { sockets } = fakeRoomSockets();
+    onDesktop();
+    hashLocation.current = `/events/summit/virtual?session=${WORKSHOP}`;
+    await open();
+    expect(player()?.getAttribute("src")).toContain(STUDIO_STREAM);
+    const joined = sockets.length;
+    // On the event's agenda the room plays nothing and keeps its connections.
+    hashLocation.current = "/events/summit/agenda";
+    await open(true);
+    expect(player()).toBeNull();
+    expect(sockets).toHaveLength(joined);
+    expect(sockets.every((socket) => socket.readyState !== 3)).toBe(true);
+    // The room's tab carries no location; it opens on the one the attendee left, on the same connections.
+    hashLocation.current = "/events/summit/virtual";
+    await open();
+    expect(player()?.getAttribute("src")).toContain(STUDIO_STREAM);
+    expect(sockets).toHaveLength(joined);
   });
 
   it("follows a moved session instead of the room saved in its bookmarked link", async () => {

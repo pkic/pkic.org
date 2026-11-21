@@ -1,6 +1,6 @@
 import { portalSession } from "../../state";
 import { lazy, Suspense } from "preact/compat";
-import { useEffect } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import {
   eventAgendaRoute,
@@ -58,6 +58,25 @@ type Selection = {
   pointToken?: string;
 };
 const href = usePortalHashLocation.hrefs;
+/**
+ * How long the virtual room stays connected while its attendee looks at another page of the event, so a
+ * quick look at the agenda does not make them join the room and its chat again.
+ */
+const ROOM_KEPT_AWAY_MS = 10 * 60_000;
+
+/** True while `shown`, and for `keepMs` after it stops being shown. */
+function useKeptAway(shown: boolean, keepMs: number): boolean {
+  const [kept, setKept] = useState(shown);
+  useEffect(() => {
+    if (shown) {
+      setKept(true);
+      return;
+    }
+    const release = setTimeout(() => setKept(false), keepMs);
+    return () => clearTimeout(release);
+  }, [shown, keepMs]);
+  return shown || kept;
+}
 /** The compact header's title for each participant page other than the event home. */
 const PAGE_LABELS: Record<string, string> = {
   registration: "Registration",
@@ -110,6 +129,8 @@ export function ParticipantEvent({
   useEffect(() => {
     if (tab === "virtual") void loadMyAgenda();
   }, [tab]);
+  const inRoom = tab === "virtual";
+  const roomKept = useKeptAway(inRoom, ROOM_KEPT_AWAY_MS);
   const registrationId = event.participation?.registrationId;
   const hasProposals = hasEventProposals(event);
   const active =
@@ -241,25 +262,7 @@ export function ParticipantEvent({
         <ParticipantLeadScanner eventId={event.id} slug={event.slug} scannerAccess={event.scannerAccess} />
       ) : tab === "submissions" ? (
         <ParticipantProposals event={event} />
-      ) : tab === "virtual" ? (
-        <Suspense fallback={<Spinner />}>
-          <VirtualRoom
-            slug={event.slug}
-            agenda={(program) => (
-              <Suspense fallback={<Spinner />}>
-                <MyAgenda
-                  embedded
-                  program={program}
-                  slug={event.slug}
-                  eventId={event.id}
-                  eventName={event.name}
-                  canPersonalize={eventRegistrationStanding(event).status === "registered"}
-                />
-              </Suspense>
-            )}
-          />
-        </Suspense>
-      ) : tab === "ticket" && !ticketless ? (
+      ) : tab === "virtual" ? null : tab === "ticket" && !ticketless ? (
         <EventTicket event={event} />
       ) : tab === "check-in" ? (
         <Suspense fallback={<Spinner />}>
@@ -270,6 +273,28 @@ export function ParticipantEvent({
       ) : (
         <EventHome event={event} now={now} />
       )}
+      {roomKept ? (
+        <div class="pk-participant-event__room" hidden={!inRoom}>
+          <Suspense fallback={<Spinner />}>
+            <VirtualRoom
+              slug={event.slug}
+              away={!inRoom}
+              agenda={(program) => (
+                <Suspense fallback={<Spinner />}>
+                  <MyAgenda
+                    embedded
+                    program={program}
+                    slug={event.slug}
+                    eventId={event.id}
+                    eventName={event.name}
+                    canPersonalize={eventRegistrationStanding(event).status === "registered"}
+                  />
+                </Suspense>
+              )}
+            />
+          </Suspense>
+        </div>
+      ) : null}
     </div>
   );
 }

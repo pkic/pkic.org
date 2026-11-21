@@ -55,18 +55,29 @@ function useVirtualRoomData(slug: string) {
 
 export function VirtualRoom({
   slug,
+  away = false,
   agenda: agendaView,
 }: {
   slug: string;
+  /**
+   * The attendee is on another page of the event: the room stays connected, so coming back shows it at once,
+   * with no stream playing and the address it had when they left.
+   */
+  away?: boolean;
   /**
    * The event's own agenda, under the stream on a desktop and on a phone's Agenda tab. It takes the program
    * the room has read already, so showing it asks the server for nothing.
    */
   agenda: (program: AgendaProgram) => ComponentChildren;
 }) {
-  const [location, navigate] = useHashLocation();
+  const [current, navigate] = useHashLocation();
+  const shown = useRef(current);
+  if (!away) shown.current = current;
+  const location = shown.current;
   const wide = useMediaQuery(ROOM_WIDE_QUERY);
   const query = new URLSearchParams(location.split("?", 2)[1] ?? "");
+  // Back from another page of the event, the room opens on the location the attendee left.
+  const lastRoom = useRef<string | null>(null);
   const { streams, program } = useVirtualRoomData(slug);
   const sponsors = useSponsorDisplay("/api/v1", { eventSlug: slug });
   const agenda = program.data?.agenda ?? null;
@@ -85,7 +96,11 @@ export function VirtualRoom({
       .map((room) => ({ id: room.id, name: room.name, stream: null, days: [], loadedOccurrenceId: null }));
     return [...configured, ...waiting];
   }, [streams.data, agenda]);
-  const roomId = chooseLocation(locations, agenda, { room: query.get("room"), session: query.get("session") });
+  const roomId = chooseLocation(locations, agenda, {
+    room: query.get("room") ?? lastRoom.current,
+    session: query.get("session"),
+  });
+  lastRoom.current = roomId;
   const room = locations.find((candidate) => candidate.id === roomId) ?? null;
   const timeZone = streams.data?.timeZone ?? agenda?.timeZone ?? "UTC";
   const sessions = useMemo(() => (agenda && roomId ? locationSessions(agenda, roomId) : []), [agenda, roomId]);
@@ -152,11 +167,13 @@ export function VirtualRoom({
         locationId={room.id}
         onLocation={(id) => navigate(eventVirtualRoomRoute(slug, { room: id }))}
         player={
-          <VirtualRoomPlayer
-            stream={waiting ? null : stream}
-            locationName={room.name}
-            startsAt={waiting ? startsAt : undefined}
-          />
+          away ? null : (
+            <VirtualRoomPlayer
+              stream={waiting ? null : stream}
+              locationName={room.name}
+              startsAt={waiting ? startsAt : undefined}
+            />
+          )
         }
         now={(picker) => (
           <VirtualRoomNowPlaying
