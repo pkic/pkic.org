@@ -53,7 +53,9 @@ it("starts a new code from empty fields after the dialog was closed with Escape"
     ticket.dispatchEvent(new Event("change", { bubbles: true }));
   });
   // Escape reaches the dialog as the platform's cancel event.
-  await act(() => dialog.dispatchEvent(new Event("cancel", { cancelable: true })));
+  await act(() => {
+    dialog.dispatchEvent(new Event("cancel", { cancelable: true }));
+  });
   await open();
   expect(host.querySelector<HTMLInputElement>('dialog input[name="label"]')!.value).toBe("");
   expect(host.querySelector<HTMLSelectElement>('dialog select[name="ticketTypeId"]')!.value).toBe("attendee");
