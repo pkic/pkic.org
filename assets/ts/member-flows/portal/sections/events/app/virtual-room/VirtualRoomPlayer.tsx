@@ -87,7 +87,7 @@ export function VirtualRoomNowPlaying({
   return (
     <section class="pk-virtual-room__now" aria-label="Now in this room">
       {location}
-      <div class="pk-virtual-room__now-text pk-stack pk-stack--snug" aria-live="polite">
+      <div class="pk-virtual-room__now-text" aria-live="polite">
         {shown ? (
           <>
             <p class="pk-event-card__eyebrow">

@@ -181,7 +181,7 @@ export function VirtualRoom({
             moment={moment}
             formatTime={formatTime}
             location={picker}
-            reactions={onAir ? <VirtualRoomReactions live={live} /> : null}
+            reactions={onAir ? <VirtualRoomReactions live={live} compact={!wide} /> : null}
           />
         )}
         sponsors={<VirtualRoomSponsors sponsors={sponsors.display} />}

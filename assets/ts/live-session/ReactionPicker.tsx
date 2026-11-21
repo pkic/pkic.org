@@ -1,10 +1,11 @@
 /**
- * ReactionPicker — the "add a reaction" control on a chat message.
+ * ReactionPicker — the "add a reaction" control, on a chat message and on a phone's session reactions.
  *
  * The trigger opens a small popover with one horizontal row of emoji, the shape every chat app uses for
- * reactions. It is a toolbar rather than a menu: the choices are independent on/off toggles, so each carries
- * `aria-pressed` for the reactions the viewer already added. Placement and the top layer are the shared popup
- * policy; the keyboard contract is arrows/Home/End within the row, Escape back to the trigger, Tab out.
+ * reactions. It is a toolbar rather than a menu. On a message the choices are on/off toggles, each with
+ * `aria-pressed` for the reactions the viewer already added; without `pressed`, each choice simply sends.
+ * Placement and the top layer are the shared popup policy; the keyboard contract is arrows/Home/End within
+ * the row, Escape back to the trigger, Tab out.
  */
 
 import type { ComponentChildren } from "preact";
@@ -32,8 +33,8 @@ export function ReactionPicker({
   title?: string;
   triggerClass?: string;
   reactions: readonly ReactionChoice[];
-  /** The ids of the reactions the viewer has already added. */
-  pressed: readonly string[];
+  /** The ids of the reactions the viewer has already added. Left out, each choice is a plain action. */
+  pressed?: readonly string[];
   /** Called with the reaction and whether it should now be on. */
   onReact: (reaction: string, on: boolean) => void;
   /** Trigger content. */

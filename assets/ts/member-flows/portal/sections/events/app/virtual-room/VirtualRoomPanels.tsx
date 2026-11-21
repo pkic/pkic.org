@@ -147,9 +147,16 @@ export function VirtualRoomChat({ chat, zone }: { chat: LiveLocationChatConnecti
 }
 
 /** The reaction bar, while the session is on air and the viewer may take part. */
-export function VirtualRoomReactions({ live }: { live: RoomLive }) {
+export function VirtualRoomReactions({ live, compact }: { live: RoomLive; compact: boolean }) {
   const state = live.room.state;
   const restriction = useLiveParticipation(state?.viewer.participation);
   if (!live.live || !state || restriction) return null;
-  return <LiveReactionBar send={live.room.send} refusal={state.refusal} disabled={live.room.status !== "live"} />;
+  return (
+    <LiveReactionBar
+      send={live.room.send}
+      refusal={state.refusal}
+      disabled={live.room.status !== "live"}
+      compact={compact}
+    />
+  );
 }

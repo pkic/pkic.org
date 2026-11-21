@@ -16,7 +16,7 @@ import { confirmAction } from "../components/ConfirmDialog";
 import { Avatar } from "../ui/Avatar";
 import { LiveAuthorName } from "./LiveAuthor";
 import { Markdown } from "../ui/Markdown";
-import { StrokeIcon } from "../ui/MediaIcons";
+import { IconReactionAdd } from "../ui/MediaIcons";
 import { LiveChatQuote } from "./LiveChatQuote";
 import { Menu, type MenuItem } from "../ui/Menu";
 import { ReactionPicker } from "./ReactionPicker";
@@ -154,15 +154,6 @@ function menuItems(
       },
     });
   return items;
-}
-
-/** A smile with a plus: add a reaction. */
-function ReactIcon() {
-  return (
-    <StrokeIcon>
-      <path d="M13 7.5A5.5 5.5 0 1 1 8.5 2.1M5.5 9.5s1 1.5 2.5 1.5 2.5-1.5 2.5-1.5M5.75 6.25h.01M9.75 6.25h.01M12.5 1v4M10.5 3h4" />
-    </StrokeIcon>
-  );
 }
 
 /** What replaces a removed or hidden message's words for the people who still see it. */
@@ -334,7 +325,7 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
                 send({ type: "chat.react", messageId: message.id, reaction: reaction as LiveChatReactionId, on })
               }
             >
-              <ReactIcon />
+              <IconReactionAdd />
             </ReactionPicker>
           ) : null}
           {items.length ? (

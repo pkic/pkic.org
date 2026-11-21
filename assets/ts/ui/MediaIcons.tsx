@@ -217,6 +217,15 @@ export function IconPin(props: SvgProps) {
   );
 }
 
+/** A smile with a plus: add a reaction. */
+export function IconReactionAdd(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <path d="M13 7.5A5.5 5.5 0 1 1 8.5 2.1M5.5 9.5s1 1.5 2.5 1.5 2.5-1.5 2.5-1.5M5.75 6.25h.01M9.75 6.25h.01M12.5 1v4M10.5 3h4" />
+    </StrokeIcon>
+  );
+}
+
 export function IconPencil(props: SvgProps) {
   return (
     <StrokeIcon {...props}>

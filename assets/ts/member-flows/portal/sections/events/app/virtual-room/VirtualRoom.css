@@ -78,7 +78,10 @@
   }
 
   .pk-virtual-room__now-text {
+    display: flex;
     flex: 1 1 8rem;
+    flex-direction: column;
+    gap: var(--pk-2);
     min-inline-size: 0;
   }
 
@@ -89,6 +92,29 @@
 
   .pk-virtual-room__now-text p {
     margin: 0;
+  }
+
+  /*
+   * One location on a phone: the line opens up, so "Live now" and its time keep the whole first line and the
+   * reactions sit beside the title, at its foot.
+   */
+  .pk-virtual-room:not(.pk-virtual-room--wide)
+    .pk-virtual-room__now:not(:has(.pk-virtual-room__location))
+    .pk-virtual-room__now-text {
+    display: contents;
+  }
+
+  .pk-virtual-room:not(.pk-virtual-room--wide)
+    .pk-virtual-room__now:not(:has(.pk-virtual-room__location))
+    :is(.pk-event-card__eyebrow, .pk-event-card__meta) {
+    flex-basis: 100%;
+  }
+
+  .pk-virtual-room:not(.pk-virtual-room--wide)
+    .pk-virtual-room__now:not(:has(.pk-virtual-room__location))
+    .pk-virtual-room__title {
+    flex: 1 1 8rem;
+    min-inline-size: 0;
   }
 
   .pk-virtual-room__now-text .pk-event-card__meta:not(:only-child) {
