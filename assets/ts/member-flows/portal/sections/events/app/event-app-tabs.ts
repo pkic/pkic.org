@@ -167,7 +167,7 @@ export function eventAppDestinations(event: EventAppSubject, session: PortalSess
     destinations.push({ id: "venue", label: "Venue & links", href: href(base + "/more"), icon: "venue" });
   if (event.basePath)
     destinations.push({ id: "event-page", label: "Event website", href: event.basePath, icon: "website" });
-  if (event.ownerGroupId && canOpenGroupWorkspace(session, event.ownerGroupId))
+  if (event.ownerGroupId && canOpenGroupWorkspace(session, event.ownerGroupId, event.id))
     destinations.push({
       id: "workspace",
       label: "Organizer workspace",

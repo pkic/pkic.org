@@ -175,12 +175,15 @@ describe("event app tab selection", () => {
     expect(ids(more)).not.toContain("lead-scanner");
   });
 
-  it("adds the organizer workspace only for a reader who can open the owning group", () => {
+  it("adds the organizer workspace only for a reader who can open the owning group or this event in it", () => {
     const managed = { ...participantEventFixture(), ownerGroupId: groupId };
     portalSession.value = { ...portalSessionFixture({ member: true }), eventParticipation: true };
     const workspace = eventAppNavigation(managed, portalSession.value).more.find((item) => item.id === "workspace");
     expect(workspace?.href).toBe(`#/groups/${groupId}/events/${participantEventId}`);
+    // The event's team opens it as the group's guest; a team grant on another event, or a sponsor's, does not.
     authority([badgeGrant]);
+    expect(ids(eventAppNavigation(managed, portalSession.value).more)).toContain("workspace");
+    authority([{ ...badgeGrant, contextId: "another-event" }, leadGrant]);
     expect(ids(eventAppNavigation(managed, portalSession.value).more)).not.toContain("workspace");
   });
 

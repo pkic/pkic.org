@@ -29,6 +29,7 @@ import {
 import { getProposalAccessForEvent } from "../../auth/proposal-access";
 import { prepareEventProposalCall, type EventProposalCallRow } from "./proposal-call";
 import { buildEventAudiencePredicate } from "./visibility";
+import { eventTeamMemberEvidence } from "./team-access";
 
 interface GroupEventRow {
   event_id: string;
@@ -55,6 +56,8 @@ interface GroupEventRow {
   granted_capabilities: string | null;
   member_access: number;
   manager_access: number;
+  /** On the event's team without joining the group; only the event read resolves it. */
+  team_access?: number;
 }
 
 const NEXT_OCCURRENCE_CTE = `next_occurrence AS (
@@ -96,6 +99,8 @@ function mapGroupEvent(row: GroupEventRow, groupId: string): GroupEvent {
     manager: row.manager_access === 1,
     grantedCapabilities: grantedCapabilities(row),
   });
+  // The team works on the event through the event's own grants; through the group it only opens the record.
+  if (row.team_access === 1 && !effectiveCapabilities.includes("view")) effectiveCapabilities.unshift("view");
   return groupEventSchema.parse({
     id: row.event_id,
     ownerGroupId: row.owner_group_id,
@@ -227,21 +232,29 @@ export function prepareGroupEventRead(db: DatabaseLike, viewer: GroupResourceVie
     userId: viewer.userId,
     admin: viewer.admin,
   });
+  const team = eventTeamMemberEvidence(viewer.userId, "owned.id");
   const eventRead = db
     .prepare(
       `WITH ${NEXT_OCCURRENCE_CTE},
-     ${accessibleEvents.sql}
-     ${EVENT_SELECT}, accessible.member_access, accessible.manager_access
-       FROM accessible_resource accessible
+     ${accessibleEvents.sql},
+     event_access(resource_id, member_access, manager_access, team_access) AS (
+       SELECT resource_id, member_access, manager_access, 0 FROM accessible_resource
+       UNION ALL
+       SELECT owned.id, 0, 0, 1 FROM events owned
+        WHERE owned.id = ? AND owned.owner_group_id = ? AND EXISTS (${team.sql})
+     )
+     ${EVENT_SELECT}, MAX(accessible.member_access) AS member_access,
+       MAX(accessible.manager_access) AS manager_access, MAX(accessible.team_access) AS team_access
+       FROM event_access accessible
        JOIN events event ON event.id = accessible.resource_id
        LEFT JOIN event_series series ON series.event_id = event.id
        LEFT JOIN next_occurrence ON next_occurrence.series_id = series.id
        LEFT JOIN event_group_grants grant_row ON grant_row.event_id = event.id AND grant_row.group_id = ?
       WHERE event.id = ? AND event.owner_group_id IS NOT NULL
-        AND (accessible.manager_access = 1 OR ${audience.sql})
+        AND (accessible.manager_access = 1 OR accessible.team_access = 1 OR ${audience.sql})
      GROUP BY event.id`,
     )
-    .bind(...accessibleEvents.bindings, groupId, eventId, ...audience.bindings);
+    .bind(...accessibleEvents.bindings, eventId, groupId, ...team.bindings, groupId, eventId, ...audience.bindings);
   const proposalCallRead = prepareEventProposalCall(db, eventId);
   return {
     statements: [eventRead, proposalCallRead.statement],

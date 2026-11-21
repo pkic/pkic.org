@@ -4,7 +4,10 @@ import { eventReadSelectionSql, type EventReadSelection } from "./read-selection
 import type { EventAudienceViewer } from "./visibility";
 import type { EventAudienceDetail } from "../../../../assets/shared/schemas/event-management";
 
-export type EventAudienceAccess = Pick<EventAudienceDetail, "scannerAccess" | "sponsorLeadAccess">;
+export type EventAudienceAccess = Pick<EventAudienceDetail, "scannerAccess" | "sponsorLeadAccess"> & {
+  /** The viewer holds a grant on this event, which only the event's team roles give. */
+  team?: boolean;
+};
 
 /** Bounded operator discovery; no admission roster or sponsor contacts. */
 export interface EventAudienceSponsorRow {
@@ -28,7 +31,13 @@ export function decodeEventAudienceAccess(
         ((grant.contextType === null && grant.contextId === null) ||
           (grant.contextType === "event" && grant.contextId === eventId)),
     );
-    if (canScan) access.set(eventId, { scannerAccess: { canScan: true, sponsors: [] }, sponsorLeadAccess: false });
+    const team = grants.some((grant) => grant.contextType === "event" && grant.contextId === eventId);
+    if (canScan || team)
+      access.set(eventId, {
+        ...(canScan ? { scannerAccess: { canScan: true, sponsors: [] } } : {}),
+        sponsorLeadAccess: false,
+        ...(team ? { team } : {}),
+      });
   }
   const sponsorIds = new Set<string>();
   const captureIds = new Set<string>();

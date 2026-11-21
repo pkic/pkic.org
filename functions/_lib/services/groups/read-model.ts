@@ -1,6 +1,7 @@
 import { sqlValue, type SqlId } from "../../db/sql-value";
 import { GROUP_SELECT, GROUP_FROM, mapGroup, type GroupRow } from "./group-projection";
 import { groupMembershipCandidateAuthorizationEvidence } from "./access";
+import { groupGuestEvidence } from "../events/team-access";
 import { groupManagementCandidateAuthorizationEvidence, groupReadCandidateAuthorizationEvidence } from "./governance";
 import { identityJobTitleSql } from "../identities/affiliation-projection";
 import { seatLeadershipJoinSql } from "./seat-leadership";
@@ -243,9 +244,18 @@ export async function readAuthenticatedGroupContext(
   idOrSlug: string,
   viewer: { userId: string; admin?: AuthAdmin },
   canReadAll: boolean,
+  options: GroupContextOptions = {},
 ) {
-  const read = prepareAuthenticatedGroupContext(db, idOrSlug, viewer, canReadAll);
+  const read = prepareAuthenticatedGroupContext(db, idOrSlug, viewer, canReadAll, undefined, options);
   return read.decode((await db.batch([read.statement]))[0]);
+}
+
+export interface GroupContextOptions {
+  /**
+   * Also resolve whether the viewer is a guest of the group (see `groupGuestEvidence`). Only the reads that serve
+   * a guest's event ask, so every other group surface stays closed to guests.
+   */
+  guests?: boolean;
 }
 
 export function prepareAuthenticatedGroupContext(
@@ -254,6 +264,7 @@ export function prepareAuthenticatedGroupContext(
   viewer: { userId: string; admin?: AuthAdmin },
   canReadAll: boolean | AuthorizationEvidence,
   memberSelection?: AuthorizationEvidence,
+  options: GroupContextOptions = {},
 ) {
   const selected = sqlValue(idOrSlug);
   const reference =
@@ -270,6 +281,7 @@ export function prepareAuthenticatedGroupContext(
   const selectedMember = memberSelection ? { sql: "SELECT member_id FROM request_member", bindings: [] } : undefined;
   const globalRead = typeof canReadAll === "object" ? canReadAll : null;
   const member = groupMembershipCandidateAuthorizationEvidence(viewer.userId);
+  const guest = options.guests ? groupGuestEvidence(viewer.userId, "g.id") : { sql: "SELECT 1 WHERE 0", bindings: [] };
   const manager = viewer.admin
     ? groupManagementCandidateAuthorizationEvidence(viewer.admin, "g.id", selectedMember)
     : { sql: "SELECT 1 WHERE 0", bindings: [] };
@@ -291,16 +303,28 @@ export function prepareAuthenticatedGroupContext(
     .prepare(`WITH ${ctes.join(", ")}
     ${GROUP_SELECT}, authority.delegated_authorized,
     (g.active=1 AND (${globalRead ? "(SELECT allowed FROM request_global_read)=1 OR " : ""}${visibility?.sql ?? "1"})) AS visible,
-    EXISTS(${member.sql}) AS participant, authority.manager
+    EXISTS(${member.sql}) AS participant, EXISTS(${guest.sql}) AS guest, authority.manager
     ${GROUP_FROM} JOIN request_group_authority authority ON authority.group_id=g.id
     WHERE ${reference.sql}`)
-    .bind(...prefixBindings, ...(visibility?.bindings ?? []), ...member.bindings, ...reference.bindings);
+    .bind(
+      ...prefixBindings,
+      ...(visibility?.bindings ?? []),
+      ...member.bindings,
+      ...guest.bindings,
+      ...reference.bindings,
+    );
 
   return {
     statement,
     decode(result: D1StatementResult) {
       const row = batchFirst<
-        GroupRow & { visible: number; participant: number; manager: number; delegated_authorized: number }
+        GroupRow & {
+          visible: number;
+          participant: number;
+          guest: number;
+          manager: number;
+          delegated_authorized: number;
+        }
       >(result);
       return row
         ? {
@@ -308,6 +332,7 @@ export function prepareAuthenticatedGroupContext(
             delegatedAuthorized: row.delegated_authorized === 1,
             visible: row.visible === 1,
             participant: row.participant === 1,
+            guest: row.guest === 1,
             manager: row.manager === 1,
           }
         : null;

@@ -248,6 +248,8 @@ export const eventAudienceDetailSchema = eventResourceCoreSchema
     sponsorLeadAccess: z.boolean(),
     viewer: eventViewerStateSchema.nullable(),
     registrationPath: z.string().nullable().optional(),
+    /** The owning group, for the event's team only: its workspace opens this event to them as the group's guest. */
+    ownerGroupId: groupIdSchema.nullable().optional(),
   });
 export type EventAudienceDetail = z.infer<typeof eventAudienceDetailSchema>;
 

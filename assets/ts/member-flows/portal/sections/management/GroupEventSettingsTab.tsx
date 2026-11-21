@@ -166,7 +166,8 @@ export function GroupEventSettingsTab({
         <Suspense fallback={<Spinner label="Loading live settings…" />}>
           <div class="pk-stack">
             <EventLiveSettings slug={event.slug} canEdit={hasEventAgendaPermission(event.id, "agenda:live_setup")} />
-            <ProductionPartnersSettings slug={event.slug} groupId={groupId} canEdit={canManage} />
+            {/* The partners come from the event's management record, which only the group's managers read. */}
+            {canManage && <ProductionPartnersSettings slug={event.slug} groupId={groupId} canEdit />}
           </div>
         </Suspense>
       ) : detailId === "scheduling" ? (
