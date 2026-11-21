@@ -534,7 +534,7 @@ describe("scoped scanner event discovery", () => {
     });
     const detail = await requestAudienceDetail("/api/v1/events/sponsor-private", token);
     expect(detail.scannerAccess).toEqual(list.events[0].scannerAccess);
-    expect(detail.sponsorLeadAccess).toBe(false);
+    expect(detail.sponsorLeadAccess).toBe(true);
     expect(JSON.stringify(detail)).not.toContain("private-contact");
     await env.DB.prepare("UPDATE sponsorships SET pipeline_stage='lapsed' WHERE id=?").bind(sponsorId).run();
     expect((await requestAudienceList("/api/v1/events", token)).events).toHaveLength(0);
@@ -563,7 +563,7 @@ describe("scoped scanner event discovery", () => {
       const grantId = await grant(userId, permission, "event_sponsor", sponsorId);
       const list = await requestAudienceList("/api/v1/events", token);
       const ownRow = list.events.find((event) => event.id === own);
-      expect(ownRow?.sponsorLeadAccess).toBe(permission !== "agenda:leads_capture");
+      expect(ownRow?.sponsorLeadAccess).toBe(true);
       expect(list.events.find((event) => event.id === other)?.sponsorLeadAccess).toBe(false);
       const detail = await requestAudienceDetail("/api/v1/events/contacts-private", token);
       expect(detail.sponsorLeadAccess).toBe(ownRow?.sponsorLeadAccess);

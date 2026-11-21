@@ -6,7 +6,14 @@ import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { callApi } from "./helpers/app";
 import { queryAll } from "./helpers/context";
-import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
+import {
+  addRepresentative,
+  assignRepresentativeRole,
+  insertOrganization,
+  insertUser,
+  seedOrganizationAggregate,
+} from "./helpers/membership";
+import { REPRESENTATIVE_ROLE_IDS } from "../assets/shared/schemas/representative-roles";
 import {
   sponsorLeadListSchema,
   sponsorLeadSponsorsSchema,
@@ -104,6 +111,139 @@ beforeEach(async () => {
   token = await createAdminSession(env.DB, operator, crypto.randomUUID());
 });
 describe("sponsor live lead viewing through the mounted API", () => {
+  it("lets the verified sponsorship contact see all captured leads and revokes access when the contact changes", async () => {
+    const contactId = await insertUser(env.DB, "sponsor-contact@synthetic.test");
+    await env.DB.prepare("UPDATE sponsorships SET contact_email=? WHERE id=?")
+      .bind("sponsor-contact@synthetic.test", sponsorId)
+      .run();
+    const contactToken = await createAdminSession(env.DB, contactId, crypto.randomUUID());
+    const read = (path: string) =>
+      callApi(env, `/api/v1/events/live-leads${path}`, { headers: { Authorization: `Bearer ${contactToken}` } });
+    const discovered = await read("/sponsors/leads");
+    expect(discovered.status, await discovered.clone().text()).toBe(200);
+    expect(sponsorLeadSponsorsSchema.parse(await discovered.json()).sponsors[0]).toMatchObject({
+      capturedCount: 3,
+      canView: true,
+      canExport: true,
+      canCapture: false,
+    });
+    const leads = await read(`/sponsors/${sponsorId}/leads`);
+    expect(leads.status).toBe(200);
+    expect(sponsorLeadListSchema.parse(await leads.json()).leads).toHaveLength(3);
+    const exported = await read(`/sponsors/${sponsorId}/leads.csv`);
+    expect(exported.status, await exported.clone().text()).toBe(200);
+    await env.DB.prepare("UPDATE sponsorships SET contact_email='another-contact@synthetic.test' WHERE id=?")
+      .bind(sponsorId)
+      .run();
+    expect((await read(`/sponsors/${sponsorId}/leads`)).status).toBe(403);
+    expect((await read(`/sponsors/${sponsorId}/leads.csv`)).status).toBe(403);
+  });
+
+  it("lets the active primary organization contact see all leads while other representatives see only their own", async () => {
+    const organizationId = await insertOrganization(env.DB, "Sponsor member organization");
+    const memberId = await seedOrganizationAggregate(env.DB, organizationId);
+    const primaryUserId = await insertUser(env.DB, "primary-sponsor@synthetic.test");
+    const primaryIdentityId = await addRepresentative(env.DB, memberId, primaryUserId);
+    await assignRepresentativeRole(env.DB, memberId, primaryUserId, REPRESENTATIVE_ROLE_IDS.primaryContact);
+    const colleagueId = await insertUser(env.DB, "colleague-sponsor@synthetic.test");
+    const colleagueIdentityId = await addRepresentative(env.DB, memberId, colleagueId);
+    await assignRepresentativeRole(env.DB, memberId, colleagueId, REPRESENTATIVE_ROLE_IDS.secondaryContact);
+    await env.DB.prepare("UPDATE sponsorships SET organization_id=? WHERE id=?").bind(organizationId, sponsorId).run();
+    const primaryToken = await createAdminSession(
+      env.DB,
+      primaryUserId,
+      crypto.randomUUID(),
+      undefined,
+      primaryIdentityId,
+    );
+    const colleagueToken = await createAdminSession(
+      env.DB,
+      colleagueId,
+      crypto.randomUUID(),
+      undefined,
+      colleagueIdentityId,
+    );
+    const list = (actorToken: string) =>
+      callApi(env, `/api/v1/events/live-leads/sponsors/${sponsorId}/leads`, {
+        headers: { Authorization: `Bearer ${actorToken}` },
+      });
+    const all = await list(primaryToken);
+    expect(all.status).toBe(200);
+    expect(sponsorLeadListSchema.parse(await all.json()).leads).toHaveLength(3);
+    expect(
+      (
+        await callApi(env, `/api/v1/events/live-leads/sponsors/${sponsorId}/leads.csv`, {
+          headers: { Authorization: `Bearer ${primaryToken}` },
+        })
+      ).status,
+    ).toBe(200);
+    const own = await list(colleagueToken);
+    expect(own.status).toBe(200);
+    expect(sponsorLeadListSchema.parse(await own.json()).leads).toEqual([]);
+    await env.DB.prepare("UPDATE user_roles SET revoked_at=? WHERE user_id=? AND role_id=?")
+      .bind(new Date().toISOString(), primaryUserId, REPRESENTATIVE_ROLE_IDS.primaryContact)
+      .run();
+    const afterRevocation = await list(primaryToken);
+    expect(afterRevocation.status).toBe(200);
+    expect(sponsorLeadListSchema.parse(await afterRevocation.json()).leads).toEqual([]);
+  });
+
+  it("keeps capture-only contact details and receipt history limited to each operator's own scans", async () => {
+    const colleagueId = await insertUser(env.DB, "own-scans-colleague@synthetic.test");
+    await grant("agenda:leads_capture", "event_sponsor", sponsorId, colleagueId);
+    await env.DB.prepare("UPDATE permission_grants SET permission='agenda:leads_capture' WHERE user_id=?")
+      .bind(operator)
+      .run();
+    const colleagueToken = await createAdminSession(env.DB, colleagueId, crypto.randomUUID());
+    const lead = await env.DB.prepare(
+      "SELECT lead.id,lead.user_id FROM event_sponsor_leads lead JOIN users attendee ON attendee.id=lead.user_id WHERE attendee.email='attendee0@synthetic.test'",
+    ).first<{ id: string; user_id: string }>();
+    if (!lead) throw new Error("Seeded lead missing");
+    for (const [userId, observedAt] of [
+      [operator, "2026-10-04T10:00:00.000Z"],
+      [colleagueId, "2026-10-04T11:00:00.000Z"],
+    ]) {
+      await env.DB.prepare(
+        `INSERT INTO event_scan_attempts
+          (id,event_id,sponsor_id,user_id,operator_user_id,device_id,operation_id,request_hash,outcome,reason,action,observed_at,created_at)
+         VALUES(?,?,?,?,?,?,?,?,'eligible','captured','lead',?,?)`,
+      )
+        .bind(
+          crypto.randomUUID(),
+          eventId,
+          sponsorId,
+          lead.user_id,
+          userId,
+          crypto.randomUUID(),
+          crypto.randomUUID(),
+          crypto.randomUUID(),
+          observedAt,
+          observedAt,
+        )
+        .run();
+    }
+    for (const [actorToken, expectedTime] of [
+      [token, "2026-10-04T10:00:00.000Z"],
+      [colleagueToken, "2026-10-04T11:00:00.000Z"],
+    ]) {
+      const read = (path: string) =>
+        callApi(env, `/api/v1/events/live-leads${path}`, { headers: { Authorization: `Bearer ${actorToken}` } });
+      const own = await read(`/sponsors/${sponsorId}/leads`);
+      expect(own.status).toBe(200);
+      expect(sponsorLeadListSchema.parse(await own.json()).leads).toMatchObject([
+        { id: lead.id, email: "attendee0@synthetic.test", capturedAt: expectedTime },
+      ]);
+      const searchAnother = await read(`/sponsors/${sponsorId}/leads?q=attendee1`);
+      expect(sponsorLeadListSchema.parse(await searchAnother.json()).leads).toEqual([]);
+      const history = await read(`/sponsors/${sponsorId}/leads/${lead.id}/captures`);
+      expect(history.status).toBe(200);
+      expect(sponsorLeadCapturesSchema.parse(await history.json()).captures).toMatchObject([
+        { observedAt: expectedTime },
+      ]);
+      expect((await read(`/sponsors/${sponsorId}/leads.csv`)).status).toBe(403);
+    }
+  });
+
   it("shares real captures between two independently authorized sponsor staff and refuses unrelated or ended scope", async () => {
     const secondOperator = await insertUser(env.DB, "colleague@synthetic.test");
     const unrelatedOperator = await insertUser(env.DB, "unrelated-staff@synthetic.test");
@@ -357,7 +497,7 @@ describe("sponsor live lead viewing through the mounted API", () => {
     expect(response.status).toBe(200);
     const result = sponsorLeadSponsorsSchema.parse(await response.json());
     expect(result.sponsors).toEqual([
-      { id: sponsorId, name: "Our sponsor", canView: true, canCapture: true, canExport: false },
+      { id: sponsorId, name: "Our sponsor", capturedCount: 3, canView: true, canCapture: true, canExport: false },
     ]);
     await env.DB.prepare(
       "UPDATE permission_grants SET revoked_at='2026-10-04T10:00:00.000Z' WHERE permission='agenda:leads_capture'",
@@ -369,7 +509,7 @@ describe("sponsor live lead viewing through the mounted API", () => {
     expect(exportOnly.sponsors[0]).toMatchObject({ canView: false, canCapture: false, canExport: true });
     expect((await request()).status).toBe(403);
   });
-  it("rejects revoked, expired, capture-only and global administrative scopes", async () => {
+  it("rejects revoked, expired and global scopes while capture-only access sees only its own scans", async () => {
     await env.DB.prepare("UPDATE permission_grants SET revoked_at='2026-10-04T10:00:00.000Z'").run();
     expect((await request()).status).toBe(403);
     await expect(
@@ -381,7 +521,9 @@ describe("sponsor live lead viewing through the mounted API", () => {
       listSponsorLeads(env.DB, eventId, sponsorId, operator, sponsorLeadQuerySchema.parse({})),
     ).rejects.toMatchObject({ status: 403 });
     await env.DB.prepare("UPDATE permission_grants SET expires_at=NULL,permission='agenda:leads_capture'").run();
-    expect((await request()).status).toBe(403);
+    const ownScans = await request();
+    expect(ownScans.status).toBe(200);
+    expect(sponsorLeadListSchema.parse(await ownScans.json()).leads).toEqual([]);
     await env.DB.prepare(
       "UPDATE permission_grants SET permission='agenda:leads_view',context_type=NULL,context_id=NULL",
     ).run();
@@ -416,6 +558,10 @@ describe("sponsor live lead viewing through the mounted API", () => {
     await expect(
       listSponsorLeads(env.DB, foreignEvent, sponsorId, operator, sponsorLeadQuerySchema.parse({})),
     ).rejects.toMatchObject({ status: 404 });
+    await env.DB.prepare("UPDATE sponsorships SET renewal_date='2025-01-01' WHERE id=?").bind(sponsorId).run();
+    expect((await request()).status).toBe(404);
+    expect(sponsorLeadSponsorsSchema.parse(await (await request("/sponsors/leads")).json()).sponsors).toEqual([]);
+    await env.DB.prepare("UPDATE sponsorships SET renewal_date=NULL WHERE id=?").bind(sponsorId).run();
     await env.DB.prepare("UPDATE sponsorships SET pipeline_stage='cancelled' WHERE id=?").bind(sponsorId).run();
     expect((await request()).status).toBe(404);
     const discovery = sponsorLeadSponsorsSchema.parse(await (await request("/sponsors/leads")).json());

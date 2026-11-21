@@ -20,6 +20,7 @@ export const sponsorLeadSponsorsQuerySchema = listQuerySchema(["name"] as const,
 export const sponsorLeadSponsorSchema = z.object({
   id: databaseIdSchema,
   name: z.string(),
+  capturedCount: z.number().int().nonnegative(),
   canView: z.boolean(),
   canCapture: z.boolean(),
   canExport: z.boolean(),

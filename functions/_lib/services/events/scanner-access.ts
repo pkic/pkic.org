@@ -1,6 +1,10 @@
 import type { DatabaseLike } from "../../types";
 import { anyPermissionAuthorizationEvidenceForResource, tokenAllowsPermission } from "../../auth/permissions";
-import { sponsorOrganizationCaptureExistsSql } from "../../auth/sponsor-organization-lead-access";
+import {
+  activeEventSponsorSql,
+  sponsorLeadViewerExistsSql,
+  sponsorOrganizationCaptureExistsSql,
+} from "../../auth/sponsor-organization-lead-access";
 import { eventReadSelectionSql, type EventReadSelection } from "./read-selection";
 import type { EventAudienceViewer } from "./visibility";
 import type { EventAudienceDetail } from "../../../../assets/shared/schemas/event-management";
@@ -33,12 +37,10 @@ export function decodeEventAudienceAccess(
   }
   const sponsorIds = new Set<string>();
   const captureIds = new Set<string>();
-  const contactIds = new Set<string>();
   for (const grant of grants) {
     if (grant.contextType !== "event_sponsor" || !grant.contextId) continue;
     if (grant.permission === "agenda:leads_capture") captureIds.add(grant.contextId);
-    else if (["agenda:leads_view", "agenda:leads_export"].includes(grant.permission)) contactIds.add(grant.contextId);
-    else continue;
+    else if (!["agenda:leads_view", "agenda:leads_export"].includes(grant.permission)) continue;
     sponsorIds.add(grant.contextId);
   }
   if (!sponsorIds.size || !eventIds.length) return access;
@@ -48,7 +50,7 @@ export function decodeEventAudienceAccess(
       value.scannerAccess ??= { canScan: false, sponsors: [] };
       value.scannerAccess.sponsors.push({ id: sponsor.id, name: sponsor.name });
     }
-    if (contactIds.has(sponsor.id)) value.sponsorLeadAccess = true;
+    value.sponsorLeadAccess = true;
     access.set(sponsor.event_id, value);
   }
   return access;
@@ -70,19 +72,31 @@ export function prepareEventAudienceSponsors(
     viewer.userId && !viewer.admin?.scopeRestricted && tokenAllowsPermission(actor, "agenda:leads_capture")
       ? sponsorOrganizationCaptureExistsSql("?", "s.id")
       : null;
+  const designatedContact =
+    viewer.userId &&
+    !viewer.admin?.scopeRestricted &&
+    (tokenAllowsPermission(actor, "agenda:leads_view") || tokenAllowsPermission(actor, "agenda:leads_export"))
+      ? sponsorLeadViewerExistsSql("?", "s.id")
+      : null;
+  const liveCapacitySql = `${organizationCapture ? ` OR ${organizationCapture}` : ""}${designatedContact ? ` OR ${designatedContact}` : ""}`;
   const filter = eventReadSelectionSql("s.event_id", selection);
   const withSql = filter.withSql
-    ? `WITH ${filter.withSql}, authorized_event_sponsors AS MATERIALIZED (SELECT s.id FROM sponsorships s WHERE EXISTS(${authority.sql})${organizationCapture ? ` OR ${organizationCapture}` : ""}) `
+    ? `WITH ${filter.withSql}, authorized_event_sponsors AS MATERIALIZED (SELECT s.id FROM sponsorships s WHERE EXISTS(${authority.sql})${liveCapacitySql}) `
     : "";
   const authoritySql = filter.withSql
     ? "s.id IN (SELECT id FROM authorized_event_sponsors)"
-    : `(EXISTS(${authority.sql})${organizationCapture ? ` OR ${organizationCapture}` : ""})`;
+    : `(EXISTS(${authority.sql})${liveCapacitySql})`;
   return db
     .prepare(`${withSql}SELECT s.id,s.event_id,COALESCE(o.name,s.non_member_name,'Sponsor') AS name
     FROM sponsorships s LEFT JOIN organizations o ON o.id=s.organization_id
-    WHERE ${filter.sql} AND s.sponsor_type='event' AND s.pipeline_stage='active' AND ${authoritySql}
+    WHERE ${filter.sql} AND ${activeEventSponsorSql("s")} AND ${authoritySql}
     ORDER BY s.event_id,name,s.id`)
-    .bind(...filter.bindings, ...authority.bindings, ...(organizationCapture ? [viewer.userId] : []));
+    .bind(
+      ...filter.bindings,
+      ...authority.bindings,
+      ...(organizationCapture ? [viewer.userId] : []),
+      ...(designatedContact ? [viewer.userId] : []),
+    );
 }
 
 export async function readEventAudienceAccess(db: DatabaseLike, viewer: EventAudienceViewer, eventIds: string[]) {

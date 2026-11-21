@@ -34,7 +34,7 @@ export interface EventAppSubject {
   /** The audience projection's own standing; the management projection has none. */
   viewer?: { registrationStatus: EventParticipation["registrationStatus"] } | null;
   scannerAccess?: ScannerAccess;
-  /** Whether this reader may view or export this event's sponsor contacts. */
+  /** Whether this reader may open their own scans or the sponsor's contact list. */
   sponsorLeadAccess?: boolean;
   /** The public event page, when the event has one. */
   basePath?: string | null;

@@ -9,17 +9,12 @@ import { getEventBySlug } from "../../../../_lib/services/events";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { json } from "../../../../_lib/http";
 import { listSponsorLeads, listLeadSponsors } from "../../../../_lib/services/event-participation/lead-list";
-import { requireSponsorLeadPermission } from "./sponsor-authorization";
+import { sponsorLeadContext } from "./sponsor-authorization";
 import { readSponsorLeadConfirmationForRequest } from "../../../../_lib/services/event-participation/lead-confirmation";
 
 export const SponsorLeadsGet = openApiRoute(sponsorLeadsRouteSchema, async (c: AdminContext, data) => {
   markResponseSensitive(c);
-  const { db, event, actor } = await requireSponsorLeadPermission(
-    c,
-    data.params.eventSlug,
-    data.params.sponsorId,
-    "agenda:leads_view",
-  );
+  const { db, event, actor } = await sponsorLeadContext(c, data.params.eventSlug, data.params.sponsorId);
   return json(await listSponsorLeads(db, event.id, data.params.sponsorId, actor.id, data.query));
 });
 export const SponsorLeadSponsorsGet = openApiRoute(sponsorLeadSponsorsRouteSchema, async (c: AdminContext, data) => {
@@ -49,12 +44,7 @@ import { sponsorLeadCapturesRouteSchema } from "../../../../../assets/shared/sch
 import { listSponsorLeadCaptures } from "../../../../_lib/services/event-participation/lead-list";
 export const SponsorLeadCapturesGet = openApiRoute(sponsorLeadCapturesRouteSchema, async (c: AdminContext, data) => {
   markResponseSensitive(c);
-  const { db, event, actor } = await requireSponsorLeadPermission(
-    c,
-    data.params.eventSlug,
-    data.params.sponsorId,
-    "agenda:leads_view",
-  );
+  const { db, event, actor } = await sponsorLeadContext(c, data.params.eventSlug, data.params.sponsorId);
   return json(
     await listSponsorLeadCaptures(db, event.id, data.params.sponsorId, data.params.leadId, actor.id, data.query),
   );

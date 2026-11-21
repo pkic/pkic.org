@@ -34,7 +34,7 @@ async function mount(canView: boolean, canCapture = false, canExport = false) {
           ],
           page,
         })
-      : json({ sponsors: [{ id, name: "Sponsor", canView, canCapture, canExport }], page });
+      : json({ sponsors: [{ id, name: "Sponsor", capturedCount: 1, canView, canCapture, canExport }], page });
   });
   vi.stubGlobal("fetch", fetcher);
   const host = document.createElement("div");
@@ -62,9 +62,11 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 describe("Live sponsor leads", () => {
-  it("does not request contacts for capture-only or export-only access", async () => {
+  it("shows an operator only their own scans and keeps export separate", async () => {
     const first = await mount(false, true);
-    expect(first.requests.some((url) => url.includes(`/sponsors/${id}/leads`))).toBe(false);
+    expect(first.requests.some((url) => url.includes(`/sponsors/${id}/leads`))).toBe(true);
+    expect(first.host.textContent).toContain("My lead scans");
+    expect(first.host.textContent).toContain("1 saved lead");
     expect(first.host.textContent).toContain("Scan leads");
     await openSponsorActions(first.host);
     expect(first.host.querySelector('a[href$="leads.csv"]')).toBeNull();
@@ -100,7 +102,10 @@ describe("Live sponsor leads", () => {
     fetcher.mockImplementation(async (url) =>
       String(url).includes(`/sponsors/${id}/leads`)
         ? json({ leads: [], page: { ...page, total: 0 } })
-        : json({ sponsors: [{ id, name: "Sponsor", canView: true, canCapture: false, canExport: false }], page }),
+        : json({
+            sponsors: [{ id, name: "Sponsor", capturedCount: 0, canView: true, canCapture: false, canExport: false }],
+            page,
+          }),
     );
     const refresh = host.querySelector<HTMLButtonElement>('button[title="Refresh consenting leads"]')!;
     await act(() => refresh.click());

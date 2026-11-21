@@ -22,9 +22,9 @@ import {
   sponsorLeadSponsorsSchema,
 } from "./event-sponsor-lead-list";
 export const sponsorLeadsRouteSchema = {
-  ...requiresPermissions("agenda:leads_view"),
+  ...requiresSession(),
   tags: ["Events"],
-  summary: "View current consenting contacts captured by one sponsor",
+  summary: "View own captured contacts or all current sponsor leads as a designated contact",
   request: { params: eventSlugParamsSchema.extend({ sponsorId: databaseIdSchema }), query: sponsorLeadQuerySchema },
   responses: {
     ...ok("Live sponsor contacts with attributed capture time", sponsorLeadListSchema),
@@ -34,7 +34,7 @@ export const sponsorLeadsRouteSchema = {
 export const sponsorLeadSponsorsRouteSchema = {
   ...requiresSession(),
   tags: ["Events"],
-  summary: "Discover active sponsorships with explicit lead permissions",
+  summary: "Discover active sponsorships with lead access",
   request: { params: eventSlugParamsSchema, query: sponsorLeadSponsorsQuerySchema },
   responses: {
     ...ok("Sponsor-specific permissions", sponsorLeadSponsorsSchema),
@@ -47,9 +47,9 @@ import {
   sponsorLeadConfirmationSchema,
 } from "./event-sponsor-lead-list";
 export const sponsorLeadCapturesRouteSchema = {
-  ...requiresPermissions("agenda:leads_view"),
+  ...requiresSession(),
   tags: ["Events"],
-  summary: "View attributed successful capture history for one current consenting lead",
+  summary: "View own or designated sponsor contact's successful capture history",
   request: {
     params: eventSlugParamsSchema.extend({ sponsorId: databaseIdSchema, leadId: databaseIdSchema }),
     query: sponsorLeadCapturesQuerySchema,

@@ -17,6 +17,35 @@ import { assertEventContactAccess, eventContactAccessSql } from "./evidence-rete
 import { sponsorConsentSql } from "./sponsor-consent";
 import { sponsorLeadPermissionBindings, sponsorLeadPermissionSql } from "./lead-scope";
 import { contactAffiliation } from "../../email-domains/contact-kind";
+import { activeEventSponsorSql } from "../../auth/sponsor-organization-lead-access";
+
+type LeadReadScope = "all" | "mine";
+
+/** Scope is chosen from live permissions, then rechecked in the page query. */
+async function resolveSponsorLeadReadScope(
+  db: DatabaseLike,
+  eventId: string,
+  sponsorId: string,
+  operatorUserId: string,
+): Promise<LeadReadScope> {
+  const all = sponsorLeadPermissionSql("agenda:leads_view", "sponsor.id");
+  const mine = sponsorLeadPermissionSql("agenda:leads_capture", "sponsor.id");
+  const row = await first<{ scope: LeadReadScope | null }>(
+    db,
+    `SELECT CASE WHEN (${all}) THEN 'all' WHEN (${mine}) THEN 'mine' END AS scope
+     FROM sponsorships sponsor WHERE sponsor.id=? AND sponsor.event_id=? AND ${activeEventSponsorSql("sponsor")}`,
+    [
+      ...sponsorLeadPermissionBindings("agenda:leads_view", operatorUserId),
+      ...sponsorLeadPermissionBindings("agenda:leads_capture", operatorUserId),
+      sponsorId,
+      eventId,
+    ],
+  );
+  if (!row) throw new AppError(404, "LEAD_SPONSOR_NOT_FOUND", "Active sponsorship not found in this event.");
+  if (!row.scope)
+    throw new AppError(403, "LEAD_VIEW_SCOPE_REQUIRED", "An active sponsor-specific lead relationship is required.");
+  return row.scope;
+}
 
 /** Page and count recheck authorization and current consent in the same native D1 batch. */
 export async function listSponsorLeads(
@@ -26,40 +55,41 @@ export async function listSponsorLeads(
   operatorUserId: string,
   query: SponsorLeadQuery,
 ) {
-  const scope = sponsorLeadPermissionSql("agenda:leads_view");
-  const scopeValues = [operatorUserId, sponsorId, operatorUserId, sponsorId];
-  if (
-    !(await first(
-      db,
-      "SELECT id FROM sponsorships WHERE id=? AND event_id=? AND sponsor_type='event' AND pipeline_stage='active'",
-      [sponsorId, eventId],
-    ))
-  )
-    throw new AppError(404, "LEAD_SPONSOR_NOT_FOUND", "Active sponsorship not found in this event.");
-  if (!(await first(db, `SELECT 1 WHERE (${scope})`, scopeValues)))
-    throw new AppError(403, "LEAD_VIEW_SCOPE_REQUIRED", "An active sponsor-specific lead viewing grant is required.");
+  const readScope = await resolveSponsorLeadReadScope(db, eventId, sponsorId, operatorUserId);
   await assertEventContactAccess(db, eventId);
+  const permission = readScope === "all" ? "agenda:leads_view" : "agenda:leads_capture";
+  const scope = sponsorLeadPermissionSql(permission, "sponsor.id");
+  const scopeValues = sponsorLeadPermissionBindings(permission, operatorUserId);
+  const ownCaptures =
+    readScope === "mine"
+      ? `JOIN (SELECT user_id,MAX(observed_at) AS captured_at FROM event_scan_attempts
+          WHERE event_id=? AND sponsor_id=? AND operator_user_id=? AND action='lead' AND outcome='eligible'
+          GROUP BY user_id) own ON own.user_id=lead.user_id`
+      : "";
+  const capturedAt = readScope === "mine" ? "own.captured_at" : "lead.observed_at";
+  const capturerId = readScope === "mine" ? "?" : "lead.operator_user_id";
+  const ownBindings = readScope === "mine" ? [eventId, sponsorId, operatorUserId, operatorUserId] : [];
   const name = "TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,''))";
   const organization = registrationOrganizationSql("reg");
   const search = query.q ? buildD1TextSearchFilter(query.q, [name, "u.email", organization]) : null;
   const { rows, total } = await queryPage<Omit<SponsorLead, "personalEmail">>(db, {
     source: {
       selectSql: `SELECT lead.id,${name} AS name,u.email,${organization} AS organization,
-        lead.observed_at AS capturedAt,
+        ${capturedAt} AS capturedAt,
         TRIM(COALESCE(capturer.first_name,'') || ' ' || COALESCE(capturer.last_name,'')) AS operatorName`,
-      fromSql: `FROM event_sponsor_leads lead JOIN users u ON u.id=lead.user_id
-        JOIN users capturer ON capturer.id=lead.operator_user_id
+      fromSql: `FROM event_sponsor_leads lead ${ownCaptures} JOIN users u ON u.id=lead.user_id
+        JOIN users capturer ON capturer.id=${capturerId}
         JOIN registrations reg ON reg.event_id=lead.event_id AND reg.user_id=lead.user_id
         JOIN sponsorships sponsor ON sponsor.id=lead.sponsor_id AND sponsor.event_id=lead.event_id
         WHERE lead.event_id=? AND lead.sponsor_id=? AND reg.status='registered' AND u.active=1
-        AND sponsor.sponsor_type='event' AND sponsor.pipeline_stage='active'
+        AND ${activeEventSponsorSql("sponsor")}
         AND ${sponsorConsentSql("reg")} AND (${scope}) AND ${eventContactAccessSql("lead.event_id")} ${search ? `AND ${search.sql}` : ""}`,
-      bindings: [eventId, sponsorId, ...scopeValues, ...(search?.bindings ?? [])],
+      bindings: [...ownBindings, eventId, sponsorId, ...scopeValues, ...(search?.bindings ?? [])],
     },
     orderBy: resolveMappedOrderBy(
       query.sort,
-      { name, email: "u.email", organization, capturedAt: "lead.observed_at" },
-      "lead.observed_at DESC",
+      { name, email: "u.email", organization, capturedAt },
+      `${capturedAt} DESC`,
       "lead.id ASC",
     ),
     limit: query.limit,
@@ -89,14 +119,17 @@ export async function listLeadSponsors(
   const { rows, total } = await queryPage<{
     id: string;
     name: string;
+    capturedCount: number;
     canView: number;
     canCapture: number;
     canExport: number;
   }>(db, {
     source: {
-      selectSql: `SELECT sponsor.id,${name} AS name,(${expressions[0]}) AS canView,(${expressions[1]}) AS canCapture,(${expressions[2]}) AS canExport`,
+      selectSql: `SELECT sponsor.id,${name} AS name,
+        (SELECT COUNT(*) FROM event_sponsor_leads saved WHERE saved.event_id=sponsor.event_id AND saved.sponsor_id=sponsor.id) AS capturedCount,
+        (${expressions[0]}) AS canView,(${expressions[1]}) AS canCapture,(${expressions[2]}) AS canExport`,
       fromSql: `FROM sponsorships sponsor LEFT JOIN organizations org ON org.id=sponsor.organization_id
-        WHERE sponsor.event_id=? AND sponsor.sponsor_type='event' AND sponsor.pipeline_stage='active'
+        WHERE sponsor.event_id=? AND ${activeEventSponsorSql("sponsor")}
         AND (${expressions.map((expression) => `(${expression})`).join(" OR ")}) ${search ? `AND ${search.sql}` : ""}`,
       bindings: [...values, eventId, ...values, ...(search?.bindings ?? [])],
       countBindings: [eventId, ...values, ...(search?.bindings ?? [])],
@@ -130,25 +163,30 @@ export async function listSponsorLeadCaptures(
   operatorUserId: string,
   query: SponsorLeadCapturesQuery,
 ) {
+  const readScope = await resolveSponsorLeadReadScope(db, eventId, sponsorId, operatorUserId);
   await assertEventContactAccess(db, eventId);
-  const scope = sponsorLeadPermissionSql("agenda:leads_view");
+  const permission = readScope === "all" ? "agenda:leads_view" : "agenda:leads_capture";
+  const scope = sponsorLeadPermissionSql(permission, "sponsor.id");
+  const scopeValues = sponsorLeadPermissionBindings(permission, operatorUserId);
+  const ownOnly = readScope === "mine" ? "AND attempt.operator_user_id=?" : "";
   const source = `FROM event_scan_attempts attempt
     JOIN event_sponsor_leads lead ON lead.event_id=attempt.event_id AND lead.sponsor_id=attempt.sponsor_id AND lead.user_id=attempt.user_id
     JOIN users attendee ON attendee.id=lead.user_id JOIN users operator ON operator.id=attempt.operator_user_id
     JOIN registrations reg ON reg.event_id=lead.event_id AND reg.user_id=lead.user_id
     JOIN sponsorships sponsor ON sponsor.id=lead.sponsor_id AND sponsor.event_id=lead.event_id
     WHERE lead.id=? AND lead.event_id=? AND lead.sponsor_id=? AND reg.status='registered' AND attendee.active=1
-    AND sponsor.sponsor_type='event' AND sponsor.pipeline_stage='active' AND ${sponsorConsentSql("reg")}
-    AND (${scope}) AND ${eventContactAccessSql("lead.event_id")} AND attempt.action='lead' AND attempt.outcome='eligible'`;
-  // Reuse the live-contact guard and predicates; an unknown/withdrawn lead yields no metadata.
-  if (
-    !(await first(
-      db,
-      `SELECT lead.id FROM event_sponsor_leads lead JOIN users attendee ON attendee.id=lead.user_id JOIN registrations reg ON reg.event_id=lead.event_id AND reg.user_id=lead.user_id JOIN sponsorships sponsor ON sponsor.id=lead.sponsor_id AND sponsor.event_id=lead.event_id
-    WHERE lead.id=? AND lead.event_id=? AND lead.sponsor_id=? AND attendee.active=1 AND reg.status='registered' AND sponsor.sponsor_type='event' AND sponsor.pipeline_stage='active' AND ${sponsorConsentSql("reg")} AND (${scope}) AND ${eventContactAccessSql("lead.event_id")}`,
-      [leadId, eventId, sponsorId, operatorUserId, sponsorId, operatorUserId, sponsorId],
-    ))
-  )
+    AND ${activeEventSponsorSql("sponsor")} AND ${sponsorConsentSql("reg")}
+    AND (${scope}) AND ${eventContactAccessSql("lead.event_id")}
+    AND attempt.action='lead' AND attempt.outcome='eligible' ${ownOnly}`;
+  const sourceBindings = [
+    leadId,
+    eventId,
+    sponsorId,
+    ...scopeValues,
+    ...(readScope === "mine" ? [operatorUserId] : []),
+  ];
+  // Unknown, withdrawn, and another operator's lead expose no history.
+  if (!(await first(db, `SELECT attempt.id ${source} LIMIT 1`, sourceBindings)))
     throw new AppError(404, "LEAD_NOT_FOUND", "Current consenting lead not found.");
   const name = "TRIM(COALESCE(operator.first_name,'') || ' ' || COALESCE(operator.last_name,''))";
   const search = query.q ? buildD1TextSearchFilter(query.q, [name]) : null;
@@ -156,16 +194,7 @@ export async function listSponsorLeadCaptures(
     source: {
       selectSql: `SELECT attempt.id,${name} AS operatorName,attempt.observed_at AS observedAt,attempt.created_at AS receivedAt`,
       fromSql: `${source} ${search ? `AND ${search.sql}` : ""}`,
-      bindings: [
-        leadId,
-        eventId,
-        sponsorId,
-        operatorUserId,
-        sponsorId,
-        operatorUserId,
-        sponsorId,
-        ...(search?.bindings ?? []),
-      ],
+      bindings: [...sourceBindings, ...(search?.bindings ?? [])],
     },
     orderBy: resolveMappedOrderBy(
       query.sort,

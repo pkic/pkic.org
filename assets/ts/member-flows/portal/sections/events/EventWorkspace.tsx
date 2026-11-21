@@ -54,9 +54,7 @@ function ScopedSponsorLeadsRoute({ slug }: { slug: string }) {
   if (event.error || !event.data) return <ErrorAlert error={event.error ?? "Event unavailable"} />;
   const detail = event.data.event;
   if (!("sponsorLeadAccess" in detail) || !detail.sponsorLeadAccess) {
-    return (
-      <ErrorAlert error="Your current identity does not have permission to view or export sponsor leads for this event." />
-    );
+    return <ErrorAlert error="Your current identity does not have sponsor lead access for this event." />;
   }
   return (
     <div class="pk pk-stack portal-section">

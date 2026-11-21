@@ -62,7 +62,16 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
             page: pageInfo,
           })
         : sponsorLeadSponsorsSchema.parse({
-            sponsors: [{ id: sponsorId, name: "Example sponsor", canView: true, canCapture: false, canExport: false }],
+            sponsors: [
+              {
+                id: sponsorId,
+                name: "Example sponsor",
+                capturedCount: 0,
+                canView: true,
+                canCapture: false,
+                canExport: false,
+              },
+            ],
             page: pageInfo,
           });
     await route.fulfill({ json: payload, headers: { "cache-control": "private, no-store" } });

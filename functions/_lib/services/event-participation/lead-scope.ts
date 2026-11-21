@@ -2,14 +2,19 @@ import type { DatabaseLike } from "../../types";
 import { guardAuthorizedDatabase } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import type { AuthorizationEvidence } from "../../db/authorization-guard";
-import { sponsorOrganizationCaptureExistsSql } from "../../auth/sponsor-organization-lead-access";
+import {
+  sponsorLeadViewerExistsSql,
+  sponsorOrganizationCaptureExistsSql,
+} from "../../auth/sponsor-organization-lead-access";
 /** Exact sponsor scopes never inherit global or event administrative access. */
 export function sponsorLeadPermissionSql(
   permission: "agenda:leads_view" | "agenda:leads_capture" | "agenda:leads_export",
   sponsorExpression = "?",
 ) {
-  const organizationCapture =
-    permission === "agenda:leads_capture" ? ` OR ${sponsorOrganizationCaptureExistsSql("?", sponsorExpression)}` : "";
+  const liveCapacity =
+    permission === "agenda:leads_capture"
+      ? ` OR ${sponsorOrganizationCaptureExistsSql("?", sponsorExpression)}`
+      : ` OR ${sponsorLeadViewerExistsSql("?", sponsorExpression)}`;
   return `EXISTS(SELECT 1 FROM permission_grants g JOIN users operator ON operator.id=g.user_id
     WHERE g.user_id=? AND operator.active=1 AND g.permission='${permission}'
     AND g.context_type='event_sponsor' AND g.context_id=${sponsorExpression} AND g.revoked_at IS NULL
@@ -18,7 +23,7 @@ export function sponsorLeadPermissionSql(
     JOIN users operator ON operator.id=role.user_id WHERE role.user_id=? AND operator.active=1
     AND role.member_id IS NULL AND rp.permission='${permission}'
     AND role.context_type='event_sponsor' AND role.context_id=${sponsorExpression} AND role.revoked_at IS NULL
-    AND (role.expires_at IS NULL OR role.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')))${organizationCapture}`;
+    AND (role.expires_at IS NULL OR role.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')))${liveCapacity}`;
 }
 
 /** Keep positional bindings aligned with the live sponsor permission predicate. */
@@ -28,7 +33,8 @@ export function sponsorLeadPermissionBindings(
   sponsorId?: string,
 ): string[] {
   const scope = sponsorId === undefined ? [] : [sponsorId];
-  return [userId, ...scope, userId, ...scope, ...(permission === "agenda:leads_capture" ? [userId, ...scope] : [])];
+  const liveCapacity = permission === "agenda:leads_capture" ? [userId, ...scope] : [...scope, userId];
+  return [userId, ...scope, userId, ...scope, ...liveCapacity];
 }
 
 /** Recheck exact sponsor ownership atomically, including transport receipts in the same batch. */

@@ -122,7 +122,7 @@ describe("scanner hosts", () => {
         async () =>
           new Response(
             JSON.stringify({
-              sponsors: [{ id, name: "Sponsor", canCapture: true, canView: false, canExport: false }],
+              sponsors: [{ id, name: "Sponsor", capturedCount: 0, canCapture: true, canView: false, canExport: false }],
               page: { limit: 50, offset: 0, total: 1, hasMore: false },
             }),
             { headers: { "content-type": "application/json" } },

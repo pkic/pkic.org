@@ -2,6 +2,8 @@ import { activeOauthAuthorizationSql, oauthPermissionCeilingSql } from "./oauth/
 import { scannerCapabilities } from "../../../assets/shared/event-scanner-permissions";
 import { eventTeamScannerRoleScopeSql } from "./event-team-scanner-scope";
 import {
+  sponsorLeadViewerExistsSql,
+  sponsorLeadViewerPredicateSql,
   sponsorOrganizationCaptureExistsSql,
   sponsorOrganizationCapturePredicateSql,
 } from "./sponsor-organization-lead-access";
@@ -79,7 +81,12 @@ function contextGrantSelection(requested: string, bindings: unknown[]) {
      JOIN sponsorships sponsor ON sponsor.organization_id=linked_identity.organization_id
      WHERE linked_operator.active=1 AND linked_operator.pii_redacted_at IS NULL
        AND linked_operator.merged_into_user_id IS NULL
-       AND ${sponsorOrganizationCapturePredicateSql("linked_identity", "sponsor")}`,
+       AND ${sponsorOrganizationCapturePredicateSql("linked_identity", "sponsor")}
+     UNION ALL
+     SELECT DISTINCT requested.request_index,requested.member_id,lead_permission.value,'event_sponsor',sponsor.id
+     FROM requested JOIN sponsorships sponsor
+       ON ${sponsorLeadViewerPredicateSql("requested.user_id", "sponsor")}
+     JOIN json_each('["agenda:leads_view","agenda:leads_export"]') lead_permission`,
     bindings,
   };
 }
@@ -313,7 +320,8 @@ export function permissionAuthorizationEvidenceForResource(
     },
     "all",
     memberSelection,
-    permission === "agenda:leads_capture" && context.type === "event_sponsor",
+    ["agenda:leads_capture", "agenda:leads_view", "agenda:leads_export"].includes(permission) &&
+      context.type === "event_sponsor",
   );
 }
 
@@ -366,7 +374,7 @@ function buildPermissionsAuthorizationEvidence(
   required: AuthorizationEvidence,
   match: "all" | "any" = "all",
   memberSelection?: AuthorizationEvidence,
-  includeSponsorOrganizationCapture = false,
+  includeSponsorLeadCapacity = false,
 ): AuthorizationEvidence {
   if (unique.length === 0) return { sql: "SELECT 1", bindings: [] };
   if (unique.some(({ permission }) => !tokenAllowsPermission(actor, permission))) {
@@ -443,10 +451,17 @@ function buildPermissionsAuthorizationEvidence(
                        )
                   )
                   ${
-                    includeSponsorOrganizationCapture
-                      ? `OR (requirement.permission='agenda:leads_capture'
-                    AND requirement.context_type='event_sponsor'
-                    AND ${sponsorOrganizationCaptureExistsSql("actor.id", "requirement.context_id")})`
+                    includeSponsorLeadCapacity && unique.some(({ permission }) => permission === "agenda:leads_capture")
+                      ? `OR (requirement.permission='agenda:leads_capture' AND requirement.context_type='event_sponsor'
+                      AND ${sponsorOrganizationCaptureExistsSql("actor.id", "requirement.context_id")})`
+                      : ""
+                  }
+                  ${
+                    includeSponsorLeadCapacity &&
+                    unique.some(({ permission }) => ["agenda:leads_view", "agenda:leads_export"].includes(permission))
+                      ? `OR (requirement.permission IN ('agenda:leads_view','agenda:leads_export')
+                      AND requirement.context_type='event_sponsor'
+                      AND ${sponsorLeadViewerExistsSql("actor.id", "requirement.context_id")})`
                       : ""
                   }
                   ${actor.oauthAuthorizationId ? ")" : ""}

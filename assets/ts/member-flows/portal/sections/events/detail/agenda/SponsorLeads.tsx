@@ -9,6 +9,7 @@ import {
   type SponsorLeadSponsor,
 } from "../../../../../../../shared/schemas/event-sponsor-lead-list";
 import { formatDateTimeInZone } from "../../../../../../../shared/format-date";
+import { formatNumber } from "../../../../../../../shared/format-number";
 import { ApiDataTable } from "../../../../../../components/ApiDataTable";
 import { Spinner } from "../../../../../../components/Spinner";
 import { Button } from "../../../../../../ui/Button";
@@ -29,6 +30,7 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
   const [selected, setSelected] = useState<SponsorLeadSponsor | null>(null);
   const [scanning, setScanning] = useState(false);
   const [captureHistory, setCaptureHistory] = useState<string | null>(null);
+  const [listVersion, setListVersion] = useState(0);
   const [live, setLive] = useState(() => navigator.onLine && document.visibilityState !== "hidden");
   const [epoch, setEpoch] = useState(0);
   useEffect(() => {
@@ -53,14 +55,11 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
       <Panel>
         <PanelHeader title="Sponsor leads" />
         <PanelBody>
-          <p>
-            Contacts are available only while online. Each request checks current consent and your sponsor permissions.
-            Refresh removes contacts whose consent has been withdrawn. Lead capture does not record event or session
-            attendance.
-          </p>
+          <p>Uploaded scans appear here. Contact details are shown only while the person still agrees to share them.</p>
         </PanelBody>
       </Panel>
       <ApiDataTable
+        key={`${slug}:${listVersion}`}
         urlState="lead-sponsors"
         endpoint={`${base}/leads`}
         responseSchema={sponsorLeadSponsorsSchema}
@@ -79,7 +78,11 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
           {
             header: "Access",
             cell: (row) =>
-              [row.canView && "View contacts", row.canCapture && "Scan leads", row.canExport && "Export"]
+              [
+                `${formatNumber(row.capturedCount)} saved ${row.capturedCount === 1 ? "lead" : "leads"}`,
+                row.canView ? "All leads" : row.canCapture && "My scans",
+                row.canExport && "Export",
+              ]
                 .filter(Boolean)
                 .join(" · "),
           },
@@ -131,12 +134,18 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
             }
           >
             {selected.canCapture && (
-              <Button variant="primary" onClick={() => setScanning(!scanning)}>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  if (scanning) setListVersion((value) => value + 1);
+                  setScanning(!scanning);
+                }}
+              >
                 {scanning ? "Close scanner" : "Scan leads"}
               </Button>
             )}
           </PanelHeader>
-          <PanelBody flush={!(scanning && selected.canCapture) && selected.canView && live}>
+          <PanelBody flush={!(scanning && selected.canCapture) && (selected.canView || selected.canCapture) && live}>
             {scanning && selected.canCapture ? (
               <Suspense fallback={<Spinner />}>
                 <EventScanner
@@ -148,7 +157,7 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
                   allowedActions={["lead"]}
                 />
               </Suspense>
-            ) : selected.canView ? (
+            ) : selected.canView || selected.canCapture ? (
               live ? (
                 <ApiDataTable
                   urlState="sponsor-leads"
@@ -157,15 +166,19 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
                   responseSchema={sponsorLeadListSchema}
                   resolve={(value) => value.leads}
                   resolvePage={(value) => value.page}
-                  caption="Consenting leads"
+                  caption={selected.canView ? "Consenting leads" : "My lead scans"}
                   paginate
-                  searchPlaceholder="Search contacts…"
+                  searchPlaceholder={selected.canView ? "Search contacts…" : "Search my scans…"}
                   initialSort="-capturedAt"
                   load={loadLiveSponsorLeads}
                   clearDataOnReload
                   retainDataOnError={false}
                   rowKey={(row) => row.id}
-                  empty="No currently consenting leads match this search."
+                  empty={
+                    selected.canView
+                      ? "No currently consenting leads match this search."
+                      : "No saved scans with current contact sharing match this search."
+                  }
                   detailRow={(row) =>
                     captureHistory === row.id ? (
                       <SponsorLeadCaptures

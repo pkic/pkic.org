@@ -22,6 +22,7 @@ import {
   sponsorEventSlug,
 } from "./helpers/sponsor-live-fixture";
 import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
+import { accessGrantCreateSchema, accessGrantCreateResponseSchema } from "../../assets/shared/schemas/access-control";
 import {
   sponsorLeadSponsorsSchema,
   sponsorLeadListSchema,
@@ -322,6 +323,32 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
     const exported = await readFile(csvFile, "utf8");
     expect(exported).toContain(fixture.email);
     expect(exported).not.toContain(fixture.deniedEmail);
+
+    for (const id of fixture.grants.slice(1))
+      expect((await staff.request.delete(`/api/v1/permissions/grants/${id}`)).status()).toBe(200);
+    await openSponsor();
+    await expect(page.getByText("My lead scans", { exact: true })).toBeVisible();
+    await expect(page.getByText("1 saved lead", { exact: false })).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "My lead scans", exact: true }).getByText(fixture.email),
+    ).toBeVisible();
+    await captureSponsorViews(page, info, "own-scans");
+    for (const [index, permission] of [
+      [1, "agenda:leads_view"],
+      [2, "agenda:leads_export"],
+    ] as const) {
+      const renewed = await staff.request.post("/api/v1/permissions/grants", {
+        data: accessGrantCreateSchema.parse({
+          userId: fixture.operator.userId,
+          permission,
+          contextType: "event_sponsor",
+          contextId: fixture.sponsorId,
+        }),
+      });
+      expect(renewed.status()).toBe(201);
+      fixture.grants[index] = accessGrantCreateResponseSchema.parse(await renewed.json()).grant.id;
+    }
+    await openSponsor();
 
     // Withdraw sharing through the attendee's actual capability UI, keeping the registration active.
     await attendee.goto(fixture.manageUrl);

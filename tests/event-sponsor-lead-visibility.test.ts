@@ -17,7 +17,11 @@ import { userAuthSessionResponseSchema } from "../assets/shared/schemas/user-aut
 import { computeGrantsForUser } from "../functions/_lib/auth/permissions";
 import { findEligibleStaffUserById } from "../functions/_lib/auth/identity-capacities";
 import { resetDb } from "./helpers/reset-db";
-import { sponsorLeadConfirmationSchema } from "../assets/shared/schemas/event-sponsor-lead-list";
+import {
+  sponsorLeadConfirmationSchema,
+  sponsorLeadListSchema,
+  sponsorLeadSponsorsSchema,
+} from "../assets/shared/schemas/event-sponsor-lead-list";
 
 type LeadPermission = "agenda:leads_view" | "agenda:leads_capture" | "agenda:leads_export";
 
@@ -137,11 +141,13 @@ describe("sponsor lead event discovery", () => {
     expect(detailResponse.status, await detailResponse.clone().text()).toBe(200);
     const detail = eventAudienceDetailSchema.parse(((await detailResponse.json()) as { event: unknown }).event);
     expect(detail.scannerAccess?.sponsors.map((sponsor) => sponsor.id)).toEqual([sponsorId]);
-    expect(detail.sponsorLeadAccess).toBe(false);
+    expect(detail.sponsorLeadAccess).toBe(true);
     expect((await request("/pqc-2026/scans/attendees?q=Test", token)).status).toBe(403);
     expect((await request(`/pqc-2026/scans/attendees/${crypto.randomUUID()}/badge`, token)).status).toBe(403);
     expect((await request("/pqc-2026/badges/attendees?q=Test", token)).status).toBe(403);
-    expect((await request(`/pqc-2026/sponsors/${sponsorId}/leads`, token)).status).toBe(403);
+    const beforeScans = await request(`/pqc-2026/sponsors/${sponsorId}/leads`, token);
+    expect(beforeScans.status).toBe(200);
+    expect(sponsorLeadListSchema.parse(await beforeScans.json()).leads).toEqual([]);
     const offlineQuery = new URLSearchParams({
       epochId: crypto.randomUUID(),
       deviceId: crypto.randomUUID(),
@@ -205,6 +211,16 @@ describe("sponsor lead event discovery", () => {
     );
     expect(captured.status, await captured.clone().text()).toBe(200);
     expect(leadCaptureResponseSchema.parse(await captured.json())).toMatchObject({ recorded: true, captured: true });
+    const ownScans = await request(`/pqc-2026/sponsors/${sponsorId}/leads`, token);
+    expect(ownScans.status).toBe(200);
+    expect(sponsorLeadListSchema.parse(await ownScans.json()).leads).toMatchObject([{ name: "Alex Example" }]);
+    const savedCount = await request("/pqc-2026/sponsors/leads", token);
+    expect(savedCount.status).toBe(200);
+    expect(sponsorLeadSponsorsSchema.parse(await savedCount.json()).sponsors[0]).toMatchObject({
+      capturedCount: 1,
+      canView: false,
+      canCapture: true,
+    });
     const confirmationPath = `/pqc-2026/sponsors/${sponsorId}/leads/confirmations/${input.operationId}`;
     const confirmation = await callApi(
       env,
@@ -228,6 +244,9 @@ describe("sponsor lead event discovery", () => {
       undefined,
       outsider.identityId,
     );
+    const otherScans = await request(`/pqc-2026/sponsors/${sponsorId}/leads?q=Alex`, otherOperatorToken);
+    expect(otherScans.status).toBe(200);
+    expect(sponsorLeadListSchema.parse(await otherScans.json()).leads).toEqual([]);
     expect((await request(confirmationPath, otherOperatorToken)).status).toBe(404);
     expect(
       (await request(`/pqc-2026/sponsors/${sponsorId}/leads/confirmations/${crypto.randomUUID()}`, token)).status,
@@ -247,11 +266,13 @@ describe("sponsor lead event discovery", () => {
     expect(detailResponse.status).toBe(200);
     const detail = eventAudienceDetailSchema.parse(((await detailResponse.json()) as { event: unknown }).event);
     expect(detail.scannerAccess?.sponsors).toContainEqual({ id: sponsorId, name: "Only my sponsor" });
-    expect(detail.sponsorLeadAccess).toBe(false);
+    expect(detail.sponsorLeadAccess).toBe(true);
     expect((await request("/pqc-2026/scans/attendees?q=Test", token)).status).toBe(403);
     expect((await request(`/pqc-2026/scans/attendees/${crypto.randomUUID()}/badge`, token)).status).toBe(403);
     expect((await request("/pqc-2026/badges/attendees?q=Test", token)).status).toBe(403);
-    expect((await request(`/pqc-2026/sponsors/${sponsorId}/leads`, token)).status).toBe(403);
+    const ownScans = await request(`/pqc-2026/sponsors/${sponsorId}/leads`, token);
+    expect(ownScans.status).toBe(200);
+    expect(sponsorLeadListSchema.parse(await ownScans.json()).leads).toEqual([]);
     const offlineQuery = new URLSearchParams({
       epochId: crypto.randomUUID(),
       deviceId: crypto.randomUUID(),
