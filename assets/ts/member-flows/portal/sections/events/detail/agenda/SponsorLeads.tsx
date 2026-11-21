@@ -11,7 +11,6 @@ import {
   sponsorLeadRemovalResponseSchema,
 } from "../../../../../../../shared/schemas/event-sponsor-lead-list";
 import { formatDateTimeInZone } from "../../../../../../../shared/format-date";
-import { formatNumber } from "../../../../../../../shared/format-number";
 import { ApiDataTable } from "../../../../../../components/ApiDataTable";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import { Spinner } from "../../../../../../components/Spinner";
@@ -171,9 +170,6 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
               ) : undefined
             }
           >
-            <span class="pk-small pk-muted">
-              {formatNumber(current.capturedCount)} saved {current.capturedCount === 1 ? "lead" : "leads"}
-            </span>
             {current.canCapture && (
               <Button
                 variant={scanning ? "secondary" : "ghost"}

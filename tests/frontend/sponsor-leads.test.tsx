@@ -47,7 +47,7 @@ async function mount(canView: boolean, canCapture = false, canExport = false, ca
   await act(() => render(<SponsorLeads slug="event" timeZone="UTC" />, host));
   await vi.waitFor(async () => {
     await settle();
-    expect(host.textContent).toContain("1 saved lead");
+    expect(host.textContent).toContain("Sponsor");
     if (canView || canCapture) expect(host.textContent).toContain("Private person");
   });
   expect(host.querySelector('button[aria-label="Open leads for Sponsor"]')).toBeNull();
@@ -123,14 +123,14 @@ describe("Live sponsor leads", () => {
     });
     await act(() => second.click());
     await vi.waitFor(() => expect(host.textContent).toContain("Consenting leads"));
-    expect(host.textContent).toContain("2 saved leads");
     expect(selector.value).toBe("Second sponsor");
   });
   it("shows an operator only their own scans and keeps export separate", async () => {
     const first = await mount(false, true);
     expect(first.requests.some((url) => url.includes(`/sponsors/${id}/leads`))).toBe(true);
     expect(first.host.textContent).toContain("My lead scans");
-    expect(first.host.textContent).toContain("1 saved lead");
+    expect(first.host.textContent).toContain("1 item");
+    expect(first.host.textContent).not.toContain("saved lead");
     expect(first.host.querySelector('button[aria-label="Scan leads"]')).not.toBeNull();
     expect(first.host.querySelector('button[aria-label="Sponsor actions"]')).toBeNull();
     const second = await mount(false, false, true);

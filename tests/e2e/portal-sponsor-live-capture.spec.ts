@@ -318,7 +318,7 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
       expect((await staff.request.delete(`/api/v1/permissions/grants/${id}`)).status()).toBe(200);
     await openSponsor();
     await expect(page.getByText("My lead scans", { exact: true })).toBeVisible();
-    await expect(page.getByText("1 saved lead", { exact: false })).toBeVisible();
+    await expect(page.getByRole("region", { name: "My lead scans", exact: true }).getByText("1 item")).toBeVisible();
     await expect(
       page.getByRole("region", { name: "My lead scans", exact: true }).getByText(fixture.email),
     ).toBeVisible();
