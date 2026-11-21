@@ -9,6 +9,7 @@ import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { prepareOneTimeAuditLog, prepareScopedAuditLogAfterOneChange, isAuditChangeGuardFailure } from "../audit";
+import { badgeAttendeeEligibilitySql } from "./badge-attendees";
 import { hashBadgeCredential } from "./badge-hash";
 import { resolveBadgeExpiry } from "./badge-expiry";
 import { sealBadgeCredential, type BadgePrintEnvironment } from "./badge-print-protection";
@@ -105,6 +106,33 @@ async function completedIssue(
 }
 
 /** Caller supplies the live event-management database; every effect shares one guarded command. */
+/**
+ * The badge desk prints a registered attendee's active badge, or issues one when they have none. It never replaces
+ * a badge or sets its expiry, and never reaches a pending or cancelled registration.
+ */
+export async function issueDeskBadge(
+  db: DatabaseLike,
+  eventId: string,
+  actorId: string,
+  input: BadgeIssueRequest,
+  environment: BadgePrintEnvironment,
+): Promise<BadgeIssueResponse> {
+  if (!input.reuseActive || input.replaceBadgeId || input.expiresAt)
+    throw new AppError(
+      403,
+      "BADGE_DESK_ISSUE_ONLY",
+      "Badge printing reuses the attendee's active badge. Ask an organizer to replace a badge.",
+    );
+  const registered = await first(
+    db,
+    `SELECT 1 FROM registrations r JOIN users u ON u.id=r.user_id WHERE r.event_id=? AND r.user_id=? AND ${badgeAttendeeEligibilitySql("r", "u")}`,
+    [eventId, input.userId],
+  );
+  if (!registered)
+    throw new AppError(409, "BADGE_REGISTRATION_REQUIRED", "Only a registered attendee can get a badge at the desk.");
+  return issueBadge(db, eventId, actorId, input, environment);
+}
+
 export async function issueBadge(
   db: DatabaseLike,
   eventId: string,

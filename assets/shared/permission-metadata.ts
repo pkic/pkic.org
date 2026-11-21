@@ -78,6 +78,7 @@ export const PERMISSION_METADATA = {
   "agenda:check": { domain: "agenda", access: "read", label: "Check attendee admission eligibility" },
   "agenda:admit": { domain: "agenda", access: "write", label: "Admit attendees" },
   "agenda:attendance_record": { domain: "agenda", access: "write", label: "Record attendance" },
+  "agenda:badge_print": { domain: "agenda", access: "write", label: "Print attendee badges" },
   "agenda:admit_exceptions": { domain: "agenda", access: "write", label: "Approve admission exceptions" },
   "agenda:attendance_read": { domain: "agenda", access: "read", label: "View attendance" },
   "agenda:attendance_correct": { domain: "agenda", access: "write", label: "Correct attendance" },

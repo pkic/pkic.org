@@ -103,3 +103,9 @@ INSERT INTO role_permissions(id,role_id,permission,created_at)
 SELECT lower(hex(randomblob(16))),candidate.role_id,'agenda:live_moderate',strftime('%Y-%m-%dT%H:%M:%fZ','now')
 FROM (SELECT 'role-program_committee' AS role_id UNION ALL SELECT 'role-event_moderator' UNION ALL SELECT 'role-event_volunteer') AS candidate
 WHERE NOT EXISTS(SELECT 1 FROM role_permissions existing WHERE existing.role_id=candidate.role_id AND existing.permission='agenda:live_moderate');
+-- Grants `agenda:badge_print` (printing a registered attendee's badge at the desk, without managing badges) to
+-- administrators, event organizers and volunteers.
+INSERT INTO role_permissions(id,role_id,permission,created_at)
+SELECT lower(hex(randomblob(16))),candidate.role_id,'agenda:badge_print',strftime('%Y-%m-%dT%H:%M:%fZ','now')
+FROM (SELECT 'role-admin' AS role_id UNION ALL SELECT 'role-event_organizer' UNION ALL SELECT 'role-event_volunteer') AS candidate
+WHERE NOT EXISTS(SELECT 1 FROM role_permissions existing WHERE existing.role_id=candidate.role_id AND existing.permission='agenda:badge_print');
