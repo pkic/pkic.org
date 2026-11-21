@@ -352,11 +352,13 @@ export function LiveAttendeeQuestions({
                 send={room.send}
                 result={room.questionChangeResult}
               />
-              {role === "speaker" ? (
+              {role === "speaker" || role === "operator" ? (
                 <LiveQuestionTransitions
                   question={question}
                   role={role}
                   disabled={!live}
+                  // A speaker answers in front of the room with buttons; a moderator keeps the list compact.
+                  menuLabel={role === "operator" ? "Question actions" : undefined}
                   onMove={(status, reason) =>
                     room.send({
                       type: "question.moderate",

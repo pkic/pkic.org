@@ -504,6 +504,25 @@ describe("session questions", () => {
     ]);
   });
 
+  it("lets a room moderator approve a question waiting for moderation from its actions menu", async () => {
+    const { host, live } = mount();
+    connect(
+      live,
+      liveSnapshot({
+        viewer: { role: "operator", name: "Mo Moderator" },
+        questions: [liveQuestion({ status: "pending" })],
+      }),
+    );
+    await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Question actions"]')!.click());
+    const approve = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (item) => item.textContent === "Approve",
+    );
+    await act(() => approve!.click());
+    expect(live.latest().messages()).toEqual([
+      { type: "question.moderate", questionId: LIVE_QUESTION, expectedRevision: 0, status: "approved" },
+    ]);
+  });
+
   it("asks the open poll in a dialog over the questions, takes one final answer and then shows the results", () => {
     const { host, live } = mount();
     connect(live, liveSnapshot({ polls: [livePoll()] }));
