@@ -4,6 +4,7 @@ import { ApiDataTable } from "../../../../../components/ApiDataTable";
 import { DownloadAction } from "../../../../../ui/DownloadAction";
 import {
   sessionDemandReportResponseSchema,
+  sessionDemandReportQuerySchema,
   sessionDemandReportExportQuerySchema,
   type SessionDemandReportRow,
   type SessionDemandReportResponse,
@@ -56,7 +57,14 @@ export function SessionDemandReport({ slug, clock }: { slug: string; clock?: Clo
           header: "Starts",
           cell: (row) => (report ? formatDateTimeInZone(row.startAt, clockForZone(clock, report.timeZone)) : "—"),
           sort: { asc: "startAt", desc: "-startAt" },
-          filter: { param: "dayDate", text: { placeholder: "YYYY-MM-DD", hint: "Event-local session day." } },
+          filter: {
+            param: "dayDate",
+            text: {
+              schema: sessionDemandReportQuerySchema.pick({ dayDate: true }),
+              placeholder: "YYYY-MM-DD",
+              hint: "Event-local session day.",
+            },
+          },
         },
         {
           header: "Attendance",

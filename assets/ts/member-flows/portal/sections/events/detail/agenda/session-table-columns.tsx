@@ -158,7 +158,14 @@ export function agendaSessionColumns(
       header: "Track",
       defaultHidden: true,
       cell: (row) => row.track || "—",
-      filter: { param: "track", text: { placeholder: "Track name", hint: "Matches the exact session track." } },
+      filter: {
+        param: "track",
+        text: {
+          schema: agendaOccurrenceQuerySchema.pick({ track: true }),
+          placeholder: "Track name",
+          hint: "Matches the exact session track.",
+        },
+      },
     },
     // Text heads, not glyphs: a check mark over a column of counts did not
     // say "reserved" to anyone who had not hovered it.

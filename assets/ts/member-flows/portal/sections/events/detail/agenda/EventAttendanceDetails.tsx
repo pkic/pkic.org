@@ -286,7 +286,13 @@ export function EventAttendanceDetails({
             {
               header: "Recorded day",
               defaultHidden: true,
-              filter: { param: "dayDate", text: { placeholder: "Event day: YYYY-MM-DD" } },
+              filter: {
+                param: "dayDate",
+                text: {
+                  schema: attendanceScopeQuerySchema.pick({ dayDate: true }),
+                  placeholder: "Event day: YYYY-MM-DD",
+                },
+              },
               cell: (row) =>
                 row.captureContext.state === "captured"
                   ? `${row.captureContext.dayDate} · ${row.captureContext.timeZone} · ${row.captureContext.source}`

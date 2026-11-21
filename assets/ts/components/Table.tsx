@@ -135,7 +135,7 @@ export interface ColumnFilter {
 
 export interface ColumnTextFilter {
   /** Shared query contract for a typed filter committed with Enter or Done. */
-  schema?: z.ZodType<Record<string, string | undefined>>;
+  schema: z.ZodType<Record<string, string | undefined>>;
   placeholder?: string;
   /** Said under the control, e.g. where the match runs. */
   hint?: string;
@@ -358,7 +358,7 @@ export function DataTable<T>({
   return (
     <>
       <AppliedFilterChips chips={chips} />
-      {openColumn && openFilter && openTextFilter && (onFilterPatch || sharedControls) && (
+      {openColumn && openFilter && openTextFilter && controls.canFilter && (
         <ColumnTextFilterRow
           key={filterOpen}
           columnLabel={openFilter?.label ?? headLabel(openColumn.header)}

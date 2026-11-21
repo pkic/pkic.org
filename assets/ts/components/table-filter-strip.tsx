@@ -20,7 +20,7 @@
  * contract-validated exact filter keeps a local draft until submission.
  */
 import type { ComponentChildren } from "preact";
-import { useState } from "preact/hooks";
+import { useId, useState } from "preact/hooks";
 import type { z } from "zod";
 import { useContractForm } from "../hooks/useContractForm";
 import { Field } from "../ui/Field";
@@ -75,31 +75,25 @@ export interface ColumnTextFilterRowProps {
   placeholder?: string;
   /** Where the matching happens, said plainly under the control. */
   hint?: ComponentChildren;
-  /** A shared query contract opts into explicit submission rather than per-keystroke queries. */
-  schema?: z.ZodType<Record<string, string | undefined>>;
-  param?: string;
+  /** Shared query contract for the draft committed with Enter or Done. */
+  schema: z.ZodType<Record<string, string | undefined>>;
+  param: string;
   onInput: (value: string) => void;
   onClose: () => void;
 }
 
-export function ColumnTextFilterRow(props: ColumnTextFilterRowProps) {
-  return props.schema ? (
-    <CommittedColumnTextFilterRow {...props} schema={props.schema} />
-  ) : (
-    <LiveColumnTextFilterRow {...props} />
-  );
-}
-
-function CommittedColumnTextFilterRow({
+export function ColumnTextFilterRow({
   columnLabel,
   value,
   schema,
-  param = "value",
+  param,
   placeholder,
   hint,
+  suggestions = [],
   onInput,
   onClose,
-}: ColumnTextFilterRowProps & { schema: z.ZodType<Record<string, string | undefined>> }) {
+}: ColumnTextFilterRowProps) {
+  const listId = useId();
   const [draft, setDraft] = useState(value);
   const form = useContractForm(schema, { [param]: draft.trim() ? draft : undefined });
   return (
@@ -107,6 +101,12 @@ function CommittedColumnTextFilterRow({
       class="pk-column-filter"
       noValidate
       {...form.handlers}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        event.stopPropagation();
+        onClose();
+      }}
       onSubmit={(event) => {
         event.preventDefault();
         const checked = form.submit();
@@ -116,11 +116,16 @@ function CommittedColumnTextFilterRow({
       }}
     >
       <div class="pk-column-filter__field">
-        <Field label={`Filter ${columnLabel.toLowerCase()}`} help={hint} {...form.of(param)}>
+        <Field
+          label={`Filter ${columnLabel}`}
+          help={hint ?? "Press Enter or Done to apply the filter."}
+          {...form.of(param)}
+        >
           {(control) => (
             <TextInput
               {...control}
               name={param}
+              list={suggestions.length ? listId : undefined}
               value={draft}
               placeholder={placeholder}
               autofocus
@@ -129,50 +134,17 @@ function CommittedColumnTextFilterRow({
           )}
         </Field>
       </div>
-      <Button variant="secondary" type="submit">
-        Done
+      {suggestions.length > 0 && (
+        <datalist id={listId}>
+          {suggestions.map((suggestion) => (
+            <option key={suggestion} value={suggestion} />
+          ))}
+        </datalist>
+      )}
+      <Button variant="secondary" type="button" onClick={onClose}>
+        Cancel
       </Button>
+      <Button type="submit">Done</Button>
     </form>
-  );
-}
-
-function LiveColumnTextFilterRow({
-  columnLabel,
-  value,
-  suggestions = [],
-  placeholder,
-  hint,
-  onInput,
-  onClose,
-}: ColumnTextFilterRowProps) {
-  const listId = `filter-values-${columnLabel.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-  return (
-    <div class="pk-column-filter">
-      <label class="pk-column-filter__field">
-        <span class="pk-small pk-strong">Filter {columnLabel.toLowerCase()}</span>
-        <TextInput
-          list={suggestions.length > 0 ? listId : undefined}
-          value={value}
-          placeholder={placeholder ?? "Contains…"}
-          // The reader opened this from a menu item; focus is the whole point
-          // of the row appearing, and without it they have to find it again.
-          autofocus
-          onInput={(event) => {
-            onInput((event.currentTarget as HTMLInputElement).value);
-          }}
-        />
-        {suggestions.length > 0 && (
-          <datalist id={listId}>
-            {suggestions.map((suggestion) => (
-              <option key={suggestion} value={suggestion} />
-            ))}
-          </datalist>
-        )}
-        {hint !== undefined && <span class="pk-small pk-muted">{hint}</span>}
-      </label>
-      <Button variant="secondary" onClick={onClose}>
-        Done
-      </Button>
-    </div>
   );
 }
