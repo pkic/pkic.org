@@ -144,7 +144,7 @@
 
   @media (prefers-reduced-motion: no-preference) {
     .pk-virtual-room__live-dot {
-      animation: pk-virtual-room-live 2s ease-in-out infinite;
+      animation: pk-virtual-room-live calc(var(--pk-dur-live-mark-second) * 2) ease-in-out infinite;
     }
   }
 
