@@ -1,12 +1,8 @@
 // @vitest-environment jsdom
-import { render } from "preact";
 import { act } from "preact/test-utils";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { LIVE_ROOM_PROTOCOL, liveRoomClientMessageSchema } from "../../assets/shared/schemas/live-session-room";
-import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
-import { SessionQuestions } from "../../assets/ts/live-session/SessionQuestions";
 import {
-  fakeLiveSockets,
   LIVE_OCCURRENCE,
   LIVE_POLL,
   LIVE_QUESTION,
@@ -15,50 +11,7 @@ import {
   liveQuestion,
   liveSnapshot,
 } from "./helpers/live-room-socket";
-
-const hosts: HTMLElement[] = [];
-
-function mount(window = { startOffsetMinutes: -10, durationMinutes: 60 }) {
-  const live = fakeLiveSockets();
-  const host = document.createElement("div");
-  document.body.append(host);
-  hosts.push(host);
-  const startAt = new Date(Date.now() + window.startOffsetMinutes * 60_000).toISOString();
-  const endAt = new Date(Date.parse(startAt) + window.durationMinutes * 60_000).toISOString();
-  void act(() => {
-    render(
-      <>
-        <SessionQuestions
-          slug="pqc-2026"
-          occurrenceId={LIVE_OCCURRENCE}
-          startAt={startAt}
-          endAt={endAt}
-          createSocket={live.factory}
-        />
-        <ConfirmDialogHost />
-      </>,
-      host,
-    );
-  });
-  return { host, live };
-}
-
-function connect(live: ReturnType<typeof fakeLiveSockets>, snapshot = liveSnapshot()) {
-  void act(() => {
-    live.latest().open();
-    live.latest().deliver(snapshot);
-  });
-}
-
-const openAsk = (host: HTMLElement) => void act(() => button(host, "Ask a question").click());
-
-function button(host: HTMLElement, name: string) {
-  const found = [...host.querySelectorAll("button")].find(
-    (candidate) => candidate.getAttribute("aria-label") === name || candidate.textContent?.trim() === name,
-  );
-  if (!found) throw new Error(`No button named ${name}`);
-  return found;
-}
+import { button, connect, mount, openAsk } from "./helpers/session-questions";
 
 function radio(host: HTMLElement, name: string) {
   const found = [...host.querySelectorAll<HTMLInputElement>("input[type=radio]")].find(
@@ -67,13 +20,6 @@ function radio(host: HTMLElement, name: string) {
   if (!found) throw new Error(`No choice named ${name}`);
   return found;
 }
-
-afterEach(() => {
-  for (const host of hosts.splice(0)) {
-    render(null, host);
-    host.remove();
-  }
-});
 
 describe("session questions", () => {
   it("takes questions ahead of the session, and stays out of its details once the room has closed", () => {
@@ -493,34 +439,6 @@ describe("session questions", () => {
     expect(host.textContent).toContain("Awaiting moderation");
     expect(host.textContent).toContain("Anonymous");
     expect(host.textContent).not.toContain("Bea Attendee");
-  });
-
-  it("lets a credited speaker mark an open question discussed", () => {
-    const { host, live } = mount();
-    connect(live, liveSnapshot({ viewer: { role: "speaker", name: "Sam Speaker" }, questions: [liveQuestion()] }));
-    void act(() => button(host, "Mark discussed").click());
-    expect(live.latest().messages()).toEqual([
-      { type: "question.moderate", questionId: LIVE_QUESTION, expectedRevision: 0, status: "answered" },
-    ]);
-  });
-
-  it("lets a room moderator approve a question waiting for moderation from its actions menu", async () => {
-    const { host, live } = mount();
-    connect(
-      live,
-      liveSnapshot({
-        viewer: { role: "operator", name: "Mo Moderator" },
-        questions: [liveQuestion({ status: "pending" })],
-      }),
-    );
-    await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Question actions"]')!.click());
-    const approve = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
-      (item) => item.textContent === "Approve",
-    );
-    await act(() => approve!.click());
-    expect(live.latest().messages()).toEqual([
-      { type: "question.moderate", questionId: LIVE_QUESTION, expectedRevision: 0, status: "approved" },
-    ]);
   });
 
   it("asks the open poll in a dialog over the questions, takes one final answer and then shows the results", () => {
