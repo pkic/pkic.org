@@ -1,4 +1,7 @@
-import { prepareBadgeLabel } from "../../../../_lib/services/event-participation/badge-label-print";
+import {
+  prepareBadgeLabel,
+  prepareDeskBadgeLabel,
+} from "../../../../_lib/services/event-participation/badge-label-print";
 import { prepareBadgeLabelBatch } from "../../../../_lib/services/event-participation/badge-label-batches";
 import { badgeLabelBatchRouteSchema } from "../../../../../assets/shared/schemas/event-badge-label-batches";
 import {
@@ -70,8 +73,9 @@ export const EventBadgePrint = openApiRoute(badgePrintRouteSchema, async (c: Adm
   return json(await prepareBadgePrint(db, c.env, event.id, data.params.badgeId, actor.id, data.body));
 });
 export const EventBadgeLabel = openApiRoute(badgeLabelRouteSchema, async (c: AdminContext, data) => {
-  const { db, event, actor } = await badgeDeskContext(c, data.params.eventSlug);
-  return json(await prepareBadgeLabel(db, c.env, event.id, actor.id, data.body));
+  const { db, event, actor, permission } = await badgeDeskContext(c, data.params.eventSlug);
+  const label = permission === "events:manage" ? prepareBadgeLabel : prepareDeskBadgeLabel;
+  return json(await label(db, c.env, event.id, actor.id, data.body));
 });
 export const EventBadgeLabelBatch = openApiRoute(badgeLabelBatchRouteSchema, async (c: AdminContext, data) => {
   const { db, event, actor } = await badgeManagementContext(c, data.params.eventSlug);

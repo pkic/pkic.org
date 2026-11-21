@@ -104,6 +104,22 @@ describe("Badge printing at the desk", () => {
     },
   );
 
+  it("prints no label at the desk once the badge's registration is cancelled", async () => {
+    const token = await teamMember("role-event_volunteer");
+    const badge = badgeIssueResponseSchema.parse(await (await issue(token)).json());
+    await env.DB.prepare("UPDATE registrations SET status='cancelled' WHERE event_id=? AND user_id=?")
+      .bind(fixture.eventId, fixture.userId)
+      .run();
+    for (const label of [
+      { source: "badge", badgeId: badge.id, operationId: crypto.randomUUID() },
+      { source: "scan", credential: fixture.badgeId, operationId: crypto.randomUUID() },
+    ])
+      expect(
+        (await call(token, "/labels", { method: "POST", body: JSON.stringify(badgeLabelRequestSchema.parse(label)) }))
+          .status,
+      ).toBe(409);
+  });
+
   it("gives the program committee no badge printing", async () => {
     const token = await teamMember("role-program_committee");
     expect((await call(token, "/attendees")).status).toBe(403);
