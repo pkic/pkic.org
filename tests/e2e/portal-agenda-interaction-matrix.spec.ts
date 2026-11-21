@@ -357,7 +357,7 @@ test("sponsor lead details fit their desktop and phone viewport", async ({ page,
     const lead = leads.leads.find((row) => row.email === fixture.email)!;
     for (const [name, width] of [
       ["desktop", 1280],
-      ["phone", 390],
+      ["phone", 375],
     ] as const) {
       await page.setViewportSize({ width, height: 900 });
       await expect(page.getByRole("link", { name: `View lead ${lead.name}`, exact: true })).toBeVisible();
@@ -369,7 +369,7 @@ test("sponsor lead details fit their desktop and phone viewport", async ({ page,
     await expect(page.getByRole("heading", { name: "Capture history", exact: true })).toBeVisible();
     for (const [name, width] of [
       ["desktop", 1280],
-      ["phone", 390],
+      ["phone", 375],
     ] as const) {
       await page.setViewportSize({ width, height: 900 });
       await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toBeVisible();

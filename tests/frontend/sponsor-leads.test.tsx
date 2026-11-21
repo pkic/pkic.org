@@ -51,7 +51,6 @@ async function mount(canView: boolean, canCapture = false, canExport = false, ca
     if (canView || canCapture) expect(host.textContent).toContain("Private person");
   });
   expect(host.querySelector('button[aria-label="Open leads for Sponsor"]')).toBeNull();
-  expect(host.querySelector("h2, h3, h4")?.textContent).toContain("Sponsor");
   return { host, requests, fetcher };
 }
 async function openSponsorActions(host: HTMLElement): Promise<void> {
@@ -72,6 +71,7 @@ describe("Live sponsor leads", () => {
     const { host } = await mount(true, false, false, false);
     expect(host.querySelector('input[placeholder="Search contacts…"]')).not.toBeNull();
     expect(host.querySelector('button[title="Refresh consenting leads"]')).not.toBeNull();
+    expect(host.querySelector(".pk-panel__header")).toBeNull();
     expect(host.querySelector('[aria-label="Actions for Private person"]')).toBeNull();
   });
   it("offers a sponsor choice only when the operator represents several sponsors", async () => {
