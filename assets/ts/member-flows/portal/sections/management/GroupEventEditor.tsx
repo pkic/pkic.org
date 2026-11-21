@@ -137,7 +137,6 @@ function settingsPayload(draft: EventDraft, schedule: ScheduleInstants, event: G
     timezone: draft.timezone,
     startsAt: schedule.startsAt,
     endsAt: schedule.endsAt,
-    inviteLimitAttendee: draft.inviteLimitAttendee,
     visibility: draft.visibility,
     city: fieldValue(draft.city),
     country: fieldValue(draft.country),
@@ -175,7 +174,7 @@ export function GroupEventEditor({
       : section === "location"
         ? ["timezone", "startsAt", "endsAt", "city", "country"]
         : section === "registration"
-          ? ["visibility", "inviteLimitAttendee"]
+          ? ["visibility"]
           : section === "links"
             ? ["links"]
             : null;
@@ -415,26 +414,6 @@ export function GroupEventEditor({
                 )}
               </Field>
             </div>
-
-            <Field
-              label="Peer invitation limit"
-              help="Maximum number of attendee invitations each registered participant may send. Set this to 0 to disable peer invitations. Manager invitations are configured separately."
-              {...form.of("inviteLimitAttendee")}
-            >
-              {(control) => (
-                <TextInput
-                  {...control}
-                  name="inviteLimitAttendee"
-                  type="number"
-                  min={0}
-                  max={50}
-                  value={draft.inviteLimitAttendee}
-                  onInput={(inputEvent) =>
-                    update("inviteLimitAttendee", Number((inputEvent.target as HTMLInputElement).value))
-                  }
-                />
-              )}
-            </Field>
           </>
         )}
         {/* The link editor is several controls, not one, so the group is named

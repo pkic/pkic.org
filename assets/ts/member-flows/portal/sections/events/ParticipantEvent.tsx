@@ -37,6 +37,9 @@ import { EventMore } from "./app/EventMore";
 import { canInviteColleagues, eventRegistrationStanding } from "./app/event-app-model";
 import { hasEventProposals, hasEventPromotionMaterials, participantEventAppSubject } from "./app/event-app-tabs";
 
+const EventNotRegistering = lazy(() =>
+  import("./app/EventNotRegistering").then((module) => ({ default: module.EventNotRegistering })),
+);
 const EventRegister = lazy(() => import("./app/EventRegister").then((module) => ({ default: module.EventRegister })));
 const MyAgenda = lazy(() => import("./detail/participation/MyAgenda").then((module) => ({ default: module.MyAgenda })));
 const EventCheckIn = lazy(() => import("./app/EventCheckIn").then((module) => ({ default: module.EventCheckIn })));
@@ -112,8 +115,8 @@ export function ParticipantEvent({
       ? "registration"
       : kind === "proposal" || tab === "submissions"
         ? "proposals"
-        : tab === "register"
-          ? "register"
+        : tab === "register" || tab === "not-registering"
+          ? tab
           : tab === "agenda"
             ? mine
               ? "agenda"
@@ -171,7 +174,7 @@ export function ParticipantEvent({
     <>
       <EventAppHero event={event} />
       {navigation}
-      {active !== "overview" && active !== "register" && (
+      {active !== "overview" && active !== "register" && active !== "not-registering" && (
         <SectionHeading level={3} class={kind === "proposal" ? undefined : "pk-participant-event__page-title"}>
           {kind === "proposal" ? (recordTitle ?? "Proposal") : (PAGE_LABELS[active] ?? "Proposals")}
         </SectionHeading>
@@ -193,6 +196,10 @@ export function ParticipantEvent({
       ) : tab === "register" ? (
         <Suspense fallback={<Spinner label="Loading registration…" />}>
           <EventRegister event={event} onRegistered={onRegistered} />
+        </Suspense>
+      ) : tab === "not-registering" ? (
+        <Suspense fallback={<Spinner />}>
+          <EventNotRegistering slug={event.slug} />
         </Suspense>
       ) : tab === "agenda" ? (
         <Suspense fallback={<Spinner />}>
@@ -236,7 +243,7 @@ export function ParticipantEvent({
           <VirtualRoom slug={event.slug} eventName={event.name} />
         </Suspense>
       ) : tab === "ticket" && !ticketless ? (
-        <EventTicket event={event} />
+        <EventTicket event={event} onSettled={onRegistered} />
       ) : tab === "check-in" ? (
         <Suspense fallback={<Spinner />}>
           <EventCheckIn slug={event.slug} pointToken={pointToken} />

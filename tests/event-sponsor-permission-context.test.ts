@@ -28,7 +28,7 @@ describe("canonical event sponsor permission targets", () => {
     ]);
     const payload = accessGrantCreateSchema.parse({
       userId: user.id,
-      permission: "agenda:leads_capture",
+      permissions: ["agenda:leads_capture"],
       contextType: "event_sponsor",
       contextId: catalog.targets[0].id,
     });
@@ -36,7 +36,7 @@ describe("canonical event sponsor permission targets", () => {
     await env.DB.prepare(
       "INSERT INTO permission_grants(id,user_id,permission,context_type,context_id,created_at) VALUES(?,?,?,?,?,?)",
     )
-      .bind(grantId, payload.userId, payload.permission, payload.contextType, payload.contextId, now)
+      .bind(grantId, payload.userId, payload.permissions[0]!, payload.contextType, payload.contextId, now)
       .run();
     await expect(
       env.DB.prepare("UPDATE permission_grants SET context_id=? WHERE id=?")

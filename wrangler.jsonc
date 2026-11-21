@@ -87,6 +87,8 @@
           "bucket_name": "pkic-speaker-uploads",
         },
       ],
+      // Workers AI: the ticket classifier is its only caller, and a failure falls back to the default ticket.
+      "ai": { "binding": "AI" },
       "images": {
         "binding": "IMAGES",
       },
@@ -199,6 +201,8 @@
             "bucket_name": "pkic-speaker-uploads-preview",
           },
         ],
+        // Workers AI: the ticket classifier is its only caller, and a failure falls back to the default ticket.
+        "ai": { "binding": "AI" },
         "images": {
           "binding": "IMAGES",
         },

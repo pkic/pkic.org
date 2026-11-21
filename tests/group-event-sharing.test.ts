@@ -1085,9 +1085,10 @@ describe("group event sharing", () => {
       granteeGroupId: fixture.granteeId,
       capability: "register",
     });
-    expect((await callApi(env, `/api/v1/events/${fixture.eventSlug}/forms/placements/event_registration`)).status).toBe(
-      200,
-    );
+    // The shared event's forms are visible to the member the grant admits, never to an anonymous reader.
+    const placements = `/api/v1/events/${fixture.eventSlug}/forms/placements/event_registration`;
+    expect((await callApi(env, placements)).status).toBe(404);
+    expect((await authenticatedRequest(fixture.memberToken, placements)).status).toBe(200);
 
     const revokedGrantDb = mutateBeforeMatchingQuery(
       env.DB,

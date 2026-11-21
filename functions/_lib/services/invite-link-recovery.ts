@@ -33,11 +33,12 @@ interface InviteRecoveryMatch {
   event_starts_at: string | null;
   event_ends_at: string | null;
   event_settings_json: string;
+  event_visibility: string;
   expires_at: string;
   next_link_secret?: string;
 }
 
-type RecoveryEvent = EventRouteRow & { timezone: string; ends_at: string | null };
+type RecoveryEvent = EventRouteRow & { timezone: string; ends_at: string | null; visibility: string };
 
 function recoveryEvent(row: InviteRecoveryMatch): RecoveryEvent {
   return {
@@ -49,6 +50,7 @@ function recoveryEvent(row: InviteRecoveryMatch): RecoveryEvent {
     starts_at: row.event_starts_at,
     ends_at: row.event_ends_at,
     settings_json: row.event_settings_json,
+    visibility: row.event_visibility,
   };
 }
 
@@ -155,6 +157,7 @@ export async function recoverInviteLinksByEmail(
          e.starts_at AS event_starts_at,
          e.ends_at AS event_ends_at,
          e.settings_json AS event_settings_json,
+         e.visibility AS event_visibility,
          ROW_NUMBER() OVER (
            PARTITION BY i.event_id, i.invite_type
            ORDER BY CASE WHEN i.status = 'sent' THEN 0 ELSE 1 END, i.created_at DESC, i.id DESC
@@ -171,7 +174,7 @@ export async function recoverInviteLinksByEmail(
      SELECT
        id, invitee_email, invitee_first_name, invitee_last_name, invite_type, link_secret, expires_at,
        transition_revision, event_id, event_name, event_slug, event_base_path,
-       event_timezone, event_starts_at, event_ends_at, event_settings_json
+       event_timezone, event_starts_at, event_ends_at, event_settings_json, event_visibility
      FROM ranked_matches
      WHERE recovery_rank = 1
      ORDER BY invite_created_at DESC, id DESC

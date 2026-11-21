@@ -49,8 +49,10 @@ export function ParticipationPersonalDetails({
   showRefusal.current = (message) => {
     if (!save) return;
     edit();
-    form.submit();
-    setError(message);
+    const checked = form.submit();
+    // The dialog's fields are not open yet, but every name the contract refuses is said by its
+    // field once they are, and clears as it is typed; the alert keeps only a refusal they cannot say.
+    setError(checked.data ? message : null);
   };
   useEffect(() => {
     if (refusal) showRefusal.current?.(refusal);
@@ -96,7 +98,7 @@ export function ParticipationPersonalDetails({
           <Dialog
             open={editing}
             title="Edit my details"
-            description="These changes update your stored personal details. Your representations stay unchanged."
+            description="Your name is the same for yourself and for every organization you represent."
             confirmLabel="Save my details"
             onConfirm={() => void submit()}
             onCancel={() => {

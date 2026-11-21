@@ -70,6 +70,12 @@ export interface DataTableColumn<Row> {
    * each other. The table sets `tabular-nums`, so digits line up either way.
    */
   align?: "start" | "center" | "end";
+  /**
+   * The word a narrow record shows after an end-aligned value, such as "registrations"
+   * in "12 registrations". Defaults to `header`; `null` when the value says what it is,
+   * such as a price.
+   */
+  recordLabel?: string | null;
   /** See DataTableColumnWidth. Defaults to `content`. */
   width?: DataTableColumnWidth;
   /**
@@ -496,9 +502,11 @@ export function DataTable<Row>({
                             contain an absolute link against a table row. Only
                             the first target participates in keyboard/AT navigation. */}
                         {action && <RowActionControl action={action} primary={index === 0} />}
-                        <span class="pk-table__mobile-label" aria-hidden="true">
-                          {column.header}
-                        </span>
+                        {column.recordLabel !== null && (
+                          <span class="pk-table__mobile-label" aria-hidden="true">
+                            {column.recordLabel ?? column.header}
+                          </span>
+                        )}
                         <div class="pk-table__value">{cellValue(value)}</div>
                       </td>
                     );

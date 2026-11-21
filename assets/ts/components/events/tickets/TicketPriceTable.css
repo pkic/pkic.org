@@ -1,0 +1,147 @@
+/*
+ * The price grid. Prices are right-aligned figures; the period in force is a
+ * tinted column with a "Now" marker so it reads without color alone.
+ */
+
+@layer components {
+  .pk-price-table {
+    inline-size: 100%;
+    background: var(--pk-surface);
+  }
+
+  .pk-price-table thead th {
+    vertical-align: bottom;
+    text-transform: none;
+    letter-spacing: normal;
+    white-space: nowrap;
+  }
+
+  .pk-price-table thead th.pk-price-table__period,
+  .pk-price-table td.pk-price-table__price {
+    text-align: end;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .pk-price-table__period > span {
+    display: block;
+  }
+
+  .pk-price-table__period-label {
+    color: var(--pk-ink);
+    font-weight: 600;
+  }
+
+  .pk-price-table__until {
+    color: var(--pk-ink-muted);
+    font-weight: 400;
+    font-size: var(--pk-text-xs);
+  }
+
+  .pk-price-table__now {
+    margin-block-end: var(--pk-1);
+    color: var(--pk-accent-ink);
+    font-size: var(--pk-text-xs);
+    font-weight: 700;
+    letter-spacing: var(--pk-tracking-label);
+    text-transform: uppercase;
+  }
+
+  .pk-price-table [data-current] {
+    background: var(--pk-accent-soft);
+  }
+
+  .pk-price-table__price {
+    font-size: var(--pk-text-md);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .pk-price-table__price[data-free] {
+    color: var(--pk-ink-muted);
+    font-weight: 400;
+  }
+
+  .pk-price-table__price[data-current] {
+    color: var(--pk-accent-ink);
+    font-weight: 800;
+  }
+
+  .pk-price-table tbody .pk-price-table__group th {
+    padding-block: var(--pk-2);
+    background: var(--pk-surface-sunk);
+    text-align: start;
+    text-transform: none;
+    letter-spacing: normal;
+    font-weight: 400;
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-price-table__group strong {
+    margin-inline-end: var(--pk-3);
+    color: var(--pk-ink);
+    font-size: var(--pk-text-md);
+  }
+
+  .pk-price-table tbody th.pk-price-table__attendance {
+    text-align: start;
+    text-transform: none;
+    letter-spacing: normal;
+    font-weight: 400;
+    white-space: nowrap;
+  }
+
+  .pk-price-table__attendance-name {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2);
+    color: var(--pk-ink);
+    font-weight: 600;
+  }
+
+  .pk-price-table__covers {
+    display: block;
+    padding-inline-start: calc(1rem + var(--pk-2));
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+  }
+
+  .pk-price-table[data-editing] td,
+  .pk-price-table[data-editing] thead th {
+    vertical-align: middle;
+  }
+
+  .pk-price-table[data-editing] .pk-price-table__price .pk-input {
+    inline-size: 6rem;
+    text-align: end;
+  }
+
+  .pk-price-table[data-editing] .pk-price-table__period .pk-input {
+    inline-size: 9.5rem;
+  }
+
+  /* Above the label rule's block display: the date and its Remove stack, so the column stays one field wide. */
+  .pk-price-table__period > .pk-price-table__period-edit {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--pk-1);
+  }
+
+  .pk-price-table__more .pk-cluster {
+    align-items: center;
+  }
+
+  .pk-price-table[data-editing] .pk-input--select {
+    inline-size: 8rem;
+  }
+
+  .pk-price-table__add,
+  .pk-price-table__remove {
+    text-align: end;
+    white-space: nowrap;
+  }
+
+  .pk-price-table__more td {
+    padding-block: var(--pk-1);
+  }
+}

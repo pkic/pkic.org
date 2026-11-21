@@ -10,6 +10,31 @@ import type { DatabaseLike } from "../../types";
 import { firstReferralCodeForOwnerSql } from "../referral-code-projection";
 import { personalPromotionSharePath } from "../../../../assets/shared/personal-promotion-image";
 import { eventDayOptionAccessSql } from "../event-attendance-option-sql";
+import { heldEventInvitationConditions, heldEventInvitationExistsSql } from "../held-event-invitation";
+import { groupEventRegistrationAccessExistsSql } from "../registrations/authorization";
+
+/** Why the viewer may register where the event takes no open registrations: one held invitation or group access. */
+const registrationAccessSql = `CASE
+        WHEN ${heldEventInvitationExistsSql({
+          inviteAlias: "access_invite",
+          eventAlias: "e",
+          userIdSql: "?",
+          statuses: ["sent"],
+          attendeeOnly: true,
+        })} THEN 'invitation'
+        WHEN ${groupEventRegistrationAccessExistsSql("e.id", "?")} THEN 'group'
+      END`;
+
+/** The viewer's open attendee invitation (at most one per event and address), so the portal can answer it: register, postpone or decline. */
+const heldInvitationSql = `(SELECT json_object('id', held.id, 'remindersPausedUntil', held.reminders_paused_until)
+        FROM invites held WHERE ${heldEventInvitationConditions({
+          inviteAlias: "held",
+          eventAlias: "e",
+          userIdSql: "?",
+          statuses: ["sent"],
+          attendeeOnly: true,
+        })}
+        LIMIT 1)`;
 
 export interface EventParticipationRow {
   id: string;
@@ -23,6 +48,8 @@ export interface EventParticipationRow {
   proposals: number;
   speakerProposals: number;
   speakerSessions: number;
+  registrationAccess?: string | null;
+  invitation?: string | null;
 }
 
 export function prepareEventParticipation(db: DatabaseLike, userId: string | null, selection: EventReadSelection) {
@@ -46,12 +73,17 @@ export function prepareEventParticipation(db: DatabaseLike, userId: string | nul
         AND p.proposer_user_id = ?) AS proposals,
       (SELECT COUNT(*) FROM proposal_speakers ps JOIN session_proposals p
         ON p.id = ps.proposal_id AND p.deleted_at IS NULL WHERE p.event_id = e.id AND ps.user_id = ?) AS speakerProposals,
-      (SELECT COUNT(*) FROM event_agenda_occurrence_speakers speaker JOIN event_agenda_occurrences occurrence ON occurrence.id=speaker.occurrence_id WHERE occurrence.event_id=e.id AND speaker.user_id=?) AS speakerSessions
+      (SELECT COUNT(*) FROM event_agenda_occurrence_speakers speaker JOIN event_agenda_occurrences occurrence ON occurrence.id=speaker.occurrence_id WHERE occurrence.event_id=e.id AND speaker.user_id=?) AS speakerSessions,
+      ${registrationAccessSql} AS registrationAccess,
+      ${heldInvitationSql} AS invitation
       FROM events e LEFT JOIN registrations r ON r.event_id = e.id AND r.user_id = ?
       WHERE ${filter.sql}`,
     )
     .bind(
       ...(filter.withSql ? filter.bindings : []),
+      userId,
+      userId,
+      userId,
       userId,
       userId,
       userId,
@@ -76,6 +108,7 @@ export function decodeEventParticipation(rows: EventParticipationRow[]) {
             : null,
         proposalStates: row.proposalStates?.split(",") ?? [],
         speakerStates: row.speakerStates?.split(",") ?? [],
+        invitation: row.invitation ? JSON.parse(row.invitation) : null,
       }),
     );
   return result;

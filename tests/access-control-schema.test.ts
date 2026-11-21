@@ -45,7 +45,7 @@ describe("permission target identifiers", () => {
       expect(
         accessGrantCreateSchema.parse({
           userId: crypto.randomUUID(),
-          permission: "events:read",
+          permissions: ["events:read"],
           contextType: "event",
           contextId: id,
         }).contextId,
@@ -73,7 +73,7 @@ describe("access-control contextTypeSchema", () => {
   it("accessGrantCreateSchema also accepts context_type='organization'", () => {
     const result = accessGrantCreateSchema.safeParse({
       userId: crypto.randomUUID(),
-      permission: "membership:write",
+      permissions: ["membership:write"],
       contextType: "organization",
       contextId: crypto.randomUUID(),
     });
@@ -106,7 +106,7 @@ describe("access-control contextTypeSchema", () => {
       const common =
         schema === userRoleAssignSchema
           ? { roleId: "role-group_lead" }
-          : { userId: crypto.randomUUID(), permission: "membership:write" };
+          : { userId: crypto.randomUUID(), permissions: ["membership:write"] };
 
       expect(schema.safeParse({ ...common, contextType: "working_group" }).success).toBe(false);
       expect(schema.safeParse({ ...common, contextId: crypto.randomUUID() }).success).toBe(false);

@@ -11,11 +11,15 @@ const event = {
   ends_at: "2026-12-02T17:00:00.000Z",
   settings_json: "{}",
   timezone: "UTC",
+  visibility: "public" as const,
 };
 
 describe("registration calendar invites", () => {
   it("preserve the emailed management link and all four standard reminders", async () => {
-    const manageUrl = registrationManagePageUrl("https://app.test", event, "synthetic-manage-token");
+    const manageUrl = registrationManagePageUrl("https://app.test", event, {
+      token: "synthetic-manage-token",
+      registrationId: "registration-1",
+    });
     const calendar = await buildRegistrationIcs(event, "registration-1", manageUrl, [
       { dayDate: "2026-12-01", attendanceType: "in_person", label: "Day 1" },
       { dayDate: "2026-12-02", attendanceType: "in_person", label: "Day 2" },

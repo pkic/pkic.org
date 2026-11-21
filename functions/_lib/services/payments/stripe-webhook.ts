@@ -1,3 +1,4 @@
+import { readTicketPaymentDetails } from "../event-tickets/payment-details";
 import type { z } from "zod";
 import { stripeEventEnvelopeSchema } from "../../../../assets/shared/schemas/stripe";
 import { membershipPaymentEventSchema } from "../../../../assets/shared/schemas/membership-payments";
@@ -10,6 +11,7 @@ import { handleMembershipPaymentEvent } from "../membership/workflows/fee-events
 import { handleSponsorshipStripeEvent } from "../sponsorship/stripe-webhook";
 import { applySponsorshipPaymentAdjustment } from "../sponsorship/payment-adjustments";
 import { recordStripePaymentEvent } from "./ledger";
+import { handleEventTicketStripeEvent, isEventTicketStripeEvent } from "../event-tickets/payment";
 
 type StripeEvent = z.infer<typeof stripeEventEnvelopeSchema>;
 type PaymentPurpose = "donation" | "membership" | "sponsorship";
@@ -90,6 +92,13 @@ export async function dispatchStripePaymentEvent(
   appBaseUrl: string,
   waitUntil: (promise: Promise<unknown>) => void,
 ) {
+  // A ticket payment records its own ledger entry in the batch that settles the ticket.
+  if (await isEventTicketStripeEvent(db, event)) {
+    const result = await handleEventTicketStripeEvent(db, event);
+    // How it was paid and what arrived are read after the response; the scheduled run reads what this misses.
+    if (result.outcome === "paid") waitUntil(readTicketPaymentDetails(db, env, {}).catch(() => undefined));
+    return result;
+  }
   const purpose = await paymentPurpose(db, event);
   if (!purpose) return { received: true, ignored: true };
   if (purpose === "donation") {

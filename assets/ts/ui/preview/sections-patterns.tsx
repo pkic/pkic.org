@@ -1,4 +1,5 @@
 import { formResponsesSection } from "./form-responses";
+import { grantPermissionsSection } from "./GrantPermissionsPreview";
 import { guidedTourSection } from "./GuidedTourPreview";
 import { imageCarouselSection } from "./image-carousel";
 import { badgeOutputProgressSection } from "./badge-output-progress";
@@ -594,4 +595,5 @@ export const patternSections: PreviewSection[] = [
   },
   contentContributionPreview,
   badgeOutputProgressSection,
+  grantPermissionsSection,
 ];

@@ -27,6 +27,9 @@ import { SectionHeading } from "../../../../../ui/SectionHeading";
 const SessionDemandReport = lazy(() =>
   import("./SessionDemandReport").then((module) => ({ default: module.SessionDemandReport })),
 );
+const UnfinishedRegistrations = lazy(() =>
+  import("./UnfinishedRegistrations").then((module) => ({ default: module.UnfinishedRegistrations })),
+);
 const Promoters = lazy(() => import("./Promoters").then((module) => ({ default: module.Promoters })));
 
 /**
@@ -67,6 +70,7 @@ type StatsSection =
   | "overview"
   | "registration-changes"
   | "registrations"
+  | "unfinished-registrations"
   | "invitations"
   | "calendar"
   | "promoters"
@@ -75,6 +79,7 @@ const STATS_SECTIONS: ReadonlyArray<{ key: StatsSection; label: string }> = [
   { key: "overview", label: "Overview" },
   { key: "registration-changes", label: "Registration changes" },
   { key: "registrations", label: "Registrations" },
+  { key: "unfinished-registrations", label: "Unfinished registrations" },
   { key: "invitations", label: "Invitations" },
   { key: "calendar", label: "Calendar" },
   { key: "promoters", label: "Promoters" },
@@ -149,14 +154,19 @@ export function EventStats({
           <SessionDemandReport slug={slug} clock={attendance?.timeZone} />
         </Suspense>
       )}
+      {active === "unfinished-registrations" && (
+        <Suspense fallback={<Spinner label="Loading unfinished registrations…" />}>
+          <UnfinishedRegistrations slug={slug} />
+        </Suspense>
+      )}
       {active === "promoters" && (
         <Suspense fallback={<Spinner label="Loading promoters…" />}>
           <Promoters slug={slug} subTab={subTab} basePath={`${basePath}/promoters`} />
         </Suspense>
       )}
-      {active && !["attendance", "session-demand", "promoters"].includes(active) && canViewAnalytics && (
-        <EventStatsData slug={slug} section={active} />
-      )}
+      {active &&
+        !["attendance", "session-demand", "promoters", "unfinished-registrations"].includes(active) &&
+        canViewAnalytics && <EventStatsData slug={slug} section={active} />}
     </div>
   );
 }

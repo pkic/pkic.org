@@ -23,8 +23,15 @@ import {
   isPendingRegistrationDayWaitlistStatus,
 } from "../components/RegistrationDayStatusSummary";
 import { Badge } from "../ui/Badge";
-import { attendanceTypeLabel, dayConfirmation, statusLabel, waitlistTone } from "./registration-manage-status";
-import { eventMyAgendaPath } from "../../shared/event-participation-link";
+import {
+  attendanceTypeLabel,
+  dayConfirmation,
+  statusLabel,
+  ticketStandingBadge,
+  waitlistTone,
+} from "./registration-manage-status";
+import { eventMyAgendaPath, eventTicketPath } from "../../shared/event-participation-link";
+import { TICKET_STANDING_COPY, ticketStanding } from "../../shared/event-ticket-standing";
 import { Kicker } from "../ui/Kicker";
 import { confirmAction } from "../components/ConfirmDialog";
 import { RegistrationManageSummary } from "./registration-manage-summary";
@@ -38,7 +45,10 @@ import "../ui/Content.css";
 function RegistrationStatusBanner({
   dayAttendance,
   dayWaitlist,
+  paymentDue,
 }: {
+  /** The ticket is still to be paid, so no day is confirmed yet. */
+  paymentDue: boolean;
   dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null; optionLabel?: string | null }>;
   dayWaitlist: Array<{ dayDate: string; status: string }>;
 }) {
@@ -54,6 +64,11 @@ function RegistrationStatusBanner({
           <>
             <Badge tone="info">Place available</Badge> A place is available for one or more waitlisted days. Use the
             claim button below while the offer is active.
+          </>
+        ) : paymentDue ? (
+          <>
+            <Badge tone={TICKET_STANDING_COPY.to_pay.tone}>{TICKET_STANDING_COPY.to_pay.status}</Badge>{" "}
+            {TICKET_STANDING_COPY.to_pay.body}
           </>
         ) : (
           <>
@@ -72,7 +87,7 @@ function RegistrationStatusBanner({
               const dayLabel = day.label ?? day.dayDate;
               const attLabel = day.optionLabel ?? attendanceTypeLabel(day.attendanceType);
               const waitlistStatus = waitlistByDay.get(day.dayDate);
-              const confirmation = dayConfirmation(waitlistStatus);
+              const confirmation = dayConfirmation(waitlistStatus, paymentDue);
               return (
                 <Fragment key={day.dayDate}>
                   <dt>{dayLabel}</dt>
@@ -156,21 +171,43 @@ async function main(): Promise<void> {
 
   if (statusBanner) {
     if (hasPendingRegistrationDayWaitlist(dayWaitlist ?? [])) {
-      render(<RegistrationStatusBanner dayAttendance={dayAttendance} dayWaitlist={dayWaitlist ?? []} />, statusBanner);
+      render(
+        <RegistrationStatusBanner
+          dayAttendance={dayAttendance}
+          dayWaitlist={dayWaitlist ?? []}
+          paymentDue={manageData.paymentDue}
+        />,
+        statusBanner,
+      );
       statusBanner.hidden = false;
     }
   }
 
   // ── Greeting ──────────────────────────────────────────────────────────────
   if (greetingEl && greetingText && statusBadge) {
+    const ticket = isCancelled ? "settled" : ticketStanding(manageData);
+    const ticketCopy = ticket === "settled" ? null : TICKET_STANDING_COPY[ticket];
     greetingText.textContent = isCancelled
       ? `Your registration for ${eventName} is cancelled.`
-      : firstName
-        ? `Hi ${firstName}, we're looking forward to seeing you at ${eventName}!`
-        : `Your registration for ${eventName}`;
-    const { label, cssClass } = statusLabel(registration.status, registration.cancellation_reason_code);
+      : ticketCopy
+        ? ticketCopy.body
+        : firstName
+          ? `Hi ${firstName}, we're looking forward to seeing you at ${eventName}!`
+          : `Your registration for ${eventName}`;
+    const { label, cssClass } =
+      ticket !== "settled"
+        ? ticketStandingBadge(ticket)
+        : statusLabel(registration.status, registration.cancellation_reason_code);
     statusBadge.textContent = label;
     statusBadge.className = `pk-badge ${cssClass}`;
+    // The ticket page in the portal says what is owed and takes the payment.
+    if (ticketCopy?.action && !greetingEl.querySelector("[data-manage-pay-link]")) {
+      const payLink = document.createElement("a");
+      payLink.href = eventTicketPath(event?.slug ?? eventSlug);
+      payLink.textContent = ticketCopy.action;
+      payLink.dataset.managePayLink = "";
+      greetingEl.append(payLink);
+    }
     // The attendee's own agenda lives in the portal; a cancelled
     // registration has no sessions to plan.
     if (!isCancelled && !greetingEl.querySelector("[data-manage-agenda-link]")) {

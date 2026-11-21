@@ -3,6 +3,7 @@ import { useData } from "../../../../hooks/useData";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { GeneralTab } from "../events/detail/settings/GeneralTab";
+import { InvitationSettingsTab } from "../events/detail/settings/InvitationSettingsTab";
 import { ProposalCallSettings } from "../events/detail/settings/ProposalCallSettings";
 
 export function GroupEventSettingsSection({
@@ -12,7 +13,7 @@ export function GroupEventSettingsSection({
   groupSettings,
 }: {
   slug: string;
-  section?: "cfp" | "general" | "location" | "registration";
+  section?: "cfp" | "general" | "location" | "registration" | "invitation";
   onUpdated?: () => void | Promise<void>;
   groupSettings?: { groupId: string; eventId: string; canEdit: boolean };
 }) {
@@ -24,6 +25,14 @@ export function GroupEventSettingsSection({
     await detail.reload();
     await onUpdated?.();
   };
+  if (section === "invitation")
+    return (
+      <InvitationSettingsTab
+        event={detail.data.event}
+        onUpdated={() => void updated()}
+        groupTarget={groupSettings ? { ...groupSettings, onSaved: updated } : undefined}
+      />
+    );
   if (section !== "cfp")
     return (
       <GeneralTab

@@ -135,6 +135,7 @@ describe("portal event statistics", () => {
       "Overview",
       "Registration changes",
       "Registrations",
+      "Unfinished registrations",
       "Invitations",
       "Calendar",
       "Promoters",

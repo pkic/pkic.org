@@ -8,6 +8,7 @@ import { prepareQueueEmailStatement } from "../email/outbox-queue";
 import type { DatabaseLike } from "../types";
 import { prepareAuditLog } from "./audit";
 import { first } from "../db/queries";
+import { buildEventAudiencePredicate } from "./events/visibility";
 import { signInPurpose } from "../../../assets/shared/sign-in-purpose";
 import { CONSORTIUM_CONTACT_EMAIL } from "../../../assets/shared/consortium-contact";
 import { eventParticipantRecordPath } from "../../../assets/shared/event-participant-paths";
@@ -52,17 +53,32 @@ const SIGN_IN_MESSAGE: LinkMessage = {
 };
 
 /**
- * The message that starts an account names what the person came for, read from where the link returns them.
- * An event is named only when it is public, so the email repeats nothing a stranger could not read anyway.
+ * What the person came for, read from where the link returns them, so the email says why it signs them in.
+ * An event is named only when its reader may see it: a public event for anyone, another event only for an
+ * account the portal shows it to, such as an invited person. The email repeats nothing its reader could not open.
  */
-async function signUpPurposeData(db: DatabaseLike, returnPath: string | undefined): Promise<Record<string, unknown>> {
+async function linkPurposeData(
+  db: DatabaseLike,
+  returnPath: string | undefined,
+  userId: string | null,
+): Promise<Record<string, unknown>> {
   const purpose = signInPurpose(returnPath);
   if (!purpose) return {};
   if (purpose.flow === "join") return { join: true };
-  const event = await first<{ name: string }>(db, "SELECT name FROM events WHERE slug = ? AND visibility = 'public'", [
+  const audience = buildEventAudiencePredicate("e", { userId });
+  const event = await first<{ name: string }>(db, `SELECT e.name FROM events e WHERE e.slug = ? AND ${audience.sql}`, [
     purpose.eventSlug,
+    ...audience.bindings,
   ]);
   return event ? { [purpose.flow]: true, eventName: event.name } : {};
+}
+
+/** The sign-in email, worded for what the person came for once the account it signs in to is known. */
+export function signInLinkMessage(db: DatabaseLike, returnPath: string | undefined) {
+  return async (userId: string): Promise<LinkMessage> => ({
+    ...SIGN_IN_MESSAGE,
+    data: await linkPurposeData(db, returnPath, userId),
+  });
 }
 
 /**
@@ -80,11 +96,12 @@ async function heldRegistration(
 } | null> {
   const purpose = signInPurpose(returnPath);
   if (purpose?.flow !== "registration") return null;
+  const audience = buildEventAudiencePredicate("e", { userId });
   const held = await first<{ id: string; event_id: string; source_mode: "hugo" | "portal" | "integration" | null }>(
     db,
     `SELECT r.id, e.id AS event_id, e.source_mode FROM registrations r JOIN events e ON e.id = r.event_id
-      WHERE e.slug = ? AND e.visibility = 'public' AND r.user_id = ? AND r.status = 'registered'`,
-    [purpose.eventSlug, userId],
+      WHERE e.slug = ? AND ${audience.sql} AND r.user_id = ? AND r.status = 'registered'`,
+    [purpose.eventSlug, ...audience.bindings, userId],
   );
   if (!held) return null;
   return {
@@ -163,22 +180,24 @@ export async function requestUserSignUpLink(
     acceptedPolicies: Array<{ termKey: AccountPolicyKey; version: string }>;
   },
 ): Promise<{ outboxId: string | null }> {
-  const purpose = await signUpPurposeData(db, payload.returnPath);
+  // No account reads the email yet, so only a public event is named.
+  const purpose = await linkPurposeData(db, payload.returnPath, null);
   const message: LinkMessage = { templateKey: "user_sign_up_link", subject: "Confirm your email", data: purpose };
   // An address that already signs in is told its account was found, and its link continues the same flow.
   const signIn = await requestUserSignInLink(db, payload, async (userId) => {
+    const found = await linkPurposeData(db, payload.returnPath, userId);
     const registration = await heldRegistration(db, userId, payload.returnPath);
     if (!registration)
       return {
         templateKey: "user_account_found_link",
         subject: "Continue with your PKI Consortium account",
-        data: purpose,
+        data: found,
       };
     // The email names the address that asked, which its link is tied to, in place of the registration's own.
     return {
       templateKey: "user_account_found_link",
       subject: "You are already registered",
-      data: { ...purpose, ...registration.details, alreadyRegistered: true },
+      data: { ...found, ...registration.details, alreadyRegistered: true },
       magicLinkBaseUrl: portalVerifyLinkBase(new URL(payload.magicLinkBaseUrl).origin, registration.path),
       eventId: registration.eventId,
     };

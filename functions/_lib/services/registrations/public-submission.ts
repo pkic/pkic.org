@@ -1,3 +1,4 @@
+import { isStateGuardFailure } from "../../db/authorization-guard";
 import { buildEventEmailVariables } from "../../email/event-email-variables";
 import {
   personalPromotionImagePath,
@@ -38,6 +39,15 @@ import {
   registrationAllowsPublicAccess,
   requireRegistrationPolicy,
 } from "./registration-policy";
+import {
+  isTicketCodeSpent,
+  planRegistrationTicket,
+  ticketCodeExhaustedError,
+} from "../event-tickets/registration-ticket";
+import { HELD_UNTIL_PAID } from "../event-tickets/payment";
+import { prepareTicketPaymentEmail } from "../event-tickets/payment-emails";
+import { uuid } from "../../utils/ids";
+import { readRefundPolicy } from "../event-tickets/refund-policy";
 
 /** The individual capacity only gates the public contract's work-email policy; the use case does not read it. */
 type RegistrationCreateInput = Omit<z.infer<typeof registrationCreateSchema>, "unaffiliatedAttestation">;
@@ -170,6 +180,18 @@ export async function submitEventRegistration(
     badgeImageUrl: `${metadata.appBaseUrl}${personalPromotionImagePath(referralCode)}`,
   };
 
+  // The ticket is issued with the registration. One that must be paid holds
+  // the confirmation until the payment arrives.
+  const ticket = await planRegistrationTicket(db, env, {
+    event,
+    registrationId: registration.id,
+    userId: user.id,
+    email: user.email,
+    identityId: registration.registration_identity_id ?? null,
+    organizationName: affiliation.organizationName,
+    dayAttendance: prepared.dayAttendance.map((day) => ({ dayDate: day.dayDate, attendanceType: day.attendanceType })),
+  });
+  const awaitingPayment = ticket?.status === "pending_payment";
   const rsvpEmail = env.INTERNAL_SIGNING_SECRET
     ? await generateSignedRsvpAddress(registration.id, env.INTERNAL_SIGNING_SECRET, env.RSVP_EMAIL)
     : undefined;
@@ -192,7 +214,9 @@ export async function submitEventRegistration(
     messageType: "transactional",
     subject: `Registration confirmed for ${event.name}`,
     capabilityLinkValues: [queuedManageUrl],
-    sendAfterSeconds: env.ASSETS_BUCKET ? Number(env.EMAIL_BADGE_DELAY_SECONDS ?? 90) : 0,
+    ...(awaitingPayment
+      ? { sendAt: HELD_UNTIL_PAID }
+      : { sendAfterSeconds: env.ASSETS_BUCKET ? Number(env.EMAIL_BADGE_DELAY_SECONDS ?? 90) : 0 }),
     attachments: [
       buildBadgeAttachment({
         badgeCode: referralCode,
@@ -217,7 +241,61 @@ export async function submitEventRegistration(
   });
 
   const badgeRenderJob = prepareBadgeRenderJob(db, referralCode);
-  await commitRegistrationSubmission(db, prepared, [queuedEmail.statement, badgeRenderJob.statement]);
+  // The payment request states the refund terms a payment made now falls under.
+  const refundPolicy = awaitingPayment
+    ? await readRefundPolicy(db, event.id)
+    : { refundableUntil: null, refundFee: 0, transferable: false };
+  // The request for payment goes out with the response, not on the outbox's next run.
+  const paymentEmailId = uuid();
+  const ticketStatements = ticket
+    ? [
+        ...ticket.statements,
+        ...(awaitingPayment
+          ? [
+              db
+                .prepare(
+                  "UPDATE registration_tickets SET held_email_id = ? WHERE registration_id = ? AND status = 'pending_payment'",
+                )
+                .bind(queuedEmail.id, registration.id),
+              prepareTicketPaymentEmail(
+                db,
+                metadata.appBaseUrl,
+                {
+                  event_id: event.id,
+                  event_slug: event.slug,
+                  event_name: event.name,
+                  ticket_name: ticket.ticketName,
+                  email: user.email,
+                  amount: ticket.amount,
+                  currency: ticket.currency,
+                  timezone: event.timezone,
+                  refund_deadline: refundPolicy.refundableUntil,
+                  refund_fee: refundPolicy.refundFee,
+                  transferable: refundPolicy.transferable,
+                  pay_by: ticket.payBy,
+                },
+                {
+                  templateKey: "ticket_payment_request",
+                  idempotencyKey: `ticket-payment:${registration.id}:${registration.updated_at}`,
+                  userId: user.id,
+                  outboxId: paymentEmailId,
+                },
+              ),
+            ]
+          : []),
+      ]
+    : [];
+  try {
+    await commitRegistrationSubmission(db, prepared, [
+      queuedEmail.statement,
+      badgeRenderJob.statement,
+      ...ticketStatements,
+    ]);
+  } catch (error) {
+    if (isStateGuardFailure(error) && (await isTicketCodeSpent(db, ticket?.claimedCodeId)))
+      throw ticketCodeExhaustedError();
+    throw error;
+  }
   return {
     response: {
       success: true,
@@ -233,7 +311,7 @@ export async function submitEventRegistration(
         userId: user.id,
         email: user.email,
         jobId: badgeRenderJob.id,
-      }).then(() => processOutboxByIdBackground(db, env, queuedEmail.id)),
+      }).then(() => processOutboxByIdBackground(db, env, awaitingPayment ? paymentEmailId : queuedEmail.id)),
     ],
   };
 }

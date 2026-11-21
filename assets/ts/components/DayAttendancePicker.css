@@ -44,18 +44,104 @@
   .pk-attendance-matrix[data-transposed] .pk-table th:not(:first-child) {
     padding-inline: 0;
   }
+  /* The row's head fills its cell, so the price stub runs the cell's full height. */
+  .pk-attendance-matrix .pk-table td:first-child {
+    block-size: 1px;
+  }
   .pk-attendance-matrix__method {
+    display: flex;
+    align-items: stretch;
+    block-size: 100%;
+  }
+  .pk-attendance-matrix__option {
     display: flex;
     align-items: flex-start;
     gap: var(--pk-2);
+    flex: 1;
+    min-inline-size: 0;
     padding: var(--pk-3);
   }
-  .pk-attendance-matrix__method > svg {
+  .pk-attendance-matrix__option > svg {
     flex: none;
     margin-block-start: var(--pk-1);
   }
-  .pk-attendance-matrix__method p {
+  .pk-attendance-matrix__option p {
     margin: var(--pk-1) 0 0;
+  }
+  .pk-attendance-matrix__option > div {
+    flex: 1;
+    min-inline-size: 0;
+  }
+  /*
+   * What the option costs. The same band on every row, so the prices form one
+   * column behind one perforation, like the stub of the ticket above.
+   */
+  .pk-attendance-matrix__price {
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    flex: none;
+    inline-size: 9rem;
+    padding: var(--pk-2) var(--pk-3);
+    border-inline-start: 2px dashed var(--pk-line-strong);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .pk-attendance-matrix__price strong {
+    font-size: var(--pk-text-2xl);
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: var(--pk-ink);
+  }
+  /* Charged per day: the amounts are on the days, so the row only says how it is charged. */
+  .pk-attendance-matrix__price[data-per-day] span {
+    font-size: var(--pk-text-sm);
+  }
+  /* The band is painted on the cell, so it fills the row whatever the row's height. */
+  .pk-attendance-matrix:not([data-transposed]) .pk-table td:first-child:has(.pk-attendance-matrix__price) {
+    background: linear-gradient(var(--pk-surface-sunk), var(--pk-surface-sunk)) no-repeat right / 9rem 100%;
+  }
+  /* Names the ticket the prices in this grid are for. */
+  .pk-attendance-matrix__price-heading {
+    margin-inline-start: auto;
+    padding-inline: var(--pk-2);
+    font-size: var(--pk-text-xs);
+    font-weight: 600;
+    letter-spacing: var(--pk-tracking-label);
+    text-transform: uppercase;
+    color: var(--pk-ink-muted);
+  }
+  .pk-attendance-matrix__price span {
+    font-size: var(--pk-text-xs);
+    font-weight: 400;
+    color: var(--pk-ink-muted);
+  }
+  /* The day's name inside its cell; shown where the cell sits far from the day header. */
+  .pk-attendance-matrix__cell-day {
+    display: none;
+    font-size: var(--pk-text-2xs);
+    color: var(--pk-ink-muted);
+  }
+  .pk-attendance-matrix__day-price {
+    margin-block-start: var(--pk-1);
+    font-size: var(--pk-text-lg);
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+    color: var(--pk-ink);
+  }
+  .pk-attendance-matrix__mode-button .pk-attendance-matrix__price {
+    inline-size: auto;
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+  .pk-attendance-matrix__mode-button .pk-attendance-matrix__price strong {
+    font-size: var(--pk-text-xs);
+  }
+  .pk-attendance-matrix__mode-button .pk-attendance-matrix__price span {
+    font-size: var(--pk-text-2xs);
   }
   .pk-attendance-matrix__date {
     display: grid;
@@ -173,6 +259,113 @@
     }
     .pk-attendance-matrix__mobile {
       display: inline;
+    }
+    /*
+     * On a narrow grid each option is a card of its own: a head with its name
+     * and price, and its days in one row beneath. The gap between cards keeps
+     * one option's days from reading as the next option's.
+     */
+    .pk-attendance-matrix:not([data-transposed]) .pk-table__scroll {
+      border: 0;
+      border-radius: 0;
+      overflow: visible;
+    }
+    .pk-attendance-matrix:not([data-transposed]) .pk-table {
+      background: none;
+    }
+    .pk-attendance-matrix:not([data-transposed]) .pk-table,
+    .pk-attendance-matrix:not([data-transposed]) .pk-table thead,
+    .pk-attendance-matrix:not([data-transposed]) .pk-table tbody {
+      display: block;
+    }
+    .pk-attendance-matrix:not([data-transposed]) .pk-table tr {
+      display: flex;
+      flex-wrap: wrap;
+    }
+    .pk-attendance-matrix:not([data-transposed]) .pk-table tbody tr {
+      overflow: hidden;
+      border: 1px solid var(--pk-line-strong);
+      border-radius: var(--pk-radius);
+      background: var(--pk-surface);
+    }
+    .pk-attendance-matrix:not([data-transposed]) .pk-table tbody tr + tr {
+      margin-block-start: var(--pk-3);
+    }
+    .pk-attendance-matrix:not([data-transposed]) .pk-table th:first-child,
+    .pk-attendance-matrix:not([data-transposed]) .pk-table td:first-child {
+      flex: 0 0 100%;
+      inline-size: 100%;
+      block-size: auto;
+      border-inline-end: 0;
+    }
+    .pk-attendance-matrix:not([data-transposed]) .pk-table td:not(:first-child) {
+      flex: 1 1 0;
+      min-inline-size: 0;
+      border-block-end: 0;
+    }
+    .pk-attendance-matrix:not([data-transposed]) .pk-table td:first-child,
+    .pk-attendance-matrix:not([data-transposed]) .pk-table td:first-child:has(.pk-attendance-matrix__price) {
+      border-inline-end: 0;
+      border-block-end: 1px solid var(--pk-line);
+      background: var(--pk-surface-sunk);
+    }
+    .pk-attendance-matrix:not([data-transposed]) .pk-table td:last-child {
+      border-inline-end: 0;
+    }
+    /* Each day names itself in its cell, so the row of day headings is for screen readers only. */
+    .pk-attendance-matrix:not([data-transposed]) .pk-table thead th {
+      border: 0;
+      background: none;
+    }
+    .pk-attendance-matrix:not([data-transposed]) .pk-table thead th:first-child {
+      padding: 0 0 var(--pk-2);
+    }
+    .pk-attendance-matrix:not([data-transposed]) .pk-table thead th:not(:first-child),
+    .pk-attendance-matrix:not([data-transposed]) .pk-table thead th:first-child:has(.pk-table__sr) {
+      position: absolute;
+      inline-size: 1px;
+      block-size: 1px;
+      padding: 0;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+    .pk-attendance-matrix:not([data-transposed]) .pk-attendance-matrix__price-heading {
+      margin-inline-start: 0;
+      padding-inline: 0;
+    }
+    /* The price belongs to the head it sits in: plain figures, no stub of its own. */
+    .pk-attendance-matrix:not([data-transposed]) .pk-attendance-matrix__price:empty {
+      display: none;
+    }
+    .pk-attendance-matrix:not([data-transposed]) .pk-attendance-matrix__price {
+      justify-items: end;
+      inline-size: auto;
+      padding: var(--pk-3);
+      border-inline-start: 0;
+      background: none;
+      text-align: end;
+    }
+    .pk-attendance-matrix:not([data-transposed]) .pk-attendance-matrix__price strong {
+      font-size: var(--pk-text-xl);
+      color: var(--pk-ink);
+      white-space: nowrap;
+    }
+    .pk-attendance-matrix:not([data-transposed]) .pk-attendance-matrix__description,
+    .pk-attendance-matrix:not([data-transposed]) .pk-attendance-matrix__cell-day {
+      display: block;
+    }
+    /* The choice, then its day, then what that day costs. */
+    .pk-attendance-matrix:not([data-transposed]) .pk-attendance-matrix__cell-day {
+      margin-block-start: var(--pk-1);
+      font-size: var(--pk-text-xs);
+      font-weight: 600;
+      color: var(--pk-ink);
+    }
+    .pk-attendance-matrix:not([data-transposed]) .pk-attendance-matrix__cell,
+    .pk-attendance-matrix:not([data-transposed]) td label.pk-attendance-matrix__choice,
+    .pk-attendance-matrix:not([data-transposed]) .pk-attendance-matrix__unavailable {
+      min-block-size: 5rem;
     }
   }
 }

@@ -104,4 +104,37 @@ export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
     contentType: "markdown",
     messageType: "transactional",
   },
+  {
+    key: "ticket_payment_request",
+    subjectTemplate: "Pay for your {{eventName}} ticket to complete your registration",
+    content:
+      'Thank you for registering for **{{eventName}}**. You\'re not registered until your ticket is paid: your {{ticketName}} ticket costs {{ticketPrice}}.\n\n<div class="cta"><a href="{{paymentUrl}}">Pay for your ticket &rarr;</a></div>\n\nWe email your confirmation once the payment arrives.{{#if payBy}} Pay by {{payBy}} to keep your place; after that your registration is cancelled.{{/if}} To cancel instead, open your registration in the portal.\n\n{{refundPolicy}}\n\n{{> sponsors_block}}',
+    contentType: "markdown",
+    messageType: "transactional",
+  },
+  {
+    key: "ticket_payment_reminder",
+    subjectTemplate:
+      "{{#if paymentFailed}}Your payment for {{eventName}} did not go through{{else}}Reminder: pay for your {{eventName}} ticket{{/if}}",
+    content:
+      '{{#if paymentFailed}}Your payment of {{ticketPrice}} for the {{ticketName}} ticket did not go through, so you\'re not registered for **{{eventName}}** yet. You can pay again, with the same or another method.{{else}}You\'re not registered for **{{eventName}}** yet: your {{ticketName}} ticket is still waiting for payment of {{ticketPrice}}.{{/if}}\n\n<div class="cta"><a href="{{paymentUrl}}">Pay for your ticket &rarr;</a></div>\n\nWe email your confirmation once the payment arrives.{{#if payBy}} Pay by {{payBy}} to keep your place; after that your registration is cancelled.{{/if}} To cancel instead, open your registration in the portal.\n\n{{refundPolicy}}\n\n{{> sponsors_block}}',
+    contentType: "markdown",
+    messageType: "transactional",
+  },
+  {
+    key: "ticket_changed_payment_request",
+    subjectTemplate: "Your {{eventName}} ticket changed",
+    content:
+      'The organizers reviewed your registration for **{{eventName}}** and moved it to the {{ticketName}} ticket, which costs {{ticketPrice}}. You\'re not registered until it is paid.\n\n<div class="cta"><a href="{{paymentUrl}}">Pay for your ticket &rarr;</a></div>\n\nWe email your confirmation once the payment arrives.{{#if payBy}} Pay by {{payBy}} to keep your place; after that your registration is cancelled.{{/if}} To cancel instead, open your registration in the portal.\n\n{{refundPolicy}}\n\n{{> sponsors_block}}',
+    contentType: "markdown",
+    messageType: "transactional",
+  },
+  {
+    key: "registration_unfinished_reminder",
+    subjectTemplate: "Finish your registration for {{eventName}}",
+    content:
+      'You started registering for **{{eventName}}** and have not finished yet.\n\n<div class="cta"><a href="{{registerUrl}}">Finish your registration &rarr;</a></div>\n\nNot coming? [Tell us you\'re not registering]({{notRegisteringUrl}}) and we will stop reminding you.\n\n{{> sponsors_block}}',
+    contentType: "markdown",
+    messageType: "transactional",
+  },
 ];

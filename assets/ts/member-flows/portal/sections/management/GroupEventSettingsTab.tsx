@@ -17,6 +17,7 @@ import { portalSession } from "../../state";
 import { formatDateTimeInZone } from "../../ui";
 import { hasEventAgendaPermission } from "../events/event-agenda-access";
 import { LazySponsorTiersTab } from "../events/detail/settings/LazySponsorTiersTab";
+import { LazyTicketsTab } from "../events/detail/settings/tickets/LazyTicketsTab";
 import { groupEventPlace } from "./group-event-place";
 import { GroupEventEditor } from "./GroupEventEditor";
 import { GroupEventSessionTypes } from "./GroupEventSessionTypes";
@@ -96,7 +97,7 @@ export function GroupEventSettingsTab({
         active={
           detailId === "scheduling" && canManage
             ? "session-types"
-            : ["access", "terms", "attendance-days", "sponsors"].includes(detailId ?? "")
+            : ["access", "tickets", "invitation", "terms", "attendance-days", "sponsors"].includes(detailId ?? "")
               ? "registration"
               : (detailId ??
                 (canManage ? "general" : hasEventAgendaPermission(event.id, "agenda:live_moderate") ? "live" : "team"))
@@ -114,20 +115,25 @@ export function GroupEventSettingsTab({
           hrefFor={(key) => `${settingsPath}/${key}`}
         />
       )}
-      {canManage && ["registration", "access", "terms", "attendance-days", "sponsors"].includes(detailId ?? "") && (
-        <Tabs
-          label="Registration settings"
-          items={[
-            { key: "registration", label: "Policy" },
-            { key: "access", label: "Visibility and access" },
-            { key: "terms", label: "Terms" },
-            { key: "attendance-days", label: "Attendance days" },
-            { key: "sponsors", label: "Sponsor tiers" },
-          ]}
-          active={detailId ?? "registration"}
-          hrefFor={(key) => `${settingsPath}/${key}`}
-        />
-      )}
+      {canManage &&
+        ["registration", "access", "tickets", "invitation", "terms", "attendance-days", "sponsors"].includes(
+          detailId ?? "",
+        ) && (
+          <Tabs
+            label="Registration settings"
+            items={[
+              { key: "registration", label: "Policy" },
+              { key: "access", label: "Visibility and access" },
+              { key: "tickets", label: "Tickets" },
+              { key: "invitation", label: "Invitation" },
+              { key: "terms", label: "Terms" },
+              { key: "attendance-days", label: "Attendance days" },
+              { key: "sponsors", label: "Sponsor tiers" },
+            ]}
+            active={detailId ?? "registration"}
+            hrefFor={(key) => `${settingsPath}/${key}`}
+          />
+        )}
       {(detailId === "team" && (canManage || hasEventAgendaPermission(event.id, "agenda:read"))) ||
       (!canManage && !detailId && !hasEventAgendaPermission(event.id, "agenda:live_moderate")) ? (
         <Suspense fallback={<Spinner label="Loading team…" />}>
@@ -175,6 +181,13 @@ export function GroupEventSettingsTab({
           groupSettings={{ groupId, eventId: event.id, canEdit: canManage }}
           onUpdated={onUpdated}
         />
+      ) : detailId === "invitation" && canManage ? (
+        <GroupEventSettingsSection
+          slug={event.slug}
+          section="invitation"
+          groupSettings={{ groupId, eventId: event.id, canEdit: canManage }}
+          onUpdated={onUpdated}
+        />
       ) : detailId === "cfp" && canManage && canConfigureEventForms(event) ? (
         <LazyGroupEventConfiguration event={event} groupId={groupId} onUpdated={onUpdated} section="proposals" />
       ) : detailId === "cfp" && canManage ? (
@@ -194,6 +207,13 @@ export function GroupEventSettingsTab({
         <Suspense fallback={<Spinner />}>
           <RawEvidenceRetentionPolicy event={event} />
         </Suspense>
+      ) : detailId === "tickets" && canManage ? (
+        <LazyTicketsTab
+          slug={event.slug}
+          canWrite={canManage}
+          detail={detailTab}
+          basePath={`${settingsPath}/tickets`}
+        />
       ) : detailId === "sponsors" && canManage ? (
         <LazySponsorTiersTab
           slug={event.slug}
@@ -261,10 +281,7 @@ export function GroupEventSettingsTab({
                           { term: "Location", value: groupEventPlace(event) },
                         ]
                       : detailId === "access"
-                        ? [
-                            { term: "Visibility", value: EVENT_VISIBILITY_LABELS[event.visibility] },
-                            { term: "Peer invitation limit", value: event.inviteLimitAttendee },
-                          ]
+                        ? [{ term: "Visibility", value: EVENT_VISIBILITY_LABELS[event.visibility] }]
                         : detailId === "links"
                           ? [
                               {

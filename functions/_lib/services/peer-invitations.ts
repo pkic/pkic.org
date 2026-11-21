@@ -19,7 +19,10 @@ import { inviteDeclineUrl, proposalPageUrl, registrationPageUrl } from "./fronte
 import type { Env } from "../types";
 import { emailPlainText } from "../email/plain-text";
 import { REGISTRATION_ORGANIZATION_SQL } from "./registrations/selected-identity";
-import { buildEventInviteRecipientVariables } from "./event-invite-email-variables";
+import {
+  buildEventInvitationMessageVariables,
+  buildEventInviteRecipientVariables,
+} from "./event-invite-email-variables";
 
 type PeerInviteBody = z.infer<typeof registrationInviteCreateSchema>;
 
@@ -160,6 +163,7 @@ async function createPeerInvitationAttempt(
             { firstName: invite.inviteeFirstName, lastName: invite.inviteeLastName },
             inviteType === "attendee" ? "Attendee" : "Speaker",
           ),
+          ...(inviteType === "attendee" ? buildEventInvitationMessageVariables(event) : {}),
           inviterName: emailPlainText(inviterName),
           [primaryKey]: primaryUrl,
           declineUrl,

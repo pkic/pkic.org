@@ -95,7 +95,7 @@ export async function provisionPersona(
           method: "POST",
           headers: { "content-type": "application/json" },
           credentials: "same-origin",
-          body: JSON.stringify({ userId, permission }),
+          body: JSON.stringify({ userId, permissions: [permission] }),
         });
         return { status: response.status, body: await response.json() };
       },

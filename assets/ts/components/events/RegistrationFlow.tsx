@@ -19,6 +19,7 @@ import {
 import type { FlowBoot } from "../../event-flows/boot";
 import { registrationEntry } from "./registration-entry";
 import { registrationInvitation } from "./registration-invitation";
+import { markRegistrationStarted } from "./registration-start";
 import { updateRegistrationReview } from "./registration-review";
 import { clearReferralSession, clearRememberedInvitation } from "../../shared/query-context";
 import { useContractForm } from "../../hooks/useContractForm";
@@ -38,6 +39,7 @@ import { Field } from "../../ui/Field";
 import { TextInput } from "../../ui/TextControl";
 import { ConsentList } from "../ConsentCard";
 import { DayAttendancePicker, NOT_ATTENDING } from "../DayAttendancePicker";
+import { PricingChoiceRequiredError, useAttendancePricing } from "../attendance-pricing";
 import { RegistrationContactStep } from "../RegistrationContactStep";
 import { RegistrationEmailAddress } from "./RegistrationEmailAddress";
 import { RegistrationRepresentationField } from "./RegistrationRepresentationField";
@@ -94,8 +96,14 @@ export function RegistrationFlow(props: Props) {
     lastName: initial?.user.last_name ?? "",
   });
   const [busy, setBusy] = useState(false);
+  // Set at once on submit: the busy state only reaches the form after the next render.
+  const submitting = useRef(false);
   const [error, setError] = useState("");
   const [attendance, setAttendance] = useState(initial?.dayAttendance ?? []);
+  const pricing = useAttendancePricing();
+  // Step navigation is installed once; the review reads the ticket chosen by the time it is shown.
+  const latestPricing = useRef(pricing);
+  latestPricing.current = pricing;
   const savedIdentityId = useRef(initial?.identityId ?? null);
   /** The signed-in account's saved names: the "You" step checks them, and the review shows them; the request never carries them. */
   const accountNames = useRef({ firstName: "", lastName: "" });
@@ -169,8 +177,12 @@ export function RegistrationFlow(props: Props) {
     readBody,
   );
   const contactReady = useCallback((value: boolean) => setReady(value), []);
+  const [, setKnownNames] = useState(accountNames.current);
   const rememberAccountNames = useCallback((names: { firstName: string; lastName: string }) => {
     accountNames.current = names;
+    // Render again so the contact contract reads the saved names; a complete name answers the step's alert.
+    setKnownNames(names);
+    if (names.firstName.trim() && names.lastName.trim()) setError("");
   }, []);
   // Continue waits while a work address has no organization; the step's alert says why.
   const [representationPending, setRepresentationPending] = useState(false);
@@ -224,7 +236,13 @@ export function RegistrationFlow(props: Props) {
             return false;
           }
           const { firstName, lastName } = accountNames.current;
-          updateRegistrationReview(boot.root, boot.form, fields, [firstName, lastName].filter(Boolean).join(" "));
+          updateRegistrationReview(
+            boot.root,
+            boot.form,
+            fields,
+            [firstName, lastName].filter(Boolean).join(" "),
+            latestPricing.current?.reviewItems,
+          );
         }
       },
       (step) => {
@@ -308,6 +326,10 @@ export function RegistrationFlow(props: Props) {
           questions.handlers.onInput(event);
         }}
         onChange={(event) => {
+          // A signed-in person who changes anything has started; a guest has no account to remind.
+          // The identity is the form's own field: the contact step fills it once the person is known.
+          if (props.mode === "create" && readField(event.currentTarget, "identityId"))
+            markRegistrationStarted(props.context.apiBase, props.context.eventSlug);
           syncAttendance(event);
           contract.handlers.onChange(event);
           contactContract.handlers.onChange(event);
@@ -334,16 +356,39 @@ export function RegistrationFlow(props: Props) {
         onSubmit={(event) => {
           event.preventDefault();
           void (async () => {
-            if (busy || !available || (props.mode === "create" && !invitation.current?.canSubmit())) return;
+            if (submitting.current || busy || !available) return;
+            if (props.mode === "create" && !invitation.current?.canSubmit()) return;
             setError("");
+            // The form is locked while the ticket step saves: nothing is submitted twice or changed underneath it.
+            if (pricing?.settle) {
+              submitting.current = true;
+              setBusy(true);
+              try {
+                // The ticket, code or reason chosen a moment ago is kept before the registration is made with it.
+                await pricing.settle();
+              } catch (cause) {
+                submitting.current = false;
+                setBusy(false);
+                return setError(
+                  cause instanceof PricingChoiceRequiredError
+                    ? cause.message
+                    : "Your ticket could not be saved. Check it and try again.",
+                );
+              }
+            }
+            const release = () => {
+              submitting.current = false;
+              setBusy(false);
+            };
             if (!updating) {
               const contact = contactContract.submit();
-              if (!contact.data) return setError(contact.formMessage ?? "");
+              if (!contact.data) return (release(), setError(contact.formMessage ?? ""));
             }
             const answered = currentQuestions.current.submit();
             const checked = contract.submit();
-            if (!answered.data) return setError(answered.formMessage ?? "");
-            if (!checked.data) return setError(checked.formMessage ?? "");
+            if (!answered.data) return (release(), setError(answered.formMessage ?? ""));
+            if (!checked.data) return (release(), setError(checked.formMessage ?? ""));
+            submitting.current = true;
             setBusy(true);
             try {
               if (props.mode === "update") {
@@ -368,10 +413,12 @@ export function RegistrationFlow(props: Props) {
                 setError(contract.refuse(cause));
               }
             } finally {
+              submitting.current = false;
               setBusy(false);
             }
           })().catch(() => {
             setError("Could not save changes. Please try again.");
+            submitting.current = false;
             setBusy(false);
           });
         }}

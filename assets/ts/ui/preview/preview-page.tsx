@@ -17,9 +17,7 @@ import { basicSections } from "./sections-basics";
 import { dataSections } from "./sections-data";
 import { densitySections } from "./sections-density";
 import { overlaySections } from "./sections-overlays";
-import { patternSections } from "./sections-patterns";
 import { agendaPickerSections } from "./sections-agenda-picker";
-import { eventParticipationSections } from "./sections-event-participation";
 import { speakerProfileReviewSections } from "./sections-speaker-profile-review";
 import { eventScreenSections } from "./sections-event-screens";
 import { eventScreenStaffSections } from "./sections-event-screens-staff";
@@ -30,9 +28,21 @@ import { eventScreenBrowserSections } from "./sections-event-screens-browser";
 import { stageDisplaySections } from "./sections-stage-display";
 import { liveReactionsSections } from "./sections-live-reactions";
 
-function main(): void {
+async function main(): Promise<void> {
   const mount = document.getElementById("pk-preview");
   if (!mount) return;
+  // The largest layout groups load as their own chunks, so the gallery's entry stays within the chunk budget.
+  const [
+    { patternSections },
+    { eventParticipationSections },
+    { eventTicketSections },
+    { unfinishedRegistrationSections },
+  ] = await Promise.all([
+    import("./sections-patterns"),
+    import("./sections-event-participation"),
+    import("./sections-event-tickets"),
+    import("./sections-unfinished-registrations"),
+  ]);
   const sections = [
     ...basicSections,
     ...dataSections,
@@ -42,6 +52,8 @@ function main(): void {
     ...agendaPickerSections,
     ...speakerProfileReviewSections,
     ...eventParticipationSections,
+    ...eventTicketSections,
+    ...unfinishedRegistrationSections,
     badgePrintingSection,
     registrationRosterActionsSection,
     badgeLabelDeskSection,
@@ -62,4 +74,4 @@ function main(): void {
   render(<PreviewShell sections={shown} />, mount);
 }
 
-main();
+void main();

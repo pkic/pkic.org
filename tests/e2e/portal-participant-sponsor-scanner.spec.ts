@@ -282,13 +282,13 @@ test("dual staff and sponsor identity reaches both event scanners across phone t
     const grantResponse = await staff.request.post("/api/v1/permissions/grants", {
       data: accessGrantCreateSchema.parse({
         userId: fixture.operator.userId,
-        permission: "agenda:scan",
+        permissions: ["agenda:scan"],
         contextType: "event",
         contextId: event.id,
       }),
     });
     expect(grantResponse.status()).toBe(201);
-    const grant = accessGrantCreateResponseSchema.parse(await grantResponse.json()).grant;
+    const grant = accessGrantCreateResponseSchema.parse(await grantResponse.json()).grants[0]!;
     expect(grant).toMatchObject({
       userId: fixture.operator.userId,
       permission: "agenda:scan",

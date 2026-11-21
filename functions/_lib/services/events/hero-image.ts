@@ -11,6 +11,8 @@ import { AppError } from "../../errors";
 import type { DatabaseLike, Env } from "../../types";
 import { imageExtension, putUploadedImage, readValidatedUploadedImage } from "../../utils/image-upload";
 import { parseJsonSafe } from "../../utils/json";
+import { eventOwnMotif } from "../../../../assets/shared/schemas/event-promotion-design";
+import { base64ToBytes } from "../../../../assets/shared/base64";
 import { isAuditChangeGuardFailure } from "../audit";
 import { getEventBySlug } from "../events";
 import { guardEventResourceManagementDatabase } from "../event-series/management";
@@ -156,6 +158,25 @@ export async function currentEventHeroImage(
     headers: {
       "content-type": object.httpMetadata?.contentType ?? "application/octet-stream",
       "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
+      "x-robots-tag": "noindex, nofollow",
+    },
+  });
+}
+
+/**
+ * The event's own decorative artwork. Uploaded SVG is served under a sandbox
+ * policy, so opening it directly can never run script on this origin.
+ */
+export async function currentEventMotif(db: DatabaseLike, slug: string): Promise<Response> {
+  const event = await getEventBySlug(db, slug);
+  const motif = eventOwnMotif(parseJsonSafe<Record<string, unknown>>(event.settings_json, {}));
+  if (!motif) throw new AppError(404, "IMAGE_NOT_FOUND", "Image not found");
+  return new Response(base64ToBytes(motif.base64).buffer as ArrayBuffer, {
+    headers: {
+      "content-type": motif.mime,
+      "cache-control": "no-store",
+      "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
       "x-content-type-options": "nosniff",
       "x-robots-tag": "noindex, nofollow",
     },

@@ -74,6 +74,10 @@ function eventCreated(event: StripeEvent): number | null {
 
 function financialStatus(event: StripeEvent, object: StripeObject, domainOutcome: string | null): PaymentStatus | null {
   if (domainOutcome === "rejected_mismatch") return "requires_review";
+  // Part of the payment was returned: the entry stays as paid, and only a full refund marks it refunded.
+  // A refund of another payment than the one the entry records leaves it too.
+  // So does a payment that is being sent straight back: it never settled what the entry records.
+  if (["partially_refunded", "other_payment_refunded", "returned"].includes(domainOutcome ?? "")) return null;
   switch (event.type) {
     case "checkout.session.completed":
       return object.payment_status === "paid" ? "paid" : "processing";
@@ -117,6 +121,19 @@ async function domainPayment(
   purpose: PaymentPurpose,
   object: StripeObject,
 ): Promise<DomainPaymentRow | null> {
+  if (purpose === "event") {
+    return first<DomainPaymentRow>(
+      db,
+      `SELECT 'registration_ticket' AS resource_type, ticket.id AS resource_id, ticket.amount,
+       lower(ticket.currency) AS currency, ticket.status, ticket.paid_at,
+       checkout.provider_session_id AS checkout_session_id, checkout.payment_intent_id
+       FROM registration_ticket_checkouts checkout JOIN registration_tickets ticket ON ticket.id = checkout.ticket_id
+       WHERE (?1 IS NOT NULL AND checkout.provider_session_id = ?1)
+          OR (?2 IS NOT NULL AND checkout.payment_intent_id = ?2)
+       LIMIT 1`,
+      [object.id?.startsWith("cs_") ? object.id : null, object.payment_intent ?? null],
+    );
+  }
   if (purpose === "donation" && object.id) {
     return first<DomainPaymentRow>(
       db,
