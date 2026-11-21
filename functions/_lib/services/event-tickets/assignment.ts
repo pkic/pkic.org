@@ -120,7 +120,7 @@ async function readTicketCode(
     throw fieldRefusal(
       "TICKET_CODE_USED_UP",
       "code",
-      "Every pass on this code has been claimed. Ask whoever gave it to you.",
+      "This code has no uses left. Ask whoever gave it to you for another one.",
     );
   return row;
 }

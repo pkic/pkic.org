@@ -333,7 +333,7 @@ export function ticketCodeExhaustedError(): AppError {
   return new AppError(
     409,
     "TICKET_CODE_USED_UP",
-    "Every pass on this code has just been claimed. Register again without it or ask for another code.",
+    "This code has just run out of uses. Register again without it, or ask for another code.",
   );
 }
 
