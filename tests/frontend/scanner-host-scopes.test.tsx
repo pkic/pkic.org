@@ -122,7 +122,17 @@ describe("scanner hosts", () => {
         async () =>
           new Response(
             JSON.stringify({
-              sponsors: [{ id, name: "Sponsor", capturedCount: 0, canCapture: true, canView: false, canExport: false }],
+              sponsors: [
+                {
+                  id,
+                  name: "Sponsor",
+                  capturedCount: 0,
+                  canCapture: true,
+                  canView: false,
+                  canExport: false,
+                  canRemoveAll: false,
+                },
+              ],
               page: { limit: 50, offset: 0, total: 1, hasMore: false },
             }),
             { headers: { "content-type": "application/json" } },
@@ -134,11 +144,7 @@ describe("scanner hosts", () => {
     document.body.append(host);
     await act(() => render(<SponsorLeads slug="event" timeZone="UTC" />, host));
     await settle();
-    await act(() =>
-      [...host.querySelectorAll<HTMLButtonElement>("button")]
-        .find((button) => button.textContent === "Scan leads")!
-        .click(),
-    );
+    await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Scan leads"]')!.click());
     await settle();
     expect(mounts.props.at(-1)).toMatchObject({ allowedActions: ["lead"] });
     const initial = mounts.count;
@@ -148,11 +154,7 @@ describe("scanner hosts", () => {
     await settle();
     expect(host.textContent).not.toContain("Scoped scanner");
     expect(mounts.count).toBe(initial);
-    await act(() =>
-      [...host.querySelectorAll<HTMLButtonElement>("button")]
-        .find((button) => button.textContent === "Scan leads")!
-        .click(),
-    );
+    await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Scan leads"]')!.click());
     await settle();
     expect(mounts.count).toBe(initial + 1);
     expect(mounts.props.at(-1)?.operatorUserId).toBe("second");
