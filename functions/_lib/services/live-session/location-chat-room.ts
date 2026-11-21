@@ -169,6 +169,7 @@ export class LiveLocationChatRoom {
     const open = operator || liveLocationChatOpen(Date.now(), state.scope.sessions, state.opening);
     switch (message.type) {
       case "chat.send":
+      case "chat.edit":
       case "chat.react":
       case "chat.report":
         return open

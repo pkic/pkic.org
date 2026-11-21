@@ -310,7 +310,11 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
 
   /** A location's chat: its latest messages a broadcast may show, and when the first after `since` was sent. */
   async locationChatOnAir(limit: number, options: LiveChatOnAirOptions): Promise<LiveChatOnAirMessage[]> {
-    return this.location.state() ? liveChatOnAirMessages(this.chat, limit, options) : [];
+    if (!this.location.state()) return [];
+    const messages = await liveChatOnAirMessages(this.chat, limit, options);
+    // What goes on screen keeps its words: its author can no longer edit it.
+    this.chat.markAired(messages.map((message) => message.id));
+    return messages;
   }
   async locationChatFirstSentAfter(since: string): Promise<string | null> {
     return this.location.state() ? this.chat.firstSentAfter(since) : null;

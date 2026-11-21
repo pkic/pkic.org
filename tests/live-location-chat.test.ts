@@ -123,3 +123,35 @@ it("turns a chat message into a question in the session the studio has loaded, a
   expect(asked.question).toMatchObject({ status: "approved", authorName: "Ada Attendee" });
   studio.socket.close();
 });
+
+it("quotes the message a reply answers, and lets its author edit it until someone reports it", async () => {
+  const attendee = await join("attendee");
+  const speaker = await join("speaker");
+  attendee.send({ type: "chat.send", text: "Will the **slides** be shared?" });
+  const asked = await speaker.next("chat.message", (message) => message.message.text.startsWith("Will the"));
+
+  speaker.send({ type: "chat.send", text: "Yes, tonight", replyTo: asked.message.id });
+  const reply = await attendee.next("chat.message", (message) => message.message.text === "Yes, tonight");
+  expect(reply.message.replyTo).toEqual({
+    messageId: asked.message.id,
+    authorName: asked.message.authorName,
+    excerpt: "Will the slides be shared?",
+    mine: true,
+  });
+
+  speaker.send({ type: "chat.edit", messageId: reply.message.id, text: "Yes, tomorrow" });
+  const edited = await attendee.next("chat.message", (message) => message.message.text === "Yes, tomorrow");
+  expect(edited.message.id).toBe(reply.message.id);
+  expect(edited.message.editedAt).toEqual(expect.any(String));
+
+  // Someone else's message is not theirs to edit.
+  const before = attendee.received.length;
+  attendee.send({ type: "chat.edit", messageId: reply.message.id, text: "Never" });
+  expect((await attendee.next("room.refused", () => true, { after: before })).code).toBe("LIVE_CHAT_NOT_ALLOWED");
+
+  // Once reported, its words stay as they are.
+  attendee.send({ type: "chat.report", messageId: reply.message.id, reason: "spam" });
+  await attendee.next("chat.message", (message) => message.message.reportedByMe === true);
+  speaker.send({ type: "chat.edit", messageId: reply.message.id, text: "Changed again" });
+  expect((await speaker.next("room.refused")).code).toBe("LIVE_CHAT_EDIT_CLOSED");
+});

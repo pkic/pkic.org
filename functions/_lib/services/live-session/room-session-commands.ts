@@ -53,6 +53,7 @@ export class LiveSessionCommands {
     const asking = operator || liveRoomTakesQuestions(Date.now(), session.endAt, opening);
     switch (message.type) {
       case "chat.send":
+      case "chat.edit":
       case "chat.react":
       case "chat.report":
       case "chat.delete":

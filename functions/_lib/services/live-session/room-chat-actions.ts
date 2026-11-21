@@ -25,13 +25,15 @@ import type { LiveChatQuestion } from "./location-chat-on-air";
 
 type ChatCommand = Extract<LiveRoomClientMessage, { type: `chat.${string}` }>;
 type Actor = { userId: string; name: string };
-type Allowance = "reaction" | "report" | "history" | "author";
+type Allowance = "reaction" | "report" | "history" | "author" | "edit";
 
 const REFUSALS = {
   missing: { code: "LIVE_CHAT_MESSAGE_NOT_FOUND", message: "That message is no longer available." },
   notAllowed: { code: "LIVE_CHAT_NOT_ALLOWED", message: "You can't do that with this message." },
   blocked: LIVE_PARTICIPATION_REFUSAL,
   tooFast: { code: "LIVE_CHAT_RATE_LIMITED", message: "Wait a moment before sending another chat message." },
+  editClosed: { code: "LIVE_CHAT_EDIT_CLOSED", message: "This message can no longer be edited." },
+  replyClosed: { code: "LIVE_CHAT_NOT_ALLOWED", message: "That message can no longer be replied to." },
   tooShort: {
     code: "LIVE_CHAT_NOT_A_QUESTION",
     message: `A question needs at least ${LIVE_ROOM_POLICY.questionMinLength} characters.`,
@@ -43,6 +45,7 @@ const ALLOWANCES = {
   report: LIVE_CHAT_POLICY.reportsPerPerson,
   history: LIVE_CHAT_POLICY.historyRequestsPerPerson,
   author: LIVE_CHAT_POLICY.authorLookupsPerPerson,
+  edit: LIVE_CHAT_POLICY.editsPerPerson,
 } satisfies Record<Allowance, { limit: number; windowSeconds: number }>;
 
 /** Who the room names when it holds a message after reports rather than on a moderator's decision. */
@@ -53,7 +56,7 @@ function staff(viewer: LiveRoomParticipant): boolean {
 }
 
 /**
- * The chat's use cases: send, react, report, delete, remove or keep,
+ * The chat's use cases: send or reply, edit, react, report, delete, remove or keep,
  * convert to a question and page back through history. Each request is
  * checked against the shared chat policy for this viewer and message; every
  * moderator action is audited; moderation data reaches moderators only.
@@ -96,19 +99,26 @@ export class LiveRoomChatActions {
   async handle(viewer: LiveRoomParticipant, actor: Actor, command: ChatCommand, socket: WebSocket) {
     const restricted = this.feed.decisions.restriction(actor.userId, Date.now()) !== null;
     if (command.type === "chat.history") return this.history(viewer, actor, command.channel, command.before, socket);
-    if (command.type === "chat.send") return this.send(viewer, actor, restricted, command.text, command.channel);
-    const row = this.chat.message(command.messageId);
-    // A message a viewer may not see does not exist for them, whatever its id.
-    if (!row || !this.feed.batch([row], []).project(row, viewer)) return REFUSALS.missing;
+    if (command.type === "chat.send") {
+      const answered = command.replyTo ? this.answerable(command.replyTo, viewer, restricted, command.channel) : null;
+      if (answered && typeof answered !== "string") return answered;
+      return this.send(viewer, actor, restricted, command.text, command.channel, answered);
+    }
+    const row = this.visible(command.messageId, viewer);
+    if (!row) return REFUSALS.missing;
     const allowed = this.actionsOn(row, viewer, restricted);
     const refuse = (action: LiveChatAction) =>
       allowed.has(action)
         ? null
         : restricted && (action === "react" || action === "report")
           ? REFUSALS.blocked
-          : REFUSALS.notAllowed;
+          : action === "edit" && row.author_user_id === actor.userId
+            ? REFUSALS.editClosed
+            : REFUSALS.notAllowed;
     const at = nowIso();
     switch (command.type) {
+      case "chat.edit":
+        return refuse("edit") ?? this.edit(actor, row, command.text, at);
       case "chat.react":
         return refuse("react") ?? this.react(actor, row, command.reaction, command.on);
       case "chat.report":
@@ -122,10 +132,29 @@ export class LiveRoomChatActions {
     }
   }
 
+  /** A message a viewer may not see does not exist for them, whatever its id. */
+  private visible(messageId: string, viewer: LiveRoomParticipant): LiveChatRow | null {
+    const row = this.chat.message(messageId);
+    return row && this.feed.batch([row], []).project(row, viewer) ? row : null;
+  }
+
+  /** The message a reply answers, when this viewer may answer it in this channel; else why not. */
+  private answerable(
+    messageId: string,
+    viewer: LiveRoomParticipant,
+    restricted: boolean,
+    channel: LiveChatChannel = "attendee",
+  ): string | LiveRefusal {
+    const parent = this.visible(messageId, viewer);
+    if (!parent || parent.channel !== channel) return REFUSALS.missing;
+    return this.actionsOn(parent, viewer, restricted).has("reply") ? parent.id : REFUSALS.replyClosed;
+  }
+
   private actionsOn(row: LiveChatRow, viewer: LiveRoomParticipant, restricted: boolean) {
     const hiding = this.feed.moderation.hidden([row.id]).get(row.id);
     const reports = this.feed.moderation.reportCount(row.id);
     const author = this.feed.people.people([row.author_user_id]).get(row.author_user_id);
+    const converted = this.feed.moderation.questions([row.id]).has(row.id);
     return liveChatActions(liveChatCapacity(viewer), restricted, {
       channel: row.channel,
       mine: row.author_user_id === viewer.userId,
@@ -135,10 +164,12 @@ export class LiveRoomChatActions {
       reportedByMe: Boolean(
         viewer.userId && this.feed.moderation.reportedBy([row.id], [viewer.userId]).get(viewer.userId)?.has(row.id),
       ),
-      converted: this.feed.moderation.questions([row.id]).has(row.id),
+      converted,
       done: this.feed.decisions.done([row.id]).has(row.id),
       authorStaff: author?.staff ?? false,
       authorRestriction: this.feed.decisions.restriction(row.author_user_id, Date.now())?.block ?? null,
+      sentAt: row.sent_at,
+      editLocked: reports > 0 || converted || this.chat.aired([row.id]).has(row.id),
     });
   }
 
@@ -161,6 +192,7 @@ export class LiveRoomChatActions {
     restricted: boolean,
     text: string,
     channel: LiveChatChannel = "attendee",
+    replyTo: string | null = null,
   ) {
     if (!liveChatCanSend(liveChatCapacity(viewer), restricted, channel))
       return restricted ? REFUSALS.blocked : REFUSALS.notAllowed;
@@ -168,13 +200,21 @@ export class LiveRoomChatActions {
     // Author resolution yields: a moderator may have blocked this person meanwhile.
     if (viewer.role !== "operator" && this.feed.decisions.restriction(actor.userId, Date.now()))
       return REFUSALS.blocked;
-    const row = this.chat.send(actor, text, Date.now(), channel, this.hooks.stamp());
+    const row = this.chat.send(actor, text, Date.now(), channel, this.hooks.stamp(), replyTo);
     if (!row) return REFUSALS.tooFast;
     this.authors.recordMessage(row.id, stamp);
     await this.deliver([row], { removeWhenHidden: false });
     if (channel !== "attendee") return;
     this.nudgeTicker();
     await this.hooks.counted();
+  }
+
+  /** The author's new words, to everyone as they may see them; the original stays with moderators. */
+  private async edit(actor: Actor, row: LiveChatRow, text: string, at: string) {
+    if (text === row.body) return;
+    if (!this.allowed("edit", actor.userId)) return REFUSALS.tooFast;
+    const edited = this.chat.edit(row, text, at);
+    if (edited) await this.redeliver([edited]);
   }
 
   private react(actor: Actor, row: LiveChatRow, reaction: LiveChatReactionId, on: boolean) {

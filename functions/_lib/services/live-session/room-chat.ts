@@ -18,6 +18,10 @@ export interface LiveChatRow extends LiveChatRemoval {
   seq: number;
   /** In a location's chat, the session on there when it was sent; null in a break and in a session's room. */
   occurrence_id: string | null;
+  /** The message this one answers. */
+  reply_to: string | null;
+  /** When its author last edited it. */
+  edited_at: string | null;
 }
 /** One attendee message as an organizer's archive keeps it. */
 export interface LiveChatArchiveRow {
@@ -26,6 +30,8 @@ export interface LiveChatArchiveRow {
   body: string;
   /** The session the message was sent during; null between sessions. */
   occurrence_id: string | null;
+  /** When its author last edited it; the body is the edited one. */
+  edited_at: string | null;
   /** Shown to attendees, removed by a moderator, or held after reports. */
   status: "shown" | "hidden" | "held";
 }
@@ -39,13 +45,18 @@ const ANNOTATIONS = [
   "room_chat_questions",
   "room_chat_authorship",
   "room_chat_sessions",
+  "room_chat_replies",
+  "room_chat_edits",
+  "room_chat_aired",
 ];
 /** Shown to attendees: not removed by a moderator or held after reports. */
 const HIDDEN = `id NOT IN (SELECT message_id FROM room_chat_hidden)`;
 
 function select(channel: LiveChatChannel): string {
   return `SELECT id, author_user_id, author_name, body, sent_at, rowid AS seq, '${channel}' AS channel,
-    (SELECT occurrence_id FROM room_chat_sessions WHERE message_id = id) AS occurrence_id FROM ${TABLES[channel]}`;
+    (SELECT occurrence_id FROM room_chat_sessions WHERE message_id = id) AS occurrence_id,
+    (SELECT parent_id FROM room_chat_replies WHERE message_id = id) AS reply_to,
+    (SELECT edited_at FROM room_chat_edits WHERE message_id = id) AS edited_at FROM ${TABLES[channel]}`;
 }
 
 /**
@@ -138,6 +149,7 @@ export class LiveRoomChat {
   /**
    * One persistent per-person allowance covers both channels, so switching channels cannot reset it. A
    * location's chat dates the message by `occurrenceId`, the session on when it was sent, and counts it there.
+   * A reply names the message it answers; whether it may is the caller's to check.
    */
   send(
     actor: { userId: string; name: string },
@@ -145,6 +157,7 @@ export class LiveRoomChat {
     now: number,
     channel: LiveChatChannel = "attendee",
     occurrenceId: string | null = null,
+    replyTo: string | null = null,
   ): LiveChatRow | null {
     const cutoff = now - LIVE_ROOM_POLICY.chatPerPerson.windowSeconds * 1000;
     this.sql.exec("DELETE FROM room_chat_limits WHERE last_sent_at<=?", cutoff);
@@ -173,6 +186,7 @@ export class LiveRoomChat {
     );
     if (occurrenceId)
       this.sql.exec("INSERT INTO room_chat_sessions(message_id,occurrence_id) VALUES(?,?)", id, occurrenceId);
+    if (replyTo) this.sql.exec("INSERT INTO room_chat_replies(message_id,parent_id) VALUES(?,?)", id, replyTo);
     if (channel === "attendee") {
       if (occurrenceId) {
         this.sql.exec(
@@ -196,6 +210,52 @@ export class LiveRoomChat {
     return this.message(id);
   }
 
+  /** New words for a message; the room keeps what was first sent, for moderators. */
+  edit(row: LiveChatRow, text: string, at: string): LiveChatRow | null {
+    this.sql.exec(
+      "INSERT INTO room_chat_edits(message_id,original_body,edited_at) VALUES(?,?,?) ON CONFLICT(message_id) DO UPDATE SET edited_at=excluded.edited_at",
+      row.id,
+      row.body,
+      at,
+    );
+    this.sql.exec(`UPDATE ${TABLES[row.channel]} SET body=? WHERE id=?`, text, row.id);
+    return this.message(row.id);
+  }
+
+  /** What the authors first sent, for the messages they edited since. */
+  originals(ids: readonly string[]): Map<string, string> {
+    if (!ids.length) return new Map();
+    return new Map(
+      this.sql
+        .rows<{ message_id: string; original_body: string }>(
+          "SELECT message_id, original_body FROM room_chat_edits WHERE message_id IN (SELECT value FROM json_each(?))",
+          JSON.stringify(ids),
+        )
+        .map((row) => [row.message_id, row.original_body]),
+    );
+  }
+
+  /** Messages a broadcast read to show: their words stay as they went on screen. */
+  aired(ids: readonly string[]): Set<string> {
+    if (!ids.length) return new Set();
+    return new Set(
+      this.sql
+        .rows<{ message_id: string }>(
+          "SELECT message_id FROM room_chat_aired WHERE message_id IN (SELECT value FROM json_each(?))",
+          JSON.stringify(ids),
+        )
+        .map((row) => row.message_id),
+    );
+  }
+
+  markAired(ids: readonly string[]): void {
+    if (!ids.length) return;
+    this.sql.exec(
+      "INSERT OR IGNORE INTO room_chat_aired(message_id) SELECT value FROM json_each(?)",
+      JSON.stringify(ids),
+    );
+  }
+
   /** Removes messages with their reactions, reports and moderation. */
   remove(ids: readonly string[]): void {
     if (!ids.length) return;
@@ -213,10 +273,11 @@ export class LiveRoomChat {
   /** Every attendee message the room still holds, oldest first, with how moderation left it. */
   archive(): LiveChatArchiveRow[] {
     return this.sql.rows<LiveChatArchiveRow>(
-      `SELECT c.sent_at, c.author_name, c.body, s.occurrence_id,
+      `SELECT c.sent_at, c.author_name, c.body, s.occurrence_id, e.edited_at,
          CASE WHEN h.held = 1 THEN 'held' WHEN h.message_id IS NOT NULL THEN 'hidden' ELSE 'shown' END AS status
        FROM room_chat c LEFT JOIN room_chat_hidden h ON h.message_id = c.id
        LEFT JOIN room_chat_sessions s ON s.message_id = c.id
+       LEFT JOIN room_chat_edits e ON e.message_id = c.id
        ORDER BY c.sent_at, c.rowid`,
     );
   }

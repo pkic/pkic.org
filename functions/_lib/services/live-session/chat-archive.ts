@@ -99,7 +99,7 @@ export async function exportEventChat(
   const namespace = rooms(env);
   // Refuses the row that would outgrow the download, so a huge event never fills the Worker's memory first.
   const csv = boundedCsvWriter(LIVE_CHAT_ARCHIVE_MAX_BYTES);
-  csv.push(["Room", "Day", "Session", "Sent (UTC)", "Author", "Message", "Status"]);
+  csv.push(["Room", "Day", "Session", "Sent (UTC)", "Edited (UTC)", "Author", "Message", "Status"]);
   const { chats, titles } = await locationChats(db, eventId);
   for (const chat of chats) {
     for (const message of await namespace.getByName(liveLocationChatName(eventId, chat.roomId, chat.day)).chatArchive())
@@ -108,6 +108,7 @@ export async function exportEventChat(
         chat.day,
         (message.occurrence_id && titles.get(message.occurrence_id)) || BETWEEN_SESSIONS,
         message.sent_at,
+        message.edited_at ?? "",
         message.author_name,
         message.body,
         STATUS_LABELS[message.status],

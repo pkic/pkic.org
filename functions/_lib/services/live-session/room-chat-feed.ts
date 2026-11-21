@@ -1,6 +1,10 @@
-import { LIVE_CHAT_POLICY } from "../../../../assets/shared/live-chat-policy";
+import { LIVE_CHAT_POLICY, liveChatReplyExcerpt } from "../../../../assets/shared/live-chat-policy";
 import { publicSessionPortraitUrlSchema } from "../../../../assets/shared/schemas/event-session-history";
-import type { LiveChatChannel, LiveChatMessage } from "../../../../assets/shared/schemas/live-session-chat";
+import type {
+  LiveChatChannel,
+  LiveChatMessage,
+  LiveChatReplyQuote,
+} from "../../../../assets/shared/schemas/live-session-chat";
 import type { DatabaseLike } from "../../types";
 import type { LiveRoomParticipant } from "./room-admission";
 import type { LiveRoomChat, LiveChatRemoval, LiveChatRow } from "./room-chat";
@@ -33,7 +37,7 @@ export interface LiveChatBatch {
   rows: LiveChatRow[];
   /** The message as this viewer may see it, or null when they may not. */
   project(row: LiveChatRow, viewer: LiveRoomParticipant): LiveChatMessage | null;
-  /** Whether a viewer's copy carries something of their own: authorship, reactions or a report. */
+  /** Whether a viewer's copy carries something of their own: authorship, reactions, a report or a reply to them. */
   personal(row: LiveChatRow, viewer: LiveRoomParticipant): boolean;
 }
 
@@ -65,13 +69,31 @@ export class LiveChatFeed {
     const done = this.decisions.done(ids);
     const people = this.people.people(authors);
     const stamps = this.authors.messageStamps(ids);
+    const originals = this.chat.originals(ids);
+    const aired = this.chat.aired(ids);
+    const parentIds = [...new Set(rows.flatMap((row) => row.reply_to ?? []))];
+    const parents = new Map(this.chat.messages(parentIds).map((row) => [row.id, row]));
+    const parentsHidden = this.moderation.hidden(parentIds);
+    /** The answered message as this viewer sees it: removed once deleted, or hidden from everyone but moderators. */
+    const quote = (row: LiveChatRow, viewer: LiveRoomParticipant): LiveChatReplyQuote | null => {
+      if (!row.reply_to) return null;
+      const parent = parents.get(row.reply_to);
+      const shown = parent?.channel === row.channel && (!parentsHidden.has(parent.id) || staff(viewer));
+      return {
+        messageId: row.reply_to,
+        authorName: shown ? parent.author_name : null,
+        excerpt: shown ? liveChatReplyExcerpt(parent.body) : null,
+        mine: shown && viewer.userId !== null && parent.author_user_id === viewer.userId,
+      };
+    };
     return {
       rows,
       personal: (row, viewer) =>
         viewer.userId !== null &&
         (row.author_user_id === viewer.userId ||
           Boolean(mine.get(viewer.userId)?.has(row.id)) ||
-          Boolean(reportedBy.get(viewer.userId)?.has(row.id))),
+          Boolean(reportedBy.get(viewer.userId)?.has(row.id)) ||
+          (row.reply_to !== null && parents.get(row.reply_to)?.author_user_id === viewer.userId)),
       project: (row, viewer) => {
         if (!liveChatChannelVisible(row.channel, viewer)) return null;
         const hiding = hidden.get(row.id) ?? null;
@@ -82,6 +104,8 @@ export class LiveChatFeed {
         if (hiding && !staff(viewer) && !mineRow) return null;
         const report = reports.get(row.id);
         const author = people.get(row.author_user_id);
+        const replyTo = quote(row, viewer);
+        const original = originals.get(row.id);
         return {
           channel: row.channel,
           id: row.id,
@@ -93,6 +117,9 @@ export class LiveChatFeed {
           authorRoles: stamps.get(row.id)?.roles ?? [],
           mine: mineRow,
           sentAt: row.sent_at,
+          ...(row.edited_at ? { editedAt: row.edited_at } : {}),
+          ...(mineRow ? { editLocked: Boolean(report?.count) || questions.has(row.id) || aired.has(row.id) } : {}),
+          ...(replyTo ? { replyTo } : {}),
           ...(row.occurrence_id ? { occurrenceId: row.occurrence_id } : {}),
           reactions: counts.get(row.id) ?? {},
           myReactions: (viewer.userId && mine.get(viewer.userId)?.get(row.id)) || [],
@@ -111,6 +138,7 @@ export class LiveChatFeed {
                 questionId: questions.get(row.id) ?? null,
                 authorStaff: author?.staff ?? false,
                 authorRestriction: restrictions.get(row.author_user_id) ?? null,
+                ...(original !== undefined ? { originalText: original } : {}),
               }
             : null,
         };

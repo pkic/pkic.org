@@ -77,6 +77,16 @@ function effectOf(message: unknown): string {
   return command.type;
 }
 
+/** Reply and Edit send nothing yet: they set the composer up, which this reads and then cancels. */
+async function composed(host: HTMLElement): Promise<string> {
+  const line = host.querySelector(".pk-live-chat__composing");
+  if (!line) return "nothing";
+  const cancel = line.querySelector<HTMLButtonElement>("button:last-of-type")!;
+  const mode = cancel.getAttribute("aria-label") === "Cancel edit" ? "compose:edit" : "compose:reply";
+  await act(async () => cancel.click());
+  return mode;
+}
+
 /**
  * What each action a viewer gets on the first message does: the reaction button, then every menu item,
  * run through its submenu or dialog to the command it sends. Copy and order changes don't matter here.
@@ -108,7 +118,7 @@ async function menuEffects(host: HTMLElement, send: ReturnType<typeof vi.fn>): P
       const confirm = [...dialog.querySelectorAll("button")].at(-1)!;
       await act(async () => confirm.click());
     }
-    effects.push(send.mock.calls.length > before ? effectOf(send.mock.calls.at(-1)![0]) : "nothing");
+    effects.push(send.mock.calls.length > before ? effectOf(send.mock.calls.at(-1)![0]) : await composed(host));
   }
   return effects;
 }
@@ -202,11 +212,11 @@ describe("live chat", () => {
   it("offers each viewer exactly the actions the chat policy grants", async () => {
     const send = vi.fn(() => true);
     const attendee = mount(<LiveChat state={stateWith()} disabled={false} send={send} />);
-    expect(await menuEffects(attendee, send)).toEqual(["chat.react", "chat.report"]);
+    expect(await menuEffects(attendee, send)).toEqual(["chat.react", "compose:reply", "chat.report"]);
     const own = mount(
       <LiveChat state={stateWith({ chat: [chatMessage({ mine: true })] })} disabled={false} send={send} />,
     );
-    expect(await menuEffects(own, send)).toEqual(["chat.react", "chat.delete"]);
+    expect(await menuEffects(own, send)).toEqual(["chat.react", "compose:reply", "compose:edit", "chat.delete"]);
     const moderation = {
       hidden: null,
       done: null,
@@ -229,6 +239,7 @@ describe("live chat", () => {
     );
     expect(await menuEffects(moderator, send)).toEqual([
       "chat.react",
+      "compose:reply",
       "moderation.done",
       "chat.convert",
       "chat.moderate:keep",
@@ -267,6 +278,7 @@ describe("live chat", () => {
     );
     expect(await menuEffects(organizer, send)).toEqual([
       "chat.react",
+      "compose:reply",
       "moderation.done",
       "chat.convert",
       "chat.moderate:keep",
@@ -394,7 +406,7 @@ describe("live chat", () => {
         vi.advanceTimersByTime(1_100);
       });
       expect(host.querySelector("textarea")).not.toBeNull();
-      expect(await menuEffects(host, send)).toEqual(["chat.react", "chat.report"]);
+      expect(await menuEffects(host, send)).toEqual(["chat.react", "compose:reply", "chat.report"]);
     } finally {
       vi.useRealTimers();
     }

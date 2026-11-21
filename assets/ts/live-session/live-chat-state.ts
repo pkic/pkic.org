@@ -1,4 +1,4 @@
-import { LIVE_CHAT_POLICY } from "../../shared/live-chat-policy";
+import { LIVE_CHAT_POLICY, liveChatReplyExcerpt } from "../../shared/live-chat-policy";
 import type { LiveChatChannel, LiveChatMessage } from "../../shared/schemas/live-session-chat";
 import type { LiveLocationChatSnapshot, LiveRoomServerMessage } from "../../shared/schemas/live-session-room";
 
@@ -72,17 +72,43 @@ function update<State extends ChatState>(
   };
 }
 
+/** Replies held here quote the message they answer as it reads now, or as removed once it is gone. */
+function requote<State extends ChatState>(state: State, answered: string, now: LiveChatMessage | null): State {
+  if (!state.chat.some((entry) => entry.replyTo?.messageId === answered)) return state;
+  const shown = now !== null && !now.removal && !now.moderation?.hidden;
+  return {
+    ...state,
+    chat: state.chat.map((entry) =>
+      entry.replyTo?.messageId === answered
+        ? {
+            ...entry,
+            replyTo: {
+              messageId: answered,
+              authorName: shown ? now.authorName : null,
+              excerpt: shown ? liveChatReplyExcerpt(now.text) : null,
+              mine: shown && now.mine,
+            },
+          }
+        : entry,
+    ),
+  };
+}
+
 /** Applies one chat message from the room to the browser's chat. */
 export function applyLiveChatMessage<State extends ChatState>(state: State, message: ChatServerMessage): State {
   switch (message.type) {
     case "chat.message":
-      return upsert(state, message.message);
+      return requote(upsert(state, message.message), message.message.id, message.message);
     case "chat.removed":
-      return {
-        ...state,
-        chat: state.chat.filter((entry) => entry.id !== message.messageId || entry.channel !== message.channel),
-        chatReports: state.chatReports?.filter((entry) => entry.id !== message.messageId),
-      };
+      return requote(
+        {
+          ...state,
+          chat: state.chat.filter((entry) => entry.id !== message.messageId || entry.channel !== message.channel),
+          chatReports: state.chatReports?.filter((entry) => entry.id !== message.messageId),
+        },
+        message.messageId,
+        null,
+      );
     case "chat.reactions":
       return update(state, message.messageId, (entry) => ({
         ...entry,

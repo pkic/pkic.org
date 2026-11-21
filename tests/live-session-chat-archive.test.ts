@@ -157,15 +157,15 @@ describe("event chat download and erasure", () => {
     expect(download.status, await download.clone().text()).toBe(200);
     expect(download.headers.get("content-disposition")).toContain("live-chat.csv");
     const lines = (await download.text()).split("\r\n");
-    expect(lines[0]).toBe("Room,Day,Session,Sent (UTC),Author,Message,Status");
-    // Each message is dated by the session on when it was sent.
+    expect(lines[0]).toBe("Room,Day,Session,Sent (UTC),Edited (UTC),Author,Message,Status");
+    // Each message is dated by the session on when it was sent; neither was edited.
     const dated = lines.slice(1).map((line) => {
-      const [room, , session, , ...rest] = line.split(",");
-      return [room, session, ...rest].join(",");
+      const [room, , session, , edited, ...rest] = line.split(",");
+      return [room, session, edited, ...rest].join(",");
     });
     expect(dated).toEqual([
-      'Physical room,Post-quantum migration,Ada Attendee,"Hello, everyone",Shown',
-      "Physical room,Post-quantum migration,Ada Attendee,Buy cheap tokens,Hidden by a moderator",
+      'Physical room,Post-quantum migration,,Ada Attendee,"Hello, everyone",Shown',
+      "Physical room,Post-quantum migration,,Ada Attendee,Buy cheap tokens,Hidden by a moderator",
     ]);
     expect(lines.join("\n")).not.toContain("Staff only");
 

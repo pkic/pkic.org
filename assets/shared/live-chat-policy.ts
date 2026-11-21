@@ -55,6 +55,11 @@ export const LIVE_CHAT_POLICY = {
   tickerRefreshMilliseconds: 5000,
   /** Characters of one message the ticker shows. */
   tickerMessageLength: 140,
+  /** How long after sending its author may still edit a message. */
+  editWindowSeconds: 300,
+  editsPerPerson: { limit: 10, windowSeconds: 60 },
+  /** Characters of the answered message a reply quotes. */
+  replyExcerptLength: 80,
 } as const;
 
 /** What a viewer may do to chat: everyone takes part, moderators run the room, organizers also block for the event. */
@@ -67,6 +72,8 @@ export function liveChatCapacity(viewer: { role: LiveRoomRole; organizer?: boole
 
 export const LIVE_CHAT_ACTIONS = [
   "send",
+  "reply",
+  "edit",
   "react",
   "report",
   "delete",
@@ -97,6 +104,14 @@ export interface LiveChatActionSubject {
   /** The author operates this room, so no one blocks them. */
   authorStaff: boolean;
   authorRestriction: LiveParticipationBlock | null;
+  sentAt: string;
+  /** Reported, asked as a question or shown on screen: its words stay as they are. */
+  editLocked: boolean;
+}
+
+/** Whether a message sent at `sentAt` is still within its author's edit window. */
+export function liveChatEditOpen(sentAt: string, now = Date.now()): boolean {
+  return now - Date.parse(sentAt) < LIVE_CHAT_POLICY.editWindowSeconds * 1000;
 }
 
 /**
@@ -109,6 +124,8 @@ export interface LiveChatActionSubject {
  * | Action     | Participant         | Moderator             | Organizer             |
  * | ---------- | ------------------- | --------------------- | --------------------- |
  * | send       | unless restricted   | yes                   | yes                   |
+ * | reply      | shown, unrestricted | shown                 | shown                 |
+ * | edit       | own, see below      | own, see below        | own, see below        |
  * | react      | unless restricted   | yes                   | yes                   |
  * | report     | others', unrestricted | no (removes instead) | no (removes instead) |
  * | delete     | own messages        | own messages          | own messages          |
@@ -120,14 +137,22 @@ export interface LiveChatActionSubject {
  * | block      | no                  | not blocked yet       | not blocked yet       |
  * | blockEvent | no                  | no                    | not blocked for event |
  * | lift       | no                  | paused or session     | any block             |
+ *
+ * An author edits their own shown message within the edit window, while they may write in its channel and
+ * nobody reported it, asked it as a question or put it on screen.
  */
 export function liveChatActions(
   capacity: LiveChatCapacity,
   restricted: boolean,
   message: LiveChatActionSubject,
+  now = Date.now(),
 ): Set<LiveChatAction> {
   const actions = new Set<LiveChatAction>();
   const staff = capacity !== "participant";
+  const writes = liveChatCanSend(capacity, restricted, message.channel);
+  if (writes && !message.hidden) actions.add("reply");
+  if (writes && message.mine && !message.hidden && !message.editLocked && liveChatEditOpen(message.sentAt, now))
+    actions.add("edit");
   if (!restricted && !message.hidden) actions.add("react");
   if (message.mine) actions.add("delete");
   if (
@@ -192,4 +217,16 @@ export function liveChatPlainText(markdown: string): string {
     .replace(/\\([\\`*_{}[\]()#+.!|<>-])/gu, "$1")
     .replace(/\s+/gu, " ")
     .trim();
+}
+
+/** The first words of an answered message, as its reply quotes them. */
+export function liveChatReplyExcerpt(markdown: string): string {
+  const characters = [...liveChatPlainText(markdown)];
+  const length = LIVE_CHAT_POLICY.replyExcerptLength;
+  return characters.length > length
+    ? `${characters
+        .slice(0, length - 1)
+        .join("")
+        .trimEnd()}…`
+    : characters.join("");
 }

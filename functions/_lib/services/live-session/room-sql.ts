@@ -33,6 +33,9 @@ CREATE INDEX IF NOT EXISTS room_chat_session_senders_user ON room_chat_session_s
 CREATE TABLE IF NOT EXISTS location_chat (id INTEGER PRIMARY KEY, event_id TEXT NOT NULL, room_id TEXT NOT NULL, day TEXT NOT NULL,
   record_json TEXT NOT NULL, loaded_occurrence_id TEXT, opening TEXT NOT NULL DEFAULT 'scheduled');
 CREATE TABLE IF NOT EXISTS room_chat_authorship (message_id TEXT PRIMARY KEY,author_json TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS room_chat_replies (message_id TEXT PRIMARY KEY, parent_id TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS room_chat_edits (message_id TEXT PRIMARY KEY, original_body TEXT NOT NULL, edited_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS room_chat_aired (message_id TEXT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS question_authorship (question_id TEXT PRIMARY KEY,author_json TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS room_access_erasures (user_id TEXT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS room_d1_read_state (id INTEGER PRIMARY KEY CHECK(id=1), bookmark TEXT NOT NULL);

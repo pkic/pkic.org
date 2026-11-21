@@ -108,6 +108,57 @@
     font-size: var(--pk-text-xs);
     font-variant-numeric: tabular-nums;
   }
+  .pk-live-chat__edited {
+    flex: none;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+  }
+  /* A reply's one line on the message it answers: quiet, cut to one line, leading there when it can. */
+  .pk-live-chat__quote {
+    display: block;
+    inline-size: 100%;
+    margin: 0 0 0.1rem;
+    padding: 0 0 0 var(--pk-2);
+    border: 0;
+    border-inline-start: 2px solid var(--pk-line);
+    background: none;
+    color: var(--pk-ink-muted);
+    font: inherit;
+    font-size: var(--pk-text-xs);
+    text-align: start;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .pk-live-chat__quote[data-removed] {
+    font-style: italic;
+  }
+  button.pk-live-chat__quote {
+    cursor: pointer;
+  }
+  button.pk-live-chat__quote:hover {
+    color: var(--pk-ink);
+    border-inline-start-color: var(--pk-accent);
+  }
+  button.pk-live-chat__quote:focus-visible {
+    outline: 2px solid var(--pk-focus);
+    outline-offset: 1px;
+  }
+  .pk-live-chat__quote-author {
+    font-weight: 600;
+  }
+  .pk-live-chat__row[data-highlighted] {
+    background: var(--pk-accent-soft);
+    transition: background var(--pk-dur-slow) var(--pk-ease);
+  }
+  .pk-live-chat__original {
+    margin-block-start: var(--pk-1);
+    font-size: var(--pk-text-xs);
+    color: var(--pk-ink-muted);
+  }
+  .pk-live-chat__original summary {
+    cursor: pointer;
+  }
   .pk-live-chat__notes {
     display: flex;
     flex-wrap: wrap;
@@ -210,6 +261,7 @@
     inset-block-end: 4.5rem;
     display: flex;
     justify-content: center;
+    gap: var(--pk-2);
     pointer-events: none;
   }
   .pk-live-chat__jump .pk-btn {
@@ -228,6 +280,23 @@
    * last line is typed. The field fills the row, so on one line it is as tall as Send, which a touch
    * screen makes taller.
    */
+  /* What the composer answers or edits, on one line with a way to set it aside. */
+  .pk-live-chat__composing {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-1);
+    min-inline-size: 0;
+  }
+  .pk-live-chat__composing .pk-live-chat__quote {
+    flex: 1;
+    margin: 0;
+  }
+  .pk-live-chat__composing .pk-btn {
+    flex: none;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    min-block-size: 0;
+  }
   .pk-live-chat__input {
     display: flex;
     align-items: stretch;

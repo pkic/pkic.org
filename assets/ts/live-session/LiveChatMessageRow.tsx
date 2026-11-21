@@ -17,6 +17,7 @@ import { Avatar } from "../ui/Avatar";
 import { LiveAuthorName } from "./LiveAuthor";
 import { Markdown } from "../ui/Markdown";
 import { StrokeIcon } from "../ui/MediaIcons";
+import { LiveChatQuote } from "./LiveChatQuote";
 import { Menu, type MenuItem } from "../ui/Menu";
 import { ReactionPicker } from "./ReactionPicker";
 import { LIVE_MODERATION_REASONS } from "../../shared/live-moderation-policy";
@@ -26,6 +27,13 @@ import { LiveRemovedPost, liveRemovalNote } from "./LiveRemovedPost";
 
 type Viewer = LiveRoomSnapshot["viewer"];
 type Send = (message: LiveRoomClientMessage) => boolean;
+
+/** What the feed does when a reader replies to, edits, or follows a quote to a message. */
+export interface LiveChatRowHandlers {
+  reply: (message: LiveChatMessage) => void;
+  edit: (message: LiveChatMessage) => void;
+  jump: (messageId: string) => void;
+}
 
 const EMOJI = Object.fromEntries(LIVE_CHAT_REACTIONS.map((reaction) => [reaction.id, reaction])) as Record<
   LiveChatReactionId,
@@ -46,6 +54,8 @@ export function liveChatMessageActions(message: LiveChatMessage, viewer: Viewer)
     done: moderation?.done != null,
     authorStaff: moderation?.authorStaff ?? false,
     authorRestriction: moderation?.authorRestriction?.block ?? null,
+    sentAt: message.sentAt,
+    editLocked: message.editLocked ?? false,
   });
 }
 
@@ -62,14 +72,20 @@ function menuItems(
   timeZone: string,
   onError: () => void,
   onRetry: () => void,
+  handlers: LiveChatRowHandlers | null,
 ): MenuItem[] {
   const messageId = message.id;
   const item = { kind: "chat" as const, messageId };
   const items: MenuItem[] = [];
+  if (handlers && actions.has("reply"))
+    items.push({ id: "reply", label: "Reply", onSelect: () => handlers.reply(message) });
+  if (handlers && actions.has("edit"))
+    items.push({ id: "edit", label: "Edit", onSelect: () => handlers.edit(message) });
   if (actions.has("report"))
     items.push({
       id: "report",
       label: "Report",
+      separatorBefore: items.length > 0,
       children: LIVE_MODERATION_REASONS.map((reason) => ({
         id: `report-${reason.id}`,
         label: reason.label,
@@ -142,7 +158,6 @@ function ReactIcon() {
   );
 }
 
-/** Moderators only: what the room knows about the message, in words. */
 /** What replaces a removed or hidden message's words for the people who still see it. */
 function removedNote(message: LiveChatMessage): string | null {
   if (message.removal) return liveRemovalNote(message.removal);
@@ -150,6 +165,7 @@ function removedNote(message: LiveChatMessage): string | null {
   return null;
 }
 
+/** Moderators only: what the room knows about the message, in words. */
 function ModerationNote({ message }: { message: LiveChatMessage }) {
   const moderation = message.moderation;
   if (!moderation) return null;
@@ -191,6 +207,8 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
   measure,
   timeZone,
   divider = null,
+  handlers = null,
+  highlighted = false,
 }: {
   message: LiveChatMessage;
   viewer: Viewer;
@@ -201,6 +219,10 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
   timeZone: string;
   /** Where the session on changes at this message, what to call the part that starts: a title, or the break. */
   divider?: string | null;
+  /** Reply, edit and quotes that lead to their message; a list without them shows replies as they are. */
+  handlers?: LiveChatRowHandlers | null;
+  /** The message a reader just followed a quote to. */
+  highlighted?: boolean;
 }) {
   const [actionError, setActionError] = useState(false);
   const actions = liveChatMessageActions(message, viewer);
@@ -213,6 +235,7 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
         timeZone,
         () => setActionError(true),
         () => setActionError(false),
+        handlers,
       );
   const canReact = !disabled && actions.has("react");
   const reactions = LIVE_CHAT_REACTIONS.filter((reaction) => (message.reactions?.[reaction.id] ?? 0) > 0);
@@ -223,6 +246,7 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
       class="pk-live-chat__row"
       data-mine={message.mine ? "" : undefined}
       data-removed={removedNote(message) ? "" : undefined}
+      data-highlighted={highlighted ? "" : undefined}
     >
       {divider !== null ? (
         <p class="pk-live-chat__divider" role="separator">
@@ -243,8 +267,14 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
           <time dateTime={message.sentAt} title={formatTimeOfDay(message.sentAt)}>
             {time}
           </time>
+          {message.editedAt ? (
+            <span class="pk-live-chat__edited" title={`Edited at ${formatTimeOfDay(message.editedAt)}`}>
+              Edited
+            </span>
+          ) : null}
           <ModerationNote message={message} />
         </div>
+        {message.replyTo ? <LiveChatQuote quote={message.replyTo} onJump={handlers?.jump} /> : null}
         {removedNote(message) ? (
           <LiveRemovedPost note={removedNote(message)!}>
             <Markdown markdown={message.text} profile="chat" className="pk-live-chat__text" />
@@ -252,6 +282,12 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
         ) : (
           <Markdown markdown={message.text} profile="chat" className="pk-live-chat__text" />
         )}
+        {message.moderation?.originalText && message.moderation.reports > 0 ? (
+          <details class="pk-live-chat__original">
+            <summary>Show original</summary>
+            <Markdown markdown={message.moderation.originalText} profile="chat" className="pk-live-chat__text" />
+          </details>
+        ) : null}
         {reactions.length ? (
           <div class="pk-live-chat__reactions">
             {reactions.map((reaction) => {

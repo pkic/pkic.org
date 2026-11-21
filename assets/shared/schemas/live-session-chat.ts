@@ -41,6 +41,8 @@ export const liveChatModerationSchema = z
     /** The author operates this room. */
     authorStaff: z.boolean(),
     authorRestriction: liveParticipationRestrictionSchema.nullable(),
+    /** What the author first sent, when they edited it since. */
+    originalText: z.string().max(LIVE_ROOM_POLICY.chatMaxLength).nullable().optional(),
   })
   .strict();
 export type LiveChatModeration = z.infer<typeof liveChatModerationSchema>;
@@ -50,6 +52,22 @@ export const liveChatTextSchema = z
   .trim()
   .min(1, "Write a message.")
   .max(LIVE_ROOM_POLICY.chatMaxLength, `Keep your message under ${LIVE_ROOM_POLICY.chatMaxLength} characters.`);
+
+/** The message a reply answers, as the room holds it now: its author and first words, or neither once removed. */
+export const liveChatReplyQuoteSchema = z
+  .object({
+    messageId: databaseIdSchema,
+    authorName: livePersonNameSchema.nullable(),
+    // Characters, so up to two code units each.
+    excerpt: z
+      .string()
+      .max(LIVE_CHAT_POLICY.replyExcerptLength * 2)
+      .nullable(),
+    /** The viewer wrote the message answered. */
+    mine: z.boolean(),
+  })
+  .strict();
+export type LiveChatReplyQuote = z.infer<typeof liveChatReplyQuoteSchema>;
 
 export const liveChatMessageSchema = z
   .object({
@@ -63,6 +81,11 @@ export const liveChatMessageSchema = z
     ...liveAuthorFields,
     mine: z.boolean(),
     sentAt: utcInstantSchema,
+    /** When its author last edited it. */
+    editedAt: utcInstantSchema.optional(),
+    /** The author only: reported, asked as a question or shown on screen, so it can no longer be edited. */
+    editLocked: z.boolean().optional(),
+    replyTo: liveChatReplyQuoteSchema.optional(),
     /** In a location's chat, the session on there when it was sent; absent in a break. */
     occurrenceId: databaseIdSchema.optional(),
     reactions: liveChatReactionCountsSchema.optional(),
@@ -82,7 +105,18 @@ const messageRefSchema = { messageId: databaseIdSchema };
 
 /** The composer's contract: the socket message carries exactly these fields. */
 export const liveChatSendSchema = z
-  .object({ type: z.literal("chat.send"), text: liveChatTextSchema, channel: liveChatChannelSchema.optional() })
+  .object({
+    type: z.literal("chat.send"),
+    text: liveChatTextSchema,
+    channel: liveChatChannelSchema.optional(),
+    /** The message this one answers, in the same channel. */
+    replyTo: databaseIdSchema.optional(),
+  })
+  .strict();
+
+/** The author changes the words of their own message, within the edit window. */
+export const liveChatEditSchema = z
+  .object({ type: z.literal("chat.edit"), messageId: databaseIdSchema, text: liveChatTextSchema })
   .strict();
 
 export const liveChatReportSchema = z
@@ -91,6 +125,7 @@ export const liveChatReportSchema = z
 
 export const liveChatClientMessageSchemas = [
   liveChatSendSchema,
+  liveChatEditSchema,
   /** Adds or withdraws this person's one reaction of a kind. */
   z
     .object({ type: z.literal("chat.react"), ...messageRefSchema, reaction: liveChatReactionSchema, on: z.boolean() })

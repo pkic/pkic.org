@@ -149,11 +149,13 @@ export {
   liveChatChannelSchema,
   liveChatMessageSchema,
   liveChatSendSchema,
+  liveChatEditSchema,
   liveChatReportSchema,
   liveChatReactionSchema,
   type LiveChatMessage,
   type LiveChatChannel,
   type LiveChatModeration,
+  type LiveChatReplyQuote,
 } from "./live-session-chat";
 
 export {
