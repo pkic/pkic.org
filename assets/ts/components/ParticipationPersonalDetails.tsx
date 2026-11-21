@@ -49,8 +49,10 @@ export function ParticipationPersonalDetails({
   showRefusal.current = (message) => {
     if (!save) return;
     edit();
-    form.submit();
-    setError(message);
+    const checked = form.submit();
+    // The dialog's fields are not open yet, but every name the contract refuses is said by its
+    // field once they are, and clears as it is typed; the alert keeps only a refusal they cannot say.
+    setError(checked.data ? message : null);
   };
   useEffect(() => {
     if (refusal) showRefusal.current?.(refusal);
