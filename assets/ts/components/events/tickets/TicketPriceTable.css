@@ -119,7 +119,8 @@
     inline-size: 9.5rem;
   }
 
-  .pk-price-table__period-edit {
+  /* Above the label rule's block display: the date and its Remove stack, so the column stays one field wide. */
+  .pk-price-table__period > .pk-price-table__period-edit {
     display: inline-flex;
     flex-direction: column;
     align-items: flex-end;

@@ -489,8 +489,8 @@ function TicketSettings() {
             columns={[
               { id: "label", header: "Code for", cell: (row) => row.label },
               { id: "ticket", header: "Ticket", width: "fit", cell: (row) => row.ticket },
-              { id: "price", header: "Price", width: "fit", align: "end", cell: (row) => row.price },
-              { id: "used", header: "Used", width: "fit", align: "end", cell: (row) => row.used },
+              { id: "price", header: "Price", width: "fit", align: "end", recordLabel: null, cell: (row) => row.price },
+              { id: "used", header: "Used", width: "fit", align: "end", recordLabel: "used", cell: (row) => row.used },
             ]}
           />
         </PanelBody>

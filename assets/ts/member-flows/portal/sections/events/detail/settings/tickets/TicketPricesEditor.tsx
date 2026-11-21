@@ -176,7 +176,8 @@ export function TicketPricesEditor({
                     triggerClass="pk-btn pk-btn--ghost"
                     items={missing.map((row) => ({
                       id: `${row.attendanceValue}|${row.dayDate ?? ""}`,
-                      label: `${attendanceLabel(configuration, row.attendanceValue)}, ${coversLabel(configuration, row.dayDate).toLowerCase()}`,
+                      // A day's own label or date keeps its capitals: "In person, Day one", "In person, all days".
+                      label: `${attendanceLabel(configuration, row.attendanceValue)}, ${row.dayDate === null ? "all days" : coversLabel(configuration, row.dayDate)}`,
                       onSelect: () =>
                         setPrices((current) => [
                           ...current,

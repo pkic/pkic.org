@@ -77,6 +77,8 @@ export function TicketCodesPanel({
   const notify = toast;
   function close() {
     setOpen(false);
+    // Backing out leaves nothing behind: the next code starts from the first ticket and empty fields.
+    setTicketTypeId(tickets[0]?.id ?? "");
     setLabel("");
     setAmount("0");
     setPercent("");
@@ -158,11 +160,12 @@ export function TicketCodesPanel({
             ),
           },
           { header: "Ticket", width: "fit", cell: (row) => ticketName(row.ticketTypeId) },
-          { header: "Price", width: "fit", align: "end", cell: (row) => codePrice(row, currency) },
+          { header: "Price", width: "fit", align: "end", recordLabel: null, cell: (row) => codePrice(row, currency) },
           {
             header: "Used",
             width: "fit",
             align: "end",
+            recordLabel: "used",
             sort: { asc: "used", desc: "-used" },
             cell: (row) => `${formatNumber(row.usedCount)} of ${formatNumber(row.maxUses)}`,
           },
