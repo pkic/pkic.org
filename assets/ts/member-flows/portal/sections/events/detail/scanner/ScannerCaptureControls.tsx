@@ -138,9 +138,11 @@ export function ScannerManualControls({
   consent,
   inline = false,
   handlers,
+  error,
 }: {
   inline?: boolean;
   handlers?: ContractForm<unknown>["handlers"];
+  error?: string;
   action: EventScanRequest["action"];
   busy: boolean;
   ready: boolean;
@@ -170,22 +172,12 @@ export function ScannerManualControls({
         }}
       >
         {content}
+        {error && <p role="alert">{error}</p>}
         <div class="pk-cluster">
           <Button type="submit" disabled={busy || !ready || (action === "lead" && !consent?.confirmed)}>
             {action === "lead" ? "Confirm lead" : scannerActionLabel(action)}
           </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            onPointerDown={(event) => {
-              // Close before an empty badge field can rerender this button on blur.
-              event.preventDefault();
-              onClose();
-            }}
-            onClick={(event) => {
-              if (event.detail === 0) onClose();
-            }}
-          >
+          <Button type="button" variant="secondary" onClick={onClose}>
             Return to scanning
           </Button>
         </div>

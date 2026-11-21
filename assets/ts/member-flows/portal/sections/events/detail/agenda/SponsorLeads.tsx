@@ -1,6 +1,6 @@
 import { ContactOrganization } from "../../../../../../components/ContactOrganization";
 import { type ClockZone } from "../../../../../../../shared/event-clock";
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { lazy, Suspense } from "preact/compat";
 import {
   sponsorLeadListSchema,
@@ -28,8 +28,9 @@ import { loadLiveSponsorLeads } from "./sponsor-lead-loader";
 import { portalSession } from "../../../../state";
 import { deleteJson, requestJson } from "../../../../../../shared/api-client";
 import { toast } from "../../../../ui";
-import { scannerTransportUnavailable } from "../scanner/scanner-offline-context";
 import { usePortalHashLocation } from "../../../../hash-location";
+import { useHashQueryParam } from "../../../../../../hooks/useHashQueryParam";
+import { databaseIdSchema } from "../../../../../../../shared/schemas/identifiers";
 import { SponsorLeadDetail } from "./SponsorLeadDetail";
 const EventScanner = lazy(() => import("../scanner/EventScanner").then((module) => ({ default: module.EventScanner })));
 
@@ -53,12 +54,16 @@ export function SponsorLeads({
 
 function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZone }) {
   const [selected, setSelected] = useState<SponsorLeadSponsor | null>(null);
+  const [selectedSponsorParam, setSelectedSponsorParam] = useHashQueryParam("leadSponsor", "");
+  const selectedSponsorId = databaseIdSchema.safeParse(selectedSponsorParam).success ? selectedSponsorParam : "";
   const [scanning, setScanning] = useState(false);
   const [listVersion, setListVersion] = useState(0);
   const [live, setLive] = useState(() => navigator.onLine && document.visibilityState !== "hidden");
   const [epoch, setEpoch] = useState(0);
   const [removingLeadId, setRemovingLeadId] = useState<string | null>(null);
   const [removalError, setRemovalError] = useState("");
+  const [restoreFocus, setRestoreFocus] = useState(false);
+  const host = useRef<HTMLDivElement>(null);
   const base = `/api/v1/events/${encodeURIComponent(slug)}/sponsors`;
   const sponsorCatalog = useMemo(
     (): ServerCatalog<SponsorLeadSponsor, z.infer<typeof sponsorLeadSponsorsSchema>> => ({
@@ -76,6 +81,24 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
     () => requestJson(`${base}/leads?limit=2`, sponsorLeadSponsorsSchema, { method: "GET", cache: "no-store" }),
     [slug, listVersion],
   );
+  const reloadSponsorOptions = sponsorOptions.reload;
+  const lookupId =
+    selectedSponsorId &&
+    sponsorOptions.data?.page.total !== 1 &&
+    !sponsorOptions.data?.sponsors.some((sponsor) => sponsor.id === selectedSponsorId)
+      ? selectedSponsorId
+      : "";
+  const selectedOption = useData(
+    () =>
+      lookupId
+        ? requestJson(
+            `${base}/leads?${new URLSearchParams({ sponsorId: lookupId, limit: "1" })}`,
+            sponsorLeadSponsorsSchema,
+            { method: "GET", cache: "no-store" },
+          )
+        : Promise.resolve(null),
+    [slug, lookupId],
+  );
   useEffect(() => {
     const changed = () => {
       setLive(navigator.onLine && document.visibilityState !== "hidden");
@@ -92,13 +115,44 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
       document.removeEventListener("visibilitychange", changed);
     };
   }, []);
+  useEffect(() => {
+    if (scanning || !restoreFocus || sponsorOptions.loading) return;
+    const button = host.current?.querySelector<HTMLButtonElement>('button[aria-label="Scan leads"]');
+    if (button) {
+      button.focus();
+      setRestoreFocus(false);
+    }
+  }, [scanning, restoreFocus, sponsorOptions.loading, sponsorOptions.data, live]);
+  useEffect(() => {
+    if (!sponsorOptions.error || scanning) return;
+    const retry = () => void reloadSponsorOptions();
+    window.addEventListener("online", retry);
+    return () => window.removeEventListener("online", retry);
+  }, [sponsorOptions.error, reloadSponsorOptions, scanning]);
+  useEffect(() => {
+    if (lookupId && !selectedOption.loading && selectedOption.data?.page.total === 0) setSelectedSponsorParam("");
+  }, [lookupId, selectedOption.loading, selectedOption.data, setSelectedSponsorParam]);
+  useEffect(() => {
+    if (selectedSponsorParam && (!selectedSponsorId || sponsorOptions.data?.page.total === 1))
+      setSelectedSponsorParam("");
+  }, [selectedSponsorParam, selectedSponsorId, sponsorOptions.data, setSelectedSponsorParam]);
   if (sponsorOptions.loading) return <Spinner label="Loading sponsor leads…" />;
   if (sponsorOptions.error || !sponsorOptions.data)
-    return <ErrorAlert error={sponsorOptions.error ?? "Sponsor leads are unavailable."} />;
+    return (
+      <div class="pk-stack">
+        <ErrorAlert error={sponsorOptions.error ?? "Sponsor leads are unavailable."} />
+        <Button onClick={() => void sponsorOptions.reload()}>Try again</Button>
+      </div>
+    );
   const oneSponsor = sponsorOptions.data.page.total === 1;
   const current = oneSponsor
     ? (sponsorOptions.data.sponsors[0] ?? null)
-    : (selected ?? sponsorOptions.data.sponsors[0] ?? null);
+    : selectedSponsorId
+      ? ((selected?.id === selectedSponsorId ? selected : null) ??
+        sponsorOptions.data.sponsors.find((sponsor) => sponsor.id === selectedSponsorId) ??
+        selectedOption.data?.sponsors[0] ??
+        (selectedOption.loading ? null : (sponsorOptions.data.sponsors[0] ?? null)))
+      : (sponsorOptions.data.sponsors[0] ?? null);
   async function removeLead(lead: SponsorLead, scope: "mine" | "all") {
     if (!current) return;
     const all = scope === "all";
@@ -127,7 +181,7 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
     }
   }
   return (
-    <div class="pk-stack">
+    <div ref={host} class="pk-stack">
       {sponsorOptions.data.page.total > 1 && (
         <Field label="Sponsor">
           {(control) => (
@@ -137,11 +191,12 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
               load={loadLiveSponsorLeads}
               searchLabel="Sponsor"
               allowEmpty={false}
-              value={current?.id ?? null}
+              value={current?.id ?? (selectedSponsorId || null)}
               selectedLabel={current?.name}
               onChange={(sponsor) => {
                 if (!sponsor) return;
                 setSelected(sponsor);
+                setSelectedSponsorParam(sponsor.id);
                 setScanning(false);
               }}
             />
@@ -162,9 +217,9 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
                 sponsorId={current.id}
                 sponsorName={current.name}
                 onExit={() => {
-                  if (!navigator.onLine || scannerTransportUnavailable.value) return;
                   setScanning(false);
-                  setListVersion((value) => value + 1);
+                  if (navigator.onLine) setListVersion((value) => value + 1);
+                  setRestoreFocus(true);
                 }}
                 operatorUserId={portalSession.value?.identity.id ?? ""}
                 allowedActions={["lead"]}
@@ -286,7 +341,11 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
             ) : (
               <div class="pk-stack">
                 <p role="status">Reconnect to view current consenting contacts.</p>
-                {current.canCapture && <Button onClick={() => setScanning(true)}>Scan leads</Button>}
+                {current.canCapture && (
+                  <Button aria-label="Scan leads" onClick={() => setScanning(true)}>
+                    Scan leads
+                  </Button>
+                )}
               </div>
             )
           ) : (

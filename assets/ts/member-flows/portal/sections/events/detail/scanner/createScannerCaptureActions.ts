@@ -60,6 +60,7 @@ interface ScannerCaptureActions {
   setFastMode: (value: boolean) => void;
   consentConfirmed: boolean;
   showProvisionalMessage: Feedback["showProvisionalMessage"];
+  rememberCaptureRequest?: (scan: EventScanRequest) => void;
 }
 
 /** Manual confirmation and decoded QR capture share the existing persistence and feedback boundary. */
@@ -97,6 +98,7 @@ export function createScannerCaptureActions({
   setFastMode,
   consentConfirmed,
   showProvisionalMessage,
+  rememberCaptureRequest,
 }: ScannerCaptureActions) {
   async function capture() {
     if (!requestCapture() || manualCapturePending.current || collection.held.current) return;
@@ -114,6 +116,7 @@ export function createScannerCaptureActions({
       setResult(action === "lead" ? null : unknownScanResponse(operationId));
       return;
     }
+    rememberCaptureRequest?.(checked.data);
     collection.begin(checked.data.badgeId);
     manualCapturePending.current = true;
     setBusy(true);
@@ -131,8 +134,12 @@ export function createScannerCaptureActions({
         void camera();
       }
     } catch (error) {
-      if (!persisted && error instanceof ScannerCapturePersistenceError && error.retryAllowed) collection.clear();
-      failure(error instanceof Error ? error.message : "Unable to save this scan. Keep the attendee here and retry.");
+      const retryable = !persisted && error instanceof ScannerCapturePersistenceError && error.retryAllowed;
+      if (retryable) collection.clear();
+      failure(
+        error instanceof Error ? error.message : "Unable to save this scan. Keep the attendee here and retry.",
+        retryable,
+      );
     } finally {
       manualCapturePending.current = false;
       setBusy(false);
@@ -186,6 +193,7 @@ export function createScannerCaptureActions({
     }
     if (fromCamera && !badgeCamera.acceptsFrame(parsed.data.badgeId)) return;
     if (fastMode && !cooldown.accept()) return;
+    rememberCaptureRequest?.(parsed.data);
     collection.begin(parsed.data.badgeId);
     const operation = parsed.data.operationId;
     lastOperation.current = operation;
@@ -200,11 +208,12 @@ export function createScannerCaptureActions({
       resetCaptureFields();
       if (fastMode) cooldown.feedback();
     } catch (error) {
-      if (!persisted && error instanceof ScannerCapturePersistenceError && error.retryAllowed) collection.clear();
+      const retryable = !persisted && error instanceof ScannerCapturePersistenceError && error.retryAllowed;
+      if (retryable) collection.clear();
       setBadge(raw);
       if (fastMode && receiptMatchesOperation(operation, lastOperation.current)) cooldown.feedback();
       if (receiptMatchesOperation(operation, lastOperation.current))
-        failure(error instanceof Error ? error.message : "Unable to save scan. Retry.");
+        failure(error instanceof Error ? error.message : "Unable to save scan. Retry.", retryable);
     }
   }
   return { capture, scanCredential };

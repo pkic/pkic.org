@@ -208,6 +208,9 @@ export function tokenAllowsPermission(actor: AuthAdmin, permission: string): boo
     (scannerLegacyCompatible(permission) && actor.scopes?.includes("agenda:scan") === true)
   );
 }
+export function requireTokenPermission(actor: AuthAdmin, permission: string): void {
+  if (!tokenAllowsPermission(actor, permission)) throw new AppError(403, "SCOPE_REQUIRED", PERMISSION_DENIED_MESSAGE);
+}
 export function hasPermission(actor: AuthAdmin, permission: string, context?: PermissionContext): boolean {
   if (!tokenAllowsPermission(actor, permission)) {
     return false;

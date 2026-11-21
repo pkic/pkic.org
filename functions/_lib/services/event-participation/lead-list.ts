@@ -20,6 +20,8 @@ import { sponsorLeadPermissionBindings, sponsorLeadPermissionSql } from "./lead-
 import { contactAffiliation } from "../../email-domains/contact-kind";
 import { activeEventSponsorSql, sponsorLeadViewerPredicateSql } from "../../auth/sponsor-organization-lead-access";
 import { activeSponsorCaptureSql, activeSponsorLeadOriginSql, activeSponsorLeadSql } from "./sponsor-lead-active";
+import { requireTokenPermission, tokenAllowsPermission } from "../../auth/permissions";
+import type { UserBackedAuthAdmin } from "../../types";
 
 type LeadReadScope = "all" | "mine";
 
@@ -28,17 +30,22 @@ async function resolveSponsorLeadReadScope(
   db: DatabaseLike,
   eventId: string,
   sponsorId: string,
-  operatorUserId: string,
+  actor: UserBackedAuthAdmin,
 ): Promise<LeadReadScope> {
+  const canView = tokenAllowsPermission(actor, "agenda:leads_view");
+  const canCapture = tokenAllowsPermission(actor, "agenda:leads_capture");
+  if (!canView && !canCapture) requireTokenPermission(actor, "agenda:leads_view");
   const all = sponsorLeadPermissionSql("agenda:leads_view", "sponsor.id");
   const mine = sponsorLeadPermissionSql("agenda:leads_capture", "sponsor.id");
   const row = await first<{ scope: LeadReadScope | null }>(
     db,
-    `SELECT CASE WHEN (${all}) THEN 'all' WHEN (${mine}) THEN 'mine' END AS scope
+    `SELECT CASE WHEN ? AND (${all}) THEN 'all' WHEN ? AND (${mine}) THEN 'mine' END AS scope
      FROM sponsorships sponsor WHERE sponsor.id=? AND sponsor.event_id=? AND ${activeEventSponsorSql("sponsor")}`,
     [
-      ...sponsorLeadPermissionBindings("agenda:leads_view", operatorUserId),
-      ...sponsorLeadPermissionBindings("agenda:leads_capture", operatorUserId),
+      canView ? 1 : 0,
+      ...sponsorLeadPermissionBindings("agenda:leads_view", actor.id),
+      canCapture ? 1 : 0,
+      ...sponsorLeadPermissionBindings("agenda:leads_capture", actor.id),
       sponsorId,
       eventId,
     ],
@@ -54,11 +61,12 @@ export async function listSponsorLeads(
   db: DatabaseLike,
   eventId: string,
   sponsorId: string,
-  operatorUserId: string,
+  actor: UserBackedAuthAdmin,
   query: SponsorLeadQuery,
   leadId?: string,
 ) {
-  const readScope = await resolveSponsorLeadReadScope(db, eventId, sponsorId, operatorUserId);
+  const operatorUserId = actor.id;
+  const readScope = await resolveSponsorLeadReadScope(db, eventId, sponsorId, actor);
   await assertEventContactAccess(db, eventId);
   const permission = readScope === "all" ? "agenda:leads_view" : "agenda:leads_capture";
   const scope = sponsorLeadPermissionSql(permission, "sponsor.id");
@@ -124,9 +132,9 @@ export async function getSponsorLead(
   eventId: string,
   sponsorId: string,
   leadId: string,
-  operatorUserId: string,
+  actor: UserBackedAuthAdmin,
 ) {
-  const result = await listSponsorLeads(db, eventId, sponsorId, operatorUserId, { limit: 1, offset: 0 }, leadId);
+  const result = await listSponsorLeads(db, eventId, sponsorId, actor, { limit: 1, offset: 0 }, leadId);
   const lead = result.leads[0];
   if (!lead) throw new AppError(404, "LEAD_NOT_FOUND", "Current consenting lead not found.");
   return sponsorLeadDetailSchema.parse({ lead, sponsorName: lead.sponsorName });
@@ -136,14 +144,22 @@ export async function getSponsorLead(
 export async function listLeadSponsors(
   db: DatabaseLike,
   eventId: string,
-  operatorUserId: string,
+  actor: UserBackedAuthAdmin,
   query: SponsorLeadSponsorsQuery,
 ) {
   const name = "COALESCE(org.name,sponsor.non_member_name,sponsor.contact_name,'Unspecified sponsor')";
   const search = query.q ? buildD1TextSearchFilter(query.q, [name]) : null;
   const permissions = ["agenda:leads_view", "agenda:leads_capture", "agenda:leads_export"] as const;
-  const expressions = permissions.map((permission) => sponsorLeadPermissionSql(permission, "sponsor.id"));
-  const values = permissions.flatMap((permission) => sponsorLeadPermissionBindings(permission, operatorUserId));
+  const expressions = permissions.map((permission) =>
+    tokenAllowsPermission(actor, permission) ? sponsorLeadPermissionSql(permission, "sponsor.id") : "0",
+  );
+  const values = permissions.flatMap((permission) =>
+    tokenAllowsPermission(actor, permission) ? sponsorLeadPermissionBindings(permission, actor.id) : [],
+  );
+  const canRemoveAll = tokenAllowsPermission(actor, "agenda:leads_view")
+    ? sponsorLeadViewerPredicateSql("?", "sponsor")
+    : "0";
+  const removeBindings = canRemoveAll === "0" ? [] : [actor.id];
   const { rows, total } = await queryPage<{
     id: string;
     name: string;
@@ -158,12 +174,20 @@ export async function listLeadSponsors(
         (SELECT COUNT(*) FROM event_sponsor_leads saved WHERE saved.event_id=sponsor.event_id AND saved.sponsor_id=sponsor.id
           AND ${activeSponsorLeadSql("saved")}) AS capturedCount,
         (${expressions[0]}) AS canView,(${expressions[1]}) AS canCapture,(${expressions[2]}) AS canExport,
-        (${sponsorLeadViewerPredicateSql("?", "sponsor")}) AS canRemoveAll`,
+        (${canRemoveAll}) AS canRemoveAll`,
       fromSql: `FROM sponsorships sponsor LEFT JOIN organizations org ON org.id=sponsor.organization_id
         WHERE sponsor.event_id=? AND ${activeEventSponsorSql("sponsor")}
+        ${query.sponsorId ? "AND sponsor.id=?" : ""}
         AND (${expressions.map((expression) => `(${expression})`).join(" OR ")}) ${search ? `AND ${search.sql}` : ""}`,
-      bindings: [...values, operatorUserId, eventId, ...values, ...(search?.bindings ?? [])],
-      countBindings: [eventId, ...values, ...(search?.bindings ?? [])],
+      bindings: [
+        ...values,
+        ...removeBindings,
+        eventId,
+        ...(query.sponsorId ? [query.sponsorId] : []),
+        ...values,
+        ...(search?.bindings ?? []),
+      ],
+      countBindings: [eventId, ...(query.sponsorId ? [query.sponsorId] : []), ...values, ...(search?.bindings ?? [])],
     },
     orderBy: resolveMappedOrderBy(query.sort, { name }, `${name} ASC`, "sponsor.id ASC"),
     limit: query.limit,
@@ -192,10 +216,11 @@ export async function listSponsorLeadCaptures(
   eventId: string,
   sponsorId: string,
   leadId: string,
-  operatorUserId: string,
+  actor: UserBackedAuthAdmin,
   query: SponsorLeadCapturesQuery,
 ) {
-  const readScope = await resolveSponsorLeadReadScope(db, eventId, sponsorId, operatorUserId);
+  const operatorUserId = actor.id;
+  const readScope = await resolveSponsorLeadReadScope(db, eventId, sponsorId, actor);
   await assertEventContactAccess(db, eventId);
   const permission = readScope === "all" ? "agenda:leads_view" : "agenda:leads_capture";
   const scope = sponsorLeadPermissionSql(permission, "sponsor.id");

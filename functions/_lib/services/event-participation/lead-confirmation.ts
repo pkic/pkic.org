@@ -10,6 +10,7 @@ import { eventContactAccessSql } from "./evidence-retention";
 import { sponsorConsentSql } from "./sponsor-consent";
 import { sponsorLeadPermissionBindings, sponsorLeadPermissionSql } from "./lead-scope";
 import { activeSponsorCaptureSql } from "./sponsor-lead-active";
+import { activeEventSponsorSql } from "../../auth/sponsor-organization-lead-access";
 
 type LeadConfirmationRow = { name: string | null; title: string | null; organization: string | null };
 
@@ -35,7 +36,7 @@ function prepareSponsorLeadConfirmation(
       AND attempt.action='lead' AND attempt.outcome='eligible' AND reg.status='registered'
       AND ${activeSponsorCaptureSql("attempt")}
       AND person.active=1 AND person.pii_redacted_at IS NULL AND person.merged_into_user_id IS NULL
-      AND sponsor.sponsor_type='event' AND sponsor.pipeline_stage='active'
+      AND ${activeEventSponsorSql("sponsor")}
       AND ${sponsorConsentSql("reg")} AND ${eventContactAccessSql("attempt.event_id")}
       AND (${sponsorLeadPermissionSql("agenda:leads_capture", "sponsor.id")})`)
     .bind(

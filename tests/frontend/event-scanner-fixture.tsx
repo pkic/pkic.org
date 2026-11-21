@@ -172,6 +172,7 @@ export async function mount(
   actions: EventScanRequest["action"][] = ["check"],
   sponsorId?: string,
   printHref?: string,
+  canAdmitExceptions = false,
 ) {
   mocks.ready = ready;
   mocks.state = ready ? "open" : "preparing";
@@ -189,6 +190,7 @@ export async function mount(
         allowedActions={actions}
         sponsorId={sponsorId}
         printHref={printHref}
+        canAdmitExceptions={canAdmitExceptions}
       />,
       host,
     );

@@ -37,6 +37,7 @@ export function EventScannerCapture(props: EventScannerProps) {
     message,
     setMessage,
     captureStatus,
+    failed,
     leadConfirmation,
     form,
     busy,
@@ -86,6 +87,8 @@ export function EventScannerCapture(props: EventScannerProps) {
     manualOpen,
     recentVisible,
     collectionDisplay,
+    exceptionRequest,
+    onExceptionConfirm,
   } = controls;
   const {
     preferences,
@@ -282,9 +285,12 @@ export function EventScannerCapture(props: EventScannerProps) {
         <FastScannerView
           collection={collectionDisplay}
           needsAdvance={needsAdvance}
+          failed={failed}
           leadConsentConfirmed={consentConfirmed}
           leadConfirmation={leadConfirmation?.operationId === result?.operationId ? leadConfirmation : null}
           onNextBadge={nextCollectionAttendee}
+          exceptionRequest={exceptionRequest}
+          onExceptionConfirm={onExceptionConfirm}
           taskSwitchDisabled={busy || cooldown.saving}
           presentation={presentation}
           onPresentation={togglePresentation}
@@ -314,7 +320,9 @@ export function EventScannerCapture(props: EventScannerProps) {
           onCameraRetry={collection.waiting ? undefined : () => void camera()}
           onManual={collection.waiting ? undefined : manualControls.onOpen}
           manualLabel={action === "lead" || offline ? "Enter badge code" : undefined}
-          manualEntry={manualOpen ? <ScannerManualControls {...manualControls} inline /> : undefined}
+          manualEntry={
+            manualOpen ? <ScannerManualControls {...manualControls} inline error={failed ? message : ""} /> : undefined
+          }
           onRecentScans={collectorContext || badgeCollection ? undefined : showRecentScans}
           recentScans={recentVisible ? recentScans : undefined}
           onReturnToScanning={() => {

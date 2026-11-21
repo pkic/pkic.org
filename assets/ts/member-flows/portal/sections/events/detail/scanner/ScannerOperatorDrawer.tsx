@@ -12,6 +12,7 @@ import { scanEligibilityLabel } from "./scan-stream";
 import { trapScannerDrawerTab } from "./scanner-gestures";
 import { ScannerExceptionReview } from "./ScannerExceptionReview";
 import { ScannerPreparationStatus } from "./ScannerPreparationStatus";
+import { formatNumber } from "../../../../../../../shared/format-number";
 
 /** Detailed status and recovery actions stay in the operator drawer, away from the camera view. */
 export function ScannerOperatorDrawer({
@@ -124,7 +125,7 @@ export function ScannerOperatorDrawer({
           <div>
             <dt>Uploads</dt>
             <dd>
-              {pending} pending{uploadStatus && <small>{uploadStatus}</small>}
+              {formatNumber(pending)} pending{uploadStatus && <small>{uploadStatus}</small>}
             </dd>
           </div>
           <div>

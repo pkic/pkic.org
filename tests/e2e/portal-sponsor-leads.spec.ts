@@ -153,7 +153,8 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
   await expect(sponsorPicker).toBeVisible();
   await sponsorPicker.click();
   await page.getByRole("option", { name: "Second sponsor", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Second sponsor", exact: true })).toBeVisible();
+  await expect(sponsorPicker).toHaveValue("Second sponsor");
+  await expect(page.getByRole("region", { name: "Consenting leads", exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Event app", exact: true })).toBeVisible();
   await page.screenshot({ path: info.outputPath("sponsor-lead-switcher-phone.png") });
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -162,6 +163,7 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
   await page.screenshot({ path: info.outputPath("sponsor-lead-switcher-desktop.png") });
   multipleSponsors = false;
   await page.reload();
+  await expect(page.getByRole("combobox", { name: "Sponsor", exact: true })).toHaveCount(0);
   await page.getByRole("searchbox", { name: "Search consenting leads", exact: true }).fill("Synthetic");
   await page.getByRole("searchbox", { name: "Search consenting leads", exact: true }).press("Enter");
   await expect

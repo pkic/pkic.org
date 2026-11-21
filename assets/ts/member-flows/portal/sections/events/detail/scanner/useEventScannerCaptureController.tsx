@@ -38,6 +38,7 @@ import { scannerPreparationRefusal } from "./scanner-offline-context";
 import { useScannerCaptureLifecycle } from "./useScannerCaptureLifecycle";
 import { useBadgeCollectionPrinting } from "./useBadgeCollectionPrinting";
 import { useSponsorLeadConfirmation } from "./useSponsorLeadConfirmation";
+import { useScannerAdmissionException } from "./useScannerAdmissionException";
 export function useEventScannerCaptureController({
   slug,
   printHref,
@@ -49,6 +50,7 @@ export function useEventScannerCaptureController({
   collectorContext,
   onSignIn,
   onExit,
+  canAdmitExceptions = false,
 }: EventScannerProps) {
   const refusePreparation = scannerPreparationRefusal(portalSession.value, operatorUserId);
   const [badgeId, setBadge] = useState("");
@@ -243,6 +245,7 @@ export function useEventScannerCaptureController({
     collectionPrinting.clear();
     collection.clear();
     lastOperation.current = null;
+    admissionException.clear();
     cancelVerification();
     cooldown.reset();
     clearFeedback();
@@ -279,6 +282,18 @@ export function useEventScannerCaptureController({
     !closedMessage &&
     !authorityPaused.current &&
     (!badgeCollection || manifestReady || Boolean(collectorContext));
+  const admissionException = useScannerAdmissionException({
+    allowed: canAdmitExceptions && allowedActions.includes("exception"),
+    action,
+    result,
+    captureAllowed,
+    persistCapture,
+    scanSaved,
+    lastOperation,
+    presentSavedEligibility,
+    verifyQueuedScan,
+    setBusy,
+  });
   function requestCapture() {
     if (action === "lead" && needsAdvance) return false;
     if (!captureAllowed()) {
@@ -322,7 +337,9 @@ export function useEventScannerCaptureController({
     setFastMode,
     consentConfirmed,
     showProvisionalMessage,
+    rememberCaptureRequest: admissionException.remember,
   });
+  const exceptionRequest = admissionException.request;
   async function camera(permissionAcknowledged = consentConfirmed) {
     if ((action === "lead" && !permissionAcknowledged) || !captureReady || badgeCamera.starting) return;
     if (closedMessage || authorityPaused.current) return;
@@ -331,7 +348,8 @@ export function useEventScannerCaptureController({
   const resumeCamera = useRef<() => void>(() => {});
   const pauseCamera = useRef<() => void>(() => {});
   resumeCamera.current = () => {
-    if (fastMode && !manualOpen && !recentVisible && !collection.waiting && captureReady) void camera();
+    if (fastMode && !manualOpen && !recentVisible && !collection.waiting && !needsAdvance && captureReady)
+      void camera();
   };
   pauseCamera.current = badgeCamera.stop;
   useEffect(() => {
@@ -410,7 +428,8 @@ export function useEventScannerCaptureController({
     badgeCamera.stop();
     cooldown.reset();
     lastOperation.current = null;
-    setResult(null);
+    admissionException.clear();
+    clearFeedback();
     if (!result && !failed && message === scannerStartMessage(false, false, action)) setMessage("Ready to scan");
     manual.reset();
     setFastMode(false);
@@ -503,6 +522,7 @@ export function useEventScannerCaptureController({
       message,
       setMessage,
       captureStatus,
+      failed,
       leadConfirmation,
       form,
       busy,
@@ -552,6 +572,8 @@ export function useEventScannerCaptureController({
       manualOpen,
       recentVisible,
       collectionDisplay,
+      exceptionRequest,
+      onExceptionConfirm: exceptionRequest ? admissionException.confirm : undefined,
     },
     status: {
       preferences,

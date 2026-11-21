@@ -231,6 +231,18 @@ describe("sponsor lead event discovery", () => {
     expect(confirmation.status, await confirmation.clone().text()).toBe(200);
     expect(confirmation.headers.get("cache-control")).toContain("no-store");
     expect(sponsorLeadConfirmationSchema.parse(await confirmation.json())).toMatchObject({ name: "Alex Example" });
+    await env.DB.prepare(
+      "INSERT INTO permission_grants(id,user_id,permission,context_type,context_id,created_at) VALUES(?,?,'agenda:leads_capture','event_sponsor',?,?)",
+    )
+      .bind(crypto.randomUUID(), representative.userId, sponsorId, now)
+      .run();
+    await env.DB.prepare("UPDATE sponsorships SET renewal_date='2000-01-01' WHERE id=?").bind(sponsorId).run();
+    expect((await request(confirmationPath, token)).status).toBe(404);
+    await env.DB.prepare("UPDATE sponsorships SET renewal_date=NULL,ended_reason='cancelled' WHERE id=?")
+      .bind(sponsorId)
+      .run();
+    expect((await request(confirmationPath, token)).status).toBe(404);
+    await env.DB.prepare("UPDATE sponsorships SET ended_reason=NULL WHERE id=?").bind(sponsorId).run();
     expect((await request(confirmationPath, outsiderToken)).status).toBe(403);
     await env.DB.prepare(
       "INSERT INTO permission_grants(id,user_id,permission,context_type,context_id,created_at) VALUES(?,?,'agenda:leads_capture','event_sponsor',?,?)",
@@ -255,6 +267,11 @@ describe("sponsor lead event discovery", () => {
       .bind(now, registrationId)
       .run();
     expect((await request(confirmationPath, token)).status).toBe(404);
+    await env.DB.prepare(
+      "DELETE FROM permission_grants WHERE user_id=? AND context_id=? AND permission='agenda:leads_capture'",
+    )
+      .bind(representative.userId, sponsorId)
+      .run();
     await env.DB.prepare("UPDATE identities SET ended_at=? WHERE id=?").bind(now, representative.identityId).run();
     expect((await request(confirmationPath, token)).status).toBe(403);
     expect((await request("/pqc-2026", token)).status).toBe(404);

@@ -243,7 +243,7 @@ export function useScannerOfflinePreparation(
         eventId: lease.eventId,
         deviceId: epoch.deviceId,
         epochId: epoch.epochId,
-        writtenAt: Date.parse(lease.serverNow),
+        writtenAt: epoch.leadLeaseReceivedAt ?? Math.min(Date.now(), Date.parse(lease.serverNow)),
       },
       occurrenceId: null,
       roomId: null,
@@ -251,7 +251,16 @@ export function useScannerOfflinePreparation(
       serverNow: lease.serverNow,
       expiresAt: lease.expiresAt,
     };
-  }, [action, manifest, epoch?.leadLease, epoch?.epochId, epoch?.deviceId, session, sponsorId]);
+  }, [
+    action,
+    manifest,
+    epoch?.leadLease,
+    epoch?.leadLeaseReceivedAt,
+    epoch?.epochId,
+    epoch?.deviceId,
+    session,
+    sponsorId,
+  ]);
   const prepareCode = useContext(ScannerCodePreparation);
   const route = scannerCollectorPath(window.location.hash);
   const hasExpectedScope = expectedScope !== undefined;

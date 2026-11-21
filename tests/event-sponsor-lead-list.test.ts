@@ -43,6 +43,7 @@ const eventId = crypto.randomUUID(),
   foreignSponsor = crypto.randomUUID(),
   foreignEvent = crypto.randomUUID(),
   operator = crypto.randomUUID();
+const leadActor = (id: string) => ({ identityType: "user" as const, id, email: "" });
 let token: string;
 async function request(path = `/sponsors/${sponsorId}/leads`, query = "") {
   return callApi(env, `/api/v1/events/live-leads${path}${query}`, { headers: { Authorization: `Bearer ${token}` } });
@@ -612,12 +613,12 @@ describe("sponsor live lead viewing through the mounted API", () => {
     await env.DB.prepare("UPDATE permission_grants SET revoked_at='2026-10-04T10:00:00.000Z'").run();
     expect((await request()).status).toBe(403);
     await expect(
-      listSponsorLeads(env.DB, eventId, sponsorId, operator, sponsorLeadQuerySchema.parse({})),
+      listSponsorLeads(env.DB, eventId, sponsorId, leadActor(operator), sponsorLeadQuerySchema.parse({})),
     ).rejects.toMatchObject({ status: 403 });
     await env.DB.prepare("UPDATE permission_grants SET revoked_at=NULL,expires_at='2000-01-01T00:00:00.000Z'").run();
     expect((await request()).status).toBe(403);
     await expect(
-      listSponsorLeads(env.DB, eventId, sponsorId, operator, sponsorLeadQuerySchema.parse({})),
+      listSponsorLeads(env.DB, eventId, sponsorId, leadActor(operator), sponsorLeadQuerySchema.parse({})),
     ).rejects.toMatchObject({ status: 403 });
     await env.DB.prepare("UPDATE permission_grants SET expires_at=NULL,permission='agenda:leads_capture'").run();
     const ownScans = await request();
@@ -627,11 +628,21 @@ describe("sponsor live lead viewing through the mounted API", () => {
       "UPDATE permission_grants SET permission='agenda:leads_view',context_type=NULL,context_id=NULL",
     ).run();
     await expect(
-      listSponsorLeads(env.DB, eventId, sponsorId, operator, sponsorLeadQuerySchema.parse({})),
+      listSponsorLeads(env.DB, eventId, sponsorId, leadActor(operator), sponsorLeadQuerySchema.parse({})),
     ).rejects.toMatchObject({ status: 403 });
     const discovery = await request("/sponsors/leads");
     expect(discovery.status).toBe(200);
     expect(sponsorLeadSponsorsSchema.parse(await discovery.json()).sponsors).toEqual([]);
+  });
+  it("limits sponsor lead reads and discovery to a delegated token's scopes", async () => {
+    await grant("agenda:leads_capture");
+    const captureActor = { ...leadActor(operator), scopeRestricted: true, scopes: ["agenda:leads_capture"] };
+    const own = await listSponsorLeads(env.DB, eventId, sponsorId, captureActor, sponsorLeadQuerySchema.parse({}));
+    expect(own.leads).toEqual([]);
+    const restricted = { ...leadActor(operator), scopeRestricted: true, scopes: ["agenda:attendance_read"] };
+    await expect(
+      listSponsorLeads(env.DB, eventId, sponsorId, restricted, sponsorLeadQuerySchema.parse({})),
+    ).rejects.toMatchObject({ code: "SCOPE_REQUIRED" });
   });
   it("excludes consent changes, inactive attendees and cancelled registrations on every refresh", async () => {
     await env.DB.prepare(
@@ -655,7 +666,7 @@ describe("sponsor live lead viewing through the mounted API", () => {
     await grant("agenda:leads_view", "event_sponsor", foreignSponsor);
     expect((await request(`/sponsors/${foreignSponsor}/leads`)).status).toBe(404);
     await expect(
-      listSponsorLeads(env.DB, foreignEvent, sponsorId, operator, sponsorLeadQuerySchema.parse({})),
+      listSponsorLeads(env.DB, foreignEvent, sponsorId, leadActor(operator), sponsorLeadQuerySchema.parse({})),
     ).rejects.toMatchObject({ status: 404 });
     await env.DB.prepare("UPDATE sponsorships SET renewal_date='2025-01-01' WHERE id=?").bind(sponsorId).run();
     expect((await request()).status).toBe(404);
@@ -793,7 +804,7 @@ it("rechecks contact expiry in the same page/count batch after a successful pref
     raced,
     eventId,
     sponsorId,
-    operator,
+    leadActor(operator),
     sponsorLeadQuerySchema.parse({ q: "Person", limit: 1 }),
   );
   expect(result.leads).toEqual([]);

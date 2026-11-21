@@ -3,6 +3,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SponsorLeads } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/SponsorLeads";
 import { SponsorLeadDetail } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/SponsorLeadDetail";
+import { formatDateTimeInZone } from "../../assets/shared/format-date";
 const id = "10000000-0000-4000-8000-000000000001";
 const page = { limit: 25, offset: 0, total: 1, hasMore: false };
 const hosts: HTMLElement[] = [];
@@ -65,6 +66,7 @@ afterEach(async () => {
     host.remove();
   }
   vi.unstubAllGlobals();
+  window.location.hash = "";
 });
 describe("Live sponsor leads", () => {
   it("uses the shared list controls without offering empty row actions to a view-only reader", async () => {
@@ -124,6 +126,12 @@ describe("Live sponsor leads", () => {
     await act(() => second.click());
     await vi.waitFor(() => expect(host.textContent).toContain("Consenting leads"));
     expect(selector.value).toBe("Second sponsor");
+    expect(window.location.hash).toContain(`leadSponsor=${secondId}`);
+    await act(() => render(null, host));
+    await act(() => render(<SponsorLeads slug="event" timeZone="UTC" />, host));
+    await vi.waitFor(() =>
+      expect(host.querySelector<HTMLInputElement>('input[role="combobox"]')?.value).toBe("Second sponsor"),
+    );
   });
   it("shows an operator only their own scans and keeps export separate", async () => {
     const first = await mount(false, true);
@@ -222,6 +230,14 @@ describe("Live sponsor leads", () => {
     expect(fetcher.mock.calls.at(-1)?.[0]).toContain(`/leads/${id}/captures`);
     expect(detailHost.textContent).toContain("Scanned at");
     expect(detailHost.textContent).toContain("Uploaded at");
+    const headings = [...detailHost.querySelectorAll("th")].map((cell) => cell.textContent?.trim());
+    const cells = [...detailHost.querySelectorAll("tbody tr:first-child td")];
+    expect(cells[headings.findIndex((heading) => heading?.startsWith("Scanned at"))]?.textContent).toContain(
+      formatDateTimeInZone("2030-01-01T09:00:00.000Z", "UTC"),
+    );
+    expect(cells[headings.findIndex((heading) => heading?.startsWith("Uploaded at"))]?.textContent).toContain(
+      formatDateTimeInZone("2030-01-01T11:00:00.000Z", "UTC"),
+    );
   });
   it("removes contacts from the DOM when the live view is hidden", async () => {
     const { host } = await mount(true);

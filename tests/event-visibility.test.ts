@@ -542,6 +542,23 @@ describe("scoped scanner event discovery", () => {
     await env.DB.prepare("UPDATE permission_grants SET revoked_at=? WHERE id=?").bind(now, id).run();
     expect((await requestAudienceList("/api/v1/events", token)).events).toEqual([]);
   });
+  it("lets a verified sponsor mailbox contact discover only its invitation-only event", async () => {
+    const userId = await insertUser(env.DB, "contact@synthetic.test");
+    const token = await createAdminSession(env.DB, userId, "sponsor-mailbox-discovery");
+    const own = await insertEvent("mailbox-private", "invitation_only");
+    await insertEvent("other-mailbox-private", "invitation_only");
+    const sponsorId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    await env.DB.prepare(
+      "INSERT INTO sponsorships(id,sponsor_type,event_id,non_member_name,contact_email,pipeline_stage,created_at,updated_at) VALUES(?,'event',?,'Mailbox sponsor','contact@synthetic.test','active',?,?)",
+    )
+      .bind(sponsorId, own, now, now)
+      .run();
+    const list = await requestAudienceList("/api/v1/events", token);
+    expect(list.events.map((event) => event.slug)).toEqual(["mailbox-private"]);
+    expect(list.events[0]?.sponsorLeadAccess).toBe(true);
+    expect((await request("/api/v1/events/other-mailbox-private", token)).status).toBe(404);
+  });
   it.each(["agenda:leads_view", "agenda:leads_export", "agenda:leads_capture"])(
     "discovers contacts only for an exact active view/export scope, independent of %s capture access",
     async (permission) => {

@@ -16,7 +16,6 @@ import { portalHasPermissionAtAnyScope } from "../../shell/portal-navigation";
 import { canOpenGroupWorkspace } from "./event-destination";
 import type { PortalSession } from "../../types";
 import { createScannerEventBootstrap } from "./detail/scanner/scanner-event-bootstrap";
-import { scannerTransportUnavailable } from "./detail/scanner/scanner-offline-context";
 import { databaseIdSchema } from "../../../../../shared/schemas/identifiers";
 import { readHashQueryParam } from "../../../../ui/url-query";
 import { ScannerEventNavigation } from "./ParticipantEventNavigation";
@@ -135,8 +134,7 @@ function ScopedScannerRoute({ slug, sponsorId }: { slug: string; sponsorId?: str
           onExit={
             sponsorId
               ? () => {
-                  if (navigator.onLine && !scannerTransportUnavailable.value)
-                    navigate(`/events/${encodeURIComponent(slug)}/leads`);
+                  navigate(`/events/${encodeURIComponent(slug)}/leads`);
                 }
               : undefined
           }

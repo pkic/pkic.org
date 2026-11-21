@@ -6,11 +6,10 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: safe center;
     gap: var(--pk-4);
     min-height: 100dvh;
-    padding: max(var(--pk-6), env(safe-area-inset-top)) var(--pk-4)
-      max(var(--pk-6), env(safe-area-inset-bottom));
+    padding: max(var(--pk-6), env(safe-area-inset-top)) var(--pk-4) max(var(--pk-6), env(safe-area-inset-bottom));
     overflow: auto;
     background: var(--pk-pqc-field);
     box-sizing: border-box;

@@ -22,7 +22,9 @@ export const sponsorLeadRemovalResponseSchema = z.object({
   removedCaptures: z.number().int().positive(),
   remainingCaptures: z.number().int().nonnegative(),
 });
-export const sponsorLeadSponsorsQuerySchema = listQuerySchema(["name"] as const, { maxLimit: 100 });
+export const sponsorLeadSponsorsQuerySchema = listQuerySchema(["name"] as const, { maxLimit: 100 }).extend({
+  sponsorId: databaseIdSchema.optional(),
+});
 export const sponsorLeadSponsorSchema = z.object({
   id: databaseIdSchema,
   name: z.string(),

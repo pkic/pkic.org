@@ -2,6 +2,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, expect, it, vi } from "vitest";
 import { scannerOfflineContextSchema } from "../../assets/shared/schemas/event-scanner-offline-context";
+import { scannerCollectorPath } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-offline-context";
 
 const mocks = vi.hoisted(() => ({ list: vi.fn(), restore: vi.fn() }));
 vi.mock(
@@ -14,7 +15,7 @@ vi.mock(
 );
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/EventScanner", () => ({
   EventScanner: ({ sponsorId, allowedActions }: { sponsorId?: string; allowedActions: string[] }) => (
-    <p data-sponsor-id={sponsorId} data-scanner-action={allowedActions[0]}>
+    <p data-sponsor-id={sponsorId} data-scanner-actions={JSON.stringify(allowedActions)}>
       Saved scanner opened
     </p>
   ),
@@ -92,11 +93,16 @@ it("offers a named sponsor lead scanner and restores only that sponsor's capture
   expect(entry.textContent).toContain("Example sponsor");
   expect(entry.getAttribute("href")).toContain(`offlineContext=${prepared.contextId}`);
   window.location.hash = entry.getAttribute("href")!;
+  const selectedRoute = scannerCollectorPath(window.location.hash);
+  expect(selectedRoute).toBe(prepared.route);
   mocks.restore.mockResolvedValue(prepared);
-  await act(() => render(<OfflineScannerBootstrap route={prepared.route} onSignIn={() => {}} />, host));
+  await act(() => render(<OfflineScannerBootstrap route={selectedRoute} onSignIn={() => {}} />, host));
   await vi.waitFor(() => expect(host.querySelector("[data-sponsor-id]")).not.toBeNull());
   expect(host.querySelector("[data-sponsor-id]")?.getAttribute("data-sponsor-id")).toBe(sponsorId);
-  expect(host.querySelector("[data-scanner-action]")?.getAttribute("data-scanner-action")).toBe("lead");
+  expect(JSON.parse(host.querySelector("[data-scanner-actions]")!.getAttribute("data-scanner-actions")!)).toEqual([
+    "lead",
+  ]);
+  expect(mocks.restore).toHaveBeenCalledWith(prepared.route);
 });
 
 it("lists each prepared scanner task with its own link", async () => {

@@ -56,6 +56,12 @@ describe("offline sponsor lead context", () => {
     const sponsorId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
     const leadRoute = `/events/${slug}/sponsors/${sponsorId}/scanner`;
     const leadLease = { eventId, sponsorId, serverNow: now, expiresAt: manifest().expiresAt };
+    const source = {
+      ...manifest(),
+      occurrenceId: null,
+      roomId: null,
+      attendeeInventory: [{ badgeId: "NEVER_STORE_THIS_BADGE", name: "Never Store" }],
+    };
     window.location.hash = `#${leadRoute}`;
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
     const prepared = await saveScannerOfflineContext({
@@ -63,14 +69,15 @@ describe("offline sponsor lead context", () => {
       slug,
       session,
       epoch: { ...epoch(), leadLease },
-      manifest: { ...manifest(), occurrenceId: null, roomId: null },
+      manifest: source,
       action: "lead",
       sponsorId,
       targetLabel: "Synthetic sponsor",
       allowedActions: ["lead"],
     });
     expect(prepared).toMatchObject({ action: "lead", sponsorId, route: leadRoute });
-    expect(JSON.stringify(mocks.rows)).not.toContain("attendee");
+    expect(JSON.stringify(mocks.rows)).not.toContain("NEVER_STORE_THIS_BADGE");
+    expect(mocks.rows[0]!.collectorContext).toMatchObject({ sponsorId, action: "lead" });
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
     expect(await listPreparedScannerContexts()).toEqual([prepared]);
     expect(await restoreScannerOfflineContext(leadRoute)).toMatchObject({ sponsorId, action: "lead" });
@@ -84,8 +91,13 @@ describe("offline sponsor lead context", () => {
     const sponsorId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
     window.location.hash = `#/events/${slug}/sponsors/${sponsorId}/scanner`;
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
-    const leadLease = { eventId, sponsorId, serverNow: now, expiresAt: manifest().expiresAt };
-    const enrolled = { ...epoch(), leadLease };
+    const leadLease = {
+      eventId,
+      sponsorId,
+      serverNow: new Date(Date.parse(now) + 300_000).toISOString(),
+      expiresAt: manifest().expiresAt,
+    };
+    const enrolled = { ...epoch(), leadLease, leadLeaseReceivedAt: Date.parse(now) };
     const actions = ["lead"] as const;
     function Preparation() {
       const state = useScannerOfflinePreparation(
@@ -115,6 +127,7 @@ describe("offline sponsor lead context", () => {
     );
     await vi.waitFor(() => expect(host!.textContent).toContain("Lead scanner ready offline"));
     expect(mocks.rows[0]!.collectorContext).toMatchObject({ sponsorId, action: "lead" });
+    expect(mocks.rows[0]!.collectorContext).toMatchObject({ savedAt: now });
     expect(JSON.stringify(mocks.rows)).not.toContain("attendee");
   });
 
@@ -144,7 +157,9 @@ describe("offline sponsor lead context", () => {
     expect((await listPreparedScannerContexts()).map((item) => item.sponsorId)).toEqual(
       prepared.map((item) => item!.sponsorId),
     );
-    window.location.hash = `#${leadRoute}?scanAction=lead&offlineContext=${prepared[0]!.contextId}`;
-    expect((await restoreScannerOfflineContext(leadRoute))?.sponsorId).toBe(prepared[0]!.sponsorId);
+    for (const saved of prepared) {
+      window.location.hash = `#${leadRoute}?scanAction=lead&offlineContext=${saved!.contextId}`;
+      expect((await restoreScannerOfflineContext(leadRoute))?.sponsorId).toBe(saved!.sponsorId);
+    }
   });
 });

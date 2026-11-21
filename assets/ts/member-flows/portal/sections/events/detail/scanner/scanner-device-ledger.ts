@@ -30,6 +30,7 @@ export type ScannerEpoch = {
   state: "preparing" | "open" | "closing" | "closed";
   closingOperationId: string | null;
   leadLease?: ScannerLeadLease;
+  leadLeaseReceivedAt?: number;
 };
 export async function prepareScannerDevice(operatorUserId: string): Promise<string> {
   const db = await openScanStorage();
@@ -87,6 +88,7 @@ export async function prepareScannerEpoch(
       }),
       scannerDeviceSessionEnrollmentResponseSchema,
     );
+    const receivedAt = Date.now();
     if (response.operatorUserId !== operatorUserId || response.deviceId !== deviceId)
       throw new Error("Scanner enrollment owner changed");
     if (response.leadLease && response.leadLease.sponsorId !== sponsorId)
@@ -102,7 +104,7 @@ export async function prepareScannerEpoch(
         epochId: response.epochId,
         openedAt: response.openedAt,
         state: "open",
-        ...(response.leadLease ? { leadLease: response.leadLease } : {}),
+        ...(response.leadLease ? { leadLease: response.leadLease, leadLeaseReceivedAt: receivedAt } : {}),
       };
       epochs.put(epoch);
     } else epoch = current;
@@ -203,7 +205,10 @@ async function refreshScannerEpoch(db: IDBDatabase, epoch: ScannerEpoch, sponsor
     : status.closingDeclaredAt && current.state === "open"
       ? { ...current, state: "closing", closingOperationId: status.closingOperationId }
       : current;
-  if (status.leadLease) refreshed.leadLease = status.leadLease;
+  if (status.leadLease) {
+    if (status.leadLease.serverNow !== current.leadLease?.serverNow) refreshed.leadLeaseReceivedAt = Date.now();
+    refreshed.leadLease = status.leadLease;
+  }
   store.put(refreshed);
   await done;
   return refreshed;

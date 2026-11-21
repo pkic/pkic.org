@@ -70,12 +70,14 @@ export function FastScannerView({
   helpOnStart = false,
   collection,
   needsAdvance = false,
+  failed = false,
   onNextBadge,
   leadConsentConfirmed = false,
   leadConfirmation,
 }: {
   collection?: ComponentProps<typeof ScannerCollectionAttendee> & { waiting: boolean; onNext: () => void };
   needsAdvance?: boolean;
+  failed?: boolean;
   onNextBadge?: () => void;
   leadConsentConfirmed?: boolean;
   leadConfirmation?: LeadConfirmation | null;
@@ -278,7 +280,7 @@ export function FastScannerView({
                   ? "Finding attendee…"
                   : (visibleStatus?.title ?? (cameraStarting ? "Starting camera…" : readyLabel))}
               </strong>
-              {leadConfirmation && result?.outcome === "eligible" && (
+              {leadConfirmation && result?.outcome === "eligible" && !helpOpen && (
                 <ScannerLeadConfirmation confirmation={leadConfirmation} />
               )}
               {collection?.waiting && !helpOpen && (
@@ -340,11 +342,16 @@ export function FastScannerView({
               Next
             </Button>
           )}
-          {needsAdvance && !collection?.waiting && !helpOpen && !manualEntry && !recentScans && onNextBadge && (
-            <Button onClick={onNextBadge} disabled={cooldown?.saving} aria-label="Next badge">
-              Next
-            </Button>
-          )}
+          {(needsAdvance || failed) &&
+            !collection?.waiting &&
+            !helpOpen &&
+            !manualEntry &&
+            !recentScans &&
+            onNextBadge && (
+              <Button onClick={onNextBadge} disabled={cooldown?.saving} aria-label="Next badge">
+                Next
+              </Button>
+            )}
           {onPresentation && presentation === "embedded" && (
             <Button variant="secondary" onClick={onPresentation}>
               <IconFullscreen />

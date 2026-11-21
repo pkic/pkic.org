@@ -39,18 +39,21 @@ export function useScannerFeedback({
     updateMessage(value);
   }
   const [failed, setFailed] = useState(false);
+  const [retryableFailure, setRetryableFailure] = useState(false);
   const [checking, setChecking] = useState<string | null>(null);
   function setResult(value: EventScanResponse | null) {
     setChecking(null);
     setFailed(false);
+    setRetryableFailure(false);
     updateResult(value);
     if (value) {
       lastDisplayedOperation.current = value.operationId;
       setLastResult(value);
     }
   }
-  function failure(value: string) {
+  function failure(value: string, retryable = false) {
     setFailed(true);
+    setRetryableFailure(retryable);
     setMessage(value);
   }
   const requiresAdvance = (value: EventScanResponse | null) =>
@@ -60,7 +63,7 @@ export function useScannerFeedback({
         value.outcome !== "eligible" ||
         (value.admissionRecorded && value.admissionDecision !== "allowed")),
     );
-  const needsAdvance = failed || requiresAdvance(result);
+  const needsAdvance = (failed && !retryableFailure) || requiresAdvance(result);
   const feedbackOperation = lastOperation.current;
   useScannerFeedbackReset(
     enabled,
@@ -76,7 +79,6 @@ export function useScannerFeedback({
   );
   function presentReceipt(receipt: EventScanResponse) {
     if (collector || authorityPaused.current) return;
-    setLastResult((last) => (last?.operationId === receipt.operationId ? receipt : last));
     if (!receiptMatchesOperation(receipt.operationId, lastOperation.current)) {
       // A late refusal still needs attention if the successful local result
       // cleared and no newer badge has taken its place.
@@ -87,6 +89,7 @@ export function useScannerFeedback({
       )
         return;
     }
+    setLastResult((last) => (last?.operationId === receipt.operationId ? receipt : last));
     lastCommittedOperation.current = receipt.operationId;
     setResult(receipt);
     if (messageOperation.current === receipt.operationId) setMessage("");
