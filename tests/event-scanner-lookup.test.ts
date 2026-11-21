@@ -24,7 +24,7 @@ describe("scanner attendee lookup through the mounted router", () => {
     const response = await get(`?q=${fixture.userId}&sort=email&limit=8&offset=0`);
     expect(response.status).toBe(200);
     const result = scannerAttendeesResponseSchema.parse(await response.json());
-    expect(result.users.map((user) => user.id)).toEqual([fixture.userId]);
+    expect(result.users.map((user) => [user.id, user.registrationStatus])).toEqual([[fixture.userId, "registered"]]);
     expect(JSON.stringify(result)).not.toContain(fixture.badgeId);
     const byCode = await get(`?q=${fixture.badgeId}&sort=email&limit=8`);
     expect(scannerAttendeesResponseSchema.parse(await byCode.json()).users.map((user) => user.id)).toEqual([
@@ -48,6 +48,16 @@ describe("scanner attendee lookup through the mounted router", () => {
           .first<{ count: number }>()
       )?.count,
     ).toBe(1);
+  });
+  it("finds pending and cancelled registrations with their status and admits neither", async () => {
+    for (const status of ["pending_email_confirmation", "cancelled"] as const) {
+      await env.DB.prepare("UPDATE registrations SET status=? WHERE event_id=? AND user_id=?")
+        .bind(status, fixture.eventId, fixture.userId)
+        .run();
+      const found = scannerAttendeesResponseSchema.parse(await (await get(`?q=${fixture.userId}`)).json());
+      expect(found.users.map((user) => [user.id, user.registrationStatus])).toEqual([[fixture.userId, status]]);
+      expect((await get(`/${fixture.userId}/badge`)).status).toBe(409);
+    }
   });
   it("rejects anonymous requests and event-unrelated attendees", async () => {
     expect((await get("?q=example", false)).status).toBe(401);

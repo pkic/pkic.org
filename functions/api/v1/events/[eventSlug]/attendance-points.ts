@@ -27,7 +27,7 @@ import {
   recordAttendancePoint,
 } from "../../../../_lib/services/event-attendance-points/self-check-in";
 import { getEventBySlug } from "../../../../_lib/services/events";
-import { requireEventPermission } from "./authorization";
+import { requireAnyEventPermission, requireEventPermission } from "./authorization";
 
 /** The signed-in attendee and the event; a check-in only ever acts for the caller. */
 async function attendeeContext(c: AdminContext, eventSlug: string) {
@@ -39,11 +39,11 @@ async function attendeeContext(c: AdminContext, eventSlug: string) {
 
 export const AttendancePointsGet = openApiRoute(attendancePointsRouteSchema, async (c: AdminContext, data) => {
   markResponseSensitive(c);
-  const { db, event, actor, context } = await requireEventPermission(
-    c,
-    data.params.eventSlug,
+  // The codes carry no attendance, so the studio, which puts them on screen, lists them too.
+  const { db, event, actor, context } = await requireAnyEventPermission(c, data.params.eventSlug, [
     "agenda:attendance_read",
-  );
+    "agenda:live_studio",
+  ]);
   const canReissue = hasPermission(actor, "agenda:write", context);
   return json(await listAttendancePoints(db, attendancePointSigningSecret(c.env), event, data.query, canReissue));
 });
