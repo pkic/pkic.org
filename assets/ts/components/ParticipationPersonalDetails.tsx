@@ -98,7 +98,7 @@ export function ParticipationPersonalDetails({
           <Dialog
             open={editing}
             title="Edit my details"
-            description="These changes update your stored personal details. Your representations stay unchanged."
+            description="Your name is the same for yourself and for every organization you represent."
             confirmLabel="Save my details"
             onConfirm={() => void submit()}
             onCancel={() => {
