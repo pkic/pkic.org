@@ -16,26 +16,6 @@ import { formatTimeRangeInZone } from "../../assets/shared/format-date";
 import { runAgendaAction } from "./helpers/agenda-actions";
 import { initialsFrom } from "../../assets/shared/initials";
 
-async function expectReadingBounds(content: Locator) {
-  const bounds = await content.evaluate((element) => {
-    const detail = element.closest(".pk-table__detail-content")!;
-    const viewport = detail.closest(".pk-table__scroll")!;
-    const box = viewport.getBoundingClientRect();
-    const range = document.createRange();
-    range.selectNodeContents(element);
-    return [...range.getClientRects()].map((rect) => ({
-      left: rect.left - box.left - viewport.clientLeft,
-      right: rect.right - box.left - viewport.clientLeft,
-      width: viewport.clientWidth,
-    }));
-  });
-  expect(bounds.length).toBeGreaterThan(0);
-  for (const rect of bounds) {
-    expect(rect.left).toBeGreaterThanOrEqual(-1);
-    expect(rect.right).toBeLessThanOrEqual(rect.width + 1);
-  }
-}
-
 for (const mode of ["keyboard", "touch", "pointer"] as const) {
   test.describe(`agenda ${mode} interaction`, () => {
     test.use({
@@ -355,10 +335,7 @@ for (const mode of ["keyboard", "touch", "pointer"] as const) {
   });
 }
 
-test("expanded sponsor history prose and inner history fit their visible desktop and phone viewport", async ({
-  page,
-  browser,
-}, info) => {
+test("sponsor lead details fit their desktop and phone viewport", async ({ page, browser }, info) => {
   test.setTimeout(600_000);
   const staffContext = await browser.newContext({ baseURL: info.project.use.baseURL });
   const attendeeContext = await browser.newContext({ baseURL: info.project.use.baseURL });
@@ -378,37 +355,28 @@ test("expanded sponsor history prose and inner history fit their visible desktop
       await (await page.request.get(`/api/v1/events/${sponsorEventSlug}/sponsors/${fixture.sponsorId}/leads`)).json(),
     );
     const lead = leads.leads.find((row) => row.email === fixture.email)!;
-    await page.getByRole("button", { name: `View capture history for ${lead.name}`, exact: true }).click();
-    await expect(page.getByRole("region", { name: "Lead capture history", exact: true })).toBeVisible();
-    const prose = page
-      .locator(".pk-table__detail-content p")
-      .filter({ hasText: "These records do not imply attendance." });
-    await expect(prose).toHaveCount(1);
     for (const [name, width] of [
       ["desktop", 1280],
       ["phone", 390],
     ] as const) {
       await page.setViewportSize({ width, height: 900 });
-      const detail = page.locator(".pk-table__detail-content").first();
-      for (const edge of ["start", "end"] as const) {
-        await detail.evaluate((element, side) => {
-          const outer = element.closest(".pk-table__scroll")!;
-          outer.scrollLeft = side === "start" ? 0 : outer.scrollWidth - outer.clientWidth;
-        }, edge);
-        await expectReadingBounds(prose);
-        const geometry = await detail.evaluate((element) => {
-          const outer = element.closest(".pk-table__scroll")!.getBoundingClientRect();
-          const inner = element.querySelector(".pk-table__scroll")!.getBoundingClientRect();
-          return { left: inner.left - outer.left, right: inner.right - outer.left, width: outer.width };
-        });
-        expect(geometry.left).toBeGreaterThanOrEqual(-1);
-        expect(geometry.right).toBeLessThanOrEqual(geometry.width + 1);
-      }
-      await detail.evaluate((element) => {
-        element.closest(".pk-table__scroll")!.scrollLeft = 0;
-      });
+      await expect(page.getByRole("link", { name: `View lead ${lead.name}`, exact: true })).toBeVisible();
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
       await page.evaluate(() => window.scrollTo(0, 0));
-      await page.screenshot({ path: info.outputPath(`expanded-history-reading-${name}.png`), fullPage: true });
+      await page.screenshot({ path: info.outputPath(`sponsor-leads-${name}.png`), fullPage: true });
+    }
+    await page.getByRole("link", { name: `View lead ${lead.name}`, exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Capture history", exact: true })).toBeVisible();
+    for (const [name, width] of [
+      ["desktop", 1280],
+      ["phone", 390],
+    ] as const) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toBeVisible();
+      await expect(page.getByText(fixture.email, { exact: true })).toBeVisible();
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.screenshot({ path: info.outputPath(`sponsor-lead-detail-${name}.png`), fullPage: true });
     }
   } finally {
     await liveSponsor?.end();

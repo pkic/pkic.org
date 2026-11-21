@@ -8,6 +8,7 @@ import { sponsorConsentSql } from "./sponsor-consent";
 import { sponsorLeadPermissionBindings, sponsorLeadPermissionSql } from "./lead-scope";
 import { contactAffiliation } from "../../email-domains/contact-kind";
 import { activeEventSponsorSql } from "../../auth/sponsor-organization-lead-access";
+import { activeSponsorLeadOriginSql, activeSponsorLeadSql } from "./sponsor-lead-active";
 
 export const SPONSOR_LEAD_EXPORT_PERMISSION_SQL = sponsorLeadPermissionSql("agenda:leads_export");
 
@@ -32,13 +33,14 @@ export async function exportSponsorLeads(db: DatabaseLike, eventId: string, spon
   await assertEventContactAccess(db, eventId);
   const rows = await all<LeadExportRow>(
     db,
-    `SELECT TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')) AS name,u.email,${registrationOrganizationSql("reg")} AS organization,lead.observed_at
+    `SELECT TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')) AS name,u.email,${registrationOrganizationSql("reg")} AS organization,${activeSponsorLeadOriginSql("lead", "observed_at")} AS observed_at
     FROM event_sponsor_leads lead JOIN users u ON u.id=lead.user_id
     JOIN registrations reg ON reg.event_id=lead.event_id AND reg.user_id=lead.user_id
     JOIN sponsorships sponsor ON sponsor.id=lead.sponsor_id AND sponsor.event_id=lead.event_id
     WHERE lead.event_id=? AND lead.sponsor_id=? AND reg.status='registered' AND u.active=1
     AND ${activeEventSponsorSql("sponsor")}
     AND ${sponsorConsentSql("reg")}
+    AND ${activeSponsorLeadSql("lead")}
     AND (${SPONSOR_LEAD_EXPORT_PERMISSION_SQL}) AND ${eventContactAccessSql("lead.event_id")}
     ORDER BY lead.observed_at,lead.user_id LIMIT 100001`,
     [eventId, sponsorId, ...scopeValues],

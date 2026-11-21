@@ -63,7 +63,17 @@ async function mount(
           return json({ error: { code: "FORBIDDEN", message: "Sponsor access is no longer available." } }, 403);
         return json(
           sponsorLeadSponsorsSchema.parse({
-            sponsors: [{ id: sponsorId, name: "Authorized sponsor", capturedCount: 0, canView, canExport, canCapture }],
+            sponsors: [
+              {
+                id: sponsorId,
+                name: "Authorized sponsor",
+                capturedCount: 0,
+                canView,
+                canExport,
+                canCapture,
+                canRemoveAll: canView,
+              },
+            ],
             page,
           }),
         );

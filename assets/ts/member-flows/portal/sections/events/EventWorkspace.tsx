@@ -224,7 +224,7 @@ export function EventWorkspace(props: EventWorkspaceProps) {
     return (
       <div class="pk pk-stack portal-section">
         <Suspense fallback={<Spinner />}>
-          <ParticipantEventPage slug={props.slug} tab="leads" />
+          <ParticipantEventPage slug={props.slug} tab="leads" sponsorId={props.subTab} leadId={props.detailSegment} />
         </Suspense>
       </div>
     );

@@ -18,6 +18,8 @@ export const sponsorLeadsExportRouteSchema = {
 import {
   sponsorLeadQuerySchema,
   sponsorLeadListSchema,
+  sponsorLeadDetailSchema,
+  sponsorLeadRemovalResponseSchema,
   sponsorLeadSponsorsQuerySchema,
   sponsorLeadSponsorsSchema,
 } from "./event-sponsor-lead-list";
@@ -29,6 +31,40 @@ export const sponsorLeadsRouteSchema = {
   responses: {
     ...ok("Live sponsor contacts with attributed capture time", sponsorLeadListSchema),
     ...authErrors({ notFound: "Active sponsorship not found", badRequest: "Invalid page query" }),
+  },
+};
+export const sponsorLeadDetailRouteSchema = {
+  ...requiresSession(),
+  tags: ["Events"],
+  summary: "View one currently consenting sponsor lead within the caller's scope",
+  request: { params: eventSlugParamsSchema.extend({ sponsorId: databaseIdSchema, leadId: databaseIdSchema }) },
+  responses: {
+    ...ok("Current sponsor lead", sponsorLeadDetailSchema),
+    ...authErrors({ notFound: "Current consenting lead not found" }),
+  },
+};
+const sponsorLeadRemovalParams = eventSlugParamsSchema.extend({
+  sponsorId: databaseIdSchema,
+  leadId: databaseIdSchema,
+});
+export const sponsorLeadOwnCapturesDeleteRouteSchema = {
+  ...requiresSession(),
+  tags: ["Events"],
+  summary: "Withdraw this operator's captures of one sponsor lead",
+  request: { params: sponsorLeadRemovalParams },
+  responses: {
+    ...ok("Own captures withdrawn and audited", sponsorLeadRemovalResponseSchema),
+    ...authErrors({ notFound: "Active lead captures not found in this operator's scope" }),
+  },
+};
+export const sponsorLeadDeleteRouteSchema = {
+  ...requiresSession(),
+  tags: ["Events"],
+  summary: "Withdraw every capture of one lead for the sponsor contact",
+  request: { params: sponsorLeadRemovalParams },
+  responses: {
+    ...ok("Sponsor lead withdrawn and audited", sponsorLeadRemovalResponseSchema),
+    ...authErrors({ notFound: "Active sponsor lead captures not found" }),
   },
 };
 export const sponsorLeadSponsorsRouteSchema = {

@@ -18,6 +18,8 @@ import {
   sponsorLeadListSchema,
   sponsorLeadSponsorsSchema,
   sponsorLeadCapturesSchema,
+  sponsorLeadDetailSchema,
+  sponsorLeadRemovalResponseSchema,
 } from "../assets/shared/schemas/event-sponsor-lead-list";
 import { captureSponsorLead } from "../functions/_lib/services/event-participation/sponsor-leads";
 import { hashBadgeCredential } from "../functions/_lib/services/event-participation/scanning";
@@ -125,6 +127,7 @@ describe("sponsor live lead viewing through the mounted API", () => {
       capturedCount: 3,
       canView: true,
       canExport: true,
+      canRemoveAll: true,
       canCapture: false,
     });
     const leads = await read(`/sponsors/${sponsorId}/leads`);
@@ -199,10 +202,13 @@ describe("sponsor live lead viewing through the mounted API", () => {
       "SELECT lead.id,lead.user_id FROM event_sponsor_leads lead JOIN users attendee ON attendee.id=lead.user_id WHERE attendee.email='attendee0@synthetic.test'",
     ).first<{ id: string; user_id: string }>();
     if (!lead) throw new Error("Seeded lead missing");
+    let operatorOperationId = "";
     for (const [userId, observedAt] of [
       [operator, "2026-10-04T10:00:00.000Z"],
       [colleagueId, "2026-10-04T11:00:00.000Z"],
     ]) {
+      const operationId = crypto.randomUUID();
+      if (userId === operator) operatorOperationId = operationId;
       await env.DB.prepare(
         `INSERT INTO event_scan_attempts
           (id,event_id,sponsor_id,user_id,operator_user_id,device_id,operation_id,request_hash,outcome,reason,action,observed_at,created_at)
@@ -215,7 +221,7 @@ describe("sponsor live lead viewing through the mounted API", () => {
           lead.user_id,
           userId,
           crypto.randomUUID(),
-          crypto.randomUUID(),
+          operationId,
           crypto.randomUUID(),
           observedAt,
           observedAt,
@@ -240,8 +246,93 @@ describe("sponsor live lead viewing through the mounted API", () => {
       expect(sponsorLeadCapturesSchema.parse(await history.json()).captures).toMatchObject([
         { observedAt: expectedTime },
       ]);
+      const detail = await read(`/sponsors/${sponsorId}/leads/${lead.id}`);
+      expect(detail.status).toBe(200);
+      expect(sponsorLeadDetailSchema.parse(await detail.json())).toMatchObject({
+        lead: { id: lead.id, capturedAt: expectedTime },
+        sponsorName: "Our sponsor",
+      });
       expect((await read(`/sponsors/${sponsorId}/leads.csv`)).status).toBe(403);
     }
+    const otherLead = await env.DB.prepare("SELECT id FROM event_sponsor_leads WHERE user_id<>? LIMIT 1")
+      .bind(lead.user_id)
+      .first<string>("id");
+    expect(
+      (
+        await callApi(env, `/api/v1/events/live-leads/sponsors/${sponsorId}/leads/${otherLead}`, {
+          headers: { Authorization: `Bearer ${colleagueToken}` },
+        })
+      ).status,
+    ).toBe(404);
+    const ownPath = `/api/v1/events/live-leads/sponsors/${sponsorId}/leads/${lead.id}`;
+    const remove = (actorToken: string, path: string) =>
+      callApi(env, path, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${actorToken}` },
+      });
+    expect((await remove(colleagueToken, ownPath)).status).toBe(404);
+    const ownRemoval = await remove(token, `${ownPath}/captures`);
+    expect(ownRemoval.status, await ownRemoval.clone().text()).toBe(200);
+    expect(sponsorLeadRemovalResponseSchema.parse(await ownRemoval.json())).toMatchObject({
+      removedCaptures: 1,
+      remainingCaptures: 1,
+    });
+    expect((await request(`/sponsors/${sponsorId}/leads/${lead.id}`)).status).toBe(404);
+    expect((await request(`/sponsors/${sponsorId}/leads/confirmations/${operatorOperationId}`)).status).toBe(404);
+    const colleagueLead = await callApi(env, ownPath, { headers: { Authorization: `Bearer ${colleagueToken}` } });
+    expect(colleagueLead.status).toBe(200);
+    expect(sponsorLeadDetailSchema.parse(await colleagueLead.json()).lead.capturedAt).toBe("2026-10-04T11:00:00.000Z");
+    await grant("agenda:leads_view", "event_sponsor", sponsorId, operator);
+    expect((await remove(token, ownPath)).status).toBe(404);
+    await env.DB.prepare("UPDATE sponsorships SET contact_email='operator@synthetic.test' WHERE id=?")
+      .bind(sponsorId)
+      .run();
+    const sponsorLead = await request(`/sponsors/${sponsorId}/leads/${lead.id}`);
+    expect(sponsorLead.status).toBe(200);
+    expect(sponsorLeadDetailSchema.parse(await sponsorLead.json()).lead.capturedAt).toBe("2026-10-04T11:00:00.000Z");
+    const allRemoval = await remove(token, ownPath);
+    expect(allRemoval.status, await allRemoval.clone().text()).toBe(200);
+    expect(sponsorLeadRemovalResponseSchema.parse(await allRemoval.json())).toMatchObject({
+      removedCaptures: 1,
+      remainingCaptures: 0,
+    });
+    expect((await request(`/sponsors/${sponsorId}/leads/${lead.id}`)).status).toBe(404);
+    expect(
+      sponsorLeadSponsorsSchema.parse(await (await request("/sponsors/leads")).json()).sponsors[0]?.capturedCount,
+    ).toBe(2);
+    expect((await callApi(env, ownPath, { headers: { Authorization: `Bearer ${colleagueToken}` } })).status).toBe(404);
+    await grant("agenda:leads_export", "event_sponsor", sponsorId, operator);
+    expect(await (await request(`/sponsors/${sponsorId}/leads.csv`)).text()).not.toContain("attendee0@synthetic.test");
+    await env.DB.prepare(
+      `INSERT INTO event_scan_attempts(id,event_id,sponsor_id,user_id,operator_user_id,device_id,operation_id,request_hash,outcome,reason,action,observed_at,created_at)
+       VALUES(?,?,?,?,?,?,?,?,'eligible','captured','lead',?,?)`,
+    )
+      .bind(
+        crypto.randomUUID(),
+        eventId,
+        sponsorId,
+        lead.user_id,
+        colleagueId,
+        crypto.randomUUID(),
+        crypto.randomUUID(),
+        crypto.randomUUID(),
+        "2026-10-04T12:00:00.000Z",
+        "2026-10-04T12:00:00.000Z",
+      )
+      .run();
+    const rescanned = await request(`/sponsors/${sponsorId}/leads/${lead.id}`);
+    expect(rescanned.status).toBe(200);
+    expect(sponsorLeadDetailSchema.parse(await rescanned.json()).lead.capturedAt).toBe("2026-10-04T12:00:00.000Z");
+    expect(
+      sponsorLeadSponsorsSchema.parse(await (await request("/sponsors/leads")).json()).sponsors[0]?.capturedCount,
+    ).toBe(3);
+    expect(await (await request(`/sponsors/${sponsorId}/leads.csv`)).text()).toContain("attendee0@synthetic.test");
+    const audits = await env.DB.prepare(
+      "SELECT audit.details_json, removed.attempt_id FROM audit_log audit JOIN event_sponsor_lead_removed_attempts removed ON removed.removal_id=audit.id WHERE audit.entity_type='event_sponsor_lead' AND audit.entity_id=? AND audit.action='sponsor_lead_captures_removed' ORDER BY audit.created_at,audit.id",
+    )
+      .bind(lead.id)
+      .all<{ details_json: string; attempt_id: string }>();
+    expect(audits.results.map((row) => JSON.parse(row.details_json).scope).sort()).toEqual(["all", "mine"]);
   });
 
   it("shares real captures between two independently authorized sponsor staff and refuses unrelated or ended scope", async () => {
@@ -497,7 +588,15 @@ describe("sponsor live lead viewing through the mounted API", () => {
     expect(response.status).toBe(200);
     const result = sponsorLeadSponsorsSchema.parse(await response.json());
     expect(result.sponsors).toEqual([
-      { id: sponsorId, name: "Our sponsor", capturedCount: 3, canView: true, canCapture: true, canExport: false },
+      {
+        id: sponsorId,
+        name: "Our sponsor",
+        capturedCount: 3,
+        canView: true,
+        canCapture: true,
+        canExport: false,
+        canRemoveAll: false,
+      },
     ]);
     await env.DB.prepare(
       "UPDATE permission_grants SET revoked_at='2026-10-04T10:00:00.000Z' WHERE permission='agenda:leads_capture'",
@@ -632,6 +731,7 @@ describe("sponsor live lead viewing through the mounted API", () => {
         .first<number>("COUNT(*)"),
     ).toBe(1);
     expect((await request(path)).status).toBe(404);
+    expect((await request(path.replace(/\/captures$/, ""))).status).toBe(404);
     const email = await env.DB.prepare("SELECT email FROM users WHERE id=?").bind(lead!.user_id).first<string>("email");
     expect(
       sponsorLeadListSchema.parse(await (await request(undefined, `?q=${encodeURIComponent(email!)}`)).json()).page

@@ -2,20 +2,50 @@ import {
   sponsorLeadsRouteSchema,
   sponsorLeadSponsorsRouteSchema,
   sponsorLeadConfirmationRouteSchema,
+  sponsorLeadDetailRouteSchema,
+  sponsorLeadOwnCapturesDeleteRouteSchema,
+  sponsorLeadDeleteRouteSchema,
 } from "../../../../../assets/shared/schemas/route-contracts-sponsor-leads";
 import { markResponseSensitive, requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { requireUserBackedAdminFromRequest } from "../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../_lib/services/events";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { json } from "../../../../_lib/http";
-import { listSponsorLeads, listLeadSponsors } from "../../../../_lib/services/event-participation/lead-list";
+import {
+  listSponsorLeads,
+  listLeadSponsors,
+  getSponsorLead,
+} from "../../../../_lib/services/event-participation/lead-list";
 import { sponsorLeadContext } from "./sponsor-authorization";
+import { removeSponsorLeadCaptures } from "../../../../_lib/services/event-participation/remove-sponsor-lead-captures";
 import { readSponsorLeadConfirmationForRequest } from "../../../../_lib/services/event-participation/lead-confirmation";
 
 export const SponsorLeadsGet = openApiRoute(sponsorLeadsRouteSchema, async (c: AdminContext, data) => {
   markResponseSensitive(c);
   const { db, event, actor } = await sponsorLeadContext(c, data.params.eventSlug, data.params.sponsorId);
   return json(await listSponsorLeads(db, event.id, data.params.sponsorId, actor.id, data.query));
+});
+export const SponsorLeadDetailGet = openApiRoute(sponsorLeadDetailRouteSchema, async (c: AdminContext, data) => {
+  markResponseSensitive(c);
+  const { db, event, actor } = await sponsorLeadContext(c, data.params.eventSlug, data.params.sponsorId);
+  return json(await getSponsorLead(db, event.id, data.params.sponsorId, data.params.leadId, actor.id));
+});
+export const SponsorLeadOwnCapturesDelete = openApiRoute(
+  sponsorLeadOwnCapturesDeleteRouteSchema,
+  async (c: AdminContext, data) => {
+    markResponseSensitive(c);
+    const { db, event, actor } = await sponsorLeadContext(c, data.params.eventSlug, data.params.sponsorId);
+    return json(
+      await removeSponsorLeadCaptures(db, event.id, data.params.sponsorId, data.params.leadId, actor.id, "mine"),
+    );
+  },
+);
+export const SponsorLeadDelete = openApiRoute(sponsorLeadDeleteRouteSchema, async (c: AdminContext, data) => {
+  markResponseSensitive(c);
+  const { db, event, actor } = await sponsorLeadContext(c, data.params.eventSlug, data.params.sponsorId);
+  return json(
+    await removeSponsorLeadCaptures(db, event.id, data.params.sponsorId, data.params.leadId, actor.id, "all"),
+  );
 });
 export const SponsorLeadSponsorsGet = openApiRoute(sponsorLeadSponsorsRouteSchema, async (c: AdminContext, data) => {
   markResponseSensitive(c);

@@ -59,6 +59,8 @@ type Selection = {
   resourceId?: string;
   tab?: string;
   pointToken?: string;
+  sponsorId?: string;
+  leadId?: string;
 };
 const href = usePortalHashLocation.hrefs;
 /** The compact header's title for each participant page other than the event home. */
@@ -92,6 +94,8 @@ export function ParticipantEvent({
   resourceId,
   tab,
   pointToken,
+  sponsorId,
+  leadId,
   onRegistered,
 }: Selection & { event: EventDetail; onRegistered?: () => Promise<void> }) {
   const [location, navigate] = useHashLocation();
@@ -239,7 +243,7 @@ export function ParticipantEvent({
       ) : tab === "leads" ? (
         "sponsorLeadAccess" in event && event.sponsorLeadAccess ? (
           <Suspense fallback={<Spinner label="Loading sponsor leads…" />}>
-            <SponsorLeads slug={event.slug} timeZone={eventClock(event)} />
+            <SponsorLeads slug={event.slug} timeZone={eventClock(event)} sponsorId={sponsorId} leadId={leadId} />
           </Suspense>
         ) : (
           <Alert tone="danger">Sponsor leads are not available for your current identity.</Alert>

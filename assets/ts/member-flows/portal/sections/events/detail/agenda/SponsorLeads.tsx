@@ -1,12 +1,14 @@
 import { ContactOrganization } from "../../../../../../components/ContactOrganization";
+import { IconPlus } from "../../../../../../components/icons";
 import { type ClockZone } from "../../../../../../../shared/event-clock";
-import { SponsorLeadCaptures } from "./SponsorLeadCaptures";
 import { useEffect, useMemo, useState } from "preact/hooks";
 import { lazy, Suspense } from "preact/compat";
 import {
   sponsorLeadListSchema,
   sponsorLeadSponsorsSchema,
   type SponsorLeadSponsor,
+  type SponsorLead,
+  sponsorLeadRemovalResponseSchema,
 } from "../../../../../../../shared/schemas/event-sponsor-lead-list";
 import { formatDateTimeInZone } from "../../../../../../../shared/format-date";
 import { formatNumber } from "../../../../../../../shared/format-number";
@@ -15,6 +17,8 @@ import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import { Spinner } from "../../../../../../components/Spinner";
 import { useData } from "../../../../../../hooks/useData";
 import { Button } from "../../../../../../ui/Button";
+import { RowActions } from "../../../../../../ui/RowActions";
+import { confirmAction } from "../../../../../../components/ConfirmDialog";
 import { Field } from "../../../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
 import { Menu } from "../../../../../../ui/Menu";
@@ -24,11 +28,26 @@ import type { z } from "zod";
 
 import { loadLiveSponsorLeads } from "./sponsor-lead-loader";
 import { portalSession } from "../../../../state";
-import { requestJson } from "../../../../../../shared/api-client";
+import { deleteJson, requestJson } from "../../../../../../shared/api-client";
+import { toast } from "../../../../ui";
 import { scannerTransportUnavailable } from "../scanner/scanner-offline-context";
+import { usePortalHashLocation } from "../../../../hash-location";
+import { SponsorLeadDetail } from "./SponsorLeadDetail";
 const EventScanner = lazy(() => import("../scanner/EventScanner").then((module) => ({ default: module.EventScanner })));
 
-export function SponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZone }) {
+export function SponsorLeads({
+  slug,
+  timeZone,
+  sponsorId,
+  leadId,
+}: {
+  slug: string;
+  timeZone: ClockZone;
+  sponsorId?: string;
+  leadId?: string;
+}) {
+  if (sponsorId && leadId)
+    return <SponsorLeadDetail slug={slug} sponsorId={sponsorId} leadId={leadId} timeZone={timeZone} />;
   return (
     <ScopedSponsorLeads key={`${slug}:${portalSession.value?.identity.id ?? ""}`} slug={slug} timeZone={timeZone} />
   );
@@ -37,10 +56,11 @@ export function SponsorLeads({ slug, timeZone }: { slug: string; timeZone: Clock
 function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZone }) {
   const [selected, setSelected] = useState<SponsorLeadSponsor | null>(null);
   const [scanning, setScanning] = useState(false);
-  const [captureHistory, setCaptureHistory] = useState<string | null>(null);
   const [listVersion, setListVersion] = useState(0);
   const [live, setLive] = useState(() => navigator.onLine && document.visibilityState !== "hidden");
   const [epoch, setEpoch] = useState(0);
+  const [removingLeadId, setRemovingLeadId] = useState<string | null>(null);
+  const [removalError, setRemovalError] = useState("");
   const base = `/api/v1/events/${encodeURIComponent(slug)}/sponsors`;
   const sponsorCatalog = useMemo(
     (): ServerCatalog<SponsorLeadSponsor, z.infer<typeof sponsorLeadSponsorsSchema>> => ({
@@ -81,6 +101,33 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
   const current = oneSponsor
     ? (sponsorOptions.data.sponsors[0] ?? null)
     : (selected ?? sponsorOptions.data.sponsors[0] ?? null);
+  async function removeLead(lead: SponsorLead, scope: "mine" | "all") {
+    if (!current) return;
+    const all = scope === "all";
+    if (
+      !(await confirmAction({
+        title: all ? `Remove ${lead.name} for ${current.name}?` : `Remove your scans of ${lead.name}?`,
+        body: all
+          ? "This removes this contact from the sponsor's lead list. A new scan can add them again."
+          : "Your scans will no longer count toward this lead. Other staff members' scans remain available.",
+        confirmLabel: all ? "Remove sponsor lead" : "Remove my scans",
+        tone: "danger",
+      }))
+    )
+      return;
+    setRemovingLeadId(lead.id);
+    setRemovalError("");
+    try {
+      const path = `${base}/${encodeURIComponent(current.id)}/leads/${encodeURIComponent(lead.id)}${all ? "" : "/captures"}`;
+      await deleteJson(path, sponsorLeadRemovalResponseSchema);
+      setListVersion((value) => value + 1);
+      toast(all ? "Lead removed for this sponsor" : "Your scans removed", "success");
+    } catch (cause) {
+      setRemovalError(cause instanceof Error ? cause.message : "Could not remove this lead.");
+    } finally {
+      setRemovingLeadId(null);
+    }
+  }
   return (
     <div class="pk-stack">
       {sponsorOptions.data.page.total > 1 && (
@@ -98,7 +145,6 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
                 if (!sponsor) return;
                 setSelected(sponsor);
                 setScanning(false);
-                setCaptureHistory(null);
               }}
             />
           )}
@@ -130,13 +176,16 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
             </span>
             {current.canCapture && (
               <Button
-                variant="primary"
+                variant={scanning ? "secondary" : "ghost"}
+                icon={!scanning}
+                aria-label={scanning ? undefined : "Scan leads"}
+                title={scanning ? undefined : "Scan leads"}
                 onClick={() => {
                   if (scanning) setListVersion((value) => value + 1);
                   setScanning(!scanning);
                 }}
               >
-                {scanning ? "Close scanner" : "Scan leads"}
+                {scanning ? "Close scanner" : <IconPlus />}
               </Button>
             )}
           </PanelHeader>
@@ -159,7 +208,7 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
               </Suspense>
             ) : current.canView || current.canCapture ? (
               live ? (
-                <ApiDataTable
+                <ApiDataTable<SponsorLead, z.infer<typeof sponsorLeadListSchema>>
                   urlState="sponsor-leads"
                   key={`${current.id}:${epoch}:${listVersion}`}
                   endpoint={`${base}/${encodeURIComponent(current.id)}/leads`}
@@ -174,18 +223,17 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
                   clearDataOnReload
                   retainDataOnError={false}
                   rowKey={(row) => row.id}
+                  inset={removalError ? <ErrorAlert error={removalError} /> : undefined}
+                  rowAction={(row) => ({
+                    label: `View lead ${row.name}`,
+                    href: usePortalHashLocation.hrefs(
+                      `/events/${encodeURIComponent(slug)}/leads/${encodeURIComponent(current.id)}/${encodeURIComponent(row.id)}`,
+                    ),
+                  })}
                   empty={
                     current.canView
                       ? "No currently consenting leads match this search."
                       : "No saved scans with current contact sharing match this search."
-                  }
-                  detailRow={(row) =>
-                    captureHistory === row.id ? (
-                      <SponsorLeadCaptures
-                        endpoint={`${base}/${encodeURIComponent(current.id)}/leads/${encodeURIComponent(row.id)}/captures`}
-                        timeZone={timeZone}
-                      />
-                    ) : undefined
                   }
                   columns={[
                     {
@@ -211,23 +259,44 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
                       cell: (row) => formatDateTimeInZone(row.capturedAt, timeZone),
                       sort: { asc: "capturedAt", desc: "-capturedAt" },
                     },
-                    {
-                      header: "Captured by",
-                      cell: (row) => row.operatorName || "—",
-                    },
-                    {
-                      header: "History",
-                      hideable: false,
-                      cell: (row) => (
-                        <Button
-                          aria-expanded={captureHistory === row.id}
-                          aria-label={`View capture history for ${row.name}`}
-                          onClick={() => setCaptureHistory(captureHistory === row.id ? null : row.id)}
-                        >
-                          {captureHistory === row.id ? "Hide history" : "View history"}
-                        </Button>
-                      ),
-                    },
+                    ...(current.canCapture || current.canRemoveAll
+                      ? [
+                          {
+                            header: "Actions",
+                            width: "fit" as const,
+                            hideable: false,
+                            cell: (row: SponsorLead) => (
+                              <RowActions
+                                subject={row.name}
+                                actions={[
+                                  ...(current.canCapture
+                                    ? [
+                                        {
+                                          id: "remove-own",
+                                          label: "Remove my scans",
+                                          danger: true,
+                                          disabled: removingLeadId === row.id,
+                                          onSelect: () => void removeLead(row, "mine"),
+                                        },
+                                      ]
+                                    : []),
+                                  ...(current.canRemoveAll
+                                    ? [
+                                        {
+                                          id: "remove-all",
+                                          label: "Remove lead for sponsor",
+                                          danger: true,
+                                          disabled: removingLeadId === row.id,
+                                          onSelect: () => void removeLead(row, "all"),
+                                        },
+                                      ]
+                                    : []),
+                                ]}
+                              />
+                            ),
+                          },
+                        ]
+                      : []),
                   ]}
                 />
               ) : (

@@ -295,9 +295,10 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
         ...offlineRecords.map((record) => record.scan.observedAt),
       ].sort(),
     );
-    await page.getByRole("button", { name: `View capture history for ${lead.name}`, exact: true }).click();
-    await expect(page.getByRole("region", { name: "Lead capture history", exact: true })).toBeVisible();
+    await page.getByRole("link", { name: `View lead ${lead.name}`, exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Capture history", exact: true })).toBeVisible();
     await captureSponsorViews(page, info, "live-history");
+    await page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Leads" }).click();
     const csvResponse = page.waitForResponse((response) => new URL(response.url()).pathname === csvPath);
     const downloading = page.waitForEvent("download");
     await page.getByRole("button", { name: "Sponsor actions", exact: true }).click();
