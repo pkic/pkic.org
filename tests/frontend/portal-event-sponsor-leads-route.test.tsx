@@ -140,7 +140,7 @@ describe("sponsor-only event contacts route", () => {
     const requests = await mount(true, false, false, false, true);
     await vi.waitFor(() => expect(host!.textContent).toContain("My lead scans"));
     expect(host!.querySelector('button[aria-label="Open leads for Authorized sponsor"]')).toBeNull();
-    expect(requests).toContain(contactsPath);
+    await vi.waitFor(() => expect(requests).toContain(contactsPath));
   });
 
   it("refuses a route without sponsor lead access before requesting discovery", async () => {
