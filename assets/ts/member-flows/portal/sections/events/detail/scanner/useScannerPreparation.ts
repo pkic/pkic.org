@@ -12,6 +12,8 @@ export function useScannerPreparation({
   operatorUserId,
   occurrenceId,
   action,
+  sponsorId,
+  sponsorName,
   allowedActions,
   collectorContext,
   badgeCollection = false,
@@ -25,6 +27,8 @@ export function useScannerPreparation({
   operatorUserId: string;
   occurrenceId: string | null;
   action: EventScanRequest["action"];
+  sponsorId?: string;
+  sponsorName?: string;
   allowedActions: readonly EventScanRequest["action"][];
   collectorContext?: ScannerOfflineContext;
   badgeCollection?: boolean;
@@ -58,11 +62,12 @@ export function useScannerPreparation({
     eligibility.eligibilityManifest.current,
     slug,
     action,
-    location.targetLabel,
+    action === "lead" ? sponsorName : location.targetLabel,
     location.rooms.find((room) => room.id === location.roomId)?.name,
     { occurrenceId: location.targetId, roomId: location.roomId },
     allowedActions,
     badgeCollection ? "collection" : "scan",
+    sponsorId,
   );
   const status = {
     occurrenceId: location.targetId,

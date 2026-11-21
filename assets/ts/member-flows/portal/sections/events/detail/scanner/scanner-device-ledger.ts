@@ -4,6 +4,7 @@ import {
   scannerDeviceSessionEnrollmentResponseSchema,
   scannerDeviceSessionClosingSchema,
   scannerDeviceSessionStatusSchema,
+  type ScannerLeadLease,
 } from "../../../../../../../shared/schemas/event-scanner-devices";
 import { ApiClientError, getJson, postJson } from "../../../../../../shared/api-client";
 import { scannerOfflineLeaseCurrent } from "./scanner-offline-context";
@@ -28,6 +29,7 @@ export type ScannerEpoch = {
   issuedHighWater: number;
   state: "preparing" | "open" | "closing" | "closed";
   closingOperationId: string | null;
+  leadLease?: ScannerLeadLease;
 };
 export async function prepareScannerDevice(operatorUserId: string): Promise<string> {
   const db = await openScanStorage();
@@ -87,13 +89,21 @@ export async function prepareScannerEpoch(
     );
     if (response.operatorUserId !== operatorUserId || response.deviceId !== deviceId)
       throw new Error("Scanner enrollment owner changed");
+    if (response.leadLease && response.leadLease.sponsorId !== sponsorId)
+      throw new Error("Scanner lead lease belongs to another sponsor");
     const write = db.transaction(SCANNER_EPOCH_STORE, "readwrite"),
       written = idbCompletion(write),
       epochs = write.objectStore(SCANNER_EPOCH_STORE);
     const current = await idbRequest<ScannerEpoch>(epochs.get(key));
     // An enrollment retry must never reset an issued counter or reopen a frozen epoch.
     if (current.state === "preparing") {
-      epoch = { ...current, epochId: response.epochId, openedAt: response.openedAt, state: "open" };
+      epoch = {
+        ...current,
+        epochId: response.epochId,
+        openedAt: response.openedAt,
+        state: "open",
+        ...(response.leadLease ? { leadLease: response.leadLease } : {}),
+      };
       epochs.put(epoch);
     } else epoch = current;
     await written;
@@ -171,6 +181,8 @@ async function refreshScannerEpoch(db: IDBDatabase, epoch: ScannerEpoch, sponsor
     throw error;
   }
   if (status.epochId !== epoch.epochId) throw new Error("Scanner status belongs to another session");
+  if (status.leadLease && status.leadLease.sponsorId !== sponsorId)
+    throw new Error("Scanner lead lease belongs to another sponsor");
   if ((status.closedAt || status.closingDeclaredAt) && !status.closingOperationId)
     throw new Error("Scanner status is missing the original closing operation");
   if ((status.closedAt || status.closingDeclaredAt) && scannerOfflineLeaseCurrent(epoch)) {
@@ -191,6 +203,7 @@ async function refreshScannerEpoch(db: IDBDatabase, epoch: ScannerEpoch, sponsor
     : status.closingDeclaredAt && current.state === "open"
       ? { ...current, state: "closing", closingOperationId: status.closingOperationId }
       : current;
+  if (status.leadLease) refreshed.leadLease = status.leadLease;
   store.put(refreshed);
   await done;
   return refreshed;

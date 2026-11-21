@@ -18,6 +18,7 @@ export function useScannerDevice(
         collector.deviceId,
         collector.epochId,
         collector.action,
+        collector.sponsorId,
         collector.occurrenceId,
         collector.roomId,
         collector.serverNow,

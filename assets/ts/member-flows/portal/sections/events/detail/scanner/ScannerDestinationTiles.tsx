@@ -27,7 +27,10 @@ export function ScannerTaskTile({
 }: ScannerTaskTileProps) {
   let label: string;
   let hint: string;
-  if (purpose === "collection") {
+  if (action === "lead") {
+    label = "Lead scanner";
+    hint = targetLabel ?? "";
+  } else if (purpose === "collection") {
     label = "Badge collection";
     hint = "";
   } else if (occurrenceId) {

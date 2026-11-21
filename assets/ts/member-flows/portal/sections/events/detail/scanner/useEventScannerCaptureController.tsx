@@ -114,6 +114,8 @@ export function useEventScannerCaptureController({
     operatorUserId,
     occurrenceId,
     action,
+    sponsorId,
+    sponsorName,
     allowedActions,
     badgeCollection,
     collectorContext,

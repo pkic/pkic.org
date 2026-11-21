@@ -23,6 +23,7 @@ import {
 } from "./helpers/sponsor-live-fixture";
 import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 import { accessGrantCreateSchema, accessGrantCreateResponseSchema } from "../../assets/shared/schemas/access-control";
+import { SCAN_STORAGE_VERSION } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/outbox-storage";
 import {
   sponsorLeadSponsorsSchema,
   sponsorLeadListSchema,
@@ -424,6 +425,83 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
     await expect(page.getByText(fixture.email, { exact: true })).toHaveCount(0);
     await captureSponsorViews(page, info, "assignment-ended");
   } finally {
+    await liveSponsor?.end();
+    await attendeeContext.close();
+    await staffContext.close();
+  }
+});
+
+test("a prepared sponsor lead scanner reopens after an offline reload without exposing attendee data", async ({
+  page,
+  browser,
+}, info) => {
+  test.setTimeout(300_000);
+  const staffContext = await browser.newContext({ baseURL: info.project.use.baseURL });
+  const attendeeContext = await browser.newContext({ baseURL: info.project.use.baseURL });
+  const staff = await staffContext.newPage();
+  const attendee = await attendeeContext.newPage();
+  let liveSponsor: Awaited<ReturnType<typeof prepareSponsorLiveFixture>> | undefined;
+  try {
+    const fixture = await prepareSponsorLiveFixture(staff, attendee);
+    liveSponsor = fixture;
+    await signInToPortal(page, fixture.operator.email);
+    await page.goto(`/portal/#/events/${sponsorEventSlug}/sponsors/${fixture.sponsorId}/scanner`);
+    await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeVisible();
+    await expect
+      .poll(() =>
+        page.evaluate(
+          async ({ version, sponsorId }) => {
+            const db = await new Promise<IDBDatabase>((resolve, reject) => {
+              const request = indexedDB.open("pkic-scanner-outbox", version);
+              request.onsuccess = () => resolve(request.result);
+              request.onerror = () => reject(request.error ?? new Error("Could not open scanner storage"));
+            });
+            try {
+              const contexts = await new Promise<unknown[]>((resolve, reject) => {
+                const request = db.transaction("scanner-epochs").objectStore("scanner-epochs").getAll();
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error ?? new Error("Could not read scanner storage"));
+              });
+              return contexts.some((record) =>
+                (
+                  record as { collectorContexts?: Array<{ action: string; sponsorId?: string }> }
+                ).collectorContexts?.some((context) => context.action === "lead" && context.sponsorId === sponsorId),
+              );
+            } finally {
+              db.close();
+            }
+          },
+          { version: SCAN_STORAGE_VERSION, sponsorId: fixture.sponsorId },
+        ),
+      )
+      .toBe(true);
+    await page.evaluate(async () => navigator.serviceWorker.ready);
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.context().setOffline(true);
+    await page.goto("/portal/");
+    await expect(page.getByRole("heading", { name: "Continue scanning offline", exact: true })).toBeVisible();
+    const task = page.getByRole("link", { name: /Lead scanner/ });
+    await expect(task).toContainText("Synthetic sponsor");
+    await page.screenshot({ animations: "disabled", path: info.outputPath("sponsor-offline-entry-phone.png") });
+    await task.click();
+    const acknowledgement = page.getByRole("checkbox", {
+      name: "I will ask each person for permission to collect their contact information before scanning their badge.",
+      exact: true,
+    });
+    await expect(acknowledgement).toBeVisible();
+    await acknowledgement.check();
+    await page.getByRole("button", { name: "Start scanning", exact: true }).click();
+    await openScannerManualEntry(page);
+    const manual = page.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
+    await manual.getByLabel("Badge code", { exact: true }).fill(fixture.consenting.badgeId);
+    await manual.getByRole("button", { name: "Confirm lead", exact: true }).click();
+    await expect(page.locator(".pk-fast-scanner__label")).toHaveText("Saved for upload");
+    await expect.poll(async () => (await scannerStorage(page)).pending.length).toBe(1);
+    await expect(page.getByText(fixture.email, { exact: true })).toHaveCount(0);
+    await expectNoStoredSponsorContacts(page, [fixture.email, fixture.firstName, fixture.organization]);
+    await page.screenshot({ animations: "disabled", path: info.outputPath("sponsor-offline-reopened-phone.png") });
+  } finally {
+    await page.context().setOffline(false);
     await liveSponsor?.end();
     await attendeeContext.close();
     await staffContext.close();

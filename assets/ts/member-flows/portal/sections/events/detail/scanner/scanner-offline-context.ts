@@ -8,6 +8,7 @@ import {
 import {
   scannerRecoveryEpochSchema,
   SCANNER_RECOVERY_EPOCH_LIMIT,
+  scannerLeadLeaseSchema,
 } from "../../../../../../../shared/schemas/event-scanner-devices";
 import { readActiveUserSession, scannerUploadSuspended } from "../../../../../../shared/pending-user-logout";
 import type { PortalSession } from "../../../../types";
@@ -20,9 +21,24 @@ import { databaseIdSchema } from "../../../../../../../shared/schemas/identifier
 
 const SCANNER_PREPARED_CONTEXT_LIMIT = 100;
 
+export type ScannerOfflinePreparation = Pick<
+  EligibilityManifest,
+  | "storageError"
+  | "enrollment"
+  | "operatorUserId"
+  | "occurrenceId"
+  | "roomId"
+  | "publishedRevision"
+  | "nativeEventContext"
+  | "serverNow"
+  | "expiresAt"
+> &
+  Partial<Pick<EligibilityManifest, "validUntil">>;
+
 const storedEpochSchema = scannerRecoveryEpochSchema
   .safeExtend({
     key: z.string(),
+    leadLease: scannerLeadLeaseSchema.optional(),
     collectorContext: scannerOfflineContextSchema.optional(),
     collectorContexts: scannerOfflineContextSchema.array().max(SCANNER_PREPARED_CONTEXT_LIMIT).optional(),
   })
@@ -64,8 +80,12 @@ export function scannerCollectorPath(hash: string): string | null {
   if (query.has("offlineContext") && !databaseIdSchema.safeParse(query.get("offlineContext")).success) return null;
   if (query.has("scannerPurpose") && !["scan", "collection"].includes(query.get("scannerPurpose")!)) return null;
   if (query.has("scannerTab") && !["scan", "recent", "diagnostics"].includes(query.get("scannerTab")!)) return null;
-  if (query.has("scanAction") && !["check", "attendance", "checkout", "admission"].includes(query.get("scanAction")!))
+  if (
+    query.has("scanAction") &&
+    !["check", "attendance", "checkout", "admission", "lead"].includes(query.get("scanAction")!)
+  )
     return null;
+  if (query.get("scanAction") === "lead" && !/\/leads$|\/sponsors\/[^/]+\/scanner$/u.test(path)) return null;
   return parsed.success ? parsed.data : null;
 }
 
@@ -86,6 +106,7 @@ function samePreparedTask(a: ScannerOfflineContext, b: ScannerOfflineContext): b
     a.route === b.route &&
     a.sessionId === b.sessionId &&
     a.action === b.action &&
+    a.sponsorId === b.sponsorId &&
     (a.purpose ?? "scan") === (b.purpose ?? "scan") &&
     a.occurrenceId === b.occurrenceId &&
     a.roomId === b.roomId
@@ -179,8 +200,9 @@ export async function saveScannerOfflineContext(input: {
   slug: string;
   session: PortalSession;
   epoch: ScannerEpoch;
-  manifest: EligibilityManifest;
+  manifest: ScannerOfflinePreparation;
   action: EventScanRequest["action"];
+  sponsorId?: string;
   purpose?: "scan" | "collection";
   allowedActions?: readonly EventScanRequest["action"][];
   targetLabel?: string;
@@ -192,9 +214,14 @@ export async function saveScannerOfflineContext(input: {
   const route = scannerCollectorPath(window.location.hash);
   if (
     !route ||
-    (route.startsWith("/groups/")
-      ? route.split("/")[4] !== manifest.enrollment?.eventId
-      : route !== `/events/${encodeURIComponent(input.slug)}/scanner`)
+    (input.action === "lead"
+      ? !input.sponsorId ||
+        (route !== `/events/${encodeURIComponent(input.slug)}/leads` &&
+          route !== `/events/${encodeURIComponent(input.slug)}/sponsors/${input.sponsorId}/scanner`)
+      : input.sponsorId ||
+        (route.startsWith("/groups/")
+          ? route.split("/")[4] !== manifest.enrollment?.eventId
+          : route !== `/events/${encodeURIComponent(input.slug)}/scanner`))
   )
     return null;
   if (
@@ -207,7 +234,13 @@ export async function saveScannerOfflineContext(input: {
     !manifest.enrollment ||
     manifest.enrollment.deviceId !== epoch.deviceId ||
     manifest.enrollment.epochId !== epoch.epochId ||
-    ["lead", "exception"].includes(input.action)
+    input.action === "exception" ||
+    (input.action === "lead" &&
+      (!epoch.leadLease ||
+        epoch.leadLease.sponsorId !== input.sponsorId ||
+        epoch.leadLease.eventId !== manifest.enrollment.eventId ||
+        epoch.leadLease.serverNow !== manifest.serverNow ||
+        epoch.leadLease.expiresAt !== manifest.expiresAt))
   )
     return null;
   const active = await readActiveUserSession();
@@ -234,6 +267,7 @@ export async function saveScannerOfflineContext(input: {
     epochId: epoch.epochId,
     contextId: crypto.randomUUID(),
     action: input.action,
+    ...(input.sponsorId ? { sponsorId: input.sponsorId } : {}),
     ...(input.targetLabel ? { targetLabel: input.targetLabel } : {}),
     ...(input.roomLabel ? { roomLabel: input.roomLabel } : {}),
     purpose:
@@ -278,7 +312,11 @@ export async function saveScannerOfflineContext(input: {
         (item) => item.sessionId === session.sessionId && scannerContextCurrent(item),
       );
       const actions = [...new Set([input.action, ...(input.allowedActions ?? [])])].flatMap((action) =>
-        ["check", "attendance", "checkout", "admission"].includes(action)
+        (
+          input.action === "lead"
+            ? action === "lead"
+            : ["check", "attendance", "checkout", "admission"].includes(action)
+        )
           ? [action as ScannerOfflineContext["action"]]
           : [],
       );
@@ -449,6 +487,7 @@ export function scannerOfflineContextMatches(expected: ScannerOfflineContext, st
     "occurrenceId",
     "roomId",
     "action",
+    "sponsorId",
     "purpose",
     "publishedRevision",
     "serverNow",

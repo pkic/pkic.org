@@ -81,15 +81,16 @@ export function prepareEventAudienceSponsors(
   const liveCapacitySql = `${organizationCapture ? ` OR ${organizationCapture}` : ""}${designatedContact ? ` OR ${designatedContact}` : ""}`;
   const filter = eventReadSelectionSql("s.event_id", selection);
   const withSql = filter.withSql
-    ? `WITH ${filter.withSql}, authorized_event_sponsors AS MATERIALIZED (SELECT s.id FROM sponsorships s WHERE EXISTS(${authority.sql})${liveCapacitySql}) `
+    ? `WITH ${filter.withSql}, authorized_event_sponsors AS MATERIALIZED (SELECT s.id FROM sponsorships s WHERE ${activeEventSponsorSql("s")} AND (EXISTS(${authority.sql})${liveCapacitySql})) `
     : "";
   const authoritySql = filter.withSql
     ? "s.id IN (SELECT id FROM authorized_event_sponsors)"
     : `(EXISTS(${authority.sql})${liveCapacitySql})`;
+  const activeFilter = filter.withSql ? "" : ` AND ${activeEventSponsorSql("s")}`;
   return db
     .prepare(`${withSql}SELECT s.id,s.event_id,COALESCE(o.name,s.non_member_name,'Sponsor') AS name
     FROM sponsorships s LEFT JOIN organizations o ON o.id=s.organization_id
-    WHERE ${filter.sql} AND ${activeEventSponsorSql("s")} AND ${authoritySql}
+    WHERE ${filter.sql}${activeFilter} AND ${authoritySql}
     ORDER BY s.event_id,name,s.id`)
     .bind(
       ...filter.bindings,
