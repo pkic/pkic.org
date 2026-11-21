@@ -151,6 +151,9 @@ export const liveChatClientMessageSchemas = [
     }),
   /** A moderator turns an attendee message into an approved live question by the same author. */
   z.object({ type: z.literal("chat.convert"), ...messageRefSchema }).strict(),
+  /** A moderator pins an attendee message above the chat, in place of the one pinned before. */
+  z.object({ type: z.literal("chat.pin"), ...messageRefSchema }).strict(),
+  z.object({ type: z.literal("chat.unpin") }).strict(),
   /** Asks for the page of messages before one; null asks for the latest page. */
   z
     .object({ type: z.literal("chat.history"), channel: liveChatChannelSchema, before: databaseIdSchema.nullable() })
@@ -175,6 +178,8 @@ export const liveChatServerMessageSchemas = [
       myReactions: myReactionsSchema.nullable(),
     })
     .strict(),
+  /** The message pinned above the chat as this viewer sees it, or none. */
+  z.object({ type: z.literal("chat.pinned"), message: liveChatMessageSchema.nullable() }).strict(),
   /** One earlier page for this viewer, oldest first. */
   z
     .object({
@@ -194,6 +199,8 @@ export const liveChatSnapshotFields = {
     .default([]),
   /** Channels with messages before the ones sent. */
   chatEarlier: z.partialRecord(liveChatChannelSchema, z.boolean()).optional(),
+  /** The attendee message a moderator pinned above the chat. */
+  chatPinned: liveChatMessageSchema.nullable().optional(),
   /** Moderators only: reported messages awaiting review, newest first. */
   chatReports: z.array(liveChatMessageSchema).max(LIVE_CHAT_POLICY.reportQueueLimit).optional(),
 };

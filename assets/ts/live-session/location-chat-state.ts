@@ -13,7 +13,7 @@ export interface LiveLocationChatState extends Omit<LiveLocationChatSnapshot, "t
 /** What the chat views read: the messages, the viewer, and the day's sessions the dividers name. */
 export type LiveChatView = Pick<
   LiveLocationChatState,
-  "viewer" | "chat" | "chatEarlier" | "chatReports" | "refusal" | "authors" | "scope"
+  "viewer" | "chat" | "chatEarlier" | "chatPinned" | "chatReports" | "refusal" | "authors" | "scope"
 >;
 
 /** Applies one message of the location's chat. Changes before the first snapshot are ignored; it carries them. */
@@ -30,6 +30,7 @@ export function applyLocationChatMessage(
     case "chat.message":
     case "chat.removed":
     case "chat.reactions":
+    case "chat.pinned":
     case "chat.history":
       return applyLiveChatMessage(state, message);
     case "participation.access":

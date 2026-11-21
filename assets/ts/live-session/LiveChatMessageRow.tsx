@@ -41,7 +41,7 @@ const EMOJI = Object.fromEntries(LIVE_CHAT_REACTIONS.map((reaction) => [reaction
 >;
 
 /** What the shared chat policy lets this viewer do with this message. */
-export function liveChatMessageActions(message: LiveChatMessage, viewer: Viewer): Set<LiveChatAction> {
+export function liveChatMessageActions(message: LiveChatMessage, viewer: Viewer, pinned = false): Set<LiveChatAction> {
   const moderation = message.moderation;
   return liveChatActions(liveChatCapacity(viewer), viewer.participation != null, {
     channel: message.channel,
@@ -56,6 +56,7 @@ export function liveChatMessageActions(message: LiveChatMessage, viewer: Viewer)
     authorRestriction: moderation?.authorRestriction?.block ?? null,
     sentAt: message.sentAt,
     editLocked: message.editLocked ?? false,
+    pinned,
   });
 }
 
@@ -99,6 +100,12 @@ function menuItems(
       label: "Turn into question",
       separatorBefore: items.length > 0 && !actions.has("done"),
       onSelect: () => send({ type: "chat.convert", messageId }),
+    });
+  if (actions.has("pin") || actions.has("unpin"))
+    items.push({
+      id: "pin",
+      label: actions.has("pin") ? "Pin message" : "Unpin message",
+      onSelect: () => send(actions.has("pin") ? { type: "chat.pin", messageId } : { type: "chat.unpin" }),
     });
   if (actions.has("keep"))
     items.push({
@@ -209,6 +216,7 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
   divider = null,
   handlers = null,
   highlighted = false,
+  pinned = false,
 }: {
   message: LiveChatMessage;
   viewer: Viewer;
@@ -223,9 +231,11 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
   handlers?: LiveChatRowHandlers | null;
   /** The message a reader just followed a quote to. */
   highlighted?: boolean;
+  /** The message is pinned above the chat. */
+  pinned?: boolean;
 }) {
   const [actionError, setActionError] = useState(false);
-  const actions = liveChatMessageActions(message, viewer);
+  const actions = liveChatMessageActions(message, viewer, pinned);
   const items = disabled
     ? []
     : menuItems(

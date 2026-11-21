@@ -49,6 +49,23 @@ export class LiveChatModerationStore {
       by,
       at,
     );
+    // A hidden message leaves the top of the chat, and stays off it when it is shown again.
+    this.sql.exec("DELETE FROM room_chat_pin WHERE message_id = ?", messageId);
+  }
+
+  /** The attendee message pinned above the chat. */
+  pinned(): string | null {
+    return this.sql.rows<{ message_id: string }>("SELECT message_id FROM room_chat_pin LIMIT 1")[0]?.message_id ?? null;
+  }
+
+  /** Pins one message, in place of any pinned before. */
+  pin(messageId: string, by: string, at: string): void {
+    this.sql.exec("DELETE FROM room_chat_pin");
+    this.sql.exec("INSERT INTO room_chat_pin(message_id, by_name, at) VALUES (?, ?, ?)", messageId, by, at);
+  }
+
+  unpin(): void {
+    this.sql.exec("DELETE FROM room_chat_pin");
   }
 
   /** Keeps a message: shown again, its reports reviewed and cleared. */

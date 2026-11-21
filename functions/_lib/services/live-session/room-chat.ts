@@ -45,6 +45,7 @@ const ANNOTATIONS = [
   "room_chat_questions",
   "room_chat_authorship",
   "room_chat_sessions",
+  "room_chat_pin",
   "room_chat_replies",
   "room_chat_edits",
   "room_chat_aired",
@@ -203,7 +204,9 @@ export class LiveRoomChat {
     }
     const dropped = this.sql
       .rows<{ id: string }>(
-        `SELECT id FROM ${TABLES[channel]} ORDER BY sent_at DESC, rowid DESC LIMIT -1 OFFSET ${LIVE_CHAT_POLICY.storedMessages}`,
+        // The pinned message stays on top of the chat however long the day runs.
+        `SELECT id FROM ${TABLES[channel]} WHERE id NOT IN (SELECT message_id FROM room_chat_pin)
+         ORDER BY sent_at DESC, rowid DESC LIMIT -1 OFFSET ${LIVE_CHAT_POLICY.storedMessages}`,
       )
       .map((row) => row.id);
     this.remove(dropped);

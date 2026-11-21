@@ -163,6 +163,7 @@ export class LiveChatFeed {
       chat.push(...messages);
       if (messages.length) chatEarlier[channel] = page.hasEarlier;
     }
+    const pinned = this.pinned(viewer);
     const reportRows = staff(viewer)
       ? this.chat.messages(this.moderation.openReports(LIVE_CHAT_POLICY.reportQueueLimit))
       : [];
@@ -170,8 +171,17 @@ export class LiveChatFeed {
     return {
       chat,
       chatEarlier,
+      chatPinned: pinned,
       chatReports: reportRows.flatMap((row) => reports.project(row, viewer) ?? []),
     };
+  }
+
+  /** The attendee message pinned above the chat as this viewer sees it, or null. */
+  pinned(viewer: LiveRoomParticipant): LiveChatMessage | null {
+    const id = this.moderation.pinned();
+    const row = id ? this.chat.message(id) : null;
+    if (!row) return null;
+    return this.batch([row], viewer.userId ? [viewer.userId] : []).project(row, viewer);
   }
 
   /** The page before a message this viewer holds, or the latest page. */

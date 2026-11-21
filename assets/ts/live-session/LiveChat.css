@@ -325,4 +325,55 @@
     align-self: end;
     min-block-size: 2.5rem;
   }
+
+  /* The pinned message: one quiet line above the feed, the whole of it on request. */
+  .pk-live-chat__pinned {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-1);
+    flex: none;
+    padding: var(--pk-1) var(--pk-1) var(--pk-1) var(--pk-2);
+    border-inline-start: 2px solid var(--pk-accent);
+    border-radius: var(--pk-radius-sm);
+    background: var(--pk-surface-sunk);
+    font-size: var(--pk-text-sm);
+    line-height: 1.35;
+  }
+  .pk-live-chat__pinned[data-open] {
+    align-items: start;
+  }
+  .pk-live-chat__pinned .pk-btn {
+    flex: none;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    min-block-size: 0;
+  }
+  .pk-live-chat__pinned-icon {
+    flex: none;
+    color: var(--pk-ink-muted);
+  }
+  .pk-live-chat__pinned[data-open] .pk-live-chat__pinned-icon {
+    margin-block-start: 0.2rem;
+  }
+  .pk-live-chat__pinned-text {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .pk-live-chat__pinned:not([data-open]) .pk-live-chat__pinned-text :is(.pk-live-chat__text, p, ul, ol, li) {
+    display: inline;
+    margin: 0;
+    padding: 0;
+    white-space: nowrap;
+  }
+  .pk-live-chat__pinned[data-open] .pk-live-chat__pinned-text {
+    max-block-size: 12rem;
+    overflow: auto;
+    white-space: normal;
+  }
+  .pk-live-chat__pinned-author {
+    font-weight: 600;
+  }
 }

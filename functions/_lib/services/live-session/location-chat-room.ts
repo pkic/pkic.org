@@ -182,6 +182,8 @@ export class LiveLocationChatRoom {
         return chatActions.handle(viewer, actor, message, socket);
       case "chat.moderate":
       case "chat.convert":
+      case "chat.pin":
+      case "chat.unpin":
         return operator ? chatActions.handle(viewer, actor, message, socket) : REFUSALS.operatorOnly;
       case "author.lookup":
         return chatActions.lookupAuthor(viewer, actor, message.handle, socket);

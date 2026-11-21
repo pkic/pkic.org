@@ -64,6 +64,7 @@ export function applyLiveRoomMessage(
     case "chat.message":
     case "chat.removed":
     case "chat.reactions":
+    case "chat.pinned":
     case "chat.history":
       // A session's chat is its location's, which speaks on a connection of its own.
       return state;

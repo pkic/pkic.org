@@ -208,6 +208,15 @@ export function IconRemove(props: SvgProps) {
   );
 }
 
+/** A pushpin: kept on top. */
+export function IconPin(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <path d="M10 1.5 14.5 6l-1.5.5-2.5 2.5-.5 3-6-6 3-.5L9.5 3ZM7 9l-5 5" />
+    </StrokeIcon>
+  );
+}
+
 export function IconPencil(props: SvgProps) {
   return (
     <StrokeIcon {...props}>

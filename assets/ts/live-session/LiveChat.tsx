@@ -16,6 +16,7 @@ import { liveChatChannel } from "./live-chat-state";
 import type { LiveChatView } from "./location-chat-state";
 import { LiveChatMessageRow, type LiveChatRowHandlers } from "./LiveChatMessageRow";
 import { LiveChatQuote } from "./LiveChatQuote";
+import { LiveChatPinned } from "./LiveChatPinned";
 import { IconRemove } from "../ui/MediaIcons";
 import { LiveAuthorProvider } from "./LiveAuthor";
 import { useContractForm } from "../hooks/useContractForm";
@@ -330,6 +331,9 @@ export function LiveChat({
   return (
     <LiveAuthorProvider authors={state.authors} send={send}>
       <div class={`pk-live-chat-workspace${compact ? " pk-live-chat-workspace--compact" : ""}`}>
+        {channel === "attendee" && state.chatPinned ? (
+          <LiveChatPinned message={state.chatPinned} viewer={state.viewer} send={send} disabled={disabled} />
+        ) : null}
         <div
           ref={(node) => {
             list.viewport.current = node;
@@ -381,6 +385,7 @@ export function LiveChat({
                   divider={dividers.get(message.id) ?? null}
                   handlers={handlers}
                   highlighted={highlighted === message.id}
+                  pinned={state.chatPinned?.id === message.id}
                 />
               ))}
               {list.after ? (

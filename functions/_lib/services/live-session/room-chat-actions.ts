@@ -99,6 +99,7 @@ export class LiveRoomChatActions {
   async handle(viewer: LiveRoomParticipant, actor: Actor, command: ChatCommand, socket: WebSocket) {
     const restricted = this.feed.decisions.restriction(actor.userId, Date.now()) !== null;
     if (command.type === "chat.history") return this.history(viewer, actor, command.channel, command.before, socket);
+    if (command.type === "chat.unpin") return staff(viewer) ? this.unpin(actor) : REFUSALS.notAllowed;
     if (command.type === "chat.send") {
       const answered = command.replyTo ? this.answerable(command.replyTo, viewer, restricted, command.channel) : null;
       if (answered && typeof answered !== "string") return answered;
@@ -129,6 +130,8 @@ export class LiveRoomChatActions {
         return refuse(command.decision) ?? this.moderate(actor, row, command.decision, command.reason ?? null, at);
       case "chat.convert":
         return refuse("convert") ?? this.convert(actor, row, at);
+      case "chat.pin":
+        return refuse("pin") ?? this.pin(actor, row, at);
     }
   }
 
@@ -170,6 +173,7 @@ export class LiveRoomChatActions {
       authorRestriction: this.feed.decisions.restriction(row.author_user_id, Date.now())?.block ?? null,
       sentAt: row.sent_at,
       editLocked: reports > 0 || converted || this.chat.aired([row.id]).has(row.id),
+      pinned: this.feed.moderation.pinned() === row.id,
     });
   }
 
@@ -345,6 +349,35 @@ export class LiveRoomChatActions {
     await this.deliver([row], { removeWhenHidden: false, only: staff });
   }
 
+  /** Puts a message on top of the chat for everyone who sees it, in place of the one pinned before. */
+  private async pin(actor: Actor, row: LiveChatRow, at: string) {
+    this.feed.moderation.pin(row.id, actor.name, at);
+    this.audit(actor.userId, "live_session.chat.pinned", { messageId: row.id }, at);
+    await this.sendPinned();
+  }
+
+  private async unpin(actor: Actor) {
+    const pinned = this.feed.moderation.pinned();
+    if (!pinned) return;
+    this.feed.moderation.unpin();
+    this.audit(actor.userId, "live_session.chat.unpinned", { messageId: pinned }, nowIso());
+    await this.sendPinned();
+  }
+
+  /** The pinned message to everyone as they may see it; its author's copy is their own. */
+  private async sendPinned(): Promise<void> {
+    const id = this.feed.moderation.pinned();
+    const row = id ? this.chat.message(id) : null;
+    const batch = row ? this.feed.batch([row], this.connectedPeople()) : null;
+    await this.broadcast.send(
+      (viewer) =>
+        liveChatChannelVisible("attendee", viewer)
+          ? { type: "chat.pinned", message: row && batch ? batch.project(row, viewer) : null }
+          : null,
+      (viewer) => (row && batch?.personal(row, viewer) ? `person:${viewer.userId}` : viewer.role),
+    );
+  }
+
   /** One author's card, to the asking socket only, when the handle names someone they can see writing here. */
   async lookupAuthor(viewer: LiveRoomParticipant, actor: Actor, handle: string, socket: WebSocket) {
     if (!this.allowed("author", actor.userId)) return REFUSALS.tooFast;
@@ -374,13 +407,7 @@ export class LiveRoomChatActions {
     rows: LiveChatRow[],
     options: { removeWhenHidden: boolean; only?: (viewer: LiveRoomParticipant) => boolean },
   ): Promise<void> {
-    const people = [
-      ...new Set(
-        this.ctx
-          .getWebSockets()
-          .flatMap((socket) => (socket.deserializeAttachment() as LiveRoomParticipant | null)?.userId ?? []),
-      ),
-    ];
+    const people = this.connectedPeople();
     for (const row of rows) {
       const batch = this.feed.batch([row], people);
       await this.broadcast.send(
@@ -397,6 +424,16 @@ export class LiveRoomChatActions {
           batch.personal(row, viewer) ? `person:${viewer.userId}` : `${viewer.role}:${options.only?.(viewer) ?? true}`,
       );
     }
+  }
+
+  private connectedPeople(): string[] {
+    return [
+      ...new Set(
+        this.ctx
+          .getWebSockets()
+          .flatMap((socket) => (socket.deserializeAttachment() as LiveRoomParticipant | null)?.userId ?? []),
+      ),
+    ];
   }
 
   private nudgeTicker(): void {

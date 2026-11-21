@@ -60,6 +60,8 @@ export class LiveSessionCommands {
       case "chat.history":
       case "chat.moderate":
       case "chat.convert":
+      case "chat.pin":
+      case "chat.unpin":
         // A session's chat is its location's, on a connection of its own.
         return REFUSALS.chatInLocation;
       case "author.lookup":

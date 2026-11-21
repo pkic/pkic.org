@@ -81,6 +81,8 @@ export const LIVE_CHAT_ACTIONS = [
   "keep",
   "done",
   "convert",
+  "pin",
+  "unpin",
   "pause",
   "block",
   "blockEvent",
@@ -107,6 +109,8 @@ export interface LiveChatActionSubject {
   sentAt: string;
   /** Reported, asked as a question or shown on screen: its words stay as they are. */
   editLocked: boolean;
+  /** Pinned above the chat. */
+  pinned?: boolean;
 }
 
 /** Whether a message sent at `sentAt` is still within its author's edit window. */
@@ -169,6 +173,7 @@ export function liveChatActions(
     if (message.hidden || message.reported) actions.add("keep");
     if (message.channel === "attendee" && !message.hidden && !message.converted) actions.add("convert");
     if (message.channel === "attendee" && !message.done) actions.add("done");
+    if (message.channel === "attendee" && !message.hidden) actions.add(message.pinned ? "unpin" : "pin");
   }
   if (message.channel === "attendee")
     for (const action of liveParticipationActions(

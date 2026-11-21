@@ -2,7 +2,7 @@ import { LIVE_CHAT_POLICY, liveChatReplyExcerpt } from "../../shared/live-chat-p
 import type { LiveChatChannel, LiveChatMessage } from "../../shared/schemas/live-session-chat";
 import type { LiveLocationChatSnapshot, LiveRoomServerMessage } from "../../shared/schemas/live-session-room";
 
-type ChatState = Pick<LiveLocationChatSnapshot, "chat" | "chatEarlier" | "chatReports" | "viewer">;
+type ChatState = Pick<LiveLocationChatSnapshot, "chat" | "chatEarlier" | "chatPinned" | "chatReports" | "viewer">;
 type ChatServerMessage = Extract<LiveRoomServerMessage, { type: `chat.${string}` }>;
 
 /** A message awaits a moderator's review while it is reported and either shown or held. */
@@ -94,27 +94,47 @@ function requote<State extends ChatState>(state: State, answered: string, now: L
   };
 }
 
+/** The pinned message follows its edits, and leaves the top of the chat once it is removed or hidden. */
+function repin<State extends ChatState>(state: State, messageId: string, now: LiveChatMessage | null): State {
+  if (state.chatPinned?.id !== messageId) return state;
+  const shown = now !== null && !now.removal && !now.moderation?.hidden;
+  return { ...state, chatPinned: shown ? now : null };
+}
+
 /** Applies one chat message from the room to the browser's chat. */
 export function applyLiveChatMessage<State extends ChatState>(state: State, message: ChatServerMessage): State {
   switch (message.type) {
     case "chat.message":
-      return requote(upsert(state, message.message), message.message.id, message.message);
+      return repin(
+        requote(upsert(state, message.message), message.message.id, message.message),
+        message.message.id,
+        message.message,
+      );
     case "chat.removed":
-      return requote(
-        {
-          ...state,
-          chat: state.chat.filter((entry) => entry.id !== message.messageId || entry.channel !== message.channel),
-          chatReports: state.chatReports?.filter((entry) => entry.id !== message.messageId),
-        },
+      return repin(
+        requote(
+          {
+            ...state,
+            chat: state.chat.filter((entry) => entry.id !== message.messageId || entry.channel !== message.channel),
+            chatReports: state.chatReports?.filter((entry) => entry.id !== message.messageId),
+          },
+          message.messageId,
+          null,
+        ),
         message.messageId,
         null,
       );
-    case "chat.reactions":
-      return update(state, message.messageId, (entry) => ({
+    case "chat.pinned":
+      return { ...state, chatPinned: message.message };
+    case "chat.reactions": {
+      const react = (entry: LiveChatMessage) => ({
         ...entry,
         reactions: message.reactions,
         myReactions: message.myReactions ?? entry.myReactions,
-      }));
+      });
+      const next = update(state, message.messageId, react);
+      return next.chatPinned?.id === message.messageId ? { ...next, chatPinned: react(next.chatPinned) } : next;
+    }
     case "chat.history": {
       const held = liveChatChannel(state, message.channel);
       const known = new Set(held.map((entry) => entry.id));
