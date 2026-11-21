@@ -112,7 +112,7 @@ const LISTS: Pick<LiveStage, "topQuestions" | "chatFeed"> = {
 const CHAT_MIXED: LiveStage["chatFeed"] = {
   config: { count: 6, delaySeconds: 10 },
   messages: [
-    { id: "40000000-0000-4000-8000-000000000021", authorName: "Alex Example", text: "Good morning from Toronto!" },
+    { id: "40000000-0000-4000-8000-000000000021", authorName: "Alex Example", text: "Good morning, everyone!" },
     {
       id: "40000000-0000-4000-8000-000000000022",
       authorName: "Casey Demo",

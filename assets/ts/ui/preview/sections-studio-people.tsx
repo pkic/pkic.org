@@ -16,7 +16,7 @@ import { ROOM } from "./studio-on-screen-fixtures";
 const TYPED_GUEST = {
   ...ROOM.session.credits[0]!,
   key: "added:guest",
-  name: "Chris Bailey",
+  name: "Jordan Example",
   identity: null,
   additionalIdentities: [],
   titleLine: "Author, Example Press",
