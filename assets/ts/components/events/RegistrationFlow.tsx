@@ -101,6 +101,9 @@ export function RegistrationFlow(props: Props) {
   const [error, setError] = useState("");
   const [attendance, setAttendance] = useState(initial?.dayAttendance ?? []);
   const pricing = useAttendancePricing();
+  // Step navigation is installed once; the review reads the ticket chosen by the time it is shown.
+  const latestPricing = useRef(pricing);
+  latestPricing.current = pricing;
   const savedIdentityId = useRef(initial?.identityId ?? null);
   /** The signed-in account's saved names: the "You" step checks them, and the review shows them; the request never carries them. */
   const accountNames = useRef({ firstName: "", lastName: "" });
@@ -174,8 +177,12 @@ export function RegistrationFlow(props: Props) {
     readBody,
   );
   const contactReady = useCallback((value: boolean) => setReady(value), []);
+  const [, setKnownNames] = useState(accountNames.current);
   const rememberAccountNames = useCallback((names: { firstName: string; lastName: string }) => {
     accountNames.current = names;
+    // Render again so the contact contract reads the saved names; a complete name answers the step's alert.
+    setKnownNames(names);
+    if (names.firstName.trim() && names.lastName.trim()) setError("");
   }, []);
   // Continue waits while a work address has no organization; the step's alert says why.
   const [representationPending, setRepresentationPending] = useState(false);
@@ -229,7 +236,13 @@ export function RegistrationFlow(props: Props) {
             return false;
           }
           const { firstName, lastName } = accountNames.current;
-          updateRegistrationReview(boot.root, boot.form, fields, [firstName, lastName].filter(Boolean).join(" "));
+          updateRegistrationReview(
+            boot.root,
+            boot.form,
+            fields,
+            [firstName, lastName].filter(Boolean).join(" "),
+            latestPricing.current?.reviewItems,
+          );
         }
       },
       (step) => {

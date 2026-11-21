@@ -38,10 +38,9 @@ function deadlineClock(timeZone: string): string {
   return `11:59 pm ${formatZoneCity(timeZone)} time`;
 }
 
-/** A ticket's work-address condition as fine print, with the price it means for a personal address. */
+/** A ticket's work-address condition as fine print. A personal address sees how to meet it; a work address meets it. */
 function personalEmailNote(offer: EventTicketOffer, ticket: OfferedTicket): ComponentChildren {
   if (ticket.personalEmailAmount === null) return undefined;
-  const price = formatTicketAmount(ticket.personalEmailAmount, offer.currency);
   return offer.personalEmail ? (
     <>
       Free with a work email address ·{" "}
@@ -50,9 +49,7 @@ function personalEmailNote(offer: EventTicketOffer, ticket: OfferedTicket): Comp
       </Button>
     </>
   ) : (
-    <>
-      Work email address required · <strong>{price}</strong> with a personal address
-    </>
+    "Work email address required"
   );
 }
 
@@ -236,12 +233,19 @@ export function EventTicketPricing({ slug, children }: { slug: string; children:
     let above: ComponentChildren;
     if (quote?.source === "code" && activeTicket)
       above = card(activeTicket, {
-        price: formatTicketAmount(quote.total, data.currency),
+        // A code prices the days chosen. Before a day is chosen there is no amount to state, and a free
+        // code's ticket never shows a price it will not cost.
+        price: dayAttendance.length > 0 ? formatTicketAmount(quote.total, data.currency) : "",
         priceTo: undefined,
         priceTerms: "with your code",
         priceNext: undefined,
         note: undefined,
-        reason: <>Your code for {quote.codeLabel} gives you this ticket.</>,
+        reason: (
+          <>
+            Your code for {quote.codeLabel} gives you this ticket.
+            {dayAttendance.length > 0 ? "" : " Choose your days to see your price."}
+          </>
+        ),
       });
     else if (data.assigned && !disputing) {
       const assigned = data.tickets.find((ticket) => ticket.key === data.assigned!.ticketKey);
@@ -334,16 +338,23 @@ export function EventTicketPricing({ slug, children }: { slug: string; children:
     const below =
       !showOrder && data.tickets.length < 2 ? undefined : (
         <div class="pk-ticket-order" {...form.handlers}>
-          {quote && showOrder && (
+          {quote && showOrder && dayAttendance.length > 0 && (
             <dl class="pk-ticket-order__lines">
               <div class="pk-ticket-order__line">
                 <dt>
                   {quote.ticketName} ticket
-                  {quote.codeLabel && <small>Code: {quote.codeLabel}</small>}
                   {quote.personalEmailPrice && <small>Price for a personal email address</small>}
+                  {quote.codeLabel && quote.total === 0 && <small>Code: {quote.codeLabel}</small>}
                 </dt>
-                <dd>{formatTicketAmount(quote.subtotal, quote.currency)}</dd>
+                {/* A free ticket reads as free: it never shows a price that is then taken off. */}
+                <dd>{formatTicketAmount(quote.total === 0 ? 0 : quote.subtotal, quote.currency)}</dd>
               </div>
+              {quote.codeLabel && quote.total > 0 && quote.total < quote.subtotal && (
+                <div class="pk-ticket-order__line">
+                  <dt>Code: {quote.codeLabel}</dt>
+                  <dd>−{formatTicketAmount(quote.subtotal - quote.total, quote.currency)}</dd>
+                </div>
+              )}
               <div class="pk-ticket-order__line pk-ticket-order__total">
                 <dt>Total</dt>
                 <dd>{formatTicketAmount(quote.total, quote.currency)}</dd>
@@ -351,7 +362,10 @@ export function EventTicketPricing({ slug, children }: { slug: string; children:
             </dl>
           )}
           {mustChoose && showOrder && <p class="pk-muted">Choose a ticket to see your price.</p>}
-          {quote && quote.nextTotal !== null && quote.nextPeriodStartsOn && (
+          {quote && showOrder && dayAttendance.length === 0 && (
+            <p class="pk-muted">Choose your days to see your price.</p>
+          )}
+          {quote && dayAttendance.length > 0 && quote.nextTotal !== null && quote.nextPeriodStartsOn && (
             <p class="pk-ticket-order__deadline">
               <IconClock width="16" height="16" />
               Register by {formatCalendarDate(dayBefore(quote.nextPeriodStartsOn))} to{" "}
@@ -432,6 +446,18 @@ export function EventTicketPricing({ slug, children }: { slug: string; children:
         ),
       },
       priceHeading: activeTicket ? `${activeTicket.name} ticket` : "Price",
+      reviewItems: quote
+        ? [
+            {
+              term: "Ticket",
+              value: quote.codeLabel ? `${quote.ticketName} · code ${quote.codeLabel}` : quote.ticketName,
+            },
+            // An event where nothing costs money states no total, as on the attendance step.
+            ...(showOrder && dayAttendance.length > 0
+              ? [{ term: "Total", value: formatTicketAmount(quote.total, quote.currency) }]
+              : []),
+          ]
+        : undefined,
       onSelection,
       settle,
     };

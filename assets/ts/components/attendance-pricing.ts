@@ -29,6 +29,8 @@ export interface AttendancePricing {
   /** What the prices are for, above them: "Vendor ticket". */
   priceHeading?: string;
   onSelection?: (selected: Readonly<Record<string, string>>) => void;
+  /** The ticket and what it costs, as the review lists them before the person registers. */
+  reviewItems?: readonly { term: string; value: string }[];
   /**
    * Resolves once the latest choice is kept on the server, so a registration is made with what is shown.
    * Rejects when it was not kept, and with `PricingChoiceRequiredError` when there is no choice to keep yet.

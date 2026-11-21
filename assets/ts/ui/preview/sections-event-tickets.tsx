@@ -115,11 +115,7 @@ function AttendanceWithTicketChoice() {
             value="attendee"
             title="Attendee"
             description={ATTENDEE_COPY}
-            note={
-              <>
-                Work email address required · <strong>$195</strong> with a personal address
-              </>
-            }
+            note="Work email address required"
             price="Free"
             priceTerms="until Mar 19, 2027"
             priceNext="then up to $195"

@@ -77,6 +77,7 @@ function RegistrationReview({
 }: {
   fullName: string;
   email: string;
+  /** The days, then the ticket and its total when attending has a price. */
   attendance: DescriptionListItem[];
   customFields: FormField[];
   customAnswers: FormAnswers;
@@ -116,6 +117,7 @@ export function updateRegistrationReview(
   form: HTMLFormElement,
   customFieldDefs: FormField[],
   fullName: string,
+  ticket: readonly DescriptionListItem[] = [],
 ): void {
   const email = readField(form, "email");
 
@@ -130,7 +132,7 @@ export function updateRegistrationReview(
       <RegistrationReview
         fullName={fullName}
         email={email}
-        attendance={readAttendanceReview(form)}
+        attendance={[...readAttendanceReview(form), ...ticket]}
         customFields={visibleCustomFields(root, customFieldDefs)}
         customAnswers={readCustomFieldValues(form) as FormAnswers}
         form={form}

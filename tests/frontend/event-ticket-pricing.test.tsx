@@ -106,6 +106,25 @@ async function mount(assigned: Parameters<typeof offer>[0], identityId = "") {
         : request.dayAttendance.some((choice) => choice.attendanceType === "in_person") && vendor
           ? 39500
           : 0;
+      // A partner code halves the price and a sponsor code waives it; either is named on the order.
+      const discount = request.code === "HALF" ? 0.5 : request.code === "FREE" ? 1 : null;
+      const coded = request.dayAttendance.some((choice) => choice.attendanceType === "in_person") ? 39500 : 0;
+      if (discount !== null)
+        return Response.json(
+          eventTicketQuoteSchema.parse({
+            ticketKey: "pqcc_vendor",
+            ticketName: "Vendor",
+            source: "code",
+            currency: "usd",
+            lines: quoteLines,
+            subtotal: coded,
+            total: coded * (1 - discount),
+            codeLabel: "Partner",
+            nextTotal: null,
+            nextPeriodStartsOn: null,
+            personalEmailPrice: false,
+          }),
+        );
       return Response.json(
         eventTicketQuoteSchema.parse({
           ticketKey: vendor ? "pqcc_vendor" : "pqcc_attendee",
@@ -367,4 +386,57 @@ it("adds nothing up below the grid when the event's only ticket costs nothing", 
   expect(host.textContent).toContain("Free");
   expect(host.querySelector(".pk-ticket-order")).toBeNull();
   expect(host.querySelector('input[name="code"]')).toBeNull();
+});
+
+async function applyCode(value: string) {
+  const code = host.querySelector<HTMLInputElement>('input[name="code"]')!;
+  await act(() => {
+    code.value = value;
+    code.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(() => [...host.querySelectorAll("button")].find((button) => button.textContent === "Apply code")!.click());
+  await settle();
+  await settle();
+}
+
+const chooseInPerson = () =>
+  act(() => host.querySelector<HTMLInputElement>('input[name="dayAttendance.2027-11-16"][value="in_person"]')!.click());
+
+const orderLines = () =>
+  [...host.querySelectorAll(".pk-ticket-order__line")].map((line) => [
+    line.querySelector("dt")?.textContent,
+    line.querySelector("dd")?.textContent,
+  ]);
+
+it("prices a code only once days are chosen, and shows what the code takes off", async () => {
+  await mount(null);
+  await act(() => host.querySelector<HTMLInputElement>('input[name="eventTicket"][value="pqcc_vendor"]')!.click());
+  await settle();
+  await applyCode("HALF");
+  // Without days there is no price to state yet: the order asks for the days instead of claiming one.
+  expect(host.querySelector(".pk-ticket-order__lines")).toBeNull();
+  expect(host.textContent).toContain("Choose your days to see your price.");
+  expect(pricing!.reviewItems).toEqual([{ term: "Ticket", value: "Vendor · code Partner" }]);
+  await chooseInPerson();
+  await settle();
+  expect(orderLines().map(([, amount]) => amount)).toEqual(["$395", "−$197.50", "$197.50"]);
+  expect(orderLines()[1][0]).toContain("Partner");
+  // The review lists the ticket and its total before the person registers.
+  expect(pricing!.reviewItems).toEqual([
+    { term: "Ticket", value: "Vendor · code Partner" },
+    { term: "Total", value: "$197.50" },
+  ]);
+});
+
+it("reads a code that waives the price as free, without a price taken back", async () => {
+  await mount(null);
+  await act(() => host.querySelector<HTMLInputElement>('input[name="eventTicket"][value="pqcc_vendor"]')!.click());
+  await chooseInPerson();
+  await settle();
+  await applyCode("FREE");
+  const lines = orderLines();
+  expect(lines).toHaveLength(2);
+  expect(lines[0][0]).toContain("Code: Partner");
+  expect(lines.flat().join(" ")).not.toContain("$395");
+  expect(host.querySelector(".pk-ticket-order__total")?.textContent).toContain("Free");
 });

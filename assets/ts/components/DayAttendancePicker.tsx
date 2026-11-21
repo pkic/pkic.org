@@ -364,10 +364,11 @@ export function DayAttendancePicker({
           ? "Pick one option per day. Tap a mode’s column header to use it for every available day."
           : "Pick one option per day. Click an option’s name to use it for every available day."}
       </p>
-      {/* Each orientation is its own table. Reusing one table for the other orientation's
-          columns left Chromium with no layout box for it after a resize. */}
+      {/* Each orientation, and each ticket's prices, is its own table. Reusing one table for
+          other columns or prices left Chromium with no layout box for it: after a resize, and
+          after a code changed the ticket. */}
       <DataTable
-        key={transposed ? "by-option" : "by-day"}
+        key={`${transposed ? "by-option" : "by-day"}:${heading ?? ""}`}
         caption="Attendance by day"
         narrowLayout="columns"
         columns={columns}
