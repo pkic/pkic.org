@@ -158,9 +158,11 @@ export function FormSubmissionsTable<Response extends { submissions: FormSubmiss
       resolvePage={(data) => data.page}
       paginate
       inset={
-        <p class="pk-small pk-muted">
-          Filter answers for one question at a time. Choosing another question replaces the current answer filter.
-        </p>
+        fields.length > 0 && (
+          <p class="pk-small pk-muted">
+            Filter answers for one question at a time. Choosing another question replaces the current answer filter.
+          </p>
+        )
       }
       tableOptionsFilters
       initialSort="-submitted_at"

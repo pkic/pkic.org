@@ -169,11 +169,20 @@ test("exact answers commit on Enter or Done and boolean filters use Yes/No", asy
     await page.getByRole("menuitem", { name: /^(Filter this column|Edit filter)…$/ }).click();
   };
   await openNotes();
-  const input = responses.getByRole("textbox", { name: "Filter notes", exact: true });
+  const input = responses.getByRole("textbox", { name: "Filter Notes", exact: true });
   await input.fill("x".repeat(501));
   await input.press("Enter");
   await expect(input).toHaveAttribute("aria-invalid", "true");
   await expect(page).not.toHaveURL(/form-responses.f.answerValue=/);
+  await input.press("Escape");
+  await expect(input).toHaveCount(0);
+  await openNotes();
+  await expect(input).toHaveValue("");
+  await input.fill("x".repeat(501));
+  await responses.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(input).toHaveCount(0);
+  await expect(page).not.toHaveURL(/form-responses.f.answerValue=/);
+  await openNotes();
   await input.fill("  Workshop  ");
   await expect(page).not.toHaveURL(/form-responses.f.answerValue=/);
   await input.press("Enter");
@@ -184,6 +193,11 @@ test("exact answers commit on Enter or Done and boolean filters use Yes/No", asy
   );
   expect(query).toMatchObject({ answerField: "notes", answerValue: "Workshop" });
   await openNotes();
+  await input.fill("Abandoned edit");
+  await input.press("Escape");
+  await expect(download).toHaveAttribute("href", /answerValue=Workshop/);
+  await openNotes();
+  await expect(input).toHaveValue("Workshop");
   for (const width of [1440, 375]) {
     await page.setViewportSize({ width, height: 900 });
     await expect(input).toBeVisible();

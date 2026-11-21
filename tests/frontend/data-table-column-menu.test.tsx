@@ -1,6 +1,8 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useColumnControls } from "../../assets/ts/components/table-column-controls";
+import { eventAttendanceRegistrationsQuerySchema } from "../../assets/shared/schemas/event-registrations";
 import { DataTable, type Column } from "../../assets/ts/components/Table";
 
 interface Row {
@@ -200,4 +202,35 @@ it("applies scoped filters atomically on a bare table", () => {
       .click(),
   );
   expect(changed).toHaveBeenCalledExactlyOnceWith({ answerField: "stage", stage: "contacted" });
+});
+
+it("hides an open typed filter when shared controls lose their filter capability", () => {
+  const changed = vi.fn();
+  function SharedTable({ enabled }: { enabled: boolean }) {
+    const cols: Column<Row>[] = [
+      {
+        header: "Job title",
+        cell: (row) => row.name,
+        filter: {
+          param: "job_title",
+          text: { schema: eventAttendanceRegistrationsQuerySchema.pick({ job_title: true }) },
+        },
+      },
+    ];
+    const controls = useColumnControls(cols, { onFilterPatch: enabled ? changed : undefined });
+    return (
+      <>
+        <button type="button" onClick={() => controls.setFilterOpen("job_title")}>
+          Open filter
+        </button>
+        <DataTable caption="Shared" columns={cols} data={rows} controls={controls} />
+      </>
+    );
+  }
+  const container = mount(<SharedTable enabled />);
+  void act(() => container.querySelector<HTMLButtonElement>("button")!.click());
+  expect(container.querySelector("input")).not.toBeNull();
+  void act(() => render(<SharedTable enabled={false} />, container));
+  expect(container.querySelector("input")).toBeNull();
+  expect(changed).not.toHaveBeenCalled();
 });

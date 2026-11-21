@@ -44,6 +44,8 @@ export interface ColumnControlsOptions {
 }
 
 export interface ColumnControls<T> {
+  /** Whether this controller can apply filter changes. */
+  canFilter: boolean;
   /** Keys (see `columnKey`) of the columns the reader has hidden for this visit. */
   hidden: ReadonlySet<string>;
   /** The control key of the column whose typed filter is open, if any. */
@@ -337,6 +339,7 @@ export function useColumnControls<T>(
           : null;
 
   return {
+    canFilter: Boolean(onFilterPatch),
     hidden,
     filterOpen,
     setFilterOpen,

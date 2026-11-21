@@ -24,6 +24,7 @@ import { RowActions } from "../../../../ui/RowActions";
 import {
   EVENT_REGISTRATION_STATUSES,
   eventAttendanceRegistrationsListResponseSchema,
+  eventAttendanceRegistrationsQuerySchema,
   eventRegistrationStatusLabel,
   eventRegistrationStatusSchema,
   type EventAttendanceRegistrationsStats,
@@ -194,7 +195,13 @@ export function GroupEventRegistrations({
             cell: (r) => r.job_title ?? "—",
             className: "pk-small",
             defaultHidden: true,
-            filter: { param: "job_title", text: { placeholder: "e.g. security architect" } },
+            filter: {
+              param: "job_title",
+              text: {
+                schema: eventAttendanceRegistrationsQuerySchema.pick({ job_title: true }),
+                placeholder: "e.g. security architect",
+              },
+            },
           },
           {
             header: "Country",

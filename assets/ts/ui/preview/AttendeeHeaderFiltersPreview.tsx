@@ -6,6 +6,7 @@ import { LEGACY_ATTENDANCE_ACCESS } from "../../../shared/event-attendance-acces
 import { attendanceTypeLabel } from "../../shared/attendance";
 import { DataTable } from "../../components/Table";
 import { registrationAttendanceColumns } from "../../components/event-registrations/registration-attendance-columns";
+import { eventAttendanceRegistrationsQuerySchema } from "../../../shared/schemas/event-registrations";
 import type { RegistrationDayState } from "../../../shared/schemas/event-registrations";
 import { countryOptions } from "../../../shared/countries";
 import { BADGE_DISPLAY_ROLE_LABELS, badgeDisplayRoleSchema } from "../../../shared/schemas/participant-roles";
@@ -62,7 +63,13 @@ export function AttendeeHeaderFiltersPreview() {
       header: "Job title",
       cell: (row: (typeof rows)[number]) => row.jobTitle,
       defaultHidden: true,
-      filter: { param: "job_title", text: { placeholder: "e.g. security architect" } },
+      filter: {
+        param: "job_title",
+        text: {
+          schema: eventAttendanceRegistrationsQuerySchema.pick({ job_title: true }),
+          placeholder: "e.g. security architect",
+        },
+      },
     },
     {
       header: "Country",

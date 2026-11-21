@@ -9,7 +9,7 @@ import { eventAttendanceRegistrationsQuerySchema } from "../../assets/shared/sch
 import { groupEventDaysResponseSchema } from "../../assets/shared/schemas/group-events";
 import { groupEventRegistrationExportQuerySchema } from "../../assets/shared/schemas/group-event-registration-operations";
 import { eventBadgePrintPopulationQuerySchema } from "../../assets/shared/schemas/event-badge-printing";
-import { openColumnFilterMenu, chooseColumnFilter } from "./helpers/column-menu";
+import { openColumnFilterMenu, chooseColumnFilter, commitExactFilter } from "./helpers/column-menu";
 import { GROUP_ID, EVENT_ID, json, registrationList } from "./helpers/group-event-attendance-fixtures";
 
 let host: HTMLDivElement | undefined;
@@ -228,6 +228,8 @@ it("offers country, job title and attendee type filters without revealing their 
     input.value = "architect";
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
+  expect(queries.at(-1)?.job_title).toBeUndefined();
+  await commitExactFilter(container);
   await vi.waitFor(() => expect(queries.at(-1)?.job_title).toBe("architect"));
   const headers = [...container.querySelectorAll("thead th")].map((cell) => cell.textContent);
   expect(headers).not.toContain("Country");
