@@ -18,11 +18,15 @@ import { closeLiveRoomSocket } from "./room-socket-close";
 import type { LiveRoomSql } from "./room-sql";
 
 type Room = LiveRoomAccessScope;
+/** Everyone connected, or only the connections that have not been checked yet. */
+type ReadScope = "all" | "unchecked";
+
+const checked = (socket: WebSocket) => Boolean((socket.deserializeAttachment() as LiveRoomParticipant).accessGrant);
 
 /** Connection leases survive hibernation in socket attachments; only the alarm refreshes D1 access. */
 export class LiveRoomAccessLease {
   private readonly admitting = new WeakSet<WebSocket>();
-  private refreshing: Promise<void> | undefined;
+  private refreshing: { scope: ReadScope; done: Promise<void> } | undefined;
   private readonly scopes = new Set<LiveRoomCommandRead>();
 
   constructor(
@@ -79,7 +83,8 @@ export class LiveRoomAccessLease {
   async admit(socket: WebSocket): Promise<void> {
     this.admitting.add(socket);
     try {
-      await this.refresh();
+      // A join checks only who is joining; the alarm keeps everyone else's access current.
+      await this.renew("unchecked");
     } catch (error) {
       closeLiveRoomSocket(socket, 1011, "Room admission unavailable");
       throw error;
@@ -121,31 +126,40 @@ export class LiveRoomAccessLease {
     return { ok: true, participant: viewer, expiresAt: Date.parse(parsed.data.credentialExpiresAt) };
   }
 
-  /** Admission and the single room alarm own refresh; overlapping joins share one in-flight refresh. */
-  async refresh(): Promise<void> {
-    if (this.refreshing) {
-      await this.refreshing;
-      // A socket admitted while the read was pending needs its own canonical basis.
-      if (this.sockets().every((socket) => (socket.deserializeAttachment() as LiveRoomParticipant).accessGrant)) return;
-      return this.refresh();
+  /** The room alarm refreshes everyone's access. */
+  refresh(): Promise<void> {
+    return this.renew("all");
+  }
+
+  /** Admission and the single room alarm own reads; overlapping ones share one in-flight read. */
+  private async renew(scope: ReadScope): Promise<void> {
+    const running = this.refreshing;
+    if (running) {
+      await running.done;
+      // A read as wide as this one covers it, unless a socket admitted meanwhile still needs its own basis.
+      if ((scope === "unchecked" || running.scope === "all") && this.sockets().every(checked)) return;
+      return this.renew(scope);
     }
-    this.refreshing = this.read();
+    const done = this.read(scope);
+    this.refreshing = { scope, done };
     try {
-      await this.refreshing;
+      await done;
     } finally {
       this.refreshing = undefined;
     }
   }
 
-  private async read(): Promise<void> {
+  private async read(scope: ReadScope): Promise<void> {
     const room = this.room(),
-      sockets = this.sockets();
+      connected = this.sockets(),
+      sockets = scope === "all" ? connected : connected.filter((socket) => !checked(socket));
     if (!room || !sockets.length) return;
     const checkedAt = Date.now();
     const viewers = sockets.map((socket) => socket.deserializeAttachment() as LiveRoomParticipant);
-    const candidates = [
-      ...new Set([...this.candidates(), ...viewers.flatMap((viewer) => (viewer.userId ? [viewer.userId] : []))]),
-    ];
+    // Everyone in the room and every author is checked for erasure on each read, so a joiner never sees what an
+    // erased account posted or did; only the joiners' own access is read again.
+    const present = connected.map((socket) => (socket.deserializeAttachment() as LiveRoomParticipant).userId);
+    const candidates = [...new Set([...this.candidates(), ...present.filter((id): id is string => Boolean(id))])];
     const read = await loadLiveRoomCommandRead(
       this.env.DB,
       this.env.LIVE_SESSION_ROOMS,

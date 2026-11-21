@@ -48,6 +48,22 @@ describe("live interaction stays local to its Durable Object", () => {
     ).toHaveLength(1);
   });
 
+  it("checks only the person joining, and leaves everyone else's access to the alarm", async () => {
+    const operator = await f.connect({ person: "operator" });
+    await env.DB.prepare("UPDATE user_roles SET revoked_at=? WHERE user_id=?")
+      .bind(new Date().toISOString(), f.users.operator)
+      .run();
+    const closed = new Promise<string>((resolve) =>
+      operator.socket.addEventListener("close", (event) => resolve(event.reason)),
+    );
+    let closedEarly = false;
+    void closed.then(() => (closedEarly = true));
+    await f.connect({ person: "attendee" });
+    expect(closedEarly).toBe(false);
+    await runDurableObjectAlarm(f.room());
+    expect(await closed).toBe("LIVE_SESSION_ACCESS_REQUIRED");
+  });
+
   it("keeps access refresh scheduled after copy failures and retries the pending copy", async () => {
     const operator = await f.connect({ person: "operator" });
     operator.send({ type: "question.ask", text: "Keep this pending copy", anonymous: false });
