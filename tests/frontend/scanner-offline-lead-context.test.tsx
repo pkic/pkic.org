@@ -23,6 +23,7 @@ import {
 } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-offline-context";
 import { useScannerOfflinePreparation } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/useEligibilityManifest";
 import { ScannerCodePreparation } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-code-preparation";
+import { prepareScannerEpoch } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-device-ledger";
 
 let host: HTMLElement | undefined;
 beforeEach(() => {
@@ -52,6 +53,17 @@ afterEach(() => {
 });
 
 describe("offline sponsor lead context", () => {
+  it("refuses another sponsor's cached open session while the server is offline", async () => {
+    const sponsorA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const sponsorB = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    mocks.rows[0] = {
+      ...mocks.rows[0],
+      leadLease: { eventId, sponsorId: sponsorA, serverNow: now, expiresAt: manifest().expiresAt },
+    };
+    await expect(prepareScannerEpoch(slug, operator, mocks.rows[0]!.deviceId as string, sponsorB)).rejects.toThrow(
+      "another sponsor",
+    );
+  });
   it("restores only the prepared sponsor lead scanner with its sponsor and no attendee inventory", async () => {
     const sponsorId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
     const leadRoute = `/events/${slug}/sponsors/${sponsorId}/scanner`;

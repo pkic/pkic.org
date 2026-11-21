@@ -162,6 +162,8 @@ export async function startNextScannerEpoch(
 
 /** Reconcile saved authorization during preparation; capture never fetches this status. */
 async function refreshScannerEpoch(db: IDBDatabase, epoch: ScannerEpoch, sponsorId?: string): Promise<ScannerEpoch> {
+  if (epoch.state === "open" && (epoch.leadLease?.sponsorId ?? null) !== (sponsorId ?? null))
+    throw new Error("Scanner lead lease belongs to another sponsor");
   if (epoch.state !== "open" || !epoch.epochId || !navigator.onLine) return epoch;
   let status;
   try {
@@ -183,7 +185,7 @@ async function refreshScannerEpoch(db: IDBDatabase, epoch: ScannerEpoch, sponsor
     throw error;
   }
   if (status.epochId !== epoch.epochId) throw new Error("Scanner status belongs to another session");
-  if (status.leadLease && status.leadLease.sponsorId !== sponsorId)
+  if ((status.leadLease?.sponsorId ?? null) !== (sponsorId ?? null))
     throw new Error("Scanner lead lease belongs to another sponsor");
   if ((status.closedAt || status.closingDeclaredAt) && !status.closingOperationId)
     throw new Error("Scanner status is missing the original closing operation");

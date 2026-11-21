@@ -133,6 +133,71 @@ describe("Live sponsor leads", () => {
       expect(host.querySelector<HTMLInputElement>('input[role="combobox"]')?.value).toBe("Second sponsor"),
     );
   });
+  it("keeps a selected sponsor during a failed lookup and recovers without showing another sponsor", async () => {
+    const thirdId = "10000000-0000-4000-8000-000000000003";
+    window.location.hash = `#/events/event/leads?leadSponsor=${thirdId}`;
+    let failLookup = true;
+    const fetcher = vi.fn(async (url: string | URL | Request) => {
+      const path = String(url);
+      if (path.includes(`sponsorId=${thirdId}`)) {
+        if (failLookup) throw new Error("Sponsor lookup failed");
+        return json({
+          sponsors: [
+            {
+              id: thirdId,
+              name: "Chosen sponsor",
+              capturedCount: 0,
+              canView: true,
+              canCapture: false,
+              canExport: false,
+              canRemoveAll: false,
+            },
+          ],
+          page: { ...page, total: 1 },
+        });
+      }
+      if (path.includes(`/sponsors/${thirdId}/leads`)) return json({ leads: [], page: { ...page, total: 0 } });
+      return json({
+        sponsors: [
+          {
+            id,
+            name: "Other sponsor",
+            capturedCount: 0,
+            canView: true,
+            canCapture: true,
+            canExport: false,
+            canRemoveAll: false,
+          },
+          {
+            id: "10000000-0000-4000-8000-000000000002",
+            name: "Second sponsor",
+            capturedCount: 0,
+            canView: true,
+            canCapture: true,
+            canExport: false,
+            canRemoveAll: false,
+          },
+        ],
+        page: { ...page, total: 3 },
+      });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    const host = document.createElement("div");
+    document.body.append(host);
+    hosts.push(host);
+    await act(() => render(<SponsorLeads slug="event" timeZone="UTC" />, host));
+    await vi.waitFor(() => expect(host.textContent).toContain("We could not reach online services"));
+    expect(host.querySelector('button[aria-label="Scan leads"]')).toBeNull();
+    expect(fetcher.mock.calls.some(([url]) => String(url).includes(`/sponsors/${id}/leads`))).toBe(false);
+    expect(window.location.hash).toContain(`leadSponsor=${thirdId}`);
+    failLookup = false;
+    await act(() => host.querySelector<HTMLButtonElement>("button")!.click());
+    await vi.waitFor(() =>
+      expect(host.querySelector<HTMLInputElement>('input[role="combobox"]')?.value).toBe("Chosen sponsor"),
+    );
+    expect(fetcher.mock.calls.some(([url]) => String(url).includes(`/sponsors/${thirdId}/leads`))).toBe(true);
+    expect(host.textContent).not.toContain("Other sponsor");
+  });
   it("shows an operator only their own scans and keeps export separate", async () => {
     const first = await mount(false, true);
     expect(first.requests.some((url) => url.includes(`/sponsors/${id}/leads`))).toBe(true);

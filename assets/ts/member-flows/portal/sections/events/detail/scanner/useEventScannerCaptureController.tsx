@@ -39,6 +39,7 @@ import { useScannerCaptureLifecycle } from "./useScannerCaptureLifecycle";
 import { useBadgeCollectionPrinting } from "./useBadgeCollectionPrinting";
 import { useSponsorLeadConfirmation } from "./useSponsorLeadConfirmation";
 import { useScannerAdmissionException } from "./useScannerAdmissionException";
+import { watchScannerCameraVisibility } from "./scanner-camera-visibility";
 export function useEventScannerCaptureController({
   slug,
   printHref,
@@ -348,40 +349,26 @@ export function useEventScannerCaptureController({
   const resumeCamera = useRef<() => void>(() => {});
   const pauseCamera = useRef<() => void>(() => {});
   resumeCamera.current = () => {
-    if (fastMode && !manualOpen && !recentVisible && !collection.waiting && !needsAdvance && captureReady)
+    if (
+      fastMode &&
+      !manualOpen &&
+      !recentVisible &&
+      !collection.waiting &&
+      !capturePause.paused.current &&
+      !needsAdvance &&
+      captureReady
+    )
       void camera();
   };
   pauseCamera.current = badgeCamera.stop;
-  useEffect(() => {
-    let backgrounded = document.visibilityState === "hidden";
-    const hidden = () => {
-      backgrounded = true;
-      pauseCamera.current();
-    };
-    const visible = () => {
-      if (document.visibilityState !== "visible" || !backgrounded) return;
-      backgrounded = false;
-      resumeCamera.current();
-    };
-    const pageShown = (event: PageTransitionEvent) => {
-      if (event.persisted) backgrounded = true;
-      visible();
-    };
-    const visibilityChanged = () => {
-      if (document.visibilityState === "hidden") hidden();
-      else visible();
-    };
-    document.addEventListener("visibilitychange", visibilityChanged);
-    window.addEventListener("pagehide", hidden);
-    window.addEventListener("pageshow", pageShown);
-    window.addEventListener("focus", visible);
-    return () => {
-      document.removeEventListener("visibilitychange", visibilityChanged);
-      window.removeEventListener("pagehide", hidden);
-      window.removeEventListener("pageshow", pageShown);
-      window.removeEventListener("focus", visible);
-    };
-  }, []);
+  useEffect(
+    () =>
+      watchScannerCameraVisibility(
+        () => resumeCamera.current(),
+        () => pauseCamera.current(),
+      ),
+    [],
+  );
   function startScanning() {
     if (!requestCapture() || !allowedActions.includes(action)) return;
     if (action === "lead") setLeadRunStarted(true);

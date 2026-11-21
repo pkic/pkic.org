@@ -35,15 +35,11 @@ export function decodeEventAudienceAccess(
     );
     if (canScan) access.set(eventId, { scannerAccess: { canScan: true, sponsors: [] }, sponsorLeadAccess: false });
   }
-  const sponsorIds = new Set<string>();
   const captureIds = new Set<string>();
   for (const grant of grants) {
     if (grant.contextType !== "event_sponsor" || !grant.contextId) continue;
     if (grant.permission === "agenda:leads_capture") captureIds.add(grant.contextId);
-    else if (!["agenda:leads_view", "agenda:leads_export"].includes(grant.permission)) continue;
-    sponsorIds.add(grant.contextId);
   }
-  if (!sponsorIds.size || !eventIds.length) return access;
   for (const sponsor of sponsors) {
     const value: EventAudienceAccess = access.get(sponsor.event_id) ?? { sponsorLeadAccess: false };
     if (captureIds.has(sponsor.id)) {
@@ -101,14 +97,7 @@ export function prepareEventAudienceSponsors(
 }
 
 export async function readEventAudienceAccess(db: DatabaseLike, viewer: EventAudienceViewer, eventIds: string[]) {
-  const needsSponsors =
-    viewer.userId &&
-    eventIds.length &&
-    viewer.scannerGrants?.some(
-      (grant) =>
-        grant.contextType === "event_sponsor" &&
-        ["agenda:leads_capture", "agenda:leads_view", "agenda:leads_export"].includes(grant.permission),
-    );
+  const needsSponsors = eventIds.length > 0 && Boolean(viewer.userId || viewer.admin);
   const sponsors = needsSponsors
     ? (await prepareEventAudienceSponsors(db, viewer, eventIds).all<EventAudienceSponsorRow>()).results
     : [];

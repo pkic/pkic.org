@@ -1,4 +1,5 @@
 import { buildEventAudiencePredicate } from "../functions/_lib/services/events/visibility";
+import { readEventAudienceAccess } from "../functions/_lib/services/events/scanner-access";
 import { grantAdministrator } from "./helpers/administrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
@@ -557,6 +558,13 @@ describe("scoped scanner event discovery", () => {
     const list = await requestAudienceList("/api/v1/events", token);
     expect(list.events.map((event) => event.slug)).toEqual(["mailbox-private"]);
     expect(list.events[0]?.sponsorLeadAccess).toBe(true);
+    const access = await readEventAudienceAccess(
+      env.DB,
+      { userId, scannerGrants: [], admin: { identityType: "user", id: userId, email: "contact@synthetic.test" } },
+      [own],
+    );
+    expect(access.get(own)?.sponsorLeadAccess).toBe(true);
+    expect(access.get(own)?.scannerAccess?.sponsors ?? []).toEqual([]);
     expect((await request("/api/v1/events/other-mailbox-private", token)).status).toBe(404);
   });
   it.each(["agenda:leads_view", "agenda:leads_export", "agenda:leads_capture"])(

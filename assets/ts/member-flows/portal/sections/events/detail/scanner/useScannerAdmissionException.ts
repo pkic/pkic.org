@@ -70,17 +70,27 @@ export function useScannerAdmissionException({
   }
   const request = currentRequest();
   async function confirm(submitted: EventScanRequest): Promise<void> {
+    const sourceOperation = lastCapture.current?.operationId;
     if (
       !captureAllowed() ||
       submitted.action !== "exception" ||
+      !sourceOperation ||
       submitted.operationId !== currentRequest()?.operationId
     )
       throw new Error("This admission exception is no longer available.");
+    const stillCurrent = () =>
+      lastCapture.current?.operationId === sourceOperation &&
+      exception.current?.request.operationId === submitted.operationId;
     setBusy(true);
     try {
       const saved = await persistCapture(submitted);
+      if (!stillCurrent()) {
+        await scanSaved();
+        return;
+      }
       lastOperation.current = submitted.operationId;
       await scanSaved();
+      if (!stillCurrent()) return;
       clear();
       await presentSavedEligibility(saved, verifyQueuedScan);
     } finally {

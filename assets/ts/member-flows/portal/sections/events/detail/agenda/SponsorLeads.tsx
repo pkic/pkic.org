@@ -97,7 +97,7 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
             { method: "GET", cache: "no-store" },
           )
         : Promise.resolve(null),
-    [slug, lookupId],
+    [slug, lookupId, listVersion],
   );
   useEffect(() => {
     const changed = () => {
@@ -144,14 +144,20 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
         <Button onClick={() => void sponsorOptions.reload()}>Try again</Button>
       </div>
     );
+  if (lookupId && selectedOption.error)
+    return (
+      <div class="pk-stack">
+        <ErrorAlert error={selectedOption.error} />
+        <Button onClick={() => void selectedOption.reload()}>Try again</Button>
+      </div>
+    );
   const oneSponsor = sponsorOptions.data.page.total === 1;
   const current = oneSponsor
     ? (sponsorOptions.data.sponsors[0] ?? null)
     : selectedSponsorId
-      ? ((selected?.id === selectedSponsorId ? selected : null) ??
-        sponsorOptions.data.sponsors.find((sponsor) => sponsor.id === selectedSponsorId) ??
-        selectedOption.data?.sponsors[0] ??
-        (selectedOption.loading ? null : (sponsorOptions.data.sponsors[0] ?? null)))
+      ? (sponsorOptions.data.sponsors.find((sponsor) => sponsor.id === selectedSponsorId) ??
+        selectedOption.data?.sponsors.find((sponsor) => sponsor.id === selectedSponsorId) ??
+        null)
       : (sponsorOptions.data.sponsors[0] ?? null);
   async function removeLead(lead: SponsorLead, scope: "mine" | "all") {
     if (!current) return;
@@ -192,7 +198,7 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
               searchLabel="Sponsor"
               allowEmpty={false}
               value={current?.id ?? (selectedSponsorId || null)}
-              selectedLabel={current?.name}
+              selectedLabel={current?.name ?? (selected?.id === selectedSponsorId ? selected.name : undefined)}
               onChange={(sponsor) => {
                 if (!sponsor) return;
                 setSelected(sponsor);
