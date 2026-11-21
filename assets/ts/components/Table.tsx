@@ -22,6 +22,7 @@
  *     translated rather than passed through.
  */
 
+import type { z } from "zod";
 import type { ComponentChildren } from "preact";
 
 import {
@@ -36,6 +37,7 @@ import { Menu, type MenuItem } from "../ui/Menu";
 import {
   TableOptionsMenu,
   columnFilters,
+  columnFilterKey,
   columnKey,
   headLabel,
   useColumnControls,
@@ -100,6 +102,8 @@ export interface Column<T> {
 }
 
 export interface ColumnFilter {
+  /** Control identity when several scoped fields share a query parameter. */
+  key?: string;
   /** Names a filter group when a column offers several. */
   label?: string;
   /** Independent choices encoded as a comma-separated query value. */
@@ -109,6 +113,8 @@ export interface ColumnFilter {
   /** How several selected values combine, when the server supports it. */
   match?: { param: string; options: readonly FilterOption[] };
   param: string;
+  /** Companion parameters that identify which resource owns this choice. */
+  scope?: Readonly<Record<string, string>>;
   /**
    * The closed vocabulary the column accepts, offered in its menu. The first
    * option is the open state — "All stages" — and carries the empty value.
@@ -126,6 +132,8 @@ export interface ColumnFilter {
 }
 
 export interface ColumnTextFilter {
+  /** Shared query contract for a typed filter committed with Enter or Done. */
+  schema: z.ZodType<Record<string, string | undefined>>;
   placeholder?: string;
   /** Said under the control, e.g. where the match runs. */
   hint?: string;
@@ -241,8 +249,8 @@ export interface DataTableProps<T> {
   selection?: DataTableSelection;
   /** The column filters in force, by query parameter. */
   filters?: Record<string, string>;
-  /** Called with the parameter and its new value ("" opens the column back up). */
-  onFilterChange?: (param: string, value: string) => void;
+  /** Applies all changed query parameters together; an empty value clears a filter. */
+  onFilterPatch?: (changes: Readonly<Record<string, string>>) => void;
   /**
    * The list's column state, when its owner also draws a toolbar from it —
    * the record-card sort menu. Omit for a bare table.
@@ -268,14 +276,14 @@ export function DataTable<T>({
   loading,
   selection,
   filters = {},
-  onFilterChange,
+  onFilterPatch,
   tableOptionsFilters = false,
   controls: sharedControls,
 }: DataTableProps<T>) {
   // A list with a toolbar holds its column state there, so the toolbar's
   // record-card menu and these column menus act on one state; a bare table
   // keeps its own.
-  const ownControls = useColumnControls(columns, { currentSort, onSort, filters, onFilterChange });
+  const ownControls = useColumnControls(columns, { currentSort, onSort, filters, onFilterPatch });
   const controls = sharedControls ?? ownControls;
   const { hidden, filterOpen, setFilterOpen, slackIndex, menuFor, filterSummaryFor, columnsMenu, chips } = controls;
   // Row identity is by index when the caller has no key, so `rowKey` here is
@@ -337,9 +345,9 @@ export function DataTable<T>({
   // column menu states its own filter at the column; the chips state the
   // whole query, so a reader looking at eleven rows learns why.
   const openColumn = filterOpen
-    ? columns.find((column) => columnFilters(column).some((filter) => filter.param === filterOpen))
+    ? columns.find((column) => columnFilters(column).some((filter) => columnFilterKey(filter) === filterOpen))
     : undefined;
-  const openFilter = openColumn && columnFilters(openColumn).find((filter) => filter.param === filterOpen);
+  const openFilter = openColumn && columnFilters(openColumn).find((filter) => columnFilterKey(filter) === filterOpen);
   const openTextFilter = openFilter?.text;
 
   // A fragment, deliberately: `pk-table-list` is a flex column whose regions
@@ -348,15 +356,18 @@ export function DataTable<T>({
   return (
     <>
       <AppliedFilterChips chips={chips} />
-      {openColumn && openTextFilter && onFilterChange && (
+      {openColumn && openFilter && openTextFilter && controls.canFilter && (
         <ColumnTextFilterRow
+          key={filterOpen}
           columnLabel={openFilter?.label ?? headLabel(openColumn.header)}
-          value={filters[filterOpen ?? ""] ?? ""}
+          value={controls.filterValue(openFilter)}
           suggestions={openTextFilter.suggestions}
           placeholder={openTextFilter.placeholder}
           hint={openTextFilter.hint}
+          schema={openTextFilter.schema}
+          param={openFilter.param}
           onInput={(value) => {
-            onFilterChange(filterOpen ?? "", value);
+            controls.applyFilter(openFilter, value);
           }}
           onClose={() => setFilterOpen(null)}
         />

@@ -66,3 +66,27 @@ export function columnFilterSummary(container: ParentNode, column: string): stri
   const head = [...container.querySelectorAll("th")].find((th) => th.textContent!.includes(column));
   return head?.querySelector("[data-column-filter]")?.textContent ?? undefined;
 }
+
+export async function openExactFilter(page: HTMLElement, column: string) {
+  const menu = openColumnMenu(page, column);
+  await act(() =>
+    [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
+      .find((item) => item.textContent === "Filter this column…" || item.textContent === "Edit filter…")!
+      .click(),
+  );
+}
+
+export async function typeExactFilter(input: HTMLInputElement, value: string) {
+  await act(() => {
+    input.value = value;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+export async function commitExactFilter(page: HTMLElement) {
+  await act(() => {
+    page
+      .querySelector<HTMLFormElement>(".pk-column-filter")!
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+}

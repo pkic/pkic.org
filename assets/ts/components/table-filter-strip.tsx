@@ -16,10 +16,14 @@
  *     menu itself; a name or an organization does not, and typing it is the
  *     only sensible control.
  *
- * Neither owns any filter state. Both render what the table was told and call
- * back — the query lives in the list controller, which sends it to the server.
+ * The query lives in the list controller, which sends it to the server. A
+ * contract-validated exact filter keeps a local draft until submission.
  */
 import type { ComponentChildren } from "preact";
+import { useId, useState } from "preact/hooks";
+import type { z } from "zod";
+import { useContractForm } from "../hooks/useContractForm";
+import { Field } from "../ui/Field";
 
 import { Button } from "../ui/Button";
 import { TextInput } from "../ui/TextControl";
@@ -71,6 +75,9 @@ export interface ColumnTextFilterRowProps {
   placeholder?: string;
   /** Where the matching happens, said plainly under the control. */
   hint?: ComponentChildren;
+  /** Shared query contract for the draft committed with Enter or Done. */
+  schema: z.ZodType<Record<string, string | undefined>>;
+  param: string;
   onInput: (value: string) => void;
   onClose: () => void;
 }
@@ -78,40 +85,66 @@ export interface ColumnTextFilterRowProps {
 export function ColumnTextFilterRow({
   columnLabel,
   value,
-  suggestions = [],
+  schema,
+  param,
   placeholder,
   hint,
+  suggestions = [],
   onInput,
   onClose,
 }: ColumnTextFilterRowProps) {
-  const listId = `filter-values-${columnLabel.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+  const listId = useId();
+  const [draft, setDraft] = useState(value);
+  const form = useContractForm(schema, { [param]: draft.trim() ? draft : undefined });
   return (
-    <div class="pk-column-filter">
-      <label class="pk-column-filter__field">
-        <span class="pk-small pk-strong">Filter {columnLabel.toLowerCase()}</span>
-        <TextInput
-          list={suggestions.length > 0 ? listId : undefined}
-          value={value}
-          placeholder={placeholder ?? "Contains…"}
-          // The reader opened this from a menu item; focus is the whole point
-          // of the row appearing, and without it they have to find it again.
-          autofocus
-          onInput={(event) => {
-            onInput((event.currentTarget as HTMLInputElement).value);
-          }}
-        />
-        {suggestions.length > 0 && (
-          <datalist id={listId}>
-            {suggestions.map((suggestion) => (
-              <option key={suggestion} value={suggestion} />
-            ))}
-          </datalist>
-        )}
-        {hint !== undefined && <span class="pk-small pk-muted">{hint}</span>}
-      </label>
-      <Button variant="secondary" onClick={onClose}>
-        Done
+    <form
+      class="pk-column-filter"
+      noValidate
+      {...form.handlers}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        event.stopPropagation();
+        onClose();
+      }}
+      onSubmit={(event) => {
+        event.preventDefault();
+        const checked = form.submit();
+        if (!checked.data) return;
+        onInput(checked.data[param] ?? "");
+        onClose();
+      }}
+    >
+      <div class="pk-column-filter__field">
+        <Field
+          label={`Filter ${columnLabel}`}
+          help={hint ?? "Press Enter or Done to apply the filter."}
+          {...form.of(param)}
+        >
+          {(control) => (
+            <TextInput
+              {...control}
+              name={param}
+              list={suggestions.length ? listId : undefined}
+              value={draft}
+              placeholder={placeholder}
+              autofocus
+              onInput={(event) => setDraft(event.currentTarget.value)}
+            />
+          )}
+        </Field>
+      </div>
+      {suggestions.length > 0 && (
+        <datalist id={listId}>
+          {suggestions.map((suggestion) => (
+            <option key={suggestion} value={suggestion} />
+          ))}
+        </datalist>
+      )}
+      <Button variant="secondary" type="button" onClick={onClose}>
+        Cancel
       </Button>
-    </div>
+      <Button type="submit">Done</Button>
+    </form>
   );
 }

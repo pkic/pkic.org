@@ -1,6 +1,8 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useColumnControls } from "../../assets/ts/components/table-column-controls";
+import { eventAttendanceRegistrationsQuerySchema } from "../../assets/shared/schemas/event-registrations";
 import { DataTable, type Column } from "../../assets/ts/components/Table";
 
 interface Row {
@@ -68,7 +70,7 @@ function itemLabels(popup: HTMLElement): string[] {
 describe("column menus", () => {
   it("offers sort, filter and hide from one trigger per column, and marks what is in force", () => {
     const onSort = vi.fn();
-    const onFilterChange = vi.fn();
+    const onFilterPatch = vi.fn();
     const container = mount(
       <DataTable
         caption="Pipeline"
@@ -77,7 +79,7 @@ describe("column menus", () => {
         currentSort="stage"
         onSort={onSort}
         filters={{ stage: "contacted" }}
-        onFilterChange={onFilterChange}
+        onFilterPatch={onFilterPatch}
       />,
     );
 
@@ -89,7 +91,7 @@ describe("column menus", () => {
     const checked = [...submenu.querySelectorAll('[aria-checked="true"]')].map((item) => item.textContent!.trim());
     expect(checked).toEqual(["✓Contacted"]);
     void act(() => submenu.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')[2].click());
-    expect(onFilterChange).toHaveBeenCalledWith("stage", "new_inquiry");
+    expect(onFilterPatch).toHaveBeenCalledWith({ stage: "new_inquiry" });
   });
 
   it("states the value a column is narrowed to under its name", () => {
@@ -99,7 +101,7 @@ describe("column menus", () => {
         columns={columns()}
         data={rows}
         filters={{ stage: "contacted" }}
-        onFilterChange={vi.fn()}
+        onFilterPatch={vi.fn()}
       />,
     );
     const stageHead = [...container.querySelectorAll("th")].find((th) => th.textContent!.includes("Stage"));
@@ -164,7 +166,7 @@ it("toggles several header choices independently, keeps the menu open and clears
       columns={scoped}
       data={rows}
       filters={{ stage: "contacted" }}
-      onFilterChange={changed}
+      onFilterPatch={changed}
     />,
   );
   const trigger = openMenu(container, "Stage column options");
@@ -177,12 +179,58 @@ it("toggles several header choices independently, keeps the menu open and clears
   expect(choice("Contacted").getAttribute("aria-checked")).toBe("true");
   expect(choice("New inquiry").getAttribute("aria-checked")).toBe("false");
   void act(() => choice("New inquiry").click());
-  expect(changed).toHaveBeenLastCalledWith("stage", "contacted,new_inquiry");
+  expect(changed).toHaveBeenLastCalledWith({ stage: "contacted,new_inquiry" });
   expect(container.querySelector('[role="menu"]')).not.toBeNull();
   void act(() => choice("Contacted").click());
-  expect(changed).toHaveBeenLastCalledWith("stage", "");
+  expect(changed).toHaveBeenLastCalledWith({ stage: "" });
   void act(() => choice("All selected values").click());
-  expect(changed).toHaveBeenLastCalledWith("match", "all");
+  expect(changed).toHaveBeenLastCalledWith({ match: "all" });
   void act(() => choice("All stages").click());
-  expect(changed).toHaveBeenLastCalledWith("stage", "");
+  expect(changed).toHaveBeenLastCalledWith({ stage: "" });
+});
+
+it("applies scoped filters atomically on a bare table", () => {
+  const changed = vi.fn();
+  const scoped = columns();
+  scoped[1]!.filter = { ...scoped[1]!.filter!, scope: { answerField: "stage" } };
+  const container = mount(<DataTable caption="Pipeline" columns={scoped} data={rows} onFilterPatch={changed} />);
+  const popup = openMenu(container, "Stage column options");
+  void act(() => popup.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]')!.click());
+  void act(() =>
+    [...popup.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')]
+      .find((item) => item.textContent?.includes("Contacted"))!
+      .click(),
+  );
+  expect(changed).toHaveBeenCalledExactlyOnceWith({ answerField: "stage", stage: "contacted" });
+});
+
+it("hides an open typed filter when shared controls lose their filter capability", () => {
+  const changed = vi.fn();
+  function SharedTable({ enabled }: { enabled: boolean }) {
+    const cols: Column<Row>[] = [
+      {
+        header: "Job title",
+        cell: (row) => row.name,
+        filter: {
+          param: "job_title",
+          text: { schema: eventAttendanceRegistrationsQuerySchema.pick({ job_title: true }) },
+        },
+      },
+    ];
+    const controls = useColumnControls(cols, { onFilterPatch: enabled ? changed : undefined });
+    return (
+      <>
+        <button type="button" onClick={() => controls.setFilterOpen("job_title")}>
+          Open filter
+        </button>
+        <DataTable caption="Shared" columns={cols} data={rows} controls={controls} />
+      </>
+    );
+  }
+  const container = mount(<SharedTable enabled />);
+  void act(() => container.querySelector<HTMLButtonElement>("button")!.click());
+  expect(container.querySelector("input")).not.toBeNull();
+  void act(() => render(<SharedTable enabled={false} />, container));
+  expect(container.querySelector("input")).toBeNull();
+  expect(changed).not.toHaveBeenCalled();
 });

@@ -134,18 +134,18 @@ test("organizers preserve exact track filters and inspect canonical demand outsi
   await page.getByRole("menuitemradio", { name: "Track", exact: true }).click();
   await page.getByRole("button", { name: "Track column options", exact: true }).click();
   await page.getByRole("menuitem", { name: "Filter this column…", exact: true }).click();
-  const trackFilter = page.getByRole("textbox", { name: "Filter track Matches the exact session track.", exact: true });
+  const trackFilter = page.getByRole("textbox", { name: "Filter Track", exact: true });
   await expect(trackFilter).toBeVisible();
   const filtered = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === `${base}/occurrences` &&
       new URL(response.url()).searchParams.get("track") === track,
   );
-  const [filterResponse] = await Promise.all([filtered, trackFilter.fill(track)]);
+  await trackFilter.fill(track);
+  const [filterResponse] = await Promise.all([filtered, trackFilter.press("Enter")]);
   expect(filterResponse.status(), await filterResponse.text()).toBe(200);
   const list = agendaOccurrenceListSchema.parse(await filterResponse.json());
   expect(list.occurrences.map((item) => item.id)).toEqual([occurrence.id]);
-  await page.getByRole("button", { name: "Done", exact: true }).click();
   for (const column of ["Pending approval", "Waitlisted"]) {
     await page.getByRole("button", { name: "Choose columns", exact: true }).click();
     await page.getByRole("menuitemradio", { name: column, exact: true }).click();
