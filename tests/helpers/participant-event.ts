@@ -50,3 +50,25 @@ export const registeredParticipant = {
     speakerProposals: 0,
   },
 };
+
+/** One session of a reader's personal agenda, in the Blue hall. */
+export function participantAgendaSession(
+  id: string,
+  title: string,
+  startAt: string,
+  endAt: string,
+  status: string | null,
+) {
+  return {
+    id,
+    publishedRevision: 1,
+    title,
+    timeZone: "Europe/Amsterdam",
+    startAt,
+    endAt,
+    rooms: [{ id: "a0000000-0000-4000-8000-000000000011", name: "Blue hall" }],
+    admissionPolicy: "optional_reservation",
+    status,
+    attendanceMode: null,
+  };
+}

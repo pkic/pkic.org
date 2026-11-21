@@ -1,4 +1,3 @@
-import { eventPlaceSummary } from "../../assets/shared/event-place";
 // @vitest-environment jsdom
 import { render, type JSX } from "preact";
 import { act } from "preact/test-utils";
@@ -11,18 +10,13 @@ import { badgeFaceBadge, badgeFacePrinting } from "./helpers/badge-face-fixture"
 import { ParticipantEvent } from "../../assets/ts/member-flows/portal/sections/events/ParticipantEvent";
 import { PortalNavigationShell } from "../../assets/ts/member-flows/portal/shell/PortalNavigationShell";
 import { portalAppTabForLocation, portalAppTabs } from "../../assets/ts/member-flows/portal/shell/portal-app-tabs";
-import { pickEventNow } from "../../assets/ts/member-flows/portal/sections/events/app/useEventNow";
-import { eventPhase } from "../../assets/ts/member-flows/portal/sections/events/app/event-timing";
 import { formatDateTimeInZone } from "../../assets/shared/format-date";
-import {
-  eventVenueLines,
-  type ParticipantEventDetail,
-} from "../../assets/ts/member-flows/portal/sections/events/app/event-app-model";
 import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import { PERSONAL_ADDRESS_FOLLOW_UP_COPY } from "../../assets/shared/email-first-copy";
 import { portalSessionFixture } from "../helpers/portal-session";
 import {
   participantEventFixture,
+  participantAgendaSession,
   participantEventId,
   participantRegistrationId,
   registeredParticipant,
@@ -64,21 +58,6 @@ const event = participantEventFixture;
 
 const registered = registeredParticipant;
 
-function agendaSession(id: string, title: string, startAt: string, endAt: string, status: string | null) {
-  return {
-    id,
-    publishedRevision: 1,
-    title,
-    timeZone: "Europe/Amsterdam",
-    startAt,
-    endAt,
-    rooms: [{ id: sessionIds[0], name: "Blue hall" }],
-    admissionPolicy: "optional_reservation",
-    status,
-    attendanceMode: null,
-  };
-}
-
 function json(value: unknown): Response {
   return new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
 }
@@ -100,14 +79,14 @@ beforeEach(() => {
         return json(
           personalAgendaResponseSchema.parse({
             sessions: [
-              agendaSession(
+              participantAgendaSession(
                 sessionIds[0]!,
                 "Opening keynote",
                 "2026-12-01T09:30:00.000Z",
                 "2026-12-01T10:30:00.000Z",
                 null,
               ),
-              agendaSession(
+              participantAgendaSession(
                 sessionIds[1]!,
                 "Migration panel",
                 "2026-12-01T13:00:00.000Z",
@@ -590,42 +569,5 @@ describe("event app agenda and pages", () => {
       render(<ParticipantEvent event={event({ proposalCall: { open: false, path: null, closesAt: null } })} />, host),
     );
     expect(host.textContent).not.toContain("Submit a proposal");
-  });
-
-  it("names the venue and city once and keeps the full address for the venue details", () => {
-    const managed = {
-      ...event(),
-      venue: "Meervaart, Meer en Vaart 300, 1068 LE, Amsterdam, Netherlands",
-      city: "Amsterdam",
-      country: "NL",
-    } as ParticipantEventDetail;
-    expect(eventPlaceSummary(managed)).toBe("Meervaart · Amsterdam");
-    expect(eventVenueLines(managed)).toEqual(["Meervaart, Meer en Vaart 300, 1068 LE, Amsterdam, Netherlands"]);
-    expect(eventVenueLines({ ...managed, city: "Amstelveen" })).toEqual([
-      "Meervaart, Meer en Vaart 300, 1068 LE, Amsterdam, Netherlands",
-      "Amstelveen, Netherlands",
-    ]);
-    expect(eventPlaceSummary({ ...event(), city: "Amsterdam" })).toBe("Amsterdam");
-  });
-});
-
-describe("event timing", () => {
-  it("names the event's phase relative to now", () => {
-    expect(eventPhase(null, null).kind).toBe("unscheduled");
-    expect(eventPhase("2026-12-01T08:00:00.000Z", "2026-12-03T17:00:00.000Z", NOW).label).toBe("Live now");
-    expect(eventPhase("2026-11-01T08:00:00.000Z", "2026-11-02T17:00:00.000Z", NOW).label).toBe("Ended");
-    expect(eventPhase(new Date(Date.now() + 3 * 86_400_000).toISOString(), null).label).toBe("Starts in 3 days");
-  });
-
-  it("picks the reader's next unfinished session, not one that has ended", () => {
-    const sessions = personalAgendaResponseSchema.parse({
-      sessions: [
-        agendaSession(sessionIds[0]!, "Done", "2026-12-01T08:00:00.000Z", "2026-12-01T09:00:00.000Z", "reserved"),
-        agendaSession(sessionIds[1]!, "Next", "2026-12-01T11:00:00.000Z", "2026-12-01T12:00:00.000Z", "saved"),
-      ],
-      page: { limit: 100, offset: 0, total: 2, hasMore: false },
-    }).sessions;
-    expect(pickEventNow(sessions, NOW).next?.title).toBe("Next");
-    expect(pickEventNow(sessions, NOW).live).toEqual([]);
   });
 });
