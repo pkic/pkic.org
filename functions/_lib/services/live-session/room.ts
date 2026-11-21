@@ -506,9 +506,12 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     if (this.store.hasPendingCopy() || this.location.pendingCopy()) await this.scheduleAlarm(this.copyDue(), true);
   }
 
-  /** The attendee chat the room still holds, oldest first, for the event's chat download. */
+  /** The attendee chat the room still holds, oldest first, for the event's chat download; anonymized people's posts leave it first. */
   async chatArchive(): Promise<LiveChatArchiveRow[]> {
-    return this.sql.holdsData() ? this.chat.archive() : [];
+    if (!this.sql.holdsData()) return [];
+    for (const removed of await this.chat.eraseAnonymizedAuthors(this.env.DB))
+      await this.broadcast.all({ type: "chat.removed", messageId: removed.id, channel: removed.channel });
+    return this.chat.archive();
   }
 
   /** Erases both chat channels, keeping the counts; false while the room is still open. */
@@ -540,6 +543,8 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     this.engagement.clear();
     this.onScreenLists.stop();
     const scope = liveRoomChatScope(this.store, this.location);
+    // A chat kept past its session still drops the posts of anyone anonymized since.
+    if (this.sql.holdsData()) await this.chat.eraseAnonymizedAuthors(this.env.DB);
     const erased = await purgeLiveRoom(this.ctx, this.env.DB, scope, this.sql, this.chat);
     if (!erased) return;
     this.databaseSession.reset();

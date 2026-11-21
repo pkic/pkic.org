@@ -139,6 +139,18 @@ describe("live chat retention", () => {
     expect(await holdsRoom()).toBe(false);
   });
 
+  it("drops an anonymized person's posts from a kept chat before it is downloaded", async () => {
+    await chatInRoom();
+    await keepChatFor(90);
+    await sessionEnded(8);
+    await runDurableObjectAlarm(f.chatRoom());
+    await env.DB.prepare("UPDATE users SET active=0, pii_redacted_at=? WHERE id=?")
+      .bind(new Date().toISOString(), f.users.attendee)
+      .run();
+    expect(await runInDurableObject(f.chatRoom(), (room) => room.chatArchive())).toEqual([]);
+    expect(await rowCount("room_chat")).toBe(0);
+  });
+
   it("goes entirely once the 90 days are over", async () => {
     await chatInRoom();
     await keepChatFor(90);
