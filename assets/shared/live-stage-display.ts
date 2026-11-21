@@ -14,17 +14,16 @@ export function seesStageDisplayNext(viewer: { role: string; overlayOutput?: str
 }
 
 /**
- * The two questions the stage display shows: the current one, its own when
- * an operator put one on it, else Program's; and the next one, Preview's,
- * unless it is the question already being answered (after a Take, Preview
- * keeps what it sent to Program).
+ * The two questions the stage display shows: the current one, on its
+ * composition (its own, or Program's while it syncs); and the next one,
+ * Preview's, unless it is the question already being answered (after a
+ * Take, Preview keeps what it sent to Program).
  */
 export function liveStageDisplayQuestions(
-  own: Pick<LiveStage, "question">,
-  program: Pick<LiveStage, "question">,
+  shown: Pick<LiveStage, "question">,
   next: LiveStageQuestion | null,
 ): { current: LiveStageQuestion | null; next: LiveStageQuestion | null } {
-  const current = own.question ?? program.question;
+  const current = shown.question;
   return { current, next: next && next.id !== current?.id ? next : null };
 }
 

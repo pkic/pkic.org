@@ -9,7 +9,7 @@ export const liveOverlayAccessResponseSchema = z
   .strict();
 
 export const liveOverlayAccessRouteSchema = {
-  ...requiresPermissions("agenda:live_moderate"),
+  ...requiresPermissions("agenda:live_studio"),
   tags: ["Events"],
   summary: "Issue read-only, expiring sources for a physical room's complete broadcast program",
   request: { params: liveProgramParamsSchema },

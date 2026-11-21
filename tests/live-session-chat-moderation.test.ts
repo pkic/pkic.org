@@ -10,7 +10,7 @@ import { createAdminSession } from "./helpers/auth";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
 
 const f = createLiveRoomFixture();
-type Client = Awaited<ReturnType<typeof f.connect>>;
+type Client = Awaited<ReturnType<typeof f.connectChat>>;
 
 async function say(author: Client, text: string, reader: Client = author) {
   author.send({ type: "chat.send", text });
@@ -21,7 +21,7 @@ async function say(author: Client, text: string, reader: Client = author) {
 function expectNoModerationData(viewer: Client) {
   for (const message of viewer.received as LiveRoomServerMessage[]) {
     if (message.type === "chat.message") expect(message.message.moderation ?? null).toBeNull();
-    if (message.type === "room.snapshot") {
+    if (message.type === "location.chat.snapshot") {
       expect(message.chatReports ?? []).toEqual([]);
       for (const chat of message.chat) expect(chat.moderation ?? null).toBeNull();
     }
@@ -58,7 +58,7 @@ async function extraAttendees(count: number): Promise<Client[]> {
       .bind(crypto.randomUUID(), f.eventId, userId, crypto.randomUUID(), now, now)
       .run();
     f.tokens.outsider = await createAdminSession(env.DB, userId, crypto.randomUUID());
-    clients.push(await f.connect({ person: "outsider" }));
+    clients.push(await f.connectChat("outsider"));
   }
   return clients;
 }
@@ -73,26 +73,26 @@ function chatActions(instance: unknown): LiveRoomChatActions {
  * requests. A window that closes on its own timer would make batching depend on scheduling.
  */
 async function inOneReactionWindow(handled: Record<string, number>, send: () => void) {
-  await runInDurableObject(f.room(), (instance) => {
+  await runInDurableObject(f.chatRoom(), (instance) => {
     Reflect.set(chatActions(instance), "reactionTimer", "held by the test");
   });
   send();
   await vi.waitFor(() =>
-    runInDurableObject(f.room(), (instance) => {
+    runInDurableObject(f.chatRoom(), (instance) => {
       const allowances: Map<string, number[]> = Reflect.get(chatActions(instance), "allowances");
       for (const [userId, count] of Object.entries(handled))
         expect(allowances.get(`reaction:${userId}`)?.length ?? 0).toBe(count);
     }),
   );
-  await runInDurableObject(f.room(), (instance) => chatActions(instance).flushReactions());
+  await runInDurableObject(f.chatRoom(), (instance) => chatActions(instance).flushReactions());
 }
 
 describe("live chat reactions, reports and moderation", () => {
   beforeEach(() => f.setup());
 
   it("counts one reaction of a kind per person and broadcasts counts together", async () => {
-    const author = await f.connect({ person: "attendee" });
-    const reader = await f.connect({ person: "secondAttendee" });
+    const author = await f.connectChat("attendee");
+    const reader = await f.connectChat("secondAttendee");
     const message = await say(author, "Reactions please", reader);
     await inOneReactionWindow({ [f.users.secondAttendee]: 2, [f.users.attendee]: 1 }, () => {
       reader.send({ type: "chat.react", messageId: message.id, reaction: "thumbs_up", on: true });
@@ -105,8 +105,8 @@ describe("live chat reactions, reports and moderation", () => {
     expect(shared).toMatchObject({ reactions: { thumbs_up: 1, love: 1 }, myReactions: ["love"] });
     // Three requests within the window arrive as one update per viewer.
     expect(reader.received.filter((update) => update.type === "chat.reactions")).toHaveLength(1);
-    const joined = await f.connect({ person: "secondAttendee" });
-    expect((await joined.next("room.snapshot")).chat[0]).toMatchObject({
+    const joined = await f.connectChat("secondAttendee");
+    expect((await joined.next("location.chat.snapshot")).chat[0]).toMatchObject({
       reactions: { thumbs_up: 1, love: 1 },
       myReactions: ["thumbs_up"],
     });
@@ -116,8 +116,8 @@ describe("live chat reactions, reports and moderation", () => {
   });
 
   it("leaves a viewer's own reactions out of a later update only someone else changed", async () => {
-    const author = await f.connect({ person: "attendee" });
-    const reader = await f.connect({ person: "secondAttendee" });
+    const author = await f.connectChat("attendee");
+    const reader = await f.connectChat("secondAttendee");
     const message = await say(author, "Separate windows", reader);
     reader.send({ type: "chat.react", messageId: message.id, reaction: "thumbs_up", on: true });
     expect((await reader.next("chat.reactions")).myReactions).toEqual(["thumbs_up"]);
@@ -131,8 +131,8 @@ describe("live chat reactions, reports and moderation", () => {
   });
 
   it("limits reactions and reports per person", async () => {
-    const author = await f.connect({ person: "attendee" });
-    const reader = await f.connect({ person: "secondAttendee" });
+    const author = await f.connectChat("attendee");
+    const reader = await f.connectChat("secondAttendee");
     const message = await say(author, "Rate limits", reader);
     for (let index = 0; index <= LIVE_CHAT_POLICY.reactionsPerPerson.limit; index++)
       reader.send({ type: "chat.react", messageId: message.id, reaction: "wow", on: index % 2 === 0 });
@@ -143,9 +143,9 @@ describe("live chat reactions, reports and moderation", () => {
   });
 
   it("sends reports to moderators only and holds a message reported by enough people", async () => {
-    const author = await f.connect({ person: "attendee" });
-    const reporter = await f.connect({ person: "secondAttendee" });
-    const operator = await f.connect({ person: "operator" });
+    const author = await f.connectChat("attendee");
+    const reporter = await f.connectChat("secondAttendee");
+    const operator = await f.connectChat("operator");
     const message = await say(author, "Buy cheap certificates at example.test", reporter);
     author.send({ type: "chat.report", messageId: message.id, reason: "spam" });
     expect((await author.next("room.refused")).code).toBe("LIVE_CHAT_NOT_ALLOWED");
@@ -155,17 +155,16 @@ describe("live chat reactions, reports and moderation", () => {
     expect(
       (await reporter.next("chat.message", (update) => update.message.reportedByMe === true)).message.moderation,
     ).toBeNull();
-    expect((await f.connect({ person: "operator" })).received[0]).toMatchObject({
+    expect((await f.connectChat("operator")).received[0]).toMatchObject({
       chatReports: [expect.objectContaining({ id: message.id })],
     });
 
     const crowd = await extraAttendees(LIVE_CHAT_POLICY.reportHoldThreshold - 1);
     for (const person of crowd) person.send({ type: "chat.report", messageId: message.id, reason: "spam" });
-    await author.next("chat.removed", (update) => update.messageId === message.id);
     const held = await operator.next("chat.message", (update) => update.message.moderation?.held === true);
     expect(held.message.moderation?.hidden?.operatorName).toBe("Held after reports");
-    const fresh = await f.connect({ person: "secondAttendee" });
-    expect((fresh.received[0] as Extract<LiveRoomServerMessage, { type: "room.snapshot" }>).chat).toEqual([]);
+    const fresh = await f.connectChat("secondAttendee");
+    expect((fresh.received[0] as Extract<LiveRoomServerMessage, { type: "location.chat.snapshot" }>).chat).toEqual([]);
 
     const beforeKeep = operator.received.length;
     operator.send({ type: "chat.moderate", messageId: message.id, decision: "keep" });
@@ -174,78 +173,86 @@ describe("live chat reactions, reports and moderation", () => {
       (update) => update.message.id === message.id && update.message.moderation?.reports === 0,
       { after: beforeKeep },
     );
-    // The author saw it held away, then back.
+    // The author kept their message throughout: a held message is not a moderator's removal.
     await vi.waitFor(() =>
       expect(
-        author.received.filter((update) => update.type === "chat.message" && update.message.id === message.id),
-      ).toHaveLength(2),
+        author.received.filter((update) => update.type === "chat.message" && update.message.id === message.id).at(-1),
+      ).toMatchObject({ message: { removal: null } }),
     );
     for (const viewer of [author, reporter, fresh, ...crowd]) expectNoModerationData(viewer);
     // The pending staff-action queue may already have been copied and drained by an alarm.
-    await runDurableObjectAlarm(f.room());
+    await runDurableObjectAlarm(f.chatRoom());
     const { results: actions } = await env.DB.prepare(
       "SELECT action FROM audit_log WHERE scope_type='event' AND scope_id=? AND entity_id=? AND action IN ('live_session.chat.held','live_session.chat.kept') ORDER BY action",
     )
-      .bind(f.eventId, f.occurrenceId)
+      .bind(f.eventId, f.roomId)
       .all<{ action: string }>();
     expect(actions.map((row) => row.action)).toEqual(["live_session.chat.held", "live_session.chat.kept"]);
   });
 
   it("lets authors delete only their own messages and moderators hide any", async () => {
-    const author = await f.connect({ person: "attendee" });
-    const reader = await f.connect({ person: "secondAttendee" });
+    const author = await f.connectChat("attendee");
+    const reader = await f.connectChat("secondAttendee");
     const first = await say(author, "Delete me", reader);
     reader.send({ type: "chat.delete", messageId: first.id });
     expect((await reader.next("room.refused")).code).toBe("LIVE_CHAT_NOT_ALLOWED");
     author.send({ type: "chat.delete", messageId: first.id });
     await reader.next("chat.removed", (update) => update.messageId === first.id);
     await demoteSecondOperator();
-    const moderator = await f.connect({ person: "secondOperator" });
+    const moderator = await f.connectChat("secondOperator");
     const second = await say(author, "Hide me", reader);
-    moderator.send({ type: "chat.moderate", messageId: second.id, decision: "hide" });
+    moderator.send({ type: "chat.moderate", messageId: second.id, decision: "remove", reason: "spam" });
     await reader.next("chat.removed", (update) => update.messageId === second.id);
     const update = await moderator.next("chat.message", (message) => message.message.moderation?.hidden !== null);
     expect(update.message.moderation?.hidden?.operatorName).toBe("Remote Rita");
     expectNoModerationData(reader);
   });
 
-  it("lets organizers, and not moderators, mute and ban a participant for the session", async () => {
-    const author = await f.connect({ person: "attendee" });
-    const reader = await f.connect({ person: "secondAttendee" });
-    const message = await say(author, "Before the mute", reader);
+  it("pauses, blocks and lifts a participant while they keep reading, and keeps event blocks for organizers", async () => {
+    const author = await f.connectChat("attendee");
+    const reader = await f.connectChat("secondAttendee");
+    const message = await say(author, "Before the pause", reader);
     await demoteSecondOperator();
-    const moderator = await f.connect({ person: "secondOperator" });
-    expect((moderator.received[0] as Extract<LiveRoomServerMessage, { type: "room.snapshot" }>).viewer.organizer).toBe(
-      false,
-    );
-    moderator.send({ type: "chat.restrict", messageId: message.id, restriction: "muted" });
-    expect((await moderator.next("room.refused")).code).toBe("LIVE_CHAT_NOT_ALLOWED");
+    const moderator = await f.connectChat("secondOperator");
+    expect(
+      (moderator.received[0] as Extract<LiveRoomServerMessage, { type: "location.chat.snapshot" }>).viewer.organizer,
+    ).toBe(false);
+    const item = { kind: "chat", messageId: message.id } as const;
+    moderator.send({ type: "participation.block", item, block: "event", reason: "spam", removePosts: false });
+    expect((await moderator.next("room.refused")).code).toBe("LIVE_MODERATION_FORBIDDEN");
 
-    const organizer = await f.connect({ person: "operator" });
-    organizer.send({ type: "chat.restrict", messageId: message.id, restriction: "muted" });
-    expect((await author.next("chat.access")).restriction).toBe("muted");
-    author.send({ type: "chat.send", text: "Muted words" });
-    expect((await author.next("room.refused")).code).toBe("LIVE_CHAT_MUTED");
+    moderator.send({ type: "participation.block", item, block: "paused", reason: "conduct", removePosts: false });
+    const paused = (await author.next("participation.access")).restriction;
+    expect(paused?.block).toBe("paused");
+    expect(Date.parse(paused!.until!)).toBeGreaterThan(Date.now());
+    author.send({ type: "chat.send", text: "Paused words" });
+    expect((await author.next("room.refused")).code).toBe("LIVE_PARTICIPATION_BLOCKED");
     const beforeReact = author.received.length;
     author.send({ type: "chat.react", messageId: message.id, reaction: "love", on: true });
-    expect((await author.next("room.refused", () => true, { after: beforeReact })).code).toBe("LIVE_CHAT_MUTED");
+    expect((await author.next("room.refused", () => true, { after: beforeReact })).code).toBe(
+      "LIVE_PARTICIPATION_BLOCKED",
+    );
 
-    organizer.send({ type: "chat.restrict", messageId: message.id, restriction: "banned" });
-    expect((await author.next("chat.access", (update) => update.restriction === "banned")).restriction).toBe("banned");
-    await reader.next("chat.removed", (update) => update.messageId === message.id);
-    const banned = await f.connect({ person: "attendee" });
-    const snapshot = banned.received[0] as Extract<LiveRoomServerMessage, { type: "room.snapshot" }>;
-    expect(snapshot.chat).toEqual([]);
-    expect(snapshot.viewer.chatRestriction).toBe("banned");
-    await say(reader, "Not for banned eyes");
+    moderator.send({ type: "participation.block", item, block: "session", reason: "spam", removePosts: true });
     expect(
-      banned.received.some((update) => update.type === "chat.message" && update.message.text === "Not for banned eyes"),
-    ).toBe(false);
+      (await author.next("participation.access", (update) => update.restriction?.block === "session")).restriction,
+    ).toMatchObject({ block: "session", until: null });
+    await reader.next("chat.removed", (update) => update.messageId === message.id);
+    const blocked = await f.connectChat("attendee");
+    const snapshot = blocked.received[0] as Extract<LiveRoomServerMessage, { type: "location.chat.snapshot" }>;
+    expect(snapshot.viewer.participation?.block).toBe("session");
+    // Blocked people keep reading: the room still delivers others' messages.
+    await say(reader, "Still readable", blocked);
+    // Their own removed message comes back to them with the reason only they see.
+    const own = snapshot.chat.find((entry) => entry.id === message.id);
+    expect(own?.removal?.reason).toBe("spam");
 
-    const beforeLift = reader.received.length;
-    organizer.send({ type: "chat.restrict", messageId: message.id, restriction: null });
-    expect((await author.next("chat.access", (update) => update.restriction === null)).restriction).toBeNull();
-    await reader.next("chat.message", (update) => update.message.id === message.id, { after: beforeLift });
+    const beforeLift = author.received.length;
+    moderator.send({ type: "participation.lift", item });
+    expect(
+      (await author.next("participation.access", (update) => update.restriction === null, { after: beforeLift }))
+        .restriction,
+    ).toBeNull();
     expectNoModerationData(reader);
   });
 
@@ -253,15 +260,16 @@ describe("live chat reactions, reports and moderation", () => {
     await env.DB.prepare("UPDATE users SET headshot_r2_key=? WHERE id=?")
       .bind(`headshots/${f.users.attendee}/portrait.jpg`, f.users.attendee)
       .run();
-    const author = await f.connect({ person: "attendee" });
-    const reader = await f.connect({ person: "secondAttendee" });
-    const operator = await f.connect({ person: "operator" });
+    const author = await f.connectChat("attendee");
+    const reader = await f.connectChat("secondAttendee");
+    const operator = await f.connectChat("operator");
+    const session = await f.connect({ person: "secondAttendee" });
     const message = await say(author, "How do we **rotate** roots without downtime?", reader);
     expect(message.authorPhotoUrl).toBe(`/api/v1/users/${f.users.attendee}/headshots/portrait.jpg`);
     reader.send({ type: "chat.convert", messageId: message.id });
     expect((await reader.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
     operator.send({ type: "chat.convert", messageId: message.id });
-    const question = (await reader.next("question.changed")).question;
+    const question = (await session.next("question.changed")).question;
     expect(question).toMatchObject({
       text: "How do we rotate roots without downtime?",
       status: "approved",
@@ -276,16 +284,16 @@ describe("live chat reactions, reports and moderation", () => {
   });
 
   it("sends the latest page on joining and earlier pages on request", async () => {
-    await f.connect({ person: "operator" });
+    await f.connectChat("operator");
     const total = LIVE_CHAT_POLICY.snapshotMessages + 10;
-    await runInDurableObject(f.room(), (_room, state) => {
+    await runInDurableObject(f.chatRoom(), (_room, state) => {
       const chat = new LiveRoomChat(new LiveRoomSql(state.storage.sql));
       const now = Date.now();
       for (let index = 0; index < total; index++)
         chat.send({ userId: crypto.randomUUID(), name: "Synthetic author" }, `History ${index}`, now + index);
     });
-    const viewer = await f.connect({ person: "attendee" });
-    const snapshot = viewer.received[0] as Extract<LiveRoomServerMessage, { type: "room.snapshot" }>;
+    const viewer = await f.connectChat("attendee");
+    const snapshot = viewer.received[0] as Extract<LiveRoomServerMessage, { type: "location.chat.snapshot" }>;
     expect(snapshot.chat).toHaveLength(LIVE_CHAT_POLICY.snapshotMessages);
     expect(snapshot.chatEarlier?.attendee).toBe(true);
     viewer.send({ type: "chat.history", channel: "attendee", before: snapshot.chat[0].id });
@@ -299,22 +307,40 @@ describe("live chat reactions, reports and moderation", () => {
   });
 
   it("puts the latest shown, unreported chat on a chat ticker", async () => {
-    const author = await f.connect({ person: "attendee" });
-    const reader = await f.connect({ person: "secondAttendee" });
-    const operator = await f.connect({ person: "operator" });
+    const author = await f.connectChat("attendee");
+    const reader = await f.connectChat("secondAttendee");
+    const operator = await f.connectChat("operator");
+    const session = await f.connect({ person: "secondAttendee" });
+    const studio = await f.connect({ person: "operator" });
     await say(author, "Great *talk*", reader);
     const reported = await say(author, "Visit spam.example", reader);
     reader.send({ type: "chat.report", messageId: reported.id, reason: "spam" });
     await operator.next("chat.message", (update) => update.message.moderation?.reports === 1);
-    operator.send({
+    studio.send({
       type: "stage.ticker",
       ticker: {
         style: "neutral",
         messages: [{ id: "chat", prefix: "Chat", template: "{{chat.latest}}", condition: "always" }],
       },
     });
-    const stage = await vi.waitFor(async () => (await reader.next("stage.changed")).stage, { timeout: 5000 });
+    const stage = await vi.waitFor(async () => (await session.next("stage.changed")).stage, { timeout: 5000 });
     expect(stage.ticker?.segments[0].markdown).toContain("Ada Attendee: Great talk");
     expect(stage.ticker?.segments[0].markdown).not.toContain("spam");
+  });
+
+  it("lets a moderator who does not run the studio moderate the chat but not change what is on air", async () => {
+    const author = await f.connectChat("attendee");
+    const message = await say(author, "Pin me");
+    await demoteSecondOperator();
+    const moderator = await f.connectChat("secondOperator");
+    moderator.send({ type: "chat.pin", messageId: message.id });
+    expect((await author.next("chat.pinned")).message?.id).toBe(message.id);
+
+    const desk = await f.connect({ person: "secondOperator" });
+    desk.send({ type: "timer.control", timerId: "session", action: "pause" });
+    expect((await desk.next("room.refused")).code).toBe("LIVE_ROOM_STUDIO_REQUIRED");
+    const studio = await f.connect({ person: "operator" });
+    studio.send({ type: "timer.control", timerId: "session", action: "pause" });
+    await studio.next("timers.changed");
   });
 });

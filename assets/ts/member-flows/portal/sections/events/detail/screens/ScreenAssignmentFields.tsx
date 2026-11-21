@@ -118,7 +118,7 @@ export function ScreenAssignmentFields({
         )}
       </Field>
       {showsLayout && (
-        <Field label="Layout" {...fields("assignment.layout")}>
+        <Field label="Scene" {...fields("assignment.layout")}>
           {(control) => (
             <Select
               {...control}

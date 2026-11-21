@@ -338,7 +338,40 @@ describe("portal event list", () => {
     expect(rowActionControlNames(container)).toEqual(["Actions for PQC Conference 2026"]);
   });
 
-  it("offers no group workspace to an event-scoped staff identity that cannot open the group", async () => {
+  it("offers no group workspace to a staff identity scoped to another event", async () => {
+    portalSession.value = portalSessionFixture({
+      staff: true,
+      grants: [
+        { permission: "events:manage", contextType: "event", contextId: "e0000000-0000-4000-8000-000000000008" },
+      ],
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json({
+          events: [
+            managementEventRow({
+              id: "e0000000-0000-4000-8000-000000000009",
+              ownerGroupId: "20000000-0000-4000-8000-000000000001",
+              ownerGroupName: "Post-Quantum Cryptography",
+            }),
+          ],
+          page: { limit: 25, offset: 0, total: 1, hasMore: false },
+        }),
+      ),
+    );
+
+    const container = mount(<EventList />);
+    await settle();
+    await settle();
+
+    expect(rowActionControlNames(container)).toEqual([]);
+    expect(container.querySelector('a[href^="#/groups/"]')).toBeNull();
+    expect(container.textContent).toContain("Post-Quantum Cryptography");
+    expect(container.querySelector("tbody tr a[href='#/events/pqc-2026']")).not.toBeNull();
+  });
+
+  it("offers the owning group to the event's team, who open it as a guest", async () => {
     portalSession.value = portalSessionFixture({
       staff: true,
       grants: [
@@ -365,9 +398,10 @@ describe("portal event list", () => {
     await settle();
     await settle();
 
-    expect(rowActionControlNames(container)).toEqual([]);
-    expect(container.querySelector('a[href^="#/groups/"]')).toBeNull();
-    expect(container.textContent).toContain("Post-Quantum Cryptography");
+    expect(rowActionControlNames(container)).toEqual(["Actions for PQC Conference 2026"]);
+    expect(container.querySelector('a[href="#/groups/20000000-0000-4000-8000-000000000001"]')?.textContent).toBe(
+      "Post-Quantum Cryptography",
+    );
     expect(container.querySelector("tbody tr a[href='#/events/pqc-2026']")).not.toBeNull();
   });
 

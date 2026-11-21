@@ -11,6 +11,7 @@ import {
 import { databaseIdSchema } from "../../../../assets/shared/schemas/identifiers";
 import { liveRoomRefusalCloseCode } from "../../../../assets/shared/schemas/live-session-room";
 import { resolveUserSessionClaims } from "../../auth/user-session";
+import { connectedSessionClaims } from "../../auth/user-session-activity";
 import { resolveUserSessionClaimsBatch } from "../../auth/user-session-live-data";
 import type { UserSessionTokenClaims } from "../../auth/user-session-token";
 import { hasPermission } from "../../auth/permissions";
@@ -25,6 +26,7 @@ import { nowIso } from "../../utils/time";
 import { readPublishedProgramRoom } from "./program-room";
 import { readLiveRoomSession } from "./room-session";
 import { liveRoomName, type LiveRoomParticipant } from "./room-admission";
+import { tellLiveLocationChats } from "./location-chat-loaded";
 import { closeLiveRoomSocket } from "./room-socket-close";
 export const LIVE_PROGRAM_ADMISSION_HEADER = "x-pkic-live-program-admission";
 export const LIVE_PROGRAM_SOCKET_TAG = "program";
@@ -87,6 +89,13 @@ export class LiveRoomProgram {
   private async bound(eventId: string, roomId: string) {
     return this.boundValue(eventId, roomId, await this.ctx.storage.get(KEY));
   }
+  /** The session loaded in this physical room, from storage alone, for the virtual room's read; null for none. */
+  async loaded(eventId: string, roomId: string): Promise<string | null> {
+    const saved = await this.ctx.storage.get(KEY);
+    if (saved === undefined) return null;
+    const program = storedProgramSchema.parse(saved);
+    return program.eventId === eventId && program.roomId === roomId ? program.selection.occurrenceId : null;
+  }
   async read(eventId: string, roomId: string): Promise<LiveProgramSelection> {
     try {
       await readPublishedProgramRoom(this.env.DB, eventId, roomId);
@@ -131,7 +140,7 @@ export class LiveRoomProgram {
         );
     }
     const operator = await resolveUserSessionClaims(this.env.DB, claims);
-    if (!operator.staff || !hasPermission(operator.staff, "agenda:live_moderate", { type: "event", id: eventId }))
+    if (!operator.staff || !hasPermission(operator.staff, "agenda:live_studio", { type: "event", id: eventId }))
       throw new AppError(
         403,
         "LIVE_ROOM_OPERATOR_REQUIRED",
@@ -163,7 +172,10 @@ export class LiveRoomProgram {
     if (previousOccurrenceId && previousOccurrenceId !== selection.occurrenceId && this.env.LIVE_SESSION_ROOMS)
       await this.env.LIVE_SESSION_ROOMS.getByName(liveRoomName(eventId, previousOccurrenceId)).endProgramSources(
         roomId,
+        selection.occurrenceId,
       );
+    if (selection.occurrenceId && previousOccurrenceId !== selection.occurrenceId && this.env.LIVE_SESSION_ROOMS)
+      await this.env.LIVE_SESSION_ROOMS.getByName(liveRoomName(eventId, selection.occurrenceId)).enterProgram();
     // Carry room graphics into the newly active session; session-bound questions and polls stay behind.
     if (previousOccurrenceId && selection.occurrenceId && previousOccurrenceId !== selection.occurrenceId) {
       const rooms = this.env.LIVE_SESSION_ROOMS;
@@ -172,6 +184,14 @@ export class LiveRoomProgram {
         await rooms.getByName(liveRoomName(eventId, selection.occurrenceId)).adoptProgramStage(stage);
       }
     }
+    if (previousOccurrenceId !== selection.occurrenceId)
+      await tellLiveLocationChats(
+        this.env,
+        eventId,
+        roomId,
+        [previousOccurrenceId, selection.occurrenceId],
+        selection.occurrenceId,
+      );
     await this.broadcast(selection);
     return selection;
   }
@@ -208,7 +228,7 @@ export class LiveRoomProgram {
   private async authorized(sockets: WebSocket[]): Promise<WebSocket[]> {
     sockets = sockets.filter((s) => s.readyState === WebSocket.OPEN);
     const admissions = sockets.map((s) => liveProgramAdmissionSchema.parse(s.deserializeAttachment()));
-    const staff = admissions.filter((a) => a.sessionClaims).map((a) => a.sessionClaims!);
+    const staff = admissions.filter((a) => a.sessionClaims).map((a) => connectedSessionClaims(a.sessionClaims!));
     let results: Awaited<ReturnType<typeof resolveUserSessionClaimsBatch>>;
     try {
       results = await resolveUserSessionClaimsBatch(this.env.DB, staff);
@@ -232,7 +252,7 @@ export class LiveRoomProgram {
           allowed &&
           result.ok &&
           result.session.staff !== undefined &&
-          hasPermission(result.session.staff, "agenda:live_moderate", { type: "event", id: admission.eventId });
+          hasPermission(result.session.staff, "agenda:live_studio", { type: "event", id: admission.eventId });
       }
       if (!allowed) {
         try {
@@ -310,6 +330,13 @@ export class LiveRoomProgram {
             return selection;
           });
           await this.broadcast(cleared);
+          await tellLiveLocationChats(
+            this.env,
+            program.eventId,
+            program.roomId,
+            [program.selection.occurrenceId],
+            null,
+          );
         }
       }
       const current = await this.bound(program.eventId, program.roomId);

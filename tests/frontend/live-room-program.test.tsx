@@ -23,7 +23,7 @@ describe("continuous physical-room source", () => {
       render(
         <LiveProgramOverlay
           view="program"
-          layout="lower-third"
+          layout="talk"
           slug="synthetic"
           roomId={roomId}
           token="signed-synthetic"
@@ -66,6 +66,7 @@ describe("continuous physical-room source", () => {
               key: "first",
               moderator: false,
               roleLabel: null,
+              titleLine: null,
               name: "First presenter",
               photoUrl: null,
               identity: null,
@@ -80,6 +81,7 @@ describe("continuous physical-room source", () => {
             chatFeed: null,
             reactions: false,
             reactionsGraphic: { showCount: false },
+            scene: null,
           },
         }),
       );

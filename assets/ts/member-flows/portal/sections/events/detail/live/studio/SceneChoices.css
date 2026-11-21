@@ -1,0 +1,109 @@
+@layer components {
+  /* One scene: its picture, and under it its name led by a dot per output showing it; the picture is edged in Preview's color while Preview holds it. */
+  .pk-studio-scene {
+    display: grid;
+    align-content: start;
+    gap: var(--pk-1);
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--pk-ink-muted);
+    font: inherit;
+    font-size: var(--pk-text-xs);
+    text-align: start;
+    cursor: pointer;
+  }
+  .pk-studio-scene:hover:not(:disabled),
+  .pk-studio-scene[aria-pressed="true"] {
+    color: var(--pk-ink);
+  }
+  .pk-studio-scene:focus-visible {
+    outline: none;
+  }
+  .pk-studio-scene:focus-visible .pk-studio-scene__picture {
+    box-shadow: var(--pk-focus);
+  }
+  .pk-studio-scene:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+  /* The picture at 16:9, its overlay scaled down to the box. */
+  .pk-studio-scene__picture {
+    display: grid;
+    box-sizing: border-box;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border: 1px solid var(--pk-line);
+    border-radius: calc(var(--pk-radius) / 2);
+    background: var(--pk-chrome-deep);
+    pointer-events: none;
+  }
+  .pk-studio-scene:hover:not(:disabled) .pk-studio-scene__picture {
+    border-color: var(--pk-line-strong);
+  }
+  .pk-studio-scene[data-tally] .pk-studio-scene__picture {
+    border: 2px var(--tally-line, solid) var(--tally);
+  }
+  .pk-studio-scene__picture > * {
+    grid-area: 1 / 1;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+  /*
+   * The overlay scales to the picture by the picture's measured size (see useSceneScale): the frame's
+   * container units alone leave a thumbnail at its old scale when the strip resizes around it.
+   */
+  .pk-studio-scene__picture .pk-live-overlay {
+    transform: scale(var(--scene-scale, 0));
+  }
+  /*
+   * A thumbnail is a picture: nothing in it moves. A running animation, such
+   * as the ticker's scroll, gets a graphics layer of its own at the graphic's
+   * full broadcast size, and a phone's browser runs out of memory with a
+   * strip of them. This overrides each graphic's own motion, so it wins
+   * whatever their selectors.
+   */
+  .pk-studio-scene__picture :is(*, ::before, ::after) {
+    animation: none !important;
+    transition: none !important;
+  }
+  /* A thumbnail with no graphic: the scene's boxes as faint hairlines, so each scene still reads as itself. */
+  .pk-studio-scene__outline {
+    fill: none;
+    stroke: color-mix(in srgb, var(--pk-on-solid) 28%, transparent);
+    stroke-width: 1px;
+    vector-effect: non-scaling-stroke;
+  }
+  /* Under the picture: the dots of the outputs showing the scene, then its name, as a monitor leads its code with its dot. */
+  .pk-studio-scene__label {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-1);
+    min-inline-size: 0;
+  }
+  .pk-studio-scene__name {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /*
+   * A dot per output showing the scene now, each in its tally color. They
+   * lead the name, so a dot never reads as the next scene's, and a long name
+   * shortens before a dot is lost.
+   */
+  .pk-studio-scene__markers {
+    display: flex;
+    flex: none;
+    order: -1;
+    gap: 0.1875rem;
+  }
+  .pk-studio-scene__marker {
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: 50%;
+    background: var(--tally);
+  }
+}

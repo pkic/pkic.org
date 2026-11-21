@@ -1,0 +1,15 @@
+@layer components {
+  /* The virtual room's state as a small chip in the session bar, like a monitor's picker: its name in the tooltip. */
+  .pk-studio-opening {
+    flex: none;
+    gap: var(--pk-1);
+    padding: var(--pk-1);
+    font: inherit;
+    font-size: var(--pk-text-sm);
+    white-space: nowrap;
+    color: var(--pk-ink-muted);
+  }
+  .pk-studio-opening .pk-icon {
+    flex: none;
+  }
+}

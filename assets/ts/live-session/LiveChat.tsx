@@ -1,10 +1,23 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
-import { LIVE_CHAT_POLICY, liveChatCanSend, liveChatCapacity, liveChatPlainText } from "../../shared/live-chat-policy";
-import { liveChatSendSchema, type LiveRoomClientMessage } from "../../shared/schemas/live-session-room";
-import type { LiveChatChannel } from "../../shared/schemas/live-session-chat";
-import type { LiveRoomState } from "./live-room-state";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
+import {
+  LIVE_CHAT_POLICY,
+  liveChatCanSend,
+  liveChatCapacity,
+  liveChatPlainText,
+  liveChatReplyExcerpt,
+} from "../../shared/live-chat-policy";
+import {
+  liveChatEditSchema,
+  liveChatSendSchema,
+  type LiveRoomClientMessage,
+} from "../../shared/schemas/live-session-room";
+import type { LiveChatChannel, LiveChatMessage } from "../../shared/schemas/live-session-chat";
 import { liveChatChannel } from "./live-chat-state";
-import { LiveChatMessageRow } from "./LiveChatMessageRow";
+import type { LiveChatView } from "./location-chat-state";
+import { LiveChatMessageRow, type LiveChatRowHandlers } from "./LiveChatMessageRow";
+import { LiveChatQuote } from "./LiveChatQuote";
+import { LiveChatPinned } from "./LiveChatPinned";
+import { IconRemove } from "../ui/MediaIcons";
 import { LiveAuthorProvider } from "./LiveAuthor";
 import { useContractForm } from "../hooks/useContractForm";
 import { useWindowedList } from "../hooks/useWindowedList";
@@ -12,10 +25,20 @@ import { Field } from "../ui/Field";
 import { FieldStatus } from "../ui/FieldStatus";
 import { Textarea } from "../ui/TextControl";
 import { Button } from "../ui/Button";
+import { LiveModerationDialogHost } from "./LiveModerationDialog";
+import { LiveParticipationAlert, useLiveParticipation } from "./LiveParticipationAlert";
 import "./LiveChat.css";
 
 /** How close to the end of the feed still counts as reading the latest message. */
 const FOLLOW_SLACK = 48;
+/** How long a message a reader followed a quote to stays marked. */
+const HIGHLIGHT_MS = 2000;
+
+/** What the composer is writing besides a new message: a reply to one, or new words for the reader's own. */
+export interface LiveChatComposing {
+  kind: "reply" | "edit";
+  message: LiveChatMessage;
+}
 
 export function ChatComposer({
   channel,
@@ -23,30 +46,69 @@ export function ChatComposer({
   disabled,
   send,
   refusal,
+  note,
+  composing = null,
+  onComposed,
 }: {
   channel: LiveChatChannel;
   compact: boolean;
   disabled: boolean;
   send: (message: LiveRoomClientMessage) => boolean;
   refusal: string | null;
+  /** What the status line says while nothing else needs saying, such as when the chat closes. */
+  note?: string;
+  composing?: LiveChatComposing | null;
+  /** The reply or edit was sent or set aside. */
+  onComposed?: () => void;
 }) {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const statusId = useId();
-  const form = useContractForm(liveChatSendSchema, { type: "chat.send", text, channel }, { quietWhenEmpty: true });
+  const formNode = useRef<HTMLFormElement>(null);
+  // A message half written waits while the reader edits another, and comes back after.
+  const draft = useRef("");
+  const wasEditing = useRef(false);
+  const replying = composing?.kind === "reply" ? composing.message : null;
+  const editing = composing?.kind === "edit" ? composing.message : null;
+  const sendForm = useContractForm(
+    liveChatSendSchema,
+    { type: "chat.send", text, channel, ...(replying ? { replyTo: replying.id } : {}) },
+    { quietWhenEmpty: true },
+  );
+  const editForm = useContractForm(
+    liveChatEditSchema,
+    { type: "chat.edit", messageId: editing?.id ?? "", text },
+    { quietWhenEmpty: true },
+  );
+  const form = editing ? editForm : sendForm;
   const field = form.of("text");
+  // Only a new reply or edit sets the words; typing does not.
+  const typed = useRef(text);
+  typed.current = text;
+  useEffect(() => {
+    const edited = composing?.kind === "edit" ? composing.message : null;
+    if (edited) {
+      if (!wasEditing.current) draft.current = typed.current;
+      setText(edited.text);
+    } else if (wasEditing.current) setText(draft.current);
+    wasEditing.current = edited !== null;
+    if (composing) formNode.current?.querySelector("textarea")?.focus();
+  }, [composing]);
   function submit() {
     // Send waits for content: an empty composer is at rest, not refused.
     if (!form.valid) return;
     const checked = form.submit();
     if (!checked.data) return;
     if (!send(checked.data)) return setError("Chat is reconnecting. Try again once it's connected.");
-    setText("");
+    setText(editing ? draft.current : "");
+    wasEditing.current = false;
     setError(null);
     form.reset();
+    onComposed?.();
   }
   return (
     <form
+      ref={formNode}
       noValidate
       {...form.handlers}
       class="pk-live-chat__composer"
@@ -59,10 +121,38 @@ export function ChatComposer({
       <FieldStatus id={statusId} state={field.state} message={field.message}>
         {error ??
           refusal ??
+          note ??
           (compact
             ? ""
-            : `${channel === "operator" ? "Only operators see this chat." : "Everyone in the session sees this chat."} Use **bold**, *italic* or \`code\`.`)}
+            : channel === "operator"
+              ? "Only operators see this chat."
+              : "Everyone in the session sees this chat.")}
       </FieldStatus>
+      {composing ? (
+        <div class="pk-live-chat__composing">
+          {replying ? (
+            <LiveChatQuote
+              quote={{
+                messageId: replying.id,
+                authorName: replying.authorName,
+                excerpt: liveChatReplyExcerpt(replying.text),
+                mine: replying.mine,
+              }}
+            />
+          ) : (
+            <p class="pk-live-chat__quote">Editing your message</p>
+          )}
+          <Button
+            variant="ghost"
+            icon
+            aria-label={replying ? "Cancel reply" : "Cancel edit"}
+            title={replying ? "Cancel reply" : "Cancel edit"}
+            onClick={() => onComposed?.()}
+          >
+            <IconRemove />
+          </Button>
+        </div>
+      ) : null}
       <div class="pk-live-chat__input">
         <Field label="Message" labelHidden statusId={statusId} {...field}>
           {(control) => (
@@ -79,17 +169,53 @@ export function ChatComposer({
                 if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
                   event.preventDefault();
                   submit();
+                } else if (event.key === "Escape" && composing) {
+                  event.preventDefault();
+                  onComposed?.();
                 }
               }}
             />
           )}
         </Field>
         <Button type="submit" variant="primary" disabled={disabled || !form.valid}>
-          Send
+          {editing ? "Save" : "Send"}
         </Button>
       </div>
     </form>
   );
+}
+
+/** The chat while its room is closed: the feed says why, and the composer waits. */
+export function LiveChatClosed({ note = "Chat opens when the session is live." }: { note?: string }) {
+  return (
+    <div class="pk-live-chat-workspace pk-live-chat-workspace--compact">
+      <div class="pk-live-chat">
+        <p class="pk-small pk-muted pk-live-chat__empty">{note}</p>
+      </div>
+      <ChatComposer channel="attendee" compact disabled send={() => false} refusal={null} />
+    </div>
+  );
+}
+
+/** What a reader between sessions sees above the first message there. */
+const BETWEEN_SESSIONS = "Between sessions";
+
+/**
+ * Where the session on changes in the feed, by the message it changes at: the title of the session that starts,
+ * or the break. The feed's first message opens with its session, so a reader always knows which part they read.
+ */
+export function liveChatDividers(
+  messages: readonly LiveChatMessage[],
+  sessions: readonly { occurrenceId: string; title: string }[],
+): Map<string, string> {
+  const titles = new Map(sessions.map((session) => [session.occurrenceId, session.title]));
+  const dividers = new Map<string, string>();
+  messages.forEach((message, index) => {
+    const previous = messages[index - 1];
+    if (previous ? previous.occurrenceId === message.occurrenceId : !message.occurrenceId) return;
+    dividers.set(message.id, (message.occurrenceId && titles.get(message.occurrenceId)) || BETWEEN_SESSIONS);
+  });
+  return dividers;
 }
 
 /**
@@ -104,61 +230,110 @@ export function LiveChat({
   compact = false,
   channel = "attendee",
   visible = true,
+  note,
 }: {
-  state: LiveRoomState;
+  /** The composer's status line while nothing else needs saying. */
+  note?: string;
+  state: LiveChatView;
   disabled: boolean;
   send: (message: LiveRoomClientMessage) => boolean;
   compact?: boolean;
   channel?: LiveChatChannel;
   visible?: boolean;
 }) {
-  const restriction = state.viewer.chatRestriction ?? null;
+  const restriction = useLiveParticipation(state.viewer.participation);
+  // Rows read the block in force, so their actions come back when a pause ends, as the composer does.
+  const viewer = useMemo(() => ({ ...state.viewer, participation: restriction }), [state.viewer, restriction]);
   const messages = liveChatChannel(state, channel);
+  const dividers = useMemo(() => liveChatDividers(messages, state.scope.sessions), [messages, state.scope.sessions]);
   const list = useWindowedList(messages, (message) => message.id, { estimate: 52, overscan: 400, initial: 40 });
   const following = useRef(true);
   const [unseen, setUnseen] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [composing, setComposing] = useState<LiveChatComposing | null>(null);
+  /** The message a reader followed a quote to, while earlier pages load until it is held. */
+  const [seeking, setSeeking] = useState<string | null>(null);
+  const [highlighted, setHighlighted] = useState<string | null>(null);
+  /** The latest reply to the reader that arrived while they read further up. */
+  const [replyToMe, setReplyToMe] = useState<string | null>(null);
   const firstId = messages[0]?.id;
   const latest = messages.at(-1);
   const latestId = latest?.id;
   const latestMine = latest?.mine;
   const anchor = useRef<{ firstId: string | undefined; height: number }>({ firstId, height: 0 });
+  const sent = useRef(latestId);
 
   // Keep the reader's place when earlier messages arrive above, and stay on the latest while following it.
   useLayoutEffect(() => {
     const node = list.viewport.current;
     if (!node) return;
+    // What the reader sends shows where they look next, even when they replied from further up.
+    if (latestMine && sent.current !== latestId) following.current = true;
+    sent.current = latestId;
     if (anchor.current.firstId !== firstId && anchor.current.firstId !== undefined && !following.current)
       node.scrollTop += node.scrollHeight - anchor.current.height;
     else if (following.current && visible) node.scrollTop = node.scrollHeight;
     anchor.current = { firstId, height: node.scrollHeight };
   });
   useEffect(() => setLoading(false), [firstId]);
+  // Each new latest message counts once, however its quote changes after.
+  const latestToMe = latest?.replyTo?.mine === true;
+  const counted = useRef(latestId);
   useEffect(() => {
-    if (!following.current && latestId && !latestMine) setUnseen((count) => count + 1);
-  }, [latestId, latestMine]);
-
-  // A lifted ban brings the chat back from the room.
-  const wasBanned = useRef(restriction === "banned");
-  useEffect(() => {
-    if (wasBanned.current && restriction !== "banned") send({ type: "chat.history", channel, before: null });
-    wasBanned.current = restriction === "banned";
-  }, [restriction, send, channel]);
-
-  if (restriction === "banned")
-    return (
-      <p class="pk-small pk-muted" role="status">
-        An organizer removed you from this session's chat.
-      </p>
-    );
+    if (counted.current === latestId) return;
+    counted.current = latestId;
+    if (following.current || !latestId || latestMine) return;
+    setUnseen((count) => count + 1);
+    if (latestToMe) setReplyToMe(latestId);
+  }, [latestId, latestMine, latestToMe]);
 
   const canLoadEarlier = state.chatEarlier?.[channel] === true && messages.length < LIVE_CHAT_POLICY.clientWindow;
-  const canSend = liveChatCanSend(liveChatCapacity(state.viewer), restriction, channel);
+  /** Scrolls a held message into view and marks it; false when the feed does not hold it. */
+  function reveal(messageId: string): boolean {
+    const offset = list.offsetOf(messageId);
+    const node = list.viewport.current;
+    if (offset === null || !node) return false;
+    following.current = false;
+    node.scrollTop = Math.max(0, offset - node.clientHeight / 3);
+    list.onScroll();
+    setHighlighted(messageId);
+    return true;
+  }
+  const revealing = useRef(reveal);
+  revealing.current = reveal;
+  const handlers = useMemo<LiveChatRowHandlers>(
+    () => ({
+      reply: (message) => setComposing({ kind: "reply", message }),
+      edit: (message) => setComposing({ kind: "edit", message }),
+      jump: (messageId) => {
+        if (revealing.current(messageId)) return;
+        following.current = false;
+        setSeeking(messageId);
+      },
+    }),
+    [],
+  );
+  // A quote leads to a message the feed no longer holds: earlier pages load until it is, or none are left;
+  // each page that arrives moves the first message.
+  useEffect(() => {
+    if (!seeking) return;
+    if (revealing.current(seeking) || !canLoadEarlier) return setSeeking(null);
+    if (!loading && send({ type: "chat.history", channel, before: firstId ?? null })) setLoading(true);
+  }, [seeking, firstId, canLoadEarlier, loading, send, channel]);
+  useEffect(() => {
+    if (!highlighted) return;
+    const timer = setTimeout(() => setHighlighted(null), HIGHLIGHT_MS);
+    return () => clearTimeout(timer);
+  }, [highlighted]);
+  const canSend = liveChatCanSend(liveChatCapacity(state.viewer), restriction !== null, channel);
   const refusal = state.refusal?.code.startsWith("LIVE_CHAT") ? state.refusal.message : null;
   const spoken = latest && !latest.mine ? `${latest.authorName}: ${liveChatPlainText(latest.text)}` : "";
   return (
     <LiveAuthorProvider authors={state.authors} send={send}>
       <div class={`pk-live-chat-workspace${compact ? " pk-live-chat-workspace--compact" : ""}`}>
+        {channel === "attendee" && state.chatPinned ? (
+          <LiveChatPinned message={state.chatPinned} viewer={state.viewer} send={send} disabled={disabled} />
+        ) : null}
         <div
           ref={(node) => {
             list.viewport.current = node;
@@ -170,7 +345,10 @@ export function LiveChat({
           onScroll={(event) => {
             const node = event.currentTarget;
             following.current = node.scrollHeight - node.scrollTop - node.clientHeight < FOLLOW_SLACK;
-            if (following.current) setUnseen(0);
+            if (following.current) {
+              setUnseen(0);
+              setReplyToMe(null);
+            }
             list.onScroll();
           }}
         >
@@ -199,11 +377,15 @@ export function LiveChat({
                 <LiveChatMessageRow
                   key={message.id}
                   message={message}
-                  viewer={state.viewer}
+                  viewer={viewer}
                   send={send}
                   disabled={disabled}
                   measure={list.measure(message.id)}
-                  timeZone={state.session.timeZone}
+                  timeZone={state.scope.timeZone}
+                  divider={dividers.get(message.id) ?? null}
+                  handlers={handlers}
+                  highlighted={highlighted === message.id}
+                  pinned={state.chatPinned?.id === message.id}
                 />
               ))}
               {list.after ? (
@@ -220,11 +402,22 @@ export function LiveChat({
         </div>
         {unseen > 0 ? (
           <div class="pk-live-chat__jump">
+            {replyToMe ? (
+              <Button
+                onClick={() => {
+                  handlers.jump(replyToMe);
+                  setReplyToMe(null);
+                }}
+              >
+                Reply to you
+              </Button>
+            ) : null}
             <Button
               onClick={() => {
                 const node = list.viewport.current;
                 following.current = true;
                 setUnseen(0);
+                setReplyToMe(null);
                 if (node) node.scrollTop = node.scrollHeight;
               }}
             >
@@ -236,14 +429,28 @@ export function LiveChat({
           {visible ? spoken : ""}
         </p>
         {canSend ? (
-          <ChatComposer channel={channel} compact={compact} disabled={disabled} send={send} refusal={refusal} />
+          <ChatComposer
+            channel={channel}
+            compact={compact}
+            disabled={disabled}
+            send={send}
+            refusal={refusal}
+            note={note}
+            composing={composing}
+            onComposed={() => setComposing(null)}
+          />
+        ) : restriction && channel === "attendee" ? (
+          <LiveParticipationAlert
+            restriction={restriction}
+            timeZone={state.scope.timeZone}
+            eventName={state.scope.eventName}
+          />
         ) : (
           <p class="pk-small pk-muted" role="status">
-            {restriction === "muted"
-              ? "An organizer muted you. You can still read the chat."
-              : "Only operators can write here."}
+            Only operators can write here.
           </p>
         )}
+        <LiveModerationDialogHost />
       </div>
     </LiveAuthorProvider>
   );

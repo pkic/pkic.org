@@ -516,6 +516,7 @@ export function MarkdownEditor({
             <>
               <Menu
                 label="Insert variables and conditions"
+                title="Insert variables and conditions"
                 items={templateInsertions.filter((item) => !item.id.startsWith("partial-"))}
                 align="end"
               >
@@ -523,6 +524,7 @@ export function MarkdownEditor({
               </Menu>
               <Menu
                 label="Insert reusable templates"
+                title="Insert reusable templates"
                 items={templateInsertions.filter((item) => item.id.startsWith("partial-"))}
                 align="end"
               >

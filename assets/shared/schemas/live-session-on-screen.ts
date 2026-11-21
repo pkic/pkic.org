@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { LIVE_CHAT_POLICY } from "../live-chat-policy";
 import { LIVE_ON_SCREEN_LIST_POLICY } from "../live-on-screen-lists";
 import { LIVE_ROOM_POLICY } from "../live-session-policy";
 import { databaseIdSchema } from "./identifiers";
@@ -57,12 +56,12 @@ export const liveTopQuestionsOnAirSchema = z
   .strict();
 export type LiveTopQuestionsOnAir = z.infer<typeof liveTopQuestionsOnAirSchema>;
 
-/** One attendee message as an output shows it: plain words, cut to the broadcast's length. */
+/** One attendee message as an output shows it: its plain words, whole; the board clamps them to whole lines. */
 export const liveChatFeedMessageSchema = z
   .object({
     id: databaseIdSchema,
     authorName: livePersonNameSchema,
-    text: z.string().min(1).max(LIVE_CHAT_POLICY.tickerMessageLength),
+    text: z.string().min(1).max(LIVE_ROOM_POLICY.chatMaxLength),
   })
   .strict();
 export type LiveChatFeedMessage = z.infer<typeof liveChatFeedMessageSchema>;

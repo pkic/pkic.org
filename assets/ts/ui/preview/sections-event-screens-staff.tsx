@@ -122,7 +122,7 @@ function ScreensTab({ screens, canManage = true }: { screens: ScreenRecord[]; ca
 }
 
 /** A dialog behind the button that opens it, which the gallery clicks for its screenshot. */
-function DialogSpecimen({ label, dialog }: { label: string; dialog: (close: () => void) => ComponentChildren }) {
+export function DialogSpecimen({ label, dialog }: { label: string; dialog: (close: () => void) => ComponentChildren }) {
   const [open, setOpen] = useState(false);
   return (
     <div data-gallery-open>

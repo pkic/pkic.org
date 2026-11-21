@@ -9,6 +9,7 @@
     list-style: none;
   }
   .pk-live-question {
+    position: relative;
     display: grid;
     grid-template-columns: auto 1fr;
     gap: var(--pk-3);
@@ -16,6 +17,45 @@
     border: 1px solid var(--pk-line-soft);
     border-radius: var(--pk-radius-card);
     background: var(--pk-surface);
+  }
+  /*
+   * A card opens on a click anywhere on it. The one control that opens it reads as a quiet cue and is
+   * stretched over the whole card; the card's other controls, and its answers once open, stay above it.
+   */
+  .pk-live-question__open {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--pk-accent-ink);
+    font: inherit;
+    font-size: var(--pk-text-xs);
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .pk-live-question__open::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: var(--pk-radius-card);
+  }
+  .pk-live-question__open:disabled {
+    color: var(--pk-ink-muted);
+    cursor: default;
+  }
+  .pk-live-question__open:focus-visible {
+    outline: none;
+  }
+  .pk-live-question__open:focus-visible::after {
+    outline: 2px solid var(--pk-focus);
+    outline-offset: -2px;
+  }
+  .pk-live-question:has(.pk-live-question__open:not(:disabled)):hover {
+    border-color: var(--pk-line-strong);
+  }
+  .pk-live-question :is(.pk-live-question__vote, .pk-live-question__actions, .pk-live-answers__thread),
+  .pk-live-question .pk-live-question__meta :is(button, a) {
+    position: relative;
+    z-index: 1;
   }
   .pk-live-question__vote {
     align-self: start;
@@ -67,6 +107,35 @@
     flex-wrap: wrap;
     gap: var(--pk-2);
   }
+  /* A viewer with no controls for this question gets no empty row in its card. */
+  .pk-live-question__actions:empty {
+    display: none;
+  }
+  /* Asking stays in reach while the poll and the questions scroll under it. */
+  /*
+   * The questions' bar: how they are ordered, and the button that asks one at its end, on one line that
+   * stays at the top while the questions scroll under it. Space is scarce beside a stream.
+   */
+  .pk-live-questions__bar {
+    position: sticky;
+    z-index: 1;
+    inset-block-start: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2);
+    background: var(--pk-surface);
+  }
+  .pk-live-questions__bar > .pk-tabs {
+    flex: 1;
+    min-inline-size: 0;
+  }
+  .pk-live-questions__bar > .pk-btn {
+    flex: none;
+    margin-inline-start: auto;
+  }
+  .pk-live-questions__bar:empty {
+    display: none;
+  }
   .pk-live-questions__empty,
   .pk-live-questions__notice {
     margin: 0;
@@ -90,5 +159,19 @@
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
+  }
+  /* Whom the question is for beside how it is asked: one line on a wide form, stacked on a phone. */
+  .pk-live-questions__ask-options {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: start;
+    gap: var(--pk-3) var(--pk-5);
+  }
+  .pk-live-questions__ask-options > .pk-field {
+    flex: 0 1 16rem;
+    min-inline-size: 0;
+  }
+  .pk-live-questions__ask-options > :last-child {
+    flex: 1 1 16rem;
   }
 }

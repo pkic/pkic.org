@@ -7,6 +7,7 @@ import {
   useSessionActivity,
 } from "../../assets/ts/member-flows/portal/use-session-activity";
 import { clearAuth, portalSession, savePortalSession } from "../../assets/ts/member-flows/portal/state";
+import { LIVE_KEEP_ALIVE_MS, watchLiveSocket } from "../../assets/ts/live-session/live-socket-retry";
 import { portalSessionFixture } from "../helpers/portal-session";
 
 let root: HTMLDivElement;
@@ -36,7 +37,7 @@ it("turns browser interaction into one throttled live-session refresh", async ()
   const initial = portalSessionFixture({ member: true, staff: true });
   initial.expiresAt = "2026-10-28T12:00:00.000Z";
   initial.idleExpiresAt = "2026-10-05T12:00:00.000Z";
-  initial.staff!.expiresAt = "2026-09-28T20:00:00.000Z";
+  initial.staff!.expiresAt = "2026-09-29T04:00:00.000Z";
   initial.staff!.idleExpiresAt = "2026-09-28T13:00:00.000Z";
   const refreshed = structuredClone(initial);
   refreshed.idleExpiresAt = "2026-10-05T12:15:00.000Z";
@@ -62,6 +63,41 @@ it("turns browser interaction into one throttled live-session refresh", async ()
   );
   expect(portalSession.value?.idleExpiresAt).toBe(refreshed.idleExpiresAt);
   expect(portalSession.value?.staff?.idleExpiresAt).toBe(refreshed.staff!.idleExpiresAt);
+});
+
+it("counts a live room the page follows as the person being there, with no click at all", async () => {
+  const initial = portalSessionFixture({ member: true, staff: true });
+  initial.expiresAt = "2026-10-28T12:00:00.000Z";
+  initial.idleExpiresAt = "2026-10-05T12:00:00.000Z";
+  initial.staff!.expiresAt = "2026-09-29T04:00:00.000Z";
+  initial.staff!.idleExpiresAt = "2026-09-28T13:00:00.000Z";
+  const fetchMock = vi.fn(async () => {
+    const renewed = structuredClone(initial);
+    renewed.staff!.idleExpiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    return Response.json(renewed);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  await act(async () => {
+    savePortalSession(initial);
+    render(<Harness />, root);
+  });
+  // The room answers each keep-alive question, as it does through a talk nobody interrupts.
+  const socket = {
+    readyState: WebSocket.OPEN,
+    send: () => setTimeout(() => watch.heard(), 50),
+  } as unknown as WebSocket;
+  const watch = watchLiveSocket(socket, () => undefined);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(SESSION_ACTIVITY_REFRESH_INTERVAL_MS + LIVE_KEEP_ALIVE_MS);
+  });
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  // An hour and a half in, past the hour a role's sign-in may sit idle, the page is still signed in.
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(5 * SESSION_ACTIVITY_REFRESH_INTERVAL_MS);
+  });
+  watch.stop();
+  expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(5);
+  expect(Date.parse(portalSession.value!.staff!.idleExpiresAt!)).toBeGreaterThan(Date.now());
 });
 
 it("fails closed when the server refuses an activity refresh", async () => {

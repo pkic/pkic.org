@@ -36,10 +36,14 @@ describe("the studio's switcher, session bar and phone layout", () => {
     try {
       const { host, live } = mountDesk();
       const bar = host.querySelector(".pk-studio-phone__bar")!;
-      // Preview and Program are the pictures alone until one is touched.
-      expect(bar.querySelector(".pk-studio-phone__thumb-tag")).toBeNull();
+      // Preview and Program are the pictures with their tags under them; the tools wait for a touch.
+      expect([...bar.querySelectorAll(".pk-studio-phone__thumb-tag")].map((tag) => tag.textContent)).toEqual([
+        "PVW",
+        "PGM",
+      ]);
+      expect(bar.querySelector(".pk-studio-phone__thumb-tools")).toBeNull();
       expect(host.querySelector(".pk-studio-grid")).toBeNull();
-      const tabs = [...host.querySelectorAll<HTMLButtonElement>(".pk-studio-phone__tab")];
+      const tabs = [...host.querySelectorAll<HTMLElement>(".pk-app-tabbar__link")];
       // Five tabs, each a glyph over a short label; the label is the tab's name.
       expect(tabs.map((tab) => tab.textContent)).toEqual(["Home", "Speakers", "Graphics", "Questions", "More"]);
       expect(tabs.every((tab) => tab.querySelector("svg[aria-hidden='true']"))).toBe(true);
@@ -56,13 +60,13 @@ describe("the studio's switcher, session bar and phone layout", () => {
         tone: "warning",
         flash: false,
       });
-      expect(home.textContent).not.toMatch(/Take off air|Nothing on the stage display/);
+      expect(home.textContent).not.toMatch(/Take off air|No message on the stage display/);
 
-      // A touch on Program shows its tag, Clear and Full screen on the picture.
+      // A touch on Program shows Clear and Full screen on the picture.
       const program = bar.querySelector<HTMLButtonElement>('button[aria-label="Program"]')!;
       void act(() => program.click());
       expect(program.getAttribute("aria-expanded")).toBe("true");
-      expect(bar.querySelector(".pk-studio-phone__thumb-tag")?.textContent).toBe("PGM");
+      expect(bar.querySelector(".pk-studio-phone__thumb-tools")).not.toBeNull();
       void act(() => bar.querySelector<HTMLButtonElement>('[aria-label="Clear Program"]')!.click());
       expect(commands(live).at(-1)).toEqual({ type: "program.clear" });
       void act(() => bar.querySelector<HTMLButtonElement>('[aria-label="Full screen Program"]')!.click());
@@ -73,22 +77,54 @@ describe("the studio's switcher, session bar and phone layout", () => {
       );
       void act(() => document.querySelector<HTMLButtonElement>('dialog[open] [aria-label="Close Program"]')!.click());
 
-      // The views without a tab of their own are behind More, which says which one is open.
+      // The views without a tab of their own are behind More, the app's sheet of tiles; More is marked while one is open.
       await act(async () => tabs[4]!.click());
-      const more = [...document.querySelectorAll('[role="menuitemradio"]')];
-      expect(more.map((item) => item.textContent)).toEqual(["Monitors", "Time", "Message"]);
-      void act(() => (more[1] as HTMLElement).click());
+      const more = [...document.querySelectorAll<HTMLElement>(".pk-action-tiles .pk-action-tile")];
+      expect(more.map((item) => item.textContent)).toEqual(["Polls", "Chat", "Monitors", "Screens", "Time", "Message"]);
+      void act(() => more[4]!.click());
       expect(location.hash).toContain("panel=time");
-      expect(host.querySelector('[aria-label="More, showing Time"]')).not.toBeNull();
+      expect(tabs[4]!.getAttribute("aria-current")).toBe("page");
 
       expect(host.querySelectorAll("section[aria-label]").length).toBeGreaterThan(0);
       void act(() => tabs[3]!.click());
       expect(location.hash).toContain("panel=questions");
       expect(host.querySelector('section[aria-label="Questions"]')).not.toBeNull();
       void act(() =>
-        bar.querySelector<HTMLButtonElement>('.pk-studio-transition button[aria-label="Transition"]')!.click(),
+        bar
+          .querySelector<HTMLButtonElement>('.pk-studio-transition button[aria-label="Transition to Program"]')!
+          .click(),
       );
       expect(commands(live).at(-1)).toEqual({ type: "preview.take" });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("shows the outputs an operator picks on the phone's monitor", () => {
+    vi.stubGlobal(
+      "matchMedia",
+      (query: string) =>
+        ({
+          matches: query.includes("max-width"),
+          addEventListener: () => {},
+          removeEventListener: () => {},
+        }) as unknown as MediaQueryList,
+    );
+    try {
+      const { host } = mountDesk();
+      void act(() => {
+        history.replaceState(null, "", "/#/live?panel=monitor");
+        window.dispatchEvent(new HashChangeEvent("hashchange"));
+      });
+      const shown = () =>
+        [...host.querySelectorAll<HTMLElement>(".pk-studio-monitor__tile")].map((tile) => tile.dataset.tally);
+      expect(shown()).toEqual(["preview", "program"]);
+      void act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Outputs on Monitors"]')!.click());
+      const projector = [...document.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]')].find((item) =>
+        item.textContent?.includes("Projector"),
+      )!;
+      void act(() => projector.click());
+      expect(shown()).toEqual(["preview", "program", "projector"]);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -147,6 +183,17 @@ describe("the studio's switcher, session bar and phone layout", () => {
     expect(host.querySelector(".pk-studio-header__left")?.textContent).toBe("Starts in 12 min");
   });
 
+  it("lets an operator open or close the session's virtual room from the session bar", () => {
+    const { host, live } = mountDesk();
+    const trigger = host.querySelector<HTMLButtonElement>('button[aria-label="Virtual room: On schedule"]')!;
+    void act(() => trigger.click());
+    const choice = [...document.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]')].find((item) =>
+      item.textContent?.startsWith("Open now"),
+    )!;
+    void act(() => choice.click());
+    expect(commands(live)).toEqual([{ type: "room.opening", opening: "open" }]);
+  });
+
   it("transitions with Space while nothing else has the key, never from a field", () => {
     const { host, live } = mountDesk();
     const space = (target: EventTarget) =>
@@ -158,8 +205,9 @@ describe("the studio's switcher, session bar and phone layout", () => {
     space(host.querySelector("button")!);
     space(panel(host, "Message to speaker").querySelector("input[name=text]")!);
     expect(commands(live)).toHaveLength(1);
-    expect(take(host).getAttribute("title")).toBe(
-      "Replace Program with Preview. This changes the overlay output, not the stream. Shortcut: Space.",
+    // The studio shows the hint as its own tooltip, so it holds it instead of the browser's title.
+    expect(take(host).dataset.tooltip).toBe(
+      "Transition to Program\nReplace Program with Preview. This changes the overlay output, not the stream. Shortcut: Space.",
     );
   });
 
@@ -176,7 +224,7 @@ describe("the studio's switcher, session bar and phone layout", () => {
         }),
       );
       const toast = () => host.querySelector(".pk-studio__toast");
-      expect(toast()?.textContent).toContain("Remote Rita took everything off air.");
+      expect(toast()?.textContent).toContain("Remote Rita took everything off air. Program is in the Default scene.");
       void act(() => button(toast()!, "Undo").click());
       expect(commands(live)).toEqual([{ type: "program.restore", snapshotId }]);
       expect(toast()).toBeNull();
@@ -205,7 +253,9 @@ describe("the studio's switcher, session bar and phone layout", () => {
       change: { operatorName: "Operator", at: "2026-01-01T00:00:00.000Z" },
     });
     const show = (snapshotId: string) =>
-      void act(() => render(<ProgramUndoToast undo={undo(snapshotId)} onUndo={() => {}} />, host));
+      void act(() =>
+        render(<ProgramUndoToast undo={undo(snapshotId)} defaultScene="Default" onUndo={() => {}} />, host),
+      );
     try {
       show("first");
       void act(() => {
@@ -246,10 +296,10 @@ describe("the studio's switcher, session bar and phone layout", () => {
           ),
       );
     // With a menu open, Escape belongs to the menu.
-    void act(() => button(host, "Add panel").click());
+    void act(() => labeled(host, "Add panel").click());
     escape();
     expect(document.querySelector("dialog[open]")).toBeNull();
-    void act(() => button(host, "Add panel").click());
+    void act(() => labeled(host, "Add panel").click());
     escape();
     expect(document.querySelector("dialog")?.textContent).toContain("Leave full screen?");
     void act(() => button(document.querySelector("dialog")!, "Stay in full screen").click());

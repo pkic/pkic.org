@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { LIVE_PRESENCE_OUTPUTS, LIVE_PRESENCE_TARGETS } from "../live-room-presence";
+import { LIVE_PRESENCE_TARGETS } from "../live-room-presence";
+import { liveAuxOutputSchema } from "./live-session-stage";
 import { livePersonNameSchema } from "./live-session-change";
 
 /**
@@ -23,10 +24,13 @@ export const livePresenceFocusSchema = z
   })
   .strict();
 export type LivePresenceFocus = z.infer<typeof livePresenceFocusSchema>;
+/** The monitors a pointer can rest on: every composition the room draws, not the livestream video. */
+export const livePresenceOutputSchema = z.union([z.enum(["preview", "program"]), liveAuxOutputSchema]);
+export type LivePresenceOutput = z.infer<typeof livePresenceOutputSchema>;
 /** Where an operator points on a shared monitor, in 0–1 coordinates of its 16:9 composition. */
 export const livePresencePointerSchema = z
   .object({
-    output: z.enum(LIVE_PRESENCE_OUTPUTS),
+    output: livePresenceOutputSchema,
     x: z.number().min(0).max(1),
     y: z.number().min(0).max(1),
   })

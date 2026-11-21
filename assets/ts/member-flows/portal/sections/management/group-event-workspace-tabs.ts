@@ -30,7 +30,7 @@ export const EVENT_WORKSPACE_TABS: readonly EventWorkspaceTabDef[] = [
   {
     key: "live",
     label: "Studio",
-    visible: (event) => hasEventAgendaPermission(event.id, "agenda:live_moderate"),
+    visible: (event) => hasEventAgendaPermission(event.id, "agenda:live_studio"),
   },
   {
     key: "screens",
@@ -68,7 +68,7 @@ export const EVENT_WORKSPACE_TABS: readonly EventWorkspaceTabDef[] = [
     visible: (event) =>
       event.capabilities.includes("manage") ||
       hasEventAgendaPermission(event.id, "agenda:write") ||
-      hasEventAgendaPermission(event.id, "agenda:live_moderate"),
+      hasEventAgendaPermission(event.id, "agenda:live_studio"),
   },
 ];
 

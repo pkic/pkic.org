@@ -1,5 +1,6 @@
 import { PromotionDesignSettings } from "./settings/PromotionDesignSettings";
 import { EventLiveSettings } from "./settings/EventLiveSettings";
+import { ProductionPartnersSettings } from "./settings/ProductionPartnersSettings";
 import { hasEventAgendaPermission } from "../event-agenda-access";
 import { Tabs } from "../../../../../components/Tabs";
 import type { EventDetail } from "../types";
@@ -9,6 +10,7 @@ import { GroupEventScheduling } from "../../management/GroupEventScheduling";
 import { GeneralTab } from "./settings/GeneralTab";
 import { SeriesManagedNotice } from "./settings/SeriesManagedNotice";
 import { LazySponsorTiersTab } from "./settings/LazySponsorTiersTab";
+import { LiveChatRetentionSettings } from "./settings/LiveChatRetentionSettings";
 import { RawEvidenceRetentionPolicy } from "./settings/RawEvidenceRetentionPolicy";
 import { AttendanceSettings } from "./settings/AttendanceSettings";
 
@@ -52,7 +54,7 @@ export function Settings({
 }) {
   const visibleTabs = [
     ...SETTINGS_TABS.filter(({ capability }) => !capability || event.capabilities.includes(capability)),
-    ...(hasEventAgendaPermission(event.id, "agenda:live_moderate") ? [{ key: "live" as const, label: "Studio" }] : []),
+    ...(hasEventAgendaPermission(event.id, "agenda:live_studio") ? [{ key: "live" as const, label: "Studio" }] : []),
   ];
   const tab: SettingsTab = visibleTabs.find(({ key }) => key === subTab)?.key ?? "general";
 
@@ -99,7 +101,12 @@ export function Settings({
       {(tab === "location" || tab === "session-types" || tab === "registration") && (
         <GeneralTab event={event} section={tab} onUpdated={onUpdated} />
       )}
-      {tab === "retention" && <RawEvidenceRetentionPolicy event={event} />}
+      {tab === "retention" && (
+        <>
+          <LiveChatRetentionSettings slug={event.slug} canEdit={event.capabilities.includes("write")} />
+          <RawEvidenceRetentionPolicy event={event} />
+        </>
+      )}
       {tab === "cfp" && <ProposalCallSettings event={event} onUpdated={onUpdated} />}
       {tab === "attendance" && <AttendanceSettings event={event} onUpdated={onUpdated} />}
       {tab === "scheduling" && (
@@ -108,7 +115,12 @@ export function Settings({
       {tab === "sponsor-tiers" && (
         <LazySponsorTiersTab slug={event.slug} canWrite={event.capabilities.includes("write")} />
       )}
-      {tab === "live" && <EventLiveSettings slug={event.slug} />}
+      {tab === "live" && (
+        <>
+          <EventLiveSettings slug={event.slug} canEdit={hasEventAgendaPermission(event.id, "agenda:live_setup")} />
+          <ProductionPartnersSettings slug={event.slug} canEdit={event.capabilities.includes("write")} />
+        </>
+      )}
       {tab === "team" && (
         <EventTeamSettings
           slug={event.slug}

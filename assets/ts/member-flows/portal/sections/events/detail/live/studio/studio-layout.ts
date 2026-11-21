@@ -1,15 +1,20 @@
 import { z } from "zod";
 import {
-  LIVE_AUX_OUTPUTS,
-  LIVE_AUX_OUTPUT_DETAILS,
   LIVE_LIVESTREAM_OUTPUT_DETAILS,
   LIVE_PREVIEW_OUTPUT_DETAILS,
   LIVE_PROGRAM_OUTPUT_DETAILS,
+  LIVE_STAGE_PREVIEW_OUTPUT,
+  liveOutputDetails,
+  liveStudioOutputs,
+  type LiveAuxOutput,
+  type LiveOutputDetails,
 } from "../../../../../../../../shared/live-room-outputs";
 import {
-  LIVE_OVERLAY_DEFAULT_LAYOUT,
-  liveOverlayLayoutSlugSchema,
-} from "../../../../../../../../shared/schemas/live-overlay-layout";
+  LIVE_SPEAKER_OUTPUT_KEY,
+  type LiveRoomOutput,
+} from "../../../../../../../../shared/schemas/live-room-output-setup";
+import { LIVE_HELD_OUTPUTS_MAX, liveAuxOutputSchema } from "../../../../../../../../shared/schemas/live-session-stage";
+import { LIVE_OVERLAY_DEFAULT_LAYOUT } from "../../../../../../../../shared/schemas/live-overlay-layout";
 import { compactGrid, flowGrid, placeGridItem, type GridBounds, type GridRect } from "./studio-grid";
 
 /**
@@ -53,15 +58,60 @@ export const STUDIO_PANEL_LABELS: Record<StudioPanelType, string> = {
   screens: "Screens",
 };
 
-/** What a monitor can show: the two switcher buses, the stream viewers see, and every auxiliary output. */
-export const STUDIO_OUTPUTS = ["preview", "program", "livestream", ...LIVE_AUX_OUTPUTS] as const;
-export type StudioOutput = (typeof STUDIO_OUTPUTS)[number];
-export const STUDIO_OUTPUT_DETAILS: Record<StudioOutput, { label: string; short: string; purpose: string }> = {
-  preview: LIVE_PREVIEW_OUTPUT_DETAILS,
-  program: LIVE_PROGRAM_OUTPUT_DETAILS,
-  livestream: LIVE_LIVESTREAM_OUTPUT_DETAILS,
-  ...LIVE_AUX_OUTPUT_DETAILS,
-};
+/** What a monitor can show besides the room's own outputs: the two switcher buses and the stream viewers see. */
+const STUDIO_BUSES = ["preview", "program", "livestream"] as const;
+/** A monitor's output: a switcher bus, the stream, or one of the room's outputs by its key. */
+export type StudioOutput = (typeof STUDIO_BUSES)[number] | LiveAuxOutput;
+const studioOutputSchema = z.union([z.enum(STUDIO_BUSES), liveAuxOutputSchema]);
+const STUDIO_OUTPUTS_MAX = STUDIO_BUSES.length + LIVE_HELD_OUTPUTS_MAX;
+const isBus = (output: StudioOutput) => (STUDIO_BUSES as readonly string[]).includes(output);
+
+/** Every output of a room in the studio's order: the buses, then the room's outputs in its own order, the stage preview after the speaker's screen. */
+export function studioOutputs(room: readonly LiveRoomOutput[]): StudioOutput[] {
+  const keys = liveStudioOutputs(room);
+  const speaker = keys.indexOf(LIVE_SPEAKER_OUTPUT_KEY);
+  const withPreview =
+    speaker < 0
+      ? [...keys, LIVE_STAGE_PREVIEW_OUTPUT]
+      : [...keys.slice(0, speaker + 1), LIVE_STAGE_PREVIEW_OUTPUT, ...keys.slice(speaker + 1)];
+  return [...STUDIO_BUSES, ...withPreview];
+}
+
+/**
+ * The outputs a monitor offers. The stage preview follows the room on its
+ * own, so the studio offers it only on a monitor that already shows it; an
+ * output the room no longer lists stays on offer where it is shown, so it
+ * can be taken off.
+ */
+export function studioMonitorChoices(shown: readonly StudioOutput[], room: readonly LiveRoomOutput[]): StudioOutput[] {
+  const all = studioOutputs(room);
+  return [
+    ...all.filter((output) => output !== LIVE_STAGE_PREVIEW_OUTPUT || shown.includes(output)),
+    ...shown.filter((output) => !all.includes(output)),
+  ];
+}
+
+/**
+ * What a monitor shows in this room. A monitor saved with a screen this room
+ * does not have shows the room's own screens in its place, so a multiview
+ * made for one room shows every screen of another.
+ */
+export function studioShownOutputs(saved: readonly StudioOutput[], room: readonly LiveRoomOutput[]): StudioOutput[] {
+  const all = studioOutputs(room);
+  const kept = saved.filter((output) => all.includes(output));
+  if (kept.length === saved.length) return kept;
+  const added = liveStudioOutputs(room).filter((output) => !kept.includes(output));
+  const shown = new Set([...kept, ...added]);
+  return all.filter((output) => shown.has(output));
+}
+
+/** An output's name, code and purpose in this room. */
+export function studioOutputDetails(room: readonly LiveRoomOutput[], output: StudioOutput): LiveOutputDetails {
+  if (output === "preview") return LIVE_PREVIEW_OUTPUT_DETAILS;
+  if (output === "program") return LIVE_PROGRAM_OUTPUT_DETAILS;
+  if (output === "livestream") return LIVE_LIVESTREAM_OUTPUT_DETAILS;
+  return liveOutputDetails(room, output);
+}
 
 export const STUDIO_COLUMNS = 12;
 /** The grid's row height in pixels (see StudioGrid.css); a panel's height is a whole number of rows. */
@@ -102,11 +152,11 @@ export const studioPanelSchema = z
     y: z.number().int().min(0).max(STUDIO_MAX_ROW),
     w: z.number().int().min(1).max(STUDIO_COLUMNS),
     h: z.number().int().min(1).max(STUDIO_MAX_H),
-    outputs: z.array(z.enum(STUDIO_OUTPUTS)).min(1).max(STUDIO_OUTPUTS.length).optional(),
-    /** The overlay layout each output's tile draws, when not the event's default; a saved name may since be gone. */
-    layouts: z.partialRecord(z.enum(STUDIO_OUTPUTS), liveOverlayLayoutSlugSchema).optional().catch(undefined),
+    outputs: z.array(studioOutputSchema).min(1).max(STUDIO_OUTPUTS_MAX).optional(),
     /** The Transition's button shows its name beside the arrow. */
     labeled: z.literal(true).optional(),
+    /** A Preview monitor shows the event's scenes under its picture unless the operator hid them. */
+    scenes: z.literal(false).optional(),
   })
   .strict()
   .refine((panel) => panel.x + panel.w <= STUDIO_COLUMNS, "A panel stays within the grid's columns.")
@@ -117,9 +167,17 @@ export const studioPanelSchema = z
 export type StudioPanel = z.infer<typeof studioPanelSchema>;
 /** Panel types the studio no longer has: the output links are on the event's live layouts settings. A saved one is dropped. */
 const RETIRED_PANEL_TYPES: ReadonlySet<unknown> = new Set(["sources"]);
+/** A saved monitor may still name a scene per tile, from when a tile could draw another scene than its screen. */
+const withoutTileScenes = (panel: unknown) => {
+  if (!panel || typeof panel !== "object" || !("layouts" in panel)) return panel;
+  const { layouts: _retired, ...rest } = panel;
+  return rest;
+};
 const withoutRetiredPanels = (panels: unknown) =>
   Array.isArray(panels)
-    ? panels.filter((panel: unknown) => !RETIRED_PANEL_TYPES.has((panel as { type?: unknown } | null)?.type))
+    ? panels
+        .filter((panel: unknown) => !RETIRED_PANEL_TYPES.has((panel as { type?: unknown } | null)?.type))
+        .map(withoutTileScenes)
     : panels;
 const studioWorkspaceSchema = z.preprocess(withoutRetiredPanels, z.array(studioPanelSchema).max(24));
 export const studioLayoutsSchema = z
@@ -270,20 +328,20 @@ export function addStudioPanel(panels: readonly StudioPanel[], type: StudioPanel
 }
 
 /** Turns one output on or off in a monitor, which always keeps at least one, in the canonical order. */
-export function toggleStudioOutput(panels: readonly StudioPanel[], id: string, output: StudioOutput): StudioPanel[] {
+export function toggleStudioOutput(
+  panels: readonly StudioPanel[],
+  id: string,
+  output: StudioOutput,
+  room: readonly LiveRoomOutput[],
+): StudioPanel[] {
   return panels.map((panel) => {
     if (panel.id !== id) return panel;
-    const current = panel.outputs ?? ["program"];
+    const current = studioShownOutputs(panel.outputs ?? ["program"], room);
     const next = current.includes(output)
       ? current.filter((entry) => entry !== output)
-      : STUDIO_OUTPUTS.filter((entry) => entry === output || current.includes(entry));
+      : studioMonitorChoices([...current, output], room).filter((entry) => entry === output || current.includes(entry));
     if (!next.length) return panel;
-    // A tile taken off the monitor forgets its layout.
-    const { layouts, ...rest } = panel;
-    const kept = Object.fromEntries(
-      Object.entries(layouts ?? {}).filter(([entry]) => next.includes(entry as StudioOutput)),
-    );
-    return Object.keys(kept).length ? { ...rest, outputs: next, layouts: kept } : { ...rest, outputs: next };
+    return { ...panel, outputs: next };
   });
 }
 
@@ -296,25 +354,25 @@ export function setStudioPanelLabeled(panels: readonly StudioPanel[], id: string
   });
 }
 
-/** The overlay layout a monitor's tile draws for an output: the event's default unless the operator chose one. */
-export function studioOutputLayout(panel: StudioPanel, output: StudioOutput): string {
-  return panel.layouts?.[output] ?? LIVE_OVERLAY_DEFAULT_LAYOUT;
-}
-
-/** Chooses the layout one tile of a monitor draws; the default is not stored. */
-export function setStudioOutputLayout(
-  panels: readonly StudioPanel[],
-  id: string,
-  output: StudioOutput,
-  layout: string,
-): StudioPanel[] {
+/** Shows or hides the scenes under a Preview monitor. */
+export function setStudioPanelScenes(panels: readonly StudioPanel[], id: string, scenes: boolean): StudioPanel[] {
   return panels.map((panel) => {
     if (panel.id !== id) return panel;
-    const { layouts: current, ...rest } = panel;
-    const others = Object.fromEntries(Object.entries(current ?? {}).filter(([entry]) => entry !== output));
-    const layouts = layout === LIVE_OVERLAY_DEFAULT_LAYOUT ? others : { ...others, [output]: layout };
-    return Object.keys(layouts).length ? { ...rest, layouts } : rest;
+    const { scenes: _shown, ...rest } = panel;
+    return scenes ? rest : { ...rest, scenes: false };
   });
+}
+
+/**
+ * The overlay layout a monitor's tile draws for an output: always the scene
+ * the output itself draws, so a monitor shows what its screen shows. The
+ * stream and the stage preview, which carry no scene of their own, draw the
+ * event's default.
+ */
+export function studioOutputLayout(output: StudioOutput): string | null {
+  // Preview and Program draw the scene their composition carries, as the room's sources do.
+  if (output === "preview" || output === "program") return null;
+  return isBus(output) || output === LIVE_STAGE_PREVIEW_OUTPUT ? LIVE_OVERLAY_DEFAULT_LAYOUT : null;
 }
 
 export const STUDIO_LAYOUT_STORAGE_KEY = "pkic.live-studio.layouts.v2";
@@ -325,7 +383,7 @@ const studioPanelV1Schema = z.object({
   type: z.enum(STUDIO_PANEL_TYPES),
   span: z.number().int().min(STUDIO_MIN_W).max(STUDIO_COLUMNS),
   height: z.number().nullable(),
-  outputs: z.array(z.enum(STUDIO_OUTPUTS)).min(1).max(STUDIO_OUTPUTS.length).optional(),
+  outputs: z.array(studioOutputSchema).min(1).max(STUDIO_OUTPUTS_MAX).optional(),
 });
 
 /** A first-shape arrangement laid on the grid in its own order; a workspace that does not read starts over. */

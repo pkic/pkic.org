@@ -1,3 +1,4 @@
+import { DEFAULT_LIVE_ROOM_OUTPUTS } from "../../assets/shared/schemas/live-room-output-setup";
 import { describe, expect, it } from "vitest";
 import {
   compactGrid,
@@ -12,6 +13,7 @@ import {
   STUDIO_LAYOUT_V1_STORAGE_KEY,
   STUDIO_WORKSPACES,
   defaultStudioLayouts,
+  studioShownOutputs,
   loadStudioLayouts,
   moveStudioPanel,
   resizeStudioPanel,
@@ -128,9 +130,11 @@ describe("studio keyboard arrangement", () => {
   });
 
   it("keeps a monitor's outputs in canonical order and never empty", () => {
-    const added = toggleStudioOutput([preview!], preview!.id, "program");
+    const added = toggleStudioOutput([preview!], preview!.id, "program", DEFAULT_LIVE_ROOM_OUTPUTS);
     expect(added[0]!.outputs).toEqual(["preview", "program"]);
-    expect(toggleStudioOutput([preview!], preview!.id, "preview")[0]!.outputs).toEqual(["preview"]);
+    expect(toggleStudioOutput([preview!], preview!.id, "preview", DEFAULT_LIVE_ROOM_OUTPUTS)[0]!.outputs).toEqual([
+      "preview",
+    ]);
   });
 
   it("starts every workspace from a valid, overlap-free default", () => {
@@ -229,5 +233,30 @@ describe("saved studio layouts", () => {
     expect(saved.stage[0]!.h).toBe(12);
     expect(loadStudioLayouts(storage).show[0]!.h).toBe(11);
     expect(loadStudioLayouts(storage).stage[0]!.h).toBe(12);
+  });
+});
+
+describe("a monitor in a room that sets up its own screens", () => {
+  const room = [
+    { key: "prj-l", name: "Screen left", code: "PRJ L", role: "follow" as const, scene: null, sceneLocked: false },
+    { key: "prj-r", name: "Screen right", code: "PRJ R", role: "follow" as const, scene: null, sceneLocked: false },
+    { key: "stage-display", name: "Speaker", code: "DSP", role: "speaker" as const, scene: null, sceneLocked: false },
+    { key: "foy", name: "Foyer", code: "FOY", role: "exact" as const, scene: "break", sceneLocked: true },
+  ];
+
+  it("shows every screen of the room in place of one the room does not have, in the room's order", () => {
+    expect(studioShownOutputs(["program", "livestream", "stage-display", "projector"], room)).toEqual([
+      "program",
+      "livestream",
+      "prj-l",
+      "prj-r",
+      "stage-display",
+      "foy",
+    ]);
+  });
+
+  it("keeps a monitor as saved when the room has all its screens", () => {
+    expect(studioShownOutputs(["foy", "program"], room)).toEqual(["foy", "program"]);
+    expect(studioShownOutputs(["projector"], DEFAULT_LIVE_ROOM_OUTPUTS)).toEqual(["projector"]);
   });
 });

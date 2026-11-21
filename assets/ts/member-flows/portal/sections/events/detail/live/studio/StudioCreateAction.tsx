@@ -4,17 +4,20 @@ import { IconPlus } from "../../../../../../../components/icons";
 import { Button } from "../../../../../../../ui/Button";
 
 /**
- * A panel's create action, in its header at the end: the system's icon-only
- * "+" (as on a collection toolbar), named and with a tooltip, which opens
- * what creates the item.
+ * A panel's create action, in its header before the panel's menu and close:
+ * the same ghost icon button as they are, named and with a tooltip, which
+ * opens what creates the item.
  */
 export function StudioCreateAction({
   label,
+  hint,
   disabled = false,
   children,
 }: {
   /** What it creates, as an action: "Add person", "Add timer". */
   label: string;
+  /** What that gives the operator, in a sentence: the second line of its tooltip. */
+  hint: string;
   disabled?: boolean;
   /** The dialog or form it opens; `close` closes it again. */
   children: (close: () => void) => ComponentChildren;
@@ -23,10 +26,10 @@ export function StudioCreateAction({
   return (
     <>
       <Button
-        variant="primary"
+        variant="ghost"
         icon
         aria-label={label}
-        title={label}
+        title={`${label}\n${hint}`}
         aria-expanded={open}
         disabled={disabled}
         onClick={() => setOpen(true)}

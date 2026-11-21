@@ -1,4 +1,3 @@
-import { LIVE_AUX_OUTPUTS } from "../../../../assets/shared/live-room-outputs";
 import type {
   LiveCredit,
   LiveRoomServerMessage,
@@ -37,7 +36,7 @@ export function refreshLiveCreditCopies(store: LiveRoomStore, session: LiveRoomS
     store.savePreview(next);
     messages.push({ type: "preview.changed", composition: next });
   }
-  for (const output of LIVE_AUX_OUTPUTS) {
+  for (const output of store.auxOutputs()) {
     const composition = store.aux(output);
     const onOutput = current(composition.lowerThird);
     if (!onOutput) continue;

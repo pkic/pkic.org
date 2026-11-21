@@ -152,6 +152,8 @@ export function GroupWorkspace({
   const views = groupContextNavigation(capabilities);
   const canManage = capabilities.includes("manage");
   const canParticipate = capabilities.includes("participate");
+  const canView = capabilities.includes("view");
+  const shownView = views.find((item) => item.key === view);
   const settingsGroup: GroupSettingsDetail | null =
     group && detail.data?.configuration ? { ...group, ...detail.data.configuration } : null;
 
@@ -163,18 +165,16 @@ export function GroupWorkspace({
   }
 
   const nestedEventRecord = view === "events" && Boolean(resourceId) && resourceId !== "new" && resourceId !== "list";
+  // A guest opens the record of the event they are on the team of; the event read decides which one.
+  const guestEventRecord = nestedEventRecord && capabilities.includes("guest");
 
   const trail = group
     ? [
         { label: "Groups", href: usePortalHashLocation.hrefs("/groups") },
         { label: group.name, href: usePortalHashLocation.hrefs(`/groups/${encodeURIComponent(group.id)}`) },
-        ...(view !== OVERVIEW_VIEW
-          ? [
-              {
-                label: views.find((item) => item.key === view)?.label ?? view,
-                href: usePortalHashLocation.hrefs(viewPath(view)),
-              },
-            ]
+        // A guest reaches one event's record, not the group's list of events.
+        ...(view !== OVERVIEW_VIEW && shownView
+          ? [{ label: shownView.label, href: usePortalHashLocation.hrefs(viewPath(view)) }]
           : []),
       ]
     : [];
@@ -209,7 +209,7 @@ export function GroupWorkspace({
             </>
           )}
           <Suspense fallback={<Spinner />}>
-            {view === OVERVIEW_VIEW && (
+            {view === OVERVIEW_VIEW && canView && (
               <div class={canParticipate || portalSession.value?.member ? "pk-record" : "pk-stack"}>
                 <GroupOverview
                   groupId={group.id}
@@ -294,7 +294,7 @@ export function GroupWorkspace({
             {view === "audit" && canManage && <GroupAuditLog key={group.id} groupId={group.id} />}
           </Suspense>
 
-          {!views.some((item) => item.key === view) && (
+          {!shownView && !guestEventRecord && (
             <ErrorAlert error="This group section is not available to your current identity." />
           )}
         </BreadcrumbScope>

@@ -27,6 +27,9 @@ import { SectionHeading } from "../../../../../ui/SectionHeading";
 const SessionDemandReport = lazy(() =>
   import("./SessionDemandReport").then((module) => ({ default: module.SessionDemandReport })),
 );
+const SessionPopularityReport = lazy(() =>
+  import("./SessionPopularityReport").then((module) => ({ default: module.SessionPopularityReport })),
+);
 const Promoters = lazy(() => import("./Promoters").then((module) => ({ default: module.Promoters })));
 
 /**
@@ -70,7 +73,8 @@ type StatsSection =
   | "invitations"
   | "calendar"
   | "promoters"
-  | "session-demand";
+  | "session-demand"
+  | "session-popularity";
 const STATS_SECTIONS: ReadonlyArray<{ key: StatsSection; label: string }> = [
   { key: "overview", label: "Overview" },
   { key: "registration-changes", label: "Registration changes" },
@@ -79,6 +83,7 @@ const STATS_SECTIONS: ReadonlyArray<{ key: StatsSection; label: string }> = [
   { key: "calendar", label: "Calendar" },
   { key: "promoters", label: "Promoters" },
   { key: "session-demand", label: "Session demand" },
+  { key: "session-popularity", label: "Session popularity" },
 ];
 
 const AttendanceReport = lazy(() =>
@@ -149,14 +154,19 @@ export function EventStats({
           <SessionDemandReport slug={slug} clock={attendance?.timeZone} />
         </Suspense>
       )}
+      {active === "session-popularity" && (
+        <Suspense fallback={<Spinner label="Loading session popularity…" />}>
+          <SessionPopularityReport slug={slug} clock={attendance?.timeZone} />
+        </Suspense>
+      )}
       {active === "promoters" && (
         <Suspense fallback={<Spinner label="Loading promoters…" />}>
           <Promoters slug={slug} subTab={subTab} basePath={`${basePath}/promoters`} />
         </Suspense>
       )}
-      {active && !["attendance", "session-demand", "promoters"].includes(active) && canViewAnalytics && (
-        <EventStatsData slug={slug} section={active} />
-      )}
+      {active &&
+        !["attendance", "session-demand", "session-popularity", "promoters"].includes(active) &&
+        canViewAnalytics && <EventStatsData slug={slug} section={active} />}
     </div>
   );
 }

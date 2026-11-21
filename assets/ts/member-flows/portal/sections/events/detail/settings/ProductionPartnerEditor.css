@@ -1,0 +1,28 @@
+@layer components {
+  /* One partner being edited: its credit and its organization side by side, the removal at the end. */
+  .pk-production-partner-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    align-items: start;
+    gap: var(--pk-3);
+  }
+
+  /* Beside the controls, under the line the two labels take, so a message under a field moves nothing. */
+  .pk-production-partner-row__actions {
+    display: flex;
+    align-items: center;
+    min-height: calc(1.35em + 2 * var(--pk-control-y) + 2px);
+    margin-block-start: calc(1lh + var(--pk-2));
+    font-size: var(--pk-text-md);
+  }
+
+  @media (max-width: 40rem) {
+    .pk-production-partner-row {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .pk-production-partner-row__actions {
+      margin-block-start: 0;
+    }
+  }
+}

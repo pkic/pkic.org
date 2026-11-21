@@ -231,7 +231,7 @@ describe("live room timers", () => {
     expect((await operator.next("room.refused")).code).toBe("LIVE_TIMER_TARGET_PAST");
     const attendee = await f.connect({ person: "attendee" });
     attendee.send({ type: "timer.control", timerId: LIVE_SESSION_TIMER_ID, action: "pause" });
-    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
+    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_STUDIO_REQUIRED");
   });
 
   it("upgrades a stored stage timer output and the switcher overlay mode once, on read", async () => {

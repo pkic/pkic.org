@@ -3,8 +3,8 @@
  * workspace.
  *
  * Every row opens the group-independent event page; the workspace is offered
- * only to a session that can actually open that group, so an event-scoped
- * staff identity is never sent into a refusal.
+ * only to a session that can actually open that group or, as the event's team,
+ * that event in it, so no one is sent into a refusal.
  */
 import { describe, expect, it } from "vitest";
 import { eventAudienceDetailSchema, eventManagementSummarySchema } from "../../assets/shared/schemas/event-management";
@@ -95,22 +95,30 @@ describe("canOpenGroupWorkspace", () => {
       expected: false,
     },
     {
-      label: "an event-scoped staff grant",
+      label: "a team grant on this event",
       session: portalSessionFixture({
         staff: true,
-        grants: [{ permission: "events:manage", contextType: "event", contextId: EVENT_ID }],
+        grants: [{ permission: "agenda:live_studio", contextType: "event", contextId: EVENT_ID }],
+      }),
+      expected: true,
+    },
+    {
+      label: "a team grant on another event",
+      session: portalSessionFixture({
+        staff: true,
+        grants: [{ permission: "agenda:live_studio", contextType: "event", contextId: "other-event" }],
       }),
       expected: false,
     },
     {
-      label: "an event-scoped groups grant",
+      label: "a sponsor's grant on this event",
       session: portalSessionFixture({
         staff: true,
-        grants: [{ permission: "groups:read", contextType: "event", contextId: EVENT_ID }],
+        grants: [{ permission: "agenda:leads_capture", contextType: "event_sponsor", contextId: EVENT_ID }],
       }),
       expected: false,
     },
   ])("answers $expected for $label", ({ session, expected }) => {
-    expect(canOpenGroupWorkspace(session, GROUP_ID)).toBe(expected);
+    expect(canOpenGroupWorkspace(session, GROUP_ID, EVENT_ID)).toBe(expected);
   });
 });

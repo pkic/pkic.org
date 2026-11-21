@@ -1,123 +1,539 @@
+import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
+import type { ClockZone } from "../../../../../../../shared/event-clock";
+import { format24HourClockInZone } from "../../../../../../../shared/format-date";
+import { formatNumber } from "../../../../../../../shared/format-number";
+import { liveQuestionAddresseeName, liveQuestionAskerName } from "../../../../../../../shared/live-room-credits";
+import type { LiveModerationReason } from "../../../../../../../shared/live-moderation-policy";
+import {
+  defaultLivePreparedQuestionWindow,
+  type LiveQuestionStatus,
+} from "../../../../../../../shared/live-session-policy";
+import type { LivePreparedQuestion } from "../../../../../../../shared/schemas/live-session-prepared-question";
 import type { LiveQuestion, LiveRoomClientMessage } from "../../../../../../../shared/schemas/live-session-room";
-import { LiveQuestionList, LiveQuestionTransitions } from "../../../../../../live-session/LiveQuestionList";
-import { LiveAuthorProvider } from "../../../../../../live-session/LiveAuthor";
+import { confirmAction } from "../../../../../../components/ConfirmDialog";
+import { useHashQueryParam } from "../../../../../../hooks/useHashQueryParam";
+import { TabList } from "../../../../../../ui/TabList";
+import { LiveQuestionTransitions } from "../../../../../../live-session/LiveQuestionList";
+import { liveRemovalNote } from "../../../../../../live-session/LiveRemovedPost";
+import {
+  LIVE_CLOSED_QUESTION_PLACES,
+  LIVE_QUESTION_PLACES,
+  liveQuestionPlace,
+  liveQuestionsIn,
+  type LiveQuestionPlace,
+} from "./live-question-places";
+import { liveAnswerCountLabel } from "../../../../../../live-session/LiveQuestionThread";
+import { LiveModerationDialogHost } from "../../../../../../live-session/LiveModerationDialog";
+import { Avatar } from "../../../../../../ui/Avatar";
 import { Button } from "../../../../../../ui/Button";
-import { Dialog } from "../../../../../../ui/Dialog";
+import { StrokeIcon } from "../../../../../../ui/MediaIcons";
+import { Menu } from "../../../../../../ui/Menu";
+import { toast } from "../../../../ui";
 import { LiveLayerTargets } from "./LiveLayerTargets";
+import {
+  LiveScreenTrigger,
+  NO_LIVE_SCREENS,
+  liveScreenItems,
+  liveScreens,
+  liveScreensTitle,
+  withScreenItems,
+} from "./LiveRowMenu";
+import { LivePreparedQuestionDialog, LivePreparedQuestionWindowDialog } from "./LivePreparedQuestionDialogs";
+import { LiveQuestionDialog, type LiveAnswerConnection } from "./LiveQuestionDialog";
 import { LiveQuestionRewrite } from "./LiveQuestionRewrite";
-import type { LiveTargets } from "./live-output-targets";
+import { liveLayerTargets, type LiveTargets } from "./live-output-targets";
 import { livePresenceItem } from "./presence/live-presence";
 import { LiveItemPresence } from "./presence/LivePresenceTag";
+import { StudioCreateAction } from "./studio/StudioCreateAction";
+import { StudioItemRow } from "./studio/StudioItemRow";
 import "./LiveQuestionsPanel.css";
 
-/** Open questions, most voted first, with moderation and outputs; answered and hidden ones leave the list. */
+/** Open questions, most voted first, with moderation and outputs; discussed, ignored and hidden ones leave the list. */
 export function openLiveQuestions(questions: readonly LiveQuestion[]): LiveQuestion[] {
-  return questions.filter((question) => question.status === "pending" || question.status === "approved");
+  return liveQuestionsIn(questions, "open");
 }
 
-export function LiveQuestionsPanel({
+/** The Questions panel's header: how many are open and waiting, and the "+" that prepares one. */
+export function LiveQuestionsHeader({
   targets,
   send,
 }: {
   targets: LiveTargets;
   send: (message: LiveRoomClientMessage) => boolean;
 }) {
-  const [inspected, setInspected] = useState<LiveQuestion | null>(null);
-  const [editing, setEditing] = useState<LiveQuestion | null>(null);
+  const { state, disabled } = targets;
+  const waiting = state.preparedQuestions.length;
+  return (
+    <>
+      <span class="pk-studio-panel__meta">
+        {formatNumber(openLiveQuestions(state.questions).length)} open
+        {waiting ? ` · ${formatNumber(waiting)} prepared` : ""}
+      </span>
+      <StudioCreateAction
+        label="Prepare question"
+        hint="Write a question ahead. It comes in at the time you set, or when you release it."
+        disabled={disabled}
+      >
+        {(close) => (
+          <LivePreparedQuestionDialog question={null} credits={state.session.credits} send={send} onClose={close} />
+        )}
+      </StudioCreateAction>
+    </>
+  );
+}
+
+/** The release-times dialog for the panel's menu, opening on the window the room keeps or the session's default. */
+export function LivePreparedQuestionTimes({
+  targets,
+  clock,
+  send,
+  onClose,
+}: {
+  targets: LiveTargets;
+  clock: ClockZone;
+  send: (message: LiveRoomClientMessage) => boolean;
+  onClose: () => void;
+}) {
+  const { session, preparedQuestionWindow } = targets.state;
+  return (
+    <LivePreparedQuestionWindowDialog
+      window={preparedQuestionWindow ?? defaultLivePreparedQuestionWindow(session.startAt, session.endAt)}
+      session={session}
+      clock={clock}
+      send={send}
+      onClose={onClose}
+    />
+  );
+}
+
+/** Prepared questions in the order they come in. */
+export function waitingPreparedQuestions(questions: readonly LivePreparedQuestion[]): LivePreparedQuestion[] {
+  return [...questions].sort((left, right) => Date.parse(left.releaseAt) - Date.parse(right.releaseAt));
+}
+
+type Send = (message: LiveRoomClientMessage) => boolean;
+
+/** Clears a question from the open ones without hiding it, or puts it back: the room's Done, which chat messages share. */
+const ignoreCommand = (question: LiveQuestion, done: boolean): LiveRoomClientMessage => ({
+  type: "moderation.done",
+  item: { kind: "question", questionId: question.id },
+  done,
+});
+
+const APPROVE = <path d="M3 8.5l3 3 7-7" />;
+const REOPEN = <path d="M4.5 3.5 2 6l2.5 2.5M2 6h7.5a3.5 3.5 0 0 1 0 7H6" />;
+// Release starts a prepared question, so it takes the timers' Start.
+const RELEASE = <path d="M5 3l8 5-8 5z" />;
+
+/** A row's one-tap action as the studio draws it: an icon, named by its label and tooltip. */
+function RowAction({
+  label,
+  hint,
+  primary = false,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string;
+  /** What the action does to the question: the second line of its tooltip. */
+  hint: string;
+  primary?: boolean;
+  disabled: boolean;
+  onClick: () => void;
+  children: ComponentChildren;
+}) {
+  return (
+    <Button
+      icon
+      variant={primary ? "primary" : "secondary"}
+      aria-label={label}
+      title={`${label}\n${hint}`}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      <StrokeIcon>{children}</StrokeIcon>
+    </Button>
+  );
+}
+
+/**
+ * One open question: its votes, answers, asker, addressee and state, Approve or its outputs, and the menu. Mark
+ * discussed, Ignore and Hide are in the menu only, so a slip of the hand on the row never closes a question.
+ */
+function OpenQuestionRow({
+  question,
+  targets,
+  send,
+  onOpen,
+  onEdit,
+}: {
+  question: LiveQuestion;
+  targets: LiveTargets;
+  send: Send;
+  onOpen: () => void;
+  onEdit: () => void;
+}) {
+  const { state, disabled } = targets;
+  const addressee = liveQuestionAddresseeName(state.session.credits, question.addressedTo);
+  const asker = liveQuestionAskerName(question);
+  const moderate = (status: LiveQuestionStatus, reason?: LiveModerationReason) =>
+    send({ type: "question.moderate", questionId: question.id, expectedRevision: question.revision, status, reason });
+  const pending = question.status === "pending";
+  const item = livePresenceItem({ kind: "question", id: question.id });
+  const layer = { kind: "question", id: question.id } as const;
+  // A pending question goes nowhere yet, so its menu has no screens.
+  const screens = pending ? NO_LIVE_SCREENS : liveScreens(targets, layer);
+  const actions = [
+    { id: "open", label: "Open question", onSelect: onOpen },
+    {
+      id: "edit",
+      label: "Edit text",
+      tooltip: "Fix its wording before it goes on air. The question keeps what was asked.",
+      disabled,
+      onSelect: onEdit,
+    },
+    {
+      id: "ignore",
+      label: "Ignore",
+      tooltip: "Take it off your Open list. Nothing changes for attendees, and nobody is told.",
+      disabled,
+      onSelect: () => send(ignoreCommand(question, true)),
+    },
+  ];
+  return (
+    <StudioItemRow
+      text={question.text}
+      open={{ title: "Open question\nRead it in full, with who asked it and its answers.", onOpen }}
+      presenceItem={pending ? item : undefined}
+      summary={
+        <>
+          {pending ? <span class="pk-live-desk__question-state">Pending</span> : null}
+          <span>▲ {formatNumber(question.votes)}</span>
+          {question.answerCount ? (
+            <span>
+              {liveAnswerCountLabel(question.answerCount)}
+              {question.acceptedAnswer ? " · 1 accepted" : ""}
+            </span>
+          ) : null}
+          {question.authorPhotoUrl && asker ? (
+            <Avatar name={asker} src={question.authorPhotoUrl} size="sm" alt="" />
+          ) : null}
+          <span>{[addressee ? `For ${addressee}` : null, asker ?? "Anonymous"].filter(Boolean).join(" · ")}</span>
+        </>
+      }
+      actions={
+        pending ? (
+          <>
+            <LiveItemPresence item={item} />
+            <RowAction
+              label="Approve"
+              hint="Open it for votes. It can then go to Preview or on air."
+              primary
+              disabled={disabled}
+              onClick={() => moderate("approved")}
+            >
+              {APPROVE}
+            </RowAction>
+          </>
+        ) : (
+          <>
+            <LiveLayerTargets targets={targets} subject="question" layer={layer} />
+          </>
+        )
+      }
+      menu={
+        <LiveQuestionTransitions
+          question={question}
+          role="operator"
+          disabled={disabled}
+          menuLabel="Question actions"
+          menuTrigger={<LiveScreenTrigger screens={screens} />}
+          menuTitle={liveScreensTitle(screens)}
+          additionalActions={pending ? actions : withScreenItems(liveScreenItems(targets, layer), actions)}
+          onMove={moderate}
+        />
+      }
+    />
+  );
+}
+
+/** One discussed, ignored or hidden question: its votes and asker, why it was hidden, its way back, and the menu. */
+function ClosedQuestionRow({
+  question,
+  back,
+  targets,
+  send,
+  onOpen,
+}: {
+  question: LiveQuestion;
+  /** How a question in this place comes back to the open ones. */
+  back: { label: string; hint: string };
+  targets: LiveTargets;
+  send: Send;
+  onOpen: () => void;
+}) {
   const { disabled } = targets;
+  const asker = liveQuestionAskerName(question);
+  const moderate = (status: LiveQuestionStatus, reason?: LiveModerationReason) =>
+    send({ type: "question.moderate", questionId: question.id, expectedRevision: question.revision, status, reason });
+  // An ignored question is still open in the room: it comes back by undoing the ignore, the others by their status.
+  const ignored = liveQuestionPlace(question) === "ignored";
+  const comeBack = () => (ignored ? send(ignoreCommand(question, false)) : moderate("approved"));
+  // A question discussed or ignored while it is on an output stays there, so its row keeps the way to take it off.
+  const layer = { kind: "question", id: question.id } as const;
+  const where = liveLayerTargets(targets, layer);
+  const screens = liveScreens(targets, layer);
+  const onOutput = where.preview || where.program || screens.on.length > 0 || screens.following.length > 0;
+  const own = [
+    { id: "open", label: "Open question", onSelect: onOpen },
+    ...(ignored ? [{ id: "back", label: back.label, disabled, onSelect: comeBack }] : []),
+  ];
+  return (
+    <StudioItemRow
+      text={question.text}
+      open={{ title: "Open question\nRead it in full, with who asked it and its answers.", onOpen }}
+      summary={
+        <>
+          <span>▲ {formatNumber(question.votes)}</span>
+          <span>{asker ?? "Anonymous"}</span>
+          {question.removal ? <span>{liveRemovalNote(question.removal)}</span> : null}
+        </>
+      }
+      actions={
+        <>
+          {onOutput ? <LiveLayerTargets targets={targets} subject="question" layer={layer} /> : null}
+          <RowAction label={back.label} hint={back.hint} disabled={disabled} onClick={comeBack}>
+            {REOPEN}
+          </RowAction>
+        </>
+      }
+      menu={
+        <LiveQuestionTransitions
+          question={question}
+          role="operator"
+          disabled={disabled}
+          menuLabel="Question actions"
+          menuTrigger={onOutput ? <LiveScreenTrigger screens={screens} /> : undefined}
+          menuTitle={onOutput ? liveScreensTitle(screens) : undefined}
+          additionalActions={onOutput ? withScreenItems(liveScreenItems(targets, layer), own) : own}
+          onMove={moderate}
+        />
+      }
+    />
+  );
+}
+
+/** One prepared question: when it comes in and for whom, Release now, and Edit or Delete in the menu. */
+function PreparedQuestionRow({
+  question,
+  targets,
+  clock,
+  send,
+  onEdit,
+}: {
+  question: LivePreparedQuestion;
+  targets: LiveTargets;
+  clock: ClockZone;
+  send: Send;
+  onEdit: () => void;
+}) {
+  const { state, disabled } = targets;
+  const addressee = liveQuestionAddresseeName(state.session.credits, question.addressedTo);
+  const remove = async () => {
+    const confirmed = await confirmAction({
+      title: "Delete this prepared question?",
+      body: `“${question.text}” will not come in.`,
+      confirmLabel: "Delete question",
+      tone: "danger",
+    });
+    if (confirmed) send({ type: "question.prepared.delete", preparedId: question.id });
+  };
+  return (
+    <StudioItemRow
+      text={question.text}
+      open={{ title: "Edit prepared question\nChange its text, who it is for, or when it comes in.", onOpen: onEdit }}
+      summary={
+        <>
+          <span class="pk-live-desk__question-state">Prepared</span>
+          <span>
+            {[
+              `Due ${format24HourClockInZone(Date.parse(question.releaseAt), clock)}`,
+              addressee ? `For ${addressee}` : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
+        </>
+      }
+      actions={
+        <RowAction
+          label="Release now"
+          hint="Bring this prepared question in now, ahead of its time."
+          disabled={disabled}
+          onClick={() => send({ type: "question.prepared.release", preparedId: question.id })}
+        >
+          {RELEASE}
+        </RowAction>
+      }
+      menu={
+        <Menu
+          label="Prepared question actions"
+          title={"Prepared question actions\nRelease it now, edit it or delete it."}
+          align="end"
+          items={[
+            {
+              id: "release",
+              label: "Release now",
+              disabled,
+              onSelect: () => send({ type: "question.prepared.release", preparedId: question.id }),
+            },
+            { id: "edit", label: "Edit question", disabled, onSelect: onEdit },
+            {
+              id: "delete",
+              label: "Delete question",
+              danger: true,
+              disabled,
+              separatorBefore: true,
+              onSelect: () =>
+                void remove().catch((error: unknown) =>
+                  toast(error instanceof Error ? error.message : "Could not complete the action.", "error"),
+                ),
+            },
+          ]}
+        />
+      }
+    />
+  );
+}
+
+/**
+ * The session's questions as compact rows, like the Time and Polls panels:
+ * open ones first, then prepared ones in the order they come in. Every
+ * action is in a row's menu; the row shows only the one used most.
+ * Discussed, ignored and hidden questions each have a tab of their own,
+ * every row with its way back; the tab in view follows the address, as the
+ * chat's does.
+ */
+export function LiveQuestionsPanel({
+  targets,
+  clock,
+  send,
+  answers,
+  opensOn = "open",
+}: {
+  targets: LiveTargets;
+  clock: ClockZone;
+  send: Send;
+  answers: LiveAnswerConnection;
+  /** The tab in view until the address names one. */
+  opensOn?: LiveQuestionPlace;
+}) {
+  // The open question is read from the room each time, so its answers and their count stay current.
+  const [inspectedId, setInspectedId] = useState<string | null>(null);
+  const inspected = targets.state.questions.find((question) => question.id === inspectedId) ?? null;
+  const [editing, setEditing] = useState<LiveQuestion | null>(null);
+  const [editingPrepared, setEditingPrepared] = useState<LivePreparedQuestion | null>(null);
+  const open = openLiveQuestions(targets.state.questions);
+  const prepared = waitingPreparedQuestions(targets.state.preparedQuestions);
+  const closed = {
+    discussed: liveQuestionsIn(targets.state.questions, "discussed"),
+    ignored: liveQuestionsIn(targets.state.questions, "ignored"),
+    hidden: liveQuestionsIn(targets.state.questions, "hidden"),
+  };
+  const [view, setView] = useHashQueryParam("questions", opensOn, LIVE_QUESTION_PLACES);
   return (
     <div class="pk-live-desk__questions">
-      <LiveAuthorProvider authors={targets.state.authors} send={send}>
-        <LiveQuestionList
-          votesInline
-          photos
-          questions={openLiveQuestions(targets.state.questions)}
-          emptyText="No open questions."
-          showStatus={(question) => question.status === "pending"}
-          actions={(question) => (
-            <>
-              {question.status === "pending" ? (
-                <span
-                  class="pk-live-desk__question-presence"
-                  data-presence-item={livePresenceItem({ kind: "question", id: question.id })}
-                >
-                  <LiveItemPresence item={livePresenceItem({ kind: "question", id: question.id })} />
-                  <Button
-                    variant="primary"
-                    disabled={disabled}
-                    onClick={() =>
-                      send({
-                        type: "question.moderate",
-                        questionId: question.id,
-                        expectedRevision: question.revision,
-                        status: "approved",
-                      })
-                    }
-                  >
-                    Approve
-                  </Button>
-                </span>
-              ) : (
-                <LiveLayerTargets targets={targets} subject="question" layer={{ kind: "question", id: question.id }} />
-              )}
-              {question.status === "approved" ? (
-                <Button
-                  variant="ghost"
-                  disabled={disabled}
-                  onClick={() =>
-                    send({
-                      type: "question.moderate",
-                      questionId: question.id,
-                      expectedRevision: question.revision,
-                      status: "answered",
-                    })
-                  }
-                >
-                  Answered
-                </Button>
-              ) : null}
-              <LiveQuestionTransitions
+      <LiveModerationDialogHost />
+      <TabList
+        label="Questions"
+        idPrefix="studio-questions"
+        activeId={view}
+        onSelect={(id) => setView(id as LiveQuestionPlace)}
+        items={[
+          { id: "open", panelId: "studio-questions-panel-open", label: "Open" },
+          ...LIVE_CLOSED_QUESTION_PLACES.map(({ id, label }) => ({
+            id,
+            panelId: `studio-questions-panel-${id}`,
+            label: closed[id].length ? `${label} · ${formatNumber(closed[id].length)}` : label,
+          })),
+        ]}
+      />
+      <div
+        id="studio-questions-panel-open"
+        role="tabpanel"
+        aria-labelledby="studio-questions-open"
+        hidden={view !== "open"}
+      >
+        {open.length || prepared.length ? (
+          <ol class="pk-studio-rows">
+            {open.map((question) => (
+              <OpenQuestionRow
+                key={question.id}
                 question={question}
-                role="operator"
-                disabled={disabled}
-                menuLabel="Question actions"
-                additionalActions={[
-                  { id: "open", label: "Open question", onSelect: () => setInspected(question) },
-                  { id: "edit", label: "Edit text", disabled, onSelect: () => setEditing(question) },
-                ]}
-                onMove={(next) =>
-                  send({
-                    type: "question.moderate",
-                    questionId: question.id,
-                    expectedRevision: question.revision,
-                    status: next,
-                  })
-                }
+                targets={targets}
+                send={send}
+                onOpen={() => setInspectedId(question.id)}
+                onEdit={() => setEditing(question)}
               />
-            </>
-          )}
-        />
-      </LiveAuthorProvider>
-      {inspected ? (
-        <Dialog
-          open
-          title="Audience question"
-          meta={inspected.authorName ?? "Anonymous"}
-          closeLabel="Close question"
-          confirmLabel="Done"
-          cancelLabel="Back to studio"
-          onConfirm={() => setInspected(null)}
-          onCancel={() => setInspected(null)}
+            ))}
+            {prepared.map((question) => (
+              <PreparedQuestionRow
+                key={question.id}
+                question={question}
+                targets={targets}
+                clock={clock}
+                send={send}
+                onEdit={() => setEditingPrepared(question)}
+              />
+            ))}
+          </ol>
+        ) : (
+          <p class="pk-live-questions__empty">No open questions.</p>
+        )}
+      </div>
+      {LIVE_CLOSED_QUESTION_PLACES.map(({ id, empty, back }) => (
+        <div
+          key={id}
+          id={`studio-questions-panel-${id}`}
+          role="tabpanel"
+          aria-labelledby={`studio-questions-${id}`}
+          hidden={view !== id}
         >
-          <p>{inspected.text}</p>
-          {inspected.originalText ? (
-            <p>
-              Asked as “{inspected.originalText}”
-              {inspected.rewritten ? ` · edited by ${inspected.rewritten.operatorName}` : ""}
-            </p>
-          ) : null}
-        </Dialog>
+          {closed[id].length ? (
+            <ol class="pk-studio-rows">
+              {closed[id].map((question) => (
+                <ClosedQuestionRow
+                  key={question.id}
+                  question={question}
+                  back={back}
+                  targets={targets}
+                  send={send}
+                  onOpen={() => setInspectedId(question.id)}
+                />
+              ))}
+            </ol>
+          ) : (
+            <p class="pk-live-questions__empty">{empty}</p>
+          )}
+        </div>
+      ))}
+      {editingPrepared ? (
+        <LivePreparedQuestionDialog
+          question={editingPrepared}
+          credits={targets.state.session.credits}
+          send={send}
+          onClose={() => setEditingPrepared(null)}
+        />
+      ) : null}
+      {inspected ? (
+        <LiveQuestionDialog
+          question={inspected}
+          state={targets.state}
+          answers={answers}
+          send={send}
+          onClose={() => setInspectedId(null)}
+        />
       ) : null}
       {editing ? (
         <LiveQuestionRewrite

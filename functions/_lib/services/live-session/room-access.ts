@@ -1,10 +1,15 @@
 import {
   currentLiveRoomCommandRead,
   liveParticipantReadKey,
+  liveRoomAccessScopeKey,
   type LiveParticipantReadResult,
+  type LiveRoomAccessScope,
 } from "./room-command-read-scope";
+import { prepareLiveLocationChatRead, type LiveLocationChatRow } from "./location-chat-read";
+import { connectedSessionClaims } from "../../auth/user-session-activity";
 import { prepareUserSessionClaimsBatch } from "../../auth/user-session-live-data";
 import type { LiveRoomRole } from "../../../../assets/shared/live-session-policy";
+import { liveRoomOutputs } from "../../../../assets/shared/live-room-outputs";
 import { LIVE_OVERLAY_PROTOCOL_PREFIX } from "../../../../assets/shared/schemas/live-session-room";
 import { verifyLiveOverlayToken } from "../../auth/live-session-overlay-token";
 import { hasPermission } from "../../auth/permissions";
@@ -20,8 +25,14 @@ import { publishedSessionsSql } from "../event-participation/published-schedule"
 import { sessionAccessEligibleSql } from "../event-participation/session-access";
 import { getEventBySlug } from "../events";
 import { liveProgramName } from "./room-program";
+import { parseJsonSafe } from "../../utils/json";
 import { publicUserHeadshotPath } from "../user-headshot";
-import { readLiveRoomSession, prepareLiveRoomSessionRead, type LiveRoomSessionRecord } from "./room-session";
+import {
+  readLiveRoomSession,
+  prepareLiveRoomSessionRead,
+  type LiveRoomSessionRecord,
+  type LiveRoomSessionRow,
+} from "./room-session";
 import type { LiveRoomParticipant } from "./room-admission";
 import { livePersonHeadshotSql } from "./live-person-photo";
 import type { LiveOverlayView } from "../../../../assets/shared/schemas/live-session-room";
@@ -37,29 +48,72 @@ export function offeredOverlayToken(request: Request): string | null {
   return entry ? entry.slice(LIVE_OVERLAY_PROTOCOL_PREFIX.length) : null;
 }
 
-/** The person behind a socket, as the room names and pictures them. */
+/** The person behind a socket, as the room names and pictures them, and the room's sessions they may attend. */
 interface LiveRoomPerson {
   name: string;
-  attendee: number;
+  /** JSON array of the candidate sessions the person holds a registration and access for. */
+  attendee_sessions: string | null;
   headshot_r2_key: string | null;
 }
 
-/** One person projection is shared by socket admission and command revalidation. */
-function prepareLiveRoomPeople(db: DatabaseLike, eventId: string, occurrenceId: string, userIds: readonly string[]) {
-  return db
-    .prepare(`SELECT person.id, ${personDisplayNameSql("person", "Attendee")} AS name, ${livePersonHeadshotSql("person")} AS headshot_r2_key,
-      EXISTS(SELECT 1 FROM registrations registration WHERE registration.event_id=? AND registration.user_id=person.id AND registration.status='registered'
-        AND EXISTS(SELECT 1 FROM (${publishedSessionsSql}) access_session
-          WHERE access_session.event_id=registration.event_id AND access_session.id=? AND ${sessionAccessEligibleSql("access_session", "person.id", null, false)})) AS attendee
-     FROM users person JOIN json_each(?) requested ON requested.value=person.id WHERE person.active=1`)
-    .bind(eventId, occurrenceId, JSON.stringify(userIds));
+/** The sessions a people read checks access to: a session's room names its own, a location's chat its location's. */
+type LiveRoomPeopleSessions = { occurrenceIds: readonly string[] } | { roomId: string };
+
+/** Who may join a room: its event, the sessions whose access admits an attendee, and who speaks in them. */
+export interface LiveRoomAccessRecord {
+  eventId: string;
+  occurrenceIds: string[];
+  speakerUserIds: string[];
 }
 
-async function signedInParticipant(
+function sessionAccess(record: LiveRoomSessionRecord): LiveRoomAccessRecord {
+  return {
+    eventId: record.eventId,
+    occurrenceIds: [record.session.occurrenceId],
+    speakerUserIds: record.speakerUserIds,
+  };
+}
+
+/**
+ * One person projection is shared by socket admission and command revalidation. A person attends when they
+ * hold a registration and access to any of the room's sessions: one for a session's room, the day's for a
+ * location's chat.
+ */
+function prepareLiveRoomPeople(
+  db: DatabaseLike,
+  eventId: string,
+  sessions: LiveRoomPeopleSessions,
+  userIds: readonly string[],
+) {
+  const candidate =
+    "roomId" in sessions
+      ? "(access_session.room_id=?1 OR EXISTS(SELECT 1 FROM json_each(access_session.additional_room_ids_json) extra WHERE extra.value=?1))"
+      : "access_session.id IN(SELECT value FROM json_each(?1))";
+  return db
+    .prepare(`SELECT person.id, ${personDisplayNameSql("person", "Attendee")} AS name, ${livePersonHeadshotSql("person")} AS headshot_r2_key,
+      (SELECT json_group_array(access_session.id) FROM (${publishedSessionsSql}) access_session
+        WHERE access_session.event_id=?2 AND ${candidate}
+          AND EXISTS(SELECT 1 FROM registrations registration WHERE registration.event_id=access_session.event_id AND registration.user_id=person.id AND registration.status='registered')
+          AND ${sessionAccessEligibleSql("access_session", "person.id", null, false)}) AS attendee_sessions
+     FROM users person JOIN json_each(?3) requested ON requested.value=person.id WHERE person.active=1`)
+    .bind(
+      "roomId" in sessions ? sessions.roomId : JSON.stringify(sessions.occurrenceIds),
+      eventId,
+      JSON.stringify(userIds),
+    );
+}
+
+function attendsAny(person: LiveRoomPerson, occurrenceIds: readonly string[]): boolean {
+  const attended = parseJsonSafe<unknown>(person.attendee_sessions, []);
+  return Array.isArray(attended) && attended.some((id) => occurrenceIds.includes(id as string));
+}
+
+/** The signed-in caller as an operator, a credited speaker or an attendee with access to the room's sessions. */
+export async function signedInLiveParticipant(
   db: DatabaseLike,
   request: Request,
   env: Pick<Env, "INTERNAL_SIGNING_SECRET">,
-  record: LiveRoomSessionRecord,
+  record: LiveRoomAccessRecord,
 ): Promise<LiveRoomParticipant> {
   if (!getUserSessionToken(request)) throw new AppError(401, "AUTH_REQUIRED", "Sign in to join this session.");
   const { session, claims } = await resolveUserSessionContext(db, request, env);
@@ -70,25 +124,27 @@ async function participantFromSession(
   db: DatabaseLike,
   session: UserSessionResult,
   claims: UserSessionTokenClaims,
-  record: LiveRoomSessionRecord,
+  record: LiveRoomAccessRecord,
   currentPerson?: LiveRoomPerson | null,
 ): Promise<LiveRoomParticipant> {
   const userId = session.identity.id;
-  const occurrenceId = record.session.occurrenceId;
   const person =
     currentPerson !== undefined
       ? currentPerson
-      : await prepareLiveRoomPeople(db, record.eventId, occurrenceId, [userId]).first<LiveRoomPerson>();
+      : await prepareLiveRoomPeople(db, record.eventId, { occurrenceIds: record.occurrenceIds }, [
+          userId,
+        ]).first<LiveRoomPerson>();
   if (!person) throw new AppError(401, "AUTH_REQUIRED", "Sign in again to join this session.");
-  // Operating the room is a staff capacity, exactly as on the control room's other staff routes.
+  // Operating the room is a staff capacity: the event team moderates it, and organizers also run the studio.
+  const scope = { type: "event", id: record.eventId } as const;
+  const studio = session.staff !== undefined && hasPermission(session.staff, "agenda:live_studio", scope);
   const operator =
-    session.staff !== undefined &&
-    hasPermission(session.staff, "agenda:live_moderate", { type: "event", id: record.eventId });
+    studio || (session.staff !== undefined && hasPermission(session.staff, "agenda:live_moderate", scope));
   const role: LiveRoomRole | null = operator
     ? "operator"
     : record.speakerUserIds.includes(userId)
       ? "speaker"
-      : person.attendee
+      : attendsAny(person, record.occurrenceIds)
         ? "attendee"
         : null;
   if (!role)
@@ -98,9 +154,10 @@ async function participantFromSession(
       "A confirmed event registration and access to this session are required to join its questions.",
     );
   // Restricting people from chat is the organizers' call, as their other event-wide decisions are.
-  const organizer = operator && hasPermission(session.staff!, "events:manage", { type: "event", id: record.eventId });
+  const organizer = operator && hasPermission(session.staff!, "events:manage", scope);
   return {
     role,
+    ...(studio ? { studio } : {}),
     userId,
     name: person.name,
     organizer,
@@ -130,6 +187,9 @@ export async function admitLiveRoomParticipant(
     });
     if (!access || !record.roomIds.includes(access.room))
       throw new AppError(401, "LIVE_OVERLAY_ACCESS_INVALID", "This overlay link is invalid or expired.");
+    // A link to a screen the room no longer sets up shows nothing, rather than a screen no one controls.
+    if (params.output && !liveOverlayViewDrawn(record.session, params.output))
+      throw new AppError(400, "LIVE_ROOM_INVALID_OUTPUT", "This output is not one this room draws.");
     if (!env.LIVE_SESSION_ROOMS) throw new AppError(503, "LIVE_ROOMS_UNAVAILABLE", "Live rooms are not available.");
     const selection = await env.LIVE_SESSION_ROOMS.getByName(liveProgramName(event.id, access.room)).readProgram(
       event.id,
@@ -153,18 +213,17 @@ export async function admitLiveRoomParticipant(
       },
     };
   }
-  return { ...record, participant: await signedInParticipant(db, request, env, record) };
+  return { ...record, participant: await signedInLiveParticipant(db, request, env, sessionAccess(record)) };
 }
 
 /** Single commands use the same bounded live policy and read batch as broadcast revalidation. */
 export async function revalidateLiveRoomParticipant(
   db: DatabaseLike,
   participant: LiveRoomParticipant,
-  eventId: string,
-  occurrenceId: string,
+  scope: LiveRoomAccessScope,
   rooms?: Env["LIVE_SESSION_ROOMS"],
 ): Promise<LiveRoomParticipant> {
-  const [current] = await revalidateLiveRoomParticipants(db, [participant], eventId, occurrenceId, rooms);
+  const [current] = await revalidateLiveRoomParticipants(db, [participant], scope, rooms);
   if (!current.ok) throw current.error;
   return current.participant;
 }
@@ -173,30 +232,37 @@ export async function revalidateLiveRoomParticipant(
 export function prepareLiveRoomParticipants(
   db: DatabaseLike,
   slice: readonly LiveRoomParticipant[],
-  eventId: string,
-  occurrenceId: string,
+  scope: LiveRoomAccessScope,
   rooms?: Env["LIVE_SESSION_ROOMS"],
 ) {
+  const { eventId } = scope;
+  // A session's overlays follow the studio's selection; a location's chat has none.
+  const occurrenceId = "session" in scope ? scope.session.occurrenceId : null;
   const valid = slice.filter((p) => p.role !== "overlay" && p.sessionClaims && p.sessionClaims.sub === p.userId);
-  const claims = valid.map((p) => p.sessionClaims!);
-  const roomRead = prepareLiveRoomSessionRead(db, eventId, occurrenceId);
+  const claims = valid.map((p) => connectedSessionClaims(p.sessionClaims!));
+  const roomRead = prepareLiveRoomAccessRead(db, scope);
   const sessionRead = prepareUserSessionClaimsBatch(db, claims);
   const statements = [
     roomRead.statement,
     ...sessionRead.statements,
-    prepareLiveRoomPeople(db, eventId, occurrenceId, [...new Set(valid.map((p) => p.userId!))]),
+    prepareLiveRoomPeople(
+      db,
+      eventId,
+      "session" in scope ? { occurrenceIds: [scope.session.occurrenceId] } : { roomId: scope.location.roomId },
+      [...new Set(valid.map((p) => p.userId!))],
+    ),
   ];
   return {
     statements,
     async decode(loaded: D1StatementResult[]): Promise<LiveParticipantReadResult[]> {
       const results: LiveParticipantReadResult[] = [];
-      const record = await roomRead.decode(batchFirst<{ payload_json: string; timezone: string }>(loaded[0]));
+      const { access: record, roomIds } = await roomRead.decode(loaded[0]);
       const sessions = await sessionRead.decode(loaded.slice(1, 1 + sessionRead.statements.length));
       const people = batchRows<LiveRoomPerson & { id: string }>(loaded[loaded.length - 1]);
       const physicalRooms = [
         ...new Set(
           slice
-            .filter((p) => p.role === "overlay" && p.overlayRoomId && record.roomIds.includes(p.overlayRoomId))
+            .filter((p) => p.role === "overlay" && p.overlayRoomId && roomIds.includes(p.overlayRoomId))
             .map((p) => p.overlayRoomId!),
         ),
       ];
@@ -221,7 +287,7 @@ export function prepareLiveRoomParticipants(
             !participant.overlayRoomId ||
             participant.overlayExpiresAt === undefined ||
             (participant.overlayExpiresAt !== undefined && participant.overlayExpiresAt <= Date.now() / 1000) ||
-            (participant.overlayRoomId && !record.roomIds.includes(participant.overlayRoomId));
+            (participant.overlayRoomId && !roomIds.includes(participant.overlayRoomId));
           const inactive =
             participant.overlayRoomId && programSelections.get(participant.overlayRoomId) !== occurrenceId;
           results.push(
@@ -289,27 +355,58 @@ export function prepareLiveRoomParticipants(
 export async function revalidateLiveRoomParticipants(
   db: DatabaseLike,
   participants: readonly LiveRoomParticipant[],
-  eventId: string,
-  occurrenceId: string,
+  scope: LiveRoomAccessScope,
   rooms?: Env["LIVE_SESSION_ROOMS"],
 ): Promise<LiveParticipantReadResult[]> {
   const current = currentLiveRoomCommandRead();
   if (
-    current?.eventId === eventId &&
-    current.occurrenceId === occurrenceId &&
+    current?.eventId === scope.eventId &&
+    current.scopeKey === liveRoomAccessScopeKey(scope) &&
     participants.every((participant) => current.participants.has(liveParticipantReadKey(participant)))
   )
     return participants.map((participant) => current.participants.get(liveParticipantReadKey(participant))!);
   const results: LiveParticipantReadResult[] = [];
   for (let offset = 0; offset < participants.length; offset += 512) {
-    const read = prepareLiveRoomParticipants(
-      db,
-      participants.slice(offset, offset + 512),
-      eventId,
-      occurrenceId,
-      rooms,
-    );
+    const read = prepareLiveRoomParticipants(db, participants.slice(offset, offset + 512), scope, rooms);
     results.push(...(await read.decode(await db.batch(read.statements))));
   }
   return results;
+}
+
+/**
+ * The room record access is checked against: a session's own, or a location's day, whose attendees are those
+ * with access to any of its sessions and whose speakers are credited on any of them.
+ */
+function prepareLiveRoomAccessRead(db: DatabaseLike, scope: LiveRoomAccessScope) {
+  if ("session" in scope) {
+    const read = prepareLiveRoomSessionRead(db, scope.eventId, scope.session.occurrenceId);
+    return {
+      statement: read.statement,
+      async decode(loaded: D1StatementResult) {
+        const record = await read.decode(batchFirst<LiveRoomSessionRow>(loaded));
+        return { access: sessionAccess(record), roomIds: record.roomIds };
+      },
+    };
+  }
+  const read = prepareLiveLocationChatRead(db, scope.eventId, scope.location.roomId);
+  return {
+    statement: read.statement,
+    async decode(loaded: D1StatementResult) {
+      const record = read.decode(batchRows<LiveLocationChatRow>(loaded), scope.location.day);
+      const access: LiveRoomAccessRecord = {
+        eventId: record.eventId,
+        occurrenceIds: record.sessions.map((session) => session.occurrenceId),
+        speakerUserIds: record.speakerUserIds,
+      };
+      return { access, roomIds: [] as string[] };
+    },
+  };
+}
+
+/** Program, each output the room sets up, and the speaker's lineup beside its screen. */
+function liveOverlayViewDrawn(session: Parameters<typeof liveRoomOutputs>[0], view: LiveOverlayView): boolean {
+  if (view === "program") return true;
+  const outputs = liveRoomOutputs(session);
+  if (view === "stage-preview") return outputs.some((output) => output.role === "speaker");
+  return outputs.some((output) => output.key === view);
 }

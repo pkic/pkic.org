@@ -2,11 +2,15 @@ import { AppError } from "../../errors";
 import { LiveRoomEngagement } from "./room-engagement";
 import { LiveRoomAnswers } from "./room-answers";
 import { LiveRoomAnswerStore } from "./room-answer-store";
-import { advanceLiveStage } from "./room-stage-next";
+import { LiveRoomModerationStore } from "./room-moderation-store";
+import { LiveRoomParticipation } from "./room-participation";
+import { LIVE_PARTICIPATION_REFUSAL, liveCommandParticipates } from "./room-participation-refusal";
+import { LiveRoomQuestionCommands } from "./room-question-commands";
+import { operateLiveDesk, type LiveDesk } from "./room-desk";
 import { LiveRoomGraphics } from "./room-graphics";
 import { LiveRoomGraphicBasis } from "./room-graphic-basis";
 import { LiveRoomOnScreenLists } from "./room-on-screen-lists";
-import { LIVE_TICKER_REFRESH_MS, liveChatTickerLines } from "./room-ticker";
+import { LIVE_TICKER_REFRESH_MS, liveChatOnAirMessages, liveChatTickerLines } from "./room-ticker";
 import { LiveRoomProgram, LIVE_PROGRAM_SOCKET_TAG, closeLiveRoomProgramSources } from "./room-program";
 import type {
   LiveProgramSelection,
@@ -15,7 +19,8 @@ import type {
 import type { UserSessionTokenClaims } from "../../auth/user-session-token";
 import type { z } from "zod";
 import type { liveProgramSelectSchema } from "../../../../assets/shared/schemas/live-room-program";
-import { LiveRoomChat } from "./room-chat";
+import { LiveRoomChat, type LiveChatArchiveRow } from "./room-chat";
+import { liveChatErasable, purgeLiveRoom } from "./room-purge";
 import { LiveRoomChatActions } from "./room-chat-actions";
 import { LiveChatFeed } from "./room-chat-feed";
 import { LiveChatModerationStore } from "./room-chat-moderation";
@@ -24,7 +29,7 @@ import { LiveRoomPeople } from "./room-people";
 import { LiveRoomAuthors } from "./room-authors";
 import { LiveRoomQuestions } from "./room-questions";
 import { DurableObject } from "cloudflare:workers";
-import { LIVE_ROOM_POLICY, liveRoomOpen, liveRoomPurgeAt } from "../../../../assets/shared/live-session-policy";
+import { LIVE_ROOM_POLICY, liveRoomPurgeAt } from "../../../../assets/shared/live-session-policy";
 import {
   LIVE_ROOM_PROTOCOL,
   type LiveRoomClientMessage,
@@ -39,9 +44,11 @@ import { liveRoomRefusalCloseCode } from "../../../../assets/shared/schemas/live
 import { nowIso } from "../../utils/time";
 import { LIVE_ROOM_ADMISSION_HEADER, liveRoomAdmissionSchema, type LiveRoomParticipant } from "./room-admission";
 import { LiveRoomBroadcast } from "./room-broadcast";
-import { LiveRoomControls, type LiveControlOutcome, type LiveDeskCommand, type LiveRefusal } from "./room-controls";
+import { LiveRoomControls, type LiveControlOutcome, type LiveRefusal } from "./room-controls";
 import { LiveRoomTimers } from "./room-timers";
 import { LivePollStore } from "./room-poll-store";
+import { LivePreparedQuestionStore } from "./room-prepared-question-store";
+import { LiveRoomPreparedQuestions } from "./room-prepared-questions";
 import { LiveRoomPolls } from "./room-polls";
 import { parseLiveRoomMessage, serializeLiveRoomMessage } from "./room-projection";
 import { LiveRoomSql } from "./room-sql";
@@ -52,13 +59,20 @@ import { LiveRoomPreview } from "./room-preview";
 import { LiveRoomPresence } from "./room-presence";
 import { LiveRoomAddedCredits } from "./room-added-credits";
 import { refreshLiveCreditCopies } from "./room-credit-refresh";
+import { LiveLocationChatStore } from "./location-chat-store";
+import { LiveLocationChatRoom } from "./location-chat-room";
+import { LiveSessionCommands } from "./room-session-commands";
+import { liveRoomChatScope } from "./room-chat-scope";
+import {
+  liveLocationOnAirChat,
+  type LiveChatOnAirMessage,
+  type LiveChatOnAirOptions,
+  type LiveChatQuestion,
+} from "./location-chat-on-air";
 
 type Handled = LiveRefusal | void;
-type Actor = { userId: string; name: string };
 const REFUSALS = {
-  closed: { code: "LIVE_ROOM_CLOSED", message: "Questions and reactions open shortly before the session starts." },
   readOnly: { code: "LIVE_ROOM_READ_ONLY", message: "This connection can only watch the room." },
-  operatorOnly: { code: "LIVE_ROOM_OPERATOR_REQUIRED", message: "Only the session's operators can do that." },
   invalid: { code: "LIVE_ROOM_INVALID_MESSAGE", message: "The room could not read that request." },
 } satisfies Record<string, LiveRefusal>;
 
@@ -84,47 +98,59 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
   private readonly authors: LiveRoomAuthors;
   private readonly chatActions: LiveRoomChatActions;
   private readonly questions: LiveRoomQuestions;
+  private readonly preparedQuestions: LiveRoomPreparedQuestions;
   private readonly answers: LiveRoomAnswers;
   private readonly answerStore: LiveRoomAnswerStore;
+  private readonly questionCommands: LiveRoomQuestionCommands;
+  private readonly decisions: LiveRoomModerationStore;
+  private readonly participation: LiveRoomParticipation;
   private readonly polls: LiveRoomPolls;
   private readonly broadcast: LiveRoomBroadcast;
   private readonly graphics: LiveRoomGraphics;
   private readonly outputs: LiveRoomOutputs;
   private readonly presence: LiveRoomPresence;
   private readonly addedCredits: LiveRoomAddedCredits;
+  private readonly desk: LiveDesk;
   private readonly engagement: LiveRoomEngagement;
   private readonly onScreenLists: LiveRoomOnScreenLists;
+  private readonly location: LiveLocationChatStore;
+  private readonly locationChat: LiveLocationChatRoom;
+  private readonly sessionCommands: LiveSessionCommands;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.sql = new LiveRoomSql(ctx.storage.sql);
     this.store = new LiveRoomStore(this.sql);
+    this.location = new LiveLocationChatStore(this.sql);
     this.databaseSession = new LiveRoomDatabaseSession(env.DB, this.store);
     this.sessionEnv = { ...env, DB: this.databaseSession };
     this.program = new LiveRoomProgram(ctx, this.sessionEnv, (bookmark) => this.databaseSession.seedBookmark(bookmark));
     this.pollStore = new LivePollStore(this.sql);
+    const preparedStore = new LivePreparedQuestionStore(this.sql);
     this.chat = new LiveRoomChat(this.sql);
+    this.decisions = new LiveRoomModerationStore(this.sql);
     this.access = new LiveRoomAccessLease(
       ctx,
       this.sessionEnv,
       this.sql,
-      () => this.store.session(),
+      () => this.store.session() ?? this.location.accessScope(),
       () => [
         ...this.chat.authors(),
         ...this.store.questions().map((row) => row.author_user_id),
         ...this.answerStore.authors(),
       ],
       (userId) => this.forgetParticipant(userId),
+      (checked, blocked, readAt) => this.participation.eventBlocksRead(checked, blocked, readAt),
     );
-    this.authors = new LiveRoomAuthors(this.sql, new LiveRoomPeople(this.sql), this.sessionEnv, () => {
-      const room = this.store.session();
-      return room ? { eventId: room.eventId, occurrenceId: room.session.occurrenceId } : null;
-    });
+    this.authors = new LiveRoomAuthors(this.sql, new LiveRoomPeople(this.sql), this.sessionEnv, () =>
+      liveRoomChatScope(this.store, this.location),
+    );
     this.chatFeed = new LiveChatFeed(
       this.chat,
       new LiveChatModerationStore(this.sql),
       new LiveChatReactionStore(this.sql),
       this.authors,
+      this.decisions,
     );
     this.outputs = new LiveRoomOutputs(this.store, this.pollStore);
     this.controls = new LiveRoomControls(this.store, this.pollStore, this.outputs);
@@ -134,6 +160,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       ctx,
       this.store,
       this.pollStore,
+      preparedStore,
       this.chatFeed,
       this.sessionEnv.DB,
       (sockets) => this.access.authorize(sockets),
@@ -141,7 +168,9 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       () => this.graphics.tickerContext,
       (work) => this.access.run(work),
     );
-    this.onScreenLists = new LiveRoomOnScreenLists(ctx, this.store, this.chat, this.broadcast);
+    // A session shows its location's chat on air; it holds no chat of its own.
+    const onAirChat = liveLocationOnAirChat(this.sessionEnv, () => this.store.session());
+    this.onScreenLists = new LiveRoomOnScreenLists(ctx, this.store, onAirChat, this.broadcast);
     this.graphics = new LiveRoomGraphics(
       this.sessionEnv,
       this.store,
@@ -152,7 +181,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       new LiveRoomGraphicBasis(this.sql),
       this.onScreenLists,
     );
-    this.graphics.chatTicker = () => liveChatTickerLines(this.chat);
+    this.graphics.chatTicker = () => liveChatTickerLines(onAirChat);
     this.chatActions = new LiveRoomChatActions(
       ctx,
       this.chat,
@@ -161,15 +190,23 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       this.broadcast,
       this.authors,
       {
-        tickerChanged: () => this.graphics.refreshLocal(),
-        listed: () => this.graphics.lists.due(),
+        tickerChanged: async () => this.locationChat.onAirChanged(),
+        listed: () => this.locationChat.onAirChanged(),
+        stamp: () => this.location.stamp(Date.now()),
+        ask: (question, by, at, sentDuring) => this.locationChat.ask(question, by, at, sentDuring),
         audited: () => this.scheduleCopy(),
+        counted: () => this.scheduleCopy(),
       },
     );
-    this.questions = new LiveRoomQuestions(this.store, this.broadcast, this.controls, this.authors, {
+    this.questions = new LiveRoomQuestions(this.store, this.broadcast, this.controls, this.authors, this.decisions, {
       allowed: (userId) => this.store.takeQuestionWriteAllowance(userId, nowIso()),
       changed: () => this.scheduleCopy(),
       listed: () => this.graphics.lists.due(),
+    });
+    this.preparedQuestions = new LiveRoomPreparedQuestions(this.store, preparedStore, this.broadcast, {
+      releaseDue: (at) => this.scheduleAlarm(at, true),
+      listed: () => this.graphics.lists.due(),
+      changed: () => this.scheduleCopy(),
     });
     this.answerStore = new LiveRoomAnswerStore(this.sql);
     this.answers = new LiveRoomAnswers(
@@ -179,17 +216,77 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       this.broadcast,
       this.authors,
       this.sessionEnv.DB,
+      this.decisions,
       () => this.scheduleCopy(),
     );
+    this.questionCommands = new LiveRoomQuestionCommands(this.questions, this.answers, this.broadcast);
+    this.participation = new LiveRoomParticipation(
+      ctx,
+      this.sessionEnv.DB,
+      this.store,
+      this.chat,
+      this.chatActions,
+      this.questions,
+      this.answers,
+      this.answerStore,
+      this.decisions,
+      this.authors.people,
+      this.broadcast,
+      () => liveRoomChatScope(this.store, this.location)?.eventId ?? null,
+    );
+    this.locationChat = new LiveLocationChatRoom({
+      ctx,
+      env: this.sessionEnv,
+      store: this.location,
+      access: this.access,
+      broadcast: this.broadcast,
+      feed: this.chatFeed,
+      chatActions: this.chatActions,
+      participation: this.participation,
+      staff: this.store,
+      seedBookmark: (bookmark) => this.databaseSession.seedBookmark(bookmark),
+      purge: () => this.purge(),
+    });
     this.presence = new LiveRoomPresence(ctx, (sockets) => this.access.eligible(sockets));
     this.addedCredits = new LiveRoomAddedCredits(this.sessionEnv.DB, this.store);
     this.engagement = new LiveRoomEngagement(ctx, this.store, this.polls, this.broadcast, () => this.scheduleCopy());
+    this.desk = {
+      questions: this.questions,
+      preparedQuestions: this.preparedQuestions,
+      polls: this.polls,
+      controls: this.controls,
+      graphics: this.graphics,
+      outputs: this.outputs,
+      addedCredits: this.addedCredits,
+      timers: this.timers,
+      broadcast: this.broadcast,
+    };
+    this.sessionCommands = new LiveSessionCommands(
+      this.store,
+      this.chatActions,
+      this.participation,
+      this.questionCommands,
+      this.questions,
+      this.engagement,
+      this.presence,
+      async (actor, session, message) => {
+        const program = this.store.stage();
+        return this.apply(this.followed(session, program, await operateLiveDesk(this.desk, actor, session, message)));
+      },
+    );
     // Keep-alive pings are answered without waking the room.
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
   }
 
-  async endProgramSources(roomId: string): Promise<void> {
+  /** The studio loaded another session in this physical room, `next`, or none. */
+  async endProgramSources(roomId: string, next: string | null): Promise<void> {
     closeLiveRoomProgramSources(this.ctx, roomId);
+    for (const message of this.controls.programLeft(next)) await this.broadcast.all(message);
+  }
+
+  /** The studio loaded this session in its physical room. */
+  async enterProgram(): Promise<void> {
+    for (const message of this.controls.programEntered()) await this.broadcast.all(message);
   }
 
   async programStage(): Promise<LiveStage> {
@@ -198,11 +295,48 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
 
   /** Takes over the Program of the session made active after another in this physical room. */
   async adoptProgramStage(stage: LiveStage): Promise<void> {
+    const before = this.store.stage();
     await this.broadcast.all(this.controls.adoptProgram(stage));
+    const room = this.store.session();
+    if (!room) return;
+    for (const message of this.outputs.followProgram(room.session, before, this.store.stage()))
+      await this.broadcast.all(message);
+  }
+
+  /** The studio loaded a session in this location's chat's location, or none: later messages are dated by it. */
+  async locationChatLoaded(occurrenceId: string | null): Promise<void> {
+    this.locationChat.loaded(occurrenceId);
+  }
+
+  /** A location's chat: its latest messages a broadcast may show, and when the first after `since` was sent. */
+  async locationChatOnAir(limit: number, options: LiveChatOnAirOptions): Promise<LiveChatOnAirMessage[]> {
+    if (!this.location.state()) return [];
+    const messages = await liveChatOnAirMessages(this.chat, limit, options);
+    // What goes on screen keeps its words: its author can no longer edit it.
+    this.chat.markAired(messages.map((message) => message.id));
+    return messages;
+  }
+  async locationChatFirstSentAfter(since: string): Promise<string | null> {
+    return this.location.state() ? this.chat.firstSentAfter(since) : null;
+  }
+
+  /** A session's room: its location's chat changed, so its chat feed and ticker fill again. */
+  async locationChatChanged(): Promise<void> {
+    if (!this.store.session()) return;
+    this.graphics.lists.due();
+    await this.graphics.refreshLocal();
+  }
+
+  /** A session's room: asks a chat message an operator converted; null when the room never opened. */
+  async questionFromChat(question: LiveChatQuestion, by: { userId: string; name: string }, at: string) {
+    return this.store.session() ? this.questions.fromChat(question, by, at) : null;
   }
 
   async readProgram(eventId: string, roomId: string): Promise<LiveProgramSelection> {
     return this.program.read(eventId, roomId);
+  }
+  async loadedProgram(eventId: string, roomId: string): Promise<string | null> {
+    return this.program.loaded(eventId, roomId);
   }
   async selectProgram(
     eventId: string,
@@ -214,7 +348,9 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
   }
 
   async fetch(request: Request): Promise<Response> {
-    if (new URL(request.url).pathname === "/program/connect") return this.program.connect(request);
+    const path = new URL(request.url).pathname;
+    if (path === "/program/connect") return this.program.connect(request);
+    if (path === "/chat/connect") return this.locationChat.connect(request);
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket")
       return new Response("Expected a WebSocket upgrade", { status: 426 });
     const admission = liveRoomAdmissionSchema.parse(JSON.parse(request.headers.get(LIVE_ROOM_ADMISSION_HEADER) ?? ""));
@@ -238,6 +374,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       await this.broadcast.operatorsChanged();
       this.presence.greet(server, admission.participant);
     }
+    if (admission.participant.role === "overlay") await this.broadcast.sourcesChanged();
     return new Response(null, {
       status: 101,
       webSocket: client,
@@ -267,8 +404,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     threadRequestId: string | null,
   ): Promise<void> {
     if (message && viewer.role !== "overlay") {
-      const room = this.store.session();
-      if (!room) return;
+      if (!this.store.session() && !this.location.state()) return;
       const authorized = await this.access.authorize([socket]);
       if (!authorized.length) {
         await this.left(socket);
@@ -314,6 +450,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
    * is copied and the session is long over, the room erases its own storage.
    */
   async alarm(): Promise<void> {
+    if (!this.store.session() && this.location.state()) return this.locationChat.alarm();
     return runLiveRoomAlarm({
       ctx: this.ctx,
       program: this.program,
@@ -321,6 +458,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       db: this.env.DB,
       access: this.access,
       refreshGraphics: () => this.graphics.refresh(),
+      preparedQuestions: this.preparedQuestions,
       copyDue: () => this.copyDue(),
       purge: () => this.purge(),
     });
@@ -339,7 +477,10 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     const changedThreads = this.answerStore.forget(userId);
     const { removed, recounted } = this.store.forgetQuestions(userId);
     const polls = this.pollStore.forget(userId);
+    const room = this.store.session();
+    if (room) await this.preparedQuestions.forget(room.session, userId);
     const chat = this.chat.forget(userId);
+    this.decisions.forget(userId);
     this.authors.prune();
     for (const questionId of changedThreads) await this.answers.publish(questionId);
     for (const socket of this.ctx.getWebSockets()) {
@@ -362,7 +503,22 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     for (const questionId of recounted) await this.broadcast.question(questionId);
     for (const pollId of polls) await this.broadcast.poll(pollId);
     if (removed.length || recounted.length || chat.length) this.graphics.lists.due();
-    if (removed.length || recounted.length || polls.length) await this.scheduleAlarm(this.copyDue(), true);
+    if (this.store.hasPendingCopy() || this.location.pendingCopy()) await this.scheduleAlarm(this.copyDue(), true);
+  }
+
+  /** The attendee chat the room still holds, oldest first, for the event's chat download. */
+  async chatArchive(): Promise<LiveChatArchiveRow[]> {
+    return this.sql.holdsData() ? this.chat.archive() : [];
+  }
+
+  /** Erases both chat channels, keeping the counts; false while the room is still open. */
+  async eraseChat(): Promise<boolean> {
+    if (!this.sql.holdsData()) return true;
+    if (!liveChatErasable(liveRoomChatScope(this.store, this.location))) return false;
+    for (const removed of this.chat.eraseAll())
+      await this.broadcast.all({ type: "chat.removed", messageId: removed.id, channel: removed.channel });
+    this.graphics.lists.due();
+    return true;
   }
 
   private copyDue(): number {
@@ -379,25 +535,23 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     await this.scheduleAlarm(this.copyDue(), true);
   }
 
+  /** The session is a week over: erase the room, or all but the chat its event keeps longer. */
   private async purge(): Promise<void> {
-    for (const socket of this.ctx.getWebSockets()) {
-      try {
-        socket.close(1001, "This session's room has closed");
-      } catch {
-        // Already closed.
-      }
-    }
     this.engagement.clear();
     this.onScreenLists.stop();
-    await this.ctx.storage.deleteAll();
-    this.sql.erased();
+    const scope = liveRoomChatScope(this.store, this.location);
+    const erased = await purgeLiveRoom(this.ctx, this.env.DB, scope, this.sql, this.chat);
+    if (!erased) return;
     this.databaseSession.reset();
+    this.location.erased();
   }
 
   private async left(socket: WebSocket): Promise<void> {
     const viewer = socket.deserializeAttachment() as LiveRoomParticipant | null;
     // A socket the purge closed can report closing after the erase; telling the others must not recreate the room.
-    if (viewer?.role !== "operator" || !this.sql.holdsData()) return;
+    if (!this.sql.holdsData() || !this.store.session()) return;
+    if (viewer?.role === "overlay") return this.broadcast.sourcesChanged(socket);
+    if (viewer?.role !== "operator") return;
     this.presence.left(viewer);
     await this.broadcast.operatorsChanged(socket);
   }
@@ -412,171 +566,17 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     if (viewer.role === "overlay" || viewer.userId === null || viewer.name === null) return REFUSALS.readOnly;
     const actor = { userId: viewer.userId, name: viewer.name };
     const operator = viewer.role === "operator";
-    const session = this.session();
-    const open = operator || liveRoomOpen(Date.now(), session.startAt, session.endAt);
-    switch (message.type) {
-      case "chat.send":
-      case "chat.react":
-      case "chat.report":
-        return open ? this.chatActions.handle(viewer, actor, message, socket) : REFUSALS.closed;
-      case "chat.delete":
-      case "chat.history":
-        return this.chatActions.handle(viewer, actor, message, socket);
-      case "author.lookup":
-        return this.chatActions.lookupAuthor(viewer, actor, message.handle, socket);
-      case "chat.moderate":
-      case "chat.restrict":
-      case "chat.convert":
-        if (!operator) return REFUSALS.operatorOnly;
-        return this.chatActions.handle(viewer, actor, message, socket);
-      case "question.edit":
-      case "question.withdraw": {
-        const result = await this.questions.changeAuthorQuestion(actor, message, open);
-        if ("questionId" in result) {
-          await this.answers.publish(result.questionId);
-          socket.send(
-            serializeLiveRoomMessage({ type: "question.updated", operationId: message.operationId, ...result }),
-          );
-          return;
-        }
-        return result;
-      }
-      case "question.answers.watch":
-        return this.answers.watch(socket, message.questionId);
-      case "question.answer":
-      case "question.answer.accept": {
-        const result =
-          message.type === "question.answer"
-            ? await this.answers.send(viewer, actor, message)
-            : await this.answers.accept(viewer, actor, message);
-        if ("answerId" in result) {
-          socket.send(
-            serializeLiveRoomMessage({
-              type: "question.answer.result",
-              operationId: message.operationId,
-              questionId: message.questionId,
-              answerId: result.answerId,
-            }),
-          );
-          return;
-        }
-        return result;
-      }
-      case "question.ask": {
-        const result = await this.questions.ask(
-          viewer,
-          actor,
-          message.text,
-          message.anonymous,
-          message.operationId,
-          open,
-        );
-        if ("questionId" in result) {
-          socket.send(
-            serializeLiveRoomMessage({
-              type: "question.accepted",
-              operationId: message.operationId,
-              questionId: result.questionId,
-            }),
-          );
-          return;
-        }
-        return result;
-      }
-      case "question.vote":
-        return open ? this.questions.vote(actor.userId, message.questionId, message.voted) : REFUSALS.closed;
-      case "reaction.send":
-        return open ? this.engagement.react(actor.userId, message.reaction) : REFUSALS.closed;
-      case "poll.vote":
-        return open ? this.engagement.votePoll(actor.userId, message.pollId, message.answer, socket) : REFUSALS.closed;
-      case "question.moderate": {
-        const refusal = await this.questions.moderate(
-          viewer,
-          actor,
-          message.questionId,
-          message.status,
-          message.expectedRevision,
-        );
-        if (!refusal) await this.answers.publish(message.questionId);
-        return refusal;
-      }
-      case "presence.update":
-        if (!operator) return REFUSALS.operatorOnly;
-        this.presence.update(actor, message);
-        return;
-    }
-    if (!operator) return REFUSALS.operatorOnly;
-    return this.apply(await this.operate(actor, session, message));
+    if (!operator && liveCommandParticipates(message.type) && this.decisions.restriction(actor.userId, Date.now()))
+      return LIVE_PARTICIPATION_REFUSAL;
+    if (!this.store.session()) return this.locationChat.handle(viewer, actor, message, socket);
+    return this.sessionCommands.handle(viewer, actor, this.session(), message, socket);
   }
 
-  /** The control desk's actions, each one a single synchronous change of the room's storage. */
-  private async operate(actor: Actor, session: LiveRoomSession, message: LiveDeskCommand): Promise<LiveControlOutcome> {
-    const at = nowIso();
-    switch (message.type) {
-      case "question.rewrite":
-        return this.questions.rewrite(actor, message.questionId, message.text, at);
-      case "poll.save":
-        return this.polls.save(actor, message.pollId, message.draft, at, message.discardRemovedAnswers ?? false);
-      case "poll.delete":
-        return this.polls.remove(actor, message.pollId, at);
-      case "poll.status":
-        return this.polls.setStatus(actor, message.pollId, message.status, at);
-      case "stage.question":
-        return this.controls.putQuestionOnStage(actor, message.questionId, at);
-      case "stage.lowerThird":
-        return this.controls.showLowerThird(actor, session, message.creditKey, at, message.motion);
-      case "stage.panelists":
-        return this.controls.setPanelists(actor, message.panelists, at);
-      case "stage.schedule":
-        return this.graphics.setSchedule(actor, message.schedule, at);
-      case "stage.ticker":
-        return this.graphics.setTicker(actor, message.ticker, at);
-      case "stage.set":
-        return this.graphics.setStage(actor, session, message, at);
-      case "aux.set":
-        return this.graphics.setAux(actor, session, message, at);
-      case "preview.set":
-        return this.graphics.setPreview(actor, session, message, at);
-      case "preview.take":
-        return this.graphics.takePreview(actor, session, at);
-      case "speaker.message":
-      case "stage.display.settings":
-        return this.outputs.setStageDisplay(actor, message, at);
-      case "program.clear":
-        return this.controls.clearProgram(actor, at);
-      case "program.restore":
-        return this.controls.restoreProgram(actor, message.snapshotId, at);
-      case "credit.add":
-        return this.addedCredits.add(actor, message.person, at);
-      case "credit.remove":
-        return this.addedCredits.remove(actor, message.creditKey, at);
-      case "stage.poll":
-        return this.controls.showPoll(actor, message.pollId, at);
-      case "stage.next":
-        return advanceLiveStage(this.controls, this.polls, this.broadcast, actor, session, message.view, at);
-      case "queue.add":
-        return this.controls.enqueue(actor, session, message.view, message.itemId, at);
-      case "queue.remove":
-        return this.controls.dequeue(actor, message.view, message.itemId, at);
-      case "queue.move":
-        return this.controls.move(actor, message.view, message.itemId, message.direction, at);
-      case "overlay.mode":
-        return this.controls.overlayMode(actor, message.mode, at);
-      case "timer.add":
-        return this.timers.add(actor, session, message.timer, Date.now(), at);
-      case "timer.remove":
-        return this.timers.remove(actor, session, message.timerId, at);
-      case "timer.adjust":
-        return this.timers.adjust(actor, session, message.timerId, message.deltaSeconds, Date.now(), at);
-      case "stage.timer":
-        return this.controls.setTimer(actor, session, message.timer, message.visible, at);
-      case "timer.control":
-        return this.timers.control(actor, session, message.timerId, message.action, Date.now(), at);
-      case "timer.configure":
-        return this.timers.configure(actor, session, message.timerId, message.settings, Date.now(), at);
-      case "timer.edit":
-        return this.timers.edit(actor, session, message.timerId, message.edit, Date.now(), at);
-    }
+  /** An operator's change to Program also reaches the screens that follow it, in the same outcome. */
+  private followed(session: LiveRoomSession, before: LiveStage, outcome: LiveControlOutcome): LiveControlOutcome {
+    if ("code" in outcome) return outcome;
+    const messages = this.outputs.followProgram(session, before, this.store.stage());
+    return messages.length ? { ...outcome, messages: [...outcome.messages, ...messages] } : outcome;
   }
 
   private async apply(outcome: LiveControlOutcome): Promise<Handled> {

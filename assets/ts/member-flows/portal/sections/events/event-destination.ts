@@ -15,14 +15,13 @@ export function eventDestination(event: EventAudienceDetail | EventManagementSum
 }
 
 /**
- * Whether this session can actually open the owning group's workspace.
+ * Whether this session can actually open the owning group's workspace on this event.
  *
- * Any staff grant enables the groups section, but an event-scoped grant does
- * not reach the group surface; sending that identity there ends on a refusal.
- * A member, a global groups reader or writer, or a grant on this exact group
- * can open it.
+ * Any staff grant enables the groups section, but most event-scoped grants do not reach the group surface;
+ * sending that identity there ends on a refusal. A member, a global groups reader or writer, a grant on this
+ * exact group, or a grant on this exact event (the event's team, as a guest of the group) can open it.
  */
-export function canOpenGroupWorkspace(session: PortalSession | null, groupId: string): boolean {
+export function canOpenGroupWorkspace(session: PortalSession | null, groupId: string, eventId: string): boolean {
   if (!portalSectionEnabled(session, "groups")) return false;
   if (session?.member) return true;
   return Boolean(
@@ -31,7 +30,8 @@ export function canOpenGroupWorkspace(session: PortalSession | null, groupId: st
         ((grant.permission === "groups:read" || grant.permission === "groups:write") &&
           grant.contextType === null &&
           grant.contextId === null) ||
-        (grant.contextType === "group" && grant.contextId === groupId),
+        (grant.contextType === "group" && grant.contextId === groupId) ||
+        (grant.contextType === "event" && grant.contextId === eventId),
     ),
   );
 }

@@ -86,17 +86,22 @@ afterEach(() => {
 });
 
 describe("group event workspace", () => {
-  it("keeps Live settings reachable only for the event's explicit live moderator scope", async () => {
+  it("keeps the studio's settings for whoever runs the event's studio, not every moderator", async () => {
     const previous = portalSession.value;
     try {
       portalSession.value = portalSessionFixture({
         staff: true,
-        grants: [{ permission: "agenda:live_moderate", contextType: "event", contextId: EVENT_ID }],
+        grants: [{ permission: "agenda:live_studio", contextType: "event", contextId: EVENT_ID }],
       });
       expect(visibleEventWorkspaceTabs(baseEvent()).map((tab) => tab.key)).toContain("settings");
       expect(visibleEventWorkspaceTabs(baseEvent({ id: "other-event" })).map((tab) => tab.key)).not.toContain(
         "settings",
       );
+      portalSession.value = portalSessionFixture({
+        staff: true,
+        grants: [{ permission: "agenda:live_moderate", contextType: "event", contextId: EVENT_ID }],
+      });
+      expect(visibleEventWorkspaceTabs(baseEvent()).map((tab) => tab.key)).not.toContain("settings");
     } finally {
       portalSession.value = previous;
     }

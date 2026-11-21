@@ -1,5 +1,3 @@
-import { LIVE_AUX_OUTPUTS } from "./live-room-outputs";
-
 /**
  * Operator presence in a live control room: who else is at the desk, which
  * control each of them is on, and where they point on a shared monitor.
@@ -22,10 +20,6 @@ export const LIVE_PRESENCE_POLICY = {
 /** The output buttons a focused control can point at; the aux menu is one target for all aux outputs. */
 export const LIVE_PRESENCE_TARGETS = ["preview", "program", "aux"] as const;
 export type LivePresenceTarget = (typeof LIVE_PRESENCE_TARGETS)[number];
-
-/** The monitors a pointer can rest on: every composition the room draws, not the livestream video. */
-export const LIVE_PRESENCE_OUTPUTS = ["preview", "program", ...LIVE_AUX_OUTPUTS] as const;
-export type LivePresenceOutput = (typeof LIVE_PRESENCE_OUTPUTS)[number];
 
 /** How many distinct operator colors the design tokens provide. */
 export const LIVE_PRESENCE_COLOR_COUNT = 6;

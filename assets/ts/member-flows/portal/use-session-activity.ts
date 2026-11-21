@@ -2,6 +2,7 @@ import { useEffect } from "preact/hooks";
 import { userAuthSessionResponseSchema } from "../../../shared/schemas/user-auth";
 import { rememberedIdentityKey } from "./acting-identity";
 import { ApiClientError, getJson } from "../../shared/api-client";
+import { onSessionPresence } from "../../shared/session-presence";
 import { clearMemberProfile, expirePortalSession, portalSession, savePortalSession } from "./state";
 
 /** Bound refresh traffic while leaving ample margin before the one-hour staff inactivity limit. */
@@ -9,8 +10,11 @@ export const SESSION_ACTIVITY_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
 
 /**
  * Acknowledges real browser interaction through the canonical live-session
- * check. The response rotates the signed cookie and records the first
- * authenticated activity of the UTC calendar month in the standing ledger.
+ * check, and for anyone with a role also a live room the page follows. The
+ * response rotates the signed cookie and records the first authenticated
+ * activity of the UTC calendar month in the standing ledger. Only a role's
+ * elevation sits idle within the hour a talk runs; everyone else's session
+ * lasts days untouched, so a room they follow asks for nothing.
  */
 export function useSessionActivity(): void {
   const session = portalSession.value;
@@ -74,6 +78,9 @@ export function useSessionActivity(): void {
       }
     }
 
+    const stopPresence = onSessionPresence(() => {
+      if (portalSession.value?.staff) acknowledgeInteraction();
+    });
     window.addEventListener("storage", identityChangedInAnotherTab);
     window.addEventListener("focus", acknowledgeInteraction);
     window.addEventListener("pageshow", acknowledgeInteraction);
@@ -83,6 +90,7 @@ export function useSessionActivity(): void {
     document.addEventListener("visibilitychange", acknowledgeVisiblePage);
     return () => {
       clearTimeout(refreshTimer);
+      stopPresence();
       window.removeEventListener("storage", identityChangedInAnotherTab);
       window.removeEventListener("focus", acknowledgeInteraction);
       window.removeEventListener("pageshow", acknowledgeInteraction);

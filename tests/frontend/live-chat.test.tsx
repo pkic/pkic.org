@@ -7,12 +7,11 @@ import { LIVE_CHAT_POLICY, LIVE_CHAT_REACTIONS } from "../../assets/shared/live-
 import {
   liveRoomClientMessageSchema,
   type LiveChatMessage,
-  type LiveRoomSnapshot,
+  type LiveLocationChatSnapshot,
 } from "../../assets/shared/schemas/live-session-room";
 import { LiveChat } from "../../assets/ts/live-session/LiveChat";
-import { SessionChat } from "../../assets/ts/live-session/SessionChat";
-import { applyLiveRoomMessage, type LiveRoomState } from "../../assets/ts/live-session/live-room-state";
-import { liveSnapshot } from "./helpers/live-room-socket";
+import { applyLocationChatMessage, type LiveLocationChatState } from "../../assets/ts/live-session/location-chat-state";
+import { LIVE_OCCURRENCE, liveLocationChatSnapshot } from "./helpers/live-room-socket";
 
 const hosts: HTMLElement[] = [];
 afterEach(() => {
@@ -41,8 +40,8 @@ function chatMessage(overrides: Partial<LiveChatMessage> = {}): LiveChatMessage 
   };
 }
 
-function stateWith(overrides: Partial<Omit<LiveRoomSnapshot, "type">> = {}): LiveRoomState {
-  const state = applyLiveRoomMessage(null, liveSnapshot({ chat: [chatMessage()], ...overrides }));
+function stateWith(overrides: Partial<Omit<LiveLocationChatSnapshot, "type">> = {}): LiveLocationChatState {
+  const state = applyLocationChatMessage(null, liveLocationChatSnapshot({ chat: [chatMessage()], ...overrides }));
   if (!state) throw new Error("No state");
   return state;
 }
@@ -70,20 +69,58 @@ function sent(send: ReturnType<typeof vi.fn>) {
   return send.mock.calls.map(([message]) => liveRoomClientMessageSchema.parse(message));
 }
 
-/** The labels of a message menu's top-level items, opened from its trigger. */
-/** What a viewer can do with the first message: "React" when its reaction button shows, then its menu's actions. */
-async function menuLabels(host: HTMLElement): Promise<string[]> {
-  const react = host.querySelector('.pk-live-chat__menu button[aria-label^="React to message"]') ? ["React"] : [];
+/** What one sent command does, as the room reads it: its type, and the decision or block it carries. */
+function effectOf(message: unknown): string {
+  const command = liveRoomClientMessageSchema.parse(message);
+  if (command.type === "chat.moderate") return `${command.type}:${command.decision}`;
+  if (command.type === "participation.block") return `${command.type}:${command.block}`;
+  return command.type;
+}
+
+/** Reply and Edit send nothing yet: they set the composer up, which this reads and then cancels. */
+async function composed(host: HTMLElement): Promise<string> {
+  const line = host.querySelector(".pk-live-chat__composing");
+  if (!line) return "nothing";
+  const cancel = line.querySelector<HTMLButtonElement>("button:last-of-type")!;
+  const mode = cancel.getAttribute("aria-label") === "Cancel edit" ? "compose:edit" : "compose:reply";
+  await act(async () => cancel.click());
+  return mode;
+}
+
+/**
+ * What each action a viewer gets on the first message does: the reaction button, then every menu item,
+ * run through its submenu or dialog to the command it sends. Copy and order changes don't matter here.
+ */
+async function menuEffects(host: HTMLElement, send: ReturnType<typeof vi.fn>): Promise<string[]> {
+  const effects = host.querySelector('.pk-live-chat__menu button[aria-label^="React to message"]')
+    ? ["chat.react"]
+    : [];
   const trigger = host.querySelector<HTMLButtonElement>(
     '.pk-live-chat__menu button[aria-label^="Actions for message"]',
   );
-  if (!trigger) return react;
+  if (!trigger) return effects;
+  const items = () => document.querySelectorAll<HTMLElement>('[role="menu"] > [role^="menuitem"]');
   await act(async () => trigger.click());
-  const labels = [...document.querySelectorAll('[role="menu"] > [role^="menuitem"]')].map(
-    (item) => item.textContent?.replace(/›/u, "").trim() ?? "",
-  );
+  const count = items().length;
   await act(async () => trigger.click());
-  return [...react, ...labels];
+  for (let index = 0; index < count; index += 1) {
+    await act(async () => trigger.click());
+    const item = items()[index];
+    const before = send.mock.calls.length;
+    await act(async () => item.click());
+    const submenu = document.getElementById(item.getAttribute("aria-controls") ?? "");
+    const choice = submenu?.querySelector<HTMLElement>('[role^="menuitem"]');
+    if (choice) await act(async () => choice.click());
+    const dialog = document.querySelector("dialog");
+    if (dialog) {
+      const reason = dialog.querySelector<HTMLInputElement>('input[type="radio"]');
+      if (reason) await act(async () => reason.click());
+      const confirm = [...dialog.querySelectorAll("button")].at(-1)!;
+      await act(async () => confirm.click());
+    }
+    effects.push(send.mock.calls.length > before ? effectOf(send.mock.calls.at(-1)![0]) : await composed(host));
+  }
+  return effects;
 }
 
 describe("live chat", () => {
@@ -175,13 +212,14 @@ describe("live chat", () => {
   it("offers each viewer exactly the actions the chat policy grants", async () => {
     const send = vi.fn(() => true);
     const attendee = mount(<LiveChat state={stateWith()} disabled={false} send={send} />);
-    expect(await menuLabels(attendee)).toEqual(["React", "Report"]);
+    expect(await menuEffects(attendee, send)).toEqual(["chat.react", "compose:reply", "chat.report"]);
     const own = mount(
       <LiveChat state={stateWith({ chat: [chatMessage({ mine: true })] })} disabled={false} send={send} />,
     );
-    expect(await menuLabels(own)).toEqual(["React", "Delete message"]);
+    expect(await menuEffects(own, send)).toEqual(["chat.react", "compose:reply", "compose:edit", "chat.delete"]);
     const moderation = {
       hidden: null,
+      done: null,
       held: false,
       reports: 2,
       reportReasons: { spam: 2 },
@@ -199,8 +237,36 @@ describe("live chat", () => {
         send={send}
       />,
     );
-    expect(await menuLabels(moderator)).toEqual(["React", "Turn into question", "Dismiss reports", "Hide message"]);
-    expect(moderator.textContent).toContain("2 reports");
+    expect(await menuEffects(moderator, send)).toEqual([
+      "chat.react",
+      "compose:reply",
+      "moderation.done",
+      "chat.convert",
+      "chat.pin",
+      "chat.moderate:keep",
+      "chat.moderate:remove",
+      "participation.block:paused",
+      "participation.block:session",
+    ]);
+    // A moderator's own message is theirs to delete; removing with a reason is for someone else's.
+    const ownAsModerator = mount(
+      <LiveChat
+        state={stateWith({
+          viewer: { role: "operator", name: "Rita", organizer: false },
+          chat: [
+            chatMessage({
+              mine: true,
+              moderation: { ...moderation, reports: 0, reportReasons: {}, authorStaff: true },
+            }),
+          ],
+        })}
+        disabled={false}
+        send={send}
+      />,
+    );
+    const ownEffects = await menuEffects(ownAsModerator, send);
+    expect(ownEffects).toContain("chat.delete");
+    expect(ownEffects).not.toContain("chat.moderate:remove");
     const organizer = mount(
       <LiveChat
         state={stateWith({
@@ -211,13 +277,17 @@ describe("live chat", () => {
         send={send}
       />,
     );
-    expect(await menuLabels(organizer)).toEqual([
-      "React",
-      "Turn into question",
-      "Dismiss reports",
-      "Hide message",
-      "Mute in chat",
-      "Ban from chat",
+    expect(await menuEffects(organizer, send)).toEqual([
+      "chat.react",
+      "compose:reply",
+      "moderation.done",
+      "chat.convert",
+      "chat.pin",
+      "chat.moderate:keep",
+      "chat.moderate:remove",
+      "participation.block:paused",
+      "participation.block:session",
+      "participation.block:event",
     ]);
   });
 
@@ -286,42 +356,95 @@ describe("live chat", () => {
     expect(sent(send)).toEqual([{ type: "chat.history", channel: "attendee", before: chat[0].id }]);
   });
 
-  it("tells a muted person they can read but not write, and a banned person nothing of the chat", () => {
-    const muted = mount(
+  it("shows a blocked person why they can't post, and keeps the chat readable", () => {
+    const paused = mount(
       <LiveChat
-        state={stateWith({ viewer: { role: "attendee", name: "Ada", chatRestriction: "muted" } })}
+        state={stateWith({
+          viewer: {
+            role: "attendee",
+            name: "Ada",
+            participation: { block: "paused", until: new Date(Date.now() + 600_000).toISOString() },
+          },
+        })}
         disabled={false}
         send={vi.fn(() => true)}
       />,
     );
-    expect(muted.querySelector("textarea")).toBeNull();
-    expect(muted.textContent).toContain("An organizer muted you");
-    expect(muted.textContent).toContain("Welcome to the session");
-    const banned = mount(
+    expect(paused.querySelector("textarea")).toBeNull();
+    expect(paused.querySelector('[role="alert"]')).not.toBeNull();
+    expect(paused.querySelector('a[href="/code-of-conduct/"]')).not.toBeNull();
+    expect(paused.textContent).toContain("Welcome to the session");
+    const blocked = mount(
       <LiveChat
-        state={stateWith({ viewer: { role: "attendee", name: "Ada", chatRestriction: "banned" } })}
+        state={stateWith({ viewer: { role: "attendee", name: "Ada", participation: { block: "event", until: null } } })}
         disabled={false}
         send={vi.fn(() => true)}
       />,
     );
-    expect(banned.textContent).not.toContain("Welcome to the session");
-    expect(banned.textContent).toContain("An organizer removed you");
+    expect(blocked.querySelector("textarea")).toBeNull();
+    expect(blocked.querySelector('[role="alert"]')).not.toBeNull();
+    expect(blocked.textContent).toContain("Welcome to the session");
   });
 
-  it("does not connect before the canonical live window", () => {
-    const createSocket = vi.fn();
+  it("gives a paused person their reactions and reporting back when the pause ends", async () => {
+    vi.useFakeTimers();
+    try {
+      const send = vi.fn(() => true);
+      const host = mount(
+        <LiveChat
+          state={stateWith({
+            viewer: {
+              role: "attendee",
+              name: "Ada",
+              participation: { block: "paused", until: new Date(Date.now() + 1_000).toISOString() },
+            },
+          })}
+          disabled={false}
+          send={send}
+        />,
+      );
+      expect(await menuEffects(host, send)).toEqual([]);
+      void act(() => {
+        vi.advanceTimersByTime(1_100);
+      });
+      expect(host.querySelector("textarea")).not.toBeNull();
+      expect(await menuEffects(host, send)).toEqual(["chat.react", "compose:reply", "chat.report"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("marks where the session on changes, and the breaks between", () => {
+    const at = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString();
     const host = mount(
-      <SessionChat
-        slug="pqc"
-        occurrenceId="session"
-        startAt={new Date(Date.now() + 7200000).toISOString()}
-        endAt={new Date(Date.now() + 10800000).toISOString()}
-        createSocket={createSocket}
-        closed={<p>Chat is closed</p>}
+      <LiveChat
+        state={stateWith({
+          chat: [
+            chatMessage({ id: "40000000-0000-4000-8000-000000000021", text: "Early", sentAt: at(-30) }),
+            chatMessage({
+              id: "40000000-0000-4000-8000-000000000022",
+              text: "Hello",
+              sentAt: at(-5),
+              occurrenceId: LIVE_OCCURRENCE,
+            }),
+            chatMessage({
+              id: "40000000-0000-4000-8000-000000000023",
+              text: "Agreed",
+              sentAt: at(-4),
+              occurrenceId: LIVE_OCCURRENCE,
+            }),
+            chatMessage({ id: "40000000-0000-4000-8000-000000000024", text: "Coffee?", sentAt: at(-1) }),
+          ],
+        })}
+        disabled={false}
+        send={vi.fn(() => true)}
       />,
     );
-    expect(createSocket).not.toHaveBeenCalled();
-    expect(host.textContent).toContain("Chat is closed");
+    expect(
+      [...host.querySelectorAll(".pk-live-chat__row")].map(
+        (row) => row.querySelector('[role="separator"]')?.textContent ?? "",
+      ),
+    ).toEqual(["", "Post-quantum migration", "", "Between sessions"]);
   });
 });
 
@@ -331,6 +454,7 @@ it("counts only new inactive-channel messages, lists reports and restores the se
     id: "40000000-0000-4000-8000-000000000009",
     moderation: {
       hidden: null,
+      done: null,
       held: false,
       reports: 1,
       reportReasons: { abuse: 1 },

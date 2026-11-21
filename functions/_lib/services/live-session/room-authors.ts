@@ -11,7 +11,7 @@ import { AppError } from "../../errors";
 import { currentLiveRoomCommandRead } from "./room-command-read-scope";
 import { first } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
-import { liveRoomName, type LiveRoomParticipant } from "./room-admission";
+import type { LiveRoomParticipant } from "./room-admission";
 import { readLiveAuthorStamp } from "./room-author-stamp";
 import type { LiveRoomPeople } from "./room-people";
 import type { LiveRoomSql } from "./room-sql";
@@ -26,9 +26,8 @@ function base64url(bytes: Uint8Array): string {
     .replace(/=+$/u, "");
 }
 
-/** A message still shown: not hidden or held, and not written by someone banned from the chat. */
-const SHOWN_CHAT = `chat.id NOT IN (SELECT message_id FROM room_chat_hidden)
-  AND chat.author_user_id NOT IN (SELECT user_id FROM room_chat_restrictions WHERE restriction = 'banned')`;
+/** A message still shown: not removed or held. */
+const SHOWN_CHAT = `chat.id NOT IN (SELECT message_id FROM room_chat_hidden)`;
 
 export function parseLiveAuthorStamp(json: string | null | undefined): LiveAuthorStamp {
   if (!json) return NO_STAMP;
@@ -48,7 +47,8 @@ export class LiveRoomAuthors {
     private readonly sql: LiveRoomSql,
     readonly people: LiveRoomPeople,
     private readonly env: { DB: DatabaseLike; INTERNAL_SIGNING_SECRET?: string },
-    private readonly room: () => { eventId: string; occurrenceId: string } | null,
+    /** The room handles are keyed by, as its object is named, and its event. */
+    private readonly room: () => { eventId: string; name: string } | null,
   ) {}
 
   /** The person's handle in this room: a keyed digest of the room and the person, never their id. */
@@ -59,8 +59,7 @@ export class LiveRoomAuthors {
     const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, [
       "sign",
     ]);
-    const name = liveRoomName(room.eventId, room.occurrenceId);
-    const digest = await crypto.subtle.sign("HMAC", key, encoder.encode(`live-author:v1:${name}:${userId}`));
+    const digest = await crypto.subtle.sign("HMAC", key, encoder.encode(`live-author:v1:${room.name}:${userId}`));
     return base64url(new Uint8Array(digest).slice(0, 24));
   }
 

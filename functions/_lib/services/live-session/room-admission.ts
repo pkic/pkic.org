@@ -23,6 +23,8 @@ export const liveRoomParticipantSchema = z
     name: z.string().min(1).max(200).nullable(),
     /** An operator who also manages the event: the chat policy's organizer. */
     organizer: z.boolean().optional(),
+    /** An operator who also runs the studio: only they use the control desk, its screens and what is on air. */
+    studio: z.boolean().optional(),
     /** The person's profile photo, which a question they ask by name may show. */
     photoUrl: z.string().min(1).max(500).nullable().optional(),
     /** The identity the person acts as now, whose title and organization label what they write. */
@@ -75,6 +77,11 @@ export type LiveRoomAdmissionMessage = z.infer<typeof liveRoomAdmissionSchema>;
 /** One room per agenda occurrence of one event. */
 export function liveRoomName(eventId: string, occurrenceId: string): string {
   return `${eventId}:${occurrenceId}`;
+}
+
+/** One chat per location and event day; it lives in the room class beside the sessions' rooms. */
+export function liveLocationChatName(eventId: string, roomId: string, day: string): string {
+  return `chat:${eventId}:${roomId}:${day}`;
 }
 
 /** Preserve server-owned connection metadata when fresh canonical admission replaces an attachment. */
