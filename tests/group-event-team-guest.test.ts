@@ -4,7 +4,7 @@
  */
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import type { GROUP_VISIBILITIES } from "../assets/shared/schemas/groups";
+import { groupLabelSchema, type GROUP_VISIBILITIES } from "../assets/shared/schemas/groups";
 import { createGroup } from "../functions/_lib/services/groups";
 import { grantEventTeamRole } from "../functions/_lib/services/events/team";
 import type { UserBackedAuthAdmin } from "../functions/_lib/types";
@@ -99,7 +99,11 @@ describe("a group's guest", () => {
     const { group, event, volunteer, assignment, outsider } = await fixture("managed");
 
     const detail = await get(volunteer.token, `/api/v1/groups/${group.id}`);
-    expect(((await detail.json()) as { capabilities: string[] }).capabilities).toEqual(["guest"]);
+    expect(await detail.json()).toEqual({
+      kind: "guest",
+      group: groupLabelSchema.parse(group),
+      capabilities: ["guest"],
+    });
     expect((await get(volunteer.token, `/api/v1/groups/${group.id}/events/${event.id}`)).status).toBe(200);
     // Every other group surface treats the guest as anyone else who may not see the group.
     expect((await get(volunteer.token, `/api/v1/groups/${group.id}/events`)).status).toBe(404);

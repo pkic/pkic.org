@@ -31,18 +31,23 @@ export async function prepareDeskBadgeLabel(
   request: BadgeLabelRequest,
 ) {
   const badgeId = await resolveLabelBadge(db, eventId, request);
-  const registered = await first(
-    db,
-    `SELECT 1 FROM event_badge_credentials badge JOIN registrations r ON r.event_id=badge.event_id AND r.user_id=badge.user_id
+  const eligibility = {
+    sql: `SELECT 1 FROM event_badge_credentials badge JOIN registrations r ON r.event_id=badge.event_id AND r.user_id=badge.user_id
       JOIN users u ON u.id=r.user_id WHERE badge.event_id=? AND badge.id=? AND ${badgeAttendeeEligibilitySql("r", "u")}`,
-    [eventId, badgeId],
-  );
+    bindings: [eventId, badgeId],
+  };
+  const registered = await first(db, eligibility.sql, eligibility.bindings);
   if (!registered)
     throw new AppError(409, "BADGE_REGISTRATION_REQUIRED", "Only a registered attendee's badge prints at the desk.");
-  return prepareBadgePrint(db, environment, eventId, badgeId, actorId, {
-    operationId: request.operationId,
-    printingRevision: null,
-  });
+  return prepareBadgePrint(
+    db,
+    environment,
+    eventId,
+    badgeId,
+    actorId,
+    { operationId: request.operationId, printingRevision: null },
+    eligibility,
+  );
 }
 
 async function resolveLabelBadge(db: DatabaseLike, eventId: string, request: BadgeLabelRequest): Promise<string> {

@@ -58,6 +58,8 @@ export const liveRoomAccessGrantSchema = z
 
 export type LiveRoomParticipant = z.infer<typeof liveRoomParticipantSchema> & {
   accessGrant?: z.infer<typeof liveRoomAccessGrantSchema>;
+  /** Server-owned occurrence grants for a location chat, populated by the access lease. */
+  locationOccurrenceIds?: readonly string[];
   /** Server-owned subscription, persisted with this socket through hibernation. Never accepted in admission input. */
   questionThreadId?: string;
   /** Latest server-received watch request, so a slower authorization cannot restore an older thread. */
@@ -68,6 +70,7 @@ export const liveRoomAdmissionSchema = z
   .object({
     eventId: z.string().min(1).max(200),
     session: liveRoomSessionSchema,
+    roomIds: z.array(databaseIdSchema).optional(),
     participant: liveRoomParticipantSchema,
     readBookmark: z.string().min(1).max(1024).optional(),
   })

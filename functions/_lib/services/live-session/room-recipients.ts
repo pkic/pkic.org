@@ -46,6 +46,15 @@ export async function authorizeLiveRoomRecipients(
       continue;
     }
     if (!result.ok) continue;
+    if (
+      viewers[index].accessGrant &&
+      (result.participant.studio !== viewers[index].studio ||
+        JSON.stringify(result.participant.locationOccurrenceIds) !==
+          JSON.stringify(viewers[index].locationOccurrenceIds))
+    ) {
+      closeLiveRoomSocket(socket, 1012, "Room access changed");
+      continue;
+    }
     socket.serializeAttachment(
       preserveLiveRoomAttachmentState(result.participant, socket.deserializeAttachment() as LiveRoomParticipant),
     );

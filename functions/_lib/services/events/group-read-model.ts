@@ -232,7 +232,9 @@ export function prepareGroupEventRead(db: DatabaseLike, viewer: GroupResourceVie
     userId: viewer.userId,
     admin: viewer.admin,
   });
-  const team = eventTeamMemberEvidence(viewer.userId, "owned.id");
+  const team = viewer.admin?.scopeRestricted
+    ? { sql: "SELECT 1 WHERE 0", bindings: [] }
+    : eventTeamMemberEvidence(viewer.userId, "owned.id");
   const eventRead = db
     .prepare(
       `WITH ${NEXT_OCCURRENCE_CTE},

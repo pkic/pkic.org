@@ -107,7 +107,8 @@ export class LiveRoomStore {
     );
   }
 
-  saveSession(eventId: string, session: LiveRoomSession): void {
+  saveSession(eventId: string, session: LiveRoomSession, roomIds?: string[]): void {
+    if (roomIds) this.saveControl("chatLocations", roomIds);
     this.sql.exec(
       "INSERT INTO room_session(id, event_id, session_json) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET event_id = excluded.event_id, session_json = excluded.session_json",
       eventId,
@@ -120,6 +121,11 @@ export class LiveRoomStore {
       "SELECT event_id, session_json FROM room_session WHERE id = 1",
     );
     return row ? { eventId: row.event_id, session: liveRoomSessionSchema.parse(JSON.parse(row.session_json)) } : null;
+  }
+
+  chatLocations(primary: string | null | undefined): readonly string[] {
+    const saved = this.control("chatLocations");
+    return Array.isArray(saved) ? saved : primary ? [primary] : [];
   }
 
   question(id: string): LiveQuestionRow | null {

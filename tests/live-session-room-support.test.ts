@@ -137,7 +137,7 @@ describe("live room configured controls and participant chat", () => {
     await runInDurableObject(f.chatRoom(), (_room, state) => {
       const chat = new LiveRoomChat(new LiveRoomSql(state.storage.sql));
       for (const channel of ["attendee", "operator"] as const)
-        expect(chat.page(channel, { before: null, limit: 10, shownOnly: false }).rows).toEqual([]);
+        expect(chat.page(channel, { before: null, limit: 10, shownOnly: false, occurrenceIds: null }).rows).toEqual([]);
     });
   });
 
@@ -215,6 +215,7 @@ describe("live room configured controls and participant chat", () => {
         before: null,
         limit: LIVE_CHAT_POLICY.storedMessages + 10,
         shownOnly: false,
+        occurrenceIds: null,
       });
       expect(history.rows).toHaveLength(LIVE_CHAT_POLICY.storedMessages);
       expect(history.hasEarlier).toBe(false);

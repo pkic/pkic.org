@@ -1,10 +1,11 @@
-import type {
-  AuthenticatedGroup,
-  AuthenticatedGroupDetailResponse,
-  Group,
-  GroupCapability,
-  GroupManagementConfiguration,
-  PublicGroup,
+import {
+  groupLabelSchema,
+  type AuthenticatedGroup,
+  type Group,
+  type GroupCapability,
+  type GroupManagementConfiguration,
+  type GroupWorkspaceResponse,
+  type PublicGroup,
 } from "../../../../assets/shared/schemas/groups";
 import { hasPermission } from "../../auth/permissions";
 import type { AuthAdmin, DatabaseLike } from "../../types";
@@ -114,9 +115,12 @@ export async function getAuthenticatedGroupDetail(
   db: DatabaseLike,
   viewer: AuthenticatedGroupViewer,
   groupIdOrSlug: string,
-): Promise<AuthenticatedGroupDetailResponse> {
+): Promise<GroupWorkspaceResponse> {
   // The group page is where a guest's event opens, so it answers guests too.
   const { group, capabilities } = await getAuthenticatedGroupContext(db, viewer, groupIdOrSlug, { guests: true });
+  if (!capabilities.includes("view")) {
+    return { kind: "guest", group: groupLabelSchema.parse(group), capabilities: ["guest"] };
+  }
   const manager = capabilities.includes("manage");
   return {
     group: authenticatedGroupDetail(group),

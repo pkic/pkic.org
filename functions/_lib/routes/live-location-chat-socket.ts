@@ -47,7 +47,6 @@ export async function liveLocationChatSocketRequest(request: Request, env: Env):
     const message = liveLocationChatAdmissionSchema.parse({
       eventId: record.eventId,
       scope: liveLocationChatScope(record),
-      speakerUserIds: record.speakerUserIds,
       participant,
       readBookmark: env.DB.getBookmark?.() ?? participant.sessionClaims?.state,
     });

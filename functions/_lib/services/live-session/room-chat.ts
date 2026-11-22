@@ -4,10 +4,13 @@ import { LIVE_ROOM_POLICY } from "../../../../assets/shared/live-session-policy"
 import { LIVE_CHAT_POLICY } from "../../../../assets/shared/live-chat-policy";
 import type { LiveChatChannel } from "../../../../assets/shared/schemas/live-session-chat";
 import type { LiveRoomSql } from "./room-sql";
+import { chatOccurrenceFilter } from "./room-chat-audience";
 
 export interface LiveChatRemoval {
   id: string;
   channel: LiveChatChannel;
+  /** The session the message was sent during, or null between sessions. */
+  occurrence_id: string | null;
 }
 export interface LiveChatRow extends LiveChatRemoval {
   author_user_id: string;
@@ -16,8 +19,6 @@ export interface LiveChatRow extends LiveChatRemoval {
   sent_at: string;
   /** Insertion order, the tie-break after the send time. */
   seq: number;
-  /** In a location's chat, the session on there when it was sent; null in a break and in a session's room. */
-  occurrence_id: string | null;
   /** The message this one answers. */
   reply_to: string | null;
   /** When its author last edited it. */
@@ -75,14 +76,23 @@ export class LiveRoomChat {
    */
   page(
     channel: LiveChatChannel,
-    options: { before: LiveChatRow | null; limit: number; shownOnly: boolean; author?: string | null },
+    options: {
+      before: LiveChatRow | null;
+      limit: number;
+      shownOnly: boolean;
+      author?: string | null;
+      occurrenceIds: readonly string[] | null;
+    },
   ): { rows: LiveChatRow[]; hasEarlier: boolean } {
+    const audience = chatOccurrenceFilter(`${TABLES[channel]}.id`, options.occurrenceIds);
     const where = [
+      audience.sql,
       ...(options.before ? ["(sent_at < ? OR (sent_at = ? AND rowid < ?))"] : []),
       ...(options.shownOnly ? [`(${HIDDEN} OR author_user_id = ?)`] : []),
     ];
     const rows = this.sql.rows<LiveChatRow>(
       `${select(channel)}${where.length ? ` WHERE ${where.join(" AND ")}` : ""} ORDER BY sent_at DESC, rowid DESC LIMIT ?`,
+      ...audience.bindings,
       ...(options.before ? [options.before.sent_at, options.before.sent_at, options.before.seq] : []),
       ...(options.shownOnly ? [options.author ?? ""] : []),
       options.limit + 1,
@@ -111,11 +121,12 @@ export class LiveRoomChat {
   }
 
   /** One person's latest attendee messages, oldest first. */
-  byAuthor(userId: string, limit: number): LiveChatRow[] {
+  byAuthor(userId: string, limit: number, occurrenceId?: string): LiveChatRow[] {
     return this.sql
       .rows<LiveChatRow>(
-        `${select("attendee")} WHERE author_user_id = ? ORDER BY sent_at DESC, rowid DESC LIMIT ?`,
+        `${select("attendee")} WHERE author_user_id = ? ${occurrenceId ? "AND occurrence_id=?" : ""} ORDER BY sent_at DESC, rowid DESC LIMIT ?`,
         userId,
+        ...(occurrenceId ? [occurrenceId] : []),
         limit,
       )
       .reverse();
@@ -125,23 +136,35 @@ export class LiveRoomChat {
    * The latest attendee messages nobody reported or removed, by people not
    * blocked, newest first; only those sent by `sentBy` when a wait applies.
    */
-  tickerRows(limit: number, sentBy: string | null = null): LiveChatRow[] {
+  tickerRows(
+    occurrenceId: string,
+    limit: number,
+    sentBy: string | null,
+    blockedUserIds: readonly string[],
+  ): LiveChatRow[] {
+    const audience = chatOccurrenceFilter("room_chat.id", [occurrenceId]);
     return this.sql.rows<LiveChatRow>(
       `${select("attendee")} WHERE ${HIDDEN}
+         AND ${audience.sql}
          AND id NOT IN (SELECT message_id FROM room_chat_reports)
+         AND author_user_id NOT IN (SELECT value FROM json_each(?))
          AND author_user_id NOT IN (SELECT user_id FROM room_participation_blocks
            WHERE until IS NULL OR until > strftime('%Y-%m-%dT%H:%M:%fZ', 'now') UNION SELECT user_id FROM room_event_blocks)
          ${sentBy ? "AND sent_at <= ?" : ""}
        ORDER BY sent_at DESC, rowid DESC LIMIT ?`,
+      ...audience.bindings,
+      JSON.stringify(blockedUserIds),
       ...(sentBy ? [sentBy] : []),
       limit,
     );
   }
 
   /** When the oldest attendee message sent after `since` was sent, or null when there is none. */
-  firstSentAfter(since: string): string | null {
+  firstSentAfter(occurrenceId: string, since: string): string | null {
+    const audience = chatOccurrenceFilter("room_chat.id", [occurrenceId]);
     const [row] = this.sql.rows<{ sent_at: string }>(
-      "SELECT sent_at FROM room_chat WHERE sent_at > ? ORDER BY sent_at, rowid LIMIT 1",
+      `SELECT sent_at FROM room_chat WHERE ${audience.sql} AND sent_at > ? ORDER BY sent_at, rowid LIMIT 1`,
+      ...audience.bindings,
       since,
     );
     return row?.sent_at ?? null;
@@ -287,9 +310,7 @@ export class LiveRoomChat {
 
   /** Removes every message of both channels with their annotations; the chat counts stay. */
   eraseAll(): LiveChatRemoval[] {
-    const removed = CHANNELS.flatMap((channel) =>
-      this.sql.rows<LiveChatRemoval>(`SELECT id, '${channel}' AS channel FROM ${TABLES[channel]}`),
-    );
+    const removed = CHANNELS.flatMap((channel) => this.sql.rows<LiveChatRemoval>(select(channel)));
     this.remove(removed.map((row) => row.id));
     return removed;
   }
@@ -310,10 +331,7 @@ export class LiveRoomChat {
   /** Everything of one person in the chat: their messages, reactions, reports and photo. */
   forget(userId: string): LiveChatRemoval[] {
     const removed = CHANNELS.flatMap((channel) =>
-      this.sql.rows<LiveChatRemoval>(
-        `SELECT id, '${channel}' AS channel FROM ${TABLES[channel]} WHERE author_user_id = ?`,
-        userId,
-      ),
+      this.sql.rows<LiveChatRemoval>(`${select(channel)} WHERE author_user_id = ?`, userId),
     );
     this.remove(removed.map((row) => row.id));
     for (const table of ["room_chat_reactions", "room_chat_reports"])

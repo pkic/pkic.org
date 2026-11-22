@@ -62,6 +62,7 @@ export function applyLiveRoomMessage(
     case "question.accepted":
     case "question.updated":
     case "location.chat.snapshot":
+    case "location.chat.access":
     case "chat.message":
     case "chat.removed":
     case "chat.reactions":

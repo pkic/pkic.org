@@ -42,6 +42,18 @@ export type R2BucketLike = R2Bucket;
 
 /** What the Worker may ask of a live session room over RPC; `LiveSessionRoom` implements it. */
 export interface LiveSessionRoomRpc extends Rpc.DurableObjectBranded {
+  /** The occurrence's participation state, shared with its location chat. */
+  readOccurrenceParticipation(
+    userId: string,
+  ): Promise<import("./services/live-session/room-occurrence-participation").LiveOccurrenceParticipation>;
+  readOccurrenceRestrictions(
+    userIds: string[],
+  ): Promise<Record<string, import("../../assets/shared/live-moderation-policy").LiveParticipationRestriction>>;
+  changeOccurrenceModeration(
+    userId: string,
+    endsAt: string,
+    change: import("./services/live-session/room-occurrence-participation").LiveOccurrenceModerationChange,
+  ): Promise<import("./services/live-session/room-occurrence-participation").LiveOccurrenceParticipation>;
   /** Removes an anonymized person's questions, votes and ballots from the room and ends their connections. */
   forgetParticipant(userId: string): Promise<void>;
   /** The attendee chat the room still holds, oldest first, for the event's chat download. */
@@ -56,10 +68,15 @@ export interface LiveSessionRoomRpc extends Rpc.DurableObjectBranded {
   /** The session loaded in a physical room, for the virtual room; null for none. */
   loadedProgram(eventId: string, roomId: string): Promise<string | null>;
   locationChatLoaded(occurrenceId: string | null): Promise<void>;
+  locationChatAccessChanged(occurrenceId: string, userId: string | null): Promise<void>;
   /** A location's chat: the latest attendee messages a broadcast may show, after their wait. */
-  locationChatOnAir(limit: number, options: LiveChatOnAirOptions): Promise<LiveChatOnAirMessage[]>;
+  locationChatOnAir(
+    occurrenceId: string,
+    limit: number,
+    options: LiveChatOnAirOptions,
+  ): Promise<LiveChatOnAirMessage[]>;
   /** A location's chat: when its first message after `since` was sent; null for none. */
-  locationChatFirstSentAfter(since: string): Promise<string | null>;
+  locationChatFirstSentAfter(occurrenceId: string, since: string): Promise<string | null>;
   /** A session's room: its location's chat changed what a broadcast may show. */
   locationChatChanged(): Promise<void>;
   /** A session's room: asks a converted chat message, approved; null when the room never opened. */

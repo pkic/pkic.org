@@ -155,11 +155,18 @@ export const authenticatedGroupDetailResponseSchema = z.object({
   configuration: groupManagementConfigurationSchema.optional(),
 });
 export type AuthenticatedGroupDetailResponse = z.infer<typeof authenticatedGroupDetailResponseSchema>;
-export const publicGroupDetailResponseSchema = z.object({ group: publicGroupSchema });
-export const groupDetailResponseSchema = z.union([
+export const guestGroupDetailResponseSchema = z.object({
+  kind: z.literal("guest"),
+  group: groupLabelSchema,
+  capabilities: z.tuple([z.literal("guest")]),
+});
+export const groupWorkspaceResponseSchema = z.union([
   authenticatedGroupDetailResponseSchema,
-  publicGroupDetailResponseSchema,
+  guestGroupDetailResponseSchema,
 ]);
+export type GroupWorkspaceResponse = z.infer<typeof groupWorkspaceResponseSchema>;
+export const publicGroupDetailResponseSchema = z.object({ group: publicGroupSchema });
+export const groupDetailResponseSchema = z.union([groupWorkspaceResponseSchema, publicGroupDetailResponseSchema]);
 export type GroupDetailResponse = z.infer<typeof groupDetailResponseSchema>;
 
 const groupPolicyInputShape = {

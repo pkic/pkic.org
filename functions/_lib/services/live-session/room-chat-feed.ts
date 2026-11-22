@@ -5,6 +5,7 @@ import type {
   LiveChatMessage,
   LiveChatReplyQuote,
 } from "../../../../assets/shared/schemas/live-session-chat";
+import type { LiveParticipationRestriction } from "../../../../assets/shared/live-moderation-policy";
 import type { DatabaseLike } from "../../types";
 import type { LiveRoomParticipant } from "./room-admission";
 import type { LiveRoomChat, LiveChatRemoval, LiveChatRow } from "./room-chat";
@@ -12,6 +13,7 @@ import type { LiveChatModerationStore } from "./room-chat-moderation";
 import type { LiveChatReactionStore } from "./room-chat-reactions";
 import type { LiveRoomAuthors } from "./room-authors";
 import type { LiveRoomModerationStore } from "./room-moderation-store";
+import { chatOccurrenceIds, seesChatOccurrence } from "./room-chat-audience";
 
 /** Moderators see every message with its moderation; everyone else sees what is shown. */
 function staff(viewer: LiveRoomParticipant): boolean {
@@ -49,13 +51,38 @@ export class LiveChatFeed {
     readonly reactions: LiveChatReactionStore,
     readonly authors: LiveRoomAuthors,
     readonly decisions: LiveRoomModerationStore,
+    private readonly occurrenceRestrictions: (
+      occurrenceId: string | null,
+      userIds: string[],
+    ) => Promise<Record<string, LiveParticipationRestriction>> | undefined,
   ) {}
 
   get people() {
     return this.authors.people;
   }
 
-  batch(rows: LiveChatRow[], viewers: readonly string[]): LiveChatBatch {
+  async moderatorRestrictions(rows: LiveChatRow[]) {
+    const authors = new Map<string | null, Set<string>>();
+    for (const row of rows) {
+      const group = authors.get(row.occurrence_id) ?? new Set<string>();
+      group.add(row.author_user_id);
+      authors.set(row.occurrence_id, group);
+    }
+    return new Map(
+      await Promise.all(
+        [...authors].map(
+          async ([occurrenceId, userIds]) =>
+            [occurrenceId, await this.occurrenceRestrictions(occurrenceId, [...userIds])] as const,
+        ),
+      ),
+    );
+  }
+
+  batch(
+    rows: LiveChatRow[],
+    viewers: readonly string[],
+    occurrenceRestrictions?: Awaited<ReturnType<LiveChatFeed["moderatorRestrictions"]>>,
+  ): LiveChatBatch {
     const ids = rows.map((row) => row.id);
     const authors = rows.map((row) => row.author_user_id);
     const counts = this.reactions.counts(ids);
@@ -78,7 +105,8 @@ export class LiveChatFeed {
     const quote = (row: LiveChatRow, viewer: LiveRoomParticipant): LiveChatReplyQuote | null => {
       if (!row.reply_to) return null;
       const parent = parents.get(row.reply_to);
-      const shown = parent?.channel === row.channel && (!parentsHidden.has(parent.id) || staff(viewer));
+      if (!parent || !seesChatOccurrence(viewer, parent.occurrence_id)) return null;
+      const shown = parent.channel === row.channel && (!parentsHidden.has(parent.id) || staff(viewer));
       return {
         messageId: row.reply_to,
         authorName: shown ? parent.author_name : null,
@@ -95,7 +123,7 @@ export class LiveChatFeed {
           Boolean(reportedBy.get(viewer.userId)?.has(row.id)) ||
           (row.reply_to !== null && parents.get(row.reply_to)?.author_user_id === viewer.userId)),
       project: (row, viewer) => {
-        if (!liveChatChannelVisible(row.channel, viewer)) return null;
+        if (!liveChatChannelVisible(row.channel, viewer) || !seesChatOccurrence(viewer, row.occurrence_id)) return null;
         const hiding = hidden.get(row.id) ?? null;
         const mineRow = viewer.userId === row.author_user_id;
         const removal = removals.get(row.id) ?? null;
@@ -137,7 +165,10 @@ export class LiveChatFeed {
                 reportReasons: report?.reasons ?? {},
                 questionId: questions.get(row.id) ?? null,
                 authorStaff: author?.staff ?? false,
-                authorRestriction: restrictions.get(row.author_user_id) ?? null,
+                authorRestriction:
+                  restrictions.get(row.author_user_id) ??
+                  occurrenceRestrictions?.get(row.occurrence_id)?.[row.author_user_id] ??
+                  null,
                 ...(original !== undefined ? { originalText: original } : {}),
               }
             : null,
@@ -147,7 +178,7 @@ export class LiveChatFeed {
   }
 
   /** What a viewer receives on joining: each channel's latest page, and the open reports for moderators. */
-  snapshot(viewer: LiveRoomParticipant) {
+  async snapshot(viewer: LiveRoomParticipant) {
     const viewers = viewer.userId ? [viewer.userId] : [];
     const chat: LiveChatMessage[] = [];
     const chatEarlier: Partial<Record<LiveChatChannel, boolean>> = {};
@@ -157,17 +188,18 @@ export class LiveChatFeed {
         limit: LIVE_CHAT_POLICY.snapshotMessages,
         shownOnly: !staff(viewer),
         author: viewer.userId,
+        occurrenceIds: chatOccurrenceIds(viewer),
       });
-      const batch = this.batch(page.rows, viewers);
+      const batch = await this.viewerBatch(page.rows, viewer, viewers);
       const messages = page.rows.flatMap((row) => batch.project(row, viewer) ?? []);
       chat.push(...messages);
       if (messages.length) chatEarlier[channel] = page.hasEarlier;
     }
-    const pinned = this.pinned(viewer);
+    const pinned = await this.pinned(viewer);
     const reportRows = staff(viewer)
       ? this.chat.messages(this.moderation.openReports(LIVE_CHAT_POLICY.reportQueueLimit))
       : [];
-    const reports = this.batch(reportRows, viewers);
+    const reports = await this.viewerBatch(reportRows, viewer, viewers);
     return {
       chat,
       chatEarlier,
@@ -177,24 +209,34 @@ export class LiveChatFeed {
   }
 
   /** The attendee message pinned above the chat as this viewer sees it, or null. */
-  pinned(viewer: LiveRoomParticipant): LiveChatMessage | null {
+  async pinned(viewer: LiveRoomParticipant): Promise<LiveChatMessage | null> {
     const id = this.moderation.pinned();
     const row = id ? this.chat.message(id) : null;
     if (!row) return null;
-    return this.batch([row], viewer.userId ? [viewer.userId] : []).project(row, viewer);
+    return (await this.viewerBatch([row], viewer)).project(row, viewer);
   }
 
   /** The page before a message this viewer holds, or the latest page. */
-  history(viewer: LiveRoomParticipant, channel: LiveChatChannel, beforeId: string | null) {
+  private async viewerBatch(
+    rows: LiveChatRow[],
+    viewer: LiveRoomParticipant,
+    viewers = viewer.userId ? [viewer.userId] : [],
+  ) {
+    return this.batch(rows, viewers, staff(viewer) ? await this.moderatorRestrictions(rows) : undefined);
+  }
+
+  async history(viewer: LiveRoomParticipant, channel: LiveChatChannel, beforeId: string | null) {
     const before = beforeId ? this.chat.message(beforeId) : null;
-    if (beforeId && (!before || before.channel !== channel)) return null;
+    if (beforeId && (!before || before.channel !== channel || !seesChatOccurrence(viewer, before.occurrence_id)))
+      return null;
     const page = this.chat.page(channel, {
       before,
       limit: LIVE_CHAT_POLICY.historyPage,
       shownOnly: !staff(viewer),
       author: viewer.userId,
+      occurrenceIds: chatOccurrenceIds(viewer),
     });
-    const batch = this.batch(page.rows, viewer.userId ? [viewer.userId] : []);
+    const batch = await this.viewerBatch(page.rows, viewer);
     return {
       messages: page.rows.flatMap((row) => batch.project(row, viewer) ?? []),
       hasEarlier: page.hasEarlier,

@@ -5,6 +5,7 @@ import {
   type BadgeIssueResponse,
 } from "../../../../assets/shared/schemas/route-contracts-event-badges";
 import { first } from "../../db/queries";
+import { isStateGuardFailure, prepareStateGuard, type AuthorizationEvidence } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { nowIso } from "../../utils/time";
@@ -50,11 +51,17 @@ export function activeReprintableBadgeWhereSql(alias: string, event: string, use
 const ACTIVE_REPRINTABLE_BADGE_SQL = `FROM event_badge_credentials badge WHERE ${activeReprintableBadgeWhereSql("badge", "?", "?", "?")}`;
 
 /** Newest active badge whose sealed print credential lets the holder or an organizer recover the same QR. */
-export async function findActiveReprintableBadge(db: DatabaseLike, eventId: string, userId: string) {
+export async function findActiveReprintableBadge(
+  db: DatabaseLike,
+  eventId: string,
+  userId: string,
+  eligibility?: AuthorizationEvidence,
+) {
   return first<{ id: string; expires_at: string }>(
     db,
-    `SELECT id,expires_at ${ACTIVE_REPRINTABLE_BADGE_SQL} ORDER BY created_at DESC,id DESC LIMIT 1`,
-    [eventId, userId, nowIso()],
+    `SELECT id,expires_at ${ACTIVE_REPRINTABLE_BADGE_SQL}
+      ${eligibility ? `AND EXISTS (${eligibility.sql})` : ""} ORDER BY created_at DESC,id DESC LIMIT 1`,
+    [eventId, userId, nowIso(), ...(eligibility?.bindings ?? [])],
   );
 }
 function existingBadge(badge: { id: string; expires_at: string }): BadgeIssueResponse {
@@ -123,14 +130,21 @@ export async function issueDeskBadge(
       "BADGE_DESK_ISSUE_ONLY",
       "Badge printing reuses the attendee's active badge. Ask an organizer to replace a badge.",
     );
-  const registered = await first(
-    db,
-    `SELECT 1 FROM registrations r JOIN users u ON u.id=r.user_id WHERE r.event_id=? AND r.user_id=? AND ${badgeAttendeeEligibilitySql("r", "u")}`,
-    [eventId, input.userId],
-  );
-  if (!registered)
-    throw new AppError(409, "BADGE_REGISTRATION_REQUIRED", "Only a registered attendee can get a badge at the desk.");
-  return issueBadge(db, eventId, actorId, input, environment);
+  const eligibility = {
+    sql: `SELECT 1 FROM registrations r JOIN users u ON u.id=r.user_id
+      WHERE r.event_id=? AND r.user_id=? AND ${badgeAttendeeEligibilitySql("r", "u")}`,
+    bindings: [eventId, input.userId],
+  };
+  await requireDeskRegistration(db, eligibility);
+  return issueBadge(db, eventId, actorId, input, environment, eligibility);
+}
+
+function deskRegistrationRequired() {
+  return new AppError(409, "BADGE_REGISTRATION_REQUIRED", "Only a registered attendee can get a badge at the desk.");
+}
+
+async function requireDeskRegistration(db: DatabaseLike, eligibility: AuthorizationEvidence) {
+  if (!(await first(db, eligibility.sql, [...eligibility.bindings]))) throw deskRegistrationRequired();
 }
 
 export async function issueBadge(
@@ -139,6 +153,7 @@ export async function issueBadge(
   actorId: string,
   input: BadgeIssueRequest,
   environment: BadgePrintEnvironment,
+  deskEligibility?: AuthorizationEvidence,
 ): Promise<BadgeIssueResponse> {
   const requestDigest = await hashBadgeCredential(
     JSON.stringify({
@@ -148,10 +163,15 @@ export async function issueBadge(
       ...(input.reuseActive ? { reuseActive: true } : {}),
     }),
   );
-  const replay = await completedIssue(db, eventId, actorId, input, requestDigest);
+  const replayIssue = async () => {
+    const replay = await completedIssue(db, eventId, actorId, input, requestDigest);
+    if (replay && deskEligibility) await requireDeskRegistration(db, deskEligibility);
+    return replay;
+  };
+  const replay = await replayIssue();
   if (replay) return replay;
   if (input.reuseActive) {
-    const active = await findActiveReprintableBadge(db, eventId, input.userId);
+    const active = await findActiveReprintableBadge(db, eventId, input.userId, deskEligibility);
     if (active) return existingBadge(active);
   }
   const event = await first<{ ends_at: string | null }>(db, "SELECT ends_at FROM events WHERE id=?", [eventId]);
@@ -166,7 +186,7 @@ export async function issueBadge(
   if (previous && previous.user_id !== input.userId)
     throw new AppError(409, "BADGE_REPLACEMENT_OWNER_MISMATCH", "Choose a badge belonging to this attendee.");
   if (previous?.revoked_at) {
-    const committed = await completedIssue(db, eventId, actorId, input, requestDigest);
+    const committed = await replayIssue();
     if (committed) return committed;
     throw new AppError(
       409,
@@ -187,6 +207,7 @@ export async function issueBadge(
     );
     const scope = { type: "event", id: eventId };
     const statements = [
+      ...(deskEligibility ? [prepareStateGuard(db, deskEligibility)] : []),
       prepareOneTimeAuditLog(
         db,
         "user",
@@ -262,8 +283,9 @@ export async function issueBadge(
     try {
       await db.batch(statements);
     } catch (error) {
+      if (deskEligibility && isStateGuardFailure(error)) throw deskRegistrationRequired();
       if (error instanceof Error && error.message.includes("audit_log.idempotency_key")) {
-        const committed = await completedIssue(db, eventId, actorId, input, requestDigest);
+        const committed = await replayIssue();
         if (committed) return committed;
       }
       // The whole command rolls back before regenerating a colliding credential.
@@ -275,7 +297,7 @@ export async function issueBadge(
       // A concurrent request issued the reusable badge first; return that one rather than a second credential.
       const concurrent =
         input.reuseActive && isAuditChangeGuardFailure(error)
-          ? await findActiveReprintableBadge(db, eventId, input.userId)
+          ? await findActiveReprintableBadge(db, eventId, input.userId, deskEligibility)
           : null;
       if (concurrent) return existingBadge(concurrent);
       throwBadgeCommandError(error);

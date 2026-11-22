@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { databaseIdSchema } from "../../../../assets/shared/schemas/identifiers";
 import { liveLocationChatDayAt } from "../../../../assets/shared/live-location-chat";
 import { liveLocationChatScopeSchema } from "../../../../assets/shared/schemas/live-location-chat";
 import { AppError } from "../../errors";
@@ -19,8 +20,7 @@ export const liveLocationChatAdmissionSchema = z
   .object({
     eventId: z.string().min(1).max(200),
     scope: liveLocationChatScopeSchema,
-    speakerUserIds: z.array(z.string().min(1).max(200)).max(500),
-    participant: liveRoomParticipantSchema,
+    participant: liveRoomParticipantSchema.extend({ locationOccurrenceIds: z.array(databaseIdSchema).optional() }),
     readBookmark: z.string().min(1).max(1024).optional(),
   })
   .strict();
@@ -47,7 +47,7 @@ export async function admitLiveLocationChatParticipant(
   const participant = await signedInLiveParticipant(db, request, env, {
     eventId: event.id,
     occurrenceIds: record.sessions.map((session) => session.occurrenceId),
-    speakerUserIds: record.speakerUserIds,
+    speakersByOccurrence: record.speakersByOccurrence,
   });
   return { record, participant };
 }

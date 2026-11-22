@@ -253,6 +253,9 @@ export class LiveRoomControls {
       question: null,
       questionChange: null,
       poll: null,
+      topQuestions: stage.topQuestions ? { ...stage.topQuestions, questions: [] } : null,
+      chatFeed: stage.chatFeed ? { ...stage.chatFeed, messages: [] } : null,
+      ticker: stage.ticker ? { ...stage.ticker, segments: [] } : null,
       timerGraphics: stage.timerGraphics.filter((graphic) => timers.some((timer) => timer.id === graphic.timerId)),
     });
     return { type: "stage.changed", stage: this.store.stage() };

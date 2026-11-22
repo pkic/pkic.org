@@ -33,6 +33,12 @@ export function applyLocationChatMessage(
     case "chat.pinned":
     case "chat.history":
       return applyLiveChatMessage(state, message);
+    case "location.chat.access":
+      return {
+        ...state,
+        sessionClosed: message.sessionClosed,
+        viewer: { ...state.viewer, participation: message.restriction },
+      };
     case "participation.access":
       return { ...state, viewer: { ...state.viewer, participation: message.restriction } };
     case "author.details":

@@ -16,8 +16,8 @@ export interface LiveLocationChatRecord {
   roomId: string;
   day: string;
   sessions: (LiveLocationChatSession & { title: string })[];
-  /** Accounts credited on any of the day's sessions in the location. */
-  speakerUserIds: string[];
+  /** Accounts credited on each session in this location. */
+  speakersByOccurrence: ReadonlyMap<string, readonly string[]>;
 }
 
 export type LiveLocationChatRow = { payload_json: string; timezone: string; event_name: string };
@@ -71,15 +71,14 @@ export function prepareLiveLocationChatRead(db: DatabaseLike, eventId: string, r
         roomId,
         day: chosen,
         sessions: sessions.map((session) => ({ ...session, title: byId.get(session.occurrenceId)!.title })),
-        speakerUserIds: [
-          ...new Set(
-            sessions.flatMap((session) =>
-              canonicalSessionCredits(byId.get(session.occurrenceId)!).flatMap((credit) =>
-                "userId" in credit ? [credit.userId] : [],
-              ),
+        speakersByOccurrence: new Map(
+          sessions.map(({ occurrenceId }) => [
+            occurrenceId,
+            canonicalSessionCredits(byId.get(occurrenceId)!).flatMap((credit) =>
+              "userId" in credit ? [credit.userId] : [],
             ),
-          ),
-        ],
+          ]),
+        ),
       };
     },
   };

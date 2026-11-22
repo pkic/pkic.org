@@ -7,7 +7,7 @@ import { BreadcrumbScope } from "../../../../ui/BreadcrumbScope";
 import { lazy, Suspense } from "preact/compat";
 import "../../../../ui/Content.css";
 import {
-  authenticatedGroupDetailResponseSchema,
+  groupWorkspaceResponseSchema,
   type AuthenticatedGroup,
   type GroupCapability,
   type GroupSettingsDetail,
@@ -117,7 +117,7 @@ export function GroupWorkspace({
 }) {
   const [, navigate] = usePortalHashLocation();
   const detail = useData(
-    () => getJson(`/api/v1/groups/${encodeURIComponent(groupId)}`, authenticatedGroupDetailResponseSchema),
+    () => getJson(`/api/v1/groups/${encodeURIComponent(groupId)}`, groupWorkspaceResponseSchema),
     [groupId],
   );
   // A link from the public site names a group by its slug — `/groups/pqc` —
@@ -148,14 +148,18 @@ export function GroupWorkspace({
   // data; rendering it would leave the old workspace on screen with no
   // feedback. Treat it as absent so the switch shows a spinner immediately.
   const group = loaded && loaded.id === groupId ? loaded : undefined;
+  const visibleDetail =
+    detail.data && !("kind" in detail.data) && detail.data.group.id === groupId ? detail.data : null;
+  const visibleGroup = visibleDetail?.group;
   const capabilities = detail.data?.capabilities ?? ([] as GroupCapability[]);
   const views = groupContextNavigation(capabilities);
   const canManage = capabilities.includes("manage");
   const canParticipate = capabilities.includes("participate");
   const canView = capabilities.includes("view");
   const shownView = views.find((item) => item.key === view);
-  const settingsGroup: GroupSettingsDetail | null =
-    group && detail.data?.configuration ? { ...group, ...detail.data.configuration } : null;
+  const settingsGroup: GroupSettingsDetail | null = visibleDetail?.configuration
+    ? { ...visibleDetail.group, ...visibleDetail.configuration }
+    : null;
 
   // Tab targets derive from the route's groupId, never from fetched data:
   // while another group's data is in flight, links must not point back into
@@ -200,9 +204,9 @@ export function GroupWorkspace({
           items={trail}
           label="Group navigation"
         >
-          {!nestedEventRecord && (
+          {!nestedEventRecord && visibleGroup && (
             <>
-              <GroupRecordHero group={group} />
+              <GroupRecordHero group={visibleGroup} />
               <Tabs
                 items={views.map((item) => ({ key: item.key, label: item.label }))}
                 active={view}
@@ -213,14 +217,14 @@ export function GroupWorkspace({
             </>
           )}
           <Suspense fallback={<Spinner />}>
-            {view === OVERVIEW_VIEW && canView && (
+            {view === OVERVIEW_VIEW && visibleGroup && canView && (
               <div class={canParticipate || portalSession.value?.member ? "pk-record" : "pk-stack"}>
                 <GroupOverview
                   groupId={group.id}
-                  description={group.description}
-                  participantCount={group.participantCount}
-                  representedMemberCount={group.representedMemberCount}
-                  childCount={group.childCount}
+                  description={visibleGroup.description}
+                  participantCount={visibleGroup.participantCount}
+                  representedMemberCount={visibleGroup.representedMemberCount}
+                  childCount={visibleGroup.childCount}
                 />
                 {Boolean(portalSession.value?.member) && (
                   <GroupParticipationPanel groupId={group.id} onChanged={detail.reload} />
@@ -242,7 +246,7 @@ export function GroupWorkspace({
             {view === "leadership" && canManage && (
               <GroupLeadership key={group.id} groupId={group.id} assignmentSegment={resourceId} />
             )}
-            {view === "events" && (
+            {view === "events" && (canView || guestEventRecord) && (
               <GroupEvents
                 key={`${group.id}:${resourceId ?? ""}`}
                 groupId={group.id}

@@ -12,6 +12,7 @@ import { currentLiveRoomCommandRead } from "./room-command-read-scope";
 import { first } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
 import type { LiveRoomParticipant } from "./room-admission";
+import { chatOccurrenceFilter, chatOccurrenceIds } from "./room-chat-audience";
 import { readLiveAuthorStamp } from "./room-author-stamp";
 import type { LiveRoomPeople } from "./room-people";
 import type { LiveRoomSql } from "./room-sql";
@@ -133,11 +134,12 @@ export class LiveRoomAuthors {
   private latestVisible(userId: string, viewer: LiveRoomParticipant) {
     const staff = viewer.role === "operator";
     const statuses = staff ? ["pending", "approved", "answered"] : PUBLIC_LIVE_QUESTION_STATUSES;
+    const audience = chatOccurrenceFilter("chat.id", chatOccurrenceIds(viewer));
     return this.sql.rows<{ name: string; author_json: string | null; at: string }>(
       `SELECT author_name AS name, author_json, at FROM (
          SELECT chat.author_name, authorship.author_json, chat.sent_at AS at
            FROM room_chat chat LEFT JOIN room_chat_authorship authorship ON authorship.message_id = chat.id
-          WHERE chat.author_user_id = ? AND ${SHOWN_CHAT}
+          WHERE chat.author_user_id = ? AND ${SHOWN_CHAT} AND ${audience.sql}
          ${
            staff
              ? `UNION ALL SELECT chat.author_name, authorship.author_json, chat.sent_at
@@ -150,7 +152,9 @@ export class LiveRoomAuthors {
           WHERE question.author_user_id = ? AND question.anonymous = 0
             AND question.status IN (SELECT value FROM json_each(?)))
        ORDER BY at DESC LIMIT 1`,
-      ...(staff ? [userId, userId] : [userId]),
+      userId,
+      ...audience.bindings,
+      ...(staff ? [userId] : []),
       userId,
       JSON.stringify(statuses),
     )[0];

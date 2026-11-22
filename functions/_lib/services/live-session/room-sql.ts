@@ -174,6 +174,25 @@ export class LiveRoomSql {
          SELECT user_id, 'session', 'conduct', NULL, '', by_name, at FROM room_chat_restrictions`,
       );
       this.sql.exec("DELETE FROM room_chat_restrictions");
+      // Rendered chat and ticker text saved before audience scoping must be filled again from scoped rows.
+      for (const root of ["$", "$.stage", "$.composition"]) {
+        for (const [container, key] of [
+          ["chatFeed", "messages"],
+          ["topQuestions", "questions"],
+          ["ticker", "segments"],
+        ]) {
+          const path = `${root}.${container}.${key}`;
+          this.sql.exec(
+            `UPDATE room_controls SET value_json=json_set(value_json, ?, json('[]'))
+               WHERE (name IN ('stage','preview','programUndo') OR name LIKE 'aux:%')
+                 AND json_type(value_json, ?)='array'
+                 AND NOT EXISTS (SELECT 1 FROM room_controls WHERE name='scopedChatOutput')`,
+            path,
+            path,
+          );
+        }
+      }
+      this.sql.exec("INSERT OR IGNORE INTO room_controls(name,value_json) VALUES ('scopedChatOutput','true')");
       this.ready = true;
     }
     return this.sql;

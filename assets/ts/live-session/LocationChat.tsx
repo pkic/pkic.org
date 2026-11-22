@@ -32,7 +32,13 @@ export function LiveAttendeeChat({
       ) : chat.status !== "live" ? (
         <Alert tone="warn">Chat is reconnecting. Sending is paused.</Alert>
       ) : null}
-      <LiveChat state={chat.state} disabled={chat.status !== "live"} send={chat.send} compact={compact} note={note} />
+      <LiveChat
+        state={chat.state}
+        disabled={chat.status !== "live" || chat.state.sessionClosed === true}
+        send={chat.send}
+        compact={compact}
+        note={chat.state.sessionClosed ? "Chat is closed for the current session." : note}
+      />
     </>
   );
 }

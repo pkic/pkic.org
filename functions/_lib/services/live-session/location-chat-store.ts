@@ -18,7 +18,6 @@ import type { LiveStaffActionRow } from "./room-store";
 export interface LiveLocationChatState {
   eventId: string;
   scope: LiveLocationChatScope;
-  speakerUserIds: string[];
   loadedOccurrenceId: string | null;
   opening: LiveRoomOpening;
 }
@@ -56,11 +55,10 @@ export class LiveLocationChatStore {
       "SELECT event_id, record_json, loaded_occurrence_id, opening FROM location_chat WHERE id = 1",
     );
     if (!row) return (this.cached = null);
-    const record = JSON.parse(row.record_json) as { scope: unknown; speakerUserIds: string[] };
+    const record = JSON.parse(row.record_json) as { scope: unknown };
     this.cached = {
       eventId: row.event_id,
       scope: liveLocationChatScopeSchema.parse(record.scope),
-      speakerUserIds: record.speakerUserIds,
       loadedOccurrenceId: row.loaded_occurrence_id,
       opening: liveRoomOpeningSchema.catch(DEFAULT_LIVE_ROOM_OPENING).parse(row.opening),
     };
@@ -68,7 +66,7 @@ export class LiveLocationChatStore {
   }
 
   /** Saves the day as the latest admission read it; the loaded session and the opening stay. Answers whether it is new. */
-  save(admission: Pick<LiveLocationChatAdmission, "eventId" | "scope" | "speakerUserIds">): boolean {
+  save(admission: Pick<LiveLocationChatAdmission, "eventId" | "scope">): boolean {
     const created = this.state() === null;
     this.sql.exec(
       `INSERT INTO location_chat(id, event_id, room_id, day, record_json) VALUES (1, ?, ?, ?, ?)
@@ -76,7 +74,7 @@ export class LiveLocationChatStore {
       admission.eventId,
       admission.scope.roomId,
       admission.scope.day,
-      JSON.stringify({ scope: admission.scope, speakerUserIds: admission.speakerUserIds }),
+      JSON.stringify({ scope: admission.scope }),
     );
     this.cached = undefined;
     return created;

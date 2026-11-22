@@ -62,6 +62,7 @@ export async function liveRoomSocketRequest(request: Request, env: Env): Promise
     const message = liveRoomAdmissionSchema.parse({
       eventId: admission.eventId,
       session: admission.session,
+      roomIds: admission.roomIds,
       participant: admission.participant,
       readBookmark: env.DB.getBookmark?.() ?? admission.participant.sessionClaims?.state,
     });

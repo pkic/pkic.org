@@ -59,6 +59,21 @@ describe("scanner attendee lookup through the mounted router", () => {
       expect((await get(`/${fixture.userId}/badge`)).status).toBe(409);
     }
   });
+  it("ends attendee search at the event's contact cutoff", async () => {
+    await env.DB.batch([
+      env.DB.prepare("UPDATE events SET ends_at='2020-01-01T10:00:00.000Z' WHERE id=?").bind(fixture.eventId),
+      env.DB.prepare("INSERT INTO retention_policies(event_id,user_retention_days,updated_at) VALUES(?,1,?)").bind(
+        fixture.eventId,
+        new Date().toISOString(),
+      ),
+    ]);
+    const response = await get(`?q=${fixture.userId}`);
+    expect(response.status).toBe(200);
+    expect(scannerAttendeesResponseSchema.parse(await response.json())).toMatchObject({
+      users: [],
+      page: { total: 0 },
+    });
+  });
   it("rejects anonymous requests and event-unrelated attendees", async () => {
     expect((await get("?q=example", false)).status).toBe(401);
     expect((await get(`/${crypto.randomUUID()}/badge`)).status).toBe(409);

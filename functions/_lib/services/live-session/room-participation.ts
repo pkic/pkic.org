@@ -2,6 +2,7 @@ import {
   canSetLiveParticipationBlock,
   type LiveModerationReason,
   type LiveParticipationBlock,
+  type LiveParticipationRestriction,
 } from "../../../../assets/shared/live-moderation-policy";
 import { LIVE_CHAT_POLICY } from "../../../../assets/shared/live-chat-policy";
 import type { LiveModerationItem } from "../../../../assets/shared/schemas/live-session-moderation";
@@ -20,6 +21,7 @@ import type { LiveRoomPeople } from "./room-people";
 import { serializeLiveRoomMessage } from "./room-projection";
 import type { LiveRoomQuestions } from "./room-questions";
 import type { LiveRoomStore } from "./room-store";
+import type { LiveOccurrenceModeration } from "./room-occurrence-participation";
 
 const REFUSALS = {
   missing: { code: "LIVE_MODERATION_NOT_FOUND", message: "This post is no longer available." },
@@ -60,6 +62,9 @@ export class LiveRoomParticipation {
     private readonly broadcast: LiveRoomBroadcast,
     /** The event the room's people act in, whether it holds a session or a location's chat. */
     private readonly eventId: () => string | null,
+    private readonly chatModeration: (occurrenceId: string | null) => LiveOccurrenceModeration | null,
+    private readonly currentChatOccurrence: () => string | null,
+    private readonly occurrenceChanged: (userId: string) => void,
   ) {}
 
   /** Who wrote the item, or null when it is gone. */
@@ -68,6 +73,16 @@ export class LiveRoomParticipation {
     if (item.kind === "question") return this.store.question(item.questionId)?.author_user_id ?? null;
     const answer = this.answerStore.answer(item.answerId);
     return answer && answer.question_id === item.questionId ? answer.author_user_id : null;
+  }
+
+  private chatOccurrence(item: LiveModerationItem): string | undefined {
+    if (item.kind !== "chat") return undefined;
+    return this.chat.message(item.messageId)?.occurrence_id ?? this.currentChatOccurrence() ?? undefined;
+  }
+
+  private moderationFor(item: LiveModerationItem) {
+    const occurrence = this.chatOccurrence(item);
+    return occurrence ? this.chatModeration(occurrence) : null;
   }
 
   async done(viewer: LiveRoomParticipant, actor: Actor, item: LiveModerationItem, done: boolean) {
@@ -103,28 +118,50 @@ export class LiveRoomParticipation {
     if (userId === actor.userId || this.people.people([userId]).get(userId)?.staff) return REFUSALS.staff;
     const at = nowIso();
     const eventId = this.eventId();
+    let sessionRestriction: LiveParticipationRestriction | undefined;
+    const occurrenceId = this.chatOccurrence(input.item);
     if (input.block === "event") {
       if (!eventId) return REFUSALS.missing;
       const by = organizerSession(viewer, actor);
       if (!by || !(await blockEventParticipation(this.db, { eventId, userId, reason: input.reason, by, at })))
         return REFUSALS.forbidden;
       this.decisions.decideEventBlock(userId, true);
-    } else this.decisions.block(userId, input.block, input.reason, actor, at);
+    } else {
+      const moderation = this.moderationFor(input.item);
+      if (moderation) {
+        const { restriction } = await moderation.change(userId, {
+          kind: "block",
+          block: input.block,
+          reason: input.reason,
+          actor,
+          at,
+        });
+        if (!restriction) return REFUSALS.forbidden;
+        sessionRestriction = restriction;
+      } else {
+        if (input.item.kind === "chat" && input.block === "session") return REFUSALS.forbidden;
+        this.decisions.block(userId, input.block, input.reason, actor, at);
+      }
+    }
     this.store.recordStaffAction(
       actor.userId,
       "live_session.participation.blocked",
       { userId, block: input.block, reason: input.reason, removePosts: input.removePosts },
       at,
     );
-    if (input.removePosts) await this.removePosts(viewer, actor, userId, input.reason, at);
-    await this.changed(userId);
+    if (input.removePosts) await this.removePosts(viewer, actor, userId, input.reason, at, occurrenceId);
+    await this.changed(userId, sessionRestriction, occurrenceId);
   }
 
   async lift(viewer: LiveRoomParticipant, actor: Actor, item: LiveModerationItem): Promise<LiveRefusal | void> {
     if (viewer.role !== "operator") return REFUSALS.forbidden;
     const userId = this.author(item);
     if (!userId) return REFUSALS.missing;
-    const current = this.decisions.restriction(userId, Date.now());
+    const local = this.decisions.restriction(userId, Date.now());
+    const occurrenceId = this.chatOccurrence(item);
+    const moderation = this.moderationFor(item);
+    const remote = local?.block === "event" ? null : (await moderation?.read(userId))?.restriction;
+    const current = remote ?? local;
     if (!current) return;
     if (!canSetLiveParticipationBlock({ role: viewer.role, organizer: viewer.organizer }, current.block))
       return REFUSALS.forbidden;
@@ -136,14 +173,19 @@ export class LiveRoomParticipation {
       if (!by || !(await liftEventParticipationBlock(this.db, { eventId, userId, by, at }))) return REFUSALS.forbidden;
       this.decisions.decideEventBlock(userId, false);
     }
-    this.decisions.lift(userId);
+    let sessionRestriction: LiveParticipationRestriction | null | undefined;
+    if (moderation && current.block !== "event" && remote) {
+      sessionRestriction = (await moderation.change(userId, { kind: "lift" })).restriction;
+    } else {
+      this.decisions.lift(userId);
+    }
     this.store.recordStaffAction(
       actor.userId,
       "live_session.participation.lifted",
       { userId, block: current.block },
       at,
     );
-    await this.changed(userId);
+    await this.changed(userId, sessionRestriction, occurrenceId);
   }
 
   /** The access refresh read who is blocked for the event; tell everyone whose block started or ended. */
@@ -158,8 +200,9 @@ export class LiveRoomParticipation {
     userId: string,
     reason: LiveModerationReason,
     at: string,
+    occurrenceId?: string,
   ): Promise<void> {
-    const messages = this.chat.byAuthor(userId, LIVE_CHAT_POLICY.storedMessages);
+    const messages = this.chat.byAuthor(userId, LIVE_CHAT_POLICY.storedMessages, occurrenceId);
     const shown = messages.filter((row) => !this.decisions.removal(row.id));
     for (const row of shown) this.chatActions.removeWithReason(actor, row, reason, at);
     await this.chatActions.redeliver(shown);
@@ -182,19 +225,24 @@ export class LiveRoomParticipation {
    * A person's restriction changed: they learn their own, and moderators see
    * it on every post of theirs still in the room.
    */
-  private async changed(userId: string): Promise<void> {
-    const restriction = this.decisions.restriction(userId, Date.now());
+  async changed(
+    userId: string,
+    restriction = this.decisions.restriction(userId, Date.now()),
+    occurrenceId?: string,
+  ): Promise<void> {
+    this.occurrenceChanged(userId);
     const message = serializeLiveRoomMessage({ type: "participation.access", restriction });
     for (const socket of this.ctx.getWebSockets()) {
       const viewer = socket.deserializeAttachment() as LiveRoomParticipant | null;
       if (viewer?.userId !== userId || viewer.role === "operator") continue;
+      if (occurrenceId && restriction?.block !== "event" && occurrenceId !== this.currentChatOccurrence()) continue;
       try {
         socket.send(message);
       } catch {
         /* Already closed. */
       }
     }
-    await this.chatActions.redeliver(this.chat.byAuthor(userId, LIVE_CHAT_POLICY.storedMessages));
+    await this.chatActions.redeliver(this.chat.byAuthor(userId, LIVE_CHAT_POLICY.storedMessages, occurrenceId));
     for (const question of this.store.questions())
       if (question.author_user_id === userId) await this.broadcast.question(question.id);
     for (const questionId of new Set(this.answers.byAuthor(userId).map((answer) => answer.question_id)))

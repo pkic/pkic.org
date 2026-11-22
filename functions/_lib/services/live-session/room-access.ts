@@ -60,11 +60,13 @@ interface LiveRoomPerson {
 type LiveRoomPeopleSessions = { occurrenceIds: readonly string[] } | { roomId: string };
 
 /** Who may join a room: its event, the sessions whose access admits an attendee, and who speaks in them. */
-export interface LiveRoomAccessRecord {
+export type LiveRoomAccessRecord = {
   eventId: string;
   occurrenceIds: string[];
-  speakerUserIds: string[];
-}
+} & (
+  | { speakerUserIds: readonly string[]; speakersByOccurrence?: never }
+  | { speakerUserIds?: never; speakersByOccurrence: ReadonlyMap<string, readonly string[]> }
+);
 
 function sessionAccess(record: LiveRoomSessionRecord): LiveRoomAccessRecord {
   return {
@@ -103,9 +105,9 @@ function prepareLiveRoomPeople(
     );
 }
 
-function attendsAny(person: LiveRoomPerson, occurrenceIds: readonly string[]): boolean {
+function attendeeOccurrences(person: LiveRoomPerson): ReadonlySet<string> {
   const attended = parseJsonSafe<unknown>(person.attendee_sessions, []);
-  return Array.isArray(attended) && attended.some((id) => occurrenceIds.includes(id as string));
+  return new Set(Array.isArray(attended) ? attended.filter((id): id is string => typeof id === "string") : []);
 }
 
 /** The signed-in caller as an operator, a credited speaker or an attendee with access to the room's sessions. */
@@ -140,11 +142,17 @@ async function participantFromSession(
   const studio = session.staff !== undefined && hasPermission(session.staff, "agenda:live_studio", scope);
   const operator =
     studio || (session.staff !== undefined && hasPermission(session.staff, "agenda:live_moderate", scope));
+  const attended = attendeeOccurrences(person);
+  const speaks = (id: string) =>
+    (record.speakersByOccurrence?.get(id) ?? record.speakerUserIds)?.includes(userId) ?? false;
+  const locationOccurrenceIds = record.speakersByOccurrence
+    ? record.occurrenceIds.filter((id) => operator || attended.has(id) || speaks(id))
+    : undefined;
   const role: LiveRoomRole | null = operator
     ? "operator"
-    : record.speakerUserIds.includes(userId)
+    : record.occurrenceIds.some(speaks)
       ? "speaker"
-      : attendsAny(person, record.occurrenceIds)
+      : record.occurrenceIds.some((id) => attended.has(id))
         ? "attendee"
         : null;
   if (!role)
@@ -158,6 +166,7 @@ async function participantFromSession(
   return {
     role,
     ...(studio ? { studio } : {}),
+    ...(locationOccurrenceIds ? { locationOccurrenceIds } : {}),
     userId,
     name: person.name,
     organizer,
@@ -396,7 +405,7 @@ function prepareLiveRoomAccessRead(db: DatabaseLike, scope: LiveRoomAccessScope)
       const access: LiveRoomAccessRecord = {
         eventId: record.eventId,
         occurrenceIds: record.sessions.map((session) => session.occurrenceId),
-        speakerUserIds: record.speakerUserIds,
+        speakersByOccurrence: record.speakersByOccurrence,
       };
       return { access, roomIds: [] as string[] };
     },

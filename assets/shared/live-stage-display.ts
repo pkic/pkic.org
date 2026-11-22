@@ -9,8 +9,12 @@ import type { LiveStage, LiveStageQuestion } from "./schemas/live-session-room";
  */
 
 /** Who may receive the question lined up in Preview: operators, and a source that draws the stage display. */
-export function seesStageDisplayNext(viewer: { role: string; overlayOutput?: string | null }): boolean {
-  return viewer.role === "operator" || (viewer.role === "overlay" && viewer.overlayOutput === "stage-display");
+export function seesStageDisplayNext(viewer: {
+  role: string;
+  studio?: boolean;
+  overlayOutput?: string | null;
+}): boolean {
+  return viewer.studio === true || (viewer.role === "overlay" && viewer.overlayOutput === "stage-display");
 }
 
 /**

@@ -11,6 +11,7 @@ import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import { scannerAttendeesResponseSchema } from "../../../../assets/shared/schemas/event-scanner-lookup";
 import { buildOffsetPageStatements, decodeOffsetPageResults } from "../../db/pagination";
 import { eventReadIdSql, type EventReadSelection } from "../events/selection";
+import { eventContactAccessSql } from "./evidence-retention";
 import type { D1StatementResult } from "../../types";
 import type { DatabaseLike } from "../../types";
 /** Eligibility shared by attendee selection and the all-matching print population. */
@@ -48,7 +49,10 @@ export async function prepareBadgeAttendees(
       ? `(${search.sql} OR EXISTS(SELECT 1 FROM event_badge_credentials badge WHERE badge.event_id=reg.event_id AND badge.user_id=u.id AND badge.credential_hash=? AND badge.revoked_at IS NULL AND badge.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')))`
       : search.sql
     : "";
-  const from = `FROM registrations reg JOIN users u ON u.id=reg.user_id WHERE reg.event_id=${scope.sql} AND ${population === "badge_eligible" ? badgeAttendeeEligibilitySql("reg", "u") : "u.active=1"} ${searchSql ? `AND ${searchSql}` : ""}`;
+  const from = `FROM registrations reg JOIN users u ON u.id=reg.user_id
+    WHERE reg.event_id=${scope.sql} AND ${eventContactAccessSql("reg.event_id")}
+    AND ${population === "badge_eligible" ? badgeAttendeeEligibilitySql("reg", "u") : "u.active=1"}
+    ${searchSql ? `AND ${searchSql}` : ""}`;
   const bindings = [...scope.bindings, ...(search?.bindings ?? []), ...(badgeHash && search ? [badgeHash] : [])];
   const statements = buildOffsetPageStatements(db, {
     source: {

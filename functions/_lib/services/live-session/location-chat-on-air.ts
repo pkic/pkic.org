@@ -15,6 +15,7 @@ export interface LiveChatOnAirMessage {
 export interface LiveChatOnAirOptions {
   sentBy?: string | null;
   cutAt?: number | null;
+  blockedUserIds?: readonly string[];
 }
 
 /** The chat a session's broadcast shows: the latest attendee messages of its location's chat. */
@@ -60,16 +61,29 @@ async function answered<Value>(read: Promise<Value> | undefined, fallback: Value
 export function liveLocationOnAirChat(
   env: Pick<Env, "LIVE_SESSION_ROOMS">,
   room: () => { eventId: string; session: LiveRoomSession } | null,
+  blockedUserIds: () => string[],
 ): LiveOnAirChat {
   const chat = () => {
     const current = room();
     if (!current?.session.roomId || !env.LIVE_SESSION_ROOMS) return null;
     const { eventId, session } = current;
     const day = instantToCalendarDate(session.startAt, session.timeZone);
-    return env.LIVE_SESSION_ROOMS.getByName(liveLocationChatName(eventId, session.roomId!, day));
+    return {
+      room: env.LIVE_SESSION_ROOMS.getByName(liveLocationChatName(eventId, session.roomId!, day)),
+      occurrenceId: session.occurrenceId,
+    };
   };
   return {
-    messages: (limit, options = {}) => answered<LiveChatOnAirMessage[]>(chat()?.locationChatOnAir(limit, options), []),
-    firstSentAfter: (since) => answered<string | null>(chat()?.locationChatFirstSentAfter(since), null),
+    messages: (limit, options = {}) => {
+      const source = chat();
+      return answered<LiveChatOnAirMessage[]>(
+        source?.room.locationChatOnAir(source.occurrenceId, limit, { ...options, blockedUserIds: blockedUserIds() }),
+        [],
+      );
+    },
+    firstSentAfter: (since) => {
+      const source = chat();
+      return answered<string | null>(source?.room.locationChatFirstSentAfter(source.occurrenceId, since), null);
+    },
   };
 }

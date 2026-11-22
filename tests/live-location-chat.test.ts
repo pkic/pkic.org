@@ -106,6 +106,30 @@ it("keeps running without an operator, and stops only when an operator ends it",
   expect(audit).toEqual({ entity_type: "event_agenda_room", entity_id: fixture.roomId });
 });
 
+it("keeps the conversation while the studio closes and reopens the active session", async () => {
+  await load(fixture.occurrenceId, 0);
+  const attendee = await join("attendee");
+  const studio = await fixture.connect({ person: "operator" });
+  clients.push(studio);
+
+  attendee.send({ type: "chat.send", text: "Notes from this session" });
+  await attendee.next("chat.message");
+  studio.send({ type: "room.opening", opening: "closed" });
+  await attendee.next("location.chat.access", (update) => update.sessionClosed);
+  const rejoined = await join("attendee");
+  const snapshot = await rejoined.next("location.chat.snapshot");
+  expect(snapshot.sessionClosed).toBe(true);
+  expect(snapshot.chat.map((entry) => entry.text)).toContain("Notes from this session");
+
+  studio.send({ type: "room.opening", opening: "open" });
+  await rejoined.next("location.chat.access", (update) => !update.sessionClosed);
+  rejoined.send({ type: "chat.send", text: "The session has reopened" });
+  expect(
+    (await attendee.next("chat.message", (update) => update.message.text === "The session has reopened")).message
+      .occurrenceId,
+  ).toBe(fixture.occurrenceId);
+});
+
 it("turns a chat message into a question in the session the studio has loaded, and none between sessions", async () => {
   const attendee = await join("attendee");
   const operator = await join("operator");

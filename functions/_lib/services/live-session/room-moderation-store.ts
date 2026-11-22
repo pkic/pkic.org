@@ -129,6 +129,15 @@ export class LiveRoomModerationStore {
     return restrictions;
   }
 
+  blockedUserIds(at: string): string[] {
+    return this.sql
+      .rows<{ user_id: string }>(
+        "SELECT user_id FROM room_participation_blocks WHERE until IS NULL OR until > ? UNION SELECT user_id FROM room_event_blocks",
+        at,
+      )
+      .map(({ user_id }) => user_id);
+  }
+
   restriction(userId: string | null, now: number): LiveParticipationRestriction | null {
     if (!userId) return null;
     return this.restrictions([userId], now).get(userId) ?? null;

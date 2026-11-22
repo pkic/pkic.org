@@ -1,3 +1,4 @@
+import { LIVE_CHAT_POLICY } from "../../../../assets/shared/live-chat-policy";
 import { liveLocationChatOpen } from "../../../../assets/shared/live-location-chat";
 import {
   LIVE_INTERACTION_BROADCAST_MILLISECONDS,
@@ -18,9 +19,14 @@ import type { LiveRoomChatActions } from "./room-chat-actions";
 import type { LiveChatFeed } from "./room-chat-feed";
 import type { LiveRefusal } from "./room-controls";
 import type { LiveRoomParticipation } from "./room-participation";
-import type { LiveChatQuestion } from "./location-chat-on-air";
+import type { LiveChatOnAirOptions, LiveChatQuestion } from "./location-chat-on-air";
+import type { LiveRoomChat } from "./room-chat";
+import { liveChatOnAirMessages } from "./room-ticker";
 import type { LiveRoomStore } from "./room-store";
 import { serializeLiveRoomMessage } from "./room-projection";
+import { seesChatOccurrence } from "./room-chat-audience";
+import { LIVE_PARTICIPATION_REFUSAL } from "./room-participation-refusal";
+import type { LiveOccurrenceModerationChange } from "./room-occurrence-participation";
 
 /** The socket tag of a location chat's connections, beside each connection's role. */
 export const LIVE_LOCATION_CHAT_SOCKET_TAG = "location-chat";
@@ -43,6 +49,7 @@ export interface LiveLocationChatParts {
   ctx: DurableObjectState;
   env: Pick<Env, "DB" | "LIVE_SESSION_ROOMS">;
   store: LiveLocationChatStore;
+  chat: LiveRoomChat;
   access: LiveRoomAccessLease;
   broadcast: LiveRoomBroadcast;
   feed: LiveChatFeed;
@@ -72,6 +79,61 @@ export class LiveLocationChatRoom {
     return store.state()?.loadedOccurrenceId ?? store.stamp(Date.now());
   }
 
+  /** Use the occurrence room as the authority for its opening and moderation decisions. */
+  occurrenceModeration(occurrenceId: string | null) {
+    const state = this.parts.store.state();
+    const rooms = this.parts.env.LIVE_SESSION_ROOMS;
+    const occurrence = state?.scope.sessions.find((session) => session.occurrenceId === occurrenceId);
+    if (!state || !rooms || !occurrence) return null;
+    const room = rooms.getByName(liveRoomName(state.eventId, occurrence.occurrenceId));
+    return {
+      read: (userId: string) => room.readOccurrenceParticipation(userId),
+      restrictions: (userIds: string[]) => room.readOccurrenceRestrictions(userIds),
+      change: (userId: string, change: LiveOccurrenceModerationChange) =>
+        room.changeOccurrenceModeration(userId, occurrence.endAt, change),
+    };
+  }
+
+  async checkWrite(viewer: LiveRoomParticipant, occurrenceId: string | null) {
+    if (viewer.role === "operator") return null;
+    const { store, feed } = this.parts;
+    const state = store.state();
+    if (!state || !viewer.userId || !seesChatOccurrence(viewer, occurrenceId)) return REFUSALS.closed;
+    if (feed.decisions.restriction(viewer.userId, Date.now())) return LIVE_PARTICIPATION_REFUSAL;
+    const rooms = this.parts.env.LIVE_SESSION_ROOMS;
+    if (!rooms) return REFUSALS.closed;
+    const loaded = await rooms
+      .getByName(liveProgramName(state.eventId, state.scope.roomId))
+      .loadedProgram(state.eventId, state.scope.roomId);
+    if (loaded !== store.state()?.loadedOccurrenceId) {
+      this.loaded(loaded);
+      return REFUSALS.closed;
+    }
+    const currentOccurrenceId = store.stamp(Date.now());
+    if (!seesChatOccurrence(viewer, currentOccurrenceId)) return REFUSALS.closed;
+    const occurrences = [...new Set([currentOccurrenceId, occurrenceId])].filter((id) => id !== null);
+    const policies = await Promise.all(occurrences.map((id) => this.occurrenceModeration(id)?.read(viewer.userId!)));
+    if (policies.some((policy) => policy?.restriction)) return LIVE_PARTICIPATION_REFUSAL;
+    if (policies.some((policy) => !policy || policy.opening === "closed")) return REFUSALS.ended;
+    const latest = store.state();
+    if (!latest || store.stamp(Date.now()) !== currentOccurrenceId) return REFUSALS.closed;
+    if (latest.opening === "closed") return REFUSALS.ended;
+    if (
+      (currentOccurrenceId === null || policies[0]?.opening !== "open") &&
+      !liveLocationChatOpen(Date.now(), latest.scope.sessions, latest.opening)
+    )
+      return REFUSALS.closed;
+    return feed.decisions.restriction(viewer.userId, Date.now()) ? LIVE_PARTICIPATION_REFUSAL : null;
+  }
+
+  async onAir(occurrenceId: string, limit: number, options: LiveChatOnAirOptions) {
+    const { store, chat } = this.parts;
+    if (!store.state()) return [];
+    const messages = await liveChatOnAirMessages(chat, occurrenceId, limit, options);
+    chat.markAired(messages.map(({ id }) => id));
+    return messages;
+  }
+
   /** Attendee chat changed: the session on air fills its chat feed and ticker again, once the moment's changes are in. */
   onAirChanged(): void {
     this.onAirTimer ??= setTimeout(() => {
@@ -95,7 +157,7 @@ export class LiveLocationChatRoom {
    */
   async ask(question: LiveChatQuestion, by: Actor, at: string, sentDuring: string | null) {
     const state = this.parts.store.state();
-    const occurrenceId = state?.loadedOccurrenceId ?? sentDuring ?? this.sessionOn();
+    const occurrenceId = sentDuring ?? this.sessionOn();
     const rooms = this.parts.env.LIVE_SESSION_ROOMS;
     if (!state || !occurrenceId || !rooms) return REFUSALS.noSession;
     const id = await rooms.getByName(liveRoomName(state.eventId, occurrenceId)).questionFromChat(question, by, at);
@@ -135,8 +197,49 @@ export class LiveLocationChatRoom {
   loaded(occurrenceId: string | null): void {
     if (!this.parts.store.state()) return;
     this.parts.store.loaded(occurrenceId);
+    this.parts.ctx.waitUntil(this.syncAccess());
     // The session now on air shows this chat from the start.
     this.onAirChanged();
+  }
+
+  async accessChanged(occurrenceId: string, userId: string | null): Promise<void> {
+    const { store, chat, chatActions } = this.parts;
+    if (!store.state()) return;
+    if (store.stamp(Date.now()) === occurrenceId) {
+      await this.syncAccess(userId);
+      this.onAirChanged();
+    }
+    if (userId) await chatActions.redeliver(chat.byAuthor(userId, LIVE_CHAT_POLICY.storedMessages, occurrenceId));
+  }
+
+  private async syncAccess(userId: string | null = null): Promise<void> {
+    const { store, ctx, broadcast, feed } = this.parts;
+    const occurrenceId = store.stamp(Date.now());
+    const viewers = ctx.getWebSockets().flatMap((socket) => {
+      const viewer = socket.deserializeAttachment() as LiveRoomParticipant | null;
+      return viewer?.userId && viewer.role !== "operator" && (!userId || viewer.userId === userId) ? [viewer] : [];
+    });
+    if (!viewers.length) return;
+    const activeViewers = viewers.filter((viewer) => seesChatOccurrence(viewer, occurrenceId));
+    const userIds = [...new Set(activeViewers.flatMap((viewer) => viewer.userId ?? []))];
+    const occurrence = this.occurrenceModeration(occurrenceId);
+    const [policy, restrictions] = await Promise.all([
+      occurrence && userIds.length ? occurrence.read(userIds[0]) : undefined,
+      occurrence && userIds.length ? occurrence.restrictions(userIds) : undefined,
+    ]);
+    if (store.stamp(Date.now()) !== occurrenceId) return;
+    await broadcast.send((viewer) => {
+      if (!viewer.userId || viewer.role === "operator" || (userId && viewer.userId !== userId)) return null;
+      const allowed = seesChatOccurrence(viewer, occurrenceId);
+      return {
+        type: "location.chat.access",
+        sessionClosed: !allowed || policy?.opening === "closed",
+        restriction:
+          feed.decisions.restriction(viewer.userId, Date.now()) ??
+          (allowed ? restrictions?.[viewer.userId] : null) ??
+          null,
+      };
+    }, null);
   }
 
   private snapshot(socket: WebSocket): Promise<string | null> {
@@ -146,17 +249,30 @@ export class LiveLocationChatRoom {
       const state = store.state();
       if (!state || !eligible.includes(socket) || socket.readyState !== WebSocket.OPEN) return null;
       const viewer = socket.deserializeAttachment() as LiveRoomParticipant;
+      const occurrenceId = store.stamp(Date.now());
+      const policy =
+        viewer.userId && viewer.role !== "operator" && seesChatOccurrence(viewer, occurrenceId)
+          ? await this.occurrenceModeration(occurrenceId)?.read(viewer.userId)
+          : undefined;
+      if (socket.readyState !== WebSocket.OPEN) return null;
       return serializeLiveRoomMessage({
         type: "location.chat.snapshot",
         viewer: {
           role: viewer.role,
           name: viewer.name,
           organizer: viewer.organizer ?? false,
-          participation: viewer.role === "operator" ? null : feed.decisions.restriction(viewer.userId, Date.now()),
+          participation:
+            viewer.role === "operator"
+              ? null
+              : (feed.decisions.restriction(viewer.userId, Date.now()) ?? policy?.restriction ?? null),
         },
-        scope: state.scope,
+        scope: {
+          ...state.scope,
+          sessions: state.scope.sessions.filter(({ occurrenceId }) => seesChatOccurrence(viewer, occurrenceId)),
+        },
         opening: state.opening,
-        ...feed.snapshot(viewer),
+        sessionClosed: !seesChatOccurrence(viewer, occurrenceId) || policy?.opening === "closed",
+        ...(await feed.snapshot(viewer)),
       });
     });
   }
@@ -166,17 +282,11 @@ export class LiveLocationChatRoom {
     const state = store.state();
     if (!state) return REFUSALS.unsupported;
     const operator = viewer.role === "operator";
-    const open = operator || liveLocationChatOpen(Date.now(), state.scope.sessions, state.opening);
     switch (message.type) {
       case "chat.send":
       case "chat.edit":
       case "chat.react":
       case "chat.report":
-        return open
-          ? chatActions.handle(viewer, actor, message, socket)
-          : state.opening === "closed"
-            ? REFUSALS.ended
-            : REFUSALS.closed;
       case "chat.delete":
       case "chat.history":
         return chatActions.handle(viewer, actor, message, socket);
@@ -220,6 +330,7 @@ export class LiveLocationChatRoom {
     const purgeAt = liveRoomPurgeAt(endAt);
     const pending = store.pendingCopy();
     await access.refresh();
+    await this.syncAccess();
     if (pending) {
       try {
         await copyLiveLocationChatToD1(env.DB, pending);

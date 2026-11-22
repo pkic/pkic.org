@@ -6,7 +6,12 @@ import {
   type BadgePrintRequest,
 } from "../../../../assets/shared/schemas/route-contracts-event-badges";
 import { first } from "../../db/queries";
-import { prepareAuthorizationGuard } from "../../db/authorization-guard";
+import {
+  isStateGuardFailure,
+  prepareAuthorizationGuard,
+  prepareStateGuard,
+  type AuthorizationEvidence,
+} from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { nowIso } from "../../utils/time";
@@ -123,6 +128,7 @@ export async function prepareBadgePrint(
   badgeId: string,
   actorId: string,
   request: Omit<BadgePrintRequest, "printingRevision"> & { printingRevision: string | null },
+  deskEligibility?: AuthorizationEvidence,
 ) {
   const { artifact, guards } = await recoverBadgePrintArtifact(
     db,
@@ -131,20 +137,27 @@ export async function prepareBadgePrint(
     badgeId,
     request.printingRevision,
   );
-  await db.batch([
-    ...guards,
-    prepareScopedAuditLog(
-      db,
-      { type: "event", id: eventId },
-      "user",
-      actorId,
-      "badge_print_prepared",
-      "event_badge_credential",
-      artifact.id,
-      { operationId: request.operationId },
-      nowIso(),
-      `badge-print:${eventId}:${artifact.id}:${actorId}:${request.operationId}`,
-    ),
-  ]);
+  try {
+    await db.batch([
+      ...(deskEligibility ? [prepareStateGuard(db, deskEligibility)] : []),
+      ...guards,
+      prepareScopedAuditLog(
+        db,
+        { type: "event", id: eventId },
+        "user",
+        actorId,
+        "badge_print_prepared",
+        "event_badge_credential",
+        artifact.id,
+        { operationId: request.operationId },
+        nowIso(),
+        `badge-print:${eventId}:${artifact.id}:${actorId}:${request.operationId}`,
+      ),
+    ]);
+  } catch (error) {
+    if (deskEligibility && isStateGuardFailure(error))
+      throw new AppError(409, "BADGE_REGISTRATION_REQUIRED", "Only a registered attendee's badge prints at the desk.");
+    throw error;
+  }
   return artifact;
 }

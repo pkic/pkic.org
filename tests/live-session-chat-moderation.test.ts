@@ -211,6 +211,7 @@ describe("live chat reactions, reports and moderation", () => {
   it("pauses, blocks and lifts a participant while they keep reading, and keeps event blocks for organizers", async () => {
     const author = await f.connectChat("attendee");
     const reader = await f.connectChat("secondAttendee");
+    const occurrenceAuthor = await f.connect({ person: "attendee" });
     const message = await say(author, "Before the pause", reader);
     await demoteSecondOperator();
     const moderator = await f.connectChat("secondOperator");
@@ -224,6 +225,10 @@ describe("live chat reactions, reports and moderation", () => {
     moderator.send({ type: "participation.block", item, block: "paused", reason: "conduct", removePosts: false });
     const paused = (await author.next("participation.access")).restriction;
     expect(paused?.block).toBe("paused");
+    expect(
+      (await occurrenceAuthor.next("participation.access", (update) => update.restriction?.block === "paused"))
+        .restriction,
+    ).toEqual(paused);
     expect(Date.parse(paused!.until!)).toBeGreaterThan(Date.now());
     author.send({ type: "chat.send", text: "Paused words" });
     expect((await author.next("room.refused")).code).toBe("LIVE_PARTICIPATION_BLOCKED");
@@ -248,11 +253,15 @@ describe("live chat reactions, reports and moderation", () => {
     expect(own?.removal?.reason).toBe("spam");
 
     const beforeLift = author.received.length;
+    const afterOccurrenceBlock = occurrenceAuthor.received.length;
     moderator.send({ type: "participation.lift", item });
     expect(
       (await author.next("participation.access", (update) => update.restriction === null, { after: beforeLift }))
         .restriction,
     ).toBeNull();
+    await occurrenceAuthor.next("participation.access", (update) => update.restriction === null, {
+      after: afterOccurrenceBlock,
+    });
     expectNoModerationData(reader);
   });
 
@@ -340,7 +349,18 @@ describe("live chat reactions, reports and moderation", () => {
     desk.send({ type: "timer.control", timerId: "session", action: "pause" });
     expect((await desk.next("room.refused")).code).toBe("LIVE_ROOM_STUDIO_REQUIRED");
     const studio = await f.connect({ person: "operator" });
+    studio.send({ type: "preview.set", composition: { creditKey: `user:${f.users.speaker}` } });
+    await studio.next("preview.changed");
+    studio.send({ type: "speaker.message", text: "Please wrap up", tone: "warning", flash: false });
+    await studio.next("speaker.message.changed");
+    const { preview, speakerMessage } = await (await f.connect({ person: "secondOperator" })).next("room.snapshot");
+    expect(preview.lowerThird).toBeNull();
+    expect(speakerMessage).toBeNull();
+
     studio.send({ type: "timer.control", timerId: "session", action: "pause" });
-    await studio.next("timers.changed");
+    await desk.next("timers.changed");
+    expect(
+      desk.received.some((entry) => entry.type === "preview.changed" || entry.type === "speaker.message.changed"),
+    ).toBe(false);
   });
 });

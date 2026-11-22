@@ -21,6 +21,7 @@ import { serializeLiveRoomMessage } from "./room-projection";
 import type { LiveRoomStore } from "./room-store";
 import type { LiveRoomAuthors } from "./room-authors";
 import { LIVE_PARTICIPATION_REFUSAL } from "./room-participation-refusal";
+import { chatAudienceKey, seesChatOccurrence } from "./room-chat-audience";
 import type { LiveChatQuestion } from "./location-chat-on-air";
 
 type ChatCommand = Extract<LiveRoomClientMessage, { type: `chat.${string}` }>;
@@ -82,6 +83,7 @@ export class LiveRoomChatActions {
       listed: () => void;
       /** The session a message sent now is dated by, in a location's chat; null in a session's room. */
       stamp: () => string | null;
+      checkWrite: (viewer: LiveRoomParticipant, occurrenceId: string | null) => Promise<LiveRefusal | null>;
       /** Asks a converted message in a session's room; answers the question's id or why it could not. */
       ask: (
         question: LiveChatQuestion,
@@ -103,10 +105,15 @@ export class LiveRoomChatActions {
     if (command.type === "chat.send") {
       const answered = command.replyTo ? this.answerable(command.replyTo, viewer, restricted, command.channel) : null;
       if (answered && typeof answered !== "string") return answered;
-      return this.send(viewer, actor, restricted, command.text, command.channel, answered);
+      return this.send(viewer, actor, restricted, command.text, command.channel, answered, socket);
     }
     const row = this.visible(command.messageId, viewer);
     if (!row) return REFUSALS.missing;
+    if (command.type === "chat.edit" || command.type === "chat.react" || command.type === "chat.report") {
+      const refusal = await this.hooks.checkWrite(viewer, row.occurrence_id);
+      if (refusal || socket.readyState !== WebSocket.OPEN) return refusal ?? REFUSALS.notAllowed;
+      if (!this.visible(row.id, viewer)) return REFUSALS.missing;
+    }
     const allowed = this.actionsOn(row, viewer, restricted);
     const refuse = (action: LiveChatAction) =>
       allowed.has(action)
@@ -196,15 +203,20 @@ export class LiveRoomChatActions {
     restricted: boolean,
     text: string,
     channel: LiveChatChannel = "attendee",
-    replyTo: string | null = null,
+    replyTo: string | null,
+    socket: WebSocket,
   ) {
     if (!liveChatCanSend(liveChatCapacity(viewer), restricted, channel))
       return restricted ? REFUSALS.blocked : REFUSALS.notAllowed;
     const stamp = await this.authors.writing(viewer);
+    const occurrenceId = this.hooks.stamp();
+    const refusal = await this.hooks.checkWrite(viewer, occurrenceId);
+    if (refusal || socket.readyState !== WebSocket.OPEN || this.hooks.stamp() !== occurrenceId)
+      return refusal ?? REFUSALS.notAllowed;
     // Author resolution yields: a moderator may have blocked this person meanwhile.
     if (viewer.role !== "operator" && this.feed.decisions.restriction(actor.userId, Date.now()))
       return REFUSALS.blocked;
-    const row = this.chat.send(actor, text, Date.now(), channel, this.hooks.stamp(), replyTo);
+    const row = this.chat.send(actor, text, Date.now(), channel, occurrenceId, replyTo);
     if (!row) return REFUSALS.tooFast;
     this.authors.recordMessage(row.id, stamp);
     await this.deliver([row], { removeWhenHidden: false });
@@ -244,7 +256,9 @@ export class LiveRoomChatActions {
       const mine = this.feed.reactions.mine([row.id], [...changed]);
       await this.broadcast.send(
         (viewer) =>
-          liveChatChannelVisible(row.channel, viewer) && (!hidden || staff(viewer))
+          liveChatChannelVisible(row.channel, viewer) &&
+          seesChatOccurrence(viewer, row.occurrence_id) &&
+          (!hidden || staff(viewer))
             ? {
                 type: "chat.reactions",
                 channel: row.channel,
@@ -254,7 +268,8 @@ export class LiveRoomChatActions {
                   viewer.userId && changed.has(viewer.userId) ? (mine.get(viewer.userId)?.get(row.id) ?? []) : null,
               }
             : null,
-        (viewer) => (viewer.userId && changed.has(viewer.userId) ? `person:${viewer.userId}` : viewer.role),
+        (viewer) =>
+          JSON.stringify([chatAudienceKey(viewer), viewer.userId && changed.has(viewer.userId) ? viewer.userId : null]),
       );
     }
   }
@@ -285,7 +300,7 @@ export class LiveRoomChatActions {
 
   private async remove(row: LiveChatRow) {
     this.chat.remove([row.id]);
-    await this.broadcast.all({ type: "chat.removed", messageId: row.id, channel: row.channel });
+    await this.broadcast.chatRemoved(row);
     if (row.channel === "attendee") this.nudgeTicker();
   }
 
@@ -368,13 +383,15 @@ export class LiveRoomChatActions {
   private async sendPinned(): Promise<void> {
     const id = this.feed.moderation.pinned();
     const row = id ? this.chat.message(id) : null;
-    const batch = row ? this.feed.batch([row], this.connectedPeople()) : null;
+    const batch = row
+      ? this.feed.batch([row], this.connectedPeople(), await this.feed.moderatorRestrictions([row]))
+      : null;
     await this.broadcast.send(
       (viewer) =>
         liveChatChannelVisible("attendee", viewer)
           ? { type: "chat.pinned", message: row && batch ? batch.project(row, viewer) : null }
           : null,
-      (viewer) => (row && batch?.personal(row, viewer) ? `person:${viewer.userId}` : viewer.role),
+      (viewer) => JSON.stringify([chatAudienceKey(viewer), row && batch?.personal(row, viewer) ? viewer.userId : null]),
     );
   }
 
@@ -394,7 +411,8 @@ export class LiveRoomChatActions {
   ) {
     if (!this.allowed("history", actor.userId)) return REFUSALS.tooFast;
     if (!liveChatChannelVisible(channel, viewer)) return REFUSALS.notAllowed;
-    const page = this.feed.history(viewer, channel, before);
+    const page = await this.feed.history(viewer, channel, before);
+    if (socket.readyState !== WebSocket.OPEN) return;
     if (!page) return REFUSALS.missing;
     socket.send(serializeLiveRoomMessage({ type: "chat.history", channel, ...page }));
   }
@@ -408,20 +426,29 @@ export class LiveRoomChatActions {
     options: { removeWhenHidden: boolean; only?: (viewer: LiveRoomParticipant) => boolean },
   ): Promise<void> {
     const people = this.connectedPeople();
+    const restrictions = this.ctx.getWebSockets("operator").length
+      ? await this.feed.moderatorRestrictions(rows)
+      : undefined;
     for (const row of rows) {
-      const batch = this.feed.batch([row], people);
+      const batch = this.feed.batch([row], people, restrictions);
       await this.broadcast.send(
         (viewer) => {
           if (options.only && !options.only(viewer)) return null;
           const message = batch.project(row, viewer);
           if (message) return { type: "chat.message", message } satisfies LiveRoomServerMessage;
-          return options.removeWhenHidden && liveChatChannelVisible(row.channel, viewer)
+          return options.removeWhenHidden &&
+            liveChatChannelVisible(row.channel, viewer) &&
+            seesChatOccurrence(viewer, row.occurrence_id)
             ? { type: "chat.removed", messageId: row.id, channel: row.channel }
             : null;
         },
         // A copy with something of the viewer's own is theirs alone; every other copy is shared by its audience.
         (viewer) =>
-          batch.personal(row, viewer) ? `person:${viewer.userId}` : `${viewer.role}:${options.only?.(viewer) ?? true}`,
+          JSON.stringify([
+            chatAudienceKey(viewer),
+            batch.personal(row, viewer) ? viewer.userId : null,
+            options.only?.(viewer) ?? true,
+          ]),
       );
     }
   }

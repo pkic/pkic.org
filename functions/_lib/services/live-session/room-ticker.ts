@@ -21,11 +21,12 @@ export const LIVE_TICKER_REFRESH_MS = 30000;
  */
 export async function liveChatOnAirMessages(
   chat: Pick<LiveRoomChat, "tickerRows">,
+  occurrenceId: string,
   limit: number,
-  { sentBy = null, cutAt = null }: LiveChatOnAirOptions = {},
+  { sentBy = null, cutAt = null, blockedUserIds = [] }: LiveChatOnAirOptions = {},
 ): Promise<LiveChatOnAirMessage[]> {
   const messages = chat
-    .tickerRows(limit, sentBy)
+    .tickerRows(occurrenceId, limit, sentBy, blockedUserIds)
     .reverse()
     .flatMap((row) => {
       const text = liveChatPlainText(row.body);

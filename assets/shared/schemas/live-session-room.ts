@@ -370,6 +370,7 @@ export const liveLocationChatSnapshotSchema = z
     type: z.literal("location.chat.snapshot"),
     viewer: liveRoomViewerSchema,
     ...liveLocationChatSnapshotFields,
+    sessionClosed: z.boolean().optional(),
   })
   .strict();
 export type LiveLocationChatSnapshot = z.infer<typeof liveLocationChatSnapshotSchema>;
@@ -377,6 +378,13 @@ export type LiveLocationChatSnapshot = z.infer<typeof liveLocationChatSnapshotSc
 export const liveRoomServerMessageSchema = z.discriminatedUnion("type", [
   liveRoomSnapshotSchema,
   liveLocationChatSnapshotSchema,
+  z
+    .object({
+      type: z.literal("location.chat.access"),
+      sessionClosed: z.boolean(),
+      restriction: liveParticipationRestrictionSchema.nullable(),
+    })
+    .strict(),
   liveQuestionAnswersSchema,
   liveQuestionAnswerResultSchema,
   z.object({ type: z.literal("question.changed"), question: liveQuestionSchema }).strict(),
