@@ -26,7 +26,7 @@ import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
 import { prepareEventDays, type EventDayRecord } from "../event-days";
-import { classifierOptions, ticketCriteriaDigest } from "./classifier";
+import { prepareDecidedOrganizationCounts } from "./classifier";
 import { normalizeTicketCode } from "./assignment";
 import {
   decodeEventTicketSnapshot,
@@ -110,14 +110,7 @@ export async function readEventTicketsConfiguration(
   const [countsResult, daysResult] = results.slice(EVENT_TICKET_SNAPSHOT_STATEMENTS);
   const counts = new Map(batchRows<TypeCountRow>(countsResult).map((row) => [row.ticket_type_id, row]));
   const days = batchRows<EventDayRecord>(daysResult);
-  const digest = await ticketCriteriaDigest(classifierOptions(snapshot.types));
-  const presets = await db.batch([
-    db
-      .prepare(
-        "SELECT ticket_key, COUNT(*) AS total FROM ticket_classifier_decisions WHERE criteria_sha256 = ? GROUP BY ticket_key",
-      )
-      .bind(digest),
-  ]);
+  const presets = await db.batch([prepareDecidedOrganizationCounts(db, snapshot.types)]);
   const presetCounts = new Map(
     batchRows<{ ticket_key: string; total: number }>(presets[0]).map((row) => [row.ticket_key, row.total]),
   );

@@ -7,9 +7,10 @@
  * configuration value; nothing else in the application names it.
  *
  * A decision is made once for an organization name and email domain and
- * stored against the ticket keys it chooses between. Tuning a description, a
- * threshold or the instructions keeps it, and another event that offers the
- * same ticket keys reuses it. An organizer's decision is never replaced.
+ * found again by the ticket key it chose. Tuning a description, a threshold or
+ * the instructions keeps it, adding or removing another ticket keeps it, and
+ * another event that offers the same ticket reuses it. An organizer's decision
+ * is never replaced.
  */
 import {
   decideClassifiedTicket,
@@ -63,18 +64,36 @@ function subjectKey(subject: TicketClassifierSubject) {
   };
 }
 
+/**
+ * The decisions that still count for these tickets: an organizer's for any active ticket, the classifier's for one
+ * it still chooses between. They are found by ticket key, not by the question they answered, so adding or clearing
+ * another ticket's description keeps them. An organizer's decision comes first, then the latest.
+ */
+function decisionsInScope(types: readonly TicketTypeRow[]) {
+  const offered = types.filter((type) => type.active === 1).map((type) => type.ticket_key);
+  const asked = classifierOptions(types).map((option) => option.key);
+  const list = (keys: readonly string[]) => (keys.length ? keys.map(() => "?").join(", ") : "NULL");
+  return {
+    where: `((source = 'organizer' AND ticket_key IN (${list(offered)})) OR (source <> 'organizer' AND ticket_key IN (${list(asked)})))`,
+    precedence: "CASE source WHEN 'organizer' THEN 0 ELSE 1 END, updated_at DESC, id",
+    bindings: [...offered, ...asked],
+  };
+}
+
 export async function readStoredTicketDecision(
   db: DatabaseLike,
-  criteriaDigest: string,
+  types: readonly TicketTypeRow[],
   subject: TicketClassifierSubject,
 ): Promise<StoredTicketDecision | null> {
   const key = subjectKey(subject);
   if (!key.organizationName && !key.emailDomain) return null;
+  const scope = decisionsInScope(types);
   const row = await first<{ ticket_key: string; source: string; confidence: number | null }>(
     db,
     `SELECT ticket_key, source, confidence FROM ticket_classifier_decisions
-     WHERE criteria_sha256 = ? AND organization_name = ? AND email_domain = ?`,
-    [criteriaDigest, key.organizationName, key.emailDomain],
+     WHERE organization_name = ? AND email_domain = ? AND ${scope.where}
+     ORDER BY ${scope.precedence} LIMIT 1`,
+    [key.organizationName, key.emailDomain, ...scope.bindings],
   );
   return row
     ? {
@@ -83,6 +102,19 @@ export async function readStoredTicketDecision(
         confidence: row.confidence,
       }
     : null;
+}
+
+/** How many organizations each ticket is decided for: the decision that counts for each, as the lookup finds it. */
+export function prepareDecidedOrganizationCounts(db: DatabaseLike, types: readonly TicketTypeRow[]): StatementLike {
+  const scope = decisionsInScope(types);
+  return db
+    .prepare(
+      `SELECT ticket_key, COUNT(*) AS total FROM (
+         SELECT ticket_key, ROW_NUMBER() OVER (PARTITION BY organization_name, email_domain ORDER BY ${scope.precedence}) AS rank
+         FROM ticket_classifier_decisions WHERE ${scope.where}
+       ) WHERE rank = 1 GROUP BY ticket_key`,
+    )
+    .bind(...scope.bindings);
 }
 
 /** Stores a decision. A classifier's answer never replaces an organizer's. */
@@ -194,16 +226,15 @@ export async function decideOrganizationTicket(
   if (options.length < 2) return null;
   const key = subjectKey(subject);
   if (!key.organizationName && !key.emailDomain) return null;
-  const digest = await ticketCriteriaDigest(options);
-  const stored = await readStoredTicketDecision(db, digest, subject);
-  if (stored && storedDecisionHolds(types, options, stored)) return stored;
+  const stored = await readStoredTicketDecision(db, types, subject);
+  if (stored) return stored;
   const asked = await askTicketClassifier(env, options, subject);
   if (!asked) return null;
   const decided = decideClassifiedTicket(options, asked.probabilities);
   if (!decided) return null;
   await db.batch([
     prepareStoreTicketDecision(db, {
-      criteriaDigest: digest,
+      criteriaDigest: await ticketCriteriaDigest(options),
       subject,
       ticketKey: decided.key,
       source: "classifier",
@@ -213,25 +244,10 @@ export async function decideOrganizationTicket(
   ]);
   // An organizer may have decided while the answer was pending; their decision survived the write and is the one that counts.
   return (
-    (await readStoredTicketDecision(db, digest, subject)) ?? {
+    (await readStoredTicketDecision(db, types, subject)) ?? {
       ticketKey: decided.key,
       source: "classifier",
       confidence: decided.confidence,
     }
   );
-}
-
-/**
- * A stored answer still decides while its ticket is offered. An organizer may decide for any offered ticket,
- * also one the classifier never picks; the classifier's own answer must still be one of its options. A later
- * threshold does not undo an answer that was certain enough when it was given.
- */
-function storedDecisionHolds(
-  types: readonly TicketTypeRow[],
-  options: readonly TicketClassifierOption[],
-  stored: StoredTicketDecision,
-): boolean {
-  if (stored.source !== "classifier")
-    return types.some((type) => type.ticket_key === stored.ticketKey && type.active === 1);
-  return options.some((option) => option.key === stored.ticketKey);
 }
