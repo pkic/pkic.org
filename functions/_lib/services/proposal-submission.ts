@@ -62,8 +62,11 @@ export interface ProposalSubmissionInput {
   formRevisionGuard?: StatementLike | null;
   formPlacementId?: string | null;
   formDefinition?: ActiveFormDefinition | null;
-  /** The screening the proposal passed, kept for reviewers with the proposal itself. */
-  screening?: ContentCheckRun | null;
+  /**
+   * The screening of the proposal, run once the cheap refusals have passed and just before the write.
+   * What it passes is kept for reviewers with the proposal itself.
+   */
+  screen?: () => Promise<ContentCheckRun | null>;
 }
 
 export interface ProposalSubmissionResult {
@@ -133,8 +136,6 @@ export async function submitProposal(
     signingSecret: input.signingSecret,
   });
   statements.push(...created.statements);
-  if (input.screening)
-    statements.push(prepareStoreContentCheckResult(db, "proposal", created.proposal.id, input.screening));
   if (input.formDefinition) {
     const formSubmission = await prepareReplaceContextFormSubmission(
       db,
@@ -346,6 +347,9 @@ export async function submitProposal(
     statements.push(reviewEmail.statement);
     outboxIds.push(reviewEmail.id);
   }
+
+  const screening = await input.screen?.();
+  if (screening) statements.push(prepareStoreContentCheckResult(db, "proposal", created.proposal.id, screening));
 
   try {
     await db.batch(statements);

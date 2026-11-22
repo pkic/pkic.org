@@ -25,8 +25,8 @@ const EventContentCheckPut = openApiRoute(eventContentCheckPutRouteSchema, async
 });
 
 const EventContentCheckTrialPost = openApiRoute(eventContentCheckTrialRouteSchema, async (c: AdminContext, data) => {
-  await requireEventPermission(c, data.params.eventSlug, "events:write");
-  return json(await runContentCheckTrial(c.env, data.params.kind, data.body));
+  const { actor } = await requireEventPermission(c, data.params.eventSlug, "events:write");
+  return json(await runContentCheckTrial(c.env, actor.id, data.params.kind, data.body));
 });
 
 type ContentCheckRouter = Pick<typeof import("./router").openapi, "get" | "post" | "put">;

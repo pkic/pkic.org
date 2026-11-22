@@ -40,7 +40,8 @@ export class LiveRoomQuestionCommands {
     actor: Actor,
     message: LiveQuestionCommand,
     socket: WebSocket,
-    asking: boolean,
+    /** Read again after a check awaits: the room may have closed to questions meanwhile. */
+    asking: () => boolean,
   ): Promise<LiveRefusal | void> {
     switch (message.type) {
       case "question.ask": {

@@ -21,6 +21,8 @@ export interface ProposalScreeningInput {
   details?: Record<string, unknown> | null;
   /** The author saw the advice and submits as written; only a block still refuses. */
   adviceAcknowledged: boolean;
+  /** The abstract's field in the form the author is on, where the reasons are shown. */
+  abstractField: string;
 }
 
 /** Null when no check runs for the event, so the proposal goes on unchecked. */
@@ -47,13 +49,13 @@ export async function screenProposal(
     const reasons = flags.filter((flag) => flag.blocking).map((flag) => flag.message);
     throw new AppError(422, PROPOSAL_CHECK_BLOCKED, "This proposal cannot be submitted as written.", {
       formErrors: ["This proposal cannot be submitted as written. Revise it and submit again."],
-      fieldErrors: { "proposal.abstract": [reasons.join(" ")] },
+      fieldErrors: { [input.abstractField]: [reasons.join(" ")] },
     });
   }
   if (outcome === "advised" && !input.adviceAcknowledged) {
     throw new AppError(422, PROPOSAL_CHECK_ADVICE, "Review the feedback on your proposal.", {
       formErrors: ["Review the feedback on your proposal. Revise it, or submit again to send it as written."],
-      fieldErrors: { "proposal.abstract": [flags.map((flag) => flag.message).join(" ")] },
+      fieldErrors: { [input.abstractField]: [flags.map((flag) => flag.message).join(" ")] },
     });
   }
   return run;

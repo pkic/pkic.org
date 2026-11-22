@@ -61,14 +61,6 @@ async function handleProposalCreate(
     customAnswers: body.proposal.details,
   });
   const proposalDetails = validatedForm.answers;
-  const screening = await screenProposal(c.env, {
-    eventId: event.id,
-    type: body.proposal.type,
-    title: body.proposal.title,
-    abstract: body.proposal.abstract,
-    details: proposalDetails,
-    adviceAcknowledged: body.adviceAcknowledged,
-  });
 
   const submitted = await submitProposal(c.env.DB, {
     actor,
@@ -82,7 +74,16 @@ async function handleProposalCreate(
     ip: c.req.raw.headers.get("cf-connecting-ip"),
     userAgent: c.req.raw.headers.get("user-agent"),
     formDefinition: validatedForm.form,
-    screening,
+    screen: () =>
+      screenProposal(c.env, {
+        eventId: event.id,
+        type: body.proposal.type,
+        title: body.proposal.title,
+        abstract: body.proposal.abstract,
+        details: proposalDetails,
+        adviceAcknowledged: body.adviceAcknowledged,
+        abstractField: "proposal.abstract",
+      }),
   });
 
   c.executionCtx.waitUntil(

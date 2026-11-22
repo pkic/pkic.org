@@ -122,7 +122,7 @@ export class LiveRoomQuestions {
     actor: Actor,
     input: { text: string; anonymous: boolean; addressedTo: string | null },
     operationId: string,
-    open: boolean,
+    open: () => boolean,
   ): Promise<LiveRefusal | { questionId: string }> {
     const { text, anonymous, addressedTo } = input;
     const room = this.store.session();
@@ -146,7 +146,7 @@ export class LiveRoomQuestions {
     };
     const existing = replay();
     if (existing) return existing;
-    if (!open) return REFUSALS.closed;
+    if (!open()) return REFUSALS.closed;
     const addressee = resolveLiveQuestionAddressee(room.session, addressedTo);
     if (addressee && "code" in addressee) return addressee;
     const stamp = await this.authors.writing(viewer);
@@ -162,6 +162,8 @@ export class LiveRoomQuestions {
     // The check yields: another invocation may have accepted this request meanwhile.
     const checked = replay();
     if (checked) return checked;
+    if (!open()) return REFUSALS.closed;
+    if (this.store.questionCount() >= LIVE_ROOM_POLICY.maxQuestionsPerRoom) return REFUSALS.full;
     this.store.addQuestion({
       id,
       authorUserId: actor.userId,
@@ -183,7 +185,7 @@ export class LiveRoomQuestions {
   async changeAuthorQuestion(
     actor: Actor,
     input: Extract<LiveRoomClientMessage, { type: "question.edit" | "question.withdraw" }>,
-    open: boolean,
+    open: () => boolean,
   ): Promise<LiveRefusal | { questionId: string; revision: number }> {
     const question = this.store.question(input.questionId);
     if (!question) return REFUSALS.missing;
@@ -199,7 +201,7 @@ export class LiveRoomQuestions {
     if (question.author_revision !== input.expectedRevision) return REFUSALS.changed;
     if (question.author_withdrawn) return REFUSALS.withdrawn;
     if (input.type === "question.edit") {
-      if (!open) return REFUSALS.closed;
+      if (!open()) return REFUSALS.closed;
       if (
         !canEditOwnLiveQuestion({
           mine: true,
@@ -213,6 +215,7 @@ export class LiveRoomQuestions {
     }
     const check = input.type === "question.edit" ? await this.check(input.text) : null;
     if (check && "code" in check) return check;
+    if (input.type === "question.edit" && !open()) return REFUSALS.closed;
     if (
       input.type === "question.edit" &&
       this.store.question(question.id)?.author_revision !== question.author_revision

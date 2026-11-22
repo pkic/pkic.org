@@ -11,6 +11,8 @@ export const PRESENTATION_CHECK_MAX_BYTES = 30 * 1024 * 1024;
 /** The check reads at most this much of the slides' text. */
 const MAX_TEXT_LENGTH = 20_000;
 const MAX_SLIDES = 300;
+/** One slide's XML is read to this size; a file inflating beyond it is cut off, not expanded. */
+const MAX_SLIDE_XML_BYTES = 1024 * 1024;
 
 const CONVERTED_EXTENSIONS = new Set(["pdf", "docx", "odt"]);
 
@@ -91,18 +93,38 @@ async function zipEntryText(bytes: Uint8Array, entry: ZipEntry): Promise<string 
     view.getUint16(entry.localOffset + 26, true) +
     view.getUint16(entry.localOffset + 28, true);
   const data = bytes.subarray(start, start + entry.compressedSize);
-  if (entry.method === 0) return new TextDecoder().decode(data);
+  if (entry.method === 0) return new TextDecoder().decode(data.subarray(0, MAX_SLIDE_XML_BYTES));
   if (entry.method !== 8) return null;
   const stream = new Blob([data.slice()]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
-  return new Response(stream).text();
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (size < MAX_SLIDE_XML_BYTES) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    size += value.length;
+  }
+  await reader.cancel().catch(() => undefined);
+  const xml = new Uint8Array(Math.min(size, MAX_SLIDE_XML_BYTES));
+  let at = 0;
+  for (const chunk of chunks) {
+    const part = chunk.subarray(0, xml.length - at);
+    xml.set(part, at);
+    at += part.length;
+  }
+  return new TextDecoder().decode(xml);
 }
 
 const XML_ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
 
 function decodeXml(text: string): string {
   return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (whole, entity: string) => {
-    if (entity.startsWith("#x") || entity.startsWith("#X")) return String.fromCodePoint(parseInt(entity.slice(2), 16));
-    if (entity.startsWith("#")) return String.fromCodePoint(parseInt(entity.slice(1), 10));
+    if (entity.startsWith("#")) {
+      const hex = entity[1] === "x" || entity[1] === "X";
+      const code = parseInt(entity.slice(hex ? 2 : 1), hex ? 16 : 10);
+      return Number.isInteger(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : "";
+    }
     return XML_ENTITIES[entity.toLowerCase()] ?? whole;
   });
 }

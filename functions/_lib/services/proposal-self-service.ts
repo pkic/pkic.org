@@ -146,19 +146,21 @@ export async function saveProposalAccessChanges(
       (input.body.title !== undefined && input.body.title !== proposal.title) ||
       (input.body.abstract !== undefined && input.body.abstract !== proposal.abstract) ||
       details !== undefined);
-  const screening = editsContent
-    ? await screenProposal(
-        { AI: input.ai, DB: db },
-        {
-          eventId: event.id,
-          type: proposalType ?? proposal.proposal_type,
-          title: input.body.title ?? proposal.title,
-          abstract: input.body.abstract ?? proposal.abstract,
-          details: details ?? parseJsonSafe<Record<string, unknown> | null>(proposal.details_json, null),
-          adviceAcknowledged: true,
-        },
-      )
-    : null;
+  const screen = editsContent
+    ? () =>
+        screenProposal(
+          { AI: input.ai, DB: db },
+          {
+            eventId: event.id,
+            type: proposalType ?? proposal.proposal_type,
+            title: input.body.title ?? proposal.title,
+            abstract: input.body.abstract ?? proposal.abstract,
+            details: details ?? parseJsonSafe<Record<string, unknown> | null>(proposal.details_json, null),
+            adviceAcknowledged: true,
+            abstractField: "abstract",
+          },
+        )
+    : undefined;
   const saved = await updateProposalForVerifiedOwner(db, proposal, {
     action: input.body.status === "withdrawn" ? "withdraw" : "update",
     proposalType,
@@ -168,7 +170,7 @@ export async function saveProposalAccessChanges(
     detailsJson: details === undefined ? undefined : Object.keys(details).length > 0 ? stringifyJson(details) : null,
     formSubmissionStatements: formSubmission?.statements,
     formPlacementId: validatedForm?.form?.placement?.id ?? null,
-    screening,
+    screen,
   });
 
   return { success: true, proposal: toAccessibleProposal(saved) };

@@ -276,8 +276,8 @@ export async function updateProposalForVerifiedOwner(
     formRevisionGuard?: StatementLike | null;
     formPlacementId?: string | null;
     formSubmissionStatements?: StatementLike[];
-    /** The automatic check of the edited proposal, kept for reviewers in the same batch. */
-    screening?: ContentCheckRun | null;
+    /** The automatic check of the edited proposal, run once the edit is known to apply and kept in the same batch. */
+    screen?: () => Promise<ContentCheckRun | null>;
   },
 ): Promise<ProposalRecord> {
   if (payload.committeeNotes !== undefined && !isProposalCommitteeNotesEditableStatus(proposal.status))
@@ -398,6 +398,7 @@ export async function updateProposalForVerifiedOwner(
   }
   if (Object.keys(changes).length === 0) return proposal;
 
+  const screening = await payload.screen?.();
   const requiresDecisionRelease = resubmits;
   let updateResults;
   try {
@@ -451,9 +452,7 @@ export async function updateProposalForVerifiedOwner(
         now,
       ),
       ...(payload.formSubmissionStatements ?? []),
-      ...(payload.screening
-        ? [prepareStoreContentCheckResult(db, "proposal", proposal.id, payload.screening, now)]
-        : []),
+      ...(screening ? [prepareStoreContentCheckResult(db, "proposal", proposal.id, screening, now)] : []),
       db
         .prepare(
           `DELETE FROM proposal_decisions

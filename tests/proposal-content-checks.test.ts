@@ -99,6 +99,7 @@ describe("automatic screening of proposals", () => {
 
     const blocked = await edit(`${body.proposal.abstract} Buy our gateway today.`);
     expect(blocked.status).toBe(422);
+    expect((await blocked.json<any>()).error.details.fieldErrors.abstract?.[0]).toContain("sales pitch");
     expect((await readContentCheckResult(env.DB, "proposal", proposalId))?.outcome).toBe("passed");
 
     const vague = await edit(`Some thoughts. ${body.proposal.abstract}`);

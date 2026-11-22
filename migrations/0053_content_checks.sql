@@ -42,6 +42,11 @@ CREATE TABLE content_check_results (
   PRIMARY KEY (kind, subject_id)
 );
 
+-- Failed checks are counted so a version that keeps failing is given up on.
+ALTER TABLE presentation_versions ADD COLUMN content_check_attempts INTEGER NOT NULL DEFAULT 0;
+
+CREATE INDEX idx_presentation_versions_uploaded ON presentation_versions(uploaded_at) WHERE deleted_at IS NULL;
+
 -- Uploaded slides are checked right after upload; this pass retries any
 -- recent version still without a verdict.
 INSERT INTO scheduled_jobs (job_key, interval_seconds, next_run_at) VALUES

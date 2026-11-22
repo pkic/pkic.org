@@ -24,8 +24,8 @@ const ContentCheckSettingsPut = openApiRoute(contentCheckSettingsPutRouteSchema,
 });
 
 const ContentCheckTrialPost = openApiRoute(contentCheckTrialRouteSchema, async (c: AdminContext, data) => {
-  await requireStaffPermission(c, "events:manage");
-  return json(await runContentCheckTrial(c.env, data.params.kind, data.body));
+  const { staff } = await requireStaffPermission(c, "events:manage");
+  return json(await runContentCheckTrial(c.env, staff.id, data.params.kind, data.body));
 });
 
 const app = new Hono<RequestDbContext>();

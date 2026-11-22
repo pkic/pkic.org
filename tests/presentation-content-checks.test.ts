@@ -107,4 +107,36 @@ describe("automatic check of uploaded slides", () => {
     expect(await readContentCheckResult(env.DB, "presentation", slides)).toBeNull();
     expect(await checkPresentationVersion(checkedEnv, slides)).toBe("checked");
   });
+
+  it("ignores character references outside Unicode instead of failing", async () => {
+    const text = await extractPresentationText(checkedEnv, {
+      bytes: await pptx([["Keys&#x110000; and&#0; certs &#65;"]]),
+      fileName: "talk.pptx",
+    });
+    expect(text).toBe("Slide 1:\nKeys and certs A");
+  });
+
+  it("gives up on a version after repeated failures and does not let it starve newer uploads", async () => {
+    const proposalId = await proposal();
+    const failing = await uploadedVersion("talk.pptx", await pptx([["Failing"]]), proposalId);
+    model.run.mockRejectedValue(new Error("model unavailable"));
+    try {
+      expect(await checkPresentationVersion(checkedEnv, failing)).toBe("retry");
+      expect(await checkPresentationVersion(checkedEnv, failing)).toBe("retry");
+      expect(await checkPresentationVersion(checkedEnv, failing)).toBe("unchecked");
+    } finally {
+      model.run.mockReset();
+      model.run.mockImplementation(async (_m, input) => ({
+        answers: Object.fromEntries(Object.keys(input.questions).map((id) => [id, { noul: 0.02 }])),
+      }));
+    }
+    expect(await readContentCheckResult(env.DB, "presentation", failing)).toMatchObject({ outcome: "unchecked" });
+
+    const older = await uploadedVersion("talk.pptx", await pptx([["Older"]]), proposalId, 2);
+    await env.DB.prepare("UPDATE presentation_versions SET content_check_attempts = 2 WHERE id = ?").bind(older).run();
+    const fresh = await uploadedVersion("talk.pptx", await pptx([["Fresh"]]), proposalId, 3);
+    expect(await checkPendingPresentations(checkedEnv, 1)).toMatchObject({ checked: 1 });
+    expect(await readContentCheckResult(env.DB, "presentation", fresh)).toMatchObject({ outcome: "passed" });
+    expect(await readContentCheckResult(env.DB, "presentation", older)).toBeNull();
+  });
 });

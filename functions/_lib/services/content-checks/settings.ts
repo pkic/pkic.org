@@ -244,6 +244,15 @@ export async function saveEventContentCheckAdditions(
   input: ContentCheckEventAdditionsInput,
 ): Promise<{ revision: number }> {
   const now = nowIso();
+  // Ids that name no PKIC-wide question would silently disable one added later.
+  const wide = await db
+    .prepare("SELECT questions_json FROM content_check_settings WHERE kind = ?")
+    .bind(kind)
+    .first<{ questions_json: string }>();
+  const wideIds = new Set(
+    (wide ? decodeQuestions(wide.questions_json) : DEFAULT_CONTENT_CHECK_SETTINGS[kind].questions).map((q) => q.id),
+  );
+  const disabledQuestionIds = [...new Set(input.disabledQuestionIds)].filter((id) => wideIds.has(id));
   await commit(db, [
     preparePermissionsAuthorizationGuard(db, actor, [
       { permission: "events:write", context: { type: "event", id: eventId } },
@@ -267,14 +276,14 @@ export async function saveEventContentCheckAdditions(
         kind,
         input.context,
         JSON.stringify(input.questions),
-        JSON.stringify(input.disabledQuestionIds),
+        JSON.stringify(disabledQuestionIds),
         actor.id,
         now,
       ),
     prepareAuditLog(db, "user", actor.id, "event_content_check_changed", "event", eventId, {
       kind,
       questions: input.questions.map((question) => question.id),
-      disabledQuestionIds: input.disabledQuestionIds,
+      disabledQuestionIds,
     }),
   ]);
   return { revision: input.expectedRevision + 1 };
