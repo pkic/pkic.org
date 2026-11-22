@@ -117,6 +117,24 @@ describe("automatic checks of live chat and questions", () => {
     expect(delivered.message.text).toBe(text);
   });
 
+  it("keeps an edit that is still being checked out of the replies other attendees read", async () => {
+    const author = await f.connectChat("attendee");
+    const reader = await f.connectChat("secondAttendee");
+    const parent = await say(author, "Renewals take a week", reader);
+    reader.send({ type: "chat.send", text: "Thanks", replyTo: parent.id });
+    const reply = await author.next("chat.message", (update) => update.message.text === "Thanks");
+    const release = holdChecks();
+    const edited = "A slow edit with unchecked words";
+    author.send({ type: "chat.edit", messageId: parent.id, text: edited });
+    await author.next("chat.message", (update) => update.message.id === parent.id && update.message.text === edited);
+    await vi.waitFor(() => expect(model.run).toHaveBeenCalledTimes(3));
+    const joining = await f.connectChat("secondAttendee");
+    const seen = (joining.received[0] as Extract<LiveRoomServerMessage, { type: "location.chat.snapshot" }>).chat;
+    const quoted = seen.find((message) => message.id === reply.message.id)?.replyTo;
+    expect(quoted).toMatchObject({ messageId: parent.id, excerpt: null });
+    release();
+  });
+
   it("lets a moderator keep a message the check only advised against", async () => {
     const author = await f.connectChat("attendee");
     const reader = await f.connectChat("secondAttendee");
