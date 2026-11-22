@@ -87,7 +87,7 @@ async function mount(
                 name: "Consenting attendee",
                 email: "attendee@example.test",
                 organization: null,
-                personalEmail: false,
+                title: null,
                 capturedAt: "2030-01-01T10:00:00.000Z",
                 operatorName: "Operator",
               },

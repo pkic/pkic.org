@@ -68,8 +68,8 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
               id: leadId,
               name: "Synthetic attendee",
               email: "synthetic-lead@gmail.com",
-              organization: null,
-              personalEmail: true,
+              organization: "Selected organization",
+              title: "Security engineer",
               capturedAt: "2026-12-01T09:30:00.000Z",
               operatorName: "Demo operator",
             },
@@ -84,8 +84,8 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
                     id: leadId,
                     name: "Synthetic attendee",
                     email: "synthetic-lead@gmail.com",
-                    organization: null,
-                    personalEmail: true,
+                    organization: "Selected organization",
+                    title: "Security engineer",
                     capturedAt: "2026-12-01T09:30:00.000Z",
                     operatorName: "Demo operator",
                   },
@@ -129,7 +129,7 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
   await expect(page.getByRole("button", { name: "Open leads for Example sponsor" })).toHaveCount(0);
   const contacts = page.getByRole("region", { name: "Consenting leads", exact: true });
   await expect(contacts.getByText("Synthetic attendee", { exact: true })).toBeVisible();
-  await expect(contacts.getByText("Personal email address", { exact: true })).toBeVisible();
+  await expect(contacts.getByText("Selected organization", { exact: true })).toBeVisible();
   await contacts.getByRole("button", { name: "Actions for Synthetic attendee" }).click();
   await page.getByRole("menuitem", { name: "Remove lead for sponsor" }).click();
   await expect(page.getByRole("alertdialog", { name: "Remove Synthetic attendee for Example sponsor?" })).toBeVisible();
@@ -175,8 +175,10 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
     .toBe(true);
   await page.getByRole("link", { name: "View lead Synthetic attendee", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Capture history", exact: true })).toBeVisible();
+  await expect(page.getByText("Security engineer", { exact: true })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: /Scanned at/ })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: /Uploaded at/ })).toBeVisible();
+  await page.screenshot({ path: info.outputPath("sponsor-lead-detail-desktop.png"), fullPage: true });
   const artifacts = process.env.AGENDA_SCREENSHOT_DIR ?? "test-results/sponsor-leads";
   await mkdir(artifacts, { recursive: true });
   await page.setViewportSize({ width: 390, height: 844 });

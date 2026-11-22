@@ -6,7 +6,6 @@ import type { DatabaseLike } from "../../db/types";
 import { assertEventContactAccess, eventContactAccessSql } from "./evidence-retention";
 import { sponsorConsentSql } from "./sponsor-consent";
 import { sponsorLeadPermissionBindings, sponsorLeadPermissionSql } from "./lead-scope";
-import { contactAffiliation } from "../../email-domains/contact-kind";
 import { activeEventSponsorSql } from "../../auth/sponsor-organization-lead-access";
 import { activeSponsorLeadOriginSql, activeSponsorLeadSql } from "./sponsor-lead-active";
 
@@ -51,11 +50,8 @@ export async function exportSponsorLeads(db: DatabaseLike, eventId: string, spon
   if (rows.length > 100000) throw new AppError(413, "CSV_EXPORT_TOO_LARGE", "Export must not exceed 100000 leads.");
   return encodeBoundedCsv(
     [
-      ["Name", "Email", "Organization", "Title", "Personal email address", "Captured at"],
-      ...rows.map((row) => {
-        const affiliation = contactAffiliation(row.email, row.organization);
-        return [row.name, row.email, affiliation.organization, row.title, affiliation.personalEmail, row.observed_at];
-      }),
+      ["Name", "Email", "Organization", "Title", "Captured at"],
+      ...rows.map((row) => [row.name, row.email, row.organization, row.title, row.observed_at]),
     ],
     20 * 1024 * 1024,
   );

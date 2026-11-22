@@ -59,6 +59,7 @@ function LiveSponsorLeadDetail({
               { term: "Sponsor", value: sponsorName },
               { term: "Email", value: lead.email },
               ...(lead.organization ? [{ term: "Organization", value: lead.organization }] : []),
+              ...(lead.title ? [{ term: "Title", value: lead.title }] : []),
             ]}
           />
         </PanelBody>

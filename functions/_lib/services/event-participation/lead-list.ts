@@ -1,4 +1,4 @@
-import { registrationOrganizationSql } from "../registrations/selected-identity";
+import { registrationJobTitleSql, registrationOrganizationSql } from "../registrations/selected-identity";
 import {
   sponsorLeadListSchema,
   sponsorLeadDetailSchema,
@@ -17,7 +17,6 @@ import { AppError } from "../../errors";
 import { assertEventContactAccess, eventContactAccessSql } from "./evidence-retention";
 import { sponsorConsentSql } from "./sponsor-consent";
 import { sponsorLeadPermissionBindings, sponsorLeadPermissionSql } from "./lead-scope";
-import { contactAffiliation } from "../../email-domains/contact-kind";
 import { activeEventSponsorSql, sponsorLeadViewerPredicateSql } from "../../auth/sponsor-organization-lead-access";
 import { activeSponsorCaptureSql, activeSponsorLeadOriginSql, activeSponsorLeadSql } from "./sponsor-lead-active";
 import { requireTokenPermission, tokenAllowsPermission } from "../../auth/permissions";
@@ -84,9 +83,10 @@ export async function listSponsorLeads(
   const name = "TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,''))";
   const organization = registrationOrganizationSql("reg");
   const search = query.q ? buildD1TextSearchFilter(query.q, [name, "u.email", organization]) : null;
-  const { rows, total } = await queryPage<Omit<SponsorLead, "personalEmail">>(db, {
+  const { rows, total } = await queryPage<SponsorLead>(db, {
     source: {
       selectSql: `SELECT lead.id,${name} AS name,u.email,${organization} AS organization,
+        ${registrationJobTitleSql("reg")} AS title,
         ${capturedAt} AS capturedAt,
         COALESCE((SELECT sponsor_org.name FROM organizations sponsor_org WHERE sponsor_org.id=sponsor.organization_id),sponsor.non_member_name,sponsor.contact_name,'Unspecified sponsor') AS sponsorName,
         TRIM(COALESCE(capturer.first_name,'') || ' ' || COALESCE(capturer.last_name,'')) AS operatorName`,
@@ -118,10 +118,7 @@ export async function listSponsorLeads(
     offset: query.offset,
   });
   return sponsorLeadListSchema.parse({
-    leads: rows.map((lead) => ({
-      ...lead,
-      ...contactAffiliation(lead.email, lead.organization),
-    })),
+    leads: rows,
     page: buildPageInfo(query.limit, query.offset, total, rows.length),
   });
 }

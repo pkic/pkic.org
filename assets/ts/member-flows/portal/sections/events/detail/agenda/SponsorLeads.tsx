@@ -1,4 +1,3 @@
-import { ContactOrganization } from "../../../../../../components/ContactOrganization";
 import { type ClockZone } from "../../../../../../../shared/event-clock";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { lazy, Suspense } from "preact/compat";
@@ -290,13 +289,7 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
                   { header: "Email", cell: (row) => row.email ?? "—", sort: { asc: "email", desc: "-email" } },
                   {
                     header: "Organization",
-                    cell: (row) => (
-                      <ContactOrganization
-                        audience="sponsor"
-                        organization={row.organization}
-                        personalEmail={row.personalEmail}
-                      />
-                    ),
+                    cell: (row) => row.organization ?? "—",
                     sort: { asc: "organization", desc: "-organization" },
                   },
                   {

@@ -497,7 +497,11 @@ describe("sponsor live lead viewing through the mounted API", () => {
     const page = sponsorLeadListSchema.parse(await searched.json());
     expect(page.page.total).toBe(1);
     expect(page.leads).toEqual([
-      expect.objectContaining({ email: "attendee0@synthetic.test", organization: "Zulu event organization" }),
+      expect.objectContaining({
+        email: "attendee0@synthetic.test",
+        organization: "Zulu event organization",
+        title: "Selected title",
+      }),
     ]);
     const ordered = sponsorLeadListSchema.parse(await (await request(undefined, "?sort=organization")).json());
     expect(ordered.leads.map((lead) => lead.organization)).toEqual([
@@ -520,7 +524,7 @@ describe("sponsor live lead viewing through the mounted API", () => {
     expect(csv).not.toContain("Later employer");
   });
 
-  it("marks a personal-mailbox lead as such, with no organization, in the list and the export", async () => {
+  it("keeps the selected organization for a lead using a personal mailbox", async () => {
     const [person] = await queryAll<{ id: string }>(
       env.DB,
       "SELECT id FROM users WHERE email = ?",
@@ -540,7 +544,7 @@ describe("sponsor live lead viewing through the mounted API", () => {
       .bind(identity, eventId, person.id)
       .run();
     const payload: unknown = await (await request(undefined, "?q=lead.person")).json();
-    expect(payload).toHaveProperty("leads.0.personalEmail", true);
+    expect(payload).not.toHaveProperty("leads.0.personalEmail");
     expect(payload).not.toHaveProperty("leads.0.userId");
     expect(payload).not.toHaveProperty("leads.0.operatorUserId");
     expect(JSON.stringify(payload)).not.toContain(person.id);
@@ -549,17 +553,16 @@ describe("sponsor live lead viewing through the mounted API", () => {
     expect(page.leads).toEqual([
       expect.objectContaining({
         email: "lead.person@gmail.com",
-        organization: null,
-        personalEmail: true,
+        organization: "Selected organization",
       }),
     ]);
     await grant("agenda:leads_export");
     const csv = await (await request(`/sponsors/${sponsorId}/leads.csv`)).text();
-    expect(csv.split("\r\n")[0]).toBe("Name,Email,Organization,Title,Personal email address,Captured at");
-    expect(csv).toContain(",lead.person@gmail.com,,,true,");
+    expect(csv.split("\r\n")[0]).toBe("Name,Email,Organization,Title,Captured at");
+    expect(csv).toContain(",lead.person@gmail.com,Selected organization,,");
     expect(csv).not.toContain(person.id);
     expect(csv).not.toContain(operator);
-    expect(csv).not.toContain("Selected organization");
+    expect(csv).not.toContain("Personal email address");
   });
 
   it("paginates unique live contacts, searches and attributes capture without creating attendance", async () => {

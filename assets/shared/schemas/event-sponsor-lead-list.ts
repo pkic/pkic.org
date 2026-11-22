@@ -11,7 +11,7 @@ export const sponsorLeadSchema = z.object({
   name: z.string(),
   email: z.string(),
   organization: z.string().nullable(),
-  personalEmail: z.boolean(),
+  title: z.string().nullable(),
   capturedAt: utcInstantSchema,
   operatorName: z.string(),
   sponsorName: z.string().optional(),
