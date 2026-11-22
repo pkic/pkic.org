@@ -259,4 +259,8 @@ describe("a monitor in a room that sets up its own screens", () => {
     expect(studioShownOutputs(["foy", "program"], room)).toEqual(["foy", "program"]);
     expect(studioShownOutputs(["projector"], DEFAULT_LIVE_ROOM_OUTPUTS)).toEqual(["projector"]);
   });
+
+  it("shows Program on a monitor whose screens a room without screens does not have", () => {
+    expect(studioShownOutputs(["projector", "stage-display"], [])).toEqual(["program"]);
+  });
 });

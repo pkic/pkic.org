@@ -94,15 +94,16 @@ export function studioMonitorChoices(shown: readonly StudioOutput[], room: reado
 /**
  * What a monitor shows in this room. A monitor saved with a screen this room
  * does not have shows the room's own screens in its place, so a multiview
- * made for one room shows every screen of another.
+ * made for one room shows every screen of another; with none left, it shows
+ * Program.
  */
 export function studioShownOutputs(saved: readonly StudioOutput[], room: readonly LiveRoomOutput[]): StudioOutput[] {
   const all = studioOutputs(room);
   const kept = saved.filter((output) => all.includes(output));
-  if (kept.length === saved.length) return kept;
+  if (kept.length === saved.length && kept.length) return kept;
   const added = liveStudioOutputs(room).filter((output) => !kept.includes(output));
   const shown = new Set([...kept, ...added]);
-  return all.filter((output) => shown.has(output));
+  return shown.size ? all.filter((output) => shown.has(output)) : ["program"];
 }
 
 /** An output's name, code and purpose in this room. */

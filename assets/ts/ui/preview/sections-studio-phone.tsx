@@ -8,20 +8,13 @@ import { DEFAULT_LIVE_SCREEN_SYNC } from "../../../shared/schemas/live-screen-sy
 import { monitorPanelView } from "../../member-flows/portal/sections/events/detail/live/studio/MonitorPanel";
 import { StudioPhone } from "../../member-flows/portal/sections/events/detail/live/studio/StudioPhone";
 import { TransitionControl } from "../../member-flows/portal/sections/events/detail/live/studio/StudioSwitcher";
-import type { StudioPanel } from "../../member-flows/portal/sections/events/detail/live/studio/studio-layout";
+import { studioPhonePanel } from "../../member-flows/portal/sections/events/detail/live/studio/studio-phone-panels";
 import { MONITOR_SOURCES } from "./sections-studio-on-screen";
 import { RoomOpeningMenu } from "../../member-flows/portal/sections/events/detail/live/studio/RoomOpeningMenu";
 
 const noCommand = () => undefined;
-const PHONE_MONITORS: StudioPanel = {
-  id: "phone-monitor",
-  type: "monitor",
-  x: 0,
-  y: 0,
-  w: 12,
-  h: 8,
-  outputs: ["preview", "program"],
-};
+/** The Monitors view as a phone starts it: the room's screens under the Preview and Program thumbnails. */
+const PHONE_MONITORS = studioPhonePanel("monitor");
 
 /** The studio on a phone with its Monitors view open: its pictures of an output move without graphics layers. */
 function PhoneStudio() {
@@ -65,7 +58,7 @@ export const studioPhoneSections: PreviewSection[] = [
   {
     id: "studio-phone-monitors",
     title: "Studio on a phone: thumbnails and monitors",
-    note: "Open at phone width. Preview and Program sit at the top as thumbnails, with the Monitors view under them. The monitors and the full-screen view move as the output does, drawn at half size to keep a phone's browser within its memory. The thumbnails hold still: a graphic cuts between its states, while the ticker still travels and a person's titles still take turns.",
+    note: "Open at phone width. Preview and Program sit at the top as thumbnails, with the Monitors view under them on the room's screens: the projector and the stage display. The monitors and the full-screen view move as the output does, drawn at half size to keep a phone's browser within its memory. The thumbnails hold still: a graphic cuts between its states, while the ticker still travels and a person's titles still take turns.",
     render: () => <PhoneStudio />,
   },
 ];
