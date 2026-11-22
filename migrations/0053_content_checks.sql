@@ -1,0 +1,43 @@
+-- Automatic checks: the PKIC-wide settings for each kind of content, what an
+-- event adds to them, and the latest verdict for a proposal or uploaded slides.
+-- Chat messages and questions keep their verdicts in the live room's own storage.
+-- `kind` and `outcome` are validated by the shared domain schema, not here.
+
+CREATE TABLE content_check_settings (
+  kind                TEXT    NOT NULL PRIMARY KEY,
+  enabled             INTEGER NOT NULL,
+  model               TEXT    NOT NULL,
+  context             TEXT    NOT NULL,
+  -- The flag and score questions, as the shared question schema describes them.
+  questions_json      TEXT    NOT NULL,
+  revision            INTEGER NOT NULL,
+  updated_by_user_id  TEXT REFERENCES users(id),
+  updated_at          TEXT    NOT NULL
+);
+
+CREATE TABLE event_content_check_additions (
+  event_id                    TEXT    NOT NULL REFERENCES events(id),
+  kind                        TEXT    NOT NULL,
+  context                     TEXT    NOT NULL,
+  -- Added questions; one with the id of a PKIC-wide question replaces it for this event.
+  questions_json              TEXT    NOT NULL,
+  disabled_question_ids_json  TEXT    NOT NULL,
+  revision                    INTEGER NOT NULL,
+  updated_by_user_id          TEXT REFERENCES users(id),
+  updated_at                  TEXT    NOT NULL,
+  PRIMARY KEY (event_id, kind)
+);
+
+-- One verdict per checked item: a proposal, or one uploaded version of slides.
+-- It holds the raised flags and scores only, never the checked text.
+CREATE TABLE content_check_results (
+  kind           TEXT    NOT NULL,
+  subject_id     TEXT    NOT NULL,
+  outcome        TEXT    NOT NULL,
+  verdict_json   TEXT    NOT NULL,
+  score_percent  REAL,
+  model          TEXT,
+  latency_ms     INTEGER NOT NULL,
+  checked_at     TEXT    NOT NULL,
+  PRIMARY KEY (kind, subject_id)
+);

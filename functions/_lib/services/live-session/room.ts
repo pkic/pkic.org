@@ -24,6 +24,7 @@ import type { z } from "zod";
 import type { liveProgramSelectSchema } from "../../../../assets/shared/schemas/live-room-program";
 import { LiveRoomChat, type LiveChatArchiveRow } from "./room-chat";
 import { liveChatErasable, purgeLiveRoom } from "./room-purge";
+import { LiveRoomContentChecks } from "./room-content-checks";
 import { LiveRoomChatActions } from "./room-chat-actions";
 import { LiveChatFeed } from "./room-chat-feed";
 import { LiveChatModerationStore } from "./room-chat-moderation";
@@ -110,6 +111,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
   private readonly engagement: LiveRoomEngagement;
   private readonly onScreenLists: LiveRoomOnScreenLists;
   private readonly location: LiveLocationChatStore;
+  private readonly contentChecks: LiveRoomContentChecks;
   private readonly locationChat: LiveLocationChatRoom;
   private readonly occurrenceParticipation: LiveOccurrenceChatAccess;
   private readonly sessionCommands: LiveSessionCommands;
@@ -125,6 +127,10 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     this.pollStore = new LivePollStore(this.sql);
     const preparedStore = new LivePreparedQuestionStore(this.sql);
     this.chat = new LiveRoomChat(this.sql);
+    this.contentChecks = new LiveRoomContentChecks(
+      this.sessionEnv,
+      () => liveRoomChatScope(this.store, this.location)?.eventId ?? null,
+    );
     this.decisions = new LiveRoomModerationStore(this.sql);
     this.access = new LiveRoomAccessLease(
       ctx,
@@ -192,6 +198,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       this.store,
       this.broadcast,
       this.authors,
+      this.contentChecks,
       {
         tickerChanged: async () => this.locationChat.onAirChanged(),
         listed: () => this.locationChat.onAirChanged(),
@@ -202,11 +209,19 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
         counted: () => this.scheduleCopy(),
       },
     );
-    this.questions = new LiveRoomQuestions(this.store, this.broadcast, this.controls, this.authors, this.decisions, {
-      allowed: (userId) => this.store.takeQuestionWriteAllowance(userId, nowIso()),
-      changed: () => this.scheduleCopy(),
-      listed: () => this.graphics.lists.due(),
-    });
+    this.questions = new LiveRoomQuestions(
+      this.store,
+      this.broadcast,
+      this.controls,
+      this.authors,
+      this.decisions,
+      this.contentChecks,
+      {
+        allowed: (userId) => this.store.takeQuestionWriteAllowance(userId, nowIso()),
+        changed: () => this.scheduleCopy(),
+        listed: () => this.graphics.lists.due(),
+      },
+    );
     this.preparedQuestions = new LiveRoomPreparedQuestions(this.store, preparedStore, this.broadcast, {
       releaseDue: (at) => this.scheduleAlarm(at, true),
       listed: () => this.graphics.lists.due(),

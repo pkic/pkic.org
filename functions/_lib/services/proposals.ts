@@ -30,6 +30,8 @@ import { isRegistrationTransitionConflict, registrationChangedError } from "./re
 import { isEventParticipantSourceConflict } from "./event-participant-source-revision";
 import { isProposalSpeakerRosterConflict } from "./proposal-speaker-roster-revision";
 import { formSubmissionContextChangedError, isFormSubmissionContextConflict } from "./forms";
+import type { ContentCheckRun } from "./content-checks/model";
+import { prepareStoreContentCheckResult } from "./content-checks/results";
 
 export interface ProposalRecord {
   id: string;
@@ -274,6 +276,8 @@ export async function updateProposalForVerifiedOwner(
     formRevisionGuard?: StatementLike | null;
     formPlacementId?: string | null;
     formSubmissionStatements?: StatementLike[];
+    /** The automatic check of the edited proposal, kept for reviewers in the same batch. */
+    screening?: ContentCheckRun | null;
   },
 ): Promise<ProposalRecord> {
   if (payload.committeeNotes !== undefined && !isProposalCommitteeNotesEditableStatus(proposal.status))
@@ -447,6 +451,9 @@ export async function updateProposalForVerifiedOwner(
         now,
       ),
       ...(payload.formSubmissionStatements ?? []),
+      ...(payload.screening
+        ? [prepareStoreContentCheckResult(db, "proposal", proposal.id, payload.screening, now)]
+        : []),
       db
         .prepare(
           `DELETE FROM proposal_decisions

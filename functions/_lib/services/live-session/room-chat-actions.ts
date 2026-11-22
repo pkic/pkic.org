@@ -23,6 +23,7 @@ import type { LiveRoomAuthors } from "./room-authors";
 import { LIVE_PARTICIPATION_REFUSAL } from "./room-participation-refusal";
 import { chatAudienceKey, seesChatOccurrence } from "./room-chat-audience";
 import type { LiveChatQuestion } from "./location-chat-on-air";
+import type { LiveRoomContentChecks } from "./room-content-checks";
 
 type ChatCommand = Extract<LiveRoomClientMessage, { type: `chat.${string}` }>;
 type Actor = { userId: string; name: string };
@@ -51,6 +52,8 @@ const ALLOWANCES = {
 
 /** Who the room names when it holds a message after reports rather than on a moderator's decision. */
 const HELD_BY = "Held after reports";
+/** Who the room names when the automatic check holds a message. */
+const HELD_BY_CHECK = "Automatic check";
 
 function staff(viewer: LiveRoomParticipant): boolean {
   return viewer.role === "operator";
@@ -76,6 +79,7 @@ export class LiveRoomChatActions {
     private readonly store: LiveRoomStore,
     private readonly broadcast: LiveRoomBroadcast,
     private readonly authors: LiveRoomAuthors,
+    private readonly checks: LiveRoomContentChecks,
     private readonly hooks: {
       /** Attendee chat changed; a chat ticker may show something else now. */
       tickerChanged: () => Promise<void>;
@@ -219,7 +223,9 @@ export class LiveRoomChatActions {
     const row = this.chat.send(actor, text, Date.now(), channel, occurrenceId, replyTo);
     if (!row) return REFUSALS.tooFast;
     this.authors.recordMessage(row.id, stamp);
+    const checking = channel === "attendee" && viewer.role !== "operator" && this.holdForCheck(row);
     await this.deliver([row], { removeWhenHidden: false });
+    if (checking) this.check(row);
     if (channel !== "attendee") return;
     this.nudgeTicker();
     await this.hooks.counted();
@@ -230,7 +236,46 @@ export class LiveRoomChatActions {
     if (text === row.body) return;
     if (!this.allowed("edit", actor.userId)) return REFUSALS.tooFast;
     const edited = this.chat.edit(row, text, at);
-    if (edited) await this.redeliver([edited]);
+    if (!edited) return;
+    const checking = edited.channel === "attendee" && this.holdForCheck(edited);
+    await this.redeliver([edited]);
+    if (checking) this.check(edited);
+  }
+
+  /**
+   * Holds an attendee's words off air until the automatic check answers. The check runs after they are shown in
+   * the chat. A blocked message is held for moderators, like one held after reports; an advised one stays in the
+   * chat, off air, in the moderators' review queue. A check that cannot run lets the message go on.
+   */
+  private holdForCheck(row: LiveChatRow): boolean {
+    if (!this.checks.mayRun("chat_message")) return false;
+    this.feed.moderation.checks.pending(row.id, nowIso());
+    return true;
+  }
+
+  /** Starts the check once everyone has the message, so its verdict always follows the message itself. */
+  private check(row: LiveChatRow): void {
+    this.ctx.waitUntil(this.settleCheck(row).catch((error: unknown) => console.error("Live chat check failed", error)));
+  }
+
+  private async settleCheck(sent: LiveChatRow): Promise<void> {
+    const run = await this.checks.run("chat_message", liveChatPlainText(sent.body));
+    const row = this.chat.message(sent.id);
+    // Deleted, or edited again meanwhile: the newer words have a check of their own.
+    if (!row || row.body !== sent.body) return;
+    const outcome = run?.verdict.outcome;
+    if (outcome !== "advised" && outcome !== "blocked") {
+      this.feed.moderation.checks.clear(row.id);
+      this.nudgeTicker();
+      return;
+    }
+    const at = nowIso();
+    this.feed.moderation.checks.record(row.id, { outcome, notes: run!.verdict.flags.map((flag) => flag.message) }, at);
+    if (outcome === "blocked" && !this.feed.moderation.hidden([row.id]).has(row.id)) {
+      this.feed.moderation.hide(row.id, HELD_BY_CHECK, true, at);
+      await this.deliver([row], { removeWhenHidden: true });
+    } else await this.deliver([row], { removeWhenHidden: false, only: staff });
+    this.nudgeTicker();
   }
 
   private react(actor: Actor, row: LiveChatRow, reaction: LiveChatReactionId, on: boolean) {

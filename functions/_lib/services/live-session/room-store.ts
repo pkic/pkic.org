@@ -52,6 +52,7 @@ import {
   type LiveQuestionAuthorChangeRow,
   type LiveQuestionRow,
 } from "./room-question-rows";
+import type { LiveAutomaticCheck } from "../../../../assets/shared/schemas/live-session-moderation";
 
 export interface LiveStaffActionRow {
   seq: number;
@@ -262,6 +263,21 @@ export class LiveRoomStore {
     );
   }
 
+  /** The automatic check's flag on a question's current words; null clears it. */
+  flagQuestion(questionId: string, check: LiveAutomaticCheck | null): void {
+    if (!check) {
+      this.sql.exec("DELETE FROM question_checks WHERE question_id = ?", questionId);
+      return;
+    }
+    this.sql.exec(
+      `INSERT INTO question_checks(question_id, outcome, notes_json) VALUES (?, ?, ?)
+       ON CONFLICT(question_id) DO UPDATE SET outcome = excluded.outcome, notes_json = excluded.notes_json`,
+      questionId,
+      check.outcome,
+      JSON.stringify(check.notes),
+    );
+  }
+
   moderate(questionId: string, status: LiveQuestionStatus, by: { userId: string; name: string }, at: string): void {
     this.sql.exec(
       `UPDATE questions SET status = ?, answered_at = CASE WHEN ? = 'answered' THEN ? ELSE NULL END,
@@ -326,6 +342,10 @@ export class LiveRoomStore {
     );
     this.sql.exec(
       "DELETE FROM question_prepared WHERE question_id IN (SELECT id FROM questions WHERE author_user_id=?)",
+      userId,
+    );
+    this.sql.exec(
+      "DELETE FROM question_checks WHERE question_id IN (SELECT id FROM questions WHERE author_user_id=?)",
       userId,
     );
     this.sql.exec("DELETE FROM question_write_times WHERE user_id=?", userId);

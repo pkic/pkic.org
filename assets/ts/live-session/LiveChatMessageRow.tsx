@@ -159,6 +159,8 @@ function menuItems(
 /** What replaces a removed or hidden message's words for the people who still see it. */
 function removedNote(message: LiveChatMessage): string | null {
   if (message.removal) return liveRemovalNote(message.removal);
+  if (message.moderation?.held && message.moderation.automaticCheck?.outcome === "blocked")
+    return "Held by the automatic check.";
   if (message.moderation?.hidden) return `Hidden by ${message.moderation.hidden.operatorName}.`;
   return null;
 }
@@ -167,8 +169,15 @@ function removedNote(message: LiveChatMessage): string | null {
 function ModerationNote({ message }: { message: LiveChatMessage }) {
   const moderation = message.moderation;
   if (!moderation) return null;
-  const notes: Array<{ text: string; tone: "warn" | "muted" }> = [];
-  if (moderation.held) notes.push({ text: "Held after reports", tone: "warn" });
+  const notes: Array<{ text: string; tone: "warn" | "muted"; title?: string }> = [];
+  const check = moderation.automaticCheck;
+  if (check)
+    notes.push({
+      text: check.outcome === "blocked" ? "Held by check" : "Flagged by check",
+      tone: "warn",
+      title: check.notes.join(" "),
+    });
+  if (moderation.held && check?.outcome !== "blocked") notes.push({ text: "Held after reports", tone: "warn" });
   if (moderation.reports > 0)
     notes.push({
       text: `${formatNumber(moderation.reports)} ${moderation.reports === 1 ? "report" : "reports"}`,
@@ -184,7 +193,7 @@ function ModerationNote({ message }: { message: LiveChatMessage }) {
   return notes.length ? (
     <span class="pk-live-chat__notes">
       {notes.map((note) => (
-        <span key={note.text} class="pk-live-chat__note" data-tone={note.tone}>
+        <span key={note.text} class="pk-live-chat__note" data-tone={note.tone} title={note.title}>
           {note.text}
         </span>
       ))}

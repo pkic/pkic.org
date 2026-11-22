@@ -57,6 +57,9 @@ export interface LiveQuestionRow {
   done_by_name: string | null;
   author_block: LiveParticipationBlock | null;
   author_block_until: string | null;
+  /** The automatic check's flag, when it raised one: `advised` and its notes as JSON. */
+  check_outcome: "advised" | "blocked" | null;
+  check_notes_json: string | null;
 }
 
 /** The person a question is for: a session credit's key and, when the credit names one, their account. */
@@ -78,7 +81,8 @@ export const LIVE_QUESTION_SELECT = `SELECT q.id, q.author_user_id, q.author_nam
   removal.reason AS removal_reason, removal.at AS removal_at, removal.by_name AS removal_by_name,
   done.at AS done_at, done.by_name AS done_by_name,
   CASE WHEN event_block.user_id IS NOT NULL THEN 'event' ELSE block.block END AS author_block,
-  CASE WHEN event_block.user_id IS NOT NULL THEN NULL ELSE block.until END AS author_block_until
+  CASE WHEN event_block.user_id IS NOT NULL THEN NULL ELSE block.until END AS author_block_until,
+  question_check.outcome AS check_outcome, question_check.notes_json AS check_notes_json
   FROM questions q LEFT JOIN question_rewrites r ON r.question_id = q.id
   LEFT JOIN question_addressees addressee ON addressee.question_id = q.id
   LEFT JOIN question_prepared prepared ON prepared.question_id = q.id
@@ -88,4 +92,5 @@ export const LIVE_QUESTION_SELECT = `SELECT q.id, q.author_user_id, q.author_nam
   LEFT JOIN room_event_blocks event_block ON event_block.user_id = q.author_user_id
   LEFT JOIN question_author_photos photo ON photo.question_id = q.id
   LEFT JOIN question_authorship authorship ON authorship.question_id = q.id
-  LEFT JOIN question_author_changes author_change ON author_change.question_id = q.id`;
+  LEFT JOIN question_author_changes author_change ON author_change.question_id = q.id
+  LEFT JOIN question_checks question_check ON question_check.question_id = q.id`;

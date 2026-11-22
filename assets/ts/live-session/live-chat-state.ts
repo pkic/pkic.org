@@ -12,10 +12,14 @@ type ChatState = Pick<LiveLocationChatSnapshot, "chat" | "chatEarlier" | "chatPi
   LiveChatAnswers;
 type ChatServerMessage = Extract<LiveRoomServerMessage, { type: `chat.${string}` }>;
 
-/** A message awaits a moderator's review while it is reported and either shown or held. */
+/** A message awaits a moderator's review while it is reported or flagged, and either shown or held. */
 export function liveChatAwaitsReview(message: LiveChatMessage): boolean {
   const moderation = message.moderation;
-  return moderation != null && moderation.reports > 0 && (moderation.hidden === null || moderation.held);
+  return (
+    moderation != null &&
+    (moderation.reports > 0 || moderation.automaticCheck !== undefined) &&
+    (moderation.hidden === null || moderation.held)
+  );
 }
 
 function byTime(left: LiveChatMessage, right: LiveChatMessage): number {

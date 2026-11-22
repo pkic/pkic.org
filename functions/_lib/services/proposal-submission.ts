@@ -43,6 +43,8 @@ import { proposalTermsDigest } from "./event-proposal-proof-capabilities";
 import { prepareIndependentDisclosure, requireIndependentDisclosure } from "./proposal-speaker-independent-disclosure";
 import { prepareInvitedSpeakerRepresentation } from "./proposal-invited-speaker-identity";
 import { outboxIdForOperation } from "../email/outbox-queue";
+import type { ContentCheckRun } from "./content-checks/model";
+import { prepareStoreContentCheckResult } from "./content-checks/results";
 
 type ProposalCreateInput = z.infer<typeof proposalCreateSchema>;
 
@@ -60,6 +62,8 @@ export interface ProposalSubmissionInput {
   formRevisionGuard?: StatementLike | null;
   formPlacementId?: string | null;
   formDefinition?: ActiveFormDefinition | null;
+  /** The screening the proposal passed, kept for reviewers with the proposal itself. */
+  screening?: ContentCheckRun | null;
 }
 
 export interface ProposalSubmissionResult {
@@ -129,6 +133,8 @@ export async function submitProposal(
     signingSecret: input.signingSecret,
   });
   statements.push(...created.statements);
+  if (input.screening)
+    statements.push(prepareStoreContentCheckResult(db, "proposal", created.proposal.id, input.screening));
   if (input.formDefinition) {
     const formSubmission = await prepareReplaceContextFormSubmission(
       db,

@@ -5,6 +5,7 @@ import { LIVE_CHAT_POLICY } from "../../../../assets/shared/live-chat-policy";
 import type { LiveChatChannel } from "../../../../assets/shared/schemas/live-session-chat";
 import type { LiveRoomSql } from "./room-sql";
 import { chatOccurrenceFilter } from "./room-chat-audience";
+import { liveChatCheckHoldsBack } from "./room-chat-checks";
 
 export interface LiveChatRemoval {
   id: string;
@@ -50,6 +51,7 @@ const ANNOTATIONS = [
   "room_chat_replies",
   "room_chat_edits",
   "room_chat_aired",
+  "room_chat_checks",
 ];
 /** Shown to attendees: not removed by a moderator or held after reports. */
 const HIDDEN = `id NOT IN (SELECT message_id FROM room_chat_hidden)`;
@@ -143,16 +145,19 @@ export class LiveRoomChat {
     blockedUserIds: readonly string[],
   ): LiveChatRow[] {
     const audience = chatOccurrenceFilter("room_chat.id", [occurrenceId]);
+    const checking = liveChatCheckHoldsBack(Date.now());
     return this.sql.rows<LiveChatRow>(
       `${select("attendee")} WHERE ${HIDDEN}
          AND ${audience.sql}
          AND id NOT IN (SELECT message_id FROM room_chat_reports)
+         AND ${checking.sql}
          AND author_user_id NOT IN (SELECT value FROM json_each(?))
          AND author_user_id NOT IN (SELECT user_id FROM room_participation_blocks
            WHERE until IS NULL OR until > strftime('%Y-%m-%dT%H:%M:%fZ', 'now') UNION SELECT user_id FROM room_event_blocks)
          ${sentBy ? "AND sent_at <= ?" : ""}
        ORDER BY sent_at DESC, rowid DESC LIMIT ?`,
       ...audience.bindings,
+      ...checking.bindings,
       JSON.stringify(blockedUserIds),
       ...(sentBy ? [sentBy] : []),
       limit,

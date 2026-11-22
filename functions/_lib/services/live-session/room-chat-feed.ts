@@ -91,6 +91,7 @@ export class LiveChatFeed {
     const reportedBy = this.moderation.reportedBy(ids, viewers);
     const hidden = this.moderation.hidden(ids);
     const questions = this.moderation.questions(ids);
+    const checks = this.moderation.checks.flagged(ids);
     const restrictions = this.decisions.restrictions(authors, Date.now());
     const removals = this.decisions.removals(ids);
     const done = this.decisions.done(ids);
@@ -170,6 +171,7 @@ export class LiveChatFeed {
                   occurrenceRestrictions?.get(row.occurrence_id)?.[row.author_user_id] ??
                   null,
                 ...(original !== undefined ? { originalText: original } : {}),
+                ...(checks.has(row.id) ? { automaticCheck: checks.get(row.id) } : {}),
               }
             : null,
         };

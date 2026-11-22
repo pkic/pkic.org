@@ -2,7 +2,8 @@ import { deriveFormSubmissionWindowState } from "../../shared/form-submission-wi
 import { mountMarkdownField } from "../components/markdown-editor/mount-markdown-field";
 import { render, createRef } from "preact";
 import type { z } from "zod";
-import { getJson, postJson } from "../shared/api-client";
+import { ApiClientError, getJson, postJson } from "../shared/api-client";
+import { PROPOSAL_CHECK_ADVICE } from "../../shared/content-checks";
 import { clearReferralSession, clearRememberedInvitation } from "../shared/query-context";
 import { renderConsentInputs, readConsentValues, syncConsentValidation } from "../shared/widgets/consents";
 import { renderCustomFields, readCustomFieldValues } from "../shared/widgets/custom-fields";
@@ -440,6 +441,7 @@ async function main(): Promise<void> {
 
   // ── Submit ────────────────────────────────────────────────────────────────
 
+  let adviceAcknowledged = false;
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     void (async () => {
@@ -485,6 +487,7 @@ async function main(): Promise<void> {
 
             speakers: readAdditionalSpeakers(form),
             consents: readConsentValues(form),
+            adviceAcknowledged,
           });
 
           const result = await postJson(
@@ -498,6 +501,8 @@ async function main(): Promise<void> {
           clearRememberedInvitation(query.inviteId);
           showSuccessPanel(boot.root, form, result, firstName, eventName, eventSlug);
         } catch (error) {
+          // After the automatic check's advice, submitting again sends the proposal as written.
+          if (error instanceof ApiClientError && error.code === PROPOSAL_CHECK_ADVICE) adviceAcknowledged = true;
           await handleFormInviteSubmitError({
             error,
             form,

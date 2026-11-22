@@ -18,6 +18,7 @@ import { eventProposalsListRouteSchema } from "../../../../../assets/shared/sche
 import { eventProposalsResponseSchema } from "../../../../../assets/shared/schemas/event-proposals";
 import { requireInternalSecret } from "../../../../_lib/request";
 import { submitProposal } from "../../../../_lib/services/proposal-submission";
+import { screenProposal } from "../../../../_lib/services/content-checks/proposal-screening";
 import { getProposalAccessForEvent } from "../../../../_lib/auth/proposal-access";
 import { listEventProposals } from "../../../../_lib/services/event-proposals-list";
 import type { AdminContext } from "../../../../_lib/db/context";
@@ -60,6 +61,14 @@ async function handleProposalCreate(
     customAnswers: body.proposal.details,
   });
   const proposalDetails = validatedForm.answers;
+  const screening = await screenProposal(c.env, {
+    eventId: event.id,
+    type: body.proposal.type,
+    title: body.proposal.title,
+    abstract: body.proposal.abstract,
+    details: proposalDetails,
+    adviceAcknowledged: body.adviceAcknowledged,
+  });
 
   const submitted = await submitProposal(c.env.DB, {
     actor,
@@ -73,6 +82,7 @@ async function handleProposalCreate(
     ip: c.req.raw.headers.get("cf-connecting-ip"),
     userAgent: c.req.raw.headers.get("user-agent"),
     formDefinition: validatedForm.form,
+    screening,
   });
 
   c.executionCtx.waitUntil(

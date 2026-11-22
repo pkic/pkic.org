@@ -7,6 +7,7 @@ import { liveChangeSchema, livePersonNameSchema } from "./live-session-change";
 import { publicSessionPortraitUrlSchema } from "./event-session-history";
 import {
   liveModerationReasonSchema,
+  liveAutomaticCheckSchema,
   liveParticipationRestrictionSchema,
   liveRemovalSchema,
 } from "./live-session-moderation";
@@ -64,6 +65,8 @@ export const liveQuestionSchema = z
     addressedTo: liveQuestionAddresseeSchema.default(null),
     /** Moderators only: operators prepared this question ahead; false for everyone else. */
     prepared: z.boolean().default(false),
+    /** Moderators only: the automatic check flagged the question. */
+    automaticCheck: liveAutomaticCheckSchema.optional(),
   })
   .strict();
 export type LiveQuestion = z.infer<typeof liveQuestionSchema>;

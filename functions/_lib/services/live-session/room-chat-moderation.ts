@@ -1,4 +1,5 @@
 import type { LiveModerationReason } from "../../../../assets/shared/live-moderation-policy";
+import { LiveChatCheckStore } from "./room-chat-checks";
 import type { LiveRoomSql } from "./room-sql";
 
 export interface LiveChatHiding {
@@ -12,9 +13,8 @@ export interface LiveChatReports {
   reasons: Partial<Record<LiveModerationReason, number>>;
 }
 
-/** A message reported and not yet reviewed: shown, or held after enough reports. */
-const OPEN_REPORT = `message_id IN (SELECT message_id FROM room_chat_reports)
-  AND (message_id NOT IN (SELECT message_id FROM room_chat_hidden) OR message_id IN (SELECT message_id FROM room_chat_hidden WHERE held = 1))`;
+/** A message reported or flagged by the automatic check and not yet reviewed: shown, or held. */
+const OPEN_REPORT = `(message_id NOT IN (SELECT message_id FROM room_chat_hidden) OR message_id IN (SELECT message_id FROM room_chat_hidden WHERE held = 1))`;
 
 function idList(ids: readonly string[]): string {
   return JSON.stringify(ids);
@@ -26,7 +26,12 @@ function idList(ids: readonly string[]): string {
  * reasons and blocks are the shared moderation store's.
  */
 export class LiveChatModerationStore {
-  constructor(private readonly sql: LiveRoomSql) {}
+  /** The automatic check's verdicts, which a moderator's keep clears with the reports. */
+  readonly checks: LiveChatCheckStore;
+
+  constructor(private readonly sql: LiveRoomSql) {
+    this.checks = new LiveChatCheckStore(sql);
+  }
 
   hidden(ids: readonly string[]): Map<string, LiveChatHiding> {
     if (!ids.length) return new Map();
@@ -72,6 +77,7 @@ export class LiveChatModerationStore {
   keep(messageId: string): void {
     this.sql.exec("DELETE FROM room_chat_hidden WHERE message_id = ?", messageId);
     this.sql.exec("DELETE FROM room_chat_reports WHERE message_id = ?", messageId);
+    this.checks.clear(messageId);
   }
 
   /** Records one person's report; false when they had already reported the message. */
@@ -131,12 +137,15 @@ export class LiveChatModerationStore {
       .map((row) => row.user_id);
   }
 
-  /** Messages awaiting review, latest report first. */
+  /** Messages awaiting review, latest report or flag first. */
   openReports(limit: number): string[] {
     return this.sql
       .rows<{ message_id: string }>(
-        `SELECT message_id FROM room_chat_reports WHERE ${OPEN_REPORT}
-         GROUP BY message_id ORDER BY MAX(reported_at) DESC, message_id LIMIT ?`,
+        `SELECT message_id FROM (
+           SELECT message_id, reported_at AS at FROM room_chat_reports
+           UNION ALL SELECT message_id, at FROM room_chat_checks WHERE outcome IN ('advised', 'blocked')
+         ) WHERE ${OPEN_REPORT}
+         GROUP BY message_id ORDER BY MAX(at) DESC, message_id LIMIT ?`,
         limit,
       )
       .map((row) => row.message_id);

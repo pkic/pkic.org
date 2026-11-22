@@ -1,0 +1,61 @@
+/**
+ * The automatic check's reading of a proposal, beside the committee's own
+ * standing. It supports the review and decides nothing: the scores follow the
+ * event's rubric, and the concerns are what the author was told at submission.
+ */
+import type { ContentCheckOutcome } from "../../../../../../../shared/content-checks";
+import type { ContentCheckResult } from "../../../../../../../shared/schemas/content-checks";
+import { formatNumber } from "../../../../../../../shared/format-number";
+import { AttentionMark } from "../../../../../../ui/AttentionList";
+import { DescriptionList } from "../../../../../../ui/DescriptionList";
+import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
+import { fmt } from "../../../../ui";
+
+const OUTCOME_LABELS: Record<ContentCheckOutcome, string> = {
+  passed: "No concerns",
+  advised: "Concerns raised",
+  blocked: "Blocked",
+  unchecked: "Not checked",
+};
+
+export function ProposalAutomaticReview({ review }: { review: ContentCheckResult }) {
+  const concerns = review.outcome === "advised" || review.outcome === "blocked";
+  return (
+    <Panel aria-label="Automatic review">
+      <PanelHeader title="Automatic review" />
+      <PanelBody>
+        <DescriptionList
+          density="compact"
+          items={[
+            {
+              term: "Screening",
+              value: concerns ? (
+                <AttentionMark>{OUTCOME_LABELS[review.outcome]}</AttentionMark>
+              ) : (
+                OUTCOME_LABELS[review.outcome]
+              ),
+            },
+            {
+              term: "Concerns",
+              value: review.flags.length ? (
+                <span class="pk-stack pk-stack--tight">
+                  {review.flags.map((flag) => (
+                    <span key={flag.id}>
+                      {flag.message} ({formatNumber(flag.probabilityPercent)}%)
+                    </span>
+                  ))}
+                </span>
+              ) : undefined,
+            },
+            {
+              term: "Score",
+              value: review.scorePercent === null ? undefined : `${formatNumber(Math.round(review.scorePercent))}%`,
+            },
+            ...review.scores.map((score) => ({ key: `score:${score.id}`, term: score.label, value: score.level })),
+            { term: "Checked", value: fmt(review.checkedAt) },
+          ]}
+        />
+      </PanelBody>
+    </Panel>
+  );
+}

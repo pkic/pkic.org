@@ -7,6 +7,7 @@ import { liveAuthorFields } from "./live-session-author";
 import { LIVE_ROOM_POLICY } from "../live-session-policy";
 import { LIVE_CHAT_POLICY, LIVE_CHAT_REACTION_IDS } from "../live-chat-policy";
 import {
+  liveAutomaticCheckSchema,
   liveModerationReasonSchema,
   liveParticipationRestrictionSchema,
   liveRemovalSchema,
@@ -43,6 +44,8 @@ export const liveChatModerationSchema = z
     authorRestriction: liveParticipationRestrictionSchema.nullable(),
     /** What the author first sent, when they edited it since. */
     originalText: z.string().max(LIVE_ROOM_POLICY.chatMaxLength).nullable().optional(),
+    /** The automatic check flagged it; absent when it passed or none ran. */
+    automaticCheck: liveAutomaticCheckSchema.optional(),
   })
   .strict();
 export type LiveChatModeration = z.infer<typeof liveChatModerationSchema>;

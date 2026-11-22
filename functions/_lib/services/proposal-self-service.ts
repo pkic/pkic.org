@@ -6,7 +6,8 @@ import type {
   proposalAccessReadResponseSchema,
 } from "../../../assets/shared/schemas/proposal-management";
 import { parseLinksJson } from "../../../assets/shared/schemas/links";
-import type { DatabaseLike } from "../types";
+import type { DatabaseLike, Env } from "../types";
+import { screenProposal } from "./content-checks/proposal-screening";
 import { parseJsonSafe, stringifyJson } from "../utils/json";
 import {
   prepareReplaceContextFormSubmission,
@@ -101,7 +102,13 @@ function invitedSpeakerView<T extends object>(status: T, speaker: ProposalSpeake
 
 export async function saveProposalAccessChanges(
   db: DatabaseLike,
-  input: { token: ParticipantAuthority; signingSecret: string; body: ProposalAccessInput },
+  input: {
+    token: ParticipantAuthority;
+    signingSecret: string;
+    body: ProposalAccessInput;
+    /** The model for the automatic check; without it an edit goes on unchecked. */
+    ai?: Env["AI"];
+  },
 ): Promise<ProposalAccessPatchResponse> {
   const proposal = await getProposalByManageToken(db, input.token, input.signingSecret);
   const event = await getEventById(db, proposal.event_id);
@@ -131,6 +138,27 @@ export async function saveProposalAccessChanges(
         new Date().toISOString(),
       )
     : null;
+  // An edit of what reviewers read is screened again. It refuses only what the check blocks: the author already
+  // set the advice aside once, and reviewers see what the check raises.
+  const editsContent =
+    input.body.status !== "withdrawn" &&
+    ((proposalType !== undefined && proposalType !== proposal.proposal_type) ||
+      (input.body.title !== undefined && input.body.title !== proposal.title) ||
+      (input.body.abstract !== undefined && input.body.abstract !== proposal.abstract) ||
+      details !== undefined);
+  const screening = editsContent
+    ? await screenProposal(
+        { AI: input.ai, DB: db },
+        {
+          eventId: event.id,
+          type: proposalType ?? proposal.proposal_type,
+          title: input.body.title ?? proposal.title,
+          abstract: input.body.abstract ?? proposal.abstract,
+          details: details ?? parseJsonSafe<Record<string, unknown> | null>(proposal.details_json, null),
+          adviceAcknowledged: true,
+        },
+      )
+    : null;
   const saved = await updateProposalForVerifiedOwner(db, proposal, {
     action: input.body.status === "withdrawn" ? "withdraw" : "update",
     proposalType,
@@ -140,6 +168,7 @@ export async function saveProposalAccessChanges(
     detailsJson: details === undefined ? undefined : Object.keys(details).length > 0 ? stringifyJson(details) : null,
     formSubmissionStatements: formSubmission?.statements,
     formPlacementId: validatedForm?.form?.placement?.id ?? null,
+    screening,
   });
 
   return { success: true, proposal: toAccessibleProposal(saved) };

@@ -22,6 +22,8 @@ import type { LiveControlOutcome, LiveRefusal, LiveRoomControls } from "./room-c
 import type { LiveQuestionAddressee } from "./room-question-rows";
 import type { LiveRoomStore } from "./room-store";
 import type { LiveChatQuestion } from "./location-chat-on-air";
+import type { LiveAutomaticCheck } from "../../../../assets/shared/schemas/live-session-moderation";
+import type { LiveRoomContentChecks } from "./room-content-checks";
 
 type Handled = LiveRefusal | void;
 type Actor = { userId: string; name: string };
@@ -82,6 +84,7 @@ export class LiveRoomQuestions {
     private readonly controls: LiveRoomControls,
     private readonly authors: LiveRoomAuthors,
     private readonly decisions: LiveRoomModerationStore,
+    private readonly checks: LiveRoomContentChecks,
     private readonly hooks: {
       /** Takes one of the person's questions from their sliding allowance, or refuses. */
       allowed: (userId: string) => boolean;
@@ -153,6 +156,11 @@ export class LiveRoomQuestions {
       return LIVE_PARTICIPATION_REFUSAL;
     if (this.store.questionCount() >= LIVE_ROOM_POLICY.maxQuestionsPerRoom) return REFUSALS.full;
     if (!this.hooks.allowed(actor.userId)) return REFUSALS.tooFast;
+    const check = viewer.role === "operator" ? null : await this.check(text);
+    if (check && "code" in check) return check;
+    // The check yields: another invocation may have accepted this request meanwhile.
+    const checked = replay();
+    if (checked) return checked;
     this.store.addQuestion({
       id,
       authorUserId: actor.userId,
@@ -163,6 +171,7 @@ export class LiveRoomQuestions {
       authorPhotoUrl: viewer.photoUrl ?? null,
       addressee,
     });
+    if (check) this.store.flagQuestion(id, check);
     this.authors.recordQuestion(id, stamp);
     await this.broadcast.question(id);
     this.hooks.listed();
@@ -201,6 +210,13 @@ export class LiveRoomQuestions {
         return REFUSALS.notEditable;
       if (!this.hooks.allowed(actor.userId)) return REFUSALS.tooFast;
     }
+    const check = input.type === "question.edit" ? await this.check(input.text) : null;
+    if (check && "code" in check) return check;
+    if (
+      input.type === "question.edit" &&
+      this.store.question(question.id)?.author_revision !== question.author_revision
+    )
+      return REFUSALS.changed;
     const at = nowIso();
     const revision = question.author_revision + 1;
     this.store.saveAuthorChange({
@@ -213,6 +229,7 @@ export class LiveRoomQuestions {
       basis_revision: input.expectedRevision,
       changed_at: at,
     });
+    if (input.type === "question.edit") this.store.flagQuestion(question.id, check);
     await this.broadcast.question(question.id);
     this.hooks.listed();
     const withdrawalActor = question.anonymous === 1 ? { ...actor, name: "Anonymous" } : actor;
@@ -221,6 +238,22 @@ export class LiveRoomQuestions {
         await this.broadcast.all(message);
     await this.hooks.changed();
     return { questionId: question.id, revision };
+  }
+
+  /**
+   * The automatic check of a question's words before it is taken: a blocked question is refused with what the
+   * check's settings tell its author; an advised one is taken and flagged for moderators. Questions wait for a
+   * moderator in any case, so a check that cannot run lets the question in unflagged.
+   */
+  private async check(text: string): Promise<LiveAutomaticCheck | LiveRefusal | null> {
+    const run = await this.checks.run("audience_question", text);
+    const outcome = run?.verdict.outcome;
+    if (outcome === "blocked")
+      return {
+        code: "LIVE_QUESTION_REFUSED_BY_CHECK",
+        message: run!.verdict.flags.find((flag) => flag.blocking)?.message ?? "This question cannot be asked here.",
+      };
+    return outcome === "advised" ? { outcome, notes: run!.verdict.flags.map((flag) => flag.message) } : null;
   }
 
   async vote(userId: string, questionId: string, voted: boolean): Promise<Handled> {
