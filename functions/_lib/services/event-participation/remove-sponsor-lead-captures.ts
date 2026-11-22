@@ -8,7 +8,7 @@ import { activeEventSponsorSql, sponsorLeadViewerPredicateSql } from "../../auth
 import { sponsorLeadPermissionBindings, sponsorLeadPermissionSql } from "./lead-scope";
 import { activeSponsorCaptureSql } from "./sponsor-lead-active";
 
-/** Withdraws immutable capture attempts as one guarded command; later scans remain valid. */
+/** Records withdrawals without editing scan evidence, including after evidence capture closes. */
 export async function removeSponsorLeadCaptures(
   db: DatabaseLike,
   eventId: string,
