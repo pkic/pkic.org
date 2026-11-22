@@ -2,10 +2,14 @@ import { runInDurableObject } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { liveRoomClientMessageSchema, type LiveRoomServerMessage } from "../assets/shared/schemas/live-session-room";
 import type { LiveRoomOnScreenLists } from "../functions/_lib/services/live-session/room-on-screen-lists";
+import { LIVE_CHAT_POLICY } from "../assets/shared/live-chat-policy";
+import type { LiveOnAirChat } from "../functions/_lib/services/live-session/location-chat-on-air";
+import { liveChatTickerLines } from "../functions/_lib/services/live-session/room-ticker";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
 
 const f = createLiveRoomFixture();
 type Client = Awaited<ReturnType<typeof f.connect>>;
+type ChatClient = Awaited<ReturnType<typeof f.connectChat>>;
 type AuxChanged = Extract<LiveRoomServerMessage, { type: "aux.changed" }>;
 
 /** The projector's composition with one audience list, or reactions, on it, as the studio sends it. */
@@ -44,7 +48,12 @@ async function ask(author: Client, operator: Client, text: string, anonymous = f
   return (await operator.next("question.changed", (message) => message.question.text === text)).question;
 }
 
-async function say(author: Client, reader: Client, text: string, channel: "attendee" | "operator" = "attendee") {
+async function say(
+  author: ChatClient,
+  reader: ChatClient,
+  text: string,
+  channel: "attendee" | "operator" = "attendee",
+) {
   author.send({ type: "chat.send", text, channel });
   return (await reader.next("chat.message", (message) => message.message.text === text)).message;
 }
@@ -68,7 +77,13 @@ describe("audience lists on an output", () => {
       operator.send({ type: "question.moderate", questionId: question.id, status: "approved" });
       await operator.next("question.changed", (m) => m.question.id === question.id && m.question.status === "approved");
     }
-    operator.send({ type: "question.moderate", questionId: hidden.id, status: "hidden", expectedRevision: 0 });
+    operator.send({
+      type: "question.moderate",
+      questionId: hidden.id,
+      status: "hidden",
+      reason: "spam",
+      expectedRevision: 0,
+    });
     for (const voter of [second, speaker]) voter.send({ type: "question.vote", questionId: popular.id, voted: true });
     await operator.next("question.changed", (m) => m.question.id === popular.id && m.question.votes === 2);
     second.send({ type: "question.vote", questionId: early.id, voted: true });
@@ -94,7 +109,13 @@ describe("audience lists on an output", () => {
 
     // Answered and hidden questions leave the list; the count stays the operator's.
     operator.send({ type: "question.moderate", questionId: early.id, status: "answered", expectedRevision: 0 });
-    operator.send({ type: "question.moderate", questionId: anonymous.id, status: "hidden", expectedRevision: 0 });
+    operator.send({
+      type: "question.moderate",
+      questionId: anonymous.id,
+      status: "hidden",
+      reason: "spam",
+      expectedRevision: 0,
+    });
     const moderated = await projector(source, (c) => c.topQuestions?.questions.length === 1);
     expect(moderated.topQuestions).toMatchObject({ config: { count: 3 }, questions: [{ id: popular.id }] });
 
@@ -109,9 +130,10 @@ describe("audience lists on an output", () => {
   });
 
   it("shows only attendee chat the broadcast may show, and takes moderated messages off at once", async () => {
-    const attendee = await f.connect({ person: "attendee" });
-    const second = await f.connect({ person: "secondAttendee" });
-    const operator = await f.connect({ person: "operator" });
+    const attendee = await f.connectChat("attendee");
+    const second = await f.connectChat("secondAttendee");
+    const operator = await f.connectChat("operator");
+    const studio = await f.connect({ person: "operator" });
     const source = await f.connectSource("projector");
 
     const kept = await say(attendee, operator, "Great overview of the inventory step");
@@ -122,10 +144,10 @@ describe("audience lists on an output", () => {
 
     attendee.send({ type: "chat.report", messageId: reported.id, reason: "spam" });
     await operator.next("chat.message", (m) => m.message.id === reported.id && m.message.moderation?.reports === 1);
-    operator.send({ type: "chat.moderate", messageId: toHide.id, decision: "hide" });
+    operator.send({ type: "chat.moderate", messageId: toHide.id, decision: "remove", reason: "spam" });
     await operator.next("chat.message", (m) => m.message.id === toHide.id && m.message.moderation?.hidden !== null);
 
-    operator.send(projectorWith({ chatFeed: { count: 6, delaySeconds: 0 } }));
+    studio.send(projectorWith({ chatFeed: { count: 6, delaySeconds: 0 } }));
     const listed = await projector(source, (composition) => composition.chatFeed !== null);
     // Oldest first; the operators' channel, hidden and reported messages never reach an output.
     expect(listed.chatFeed?.messages).toEqual([
@@ -138,8 +160,14 @@ describe("audience lists on an output", () => {
     const fresh = await say(second, operator, "When are the slides shared?");
     await projector(source, (c) => c.chatFeed?.messages.at(-1)?.id === fresh.id);
 
-    // A banned person's messages leave the output with them.
-    operator.send({ type: "chat.restrict", messageId: fresh.id, restriction: "banned" });
+    // A person blocked with their posts removed leaves the output with them.
+    operator.send({
+      type: "participation.block",
+      item: { kind: "chat", messageId: fresh.id },
+      block: "session",
+      reason: "spam",
+      removePosts: true,
+    });
     const afterBan = await projector(source, (c) => c.chatFeed?.messages.every((m) => m.id !== fresh.id) ?? false);
     expect(afterBan.chatFeed?.messages.map((message) => message.id)).toEqual([kept.id]);
     for (const message of source.received)
@@ -147,16 +175,41 @@ describe("audience lists on an output", () => {
         expect(JSON.stringify(message.composition.chatFeed)).not.toContain("Crew only");
   });
 
+  it("gives the chat graphic each message whole, and cuts only the ticker's line", async () => {
+    const attendee = await f.connectChat("attendee");
+    const operator = await f.connectChat("operator");
+    // The session's room reads the location's chat for its graphics.
+    await f.connect({ person: "operator" });
+    const long = await say(
+      attendee,
+      operator,
+      `We ran the inventory step last year ${"and found more. ".repeat(14)}`.trim(),
+    );
+    expect(long.text.length).toBeGreaterThan(LIVE_CHAT_POLICY.tickerMessageLength);
+    const [feed, ticker] = await runInDurableObject(f.room(), async (instance) => {
+      const room = lists(instance);
+      return [
+        await room.chatFeed({ count: 6, delaySeconds: 0 }),
+        await liveChatTickerLines(Reflect.get(room, "chat") as LiveOnAirChat),
+      ] as const;
+    });
+    // The board clamps the message to whole lines itself; the ticker has no lines to clamp, so the room cuts it.
+    expect(feed.messages.at(-1)?.text).toBe(long.text);
+    expect(ticker.at(-1)).toHaveLength("Ada Attendee: ".length + LIVE_CHAT_POLICY.tickerMessageLength);
+    expect(ticker.at(-1)?.endsWith("…")).toBe(true);
+  });
+
   it(
     "holds each new message for the chat's wait, and never shows one moderated during it",
     { timeout: 30_000 },
     async () => {
-      const attendee = await f.connect({ person: "attendee" });
-      const second = await f.connect({ person: "secondAttendee" });
-      const operator = await f.connect({ person: "operator" });
+      const attendee = await f.connectChat("attendee");
+      const second = await f.connectChat("secondAttendee");
+      const operator = await f.connectChat("operator");
+      const studio = await f.connect({ person: "operator" });
       const source = await f.connectSource("projector");
       const delayed = { count: 6, delaySeconds: 10 };
-      operator.send(projectorWith({ chatFeed: delayed }));
+      studio.send(projectorWith({ chatFeed: delayed }));
       await projector(source, (composition) => composition.chatFeed?.config.delaySeconds === 10);
 
       const kept = await say(attendee, operator, "Worth the wait");
@@ -171,7 +224,7 @@ describe("audience lists on an output", () => {
       );
       expect(later.messages.map((message) => message.id)).toEqual([kept.id, hidden.id, deleted.id, reported.id]);
 
-      operator.send({ type: "chat.moderate", messageId: hidden.id, decision: "hide" });
+      operator.send({ type: "chat.moderate", messageId: hidden.id, decision: "remove", reason: "spam" });
       attendee.send({ type: "chat.delete", messageId: deleted.id });
       attendee.send({ type: "chat.report", messageId: reported.id, reason: "spam" });
       await operator.next("chat.message", (m) => m.message.id === reported.id && m.message.moderation?.reports === 1);

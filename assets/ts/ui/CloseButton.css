@@ -9,14 +9,14 @@
 @layer components {
   .pk-close.pk-btn {
     flex: none;
-    inline-size: 2.125rem;
+    /* The shared control size, so a close sits level with the icon buttons beside it. */
+    inline-size: var(--pk-control-size);
     min-block-size: 0;
-    block-size: 2.125rem;
+    block-size: var(--pk-control-size);
     padding: 0;
     border-radius: var(--pk-radius);
   }
   .pk-close.pk-btn--ghost {
-    border-color: color-mix(in srgb, currentColor 28%, transparent);
     color: inherit;
   }
   .pk-close.pk-btn--ghost:hover:not(:disabled, [aria-disabled="true"]) {

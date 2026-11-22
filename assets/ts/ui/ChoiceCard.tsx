@@ -15,6 +15,11 @@
  *
  * Cards sit side by side where there is room and stack on a phone. Like the
  * sign-in methods, they are the one place a full-width choice is right.
+ *
+ * A choice that is best shown rather than told, such as how a graphic looks,
+ * takes a `picture` in place of the icon: a small example of what the reader
+ * gets. Such cards carry no gain or cost (`pointTone="neutral"`) and sit in a
+ * `compact` group, several to a row.
  */
 import type { ComponentChildren, JSX } from "preact";
 import { useState } from "preact/hooks";
@@ -25,10 +30,13 @@ import { IconCheckmark } from "./MediaIcons";
 import "./ChoiceCard.css";
 
 /** Whether a card's points are what the choice gives or what it costs. */
-export type ChoicePointTone = "gain" | "cost";
+export type ChoicePointTone = "gain" | "cost" | "neutral";
 
 export interface ChoiceCardProps extends Omit<JSX.InputHTMLAttributes<HTMLInputElement>, "type" | "class" | "title"> {
-  icon: ComponentChildren;
+  /** The card's icon; a card with a `picture` has none. */
+  icon?: ComponentChildren;
+  /** An example of what choosing the card gives, across the card's width, in place of the icon. */
+  picture?: ComponentChildren;
   /** A small mark at the icon's corner, e.g. a caution on the costlier choice. */
   iconMark?: ComponentChildren;
   /** Names the radio. */
@@ -41,6 +49,7 @@ export interface ChoiceCardProps extends Omit<JSX.InputHTMLAttributes<HTMLInputE
 
 export function ChoiceCard({
   icon,
+  picture,
   iconMark,
   title,
   description,
@@ -71,10 +80,16 @@ export function ChoiceCard({
         aria-describedby={hasDetail ? detailId : undefined}
         onInput={respond}
       />
-      <span class="pk-choice-card__icon" aria-hidden="true">
-        {icon}
-        {iconMark && <span class="pk-choice-card__icon-mark">{iconMark}</span>}
-      </span>
+      {picture ? (
+        <span class="pk-choice-card__picture" aria-hidden="true">
+          {picture}
+        </span>
+      ) : (
+        <span class="pk-choice-card__icon" aria-hidden="true">
+          {icon}
+          {iconMark && <span class="pk-choice-card__icon-mark">{iconMark}</span>}
+        </span>
+      )}
       <span class="pk-choice-card__title" id={titleId}>
         {title}
       </span>
@@ -85,7 +100,7 @@ export function ChoiceCard({
             <span class={`pk-choice-card__points pk-choice-card__points--${pointTone}`} role="list">
               {points.map((point, index) => (
                 <span class="pk-choice-card__point" role="listitem" key={index}>
-                  {pointTone === "gain" ? (
+                  {pointTone !== "cost" ? (
                     <IconCheckmark class="pk-choice-card__mark" />
                   ) : (
                     <StateIcon state="advisory" class="pk-choice-card__mark" />
@@ -109,14 +124,17 @@ export function ChoiceCard({
 export function ChoiceCards({
   legend,
   legendHidden = false,
+  compact = false,
   children,
 }: {
   legend: ComponentChildren;
   legendHidden?: boolean;
+  /** Small cards, several to a row, such as picture choices. */
+  compact?: boolean;
   children: ComponentChildren;
 }) {
   return (
-    <fieldset class="pk-choice-cards" role="radiogroup">
+    <fieldset class="pk-choice-cards" data-compact={compact ? "" : undefined} role="radiogroup">
       <legend class={legendHidden ? "pk-sr-only" : "pk-choice-cards__legend"}>{legend}</legend>
       <div class="pk-choice-cards__grid">{children}</div>
     </fieldset>

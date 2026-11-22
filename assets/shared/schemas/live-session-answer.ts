@@ -4,6 +4,11 @@ import { utcInstantSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { liveAuthorFields } from "./live-session-author";
 import { livePersonNameSchema } from "./live-session-change";
+import {
+  liveModerationReasonSchema,
+  liveParticipationRestrictionSchema,
+  liveRemovalSchema,
+} from "./live-session-moderation";
 
 /** The same answer text contract validates the attendee form and room command. */
 export const liveQuestionAnswerCreateSchema = z
@@ -22,6 +27,14 @@ export const liveQuestionAnswerSchema = liveQuestionAnswerCreateSchema
     createdAt: utcInstantSchema,
     revision: z.number().int().nonnegative(),
     acceptance: z.object({ byName: livePersonNameSchema.nullable(), at: utcInstantSchema }).strict().nullable(),
+    votes: z.number().int().nonnegative(),
+    votedByMe: z.boolean(),
+    /** The author and moderators only: a moderator removed it, and why. Everyone else no longer receives it. */
+    removal: liveRemovalSchema.nullable(),
+    /** Moderators only: the author's block in force. */
+    authorRestriction: liveParticipationRestrictionSchema.nullable(),
+    /** Moderators only: the author operates this room, so no one blocks them. */
+    authorStaff: z.boolean(),
   })
   .strict();
 export type LiveQuestionAnswer = z.infer<typeof liveQuestionAnswerSchema>;
@@ -49,6 +62,41 @@ export const liveQuestionAnswerAcceptSchema = z
   })
   .strict();
 
+/** One vote per person per answer; not on your own answer. */
+export const liveQuestionAnswerVoteSchema = z
+  .object({
+    type: z.literal("question.answer.vote"),
+    questionId: databaseIdSchema,
+    answerId: databaseIdSchema,
+    voted: z.boolean(),
+  })
+  .strict();
+
+/** A moderator removes an answer from everyone with a reason the author sees, or shows it again. */
+export const liveQuestionAnswerHideSchema = z
+  .object({
+    type: z.literal("question.answer.hide"),
+    questionId: databaseIdSchema,
+    answerId: databaseIdSchema,
+    hidden: z.boolean(),
+    reason: liveModerationReasonSchema.optional(),
+    expectedRevision: z.number().int().nonnegative(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.hidden && !value.reason)
+      context.addIssue({ code: "custom", path: ["reason"], message: "Choose why you remove this answer." });
+  });
+
+/** The answer commands in the room's client message union. */
+export const liveQuestionAnswerClientMessageSchemas = [
+  liveQuestionAnswersWatchSchema,
+  liveQuestionAnswerSendSchema,
+  liveQuestionAnswerAcceptSchema,
+  liveQuestionAnswerVoteSchema,
+  liveQuestionAnswerHideSchema,
+] as const;
+
 /** A sender-only receipt for either a reply or an acceptance decision. */
 export const liveQuestionAnswerResultSchema = z
   .object({
@@ -67,5 +115,9 @@ export const liveQuestionAnswersSchema = z
     answers: z.array(liveQuestionAnswerSchema).max(LIVE_QUESTION_ANSWER_POLICY.maxAnswersPerQuestion),
     canAnswer: z.boolean(),
     canAccept: z.boolean(),
+    /** Whether this viewer may vote on others' answers; a block the viewer holds is applied by the client and the room. */
+    canVote: z.boolean(),
+    /** Moderators: may remove answers and show them again. */
+    canModerate: z.boolean(),
   })
   .strict();

@@ -12,7 +12,8 @@ import {
 } from "../../assets/shared/schemas/live-session-room";
 import { liveOverlayAccessResponseSchema } from "../../assets/shared/schemas/live-overlay-access";
 import { getAgenda } from "../../functions/_lib/services/event-agenda/read";
-import { liveRoomName } from "../../functions/_lib/services/live-session/room-admission";
+import { instantToCalendarDate } from "../../assets/shared/timezone";
+import { liveLocationChatName, liveRoomName } from "../../functions/_lib/services/live-session/room-admission";
 import { grantAdministrator } from "./administrator";
 import { callApi } from "./app";
 import { createAdminSession } from "./auth";
@@ -40,6 +41,7 @@ export function createLiveRoomFixture() {
   const tokens = {} as Record<Person, string>;
   let occurrenceId = "";
   let roomId = "";
+  let startAt = "";
 
   async function setup(window = { startOffsetMinutes: -5, durationMinutes: 60 }) {
     await resetDb();
@@ -81,6 +83,7 @@ export function createLiveRoomFixture() {
         .run();
     const start = new Date(Date.now() + window.startOffsetMinutes * 60_000).toISOString();
     const end = new Date(Date.parse(start) + window.durationMinutes * 60_000).toISOString();
+    startAt = start;
     await env.DB.prepare("INSERT INTO event_agenda_rooms(id,event_id,name) VALUES (?,?,'Physical room')")
       .bind(roomId, eventId)
       .run();
@@ -114,13 +117,13 @@ export function createLiveRoomFixture() {
       .run();
     for (const person of Object.keys(users) as Person[])
       tokens[person] = await createAdminSession(env.DB, users[person], crypto.randomUUID());
-    const room = env.LIVE_SESSION_ROOMS!.getByName(liveRoomName(eventId, occurrenceId));
-    onTestFinished(() =>
-      runInDurableObject(room, async (_instance, state) => {
-        for (const socket of state.getWebSockets()) closeLiveRoomSocket(socket, 1000, "Fixture complete");
-        await state.storage.deleteAlarm();
-      }),
-    );
+    for (const room of [env.LIVE_SESSION_ROOMS!.getByName(liveRoomName(eventId, occurrenceId)), chatRoom()])
+      onTestFinished(() =>
+        runInDurableObject(room, async (_instance, state) => {
+          for (const socket of state.getWebSockets()) closeLiveRoomSocket(socket, 1000, "Fixture complete");
+          await state.storage.deleteAlarm();
+        }),
+      );
   }
 
   function path(suffix = "") {
@@ -129,13 +132,13 @@ export function createLiveRoomFixture() {
 
   /** A signed-in person, or a read-only source with its access and the output it draws. */
   type Credential = { person: Person } | { overlay: string; output?: string };
-  function upgrade(credential: Credential | null, headers: Record<string, string> = {}) {
+  function upgrade(credential: Credential | null, headers: Record<string, string> = {}, socketPath = path()) {
     const protocols = [
       LIVE_ROOM_PROTOCOL,
       ...(credential && "overlay" in credential ? [LIVE_OVERLAY_PROTOCOL_PREFIX + credential.overlay] : []),
     ];
     const output = credential && "output" in credential && credential.output ? `?output=${credential.output}` : "";
-    return callApi(env, path(output), {
+    return callApi(env, `${socketPath}${output}`, {
       headers: {
         upgrade: "websocket",
         origin: ORIGIN,
@@ -169,7 +172,26 @@ export function createLiveRoomFixture() {
 
   /** An accepted socket that records every message the room sends it. */
   async function connect(credential: Credential) {
-    const response = await upgrade(credential);
+    return accept(await upgrade(credential), "room.snapshot");
+  }
+
+  /** A signed-in person in the location's chat of the day, after its snapshot. */
+  async function connectChat(person: Person) {
+    return accept(await upgrade({ person }, {}, chatPath()), "location.chat.snapshot");
+  }
+
+  /** The room object holding the location's chat for the session's day. */
+  function chatRoom() {
+    return env.LIVE_SESSION_ROOMS!.getByName(
+      liveLocationChatName(eventId, roomId, instantToCalendarDate(startAt, "Europe/Amsterdam")),
+    );
+  }
+
+  function chatPath() {
+    return `/api/v1/events/${EVENT_SLUG}/agenda/rooms/${roomId}/live/chat`;
+  }
+
+  async function accept(response: Response, first: "room.snapshot" | "location.chat.snapshot") {
     if (response.status !== 101) throw new Error(`Expected 101, got ${response.status}: ${await response.text()}`);
     const socket = response.webSocket!;
     const received: LiveRoomServerMessage[] = [];
@@ -230,7 +252,7 @@ export function createLiveRoomFixture() {
         );
       },
     };
-    await client.next("room.snapshot");
+    await client.next(first);
     return client;
   }
 
@@ -258,6 +280,8 @@ export function createLiveRoomFixture() {
     upgrade,
     refusal,
     connect,
+    connectChat,
+    chatPath,
     connectSource,
     get roomId() {
       return roomId;
@@ -271,5 +295,6 @@ export function createLiveRoomFixture() {
     room() {
       return env.LIVE_SESSION_ROOMS!.getByName(liveRoomName(eventId, occurrenceId));
     },
+    chatRoom,
   };
 }

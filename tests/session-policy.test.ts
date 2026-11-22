@@ -4,6 +4,7 @@ import {
   DEFAULT_USER_SESSION_IDLE_TTL_HOURS,
   resolveMemberSessionTtlHours,
   sessionIdleExpiresAt,
+  STAFF_CAPACITY_TTL_HOURS,
   STAFF_SESSION_IDLE_TTL_HOURS,
 } from "../functions/_lib/auth/session-policy";
 
@@ -11,6 +12,9 @@ describe("member session policy", () => {
   it("uses a seven-day user idle limit and a one-hour staff idle limit", () => {
     expect(DEFAULT_USER_SESSION_IDLE_TTL_HOURS).toBe(168);
     expect(STAFF_SESSION_IDLE_TTL_HOURS).toBe(1);
+    // A conference day with its setup and teardown fits inside one elevation.
+    expect(STAFF_CAPACITY_TTL_HOURS).toBe(16);
+    expect(STAFF_CAPACITY_TTL_HOURS).toBeGreaterThanOrEqual(STAFF_SESSION_IDLE_TTL_HOURS);
   });
 
   it("never lets an inactivity deadline exceed the absolute session expiry", () => {

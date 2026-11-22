@@ -1,0 +1,113 @@
+/*
+ * The audience question on the conference board. The text steps down with its
+ * length, from the stage display's fit, and is clamped to the lines its size
+ * allows, so a long question never pushes past the board. It sits centered in
+ * the board under the eyebrow and grows with the room the board gives it: a
+ * full frame or a full-height column sets it larger than a small box does.
+ */
+@layer components {
+  .pk-live-board-question__body {
+    --question-scale: 1.1;
+    display: grid;
+    align-content: center;
+    gap: 36px;
+    min-block-size: 0;
+    margin-block: auto;
+    padding-inline-start: 44px;
+    border-inline-start: 12px solid transparent;
+    border-image: linear-gradient(180deg, var(--pk-pqc-green), var(--pk-pqc-blue) 50%, var(--pk-pqc-orange)) 1;
+  }
+  /* A band grows the type with its width and height, up to a full frame. */
+  .pk-live-board[data-shape="wide"] .pk-live-board-question__body {
+    --question-scale: clamp(
+      1.1,
+      min(1.1 + 0.4 * (var(--board-width) - 1040) / 880, 1.1 + 0.4 * (var(--board-height) - 650) / 430),
+      1.5
+    );
+  }
+  /* A column beside the camera grows the type with its height. */
+  .pk-live-board[data-shape="tall"] .pk-live-board-question__body {
+    --question-scale: clamp(1.1, 1.1 + 0.4 * (var(--board-height) - 1040) / 420, 1.5);
+  }
+  /* Whom the question is for, read before the question itself. */
+  .pk-live-board-question__addressee {
+    margin: 0;
+    color: var(--pk-pqc-on-field-muted);
+    font-size: calc(var(--pk-live-question-byline-type) * var(--question-scale) * 1.1);
+    font-weight: 500;
+    line-height: 1.2;
+  }
+  .pk-live-board-question__addressee strong {
+    color: var(--pk-pqc-on-field);
+    font-weight: 800;
+  }
+  .pk-live-board-question .pk-live-overlay__question-text {
+    --question-lines: 5;
+    display: -webkit-box;
+    margin: 0;
+    overflow: hidden;
+    color: var(--pk-pqc-on-field);
+    font-size: calc(var(--pk-live-question-type) * var(--question-scale));
+    font-weight: 700;
+    line-height: 1.14;
+    text-wrap: pretty;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: var(--question-lines);
+    line-clamp: var(--question-lines);
+  }
+  .pk-live-board-question .pk-live-overlay__question-text[data-fit="long"] {
+    --question-lines: 6;
+    font-size: calc(var(--pk-live-question-type-long) * var(--question-scale));
+  }
+  .pk-live-board-question .pk-live-overlay__question-text[data-fit="longer"] {
+    --question-lines: 7;
+    font-size: calc(var(--pk-live-question-type-longer) * var(--question-scale));
+  }
+  .pk-live-board-question .pk-live-overlay__question-text[data-fit="longest"] {
+    --question-lines: 8;
+    font-size: calc(var(--pk-live-question-type-longest) * var(--question-scale));
+  }
+  /* A column is narrow and tall, so it holds more lines at each size. */
+  .pk-live-board[data-shape="tall"] .pk-live-overlay__question-text {
+    --question-lines: 7;
+  }
+  .pk-live-board[data-shape="tall"] .pk-live-overlay__question-text[data-fit="long"] {
+    --question-lines: 9;
+  }
+  .pk-live-board[data-shape="tall"] .pk-live-overlay__question-text[data-fit="longer"] {
+    --question-lines: 11;
+  }
+  .pk-live-board[data-shape="tall"] .pk-live-overlay__question-text[data-fit="longest"] {
+    --question-lines: 13;
+  }
+  /* A thin strip holds fewer lines at each size. */
+  .pk-live-board[data-shape="strip"] .pk-live-overlay__question-text {
+    --question-lines: 3;
+  }
+  .pk-live-board[data-shape="strip"] .pk-live-overlay__question-text[data-fit="long"] {
+    --question-lines: 4;
+  }
+  .pk-live-board[data-shape="strip"] .pk-live-overlay__question-text[data-fit="longer"] {
+    --question-lines: 5;
+  }
+  .pk-live-board[data-shape="strip"] .pk-live-overlay__question-text[data-fit="longest"] {
+    --question-lines: 6;
+  }
+  .pk-live-board-question .pk-live-overlay__question-asker {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    margin: 0;
+    color: var(--pk-pqc-on-field-muted);
+    font-size: calc(var(--pk-live-question-byline-type) * var(--question-scale) / 1.1);
+    font-weight: 500;
+  }
+  .pk-live-board-question .pk-live-board-question__asker {
+    --pk-avatar-size: calc(80px * var(--question-scale) / 1.1);
+    flex: none;
+    box-shadow:
+      0 0 0 4px var(--pk-pqc-forest),
+      0 0 0 7px var(--pk-pqc-blue);
+  }
+}

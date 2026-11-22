@@ -17,6 +17,7 @@ import {
   requestPromotionRender,
 } from "../functions/_lib/services/event-agenda/promotion-render-jobs";
 import { recordReferralClick, recordReferralConversion } from "../functions/_lib/services/referrals";
+import { STAFF_CAPACITY_TTL_HOURS } from "../functions/_lib/auth/session-policy";
 
 describe("personal event promotion kits", () => {
   beforeEach(() => resetDb());
@@ -155,7 +156,7 @@ describe("personal event promotion kits", () => {
     const f = await promotionFixture();
     const kit = promotionKitSchema.parse(await (await callApi(env, f.sessionBase, { headers: f.headers })).json());
     await env.DB.prepare("UPDATE sessions SET created_at=? WHERE user_id=?")
-      .bind(new Date(Date.now() - 9 * 60 * 60 * 1000).toISOString(), f.admin.id)
+      .bind(new Date(Date.now() - (STAFF_CAPACITY_TTL_HOURS + 1) * 60 * 60 * 1000).toISOString(), f.admin.id)
       .run();
     const saved = await callApi(
       env,

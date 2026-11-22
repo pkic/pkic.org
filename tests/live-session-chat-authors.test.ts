@@ -4,7 +4,7 @@ import type { LiveRoomServerMessage } from "../assets/shared/schemas/live-sessio
 import { createLiveRoomFixture } from "./helpers/live-session-room";
 
 const f = createLiveRoomFixture();
-type Client = Awaited<ReturnType<typeof f.connect>>;
+type Client = Awaited<ReturnType<typeof f.connectChat>>;
 
 /** The attendee acts as their one identity: a chief architect at Digitorus, a member when `member`. */
 async function giveAttendeeAffiliation(member = false) {
@@ -37,15 +37,16 @@ async function lookup(viewer: Client, handle: string) {
   return (await viewer.next("author.details", (message) => message.handle === handle)).author;
 }
 
-const snapshotOf = (client: Client) => client.received[0] as Extract<LiveRoomServerMessage, { type: "room.snapshot" }>;
+const snapshotOf = (client: Client) =>
+  client.received[0] as Extract<LiveRoomServerMessage, { type: "location.chat.snapshot" }>;
 
 describe("live room authors", () => {
   beforeEach(() => f.setup());
 
   it("labels a message with the capacity it was written in and resolves its author's card by handle", async () => {
     await giveAttendeeAffiliation();
-    const author = await f.connect({ person: "attendee" });
-    const reader = await f.connect({ person: "secondAttendee" });
+    const author = await f.connectChat("attendee");
+    const reader = await f.connectChat("secondAttendee");
     author.send({ type: "chat.send", text: "Hello from Digitorus" });
     const { message } = await reader.next("chat.message");
     expect(message.authorAffiliation).toEqual({ title: "Chief Architect", organization: { name: "Digitorus" } });
@@ -63,9 +64,9 @@ describe("live room authors", () => {
 
   it("marks authors with the public roles they hold when they write, highest first", async () => {
     await giveAttendeeAffiliation(true);
-    const member = await f.connect({ person: "attendee" });
-    const speaker = await f.connect({ person: "speaker" });
-    const operator = await f.connect({ person: "operator" });
+    const member = await f.connectChat("attendee");
+    const speaker = await f.connectChat("speaker");
+    const operator = await f.connectChat("operator");
     member.send({ type: "chat.send", text: "From a member" });
     expect(
       (await operator.next("chat.message", (update) => update.message.text === "From a member")).message.authorRoles,
@@ -78,40 +79,48 @@ describe("live room authors", () => {
     const desk = (await member.next("chat.message", (update) => update.message.text === "From the desk")).message;
     expect(desk.authorRoles).toEqual(["event_team"]);
     expect((await lookup(member, desk.authorHandle!))?.roles).toEqual(["event_team"]);
-    member.send({ type: "question.ask", text: "Will the slides be shared?", anonymous: true });
-    const asked = (await operator.next("question.changed")).question;
+    // Questions stay with the session's room.
+    const memberInRoom = await f.connect({ person: "attendee" });
+    const speakerInRoom = await f.connect({ person: "speaker" });
+    const operatorInRoom = await f.connect({ person: "operator" });
+    memberInRoom.send({ type: "question.ask", text: "Will the slides be shared?", anonymous: true });
+    const asked = (await operatorInRoom.next("question.changed")).question;
     // Moderators see who asked, but even they get no handle to look an anonymous author up by.
     expect(asked.authorHandle ?? null).toBeNull();
-    operator.send({ type: "question.moderate", questionId: asked.id, status: "approved" });
-    const anonymous = (await speaker.next("question.changed", (update) => update.question.id === asked.id)).question;
+    operatorInRoom.send({ type: "question.moderate", questionId: asked.id, status: "approved" });
+    const anonymous = (await speakerInRoom.next("question.changed", (update) => update.question.id === asked.id))
+      .question;
     expect(anonymous.authorRoles ?? []).toEqual([]);
     expect(anonymous.authorAffiliation ?? null).toBeNull();
   });
 
   it("refuses handles for people who wrote nothing visible, for anonymous questions and from other rooms", async () => {
-    const author = await f.connect({ person: "attendee" });
-    const reader = await f.connect({ person: "secondAttendee" });
-    const operator = await f.connect({ person: "operator" });
+    const author = await f.connectChat("attendee");
+    const reader = await f.connectChat("secondAttendee");
+    const operator = await f.connectChat("operator");
+    const authorInRoom = await f.connect({ person: "attendee" });
+    const readerInRoom = await f.connect({ person: "secondAttendee" });
+    const operatorInRoom = await f.connect({ person: "operator" });
     // A well-formed handle nobody in this room holds, such as one copied from another room.
     expect(await lookup(reader, "A".repeat(32))).toBeNull();
-    author.send({ type: "question.ask", text: "An anonymous question here?", anonymous: true });
-    const asked = (await operator.next("question.changed")).question;
+    authorInRoom.send({ type: "question.ask", text: "An anonymous question here?", anonymous: true });
+    const asked = (await operatorInRoom.next("question.changed")).question;
     expect(asked.authorHandle ?? null).toBeNull();
-    operator.send({ type: "question.moderate", questionId: asked.id, status: "approved" });
-    const shown = (await reader.next("question.changed")).question;
+    operatorInRoom.send({ type: "question.moderate", questionId: asked.id, status: "approved" });
+    const shown = (await readerInRoom.next("question.changed")).question;
     expect(shown).toMatchObject({ authorName: null, authorPhotoUrl: null });
     expect(shown.authorHandle ?? null).toBeNull();
     // The author holds a handle (they wrote here) but nothing under their name: it resolves to nothing.
     author.send({ type: "chat.send", text: "Now under my name" });
     const { message } = await reader.next("chat.message");
-    operator.send({ type: "chat.moderate", messageId: message.id, decision: "hide" });
+    operator.send({ type: "chat.moderate", messageId: message.id, decision: "remove", reason: "spam" });
     await reader.next("chat.removed");
     expect(await lookup(reader, message.authorHandle!)).toBeNull();
   });
 
   it("stops resolving deleted messages and redacted accounts, and limits lookups", async () => {
-    const author = await f.connect({ person: "attendee" });
-    const reader = await f.connect({ person: "secondAttendee" });
+    const author = await f.connectChat("attendee");
+    const reader = await f.connectChat("secondAttendee");
     author.send({ type: "chat.send", text: "Soon deleted" });
     const { message } = await reader.next("chat.message");
     const handle = message.authorHandle!;

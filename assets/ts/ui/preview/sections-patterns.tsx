@@ -60,7 +60,7 @@ import { Toolbar } from "../Toolbar";
 import type { ToneProps } from "../tone";
 import type { PreviewSection } from "./PreviewShell";
 import { ProfileBiographiesExample } from "./profile-biographies";
-import { AgendaExample } from "./agenda-example";
+import { agendaSections } from "./agenda-example";
 
 /** One membership workflow, as its domain module would declare it: a tone, and a place in the flow while in flight. */
 const applicationStages: (ToneProps & { label: string })[] = [
@@ -360,11 +360,7 @@ export const patternSections: PreviewSection[] = [
       </div>
     ),
   },
-  {
-    id: "agenda",
-    title: "Agenda",
-    render: () => <AgendaExample />,
-  },
+  ...agendaSections,
   imageCarouselSection,
   ...contentSections,
   {
@@ -430,7 +426,7 @@ export const patternSections: PreviewSection[] = [
   {
     id: "tooltip",
     title: "Tooltip",
-    note: "Short icon labels use native titles. Structured help is available on hover, focus and tap, without clipping inside a table.",
+    note: "Short icon labels use native titles; live-production surfaces show them as Control hints instead. Structured help is available on hover, focus and tap, without clipping inside a table.",
     render: () => <TooltipPreview />,
   },
   {

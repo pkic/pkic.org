@@ -1,4 +1,7 @@
-import { prepareBadgeLabel } from "../../../../_lib/services/event-participation/badge-label-print";
+import {
+  prepareBadgeLabel,
+  prepareDeskBadgeLabel,
+} from "../../../../_lib/services/event-participation/badge-label-print";
 import { prepareBadgeLabelBatch } from "../../../../_lib/services/event-participation/badge-label-batches";
 import { badgeLabelBatchRouteSchema } from "../../../../../assets/shared/schemas/event-badge-label-batches";
 import {
@@ -18,14 +21,14 @@ import { markResponseSensitive, requestDb, type AdminContext } from "../../../..
 import { AppError } from "../../../../_lib/errors";
 import { json } from "../../../../_lib/http";
 import { openApiRoute } from "../../../../_lib/openapi/route";
-import { issueBadge, revokeBadge } from "../../../../_lib/services/event-participation/badge-lifecycle";
+import { issueBadge, issueDeskBadge, revokeBadge } from "../../../../_lib/services/event-participation/badge-lifecycle";
 import {
   listBadgeCredentials,
   getBadgeCredential,
 } from "../../../../_lib/services/event-participation/badge-credentials";
 import { getBadgePrintingContext } from "../../../../_lib/services/event-participation/badge-print-branding";
 import { prepareBadgePrint } from "../../../../_lib/services/event-participation/badge-print";
-import { requireEventPermission } from "./authorization";
+import { requireAnyEventPermission, requireEventPermission } from "./authorization";
 import { badgeAttendees } from "../../../../_lib/services/event-participation/badge-attendees";
 import { prepareBadgeHolderTicket } from "../../../../_lib/services/event-participation/badge-holder-ticket";
 import { getEventBySlug } from "../../../../_lib/services/events";
@@ -40,11 +43,11 @@ export const EventBadgeCurrentPut = openApiRoute(currentBadgeRouteSchema, async 
   );
 });
 export const EventBadgeAttendeesGet = openApiRoute(badgeAttendeesRouteSchema, async (c: AdminContext, data) => {
-  const { db, event } = await badgeManagementContext(c, data.params.eventSlug);
+  const { db, event } = await badgeDeskContext(c, data.params.eventSlug);
   return json(await badgeAttendees(db, event.id, data.query));
 });
 export const EventBadgePrintingGet = openApiRoute(badgePrintingRouteSchema, async (c: AdminContext, data) => {
-  const { db, event } = await badgeManagementContext(c, data.params.eventSlug);
+  const { db, event } = await badgeDeskContext(c, data.params.eventSlug);
   return json(await getBadgePrintingContext(db, c.env, event.id));
 });
 export const EventBadgesGet = openApiRoute(badgeCredentialsRouteSchema, async (c: AdminContext, data) => {
@@ -56,8 +59,9 @@ export const EventBadgeGet = openApiRoute(badgeCredentialRouteSchema, async (c: 
   return json(await getBadgeCredential(db, event.id, data.params.badgeId));
 });
 export const EventBadgeCreate = openApiRoute(badgeIssueRouteSchema, async (c: AdminContext, data) => {
-  const { db, event, actor } = await badgeManagementContext(c, data.params.eventSlug);
-  return json(await issueBadge(db, event.id, actor.id, data.body, c.env));
+  const { db, event, actor, permission } = await badgeDeskContext(c, data.params.eventSlug);
+  const issue = permission === "events:manage" ? issueBadge : issueDeskBadge;
+  return json(await issue(db, event.id, actor.id, data.body, c.env));
 });
 export const EventBadgeDelete = openApiRoute(badgeRevokeRouteSchema, async (c: AdminContext, data) => {
   const { db, event, actor } = await badgeManagementContext(c, data.params.eventSlug);
@@ -69,8 +73,9 @@ export const EventBadgePrint = openApiRoute(badgePrintRouteSchema, async (c: Adm
   return json(await prepareBadgePrint(db, c.env, event.id, data.params.badgeId, actor.id, data.body));
 });
 export const EventBadgeLabel = openApiRoute(badgeLabelRouteSchema, async (c: AdminContext, data) => {
-  const { db, event, actor } = await badgeManagementContext(c, data.params.eventSlug);
-  return json(await prepareBadgeLabel(db, c.env, event.id, actor.id, data.body));
+  const { db, event, actor, permission } = await badgeDeskContext(c, data.params.eventSlug);
+  const label = permission === "events:manage" ? prepareBadgeLabel : prepareDeskBadgeLabel;
+  return json(await label(db, c.env, event.id, actor.id, data.body));
 });
 export const EventBadgeLabelBatch = openApiRoute(badgeLabelBatchRouteSchema, async (c: AdminContext, data) => {
   const { db, event, actor } = await badgeManagementContext(c, data.params.eventSlug);
@@ -86,4 +91,19 @@ async function badgeManagementContext(c: AdminContext, slug: string) {
     () => new AppError(403, "BADGE_PERMISSION_CHANGED", "Your badge management permission changed."),
   );
   return { db: guarded, event, actor };
+}
+/** The badge desk: finding a registered attendee and printing their badge, for managers and badge printers alike. */
+async function badgeDeskContext(c: AdminContext, slug: string) {
+  markResponseSensitive(c);
+  const { db, event, actor, context, permission } = await requireAnyEventPermission(c, slug, [
+    "events:manage",
+    "agenda:badge_print",
+  ]);
+  const guarded = guardPermissionDatabase(
+    db,
+    actor,
+    [{ permission, context }],
+    () => new AppError(403, "BADGE_PERMISSION_CHANGED", "Your badge printing permission changed."),
+  );
+  return { db: guarded, event, actor, permission };
 }

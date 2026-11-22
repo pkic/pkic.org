@@ -7,7 +7,11 @@ import { LiveStageContent } from "./LiveStageContent";
 import { useLiveStageDisplayPlan, useLiveStageReactions } from "./useLiveStageDisplay";
 import "./LiveStageDisplay.css";
 
-/** One timer: its label over its value, sized by its role and fitted to its column by its length. */
+/**
+ * One timer: its label over its value, sized by its role and fitted to its
+ * column by its length. Always plain digits: the stage display spends its
+ * room on reading the time, not on the stream's designs.
+ */
 function StageTimer({ timer }: { timer: LiveStageTimer }) {
   const geometry = useNumericCssProperties({ "--timer-chars": Math.max(4, [...timer.text].length) });
   return (
@@ -39,7 +43,13 @@ function StageMain({ main }: { main: LiveStageMain }) {
     case "content":
       return (
         <>
-          {main.timer ? <StageTimer timer={main.timer} /> : null}
+          {main.timers.length > 0 ? (
+            <div class="pk-live-stage-display__timers">
+              {main.timers.map((timer) => (
+                <StageTimer key={timer.timerId} timer={timer} />
+              ))}
+            </div>
+          ) : null}
           <LiveStageContent content={main.content} />
         </>
       );
@@ -83,7 +93,12 @@ export function LiveStageDisplay({
 }) {
   const plan = useLiveStageDisplayPlan(state, roomId);
   const covered = bannerShown && plan.banner !== null;
-  const items = plan.main.kind === "timers" ? plan.main.timers.length : plan.main.kind === "content" ? 2 : 1;
+  const items =
+    plan.main.kind === "timers"
+      ? plan.main.timers.length
+      : plan.main.kind === "content"
+        ? Math.min(plan.main.timers.length, 1) + 1
+        : 1;
   return (
     <div class="pk-live-stage-display" data-main={plan.main.kind} data-items={items}>
       <div class="pk-live-stage-display__stripe" />
@@ -97,7 +112,7 @@ export function LiveStageDisplay({
       <footer class="pk-live-stage-display__footer">
         <p class="pk-live-stage-display__title">
           <span class="pk-live-stage-display__marker" data-marker={plan.footer.marker}>
-            {plan.footer.marker === "live" ? "Live" : "Next"}
+            {plan.footer.marker === "live" ? "Live" : "Next session"}
           </span>
           {plan.footer.title}
         </p>

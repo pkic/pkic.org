@@ -208,7 +208,12 @@ describe("multi-message live ticker", () => {
     const send = vi.fn((command: LiveRoomClientMessage) => command.type === "preview.set");
     try {
       void act(() => render(<LiveTickerControls targets={tickerTargets(stage, { sendProgram: send })} />, host));
-      void act(() => host.querySelector<HTMLButtonElement>('[aria-label="Edit ticker messages"]')!.click());
+      void act(() => host.querySelector<HTMLButtonElement>('[aria-label="News ticker actions"]')!.click());
+      void act(() =>
+        [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+          .find((item) => item.textContent?.includes("Edit ticker messages"))!
+          .click(),
+      );
       const add = Array.from(document.querySelectorAll("button")).find(
         (button) => button.textContent === "Add message",
       )!;
@@ -235,7 +240,7 @@ describe("multi-message live ticker", () => {
       );
       void act(() =>
         Array.from(host.querySelectorAll("button"))
-          .find((button) => button.textContent === "Preview")!
+          .find((button) => button.textContent === "PVW")!
           .click(),
       );
       const payload = send.mock.calls[0][0];
@@ -258,12 +263,13 @@ describe("multi-message live ticker", () => {
     try {
       void act(() => render(<LiveTickerControls targets={tickerTargets(stage, { sendProgram: program })} />, host));
       const buttons = Array.from(host.querySelectorAll("button"));
-      expect(buttons).toHaveLength(4);
-      const programButton = buttons.find((button) => button.textContent === "Program")!;
+      // PVW, PGM and the row's menu, which holds the screens and the settings.
+      expect(buttons).toHaveLength(3);
+      const programButton = buttons.find((button) => button.textContent === "PGM")!;
       expect(programButton.getAttribute("aria-pressed")).toBe("false");
       void act(() => programButton.click());
       expect(program).toHaveBeenCalledWith({ type: "stage.ticker", ticker: config });
-      void act(() => buttons.find((button) => button.textContent === "Preview")!.click());
+      void act(() => buttons.find((button) => button.textContent === "PVW")!.click());
       expect(program).toHaveBeenLastCalledWith({ type: "preview.set", composition: { ticker: null } });
     } finally {
       void act(() => render(null, host));

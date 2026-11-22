@@ -295,6 +295,19 @@ describe("attendee self check-in", () => {
     expect(await studioCode({ kind: "room", roomId: ids.room })).not.toBe(listed.token);
   });
 
+  it("lists the codes to a volunteer running the studio, who still sees no attendance", async () => {
+    await env.DB.prepare(
+      "INSERT INTO user_roles (id,user_id,role_id,context_type,context_id,created_at) VALUES (?,?,'role-event_volunteer','event',?,?)",
+    )
+      .bind(crypto.randomUUID(), ids.waiting, ids.event, new Date().toISOString())
+      .run();
+    const listed = await request("waiting", "/attendance/points?kind=session");
+    expect(listed.status).toBe(200);
+    expect(((await listed.json()) as { canReissue: boolean }).canReissue).toBe(false);
+    expect((await request("waiting", "/attendance/summary")).status).toBe(403);
+    expect((await request("waiting", "/attendance/points/issuances", { method: "POST" })).status).toBe(403);
+  });
+
   it("counts one person once, however often they scan", async () => {
     const session = await studioCode({ kind: "session", occurrenceId: ids.running });
     const venue = await point("venue_check_in");

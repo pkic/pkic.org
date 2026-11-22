@@ -19,6 +19,8 @@ export interface CloseButtonProps extends Omit<
 > {
   /** What it closes, starting with "Close". */
   label: CloseLabel;
+  /** What closing does, where that is not plain: the second line of its hint on a surface with `ControlTooltips`. */
+  hint?: string;
   /** Sits over an image, so it carries its own contrasting backdrop. */
   overMedia?: boolean;
   /** Match adjacent filled controls on a colored surface. */
@@ -27,6 +29,7 @@ export interface CloseButtonProps extends Omit<
 
 export function CloseButton({
   label,
+  hint,
   overMedia = false,
   variant = "ghost",
   class: className,
@@ -39,7 +42,7 @@ export function CloseButton({
       icon
       class={closeControlClasses(overMedia, className)}
       aria-label={label}
-      title={label}
+      title={hint ? `${label}\n${hint}` : label}
     >
       <IconRemove />
     </Button>

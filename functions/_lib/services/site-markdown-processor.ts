@@ -1,16 +1,31 @@
 import type {} from "mdast-util-to-hast";
-import { unified } from "@astrojs/markdown-remark";
+import rehypeRaw from "rehype-raw";
+import rehypeStringify from "rehype-stringify";
 import remarkGemoji from "remark-gemoji";
+import remarkGfm from "remark-gfm";
+import remarkParse from "remark-parse";
+import remarkRehype from "remark-rehype";
+import { unified } from "unified";
+import { VFile } from "vfile";
 import type { Root } from "hast";
 import { toText } from "hast-util-to-text";
 import { visit } from "unist-util-visit";
 
 import { ANCHOR_ICON, headingAnchor } from "./site-headings";
 
-/** Preserve the published site's presentation through Astro's supported plugin API. */
+type SiteImageRenderer = (src: string, alt: string, title?: string) => Promise<string>;
+
+declare module "vfile" {
+  interface DataMap {
+    /** Renders a Markdown image as the site's responsive picture. */
+    renderSiteImage: SiteImageRenderer;
+  }
+}
+
+/** Preserve the published site's presentation. */
 function sitePresentation() {
-  return async (tree: Root, file: { data: { astro?: { frontmatter?: Record<string, unknown> } } }) => {
-    const renderImage = file.data.astro?.frontmatter?.renderSiteImage as SiteImageRenderer | undefined;
+  return async (tree: Root, file: VFile) => {
+    const renderImage = file.data.renderSiteImage;
     const headings = new Map<string, number>();
     const images: Promise<void>[] = [];
     visit(tree, "element", (node, index, parent) => {
@@ -80,14 +95,18 @@ function sitePresentation() {
 
 // Cloudflare Workers cannot load Sätteri's native or threaded WASM binding.
 // Astro replaces this module with site/markdown-processor.ts at build time.
-const runtimeMarkdownProcessor = unified({
-  smartypants: false,
-  remarkPlugins: [remarkGemoji],
-  rehypePlugins: [sitePresentation],
-});
-
-const renderer = runtimeMarkdownProcessor.createRenderer({ syntaxHighlight: false });
-type SiteImageRenderer = (src: string, alt: string, title?: string) => Promise<string>;
+// The Worker builds the same remark and rehype chain as Astro's renderer
+// without importing it: that module bundles every syntax highlighter
+// language, which the site never uses and the Worker would load on each start.
+const renderer = unified()
+  .use(remarkParse)
+  .use(remarkGfm)
+  .use(remarkGemoji)
+  .use(remarkRehype, { allowDangerousHtml: true, passThrough: [] })
+  .use(sitePresentation)
+  .use(rehypeRaw)
+  .use(rehypeStringify, { allowDangerousHtml: true });
 export async function renderSiteMarkdown(source: string, renderSiteImage?: SiteImageRenderer): Promise<string> {
-  return (await (await renderer).render(source, { frontmatter: { renderSiteImage } })).code;
+  const file = new VFile({ value: source, data: renderSiteImage ? { renderSiteImage } : {} });
+  return String((await renderer.process(file)).value);
 }

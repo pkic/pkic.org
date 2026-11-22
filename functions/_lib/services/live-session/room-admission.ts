@@ -23,6 +23,8 @@ export const liveRoomParticipantSchema = z
     name: z.string().min(1).max(200).nullable(),
     /** An operator who also manages the event: the chat policy's organizer. */
     organizer: z.boolean().optional(),
+    /** An operator who also runs the studio: only they use the control desk, its screens and what is on air. */
+    studio: z.boolean().optional(),
     /** The person's profile photo, which a question they ask by name may show. */
     photoUrl: z.string().min(1).max(500).nullable().optional(),
     /** The identity the person acts as now, whose title and organization label what they write. */
@@ -56,6 +58,8 @@ export const liveRoomAccessGrantSchema = z
 
 export type LiveRoomParticipant = z.infer<typeof liveRoomParticipantSchema> & {
   accessGrant?: z.infer<typeof liveRoomAccessGrantSchema>;
+  /** Server-owned occurrence grants for a location chat, populated by the access lease. */
+  locationOccurrenceIds?: readonly string[];
   /** Server-owned subscription, persisted with this socket through hibernation. Never accepted in admission input. */
   questionThreadId?: string;
   /** Latest server-received watch request, so a slower authorization cannot restore an older thread. */
@@ -66,6 +70,7 @@ export const liveRoomAdmissionSchema = z
   .object({
     eventId: z.string().min(1).max(200),
     session: liveRoomSessionSchema,
+    roomIds: z.array(databaseIdSchema).optional(),
     participant: liveRoomParticipantSchema,
     readBookmark: z.string().min(1).max(1024).optional(),
   })
@@ -75,6 +80,11 @@ export type LiveRoomAdmissionMessage = z.infer<typeof liveRoomAdmissionSchema>;
 /** One room per agenda occurrence of one event. */
 export function liveRoomName(eventId: string, occurrenceId: string): string {
   return `${eventId}:${occurrenceId}`;
+}
+
+/** One chat per location and event day; it lives in the room class beside the sessions' rooms. */
+export function liveLocationChatName(eventId: string, roomId: string, day: string): string {
+  return `chat:${eventId}:${roomId}:${day}`;
 }
 
 /** Preserve server-owned connection metadata when fresh canonical admission replaces an attachment. */

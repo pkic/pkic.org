@@ -10,6 +10,7 @@ import { eventSlugParamsSchema, slugPattern, utcInstantSchema } from "./api-comm
 
 /** Every layer the overlay draws, in the order the editor lists them. */
 export const LIVE_OVERLAY_ELEMENTS = [
+  "background",
   "lowerThird",
   "question",
   "poll",
@@ -20,22 +21,25 @@ export const LIVE_OVERLAY_ELEMENTS = [
   "checkIn",
   "topQuestions",
   "chat",
+  "qrCode",
   "reactions",
   "stageDisplay",
   "stageMessage",
 ] as const;
 export type LiveOverlayElement = (typeof LIVE_OVERLAY_ELEMENTS)[number];
 export const LIVE_OVERLAY_ELEMENT_LABELS: Record<LiveOverlayElement, string> = {
+  background: "Background",
   lowerThird: "Lower third",
   question: "Question",
   poll: "Poll results",
   timer: "Timer graphic",
   ticker: "News ticker",
   schedule: "Up next",
-  panelists: "Panel",
+  panelists: "Session",
   checkIn: "Check-in code",
   topQuestions: "Top questions",
   chat: "Chat",
+  qrCode: "QR code",
   reactions: "Reactions",
   stageDisplay: "Stage display",
   stageMessage: "Message to speaker",
@@ -44,6 +48,7 @@ export const LIVE_OVERLAY_ELEMENT_LABELS: Record<LiveOverlayElement, string> = {
 /** The two compositions an element can belong to: Program (and the outputs drawn like it), or the stage display. */
 export type LiveOverlayComposition = "program" | "stage-display";
 export const LIVE_OVERLAY_ELEMENT_COMPOSITIONS: Record<LiveOverlayElement, readonly LiveOverlayComposition[]> = {
+  background: ["program"],
   lowerThird: ["program"],
   question: ["program"],
   poll: ["program"],
@@ -54,10 +59,58 @@ export const LIVE_OVERLAY_ELEMENT_COMPOSITIONS: Record<LiveOverlayElement, reado
   checkIn: ["program", "stage-display"],
   topQuestions: ["program"],
   chat: ["program"],
+  qrCode: ["program"],
   reactions: ["program"],
   stageDisplay: ["stage-display"],
   stageMessage: ["stage-display"],
 };
+
+/**
+ * What puts a graphic on an output: the one property the room, the outputs
+ * and the studio read for it. Nothing else decides this per graphic.
+ * - `pick`: it is on only while someone picked what it shows (which person,
+ *   question, poll, timer or code). A scene never picks.
+ * - `room`: it fills itself from the room, so a scene either brings it on
+ *   (`comesOn`) or leaves it to its switch in the studio.
+ * - `scene`: it has no switch. It is on whenever the scene includes it.
+ */
+export type LiveOverlayElementSwitch = "pick" | "room" | "scene";
+export const LIVE_OVERLAY_ELEMENT_SWITCHES = {
+  background: "scene",
+  lowerThird: "pick",
+  question: "pick",
+  poll: "pick",
+  timer: "pick",
+  ticker: "room",
+  schedule: "room",
+  panelists: "room",
+  checkIn: "pick",
+  topQuestions: "room",
+  chat: "room",
+  qrCode: "scene",
+  reactions: "room",
+  stageDisplay: "scene",
+  stageMessage: "scene",
+} as const satisfies Record<LiveOverlayElement, LiveOverlayElementSwitch>;
+
+/** The elements put on an output one way. */
+type ElementsSwitchedBy<Switch extends LiveOverlayElementSwitch> = {
+  [Element in LiveOverlayElement]: (typeof LIVE_OVERLAY_ELEMENT_SWITCHES)[Element] extends Switch ? Element : never;
+}[LiveOverlayElement];
+/** The graphics that fill themselves from the room, which a scene can bring on. */
+export type LiveSelfFillingElement = ElementsSwitchedBy<"room">;
+/** The graphics without a switch, on whenever the scene includes them. */
+export type LiveAlwaysOnElement = ElementsSwitchedBy<"scene">;
+
+/** Whether a scene can bring this graphic on: only one that fills itself from the room. */
+export function liveOverlayElementFillsItself(element: LiveOverlayElement): element is LiveSelfFillingElement {
+  return LIVE_OVERLAY_ELEMENT_SWITCHES[element] === "room";
+}
+
+/** Whether a graphic has no switch, so it is on whenever the scene includes it. */
+export function liveOverlayElementAlwaysOn(element: LiveOverlayElement): element is LiveAlwaysOnElement {
+  return LIVE_OVERLAY_ELEMENT_SWITCHES[element] === "scene";
+}
 
 /** The broadcast frame every overlay is drawn on, in pixels. */
 export const LIVE_OVERLAY_FRAME = { width: 1920, height: 1080 } as const;
@@ -112,43 +165,104 @@ export function liveOverlayPixelBox(
 /**
  * Elements added after events began saving layouts, at their Full frame box.
  * A layout or set of shared positions saved before one existed reads it
- * there, shown and shared, so nothing an organizer saved stops reading.
+ * there, shared and shown (the background hidden), so nothing an organizer
+ * saved stops reading.
  */
 export const LIVE_OVERLAY_ADDED_ELEMENT_BOXES = {
-  topQuestions: liveOverlayPixelBox(48, 176, 840, 728, { horizontal: "left", vertical: "top" }),
-  chat: liveOverlayPixelBox(1104, 176, 768, 728, { horizontal: "right", vertical: "bottom" }),
+  topQuestions: liveOverlayPixelBox(0, 0, 1920, 1080, { horizontal: "center", vertical: "middle" }),
+  chat: liveOverlayPixelBox(0, 0, 1920, 1080, { horizontal: "center", vertical: "middle" }),
+  background: liveOverlayPixelBox(0, 0, 1920, 1080, { horizontal: "center", vertical: "middle" }),
+  // Bottom right, above the ticker and clear of the lower third.
+  qrCode: liveOverlayPixelBox(1512, 498, 360, 432, { horizontal: "right", vertical: "bottom" }),
 } satisfies Partial<Record<LiveOverlayElement, LiveOverlayElementBox>>;
+
+/**
+ * Added elements a saved layout reads hidden: the background would change how
+ * a saved scene looks, covering the camera beside a column of boards, so an
+ * organizer turns it on.
+ */
+const ADDED_HIDDEN: ReadonlySet<string> = new Set(["background", "qrCode"]);
 
 /** Saved elements with any element added since filled in; anything but an object is left for the schema to refuse. */
 function withAddedElements(value: unknown, placement: boolean): unknown {
   if (!value || typeof value !== "object" || Array.isArray(value)) return value;
   const added = Object.entries(LIVE_OVERLAY_ADDED_ELEMENT_BOXES).map(([element, box]) => [
     element,
-    placement ? { visible: true, shared: true, ...box } : box,
+    placement ? { visible: !ADDED_HIDDEN.has(element), shared: true, ...box } : box,
   ]);
   return { ...Object.fromEntries(added), ...value };
 }
 
 /**
- * Where one element sits on one layout: whether it shows, and its box. An
- * element `shared` with the event's other layouts takes the event's shared
- * position for it, so moving it once moves it on every layout that shares
- * it; a layout that places it differently keeps its own box.
+ * Placement fields a scene saved before the background became a graphic of
+ * its own: a board no longer carries a field, so the flag is dropped as the
+ * scene reads and the scene keeps reading.
+ */
+const RETIRED_PLACEMENT_FIELDS = ["background"] as const;
+
+/** Saved placements without the fields no placement has anymore. */
+function withoutRetiredPlacementFields(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([element, placement]) => {
+      if (!placement || typeof placement !== "object" || Array.isArray(placement)) return [element, placement];
+      const fields = { ...(placement as Record<string, unknown>) };
+      for (const retired of RETIRED_PLACEMENT_FIELDS) delete fields[retired];
+      return [element, fields];
+    }),
+  );
+}
+
+/**
+ * Where one element sits on one layout: whether the scene includes it
+ * (`visible`), and its box. An element `shared` with the event's other
+ * layouts takes the event's shared position for it, so moving it once moves
+ * it on every layout that shares it; a layout that places it differently
+ * keeps its own box. `layer` is the graphic's place in this layout's stack,
+ * bottom first; without it the graphic keeps its built-in place
+ * (`live-overlay-stacking.ts`).
  */
 export const liveOverlayElementPlacementSchema = insideFrame(
-  z.object({ visible: z.boolean(), shared: z.boolean(), ...boxShape }).strict(),
+  z
+    .object({
+      visible: z.boolean(),
+      shared: z.boolean(),
+      layer: z
+        .number()
+        .int()
+        .min(0)
+        .max(LIVE_OVERLAY_ELEMENTS.length - 1)
+        .optional(),
+      /**
+       * Comes on with the scene: loading the scene switches the graphic on, filled from the room. Only a graphic
+       * that fills itself from the room can (`LIVE_OVERLAY_ELEMENT_SWITCHES`); off or absent, the scene only
+       * places it and it is switched in the studio.
+       */
+      comesOn: z.boolean().optional(),
+      ...boxShape,
+    })
+    .strict(),
 );
 export type LiveOverlayElementPlacement = z.infer<typeof liveOverlayElementPlacementSchema>;
 
 export const liveOverlayLayoutElementsSchema = z.preprocess(
-  (value) => withAddedElements(value, true),
+  (value) => withoutRetiredPlacementFields(withAddedElements(value, true)),
   z
     .object(
       Object.fromEntries(
         LIVE_OVERLAY_ELEMENTS.map((element) => [element, liveOverlayElementPlacementSchema]),
       ) as Record<LiveOverlayElement, typeof liveOverlayElementPlacementSchema>,
     )
-    .strict(),
+    .strict()
+    .superRefine((elements, context) => {
+      for (const element of LIVE_OVERLAY_ELEMENTS)
+        if (elements[element].comesOn && !liveOverlayElementFillsItself(element))
+          context.addIssue({
+            code: "custom",
+            path: [element, "comesOn"],
+            message: "Only a graphic that fills itself from the room can come on with a scene.",
+          });
+    }),
 );
 export type LiveOverlayLayoutElements = z.infer<typeof liveOverlayLayoutElementsSchema>;
 
@@ -167,17 +281,10 @@ export const liveOverlaySharedPositionsSchema = z.preprocess(
 export type LiveOverlaySharedPositions = z.infer<typeof liveOverlaySharedPositionsSchema>;
 
 /** The built-in layouts every event starts with; their data lives in `live-overlay-layout-presets.ts`. */
-export const LIVE_OVERLAY_PRESETS = [
-  "full-frame",
-  "lower-third",
-  "side-by-side",
-  "close-up",
-  "panel",
-  "ticker-only",
-] as const;
+export const LIVE_OVERLAY_PRESETS = ["default", "questions", "panel", "break", "check-in", "full-board"] as const;
 export type LiveOverlayPreset = (typeof LIVE_OVERLAY_PRESETS)[number];
 /** The layout a browser source uses when it names none, or one the event does not have. */
-export const LIVE_OVERLAY_DEFAULT_LAYOUT: LiveOverlayPreset = "full-frame";
+export const LIVE_OVERLAY_DEFAULT_LAYOUT: LiveOverlayPreset = "default";
 /** Saved layouts per event, built-in ones the organizers changed included. */
 export const LIVE_OVERLAY_MAX_SAVED_LAYOUTS = 24;
 
@@ -195,6 +302,8 @@ export const liveOverlayLayoutGeometrySchema = z
   .object({
     slug: liveOverlayLayoutSlugSchema,
     name: liveOverlayLayoutNameSchema,
+    /** The built-in scene it started from; null or absent for one of the event's own. */
+    preset: z.enum(LIVE_OVERLAY_PRESETS).nullable().optional(),
     elements: liveOverlayLayoutElementsSchema,
   })
   .strict();

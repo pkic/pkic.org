@@ -18,6 +18,7 @@ import {
 import { createMcpAuthorizeHandler } from "../functions/_lib/auth/oauth/consent";
 import { Hono } from "hono";
 import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
+import { STAFF_CAPACITY_TTL_HOURS } from "../functions/_lib/auth/session-policy";
 
 const RETURN_TO = `${MCP_OAUTH_AUTHORIZE_PATH}?client_id=client-1&redirect_uri=https%3A%2F%2Fclient.example%2Fcallback&scope=events%3Aread&state=state-1`;
 
@@ -114,7 +115,7 @@ describe("MCP authorization through canonical portal authentication", () => {
     await addRepresentative(env.DB, memberId, staff.id);
     const token = await createAdminSession(env.DB, staff.id, crypto.randomUUID());
     await env.DB.prepare("UPDATE sessions SET created_at = ? WHERE user_id = ?")
-      .bind(new Date(Date.now() - 9 * 60 * 60 * 1000).toISOString(), staff.id)
+      .bind(new Date(Date.now() - (STAFF_CAPACITY_TTL_HOURS + 1) * 60 * 60 * 1000).toISOString(), staff.id)
       .run();
     const context = await describeMcpAuthorization(
       new Request(`https://app.test${MCP_OAUTH_AUTHORIZE_PATH}`, { headers: { cookie: `pkic_session=${token}` } }),

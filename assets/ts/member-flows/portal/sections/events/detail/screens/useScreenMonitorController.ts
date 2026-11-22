@@ -13,7 +13,7 @@ import { useBoundaryClock } from "../../../../../../hooks/useBoundaryClock";
 import { screenMonitorIssues, type ScreenMonitorView } from "./screen-monitor-view";
 import { useScreenIssueNotifications } from "./useScreenIssueNotifications";
 import { useScreenMonitorStaff } from "./useScreenMonitorStaff";
-import type { LiveSocketFactory } from "../../../../../../live-session/useLiveRoom";
+import type { LiveSocketFactory } from "../../../../../../live-session/useLiveSocket";
 
 /** Issues read against a clock that moves every five seconds, so a late heartbeat shows within the window. */
 const nextTick = (now: number) => now - (now % 5_000) + 5_000;

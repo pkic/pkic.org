@@ -34,7 +34,7 @@ export function OverlayLayoutCreateDialog({
   onCancel: () => void;
   onCreated: (saved: EventLiveOverlayLayoutsResponse, slug: string) => void;
 }) {
-  const [name, setName] = useState(duplicate ? `Copy of ${from.name}` : "New layout");
+  const [name, setName] = useState(duplicate ? `Copy of ${from.name}` : "New scene");
   const [source, setSource] = useState(from.slug);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -68,9 +68,9 @@ export function OverlayLayoutCreateDialog({
   return (
     <Dialog
       open
-      title="New layout"
-      description="Start from any layout, then arrange its elements."
-      confirmLabel="Create layout"
+      title="New scene"
+      description="Start from any scene, then arrange its elements."
+      confirmLabel="Create scene"
       confirmDisabled={busy}
       onConfirm={() => void create()}
       onCancel={onCancel}

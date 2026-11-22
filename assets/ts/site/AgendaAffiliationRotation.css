@@ -183,13 +183,13 @@
     animation-play-state: paused;
   }
   @media (prefers-reduced-motion: reduce) {
-    .pk-affiliation-rotation__unit {
+    :root:not(:has([data-live-broadcast-source])) .pk-affiliation-rotation__unit {
       animation: none;
     }
-    .pk-affiliation-rotation__unit:not(:first-child) {
+    :root:not(:has([data-live-broadcast-source])) .pk-affiliation-rotation__unit:not(:first-child) {
       display: none;
     }
-    .pk-affiliation-rotation__more {
+    :root:not(:has([data-live-broadcast-source])) .pk-affiliation-rotation__more {
       display: inline;
     }
   }

@@ -7,6 +7,6 @@ import { requireEventPermission } from "../authorization";
 
 /** A room operator reads a session's poll results from the durable copy. */
 export const LivePollResultsGet = openApiRoute(livePollResultsRouteSchema, async (c: AdminContext, data) => {
-  const { db, event } = await requireEventPermission(c, data.params.eventSlug, "agenda:live_moderate");
+  const { db, event } = await requireEventPermission(c, data.params.eventSlug, "agenda:live_studio");
   return json(await listLivePollResults(db, event.id, data.params.occurrenceId, data.query));
 });

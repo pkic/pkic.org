@@ -32,6 +32,15 @@ it("validates the instruction, saves its visibility and sends both through the c
   document.body.append(host);
   const sendProgram = vi.fn<(message: LiveRoomClientMessage) => boolean>(() => true);
   const state = applyLiveRoomMessage(null, liveSnapshot({ viewer: { role: "operator", name: "Olga Operator" } }))!;
+  /** The row's settings, in its menu like a timer's. */
+  const openSettings = () => {
+    void act(() => labeled(host!, "Check-in code actions").click());
+    void act(() =>
+      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+        .find((item) => item.textContent?.includes("Check-in code settings"))!
+        .click(),
+    );
+  };
   void act(() =>
     render(
       <LiveCheckInControls
@@ -42,7 +51,7 @@ it("validates the instruction, saves its visibility and sends both through the c
       host,
     ),
   );
-  void act(() => labeled(host, "Check-in code settings").click());
+  openSettings();
   const dialog = document.querySelector<HTMLDialogElement>("dialog[open]")!;
   const instruction = dialog.querySelector<HTMLTextAreaElement>("textarea")!;
   expect(instruction.value).toBe(DEFAULT_LIVE_CHECK_IN_TEXT.template);
@@ -61,7 +70,7 @@ it("validates the instruction, saves its visibility and sends both through the c
     checkIn: { kind: "session", occurrenceId: LIVE_OCCURRENCE },
     checkInText: { visible: false, template },
   });
-  void act(() => labeled(host, "Check-in code settings").click());
+  openSettings();
   const reopened = document.querySelector<HTMLDialogElement>("dialog[open]")!;
   expect(reopened.querySelector<HTMLTextAreaElement>("textarea")!.value).toBe(template);
   expect(reopened.querySelector<HTMLInputElement>('input[type="checkbox"]')!.checked).toBe(false);

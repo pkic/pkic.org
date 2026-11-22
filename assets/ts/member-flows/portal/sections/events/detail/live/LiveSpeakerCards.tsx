@@ -4,42 +4,26 @@ import "./LiveSpeakerCards.css";
 import "./live-tally.css";
 import { signal } from "@preact/signals";
 import type { ComponentChildren } from "preact";
-import { useEffect, useRef } from "preact/hooks";
-import { LIVE_AUX_OUTPUTS } from "../../../../../../../shared/live-room-outputs";
+import { useEffect, useRef, useState } from "preact/hooks";
 import {
   LIVE_ADDED_CREDITS_MAX,
+  isTypedLiveCreditKey,
   liveCreditAffiliations,
   liveCreditHasRole,
 } from "../../../../../../../shared/live-room-credits";
 import type { LiveCredit } from "../../../../../../../shared/schemas/live-session-room";
 import { Avatar } from "../../../../../../ui/Avatar";
-import { Button } from "../../../../../../ui/Button";
 import { SectionHeading } from "../../../../../../ui/SectionHeading";
-import { IconRemove } from "../../../../../../ui/MediaIcons";
-import { LiveAddPersonDialog } from "./LiveAddPersonDialog";
+import { LiveAddPersonDialog, LiveEditPersonDialog } from "./LiveAddPersonDialog";
 import { StudioCreateAction } from "./studio/StudioCreateAction";
 import { LiveLayerTargets } from "./LiveLayerTargets";
+import { LiveRowMenu } from "./LiveRowMenu";
 import { liveLayerTargets, sendLayerToggle, type LiveTargets } from "./live-output-targets";
 import { livePresenceItem } from "./presence/live-presence";
 import { personAffiliation, usePersonCard } from "../../../../../../site/PersonCard";
 
 /** Set while this desk waits for the person it just added, so only its operator is taken to them. */
 const awaitingAdded = signal(false);
-
-/** Where a credit's lower third is now, for the tally edge of its row. */
-function onAirOf(targets: LiveTargets, key: string) {
-  const where = liveLayerTargets(targets, { kind: "lowerThird", key });
-  return {
-    where,
-    onAir: where.program
-      ? ("program" as const)
-      : LIVE_AUX_OUTPUTS.some(where.aux)
-        ? ("aux" as const)
-        : where.preview
-          ? ("preview" as const)
-          : undefined,
-  };
-}
 
 /**
  * One person as one compact row: their photo, name, and the role or identity
@@ -52,6 +36,7 @@ function PersonRow({
   targets,
   credit,
   sessionRole,
+  onEdit,
   onRemove,
   rowRef,
 }: {
@@ -59,17 +44,19 @@ function PersonRow({
   credit: LiveCredit;
   /** Their part in this session, as the card says it. */
   sessionRole: string;
+  /** Opens the editor of someone added without an account; a person from an identity has none. */
+  onEdit?: () => void;
   onRemove?: () => void;
   rowRef?: (node: HTMLLIElement | null) => void;
 }) {
   const layer = { kind: "lowerThird" as const, key: credit.key };
-  const { where, onAir } = onAirOf(targets, credit.key);
+  const where = liveLayerTargets(targets, { kind: "lowerThird", key: credit.key });
   const item = livePresenceItem(layer);
   // The first identity with a title or organization, as the lower third starts with; the row stays still
-  // and only counts the further ones it rolls through.
-  const shownIdentity = [credit.identity, ...credit.additionalIdentities].find(
-    (identity) => identity?.title || identity?.organization,
-  );
+  // and only counts the further ones it rolls through. Someone without an account has the line typed for them.
+  const shownIdentity =
+    [credit.identity, ...credit.additionalIdentities].find((identity) => identity?.title || identity?.organization) ??
+    (credit.titleLine ? { title: credit.titleLine, organization: null } : undefined);
   const affiliation = personRoleAt({ title: shownIdentity?.title, organization: shownIdentity?.organization });
   const moreIdentities = Math.max(0, liveCreditAffiliations(credit).length - 1);
   const card = usePersonCard<HTMLLIElement>({
@@ -89,7 +76,6 @@ function PersonRow({
         rowRef?.(node);
       }}
       class="pk-live-person"
-      data-on-air={onAir}
       data-presence-item={item}
     >
       <div class="pk-live-person__who" {...card.hoverProps}>
@@ -103,6 +89,11 @@ function PersonRow({
           disabled={targets.disabled}
           aria-pressed={where.preview}
           aria-label={`Prepare ${credit.name} in Preview`}
+          title={
+            where.preview
+              ? `Lower third for ${credit.name}: in Preview\nTransition puts it on air. PVW takes it out of Preview.`
+              : `Lower third for ${credit.name}\nClick to put it in Preview and check it before air.`
+          }
           onClick={() => {
             if (!where.preview) sendLayerToggle(targets, layer, "preview");
           }}
@@ -129,20 +120,31 @@ function PersonRow({
         </button>
         {card.card}
       </div>
-      {/* The outputs name the other operators on this person, once. */}
-      <LiveLayerTargets targets={targets} subject={credit.name} layer={layer} />
-      {onRemove ? (
-        <Button
-          icon
-          variant="ghost"
-          aria-label={`Remove ${credit.name}`}
-          title="Remove from this session"
-          disabled={targets.disabled}
-          onClick={onRemove}
-        >
-          <IconRemove />
-        </Button>
-      ) : null}
+      {/* The outputs and the menu move under the name together, so the menu never wraps alone. */}
+      <span class="pk-live-person__outputs">
+        {/* The outputs name the other operators on this person, once. */}
+        <LiveLayerTargets targets={targets} subject={credit.name} layer={layer} />
+        <LiveRowMenu
+          targets={targets}
+          layer={layer}
+          label={`${credit.name} actions`}
+          heading={credit.name}
+          items={[
+            ...(onEdit ? [{ id: "edit", label: "Edit person", disabled: targets.disabled, onSelect: onEdit }] : []),
+            ...(onRemove
+              ? [
+                  {
+                    id: "remove",
+                    label: "Remove from this session",
+                    danger: true,
+                    disabled: targets.disabled,
+                    onSelect: onRemove,
+                  },
+                ]
+              : []),
+          ]}
+        />
+      </span>
     </li>
   );
 }
@@ -179,7 +181,8 @@ function PeopleGroup({
 /**
  * The session's people as lower thirds: the speakers, then the host and
  * moderator, then anyone operators added for this session, whom any
- * operator can remove again. Someone just added is scrolled into view and
+ * operator can remove again; someone added without an account can be edited
+ * too, in a dialog. Someone just added is scrolled into view and
  * focused, so the operator sees them where they landed. Bare, as on the
  * phone's Home, it is the rows alone: no group headings and nothing when
  * there is no one.
@@ -189,6 +192,9 @@ export function LiveSpeakerCards({ targets, bare = false }: { targets: LiveTarge
   const speakers = session.credits.filter((credit) => !liveCreditHasRole(credit));
   const supporting = session.credits.filter(liveCreditHasRole);
   const full = addedCredits.length >= LIVE_ADDED_CREDITS_MAX;
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  // Read from the room each time, so the dialog closes when another operator removes the person.
+  const editing = addedCredits.find((credit) => credit.key === editingKey) ?? null;
   const rows = useRef(new Map<string, HTMLLIElement>());
   const known = useRef(new Set(addedCredits.map((credit) => credit.key)));
   useEffect(() => {
@@ -235,12 +241,20 @@ export function LiveSpeakerCards({ targets, bare = false }: { targets: LiveTarge
               credit={credit}
               sessionRole={sessionRoleOf(credit, true)}
               rowRef={keep(credit.key)}
+              onEdit={isTypedLiveCreditKey(credit.key) ? () => setEditingKey(credit.key) : undefined}
               onRemove={() => targets.sendProgram({ type: "credit.remove", creditKey: credit.key })}
             />
           ))}
         </PeopleGroup>
       ) : null}
       {full && !bare ? <p class="pk-live-speakers__note">Remove someone to add another person.</p> : null}
+      {editing ? (
+        <LiveEditPersonDialog
+          credit={editing}
+          onSave={(person) => targets.sendProgram({ type: "credit.update", creditKey: editing.key, person })}
+          onClose={() => setEditingKey(null)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -250,6 +264,7 @@ export function LiveAddPersonAction({ targets, slug }: { targets: LiveTargets; s
   return (
     <StudioCreateAction
       label="Add person"
+      hint="Add someone to this session, so you can show their lower third."
       disabled={targets.disabled || targets.state.addedCredits.length >= LIVE_ADDED_CREDITS_MAX}
     >
       {(close) => (

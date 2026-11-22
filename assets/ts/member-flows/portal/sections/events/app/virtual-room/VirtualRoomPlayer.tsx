@@ -4,16 +4,18 @@ import { useLiveTimerNow } from "../../../../../../live-session/useLiveCountdown
  * The location's live player and what is on it: YouTube's privacy-enhanced player for the day's stream, then
  * the running session's title and speakers, which follow the published agenda as sessions change.
  */
+import type { ComponentChildren } from "preact";
 import type { LiveStream } from "../../../../../../../shared/schemas/event-live-stream";
-import { youtubePrivacyEmbedUrl, youtubeWatchUrl } from "../../../../../../../shared/youtube-video";
+import { youtubePrivacyEmbedUrl } from "../../../../../../../shared/youtube-video";
 import { eventSessionRoute } from "../../../../../../../shared/event-participation-link";
 import { usePortalHashLocation } from "../../../../hash-location";
 import { JoinSessionMeeting } from "../../detail/participation/JoinSessionMeeting";
+import type { AgendaSnapshot } from "../../../../../../../shared/schemas/event-agenda";
 import { sessionSpeakerLine, type RoomMoment } from "./virtual-room-schedule";
+import { VirtualRoomSpeakerFaces } from "./VirtualRoomSpeakerFaces";
 import "../../../../../../ui/Content.css";
 import "./VirtualRoom.css";
 import { SectionHeading } from "../../../../../../ui/SectionHeading";
-import { ExternalLink } from "../../../../../../ui/ExternalLink";
 
 export function VirtualRoomPlayer({
   stream,
@@ -63,53 +65,65 @@ function WaitingRoomPlayer({ locationName, startsAt }: { locationName: string; s
   );
 }
 
-/** The running session under the player, or what comes next between sessions. */
+/**
+ * The running session under the player, or what comes next between sessions: its time, behind a live dot
+ * while it runs, with its people's portraits, then the title and the reactions. A wide window also names
+ * the speakers under the title.
+ */
 export function VirtualRoomNowPlaying({
   slug,
   moment,
-  stream,
   formatTime,
+  organizations,
+  location,
+  reactions,
 }: {
   slug: string;
   moment: RoomMoment;
-  stream: LiveStream | null;
+  /** The agenda's organizations, for the people's cards. */
+  organizations?: AgendaSnapshot["speakerOrganizations"];
   formatTime: (startAt: string, endAt: string) => string;
+  /** The location picker, where the line carries it. */
+  location?: ComponentChildren;
+  /** The running session's reaction bar. */
+  reactions?: ComponentChildren;
 }) {
   const session = moment.current;
-  const next = moment.upcoming[0];
+  const shown = session ?? moment.upcoming[0];
   return (
-    <section class="pk-virtual-room__now pk-stack pk-stack--snug" aria-live="polite" aria-label="Now in this room">
-      {session ? (
-        <>
-          <p class="pk-event-card__eyebrow">Live now · {formatTime(session.startAt, session.endAt)}</p>
-          <SectionHeading level={3} class="pk-virtual-room__title">
-            <a href={usePortalHashLocation.hrefs(eventSessionRoute(slug, session.id))}>{session.title}</a>
-          </SectionHeading>
-          {session.speakers.length > 0 && <p class="pk-event-card__meta">{sessionSpeakerLine(session)}</p>}
-          {session.onlineAccessAvailable && (
-            <div class="pk-cluster">
-              <JoinSessionMeeting slug={slug} sessionId={session.id} primary={false} label="Join the meeting" />
+    <section class="pk-virtual-room__now" aria-label="Now in this room">
+      {location}
+      <div class="pk-virtual-room__now-text" aria-live="polite">
+        {shown ? (
+          <>
+            <div class="pk-virtual-room__when">
+              <p class="pk-event-card__eyebrow">
+                {session ? (
+                  <>
+                    <span class="pk-virtual-room__live-dot" aria-hidden="true" />
+                    <span class="pk-sr-only">Live now, </span>
+                  </>
+                ) : (
+                  "Up next · "
+                )}
+                {formatTime(shown.startAt, shown.endAt)}
+              </p>
+              <VirtualRoomSpeakerFaces session={shown} organizations={organizations} />
             </div>
-          )}
-        </>
-      ) : next ? (
-        <>
-          <p class="pk-event-card__eyebrow">Up next · {formatTime(next.startAt, next.endAt)}</p>
-          <SectionHeading level={3} class="pk-virtual-room__title">
-            <a href={usePortalHashLocation.hrefs(eventSessionRoute(slug, next.id))}>{next.title}</a>
-          </SectionHeading>
-          {next.speakers.length > 0 && <p class="pk-event-card__meta">{sessionSpeakerLine(next)}</p>}
-        </>
-      ) : (
-        <p class="pk-event-card__meta">No more sessions in this location today.</p>
-      )}
-      {stream && (
-        <p class="pk-small pk-muted">
-          Player not starting?{" "}
-          <ExternalLink href={youtubeWatchUrl(stream.videoId)} external>
-            Watch on YouTube
-          </ExternalLink>
-        </p>
+            <SectionHeading level={3} class="pk-virtual-room__title">
+              <a href={usePortalHashLocation.hrefs(eventSessionRoute(slug, shown.id))}>{shown.title}</a>
+            </SectionHeading>
+            {shown.speakers.length > 0 && <p class="pk-event-card__meta">{sessionSpeakerLine(shown)}</p>}
+          </>
+        ) : (
+          <p class="pk-event-card__meta">No more sessions in this location today.</p>
+        )}
+      </div>
+      {reactions}
+      {session?.onlineAccessAvailable && (
+        <div class="pk-cluster pk-virtual-room__now-actions">
+          <JoinSessionMeeting slug={slug} sessionId={session.id} primary={false} label="Join the meeting" />
+        </div>
       )}
     </section>
   );

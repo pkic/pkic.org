@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { liveStageDisplayPlan, type LiveStageDisplayPlan } from "../../shared/live-stage-display-plan";
 import { LIVE_REACTIONS, type LiveReactionId } from "../../shared/live-session-policy";
+import { LIVE_SPEAKER_OUTPUT_KEY } from "../../shared/schemas/live-room-output-setup";
+import { liveOutputComposition } from "../../shared/schemas/live-session-stage";
 import type { LiveRoomState } from "./live-room-state";
 import { useLiveTimerNow } from "./useLiveCountdown";
 
@@ -14,8 +16,9 @@ export function useLiveStageDisplayPlan(state: LiveRoomState, roomId?: string): 
   const next = state.stageDisplayNext;
   return liveStageDisplayPlan({
     session: state.session,
-    own: state.outputs["stage-display"],
+    own: liveOutputComposition(state.outputs, LIVE_SPEAKER_OUTPUT_KEY),
     program: state.stage,
+    screenSync: state.screenSync,
     next,
     // Operators' monitors read the votes from the question list; a stage display source receives them with the question.
     nextVotes: next

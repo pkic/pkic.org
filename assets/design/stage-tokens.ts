@@ -10,7 +10,7 @@ export const stageTokens = {
   "stage-type": "64px",
   "stage-type-lead": "84px",
   "stage-type-clock": "120px",
-  "stage-type-timer-small": "180px",
+  "stage-type-timer-small": "150px",
   "stage-type-timer": "400px",
   "stage-ground": "#020202",
   "stage-ink": "#f5f6f7",

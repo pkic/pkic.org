@@ -98,6 +98,14 @@ describe("scanner hosts", () => {
       canAdmitExceptions: true,
     });
   });
+  it.each([
+    [["agenda:check"], false],
+    [["agenda:check", "agenda:badge_print"], true],
+  ])("offers the badge print desk to %j: %s", async (permissions, offered) => {
+    portalSession.value = session(permissions);
+    await mountGroup();
+    expect(Boolean(mounts.props.at(-1)?.printHref)).toBe(offered);
+  });
   it("remounts group scanner when operator or event changes", async () => {
     portalSession.value = session(["agenda:scan"]);
     await mountGroup();

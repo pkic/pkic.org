@@ -1,0 +1,50 @@
+@layer components {
+  /* Preview's scene beside PVW: a small button with the scene's name; a long name shortens before the header's controls do. */
+  .pk-studio-scene-picker {
+    display: inline-flex;
+    min-inline-size: 0;
+  }
+  /* Button.css loads after the studio's styles, so this needs the extra weight. */
+  .pk-studio-scene-picker > .pk-btn.pk-studio-scene-picker__trigger {
+    gap: var(--pk-1);
+    min-inline-size: 0;
+    padding: 0 var(--pk-2);
+    min-block-size: 1.5rem;
+    font-size: var(--pk-text-xs);
+    font-weight: 600;
+  }
+  .pk-studio-scene-picker__name {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* The scenes hanging from that button: three to a row, in the browser's top layer above the studio. */
+  .pk-studio-scene-popover {
+    position: fixed;
+    inset: auto;
+    display: grid;
+    gap: var(--pk-2);
+    box-sizing: border-box;
+    inline-size: min(27rem, calc(100vw - 1rem));
+    max-block-size: calc(100dvh - 1rem);
+    overflow: auto;
+    margin: 0;
+    padding: var(--pk-3);
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius);
+    background: var(--pk-surface-raise);
+    color: var(--pk-ink);
+    box-shadow: var(--pk-shadow-3);
+  }
+  .pk-studio-scene-popover__title {
+    margin: 0;
+    font-size: var(--pk-text-sm);
+    font-weight: 600;
+  }
+  .pk-studio-scene-popover__scenes {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--pk-3) var(--pk-2);
+  }
+}

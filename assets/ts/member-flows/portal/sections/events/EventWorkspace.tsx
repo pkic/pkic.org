@@ -175,7 +175,7 @@ function LegacyEventRoute({
   const ownerGroupId = event && "ownerGroupId" in event ? event.ownerGroupId : null;
   const eventId = detail.data?.event.id ?? null;
   const target =
-    !audienceFallback && ownerGroupId && eventId && canOpenGroupWorkspace(portalSession.value, ownerGroupId)
+    !audienceFallback && ownerGroupId && eventId && canOpenGroupWorkspace(portalSession.value, ownerGroupId, eventId)
       ? mapPath(`/groups/${encodeURIComponent(ownerGroupId)}/events/${encodeURIComponent(eventId)}`)
       : null;
 

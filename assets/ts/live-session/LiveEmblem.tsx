@@ -1,7 +1,7 @@
 import { LIVE_EMBLEM } from "../../shared/live-lower-third";
 
-/** The consortium emblem's seats and spokes in its own square box (`LIVE_EMBLEM`): the part that turns. */
-export function LiveEmblemWheel() {
+/** The consortium emblem's three seats in its own square box (`LIVE_EMBLEM`), without the ring and spokes between them. */
+export function LiveEmblemSeats() {
   return (
     <>
       <path
@@ -16,12 +16,28 @@ export function LiveEmblemWheel() {
         class="pk-live-overlay__emblem-green"
         d="M41.564 133.333C33.162 118.791 16.595 107.326 25.977 91.075C35.36 74.824 53.572 83.439 70.368 83.444A146.09 146.09 0 0 1 140.246 39.423L144.839 58.724A126.27 126.27 0 0 0 57.392 210.188L38.38 215.86A146.09 146.09 0 0 1 41.564 133.333Z"
       />
-      <path
-        class="pk-live-overlay__emblem-ink"
-        fill-rule="evenodd"
-        d="M189.905 81.165A99.33 99.33 0 0 1 270.546 220.839L311.47 244.467L301.565 261.623L260.641 237.995A99.33 99.33 0 0 1 99.359 237.995L58.435 261.623L48.53 244.467L89.454 220.839A99.33 99.33 0 0 1 170.095 81.165L170.095 33.91L189.905 33.91ZM180 100.48A79.52 79.52 0 0 0 180 259.52A79.52 79.52 0 0 0 180 100.48Z"
-      />
     </>
+  );
+}
+
+/** The emblem's seats and spokes in its own square box (`LIVE_EMBLEM`): the part that turns. */
+export function LiveEmblemWheel() {
+  return (
+    <>
+      <LiveEmblemSeats />
+      <LiveEmblemRing />
+    </>
+  );
+}
+
+/** The ring and spokes between the emblem's seats, in its box (`LIVE_EMBLEM`). */
+export function LiveEmblemRing() {
+  return (
+    <path
+      class="pk-live-overlay__emblem-ink"
+      fill-rule="evenodd"
+      d="M189.905 81.165A99.33 99.33 0 0 1 270.546 220.839L311.47 244.467L301.565 261.623L260.641 237.995A99.33 99.33 0 0 1 99.359 237.995L58.435 261.623L48.53 244.467L89.454 220.839A99.33 99.33 0 0 1 170.095 81.165L170.095 33.91L189.905 33.91ZM180 100.48A79.52 79.52 0 0 0 180 259.52A79.52 79.52 0 0 0 180 100.48Z"
+    />
   );
 }
 

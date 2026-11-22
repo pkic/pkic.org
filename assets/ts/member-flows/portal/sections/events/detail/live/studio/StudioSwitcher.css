@@ -1,14 +1,33 @@
 @layer components {
-  /* The Transition: its button in the middle of whatever holds it, its panel or the phone's switcher row. */
+  /* The Transition: its take buttons stacked in the middle of whatever holds them, its panel or the phone's switcher row,
+     one column as wide as the longest label so the buttons line up. */
   .pk-studio-transition {
     display: grid;
-    place-items: center;
+    align-content: center;
+    justify-content: center;
+    gap: var(--pk-2);
+    box-sizing: border-box;
     block-size: 100%;
+    padding: var(--pk-2) var(--pk-3);
   }
-  /* A 44px target wherever it sits, desk or phone. */
-  .pk-studio-transition > .pk-btn {
+  /* A 44px target wherever it sits, desk or phone, solid in the tally color of the output it goes to.
+     Scoped under the Transition so it wins over the shared Button's variant, whatever order the styles load in. */
+  .pk-studio-transition > .pk-btn.pk-studio-transition__take {
+    justify-content: flex-start;
+    gap: var(--pk-1);
     min-block-size: 2.75rem;
     min-inline-size: 2.75rem;
+    border-color: var(--tally-solid);
+    border-style: var(--tally-line);
+    background: var(--tally-solid);
+    color: var(--pk-on-solid);
+    font-family: var(--pk-font-mono);
+    font-weight: 600;
+  }
+  .pk-studio-transition > .pk-btn.pk-studio-transition__take:hover:not(:disabled) {
+    border-color: color-mix(in oklab, var(--tally-solid) 85%, var(--pk-live-shade));
+    background: color-mix(in oklab, var(--tally-solid) 85%, var(--pk-live-shade));
+    color: var(--pk-on-solid);
   }
   /* The Undo after a clear, above the panels at the foot of the window, out of the way of the header. */
   .pk-studio__toast {

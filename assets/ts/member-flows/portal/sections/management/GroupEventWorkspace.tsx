@@ -401,7 +401,7 @@ export function GroupEventWorkspace({
                   slug={event.slug}
                   basePath={tabPath("scanner")}
                   section={detailId}
-                  canPrintLabels={canManage}
+                  canPrintLabels={canManage || hasEventAgendaPermission(event.id, "agenda:badge_print")}
                 />
               )}
               {activeTab === "live" && (

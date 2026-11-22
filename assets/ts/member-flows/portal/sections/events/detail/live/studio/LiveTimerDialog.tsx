@@ -4,11 +4,7 @@ import type { ClockZone } from "../../../../../../../../shared/event-clock";
 import { clockTimeZone } from "../../../../../../../../shared/event-clock";
 import { format24HourClockInZone, formatClockName } from "../../../../../../../../shared/format-date";
 import { liveTimerHasSettings } from "../../../../../../../../shared/live-timer-policy";
-import type {
-  LiveRoomClientMessage,
-  LiveRoomSession,
-  LiveTimer,
-} from "../../../../../../../../shared/schemas/live-session-room";
+import type { LiveRoomClientMessage, LiveTimer } from "../../../../../../../../shared/schemas/live-session-room";
 import {
   LIVE_TIMER_ZERO_ACTIONS,
   liveTimerAtZeroSchema,
@@ -30,9 +26,10 @@ import { DurationInput, durationFieldOf } from "../../../../../../../ui/Duration
 import { Field } from "../../../../../../../ui/Field";
 import { FormSection } from "../../../../../../../ui/FormSection";
 import { Select, TextInput } from "../../../../../../../ui/TextControl";
+import { LIVE_SETTINGS_NOT_SENT } from "../live-graphic-settings";
 import { LiveTimerLookFields } from "../LiveTimerGraphicControls";
 import "./LiveTimerDialog.css";
-import { liveTimerTargetInstant } from "./LiveTimerAddForm";
+import { liveTimerNextInstant } from "./LiveTimerAddForm";
 
 const ZERO_LABELS: Record<LiveTimerZeroAction, string> = {
   overtime: "Keep counting as overtime",
@@ -56,7 +53,6 @@ function mineOver<Value extends object>(opened: Value, mine: Value, current: Val
   const changed = Object.entries(mine).filter(([key, value]) => !same(value, opened[key as keyof Value]));
   return { ...current, ...Object.fromEntries(changed) };
 }
-const RECONNECTING = "The control room is reconnecting or busy. Try again when it is connected.";
 
 /**
  * One timer's settings in one place, in two columns on a wide screen: its
@@ -66,7 +62,6 @@ const RECONNECTING = "The control room is reconnecting or busy. Try again when i
  */
 export function LiveTimerDialog({
   timer,
-  session,
   clock,
   graphic,
   send,
@@ -74,7 +69,6 @@ export function LiveTimerDialog({
   onClose,
 }: {
   timer: LiveTimer;
-  session: Pick<LiveRoomSession, "startAt">;
   clock: ClockZone;
   graphic: LiveTimerGraphic;
   send: (message: LiveRoomClientMessage) => boolean;
@@ -105,9 +99,8 @@ export function LiveTimerDialog({
   const warnAt = seconds(warning);
   const edit: Record<string, unknown> = { name };
   if (timer.kind === "duration") edit.durationSeconds = length;
-  // An unchanged time keeps the stored instant; a new one keeps the date the timer counts to.
-  if (timer.kind === "until" && time !== shownTime)
-    edit.targetAt = liveTimerTargetInstant(time, { startAt: opened.timer.targetAt ?? session.startAt }, zone);
+  // An unchanged time keeps the stored instant; a new one counts to its next coming occurrence, as when added.
+  if (timer.kind === "until" && time !== shownTime) edit.targetAt = liveTimerNextInstant(time, Date.now(), zone);
   const body = {
     edit,
     settings: {
@@ -148,7 +141,7 @@ export function LiveTimerDialog({
       ...(next.edit.targetAt !== undefined ? { targetAt: next.edit.targetAt } : {}),
     };
     if (Object.keys(patch).length && !send({ type: "timer.edit", timerId: timer.id, edit: patch }))
-      return setError(RECONNECTING);
+      return setError(LIVE_SETTINGS_NOT_SENT);
     const settings = {
       atZero: mineOver(opened.timer.atZero, next.settings.atZero, timer.atZero),
       sound: mineOver(opened.timer.sound, next.settings.sound, timer.sound),
@@ -158,9 +151,9 @@ export function LiveTimerDialog({
       !same(settings, { atZero: timer.atZero, sound: timer.sound }) &&
       !send({ type: "timer.configure", timerId: timer.id, settings })
     )
-      return setError(RECONNECTING);
+      return setError(LIVE_SETTINGS_NOT_SENT);
     const shown = mineOver(opened.graphic, next.graphic, graphic);
-    if (!same(shown, graphic) && !saveGraphic(shown)) return setError(RECONNECTING);
+    if (!same(shown, graphic) && !saveGraphic(shown)) return setError(LIVE_SETTINGS_NOT_SENT);
     onClose();
   };
 

@@ -1,9 +1,9 @@
 import { expect, type Page } from "@playwright/test";
+import type { z } from "zod";
 import {
   LIVE_ROOM_PROTOCOL,
   liveRoomClientMessageSchema,
   liveRoomServerMessageSchema,
-  type LiveRoomClientMessage,
 } from "../../../assets/shared/schemas/live-session-room";
 
 interface BrowserLiveProbe {
@@ -47,7 +47,7 @@ export async function liveClose(page: Page) {
     return probe.close;
   });
 }
-export async function sendLiveMessage(page: Page, message: LiveRoomClientMessage) {
+export async function sendLiveMessage(page: Page, message: z.input<typeof liveRoomClientMessageSchema>) {
   const parsed = liveRoomClientMessageSchema.parse(message);
   await page.evaluate((message) => {
     const probe = globalThis.liveSessionBrowserProbe;

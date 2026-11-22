@@ -96,7 +96,12 @@ it("keeps selectors behind the room button and navigates adjacent real sessions 
   expect(location.hash).toContain("studioSplit=45");
   expect(location.hash).toContain("chat=operator");
   expect(location.search).toBe("?campaign=event");
-  expect(host.querySelector('[title="Choose room and session"]')?.textContent).toContain("Main hall");
+  // The room button names its room and says what it opens, as a hint or, before the layer takes it, a title.
+  const roomButton = host.querySelector<HTMLElement>(".pk-studio-room__name")!.closest("button")!;
+  expect(roomButton.textContent).toContain("Main hall");
+  expect(roomButton.dataset.tooltip ?? roomButton.title).toBe(
+    "Room: Main hall\nChoose another room or session to open in the studio.",
+  );
   void act(() =>
     render(
       <EventLiveControlRoom
@@ -127,7 +132,7 @@ it("goes back to the session the agenda has now in the room, and stays put until
 });
 it("changing room/session is a draft until the shared dialog confirms it", async () => {
   const host = mount("opening");
-  await act(async () => host.querySelector<HTMLButtonElement>('[title="Choose room and session"]')!.click());
+  await act(async () => host.querySelector<HTMLElement>(".pk-studio-room__name")!.closest("button")!.click());
   const room = host.querySelector<HTMLSelectElement>("dialog select")!;
   await act(async () => {
     room.value = "annex";
