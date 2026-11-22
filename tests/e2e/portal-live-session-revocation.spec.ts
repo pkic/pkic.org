@@ -103,7 +103,7 @@ test("Studio queue stays private and moderators lose question and poll access af
     data: agendaRevisionSchema.parse({ expectedRevision: agenda.revision }),
   });
   expect(published.status(), await published.text()).toBe(200);
-  const moderator = await createMember(staff, { individual: true });
+  const moderator = await createMember(staff);
   const granting = await staff.request.post("/api/v1/permissions/grants", {
     data: accessGrantCreateSchema.parse({
       userId: moderator.userId,
@@ -119,11 +119,11 @@ test("Studio queue stays private and moderators lose question and poll access af
   const path = `${api}/occurrences/${occurrence.id}/live`;
   const marker = crypto.randomUUID();
   try {
-    await registerStateAttendee(pages[0]!, fixture, moderator.email);
+    for (const page of pages) await signInToPortal(page, moderator.email);
+    await registerStateAttendee(pages[0]!, fixture, moderator.email, { identityId: moderator.identityId });
     await connectLiveBrowser(staff, path);
     await expectLiveOperator(staff);
     for (const page of pages) {
-      await signInToPortal(page, moderator.email);
       await connectLiveBrowser(page, path);
       await expectLiveOperator(page);
     }
@@ -165,9 +165,19 @@ test("Studio queue stays private and moderators lose question and poll access af
         question: { anonymous: true, status: "pending", authorName: expect.any(String) },
       });
     }
+    const chat = await staff.context().newPage();
     const latency = [];
-    for (let sample = 0; sample < 5; sample++)
-      latency.push(await measureLiveChatDelivery(staff, `Synthetic instant chat ${marker}-${sample}`));
+    try {
+      await chat.goto("/portal/");
+      await connectLiveBrowser(chat, `${api}/rooms/${room.id}/live/chat`);
+      await livePoll(async () =>
+        (await liveMessages(chat)).some((message) => message.type === "location.chat.snapshot"),
+      ).toBe(true);
+      for (let sample = 0; sample < 5; sample++)
+        latency.push(await measureLiveChatDelivery(chat, `Synthetic instant chat ${marker}-${sample}`));
+    } finally {
+      await chat.close();
+    }
     await writeFile(
       info.outputPath("live-chat-latency.json"),
       JSON.stringify({ targetMilliseconds: 100, samples: latency }, null, 2),
