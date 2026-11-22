@@ -306,9 +306,13 @@ describe("buildTemplateSqlStatements", () => {
         hasWaitingVenueDay: true,
         hasOfferedVenueDay: false,
         hasExpiredVenueDay: false,
+        waitlistAlternatives: [{ label: "Livestream Lounge", description: "Watch together nearby", limited: true }],
         manageUrl: "https://example.test/registration",
       }),
       DEFAULT_LAYOUT_HTML,
+    );
+    expect(rendered.text).toContain(
+      "We recommend Livestream Lounge instead: Watch together nearby, while space lasts. To switch, change your registration",
     );
     expect(rendered.text).toContain("Dear Alex,");
     expect(rendered.text).toContain("Your registration details");

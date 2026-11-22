@@ -7,6 +7,21 @@ export function attendanceOptionLabelSql(day: string, value: string): string {
     WHERE CASE WHEN json_valid(option.value) THEN json_extract(option.value, '$.value') END = ${value} LIMIT 1)`;
 }
 
+/**
+ * The stored JSON of the option a day suggests when the selected option is full: the one the
+ * selected option names as its waitlist alternative, while that day still offers it. Arguments
+ * are trusted SQL expressions.
+ */
+export function waitlistAlternativeOptionSql(day: string, value: string): string {
+  const options = `json_each(CASE WHEN json_valid(${day}.attendance_options_json) THEN ${day}.attendance_options_json ELSE '[]' END)`;
+  return `(SELECT alternative.value
+    FROM ${options} option JOIN ${options} alternative
+      ON alternative.type = 'object' AND option.type = 'object'
+     AND json_extract(alternative.value, '$.value') = json_extract(option.value, '$.waitlistAlternative')
+    WHERE json_extract(option.value, '$.value') = ${value}
+      AND COALESCE(json_extract(alternative.value, '$.enabled'), 1) <> 0 LIMIT 1)`;
+}
+
 /** Whether a selected day currently occupies its option's capacity. Arguments are trusted SQL expressions. */
 export function registrationDayHoldsOptionSql(attendance: string, now: string): string {
   return `NOT EXISTS (SELECT 1 FROM event_day_waitlist_entries capacity_waiting

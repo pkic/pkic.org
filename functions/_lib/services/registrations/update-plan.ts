@@ -1,4 +1,3 @@
-import { eventAttendanceAccessMode } from "../../../../assets/shared/event-attendance-access";
 import { attendanceOptionCapacity } from "./day-waitlist-capacity";
 import { prepareParticipationReconciliation } from "../event-participation/reconciliation";
 import { assertRegistrationRestorationAllowed } from "./restoration";
@@ -20,7 +19,7 @@ import {
   prepareRestoreRegistrationTicket,
 } from "../event-tickets/registration-ticket";
 import {
-  configuredAttendanceOptions,
+  selectedDayEmailAttendance,
   listEventDays,
   getRegistrationDayAttendance,
   prepareReplaceRegistrationDayAttendanceStatements,
@@ -102,6 +101,7 @@ export interface BuiltRegistrationUpdate {
     label: string | null;
     optionLabel: string | null;
     accessMode: import("../../../../assets/shared/event-attendance-access").EventAttendanceAccessMode;
+    waitlistAlternativeJson: string | null;
     startsAt: string | null;
     endsAt: string | null;
   }>;
@@ -349,20 +349,14 @@ export async function buildRegistrationUpdate(
         .filter((selection) => payload.claimDayWaitlistOffers?.includes(selection.dayDate))
         .map((selection) => selection.dayDate),
     );
-    plannedDayAttendance = payload.dayAttendance.map((selection) => {
-      const day = configuredEventDays.find((entry) => entry.day_date === selection.dayDate);
-      const option = day && configuredAttendanceOptions(day).find((entry) => entry.value === selection.attendanceType);
-      return {
-        dayDate: selection.dayDate,
-        attendanceType: selection.attendanceType,
-        label: day?.label ?? null,
-        // The event's own name for the option, as every other registration email shows it.
-        optionLabel: option?.label ?? null,
-        accessMode: eventAttendanceAccessMode(option ?? { value: selection.attendanceType }),
-        startsAt: day?.starts_at ?? null,
-        endsAt: day?.ends_at ?? null,
-      };
-    });
+    plannedDayAttendance = payload.dayAttendance.map((selection) => ({
+      dayDate: selection.dayDate,
+      attendanceType: selection.attendanceType,
+      ...selectedDayEmailAttendance(
+        configuredEventDays.find((entry) => entry.day_date === selection.dayDate),
+        selection.attendanceType,
+      ),
+    }));
     plannedDayWaitlist = waitlist.activeRows.map((row) =>
       row.status === "offered" && claimedInPersonDates.has(row.dayDate)
         ? { ...row, status: "accepted", offerExpiresAt: null }
