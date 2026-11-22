@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { liveChatActions } from "../assets/shared/live-chat-policy";
 import {
+  CONTENT_CHECK_MAX_QUESTIONS,
+  contentCheckQuestionLimitRefusal,
   decideContentCheck,
   effectiveContentCheck,
+  mergedContentCheckQuestions,
   type ContentCheckQuestion,
   type ContentCheckSettings,
 } from "../assets/shared/content-checks";
@@ -111,3 +115,58 @@ describe("check settings contract", () => {
     expect(duplicate.success).toBe(false);
   });
 });
+
+describe("an event's questions beside the PKIC-wide ones", () => {
+  const many = (count: number, prefix: string): ContentCheckQuestion[] =>
+    Array.from({ length: count }, (_, index) => ({ ...spam, id: `${prefix}_${String(index).padStart(2, "0")}` }));
+
+  it("keeps every saved question and refuses a set above the limit instead of dropping the extras", () => {
+    const wide = many(CONTENT_CHECK_MAX_QUESTIONS, "wide");
+    const extra = { context: "", questions: [{ ...spam, id: "event_only" }], disabledQuestionIds: [] };
+    expect(contentCheckQuestionLimitRefusal(wide, extra)).toContain(`${CONTENT_CHECK_MAX_QUESTIONS + 1}`);
+    expect(mergedContentCheckQuestions(wide, extra)).toHaveLength(CONTENT_CHECK_MAX_QUESTIONS + 1);
+    expect(effectiveContentCheck({ ...settings(wide) }, extra).questions.map((question) => question.id)).toContain(
+      "event_only",
+    );
+  });
+
+  it("counts a replacement once and a switched-off question not at all", () => {
+    const wide = many(CONTENT_CHECK_MAX_QUESTIONS, "wide");
+    expect(
+      contentCheckQuestionLimitRefusal(wide, {
+        context: "",
+        questions: [
+          { ...spam, id: "wide_00" },
+          { ...spam, id: "event_only" },
+        ],
+        disabledQuestionIds: ["wide_01"],
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("keeping a message the automatic check flagged", () => {
+  it("offers a moderator keep for a flagged message nobody reported, and no one else", () => {
+    const message = {
+      channel: "attendee" as const,
+      mine: false,
+      hidden: false,
+      held: false,
+      reported: false,
+      reportedByMe: false,
+      converted: false,
+      done: false,
+      authorStaff: false,
+      authorRestriction: null,
+      sentAt: new Date().toISOString(),
+      editLocked: false,
+    };
+    expect(liveChatActions("moderator", false, message).has("keep")).toBe(false);
+    expect(liveChatActions("moderator", false, { ...message, flaggedByCheck: true }).has("keep")).toBe(true);
+    expect(liveChatActions("participant", false, { ...message, flaggedByCheck: true }).has("keep")).toBe(false);
+  });
+});
+
+function settings(questions: ContentCheckQuestion[]): ContentCheckSettings {
+  return { enabled: true, model: "clef-flash", context: "", questions };
+}

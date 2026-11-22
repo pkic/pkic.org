@@ -6,6 +6,7 @@
 import { DEFAULT_CONTENT_CHECK_SETTINGS } from "../../../../assets/shared/content-check-defaults";
 import {
   CONTENT_CHECK_KINDS,
+  contentCheckQuestionLimitRefusal,
   effectiveContentCheck,
   type ContentCheckEventAdditions,
   type ContentCheckKind,
@@ -194,6 +195,37 @@ function changedError(): AppError {
   );
 }
 
+function questionLimitError(field: string, message: string): AppError {
+  return new AppError(400, "VALIDATION_ERROR", message, { formErrors: [], fieldErrors: { [field]: [message] } });
+}
+
+/** A PKIC-wide change must not leave an event asking more questions than a check runs: refused, not dropped. */
+async function refuseQuestionsEventsCannotCarry(
+  db: DatabaseLike,
+  kind: ContentCheckKind,
+  questions: readonly ContentCheckQuestion[],
+): Promise<void> {
+  const { results } = await db
+    .prepare(
+      "SELECT questions_json, disabled_question_ids_json, context FROM event_content_check_additions WHERE kind = ?",
+    )
+    .bind(kind)
+    .all<Pick<AdditionsRow, "questions_json" | "disabled_question_ids_json" | "context">>();
+  const over = results.filter(
+    (row) =>
+      contentCheckQuestionLimitRefusal(questions, {
+        context: row.context,
+        questions: decodeQuestions(row.questions_json),
+        disabledQuestionIds: decodeIds(row.disabled_question_ids_json),
+      }) !== null,
+  ).length;
+  if (over)
+    throw questionLimitError(
+      "questions",
+      `${over} ${over === 1 ? "event adds" : "events add"} questions that would no longer fit beside these. Remove some here or in ${over === 1 ? "that event" : "those events"}.`,
+    );
+}
+
 async function commit(db: DatabaseLike, statements: StatementLike[]): Promise<void> {
   try {
     await db.batch(statements);
@@ -211,6 +243,7 @@ export async function saveContentCheckSettings(
   input: ContentCheckSettingsInput,
 ): Promise<{ revision: number }> {
   const now = nowIso();
+  await refuseQuestionsEventsCannotCarry(db, kind, input.questions);
   await commit(db, [
     preparePermissionsAuthorizationGuard(db, actor, [{ permission: "events:manage" }]),
     prepareStateGuard(db, {
@@ -249,10 +282,11 @@ export async function saveEventContentCheckAdditions(
     .prepare("SELECT questions_json FROM content_check_settings WHERE kind = ?")
     .bind(kind)
     .first<{ questions_json: string }>();
-  const wideIds = new Set(
-    (wide ? decodeQuestions(wide.questions_json) : DEFAULT_CONTENT_CHECK_SETTINGS[kind].questions).map((q) => q.id),
-  );
+  const wideQuestions = wide ? decodeQuestions(wide.questions_json) : DEFAULT_CONTENT_CHECK_SETTINGS[kind].questions;
+  const wideIds = new Set(wideQuestions.map((q) => q.id));
   const disabledQuestionIds = [...new Set(input.disabledQuestionIds)].filter((id) => wideIds.has(id));
+  const tooMany = contentCheckQuestionLimitRefusal(wideQuestions, { ...input, disabledQuestionIds });
+  if (tooMany) throw questionLimitError("questions", tooMany);
   await commit(db, [
     preparePermissionsAuthorizationGuard(db, actor, [
       { permission: "events:write", context: { type: "event", id: eventId } },

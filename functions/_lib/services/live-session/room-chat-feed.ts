@@ -92,6 +92,7 @@ export class LiveChatFeed {
     const hidden = this.moderation.hidden(ids);
     const questions = this.moderation.questions(ids);
     const checks = this.moderation.checks.flagged(ids);
+    const waiting = this.moderation.checks.waiting(ids, Date.now());
     const restrictions = this.decisions.restrictions(authors, Date.now());
     const removals = this.decisions.removals(ids);
     const done = this.decisions.done(ids);
@@ -131,6 +132,8 @@ export class LiveChatFeed {
         const doneRow = done.get(row.id);
         // The author keeps seeing a message a moderator removed, with the reason; a held one stays theirs too.
         if (hiding && !staff(viewer) && !mineRow) return null;
+        // Words still being checked are for their author and moderators until the check passes.
+        if (waiting.has(row.id) && !staff(viewer) && !mineRow) return null;
         const report = reports.get(row.id);
         const author = people.get(row.author_user_id);
         const replyTo = quote(row, viewer);

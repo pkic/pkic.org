@@ -34,7 +34,15 @@ function isKind(value: string | undefined): value is ContentCheckKind {
   return CONTENT_CHECK_KINDS.includes(value as ContentCheckKind);
 }
 
-function KindSettings({ initial, canWrite }: { initial: ContentCheckSettingsResponse; canWrite: boolean }) {
+function KindSettings({
+  initial,
+  canWrite,
+  onSaved,
+}: {
+  initial: ContentCheckSettingsResponse;
+  canWrite: boolean;
+  onSaved: (settings: ContentCheckSettingsResponse) => void;
+}) {
   const [settings, setSettings] = useState(initial);
 
   async function save(patch: Partial<Omit<ContentCheckSettingsInput, "expectedRevision">>) {
@@ -47,7 +55,9 @@ function KindSettings({ initial, canWrite }: { initial: ContentCheckSettingsResp
       ...patch,
     };
     const saved = await putJson(`${CONTENT_CHECKS_API}/${settings.kind}`, body, contentCheckSavedResponseSchema);
-    setSettings({ ...settings, ...body, revision: saved.revision, saved: true });
+    const next = { ...settings, ...body, revision: saved.revision, saved: true };
+    setSettings(next);
+    onSaved(next);
     toast("Check saved", "success");
   }
 
@@ -92,7 +102,9 @@ function KindSettings({ initial, canWrite }: { initial: ContentCheckSettingsResp
 export function ContentChecks({ canWrite, kind: requested }: { canWrite: boolean; kind?: string }) {
   const state = useData(() => getJson(CONTENT_CHECKS_API, contentCheckSettingsListResponseSchema), []);
   const kind = isKind(requested) ? requested : "chat_message";
-  const settings = state.data?.checks.find((check) => check.kind === kind);
+  // What was saved here, so a tab left and revisited starts from the saved settings and their revision.
+  const [saved, setSaved] = useState<Partial<Record<ContentCheckKind, ContentCheckSettingsResponse>>>({});
+  const settings = saved[kind] ?? state.data?.checks.find((check) => check.kind === kind);
 
   return (
     <div class="pk pk-stack">
@@ -111,7 +123,12 @@ export function ContentChecks({ canWrite, kind: requested }: { canWrite: boolean
       ) : state.error ? (
         <ErrorAlert error={state.error} />
       ) : settings ? (
-        <KindSettings key={kind} initial={settings} canWrite={canWrite} />
+        <KindSettings
+          key={kind}
+          initial={settings}
+          canWrite={canWrite}
+          onSaved={(next) => setSaved((current) => ({ ...current, [next.kind]: next }))}
+        />
       ) : null}
     </div>
   );

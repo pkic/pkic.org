@@ -107,6 +107,31 @@ describe("automatic screening of proposals", () => {
     expect((await readContentCheckResult(env.DB, "proposal", proposalId))?.outcome).toBe("advised");
   });
 
+  it("drops the verdict of old words when an edit is not screened, and keeps it for private notes", async () => {
+    const { token, body } = await proposalIdentityFixture();
+    const submitted = await submit(body, token);
+    const { proposalId, manageToken } = await submitted.json<{ proposalId: string; manageToken: string }>();
+    expect(await readContentCheckResult(env.DB, "proposal", proposalId)).not.toBeNull();
+    const edit = (change: Record<string, string>) =>
+      callApi(checkedEnv, `/api/v1/proposals/access/${encodeURIComponent(manageToken)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(change),
+      });
+
+    await env.DB.prepare(
+      `INSERT INTO content_check_settings (kind, enabled, model, context, questions_json, revision, updated_at)
+       VALUES ('proposal', 0, 'clef', '', '[]', 1, ?)`,
+    )
+      .bind(new Date().toISOString())
+      .run();
+    expect((await edit({ committeeNotes: "Please schedule us early." })).status).toBe(200);
+    expect(await readContentCheckResult(env.DB, "proposal", proposalId)).not.toBeNull();
+
+    expect((await edit({ title: "A new title for the talk" })).status).toBe(200);
+    expect(await readContentCheckResult(env.DB, "proposal", proposalId)).toBeNull();
+  });
+
   it("submits unchecked when the model fails", async () => {
     model.run.mockRejectedValueOnce(new Error("model unavailable"));
     const { token, body } = await proposalIdentityFixture();

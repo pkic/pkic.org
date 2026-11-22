@@ -41,10 +41,16 @@ export class LiveRoomContentChecks {
   }
 
   /** Whether a check may run, as far as the room knows without reading: unknown settings count as on. */
-  mayRun(kind: LiveCheckKind): boolean {
+  mayRun(kind: LiveCheckKind, now = Date.now()): boolean {
     if (!this.env.AI) return false;
     const cached = this.cached.get(kind);
-    return !cached || cached.eventId !== this.eventId() || cached.check.enabled;
+    // Settings that are off count as off only while fresh: run() must read them again to notice they were enabled.
+    return (
+      !cached ||
+      cached.eventId !== this.eventId() ||
+      now - cached.readAt >= LIVE_CONTENT_CHECK_SETTINGS_TTL_MS ||
+      cached.check.enabled
+    );
   }
 
   private async settings(kind: LiveCheckKind, now: number): Promise<EffectiveContentCheck | null> {

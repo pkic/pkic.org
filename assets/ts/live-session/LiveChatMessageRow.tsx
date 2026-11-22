@@ -49,6 +49,7 @@ export function liveChatMessageActions(message: LiveChatMessage, viewer: Viewer,
     hidden: moderation?.hidden != null,
     held: moderation?.held ?? false,
     reported: (moderation?.reports ?? 0) > 0,
+    flaggedByCheck: moderation?.automaticCheck != null,
     reportedByMe: message.reportedByMe ?? false,
     converted: moderation?.questionId != null,
     done: moderation?.done != null,
@@ -62,7 +63,8 @@ export function liveChatMessageActions(message: LiveChatMessage, viewer: Viewer,
 
 function keepLabel(message: LiveChatMessage): string {
   if (message.moderation?.held) return "Keep message";
-  return message.moderation?.hidden ? "Show message" : "Dismiss reports";
+  if (message.moderation?.hidden) return "Show message";
+  return (message.moderation?.reports ?? 0) > 0 ? "Dismiss reports" : "Keep message";
 }
 
 /** The message's menu: the other actions the policy grants, each sent as the room's own command. */

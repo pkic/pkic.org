@@ -175,6 +175,7 @@ export class LiveRoomChatActions {
       hidden: hiding !== undefined,
       held: hiding?.held ?? false,
       reported: reports > 0,
+      flaggedByCheck: this.feed.moderation.checks.flagged([row.id]).has(row.id),
       reportedByMe: Boolean(
         viewer.userId && this.feed.moderation.reportedBy([row.id], [viewer.userId]).get(viewer.userId)?.has(row.id),
       ),
@@ -243,9 +244,10 @@ export class LiveRoomChatActions {
   }
 
   /**
-   * Holds an attendee's words off air until the automatic check answers. The check runs after they are shown in
-   * the chat. A blocked message is held for moderators, like one held after reports; an advised one stays in the
-   * chat, off air, in the moderators' review queue. A check that cannot run lets the message go on.
+   * Holds an attendee's words back until the automatic check answers: only their author and moderators read
+   * them meanwhile, and a passing check delivers them to everyone else. A blocked message is held for moderators,
+   * like one held after reports; an advised one goes to the chat, off air, in the moderators' review queue. A
+   * check that cannot run lets the message go on.
    */
   private holdForCheck(row: LiveChatRow): boolean {
     if (!this.checks.mayRun("chat_message")) return false;
@@ -253,9 +255,24 @@ export class LiveRoomChatActions {
     return true;
   }
 
-  /** Starts the check once everyone has the message, so its verdict always follows the message itself. */
+  /** Starts the check once its author has the message, so its verdict always follows the message itself. */
   private check(row: LiveChatRow): void {
-    this.ctx.waitUntil(this.settleCheck(row).catch((error: unknown) => console.error("Live chat check failed", error)));
+    this.ctx.waitUntil(
+      this.settleCheck(row).catch(async (error: unknown) => {
+        console.error("Live chat check failed", error);
+        // A check that fails lets the message go on rather than keeping it from the room.
+        await this.releaseFromCheck(row.id).catch(() => undefined);
+      }),
+    );
+  }
+
+  /** Nothing holds the message back for its check any longer: everyone who may see it receives it. */
+  private async releaseFromCheck(messageId: string): Promise<void> {
+    const row = this.chat.message(messageId);
+    if (!row) return;
+    this.feed.moderation.checks.clear(row.id);
+    await this.deliver([row], { removeWhenHidden: false });
+    this.nudgeTicker();
   }
 
   private async settleCheck(sent: LiveChatRow): Promise<void> {
@@ -264,17 +281,13 @@ export class LiveRoomChatActions {
     // Deleted, or edited again meanwhile: the newer words have a check of their own.
     if (!row || row.body !== sent.body) return;
     const outcome = run?.verdict.outcome;
-    if (outcome !== "advised" && outcome !== "blocked") {
-      this.feed.moderation.checks.clear(row.id);
-      this.nudgeTicker();
-      return;
-    }
+    if (outcome !== "advised" && outcome !== "blocked") return this.releaseFromCheck(row.id);
     const at = nowIso();
     this.feed.moderation.checks.record(row.id, { outcome, notes: run!.verdict.flags.map((flag) => flag.message) }, at);
     if (outcome === "blocked" && !this.feed.moderation.hidden([row.id]).has(row.id)) {
       this.feed.moderation.hide(row.id, HELD_BY_CHECK, true, at);
       await this.deliver([row], { removeWhenHidden: true });
-    } else await this.deliver([row], { removeWhenHidden: false, only: staff });
+    } else await this.deliver([row], { removeWhenHidden: false });
     this.nudgeTicker();
   }
 

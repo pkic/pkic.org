@@ -28,7 +28,11 @@ export function EventContentCheckContext({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [context, setContext] = useState(check.additions.context);
-  const form = useContractForm(contentCheckEventAdditionsInputSchema, { ...check.additions, context });
+  const form = useContractForm(contentCheckEventAdditionsInputSchema, {
+    expectedRevision: check.additions.revision,
+    ...check.additions,
+    context,
+  });
 
   function reset() {
     setContext(check.additions.context);
