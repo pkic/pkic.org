@@ -261,7 +261,7 @@ describe("event tickets", () => {
   });
 
   it("decides the ticket once per organization and reuses the stored decision", async () => {
-    const { event } = await seedTickets();
+    const { event, admin } = await seedTickets();
     const first = await register(
       event,
       "one@vendor-example.test",
@@ -271,6 +271,23 @@ describe("event tickets", () => {
     // No classifier this time: the stored decision for the organization and domain still applies.
     const second = await register(event, "two@vendor-example.test");
     expect(second.ticket).toMatchObject({ ticketName: "Vendor" });
+
+    // Tuning the question keeps the decision: a new description and a stricter threshold ask nothing again.
+    const configuration = await readEventTicketsConfiguration(env.DB, event);
+    const vendor = configuration.types.find((type) => type.key === "pqcc_vendor")!;
+    await saveEventTicketType(env.DB, admin, event, vendor.id, {
+      expectedRevision: configuration.revision,
+      key: vendor.key,
+      name: vendor.name,
+      descriptionMarkdown: vendor.descriptionMarkdown,
+      classifierDescription: "Sells, licenses or integrates cryptography for other organizations.",
+      classifierThresholdPercent: 99,
+      isDefault: vendor.isDefault,
+      freeRequiresWorkEmail: vendor.freeRequiresWorkEmail,
+      active: vendor.active,
+    });
+    const third = await register(event, "three@vendor-example.test");
+    expect(third.ticket).toMatchObject({ ticketName: "Vendor" });
   });
 
   it("lets the person choose when the classifier is unsure and falls back to the default when it fails", async () => {

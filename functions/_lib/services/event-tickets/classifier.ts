@@ -7,8 +7,9 @@
  * configuration value; nothing else in the application names it.
  *
  * A decision is made once for an organization name and email domain and
- * stored against the canonical form of the question. Another event that asks
- * the same question reuses it. An organizer's decision is never replaced.
+ * stored against the ticket keys it chooses between. Tuning a description, a
+ * threshold or the instructions keeps it, and another event that offers the
+ * same ticket keys reuses it. An organizer's decision is never replaced.
  */
 import {
   decideClassifiedTicket,
@@ -221,8 +222,9 @@ export async function decideOrganizationTicket(
 }
 
 /**
- * A stored answer still decides when its ticket is offered. An organizer may decide for any offered ticket,
- * also one the classifier never picks; the classifier's own answer must be one of its options and certain enough today.
+ * A stored answer still decides while its ticket is offered. An organizer may decide for any offered ticket,
+ * also one the classifier never picks; the classifier's own answer must still be one of its options. A later
+ * threshold does not undo an answer that was certain enough when it was given.
  */
 function storedDecisionHolds(
   types: readonly TicketTypeRow[],
@@ -231,6 +233,5 @@ function storedDecisionHolds(
 ): boolean {
   if (stored.source !== "classifier")
     return types.some((type) => type.ticket_key === stored.ticketKey && type.active === 1);
-  if (!options.some((option) => option.key === stored.ticketKey)) return false;
-  return decideClassifiedTicket(options, { [stored.ticketKey]: stored.confidence ?? 0 }) !== null;
+  return options.some((option) => option.key === stored.ticketKey);
 }

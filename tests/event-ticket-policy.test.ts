@@ -135,10 +135,10 @@ describe("ticket classifier decisions", () => {
     expect(decideClassifiedTicket(options, {})).toBeNull();
   });
 
-  it("identifies a question by its keys and descriptions, whatever their order or spacing", () => {
+  it("identifies a question by its ticket keys alone, so tuning a description or threshold keeps decisions", () => {
     const same = [
-      { key: "pqcc_vendor", description: "Sells cryptography.", threshold: 0.5 },
-      { key: "pqcc_attendee", description: "Uses cryptography.", threshold: 0.5 },
+      { key: "pqcc_vendor", description: "Sells, licenses or integrates cryptography for others.", threshold: 0.5 },
+      { key: "pqcc_attendee", description: "Only uses cryptography for itself.", threshold: 0.99 },
     ];
     expect(ticketClassifierCriteria(same)).toBe(ticketClassifierCriteria(options));
     expect(ticketClassifierCriteria([{ ...options[0], key: "pki_attendee" }, options[1]])).not.toBe(

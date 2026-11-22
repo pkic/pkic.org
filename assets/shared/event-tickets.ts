@@ -193,16 +193,13 @@ export interface TicketClassifierOption {
 }
 
 /**
- * The identity of a set of classifier options. A stored decision holds for
- * another event only when that event asks the same question: the same ticket
- * keys with the same descriptions.
+ * The identity of a set of classifier options: the ticket keys it chooses
+ * between. Descriptions, thresholds and the model's instructions are tuning,
+ * so changing them keeps every stored decision; another event that offers the
+ * same ticket keys reuses them too.
  */
 export function ticketClassifierCriteria(options: readonly TicketClassifierOption[]): string {
-  return JSON.stringify(
-    [...options]
-      .sort((a, b) => a.key.localeCompare(b.key))
-      .map((option) => [option.key, option.description.trim().replace(/\s+/g, " ")]),
-  );
+  return JSON.stringify(options.map((option) => option.key).sort((a, b) => a.localeCompare(b)));
 }
 
 /** The ticket a classifier's answer decides, or null when it is not certain enough for that ticket. */
