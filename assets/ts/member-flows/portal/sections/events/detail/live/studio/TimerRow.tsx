@@ -214,7 +214,6 @@ export function TimerRow({
           {following ? null : agenda ? (
             <Button
               icon
-              class="pk-studio-time__reset"
               aria-label={`${timer.name}: follow the agenda`}
               title={`Follow the agenda\nBack to the session's times on the agenda, without the minutes added or taken.`}
               disabled={disabled}
@@ -225,7 +224,6 @@ export function TimerRow({
           ) : (
             <Button
               icon
-              class="pk-studio-time__reset"
               aria-label={`Reset ${timer.name}`}
               title={`Reset ${timer.name}\n${
                 timer.kind === "until" ? "Count to its set time again." : "Put it back to its full length, stopped."
