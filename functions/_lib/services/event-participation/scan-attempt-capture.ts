@@ -10,7 +10,7 @@ export function prepareAttemptCapturedValue(
 ) {
   return db
     .prepare(
-      "UPDATE event_scan_attempts SET scanned_value=?,scanned_value_truncated=? WHERE operation_id=? AND event_id=? AND operator_user_id=? AND request_hash=? AND scanned_value IS NULL",
+      "UPDATE event_scan_attempts SET scanned_value=?,scanned_value_truncated=? WHERE operation_id=? AND event_id=? AND operator_user_id=? AND request_hash=? AND scanned_value IS NULL AND sponsor_lead_removed_at IS NULL",
     )
     .bind(
       input.scannedValue,

@@ -7,7 +7,7 @@ import { assertEventContactAccess, eventContactAccessSql } from "./evidence-rete
 import { sponsorConsentSql } from "./sponsor-consent";
 import { sponsorLeadPermissionBindings, sponsorLeadPermissionSql } from "./lead-scope";
 import { activeEventSponsorSql } from "../../auth/sponsor-organization-lead-access";
-import { activeSponsorLeadOriginSql, activeSponsorLeadSql } from "./sponsor-lead-active";
+import { activeSponsorLeadOriginSql } from "./sponsor-lead-active";
 
 export const SPONSOR_LEAD_EXPORT_PERMISSION_SQL = sponsorLeadPermissionSql("agenda:leads_export");
 
@@ -42,7 +42,6 @@ export async function exportSponsorLeads(db: DatabaseLike, eventId: string, spon
     WHERE lead.event_id=? AND lead.sponsor_id=? AND reg.status='registered' AND u.active=1
     AND ${activeEventSponsorSql("sponsor")}
     AND ${sponsorConsentSql("reg")}
-    AND ${activeSponsorLeadSql("lead")}
     AND (${SPONSOR_LEAD_EXPORT_PERMISSION_SQL}) AND ${eventContactAccessSql("lead.event_id")}
     ORDER BY lead.observed_at,lead.user_id LIMIT 100001`,
     [eventId, sponsorId, ...scopeValues],

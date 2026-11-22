@@ -18,7 +18,7 @@ import { assertEventContactAccess, eventContactAccessSql } from "./evidence-rete
 import { sponsorConsentSql } from "./sponsor-consent";
 import { sponsorLeadPermissionBindings, sponsorLeadPermissionSql } from "./lead-scope";
 import { activeEventSponsorSql, sponsorLeadViewerPredicateSql } from "../../auth/sponsor-organization-lead-access";
-import { activeSponsorCaptureSql, activeSponsorLeadOriginSql, activeSponsorLeadSql } from "./sponsor-lead-active";
+import { activeSponsorCaptureSql, activeSponsorLeadOriginSql } from "./sponsor-lead-active";
 import { requireTokenPermission, tokenAllowsPermission } from "../../auth/permissions";
 import type { UserBackedAuthAdmin } from "../../types";
 
@@ -97,7 +97,6 @@ export async function listSponsorLeads(
         WHERE lead.event_id=? AND lead.sponsor_id=? AND reg.status='registered' AND u.active=1
         AND ${activeEventSponsorSql("sponsor")}
         AND ${sponsorConsentSql("reg")} AND (${scope}) AND ${eventContactAccessSql("lead.event_id")}
-        AND ${activeSponsorLeadSql("lead")}
         ${leadId ? "AND lead.id=?" : ""} ${search ? `AND ${search.sql}` : ""}`,
       bindings: [
         ...ownBindings,
@@ -168,8 +167,7 @@ export async function listLeadSponsors(
   }>(db, {
     source: {
       selectSql: `SELECT sponsor.id,${name} AS name,
-        (SELECT COUNT(*) FROM event_sponsor_leads saved WHERE saved.event_id=sponsor.event_id AND saved.sponsor_id=sponsor.id
-          AND ${activeSponsorLeadSql("saved")}) AS capturedCount,
+        (SELECT COUNT(*) FROM event_sponsor_leads saved WHERE saved.event_id=sponsor.event_id AND saved.sponsor_id=sponsor.id) AS capturedCount,
         (${expressions[0]}) AS canView,(${expressions[1]}) AS canCapture,(${expressions[2]}) AS canExport,
         (${canRemoveAll}) AS canRemoveAll`,
       fromSql: `FROM sponsorships sponsor LEFT JOIN organizations org ON org.id=sponsor.organization_id
