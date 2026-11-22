@@ -14,6 +14,7 @@ import {
 import { databaseIdSchema } from "./identifiers";
 import { stripeCurrencySchema } from "./stripe";
 import {
+  DEFAULT_CLASSIFIER_THRESHOLD,
   DEFAULT_PAYMENT_RETRY_DAYS,
   REGISTRATION_TICKET_STATUSES,
   TICKET_ASSIGNMENT_SOURCES,
@@ -54,7 +55,12 @@ export const eventTicketTypeInputSchema = z.object({
   descriptionMarkdown: z.string().trim().max(2000).default(""),
   /** Who qualifies, as the classifier is asked. Empty keeps the ticket out of automatic assignment. */
   classifierDescription: z.string().trim().max(4000).default(""),
-  classifierThresholdPercent: z.number().int().min(50, "Enter 50 or more.").max(100, "Enter 100 or less.").default(85),
+  classifierThresholdPercent: z
+    .number()
+    .int()
+    .min(50, "Enter 50 or more.")
+    .max(100, "Enter 100 or less.")
+    .default(Math.round(DEFAULT_CLASSIFIER_THRESHOLD * 100)),
   isDefault: z.boolean().default(false),
   freeRequiresWorkEmail: z.boolean().default(false),
   active: z.boolean().default(true),

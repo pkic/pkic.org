@@ -25,7 +25,7 @@ export type RegistrationTicketStatus = (typeof REGISTRATION_TICKET_STATUSES)[num
 export const TICKET_ASSIGNMENT_SOURCES = ["code", "organizer", "classifier", "chosen", "default", "disputed"] as const;
 export type TicketAssignmentSource = (typeof TICKET_ASSIGNMENT_SOURCES)[number];
 
-export const DEFAULT_CLASSIFIER_THRESHOLD = 0.85;
+export const DEFAULT_CLASSIFIER_THRESHOLD = 0.75;
 export const DEFAULT_PAYMENT_REMINDER_INTERVAL_DAYS = 3;
 export const DEFAULT_PAYMENT_REMINDER_PERIOD_DAYS = 14;
 /** How long a place is kept after its payment failed, unless the event says otherwise. */

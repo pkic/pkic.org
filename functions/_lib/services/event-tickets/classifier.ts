@@ -152,8 +152,9 @@ export async function askTicketClassifier(
         questions: {
           ticket: {
             type: "choice",
+            // Event-neutral: what makes an organization fit lives in each ticket's own description.
             instructions:
-              "Which description fits this organization best? Judge the organization as a whole, not one person's role.",
+              "Use what you know about this organization: what it does and what it sells. Pick the description that fits it, following each description literally. Judge the organization as a whole, not one person's role.",
             criteria: Object.fromEntries(options.map((option) => [option.key, option.description])),
           },
         },
