@@ -206,7 +206,7 @@ describe("sponsor live lead viewing through the mounted API", () => {
       staffIdleExpiresAt: new Date(Date.now() + 3600000).toISOString(),
       clientName: "Synthetic sponsor client",
       selectedScopes: ["agenda:leads_view"],
-      signingSecret,
+      signingSecret: "synthetic-sponsor-leads-oauth-signing-secret",
     });
     await env.DB.prepare("UPDATE oauth_authorizations SET status='active' WHERE id=?")
       .bind(approval.authorizationId)
