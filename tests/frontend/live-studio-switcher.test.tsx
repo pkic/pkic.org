@@ -118,13 +118,14 @@ describe("the studio's switcher, session bar and phone layout", () => {
       });
       const shown = () =>
         [...host.querySelectorAll<HTMLElement>(".pk-studio-monitor__tile")].map((tile) => tile.dataset.tally);
-      expect(shown()).toEqual(["preview", "program"]);
+      // The bar above shows Preview and Program, so the monitor starts on the room's screens.
+      expect(shown()).toEqual(["projector", "stage-display"]);
       void act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Outputs on Monitors"]')!.click());
-      const projector = [...document.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]')].find((item) =>
-        item.textContent?.includes("Projector"),
+      const program = [...document.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]')].find((item) =>
+        item.textContent?.includes("Program"),
       )!;
-      void act(() => projector.click());
-      expect(shown()).toEqual(["preview", "program", "projector"]);
+      void act(() => program.click());
+      expect(shown()).toEqual(["program", "projector", "stage-display"]);
     } finally {
       vi.unstubAllGlobals();
     }
