@@ -18,7 +18,7 @@ import { assertEventContactAccess, eventContactAccessSql } from "./evidence-rete
 import { sponsorConsentSql } from "./sponsor-consent";
 import { sponsorLeadReadEvidence } from "./lead-scope";
 import { activeEventSponsorSql, sponsorLeadViewerPredicateSql } from "../../auth/sponsor-organization-lead-access";
-import { activeSponsorCaptureSql, activeSponsorLeadOriginSql } from "./sponsor-lead-active";
+import { activeSponsorLeadOriginSql } from "./sponsor-lead-active";
 import { requireTokenPermission, tokenAllowsPermission } from "../../auth/permissions";
 import type { UserBackedAuthAdmin } from "../../types";
 
@@ -66,7 +66,6 @@ export async function listSponsorLeads(
     readScope === "mine"
       ? `JOIN (SELECT user_id,MAX(observed_at) AS captured_at FROM event_scan_attempts
           WHERE event_id=? AND sponsor_id=? AND operator_user_id=? AND action='lead' AND outcome='eligible'
-          AND ${activeSponsorCaptureSql("event_scan_attempts")}
           GROUP BY user_id) own ON own.user_id=lead.user_id`
       : "";
   const capturedAt = readScope === "mine" ? "own.captured_at" : activeSponsorLeadOriginSql("lead", "observed_at");
@@ -214,7 +213,6 @@ export async function listSponsorLeadCaptures(
     AND ${activeEventSponsorSql("sponsor")} AND ${sponsorConsentSql("reg")}
     AND (${scope}) AND ${eventContactAccessSql("lead.event_id")}
     AND attempt.action='lead' AND attempt.outcome='eligible' ${ownOnly}`;
-  const activeSource = `${source} AND ${activeSponsorCaptureSql("attempt")}`;
   const sourceBindings = [
     leadId,
     eventId,
@@ -223,14 +221,14 @@ export async function listSponsorLeadCaptures(
     ...(readScope === "mine" ? [operatorUserId] : []),
   ];
   // Unknown, withdrawn, and another operator's lead expose no history.
-  if (!(await first(db, `SELECT attempt.id ${activeSource} LIMIT 1`, sourceBindings)))
+  if (!(await first(db, `SELECT attempt.id ${source} LIMIT 1`, sourceBindings)))
     throw new AppError(404, "LEAD_NOT_FOUND", "Current consenting lead not found.");
   const name = "TRIM(COALESCE(operator.first_name,'') || ' ' || COALESCE(operator.last_name,''))";
   const search = query.q ? buildD1TextSearchFilter(query.q, [name]) : null;
   const { rows, total } = await queryPage<SponsorLeadCapture>(db, {
     source: {
       selectSql: `SELECT attempt.id,${name} AS operatorName,attempt.observed_at AS observedAt,attempt.created_at AS receivedAt`,
-      fromSql: `${activeSource} ${search ? `AND ${search.sql}` : ""}`,
+      fromSql: `${source} ${search ? `AND ${search.sql}` : ""}`,
       bindings: [...sourceBindings, ...(search?.bindings ?? [])],
     },
     orderBy: resolveMappedOrderBy(

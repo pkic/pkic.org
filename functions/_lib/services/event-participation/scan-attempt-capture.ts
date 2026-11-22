@@ -1,6 +1,9 @@
 import type { EventScanRequest } from "../../../../assets/shared/schemas/event-participation-scanning";
 import type { DatabaseLike } from "../../types";
 
+/** A successful lead attempt without an attendee has been redacted. */
+export const scanAttemptAcceptsCapturedValueSql = "NOT (action='lead' AND outcome='eligible' AND user_id IS NULL)";
+
 /** Attach bounded original evidence inside the attempt's existing atomic write, never overwrite a replay. */
 export function prepareAttemptCapturedValue(
   db: DatabaseLike,
@@ -10,7 +13,7 @@ export function prepareAttemptCapturedValue(
 ) {
   return db
     .prepare(
-      "UPDATE event_scan_attempts SET scanned_value=?,scanned_value_truncated=? WHERE operation_id=? AND event_id=? AND operator_user_id=? AND request_hash=? AND scanned_value IS NULL AND sponsor_lead_removed_at IS NULL",
+      `UPDATE event_scan_attempts SET scanned_value=?,scanned_value_truncated=? WHERE operation_id=? AND event_id=? AND operator_user_id=? AND request_hash=? AND scanned_value IS NULL AND ${scanAttemptAcceptsCapturedValueSql}`,
     )
     .bind(
       input.scannedValue,
