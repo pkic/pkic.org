@@ -68,6 +68,52 @@ describe("registration details email", () => {
     );
   });
 
+  it("recommends the configured alternative for a waitlisted venue day, in its own words", async () => {
+    const dayWaitlist = [{ dayDate: "2026-12-01", status: "waiting" }];
+    const alternative = (option: Record<string, unknown>) => ({
+      dayDate: "2026-12-01",
+      attendanceType: "in_person",
+      label: "Day 1",
+      waitlistAlternativeJson: JSON.stringify({ value: "lounge", ...option }),
+    });
+    const render = async (option: Record<string, unknown>, manageUrl?: string) => {
+      const data = buildAttendanceEmailData([alternative(option)], dayWaitlist);
+      return renderEmail(
+        "{{> reg_details}}",
+        {
+          ...data,
+          ...data.venueDayStanding,
+          manageUrl,
+          _partials: { reg_details: { content: detailsPartial.content, contentType: "markdown" } },
+        },
+        "{{{body_html}}}",
+        "markdown",
+      );
+    };
+    const limited = await render(
+      { label: "Livestream Lounge", description: "Watch together at a partner venue.", capacity: 40 },
+      "https://example.test/manage",
+    );
+    expect(limited.text).toContain(
+      "We recommend Livestream Lounge instead: Watch together at a partner venue, while space lasts. To switch, change your registration",
+    );
+    expect(limited.html).toContain('href="https://example.test/manage"');
+
+    // The organizer's words read literally, never as markup.
+    const literal = await render({ label: "Lounge <East>", description: "Seats *nearby*" });
+    expect(literal.text).toContain("We recommend Lounge <East> instead: Seats *nearby*.");
+    expect(literal.html).toContain("Lounge &lt;East&gt;");
+
+    const open = await render({ label: "Watch party" });
+    expect(open.text).toContain("We recommend Watch party instead.");
+    expect(open.text).not.toContain("while space lasts");
+    expect(open.text).not.toContain("To switch");
+
+    const none = await render({ label: "Lounge", enabled: false });
+    expect(none.text).toContain("Only days marked confirmed give you venue entry.");
+    expect(none.text).not.toContain("We recommend");
+  });
+
   it("names a country answer", () => {
     const field = { options: null, validation: { format: "iso_country" as const } };
     expect(formatCustomAnswerValue("NL", field)).toBe("Netherlands");

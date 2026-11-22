@@ -124,6 +124,46 @@ function DefinitionField({
   );
 }
 
+const WAITLIST_ALTERNATIVE_LABEL = "If waitlisted, suggest";
+
+/** The option to point a waitlisted person to; only options at the venue have a waitlist. */
+function WaitlistAlternativeField({
+  definition,
+  props,
+}: {
+  definition: AttendanceDefinition;
+  props: AttendanceOptionsProps;
+}) {
+  if (eventAttendanceAccessMode(definition.option) !== "physical") return props.phone ? null : <span>—</span>;
+  const others = props.draft.definitions.filter(
+    (candidate) => candidate.id !== definition.id && candidate.option.value,
+  );
+  const current = others.find((candidate) => candidate.option.value === definition.option.waitlistAlternative);
+  if (props.readOnly) return <span>{current ? current.option.label || current.option.value : "No suggestion"}</span>;
+  const name = `${optionFieldPrefix(props.draft, definition.id)}.waitlistAlternative`;
+  return (
+    <Field {...props.field(name)} label={WAITLIST_ALTERNATIVE_LABEL} labelHidden={!props.phone}>
+      {(control) => (
+        <Select
+          {...control}
+          name={name}
+          value={definition.option.waitlistAlternative ?? ""}
+          onChange={(event) =>
+            props.onChange(definition.id, { waitlistAlternative: event.currentTarget.value || undefined })
+          }
+        >
+          <option value="">No suggestion</option>
+          {others.map((candidate) => (
+            <option key={candidate.id} value={candidate.option.value}>
+              {candidate.option.label || candidate.option.value}
+            </option>
+          ))}
+        </Select>
+      )}
+    </Field>
+  );
+}
+
 function RemoveOption({ definition, props }: { definition: AttendanceDefinition; props: AttendanceOptionsProps }) {
   if (props.readOnly) return null;
   const inUse = optionInUse(props.draft, definition);
@@ -180,6 +220,11 @@ export function EventAttendanceOptions(props: AttendanceOptionsProps) {
             id: "description",
             header: "Description",
             cell: (definition) => <DefinitionField definition={definition} property="description" props={props} />,
+          },
+          {
+            id: "waitlistAlternative",
+            header: WAITLIST_ALTERNATIVE_LABEL,
+            cell: (definition) => <WaitlistAlternativeField definition={definition} props={props} />,
           },
           ...(!props.readOnly
             ? [
@@ -239,6 +284,16 @@ export function EventAttendanceOptions(props: AttendanceOptionsProps) {
                 ) : (
                   <DefinitionField key={property} definition={definition} property={property} props={props} />
                 ),
+              )}
+              {props.readOnly ? (
+                eventAttendanceAccessMode(definition.option) === "physical" && (
+                  <div class="pk-stack pk-stack--tight">
+                    <span class="pk-small pk-muted">{WAITLIST_ALTERNATIVE_LABEL}</span>
+                    <WaitlistAlternativeField definition={definition} props={props} />
+                  </div>
+                )
+              ) : (
+                <WaitlistAlternativeField definition={definition} props={props} />
               )}
               <RemoveOption definition={definition} props={props} />
             </div>
