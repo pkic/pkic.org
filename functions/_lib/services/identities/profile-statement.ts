@@ -1,4 +1,5 @@
 import { getFeaturedLink, parseLinksJson, serializeLinks } from "../../../../assets/shared/schemas/links";
+import { jobTitleTextSchema } from "../../../../assets/shared/schemas/api-common";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { prepareIndividualJobTitleStatement } from "./individual-job-title";
 import { JOB_TITLE_REQUIRED, organizationJobTitleMissing } from "../../../../assets/shared/schemas/identity-job-title";
@@ -62,6 +63,7 @@ export function prepareIdentityProfileUpdateStatement(
   at: string,
   jobTitleField = "jobTitle",
 ) {
+  if (input.jobTitle != null) input = { ...input, jobTitle: jobTitleTextSchema.parse(input.jobTitle) || null };
   // A names-only edit leaves the profile alone, so it is not held to the title rule.
   const editsProfile = Object.values(input).some((value) => value !== undefined);
   if (
@@ -132,7 +134,7 @@ export function prepareIdentityProfileEdit(
   changes: Record<string, ProfileChange>;
 } {
   const organization = current.organization_id !== null;
-  const jobTitle = input.jobTitle === undefined ? undefined : input.jobTitle || null;
+  const jobTitle = input.jobTitle === undefined ? undefined : jobTitleTextSchema.parse(input.jobTitle) || null;
   const identityInput: IdentityProfileInput = { ...input, jobTitle: organization ? jobTitle : undefined };
   const changes = identityProfileChanges(current, identityInput);
   const individual = !organization && jobTitle !== undefined;

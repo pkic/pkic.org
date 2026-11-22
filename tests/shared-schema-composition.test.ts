@@ -40,6 +40,7 @@ import {
   registrationResponseSchema,
 } from "../assets/shared/schemas/passkeys";
 import { successResponseSchema } from "../assets/shared/schemas/api-common";
+import { meetingLocationSchema } from "../assets/shared/schemas/event-series";
 import { headshotUploadResponseSchema } from "../assets/shared/schemas/registration";
 import { memberAuthVerifyResponseSchema } from "../assets/shared/schemas/member-auth";
 import { userAuthEstablishedResponseSchema } from "../assets/shared/schemas/user-auth";
@@ -372,6 +373,12 @@ describe("work address representation", () => {
       contact,
     );
   });
+});
+
+it.each(["", "   ", null])("round-trips a cleared meeting location through the shared contract: %j", (value) => {
+  const parsed = meetingLocationSchema.parse(value);
+  expect(parsed).toBeNull();
+  expect(meetingLocationSchema.parse(parsed)).toBeNull();
 });
 
 it("requires explicit saved speaker agreements in the read response", () => {

@@ -205,6 +205,15 @@ describe("bounded stream reader", () => {
 });
 
 describe("canonical Unicode personal names", () => {
+  it.each(["", "   ", null, "  Preferred  "])("normalizes preferred names consistently: %j", (preferredName) => {
+    for (const schema of [myProfileUpdateSchema, userUpdateSchema]) {
+      const parsed = schema.parse({ preferredName });
+      expect(parsed).toMatchObject({ preferredName: preferredName?.trim() || null });
+      expect(schema.parse(parsed)).toEqual(parsed);
+      expect(schema.safeParse({ preferredName: "x".repeat(80) }).success).toBe(true);
+      expect(schema.safeParse({ preferredName: "x".repeat(81) }).success).toBe(false);
+    }
+  });
   it.each(["Zoë", "Test ø", "Jose\u0301", "李明", "محمد", "क्‍ष", "Anne‐Marie"])(
     "round-trips %s across naming contracts and capability payloads",
     (name) => {

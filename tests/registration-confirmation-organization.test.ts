@@ -10,6 +10,7 @@ import { resetDb } from "./helpers/reset-db";
 import { seedMemberApplication } from "./helpers/member-applications";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { callApi } from "./helpers/app";
+import { createAdminSession } from "./helpers/auth";
 import { insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
 import { createPendingRegistration } from "./helpers/registration-confirmation";
@@ -118,6 +119,22 @@ describe("organization named on registration confirmation", () => {
     expect((await confirm({ token })).status).toBe("registered");
   });
 
+  it.each([
+    [2, 2],
+    [160, 100],
+  ])(
+    "confirms a %i-character organization name and %i-character job title accepted by identity creation",
+    async (nameLength, titleLength) => {
+      const name = "X".repeat(nameLength);
+      const jobTitle = "R".repeat(titleLength);
+      const email = "limits@profile-fields.example";
+      const token = await register(email);
+      const confirmed = await confirm({ token, organization: { name, jobTitle } });
+      expect(confirmed.organizationOutcome).toBe("linked");
+      expect(await affiliations(email)).toEqual([{ name, job_title: jobTitle }]);
+    },
+  );
+
   it("asks an unknown work domain once and creates the affiliation through the canonical rule", async () => {
     const token = await register("person@unknown-works.example");
     expect((await info(token)).asksOrganization).toBe(true);
@@ -214,6 +231,35 @@ describe("organization named on registration confirmation", () => {
     expect(result.organizationOutcome).toBe("linked");
     expect(await affiliations(email)).toEqual([{ name: organizationName, job_title: "Engineer" }]);
     expect(await queryAll(env.DB, "SELECT id FROM affiliation_reviews")).toEqual([]);
+  });
+
+  it("keeps the submitted job title when staff approve a registration's queued organization", async () => {
+    const email = "person@approved-review.example";
+    const organizationName = "Approved Review Corp";
+    const organizationId = await insertOrganization(env.DB, organizationName);
+    await seedOrganizationAggregate(env.DB, organizationId, "A");
+    const token = await register(email);
+    const confirmed = await confirm({ token, organization: { name: organizationName, jobTitle: "Research Engineer" } });
+    expect(confirmed.organizationOutcome).toBe("review_required");
+    // Separate organization approval establishes the domain mapping; the typed name does not grant it.
+    await env.DB.prepare(
+      "INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,'approved-review.example',?,strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+    )
+      .bind(crypto.randomUUID(), organizationId)
+      .run();
+    const adminId = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email='admin@pkic.org'"))[0].id;
+    const staffToken = await createAdminSession(env.DB, adminId, crypto.randomUUID());
+    const response = await callApi(
+      env,
+      "/api/v1/identities/reviews/groups/" + encodeURIComponent(organizationName.toLowerCase()) + "/approve",
+      {
+        method: "POST",
+        headers: { authorization: `Bearer ${staffToken}`, "content-type": "application/json" },
+        body: JSON.stringify({}),
+      },
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(await affiliations(email)).toEqual([{ name: organizationName, job_title: "Research Engineer" }]);
   });
 
   it("does not ask a consumer address for an organization", async () => {
