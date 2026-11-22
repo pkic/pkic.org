@@ -4,9 +4,9 @@ import { expect, test, type Page, type TestInfo, type Request } from "@playwrigh
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 import { runRowAction } from "./helpers/data-table";
-import { confirmRegistration, ownDomainEmail, registerInBrowser } from "./helpers/registration";
+import { ownDomainEmail, registerInBrowser } from "./helpers/registration";
+import { registerSignedIn } from "./helpers/registrant";
 import { signInToPortal } from "./helpers/portal-auth";
-import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
 import { registrationCreateSchema } from "../../assets/shared/schemas/registration";
 import { sessionParticipationRequestSchema } from "../../assets/shared/schemas/event-participation-scanning";
 import {
@@ -44,23 +44,19 @@ test("organizers preserve exact track filters and inspect canonical demand outsi
   const track = `Cryptography ${suffix}`;
   const roomName = `Track workshop hall ${suffix}`;
   const template = await registerInBrowser(page, ownDomainEmail("track-template"), undefined, undefined, {
-    organization: "Track Template Org",
+    organization: `Track Template Org ${suffix}`,
   });
   const attendeeEmail = ownDomainEmail("track-attendee");
-  const since = await capturedEmailCount();
-  const registration = await page.request.post(`/api/v1/events/${slug}/registrations`, {
-    data: registrationCreateSchema.parse({
+  await registerSignedIn(
+    page,
+    slug,
+    registrationCreateSchema.parse({
       ...template.request,
       email: attendeeEmail,
-      attendanceType: "in_person",
       dayAttendance: template.request.dayAttendance?.map((day) => ({ ...day, attendanceType: "in_person" })),
     }),
-  });
-  expect(registration.status(), await registration.text()).toBe(200);
-  const confirmation = await waitForCapturedEmail(attendeeEmail, "Confirm your registration", { since });
-  await page.goto(extractEmailUrl(confirmation, "/register/confirm"));
-  await confirmRegistration(page, "Track Demand Org");
-  await waitForCapturedEmail(attendeeEmail, "registration is confirmed", { since });
+    { organization: `Track Demand Org ${suffix}` },
+  );
   await signInAsE2eStaff(page, e2eAdminEmail("portal-agenda-track-demand"));
   const base = `/api/v1/events/${slug}/agenda`;
   let snapshot = agendaSnapshotSchema.parse(await (await page.request.get(base)).json());

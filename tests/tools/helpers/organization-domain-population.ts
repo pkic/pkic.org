@@ -61,14 +61,14 @@ export function decidePopulation(fixture: OrganizationDomainFixture): Record<str
     const owner = domain ? claimedBy.get(domain) : undefined;
     // No identity carries a verified domain before 0038, so there are no derived facts yet.
     const resolution = resolveDomainOrganization({
-      claimed: owner ? [{ organizationId: owner.id, isMember: Boolean(owner.member) }] : [],
-      heldByApplication: false,
+      claimed: owner ? [{ organizationId: owner.id }] : [],
       derived: [],
+      related: [],
     });
     // Migration 0038 retains its historical non-member-only population policy.
     const joined =
       resolution.kind === "organization" &&
-      !resolution.isMember &&
+      !owner?.member &&
       !(person.identities ?? []).some((identity) => identity.organizationId === resolution.organizationId);
     if (joined)
       outcomes[person.id] = {

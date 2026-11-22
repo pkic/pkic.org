@@ -1,6 +1,12 @@
 import type { LiveStage } from "../../assets/shared/schemas/live-session-room";
 import type { UserSessionTokenClaims } from "./auth/user-session-token";
 import type { LiveProgramSelection, LiveProgramSelectResult } from "../../assets/shared/schemas/live-room-program";
+import type { LiveChatArchiveRow } from "./services/live-session/room-chat";
+import type {
+  LiveChatOnAirMessage,
+  LiveChatOnAirOptions,
+  LiveChatQuestion,
+} from "./services/live-session/location-chat-on-air";
 import type { RateLimitBinding } from "./rate-limit";
 
 import type { DatabaseLike } from "./db/types";
@@ -36,10 +42,51 @@ export type R2BucketLike = R2Bucket;
 
 /** What the Worker may ask of a live session room over RPC; `LiveSessionRoom` implements it. */
 export interface LiveSessionRoomRpc extends Rpc.DurableObjectBranded {
+  /** The occurrence's participation state, shared with its location chat. */
+  readOccurrenceParticipation(
+    userId: string,
+  ): Promise<import("./services/live-session/room-occurrence-participation").LiveOccurrenceParticipation>;
+  readOccurrenceRestrictions(
+    userIds: string[],
+  ): Promise<Record<string, import("../../assets/shared/live-moderation-policy").LiveParticipationRestriction>>;
+  changeOccurrenceModeration(
+    userId: string,
+    endsAt: string,
+    change: import("./services/live-session/room-occurrence-participation").LiveOccurrenceModerationChange,
+  ): Promise<import("./services/live-session/room-occurrence-participation").LiveOccurrenceParticipation>;
   /** Removes an anonymized person's questions, votes and ballots from the room and ends their connections. */
   forgetParticipant(userId: string): Promise<void>;
-  endProgramSources(roomId: string): Promise<void>;
+  /** The attendee chat the room still holds, oldest first, for the event's chat download. */
+  chatArchive(): Promise<LiveChatArchiveRow[]>;
+  /** Erases the room's chat once its session has closed; false while it is still open. */
+  eraseChat(): Promise<boolean>;
+  /** The studio loaded another session in the physical room, or none: attendees follow it there. */
+  endProgramSources(roomId: string, next: string | null): Promise<void>;
+  /** The studio loaded this session in its physical room. */
+  enterProgram(): Promise<void>;
   readProgram(eventId: string, roomId: string): Promise<LiveProgramSelection>;
+  /** The session loaded in a physical room, for the virtual room; null for none. */
+  loadedProgram(eventId: string, roomId: string): Promise<string | null>;
+  /** A location's chat: the studio loaded a session in its location, or none; later messages are dated by it. */
+  locationChatLoaded(occurrenceId: string | null): Promise<void>;
+  /** A location's chat: a session's opening or one person's block there changed; null means everyone. */
+  locationChatAccessChanged(occurrenceId: string, userId: string | null): Promise<void>;
+  /** A location's chat: the latest attendee messages a broadcast may show, after their wait. */
+  locationChatOnAir(
+    occurrenceId: string,
+    limit: number,
+    options: LiveChatOnAirOptions,
+  ): Promise<LiveChatOnAirMessage[]>;
+  /** A location's chat: when its first message after `since` was sent; null for none. */
+  locationChatFirstSentAfter(occurrenceId: string, since: string): Promise<string | null>;
+  /** A session's room: its location's chat changed what a broadcast may show. */
+  locationChatChanged(): Promise<void>;
+  /** A session's room: asks a converted chat message, approved; null when the room never opened. */
+  questionFromChat(
+    question: LiveChatQuestion,
+    by: { userId: string; name: string },
+    at: string,
+  ): Promise<string | null>;
   /** The composition this session's room has on Program. */
   programStage(): Promise<LiveStage>;
   /** Takes over another session's Program as it is, so making a session active never changes the picture. */
@@ -174,6 +221,10 @@ export interface Env {
    * a Bearer token is granted admin privileges without a DB session lookup.
    */
   ADMIN_API_KEY?: string;
+  /** Workers AI binding; the ticket classifier is its only caller. Absent in tests and local runs without it. */
+  AI?: { run(model: string, input: Record<string, unknown>): Promise<unknown> };
+  /** The decision model the ticket classifier asks. Defaults to the platform's current decision model. */
+  TICKET_CLASSIFIER_MODEL?: string;
   /** Stripe secret key for creating Checkout Sessions (donation flow). */
   STRIPE_SECRET_KEY?: string;
   STRIPE_API_BASE?: string;
@@ -207,7 +258,6 @@ export interface Env {
   /** WebAuthn expected origin (scheme + host, e.g. "https://pkic.org"). */
   WEBAUTHN_ORIGIN?: string;
   /** Worker name whose Cloudflare branch preview URLs may verify passkeys. */
-  WEBAUTHN_PREVIEW_WORKER_NAME?: string;
   /** Member (non-admin) magic-link session TTL, hours. Defaults to 720 (30 days). */
   MEMBER_SESSION_TTL_HOURS?: string;
   /** Google Workspace service account email used to sign Directory API JWTs. */

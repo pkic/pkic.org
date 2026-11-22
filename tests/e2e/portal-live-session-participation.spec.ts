@@ -39,7 +39,6 @@ async function stageTimers(page: Page, path: (name: string) => string) {
   const settings = page.getByRole("dialog", { name: "Timer graphic", exact: true });
   await settings.getByLabel("Format", { exact: true }).selectOption("custom");
   await settings.getByLabel("Custom duration", { exact: true }).fill("{{minutes}} minutes and {{seconds}} seconds");
-  await settings.getByLabel("Show logo", { exact: true }).uncheck();
   await settings.getByRole("button", { name: "Save", exact: true }).click();
   for (const name of ["Session", "Pitch"]) {
     const controls = page.getByRole("group", { name: `${name} controls`, exact: true });
@@ -48,7 +47,7 @@ async function stageTimers(page: Page, path: (name: string) => string) {
     await expect(preview).toHaveAttribute("aria-pressed", "true");
   }
   await page.getByRole("tab", { name: "Show", exact: true }).click();
-  await page.getByRole("button", { name: "Transition", exact: true }).click();
+  await page.getByRole("button", { name: "Transition to Program", exact: true }).click();
   await page.getByRole("button", { name: "Full screen Program", exact: true }).first().click();
   const program = page.getByRole("dialog", { name: "Program", exact: true });
   await expect(program.getByText("Session", { exact: true })).toBeVisible();
@@ -124,7 +123,7 @@ test("attendees ask, upvote, reply, accept answers and restore participation aft
     const attendees = await Promise.all(contexts.map((context) => context.newPage()));
     for (const attendee of attendees) {
       const email = ownDomainEmail("live-attendee");
-      await registerStateAttendee(attendee, fixture, email, { staticRelease: false });
+      await registerStateAttendee(attendee, fixture, email);
       await signInToPortal(attendee, email);
       await attendee.goto(`/portal/#/events/${fixture.slug}/agenda?session=${occurrence.id}`);
       await expect(attendee.getByLabel("Your question", { exact: true })).toBeVisible();

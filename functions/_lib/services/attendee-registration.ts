@@ -1,4 +1,3 @@
-import type { EventAffiliationContext } from "./identities/event-affiliation-context";
 import type { AttendeeRegistrationFields } from "../../../assets/shared/schemas/registration";
 import type { DatabaseLike, StatementLike } from "../types";
 import { prepareActiveTermsSnapshotGuard, validateRequiredConsents } from "./consent";
@@ -25,12 +24,8 @@ export async function prepareValidatedAttendeeRegistration(
     ip: string | null;
     userAgent: string | null;
     signingSecret: string;
-    pendingConfirmationDeadlineHours: number;
-    confirmationTtlHours: number;
     referralCodeLength: number;
-    verifiedIdentity?: VerifiedRegistrationIdentityContext;
-    affiliationContext?: EventAffiliationContext;
-    mailboxVerified?: boolean;
+    verifiedIdentity: VerifiedRegistrationIdentityContext;
     authorizationGuards?: readonly StatementLike[];
     /** Every registration flow supplies the loaded event so portal isolation cannot be skipped. */
     event: Pick<EventFormResolutionEvent, "id"> & { source_mode: string | null | undefined };
@@ -54,11 +49,8 @@ export async function prepareValidatedAttendeeRegistration(
 
   const prepared = await prepareRegistrationSubmission(db, {
     eventId: event.id,
-    user: {
-      email: input.email,
-      firstName: input.firstName,
-      lastName: input.lastName,
-    },
+    // The signed-in account supplies the names; the request carries only its address.
+    user: { email: input.email },
     dayAttendance: input.dayAttendance,
     sourceType: options.sourceType,
     sourceRef: options.sourceRef,
@@ -71,15 +63,11 @@ export async function prepareValidatedAttendeeRegistration(
     consents: input.consents,
     ip: options.ip,
     userAgent: options.userAgent,
-    pendingConfirmationDeadlineHours: options.pendingConfirmationDeadlineHours,
     signingSecret: options.signingSecret,
-    confirmationTtlHours: options.confirmationTtlHours,
     referralCodeLength: options.referralCodeLength,
     authorizationGuards: options.authorizationGuards,
     termsSnapshotGuard: prepareActiveTermsSnapshotGuard(db, event.id, requiredTerms),
     verifiedIdentity: options.verifiedIdentity,
-    affiliationContext: options.affiliationContext,
-    mailboxVerified: options.mailboxVerified,
   });
   return { prepared, requiredTerms, formResponse: validatedForm };
 }

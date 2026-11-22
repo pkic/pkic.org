@@ -112,7 +112,7 @@ test("session stream joining follows its window and old links explain the reques
   });
   expect(represented.status(), await represented.text()).toBe(201);
   const identityId = identityMutationResponseSchema.parse(await represented.json()).identityId;
-  await registerStateAttendee(page, event, e2eAdminEmail("session-timing"), { staticRelease: false, identityId });
+  await registerStateAttendee(page, event, e2eAdminEmail("session-timing"), { identityId });
   // Keep the test independent of a third-party video player's network and consent behavior.
   await page.route("https://www.youtube-nocookie.com/**", (route) =>
     route.fulfill({ contentType: "text/html", body: "<p>Synthetic stream player</p>" }),
@@ -384,7 +384,7 @@ test("public session links expose all seven participation states through accessi
     const second = await contexts[1]!.newPage();
     for (const [index, attendee] of [first, second].entries()) {
       const email = ownDomainEmail(`state-attendee-${index}`);
-      await registerStateAttendee(attendee, fixture, email, { organization: `State attendee ${index} org` });
+      await registerStateAttendee(attendee, fixture, email);
       await signInToPortal(attendee, email);
     }
 

@@ -31,6 +31,7 @@ const NO_PERMISSIONS: UserPermissions = {
   canWrite: false,
   canGrantAccess: false,
   canAnonymize: false,
+  canDelete: false,
   canManageMembership: false,
   canActivateIdentity: false,
 };
@@ -135,7 +136,7 @@ function stubApi(options: { invitations?: unknown[] } = {}): string[] {
                 id: null,
                 email: "person@example.test",
                 primary: true,
-                signInEnabled: true,
+                signIn: "signs_in",
                 verifiedAt: "2026-08-01T00:00:00.000Z",
                 verificationMethod: "magic_link",
                 identityId: null,

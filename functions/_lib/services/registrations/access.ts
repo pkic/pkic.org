@@ -1,5 +1,5 @@
 import type { EventRecord } from "../events";
-import { registrationManagePageUrl } from "../frontend-links";
+import { registrationTokenManagePageUrl } from "../frontend-links";
 import { writeAuditLog } from "../audit";
 import { getRegistrationById } from "./queries";
 import { AppError } from "../../errors";
@@ -44,5 +44,5 @@ export async function createRegistrationManageUrl(
   await writeAuditLog(db, "admin", payload.actor.id, "admin_opened_manage_page", "registration", registration.id, {
     eventSlug: payload.event.slug,
   });
-  return registrationManagePageUrl(payload.appBaseUrl, payload.event, token);
+  return registrationTokenManagePageUrl(payload.appBaseUrl, payload.event, token);
 }

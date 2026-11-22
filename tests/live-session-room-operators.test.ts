@@ -53,7 +53,7 @@ describe("live room shared Preview", () => {
     expect((await olga.next("room.refused")).code).toBe("LIVE_CREDIT_NOT_FOUND");
     const attendee = await f.connect({ person: "attendee" });
     attendee.send({ type: "preview.set", composition: { timerGraphics: [GRAPHIC] } });
-    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
+    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_STUDIO_REQUIRED");
     const joined = await f.connect({ person: "operator" });
     expect((await joined.next("room.snapshot")).preview).toMatchObject({ lowerThird: null, timerGraphics: [] });
   });
@@ -137,5 +137,26 @@ describe("live room operator presence", () => {
     await new Promise((resolve) => setTimeout(resolve, 250));
     expect(rita.received.filter((m) => m.type === "presence.changed").slice(before)).toHaveLength(burst.length);
     await vi.waitFor(() => expect(olga.received.some((m) => m.type === "presence.changed")).toBe(false));
+  });
+});
+
+describe("live room sources", () => {
+  beforeEach(() => f.setup());
+
+  it("tells operators how many sources show each output, and when one drops", async () => {
+    const olga = await f.connect({ person: "operator" });
+    // An output no source draws is left out of the counts.
+    expect((await olga.next("room.snapshot")).sources).toEqual({});
+    const program = await f.connectSource();
+    await olga.next("sources.changed", (m) => m.sources.program === 1);
+    const projector = await f.connectSource("projector");
+    const both = await olga.next("sources.changed", (m) => m.sources.projector === 1);
+    expect(both.sources).toEqual({ program: 1, projector: 1 });
+    // A source sees no counts of its own.
+    expect(program.received.some((message) => message.type === "sources.changed")).toBe(false);
+    expect((await program.next("room.snapshot")).sources).toEqual({});
+
+    projector.socket.close(1000, "done");
+    await olga.next("sources.changed", (m) => m.sources.projector === undefined && m.sources.program === 1);
   });
 });

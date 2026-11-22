@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SCANNER_OFFLINE_MAXIMUM_MS } from "../../../../../../../shared/event-offline-expiry";
+import { SCANNER_EVENT_OFFLINE_MAXIMUM_MS } from "../../../../../../../shared/event-offline-expiry";
 import { enrolledOfflineEligibilityResponseSchema as offlineEligibilityResponseSchema } from "../../../../../../../shared/schemas/event-offline-eligibility";
 
 export const cachedManifestSchema = offlineEligibilityResponseSchema
@@ -15,8 +15,9 @@ export const cachedManifestSchema = offlineEligibilityResponseSchema
   })
   .strict()
   .refine(
-    (value) => value.validUntil >= value.writtenAt && value.validUntil - value.writtenAt <= SCANNER_OFFLINE_MAXIMUM_MS,
-    "Eligibility snapshot lifetime must not exceed one local calendar day",
+    (value) =>
+      value.validUntil >= value.writtenAt && value.validUntil - value.writtenAt <= SCANNER_EVENT_OFFLINE_MAXIMUM_MS,
+    "Eligibility snapshot must retain its bounded event deadline",
   );
 export type CachedManifest = z.infer<typeof cachedManifestSchema>;
 type SnapshotScope = Pick<CachedManifest, "operatorUserId" | "occurrenceId" | "roomId" | "epochId" | "deviceId"> &

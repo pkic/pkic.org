@@ -1,3 +1,4 @@
+import { buildEventEmailVariables } from "../email/event-email-variables";
 import { prepareQueueEmailStatementWhen } from "../email/outbox";
 import { emailPlainText } from "../email/plain-text";
 import { getProposalAccessForEvent } from "../auth/proposal-access";
@@ -10,7 +11,6 @@ import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
-import { buildEventEmailVariables } from "./events";
 import { isEventParticipantSourceConflict } from "./event-participant-source-revision";
 import { prepareCancelProposalEmails } from "./proposal-email-cancellation";
 import { prepareProposalRoleCapacityForProposalStatus } from "./proposal-role-capacity";

@@ -3,8 +3,10 @@
  *
  * Creates a member_applications record directly in D1 and queues its email
  * through the durable outbox. This is the only membership-application write
- * path; there is no generic form fallback. A visitor applies through the
- * verified-email link; a signed-in person applies as one of their identities.
+ * path; there is no generic form fallback. A signed-in person applies as one
+ * of their identities, or as an individual through the continuation the join
+ * step issued for their session. An organization they do not represent yet is
+ * added to their account first.
  */
 import { OpenAPIRoute } from "chanfana";
 import { getConfig } from "../../../../_lib/config";
@@ -86,7 +88,6 @@ async function createThroughVerifiedEmail(c: any, rawBody: unknown) {
     joinCapabilityId: joinCapability.capabilityId,
     applicantKind: joinCapability.applicantKind,
     applicantUserId: joinCapability.applicantUserId,
-    selectedOrganization: joinCapability.organization,
   });
 }
 

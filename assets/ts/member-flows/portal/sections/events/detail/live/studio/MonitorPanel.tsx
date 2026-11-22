@@ -1,7 +1,20 @@
 import { signal } from "@preact/signals";
 import { memo } from "preact/compat";
+import { useRef } from "preact/hooks";
 import type { LiveRoomState } from "../../../../../../../live-session/live-room-state";
-import type { LiveAuxOutput } from "../../../../../../../../shared/live-room-outputs";
+import {
+  LIVE_STAGE_PREVIEW_OUTPUT,
+  liveOutputFixedScene,
+  liveOutputRole,
+  liveRoomOutputs,
+  type LiveAuxOutput,
+} from "../../../../../../../../shared/live-room-outputs";
+import { liveScreenSyncs } from "../../../../../../../../shared/live-screen-sync";
+import type { AgendaSnapshot } from "../../../../../../../../shared/schemas/event-agenda";
+import type { LiveRoomOutput } from "../../../../../../../../shared/schemas/live-room-output-setup";
+import type { LiveScreenSync, LiveSyncedScreen } from "../../../../../../../../shared/schemas/live-screen-sync";
+import { liveOutputComposition } from "../../../../../../../../shared/schemas/live-session-stage";
+import { liveOutputProjection, liveOutputScene } from "../../../../../../../live-session/live-output-projection";
 import { liveOverlayLayoutChoices } from "../../../../../../../../shared/live-overlay-layout-presets";
 import { LiveOverlayPresentation } from "../../../../../../../live-session/LiveOverlayPresentation";
 import { Button } from "../../../../../../../ui/Button";
@@ -12,24 +25,39 @@ import { SectionHeading } from "../../../../../../../ui/SectionHeading";
 import { LiveDeskStream } from "../LiveDeskStream";
 import { LiveMonitorPointers, useLivePointerReport } from "../presence/LiveMonitorPointers";
 import {
-  STUDIO_OUTPUTS,
-  STUDIO_OUTPUT_DETAILS,
-  setStudioOutputLayout,
+  studioMonitorChoices,
+  setStudioPanelScenes,
+  studioOutputDetails,
   studioOutputLayout,
+  studioShownOutputs,
   toggleStudioOutput,
   type StudioOutput,
   type StudioPanel,
 } from "./studio-layout";
 import type { StudioPanelView } from "./StudioGrid";
+import { ScenePicker } from "./ScenePicker";
+import { SceneStrip } from "./SceneStrip";
 import type { StudioChange } from "./useStudioLayout";
 import { setStudioLivestreamSound, studioLivestreamAudible } from "./studio-livestream-sound";
+import { liveTallyAttributes } from "../live-tally";
 import "../live-tally.css";
+import { SourceCount, SyncToggle } from "./MonitorOutputStatus";
+import { liveSceneName } from "../live-layer-unseen";
+import { clearHint } from "./StudioSwitcher";
+import { usePictureInView } from "./use-picture-in-view";
 import "./MonitorPanel.css";
 
 /** The switcher's actions the Preview and Program monitors offer with their controls. */
 export interface MonitorSwitcher {
   /** Takes every graphic off one output at once; Program's clear the desk offers to undo. */
   clear: (output: StudioOutput) => void;
+  /** Whether the projector and the stage display follow Program, and the switch for each. */
+  screenSync: LiveScreenSync;
+  sync: (output: LiveSyncedScreen, sync: boolean) => void;
+  /** Loads a scene into Preview; the next Take puts it on Program with Preview's graphics. */
+  previewScene: (scene: string) => void;
+  /** Changes the scene one of the room's screens draws, at once and for everyone. */
+  screenScene: (output: LiveAuxOutput, scene: string) => void;
   disabled: boolean;
 }
 
@@ -38,30 +66,40 @@ export interface MonitorSources {
   preview: LiveRoomState;
   /** The session the physical room has on air, which may be another session; null when none is. */
   program: LiveRoomState | null;
+  /** The approved agenda, which the scene thumbnails fill Up next and the ticker from; null before the first approval. */
+  agenda: AgendaSnapshot | null;
+  /** Whether the studio reaches the room now; while it does not, the monitors hold their last picture. */
+  connected: boolean;
   slug: string;
   roomId: string;
   startAt: string;
 }
 
-const tally = (output: StudioOutput) =>
-  output === "preview" || output === "program" ? output : output === "livestream" ? "stream" : "aux";
+/** The outputs the room sets up, which name and color the monitors' outputs. */
+const roomOf = (sources: MonitorSources) => liveRoomOutputs(sources.preview.session);
 
 /** The room as one output composes it: Preview from the shared Preview, every other output from the room on air. */
 const projectionOf = (output: StudioOutput, sources: MonitorSources) =>
   output === "preview" ? sources.preview : sources.program;
 
+/** Composition keys that only say how a graphic looks, never that one is on. */
+const GRAPHIC_SETTINGS: ReadonlySet<string> = new Set(["lowerThirdMotion", "reactionsGraphic"]);
+
 /** Whether an output's composition holds any graphic; stage screens always draw their own clock and notes. */
 function showsGraphics(output: StudioOutput, state: LiveRoomState): boolean {
-  if (output === "stage-display" || output === "stage-preview") return true;
+  if (output === LIVE_STAGE_PREVIEW_OUTPUT || liveOutputRole(liveRoomOutputs(state.session), output) === "speaker")
+    return true;
   const composition: Record<string, unknown> =
-    output === "preview" || output === "program" ? state.stage : state.outputs[output as LiveAuxOutput];
+    output === "preview" || output === "program"
+      ? state.stage
+      : liveOutputProjection(state, output as LiveAuxOutput).stage;
   return Object.entries(composition).some(
     ([key, value]) =>
       value !== null &&
       value !== false &&
       !(Array.isArray(value) && value.length === 0) &&
       !key.endsWith("Change") &&
-      key !== "lowerThirdMotion",
+      !GRAPHIC_SETTINGS.has(key),
   );
 }
 
@@ -70,7 +108,9 @@ function samePicture(output: StudioOutput, left: LiveRoomState | null, right: Li
   if (left === right) return true;
   if (!left || !right) return false;
   const composition = (state: LiveRoomState) =>
-    output === "preview" || output === "program" || output === "livestream" ? state.stage : state.outputs[output];
+    output === "preview" || output === "program" || output === "livestream"
+      ? state.stage
+      : liveOutputComposition(state.outputs, output);
   return (
     composition(left) === composition(right) &&
     left.timers === right.timers &&
@@ -78,7 +118,14 @@ function samePicture(output: StudioOutput, left: LiveRoomState | null, right: Li
     left.session === right.session &&
     left.overlayLayouts === right.overlayLayouts &&
     left.burst === right.burst &&
-    left.speakerMessage === right.speakerMessage
+    left.speakerMessage === right.speakerMessage &&
+    // A room screen that syncs also draws what is on Program, and the question lined up next.
+    (output === "preview" ||
+      output === "program" ||
+      output === "livestream" ||
+      (left.stage === right.stage &&
+        left.screenSync === right.screenSync &&
+        left.stageDisplayNext === right.stageDisplayNext))
   );
 }
 
@@ -88,7 +135,15 @@ function samePicture(output: StudioOutput, left: LiveRoomState | null, right: Li
  * the panel around it, leave it alone.
  */
 const Screen = memo(
-  function Screen({ output, layout, sources }: { output: StudioOutput; layout: string; sources: MonitorSources }) {
+  function Screen({
+    output,
+    layout,
+    sources,
+  }: {
+    output: StudioOutput;
+    layout: string | null;
+    sources: MonitorSources;
+  }) {
     if (output === "livestream")
       return <LiveDeskStream slug={sources.slug} roomId={sources.roomId} startAt={sources.startAt} />;
     const projection = projectionOf(output, sources);
@@ -99,6 +154,7 @@ const Screen = memo(
         layout={layout}
         projection={projection}
         roomId={sources.roomId}
+        eventSlug={sources.slug}
       />
     );
     // An output showing no graphic says so in the picture, rather than looking like a broken screen.
@@ -161,8 +217,11 @@ function SoundIcon({ audible }: { audible: boolean }) {
 function LivestreamSoundToggle() {
   const audible = studioLivestreamAudible();
   const label = audible ? "Mute Livestream" : "Unmute Livestream";
+  const hint = audible
+    ? "Livestream sound: on\nClick to mute it. Only this browser plays it."
+    : "Livestream sound: off\nClick to hear the livestream in this browser.";
   return (
-    <Button icon variant="ghost" aria-label={label} title={label} onClick={() => setStudioLivestreamSound(!audible)}>
+    <Button icon variant="ghost" aria-label={label} title={hint} onClick={() => setStudioLivestreamSound(!audible)}>
       <SoundIcon audible={audible} />
     </Button>
   );
@@ -174,45 +233,75 @@ const enlargedKey = (panelId: string, output: StudioOutput) => `${panelId}:${out
 
 interface MonitorContext {
   panel: StudioPanel;
+  room: readonly LiveRoomOutput[];
   sources: MonitorSources;
   switcher: MonitorSwitcher;
   change: StudioChange;
 }
 
-/** The overlay layout a monitor draws its output in, beside the output's name. */
+/**
+ * The scene an output draws, beside the output's name, and the way to
+ * change it: Preview's for the buses, the screen's own for a room screen. A
+ * screen its room locked to a scene, the speaker's screen and the stage
+ * preview offer none.
+ */
 function LayoutPicker({ output, context }: { output: StudioOutput; context: MonitorContext }) {
-  const { panel, sources, change } = context;
-  if (output === "livestream") return null;
-  const details = STUDIO_OUTPUT_DETAILS[output];
-  const layout = studioOutputLayout(panel, output);
+  const { sources, switcher, room } = context;
+  if (output === "livestream" || output === LIVE_STAGE_PREVIEW_OUTPUT) return null;
+  if (output === "preview" || output === "program")
+    return (
+      <ScenePicker
+        output={output}
+        sources={sources}
+        disabled={context.switcher.disabled}
+        onScene={context.switcher.previewScene}
+      />
+    );
+  if (liveOutputRole(room, output) === "speaker" || liveOutputFixedScene(room, output)) return null;
+  const details = studioOutputDetails(room, output);
+  const layout = liveOutputScene(projectionOf(output, sources), output);
   const choices = liveOverlayLayoutChoices(sources.preview.overlayLayouts);
   const current = choices.find((choice) => choice.slug === layout) ?? choices[0]!;
   return (
     <Menu
       variant="plain"
-      label={`Layout on ${details.label}: ${current.name}`}
-      title="Choose layout"
+      label={`Scene on ${details.label}: ${current.name}`}
+      title={`Scene on ${details.label}: ${current.name}\nChoose a scene to change it on ${details.label} at once. What is on ${details.label} stays, and what comes on with the scene goes on.`}
       triggerClass="pk-studio-monitor__picker pk-studio-monitor__layout"
-      heading="Show as the layout"
+      heading={`Scene on ${details.label}`}
       items={choices.map((choice) => ({
         id: choice.slug,
         label: choice.name,
         checked: choice.slug === current.slug,
-        onSelect: () => change((panels) => setStudioOutputLayout(panels, panel.id, output, choice.slug)),
+        disabled: switcher.disabled,
+        onSelect: () => switcher.screenScene(output, choice.slug),
       }))}
     >
-      {current.name}
-      <span aria-hidden="true"> ▾</span>
+      <LayoutIcon />
     </Menu>
   );
 }
 
-/** What an operator does with one monitor's output, as icons at the end of its header: clear it, and full screen. */
+/** A frame with its graphics' boxes: the layout an output is drawn in, named in its tooltip. */
+export function LayoutIcon() {
+  return (
+    <StrokeIcon>
+      <rect x="1.5" y="3" width="13" height="10" rx="1" />
+      <path d="M4 10.5h5M10.5 5.5h2" />
+    </StrokeIcon>
+  );
+}
+
+/** What an operator does with one monitor's output, at the end of its header: its sync chip, then clear it, and full screen. */
 function MonitorActions({ output, context }: { output: StudioOutput; context: MonitorContext }) {
-  const { panel, switcher } = context;
-  const details = STUDIO_OUTPUT_DETAILS[output];
+  const { panel, switcher, room } = context;
+  const details = studioOutputDetails(room, output);
+  const role = isBusOutput(output) ? null : liveOutputRole(room, output);
   return (
     <span class="pk-studio-monitor__controls">
+      {/* The sync chip leads, so the count and the icons keep the same place on every monitor. */}
+      {role === "follow" || role === "speaker" ? <SyncToggle output={output} room={room} switcher={switcher} /> : null}
+      <SourceCount output={output} room={room} sources={context.sources} />
       {output === "livestream" ? (
         <LivestreamSoundToggle />
       ) : (
@@ -221,11 +310,11 @@ function MonitorActions({ output, context }: { output: StudioOutput; context: Mo
           variant="ghost"
           disabled={switcher.disabled}
           aria-label={`Clear ${details.label}`}
-          title={
-            output === "program"
-              ? "Clear Program: remove every graphic at once. You can undo it for a few seconds."
-              : `Clear ${details.label}: remove every graphic`
-          }
+          title={clearHint(
+            output === "program" || output === "preview" ? output : "screen",
+            details.label,
+            liveSceneName(context.sources.preview, null),
+          )}
           onClick={() => switcher.clear(output)}
         >
           <ClearIcon />
@@ -235,7 +324,7 @@ function MonitorActions({ output, context }: { output: StudioOutput; context: Mo
         icon
         variant="ghost"
         aria-label={`Full screen ${details.label}`}
-        title="Full screen"
+        title={`Full screen ${details.label}\nShow this monitor large. Double-clicking its picture does the same.`}
         onClick={() => (enlarged.value = enlargedKey(panel.id, output))}
       >
         <ExpandIcon />
@@ -244,13 +333,49 @@ function MonitorActions({ output, context }: { output: StudioOutput; context: Mo
   );
 }
 
-/** The output's tally tag and its switcher abbreviation, PVW or PGM; the full name on hover. */
-function OutputName({ output }: { output: StudioOutput }) {
-  const details = STUDIO_OUTPUT_DETAILS[output];
+const isBusOutput = (output: StudioOutput) => output === "preview" || output === "program" || output === "livestream";
+
+/**
+ * The tag beside a room output's code: the scene an output you take to
+ * shows, "Follows PGM" for one that syncs with Program, "Speaker" for the
+ * speaker's screen. The buses and the stage preview keep their purpose.
+ */
+function outputTag(output: StudioOutput, context: MonitorContext): { text: string; hint?: string } {
+  const { room, sources, switcher } = context;
+  const details = studioOutputDetails(room, output);
+  if (isBusOutput(output) || output === LIVE_STAGE_PREVIEW_OUTPUT) return { text: details.purpose };
+  const role = liveOutputRole(room, output);
+  if (role === "speaker")
+    return {
+      text: "Speaker",
+      hint: "Speaker's screen\nShows the time, the next question and your messages to the speaker.",
+    };
+  if (role === "follow")
+    return liveScreenSyncs(switcher.screenSync, room, output)
+      ? {
+          text: "Follows PGM",
+          hint: "Follows Program\nWhat you change on Program changes here too, in this screen's own scene. A Transition to it shows Preview exactly. The PGM chip turns this off.",
+        }
+      : {
+          text: "Sync off",
+          hint: "Sync with Program is off\nThis screen stays as it is until you change it. The PGM chip turns sync back on.",
+        };
+  const scene = liveOutputScene(projectionOf(output, sources), output);
+  const choices = liveOverlayLayoutChoices(sources.preview.overlayLayouts);
+  const name = (choices.find((choice) => choice.slug === scene) ?? choices[0]!).name;
+  return {
+    text: name,
+    hint: `Scene on ${details.label}: ${name}\nTransition to ${details.label} puts Preview's scene on it.`,
+  };
+}
+
+/** The output's tally tag and its switcher abbreviation, PVW or PGM; its full name and purpose on hover. */
+function OutputName({ output, room }: { output: StudioOutput; room: readonly LiveRoomOutput[] }) {
+  const details = studioOutputDetails(room, output);
   return (
-    <span class="pk-studio-monitor__name" data-tally={tally(output)}>
+    <span class="pk-studio-monitor__name" {...liveTallyAttributes(room, output)}>
       <span class="pk-studio-monitor__dot" aria-hidden="true" />
-      <abbr class="pk-studio-monitor__label" title={details.label}>
+      <abbr class="pk-studio-monitor__label" title={`${details.short} · ${details.label}\n${details.purpose}`}>
         {details.short}
       </abbr>
     </span>
@@ -262,15 +387,18 @@ function OutputName({ output }: { output: StudioOutput }) {
  * the whole-window view it opens to.
  */
 function MonitorScreen({ output, context }: { output: StudioOutput; context: MonitorContext }) {
-  const { panel, sources } = context;
-  const details = STUDIO_OUTPUT_DETAILS[output];
-  const layout = studioOutputLayout(panel, output);
+  const { panel, sources, room } = context;
+  const details = studioOutputDetails(room, output);
+  const layout = studioOutputLayout(output);
   const pointer = useLivePointerReport(output);
   const key = enlargedKey(panel.id, output);
+  // A monitor out of sight keeps its place and draws nothing until it comes into view.
+  const screen = useRef<HTMLDivElement>(null);
+  const inView = usePictureInView(screen);
   return (
     <>
-      <div class="pk-studio-monitor__screen" onDblClick={() => (enlarged.value = key)} {...pointer}>
-        <Screen output={output} layout={layout} sources={sources} />
+      <div ref={screen} class="pk-studio-monitor__screen" onDblClick={() => (enlarged.value = key)} {...pointer}>
+        {inView ? <Screen output={output} layout={layout} sources={sources} /> : null}
         <LiveMonitorPointers output={output} />
       </div>
       {enlarged.value === key ? (
@@ -284,7 +412,7 @@ function MonitorScreen({ output, context }: { output: StudioOutput; context: Mon
           onConfirm={() => (enlarged.value = null)}
           onCancel={() => (enlarged.value = null)}
         >
-          <div class="pk-studio-monitor__screen" data-tally={tally(output)} {...pointer}>
+          <div class="pk-studio-monitor__screen" {...liveTallyAttributes(room, output)} {...pointer}>
             <Screen output={output} layout={layout} sources={sources} />
             <LiveMonitorPointers output={output} />
           </div>
@@ -299,15 +427,21 @@ function MonitorScreen({ output, context }: { output: StudioOutput; context: Mon
  * controls in the card's own header so they plainly belong to it.
  */
 function MonitorTile({ output, context }: { output: StudioOutput; context: MonitorContext }) {
-  const details = STUDIO_OUTPUT_DETAILS[output];
+  const { room } = context;
+  const tag = outputTag(output, context);
   return (
-    <figure class="pk-studio-monitor__tile" data-tally={tally(output)}>
+    <figure class="pk-studio-monitor__tile" {...liveTallyAttributes(room, output)}>
       <figcaption class="pk-studio-monitor__caption">
-        <span class="pk-studio-monitor__output" title={details.purpose}>
-          <OutputName output={output} />
+        <span class="pk-studio-monitor__output">
+          <OutputName output={output} room={room} />
         </span>
         <LayoutPicker output={output} context={context} />
-        <span class="pk-studio-monitor__purpose">{details.purpose}</span>
+        {/* Program names its scene in this place instead. */}
+        {output === "program" ? null : (
+          <span class="pk-studio-monitor__purpose" title={tag.hint}>
+            {tag.text}
+          </span>
+        )}
         <MonitorActions output={output} context={context} />
       </figcaption>
       <MonitorScreen output={output} context={context} />
@@ -317,7 +451,7 @@ function MonitorTile({ output, context }: { output: StudioOutput; context: Monit
 
 /** A free place in a multiview, which adds one of the outputs not shown yet. */
 function FreeSlot({ missing, context }: { missing: readonly StudioOutput[]; context: MonitorContext }) {
-  const { panel, change } = context;
+  const { panel, change, room } = context;
   return (
     <div class="pk-studio-monitor__free">
       <Menu
@@ -327,8 +461,8 @@ function FreeSlot({ missing, context }: { missing: readonly StudioOutput[]; cont
         heading="Add an output"
         items={missing.map((output) => ({
           id: output,
-          label: STUDIO_OUTPUT_DETAILS[output].label,
-          onSelect: () => change((panels) => toggleStudioOutput(panels, panel.id, output)),
+          label: studioOutputDetails(room, output).label,
+          onSelect: () => change((panels) => toggleStudioOutput(panels, panel.id, output, room)),
         }))}
       >
         <span aria-hidden="true">+</span> Add output
@@ -354,33 +488,36 @@ export function monitorPanelView(
   change: StudioChange,
   switcher: MonitorSwitcher,
 ): StudioPanelView {
-  const outputs = panel.outputs ?? ["program"];
+  const room = roomOf(sources);
+  const outputs = studioShownOutputs(panel.outputs ?? ["program"], room);
   const single = outputs.length === 1 ? outputs[0]! : null;
-  const title = single ? STUDIO_OUTPUT_DETAILS[single].label : "Monitors";
-  const context: MonitorContext = { panel, sources, switcher, change };
+  const title = single ? studioOutputDetails(room, single).label : "Monitors";
+  const context: MonitorContext = { panel, room, sources, switcher, change };
   const heading = (
     <SectionHeading level={3} class="pk-studio-panel__title">
       <Menu
         variant="plain"
         label={`Outputs on ${title}`}
-        title="Choose outputs"
+        title={"Monitors in this panel\nChoose which outputs it shows: one, or several side by side."}
         triggerClass="pk-studio-monitor__picker pk-studio-monitor__output"
         heading="Show one or more"
-        items={STUDIO_OUTPUTS.map((output) => ({
+        items={studioMonitorChoices(outputs, room).map((output) => ({
           id: output,
-          label: STUDIO_OUTPUT_DETAILS[output].label,
+          label: studioOutputDetails(room, output).label,
           checked: outputs.includes(output),
           multiple: true,
           keepOpen: true,
           disabled: outputs.length === 1 && outputs[0] === output,
-          onSelect: () => change((panels) => toggleStudioOutput(panels, panel.id, output)),
+          onSelect: () => change((panels) => toggleStudioOutput(panels, panel.id, output, room)),
         }))}
       >
-        {single ? <OutputName output={single} /> : title}
+        {single ? <OutputName output={single} room={room} /> : title}
         <span aria-hidden="true"> ▾</span>
       </Menu>
     </SectionHeading>
   );
+  // Preview shows the scenes under its picture unless the operator hid them.
+  const scenesShown = panel.scenes !== false;
   if (single)
     return {
       title,
@@ -391,16 +528,32 @@ export function monitorPanelView(
         </span>
       ),
       actions: <MonitorActions output={single} context={context} />,
+      menu:
+        single === "preview"
+          ? [
+              {
+                id: "scenes",
+                label: scenesShown ? "Hide scenes" : "Show scenes",
+                tooltip: "The scene thumbnails under Preview. The scene picker in the header stays either way.",
+                onSelect: () => change((panels) => setStudioPanelScenes(panels, panel.id, !scenesShown)),
+              },
+            ]
+          : undefined,
       body: (
-        <div class="pk-studio-monitor-frame">
-          <div class="pk-studio-monitor" data-single="" data-tally={tally(single)}>
-            <MonitorScreen output={single} context={context} />
+        <div class="pk-studio-monitor-stack">
+          <div class="pk-studio-monitor-frame">
+            <div class="pk-studio-monitor" data-single="" {...liveTallyAttributes(room, single)}>
+              <MonitorScreen output={single} context={context} />
+            </div>
           </div>
+          {single === "preview" && scenesShown ? (
+            <SceneStrip sources={sources} disabled={switcher.disabled} onScene={switcher.previewScene} />
+          ) : null}
         </div>
       ),
     };
   const { columns, rows } = multiviewGrid(outputs.length);
-  const missing = STUDIO_OUTPUTS.filter((output) => !outputs.includes(output));
+  const missing = studioMonitorChoices(outputs, room).filter((output) => !outputs.includes(output));
   const free = missing.length ? Math.min(columns * rows - outputs.length, missing.length) : 0;
   return {
     title,

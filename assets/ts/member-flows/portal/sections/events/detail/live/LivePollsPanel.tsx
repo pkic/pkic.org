@@ -14,9 +14,18 @@ import { Button } from "../../../../../../ui/Button";
 import { EmptyState } from "../../../../../../ui/EmptyState";
 import { Menu, type MenuItem } from "../../../../../../ui/Menu";
 import { LiveLayerTargets } from "./LiveLayerTargets";
+import {
+  LiveScreenTrigger,
+  NO_LIVE_SCREENS,
+  liveScreenItems,
+  liveScreens,
+  liveScreensTitle,
+  withScreenItems,
+} from "./LiveRowMenu";
 import { LivePollDialog, livePollWritten } from "./LivePollDialog";
 import { LivePollEditor } from "./LivePollEditor";
 import { LivePollStatusBadge } from "./LivePollStatusBadge";
+import { StudioItemRow } from "./studio/StudioItemRow";
 import type { LiveTargets } from "./live-output-targets";
 import { takeLiveStage } from "./live-stage-preview";
 import "./LivePollsPanel.css";
@@ -80,49 +89,54 @@ function LivePollRow({
   const { disabled } = targets;
   const answers = poll.results?.totalAnswers ?? 0;
   const top = leading(poll);
+  const layer = { kind: "poll", id: poll.id, presentation } as const;
+  // A draft poll goes nowhere yet, so its menu has no screens.
+  const screens = poll.status === "draft" ? NO_LIVE_SCREENS : liveScreens(targets, layer);
+  const actions = disabled ? [] : rowMenu(poll, send, onOpen);
   return (
-    <li class="pk-live-polls__row">
-      <button
-        type="button"
-        class="pk-live-polls__open"
-        title={`${poll.field.label}: results, edit and settings`}
-        onClick={onOpen}
-      >
-        <span class="pk-live-polls__question">{poll.field.label}</span>
-        <span class="pk-live-polls__summary">
+    <StudioItemRow
+      text={poll.field.label}
+      open={{ title: `${poll.field.label}\nOpen the poll: its results, its text and its settings.`, onOpen }}
+      summary={
+        <>
           <LivePollStatusBadge status={poll.status} />
-          <span class="pk-live-polls__count">
+          <span>
             {formatNumber(answers)} {answers === 1 ? "answer" : "answers"}
             {top ? ` · ${top}` : ""}
           </span>
-        </span>
-      </button>
-      <span class="pk-live-polls__outputs">
-        {poll.status === "draft" ? (
+        </>
+      }
+      actions={
+        poll.status === "draft" ? (
           <Button disabled={disabled} onClick={() => send({ type: "poll.status", pollId: poll.id, status: "open" })}>
             Open voting
           </Button>
         ) : (
-          <LiveLayerTargets
-            targets={targets}
-            subject="poll results"
-            layer={{ kind: "poll", id: poll.id, presentation }}
-          />
-        )}
-      </span>
-      <Menu
-        label={`Poll actions, ${poll.field.label}`}
-        items={disabled ? [] : rowMenu(poll, send, onOpen)}
-        align="end"
-      />
-    </li>
+          <LiveLayerTargets targets={targets} subject="poll results" layer={layer} />
+        )
+      }
+      menu={
+        <Menu
+          label={`Poll actions, ${poll.field.label}`}
+          title={liveScreensTitle(screens)}
+          items={poll.status === "draft" ? actions : withScreenItems(liveScreenItems(targets, layer), actions)}
+          align="end"
+        >
+          <LiveScreenTrigger screens={screens} />
+        </Menu>
+      }
+    />
   );
 }
 
 /** The polls panel's create action, in the studio panel's header: the "+" that prepares a new poll. */
 export function LivePollsCreateAction({ disabled, send }: { disabled: boolean; send: Send }) {
   return (
-    <StudioCreateAction label="New poll" disabled={disabled}>
+    <StudioCreateAction
+      label="New poll"
+      hint="Write a poll as a draft. Voting starts when you open it."
+      disabled={disabled}
+    >
       {(close) => (
         <LivePollEditor onSave={(draft) => send({ type: "poll.save", pollId: null, draft })} onClose={close} />
       )}
@@ -159,7 +173,7 @@ export function LivePollsPanel({ targets, send }: { targets: LiveTargets; send: 
   return (
     <div class="pk-live-polls">
       {state.polls.length ? (
-        <ol class="pk-live-polls__list">
+        <ol class="pk-studio-rows">
           {state.polls.map((poll) => (
             <LivePollRow
               key={poll.id}

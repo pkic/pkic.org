@@ -26,6 +26,8 @@ import {
   attendanceConfiguration,
   attendanceSettingsDraft,
   dayOptionEntries,
+  removeAttendanceDefinition,
+  updateAttendanceDefinition,
   type AttendanceDayDraft,
   type AttendanceDefinition,
 } from "./event-attendance-draft";
@@ -259,20 +261,8 @@ export function EventDaysForm({
                 expanded={expanded}
                 onExpand={setExpanded}
                 field={form.of}
-                onChange={(id, patch) =>
-                  setDraft((current) => ({
-                    ...current,
-                    definitions: current.definitions.map((definition) =>
-                      definition.id === id ? { ...definition, option: { ...definition.option, ...patch } } : definition,
-                    ),
-                  }))
-                }
-                onRemove={(id) =>
-                  setDraft((current) => ({
-                    ...current,
-                    definitions: current.definitions.filter((definition) => definition.id !== id),
-                  }))
-                }
+                onChange={(id, patch) => setDraft((current) => updateAttendanceDefinition(current, id, patch))}
+                onRemove={(id) => setDraft((current) => removeAttendanceDefinition(current, id))}
               />
             )}
             <PanelBody>

@@ -1,5 +1,6 @@
 import type { EventHeroVariantWidth } from "../../../../assets/shared/event-hero-image-variants";
 import { storedRasterRenditionResponse } from "../raster-image-renditions";
+import { SANDBOXED_IMAGE_CONTENT_SECURITY_POLICY } from "../image-response";
 import type { EventHeroImageSave } from "../../../../assets/shared/schemas/event-hero-image";
 import {
   EVENT_HERO_IMAGE_MAX_BYTES,
@@ -11,8 +12,10 @@ import { AppError } from "../../errors";
 import type { DatabaseLike, Env } from "../../types";
 import { imageExtension, putUploadedImage, readValidatedUploadedImage } from "../../utils/image-upload";
 import { parseJsonSafe } from "../../utils/json";
+import { eventOwnMotif } from "../../../../assets/shared/schemas/event-promotion-design";
+import { base64ToBytes } from "../../../../assets/shared/base64";
 import { isAuditChangeGuardFailure } from "../audit";
-import { getEventBySlug } from "../events";
+import { getEventBySlug, type EventRecord } from "../events";
 import { guardEventResourceManagementDatabase } from "../event-series/management";
 import { withStorageUploadCompensation } from "../storage-deletion-outbox";
 import { prepareEventDetail, decodeEventDetail, type EventDetailRow } from "./detail";
@@ -156,6 +159,24 @@ export async function currentEventHeroImage(
     headers: {
       "content-type": object.httpMetadata?.contentType ?? "application/octet-stream",
       "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
+      "x-robots-tag": "noindex, nofollow",
+    },
+  });
+}
+
+/**
+ * The event's own decorative artwork. Uploaded SVG is served under a sandbox
+ * policy, so opening it directly can never run script on this origin.
+ */
+export function currentEventMotif(event: Pick<EventRecord, "settings_json">): Response {
+  const motif = eventOwnMotif(parseJsonSafe<Record<string, unknown>>(event.settings_json, {}));
+  if (!motif) throw new AppError(404, "IMAGE_NOT_FOUND", "Image not found");
+  return new Response(base64ToBytes(motif.base64).buffer as ArrayBuffer, {
+    headers: {
+      "content-type": motif.mime,
+      "cache-control": "no-store",
+      "content-security-policy": SANDBOXED_IMAGE_CONTENT_SECURITY_POLICY,
       "x-content-type-options": "nosniff",
       "x-robots-tag": "noindex, nofollow",
     },

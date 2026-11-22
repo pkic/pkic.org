@@ -1,37 +1,29 @@
-import { ParticipationPersonalDetails, type PersonalNamePatch } from "./ParticipationPersonalDetails";
-import {
-  registrationProofPersonPatchSchema,
-  registrationProofPersonPatchResponseSchema,
-} from "../../shared/schemas/registration-email-proof";
-import { IconPencil } from "./icons";
-import { useEffect, useState } from "preact/hooks";
-import type { ComponentChildren } from "preact";
+import type { PersonalNamePatch } from "./ParticipationPersonalDetails";
+import { PersonDetailsSummary } from "./PersonDetailsSummary";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import type { ComponentChildren, RefObject } from "preact";
+import type { MutableRef } from "preact/hooks";
+import { createPortal } from "preact/compat";
+import type { z } from "zod";
 import type { FieldPresentation } from "../hooks/useContractForm";
-import { EMAIL_FIRST_COPY } from "../../shared/email-first-copy";
-import { emailDomainOf, emailDomainResponseSchema, emailDomainUrl } from "../../shared/schemas/email-domains";
 import type { SessionActingIdentity } from "../../shared/session-acting-identity";
-import {
-  registrationEmailProofStartResponseSchema,
-  registrationEmailProofStartSchema,
-  type RegistrationEntry,
-} from "../../shared/schemas/registration-email-proof";
 import { userAuthSessionResponseSchema } from "../../shared/schemas/user-auth";
 import { myProfileSchema, myProfileUpdateSchema } from "../../shared/schemas/me";
-import { workEmailStepForKindSchema, type WorkEmailStep } from "../../shared/schemas/work-email";
-import { getJson, postJson, patchJson } from "../shared/api-client";
+import type { WorkEmailStep } from "../../shared/schemas/work-email";
+import { getJson, patchJson, postJson } from "../shared/api-client";
+import { previewAffiliation, readRegistrationAddress, type AddressAffiliation } from "../shared/registration-address";
+import { currentUserIdentityCreateSchema, identityMutationResponseSchema } from "../../shared/schemas/identity";
+import {
+  VerifiedOrganizationDetails,
+  type VerifiedOrganizationController,
+} from "./identities/VerifiedOrganizationDetails";
+import { friendlyErrorMessage } from "./ErrorAlert";
 import { Alert } from "../ui/Alert";
-import { Button } from "../ui/Button";
-import { DescriptionList } from "../ui/DescriptionList";
-import { Field } from "../ui/Field";
-import { TextInput } from "../ui/TextControl";
-import { EmailFirstStep } from "./EmailFirstStep";
-import { RegistrationConfirmOrganization, type ConfirmOrganizationController } from "./RegistrationConfirmOrganization";
+import { SignInCard } from "./sign-in/SignInCard";
+import { signInReturnPath } from "../shared/query-context";
 import { RegistrationIdentityField } from "./RegistrationIdentitySelect";
-import { useRegistrationEmailProof, type VerifiedRegistrationEmail } from "./useRegistrationEmailProof";
 
-const copy = EMAIL_FIRST_COPY.registration;
-
-/** Known details for an address the signed-in person continued with; names may still be missing. */
+/** The signed-in person's saved details; names may still be missing. */
 interface KnownPerson {
   firstName: string;
   lastName: string;
@@ -41,22 +33,32 @@ interface KnownPerson {
 }
 
 type Stage =
-  | { kind: "email" }
   | { kind: "loading" }
   | { kind: "unavailable"; message: string }
-  /** A verification link went to this address; the person continues from the email. */
-  | { kind: "sent"; email: string }
-  /** Signed in with the same address: verified already, and continues with saved details. */
-  | { kind: "known"; step: WorkEmailStep; person: KnownPerson; workEmail: boolean };
+  /** No session in this browser: the person signs in or starts an account, then returns here. */
+  | { kind: "signed-out" }
+  /** Signed in: the account's address is verified already, and registration continues with saved details. */
+  | {
+      kind: "known";
+      step: WorkEmailStep;
+      person: KnownPerson;
+      /** A work address that registers for an organization; a personal one, as the person said at sign-in, does not. */
+      workEmail: boolean;
+      /** A work address with no organization identity yet confirms its organization in place. */
+      affiliation: Affiliation | null;
+    };
 
-/** The signed-in person, or null when this browser has no session; asked only once the visitor continues. */
-async function readSession() {
-  // Signed out (401) or unreadable alike: neither stops someone registering; they verify their address instead.
+type Affiliation = AddressAffiliation;
+
+type Session = z.infer<typeof userAuthSessionResponseSchema>;
+
+/** The signed-in person, or null when this browser has no session. */
+async function readSession(): Promise<Session | null> {
+  // Signed out (401) or unreadable alike: the person signs in to continue.
   return getJson("/api/v1/auth/session", userAuthSessionResponseSchema).catch(() => null);
 }
 
-async function readKnownPerson(session: Awaited<ReturnType<typeof readSession>>): Promise<KnownPerson> {
-  if (!session) throw new Error("Sign in again before registering.");
+async function readKnownPerson(session: Session): Promise<KnownPerson> {
   const detail = await getJson("/api/v1/users/current", myProfileSchema);
   return {
     firstName: detail.firstName ?? "",
@@ -67,57 +69,44 @@ async function readKnownPerson(session: Awaited<ReturnType<typeof readSession>>)
   };
 }
 
-/** Saved names are shown, not asked again; a missing one is asked for. */
-function NameFields({
-  firstName = "",
-  lastName = "",
-  presentationOf,
-}: {
-  firstName?: string | null;
-  lastName?: string | null;
-  presentationOf?: (name: string) => FieldPresentation;
-}) {
-  if (firstName && lastName)
-    return (
-      <>
-        <input type="hidden" name="firstName" value={firstName} />
-        <input type="hidden" name="lastName" value={lastName} />
-      </>
-    );
-  return (
-    <div class="pk-split">
-      <Field
-        id="registration-first-name"
-        label="First name"
-        errorSlot="firstName"
-        required
-        {...presentationOf?.("firstName")}
-      >
-        {(control) => (
-          <TextInput {...control} name="firstName" required autoComplete="given-name" defaultValue={firstName ?? ""} />
-        )}
-      </Field>
-      <Field
-        id="registration-last-name"
-        label="Last name"
-        errorSlot="lastName"
-        required
-        {...presentationOf?.("lastName")}
-      >
-        {(control) => (
-          <TextInput {...control} name="lastName" required autoComplete="family-name" defaultValue={lastName ?? ""} />
-        )}
-      </Field>
-    </div>
-  );
+/**
+ * A work address registers for an organization: the identity the session acts as when it has one,
+ * otherwise the person's only organization identity. With none, or several to tell apart, the person selects one.
+ */
+function likelyOrganizationIdentity(person: KnownPerson): SessionActingIdentity | null {
+  if (person.identity?.organizationId) return person.identity;
+  const organizations = person.identities.filter((identity) => identity.organizationId);
+  return organizations.length === 1 ? organizations[0]! : null;
 }
 
-function AddressFields({ step, emailProof }: { step: WorkEmailStep; emailProof?: string }) {
+/** Where the session stands: signed out, or the details registration continues with. */
+async function readStage(): Promise<Stage> {
+  const session = await readSession();
+  if (!session) return { kind: "signed-out" };
+  const [known, address] = await Promise.all([
+    readKnownPerson(session),
+    readRegistrationAddress(session.identity.email),
+  ]);
+  // A personal address, as the person said at sign-in, registers like any other personal one.
+  const workEmail = address.organizationRequired;
+  const person = workEmail ? { ...known, identity: likelyOrganizationIdentity(known) } : known;
+  // Without any organization identity, the shared organization details confirm one; otherwise the chooser picks.
+  const affiliation =
+    workEmail && !known.identities.some((identity) => identity.organizationId) ? address.affiliation : null;
+  return {
+    kind: "known",
+    person,
+    workEmail,
+    affiliation,
+    step: { email: session.identity.email, unaffiliatedAttestation: person.identity?.organizationId === null },
+  };
+}
+
+function AddressFields({ step }: { step: WorkEmailStep }) {
   return (
     <>
       <input type="hidden" name="email" value={step.email} />
       <input type="hidden" name="unaffiliatedAttestation" value={step.unaffiliatedAttestation ? "true" : ""} />
-      {emailProof && <input type="hidden" name="emailProof" value={emailProof} />}
     </>
   );
 }
@@ -127,7 +116,6 @@ function Details({
   firstName,
   lastName,
   representation,
-  onChangeEmail,
   saveNames,
   presentationOf,
 }: {
@@ -135,253 +123,134 @@ function Details({
   firstName?: string | null;
   lastName?: string | null;
   representation?: ComponentChildren;
-  onChangeEmail?: () => void;
-  saveNames?: (names: PersonalNamePatch) => Promise<void>;
+  saveNames: (names: PersonalNamePatch) => Promise<void>;
   presentationOf?: (name: string) => FieldPresentation;
 }) {
+  // The names are the account's own: edited and saved on the account, never posted with the registration.
   const refusal = presentationOf?.("firstName").message ?? presentationOf?.("lastName").message;
   return (
-    <>
-      <ParticipationPersonalDetails
-        person={{ firstName: firstName ?? null, lastName: lastName ?? null }}
-        save={saveNames}
-        refusal={refusal}
-        summary={(edit) => (
-          <DescriptionList
-            align="baseline"
-            items={[
-              ...(firstName || lastName || saveNames
-                ? [
-                    {
-                      term: "Name",
-                      value: (
-                        <span class="pk-cluster pk-cluster--nowrap">
-                          <span>{[firstName, lastName].filter(Boolean).join(" ") || "Add your name"}</span>
-                          {edit && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              icon
-                              aria-label="Edit personal details"
-                              title="Edit personal details"
-                              onClick={edit}
-                            >
-                              <IconPencil />
-                            </Button>
-                          )}
-                        </span>
-                      ),
-                    },
-                  ]
-                : []),
-              {
-                term: "Email",
-                value: (
-                  <span class="pk-cluster pk-cluster--nowrap">
-                    <span class="pk-break">{email}</span>
-                    {onChangeEmail && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        icon
-                        aria-label={copy.changeEmail}
-                        title={copy.changeEmail}
-                        onClick={onChangeEmail}
-                      >
-                        <IconPencil />
-                      </Button>
-                    )}
-                  </span>
-                ),
-              },
-              ...(representation ? [{ term: "Representation", value: representation }] : []),
-            ]}
-          />
-        )}
-      />
-      {saveNames ? (
-        <>
-          <input type="hidden" name="firstName" value={firstName ?? ""} />
-          <input type="hidden" name="lastName" value={lastName ?? ""} />
-        </>
-      ) : (
-        <NameFields firstName={firstName} lastName={lastName} presentationOf={presentationOf} />
-      )}
-    </>
-  );
-}
-
-function VerifiedContact({
-  verified,
-  organization,
-  changeEmail,
-  endpoint,
-  presentationOf,
-}: {
-  verified: VerifiedRegistrationEmail;
-  organization: ConfirmOrganizationController;
-  changeEmail: () => void;
-  endpoint: string;
-  presentationOf?: (name: string) => FieldPresentation;
-}) {
-  const [savedPerson, setSavedPerson] = useState(verified.person);
-  const person = savedPerson;
-  return (
-    <div class="pk-stack">
-      <AddressFields step={verified} emailProof={verified.token} />
-      <Details
-        email={verified.email}
-        firstName={person?.firstName}
-        lastName={person?.lastName}
-        onChangeEmail={changeEmail}
-        presentationOf={presentationOf}
-        saveNames={
-          person
-            ? async (names) => {
-                const saved = await patchJson(
-                  `${endpoint}/proof/person`,
-                  registrationProofPersonPatchSchema.parse({ token: verified.token, userId: person.userId, ...names }),
-                  registrationProofPersonPatchResponseSchema,
-                );
-                setSavedPerson(saved.person);
-              }
-            : undefined
-        }
-      />
-      {verified.affiliation && (
-        <RegistrationConfirmOrganization
-          key={verified.email}
-          controller={organization}
-          email={verified.email}
-          proof={{ token: verified.token, endpoint: `${endpoint}/proof/verify`, affiliation: verified.affiliation }}
-        />
-      )}
-    </div>
+    <PersonDetailsSummary
+      email={email}
+      firstName={firstName}
+      lastName={lastName}
+      representation={representation}
+      saveNames={saveNames}
+      refusal={refusal}
+    />
   );
 }
 
 /**
- * The registration's first step: the shared work-email step, verified before
- * anything else is asked. Continuing emails a verification link; opening it
- * returns the person to this form — in this tab or a new one — with the
- * address verified, their saved names filled in, and the shared organization
- * confirmation flow for a work address. A
- * person signed in with the same address has nothing to verify and continues
- * with their saved details and organization identity.
+ * The registration's first step: who is registering. A signed-in person
+ * continues with their saved details and chooses the identity they register
+ * as. Without a session the shared sign-in card takes this step: the person
+ * signs in or starts an account, and comes back to this form signed in.
  */
 export function RegistrationContactStep({
-  endpoint,
-  entry = {},
-  organization,
+  signInSlot,
   onReadyChange,
-  autoSession = false,
+  onNamesChange,
+  onRepresentationMissingChange,
+  onSignInChange,
   presentationOf,
+  confirmRepresentation,
 }: {
-  /** The event's registrations collection, under which the email proof lives. */
-  endpoint: string;
-  /** How the person reached the form; the link brings them back to the same entry. */
-  entry?: RegistrationEntry;
-  organization: ConfirmOrganizationController;
+  /**
+   * Set while the step confirms an organization in place: Continue awaits it, which adds the
+   * identity through the shared contract, and clears it once the identity exists.
+   */
+  confirmRepresentation?: MutableRef<(() => Promise<boolean>) | null>;
+  /** Where the sign-in card renders: outside the registration form, because the card has a form of its own. */
+  signInSlot: RefObject<HTMLElement>;
   onReadyChange: (ready: boolean) => void;
-  /** An authenticated embedding starts with its current session, without a mailbox challenge. */
-  autoSession?: boolean;
+  /** Tells the flow the account's saved names, which the step checks and the review shows. */
+  onNamesChange?: (names: { firstName: string; lastName: string }) => void;
+  /** Tells the flow whether a work address still has no organization, so Continue waits for one. */
+  onRepresentationMissingChange?: (missing: boolean) => void;
+  /** Tells the flow whether the sign-in card stands in for the form. */
+  onSignInChange?: (signingIn: boolean) => void;
   presentationOf?: (name: string) => FieldPresentation;
 }) {
-  const [email, setEmail] = useState("");
-  const [individual, setIndividual] = useState(false);
-  const [stage, setStage] = useState<Stage>({ kind: autoSession ? "loading" : "email" });
-  const proof = useRegistrationEmailProof(`${endpoint}/proof/verify`);
-  const verified = proof.verified;
-  useEffect(() => onReadyChange(Boolean(verified) || stage.kind === "known"), [verified, stage.kind, onReadyChange]);
+  const [stage, setStage] = useState<Stage>({ kind: "loading" });
+  const organization = useRef<VerifiedOrganizationController>({});
+  const [organizationChosen, setOrganizationChosen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [confirmError, setConfirmError] = useState("");
+  // A work address never registers as the personal identity a new account starts with.
+  const representationMissing = stage.kind === "known" && stage.workEmail && !stage.person.identity?.organizationId;
+  const confirmsInPlace = representationMissing && stage.kind === "known" && stage.affiliation !== null;
+  useEffect(() => onReadyChange(stage.kind === "known"), [stage.kind, onReadyChange]);
+  const knownFirstName = stage.kind === "known" ? stage.person.firstName : "";
+  const knownLastName = stage.kind === "known" ? stage.person.lastName : "";
+  useEffect(
+    () => onNamesChange?.({ firstName: knownFirstName, lastName: knownLastName }),
+    [knownFirstName, knownLastName, onNamesChange],
+  );
+  useEffect(
+    () => onRepresentationMissingChange?.(confirmsInPlace ? !organizationChosen || confirming : representationMissing),
+    [confirmsInPlace, organizationChosen, confirming, representationMissing, onRepresentationMissingChange],
+  );
+  useEffect(() => onSignInChange?.(stage.kind === "signed-out"), [stage.kind, onSignInChange]);
 
-  useEffect(() => {
-    if (!autoSession) return;
-    let active = true;
-    void (async () => {
-      try {
-        const session = await readSession();
-        const person = await readKnownPerson(session);
-        const domain =
-          session &&
-          (await getJson(emailDomainUrl(emailDomainOf(session.identity.email)), emailDomainResponseSchema).catch(
-            () => null,
-          ));
-        if (active && session)
-          setStage({
-            kind: "known",
-            person,
-            workEmail: domain?.kind === "work",
-            step: { email: session.identity.email, unaffiliatedAttestation: person.identity?.organizationId === null },
-          });
-      } catch {
-        if (active) setStage({ kind: "unavailable", message: "Close registration and sign in again to continue." });
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [autoSession]);
-
-  async function proceed(step: WorkEmailStep): Promise<void> {
-    // Ask the server what kind of mailbox this is first; a refusal is the ZodError the step reads onto its field.
-    const domain = await getJson(emailDomainUrl(emailDomainOf(step.email)), emailDomainResponseSchema).catch(
-      () => null,
-    );
-    if (domain) workEmailStepForKindSchema(domain.kind).parse(step);
-    const session = await readSession();
-    if (session && session.identity.email.toLowerCase() === step.email) {
-      const person = await readKnownPerson(session);
-      setStage({
-        kind: "known",
-        person,
-        workEmail: domain?.kind === "work",
-        step: person.identity ? { ...step, unaffiliatedAttestation: person.identity.organizationId === null } : step,
-      });
-      return;
+  const load = useCallback(async () => {
+    try {
+      setStage(await readStage());
+    } catch {
+      setStage({ kind: "unavailable", message: "We could not load your details. Reload this page to try again." });
     }
-    await postJson(
-      `${endpoint}/proof`,
-      registrationEmailProofStartSchema.parse({ ...step, entry }),
-      registrationEmailProofStartResponseSchema,
-    );
-    setStage({ kind: "sent", email: step.email });
-  }
-
-  const changeEmail = () => {
-    proof.forget();
-    setStage({ kind: "email" });
-  };
+  }, []);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  if (confirmRepresentation)
+    confirmRepresentation.current = confirmsInPlace
+      ? async () => {
+          setConfirming(true);
+          setConfirmError("");
+          try {
+            if (!(await organization.current.prepare?.())) return false;
+            const checked = organization.current.read?.();
+            if (!checked || "refused" in checked) return false;
+            await postJson(
+              "/api/v1/users/current/identities",
+              currentUserIdentityCreateSchema.parse({ contextToken: checked.contextToken }),
+              identityMutationResponseSchema,
+            );
+            confirmRepresentation.current = null;
+            await load();
+            return true;
+          } catch (cause) {
+            setConfirmError(
+              friendlyErrorMessage(cause instanceof Error ? cause.message : "Could not add your organization."),
+            );
+            return false;
+          } finally {
+            setConfirming(false);
+          }
+        }
+      : null;
 
   if (stage.kind === "loading") return <p role="status">Loading your saved details…</p>;
   if (stage.kind === "unavailable") return <Alert tone="danger">{stage.message}</Alert>;
 
-  if (proof.verifying) return <p role="status">Verifying your email address…</p>;
-
-  if (verified)
-    return (
-      <VerifiedContact
-        verified={verified}
-        endpoint={endpoint}
-        organization={organization}
-        changeEmail={changeEmail}
-        presentationOf={presentationOf}
-      />
-    );
-
   if (stage.kind === "known") {
-    const { person, step, workEmail } = stage;
+    const { person, step, workEmail, affiliation } = stage;
     return (
       <div class="pk-stack">
-        {workEmail && !person.identity?.organizationId && (
+        {representationMissing && !confirmsInPlace && (
           <Alert tone="info">
             This email address uses an organization domain. Choose or add the organization you represent for this
             registration.
           </Alert>
         )}
+        <input
+          type="hidden"
+          name="organizationRepresentationMissing"
+          value={String(representationMissing && !confirmsInPlace)}
+        />
         <AddressFields step={step} />
         <Details
           email={step.email}
-          onChangeEmail={!autoSession ? changeEmail : undefined}
           firstName={person.firstName}
           lastName={person.lastName}
           presentationOf={presentationOf}
@@ -392,44 +261,60 @@ export function RegistrationContactStep({
               person: { ...person, firstName: saved.firstName ?? "", lastName: saved.lastName ?? "" },
               step,
               workEmail,
+              affiliation,
             });
           }}
           representation={
-            <RegistrationIdentityField
-              preferred={person.identity}
-              available={person.identities}
-              organizationOnly={workEmail}
-              userId={person.userId}
-              onSelect={(identity) => {
-                setStage({
-                  kind: "known",
-                  person: { ...person, identity },
-                  step: { ...step, unaffiliatedAttestation: identity?.organizationId === null },
-                  workEmail,
-                });
-              }}
-            />
+            confirmsInPlace ? undefined : (
+              <RegistrationIdentityField
+                preferred={representationMissing ? null : person.identity}
+                available={person.identities}
+                organizationOnly={workEmail}
+                userId={person.userId}
+                onSelect={(identity) => {
+                  setStage({
+                    kind: "known",
+                    person: { ...person, identity },
+                    step: { ...step, unaffiliatedAttestation: identity?.organizationId === null },
+                    workEmail,
+                    affiliation,
+                  });
+                }}
+              />
+            )
           }
         />
+        {confirmsInPlace && affiliation && (
+          <VerifiedOrganizationDetails
+            confirmSole
+            initial={affiliation}
+            emailId={null}
+            controller={organization.current}
+            onDraftChange={(draft) => setOrganizationChosen(Boolean(draft.organizationName))}
+            resolve={(domain) =>
+              previewAffiliation({
+                phase: "resolve",
+                email: step.email,
+                emailId: null,
+                domain,
+                unaffiliatedAttestation: false,
+              })
+            }
+            prepare={(input) => previewAffiliation(input)}
+          />
+        )}
+        {confirmError && <Alert tone="danger">{confirmError}</Alert>}
       </div>
     );
   }
 
-  return (
-    <div class="pk-stack">
-      {proof.error && <Alert tone="danger">{proof.error}</Alert>}
-      <EmailFirstStep
-        flow="registration"
-        schema={registrationEmailProofStartSchema}
-        body={{ entry }}
-        email={email}
-        onEmailChange={setEmail}
-        individual={individual}
-        onIndividualChange={setIndividual}
-        onContinue={proceed}
-        sentTo={stage.kind === "sent" ? stage.email : null}
-        onChangeEmail={changeEmail}
-      />
-    </div>
+  if (!signInSlot.current) return null;
+  // Invitation and source parameters ride along, so the emailed link returns to the same registration.
+  return createPortal(
+    <SignInCard
+      embedded={{ returnPath: signInReturnPath(`${location.pathname}${location.search}`), emailFlow: "registration" }}
+      onSignedIn={load}
+    />,
+    signInSlot.current,
   );
 }

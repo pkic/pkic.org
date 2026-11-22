@@ -16,15 +16,11 @@ import {
   registrationResendConfirmationSchema,
 } from "./registration";
 import {
-  registrationProofPersonPatchSchema,
-  registrationProofPersonPatchResponseSchema,
-  registrationEmailProofStartResponseSchema,
-  registrationEmailProofStartSchema,
   registrationEmailProofVerifyResponseSchema,
   registrationEmailProofVerifySchema,
 } from "./registration-email-proof";
 import { jsonResponse, requiredJsonBody } from "./openapi";
-import { publicOperation } from "./route-contract";
+import { publicOperation, requiresSession } from "./route-contract";
 import { screensWorkEmailDomain } from "./work-email";
 
 export const registrationResendManageLinkRouteSchema = {
@@ -51,7 +47,7 @@ export const registrationResendManageLinkRouteSchema = {
 
 export const eventRegistrationCreateRouteSchema = {
   ...protectsPublicAction("event_registration", "events:manage"),
-  ...publicOperation(),
+  ...requiresSession(),
   ...screensWorkEmailDomain(),
   tags: ["Registrations"],
   summary: "Register for an event",
@@ -64,41 +60,25 @@ export const eventRegistrationCreateRouteSchema = {
   responses: {
     "200": jsonResponse("Registration submitted.", registrationSubmissionResponseSchema),
     "400": { description: "Invalid registration, form answers, attendance, invite, or consent." },
+    "401": { description: "Sign in to register." },
     "404": { description: "Event not found." },
     "409": { description: "Registration state or capacity changed concurrently." },
-  },
-};
-
-export const registrationEmailProofStartRouteSchema = {
-  ...protectsPublicAction("registration_email_proof", "events:manage"),
-  ...publicOperation(),
-  ...screensWorkEmailDomain(),
-  tags: ["Registrations"],
-  summary: "Verify a registrant's email address",
-  description:
-    "Queues a short-lived verification link to the address. Opening it returns the person to the registration form with the address verified.",
-  request: { params: eventSlugParamsSchema, body: requiredJsonBody(registrationEmailProofStartSchema) },
-  responses: {
-    "200": jsonResponse("Verification link queued.", registrationEmailProofStartResponseSchema),
-    "403": { description: "The event does not take registrations." },
-    "404": { description: "Event not found." },
-    "422": { description: "The address cannot receive email or is not accepted." },
-    "429": { description: "Rate limit exceeded." },
   },
 };
 
 export const registrationEmailProofVerifyRouteSchema = {
   ...publicOperation(),
   tags: ["Registrations"],
-  summary: "Continue a registration with a verified email address",
+  summary: "Read the organization a confirming registrant's work address names",
   request: { params: eventSlugParamsSchema, body: requiredJsonBody(registrationEmailProofVerifySchema) },
   responses: {
     "200": jsonResponse(
-      "The verified address and what the form still asks.",
+      "The confirmed address and the organization its domain names.",
       registrationEmailProofVerifyResponseSchema,
     ),
-    "404": { description: "Invalid verification link." },
-    "410": { description: "Expired verification link." },
+    "404": { description: "Invalid confirmation link." },
+    "409": { description: "The registration changed since the confirmation link was opened." },
+    "410": { description: "Expired confirmation link." },
   },
 };
 
@@ -220,13 +200,4 @@ export const registrationManageUpdateRouteSchema = {
     "409": { description: "Registration state or capacity changed concurrently." },
     "410": { description: "Registration management capability expired." },
   },
-};
-
-/** A mailbox capability edits only the live owner of that exact address, inside its event. */
-export const registrationProofPersonPatchRouteSchema = {
-  ...publicOperation(),
-  tags: ["Registrations"],
-  summary: "Correct the verified registrant's personal details",
-  request: { params: eventSlugParamsSchema, body: requiredJsonBody(registrationProofPersonPatchSchema) },
-  responses: { "200": jsonResponse("Saved canonical personal details.", registrationProofPersonPatchResponseSchema) },
 };

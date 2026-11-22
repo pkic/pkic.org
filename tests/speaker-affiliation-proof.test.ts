@@ -22,8 +22,9 @@ import { confirmSpeakerParticipation } from "../functions/_lib/services/proposal
 import { parseCapabilityToken } from "../functions/_lib/auth/capability-token";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { callApi } from "./helpers/app";
+import { confirmedProposalAffiliation } from "./helpers/proposal-proof";
 import { createMemberSession } from "./helpers/auth";
-import { seedEventAndAdmin, deliveredEmailPayload, queryAll } from "./helpers/context";
+import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { insertOrganization, insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
@@ -95,7 +96,6 @@ async function proof(
     capabilityId: crypto.randomUUID(),
     termsDigest: await proposalTermsDigest(await getRequiredTerms(env.DB, f.eventId, "speaker")),
     consents: [{ termKey: "speaker-terms", version: "v1" }],
-    operation: "speaker_profile",
     context: {
       kind: "speaker",
       userId: f.userId,
@@ -114,6 +114,22 @@ async function proof(
       Math.floor(Date.now() / 1000) + 3600,
     ),
   };
+}
+
+/** The guest confirms the organization they represent, as the speaker screen does. */
+async function confirmed(
+  f: Awaited<ReturnType<typeof fixture>>,
+  organizationId: string,
+  { email = f.email, jobTitle = "Security engineer" }: { email?: string; jobTitle?: string } = {},
+) {
+  return confirmedProposalAffiliation({
+    environment: env,
+    eventId: f.eventId,
+    email,
+    userId: f.userId,
+    organizationId,
+    jobTitle,
+  });
 }
 
 /** A new affiliation on behalf of the organization carries the job title the contract requires. */
@@ -161,76 +177,35 @@ async function identity(userId: string, organizationId: string) {
 }
 
 describe("speaker affiliation mailbox proof", () => {
-  it("claims only the invited speaker row into the authenticated professional account and refuses replay", async () => {
+  it("refuses a mailbox proof on another account's speaker link, signed in or not, without changing the roster", async () => {
     const f = await fixture("personal@example.net", "pending");
-    const proposer = await insertUser(env.DB, "proposer@example.net");
-    await env.DB.prepare("UPDATE session_proposals SET proposer_user_id=? WHERE id=?")
-      .bind(proposer, f.proposalId)
-      .run();
     const target = await insertUser(env.DB, "professional@speaker-employer.example");
     const employer = await claimedOrganization();
     await identity(target, employer);
     const session = await createMemberSession(env.DB, target, "claim-session");
-    const requestProof = (suffix: string, body: unknown, auth?: string) =>
-      callApi(env, `/api/v1/events/pqc-2026/proposals/proof${suffix}`, {
+    const requestProof = (body: unknown, auth?: string) =>
+      callApi(env, "/api/v1/events/pqc-2026/proposals/proof", {
         method: "POST",
         headers: { "content-type": "application/json", ...(auth ? { authorization: `Bearer ${auth}` } : {}) },
         body: JSON.stringify(body),
       });
-    const started = await requestProof("", {
+    const startBody = {
       email: "professional@speaker-employer.example",
       consents: [{ termKey: "speaker-terms", version: "v1" }],
       unaffiliatedAttestation: false,
       speakerManagementToken: f.token,
-    });
-    expect(started.status, await started.clone().text()).toBe(200);
-    const mails = await queryAll<{ payload_json: string }>(
-      env.DB,
-      "SELECT payload_json FROM email_outbox WHERE template_key='event_proposal_verify' AND recipient_email=?",
-      "professional@speaker-employer.example",
+    };
+    // A forwarded speaker link speaks only for its own speaker, and only once they sign in.
+    expect((await requestProof(startBody)).status).toBe(401);
+    const other = await requestProof(startBody, session);
+    expect(other.status).toBe(403);
+    expect(await other.json()).toMatchObject({ error: { code: "PROPOSAL_PROOF_CONTEXT_MISMATCH" } });
+    expect(await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key='event_proposal_verify'")).toEqual(
+      [],
     );
-    const mail = await deliveredEmailPayload<{ verificationUrl: string }>(env.DB, env, mails[0].payload_json);
-    const token = new URLSearchParams(new URL(mail.verificationUrl).hash.slice(1)).get("verify")!;
-    const guest = await requestProof("/verify", { token });
-    expect(await guest.json()).toMatchObject({ status: "sign_in_required" });
-    const verified = await requestProof("/verify", { token }, session);
-    expect(verified.status, await verified.clone().text()).toBe(200);
-    const p = (await verified.json()) as { status: string; continuationToken: string };
-    expect(p.status).toBe("ready");
-    const body = { continuationToken: p.continuationToken, unaffiliatedAttestation: false, jobTitle: "Engineer" };
-    expect((await patch(f, body)).status).toBe(403);
-    const beforeSource = await getEventParticipantSourceRevision(env.DB, f.eventId, f.userId);
-    const beforeTarget = await getEventParticipantSourceRevision(env.DB, f.eventId, target);
-    const beforeRoster = await getProposalSpeakerRosterRevision(env.DB, f.proposalId);
-    const result = await patch(f, body, session);
-    expect(result.status, await result.clone().text()).toBe(200);
-    expect(await getEventParticipantSourceRevision(env.DB, f.eventId, f.userId)).toBe(beforeSource + 1);
-    expect(await getEventParticipantSourceRevision(env.DB, f.eventId, target)).toBe(beforeTarget + 1);
-    expect(await getProposalSpeakerRosterRevision(env.DB, f.proposalId)).toBe(beforeRoster + 1);
     expect(await env.DB.prepare("SELECT user_id FROM proposal_speakers WHERE id=?").bind(f.speakerId).first()).toEqual({
-      user_id: target,
+      user_id: f.userId,
     });
-    expect(
-      await env.DB.prepare("SELECT email,merged_into_user_id FROM users WHERE id=?").bind(f.userId).first(),
-    ).toEqual({ email: f.email, merged_into_user_id: null });
-    expect(
-      await env.DB.prepare("SELECT proposer_user_id FROM session_proposals WHERE id=?").bind(f.proposalId).first(),
-    ).toEqual({ proposer_user_id: proposer });
-    const accepted = await callApi(env, `${f.path}/participation`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(
-        speakerParticipationPatchSchema.parse({
-          status: "confirmed",
-          consents: [{ termKey: "speaker-terms", version: "v1" }],
-        }),
-      ),
-    });
-    expect(accepted.status, await accepted.clone().text()).toBe(200);
-    expect(
-      await env.DB.prepare("SELECT user_id,status FROM proposal_speakers WHERE id=?").bind(f.speakerId).first(),
-    ).toEqual({ user_id: target, status: "confirmed" });
-    expect((await patch(f, body, session)).status).toBeGreaterThanOrEqual(400);
   });
 
   it.each(["wrong_owner", "revoked_session", "confirmed", "proposer", "duplicate", "changed_invitation"] as const)(
@@ -295,7 +270,7 @@ describe("speaker affiliation mailbox proof", () => {
     const response = await patch(f, {
       continuationToken: p.token,
       unaffiliatedAttestation: false,
-      jobTitle: "Verified speaker role",
+      ...(await confirmed(f, organizationId, { jobTitle: "Verified speaker role" })),
       firstName: "Duplicate name",
       lastName: "Duplicate surname",
     });
@@ -369,37 +344,35 @@ describe("speaker affiliation mailbox proof", () => {
     expect(accepted.status, await accepted.clone().text()).toBe(200);
   });
 
-  it.each(["initial_proposal", "other_speaker", "other_event", "old_generation"] as const)(
+  it.each(["other_speaker", "other_event", "old_generation"] as const)(
     "rejects %s confirmation context",
     async (kind) => {
       const f = await fixture();
       await claimedOrganization();
       const overrides: Partial<EventProposalContinuationPayload> =
-        kind === "initial_proposal"
-          ? { operation: "proposal_submission", context: null }
-          : kind === "other_speaker"
-            ? {
+        kind === "other_speaker"
+          ? {
+              context: {
+                kind: "speaker",
+                userId: f.userId,
+                speakerId: crypto.randomUUID(),
+                inviteGeneration: 0,
+                expiresAt: f.expiresAt,
+                secretDigest: await sha256Hex(f.secret),
+              },
+            }
+          : kind === "other_event"
+            ? { eventId: crypto.randomUUID() }
+            : {
                 context: {
                   kind: "speaker",
                   userId: f.userId,
-                  speakerId: crypto.randomUUID(),
-                  inviteGeneration: 0,
+                  speakerId: f.speakerId,
+                  inviteGeneration: 1,
                   expiresAt: f.expiresAt,
                   secretDigest: await sha256Hex(f.secret),
                 },
-              }
-            : kind === "other_event"
-              ? { eventId: crypto.randomUUID() }
-              : {
-                  context: {
-                    kind: "speaker",
-                    userId: f.userId,
-                    speakerId: f.speakerId,
-                    inviteGeneration: 1,
-                    expiresAt: f.expiresAt,
-                    secretDigest: await sha256Hex(f.secret),
-                  },
-                };
+              };
       const p = await proof(f, overrides);
       const response = await patch(f, { continuationToken: p.token, unaffiliatedAttestation: false });
       expect(response.status).toBeGreaterThanOrEqual(400);
@@ -420,7 +393,11 @@ describe("speaker affiliation mailbox proof", () => {
     const organizationId = await claimedOrganization();
     const email = "guest@speaker-employer.example";
     const p = await proof(f, { email });
-    const response = await patch(f, { continuationToken: p.token, unaffiliatedAttestation: false });
+    const response = await patch(f, {
+      continuationToken: p.token,
+      unaffiliatedAttestation: false,
+      ...(await confirmed(f, organizationId, { email })),
+    });
     expect(response.status, await response.clone().text()).toBe(200);
     const address = await env.DB.prepare("SELECT id,user_id,verified_at FROM user_emails WHERE normalized_email=?")
       .bind(email)
@@ -659,12 +636,12 @@ describe("speaker affiliation mailbox proof", () => {
       kind === "individual" ? "individual-confirm@gmail.com" : "organization-confirm@speaker-employer.example",
       "pending",
     );
-    if (kind === "organization") await claimedOrganization();
+    const organizationId = kind === "organization" ? await claimedOrganization() : null;
     const p = await proof(f, { applicantKind: kind });
     const selected = await patch(f, {
       continuationToken: p.token,
       unaffiliatedAttestation: kind === "individual",
-      ...(kind === "individual" ? { actingIdentityId: null } : {}),
+      ...(organizationId ? await confirmed(f, organizationId) : { actingIdentityId: null }),
     });
     expect(selected.status, await selected.clone().text()).toBe(200);
     const response = await callApi(env, `${f.path}/participation`, {
@@ -706,9 +683,13 @@ describe("speaker affiliation mailbox proof", () => {
 
   it("rolls back confirmation if the selected organization identity ends after preflight", async () => {
     const f = await fixture("confirmation-race@speaker-employer.example", "pending");
-    await claimedOrganization();
+    const organizationId = await claimedOrganization();
     const p = await proof(f);
-    const selected = await patch(f, { continuationToken: p.token, unaffiliatedAttestation: false });
+    const selected = await patch(f, {
+      continuationToken: p.token,
+      unaffiliatedAttestation: false,
+      ...(await confirmed(f, organizationId)),
+    });
     expect(selected.status, await selected.clone().text()).toBe(200);
     const identityId = await env.DB.prepare("SELECT acting_identity_id FROM proposal_speakers WHERE id=?")
       .bind(f.speakerId)
@@ -736,9 +717,13 @@ describe("speaker affiliation mailbox proof", () => {
     "rolls back confirmation when active speaker terms are %s after preflight",
     async (change) => {
       const f = await fixture(`terms-${change}@speaker-employer.example`, "pending");
-      await claimedOrganization();
+      const organizationId = await claimedOrganization();
       const p = await proof(f);
-      const selected = await patch(f, { continuationToken: p.token, unaffiliatedAttestation: false });
+      const selected = await patch(f, {
+        continuationToken: p.token,
+        unaffiliatedAttestation: false,
+        ...(await confirmed(f, organizationId)),
+      });
       expect(selected.status, await selected.clone().text()).toBe(200);
       const before = await speakerState(f.speakerId);
       const sourceRevision = await getEventParticipantSourceRevision(env.DB, f.eventId, f.userId);

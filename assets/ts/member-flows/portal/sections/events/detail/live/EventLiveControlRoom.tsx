@@ -36,7 +36,10 @@ export function SelectedSessionDesk({
   sessions = [],
   agendaSession,
   onBrowse,
+  eventPath,
 }: {
+  /** The event's own page, which the phone studio links back to. */
+  eventPath?: string;
   slug: string;
   occurrenceId: string;
   roomId: string;
@@ -52,9 +55,13 @@ export function SelectedSessionDesk({
 }) {
   const program = useLiveRoomProgram({ slug, roomId });
   const [failure, setFailure] = useState<string | null>(null);
-  const active = program.status === "live" && program.selection?.occurrenceId === occurrenceId;
+  // A refusal belongs to the session it happened in.
+  useEffect(() => setFailure(null), [occurrenceId]);
+  // A dropped connection keeps the last session on air: the header still reads Loaded and the
+  // monitors hold their picture while it reconnects, and the desk pauses the controls meanwhile.
+  const activeId = program.selection?.occurrenceId ?? null;
+  const active = activeId === occurrenceId;
   const now = useBoundaryClock(useCallback((at: number) => at + 30_000, []));
-  const activeId = program.status === "live" ? (program.selection?.occurrenceId ?? null) : null;
   const activeSession = sessions.find((choice) => choice.id === activeId) ?? null;
   const drift = liveAgendaDrift(
     activeSession ? { startAt: activeSession.startsAt, endAt: activeSession.endsAt } : null,
@@ -87,6 +94,9 @@ export function SelectedSessionDesk({
             ) : undefined,
         }
       : null;
+  // The panels open on the graphics already on air, so they wait for the room to say what that is:
+  // a studio reloaded mid-show then lights what is on Program instead of offering to replace it.
+  if (program.status === "connecting" && !program.selection) return <Spinner label="Joining the live room…" />;
   return (
     <div class="pk-stack pk-stack--snug" data-density="compact">
       <LiveSessionDesk
@@ -99,7 +109,9 @@ export function SelectedSessionDesk({
               <Button
                 disabled={program.status !== "live"}
                 aria-pressed={active}
-                title="Load this session into the studio and Preview. Program does not change until you transition."
+                title={
+                  "Load session\nLoad this session into the studio and Preview. Program does not change until you transition."
+                }
                 onClick={() => {
                   setFailure(null);
                   void program
@@ -121,7 +133,8 @@ export function SelectedSessionDesk({
         roomControl={roomControl}
         clock={clock}
         broadcast={broadcast}
-        activeOccurrenceId={program.status === "live" ? (program.selection?.occurrenceId ?? null) : null}
+        activeOccurrenceId={activeId}
+        eventPath={eventPath}
       />
     </div>
   );
@@ -223,13 +236,13 @@ export function EventLiveControlRoom({
           class="pk-studio-room__browse"
           href={`#${eventPath}`}
           aria-label="Back to the event"
-          title="Back to the event"
+          title={"Back to the event\nLeave the studio. Nothing on air changes."}
         >
           <IconChevron pointing="left" />
         </ButtonLink>
       ) : null}
       <Button
-        title="Choose room and session"
+        title={`Room: ${roomName}\nChoose another room or session to open in the studio.`}
         onClick={() => {
           setDraftRoom(roomId);
           setDraftSession(selected?.id ?? "");
@@ -244,7 +257,7 @@ export function EventLiveControlRoom({
         variant="ghost"
         class="pk-studio-room__browse"
         aria-label="Previous session"
-        title="Previous session"
+        title={"Previous session\nOpen the session before this one in this room. Nothing on air changes."}
         disabled={!previous}
         onClick={() => previous && choose(previous.id)}
       >
@@ -253,7 +266,9 @@ export function EventLiveControlRoom({
       <Button
         variant="ghost"
         class="pk-studio-room__browse"
-        title="Go to the session the agenda has now in this room, or the next one"
+        title={
+          "Session on the agenda now\nOpen the session the agenda has now in this room, or the next one. Nothing on air changes."
+        }
         disabled={!agendaNow || agendaNow.id === selected?.id}
         onClick={() => agendaNow && choose(agendaNow.id)}
       >
@@ -264,7 +279,7 @@ export function EventLiveControlRoom({
         variant="ghost"
         class="pk-studio-room__browse"
         aria-label="Next session"
-        title="Next session"
+        title={"Next session\nOpen the session after this one in this room. Nothing on air changes."}
         disabled={!next}
         onClick={() => next && choose(next.id)}
       >
@@ -339,8 +354,9 @@ export function EventLiveControlRoom({
           {renderSession(selected.id, roomId)}
         </>
       ) : selected ? (
+        // One studio for the room: moving to another session keeps its frame, controls and connection to the
+        // room's program, and the desk holds the last session's picture until the next one's room answers.
         <SelectedSessionDesk
-          key={selected.id}
           slug={slug}
           occurrenceId={selected.id}
           roomId={roomId}
@@ -350,6 +366,7 @@ export function EventLiveControlRoom({
           sessions={ordered}
           agendaSession={agendaNow}
           onBrowse={(id) => choose(id)}
+          eventPath={eventPath}
         />
       ) : null}
     </div>

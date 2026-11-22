@@ -46,7 +46,7 @@ import {
 import { createManagedForm, createManagedFormPlacement } from "../functions/_lib/services/forms";
 import type { DatabaseLike, Env, UserBackedAuthAdmin } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
-import { createAdminSession, createMemberSession } from "./helpers/auth";
+import { createAdminSession, createMemberSession, signInRegistrant } from "./helpers/auth";
 import { mutateBeforeMatchingQuery, mutateBeforeNextBatch } from "./helpers/database-races";
 import { insertOrgRepresentative, insertUser } from "./helpers/membership";
 import { userRecordColumns, type UserRecord } from "../functions/_lib/services/users";
@@ -191,12 +191,7 @@ function registrationSubmissionMetadata() {
     userAgent: null,
     appBaseUrl: "https://example.test",
     signingSecret: "test-signing-secret",
-    config: {
-      maxPendingConfirmationReminders: 12,
-      pendingConfirmationReminderIntervalDays: 2,
-      confirmationLinkTtlHours: 24,
-      referralCodeLength: 8,
-    },
+    referralCodeLength: 8,
   };
 }
 
@@ -1027,12 +1022,11 @@ describe("group event sharing", () => {
       }),
     });
     expect(registered.status, await registered.clone().text()).toBe(200);
-    expect(await registered.json()).toMatchObject({
-      success: true,
-      status: "registered",
-      manageToken: null,
-      manageUrl: null,
-    });
+    const registeredBody = await registered.json();
+    expect(registeredBody).toMatchObject({ success: true, status: "registered" });
+    // The manage capability travels only by email.
+    expect(registeredBody).not.toHaveProperty("manageToken");
+    expect(registeredBody).not.toHaveProperty("manageUrl");
     expect(
       await env.DB.prepare(
         `SELECT user_id, registration_group_id, status, confirmation_link_secret
@@ -1091,9 +1085,10 @@ describe("group event sharing", () => {
       granteeGroupId: fixture.granteeId,
       capability: "register",
     });
-    expect((await callApi(env, `/api/v1/events/${fixture.eventSlug}/forms/placements/event_registration`)).status).toBe(
-      200,
-    );
+    // The shared event's forms are visible to the member the grant admits, never to an anonymous reader.
+    const placements = `/api/v1/events/${fixture.eventSlug}/forms/placements/event_registration`;
+    expect((await callApi(env, placements)).status).toBe(404);
+    expect((await authenticatedRequest(fixture.memberToken, placements)).status).toBe(200);
 
     const revokedGrantDb = mutateBeforeMatchingQuery(
       env.DB,
@@ -1240,13 +1235,17 @@ describe("group event sharing", () => {
     });
     expect(ungranted.status).toBe(404);
 
+    const visitor = await signInRegistrant(env.DB, "visitor@example.test", {
+      firstName: "Public",
+      lastName: "Visitor",
+      organization: "Visitor Organization",
+    });
     const publicAttempt = await callApi(env, `/api/v1/events/${fixture.eventSlug}/registrations`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...visitor.headers },
       body: JSON.stringify({
-        firstName: "Public",
-        lastName: "Visitor",
         email: "visitor@example.test",
+        identityId: visitor.identityId,
         ...payload,
       }),
     });
@@ -1259,8 +1258,6 @@ describe("group event sharing", () => {
     const prepared = await prepareValidatedAttendeeRegistration(
       env.DB,
       {
-        firstName: "Test",
-        lastName: "Member",
         email: fixture.memberEmail,
         ...payload,
       },
@@ -1272,8 +1269,6 @@ describe("group event sharing", () => {
         ip: null,
         userAgent: null,
         signingSecret: "test-signing-secret",
-        pendingConfirmationDeadlineHours: 24,
-        confirmationTtlHours: 24,
         referralCodeLength: 8,
         verifiedIdentity: { userId: fixture.memberId, registrationGroupId: fixture.granteeId },
       },
@@ -1425,8 +1420,6 @@ describe("group event sharing", () => {
       capability: "register",
     });
     const payload = {
-      firstName: "Test",
-      lastName: "Member",
       email: fixture.memberEmail,
       dayAttendance: [{ dayDate: "2027-01-10", attendanceType: "virtual" }],
       consents: [{ termKey: "meeting-terms", version: "1" }],
@@ -1444,8 +1437,6 @@ describe("group event sharing", () => {
         ip: null,
         userAgent: null,
         signingSecret: "test-signing-secret",
-        pendingConfirmationDeadlineHours: 24,
-        confirmationTtlHours: 24,
         referralCodeLength: 8,
         verifiedIdentity: { userId: fixture.memberId, registrationGroupId: fixture.granteeId },
         authorizationGuards: [
@@ -1465,11 +1456,7 @@ describe("group event sharing", () => {
       code: "EVENT_REGISTRATION_CONTEXT_CHANGED",
     });
 
-    const termsPrepared = await prepareValidatedAttendeeRegistration(
-      env.DB,
-      { ...payload, firstName: "Changed" },
-      await buildOptions(),
-    );
+    const termsPrepared = await prepareValidatedAttendeeRegistration(env.DB, payload, await buildOptions());
     await env.DB.prepare("UPDATE event_terms SET version = '2' WHERE event_id = ? AND term_key = 'meeting-terms'")
       .bind(fixture.eventId)
       .run();

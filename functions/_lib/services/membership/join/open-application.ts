@@ -27,26 +27,24 @@ export function ownOpenApplicationSelection(email: string, applicantUser: SqlSel
   };
 }
 
-/** An open application that holds the organization domain claim the address links through. */
-export function organizationOpenApplicationSelection(claim: SqlSelection): SqlSelection {
+/** An open application for the organization the address joins, matched by organization id. */
+export function organizationOpenApplicationSelection(organization: SqlSelection): SqlSelection {
   return {
-    sql: `SELECT application.id FROM organization_domain_claims claim
-       JOIN member_applications application ON application.id = claim.application_id
-      WHERE claim.id = (SELECT id FROM (${claim.sql})) AND claim.organization_id IS NULL
-        AND application.stage ${OPEN_STAGE_SQL}
+    sql: `SELECT application.id FROM member_applications application
+      WHERE application.organization_id = (${organization.sql}) AND application.stage ${OPEN_STAGE_SQL}
       LIMIT 1`,
-    bindings: [...claim.bindings, ...APPLICATION_TERMINAL_STAGES],
+    bindings: [...organization.bindings, ...APPLICATION_TERMINAL_STAGES],
   };
 }
 
 /**
  * Found right after verification so the applicant learns of an open application
  * before filling in the form again. The owner receives a status-only link to it;
- * another person's application for the same domain is only acknowledged.
+ * another person's application for the same organization is only acknowledged.
  */
 export async function resolveOpenJoinApplication(
   signingSecret: string,
-  observed: { own: OwnOpenApplicationRow | null; organizationHeld: boolean },
+  observed: { own: OwnOpenApplicationRow | null; organizationOpen: boolean },
 ): Promise<OpenJoinApplication> {
   const own = observed.own;
   if (own) {
@@ -61,5 +59,5 @@ export async function resolveOpenJoinApplication(
       statusPath: `/application-status/?id=${encodeURIComponent(own.id)}&token=${encodeURIComponent(token)}`,
     };
   }
-  return observed.organizationHeld ? { kind: "organization" } : null;
+  return observed.organizationOpen ? { kind: "organization" } : null;
 }

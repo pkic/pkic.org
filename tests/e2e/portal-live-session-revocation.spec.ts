@@ -56,7 +56,7 @@ async function prepareDraftPoll(page: Page, label: string) {
 /** Live messages cross a socket and a busy server, so they get longer than an assertion's default to arrive. */
 const livePoll = <T>(fn: () => Promise<T> | T) => expect.poll(fn, { timeout: 20_000 });
 
-test("two already-open live moderator clients stop receiving private questions, polls and queue updates after grant revocation", async ({
+test("Studio queue stays private and moderators lose question and poll access after revocation", async ({
   page: staff,
   browser,
 }, info) => {
@@ -103,27 +103,27 @@ test("two already-open live moderator clients stop receiving private questions, 
     data: agendaRevisionSchema.parse({ expectedRevision: agenda.revision }),
   });
   expect(published.status(), await published.text()).toBe(200);
-  const moderator = await createMember(staff, { individual: true });
+  const moderator = await createMember(staff);
   const granting = await staff.request.post("/api/v1/permissions/grants", {
     data: accessGrantCreateSchema.parse({
       userId: moderator.userId,
-      permission: "agenda:live_moderate",
+      permissions: ["agenda:live_moderate"],
       contextType: "event",
       contextId: fixture.eventId,
     }),
   });
   expect(granting.status(), await granting.text()).toBe(201);
-  const grant = accessGrantCreateResponseSchema.parse(await granting.json()).grant;
+  const grant = accessGrantCreateResponseSchema.parse(await granting.json()).grants[0]!;
   const contexts = await Promise.all([0, 1].map(() => browser.newContext({ baseURL: new URL(staff.url()).origin })));
   const pages = await Promise.all(contexts.map((context) => context.newPage()));
   const path = `${api}/occurrences/${occurrence.id}/live`;
   const marker = crypto.randomUUID();
   try {
-    await registerStateAttendee(pages[0]!, fixture, moderator.email, { staticRelease: false });
+    for (const page of pages) await signInToPortal(page, moderator.email);
+    await registerStateAttendee(pages[0]!, fixture, moderator.email, { identityId: moderator.identityId });
     await connectLiveBrowser(staff, path);
     await expectLiveOperator(staff);
     for (const page of pages) {
-      await signInToPortal(page, moderator.email);
       await connectLiveBrowser(page, path);
       await expectLiveOperator(page);
     }
@@ -145,27 +145,39 @@ test("two already-open live moderator clients stop receiving private questions, 
     expect(question.question.status).toBe("pending");
     const privatePoll = await prepareDraftPoll(staff, `Baseline private draft ${marker}`);
     await sendLiveMessage(staff, { type: "queue.add", view: "poll", itemId: privatePoll.id });
+    await livePoll(async () =>
+      (await liveMessages(staff)).some(
+        (message) => message.type === "queue.changed" && message.queue.poll.includes(privatePoll.id),
+      ),
+    ).toBe(true);
     for (const page of pages) {
       await livePoll(async () =>
-        (await liveMessages(page)).some(
-          (message) => message.type === "queue.changed" && message.queue.poll.includes(privatePoll.id),
-        ),
-      ).toBe(true);
-      const received = (await liveMessages(page)).find(
-        (message) => message.type === "question.changed" && message.question.id === question.question.id,
-      );
-      expect(
         (await liveMessages(page)).some(
           (message) => message.type === "poll.changed" && message.poll.id === privatePoll.id,
         ),
       ).toBe(true);
+      const messages = await liveMessages(page);
+      const received = messages.find(
+        (message) => message.type === "question.changed" && message.question.id === question.question.id,
+      );
+      expect(messages.some((message) => message.type === "queue.changed")).toBe(false);
       expect(received).toMatchObject({
         question: { anonymous: true, status: "pending", authorName: expect.any(String) },
       });
     }
+    const chat = await staff.context().newPage();
     const latency = [];
-    for (let sample = 0; sample < 5; sample++)
-      latency.push(await measureLiveChatDelivery(staff, `Synthetic instant chat ${marker}-${sample}`));
+    try {
+      await chat.goto("/portal/");
+      await connectLiveBrowser(chat, `${api}/rooms/${room.id}/live/chat`);
+      await livePoll(async () =>
+        (await liveMessages(chat)).some((message) => message.type === "location.chat.snapshot"),
+      ).toBe(true);
+      for (let sample = 0; sample < 5; sample++)
+        latency.push(await measureLiveChatDelivery(chat, `Synthetic instant chat ${marker}-${sample}`));
+    } finally {
+      await chat.close();
+    }
     await writeFile(
       info.outputPath("live-chat-latency.json"),
       JSON.stringify({ targetMilliseconds: 100, samples: latency }, null, 2),

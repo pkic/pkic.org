@@ -1,12 +1,8 @@
 // @vitest-environment jsdom
-import { render } from "preact";
 import { act } from "preact/test-utils";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { LIVE_ROOM_PROTOCOL, liveRoomClientMessageSchema } from "../../assets/shared/schemas/live-session-room";
-import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
-import { SessionQuestions } from "../../assets/ts/live-session/SessionQuestions";
 import {
-  fakeLiveSockets,
   LIVE_OCCURRENCE,
   LIVE_POLL,
   LIVE_QUESTION,
@@ -15,48 +11,7 @@ import {
   liveQuestion,
   liveSnapshot,
 } from "./helpers/live-room-socket";
-
-const hosts: HTMLElement[] = [];
-
-function mount(window = { startOffsetMinutes: -10, durationMinutes: 60 }) {
-  const live = fakeLiveSockets();
-  const host = document.createElement("div");
-  document.body.append(host);
-  hosts.push(host);
-  const startAt = new Date(Date.now() + window.startOffsetMinutes * 60_000).toISOString();
-  const endAt = new Date(Date.parse(startAt) + window.durationMinutes * 60_000).toISOString();
-  void act(() => {
-    render(
-      <>
-        <SessionQuestions
-          slug="pqc-2026"
-          occurrenceId={LIVE_OCCURRENCE}
-          startAt={startAt}
-          endAt={endAt}
-          createSocket={live.factory}
-        />
-        <ConfirmDialogHost />
-      </>,
-      host,
-    );
-  });
-  return { host, live };
-}
-
-function connect(live: ReturnType<typeof fakeLiveSockets>, snapshot = liveSnapshot()) {
-  void act(() => {
-    live.latest().open();
-    live.latest().deliver(snapshot);
-  });
-}
-
-function button(host: HTMLElement, name: string) {
-  const found = [...host.querySelectorAll("button")].find(
-    (candidate) => candidate.getAttribute("aria-label") === name || candidate.textContent?.trim() === name,
-  );
-  if (!found) throw new Error(`No button named ${name}`);
-  return found;
-}
+import { button, connect, mount, openAsk } from "./helpers/session-questions";
 
 function radio(host: HTMLElement, name: string) {
   const found = [...host.querySelectorAll<HTMLInputElement>("input[type=radio]")].find(
@@ -66,18 +21,11 @@ function radio(host: HTMLElement, name: string) {
   return found;
 }
 
-afterEach(() => {
-  for (const host of hosts.splice(0)) {
-    render(null, host);
-    host.remove();
-  }
-});
-
 describe("session questions", () => {
-  it("stays out of the session details before the room opens", () => {
-    const { host, live } = mount({ startOffsetMinutes: 120, durationMinutes: 30 });
-    expect(host.textContent).toBe("");
-    expect(live.sockets).toHaveLength(0);
+  it("takes questions ahead of the session, and stays out of its details once the room has closed", () => {
+    expect(mount({ startOffsetMinutes: 24 * 60, durationMinutes: 30 }).live.sockets).toHaveLength(1);
+    const after = mount({ startOffsetMinutes: -120, durationMinutes: 30 });
+    expect([after.host.textContent, after.live.sockets.length]).toEqual(["", 0]);
   });
 
   it("joins the session's room over its own subprotocol", () => {
@@ -88,16 +36,21 @@ describe("session questions", () => {
     expect(live.latest().protocols).toEqual([LIVE_ROOM_PROTOCOL]);
   });
 
-  it("asks through the shared contract, optionally anonymous", () => {
+  it("asks through the shared contract, optionally anonymous and for a speaker", () => {
     const { host, live } = mount();
     connect(live);
+    openAsk(host);
     const text = host.querySelector<HTMLTextAreaElement>("textarea[name=text]")!;
     const anonymous = host.querySelector<HTMLInputElement>("input[name=anonymous]")!;
+    const addressee = host.querySelector<HTMLSelectElement>("select[name=addressedTo]")!;
+    expect([...addressee.options].map((option) => option.text)).toEqual(["Anyone", "Sam Speaker"]);
     void act(() => {
       text.value = "Which algorithms should we migrate first?";
       text.dispatchEvent(new Event("input", { bubbles: true }));
       anonymous.checked = true;
       anonymous.dispatchEvent(new Event("input", { bubbles: true }));
+      addressee.value = "user:speaker";
+      addressee.dispatchEvent(new Event("change", { bubbles: true }));
     });
     void act(() => {
       host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
@@ -107,6 +60,7 @@ describe("session questions", () => {
       type: "question.ask",
       text: "Which algorithms should we migrate first?",
       anonymous: true,
+      addressedTo: "user:speaker",
     });
     if (request.type !== "question.ask") throw new Error("Expected question request");
     expect(text.value).toBe(request.text);
@@ -118,13 +72,16 @@ describe("session questions", () => {
     void act(() =>
       live.latest().deliver({ type: "question.accepted", operationId: request.operationId, questionId: LIVE_QUESTION }),
     );
-    expect(text.value).toBe("");
-    expect(text.disabled).toBe(false);
+    expect(host.querySelector("textarea[name=text]")).toBeNull();
+    openAsk(host);
+    expect(host.querySelector<HTMLTextAreaElement>("textarea[name=text]")!.value).toBe("");
+    expect(host.querySelector<HTMLSelectElement>("select[name=addressedTo]")!.value).toBe("");
   });
 
   it("retains a refused draft and ignores acknowledgments for another request", () => {
     const { host, live } = mount();
     connect(live);
+    openAsk(host);
     const text = host.querySelector<HTMLTextAreaElement>("textarea[name=text]")!;
     void act(() => {
       text.value = "Which certificates should we replace first?";
@@ -170,6 +127,8 @@ describe("session questions", () => {
         answers: [],
         canAnswer: true,
         canAccept: false,
+        canVote: true,
+        canModerate: false,
       }),
     );
     const thread = host.querySelector<HTMLElement>('section[aria-label="Answers to this question"]')!;
@@ -213,6 +172,11 @@ describe("session questions", () => {
       createdAt: "2026-10-16T12:00:00.000Z",
       revision: 3,
       acceptance: null,
+      votes: 0,
+      votedByMe: false,
+      removal: null,
+      authorRestriction: null,
+      authorStaff: false,
     };
     void act(() =>
       live.latest().deliver({
@@ -221,6 +185,8 @@ describe("session questions", () => {
         answers: [answer],
         canAnswer: true,
         canAccept: true,
+        canVote: true,
+        canModerate: false,
       }),
     );
     void act(() => button(host, "Accept answer").click());
@@ -239,6 +205,8 @@ describe("session questions", () => {
         answers: [{ ...answer, revision: 4, acceptance: { byName: null, at: "2026-10-16T12:01:00.000Z" } }],
         canAnswer: true,
         canAccept: true,
+        canVote: true,
+        canModerate: false,
       }),
     );
     if (request.type !== "question.answer.accept") throw new Error("Expected acceptance request");
@@ -250,7 +218,7 @@ describe("session questions", () => {
         answerId: answer.id,
       }),
     );
-    expect(host.textContent).toContain("Accepted by the question author");
+    expect(host.textContent).toContain("Accepted answer · by the question author");
     expect(button(host, "Remove acceptance").getAttribute("aria-pressed")).toBe("true");
   });
 
@@ -379,13 +347,13 @@ describe("session questions", () => {
   it("waits for a question the contract accepts and says why on the status line", () => {
     const { host, live } = mount();
     connect(live);
+    openAsk(host);
     void act(() => {
       host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
     expect(live.latest().messages()).toEqual([]);
-    // An empty question is at rest, not an error.
     expect(host.querySelector("[aria-invalid=true]")).toBeNull();
-    expect(button(host, "Ask").disabled).toBe(true);
+    expect(button(host, "Ask question").disabled).toBe(true);
     const text = host.querySelector("textarea")!;
     void act(() => {
       text.value = "ab";
@@ -393,7 +361,7 @@ describe("session questions", () => {
     });
     expect(text.getAttribute("aria-invalid")).toBe("true");
     expect(document.getElementById(text.getAttribute("aria-describedby")!)?.textContent).toContain("a few characters");
-    expect(button(host, "Ask").disabled).toBe(true);
+    expect(button(host, "Ask question").disabled).toBe(true);
   });
 
   it("shows a named asker's photo and capacity beside their question, and none for an anonymous one", () => {
@@ -473,21 +441,13 @@ describe("session questions", () => {
     expect(host.textContent).not.toContain("Bea Attendee");
   });
 
-  it("lets a credited speaker mark an open question answered", () => {
-    const { host, live } = mount();
-    connect(live, liveSnapshot({ viewer: { role: "speaker", name: "Sam Speaker" }, questions: [liveQuestion()] }));
-    void act(() => button(host, "Mark answered").click());
-    expect(live.latest().messages()).toEqual([
-      { type: "question.moderate", questionId: LIVE_QUESTION, expectedRevision: 0, status: "answered" },
-    ]);
-  });
-
-  it("answers the open poll with the form controls, changeably, and shows the results it is allowed to see", () => {
+  it("asks the open poll in a dialog over the questions, takes one final answer and then shows the results", () => {
     const { host, live } = mount();
     connect(live, liveSnapshot({ polls: [livePoll()] }));
-    expect(host.textContent).toContain("Which migration comes first?");
+    // One row above the questions; being asked now, it opens by itself.
+    expect(host.querySelector(".pk-live-question[data-lead]")?.textContent).toContain("Which migration comes first?");
+    expect(host.querySelector("dialog input[type=radio]")).not.toBeNull();
     expect(host.querySelector(".pk-chart__bars")).toBeNull();
-    // Sending nothing is refused by the forms answer rules, on the question, before the room hears of it.
     void act(() => button(host, "Send answer").click());
     expect(host.querySelector("[data-field-error=answer]")?.textContent).toMatch(/required/);
     void act(() => radio(host, "TLS endpoints").click());
@@ -498,15 +458,17 @@ describe("session questions", () => {
         poll: livePoll({ myAnswer: "TLS endpoints", results: livePollResults({ "Root CA": 1, "TLS endpoints": 3 }) }),
       }),
     );
-    expect(radio(host, "TLS endpoints").checked).toBe(true);
-    expect(host.querySelector(".pk-chart__bars")?.textContent).toContain("3 · 75%");
-    void act(() => radio(host, "Root CA").click());
-    void act(() => button(host, "Change answer").click());
-    const votes = live.latest().messages();
-    expect(votes.map((message) => liveRoomClientMessageSchema.parse(message))).toEqual([
-      { type: "poll.vote", pollId: LIVE_POLL, answer: "TLS endpoints" },
-      { type: "poll.vote", pollId: LIVE_POLL, answer: "Root CA" },
-    ]);
+    // Answered: the choices give way to the results, and nothing offers to change the answer.
+    expect(host.querySelector("input[type=radio]")).toBeNull();
+    expect(host.querySelector(".pk-chart__bars")?.textContent).toContain("75% 3");
+    expect(host.querySelector(".pk-live-poll-card__kicker")?.textContent).toBe("Poll · 4 votes");
+    expect([...host.querySelectorAll("button")].some((item) => item.textContent === "Change answer")).toBe(false);
+    expect(
+      live
+        .latest()
+        .messages()
+        .map((message) => liveRoomClientMessageSchema.parse(message)),
+    ).toEqual([{ type: "poll.vote", pollId: LIVE_POLL, answer: "TLS endpoints" }]);
   });
 
   it("marks an answer the room refused on the question, and only there", () => {
@@ -536,9 +498,11 @@ describe("session questions", () => {
     const { host, live } = mount();
     const closed = livePoll({ status: "closed", results: livePollResults({ "Root CA": 2 }) });
     connect(live, liveSnapshot({ polls: [closed] }));
-    expect(host.textContent).toContain("Poll results");
+    expect(host.querySelector(".pk-live-question[data-lead]")?.textContent).toContain("Poll results");
+    expect(host.querySelector("dialog")).toBeNull();
+    void act(() => button(host, "See results").click());
     expect(host.querySelector("input[type=radio]")).toBeNull();
-    expect(host.querySelector(".pk-chart__bars")?.textContent).toContain("2 · 100%");
+    expect(host.querySelector(".pk-chart__bars")?.textContent).toContain("100% 2");
   });
 
   it("keeps the last state read-only while the room reconnects", () => {

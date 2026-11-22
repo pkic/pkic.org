@@ -8,6 +8,13 @@ import { validateRasterImage } from "../utils/image-format";
 const IMPORTED_PORTRAIT_MAX_BYTES = 10 * 1024 * 1024;
 const IMPORTED_PORTRAIT_LIMITS = { maxDimension: 8192, maxPixels: 32_000_000 };
 
+/**
+ * The one policy a served image may keep on a sensitive response: nothing
+ * loads, nothing runs, and opening it directly is sandboxed. The API
+ * middleware keeps a route's policy only when it is exactly this one.
+ */
+export const SANDBOXED_IMAGE_CONTENT_SECURITY_POLICY = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+
 export const PUBLIC_IMAGE_CACHE_CONTROL = "public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600";
 
 function storedImageContentType(key: string): string {
@@ -30,7 +37,7 @@ export async function storedImageResponse(
     headers: {
       "Content-Type": storedImageContentType(key),
       "Cache-Control": options.cacheControl,
-      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+      "Content-Security-Policy": SANDBOXED_IMAGE_CONTENT_SECURITY_POLICY,
       "X-Content-Type-Options": "nosniff",
     },
   });
@@ -42,7 +49,7 @@ export function rasterImageResponse(bytes: ArrayBuffer, contentType: string, cac
     headers: {
       "Content-Type": contentType,
       "Cache-Control": cacheControl,
-      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+      "Content-Security-Policy": SANDBOXED_IMAGE_CONTENT_SECURITY_POLICY,
       "X-Content-Type-Options": "nosniff",
     },
   });

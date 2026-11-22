@@ -9,6 +9,12 @@ import type { ApiErrorPayload } from "../../../shared/schemas/api-common";
 import { PERMISSION_DENIED_WITH_REFRESH_MESSAGE } from "../../../shared/auth-errors";
 import type { MyProfile, PortalSession } from "./types";
 import { personDisplayName } from "../../../shared/person-display";
+import {
+  listPreparedScannerContexts,
+  scannerCaptureActive,
+  scannerCollectorPath,
+  scannerTransportUnavailable,
+} from "./sections/events/detail/scanner/scanner-offline-context";
 
 export type AuthStatus = "loading" | "authenticated" | "anonymous";
 
@@ -131,9 +137,23 @@ function restoreReturnPath(): void {
  * — since recording the path is a plain sessionStorage write and clearAuth
  * only resets signals to values they may already hold.
  */
-export function expirePortalSession(): void {
+export function expirePortalSession(status?: number): void {
   recordReturnPath();
+  const scannerRoute = typeof window === "undefined" ? null : scannerCollectorPath(window.location.hash);
+  const keepActiveScanner = Boolean(scannerRoute && scannerCaptureActive.value);
+  if (!scannerRoute || (status === 401 && !keepActiveScanner)) scannerTransportUnavailable.value = false;
+  else if (keepActiveScanner) scannerTransportUnavailable.value = true;
   clearAuth();
+  if (status === 401 && !keepActiveScanner) return;
+  if (scannerRoute)
+    void listPreparedScannerContexts()
+      .then((contexts) => {
+        if (!portalSession.value)
+          scannerTransportUnavailable.value = contexts.some((context) => context.route === scannerRoute);
+      })
+      .catch(() => {
+        if (!portalSession.value) scannerTransportUnavailable.value = false;
+      });
 }
 
 /** Rewrites SCOPE_REQUIRED errors so the portal never surfaces internal scope names. */

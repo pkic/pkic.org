@@ -12,11 +12,12 @@ import {
   type LiveTopQuestionsConfig,
 } from "../../../../../../../shared/schemas/live-session-on-screen";
 import { useContractForm, type ContractForm, type FieldPresentation } from "../../../../../../hooks/useContractForm";
+import { Alert } from "../../../../../../ui/Alert";
 import { Dialog } from "../../../../../../ui/Dialog";
 import { Field } from "../../../../../../ui/Field";
 import { Select } from "../../../../../../ui/TextControl";
 import { LiveGraphicRow } from "./LiveGraphicRow";
-import { LiveLayerTargets } from "./LiveLayerTargets";
+import { LIVE_SETTINGS_NOT_SENT, useLiveGraphicSettings } from "./live-graphic-settings";
 import type { LiveLayer, LiveTargets } from "./live-output-targets";
 
 const range = ({ min, max }: { min: number; max: number }) =>
@@ -31,13 +32,15 @@ function delayLabel(seconds: number): string {
 /**
  * An audience list's row: its settings, and where it goes. The room fills
  * the list from what its moderation lets the audience see and keeps it
- * current, so the operator chooses only how it shows.
+ * current, so the operator chooses only how it shows. The row follows the
+ * list an output shows, and saving its settings changes it there.
  */
 function AudienceListRow<Config extends { count: number }>({
   targets,
   name,
   subject,
   schema,
+  shown,
   initial,
   detail,
   layer,
@@ -47,29 +50,33 @@ function AudienceListRow<Config extends { count: number }>({
   name: string;
   subject: string;
   schema: z.ZodType<Config>;
+  /** The settings Preview shows the list with, else Program; null while it is off both. */
+  shown: Config | null;
   initial: Config;
   detail: (config: Config) => string;
   layer: (config: Config) => LiveLayer;
   fields: (draft: Config, change: (patch: Partial<Config>) => void, form: ContractForm<Config>) => ComponentChildren;
 }) {
-  const [config, setConfig] = useState(initial);
+  const { settings: config, save } = useLiveGraphicSettings(targets, shown, initial, layer);
   const [draft, setDraft] = useState(config);
   const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const form = useContractForm(schema, draft);
   return (
     <LiveGraphicRow
       name={name}
       detail={detail(config)}
+      outputs={{ targets, subject, layer: layer(config) }}
       settings={{
         label: `${name} settings`,
         disabled: targets.disabled,
         onOpen: () => {
           setDraft(config);
+          setError(null);
           setOpen(true);
         },
       }}
     >
-      <LiveLayerTargets targets={targets} subject={subject} layer={layer(config)} />
       {open && (
         <Dialog
           open
@@ -77,15 +84,15 @@ function AudienceListRow<Config extends { count: number }>({
           confirmLabel="Save"
           onConfirm={() => {
             const checked = form.submit();
-            if (checked.data) {
-              setConfig(checked.data);
-              setOpen(false);
-            }
+            if (!checked.data) return;
+            if (!save(checked.data)) return setError(LIVE_SETTINGS_NOT_SENT);
+            setOpen(false);
           }}
           onCancel={() => setOpen(false)}
         >
           <form noValidate {...form.handlers} class="pk-stack" onSubmit={(event) => event.preventDefault()}>
             {fields(draft, (patch) => setDraft((previous) => ({ ...previous, ...patch })), form)}
+            {error ? <Alert tone="danger">{error}</Alert> : null}
           </form>
         </Dialog>
       )}
@@ -139,7 +146,8 @@ export function LiveTopQuestionsControls({ targets }: { targets: LiveTargets }) 
       name="Top questions"
       subject="top questions"
       schema={liveTopQuestionsConfigSchema}
-      initial={shown?.config ?? DEFAULT_LIVE_TOP_QUESTIONS_CONFIG}
+      shown={shown?.config ?? null}
+      initial={DEFAULT_LIVE_TOP_QUESTIONS_CONFIG}
       detail={({ count }) => `${formatNumber(count)} open, most votes first`}
       layer={(config) => ({ kind: "topQuestions", config })}
       fields={(draft, change, form) => (
@@ -164,7 +172,8 @@ export function LiveChatFeedControls({ targets }: { targets: LiveTargets }) {
       name="Chat"
       subject="chat"
       schema={liveChatFeedConfigSchema}
-      initial={shown?.config ?? DEFAULT_LIVE_CHAT_FEED_CONFIG}
+      shown={shown?.config ?? null}
+      initial={DEFAULT_LIVE_CHAT_FEED_CONFIG}
       detail={({ count, delaySeconds }) =>
         `Latest ${formatNumber(count)} messages · ${delaySeconds ? `${delayLabel(delaySeconds)} delay` : "no delay"}`
       }
@@ -200,8 +209,10 @@ export function LiveChatFeedControls({ targets }: { targets: LiveTargets }) {
 /** Viewers' reactions floating up over an output; nothing to set, only where they show. */
 export function LiveReactionsControls({ targets }: { targets: LiveTargets }) {
   return (
-    <LiveGraphicRow name="Reactions" detail="Viewer reactions float up the side">
-      <LiveLayerTargets targets={targets} subject="reactions" layer={{ kind: "reactions" }} />
-    </LiveGraphicRow>
+    <LiveGraphicRow
+      name="Reactions"
+      detail="Viewer reactions float up the side"
+      outputs={{ targets, subject: "reactions", layer: { kind: "reactions" } }}
+    />
   );
 }

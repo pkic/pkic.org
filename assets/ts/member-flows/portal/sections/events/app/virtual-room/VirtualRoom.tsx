@@ -4,20 +4,20 @@ import {
   ONLINE_JOIN_LEAD_MS,
 } from "../../../../../../../shared/event-agenda-media";
 /**
- * The event app's virtual room: one location's live stream, large, with what is on now and next, the
- * session's questions and the event's sponsors beside it (below it on a phone, under a player that stays in
- * view). The viewer switches location by its tab; each location has its own address.
+ * The event app's virtual room: one location's live stream with the running session and the event's
+ * sponsors, the session's questions, polls and chat, and what is on next. `VirtualRoomFrame` lays it out for
+ * a desktop and for a phone. The viewer switches location in place; each location has its own address.
  *
  * Streams come from the attendee endpoint, which releases them only to registered attendees and staff; the
  * running session comes from the published agenda compared with the browser clock at session boundaries.
  */
+import type { ComponentChildren } from "preact";
 import { useCallback, useEffect, useMemo, useRef } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import { agendaTimeZones } from "../../../../../../../shared/agenda-time-display";
 import { eventVirtualRoomRoute } from "../../../../../../../shared/event-participation-link";
 import { formatDateTimeWithSchedule, formatTimeRangeInZone } from "../../../../../../../shared/format-date";
 import { locationStreamOn, virtualRoomResponseSchema } from "../../../../../../../shared/schemas/event-live-stream";
-import { personalAgendaProgramResponseSchema } from "../../../../../../../shared/schemas/event-personal-agenda";
 import { instantToCalendarDate, viewerTimeZone } from "../../../../../../../shared/timezone";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import { Spinner } from "../../../../../../components/Spinner";
@@ -26,12 +26,17 @@ import { useData } from "../../../../../../hooks/useData";
 import { getJson } from "../../../../../../shared/api-client";
 import { Alert } from "../../../../../../ui/Alert";
 import { EmptyState } from "../../../../../../ui/EmptyState";
-import { Tabs } from "../../../../../../ui/Tabs";
+import { useHashQueryParam } from "../../../../../../hooks/useHashQueryParam";
+import { useMediaQuery } from "../../../../../../hooks/useMediaQuery";
 import { useSponsorDisplay } from "../../../../../sponsors-wall-data";
 import { usePortalHashLocation } from "../../../../hash-location";
-import { VirtualRoomPanels } from "./VirtualRoomPanels";
+import { useAgendaProgram, type AgendaProgram } from "../../detail/participation/useAgendaProgram";
+import { ROOM_PANELS, ROOM_WIDE_QUERY, VirtualRoomFrame, type RoomPanelId } from "./VirtualRoomFrame";
+import { VirtualRoomChat, VirtualRoomQuestions, VirtualRoomReactions, useRoomLive } from "./VirtualRoomPanels";
+import { useLocationChat } from "../../../../../../live-session/useLocationChat";
+import { VirtualRoomPartners } from "./VirtualRoomPartners";
+import { VirtualRoomSponsors } from "./VirtualRoomSponsors";
 import { VirtualRoomNowPlaying, VirtualRoomPlayer } from "./VirtualRoomPlayer";
-import { SessionReactions } from "../../../../../../live-session/SessionReactions";
 import {
   chooseLocation,
   locationSessions,
@@ -45,13 +50,34 @@ import "./VirtualRoom.css";
 function useVirtualRoomData(slug: string) {
   const base = `/api/v1/events/${encodeURIComponent(slug)}/agenda`;
   const streams = useData(() => getJson(`${base}/streams`, virtualRoomResponseSchema), [slug]);
-  const program = useData(() => getJson(`${base}/participation/program`, personalAgendaProgramResponseSchema), [slug]);
-  return { streams, program };
+  return { streams, program: useAgendaProgram(slug) };
 }
 
-export function VirtualRoom({ slug, eventName }: { slug: string; eventName: string }) {
-  const [location] = useHashLocation();
+export function VirtualRoom({
+  slug,
+  away = false,
+  agenda: agendaView,
+}: {
+  slug: string;
+  /**
+   * The attendee is on another page of the event: the room stays connected, so coming back shows it at once,
+   * with no stream playing and the address it had when they left.
+   */
+  away?: boolean;
+  /**
+   * The event's own agenda, under the stream on a desktop and on a phone's Agenda tab. It takes the program
+   * the room has read already, so showing it asks the server for nothing.
+   */
+  agenda: (program: AgendaProgram) => ComponentChildren;
+}) {
+  const [current, navigate] = useHashLocation();
+  const shown = useRef(current);
+  if (!away) shown.current = current;
+  const location = shown.current;
+  const wide = useMediaQuery(ROOM_WIDE_QUERY);
   const query = new URLSearchParams(location.split("?", 2)[1] ?? "");
+  // Back from another page of the event, the room opens on the location the attendee left.
+  const lastRoom = useRef<string | null>(null);
   const { streams, program } = useVirtualRoomData(slug);
   const sponsors = useSponsorDisplay("/api/v1", { eventSlug: slug });
   const agenda = program.data?.agenda ?? null;
@@ -67,16 +93,29 @@ export function VirtualRoom({ slug, eventName }: { slug: string; eventName: stri
               (session) => session.roomId === room.id && agendaOccurrenceMedia(agenda.rooms, session).liveStreaming,
             )),
       )
-      .map((room) => ({ id: room.id, name: room.name, stream: null, days: [] }));
+      .map((room) => ({ id: room.id, name: room.name, stream: null, days: [], loadedOccurrenceId: null }));
     return [...configured, ...waiting];
   }, [streams.data, agenda]);
-  const roomId = chooseLocation(locations, agenda, { room: query.get("room"), session: query.get("session") });
+  const roomId = chooseLocation(locations, agenda, {
+    room: query.get("room") ?? lastRoom.current,
+    session: query.get("session"),
+  });
+  lastRoom.current = roomId;
   const room = locations.find((candidate) => candidate.id === roomId) ?? null;
   const timeZone = streams.data?.timeZone ?? agenda?.timeZone ?? "UTC";
   const sessions = useMemo(() => (agenda && roomId ? locationSessions(agenda, roomId) : []), [agenda, roomId]);
   const now = useBoundaryClock(
     useCallback((at: number) => nextRoomBoundary(sessions, at, timeZone), [sessions, timeZone]),
   );
+  // A phone opens where attendees take part: the questions and polls of the session on or next, which take
+  // questions ahead of time. Only with no session left does it open on the agenda.
+  const viewerZone = agendaTimeZones(timeZone, viewerTimeZone(), "remote").primary.zone;
+  // The room follows the session loaded in the studio, which may run over or start early; it says what it is on.
+  const live = useRoomLive(slug, roomMoment(sessions, now), sessions, room?.loadedOccurrenceId ?? null, viewerZone);
+  const chat = useLocationChat({ slug, roomId: room?.id ?? "" });
+  const moment = live.moment;
+  const defaultPanel: RoomPanelId = live.session ? "questions" : "agenda";
+  const [panel, setPanel] = useHashQueryParam("roomPanel", defaultPanel, ROOM_PANELS);
   const startsAt = sessions[0]?.startAt;
   const waiting = Boolean(startsAt && now < Date.parse(startsAt) - ONLINE_JOIN_LEAD_MS);
   const previousCountdown = useRef({ roomId, waiting });
@@ -96,62 +135,75 @@ export function VirtualRoom({ slug, eventName }: { slug: string; eventName: stri
       />
     );
   const stream = locationStreamOn(room, instantToCalendarDate(new Date(now).toISOString(), timeZone));
-  const moment = roomMoment(sessions, now);
-  const viewerZone = agendaTimeZones(timeZone, viewerTimeZone(), "remote").primary.zone;
   const formatTime = (startAt: string, endAt: string) => formatTimeRangeInZone(startAt, endAt, viewerZone);
   const requested = requestedSessionNotice(agenda, query.get("session"), now);
+  const href = usePortalHashLocation.hrefs;
+  const onAir = Boolean(moment.current && stream && !waiting);
   return (
-    <div class="pk-virtual-room">
-      {requested && (
-        <Alert
-          title={
-            requested.state === "ended"
-              ? `${requested.session.title} has ended`
-              : `${requested.session.title} starts ${formatDateTimeWithSchedule(requested.session.startAt, timeZone)}`
-          }
-        >
-          {requested.state === "ended"
-            ? `Below is what is on in ${room.name} now.`
-            : `Until then, below is what is on in ${room.name}.`}
-        </Alert>
-      )}
-      {locations.length > 1 && (
-        <Tabs
-          class="pk-virtual-room__locations"
-          label="Locations"
-          activeId={room.id}
-          items={locations.map((candidate) => ({
-            id: candidate.id,
-            label: candidate.name,
-            href: usePortalHashLocation.hrefs(eventVirtualRoomRoute(slug, { room: candidate.id })),
-          }))}
-        />
-      )}
-      <div class="pk-virtual-room__stage">
-        <VirtualRoomPlayer
-          stream={waiting ? null : stream}
-          locationName={room.name}
-          startsAt={waiting ? startsAt : undefined}
-        />
-        {moment.current && stream && !waiting ? (
-          <SessionReactions
-            key={moment.current.id}
-            slug={slug}
-            occurrenceId={moment.current.id}
-            startAt={moment.current.startAt}
-            endAt={moment.current.endAt}
-          />
-        ) : null}
-        <VirtualRoomNowPlaying slug={slug} moment={moment} stream={stream} formatTime={formatTime} />
-      </div>
+    <>
       {program.error && <ErrorAlert error={program.error} />}
-      <VirtualRoomPanels
-        slug={slug}
-        eventName={eventName}
-        moment={moment}
-        sponsors={sponsors.display}
-        formatTime={formatTime}
+      <VirtualRoomFrame
+        wide={wide}
+        notice={
+          requested && (
+            <Alert
+              title={
+                requested.state === "ended"
+                  ? `${requested.session.title} has ended`
+                  : `${requested.session.title} starts ${formatDateTimeWithSchedule(requested.session.startAt, timeZone)}`
+              }
+            >
+              {requested.state === "ended"
+                ? `Below is what is on in ${room.name} now.`
+                : `Until then, below is what is on in ${room.name}.`}
+            </Alert>
+          )
+        }
+        locations={locations.map((candidate) => ({
+          id: candidate.id,
+          name: candidate.name,
+          href: href(eventVirtualRoomRoute(slug, { room: candidate.id })),
+        }))}
+        locationId={room.id}
+        onLocation={(id) => navigate(eventVirtualRoomRoute(slug, { room: id }))}
+        player={
+          away ? null : (
+            <VirtualRoomPlayer
+              stream={waiting ? null : stream}
+              locationName={room.name}
+              startsAt={waiting ? startsAt : undefined}
+            />
+          )
+        }
+        now={(picker) => (
+          <VirtualRoomNowPlaying
+            slug={slug}
+            moment={moment}
+            formatTime={formatTime}
+            organizations={agenda?.speakerOrganizations}
+            location={picker}
+            reactions={onAir ? <VirtualRoomReactions live={live} compact={!wide} /> : null}
+          />
+        )}
+        sponsors={<VirtualRoomSponsors sponsors={sponsors.display} />}
+        partners={<VirtualRoomPartners partners={streams.data?.productionPartners ?? []} />}
+        questions={(askIn) => <VirtualRoomQuestions live={live} askIn={askIn} />}
+        chat={<VirtualRoomChat chat={chat} zone={viewerZone} />}
+        agenda={agendaView(program)}
+        eventHref={href(`/events/${encodeURIComponent(slug)}`)}
+        panel={panel}
+        panelHref={(id) => href(panelRoute(location, id, defaultPanel))}
+        onPanel={setPanel}
       />
-    </div>
+    </>
   );
+}
+
+/** The open page's address with another room panel chosen; the panel a room opens on stays out of it. */
+function panelRoute(location: string, panel: RoomPanelId, defaultPanel: RoomPanelId): string {
+  const [path, search = ""] = location.split("?", 2);
+  const query = new URLSearchParams(search);
+  if (panel === defaultPanel) query.delete("roomPanel");
+  else query.set("roomPanel", panel);
+  return query.size ? `${path}?${query}` : path!;
 }

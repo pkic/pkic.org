@@ -75,6 +75,11 @@ export function useWindowedList<Item>(
     measure,
     start,
     rows: items.slice(start, end),
+    /** Where a row starts in the list, measured or estimated; null when the list does not hold it. */
+    offsetOf: (id: string): number | null => {
+      const index = items.findIndex((item) => key(item) === id);
+      return index < 0 ? null : offsets[index];
+    },
     /** The space the rows before and after the window would take. */
     before: offsets[start],
     after: offsets[items.length] - offsets[end],

@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
-import { memberJoinStartSchema } from "../../assets/shared/schemas/member-join";
+import { userSignUpRequestSchema } from "../../assets/shared/schemas/user-auth";
+import { acceptAccountPolicies } from "./helpers/sign-in-card";
 
 test("maintenance refusal preserves a public form and recovery never replays it", async ({ page }) => {
   let paused = false;
@@ -23,9 +24,9 @@ test("maintenance refusal preserves a public form and recovery never replays it"
       },
     }),
   );
-  await page.route("**/api/v1/members/join/start", async (route) => {
+  await page.route("**/api/v1/auth/sign-up", async (route) => {
     attempts++;
-    memberJoinStartSchema.parse(route.request().postDataJSON());
+    userSignUpRequestSchema.parse(route.request().postDataJSON());
     if (paused)
       await route.fulfill({
         status: 503,
@@ -34,9 +35,11 @@ test("maintenance refusal preserves a public form and recovery never replays it"
     else await route.continue();
   });
   await page.goto("/join/");
+  await page.getByRole("button", { name: "Start your application", exact: true }).click();
   const email = page.getByLabel(EMAIL_FIRST_COPY.join.work.label);
   const address = `maintenance-${Date.now()}@organization.test`;
   await email.fill(address);
+  await acceptAccountPolicies(page);
   paused = true;
   await page.getByRole("button", { name: EMAIL_FIRST_COPY.join.work.action, exact: true }).click();
   await expect(page.getByText("Maintenance in progress", { exact: true })).toBeVisible();

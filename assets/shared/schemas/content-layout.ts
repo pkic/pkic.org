@@ -94,6 +94,8 @@ export const contentContainerSchema = z
   });
 export type ContentContainer = z.infer<typeof contentContainerSchema>;
 export type ContentContainerName = ContentContainer["type"];
+export type ContentButtonVariant = z.infer<typeof contentButtonVariantSchema>;
+export type ContentCardVariant = z.infer<typeof contentCardVariantSchema>;
 export const contentAttributeNames = Object.keys(contentContainerSchema.shape).filter(
   (key) => key !== "type" && key !== "markdown",
 ) as Array<Exclude<keyof ContentContainer, "type" | "markdown">>;

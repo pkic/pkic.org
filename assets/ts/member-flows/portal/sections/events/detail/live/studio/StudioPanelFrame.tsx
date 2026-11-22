@@ -124,7 +124,11 @@ export function StudioPanelFrame({
       data-presence-panel={panel.type}
     >
       <Panel class="pk-studio-panel" aria-label={title}>
-        <header class="pk-studio-panel__header" title="Drag to move" {...dragHandle}>
+        <header
+          class="pk-studio-panel__header"
+          title={"Drag to move this panel\nIts ⋯ menu moves and resizes it step by step."}
+          {...dragHandle}
+        >
           <span class="pk-studio-panel__grip" aria-hidden="true" />
           {heading ?? (
             <SectionHeading level={3} class="pk-studio-panel__title">
@@ -132,9 +136,18 @@ export function StudioPanelFrame({
             </SectionHeading>
           )}
           <span class="pk-studio-panel__actions">
-            <Menu label={`${title} panel`} align="end" items={items} />
             {actions}
-            <CloseButton label={`Close ${title}`} onClick={() => change((all) => closeStudioPanel(all, panel.id))} />
+            <Menu
+              label={`${title} panel`}
+              title={`${title} panel\nMove or resize this panel. A panel's own settings are here too.`}
+              align="end"
+              items={items}
+            />
+            <CloseButton
+              label={`Close ${title}`}
+              hint="Take this panel off the workspace. Nothing on air changes, and Add panel brings it back."
+              onClick={() => change((all) => closeStudioPanel(all, panel.id))}
+            />
           </span>
         </header>
         <div ref={body} class="pk-studio-panel__body pk-scroll-edges">
@@ -145,7 +158,7 @@ export function StudioPanelFrame({
         type="button"
         class="pk-studio-cell__resize"
         aria-label={`Resize ${title}`}
-        title="Drag to resize. Arrow keys resize too."
+        title={`Resize ${title}\nDrag this corner, or use the arrow keys.`}
         onKeyDown={(event) => {
           const step = RESIZE_KEYS[event.key];
           if (!step) return;

@@ -1,9 +1,16 @@
+import { scannerContextCurrent } from "./scanner-offline-context";
+import type { ScannerOfflineContext } from "../../../../../../../shared/schemas/event-scanner-offline-context";
+import { decryptBadgeCollectionName } from "../../../../../../../shared/badge-collection-name";
 import { sha256Hex } from "../../../../../../../shared/sha256";
 import { readActiveUserSession } from "../../../../../../shared/pending-user-logout";
 import type { NativeEventCaptureContext } from "../../../../../../../shared/schemas/event-attendance-capture";
 import { scannerUploadSuspended } from "../../../../../../shared/pending-user-logout";
 import { cachedManifestSchema, sameSnapshotScope, snapshotCurrent, type CachedManifest } from "./eligibility-snapshot";
-import { eligibilityRefreshError, eligibilityRefreshRefused } from "./eligibility-refresh-error";
+import {
+  EligibilityRefreshFailure,
+  eligibilityPreparationStopped,
+  eligibilityRefreshError,
+} from "./eligibility-refresh-error";
 import { downloadEligibilitySnapshot } from "./eligibility-download";
 import type {
   EventScanRequest,
@@ -11,8 +18,11 @@ import type {
 } from "../../../../../../../shared/schemas/event-participation-scanning";
 
 export type LocalEligibility = Pick<EventScanResponse, "outcome" | "reason"> & { message: string; userId?: string };
+const containsBadgeNameResponse = (snapshot: CachedManifest) =>
+  snapshot.badgeNamesPrepared !== undefined || snapshot.badgeNamesUnavailable !== undefined;
 export interface EligibilityManifest {
   refreshError?: string;
+  retryAfterMs?: number;
   storageError?: string;
   enrollment?: Pick<CachedManifest, "eventId" | "deviceId" | "epochId" | "writtenAt">;
   operatorUserId: string;
@@ -23,7 +33,10 @@ export interface EligibilityManifest {
   privateAccessRequired?: boolean;
   serverNow: string;
   expiresAt: string;
+  badgeNamesPrepared?: boolean;
+  badgeNamesUnavailable?: number;
   validUntil: number;
+  lookupName?(credential: string): Promise<string | null>;
   lookup(credential: string, action?: EventScanRequest["action"]): Promise<LocalEligibility>;
 }
 function database(): Promise<IDBDatabase> {
@@ -127,7 +140,29 @@ export function buildEligibilityManifest(raw: unknown): EligibilityManifest {
     privateAccessRequired: snapshot.session?.visibility === "private",
     serverNow: snapshot.serverNow,
     expiresAt: snapshot.expiresAt,
+    get badgeNamesPrepared() {
+      return snapshot.badgeNamesPrepared === undefined
+        ? undefined
+        : snapshot.badgeNamesPrepared && snapshot.complete && observeTime(Date.now());
+    },
+    badgeNamesUnavailable: snapshot.badgeNamesUnavailable,
     validUntil: snapshot.validUntil,
+    async lookupName(credential) {
+      if (!observeTime(Date.now())) return null;
+      const hash = await sha256Hex(credential);
+      const entry = entries.get(hash);
+      if (!entry?.encryptedName || entry.revoked || !observeTime(Date.now())) return null;
+      try {
+        const name = await decryptBadgeCollectionName(
+          credential,
+          { eventId: snapshot.eventId, badgeId: entry.badgeId, credentialHash: entry.credentialHash },
+          entry.encryptedName,
+        );
+        return observeTime(Date.now()) ? name : null;
+      } catch {
+        return null;
+      }
+    },
     async lookup(credential, action = "check") {
       const startedAt = Date.now();
       const currentBeforeHash = observeTime(startedAt);
@@ -135,7 +170,10 @@ export function buildEligibilityManifest(raw: unknown): EligibilityManifest {
       const checkedAt = Date.now();
       const clockConsistent = checkedAt >= startedAt;
       const currentAfterHash = observeTime(checkedAt);
-      const current = currentBeforeHash && clockConsistent && currentAfterHash;
+      const eligibilityCurrent =
+        !snapshot.eligibilityExpiresAt ||
+        Date.parse(snapshot.serverNow) + (checkedAt - snapshot.writtenAt) < Date.parse(snapshot.eligibilityExpiresAt);
+      const current = currentBeforeHash && clockConsistent && currentAfterHash && eligibilityCurrent;
       const entry = entries.get(hash);
       const badgeExpiresAt = entry?.expiresAt ? Date.parse(entry.expiresAt) : null;
       // Only the server snapshot can establish that a credential was already expired.
@@ -236,28 +274,47 @@ export async function prepareEligibilityManifest(
   roomId: string | null = null,
   source: "refresh" | "cache" = "refresh",
   onProgress?: (checkedBadges: number) => void,
+  includeBadgeNames = false,
 ): Promise<EligibilityManifest> {
   const session = await readActiveUserSession();
   const sessionId = session?.sessionId;
   if (await scannerUploadSuspended(operatorUserId, sessionId)) throw new Error("SCANNER_SIGNED_OUT");
-  const key = JSON.stringify([operatorUserId, slug, occurrenceId, roomId, enrollment.epochId, enrollment.deviceId]);
+  const scope = [operatorUserId, slug, occurrenceId, roomId, enrollment.epochId, enrollment.deviceId];
+  const key = JSON.stringify(includeBadgeNames ? [...scope, true] : scope);
   let fallback: unknown;
   try {
     // Retain IDs for qualified feedback in this foreground session, then remove expired persisted copies.
     fallback = await cached(key);
+    const preferred = cachedManifestSchema.safeParse(fallback);
+    if (
+      !preferred.success ||
+      !snapshotCurrent(preferred.data) ||
+      (includeBadgeNames && (!preferred.data.complete || !containsBadgeNameResponse(preferred.data)))
+    ) {
+      const alternate = cachedManifestSchema.safeParse(
+        await cached(JSON.stringify(includeBadgeNames ? scope : [...scope, true])),
+      );
+      if (alternate.success && alternate.data.complete && snapshotCurrent(alternate.data)) fallback = alternate.data;
+    }
     await pruneExpiredEligibilityManifests();
   } catch {
     // An unavailable cache must not prevent an authorized network refresh.
   }
   const restore = (error: unknown = new Error("No matching prepared eligibility snapshot")) => {
     const saved = cachedManifestSchema.safeParse(fallback);
-    if (!saved.success || !sameSnapshotScope(saved.data, { operatorUserId, occurrenceId, roomId, ...enrollment }))
+    if (
+      !saved.success ||
+      (includeBadgeNames && (!saved.data.complete || !snapshotCurrent(saved.data))) ||
+      !sameSnapshotScope(saved.data, { operatorUserId, occurrenceId, roomId, ...enrollment })
+    )
       throw error;
     return buildEligibilityManifest(saved.data);
   };
   if (source === "cache") return restore();
   try {
     const saved = cachedManifestSchema.safeParse(fallback);
+    const reusable =
+      saved.success && saved.data.complete && (!includeBadgeNames || containsBadgeNameResponse(saved.data));
     const downloaded = await downloadEligibilitySnapshot(
       slug,
       operatorUserId,
@@ -265,8 +322,9 @@ export async function prepareEligibilityManifest(
       roomId,
       enrollment,
       signal,
-      saved.success && saved.data.complete ? saved.data : undefined,
+      reusable ? saved.data : undefined,
       onProgress,
+      includeBadgeNames,
     );
     if (await scannerUploadSuspended(operatorUserId, sessionId)) throw new Error("SCANNER_SIGNED_OUT");
     if (signal?.aborted) throw new DOMException("Eligibility preparation canceled", "AbortError");
@@ -274,7 +332,7 @@ export async function prepareEligibilityManifest(
     let storageError: string | undefined;
     try {
       snapshot = cachedManifestSchema.parse(
-        await cached(key, downloaded, saved.success ? saved.data.snapshotId : undefined),
+        await cached(key, downloaded, reusable ? saved.data.snapshotId : undefined),
       );
     } catch {
       storageError =
@@ -284,14 +342,73 @@ export async function prepareEligibilityManifest(
       await clearOperatorEligibilityManifests(operatorUserId);
       throw new Error("SCANNER_SIGNED_OUT");
     }
-    return { ...buildEligibilityManifest(snapshot), ...(storageError ? { storageError } : {}) };
+    return Object.assign(buildEligibilityManifest(snapshot), storageError ? { storageError } : {});
   } catch (error) {
-    if (signal?.aborted || eligibilityRefreshRefused(error)) throw error;
+    if (signal?.aborted) throw error;
     if (await scannerUploadSuspended(operatorUserId, sessionId))
       throw new Error("SCANNER_SIGNED_OUT", { cause: error });
-    return {
-      ...restore(error),
-      refreshError: eligibilityRefreshError(error),
-    };
+    // A device-session close can be resumed with the original scan chain. Event capture closure
+    // and lost enrollment remain final for this cached inventory.
+    if (
+      error instanceof Error &&
+      eligibilityPreparationStopped(error.message) &&
+      error.message !== "SCANNER_PREPARATION_CLOSED" &&
+      error.message !== "SCANNER_PREPARATION_CLOSING"
+    )
+      throw error;
+    return Object.assign(restore(error), {
+      refreshError:
+        error instanceof Error &&
+        (error.message === "SCANNER_PREPARATION_CLOSED" || error.message === "SCANNER_PREPARATION_CLOSING")
+          ? "Scanner session interrupted. Saved badge data remains available; uploads will retry."
+          : eligibilityRefreshError(error),
+      retryAfterMs: error instanceof EligibilityRefreshFailure ? error.retryAfterMs : undefined,
+    });
+  }
+}
+/** Read only this prepared operator/device/target, without granting portal or network access. */
+export async function restoreEligibilityManifest(
+  context: ScannerOfflineContext,
+  includeBadgeNames = false,
+): Promise<EligibilityManifest | null> {
+  const scope = [
+    context.operatorUserId,
+    context.slug,
+    context.occurrenceId,
+    context.roomId,
+    context.epochId,
+    context.deviceId,
+  ];
+  const key = JSON.stringify(includeBadgeNames ? [...scope, true] : scope);
+  try {
+    if (!scannerContextCurrent(context) || (await scannerUploadSuspended(context.operatorUserId, context.sessionId)))
+      return null;
+    let saved = cachedManifestSchema.safeParse(await cached(key));
+    if (
+      !saved.success ||
+      !snapshotCurrent(saved.data) ||
+      (includeBadgeNames && (!saved.data.complete || !containsBadgeNameResponse(saved.data)))
+    ) {
+      const alternate = cachedManifestSchema.safeParse(
+        await cached(JSON.stringify(includeBadgeNames ? scope : [...scope, true])),
+      );
+      if (alternate.success && alternate.data.complete && snapshotCurrent(alternate.data)) saved = alternate;
+    }
+    if (
+      !saved.success ||
+      !snapshotCurrent(saved.data) ||
+      !scannerContextCurrent(context) ||
+      saved.data.eventId !== context.eventId ||
+      saved.data.operatorUserId !== context.operatorUserId ||
+      saved.data.deviceId !== context.deviceId ||
+      saved.data.epochId !== context.epochId ||
+      saved.data.occurrenceId !== context.occurrenceId ||
+      (saved.data.roomId ?? null) !== context.roomId ||
+      (await scannerUploadSuspended(context.operatorUserId, context.sessionId))
+    )
+      return null;
+    return buildEligibilityManifest(saved.data);
+  } catch {
+    return null;
   }
 }

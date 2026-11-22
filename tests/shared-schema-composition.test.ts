@@ -1,6 +1,9 @@
 import {
+  WORK_EMAIL_REPRESENTATION_REQUIRED,
   registrationAttendanceFieldsSchema,
+  registrationContactFieldsSchema,
   withRequiredDayAttendanceChoices,
+  withRequiredOrganizationRepresentation,
 } from "../assets/shared/schemas/registration";
 import { describe, expect, it } from "vitest";
 import {
@@ -351,6 +354,23 @@ describe("explicit attendance choices", () => {
       { dayLabel: "Second day", answered: true },
     ]).parse(payload);
     expect(completed.dayAttendance).toEqual(payload.dayAttendance);
+  });
+});
+
+describe("work address representation", () => {
+  it("refuses the whole step, in the server's words, only while the organization is missing", () => {
+    const contact = { firstName: "Ada", lastName: "Lovelace", email: "ada@example.test" };
+    const missing = withRequiredOrganizationRepresentation(registrationContactFieldsSchema, () => true).safeParse(
+      contact,
+    );
+    expect(missing.success).toBe(false);
+    if (!missing.success)
+      expect(missing.error.issues).toEqual([
+        expect.objectContaining({ path: [], message: WORK_EMAIL_REPRESENTATION_REQUIRED }),
+      ]);
+    expect(withRequiredOrganizationRepresentation(registrationContactFieldsSchema, () => false).parse(contact)).toEqual(
+      contact,
+    );
   });
 });
 

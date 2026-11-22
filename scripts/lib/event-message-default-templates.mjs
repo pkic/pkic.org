@@ -9,52 +9,60 @@ export const DEFAULT_EVENT_MESSAGE_TEMPLATES = [
   {
     key: "msg_attendee_session_favorites",
     subjectTemplate: "Save sessions that interest you — {{eventName}}",
-    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
+    content: `{{> greeting}}
 
-Use the star beside a session to save it to your personal agenda for **{{eventName}}**.
+Building your plan for **{{eventName}}**? Star the sessions that interest you to save them to your agenda.
 
-A favorite records your interest. It does not register you for the session, reserve a place, or grant invitation-only access. Check the session's requirements before attending.
+A star only saves the session for you. It doesn't reserve a place, so check whether a session needs registration before you go.
 
-[Open My agenda]({{baseUrl}}/portal/#/events/{{eventSlug}}/agenda)
+[Open my agenda]({{baseUrl}}/portal/#/events/{{eventSlug}}/agenda)
+
+{{> sponsors_block}}
 `,
     contentType: "markdown",
   },
   {
     key: "msg_attendee_session_reminder",
     subjectTemplate: "Review your session plans — {{eventName}}",
-    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
+    content: `{{> greeting}}
 
-Before attending **{{eventName}}**, review the current times, locations, and access requirements for the sessions you want to join.
+**{{eventName}}** is coming up. Take a moment to check the times, rooms, and requirements of the sessions you want to join.
 
-Your personal agenda shows saved favorites and session registration statuses separately. A favorite alone does not reserve a place. Review the current schedule again if the organizers announce changes.
+Your agenda shows the sessions you starred and those you registered for. A star alone doesn't reserve a place. If we announce schedule changes, check your agenda again.
 
-[Review My agenda]({{baseUrl}}/portal/#/events/{{eventSlug}}/agenda)
+[Review my agenda]({{baseUrl}}/portal/#/events/{{eventSlug}}/agenda)
+
+{{> sponsors_block}}
 `,
     contentType: "markdown",
   },
   {
     key: "msg_attendee_session_reservations",
-    subjectTemplate: "Check session registration requirements — {{eventName}}",
-    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
+    subjectTemplate: "Check which sessions need registration — {{eventName}}",
+    content: `{{> greeting}}
 
-Some sessions at **{{eventName}}** require a reservation or approval. Open each session you want to attend and review its current registration status and access requirements.
+Some sessions at **{{eventName}}** need a registration or an organizer's approval. Open each session you want to join to see its status and what it requires.
 
-Saving a favorite does not make a reservation. This message does not confirm a booking or approval. If your plans change, cancel any session registration you no longer need so its place can become available to someone else.
+Starring a session doesn't register you, and this email doesn't confirm a place. If your plans change, cancel the session registrations you no longer need so someone else can take the place.
 
-[Review session registrations]({{baseUrl}}/portal/#/events/{{eventSlug}}/agenda)
+[Review my session registrations]({{baseUrl}}/portal/#/events/{{eventSlug}}/agenda)
+
+{{> sponsors_block}}
 `,
     contentType: "markdown",
   },
   {
     key: "msg_attendee_session_waitlist",
     subjectTemplate: "Check session availability — {{eventName}}",
-    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
+    content: `{{> greeting}}
 
-If you are waiting for a session place at **{{eventName}}**, open the session in your personal agenda to check its current status and available actions.
+Waiting for a place in a session at **{{eventName}}**? Open it in your agenda to see its status and what you can do.
 
-A waitlist entry is not a confirmed place. This message does not announce that a place is available or that you have been admitted. Follow the session's current instructions, and consider other sessions if it remains full.
+Being on the waitlist doesn't confirm a place, and this email doesn't mean one has opened up. If the session stays full, have a look at other sessions too.
 
-[Check My agenda]({{baseUrl}}/portal/#/events/{{eventSlug}}/agenda)
+[Check my agenda]({{baseUrl}}/portal/#/events/{{eventSlug}}/agenda)
+
+{{> sponsors_block}}
 `,
     contentType: "markdown",
   },

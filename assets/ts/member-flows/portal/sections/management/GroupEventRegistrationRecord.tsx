@@ -39,6 +39,7 @@ import { ProfileHeader } from "../../../../ui/ProfileHeader";
 import { usePortalHashLocation } from "../../hash-location";
 import { fmt } from "../../ui";
 import { RegistrationAuditLogSection } from "../events/detail/registration-detail/RegistrationPanels";
+import { RegistrationTicketPanel } from "../events/detail/registration-detail/RegistrationTicketPanel";
 import { AttendeeParticipationSections } from "../events/detail/registration-detail/AttendeeParticipationSections";
 import { ButtonLink } from "../../../../ui/Button";
 import { portalSession } from "../../state";
@@ -300,6 +301,14 @@ export function GroupEventRegistrationRecord({
                     />
                   </PanelBody>
                 </Panel>
+                {eventSlug && (
+                  <RegistrationTicketPanel
+                    slug={eventSlug}
+                    registrationId={registrationId}
+                    canManage={canVip}
+                    onChanged={onChanged}
+                  />
+                )}
               </div>
             </div>
           }

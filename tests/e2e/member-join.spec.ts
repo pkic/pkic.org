@@ -4,77 +4,73 @@
  * @covers join.1.0.b
  */
 import { EMAIL_FIRST_ADVISORY_COPY, EMAIL_FIRST_COPY, WORK_EMAIL_STEER } from "../../assets/shared/email-first-copy";
-import { openMembershipVerificationLink } from "./helpers/member-join";
-import { expect, test, type Locator } from "@playwright/test";
+import { startJoinInBrowser } from "./helpers/member-join";
+import { acceptAccountPolicies } from "./helpers/sign-in-card";
+import { addMissingName, addRepresentationBio } from "./helpers/person-details";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
 
-test("starts from the work email and steers a personal address to the explicit individual path", async ({ page }) => {
+test("starts from the sign-in card and steers a personal address to the explicit individual path", async ({ page }) => {
   await page.goto("/join/");
 
   await expect(page.getByRole("heading", { name: "Join the PKI Consortium", exact: true })).toHaveCount(1);
   await expect(page.getByRole("heading", { name: "Membership Application", exact: true })).toHaveCount(1);
-
-  await expect(page.getByRole("radio", { name: EMAIL_FIRST_COPY.join.work.title, exact: true })).toBeChecked();
-  const organizationEmail = page.getByLabel(EMAIL_FIRST_COPY.join.work.label);
-  await expect(organizationEmail).toBeVisible();
   await expect(
     page.getByText(/so we can verify the relationship and keep organizational and IPR attribution/),
   ).toBeVisible();
   await expect(page.locator('input[name="applicantKind"]')).toHaveCount(0);
 
+  // Signed out, the shared sign-in card is the first step; a new person starts with their email.
+  const card = page.locator("[data-join-sign-in-card]").getByRole("region", { name: "Sign in", exact: true });
+  await card.getByRole("button", { name: "Start your application", exact: true }).click();
+  await expect(card.getByRole("radio", { name: EMAIL_FIRST_COPY.join.work.title, exact: true })).toBeChecked();
+  const organizationEmail = card.getByLabel(EMAIL_FIRST_COPY.join.work.label);
+  await expect(organizationEmail).toBeVisible();
+
   await organizationEmail.fill("person@gmail.com");
+  await acceptAccountPolicies(card);
   // The steer holds the step: nothing is sent for a personal address on behalf of an organization.
-  await page.getByRole("button", { name: EMAIL_FIRST_COPY.join.work.action, exact: true }).click();
-  await expect(page.getByText(WORK_EMAIL_STEER)).toBeVisible();
-  await expect(page.getByText(EMAIL_FIRST_COPY.join.sentTitle, { exact: true })).toHaveCount(0);
+  await card.getByRole("button", { name: EMAIL_FIRST_COPY.join.work.action, exact: true }).click();
+  await expect(card.getByText(WORK_EMAIL_STEER)).toBeVisible();
+  await expect(card.getByText(EMAIL_FIRST_COPY.join.sentTitle, { exact: true })).toHaveCount(0);
 
-  await page.getByRole("button", { name: EMAIL_FIRST_ADVISORY_COPY.usePersonal, exact: true }).click();
-  await expect(page.getByRole("radio", { name: EMAIL_FIRST_COPY.join.personal.title, exact: true })).toBeChecked();
-  const personalEmail = page.getByLabel(EMAIL_FIRST_COPY.join.personal.label);
-  await expect(personalEmail).toHaveValue("person@gmail.com");
-  await expect(page.getByText(WORK_EMAIL_STEER)).toHaveCount(0);
-  await expect(page.getByText(/H5 — PhD students researching PKI or cryptography/)).toBeVisible();
-  await expect(page.getByText(/H6 — Unaffiliated independent PKI or cryptography consultants/)).toBeVisible();
-  await expect(page.getByText(/H7 — Unaffiliated independent PKI or cryptography researchers/)).toBeVisible();
-  await expect(page.getByText(/A — Certification Authorities and Trust Service Providers/)).toHaveCount(0);
+  await card.getByRole("button", { name: EMAIL_FIRST_ADVISORY_COPY.usePersonal, exact: true }).click();
+  await expect(card.getByRole("radio", { name: EMAIL_FIRST_COPY.join.personal.title, exact: true })).toBeChecked();
+  await expect(card.getByLabel(EMAIL_FIRST_COPY.join.personal.label)).toHaveValue("person@gmail.com");
+  await expect(card.getByText(WORK_EMAIL_STEER)).toHaveCount(0);
 
-  await page.getByRole("radio", { name: EMAIL_FIRST_COPY.join.work.title, exact: true }).check();
-  await expect(page.getByLabel(EMAIL_FIRST_COPY.join.work.label)).toBeVisible();
-  await expect(page.getByText(/H5 — PhD students researching PKI or cryptography/)).toBeHidden();
+  await card.getByRole("radio", { name: EMAIL_FIRST_COPY.join.work.title, exact: true }).check();
+  await expect(card.getByLabel(EMAIL_FIRST_COPY.join.work.label)).toBeVisible();
 });
 
-test("verifies an organization email before submitting the D1-backed membership form", async ({ page }, testInfo) => {
+test("signs in with an organization email before submitting the D1-backed membership form", async ({
+  browser,
+  page,
+}, testInfo) => {
   const unique = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const email = `membership-${unique}@organization-${unique}.test`;
-  const sinceVerification = await capturedEmailCount();
+  const organizationName = `E2E Organization ${unique}`;
 
-  await page.goto("/join/");
-  await page.getByLabel(EMAIL_FIRST_COPY.join.work.label).fill(email);
-  await page.getByRole("button", { name: EMAIL_FIRST_COPY.join.work.action, exact: true }).click();
-  await expect(page.getByText(EMAIL_FIRST_COPY.join.sentTitle, { exact: true })).toBeVisible();
-
-  const verification = await waitForCapturedEmail(email, "Verify your email address", {
-    since: sinceVerification,
-  });
-  await openMembershipVerificationLink(page, extractEmailUrl(verification, "#verify="));
+  // The organization is added at account setup, so the page applies as the identity that represents it.
+  await startJoinInBrowser(page, email, { organization: { name: organizationName } });
 
   await expect(page.getByRole("heading", { name: "Membership Application", exact: true })).toBeVisible();
-  await expect(page.locator("[data-verified-application-email]")).toHaveText(email);
-  await expect(page.locator("[data-verified-application-kind]")).toHaveText("Organization application");
+  // The account's proved address and its organization stand for the applicant; neither is typed again.
+  const applicant = page.locator("[data-join-signed-in]");
+  await expect(applicant).toContainText(email);
+  await expect(applicant).toContainText(organizationName);
   await expect(page.locator("[data-join-application-form] input[type='email']")).toHaveCount(0);
+  await expect(page.getByLabel("Organization name")).toHaveCount(0);
   await expect(page.getByLabel(/H6/)).toHaveCount(0);
   await expect(page.locator("[data-membership-legal-field]").first().getByRole("status")).toHaveText(
     "Agreement required",
   );
+  await addMissingName(page, applicant, { firstName: "Morgan", lastName: "Member" });
+  await addRepresentationBio(page, applicant, "I work on PKI interoperability.");
   await page.getByLabel(/F —/).check();
   // Checking the later agreements must not leave focus below earlier unanswered fields.
   await page.getByRole("button", { name: "Submit membership application", exact: true }).click();
-  await expect(page.getByLabel("First name", { exact: true })).toBeFocused();
-  await page.getByLabel("First name", { exact: true }).fill("Morgan");
-  await page.getByRole("button", { name: "Submit membership application", exact: true }).click();
-  await expect(page.getByLabel("Last name", { exact: true })).toBeFocused();
-  await page.getByLabel("Last name").fill("Member");
-  await page.getByLabel("Organization name").fill(`E2E Organization ${unique}`);
+  await expect(page.getByLabel("About your organization", { exact: false })).toBeFocused();
   await page.locator('[name="custom.reason"]').fill("We want to contribute to the PKI community.");
 
   const legalFields = page.locator("[data-membership-legal-field]");
@@ -94,7 +90,7 @@ test("verifies an organization email before submitting the D1-backed membership 
   // The field's border eases into its state, so compare once it has settled.
   const borderColor = (locator: Locator) => locator.evaluate((element) => getComputedStyle(element).borderTopColor);
   await expect
-    .poll(async () => borderColor(page.getByLabel("About yourself", { exact: false })))
+    .poll(async () => borderColor(page.getByLabel("About your organization", { exact: false })))
     .toBe(await borderColor(firstLegalCard));
   await firstDocument.evaluate((container) => {
     container.scrollTop = container.scrollHeight;
@@ -107,7 +103,7 @@ test("verifies an organization email before submitting the D1-backed membership 
 
   await expect(headerStatus).toHaveText("Agreed");
   expect(await firstLegalCard.evaluate((card) => getComputedStyle(card).borderTopColor)).toBe(
-    await page.getByLabel("First name").evaluate((input) => getComputedStyle(input).borderTopColor),
+    await page.locator('[name="custom.reason"]').evaluate((input) => getComputedStyle(input).borderTopColor),
   );
   for (const width of [1280, 375]) {
     await page.setViewportSize({ width, height: 900 });
@@ -125,23 +121,18 @@ test("verifies an organization email before submitting the D1-backed membership 
   await page.setViewportSize({ width: 1280, height: 900 });
 
   const sinceConfirmation = await capturedEmailCount();
-  await page.locator('[name="custom.job_title"]').fill("Membership contact");
-  await page.getByLabel("About yourself", { exact: false }).fill("I work on PKI interoperability.");
   await page.getByLabel("About your organization", { exact: false }).fill("We build PKI services.");
   await page.reload();
-  await expect(page.getByLabel("First name", { exact: true })).toHaveValue("Morgan");
-  await expect(page.getByLabel("Last name", { exact: true })).toHaveValue("Member");
-  await expect(page.getByLabel("Organization name")).toHaveValue(`E2E Organization ${unique}`);
+  await expect(applicant).toContainText(organizationName);
   await expect(page.getByLabel(/F —/)).toBeChecked();
   await expect(page.locator('[name="custom.reason"]')).toHaveValue("We want to contribute to the PKI community.");
-  await expect(page.getByLabel("About yourself", { exact: false })).toHaveValue("I work on PKI interoperability.");
   await expect(page.getByLabel("About your organization", { exact: false })).toHaveValue("We build PKI services.");
   await expect(page.getByText(/We restored the answers/)).toBeVisible();
   for (const agreement of await page.locator("[data-membership-legal-input]").all())
     await expect(agreement).not.toBeChecked();
   for (const width of [1280, 375]) {
     await page.setViewportSize({ width, height: 900 });
-    await page.getByLabel("First name", { exact: true }).scrollIntoViewIfNeeded();
+    await page.locator('[name="custom.reason"]').scrollIntoViewIfNeeded();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`restored-application-${width}.png`) });
   }
@@ -187,101 +178,95 @@ test("verifies an organization email before submitting the D1-backed membership 
   const confirmation = await waitForCapturedEmail(email, "membership application", { since: sinceConfirmation });
   expect(extractEmailUrl(confirmation, "/application-status/")).toContain("token=");
   expect(await page.evaluate(() => sessionStorage.getItem("pkic.join.verifiedApplication"))).toBeNull();
-  const returnWithVerifiedEmail = async (address: string) => {
-    await page.goto("/join/");
-    const sinceRepeat = await capturedEmailCount();
-    await page.getByLabel(EMAIL_FIRST_COPY.join.work.label).fill(address);
-    await page.getByRole("button", { name: EMAIL_FIRST_COPY.join.work.action, exact: true }).click();
-    const repeat = await waitForCapturedEmail(address, "Verify your email address", { since: sinceRepeat });
-    await openMembershipVerificationLink(page, extractEmailUrl(repeat, "#verify="));
+
+  const showsNoticeInstead = async (on: Page, heading: string, name: string) => {
+    const notice = on.getByRole("heading", { name: heading, exact: true });
+    await expect(notice).toBeVisible();
+    await expect(on.locator("[data-join-application-form]")).toBeHidden();
+    for (const width of [1280, 375]) {
+      await on.setViewportSize({ width, height: 900 });
+      await notice.scrollIntoViewIfNeeded();
+      expect(await on.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await on.screenshot({ path: testInfo.outputPath(`${name}-${width}.png`) });
+    }
   };
-  await returnWithVerifiedEmail(email);
-  await expect(
-    page.getByRole("heading", { name: "Your application is already in progress", exact: true }),
-  ).toBeVisible();
-  await expect(page.locator("[data-join-application-form]")).toBeHidden();
-  for (const width of [1280, 375]) {
-    await page.setViewportSize({ width, height: 900 });
-    await page
-      .getByRole("heading", { name: "Your application is already in progress", exact: true })
-      .scrollIntoViewIfNeeded();
-    await page.screenshot({ path: testInfo.outputPath(`application-in-progress-${width}.png`) });
-  }
+  // Returning, the representation leads to the application already made, not to the form again.
+  await page.goto("/join/");
+  await showsNoticeInstead(page, "Your application is already in progress", "application-in-progress");
   await page.getByRole("link", { name: "Check application status", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Application status", exact: true })).toBeVisible();
-  await returnWithVerifiedEmail(`colleague@${email.split("@")[1]}`);
-  const organizationNotice = page.getByRole("heading", {
-    name: "An application for your organization is already in progress",
-    exact: true,
-  });
-  await expect(organizationNotice).toBeVisible();
-  await expect(page.locator("[data-join-application-form]")).toBeHidden();
-  await expect(page.getByRole("link", { name: "Check application status", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Email the secretariat", exact: true })).toHaveAttribute(
-    "href",
-    "mailto:contact@pkic.org",
-  );
-  for (const width of [1280, 375]) {
-    await page.setViewportSize({ width, height: 900 });
-    await organizationNotice.scrollIntoViewIfNeeded();
-    await page.screenshot({ path: testInfo.outputPath(`organization-application-in-progress-${width}.png`) });
+
+  // A colleague who represents the same organization waits for that application; its approval admits them too.
+  const colleagueContext = await browser.newContext({ baseURL: new URL(page.url()).origin });
+  try {
+    const colleague = await colleagueContext.newPage();
+    await startJoinInBrowser(colleague, `colleague@${email.split("@")[1]}`, {
+      organization: { name: organizationName },
+    });
+    await showsNoticeInstead(
+      colleague,
+      `An application for ${organizationName} is already in progress`,
+      "representation-application-in-progress",
+    );
+    await expect(colleague.getByText(/you are admitted automatically as one of the organization/)).toBeVisible();
+    await expect(colleague.getByRole("link", { name: "Check application status", exact: true })).toHaveCount(0);
+    await expect(colleague.getByRole("link", { name: "Email the secretariat", exact: true })).toHaveAttribute(
+      "href",
+      "mailto:contact@pkic.org",
+    );
+    // The portal says who applied, so the colleague can reach them, and what approval brings.
+    await colleague.setViewportSize({ width: 1280, height: 900 });
+    await colleague.getByRole("link", { name: "Go to the member portal", exact: true }).click();
+    const pending = colleague
+      .locator(".pk-panel")
+      .filter({ has: colleague.getByRole("heading", { name: `Membership application for ${organizationName}` }) });
+    await expect(pending).toBeVisible({ timeout: 30_000 });
+    await expect(pending).toContainText("Morgan Member");
+    await expect(pending.getByRole("link", { name: "Email Morgan Member", exact: true })).toHaveAttribute(
+      "href",
+      `mailto:${email}`,
+    );
+    await expect(colleague.getByRole("link", { name: "Explore membership", exact: true })).toHaveCount(0);
+    for (const width of [1280, 375]) {
+      await colleague.setViewportSize({ width, height: 900 });
+      await pending.scrollIntoViewIfNeeded();
+      expect(await colleague.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await colleague.screenshot({ path: testInfo.outputPath(`portal-organization-application-${width}.png`) });
+    }
+  } finally {
+    await colleagueContext.close();
   }
 });
 
 test("keeps the individual path an explicit policy exception for an institutional email", async ({ page }) => {
   const unique = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const email = `student-${unique}@university-${unique}.test`;
-  const since = await capturedEmailCount();
 
-  await page.goto("/join/");
-  await page.getByRole("radio", { name: EMAIL_FIRST_COPY.join.personal.title, exact: true }).check();
-  await page.getByLabel(EMAIL_FIRST_COPY.join.personal.label).fill(email);
-  await page.getByRole("button", { name: EMAIL_FIRST_COPY.join.personal.action, exact: true }).click();
-
-  const verification = await waitForCapturedEmail(email, "Verify your email address", { since });
-  await openMembershipVerificationLink(page, extractEmailUrl(verification, "#verify="));
+  await startJoinInBrowser(page, email, { individual: true });
   await expect(page.getByRole("heading", { name: "Membership Application", exact: true })).toBeVisible();
   await expect(page.getByLabel(/H5 —/)).toBeVisible();
   await expect(page.getByLabel(/F —/)).toHaveCount(0);
   await expect(page.getByLabel("Organization name")).toBeHidden();
 });
 
-for (const draftState of ["first link", "replacement link", "saved answers"] as const) {
-  test(`describes retained answers accurately after verification fails: ${draftState}`, async ({ page }, testInfo) => {
-    const token = "b".repeat(32);
-    if (draftState !== "first link") {
-      await page.addInitScript(
-        ({ token, replacing }) => {
-          sessionStorage.setItem(
-            "pkic.join.verifiedApplication",
-            JSON.stringify({
-              token: replacing ? "a".repeat(32) : token,
-              values: { firstName: "Morgan" },
-              checked: [],
-              answers: {},
-            }),
-          );
-        },
-        { token, replacing: draftState === "replacement link" },
-      );
-    }
-    await page.route("**/api/v1/members/join/verify", (route) =>
-      route.fulfill({ status: 503, json: { error: { code: "SERVICE_UNAVAILABLE", message: "Try again" } } }),
-    );
-    await page.goto(`/join/#verify=${token}`);
-    const message = page.getByText(
-      draftState === "saved answers"
-        ? "We could not verify your email right now. Your saved answers are still available in this tab. Refresh to try again."
-        : "We could not verify your email right now. Refresh to try again.",
-      { exact: true },
-    );
-    await expect(message).toBeVisible();
-    await expect(page.getByLabel(EMAIL_FIRST_COPY.join.work.label)).toBeVisible();
-    for (const width of [1280, 375]) {
-      await page.setViewportSize({ width, height: 900 });
-      await message.scrollIntoViewIfNeeded();
-      await expect(message).toBeInViewport();
-      await page.screenshot({ path: testInfo.outputPath(`verification-failure-${width}.png`) });
-    }
+test("says the membership options could not be loaded and keeps the applicant signed in", async ({
+  page,
+}, testInfo) => {
+  const unique = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  await page.route("**/api/v1/members/join/verify", (route) =>
+    route.fulfill({ status: 503, json: { error: { code: "SERVICE_UNAVAILABLE", message: "Try again" } } }),
+  );
+  await startJoinInBrowser(page, `outage-${unique}@outage-${unique}.test`);
+  const message = page.getByText("We could not load your membership options right now. Refresh to try again.", {
+    exact: true,
   });
-}
+  await expect(message).toBeVisible();
+  await expect(page.locator("[data-join-application-form]")).toBeHidden();
+  await expect(page.locator("[data-join-sign-in-card]").getByRole("region", { name: "Sign in" })).toHaveCount(0);
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await message.scrollIntoViewIfNeeded();
+    await expect(message).toBeInViewport();
+    await page.screenshot({ path: testInfo.outputPath(`path-failure-${width}.png`) });
+  }
+});

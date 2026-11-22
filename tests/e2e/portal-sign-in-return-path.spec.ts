@@ -3,6 +3,7 @@
  */
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { answerAccountOrganizationStep } from "./helpers/account-organization";
 import { clientIpForIdentity, openEmailSignIn } from "./helpers/portal-auth";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
 
@@ -30,7 +31,13 @@ test("a sign-in started on a working group page returns there from the emailed l
   // The email opens in a new tab: a fresh mount, no state carried over.
   const fresh = await page.context().newPage();
   await fresh.setExtraHTTPHeaders({ "cf-connecting-ip": clientIpForIdentity(email) });
+  const verified = fresh.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/v1/auth/verify-link" && response.request().method() === "POST",
+  );
   await fresh.goto(link);
+  // A work address without an organization answers account setup's organization step first.
+  await answerAccountOrganizationStep(fresh, await verified);
   // Email sign-in offers a passkey before the workspace mounts; declining it continues to the page asked for.
   const passkeyOffer = fresh.getByRole("region", { name: "You're signed in", exact: true });
   await expect(passkeyOffer).toBeVisible({ timeout: 15_000 });

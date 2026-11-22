@@ -1,3 +1,4 @@
+import { prepareAccountSecurityNoticeStatements } from "./account-security-notices";
 import { prepareAddressDeliveryTransfer } from "./email-address-delivery";
 import { prepareMailingListAddressSync } from "./mailing-list-subscriptions/queue-email-change";
 /**
@@ -360,6 +361,13 @@ export async function verifyOwnEmailAddress(
         .bind(at, address.id, userId),
       ...(ownership ? [prepareAddressDeliveryTransfer(db, "user_emails", address.id, ownership)] : []),
       ...prepareMailingListAddressSync(db, userId, at),
+      ...prepareAccountSecurityNoticeStatements(db, {
+        userId,
+        change: "address_added",
+        address: address.email,
+        alsoTo: [address.account_email],
+        at,
+      }),
     ],
   });
   const offer = representationRequest ? null : await readAffiliationOffer(db, userId);

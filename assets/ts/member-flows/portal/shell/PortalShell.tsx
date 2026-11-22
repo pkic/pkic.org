@@ -337,6 +337,7 @@ export function PortalShell() {
                             canWrite: portalHasGlobalPermission(session, "users:write"),
                             canGrantAccess: portalHasGlobalPermission(session, "access:grant"),
                             canAnonymize: portalHasGlobalPermission(session, "users:anonymize"),
+                            canDelete: portalHasGlobalPermission(session, "users:delete"),
                             canManageMembership: portalHasGlobalPermission(session, "membership:write"),
                             canActivateIdentity: portalHasGlobalPermission(session, "identities:activate"),
                           }}

@@ -1,9 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eventScanRequestSchema } from "../../assets/shared/schemas/event-participation-scanning";
-import { persistScannerCapture } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/useScannerFailureCapture";
+import {
+  persistScannerCapture,
+  ScannerCapturePersistenceError,
+} from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/useScannerFailureCapture";
 import { boundedScannedValue } from "../../assets/shared/schemas/scanner-attempt-capture";
 import { scannerQueueRecordSchema } from "../../assets/shared/schemas/event-scanner-offline-queue";
-const mocks = vi.hoisted(() => ({ open: vi.fn(), suspended: vi.fn(async () => false), active: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  open: vi.fn(),
+  suspended: vi.fn(async () => false),
+  active: vi.fn(),
+  resume: vi.fn(),
+}));
+vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-session-resumption", () => ({
+  resumeScannerServerSession: mocks.resume,
+}));
 vi.mock("../../assets/ts/shared/pending-user-logout", () => ({
   scannerUploadSuspended: mocks.suspended,
   readActiveUserSession: mocks.active,
@@ -117,8 +128,10 @@ function storage(): IDBDatabase {
 beforeEach(() => {
   rows = new Map();
   history = new Map();
+  mocks.suspended.mockReset().mockResolvedValue(false);
   mocks.active.mockResolvedValue({ operatorUserId: operator, sessionId: "active" });
   highWater = 0;
+  mocks.resume.mockReset();
   mocks.open.mockImplementation(async () => storage());
   vi.stubGlobal("IDBKeyRange", {
     bound: (lower: string[]) => lower.slice(0, 2),
@@ -145,6 +158,62 @@ function failure(raw = "  not-a-badge 😀  ") {
   };
 }
 describe("durable rejected scanner attempts", () => {
+  it("resumes a closed server session and uploads the original queued operation", async () => {
+    const queued = await queueScannerAttempt(failure());
+    mocks.resume.mockResolvedValue({ epochId: epoch, deviceId: device, closedAt: null, closingDeclaredAt: null });
+    const upload = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({ error: { code: "SCANNER_SESSION_CLOSED", message: "Closed" } }, { status: 409 }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          operationId: queued.scan.operationId,
+          outcome: "unknown",
+          reason: "unsupported_code",
+          recorded: true,
+          attendanceRecorded: false,
+          admissionRecorded: false,
+          checkoutRecorded: false,
+          scannerReceipt: {
+            ...queued.scan.scannerSession,
+            operationId: queued.scan.operationId,
+            receivedAt: "2026-10-12T10:01:00.000Z",
+          },
+        }),
+      );
+    expect(await drainScanOutbox(upload, operator)).toEqual({ uploaded: 1, state: "complete" });
+    expect(mocks.resume).toHaveBeenCalledWith("synthetic-event", epoch, device, undefined);
+    expect(upload).toHaveBeenCalledTimes(2);
+    expect(rows.size).toBe(0);
+    expect(history.get(queued.scan.operationId)).toMatchObject({ scan: queued.scan });
+  });
+  it("retains a queued operation when server session recovery is refused", async () => {
+    const queued = await queueScannerAttempt(failure());
+    mocks.resume.mockRejectedValue(new Error("Server unavailable"));
+    const upload = vi.fn(async () =>
+      Response.json({ error: { code: "SCANNER_SESSION_CLOSED", message: "Closed" } }, { status: 409 }),
+    );
+    expect((await drainScanOutbox(upload, operator)).state).toBe("retry");
+    expect(rows.get(queued.scan.operationId)?.scan).toEqual(queued.scan);
+    expect(history.size).toBe(0);
+    expect(upload).toHaveBeenCalledOnce();
+  });
+  it.each([401, 403, 409, 429, 500, 503])("retains a scan and backs off after server HTTP %s", async (status) => {
+    const queued = await queueScannerAttempt(failure());
+    const upload = vi.fn(
+      async () => new Response(null, { status, headers: status === 429 ? { "Retry-After": "120" } : undefined }),
+    );
+    const result = await drainScanOutbox(upload, operator);
+    expect(result.state).toBe("retry");
+    expect(rows.size).toBe(1);
+    expect(history.size).toBe(0);
+    expect(rows.get(queued.scan.operationId)?.nextAttemptAt).toBeGreaterThan(
+      Date.now() + (status === 429 ? 119_000 : 0),
+    );
+    expect((await drainScanOutbox(upload, operator)).state).toBe("retry");
+    expect(upload).toHaveBeenCalledOnce();
+  });
   it("claims the awaited operation before a backlog and archives each operation once", async () => {
     const older = await queueScannerAttempt(failure());
     const awaited = await queueScannerAttempt(failure());
@@ -280,18 +349,55 @@ describe("durable rejected scanner attempts", () => {
     const scan = eventScanRequestSchema.parse({ ...capture, badgeId: "ABCDEFGHJKLMNPQR" });
     rows.set(scan.operationId, { eventId: attempt.eventId, kind: "scan", scan });
     const audit = vi.fn(async () => true);
-    await expect(
-      persistScannerCapture(
-        scan,
-        attempt.eventId,
-        async () => {
-          throw new Error("Save result interrupted");
-        },
-        audit,
-      ),
-    ).rejects.toThrow("already retained");
+    const result = persistScannerCapture(
+      scan,
+      attempt.eventId,
+      async () => {
+        throw new Error("Save result interrupted");
+      },
+      audit,
+    );
+    await expect(result).rejects.toThrow("already retained");
+    await expect(result).rejects.toMatchObject({ retryAllowed: false });
     expect(audit).not.toHaveBeenCalled();
     expect(rows.size).toBe(1);
+  });
+  it.each([false, true])("marks a confirmed absent scan retryable, audit saved=%s", async (auditSaved) => {
+    const attempt = failure();
+    const capture = { ...attempt.scan };
+    Reflect.deleteProperty(capture, "reason");
+    const scan = eventScanRequestSchema.parse({ ...capture, badgeId: "ABCDEFGHJKLMNPQR" });
+    const audit = vi.fn(async () => auditSaved);
+    const error = await persistScannerCapture(
+      scan,
+      attempt.eventId,
+      async () => {
+        throw new Error("Storage failed before save");
+      },
+      audit,
+    ).catch((error: unknown) => error);
+    expect(error).toBeInstanceOf(ScannerCapturePersistenceError);
+    expect(error).toMatchObject({ retryAllowed: true });
+    expect(audit).toHaveBeenCalledOnce();
+  });
+  it("does not permit retry when the saved operation cannot be inspected", async () => {
+    const attempt = failure();
+    const capture = { ...attempt.scan };
+    Reflect.deleteProperty(capture, "reason");
+    const scan = eventScanRequestSchema.parse({ ...capture, badgeId: "ABCDEFGHJKLMNPQR" });
+    mocks.open.mockRejectedValueOnce(new Error("Storage unavailable"));
+    const audit = vi.fn(async () => true);
+    const error = await persistScannerCapture(
+      scan,
+      attempt.eventId,
+      async () => {
+        throw new Error("Save interrupted");
+      },
+      audit,
+    ).catch((error: unknown) => error);
+    expect(error).toBeInstanceOf(ScannerCapturePersistenceError);
+    expect(error).toMatchObject({ retryAllowed: false });
+    expect(audit).not.toHaveBeenCalled();
   });
   it("does not claim persistence when storage is unavailable", async () => {
     mocks.open.mockRejectedValue(new Error("Quota exceeded"));

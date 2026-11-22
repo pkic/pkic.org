@@ -1,35 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import {
-  LIVE_OVERLAY_PROTOCOL_PREFIX,
-  LIVE_ROOM_PROTOCOL,
-  liveRoomClientMessageSchema,
-  liveRoomRefusalFromClose,
   liveRoomSocketQuerySchema,
   type LiveOverlayView,
-  liveRoomServerMessageSchema,
-  type LiveRoomClientMessage,
   type LiveRoomServerMessage,
 } from "../../shared/schemas/live-session-room";
 
 export type LivePresenceMessage = Extract<LiveRoomServerMessage, { type: "presence.changed" | "presence.left" }>;
 import { applyLiveRoomMessage, type LiveRoomState } from "./live-room-state";
-import { persistentRetryDelay, type LivePersistence } from "./live-socket-retry";
-
-/**
- * `connecting` before the first snapshot, `live` while the socket is open,
- * `offline` while it reconnects: the last state stays on screen, read-only.
- * There is no polling fallback; a room that cannot be reached stays offline.
- * A room that refused admission stays offline with the refusal's error code
- * and is not retried, unless the connection is persistent (a venue screen),
- * which retries after anything and keeps its last state on screen.
- */
-export type LiveRoomStatus = "connecting" | "live" | "offline";
-
-export type LiveSocketFactory = (url: string, protocols: string[]) => WebSocket;
-
-const browserSocket: LiveSocketFactory = (url, protocols) => new WebSocket(url, protocols);
-const KEEP_ALIVE_MS = 25_000;
-const RETRY_DELAYS_MS = [1_000, 2_000, 5_000, 10_000, 30_000];
+import type { LivePersistence } from "./live-socket-retry";
+import { useLiveSocket, type LiveSocketFactory } from "./useLiveSocket";
 
 export function liveRoomSocketUrl(
   location: Pick<Location, "protocol" | "host">,
@@ -42,6 +21,9 @@ export function liveRoomSocketUrl(
   return `${scheme}//${location.host}/api/v1/events/${encodeURIComponent(slug)}/agenda/occurrences/${encodeURIComponent(occurrenceId)}/live${query}`;
 }
 
+/** A session's live room as `useLiveRoom` hands it out, for components that share one connection. */
+export type LiveRoomConnection = ReturnType<typeof useLiveRoom>;
+
 /** One session's live room over its socket, reconnecting with backoff while mounted and enabled. */
 export function useLiveRoom({
   slug,
@@ -49,7 +31,7 @@ export function useLiveRoom({
   enabled = true,
   overlayToken,
   output,
-  createSocket = browserSocket,
+  createSocket,
   onPresence,
   persistent,
 }: {
@@ -78,128 +60,48 @@ export function useLiveRoom({
     LiveRoomServerMessage,
     { type: "question.accepted" | "room.refused" }
   > | null>(null);
-  const [state, setState] = useState<LiveRoomState | null>(null);
-  const [status, setStatus] = useState<LiveRoomStatus>("connecting");
-  const [admissionRefusal, setAdmissionRefusal] = useState<string | null>(null);
-  const socket = useRef<WebSocket | null>(null);
-  const factory = useRef(createSocket);
-  factory.current = createSocket;
   const presence = useRef(onPresence);
   presence.current = onPresence;
-  const persistence = useRef(persistent);
-  persistence.current = persistent;
-  const access = useRef(overlayToken);
-  access.current = overlayToken;
-  const keepsTrying = Boolean(persistent);
-  // A persistent connection takes renewed access at its next attempt instead of reconnecting for it.
-  const accessKey = keepsTrying ? null : overlayToken;
-
-  useEffect(() => {
-    if (!enabled) return;
-    let stopped = false;
-    let attempt = 0;
-    let admitted = false;
-    let retry: ReturnType<typeof setTimeout> | undefined;
-    let keepAlive: ReturnType<typeof setInterval> | undefined;
-
-    function open() {
-      const token = access.current;
-      const protocols = [LIVE_ROOM_PROTOCOL, ...(token ? [LIVE_OVERLAY_PROTOCOL_PREFIX + token] : [])];
-      const current = factory.current(liveRoomSocketUrl(window.location, slug, occurrenceId, output), protocols);
-      socket.current = current;
-      current.addEventListener("open", () => {
-        // A refused admission opens before it closes: a persistent feed only
-        // starts over once the room actually answers with its snapshot.
-        if (!keepsTrying) attempt = 0;
-        keepAlive = setInterval(() => current.send("ping"), KEEP_ALIVE_MS);
-      });
-      current.addEventListener("message", (event) => {
-        if (stopped || socket.current !== current) return;
-        persistence.current?.onActivity?.();
-        if (event.data === "pong") return;
-        let parsed;
-        try {
-          parsed = liveRoomServerMessageSchema.safeParse(JSON.parse(String(event.data)));
-        } catch {
-          return;
-        }
-        if (!parsed.success) {
-          // A screen cannot follow a room it cannot read: it holds its last state until the next snapshot.
-          if (keepsTrying) {
-            setStatus("offline");
-            persistence.current?.onUnreadable?.();
-          }
-          return;
-        }
-        const message = parsed.data;
-        if (message.type === "presence.changed" || message.type === "presence.left") {
-          presence.current?.(message);
-          return;
-        }
-        if (message.type === "question.updated") {
-          setQuestionChangeResult(message);
-          return;
-        }
-        if (message.type === "room.refused" && message.operationId) setQuestionChangeResult(message);
-        if (message.type === "question.answer.result") {
-          setAnswerResult(message);
-          return;
-        }
-        if (message.type === "room.refused" && message.operationId) setAnswerResult(message);
-        if (message.type === "question.accepted" || (message.type === "room.refused" && message.operationId)) {
-          setQuestionResult(message);
-          return;
-        }
-        if (message.type === "room.snapshot") {
-          admitted = true;
-          attempt = 0;
-          setStatus("live");
-        }
-        setState((previous) => applyLiveRoomMessage(previous, message));
-      });
-      current.addEventListener("close", (event) => {
-        clearInterval(keepAlive);
-        if (socket.current === current) socket.current = null;
-        if (stopped) return;
-        setStatus("offline");
-        const refused = liveRoomRefusalFromClose(event.code, event.reason);
-        if (refused) setAdmissionRefusal(refused);
-        if (keepsTrying) {
-          if (refused) persistence.current?.onRefusal?.(refused);
-          retry = setTimeout(open, persistentRetryDelay(attempt));
-          attempt += 1;
-          return;
-        }
-        if (refused) return;
-        // A room that was never reached is not retried forever.
-        if (!admitted && attempt >= RETRY_DELAYS_MS.length) return;
-        retry = setTimeout(open, RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)]);
-        attempt += 1;
-      });
-    }
-
-    setQuestionChangeResult(null);
-    setQuestionResult(null);
-    setAnswerResult(null);
-    setStatus("connecting");
-    setAdmissionRefusal(null);
-    open();
-    return () => {
-      stopped = true;
-      clearTimeout(retry);
-      clearInterval(keepAlive);
-      socket.current?.close(1000, "Left the room");
-      socket.current = null;
-    };
-  }, [slug, occurrenceId, enabled, accessKey, keepsTrying, output]);
-
-  /** Sends one contract message; false when the room is not connected. */
-  const send = useCallback((message: LiveRoomClientMessage): boolean => {
-    const current = socket.current;
-    if (!current || current.readyState !== WebSocket.OPEN) return false;
-    current.send(JSON.stringify(liveRoomClientMessageSchema.parse(message)));
-    return true;
-  }, []);
-
-  return { state, status, admissionRefusal, send, questionResult, answerResult, questionChangeResult };
+  const connection = useLiveSocket<LiveRoomState>({
+    url: () => liveRoomSocketUrl(window.location, slug, occurrenceId, output),
+    urlKey: `${slug}/${occurrenceId}/${output ?? ""}`,
+    enabled,
+    snapshot: "room.snapshot",
+    reduce: applyLiveRoomMessage,
+    overlayToken,
+    createSocket,
+    persistent,
+    onConnecting: () => {
+      setQuestionChangeResult(null);
+      setQuestionResult(null);
+      setAnswerResult(null);
+    },
+    intercept: (message) => {
+      if (message.type === "presence.changed" || message.type === "presence.left") {
+        presence.current?.(message);
+        return true;
+      }
+      if (message.type === "question.updated") {
+        setQuestionChangeResult(message);
+        return true;
+      }
+      if (message.type === "question.answer.result") {
+        setAnswerResult(message);
+        return true;
+      }
+      if (message.type === "question.accepted") {
+        setQuestionResult(message);
+        return true;
+      }
+      // A refused question, answer or edit answers its own request, and changes no state.
+      if (message.type === "room.refused" && message.operationId) {
+        setQuestionChangeResult(message);
+        setAnswerResult(message);
+        setQuestionResult(message);
+        return true;
+      }
+      return false;
+    },
+  });
+  return { ...connection, questionResult, answerResult, questionChangeResult };
 }

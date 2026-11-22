@@ -1,3 +1,4 @@
+import { recordRecipientEmailSql } from "./identities/record-recipient";
 /**
  * The one read model of how a proposal speaker appears: every value comes from
  * where it is kept, never from a copy on the roster row. The person owns the
@@ -23,6 +24,11 @@ export function proposalSpeakerIdentityIdSql(speakerAlias = "ps"): string {
   return `CASE WHEN ${speakerAlias}.acting_identity_id IS NOT NULL THEN ${speakerAlias}.acting_identity_id
     WHEN ${speakerAlias}.acting_identity_selected_at IS NOT NULL THEN ${individualIdentityIdSql(`${speakerAlias}.user_id`)}
     ELSE ${primaryIdentityIdSql(`${speakerAlias}.user_id`)} END`;
+}
+
+/** Where mail about a speaker's part goes: the shared record recipient rule for the identity they speak as. */
+export function proposalSpeakerRecipientEmailSql(speakerAlias = "ps", person = "u"): string {
+  return recordRecipientEmailSql(proposalSpeakerIdentityIdSql(speakerAlias), person);
 }
 
 /** The organization a speaker appears with: the one the identity they speak as speaks for. */

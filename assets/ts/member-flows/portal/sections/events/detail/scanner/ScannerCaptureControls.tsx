@@ -1,11 +1,10 @@
 import type { ComponentChildren, ComponentProps } from "preact";
 import type { ContractForm, FieldPresentation } from "../../../../../../hooks/useContractForm";
+import type { useScannerManualEntry } from "./useScannerManualEntry";
 import type { ScannerOfflineContext } from "../../../../../../../shared/schemas/event-scanner-offline-context";
 import { Button } from "../../../../../../ui/Button";
-import { Checkbox } from "../../../../../../ui/Checkbox";
-import { Field } from "../../../../../../ui/Field";
+import { ScannerLeadConsent, type ScannerLeadConsentProps } from "./ScannerLeadConsent";
 import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
-import { Alert } from "../../../../../../ui/Alert";
 import { ScannerSetup } from "./ScannerSetup";
 import { ScannerManualEntry } from "./ScannerManualEntry";
 import { ScannerModeSelect, scannerActionLabel } from "./ScannerModeSelect";
@@ -61,54 +60,65 @@ export function ScannerDiagnostics({
 }
 
 /** Context and mode controls shared by authenticated capture and the fixed offline collector. */
+export function ScannerOfflineSignInButton({ onSignIn }: { onSignIn: () => void }) {
+  return (
+    <Button type="button" variant="secondary" onClick={onSignIn}>
+      Sign in
+    </Button>
+  );
+}
+
 export function ScannerCaptureControls({
   setup,
   mode,
   collector,
+  onSignIn,
   canStart,
   preparing,
   cameraError,
   start,
-  onCheckSignIn,
+  leadConsent,
+  leadConsentConfirmed = false,
+  leadNeedsAdvance = false,
+  onNextLead,
   children,
 }: {
   children?: ComponentChildren;
   setup: ComponentProps<typeof ScannerSetup>;
   mode: ComponentProps<typeof ScannerModeSelect>;
   collector?: ScannerOfflineContext;
+  onSignIn?: () => void;
   canStart: boolean;
   preparing: boolean;
   cameraError: string;
   start: () => void;
-  onCheckSignIn?: () => void;
+  leadConsent?: ScannerLeadConsentProps;
+  leadConsentConfirmed?: boolean;
+  leadNeedsAdvance?: boolean;
+  onNextLead?: () => void;
 }) {
   return (
     <>
       {collector ? (
-        <Alert tone="info" title="Offline scanning">
-          <div class="pk-stack pk-stack--snug">
-            <p>Badge checks use prepared data. Scans save on this device and upload when connected.</p>
-            {onCheckSignIn && (
-              <div class="pk-cluster">
-                <Button type="button" variant="secondary" onClick={onCheckSignIn}>
-                  Check sign-in again
-                </Button>
-              </div>
-            )}
-          </div>
-        </Alert>
+        onSignIn && <ScannerOfflineSignInButton onSignIn={onSignIn} />
       ) : (
         <>
           <ScannerSetup {...setup} allowedActions={mode.allowedActions} onAction={mode.onAction} onStart={start} />
         </>
       )}
+      {leadConsent && <ScannerLeadConsent {...leadConsent} />}
       <div class="pk-cluster">
         {(collector || mode.action === "lead") && mode.allowedActions?.includes(mode.action) && (
-          <Button type="button" variant="primary" disabled={!canStart} onClick={start}>
-            Start scanning
+          <Button
+            type="button"
+            variant="primary"
+            disabled={!leadNeedsAdvance && (!canStart || (mode.action === "lead" && !leadConsentConfirmed))}
+            onClick={leadNeedsAdvance ? onNextLead : start}
+          >
+            {leadNeedsAdvance ? "Next" : "Start scanning"}
           </Button>
         )}
-        {(collector || mode.action === "lead") && children}
+        {!leadNeedsAdvance && (collector || mode.action === "lead") && children}
       </div>
       {preparing && <p role="status">Preparing scanner for this session…</p>}
       {cameraError && <p role="status">{cameraError}</p>}
@@ -128,9 +138,11 @@ export function ScannerManualControls({
   consent,
   inline = false,
   handlers,
+  error,
 }: {
   inline?: boolean;
   handlers?: ContractForm<unknown>["handlers"];
+  error?: string;
   action: EventScanRequest["action"];
   busy: boolean;
   ready: boolean;
@@ -143,18 +155,8 @@ export function ScannerManualControls({
 }) {
   const content = (
     <ScannerManualEntry {...entry}>
-      {action === "lead" && consent && (
-        <Field label="Attendee consent" {...consent.field} required group>
-          {(control) => (
-            <Checkbox
-              {...control}
-              name="consentConfirmed"
-              checked={consent.confirmed}
-              onChange={(event) => consent.onChange(event.currentTarget.checked)}
-              label="The attendee agrees to share their contact details with this sponsor."
-            />
-          )}
-        </Field>
+      {action === "lead" && consent && !consent.confirmed && (
+        <p role="alert">Confirm the attendee’s permission before scanning.</p>
       )}
     </ScannerManualEntry>
   );
@@ -170,11 +172,22 @@ export function ScannerManualControls({
         }}
       >
         {content}
+        {error && <p role="alert">{error}</p>}
         <div class="pk-cluster">
-          <Button type="submit" disabled={busy || !ready}>
+          <Button type="submit" disabled={busy || !ready || (action === "lead" && !consent?.confirmed)}>
             {action === "lead" ? "Confirm lead" : scannerActionLabel(action)}
           </Button>
-          <Button type="button" variant="secondary" onClick={onClose}>
+          <Button
+            type="button"
+            variant="secondary"
+            onPointerDown={(event) => {
+              // Close before the input's focus-out validation can replace this button.
+              if (event.button === 0) onClose();
+            }}
+            onClick={(event) => {
+              if (event.detail === 0) onClose();
+            }}
+          >
             Return to scanning
           </Button>
         </div>
@@ -182,14 +195,14 @@ export function ScannerManualControls({
     );
   return (
     <>
-      <Button type="button" variant="secondary" onClick={onOpen}>
-        Find attendee or badge
+      <Button type="button" variant="secondary" disabled={action === "lead" && !consent?.confirmed} onClick={onOpen}>
+        {entry.lookup?.online ? "Find attendee or badge" : "Enter badge code"}
       </Button>
       <Dialog
         open={open}
         title={action === "lead" ? "Review sponsor lead" : "Enter badge code"}
         confirmLabel={action === "lead" ? "Confirm lead" : scannerActionLabel(action)}
-        confirmDisabled={busy || !ready}
+        confirmDisabled={busy || !ready || (action === "lead" && !consent?.confirmed)}
         onConfirm={onCapture}
         onCancel={onClose}
       >
@@ -197,6 +210,59 @@ export function ScannerManualControls({
       </Dialog>
     </>
   );
+}
+
+export function scannerManualControlProps({
+  form,
+  action,
+  busy,
+  ready,
+  manual,
+  badgeId,
+  onBadge,
+  onCapture,
+  consentConfirmed,
+  onConsent,
+  onOpen,
+  slug,
+  offline,
+}: {
+  form: ContractForm<unknown>;
+  action: EventScanRequest["action"];
+  busy: boolean;
+  ready: boolean;
+  manual: ReturnType<typeof useScannerManualEntry>;
+  badgeId: string;
+  onBadge: (code: string) => void;
+  onCapture: () => void;
+  consentConfirmed: boolean;
+  onConsent: (confirmed: boolean) => void;
+  onOpen?: () => void;
+  slug: string;
+  offline: boolean;
+}): ComponentProps<typeof ScannerManualControls> {
+  return {
+    handlers: form.handlers,
+    action,
+    busy,
+    ready,
+    open: manual.open,
+    onCapture,
+    consent:
+      action === "lead"
+        ? { confirmed: consentConfirmed, field: form.of("consentConfirmed"), onChange: onConsent }
+        : undefined,
+    onOpen: onOpen ?? manual.show,
+    onClose: manual.hide,
+    entry: {
+      focusRequested: manual.focusRequested,
+      onFocusHandled: () => manual.setFocusRequested(false),
+      badgeId,
+      onBadge,
+      field: form.of("badgeId"),
+      lookup: action !== "lead" ? { slug, online: !offline, disabled: busy || !ready } : undefined,
+    },
+  };
 }
 
 export function scannerStartMessage(prepared: boolean, offline: boolean, action: EventScanRequest["action"]): string {

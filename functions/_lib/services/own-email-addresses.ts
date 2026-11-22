@@ -4,8 +4,9 @@ import {
   prepareMailingListAddressSync,
   prepareMailingListEmailChange,
 } from "./mailing-list-subscriptions/queue-email-change";
-import { setOwnEmailSignInPermission } from "./own-email-sign-in";
 import { refuseRemovingLastSignInMethod } from "../auth/sign-in-methods";
+import { addedEmailSignInAllowedSql } from "../auth/email-sign-in-policy";
+import { prepareAccountSecurityNoticeStatements } from "./account-security-notices";
 /**
  * The signed-in person manages their own email addresses.
  *
@@ -24,7 +25,6 @@ import {
   ownEmailInUseMessage,
   type OwnEmailHolding,
   type OwnEmailAddress,
-  type OwnEmailAddressUpdate,
   type OwnEmailAddressesListQuery,
 } from "../../../assets/shared/schemas/own-email-addresses";
 import { buildPageInfo, type PageInfo } from "../../../assets/shared/schemas/pagination";
@@ -200,6 +200,7 @@ interface SwapParty extends AddressDeliveryRow {
   normalized_email: string;
   verified_at: string | null;
   verification_method: string | null;
+  signs_in: number;
 }
 
 /**
@@ -220,6 +221,7 @@ export async function makeOwnEmailAddressPrimary(
             person.normalized_email AS primary_normalized, person.email_verified_at AS primary_verified_at,
             person.email_verification_method AS primary_method, address.email, address.normalized_email,
             address.verified_at, address.verification_method,
+            ${addedEmailSignInAllowedSql("address")} AS signs_in,
             ${DELIVERY_COLUMNS.map((column) => `person.${column} AS primary_${column}, address.${column}`).join(", ")}
        FROM user_emails address JOIN users person ON person.id = address.user_id
       WHERE address.id = ? AND address.user_id = ? AND person.active = 1`,
@@ -232,6 +234,12 @@ export async function makeOwnEmailAddressPrimary(
     throw new AppError(409, "EMAIL_UNVERIFIED", "Verify this address before making it your primary address");
   if (party.pending_email)
     throw new AppError(409, "EMAIL_CHANGE_PENDING", "Confirm or cancel your pending email change first");
+  if (!party.signs_in)
+    throw new AppError(
+      409,
+      "EMAIL_SIGN_IN_ENDED",
+      "This address stopped signing in when its representation ended, so it can't be your primary address.",
+    );
   const at = nowIso();
   const { emailId, userId } = input;
   const followers = `SELECT follower.id FROM identities follower
@@ -277,7 +285,7 @@ export async function makeOwnEmailAddressPrimary(
     db
       .prepare(
         `UPDATE user_emails SET email = ?, normalized_email = ?, verified_at = ?, verification_method = ?,
-                identity_id = NULL
+                identity_id = NULL, first_signed_in_at = ?
           WHERE id = ? AND user_id = ?`,
       )
       .bind(
@@ -285,6 +293,8 @@ export async function makeOwnEmailAddressPrimary(
         party.primary_normalized,
         party.primary_verified_at,
         party.primary_method,
+        // The former primary address has signed in already; moving it needs no first-sign-in notice.
+        at,
         emailId,
         userId,
       ),
@@ -315,6 +325,15 @@ export async function makeOwnEmailAddressPrimary(
       .bind(...DELIVERY_COLUMNS.map((column) => party[`primary_${column}`]), emailId, userId),
   );
   statements.push(...prepareMailingListEmailChange(db, userId, at));
+  statements.push(
+    ...prepareAccountSecurityNoticeStatements(db, {
+      userId,
+      change: "primary_changed",
+      address: party.email,
+      alsoTo: [party.primary_email],
+      at,
+    }),
+  );
   try {
     await db.batch(statements);
   } catch (error) {
@@ -330,10 +349,11 @@ export async function removeOwnEmailAddress(
   db: DatabaseLike,
   input: { userId: string; emailId: string },
 ): Promise<void> {
-  const address = await first<{ email: string; used_by_json: string }>(
+  const address = await first<{ email: string; primary_email: string; used_by_json: string }>(
     db,
-    `SELECT address.email, ${addressUsedByJsonSql("address")} AS used_by_json
-       FROM user_emails address WHERE address.id = ? AND address.user_id = ?`,
+    `SELECT address.email, person.email AS primary_email, ${addressUsedByJsonSql("address")} AS used_by_json
+       FROM user_emails address JOIN users person ON person.id = address.user_id
+      WHERE address.id = ? AND address.user_id = ?`,
     [input.emailId, input.userId],
   );
   if (!address) throw new AppError(404, "EMAIL_NOT_FOUND", "Email address not found");
@@ -362,6 +382,13 @@ export async function removeOwnEmailAddress(
         at,
       ),
       ...prepareMailingListAddressSync(db, input.userId, at),
+      ...prepareAccountSecurityNoticeStatements(db, {
+        userId: input.userId,
+        change: "address_removed",
+        address: address.email,
+        alsoTo: [address.primary_email],
+        at,
+      }),
     ]);
   } catch (error) {
     if (isAuthorizationGuardFailure(error)) {
@@ -372,18 +399,4 @@ export async function removeOwnEmailAddress(
     if (isAuditChangeGuardFailure(error)) throw new AppError(404, "EMAIL_NOT_FOUND", "Email address not found");
     throw error;
   }
-}
-
-/** One canonical update contract for the account owner's address choices. */
-export async function updateOwnEmailAddress(
-  db: DatabaseLike,
-  input: { userId: string; emailId: string; update: OwnEmailAddressUpdate },
-) {
-  return "primary" in input.update
-    ? makeOwnEmailAddressPrimary(db, input)
-    : setOwnEmailSignInPermission(db, {
-        userId: input.userId,
-        emailId: input.emailId,
-        enabled: input.update.signInEnabled,
-      });
 }

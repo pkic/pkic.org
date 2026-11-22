@@ -355,6 +355,8 @@ describe("Registration Email Change", () => {
       const signingSecret = "test-signing-secret";
       const ownerEventId = await createTestEvent();
       const otherEventId = await createTestEvent();
+      // Only a public event's status email carries the token management link this test follows.
+      await run(env.DB, "UPDATE events SET visibility = 'public' WHERE id = ?", [ownerEventId]);
       const user = await findOrCreateUser(env.DB, { email: "bound-original@example.com" });
       await env.DB.prepare("UPDATE users SET email_verified_at=?,email_verification_method='magic_link' WHERE id=?")
         .bind(nowIso(), user.id)

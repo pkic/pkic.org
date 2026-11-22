@@ -22,7 +22,7 @@ async function apply(
   email: string,
   category: string,
   organizationName?: string,
-  applicantUserId: string | null = null,
+  applicantUserId?: string,
   applicantName = "Alice Applicant",
 ) {
   const response = await callApi(apiEnv(), "/api/v1/members/applications", {
@@ -63,7 +63,7 @@ async function signIn(email: string) {
   const verified = await callApi(apiEnv(), "/api/v1/auth/verify-link", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ token }),
+    body: JSON.stringify({ token, organization: { personal: true } }),
   });
   expect(verified.status, await verified.clone().text()).toBe(200);
   return (verified.headers.get("set-cookie") ?? "").split(";", 1)[0];
@@ -75,11 +75,12 @@ describe("sign-in for someone whose membership application is pending", () => {
     await seedMembershipApplicationForm();
   });
 
-  it.each([
-    ["an organization", "applicant@new-org.test", "A", "New Org"],
-    ["an individual", "applicant@individual.test", "H6", undefined],
-  ] as const)("lets %s applicant sign in and see their application", async (_kind, email, category, organization) => {
-    await apply(email, category, organization);
+  // An organization applicant already holds the organization identity it applies through, so only an
+  // individual applicant can have an application before any identity.
+  it("lets an individual applicant sign in and see their application", async () => {
+    const email = "applicant@individual.test";
+    const category = "H6";
+    await apply(email, category);
     // The membership identity comes at approval, so a new member is not asked to choose between identities.
     expect(
       await queryAll(
@@ -117,19 +118,21 @@ describe("sign-in for someone whose membership application is pending", () => {
     expect(response.status).toBe(200);
   });
 
-  it("still accepts a name the account rules refuse, without creating an account", async () => {
-    await apply("odd-name@individual.test", "H6", undefined, null, "Dr. Alice+Test: Applicant");
+  it("still accepts a name the account rules refuse, without saving it on the account", async () => {
+    await apply("odd-name@individual.test", "H6", undefined, undefined, "Dr. Alice+Test: Applicant");
     expect(await queryAll(env.DB, "SELECT id FROM member_applications")).toHaveLength(1);
     expect(
-      await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = ?", ["odd-name@individual.test"]),
-    ).toEqual([]);
+      await queryAll(env.DB, "SELECT first_name, last_name FROM users WHERE normalized_email = ?", [
+        "odd-name@individual.test",
+      ]),
+    ).toEqual([{ first_name: null, last_name: null }]);
   });
 
-  it("gives an applicant with a single name an account too", async () => {
-    await apply("single@individual.test", "H6", undefined, null, "Madonna");
+  it("saves a single name on the applicant's account", async () => {
+    await apply("single@individual.test", "H6", undefined, undefined, "Madonna");
     expect(
-      await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = ?", ["single@individual.test"]),
-    ).toHaveLength(1);
+      await queryAll(env.DB, "SELECT first_name FROM users WHERE normalized_email = ?", ["single@individual.test"]),
+    ).toEqual([{ first_name: "Madonna" }]);
   });
 
   it("redacts an applicant's application, and kills its status link, when the account is anonymized", async () => {

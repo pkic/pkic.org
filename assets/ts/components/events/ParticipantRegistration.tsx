@@ -15,6 +15,7 @@ import { Spinner } from "../Spinner";
 import { confirmAction } from "../ConfirmDialog";
 import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";
+import { TicketStandingNotice } from "./tickets/TicketStandingNotice";
 import { Panel, PanelBody } from "../../ui/Panel";
 import type { EventFormsResponse } from "../../shared/types";
 import { ParticipantRegistrationDetails } from "./ParticipantRegistrationDetails";
@@ -178,6 +179,12 @@ function RegistrationRecord({
         <div class="pk-stack pk-stack--loose">
           {error && <Alert tone="danger">{error}</Alert>}
           {message && <Alert tone="ok">{message}</Alert>}
+          <TicketStandingNotice
+            eventSlug={data.event.slug}
+            paymentDue={data.paymentDue}
+            paymentProcessing={data.paymentProcessing}
+            paymentUnderReview={data.paymentUnderReview}
+          />
           {cancelled && (
             <Alert>
               This registration is cancelled.

@@ -1,9 +1,11 @@
 /**
- * The verified path and unsent answers of a membership application, kept for
- * this tab so a reload or a step away and back continues where the applicant
- * was. The emailed link stays the proof: a reload verifies the kept token again
- * and starts over when it has expired. Agreements are never restored; each is
- * accepted again after reading.
+ * The membership path a signed-in applicant chose and their unsent answers,
+ * kept for this tab so a reload, a step away and back, or a change to their
+ * representation continues where they were. The session stays the proof: a
+ * reload asks the server for the path again. A draft belongs to the account
+ * it was started under and its answers to the identity they were given for;
+ * neither is shown to another. Agreements are never restored; each is accepted
+ * again after reading.
  */
 import { z } from "zod";
 import { readCustomFieldValues } from "../shared/widgets/custom-fields";
@@ -11,15 +13,25 @@ import { memberJoinVerifySchema } from "../../shared/schemas/member-join";
 
 const STORAGE_KEY = "pkic.join.verifiedApplication";
 
-const joinDraftSchema = z.object({
-  token: z.string(),
-  values: z.record(z.string(), z.string()),
+const joinChoiceSchema = memberJoinVerifySchema.pick({
+  unaffiliatedAttestation: true,
+  organizationId: true,
+  continueAsIndividual: true,
+});
+/** How the applicant is joining, and the organization they chose on the way. */
+export type JoinChoice = z.infer<typeof joinChoiceSchema>;
+
+const joinAnswersSchema = z.object({
+  identityId: z.string(),
   checked: z.array(z.string()),
   // Unsent answers may be incomplete or exceed the submission contract.
   answers: z.record(z.string(), z.unknown()),
-  choice: memberJoinVerifySchema
-    .pick({ organizationId: true, organizationName: true, domain: true, continueAsIndividual: true })
-    .optional(),
+});
+
+const joinDraftSchema = z.object({
+  applicantUserId: z.string(),
+  choice: joinChoiceSchema.optional(),
+  application: joinAnswersSchema.optional(),
 });
 type JoinDraft = z.infer<typeof joinDraftSchema>;
 
@@ -39,104 +51,70 @@ function write(draft: JoinDraft | null): void {
     if (draft) sessionStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
     else sessionStorage.removeItem(STORAGE_KEY);
   } catch {
-    // Without storage a reload starts from the email step again; nothing else depends on it.
+    // Without storage a reload asks how the applicant is joining again; nothing else depends on it.
   }
 }
 
-/** The verification token kept from an earlier visit in this tab, if any. */
-export function rememberedJoinToken(): string | null {
-  return read()?.token ?? null;
+/** The path this account chose earlier in this tab, if any. */
+export function rememberedJoinChoice(applicantUserId: string): JoinChoice | undefined {
+  const draft = read();
+  return draft?.applicantUserId === applicantUserId ? draft.choice : undefined;
 }
 
-export function rememberedJoinChoice() {
-  return read()?.choice;
-}
-
-export function rememberJoinChoice(choice?: z.infer<typeof joinDraftSchema>["choice"]): void {
+export function rememberJoinChoice(choice?: JoinChoice): void {
   const current = read();
   if (current) write({ ...current, choice });
 }
 
-function hasAnswers(draft: JoinDraft): boolean {
-  return draft.checked.length > 0 || Object.keys(draft.values).length > 0 || Object.keys(draft.answers).length > 0;
-}
-
-/** Whether the current proof has saved form answers, beyond the token itself. */
-export function hasJoinAnswers(): boolean {
-  const draft = read();
-  return draft !== null && hasAnswers(draft);
-}
-
-/** Keeps a token that verified; a different token starts a fresh draft. */
-export function rememberJoinToken(token: string): void {
+/** Keeps the draft of the account that is applying; another account starts a fresh one. */
+export function rememberJoinApplicant(applicantUserId: string): void {
   const current = read();
-  write(current?.token === token ? current : { token, values: {}, checked: [], answers: {} });
+  write(current?.applicantUserId === applicantUserId ? current : { applicantUserId });
 }
 
-/** Forgets the path and its answers: after submitting, or when the kept link no longer verifies. */
+/** Forgets the path and its answers: after submitting, or when the path ends without an application. */
 export function forgetJoinDraft(): void {
   write(null);
 }
 
-function restorable(element: Element): element is HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement {
-  if (
-    !(
-      element instanceof HTMLInputElement ||
-      element instanceof HTMLTextAreaElement ||
-      element instanceof HTMLSelectElement
-    )
-  )
-    return false;
-  if (!element.name || element.name.startsWith("custom.") || element.matches("[data-membership-legal-input]"))
-    return false;
-  return !(element instanceof HTMLInputElement) || !["file", "submit", "button", "hidden"].includes(element.type);
+/** The category and question answers; agreements stay out. */
+function categoryInputs(form: HTMLFormElement): HTMLInputElement[] {
+  return Array.from(form.querySelectorAll<HTMLInputElement>('input[name="membershipCategory"]'));
 }
 
-/** Records what the applicant has entered so far. */
-export function saveJoinAnswers(form: HTMLFormElement): void {
+/** Records what the applicant has entered so far for the identity they apply as. */
+export function saveJoinAnswers(form: HTMLFormElement, identityId: string): void {
   const current = read();
   if (!current) return;
-  const values: Record<string, string> = {};
-  const checked: string[] = [];
-  for (const element of Array.from(form.elements)) {
-    if (!restorable(element)) continue;
-    if (element instanceof HTMLInputElement && (element.type === "checkbox" || element.type === "radio")) {
-      if (element.checked) checked.push(`${element.name}=${element.value}`);
-    } else values[element.name] = element.value;
-  }
+  const checked = categoryInputs(form)
+    .filter((input) => input.checked)
+    .map((input) => input.value);
   const answers = readCustomFieldValues(form);
   for (const agreement of form.querySelectorAll<HTMLInputElement>("[data-membership-legal-input]")) {
     delete answers[agreement.name.replace(/^custom\./, "")];
   }
-  write({ ...current, values, checked, answers });
+  write({ ...current, application: { identityId, checked, answers } });
 }
 
 /**
- * Puts kept answers back into the form. The category goes first and is
- * announced as a change, because it decides which questions the form asks;
- * `renderQuestions` then answers those questions through their own widgets.
- * Returns whether anything was restored.
+ * Puts the answers kept for `identityId` back into the form. The category goes
+ * first and is announced as a change, because it decides which questions the
+ * form asks; `renderQuestions` then answers those questions through their own
+ * widgets. Returns whether anything was restored.
  */
 export function restoreJoinAnswers(
   form: HTMLFormElement,
+  identityId: string,
   renderQuestions: (answers: Record<string, unknown>) => void,
 ): boolean {
-  const draft = read();
-  if (!draft || !hasAnswers(draft)) return false;
-  const checked = new Set(draft.checked);
-  const category = Array.from(form.querySelectorAll<HTMLInputElement>('input[name="membershipCategory"]')).find(
-    (input) => checked.has(`membershipCategory=${input.value}`),
-  );
+  const kept = read()?.application;
+  if (!kept || kept.identityId !== identityId) return false;
+  if (kept.checked.length === 0 && Object.keys(kept.answers).length === 0) return false;
+  const category = categoryInputs(form).find((input) => kept.checked.includes(input.value));
   if (category && !category.checked) {
     category.checked = true;
     category.dispatchEvent(new Event("change", { bubbles: true }));
   }
-  renderQuestions(draft.answers);
-  for (const element of Array.from(form.elements)) {
-    if (!restorable(element) || element.name === "membershipCategory") continue;
-    if (element instanceof HTMLInputElement && (element.type === "checkbox" || element.type === "radio"))
-      element.checked = checked.has(`${element.name}=${element.value}`);
-    else if (element.name in draft.values) element.value = draft.values[element.name];
-  }
+  renderQuestions(kept.answers);
   return true;
 }

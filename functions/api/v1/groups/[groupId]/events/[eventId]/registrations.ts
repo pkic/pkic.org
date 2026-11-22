@@ -51,12 +51,7 @@ export const GroupEventRegistrationCreate = openApiRoute(
       userAgent: getUserAgent(request),
       appBaseUrl: resolveAppBaseUrl(c.env, request),
       signingSecret: requireInternalSecret(c.env),
-      config: {
-        maxPendingConfirmationReminders: config.maxPendingConfirmationReminders,
-        pendingConfirmationReminderIntervalDays: config.pendingConfirmationReminderIntervalDays,
-        confirmationLinkTtlHours: config.confirmationLinkTtlHours,
-        referralCodeLength: config.referralCodeLength,
-      },
+      referralCodeLength: config.referralCodeLength,
     });
     for (const task of result.backgroundTasks) c.executionCtx.waitUntil(task);
     return json(registrationSubmissionResponseSchema.parse(result.response));

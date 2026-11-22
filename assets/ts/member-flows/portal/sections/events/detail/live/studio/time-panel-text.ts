@@ -41,7 +41,7 @@ function kindDetail(timer: LiveTimer, session: SessionTime, clock: ClockZone): s
     case "session":
       return timer.followsAgenda
         ? `Agenda, ${formatClockInZone(session.startAt, clock)} to ${formatClockInZone(session.endAt, clock)}`
-        : `${formatDuration(liveTimerTotalMs(timer, session) ?? 0)} session`;
+        : `Off the agenda, ${formatDuration(liveTimerTotalMs(timer, session) ?? 0)} session`;
     case "until":
       return timer.targetAt ? `Until ${onClock(timer.targetAt, session, clock)}` : "Until a time";
     case "duration":

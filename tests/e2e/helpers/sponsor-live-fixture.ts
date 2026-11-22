@@ -6,13 +6,13 @@ import { captureDeviceConsole } from "./device-console";
 import { endEventSponsor } from "./event-sponsor";
 import { signInAsE2eStaff } from "./staff-auth";
 import { createMember } from "./member-provisioning";
-import { confirmRegistration, ownDomainEmail, registerInBrowser } from "./registration";
-import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./sendgrid";
+import { ownDomainEmail, registerInBrowser } from "./registration";
+import { registerSignedIn } from "./registrant";
+import { capturedEmailCount, waitForCapturedEmail } from "./sendgrid";
 import { eventDetailResponseSchema } from "../../../assets/shared/schemas/event-management";
 import { eventTermsResponseSchema } from "../../../assets/shared/schemas/forms";
 import {
   registrationCreateSchema,
-  registrationSubmissionResponseSchema,
   registrationManageSchema,
   registrationManageUpdateResponseSchema,
 } from "../../../assets/shared/schemas/registration";
@@ -50,19 +50,6 @@ import {
 export const sponsorEventSlug = "pqc-conference-amsterdam-nl";
 const eventApi = `/api/v1/events/${sponsorEventSlug}`;
 
-/** Each address is on its own domain, so confirming asks for its organization and links it. */
-async function confirmEmailedRegistration(page: Page, email: string, since: number, organization: string) {
-  const mail = await waitForCapturedEmail(email, "Confirm your registration", { since });
-  await page.goto(extractEmailUrl(mail, "/register/confirm"));
-  await confirmRegistration(page, organization, "Security engineer");
-  // Confirming proves the mailbox and issues a fresh management link; the one from submission no longer works.
-  const confirmed = await waitForCapturedEmail(email, "registration is confirmed", { since });
-  const manageUrl = extractEmailUrl(confirmed, "/register/manage/");
-  const manageToken = new URL(manageUrl).searchParams.get("token");
-  if (!manageToken) throw new Error("The confirmation email must carry the registration management link");
-  return { manageUrl, manageToken };
-}
-
 async function issueBadge(staff: Page, email: string) {
   const response = await staff.request.get(
     `${eventApi}/badges/attendees?q=${encodeURIComponent(email)}&sort=email&limit=10&offset=0`,
@@ -89,6 +76,8 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
     jobTitle: "Security engineer",
   });
   await waitForCapturedEmail(deniedEmail, "registration is confirmed", { since: deniedSince });
+  // Registering signed this browser in as the denied attendee; the fixture's other attendee is someone else.
+  await attendee.context().clearCookies();
   const termsResponse = await attendee.request.get(`${eventApi}/terms?audience=attendee`);
   expect(termsResponse.status()).toBe(200);
   const terms = eventTermsResponseSchema.parse(await termsResponse.json()).terms;
@@ -97,24 +86,19 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
   const firstName = `Contact-${stamp.slice(0, 8)}`;
   const lastName = "SponsorFixture";
   const organization = `Lead organization ${stamp}`;
-  const since = await capturedEmailCount();
-  const registration = await attendee.request.post(`${eventApi}/registrations`, {
-    data: registrationCreateSchema.parse({
+  // The organization the lead is captured with is the one the registrant's identity names.
+  const confirmedManage = await registerSignedIn(
+    attendee,
+    sponsorEventSlug,
+    registrationCreateSchema.parse({
       ...template.request,
       email,
-      firstName,
-      lastName,
       consents: terms
         .filter((term) => term.required || term.termKey === "sponsor-data-sharing")
         .map(({ termKey, version }) => ({ termKey, version })),
     }),
-  });
-  expect(registration.status()).toBe(200);
-  const registered = registrationSubmissionResponseSchema.parse(await registration.json());
-  if (!registered.manageUrl || !registered.manageToken)
-    throw new Error("Fresh attendee must have a registration management capability");
-  // The organization the lead is captured with is the one their confirmed address names.
-  const confirmedManage = await confirmEmailedRegistration(attendee, email, since, organization);
+    { firstName, lastName, organization, jobTitle: "Security engineer" },
+  );
 
   await signInAsE2eStaff(staff, e2eAdminEmail("sponsor-live-fixture-operator"));
   const eventResponse = await staff.request.get(eventApi);
@@ -131,7 +115,7 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
       sponsorType: "event",
       eventId: event.id,
       tier: "Leader",
-      nonMemberName: `Synthetic lead sponsor ${stamp}`,
+      nonMemberName: `Synthetic sponsor ${stamp.slice(0, 8)}`,
       contactName: "Sponsor fixture contact",
       contactEmail: `lead-sponsor-${stamp}@example.test`,
       renewalDate: "2027-12-31",
@@ -153,18 +137,18 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
       const response = await staff.request.post("/api/v1/permissions/grants", {
         data: accessGrantCreateSchema.parse({
           userId: operator.userId,
-          permission,
+          permissions: [permission],
           contextType: "event_sponsor",
           contextId: sponsorId,
         }),
       });
       expect(response.status()).toBe(201);
-      grants.push(accessGrantCreateResponseSchema.parse(await response.json()).grant.id);
+      grants.push(accessGrantCreateResponseSchema.parse(await response.json()).grants[0]!.id);
     }
     const consenting = await issueBadge(staff, email);
     const denied = await issueBadge(staff, deniedEmail);
-    if (!template.result.manageToken) throw new Error("Denied fixture needs its own registration capability");
-    const canceled = await attendee.request.patch(`/api/v1/registrations/access/${template.result.manageToken}`, {
+    const deniedManage = await template.manageLink();
+    const canceled = await attendee.request.patch(`/api/v1/registrations/access/${deniedManage.manageToken}`, {
       data: registrationManageSchema.parse({ action: "cancel" }),
     });
     expect(canceled.status()).toBe(200);
@@ -191,7 +175,18 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
   }
 }
 
-async function openManualBadgeEntry(page: Page) {
+async function openManualBadgeEntry(page: Page, sponsor = false) {
+  const acknowledgement = page.getByRole("checkbox", {
+    name: "I will ask each person for permission to collect their contact information before scanning their badge.",
+    exact: true,
+  });
+  const continuous = page.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
+  if (sponsor)
+    await expect.poll(async () => (await acknowledgement.isVisible()) || (await continuous.isVisible())).toBe(true);
+  if (await acknowledgement.isVisible()) {
+    await acknowledgement.check();
+    await page.getByRole("button", { name: "Start scanning", exact: true }).click();
+  }
   await openScannerManualEntry(page);
 }
 
@@ -206,16 +201,17 @@ async function expectDoorScannerReady(page: Page) {
   await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeEnabled();
 }
 
-export async function captureSponsorBadge(page: Page, badgeId: string, sponsorId: string, operatorUserId: string) {
-  await openManualBadgeEntry(page);
-  const manual = page.getByRole("dialog", { name: "Review sponsor lead", exact: true });
+export async function captureSponsorBadge(
+  page: Page,
+  badgeId: string,
+  sponsorId: string,
+  operatorUserId: string,
+  onResult?: () => Promise<void>,
+) {
+  await openManualBadgeEntry(page, true);
+  const scanner = page.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
+  const manual = scanner.locator(".pk-fast-scanner__manual");
   await manual.getByLabel("Badge code", { exact: true }).fill(badgeId);
-  await page
-    .getByRole("checkbox", {
-      name: "The attendee agrees to share their contact details with this sponsor.",
-      exact: true,
-    })
-    .check();
   const receiving = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === `${eventApi}/scans` &&
@@ -244,16 +240,21 @@ export async function captureSponsorBadge(page: Page, badgeId: string, sponsorId
     .poll(async () => (await scannerStorage(page)).history.some((row) => row.scan.operationId === request.operationId))
     .toBe(true);
   await expect(manual).not.toBeVisible();
-  await openManualBadgeEntry(page);
+  const next = scanner.getByRole("button", { name: "Next badge", exact: true });
+  await expect(next).toBeVisible();
+  if (receipt.outcome === "eligible")
+    await expect(scanner.locator(".pk-fast-scanner__label")).toHaveText("Lead captured");
+  await onResult?.();
+  await next.click();
+  await openManualBadgeEntry(page, true);
   await expect(manual.getByLabel("Badge code", { exact: true })).toHaveValue("");
   await expect(manual.getByLabel("Badge code", { exact: true })).not.toHaveAttribute("aria-invalid", "true");
   await expect(
-    manual.getByRole("checkbox", {
-      name: "The attendee agrees to share their contact details with this sponsor.",
-      exact: true,
+    page.getByRole("checkbox", {
+      name: "I will ask each person for permission to collect their contact information before scanning their badge.",
     }),
-  ).not.toBeChecked();
-  await manual.getByRole("button", { name: "Cancel", exact: true }).click();
+  ).toHaveCount(0);
+  await manual.getByRole("button", { name: "Return to scanning", exact: true }).click();
   await expect(manual).not.toBeVisible();
   return { request, receipt };
 }
@@ -267,14 +268,6 @@ export async function captureOfflineSponsorBadge(
   forbidden: readonly string[],
   readConsole: ReturnType<typeof captureDeviceConsole>,
 ) {
-  const diagnostics = await openScannerDiagnostics(page);
-  await expect(
-    diagnostics.getByText("Scanner session: open. Offline preparation uses the last saved authorization.", {
-      exact: true,
-    }),
-  ).toBeVisible();
-  await closeScannerDiagnostics(page);
-  await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeEnabled();
   expect((await scannerStorage(page)).pending).toHaveLength(0);
   const offlineReceipts: number[] = [];
   const observeReceipt = (response: import("@playwright/test").Response) => {
@@ -291,23 +284,17 @@ export async function captureOfflineSponsorBadge(
   let pendingPrivacy: Awaited<ReturnType<typeof expectNoStoredSponsorContacts>> | undefined;
   try {
     await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
-    await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeEnabled();
-    await openManualBadgeEntry(page);
+    await expect(page.getByRole("dialog", { name: "Continuous badge scanner", exact: true })).toBeVisible();
+    await openManualBadgeEntry(page, true);
     await page.getByLabel("Badge code", { exact: true }).fill(badgeId);
-    await page
-      .getByRole("checkbox", {
-        name: "The attendee agrees to share their contact details with this sponsor.",
-        exact: true,
-      })
-      .check();
-    const manual = page.getByRole("dialog", { name: "Review sponsor lead", exact: true });
+    const manual = page
+      .getByRole("dialog", { name: "Continuous badge scanner", exact: true })
+      .locator(".pk-fast-scanner__manual");
     const capture = manual.getByRole("button", { name: "Confirm lead", exact: true });
     expect(
       await capture.evaluate((button) => {
         const form = (button as HTMLButtonElement).form;
-        return Boolean(
-          form?.noValidate && form.querySelector('[name="badgeId"]') && form.querySelector('[name="consentConfirmed"]'),
-        );
+        return Boolean(form?.noValidate && form.querySelector('[name="badgeId"]'));
       }),
     ).toBe(true);
     await capture.click();
@@ -316,7 +303,11 @@ export async function captureOfflineSponsorBadge(
         message: "The real offline sponsor capture must commit exactly one durable pending scan before upload",
       })
       .toBe(1);
-    await expect(page.getByText("1 scans awaiting upload", { exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole("status", { name: "Scanner status", exact: true })
+        .getByText(/^1 awaiting upload(?: · syncing…)?$/),
+    ).toBeVisible();
     const pending = await scannerStorage(page);
     expect(pending.pending).toHaveLength(1);
     pendingLead = enrolledEventScanRequestSchema.parse(pending.pending[0]!.scan);
@@ -338,7 +329,6 @@ export async function captureOfflineSponsorBadge(
   }
   if (!pendingLead || !pendingPrivacy) throw new Error("The inspected offline lead must survive to reconciliation");
   const request = pendingLead;
-  await page.getByRole("button", { name: "Sync now", exact: true }).click();
   await expect.poll(async () => (await scannerStorage(page)).pending.length).toBe(0);
   const archived = (await scannerStorage(page)).history.find((row) => row.scan.operationId === request.operationId);
   expect(archived?.scan).toEqual(request);
@@ -354,6 +344,18 @@ export async function captureOfflineSponsorBadge(
 }
 
 export async function captureSponsorViews(page: Page, info: TestInfo, checkpoint: string) {
+  const scanner = page.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
+  if (await scanner.isVisible()) {
+    const width = page.viewportSize()?.width;
+    if (width)
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await page.screenshot({
+      fullPage: true,
+      animations: "disabled",
+      path: info.outputPath(`sponsor-${checkpoint}-scanner-phone.png`),
+    });
+    return;
+  }
   for (const [name, width, height] of [
     ["desktop", 1280, 900],
     ["phone", 390, 844],
@@ -376,6 +378,12 @@ export async function captureSponsorViews(page: Page, info: TestInfo, checkpoint
       animations: "disabled",
       path: info.outputPath(`sponsor-${checkpoint}-${name}.png`),
     });
+    const scannerPanel = page
+      .locator(".pk-panel")
+      .filter({ has: page.getByRole("button", { name: /^(Next|Start scanning)$/ }) })
+      .last();
+    if (await scannerPanel.count())
+      await scannerPanel.screenshot({ path: info.outputPath(`sponsor-${checkpoint}-${name}-scanner.png`) });
   }
 }
 

@@ -374,13 +374,24 @@ describe("admin event management endpoints", () => {
   it("links the organizer's registration action to the registration flow, not the event's page", async () => {
     await setupAdmin();
     await env.DB.prepare(
-      "UPDATE events SET base_path = '/events/2026/pqc-2026/', registration_mode = 'open' WHERE slug = 'pqc-2026'",
+      "UPDATE events SET base_path = '/events/2026/pqc-2026/', registration_mode = 'open', visibility = 'public' WHERE slug = 'pqc-2026'",
     ).run();
 
     const detail = eventManagementDetailResponseSchema.parse(await (await callAdmin("/api/v1/events/pqc-2026")).json());
 
     expect(detail.event.basePath).toBe("/events/2026/pqc-2026/");
     expect(detail.event.registrationPath).toBe("/events/2026/pqc-2026/register/");
+  });
+
+  it("links no public page for an event without one, though it has a base path", async () => {
+    await setupAdmin();
+    await env.DB.prepare(
+      "UPDATE events SET base_path = '/events/2026/pqc-2026/', visibility = 'invitation_only' WHERE slug = 'pqc-2026'",
+    ).run();
+
+    const detail = eventManagementDetailResponseSchema.parse(await (await callAdmin("/api/v1/events/pqc-2026")).json());
+
+    expect(detail.event.basePath).toBeNull();
   });
 
   it("offers the registration flow of a required event but not of an invitation-only one", async () => {

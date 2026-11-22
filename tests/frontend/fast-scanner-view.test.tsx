@@ -174,9 +174,9 @@ describe("continuous scanner presentation", () => {
       />,
     );
     expect(html).toContain("Scanner operator controls");
-    expect(html).toContain("Using saved badge data");
+    expect(html).toContain("Badge data is more than a day old");
     expect(html).toContain("Last badge refresh");
-    expect(html).toContain("Badge data valid until");
+    expect(html).toContain("Offline access ends");
     expect(html).toContain(formatDateTime(snapshot.serverNow));
     expect(html).toContain(formatDateTime(snapshot.expiresAt));
     expect(html).not.toContain("Last sync");
@@ -278,12 +278,12 @@ describe("continuous scanner presentation", () => {
     await Promise.resolve();
     vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
     document.dispatchEvent(new Event("visibilitychange"));
-    expect(exit).toHaveBeenCalledOnce();
+    expect(exit).not.toHaveBeenCalled();
     expect(lock.release).toHaveBeenCalledOnce();
     release();
   });
   it.each(["Escape", "hidden"] as const)(
-    "keeps the immersive viewport after native fullscreen loss until %s, then cleans up",
+    "keeps the immersive viewport after native fullscreen loss and %s, then cleans up",
     async (stop) => {
       const element = document.createElement("div");
       let fullscreen: Element | null = element;
@@ -309,6 +309,14 @@ describe("continuous scanner presentation", () => {
           vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
           document.dispatchEvent(new Event("visibilitychange"));
           expect(lock.release).toHaveBeenCalledOnce();
+        }
+        if (stop === "hidden") {
+          expect(exit).not.toHaveBeenCalled();
+          expect(document.body.classList.contains("pk-scanner-immersive")).toBe(true);
+          vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+          document.dispatchEvent(new Event("visibilitychange"));
+          expect(lock.release).toHaveBeenCalledOnce();
+          document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
         }
         expect(exit).toHaveBeenCalledOnce();
         cleanup();
@@ -400,7 +408,7 @@ it("shows compact setup feedback without a fullscreen mark while retaining actua
   expect(html).toContain("pk-event-scanner--compact");
   expect(html).not.toContain("pk-event-scanner__mark");
   expect(html).toContain("Unable to save scan. Retry.");
-  expect(html).toContain("2 scans awaiting upload");
+  expect(html).not.toContain("2 scans awaiting upload");
 });
 
 it.each([

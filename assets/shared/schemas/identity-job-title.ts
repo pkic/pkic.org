@@ -6,19 +6,15 @@
  * the rule stays readable and its next edit asks for the title.
  */
 import { z } from "zod";
-import { JOB_TITLE_REQUIRED } from "./api-common";
+import { JOB_TITLE_REQUIRED, jobTitleSchema } from "./api-common";
 
 export { JOB_TITLE_REQUIRED };
 
 /** Shown on an organization identity that has no job title yet. */
 export const JOB_TITLE_NEEDED_LABEL = "Job title needed";
 
-/** The job title an organization identity is created with: required, at most 200 characters. */
-export const organizationIdentityJobTitleSchema = z
-  .string({ error: JOB_TITLE_REQUIRED })
-  .trim()
-  .min(1, JOB_TITLE_REQUIRED)
-  .max(200);
+/** The job title an organization identity is created with: the one required job title rule. */
+export const organizationIdentityJobTitleSchema = jobTitleSchema;
 
 /** What an edit needs to know about the identity it changes. */
 export interface IdentityJobTitleContext {

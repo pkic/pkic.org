@@ -3,7 +3,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LIVE_REACTIONS, LIVE_ROOM_POLICY } from "../../assets/shared/live-session-policy";
-import { LIVE_REACTION_PAUSED } from "../../assets/ts/live-session/LiveReactionBar";
+import { LIVE_REACTION_PAUSED, LiveReactionBar } from "../../assets/ts/live-session/LiveReactionBar";
 import { SessionReactions } from "../../assets/ts/live-session/SessionReactions";
 import { LIVE_OCCURRENCE, fakeLiveSockets, liveSnapshot } from "./helpers/live-room-socket";
 
@@ -119,5 +119,25 @@ describe("the session's reaction bar", () => {
     expect(bar.status()).toBe(LIVE_REACTION_PAUSED);
     await act(() => bar.button("Laugh").click());
     expect(bar.reactions()).toEqual([]);
+  });
+
+  it("keeps applause in reach on a phone and the other reactions behind one button", async () => {
+    const send = vi.fn(() => true);
+    host = document.body.appendChild(document.createElement("div"));
+    await act(() => render(<LiveReactionBar send={send} refusal={null} compact />, host!));
+    const bar = host.querySelector<HTMLElement>('[aria-label="React to this session"]')!;
+    expect([...bar.querySelectorAll("button")].map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Applause",
+    ]);
+    const more = host.querySelector<HTMLButtonElement>('button[aria-label="More reactions"]')!;
+    await act(() => more.click());
+    const picker = host.querySelector<HTMLElement>('[role="toolbar"][aria-label="Reactions"]')!;
+    expect([...picker.querySelectorAll("button")].map((button) => button.getAttribute("aria-label"))).toEqual(
+      LIVE_REACTIONS.slice(1).map((reaction) => reaction.label),
+    );
+    expect(picker.querySelector("[aria-pressed]")).toBeNull();
+    await act(() => picker.querySelector<HTMLButtonElement>('[aria-label="Love"]')!.click());
+    expect(send).toHaveBeenCalledWith({ type: "reaction.send", reaction: "love" });
+    expect(host.querySelector('[role="toolbar"][aria-label="Reactions"]')).toBeNull();
   });
 });

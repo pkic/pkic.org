@@ -155,7 +155,7 @@ export type LiveTimerDraft = z.infer<typeof liveTimerDraftSchema>;
 // ── The timer graphic ───────────────────────────────────────────────────────
 
 /**
- * `clock` grows with the time it shows (12:34, 1:02:34, 3d 04:12, 2y 145d)
+ * `clock` grows with the time it shows (12:34, 1:02:34, 3d 4h 12m)
  * and reads the same in the studio and on every screen; `ss` is total seconds.
  */
 export const LIVE_TIMER_FORMATS = ["clock", "ss", "custom"] as const;
@@ -171,7 +171,12 @@ export const LIVE_TIMER_PLACEMENTS = [
   "center",
 ] as const;
 export const LIVE_TIMER_SIZES = ["small", "medium", "large"] as const;
-export const LIVE_TIMER_PRESENTATIONS = ["ring", "digital"] as const;
+/**
+ * How a timer looks on air: digits on a white plate (`digital`), white digits
+ * with no background (`bare`), a plate that hangs from the frame's top or
+ * bottom edge (`tab`), or the time in the consortium emblem (`ring`).
+ */
+export const LIVE_TIMER_PRESENTATIONS = ["digital", "bare", "tab", "ring"] as const;
 
 export const liveTimerGraphicSchema = z
   .object({
@@ -187,7 +192,11 @@ export const liveTimerGraphicSchema = z
       .max(300)
       .refine((value) => validateOverlayTextTemplate(value) === null, "Use a valid duration template.")
       .default("{{hours}}h {{minutes}}m {{seconds}}s"),
-    showLogo: z.boolean().default(true),
+    /**
+     * No longer drawn: timers carry no logo. Kept so timers saved with it
+     * still load; nothing sets or reads it.
+     */
+    showLogo: z.boolean().default(false),
     direction: z.enum(LIVE_TIMER_DIRECTIONS),
     /** The graphic turns to its warning color with this much time left. */
     warningSeconds: z
@@ -219,14 +228,15 @@ export function defaultLiveTimerGraphic(timerId: string): LiveTimerGraphic {
   return {
     timerId,
     label: null,
-    showLabel: true,
+    // The stream and the projector read the time alone; the stage display names it anyway.
+    showLabel: false,
     format: "clock",
     customFormat: "{{hours}}h {{minutes}}m {{seconds}}s",
-    showLogo: true,
+    showLogo: false,
     direction: "remaining",
     warningSeconds: 120,
     overrunSeconds: 0,
-    presentation: "ring",
+    presentation: "digital",
     placement: "layout",
     size: "large",
   };

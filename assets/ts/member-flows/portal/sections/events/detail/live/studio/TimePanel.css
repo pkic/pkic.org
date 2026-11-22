@@ -1,9 +1,10 @@
 /*
  * The Time panel: one row per timer, fixed so nothing moves while operating.
  * The row follows the panel's width: a phone keeps the name over the value,
- * PVW and PGM, Start or Pause, and the menu; a medium panel adds the detail
- * and Reset in a single line; a wide one adds the screens and a minute
- * either way. Start, Reset and the minutes are one joined control. What a width hides stays in the row's menu.
+ * PVW and PGM, Start or Pause, Reset, and the menu; a medium panel adds the
+ * detail in a single line; a wide one adds the screens and a minute either
+ * way. Start, Reset and the minutes are one joined control. What a width
+ * hides stays in the row's menu.
  */
 @layer components {
   .pk-studio-time {
@@ -28,25 +29,28 @@
       "reading outputs transport menu";
     align-items: center;
     column-gap: var(--pk-2);
-    row-gap: var(--pk-1);
-    padding: var(--pk-2) var(--pk-3);
+    row-gap: 2px;
+    min-block-size: 3rem;
+    padding: var(--pk-1) var(--pk-2) var(--pk-1) var(--pk-3);
     border-block-end: 1px solid var(--pk-line-soft);
   }
   /*
    * Narrow panels hide what they cannot fit, below a width rather than
    * revealing it above one: revealing with display: revert would undo the
-   * buttons' own flex centering.
+   * buttons' own flex centering. Each hide is scoped to the panel, so it
+   * outranks the button's own display rule whichever stylesheet loads last.
    */
   @container studio-time (width < 30rem) {
-    .pk-studio-time__detail,
-    .pk-studio-time__reset {
+    .pk-studio-time .pk-studio-time__detail {
       display: none;
     }
   }
   @container studio-time (width < 46rem) {
-    .pk-studio-time__minus,
-    .pk-studio-time__plus,
-    .pk-studio-time__outputs .pk-output-target > .pk-menu {
+    .pk-studio-time .pk-studio-time__minus,
+    .pk-studio-time .pk-studio-time__plus,
+    /* A session on the agenda has only the minutes, so its control goes with them. */
+    .pk-studio-time .pk-studio-time__transport[data-following],
+    .pk-studio-time .pk-studio-time__outputs .pk-output-target > .pk-menu {
       display: none;
     }
   }
@@ -65,7 +69,8 @@
     grid-area: name;
     min-inline-size: 0;
     overflow: hidden;
-    font-weight: 700;
+    font-size: var(--pk-text-sm);
+    font-weight: 600;
     white-space: nowrap;
     text-overflow: ellipsis;
   }
@@ -134,6 +139,7 @@
   }
   .pk-studio-time__transport {
     grid-area: transport;
+    justify-self: end;
   }
   .pk-studio-time__menu {
     display: flex;

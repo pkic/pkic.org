@@ -5,6 +5,7 @@ import {
   liveTickerContextSchema,
   DEFAULT_LIVE_TICKER_CONTEXT,
 } from "../../../../assets/shared/schemas/live-session-ticker";
+import { parseJsonSafe } from "../../utils/json";
 import type { LiveRoomSql } from "./room-sql";
 
 const basisSchema = z.object({
@@ -20,14 +21,20 @@ export class LiveRoomGraphicBasis {
   ready = false;
   constructor(private readonly sql: LiveRoomSql) {}
 
+  /**
+   * The saved basis. One that no longer reads, such as one that still holds
+   * a built-in scene retired since, reads as none, so the room reads it
+   * again from the event instead of failing.
+   */
   read(): Basis {
     if (this.current) return this.current;
     const [row] = this.sql.rows<{ value_json: string }>(
       "SELECT value_json FROM room_controls WHERE name='graphicBasis'",
     );
-    this.ready = row !== undefined;
-    return (this.current = row
-      ? basisSchema.parse(JSON.parse(row.value_json))
+    const saved = row ? basisSchema.safeParse(parseJsonSafe<unknown>(row.value_json, null)) : null;
+    this.ready = saved?.success === true;
+    return (this.current = saved?.success
+      ? saved.data
       : {
           layouts: [],
           context: DEFAULT_LIVE_TICKER_CONTEXT,

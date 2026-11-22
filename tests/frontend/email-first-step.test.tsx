@@ -16,6 +16,8 @@ import {
 } from "../../assets/shared/email-first-copy";
 import type { MailboxKind } from "../../assets/shared/schemas/email-domains";
 import { workEmailStepForKindSchema, workEmailStepSchema } from "../../assets/shared/schemas/work-email";
+import { ACCOUNT_POLICIES_COPY } from "../../assets/shared/account-policies";
+import { userSignUpRequestSchema } from "../../assets/shared/schemas/user-auth";
 import { chooseCard, controlFor, radioNamed } from "./helpers/labeled-control";
 
 let host: HTMLDivElement | undefined;
@@ -74,6 +76,24 @@ function Harness({ flow, onContinue }: { flow: EmailFirstFlow; onContinue: (step
       }}
       sentTo={sentTo}
       onChangeEmail={() => setSentTo(null)}
+    />
+  );
+}
+
+function SignUpHarness() {
+  const [email, setEmail] = useState("");
+  const [individual, setIndividual] = useState(false);
+  const [accepted, setAccepted] = useState(false);
+  return (
+    <EmailFirstStep
+      flow="registration"
+      schema={userSignUpRequestSchema}
+      email={email}
+      onEmailChange={setEmail}
+      individual={individual}
+      onIndividualChange={setIndividual}
+      accountPolicies={{ accepted, onChange: setAccepted }}
+      onContinue={async () => {}}
     />
   );
 }
@@ -298,6 +318,28 @@ describe("email-first step", () => {
       button!.click();
     });
     await vi.waitFor(() => expect(sent).toHaveLength(1));
+  });
+
+  it("keeps the action unavailable until the step is valid, and Enter shows every reason at once", async () => {
+    host = document.createElement("div");
+    document.body.append(host);
+    await act(() => render(<SignUpHarness />, host!));
+    const action = () =>
+      [...host!.querySelectorAll("button")].find((button) => button.textContent === copy.work.action)!;
+    expect(action().disabled).toBe(true);
+
+    await act(() => {
+      controlFor(host!, copy.work.label).dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    expect(host!.textContent).toContain("Please enter a valid email address");
+    expect(host!.textContent).toContain(ACCOUNT_POLICIES_COPY.required);
+
+    await type(copy.work.label, "ada@official.example");
+    expect(action().disabled).toBe(true);
+    await act(() => {
+      host!.querySelector<HTMLInputElement>('input[name="acceptsAccountPolicies"]')!.click();
+    });
+    expect(action().disabled).toBe(false);
   });
 
   it("has no automatically detectable accessibility defects on either card", async () => {

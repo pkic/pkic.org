@@ -38,13 +38,24 @@ const ROLE_SELECT_COLUMNS = `r.id, r.name, r.description, r.is_system_role, r.cr
                      '[]'
                    ) AS permissions_json`;
 
+/**
+ * A stored permission this version does not know grants nothing here, so it is
+ * left out of what is shown. One such row (written by a newer version, or left
+ * after a rollback) must not make every role unreadable.
+ */
+function knownPermissions(stored: readonly unknown[]): string[] {
+  return stored.filter(
+    (permission): permission is string => typeof permission === "string" && isPermission(permission),
+  );
+}
+
 function serializeRole(row: RoleRow): Role {
   return roleResponseSchema.parse({
     id: row.id,
     name: row.name,
     description: row.description,
     isSystemRole: row.is_system_role === 1,
-    permissions: parseJsonSafe<unknown>(row.permissions_json, []),
+    permissions: knownPermissions(parseJsonSafe<unknown[]>(row.permissions_json, [])),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });
@@ -152,13 +163,16 @@ export async function updateRole(
   if (existing.is_system_role === 1 && input.name !== undefined && input.name !== existing.name) {
     throw new AppError(409, "SYSTEM_ROLE", "System role names cannot be changed");
   }
-  const currentPermissions = (
+  const storedPermissions = (
     await all<{ permission: string }>(
       db,
       "SELECT permission FROM role_permissions WHERE role_id = ? ORDER BY permission ASC",
       [roleId],
     )
   ).map((row) => row.permission);
+  const currentPermissions = knownPermissions(storedPermissions);
+  // Rows this version does not know are not its to remove: an edit keeps them as they are.
+  const keptUnknown = storedPermissions.filter((permission) => !isPermission(permission));
   const added = (input.permissions ?? []).filter((permission) => !currentPermissions.includes(permission));
   const proposedPermissions = input.permissions === undefined ? undefined : new Set<string>(input.permissions);
   const removed = proposedPermissions
@@ -238,7 +252,7 @@ export async function updateRole(
   if (input.permissions !== undefined) {
     statements.push(
       db.prepare("DELETE FROM role_permissions WHERE role_id = ?").bind(roleId),
-      ...input.permissions.map((permission) =>
+      ...[...input.permissions, ...keptUnknown].map((permission) =>
         db
           .prepare("INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES (?, ?, ?, ?)")
           .bind(uuid(), roleId, permission, now),
@@ -251,13 +265,15 @@ export async function updateRole(
 
   const permissions =
     input.permissions ??
-    (
-      await all<{ permission: string }>(
-        db,
-        "SELECT permission FROM role_permissions WHERE role_id = ? ORDER BY permission ASC",
-        [roleId],
-      )
-    ).map((row) => row.permission);
+    knownPermissions(
+      (
+        await all<{ permission: string }>(
+          db,
+          "SELECT permission FROM role_permissions WHERE role_id = ? ORDER BY permission ASC",
+          [roleId],
+        )
+      ).map((row) => row.permission),
+    );
 
   return roleResponseSchema.parse({
     id: roleId,

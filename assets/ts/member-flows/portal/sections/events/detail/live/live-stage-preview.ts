@@ -35,6 +35,7 @@ export function previewLiveStage(
           authorName: question.anonymous ? null : question.authorName,
           authorPhotoUrl: question.anonymous ? null : question.authorPhotoUrl,
           authorAffiliation: question.anonymous ? null : (question.authorAffiliation ?? null),
+          addressedTo: question.addressedTo,
         }
       : null;
     next.questionChange = null;
@@ -71,6 +72,8 @@ export function previewLiveStage(
     };
     next.chatFeed = message.chatFeed && { config: message.chatFeed, messages: stage.chatFeed?.messages ?? [] };
     next.reactions = message.reactions;
+    next.reactionsGraphic = message.reactionsGraphic;
+    next.scene = message.scene;
   }
   if (message.type === "stage.timer")
     next.timerGraphics = updateLiveTimerGraphics(stage.timerGraphics, message.timer, message.visible);
@@ -110,5 +113,9 @@ export function livePreviewDifferences(preview: LiveStage, program: LiveStage): 
     JSON.stringify(left.checkIn) === JSON.stringify(right.checkIn) &&
     (left.checkInTheme !== right.checkInTheme ||
       JSON.stringify(left.checkInText) !== JSON.stringify(right.checkInText));
-  return changed + (poll ? 1 : 0) + (checkInPresentationChanged ? 1 : 0);
+  const reactionsPresentationChanged =
+    left.reactions &&
+    right.reactions &&
+    JSON.stringify(left.reactionsGraphic) !== JSON.stringify(right.reactionsGraphic);
+  return changed + (poll ? 1 : 0) + (checkInPresentationChanged ? 1 : 0) + (reactionsPresentationChanged ? 1 : 0);
 }

@@ -1,4 +1,11 @@
+import {
+  eventAttendanceAccessMode,
+  type EventAttendanceAccessMode,
+} from "../../../assets/shared/event-attendance-access";
 import type { EmailDayAttendance, EmailDayWaitlist } from "../../../assets/shared/schemas/email-template-data";
+import { eventAttendanceOptionSchema } from "../../../assets/shared/schemas/event-configuration";
+import { emailPlainText, type EmailPlainTextValue } from "../email/plain-text";
+import { parseJsonSafe } from "./json";
 /**
  * Human-readable labels for registration attendance type values.
  */
@@ -18,6 +25,49 @@ export const STATUS_LABELS: Record<string, string> = {
 };
 
 type DayWaitlistEmailEntry = EmailDayWaitlist;
+
+/**
+ * A suggested option, in the organizer's words. Both are plain text, so the email shows them
+ * literally; an empty description stays empty for the template's condition.
+ */
+export type WaitlistAlternativeEmailItem = {
+  label: EmailPlainTextValue;
+  description: EmailPlainTextValue | "";
+  limited: boolean;
+};
+
+/**
+ * Whether a day attended at the venue gets the person in. Only a confirmed day does, so every
+ * venue day says which it is; a day attended remotely needs no note.
+ */
+const VENUE_DAY_NOTES: Record<string, string> = {
+  "": "confirmed",
+  accepted: "confirmed",
+  waiting: "waitlisted",
+  offered: "waitlisted, seat offered",
+  expired: "waitlisted, offer expired",
+};
+
+/** What a day with a seat says while the registration itself is not settled. */
+const UNSETTLED_DAY_NOTES = { payment_required: "awaiting payment", cancelled: "cancelled" } as const;
+
+/** Which kinds of unconfirmed venue day a registration has, so one notice explains each next step. */
+export type VenueDayStanding = {
+  hasUnconfirmedVenueDay: boolean;
+  hasWaitingVenueDay: boolean;
+  hasOfferedVenueDay: boolean;
+  hasExpiredVenueDay: boolean;
+};
+
+function venueDayStanding(days: Array<{ statusNote: string; waitlistStatus: string }>): VenueDayStanding {
+  const unconfirmed = days.filter((day) => day.statusNote && day.statusNote !== VENUE_DAY_NOTES[""]);
+  return {
+    hasUnconfirmedVenueDay: unconfirmed.length > 0,
+    hasWaitingVenueDay: unconfirmed.some((day) => day.waitlistStatus !== "offered" && day.waitlistStatus !== "expired"),
+    hasOfferedVenueDay: unconfirmed.some((day) => day.waitlistStatus === "offered"),
+    hasExpiredVenueDay: unconfirmed.some((day) => day.waitlistStatus === "expired"),
+  };
+}
 
 export function hasActiveDayWaitlist(dayWaitlist: DayWaitlistEmailEntry[] = []): boolean {
   return dayWaitlist.some((entry) => entry.status === "waiting" || entry.status === "offered");
@@ -60,35 +110,99 @@ export function buildRegistrationEmailStatusData(
  * falling back to the ISO day_date if no label is set.
  */
 export function buildAttendanceEmailData(
-  dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null; optionLabel?: string | null }>,
+  dayAttendance: Array<{
+    dayDate: string;
+    attendanceType: string;
+    label: string | null;
+    optionLabel?: string | null;
+    accessMode?: EventAttendanceAccessMode;
+    /** The configured option the day suggests when its own option is full, as stored JSON. */
+    waitlistAlternativeJson?: string | null;
+  }>,
   dayWaitlist: DayWaitlistEmailEntry[] = [],
+  /** What keeps a day with a seat from being confirmed: an unpaid ticket, or a cancelled registration. */
+  unsettled?: "payment_required" | "cancelled",
 ): {
   attendanceLabel: string;
   dayAttendance: EmailDayAttendance[];
+  venueDayStanding: VenueDayStanding;
+  waitlistAlternatives: WaitlistAlternativeEmailItem[];
 } {
   const waitlistByDay = new Map(dayWaitlist.map((entry) => [entry.dayDate, entry.status]));
 
   if (dayAttendance.length > 0) {
+    const days = dayAttendance.map((d) => {
+      // A cancelled registration waits for nothing.
+      const waitlistStatus = unsettled === "cancelled" ? "" : (waitlistByDay.get(d.dayDate) ?? "");
+      const venueNote = VENUE_DAY_NOTES[waitlistStatus] ?? "waitlisted";
+      return {
+        dayLabel: d.label ?? d.dayDate,
+        attendanceLabel: d.optionLabel ?? ATTENDANCE_TYPE_LABELS[d.attendanceType] ?? d.attendanceType,
+        statusLabel: buildDayAttendanceStatusLabel(d.attendanceType, waitlistStatus, d.optionLabel),
+        statusNote:
+          unsettled === "cancelled"
+            ? "cancelled"
+            : eventAttendanceAccessMode({ value: d.attendanceType, accessMode: d.accessMode }) === "physical"
+              ? unsettled && venueNote === VENUE_DAY_NOTES[""]
+                ? UNSETTLED_DAY_NOTES[unsettled]
+                : venueNote
+              : "",
+        waitlistStatus,
+        isWaitlisted: waitlistStatus === "waiting",
+        isWaitlistOffer: waitlistStatus === "offered",
+      };
+    });
+    // The seat notice explains waitlist steps only; payment and cancellation have their own.
+    const waiting = days.filter((day) => day.waitlistStatus && day.waitlistStatus !== "accepted");
     return {
       attendanceLabel: "",
-      dayAttendance: dayAttendance.map((d) => {
-        const waitlistStatus = waitlistByDay.get(d.dayDate) ?? "";
-        return {
-          dayLabel: d.label ?? d.dayDate,
-          attendanceLabel: d.optionLabel ?? ATTENDANCE_TYPE_LABELS[d.attendanceType] ?? d.attendanceType,
-          statusLabel: buildDayAttendanceStatusLabel(d.attendanceType, waitlistStatus, d.optionLabel),
-          waitlistStatus,
-          isWaitlisted: waitlistStatus === "waiting",
-          isWaitlistOffer: waitlistStatus === "offered",
-        };
-      }),
+      dayAttendance: days,
+      venueDayStanding: venueDayStanding(unsettled ? waiting : days),
+      waitlistAlternatives: waitlistAlternatives(dayAttendance, waitlistByDay),
     };
   }
 
   return {
     attendanceLabel: "",
     dayAttendance: [],
+    venueDayStanding: venueDayStanding([]),
+    waitlistAlternatives: [],
   };
+}
+
+/**
+ * The options to suggest for venue days still on the waitlist, each once. Only the organizer's
+ * label and description say what they are; the email adds no event-specific wording.
+ */
+function waitlistAlternatives(
+  dayAttendance: ReadonlyArray<{
+    dayDate: string;
+    attendanceType: string;
+    accessMode?: EventAttendanceAccessMode;
+    waitlistAlternativeJson?: string | null;
+  }>,
+  waitlistByDay: ReadonlyMap<string, string>,
+): WaitlistAlternativeEmailItem[] {
+  const suggested = new Map<string, { label: string; description: string; limited: boolean }>();
+  for (const day of dayAttendance) {
+    // A held offer is the person's seat to claim, so only a day still waiting gets a suggestion.
+    if (waitlistByDay.get(day.dayDate) !== "waiting") continue;
+    if (eventAttendanceAccessMode({ value: day.attendanceType, accessMode: day.accessMode }) !== "physical") continue;
+    const parsed = day.waitlistAlternativeJson
+      ? eventAttendanceOptionSchema.safeParse(parseJsonSafe<unknown>(day.waitlistAlternativeJson, null))
+      : null;
+    if (!parsed?.success || parsed.data.enabled === false) continue;
+    const description = (parsed.data.description ?? "").replace(/[.\s]+$/, "");
+    const limited = parsed.data.capacity != null;
+    const key = `${parsed.data.label}\u0000${description}`;
+    const known = suggested.get(key);
+    suggested.set(key, { label: parsed.data.label, description, limited: limited || Boolean(known?.limited) });
+  }
+  return [...suggested.values()].map(({ label, description, limited }) => ({
+    label: emailPlainText(label),
+    description: description ? emailPlainText(description) : "",
+    limited,
+  }));
 }
 
 function buildDayAttendanceStatusLabel(

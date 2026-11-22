@@ -15,7 +15,7 @@ import { requiresSession, ok, authErrors } from "./route-contract";
 
 export const oauthAuthorizationScopeSchema = z
   .object({
-    permission: accessGrantCreateSchema.shape.permission,
+    permission: permissionSchema,
     contextType: accessGrantCreateSchema.shape.contextType.unwrap(),
     contextId: accessGrantCreateSchema.shape.contextId.unwrap(),
   })

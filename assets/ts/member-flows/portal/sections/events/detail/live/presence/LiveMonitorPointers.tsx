@@ -1,12 +1,15 @@
 import { Avatar } from "../../../../../../../ui/Avatar";
 import type { JSX } from "preact";
-import { LIVE_PRESENCE_OUTPUTS, type LivePresenceOutput } from "../../../../../../../../shared/live-room-presence";
+import {
+  livePresenceOutputSchema,
+  type LivePresenceOutput,
+} from "../../../../../../../../shared/schemas/live-session-presence";
 import { useLivePresence, useLivePresenceController } from "./live-presence";
 import "./LivePresence.css";
 
 /** Whether a monitor shows a composition every operator sees the same way, so a pointer on it means the same spot. */
 export function livePointerOutput(output: string): output is LivePresenceOutput {
-  return (LIVE_PRESENCE_OUTPUTS as readonly string[]).includes(output);
+  return livePresenceOutputSchema.safeParse(output).success;
 }
 
 const percent = (value: number) => `${(value * 100).toFixed(2)}%`;

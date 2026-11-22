@@ -6,6 +6,8 @@
 import { z } from "zod";
 import { YOUTUBE_VIDEO_ID_PATTERN, youtubeVideoId } from "../youtube-video";
 import { eventSlugParamsSchema } from "./api-common";
+import { databaseIdSchema } from "./identifiers";
+import { eventProductionPartnerCreditsSchema } from "./event-production-partners";
 import { eventDayDateSchema } from "./event-read-models";
 import { timeZoneSchema } from "./event-series";
 import { authErrors, ok, requiresPermissions, requiresSession } from "./route-contract";
@@ -76,6 +78,8 @@ export const virtualRoomLocationSchema = z.object({
   name: z.string(),
   stream: liveStreamSchema.nullable(),
   days: dayOverridesSchema(locationLiveStreamDaySchema),
+  /** The session the studio has loaded in this location, which its virtual room follows; null for none. */
+  loadedOccurrenceId: databaseIdSchema.nullable().default(null),
 });
 export type VirtualRoomLocation = z.infer<typeof virtualRoomLocationSchema>;
 
@@ -83,6 +87,8 @@ export type VirtualRoomLocation = z.infer<typeof virtualRoomLocationSchema>;
 export const virtualRoomResponseSchema = z.object({
   timeZone: timeZoneSchema,
   locations: z.array(virtualRoomLocationSchema).max(100),
+  /** Who helps produce the event's streams, credited under them apart from the sponsors. */
+  productionPartners: eventProductionPartnerCreditsSchema.default([]),
 });
 export type VirtualRoomResponse = z.infer<typeof virtualRoomResponseSchema>;
 

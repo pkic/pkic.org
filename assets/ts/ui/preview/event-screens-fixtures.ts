@@ -3,6 +3,8 @@
  * morning, so every screenshot reads the same.
  */
 import { DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS } from "../../../shared/schemas/live-stage-display-settings";
+import { DEFAULT_LIVE_SCREEN_SYNC } from "../../../shared/schemas/live-screen-sync";
+import { DEFAULT_LIVE_ROOM_OPENING } from "../../../shared/schemas/live-room-opening";
 import { DEFAULT_LIVE_TICKER_CONTEXT } from "../../../shared/schemas/live-session-ticker";
 import {
   EMPTY_LIVE_AUX_COMPOSITION,
@@ -14,12 +16,14 @@ import { defaultLiveTimerGraphic } from "../../../shared/schemas/live-session-ti
 import { sessionLiveTimer } from "../../../shared/live-timer-policy";
 import { applyLiveRoomMessage, type LiveRoomState } from "../../live-session/live-room-state";
 import type { ScreenCachedAgenda } from "../../event-screens/screen-cache";
+import { NO_LIVE_ROOM_SOURCES } from "../../../shared/schemas/live-room-sources";
 
 export const SCREEN_FIXTURE = {
   screenId: "K7M2QA",
   pairingCode: "HJKP4QRT",
   name: "Foyer, by registration",
   roomId: "30000000-0000-4000-8000-000000000001",
+  eventSlug: "pqc-2026",
   roomName: "Blue room",
   timeZone: "Europe/Amsterdam",
 } as const;
@@ -87,9 +91,10 @@ function stageDisplayState(
     session: { ...session, timeZone: SCREEN_FIXTURE.timeZone, credits: [] },
     viewer: { role: "attendee", name: "Stage display" },
     overlayMode: "direct",
-    chat: [],
     questions: [],
     polls: [],
+    preparedQuestions: [],
+    preparedQuestionWindow: null,
     stage: EMPTY_LIVE_AUX_COMPOSITION,
     // The stage display draws its own composition: the session timer and the room's Up next.
     outputs: { ...EMPTY_LIVE_OUTPUTS, "stage-display": stageDisplay },
@@ -103,6 +108,10 @@ function stageDisplayState(
     stageDisplayNext: null,
     stageDisplayNextVotes: null,
     stageDisplaySettings: DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS,
+    screenSync: DEFAULT_LIVE_SCREEN_SYNC,
+    opening: DEFAULT_LIVE_ROOM_OPENING,
+    movedOn: null,
+    sources: NO_LIVE_ROOM_SOURCES,
   };
   return applyLiveRoomMessage(null, snapshot)!;
 }

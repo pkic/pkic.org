@@ -3,6 +3,7 @@ import { json } from "../../../../../_lib/http";
 import { logError } from "../../../../../_lib/logging";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { requestDb } from "../../../../../_lib/db/context";
+import { prepareOptionalRequestViewer } from "../../../../../_lib/auth/optional-request-viewer";
 import { getEventRegistrationConfigurationBySlug } from "../../../../../_lib/services/events/registration-configuration";
 
 function isMissingTableError(error: unknown): boolean {
@@ -11,9 +12,9 @@ function isMissingTableError(error: unknown): boolean {
 
 export const EventFormPlacementGet = openApiRoute(eventFormPlacementGetRouteSchema, async (c: any, data) => {
   try {
-    return json(
-      await getEventRegistrationConfigurationBySlug(requestDb(c), data.params.eventSlug, data.params.purpose),
-    );
+    const db = requestDb(c);
+    const auth = await prepareOptionalRequestViewer(db, c.req.raw, c.env);
+    return json(await getEventRegistrationConfigurationBySlug(db, data.params.eventSlug, data.params.purpose, auth));
   } catch (error) {
     if (!isMissingTableError(error)) throw error;
     logError("EVENT_FORM_PLACEMENT_SCHEMA_MISSING", {

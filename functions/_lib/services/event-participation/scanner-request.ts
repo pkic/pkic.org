@@ -37,20 +37,13 @@ export async function recordScannerUploadRequest(
   if (basis.type === "lead") {
     const context = { type: "event_sponsor", id: scan.sponsorId! };
     requirePermission(actor, "agenda:leads_capture", context);
+    const captureBasis = basis.read.decode(loaded.slice(offset + 1), event.id);
     const authority = guardScannerUploadAuthority(db, actor, context, "agenda:leads_capture", scan);
     return receiveScannerUpload(
       authority.db,
       event.id,
       scan,
-      (uploadDb) =>
-        captureSponsorLead(
-          uploadDb,
-          event.id,
-          scan.sponsorId!,
-          actor.id,
-          basis.input,
-          basis.read.decode(loaded.slice(offset + 1), event.id),
-        ),
+      (uploadDb) => captureSponsorLead(uploadDb, event.id, scan.sponsorId!, actor.id, basis.input, captureBasis),
       loaded[offset],
     );
   }

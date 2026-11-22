@@ -1,3 +1,5 @@
+import { formResponsesSection } from "./form-responses";
+import { grantPermissionsSection } from "./GrantPermissionsPreview";
 import { guidedTourSection } from "./GuidedTourPreview";
 import { imageCarouselSection } from "./image-carousel";
 import { badgeOutputProgressSection } from "./badge-output-progress";
@@ -5,7 +7,7 @@ import { TooltipPreview } from "./TooltipPreview";
 import { proposalSections } from "./sections-proposals";
 import { ServerSelectPreview } from "./ServerSelectPreview";
 import { RegistrationFieldsPreview } from "./RegistrationFieldsPreview";
-import { OrganizationReviewDomainPreview, VerifiedOrganizationPreview } from "./VerifiedOrganizationPreview";
+import { OrganizationBeforeDomainPreview, VerifiedOrganizationPreview } from "./VerifiedOrganizationPreview";
 import { ContentVersionNoticePreview } from "./ContentVersionNoticePreview";
 import { ModelNavigationPreview } from "./ModelNavigationPreview";
 import { contentContributionPreview } from "./ContentContributionPreview";
@@ -59,7 +61,7 @@ import { Toolbar } from "../Toolbar";
 import type { ToneProps } from "../tone";
 import type { PreviewSection } from "./PreviewShell";
 import { ProfileBiographiesExample } from "./profile-biographies";
-import { AgendaExample } from "./agenda-example";
+import { agendaSections } from "./agenda-example";
 
 /** One membership workflow, as its domain module would declare it: a tone, and a place in the flow while in flight. */
 const applicationStages: (ToneProps & { label: string })[] = [
@@ -267,6 +269,7 @@ function RowListSpecimen() {
 const wallLogo = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="16" viewBox="0 0 100 40"><path fill="currentColor" d="M0 0h28v40H0zm36 0h28v40H36zm36 0h28v40H72z"/></svg>')}`;
 
 export const patternSections: PreviewSection[] = [
+  formResponsesSection,
   guidedTourSection,
   pictureUploadSection,
   consentAgreementsSection,
@@ -295,10 +298,10 @@ export const patternSections: PreviewSection[] = [
     render: () => <RegistrationFieldsPreview />,
   },
   {
-    id: "organization-review-domain",
+    id: "organization-before-domain",
     title: "Organization before domain selection",
-    note: "Review guidance waits until an email domain is selected.",
-    render: () => <OrganizationReviewDomainPreview />,
+    note: "The domain guidance waits until an email domain is selected.",
+    render: () => <OrganizationBeforeDomainPreview />,
   },
   {
     id: "verified-organization",
@@ -358,11 +361,7 @@ export const patternSections: PreviewSection[] = [
       </div>
     ),
   },
-  {
-    id: "agenda",
-    title: "Agenda",
-    render: () => <AgendaExample />,
-  },
+  ...agendaSections,
   imageCarouselSection,
   ...contentSections,
   {
@@ -428,7 +427,7 @@ export const patternSections: PreviewSection[] = [
   {
     id: "tooltip",
     title: "Tooltip",
-    note: "Short icon labels use native titles. Structured help is available on hover, focus and tap, without clipping inside a table.",
+    note: "Short icon labels use native titles; live-production surfaces show them as Control hints instead. Structured help is available on hover, focus and tap, without clipping inside a table.",
     render: () => <TooltipPreview />,
   },
   {
@@ -592,4 +591,5 @@ export const patternSections: PreviewSection[] = [
   },
   contentContributionPreview,
   badgeOutputProgressSection,
+  grantPermissionsSection,
 ];

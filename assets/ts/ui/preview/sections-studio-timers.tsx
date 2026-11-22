@@ -16,7 +16,6 @@ import { Panel } from "../Panel";
 import { SectionHeading } from "../SectionHeading";
 import {
   TIMERS_FIXTURE_NOW,
-  TIMERS_FIXTURE_SESSION,
   agendaSessionTimer,
   breakTimer,
   clockTimer,
@@ -41,7 +40,7 @@ function Fixed({ children }: { children: ComponentChildren }) {
   return <LiveClockContext.Provider value={fixedClock}>{children}</LiveClockContext.Provider>;
 }
 
-function TimeSpecimen() {
+function TimeSpecimen({ state = panelState }: { state?: LiveRoomState }) {
   return (
     <Fixed>
       <div data-density="compact">
@@ -53,12 +52,12 @@ function TimeSpecimen() {
           </header>
           <div class="pk-studio-panel__body">
             <TimePanel
-              state={panelState}
-              clock={panelState.session.timeZone}
+              state={state}
+              clock={state.session.timeZone}
               send={send}
               disabled={false}
               next={null}
-              targets={{ state: panelState, programActive: true, disabled: false, sendProgram: send }}
+              targets={{ state, programActive: true, disabled: false, sendProgram: send }}
             />
           </div>
         </Panel>
@@ -77,12 +76,59 @@ function StageDisplay({ state }: { state: LiveRoomState }) {
   );
 }
 
+/** Program with these timer graphics in the layout's corner, over a picture as on the stream. */
+function ProgramTimers({ state }: { state: LiveRoomState }) {
+  return (
+    <Fixed>
+      <div class="pk-preview__screen pk-preview__camera">
+        <LiveOverlayPresentation view="program" projection={state} />
+      </div>
+    </Fixed>
+  );
+}
+
+const programTimers = timersRoomState([pitchTimer, lunchTimer, overrunPitchTimer], [], {
+  stage: {
+    ...timersRoomState([]).stage,
+    timerGraphics: [
+      { ...defaultLiveTimerGraphic(pitchTimer.id), warningSeconds: 30 },
+      { ...defaultLiveTimerGraphic(lunchTimer.id), presentation: "digital" },
+      defaultLiveTimerGraphic(overrunPitchTimer.id),
+    ],
+  },
+});
+
+const programMark = timersRoomState([pitchTimer], [], {
+  stage: {
+    ...timersRoomState([]).stage,
+    timerGraphics: [{ ...defaultLiveTimerGraphic(pitchTimer.id), presentation: "ring", warningSeconds: 30 }],
+  },
+});
+
 export const studioTimerSections: PreviewSection[] = [
+  {
+    id: "program-timer-mark",
+    title: "Program: a timer as the mark",
+    note: "A pitch in the emblem: its seats fill in the event's colors as the time goes, clipped to the seats at any size.",
+    render: () => <ProgramTimers state={programMark} />,
+  },
+  {
+    id: "program-timers",
+    title: "Program: timers in the corner",
+    note: "Each timer on a plate in the event's colors, stacked down the top-right corner at full size: a pitch in its warning with the ring of time left, a countdown to lunch without a ring, and a pitch over time.",
+    render: () => <ProgramTimers state={programTimers} />,
+  },
   {
     id: "studio-time-panel",
     title: "Studio: Time panel",
-    note: "One row per timer: value and progress, PVW and PGM first, then Start, Reset and a minute either way; the menu holds every action.",
+    note: "One row per timer: value and progress, PVW and PGM first, then Start, Reset and a minute either way; the menu holds every action. The session timer waits on the agenda with no controls.",
     render: () => <TimeSpecimen />,
+  },
+  {
+    id: "studio-time-panel-session-running",
+    title: "Studio: session timer during its session",
+    note: "On the agenda the session timer runs by itself: its row offers only a minute either way.",
+    render: () => <TimeSpecimen state={stageClockState} />,
   },
   {
     id: "studio-timer-settings",
@@ -92,7 +138,6 @@ export const studioTimerSections: PreviewSection[] = [
       <div data-density="compact">
         <LiveTimerDialog
           timer={pitchTimer}
-          session={TIMERS_FIXTURE_SESSION}
           clock="Europe/Amsterdam"
           graphic={defaultLiveTimerGraphic(pitchTimer.id)}
           send={send}

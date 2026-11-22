@@ -35,7 +35,8 @@ export interface ConfirmActionRequest {
   consequences?: readonly string[];
   /** Names the action, e.g. "Remove from organization" — never "OK". */
   confirmLabel: string;
-  cancelLabel?: string;
+  /** Null drops it, for a notice whose one button closes it. */
+  cancelLabel?: string | null;
   tone?: "danger" | "primary";
   /**
    * For irreversible operations: the exact string the user must type back

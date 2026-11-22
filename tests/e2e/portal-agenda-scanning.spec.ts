@@ -9,8 +9,8 @@ import { archivedScanSchema } from "../../assets/shared/schemas/event-scan-recov
 import { expect, test, type Page, type Response, type TestInfo } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
-import { confirmRegistration, ownDomainEmail, registerInBrowser } from "./helpers/registration";
-import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
+import { ownDomainEmail, registerInBrowser } from "./helpers/registration";
+import { registerSignedIn } from "./helpers/registrant";
 import {
   eventScanRequestSchema,
   eventScanResponseSchema,
@@ -233,7 +233,9 @@ async function scanAttendance(page: Page, credential: string, publishedRevision:
   });
   const receipt = eventScanResponseSchema.parse(await response.json());
   expect(receipt.operationId).toBe(request.operationId);
-  await expect(page.getByText("0 scans awaiting upload", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("status", { name: "Scanner status", exact: true }).getByText("All scans synced", { exact: true }),
+  ).toBeVisible();
   await expect(page.locator(".pk-event-scanner")).not.toContainText(/upload pending/i);
   return receipt;
 }
@@ -303,7 +305,9 @@ test("phone scanner retains an IDs-only offline scan and acknowledges it after r
   await openScannerManualEntry(page);
   await page.getByLabel("Badge code", { exact: true }).fill(badgeId);
   await page.getByRole("button", { name: "Record attendance", exact: true }).click();
-  await expect(page.getByText("1 scans awaiting upload", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("status", { name: "Scanner status", exact: true }).getByText(/^1 awaiting upload(?: · syncing…)?$/),
+  ).toBeVisible();
   await expect(page.getByText("Unknown badge", { exact: true })).toBeVisible();
   const records = await queuedRecords(page);
   expect(records).toHaveLength(1);
@@ -321,7 +325,9 @@ test("phone scanner retains an IDs-only offline scan and acknowledges it after r
   await context.setOffline(false);
   await page.getByRole("button", { name: "Sync now", exact: true }).click();
   await expect(page.getByText("Unknown badge", { exact: true })).toBeVisible();
-  await expect(page.getByText("0 scans awaiting upload", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("status", { name: "Scanner status", exact: true }).getByText("All scans synced", { exact: true }),
+  ).toBeVisible();
   expect(await queuedRecords(page)).toHaveLength(0);
   const retained = await page.evaluate(async (storageVersion) => {
     const opening = indexedDB.open("pkic-scanner-outbox", storageVersion);
@@ -361,7 +367,9 @@ test("phone scanner retains an IDs-only offline scan and acknowledges it after r
   });
   expect(await replayResponse.json()).toMatchObject({ operationId: record.scan.operationId, outcome: "unknown" });
   await closeScannerDiagnostics(page);
-  await expect(page.getByText("0 scans awaiting upload", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("status", { name: "Scanner status", exact: true }).getByText("All scans synced", { exact: true }),
+  ).toBeVisible();
 
   expect(
     await page.evaluate(async () => {
@@ -382,22 +390,19 @@ test("organizer reloads two independent QR credentials, replaces only one and re
   test.setTimeout(180_000);
   const templateEmail = ownDomainEmail("badge-template");
   const template = await registerInBrowser(page, templateEmail, undefined, undefined, {
-    organization: "Badge Template Org",
+    organization: `Badge Template Org ${Date.now()}`,
   });
   const email = ownDomainEmail("scanner");
-  const since = await capturedEmailCount();
-  const registration = await page.request.post(`/api/v1/events/${slug}/registrations`, {
-    data: registrationCreateSchema.parse({
+  await registerSignedIn(
+    page,
+    slug,
+    registrationCreateSchema.parse({
       ...template.request,
       email,
       dayAttendance: template.request.dayAttendance?.map((day) => ({ ...day, attendanceType: "in_person" })),
     }),
-  });
-  expect(registration.status(), await registration.text()).toBe(200);
-  const confirmation = await waitForCapturedEmail(email, "Confirm your registration", { since });
-  await page.goto(extractEmailUrl(confirmation, "/register/confirm"));
-  await confirmRegistration(page, "Scanner Credential Org");
-  await waitForCapturedEmail(email, "registration is confirmed", { since });
+    { organization: `Scanner Credential Org ${Date.now()}` },
+  );
   await signInAsE2eStaff(page, e2eAdminEmail("default"));
   // Reuse earlier scenarios' approved capture context without publishing their current draft.
   const draftResponse = await page.request.get(`/api/v1/events/${slug}/agenda`);

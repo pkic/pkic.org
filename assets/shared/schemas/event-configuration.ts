@@ -2,7 +2,7 @@ import { z } from "zod";
 import { successResponseSchema, termKeySchema, trimmedString, termVersionSchema } from "./api-common";
 import { addDuplicateStringIssues } from "./refinements";
 import { attendanceIconSchema } from "../event-attendance-icons";
-import { eventAttendanceAccessModeSchema } from "../event-attendance-access";
+import { eventAttendanceAccessMode, eventAttendanceAccessModeSchema } from "../event-attendance-access";
 
 /**
  * Configuration contracts shared by every event-management surface. These are
@@ -55,19 +55,23 @@ export const eventTermsResponseSchema = z.object({
 });
 export const eventTermsReplaceResponseSchema = successResponseSchema;
 
+const attendanceOptionValueSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .regex(/^[a-z_][a-z0-9_]*$/);
+
 export const eventAttendanceOptionSchema = z.object({
-  value: z
-    .string()
-    .trim()
-    .min(1)
-    .max(64)
-    .regex(/^[a-z_][a-z0-9_]*$/),
+  value: attendanceOptionValueSchema,
   label: trimmedString(1, 80),
   description: z.string().trim().max(240).optional(),
   icon: attendanceIconSchema.optional(),
   accessMode: eventAttendanceAccessModeSchema.optional(),
   enabled: z.boolean().optional(),
   capacity: z.number().int().positive().nullable().optional(),
+  /** Another option of the same day that a person waitlisted for this one is pointed to. */
+  waitlistAlternative: attendanceOptionValueSchema.optional(),
 });
 export type EventAttendanceOption = z.infer<typeof eventAttendanceOptionSchema>;
 
@@ -97,6 +101,23 @@ export const eventDayInputSchema = z
       path: (index) => ["attendanceOptions", index, "value"],
       label: "Attendance option",
     });
+    const values = new Set(value.attendanceOptions.map((option) => option.value));
+    for (const [index, option] of value.attendanceOptions.entries()) {
+      const alternative = option.waitlistAlternative;
+      if (alternative === undefined) continue;
+      if (eventAttendanceAccessMode(option) !== "physical")
+        ctx.addIssue({
+          code: "custom",
+          message: "Only a venue option can suggest another option",
+          path: ["attendanceOptions", index, "waitlistAlternative"],
+        });
+      else if (alternative === option.value || !values.has(alternative))
+        ctx.addIssue({
+          code: "custom",
+          message: "Choose another option offered on this day",
+          path: ["attendanceOptions", index, "waitlistAlternative"],
+        });
+    }
   });
 
 export const eventDaysReplaceSchema = z

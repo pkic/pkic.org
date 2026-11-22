@@ -5,9 +5,14 @@ import "./LiveCreditTitles.css";
 
 /**
  * A person's title line on a stream graphic: their identity, or each of several in turn, rolling up to
- * the next. The caller's title box clips the roll.
+ * the next; for someone without an account, the line an operator typed. The caller's title box clips
+ * the roll.
  */
-export function LiveCreditTitles({ credit }: { credit: Pick<LiveCredit, "identity" | "additionalIdentities"> }) {
+export function LiveCreditTitles({
+  credit,
+}: {
+  credit: Pick<LiveCredit, "identity" | "additionalIdentities" | "titleLine">;
+}) {
   const lines = liveCreditAffiliations(credit);
   if (lines.length < 2) return <span>{lines[0] ?? ""}</span>;
   return (

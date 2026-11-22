@@ -3,6 +3,7 @@ import type { LiveOverlayLayoutGeometry } from "../../../../assets/shared/schema
 import type { DatabaseLike } from "../../types";
 import type { LiveChatRemoval } from "./room-chat";
 import { liveChatChannelVisible, type LiveChatFeed } from "./room-chat-feed";
+import { chatAudienceKey, seesChatOccurrence } from "./room-chat-audience";
 import {
   EMPTY_LIVE_AUX_COMPOSITION,
   EMPTY_LIVE_OUTPUTS,
@@ -12,27 +13,36 @@ import {
 import type { LiveRoomParticipant } from "./room-admission";
 import type { CustomAnswerValue } from "../../../../assets/shared/form-answer-rules";
 import type { LivePollStore } from "./room-poll-store";
+import { projectLivePreparedQuestion, type LivePreparedQuestionStore } from "./room-prepared-question-store";
 import {
   projectLivePoll,
   projectLiveQuestion,
   serializeLiveRoomMessage,
   type LiveQuestionAuthor,
 } from "./room-projection";
-import type { LiveQuestionRow, LiveRoomStore } from "./room-store";
+import type { LiveQuestionRow } from "./room-question-rows";
+import type { LiveRoomStore } from "./room-store";
 import { seesStageDisplayNext } from "../../../../assets/shared/live-stage-display";
+import { NO_LIVE_ROOM_SOURCES, type LiveRoomSources } from "../../../../assets/shared/schemas/live-room-sources";
+import { DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS } from "../../../../assets/shared/schemas/live-stage-display-settings";
+import { DEFAULT_LIVE_SCREEN_SYNC } from "../../../../assets/shared/schemas/live-screen-sync";
 
 const EMPTY_QUEUE = { question: [], "lower-third": [], poll: [], change: null };
 
 /** Attendees see Program on their own screens; the room's other outputs are for the stage and its crew. */
 function seesRoomOutputs(viewer: LiveRoomParticipant): boolean {
-  return viewer.role !== "attendee";
+  return viewer.studio === true || viewer.role === "overlay" || viewer.role === "speaker";
+}
+
+function seesSpeakerMessage(viewer: LiveRoomParticipant): boolean {
+  return viewer.role === "speaker" || viewer.role === "overlay" || viewer.studio === true;
 }
 
 function roomOutputMessage(message: LiveRoomServerMessage): boolean {
   return (
     message.type === "aux.changed" ||
-    message.type === "speaker.message.changed" ||
-    message.type === "stage.display.settings.changed"
+    message.type === "stage.display.settings.changed" ||
+    message.type === "screen.sync.changed"
   );
 }
 
@@ -45,6 +55,7 @@ export class LiveRoomBroadcast {
     private readonly ctx: DurableObjectState,
     private readonly store: LiveRoomStore,
     private readonly polls: LivePollStore,
+    private readonly prepared: LivePreparedQuestionStore,
     private readonly chat: LiveChatFeed,
     private readonly db: DatabaseLike,
     private readonly authorize: (sockets: WebSocket[]) => Promise<WebSocket[]>,
@@ -68,6 +79,7 @@ export class LiveRoomBroadcast {
     const answers = viewer.userId ? this.polls.answers(viewer.userId) : new Map<string, CustomAnswerValue>();
     const stage = this.store.stage();
     const operator = viewer.role === "operator";
+    const studio = viewer.studio === true;
     return serializeLiveRoomMessage({
       type: "room.snapshot",
       overlayLayouts: this.overlayLayouts(),
@@ -77,7 +89,7 @@ export class LiveRoomBroadcast {
         role: viewer.role,
         name: viewer.name,
         organizer: viewer.organizer ?? false,
-        chatRestriction: this.chat.moderation.restriction(viewer.userId),
+        participation: viewer.role === "operator" ? null : this.chat.decisions.restriction(viewer.userId, Date.now()),
       },
       questions: this.questionsFor(viewer, voted),
       polls: this.polls
@@ -85,20 +97,27 @@ export class LiveRoomBroadcast {
         .flatMap(
           (poll) => projectLivePoll(poll, viewer, answers.get(poll.id) ?? null, this.store.pollOnAir(poll.id)) ?? [],
         ),
+      preparedQuestions: studio ? this.prepared.list().map(projectLivePreparedQuestion) : [],
+      preparedQuestionWindow: studio ? this.prepared.window(session) : null,
       overlayMode: this.store.overlayMode(),
-      ...this.chat.snapshot(viewer),
       stage,
       outputs: seesRoomOutputs(viewer) ? this.store.outputs() : EMPTY_LIVE_OUTPUTS,
-      speakerMessage: seesRoomOutputs(viewer) ? this.store.speakerMessage() : null,
-      preview: operator ? this.store.preview() : EMPTY_LIVE_AUX_COMPOSITION,
+      speakerMessage: seesSpeakerMessage(viewer) ? this.store.speakerMessage() : null,
+      preview: studio ? this.store.preview() : EMPTY_LIVE_AUX_COMPOSITION,
       timers: this.store.timers(),
       reactionTotals: this.store.reactionTotals(),
-      queue: operator ? this.store.queue() : EMPTY_QUEUE,
+      queue: studio ? this.store.queue() : EMPTY_QUEUE,
       operators: operator ? this.operators(undefined, eligible) : [],
-      addedCredits: operator ? this.store.addedCredits() : [],
+      addedCredits: studio ? this.store.addedCredits() : [],
       stageDisplayNext: seesStageDisplayNext(viewer) ? this.store.preview().question : null,
       stageDisplayNextVotes: seesStageDisplayNext(viewer) ? this.nextVotes() : null,
-      stageDisplaySettings: this.store.stageDisplaySettings(),
+      stageDisplaySettings: seesRoomOutputs(viewer)
+        ? this.store.stageDisplaySettings()
+        : DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS,
+      screenSync: seesRoomOutputs(viewer) ? this.store.screenSync() : DEFAULT_LIVE_SCREEN_SYNC,
+      opening: this.store.opening(),
+      movedOn: this.store.movedOn(),
+      sources: studio ? this.sources() : NO_LIVE_ROOM_SOURCES,
     });
   }
 
@@ -207,6 +226,27 @@ export class LiveRoomBroadcast {
     return [...people.values()].sort((left, right) => left.name.localeCompare(right.name));
   }
 
+  /** How many read-only sources draw each output now; `leaving` is a socket that is closing. */
+  sources(leaving?: WebSocket): LiveRoomSources {
+    const sources: Record<string, number> = { ...NO_LIVE_ROOM_SOURCES };
+    for (const socket of this.ctx.getWebSockets("overlay")) {
+      if (socket === leaving || socket.readyState !== WebSocket.OPEN) continue;
+      const viewer = socket.deserializeAttachment() as LiveRoomParticipant;
+      if (viewer.role !== "overlay") continue;
+      const output = viewer.overlayOutput ?? "program";
+      sources[output] = (sources[output] ?? 0) + 1;
+    }
+    return sources;
+  }
+
+  async sourcesChanged(leaving?: WebSocket): Promise<void> {
+    const sources = this.sources(leaving);
+    await this.send(
+      (viewer) => (viewer.studio ? { type: "sources.changed", sources } : null),
+      (viewer) => String(viewer.studio === true),
+    );
+  }
+
   async operatorsChanged(leaving?: WebSocket): Promise<void> {
     await this.send(
       (viewer, sockets) =>
@@ -216,38 +256,43 @@ export class LiveRoomBroadcast {
   }
 
   /**
-   * A message that reads the same for its whole audience; queue, Preview and
-   * added-people changes reach operators only, and the room's other outputs never reach attendees.
+   * A message that reads the same for its whole audience; queue, Preview,
+   * prepared-question and added-people changes reach operators only, and the room's other outputs never reach attendees.
    */
   async all(message: LiveRoomServerMessage): Promise<void> {
-    const operatorsOnly =
+    const studioOnly =
       message.type === "queue.changed" ||
       message.type === "preview.changed" ||
       message.type === "credits.added.changed" ||
-      message.type === "program.cleared";
+      message.type === "program.cleared" ||
+      message.type === "question.prepared.changed";
+    const speakerOnly = message.type === "speaker.message.changed";
     const roomOutput = roomOutputMessage(message);
-    const banned = message.type === "chat.removed" ? this.chat.banned() : new Set<string>();
     await this.send(
       (viewer) =>
-        (operatorsOnly && viewer.role !== "operator") ||
-        (roomOutput && !seesRoomOutputs(viewer)) ||
-        (message.type === "chat.removed" && !liveChatChannelVisible(message.channel, viewer, banned))
+        (studioOnly && !viewer.studio) ||
+        (speakerOnly && !seesSpeakerMessage(viewer)) ||
+        (roomOutput && !seesRoomOutputs(viewer))
           ? null
           : message,
-      (viewer) =>
-        message.type === "chat.removed"
-          ? `${viewer.role}:${viewer.userId !== null && banned.has(viewer.userId)}`
-          : operatorsOnly || roomOutput
-            ? viewer.role
-            : "all",
+      studioOnly || speakerOnly || roomOutput ? null : (viewer) => viewer.role,
     );
     // Preview's question also reaches the stage display, as the speaker's next one; operators read it from Preview.
     if (message.type === "preview.changed") await this.stageDisplayNext();
   }
 
+  async chatRemoved(removal: LiveChatRemoval): Promise<void> {
+    await this.send(
+      (viewer) =>
+        liveChatChannelVisible(removal.channel, viewer) && seesChatOccurrence(viewer, removal.occurrence_id)
+          ? { type: "chat.removed", messageId: removal.id, channel: removal.channel }
+          : null,
+      chatAudienceKey,
+    );
+  }
+
   private sendChatRemovals(removed: readonly LiveChatRemoval[], sockets: WebSocket[]): void {
     if (!removed.length) return;
-    const banned = this.chat.banned();
     for (const socket of sockets) {
       if (
         socket.readyState !== WebSocket.OPEN ||
@@ -256,7 +301,8 @@ export class LiveRoomBroadcast {
         continue;
       for (const removal of removed) {
         const viewer = socket.deserializeAttachment() as LiveRoomParticipant;
-        if (!liveChatChannelVisible(removal.channel, viewer, banned)) continue;
+        if (!liveChatChannelVisible(removal.channel, viewer) || !seesChatOccurrence(viewer, removal.occurrence_id))
+          continue;
         try {
           socket.send(
             serializeLiveRoomMessage({ type: "chat.removed", messageId: removal.id, channel: removal.channel }),

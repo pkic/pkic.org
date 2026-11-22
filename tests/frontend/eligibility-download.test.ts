@@ -64,6 +64,45 @@ afterEach(() => {
 });
 
 describe("Conditional eligibility page downloads", () => {
+  it("reuses encrypted name entries when the server confirms their stable content digest", async () => {
+    const base = fixture();
+    const snapshot = cachedManifestSchema.parse({
+      ...base,
+      badgeNamesPrepared: true,
+      badgeNamesUnavailable: 0,
+      entries: [
+        {
+          ...base.entries[0],
+          badgeNameDigest: "b".repeat(64),
+          encryptedName: { version: 1, salt: "a".repeat(32), iv: "a".repeat(24), ciphertext: "a".repeat(32) },
+        },
+      ],
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const query = parseQuery(url);
+        expect(query.includeBadgeNames).toBe("true");
+        expect(query.knownDigest).toBeDefined();
+        const response = await page(snapshot, {}, query.knownDigest);
+        expect((await response.clone().json()).entries).toEqual([]);
+        return response;
+      }),
+    );
+    const result = await downloadEligibilitySnapshot(
+      "synthetic",
+      snapshot.operatorUserId,
+      null,
+      null,
+      snapshot,
+      undefined,
+      snapshot,
+      undefined,
+      true,
+    );
+    expect(result.entries).toEqual(snapshot.entries);
+    expect(result.badgeNamesPrepared).toBe(true);
+  });
   it("rejects an unchanged-page claim when the returned scope differs", async () => {
     const snapshot = fixture();
     vi.stubGlobal(
@@ -282,15 +321,13 @@ describe("Conditional eligibility page downloads", () => {
     expect(smaller.entries.find((entry) => entry.badgeId === inventory[699]!.badgeId)?.revoked).toBe(true);
   });
 
-  it.each([401, 403])("refuses permission denial %s without renewing the snapshot", async (status) => {
+  it.each([401, 403])("reports HTTP %s without claiming local sign-out", async (status) => {
     const snapshot = fixture();
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => new Response(null, { status })),
     );
-    await expect(download(snapshot)).rejects.toThrow(
-      status === 401 ? "SCANNER_SIGNED_OUT" : "SCANNER_PERMISSION_CHANGED",
-    );
+    await expect(download(snapshot)).rejects.toMatchObject({ code: "http", status });
   });
 
   it("reports a changed room without refusing scanner access", async () => {

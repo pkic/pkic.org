@@ -15,19 +15,34 @@ import {
   portalSectionChildren,
 } from "../../assets/ts/member-flows/portal/shell/portal-navigation";
 import { portalSessionFixture } from "../helpers/portal-session";
+import type { PortalSession } from "../../assets/ts/member-flows/portal/types";
 import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 
 describe("portal capability-derived navigation", () => {
-  it("opens the own user record for an affiliation without granting membership or workspace navigation", () => {
+  it("opens Home for every signed-in person, whatever they hold or wait for", () => {
+    const person = portalSessionFixture({});
+    for (const session of [
+      person,
+      portalSessionFixture({ member: true }),
+      portalSessionFixture({ staff: true }),
+      portalSessionFixture({ pendingIdentityCount: 1 }),
+      { ...person, eventParticipation: true },
+      { ...person, sponsors: [{ sponsorshipId: "00000000-0000-4000-8000-0000000000c1" }] },
+    ] as PortalSession[]) {
+      expect(portalDefaultPath(session)).toBe("/home");
+    }
+    expect(portalDefaultPath(null)).toBe("/");
+  });
+
+  it("grants an affiliation Home without membership or workspace navigation", () => {
     const session = userAuthSessionResponseSchema.parse({ ...portalSessionFixture({}), hasActiveIdentity: true });
-    const ownRecord = `/users/${session.identity.id}`;
-    expect(portalDefaultPath(session)).toBe(ownRecord);
+    expect(portalDefaultPath(session)).toBe("/home");
     expect(portalSectionEnabled(session, "users")).toBe(true);
     expect(portalNavigationItems(session).map((item) => item.label)).toEqual(["Home"]);
     for (const section of ["groups", "organizations", "members", "sponsors", "settings"] as const) {
       expect(portalSectionEnabled(session, section)).toBe(false);
     }
-    expect(portalCapacityFallbackPath(session, "/organizations/unrelated")).toBe(ownRecord);
+    expect(portalCapacityFallbackPath(session, "/organizations/unrelated")).toBe("/home");
   });
 
   it("opens the event pages Home links to for a signed-in person without event participation", () => {

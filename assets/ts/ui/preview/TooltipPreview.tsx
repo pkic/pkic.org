@@ -1,7 +1,9 @@
+import { useRef } from "preact/hooks";
+import { ControlTooltips } from "../ControlTooltips";
 import { Tooltip } from "../Tooltip";
 import { Badge } from "../Badge";
 import { Button } from "../Button";
-import { IconPlus } from "../../components/icons";
+import { IconLayoutReset, IconPlus } from "../../components/icons";
 export function TooltipPreview() {
   return (
     <div class="pk-preview__shelf">
@@ -24,6 +26,32 @@ export function TooltipPreview() {
           <Badge dot={false}>3 days</Badge>
         </Tooltip>
       </span>
+    </div>
+  );
+}
+
+/** A surface with `ControlTooltips`: a coded control and an icon control, each with a hint in the house style. */
+export function ControlTooltipPreview() {
+  const surface = useRef<HTMLDivElement>(null);
+  return (
+    <div ref={surface} class="pk-preview__shelf" data-density="compact">
+      <ControlTooltips scope={surface} />
+      <span data-gallery-open="focus">
+        <Button
+          aria-pressed={false}
+          aria-label="Show Sam Speaker on air"
+          title={"Off air\nClick to put it on air now. Preview is not needed first."}
+        >
+          PGM
+        </Button>
+      </span>
+      <Button
+        icon
+        aria-label="Reset layout"
+        title={"Reset layout\nPut this workspace's panels back where they started. Nothing on air changes."}
+      >
+        <IconLayoutReset />
+      </Button>
     </div>
   );
 }

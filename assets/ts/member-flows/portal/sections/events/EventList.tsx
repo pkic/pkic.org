@@ -2,7 +2,7 @@ import { EventCollectionCard, eventWhen } from "./EventCollectionCard";
 import { CollectionStatusLine } from "../../../../ui/CollectionCard";
 import { DiscoveryViewToggle, useDiscoveryView } from "../DiscoveryView";
 import { formatEventPlace } from "../../../../../shared/event-place";
-import { eventParticipantRecordPath } from "./event-participant-paths";
+import { eventParticipantRecordPath } from "../../../../../shared/event-participant-paths";
 import { useRef } from "preact/hooks";
 import type { z } from "zod";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
@@ -91,10 +91,11 @@ function workspaceActions(event: EventRow, navigate: (path: string) => void): Me
         })) ?? []),
       ]
     : [];
-  if (isAudienceEvent(event) || !event.ownerGroupId || !canOpenGroupWorkspace(portalSession.value, event.ownerGroupId))
+  // An audience row names its owning group only to the event's team, who open the record there as the group's guest.
+  if (!event.ownerGroupId || !canOpenGroupWorkspace(portalSession.value, event.ownerGroupId, event.id))
     return audienceActions;
   const groupId = event.ownerGroupId;
-  const groupLabel = event.ownerGroupTypeLabel ?? "group";
+  const groupLabel = (isAudienceEvent(event) ? null : event.ownerGroupTypeLabel) ?? "group";
   return [
     ...audienceActions,
     {
@@ -186,7 +187,7 @@ export function EventList() {
             cell: (e) =>
               isAudienceEvent(e) || !e.ownerGroupId ? (
                 <span class="pk-muted">—</span>
-              ) : canOpenGroupWorkspace(portalSession.value, e.ownerGroupId) ? (
+              ) : canOpenGroupWorkspace(portalSession.value, e.ownerGroupId, e.id) ? (
                 <a href={`#/groups/${encodeURIComponent(e.ownerGroupId)}`}>{e.ownerGroupName ?? e.ownerGroupId}</a>
               ) : (
                 (e.ownerGroupName ?? e.ownerGroupId)

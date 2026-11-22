@@ -1,10 +1,13 @@
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
-import { prepareProposalProof } from "./helpers/proposal-proof";
+import { signInProposer } from "./helpers/proposal-proof";
+import { signInRegistrant } from "./helpers/auth";
+import { withIndependentCapacity } from "./helpers/independent-capacity";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { proposalCreateSchema } from "../assets/shared/schemas/proposal-management";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { prepareValidatedAttendeeRegistration } from "../functions/_lib/services/attendee-registration";
+import { requireIdentityFromRequest } from "../functions/_lib/auth/user-session";
 import { getEventById } from "../functions/_lib/services/events";
 import { toEventFormResolutionEvent, validateCustomAnswersForSubmission } from "../functions/_lib/services/forms";
 import { saveProposalAccessChanges } from "../functions/_lib/services/proposal-self-service";
@@ -64,11 +67,13 @@ async function prepareRegistration(eventId: string, answer: string) {
   )
     .bind(crypto.randomUUID(), eventId, new Date().toISOString(), new Date().toISOString())
     .run();
+  const { userId } = await signInRegistrant(env.DB, "form-attendee@example.test", {
+    firstName: "Form",
+    lastName: "Attendee",
+  });
   return prepareValidatedAttendeeRegistration(
     env.DB as unknown as DatabaseLike,
     {
-      firstName: "Form",
-      lastName: "Attendee",
       email: "form-attendee@example.test",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
       customAnswers: { answer },
@@ -84,11 +89,16 @@ async function prepareRegistration(eventId: string, answer: string) {
       ip: null,
       userAgent: null,
       signingSecret: SIGNING_SECRET,
-      pendingConfirmationDeadlineHours: 72,
-      confirmationTtlHours: 24,
       referralCodeLength: 8,
+      verifiedIdentity: { userId },
     },
   );
+}
+
+/** The signed-in proposer a proposal command acts for, resolved from a real session. */
+async function signedInProposer(email: string) {
+  const { headers } = await signInProposer({ environment: env, email });
+  return requireIdentityFromRequest(env.DB, new Request("https://app.test/", { headers }), env);
 }
 
 async function submitCurrentProposal(eventId: string, answer: string) {
@@ -100,18 +110,13 @@ async function submitCurrentProposal(eventId: string, answer: string) {
     customAnswers: { answer },
   });
   const body = proposalCreateSchema.parse({
-    ...(await prepareProposalProof({
-      environment: env,
-      eventSlug: event.slug,
-      email: "form-speaker@example.test",
-      consents: [{ termKey: "speaker-terms", version: "v1" }],
-      unaffiliatedAttestation: true,
-    })),
+    ...withIndependentCapacity({ unaffiliatedAttestation: true }),
     sourceType: "direct",
     proposer: {
       firstName: "Form",
       lastName: "Speaker",
       email: "form-speaker@example.test",
+      actingIdentityId: null,
       role: "proposer",
       links: [],
     },
@@ -128,6 +133,7 @@ async function submitCurrentProposal(eventId: string, answer: string) {
   return submitProposal(database, {
     event,
     body,
+    actor: await signedInProposer("form-speaker@example.test"),
     appBaseUrl: "https://app.test",
     signingSecret: env.INTERNAL_SIGNING_SECRET!,
     referralCodeLength: 8,
@@ -153,7 +159,7 @@ describe("form revision guards on registration and proposal commands", () => {
       code: "FORM_CHANGED",
     });
     expect(await queryAll(env.DB, "SELECT id FROM registrations WHERE id = ?", [prepared.registration.id])).toEqual([]);
-    expect(await queryAll(env.DB, "SELECT id FROM users WHERE email = 'form-attendee@example.test'")).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM consent_acceptances")).toEqual([]);
   });
 
   it("rolls back a new proposal when its validated form changes before commit", async () => {
@@ -167,15 +173,15 @@ describe("form revision guards on registration and proposal commands", () => {
       customAnswers: { answer: "before edit" },
     });
     const body = proposalCreateSchema.parse({
-      ...(await prepareProposalProof({
-        environment: env,
-        eventSlug: event.slug,
-        email: "stale-speaker@example.test",
-        consents: [{ termKey: "speaker-terms", version: "v1" }],
-        unaffiliatedAttestation: true,
-      })),
+      ...withIndependentCapacity({ unaffiliatedAttestation: true }),
       sourceType: "direct",
-      proposer: { firstName: "Stale", lastName: "Speaker", email: "stale-speaker@example.test", links: [] },
+      proposer: {
+        firstName: "Stale",
+        lastName: "Speaker",
+        email: "stale-speaker@example.test",
+        actingIdentityId: null,
+        links: [],
+      },
       proposal: {
         type: "talk",
         title: "A stale proposal submission that must be rejected",
@@ -185,12 +191,14 @@ describe("form revision guards on registration and proposal commands", () => {
       },
       consents: [{ termKey: "speaker-terms", version: "v1" }],
     });
+    const actor = await signedInProposer("stale-speaker@example.test");
     await advanceFormRevision(formId);
 
     await expect(
       submitProposal(database, {
         event,
         body,
+        actor,
         appBaseUrl: "https://app.test",
         signingSecret: env.INTERNAL_SIGNING_SECRET!,
         referralCodeLength: 8,
@@ -201,7 +209,10 @@ describe("form revision guards on registration and proposal commands", () => {
       }),
     ).rejects.toMatchObject({ status: 409, code: "FORM_CHANGED" });
     expect(await queryAll(env.DB, "SELECT id FROM session_proposals")).toEqual([]);
-    expect(await queryAll(env.DB, "SELECT id FROM users WHERE email = 'stale-speaker@example.test'")).toEqual([]);
+    // The submitted name would have completed the account; it rolls back with the proposal.
+    expect(
+      await queryAll(env.DB, "SELECT first_name, last_name FROM users WHERE email = 'stale-speaker@example.test'"),
+    ).toEqual([{ first_name: null, last_name: null }]);
   });
 
   it("rolls back registration and proposal edits when their live definitions change during the command", async () => {

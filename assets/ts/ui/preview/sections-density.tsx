@@ -84,7 +84,7 @@ function StudioTimerSpecimen() {
                 <path d="M5.5 3v10M10.5 3v10" />
               </StrokeIcon>
             </Button>
-            <Button icon class="pk-studio-time__reset" aria-label="Reset Session" title="Reset">
+            <Button icon aria-label="Reset Session" title="Reset">
               <StrokeIcon>
                 <path d="M3.5 8a4.5 4.5 0 1 0 1.3-3.2M3.5 2.5v2.8h2.8" />
               </StrokeIcon>

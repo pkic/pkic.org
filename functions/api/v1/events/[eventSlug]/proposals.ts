@@ -22,12 +22,14 @@ import { getProposalAccessForEvent } from "../../../../_lib/auth/proposal-access
 import { listEventProposals } from "../../../../_lib/services/event-proposals-list";
 import type { AdminContext } from "../../../../_lib/db/context";
 import { requireEventPermission } from "./authorization";
-import { resolveOptionalIdentityFromRequest } from "../../../../_lib/auth/user-session";
+import { requireIdentityFromRequest } from "../../../../_lib/auth/user-session";
 
 async function handleProposalCreate(
   c: any,
   data: ValidatedData<typeof eventProposalCreateRouteSchema>,
 ): Promise<Response> {
+  // Every proposal belongs to a signed-in account; nothing is read or written for an anonymous request.
+  const actor = await requireIdentityFromRequest(c.env.DB, c.req.raw, c.env);
   const config = getConfig(c.env, c.req.raw);
   const signingSecret = requireInternalSecret(c.env);
   const body = data.body;
@@ -60,7 +62,7 @@ async function handleProposalCreate(
   const proposalDetails = validatedForm.answers;
 
   const submitted = await submitProposal(c.env.DB, {
-    actor: await resolveOptionalIdentityFromRequest(c.env.DB, c.req.raw, c.env),
+    actor,
     event,
     body,
     appBaseUrl,

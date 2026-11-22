@@ -1,10 +1,13 @@
-import { expect, test } from "@playwright/test";
+import { expect, request, test } from "@playwright/test";
 import {
   approveMemberThroughReview,
   ensureAppOrigin,
   submitMembershipApplication,
   uniqueSuffix,
 } from "./helpers/membership";
+import { startAccountLinkToken } from "./helpers/sign-in-card";
+import { apiErrorPayloadSchema } from "../../assets/shared/schemas/api-common";
+import { userAuthVerifyResponseSchema, userAuthVerifySchema } from "../../assets/shared/schemas/user-auth";
 import { verifyMembershipJoinEmail } from "./helpers/member-join";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
@@ -30,7 +33,8 @@ test("the application refuses a draft missing its agreements, naming what is mis
   const email = `refusal-terms-${suffix}@refusal-terms-${suffix}.test`;
   await ensureAppOrigin(page);
 
-  const join = await verifyMembershipJoinEmail(page, email, { unaffiliatedAttestation: false });
+  // Only an individual applies through a continuation; an organization applies as an identity it holds.
+  const join = await verifyMembershipJoinEmail(page, email, { unaffiliatedAttestation: true });
   expect(join.status).toBe("application_ready");
   if (join.status !== "application_ready") throw new Error("Expected an application continuation");
 
@@ -49,14 +53,11 @@ test("the application refuses a draft missing its agreements, naming what is mis
         body: JSON.stringify({
           applicantEmail,
           applicantName: "Refusal Applicant",
-          membershipCategory: "F",
-          organizationName: "Refusal Organization",
+          membershipCategory: "H5",
           joinToken,
           answers: {
             reason: "Submitted without accepting the agreements.",
-            job_title: "Membership contact",
             about_yourself: "I work on PKI interoperability.",
-            about_organization: "We build PKI services.",
             agrees_bylaws: false,
             agrees_code_of_conduct: false,
             agrees_ipr_policy: false,
@@ -109,18 +110,9 @@ test("a second application from the same applicant does not create a second reco
    * holding two live applications for one applicant, because staff would then
    * review one and approve the other.
    */
-  const second = await page.evaluate(
-    async ({ email: applicantEmail }) => {
-      const response = await fetch("/api/v1/members/join/verify", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: applicantEmail }),
-      });
-      return { status: response.status, body: await response.text() };
-    },
-    { email },
-  );
-  expect(second.status, second.body).toBeLessThan(500);
+  const second = await verifyMembershipJoinEmail(page, email);
+  // Asking again leads to the application already made, never to a second one.
+  expect(second.status).toBe("application_in_progress");
 
   await ensureAppOrigin(page);
   const applications = await page.evaluate(
@@ -163,58 +155,37 @@ test("an application for an organization the consortium already has is refused, 
   });
   await page.context().clearCookies();
 
-  // Somebody else, at their own domain, naming that same organization.
+  /*
+   * Somebody else, at their own domain, naming that same organization. An
+   * organization applies as an identity its applicant holds, and account
+   * setup's organization step will not hand an outsider an identity in an
+   * existing organization: the name is refused there, before any second
+   * application can start.
+   */
   const applicantEmail = `outsider-${suffix}@outsider-${suffix}.test`;
   await ensureAppOrigin(page);
-  const join = await verifyMembershipJoinEmail(page, applicantEmail);
-  expect(join.status).toBe("application_ready");
-  if (join.status !== "application_ready") throw new Error("Expected an application continuation");
-
-  const refused = await page.evaluate(
-    async ({ email, name, organization, joinToken }) => {
-      const response = await fetch("/api/v1/members/applications", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          applicantEmail: email,
-          applicantName: name,
-          membershipCategory: "F",
-          organizationName: organization,
-          joinToken,
-          answers: {
-            reason: "This browser journey exercises the membership review workflow.",
-            job_title: "Membership contact",
-            about_yourself: "I work on PKI interoperability.",
-            about_organization: "We build PKI services.",
-            agrees_bylaws: true,
-            agrees_code_of_conduct: true,
-            agrees_ipr_policy: true,
-            warranted_authority: true,
-          },
-        }),
-      });
-      return { status: response.status, body: await response.text() };
-    },
-    {
-      email: applicantEmail,
-      name: `Outsider ${suffix}`,
-      // Spelled as somebody typing it in a hurry would: the match is on the
-      // consortium's normalized name, not on the characters submitted.
-      organization: `  ${organizationName.toUpperCase()}  `,
-      joinToken: join.joinToken,
-    },
-  );
-
-  // Refused, and named: the applicant is told the organization is already a
-  // member rather than left waiting on a review that can only end one way.
-  expect(refused.status, refused.body).toBe(409);
-  const refusal = JSON.parse(refused.body) as {
-    error: { code: string; message: string; details: { fieldErrors: Record<string, string[]> } };
-  };
-  expect(refusal.error.code).toBe("ORGANIZATION_ALREADY_MEMBER");
-  // Named as the consortium holds it, so the applicant can recognize it.
-  expect(refusal.error.message).toContain(organizationName);
-  // And carried on the box they would have to change, the way every other
-  // refusal in this form is, so it is marked rather than only announced.
-  expect(refusal.error.details.fieldErrors.organizationName?.[0]).toContain(organizationName);
+  const applicant = await request.newContext({ baseURL: new URL(page.url()).origin });
+  try {
+    const token = await startAccountLinkToken(applicant, applicantEmail);
+    const verify = (body: object) =>
+      applicant.post("/api/v1/auth/verify-link", { data: userAuthVerifySchema.parse({ token, ...body }) });
+    const opened = await verify({});
+    expect(opened.status(), await opened.text()).toBe(200);
+    expect(userAuthVerifyResponseSchema.parse(await opened.json())).toHaveProperty("organizationRequired");
+    // Spelled as somebody typing it in a hurry would: the match is on the
+    // consortium's normalized name, not on the characters submitted.
+    const refused = await verify({
+      affiliation: {
+        selection: {
+          organizationId: null,
+          organizationName: `  ${organizationName.toUpperCase()}  `,
+          jobTitle: "Membership contact",
+        },
+      },
+    });
+    expect(refused.status(), await refused.text()).toBe(422);
+    expect(apiErrorPayloadSchema.parse(await refused.json()).error.code).toBe("ORGANIZATION_NAME_EXISTS");
+  } finally {
+    await applicant.dispose();
+  }
 });

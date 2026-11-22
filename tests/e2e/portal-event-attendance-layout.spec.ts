@@ -80,15 +80,9 @@ test("waitlist admission refuses a full option and succeeds after a place opens"
   const context = await browser.newContext({ baseURL: new URL(page.url()).origin });
   try {
     const attendee = await context.newPage();
-    await registerStateAttendee(attendee, fixture, `holder-${crypto.randomUUID()}@synthetic-waitlist.test`, {
-      staticRelease: false,
-      organization: "Synthetic waitlist company",
-    });
+    await registerStateAttendee(attendee, fixture, `holder-${crypto.randomUUID()}@synthetic-waitlist.test`);
     const email = `waiting-${crypto.randomUUID()}@synthetic-waitlist.test`;
-    await registerStateAttendee(attendee, fixture, email, {
-      staticRelease: false,
-      organization: "Synthetic waitlist company",
-    });
+    await registerStateAttendee(attendee, fixture, email);
     const roster = await page.request.get(`/api/v1/events/${fixture.slug}/registrations`, { params: { q: email } });
     expect(roster.status()).toBe(200);
     const registration = eventRegistrationsListResponseSchema.parse(await roster.json()).registrations[0]!;

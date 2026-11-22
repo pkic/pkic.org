@@ -1,5 +1,6 @@
 import { conferenceField } from "./conference-field.ts";
 import { scannerTokens } from "./scanner-tokens.ts";
+import { liveTokens } from "./live-tokens.ts";
 import { stageTokens } from "./stage-tokens.ts";
 /**
  * The canonical design tokens.
@@ -177,13 +178,7 @@ export const constants = {
   "text-xl": "1.25rem",
   "text-2xl": "1.5rem",
   "text-3xl": "2rem",
-  // Broadcast graphics use a fixed canvas, independent of the page's root font size.
-  "live-question-type": "64px",
-  "live-question-type-long": "52px",
-  "live-question-type-longer": "44px",
-  "live-question-type-longest": "36px",
-  "live-question-byline-type": "32px",
-  "live-control-scrim": "rgba(0, 0, 0, 0.6)",
+  ...liveTokens,
   "text-display": "clamp(2.25rem, 5vw, 3.5rem)",
   "text-display-lg": "clamp(2.6rem, 5vw, 3.5rem)",
   "text-display-mobile": "clamp(2rem, 10vw, 2.7rem)",
@@ -555,12 +550,7 @@ export const featureTokenGroups = {
     ...Object.keys(constants).filter((name) => name.startsWith("scanner-")),
   ],
   event: [
-    "live-question-type",
-    "live-question-type-long",
-    "live-question-type-longer",
-    "live-question-type-longest",
-    "live-question-byline-type",
-    "live-control-scrim",
+    ...Object.keys(liveTokens),
     "dur-timer-warning",
     "pqc-ink",
     "pqc-ink-muted",

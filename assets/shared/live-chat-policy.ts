@@ -6,6 +6,7 @@ import { LIVE_INTERACTION_BROADCAST_MILLISECONDS } from "./live-session-policy";
  * actions they grant, so the two read them from here.
  */
 import type { LiveRoomRole } from "./live-session-policy";
+import { liveParticipationActions, type LiveParticipationBlock } from "./live-moderation-policy";
 
 /** The fixed message reactions, in display order. One of each per person per message. */
 export const LIVE_CHAT_REACTIONS = [
@@ -21,23 +22,6 @@ export const LIVE_CHAT_REACTION_IDS = LIVE_CHAT_REACTIONS.map((reaction) => reac
   LiveChatReactionId,
   ...LiveChatReactionId[],
 ];
-
-/** Why a participant reports a message; moderators see the count per reason. */
-export const LIVE_CHAT_REPORT_REASONS = [
-  { id: "abuse", label: "Abuse or harassment" },
-  { id: "conduct", label: "Breaks the code of conduct" },
-  { id: "spam", label: "Spam" },
-  { id: "other", label: "Something else" },
-] as const;
-export type LiveChatReportReason = (typeof LIVE_CHAT_REPORT_REASONS)[number]["id"];
-export const LIVE_CHAT_REPORT_REASON_IDS = LIVE_CHAT_REPORT_REASONS.map((reason) => reason.id) as [
-  LiveChatReportReason,
-  ...LiveChatReportReason[],
-];
-
-/** An organizer's restriction on one person for the rest of the session. */
-export const LIVE_CHAT_RESTRICTIONS = ["muted", "banned"] as const;
-export type LiveChatRestriction = (typeof LIVE_CHAT_RESTRICTIONS)[number];
 
 export const LIVE_CHAT_POLICY = {
   /** Messages per channel a viewer receives on joining; earlier ones load on request. */
@@ -71,9 +55,14 @@ export const LIVE_CHAT_POLICY = {
   tickerRefreshMilliseconds: 5000,
   /** Characters of one message the ticker shows. */
   tickerMessageLength: 140,
+  /** How long after sending its author may still edit a message. */
+  editWindowSeconds: 300,
+  editsPerPerson: { limit: 10, windowSeconds: 60 },
+  /** Characters of the answered message a reply quotes. */
+  replyExcerptLength: 80,
 } as const;
 
-/** What a viewer may do to chat: everyone takes part, moderators run the room, organizers also restrict people. */
+/** What a viewer may do to chat: everyone takes part, moderators run the room, organizers also block for the event. */
 export type LiveChatCapacity = "participant" | "moderator" | "organizer";
 
 export function liveChatCapacity(viewer: { role: LiveRoomRole; organizer?: boolean }): LiveChatCapacity {
@@ -83,14 +72,20 @@ export function liveChatCapacity(viewer: { role: LiveRoomRole; organizer?: boole
 
 export const LIVE_CHAT_ACTIONS = [
   "send",
+  "reply",
+  "edit",
   "react",
   "report",
   "delete",
-  "hide",
+  "remove",
   "keep",
+  "done",
   "convert",
-  "mute",
-  "ban",
+  "pin",
+  "unpin",
+  "pause",
+  "block",
+  "blockEvent",
   "lift",
 ] as const;
 export type LiveChatAction = (typeof LIVE_CHAT_ACTIONS)[number];
@@ -99,68 +94,104 @@ export type LiveChatAction = (typeof LIVE_CHAT_ACTIONS)[number];
 export interface LiveChatActionSubject {
   channel: "attendee" | "operator";
   mine: boolean;
-  /** Hidden from attendees by a moderator, or held after reports. */
+  /** Removed by a moderator, or held after reports. */
   hidden: boolean;
   /** Held after reports and not yet reviewed. */
   held: boolean;
   reported: boolean;
   reportedByMe: boolean;
   converted: boolean;
-  /** The author operates this room, so no one restricts them from chat. */
+  /** Cleared from the studio queue. */
+  done: boolean;
+  /** The author operates this room, so no one blocks them. */
   authorStaff: boolean;
-  authorRestriction: LiveChatRestriction | null;
+  authorRestriction: LiveParticipationBlock | null;
+  sentAt: string;
+  /** Reported, asked as a question or shown on screen: its words stay as they are. */
+  editLocked: boolean;
+  /** Pinned above the chat. */
+  pinned?: boolean;
+}
+
+/** Whether a message sent at `sentAt` is still within its author's edit window. */
+export function liveChatEditOpen(sentAt: string, now = Date.now()): boolean {
+  return now - Date.parse(sentAt) < LIVE_CHAT_POLICY.editWindowSeconds * 1000;
 }
 
 /**
  * The actions one viewer may take on one message. The room checks every
- * request against this set; the message menu offers exactly this set.
+ * request against this set; the message menu offers exactly this set. A
+ * viewer kept from posting (`restricted`) still reads and deletes their own.
+ * A moderator takes their own message away by deleting it, as anyone does:
+ * removing with a reason is for someone else's message.
  *
- * | Action  | Participant         | Moderator          | Organizer          |
- * | ------- | ------------------- | ------------------ | ------------------ |
- * | send    | unless restricted   | yes                | yes                |
- * | react   | unless restricted   | yes                | yes                |
- * | report  | others' messages    | no (hides instead) | no (hides instead) |
- * | delete  | own messages        | own messages       | own messages       |
- * | hide    | no                  | any shown message  | any shown message  |
- * | keep    | no                  | held or reported   | held or reported   |
- * | convert | no                  | attendee messages  | attendee messages  |
- * | mute    | no                  | no                 | attendees          |
- * | ban     | no                  | no                 | attendees          |
- * | lift    | no                  | no                 | restricted people  |
+ * | Action     | Participant         | Moderator             | Organizer             |
+ * | ---------- | ------------------- | --------------------- | --------------------- |
+ * | send       | unless restricted   | yes                   | yes                   |
+ * | reply      | shown, unrestricted | shown                 | shown                 |
+ * | edit       | own, see below      | own, see below        | own, see below        |
+ * | react      | unless restricted   | yes                   | yes                   |
+ * | report     | others', unrestricted | no (removes instead) | no (removes instead) |
+ * | delete     | own messages        | own messages          | own messages          |
+ * | remove     | no                  | others' shown         | others' shown         |
+ * | keep       | no                  | held or reported      | held or reported      |
+ * | done       | no                  | attendee messages     | attendee messages     |
+ * | convert    | no                  | attendee messages     | attendee messages     |
+ * | pause      | no                  | unrestricted authors  | unrestricted authors  |
+ * | block      | no                  | not blocked yet       | not blocked yet       |
+ * | blockEvent | no                  | no                    | not blocked for event |
+ * | lift       | no                  | paused or session     | any block             |
+ *
+ * An author edits their own shown message within the edit window, while they may write in its channel and
+ * nobody reported it, asked it as a question or put it on screen.
  */
 export function liveChatActions(
   capacity: LiveChatCapacity,
-  restriction: LiveChatRestriction | null,
+  restricted: boolean,
   message: LiveChatActionSubject,
+  now = Date.now(),
 ): Set<LiveChatAction> {
   const actions = new Set<LiveChatAction>();
   const staff = capacity !== "participant";
-  if (restriction === "banned") return actions;
-  if (!restriction && !message.hidden) actions.add("react");
+  const writes = liveChatCanSend(capacity, restricted, message.channel);
+  if (writes && !message.hidden) actions.add("reply");
+  if (writes && message.mine && !message.hidden && !message.editLocked && liveChatEditOpen(message.sentAt, now))
+    actions.add("edit");
+  if (!restricted && !message.hidden) actions.add("react");
   if (message.mine) actions.add("delete");
-  if (!staff && !message.mine && !message.hidden && message.channel === "attendee" && !message.reportedByMe)
+  if (
+    !staff &&
+    !restricted &&
+    !message.mine &&
+    !message.hidden &&
+    message.channel === "attendee" &&
+    !message.reportedByMe
+  )
     actions.add("report");
   if (staff) {
-    if (!message.hidden || message.held) actions.add("hide");
+    if (!message.mine && (!message.hidden || message.held)) actions.add("remove");
     if (message.hidden || message.reported) actions.add("keep");
     if (message.channel === "attendee" && !message.hidden && !message.converted) actions.add("convert");
+    if (message.channel === "attendee" && !message.done) actions.add("done");
+    if (message.channel === "attendee" && !message.hidden) actions.add(message.pinned ? "unpin" : "pin");
   }
-  if (capacity === "organizer" && !message.mine && !message.authorStaff && message.channel === "attendee") {
-    if (message.authorRestriction === null) actions.add("mute");
-    if (message.authorRestriction !== "banned") actions.add("ban");
-    if (message.authorRestriction !== null) actions.add("lift");
-  }
+  if (message.channel === "attendee")
+    for (const action of liveParticipationActions(
+      { role: staff ? "operator" : "attendee", organizer: capacity === "organizer" },
+      { mine: message.mine, staff: message.authorStaff, restriction: message.authorRestriction },
+    ))
+      actions.add(action);
   return actions;
 }
 
 /** Whether a viewer may write in a channel at all. */
 export function liveChatCanSend(
   capacity: LiveChatCapacity,
-  restriction: LiveChatRestriction | null,
+  restricted: boolean,
   channel: "attendee" | "operator",
 ): boolean {
   if (channel === "operator") return capacity !== "participant";
-  return restriction === null;
+  return !restricted;
 }
 
 /**
@@ -191,4 +222,16 @@ export function liveChatPlainText(markdown: string): string {
     .replace(/\\([\\`*_{}[\]()#+.!|<>-])/gu, "$1")
     .replace(/\s+/gu, " ")
     .trim();
+}
+
+/** The first words of an answered message, as its reply quotes them. */
+export function liveChatReplyExcerpt(markdown: string): string {
+  const characters = [...liveChatPlainText(markdown)];
+  const length = LIVE_CHAT_POLICY.replyExcerptLength;
+  return characters.length > length
+    ? `${characters
+        .slice(0, length - 1)
+        .join("")
+        .trimEnd()}…`
+    : characters.join("");
 }
