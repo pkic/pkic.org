@@ -33,6 +33,12 @@ const REFUSALS = {
 
 type Actor = { userId: string; name: string };
 
+/** The signed-in session an organizer acts by, which D1 checks again; null for a socket without one. */
+function organizerSession(viewer: LiveRoomParticipant, actor: Actor): { userId: string; sessionId: string } | null {
+  const claims = viewer.sessionClaims;
+  return claims && claims.sub === actor.userId ? { userId: actor.userId, sessionId: claims.sid } : null;
+}
+
 /**
  * Moderation that reaches a person rather than one post: the studio's Done
  * flag, and pausing, blocking and lifting a block on whoever wrote a chat
@@ -99,13 +105,9 @@ export class LiveRoomParticipation {
     const eventId = this.eventId();
     if (input.block === "event") {
       if (!eventId) return REFUSALS.missing;
-      await blockEventParticipation(this.db, {
-        eventId,
-        userId,
-        reason: input.reason,
-        by: actor.userId,
-        at,
-      });
+      const by = organizerSession(viewer, actor);
+      if (!by || !(await blockEventParticipation(this.db, { eventId, userId, reason: input.reason, by, at })))
+        return REFUSALS.forbidden;
       this.decisions.decideEventBlock(userId, true);
     } else this.decisions.block(userId, input.block, input.reason, actor, at);
     this.store.recordStaffAction(
@@ -130,7 +132,8 @@ export class LiveRoomParticipation {
     const eventId = this.eventId();
     if (current.block === "event") {
       if (!eventId) return REFUSALS.missing;
-      await liftEventParticipationBlock(this.db, { eventId, userId, by: actor.userId, at });
+      const by = organizerSession(viewer, actor);
+      if (!by || !(await liftEventParticipationBlock(this.db, { eventId, userId, by, at }))) return REFUSALS.forbidden;
       this.decisions.decideEventBlock(userId, false);
     }
     this.decisions.lift(userId);

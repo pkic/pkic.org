@@ -1,4 +1,7 @@
 import type { LiveModerationReason } from "../../../../assets/shared/live-moderation-policy";
+import { createUserBackedAuthAdmin } from "../../auth/admin-identity";
+import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
+import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { prepareScopedAuditLogAfterOneChange } from "../audit";
 
@@ -10,16 +13,37 @@ import { prepareScopedAuditLogAfterOneChange } from "../audit";
 export interface EventParticipationBlockInput {
   eventId: string;
   userId: string;
-  by: string;
+  /** The organizer, by the signed-in session their socket joined with. */
+  by: { userId: string; sessionId: string };
   at: string;
 }
 
+/**
+ * Runs the change only while the organizer still manages the event: the room's own copy of their access is only
+ * as fresh as its last refresh. False when that access is gone, and nothing was written.
+ */
+async function asOrganizer(db: DatabaseLike, input: EventParticipationBlockInput, change: StatementLike[]) {
+  const organizer = createUserBackedAuthAdmin({ id: input.by.userId, sessionId: input.by.sessionId, email: "" });
+  try {
+    await db.batch([
+      preparePermissionsAuthorizationGuard(db, organizer, [
+        { permission: "events:manage", context: { type: "event", id: input.eventId } },
+      ]),
+      ...change,
+    ]);
+    return true;
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) return false;
+    throw error;
+  }
+}
+
 /** Places the event block with its audit row in one atomic batch; a second block while one is open changes nothing. */
-export async function blockEventParticipation(
+export function blockEventParticipation(
   db: DatabaseLike,
   input: EventParticipationBlockInput & { reason: LiveModerationReason },
-): Promise<void> {
-  await db.batch([
+): Promise<boolean> {
+  return asOrganizer(db, input, [
     db
       .prepare(
         `INSERT INTO event_participation_blocks(id,event_id,user_id,reason,blocked_by,blocked_at)
@@ -31,7 +55,7 @@ export async function blockEventParticipation(
         input.eventId,
         input.userId,
         input.reason,
-        input.by,
+        input.by.userId,
         input.at,
         input.eventId,
         input.userId,
@@ -40,7 +64,7 @@ export async function blockEventParticipation(
       db,
       { type: "event", id: input.eventId },
       "user",
-      input.by,
+      input.by.userId,
       "event.participation.blocked",
       "user",
       input.userId,
@@ -51,21 +75,18 @@ export async function blockEventParticipation(
 }
 
 /** Lifts the open event block with its audit row; lifting when none is open changes nothing. */
-export async function liftEventParticipationBlock(
-  db: DatabaseLike,
-  input: EventParticipationBlockInput,
-): Promise<void> {
-  await db.batch([
+export function liftEventParticipationBlock(db: DatabaseLike, input: EventParticipationBlockInput): Promise<boolean> {
+  return asOrganizer(db, input, [
     db
       .prepare(
         "UPDATE event_participation_blocks SET lifted_by=?,lifted_at=? WHERE event_id=? AND user_id=? AND lifted_at IS NULL",
       )
-      .bind(input.by, input.at, input.eventId, input.userId),
+      .bind(input.by.userId, input.at, input.eventId, input.userId),
     prepareScopedAuditLogAfterOneChange(
       db,
       { type: "event", id: input.eventId },
       "user",
-      input.by,
+      input.by.userId,
       "event.participation.lifted",
       "user",
       input.userId,

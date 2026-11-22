@@ -168,4 +168,38 @@ describe("answer votes, acceptance and removal", () => {
       .first<{ lifted_at: string | null }>();
     expect(lifted?.lifted_at).toMatch(/Z$/);
   });
+
+  it("writes no event block or lift once the organizer stops managing the event, before the room rereads access", async () => {
+    const { owner, moderator, questionId } = await question();
+    const attendee = await f.connect({ person: "secondAttendee" });
+    const answerId = await reply(attendee, questionId, "First, the inventory.");
+    const item = { kind: "answer", questionId, answerId } as const;
+    moderator.send({ type: "participation.block", item, block: "event", reason: "abuse", removePosts: false });
+    expect((await attendee.next("participation.access")).restriction).toEqual({ block: "event", until: null });
+    // The room still holds the moderator's access as it read it; only D1 knows it ended.
+    await env.DB.prepare("UPDATE user_roles SET revoked_at=? WHERE user_id=?")
+      .bind(new Date().toISOString(), f.users.operator)
+      .run();
+    const blocks = env.DB.prepare(
+      "SELECT user_id, lifted_at FROM event_participation_blocks WHERE event_id=? ORDER BY user_id",
+    ).bind(f.eventId);
+    const before = await blocks.all();
+
+    moderator.send({ type: "participation.lift", item });
+    expect((await moderator.next("room.refused")).code).toBe("LIVE_MODERATION_FORBIDDEN");
+    const questionItem = { kind: "question", questionId } as const;
+    const refusals = moderator.received.length;
+    moderator.send({
+      type: "participation.block",
+      item: questionItem,
+      block: "event",
+      reason: "spam",
+      removePosts: false,
+    });
+    expect((await moderator.next("room.refused", () => true, { after: refusals })).code).toBe(
+      "LIVE_MODERATION_FORBIDDEN",
+    );
+    expect((await blocks.all()).results).toEqual(before.results);
+    expect(owner.received.some((message) => message.type === "participation.access")).toBe(false);
+  });
 });
