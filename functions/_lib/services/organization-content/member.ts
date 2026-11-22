@@ -128,13 +128,15 @@ export async function submitOrgContentChange(
   const slogan = pageText(changedFields, "slogan");
   const description = pageText(changedFields, "description");
   const page = pageText(changedFields, "contentMarkdown");
+  // One call reads all the text, so a flag cannot name a field: the reasons go on the first changed one.
+  const field = slogan ? "slogan" : description ? "description" : "contentMarkdown";
   const verdict =
     slogan || description || page
       ? await screenProfileContent({ AI: screening.ai }, db, {
           kind: "organization_profile",
           subject: { title: org.name, slogan, description, text: page },
           adviceAcknowledged: screening.adviceAcknowledged,
-          field: page && !description ? "contentMarkdown" : description ? "description" : "slogan",
+          field,
         })
       : null;
 

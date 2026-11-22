@@ -140,8 +140,9 @@ export async function updateOwnIdentityProfile(
   // The job title and biography are read only when they change; the text is checked before anything is written.
   const jobTitle = input.jobTitle ?? (isOrganizationIdentity ? current.job_title : current.individual_job_title) ?? "";
   const biography = input.biography ?? current.biography ?? "";
+  const textChanged = "biography" in edit.changes || "jobTitle" in edit.changes;
   const verdict =
-    ("biography" in edit.changes || "jobTitle" in edit.changes) && (jobTitle || biography.trim())
+    textChanged && (jobTitle || biography.trim())
       ? await screenProfileContent({ AI: screening.ai }, db, {
           kind: "person_profile",
           subject: { title: jobTitle, text: biography },
@@ -194,6 +195,11 @@ export async function updateOwnIdentityProfile(
   );
   if (edit.individualJobTitle) statements.push(edit.individualJobTitle);
   if (verdict) statements.push(prepareStoreContentCheckResult(db, "person_profile", current.id, verdict, now));
+  // Changed text that was not checked, because both were emptied or no check ran, leaves no verdict of the old text.
+  else if (textChanged)
+    statements.push(
+      db.prepare("DELETE FROM content_check_results WHERE kind = 'person_profile' AND subject_id = ?").bind(current.id),
+    );
   try {
     await db.batch(statements);
   } catch (error) {

@@ -130,6 +130,20 @@ describe("automatic checks of member pages", () => {
     });
   });
 
+  it("puts the reasons on the first changed field", async () => {
+    const { organizationId, token } = await seedOrgContact();
+    const both = await call(token, path(organizationId), {
+      method: "POST",
+      body: { slogan: "Certificates", description: "Visit SPAMLINKS today" },
+    });
+    expect((await both.json<Refusal>()).error.details.fieldErrors.slogan?.[0]).toContain("spam");
+    const page = await call(token, path(organizationId), {
+      method: "POST",
+      body: { contentMarkdown: "Visit SPAMLINKS today" },
+    });
+    expect((await page.json<Refusal>()).error.details.fieldErrors.contentMarkdown?.[0]).toContain("spam");
+  });
+
   it("makes no model call for links alone", async () => {
     const { organizationId, token } = await seedOrgContact();
     const response = await call(token, path(organizationId), {
@@ -194,6 +208,21 @@ describe("automatic checks of bios", () => {
     });
     expect(blocked.status).toBe(422);
     expect((await blocked.json<Refusal>()).error.code).toBe("PROFILE_CHECK_BLOCKED");
+  });
+
+  it("drops the verdict of the old text when the changed text is not checked", async () => {
+    const { token, path, identityId } = await owner();
+    const body = { jobTitle: "Engineer", biography: "An engineer." };
+    expect((await call(token, path, { method: "PATCH", body })).status).toBe(200);
+    expect(await readContentCheckResult(env.DB, "person_profile", identityId)).toMatchObject({ outcome: "passed" });
+    // No model binding: the new text is saved unchecked, and the old verdict no longer describes it.
+    const unchecked = await callApi(env, path, {
+      method: "PATCH",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ ...body, biography: "A different bio." }),
+    });
+    expect(unchecked.status).toBe(200);
+    expect(await readContentCheckResult(env.DB, "person_profile", identityId)).toBeNull();
   });
 
   it("makes no model call when the bio and title do not change", async () => {

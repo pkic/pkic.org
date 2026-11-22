@@ -30,6 +30,11 @@ import {
   organizationContentReviewCreateResponseSchema,
 } from "../../../../shared/schemas/organization-self-service";
 
+/** The text the automatic check reads: the slogan, the description and the long page. */
+function checkedTextOf(body: { slogan?: string | null; description?: string | null; contentMarkdown?: string | null }) {
+  return JSON.stringify([body.slogan ?? null, body.description ?? null, body.contentMarkdown ?? null]);
+}
+
 function PendingSubmission({
   review,
   organizationId,
@@ -142,11 +147,11 @@ function ContentEditForm({
   const [links, setLinks] = useState<string[]>(draft.links);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // After the automatic check's advice, submitting again sends the text as written; editing it asks again.
-  const [adviceAcknowledged, setAdviceAcknowledged] = useState(false);
+  // The checked text the automatic check advised on: submitting that same text again sends it as written, and any
+  // edit of it asks again.
+  const [advisedText, setAdvisedText] = useState<string | null>(null);
 
   function setField(key: EditableField, value: string): void {
-    setAdviceAcknowledged(false);
     setForm((f) => ({ ...f, [key]: value }));
   }
 
@@ -175,13 +180,14 @@ function ContentEditForm({
     try {
       await postJson(
         `${organizationPath(organizationId)}/content/reviews`,
-        { ...checked.data, adviceAcknowledged },
+        { ...checked.data, adviceAcknowledged: advisedText === checkedTextOf(checked.data) },
         organizationContentReviewCreateResponseSchema,
       );
       toast("Submitted for staff review", "success");
       await reload();
     } catch (err) {
-      if (err instanceof ApiClientError && err.code === PROFILE_CHECK_ADVICE) setAdviceAcknowledged(true);
+      if (err instanceof ApiClientError && err.code === PROFILE_CHECK_ADVICE)
+        setAdvisedText(checkedTextOf(checked.data));
       setError(validation.refuse(err));
     } finally {
       setSaving(false);

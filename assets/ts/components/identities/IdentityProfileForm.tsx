@@ -36,6 +36,11 @@ export interface EditableIdentity {
   links: readonly string[];
 }
 
+/** The text the automatic check reads: the job title and the biography. */
+function checkedTextOf(body: { jobTitle?: string; biography?: string }): string {
+  return JSON.stringify([body.jobTitle ?? null, body.biography ?? null]);
+}
+
 export function IdentityProfileForm({
   identity,
   editor,
@@ -57,8 +62,9 @@ export function IdentityProfileForm({
   const [draft, setDraft] = useState<IdentityProfileDraft>(() => identityProfileDraft(identity));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // After the automatic check's advice, saving again keeps the text as written; editing it asks again.
-  const [adviceAcknowledged, setAdviceAcknowledged] = useState(false);
+  // The checked text the automatic check advised on: saving that same text again keeps it as written, and any
+  // edit of it asks again.
+  const [advisedText, setAdvisedText] = useState<string | null>(null);
   // Checked by the contract the route parses, live and on submit.
   const form = useContractForm(
     withOrganizationJobTitle(identityProfileUpdateSchema, {
@@ -78,10 +84,12 @@ export function IdentityProfileForm({
     }
     setSaving(true);
     try {
-      await save(adviceAcknowledged ? { ...checked.data, adviceAcknowledged } : checked.data);
+      const checkedText = checkedTextOf(checked.data);
+      await save(advisedText === checkedText ? { ...checked.data, adviceAcknowledged: true } : checked.data);
       onSaved();
     } catch (cause) {
-      if (cause instanceof ApiClientError && cause.code === PROFILE_CHECK_ADVICE) setAdviceAcknowledged(true);
+      if (cause instanceof ApiClientError && cause.code === PROFILE_CHECK_ADVICE)
+        setAdvisedText(checkedTextOf(checked.data));
       setError(form.refuse(cause));
     } finally {
       setSaving(false);
@@ -100,10 +108,7 @@ export function IdentityProfileForm({
       <IdentityEditNotice editor={editor} />
       <IdentityProfileFields
         draft={draft}
-        onChange={(patch) => {
-          setAdviceAcknowledged(false);
-          setDraft((current) => ({ ...current, ...patch }));
-        }}
+        onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
         of={form.of}
         organizationId={identity.organizationId}
         organizationName={identity.organizationName}
