@@ -1,9 +1,8 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import {
   LIVE_CHAT_POLICY,
   liveChatCanSend,
   liveChatCapacity,
-  liveChatPlainText,
   liveChatReplyExcerpt,
 } from "../../shared/live-chat-policy";
 import {
@@ -27,6 +26,7 @@ import { Textarea } from "../ui/TextControl";
 import { Button } from "../ui/Button";
 import { LiveModerationDialogHost } from "./LiveModerationDialog";
 import { LiveParticipationAlert, useLiveParticipation } from "./LiveParticipationAlert";
+import { useLiveChatAnnouncement } from "./useLiveChatAnnouncement";
 import "./LiveChat.css";
 
 /** How close to the end of the feed still counts as reading the latest message. */
@@ -40,12 +40,27 @@ export interface LiveChatComposing {
   message: LiveChatMessage;
 }
 
+/** A message or edit the room has not answered yet: its words stay until it arrives or the room refuses it. */
+interface LiveChatUnanswered {
+  text: string;
+  /** The room's refusal count when it went out; a new refusal means it did not arrive. */
+  refusal: number;
+  /** The edited message and when it was edited before; null for a new message. */
+  edit: { id: string; editedAt: string | undefined } | null;
+  /** The reader's own messages held when it went out; a new one is this message arriving. */
+  mine: ReadonlySet<string>;
+  /** The connection dropped meanwhile; if the room's next snapshot does not hold it, it is sent again by hand. */
+  dropped: boolean;
+}
+
 export function ChatComposer({
   channel,
   compact,
   disabled,
   send,
   refusal,
+  refusals = 0,
+  messages = [],
   note,
   composing = null,
   onComposed,
@@ -55,6 +70,10 @@ export function ChatComposer({
   disabled: boolean;
   send: (message: LiveRoomClientMessage) => boolean;
   refusal: string | null;
+  /** How many actions the room refused so far, so the composer knows a refusal of what it sent. */
+  refusals?: number;
+  /** The channel's messages, so the composer sees what it sent arrive. */
+  messages?: readonly LiveChatMessage[];
   /** What the status line says while nothing else needs saying, such as when the chat closes. */
   note?: string;
   composing?: LiveChatComposing | null;
@@ -94,17 +113,48 @@ export function ChatComposer({
     wasEditing.current = edited !== null;
     if (composing) formNode.current?.querySelector("textarea")?.focus();
   }, [composing]);
-  function submit() {
-    // Send waits for content: an empty composer is at rest, not refused.
-    if (!form.valid) return;
-    const checked = form.submit();
-    if (!checked.data) return;
-    if (!send(checked.data)) return setError("Chat is reconnecting. Try again once it's connected.");
-    setText(editing ? draft.current : "");
+  const unanswered = useRef<LiveChatUnanswered | null>(null);
+  /** What was sent arrived: its words leave the composer, unless the reader already typed on. */
+  function sent(words: string, edited: boolean) {
+    unanswered.current = null;
+    if (typed.current === words) setText(edited ? draft.current : "");
     wasEditing.current = false;
-    setError(null);
     form.reset();
     onComposed?.();
+  }
+  const settled = useRef(sent);
+  settled.current = sent;
+  useEffect(() => {
+    const waiting = unanswered.current;
+    if (!waiting) return;
+    if (disabled) {
+      waiting.dropped = true;
+      return;
+    }
+    const edit = waiting.edit;
+    const arrived = edit
+      ? messages.some((message) => message.id === edit.id && message.editedAt !== edit.editedAt)
+      : messages.some((message) => message.mine && !waiting.mine.has(message.id));
+    if (arrived) settled.current(waiting.text, edit !== null);
+    // Refused, or lost with the connection: the words stay, ready to send again.
+    else if (refusals !== waiting.refusal || waiting.dropped) unanswered.current = null;
+  }, [messages, refusals, disabled]);
+  function submit() {
+    // Send waits for content, and for the room to answer the last message: an empty composer is at rest, not refused.
+    if (!form.valid || unanswered.current) return;
+    const checked = form.submit();
+    if (!checked.data) return;
+    // New words that match the old ones change nothing, and the room answers nothing.
+    if (editing && checked.data.text === editing.text) return sent(text, true);
+    if (!send(checked.data)) return setError("Chat is reconnecting. Try again once it's connected.");
+    setError(null);
+    unanswered.current = {
+      text,
+      refusal: refusals,
+      edit: editing ? { id: editing.id, editedAt: editing.editedAt } : null,
+      mine: new Set(messages.filter((message) => message.mine).map((message) => message.id)),
+      dropped: false,
+    };
   }
   return (
     <form
@@ -275,7 +325,25 @@ export function LiveChat({
     else if (following.current && visible) node.scrollTop = node.scrollHeight;
     anchor.current = { firstId, height: node.scrollHeight };
   });
-  useEffect(() => setLoading(false), [firstId]);
+  const pages = state.chatPages?.[channel] ?? 0;
+  const refusals = state.refusal?.sequence ?? 0;
+  /** The first message held when the waiting history request went out; undefined while none waits. */
+  const askedBefore = useRef<string | null | undefined>(undefined);
+  const heldFirst = useRef(firstId);
+  heldFirst.current = firstId;
+  const loadEarlier = useCallback(() => {
+    if (!send({ type: "chat.history", channel, before: firstId ?? null })) return;
+    askedBefore.current = firstId ?? null;
+    setLoading(true);
+  }, [send, channel, firstId]);
+  // Each answer ends the wait: a page, even one that added nothing, or a refusal. An answer that brought nothing
+  // earlier also ends the search for a quoted message, rather than asking again.
+  useEffect(() => {
+    if (askedBefore.current === undefined) return;
+    if (askedBefore.current === (heldFirst.current ?? null)) setSeeking(null);
+    askedBefore.current = undefined;
+    setLoading(false);
+  }, [pages, refusals]);
   // Each new latest message counts once, however its quote changes after.
   const latestToMe = latest?.replyTo?.mine === true;
   const counted = useRef(latestId);
@@ -318,8 +386,8 @@ export function LiveChat({
   useEffect(() => {
     if (!seeking) return;
     if (revealing.current(seeking) || !canLoadEarlier) return setSeeking(null);
-    if (!loading && send({ type: "chat.history", channel, before: firstId ?? null })) setLoading(true);
-  }, [seeking, firstId, canLoadEarlier, loading, send, channel]);
+    if (!loading) loadEarlier();
+  }, [seeking, canLoadEarlier, loading, loadEarlier]);
   useEffect(() => {
     if (!highlighted) return;
     const timer = setTimeout(() => setHighlighted(null), HIGHLIGHT_MS);
@@ -327,7 +395,7 @@ export function LiveChat({
   }, [highlighted]);
   const canSend = liveChatCanSend(liveChatCapacity(state.viewer), restriction !== null, channel);
   const refusal = state.refusal?.code.startsWith("LIVE_CHAT") ? state.refusal.message : null;
-  const spoken = latest && !latest.mine ? `${latest.authorName}: ${liveChatPlainText(latest.text)}` : "";
+  const spoken = useLiveChatAnnouncement(latest, following, visible);
   return (
     <LiveAuthorProvider authors={state.authors} send={send}>
       <div class={`pk-live-chat-workspace${compact ? " pk-live-chat-workspace--compact" : ""}`}>
@@ -354,12 +422,7 @@ export function LiveChat({
         >
           {canLoadEarlier ? (
             <div class="pk-live-chat__earlier">
-              <Button
-                disabled={disabled || loading}
-                onClick={() => {
-                  if (send({ type: "chat.history", channel, before: firstId ?? null })) setLoading(true);
-                }}
-              >
+              <Button disabled={disabled || loading} onClick={loadEarlier}>
                 {loading ? "Loading…" : "Load earlier messages"}
               </Button>
             </div>
@@ -426,7 +489,7 @@ export function LiveChat({
           </div>
         ) : null}
         <p class="pk-sr-only" aria-live="polite">
-          {visible ? spoken : ""}
+          {spoken}
         </p>
         {canSend ? (
           <ChatComposer
@@ -435,6 +498,8 @@ export function LiveChat({
             disabled={disabled}
             send={send}
             refusal={refusal}
+            refusals={refusals}
+            messages={messages}
             note={note}
             composing={composing}
             onComposed={() => setComposing(null)}

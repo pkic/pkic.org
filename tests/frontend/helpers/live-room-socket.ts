@@ -8,6 +8,7 @@ import {
   EMPTY_LIVE_OUTPUTS,
   liveRoomClientMessageSchema,
   liveRoomServerMessageSchema,
+  type LiveChatMessage,
   type LiveLocationChatSnapshot,
   type LiveRoomClientMessage,
   type LiveRoomServerMessage,
@@ -196,6 +197,24 @@ export function liveLocationChatSnapshot(
     },
     opening: DEFAULT_LIVE_ROOM_OPENING,
     chat: [],
+    ...overrides,
+  };
+}
+
+/** One attendee chat message from someone else, as the room sends it to a reader. */
+export function liveChatMessage(overrides: Partial<LiveChatMessage> = {}): LiveChatMessage {
+  return {
+    channel: "attendee",
+    id: "40000000-0000-4000-8000-000000000001",
+    text: "Welcome to the session",
+    authorName: "Sam Speaker",
+    authorPhotoUrl: null,
+    mine: false,
+    sentAt: new Date().toISOString(),
+    reactions: {},
+    myReactions: [],
+    reportedByMe: false,
+    moderation: null,
     ...overrides,
   };
 }

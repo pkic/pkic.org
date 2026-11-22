@@ -11,7 +11,7 @@ import {
 } from "../../assets/shared/schemas/live-session-room";
 import { LiveChat } from "../../assets/ts/live-session/LiveChat";
 import { applyLocationChatMessage, type LiveLocationChatState } from "../../assets/ts/live-session/location-chat-state";
-import { LIVE_OCCURRENCE, liveLocationChatSnapshot } from "./helpers/live-room-socket";
+import { LIVE_OCCURRENCE, liveChatMessage, liveLocationChatSnapshot } from "./helpers/live-room-socket";
 
 const hosts: HTMLElement[] = [];
 afterEach(() => {
@@ -24,20 +24,7 @@ afterEach(() => {
 const MESSAGE = "40000000-0000-4000-8000-000000000001";
 
 function chatMessage(overrides: Partial<LiveChatMessage> = {}): LiveChatMessage {
-  return {
-    channel: "attendee",
-    id: MESSAGE,
-    text: "Welcome to the session",
-    authorName: "Sam Speaker",
-    authorPhotoUrl: null,
-    mine: false,
-    sentAt: new Date().toISOString(),
-    reactions: {},
-    myReactions: [],
-    reportedByMe: false,
-    moderation: null,
-    ...overrides,
-  };
+  return liveChatMessage({ id: MESSAGE, ...overrides });
 }
 
 function stateWith(overrides: Partial<Omit<LiveLocationChatSnapshot, "type">> = {}): LiveLocationChatState {
@@ -136,7 +123,8 @@ describe("live chat", () => {
       text.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
     });
     expect(sent(send)).toEqual([{ type: "chat.send", text: "Good morning", channel: "attendee" }]);
-    expect(text.value).toBe("");
+    // The words wait for the room's answer, and a second Send while they do sends nothing twice.
+    expect(text.value).toBe("Good morning");
     void act(() => {
       host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });

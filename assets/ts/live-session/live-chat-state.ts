@@ -2,7 +2,14 @@ import { LIVE_CHAT_POLICY, liveChatReplyExcerpt } from "../../shared/live-chat-p
 import type { LiveChatChannel, LiveChatMessage } from "../../shared/schemas/live-session-chat";
 import type { LiveLocationChatSnapshot, LiveRoomServerMessage } from "../../shared/schemas/live-session-room";
 
-type ChatState = Pick<LiveLocationChatSnapshot, "chat" | "chatEarlier" | "chatPinned" | "chatReports" | "viewer">;
+/** What the browser itself keeps about its chat besides what the room sent. */
+export interface LiveChatAnswers {
+  /** History pages the room answered per channel, so a view sees each answer, even a page that added nothing. */
+  chatPages?: Partial<Record<LiveChatChannel, number>>;
+}
+
+type ChatState = Pick<LiveLocationChatSnapshot, "chat" | "chatEarlier" | "chatPinned" | "chatReports" | "viewer"> &
+  LiveChatAnswers;
 type ChatServerMessage = Extract<LiveRoomServerMessage, { type: `chat.${string}` }>;
 
 /** A message awaits a moderator's review while it is reported and either shown or held. */
@@ -139,7 +146,8 @@ export function applyLiveChatMessage<State extends ChatState>(state: State, mess
       const held = liveChatChannel(state, message.channel);
       const known = new Set(held.map((entry) => entry.id));
       const merged = [...message.messages.filter((entry) => !known.has(entry.id)), ...held].sort(byTime);
-      return replaceChannel(state, message.channel, merged, message.hasEarlier);
+      const pages = { ...state.chatPages, [message.channel]: (state.chatPages?.[message.channel] ?? 0) + 1 };
+      return { ...replaceChannel(state, message.channel, merged, message.hasEarlier), chatPages: pages };
     }
   }
 }

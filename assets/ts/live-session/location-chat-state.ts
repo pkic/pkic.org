@@ -1,9 +1,9 @@
 import type { LiveAuthorDetails } from "../../shared/schemas/live-session-author";
 import type { LiveLocationChatSnapshot, LiveRoomServerMessage } from "../../shared/schemas/live-session-room";
-import { applyLiveChatMessage } from "./live-chat-state";
+import { applyLiveChatMessage, type LiveChatAnswers } from "./live-chat-state";
 
 /** What a browser knows about a location's chat: the last snapshot with every pushed change applied. */
-export interface LiveLocationChatState extends Omit<LiveLocationChatSnapshot, "type"> {
+export interface LiveLocationChatState extends Omit<LiveLocationChatSnapshot, "type">, LiveChatAnswers {
   /** The latest refused action, numbered so a view can announce it once. */
   refusal: { sequence: number; code: string; message: string } | null;
   /** Author cards the chat answered, by handle; null when a handle resolved to no one. */
@@ -13,7 +13,7 @@ export interface LiveLocationChatState extends Omit<LiveLocationChatSnapshot, "t
 /** What the chat views read: the messages, the viewer, and the day's sessions the dividers name. */
 export type LiveChatView = Pick<
   LiveLocationChatState,
-  "viewer" | "chat" | "chatEarlier" | "chatPinned" | "chatReports" | "refusal" | "authors" | "scope"
+  "viewer" | "chat" | "chatEarlier" | "chatPages" | "chatPinned" | "chatReports" | "refusal" | "authors" | "scope"
 >;
 
 /** Applies one message of the location's chat. Changes before the first snapshot are ignored; it carries them. */

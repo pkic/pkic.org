@@ -4,9 +4,10 @@ import type { LiveAuthorDetails } from "../../shared/schemas/live-session-author
 import { compareLiveQuestions, type LiveQuestionOrder, type LiveReactionId } from "../../shared/live-session-policy";
 import { compareLivePolls, type LivePoll } from "../../shared/schemas/live-session-poll";
 import type { LiveQuestion, LiveRoomServerMessage, LiveRoomSnapshot } from "../../shared/schemas/live-session-room";
+import type { LiveChatAnswers } from "./live-chat-state";
 
 /** What a browser knows about a room: the last snapshot with every pushed change applied. */
-export interface LiveRoomState extends Omit<LiveRoomSnapshot, "type"> {
+export interface LiveRoomState extends Omit<LiveRoomSnapshot, "type">, LiveChatAnswers {
   /** Only the question the viewer currently expanded; replaced after each reconnect. */
   thread?: z.infer<typeof liveQuestionAnswersSchema> | null;
   /** The latest reaction burst, numbered so a view can replay it once. */
