@@ -119,7 +119,7 @@ beforeEach(async () => {
   token = await createAdminSession(env.DB, operator, crypto.randomUUID());
 });
 describe("sponsor live lead viewing through the mounted API", () => {
-  it("clears an unauthorized lead scan after evidence capture closes while blocking ordinary edits", async () => {
+  it("clears lead captures after closure while protecting frozen evidence and active purges", async () => {
     await grant("agenda:leads_capture");
     const lead = await env.DB.prepare("SELECT id,user_id FROM event_sponsor_leads WHERE sponsor_id=? LIMIT 1")
       .bind(sponsorId)
@@ -159,11 +159,31 @@ describe("sponsor live lead viewing through the mounted API", () => {
       env.DB.prepare("UPDATE event_scan_attempts SET outcome='denied' WHERE id=?").bind(attemptId).run(),
     ).rejects.toThrow("EVENT_EVIDENCE_CAPTURE_CLOSED");
 
-    const removed = await callApi(env, `/api/v1/events/live-leads/sponsors/${sponsorId}/leads/${lead.id}/captures`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const remove = () =>
+      callApi(env, `/api/v1/events/live-leads/sponsors/${sponsorId}/leads/${lead.id}/captures`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    const permitCount = () =>
+      env.DB.prepare("SELECT COUNT(*) AS count FROM event_sponsor_lead_removal_permits").first<number>("count");
+
+    await env.DB.prepare("UPDATE event_evidence_retention_state SET active_run_id=? WHERE event_id=?")
+      .bind(crypto.randomUUID(), eventId)
+      .run();
+    expect((await remove()).ok).toBe(false);
+    expect(await permitCount()).toBe(0);
+    expect(
+      await env.DB.prepare("SELECT user_id FROM event_scan_attempts WHERE id=?")
+        .bind(attemptId)
+        .first<string>("user_id"),
+    ).toBe(lead.user_id);
+    await env.DB.prepare("UPDATE event_evidence_retention_state SET active_run_id=NULL WHERE event_id=?")
+      .bind(eventId)
+      .run();
+
+    const removed = await remove();
     expect(removed.status, await removed.clone().text()).toBe(200);
+    expect(await permitCount()).toBe(0);
     expect(sponsorLeadRemovalResponseSchema.parse(await removed.json())).toMatchObject({
       removedCaptures: 1,
     });
