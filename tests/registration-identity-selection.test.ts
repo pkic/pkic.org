@@ -41,6 +41,7 @@ import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { outboxIdForOperation, prepareQueueEmailStatement } from "../functions/_lib/email/outbox-queue";
 import { emailPlainText, resolveEmailTemplateData } from "../functions/_lib/email/plain-text";
 import { registrationIdentityChangeSchema } from "../assets/shared/schemas/registration-identity";
+import { recordPersonalAddressAnswer } from "./helpers/account-organization";
 
 let registrationEnvironment: Env;
 
@@ -117,6 +118,19 @@ describe("registration representation changes", () => {
       "REGISTRATION_REPRESENTATION_REQUIRED",
     );
     expect((await getRegistrationById(env.DB, f.registrationId)).registration_identity_id).toBe(f.identityId);
+  });
+  it("moves a registration to the personal identity on a work address the person said is personal", async () => {
+    const f = await setupChange();
+    const email = `identity-${crypto.randomUUID()}@unclaimed-personal.example`;
+    await env.DB.prepare(
+      "UPDATE users SET email=?, normalized_email=?, email_verified_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
+    )
+      .bind(email, email, f.userId)
+      .run();
+    await recordPersonalAddressAnswer(env.DB, f.userId);
+    const response = await change(f);
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect((await getRegistrationById(env.DB, f.registrationId)).registration_identity_id).toBe(f.personalId);
   });
   it.each(["participant", "manage link"])(
     "does not record identity effects for an unchanged selection through %s",
