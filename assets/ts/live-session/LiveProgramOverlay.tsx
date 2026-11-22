@@ -28,9 +28,10 @@ export function LiveProgramOverlay({
   // A browser source in the streaming software has nobody to reload it: it keeps trying, and holds the
   // session it follows through a dropped connection instead of going blank.
   const program = useLiveRoomProgram({ slug, roomId, overlayToken: token, createSocket, persistent: KEEPS_TRYING });
+  // The same overlay follows each new selection: it reconnects to the new session and keeps the last one's
+  // picture on screen until that session's snapshot arrives, so the source never blanks between sessions.
   return program.selection?.occurrenceId ? (
     <LiveOverlay
-      key={`${program.selection.occurrenceId}:${program.selection.revision}`}
       view={view}
       layout={layout}
       graphics={graphics}
