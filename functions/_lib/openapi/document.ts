@@ -109,6 +109,10 @@ export const OPENAPI_TAGS: readonly { name: string; description: string }[] = [
   { name: "Reminders", description: "Reminder cycles that queue into the outbox." },
   { name: "Scheduler", description: "Recurring jobs, their schedule, and their outcomes." },
   { name: "Retention", description: "Data retention policy and redaction." },
+  {
+    name: "Content checks",
+    description: "Automatic checks of user content: PKIC-wide settings, event additions, and trial runs.",
+  },
   { name: "Analytics", description: "Platform and event analytics." },
   { name: "Statistics", description: "Aggregate counts and reporting figures." },
   { name: "Audit log", description: "The audit trail." },
@@ -175,6 +179,7 @@ export const OPENAPI_TAG_GROUPS: readonly { name: string; tags: string[] }[] = [
       "Reminders",
       "Scheduler",
       "Retention",
+      "Content checks",
       "Analytics",
       "Statistics",
       "Audit log",
