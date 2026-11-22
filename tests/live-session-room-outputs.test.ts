@@ -446,13 +446,16 @@ describe("live room auxiliary outputs", () => {
     expect(pause.schedule?.config).toEqual({ ...DEFAULT_LIVE_SCHEDULE_CONFIG, scope: "all-rooms" });
     expect({ ...pause, schedule: null, scene: "questions" }).toEqual(questions);
 
-    // A panel needs more than one speaker, so Panel brings nothing on for this session.
+    // Panel brings the session graphic on, for a session with one speaker too.
     operator.send({ type: "preview.set", composition: { scene: "panel" } });
     const panel = (await operator.next("preview.changed", (m) => m.composition.scene === "panel")).composition;
-    expect(panel.panelists).toBeNull();
+    expect(panel.panelists).toEqual({ layout: "panel" });
 
     // What the operator switched off stays off in every scene that only places it; a retired scene reads as Default.
-    operator.send({ type: "preview.set", composition: { schedule: null, topQuestions: null, timerGraphics: [] } });
+    operator.send({
+      type: "preview.set",
+      composition: { schedule: null, topQuestions: null, panelists: null, timerGraphics: [] },
+    });
     await operator.next("preview.changed", (m) => m.composition.schedule === null);
     for (const scene of ["check-in", "full-board", "default", "talk"]) {
       operator.send({ type: "preview.set", composition: { scene } });

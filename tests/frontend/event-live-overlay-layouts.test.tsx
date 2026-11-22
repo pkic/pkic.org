@@ -308,7 +308,7 @@ describe("scene editor", () => {
       "Background",
       "Question",
       "Poll results",
-      "Panel",
+      "Session",
       "Top questions",
       "Chat",
       "QR code",

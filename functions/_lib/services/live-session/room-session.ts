@@ -9,6 +9,7 @@ import {
   publicSessionCreditRole,
 } from "../../../../assets/shared/session-public-credits";
 import { first } from "../../db/queries";
+import { liveSessionAbstract } from "../../../../assets/shared/live-session-abstract";
 import { decodeLiveRoomOutputs, liveRoomOutputsJsonSql } from "./room-output-setup";
 import { z } from "zod";
 import { agendaDisplayRoleShiftSchema } from "../../../../assets/shared/schemas/event-agenda";
@@ -162,6 +163,7 @@ export function prepareLiveRoomSessionRead(
           timeZone: row.timezone,
           roomId: occurrence.roomId,
           credits: [...credits, ...hosts].slice(0, LIVE_ROOM_SESSION_CREDITS_MAX),
+          abstract: liveSessionAbstract(occurrence.description),
           roomOutputs: decodeLiveRoomOutputs(row.room_outputs_json),
         }),
         roomIds: [occurrence.roomId, ...(occurrence.additionalRoomIds ?? [])].filter((id): id is string => id !== null),

@@ -7,10 +7,25 @@ import { LiveBoard } from "./LiveBoard";
 import "./LiveQuestionOverlay.css";
 import { LiveScreenText } from "./LiveScreenText";
 
-/** The question large beside the event stripe, and who asked it when they asked by name. */
-export function LiveQuestionBody({ question }: { question: NonNullable<LiveStage["question"]> }) {
+/**
+ * The question large beside the event stripe: whom it is for above it, when
+ * the asker named someone, and who asked it under it, when they asked by name.
+ */
+export function LiveQuestionBody({
+  question,
+  credits,
+}: {
+  question: NonNullable<LiveStage["question"]>;
+  credits: readonly LiveCredit[];
+}) {
+  const addressee = liveQuestionAddresseeName(credits, question.addressedTo);
   return (
     <div class="pk-live-board-question__body">
+      {addressee ? (
+        <p class="pk-live-board-question__addressee">
+          For <strong>{addressee}</strong>
+        </p>
+      ) : null}
       <p class="pk-live-overlay__question-text" data-fit={liveQuestionFit(question.text)}>
         <LiveScreenText text={question.text} />
       </p>
@@ -28,15 +43,6 @@ export function LiveQuestionBody({ question }: { question: NonNullable<LiveStage
       ) : null}
     </div>
   );
-}
-
-/** The board's eyebrow for a question: and whom it is for, when the asker named someone. */
-export function liveQuestionEyebrow(
-  question: NonNullable<LiveStage["question"]>,
-  credits: readonly LiveCredit[],
-): string {
-  const addressee = liveQuestionAddresseeName(credits, question.addressedTo);
-  return addressee ? `Audience question · For ${addressee}` : "Audience question";
 }
 
 /**
@@ -60,9 +66,9 @@ export function LiveQuestionOverlay({
       box={box}
       class="pk-live-board-question"
       label="Audience question"
-      eyebrow={liveQuestionEyebrow(question, credits)}
+      eyebrow="Audience question"
     >
-      <LiveQuestionBody question={question} />
+      <LiveQuestionBody question={question} credits={credits} />
     </LiveBoard>
   );
 }

@@ -147,7 +147,7 @@ export class LiveRoomGraphics {
   ): Promise<LiveControlOutcome> {
     const scene = liveOutputFixedScene(liveRoomOutputs(session), message.output) ?? message.scene;
     const held = { ...liveCompositionInput(this.store.aux(message.output)), scene };
-    const composition = { ...held, ...this.comesOn(session, held) };
+    const composition = { ...held, ...this.comesOn(held) };
     return this.outputs.setAux(actor, session, message.output, await this.resolve(session, composition, at), at);
   }
   async setPreview(
@@ -159,7 +159,7 @@ export class LiveRoomGraphics {
     const merged = mergeLivePreview(this.store.preview(), message.composition);
     // Loading a scene switches on the graphics that come on with it, in the same one write. A layer the
     // change itself names stays as the operator set it.
-    const loaded = "scene" in message.composition ? this.comesOn(session, merged) : {};
+    const loaded = "scene" in message.composition ? this.comesOn(merged) : {};
     const patch = { ...loaded, ...message.composition };
     return this.preview.set(actor, session, patch, await this.resolve(session, { ...merged, ...patch }, at), at);
   }
@@ -168,9 +168,9 @@ export class LiveRoomGraphics {
    * room screen alike: the scene's comes-on graphics that are off there,
    * filled from the room.
    */
-  private comesOn(session: LiveRoomSession, input: LiveCompositionInput): LiveSceneFill {
+  private comesOn(input: LiveCompositionInput): LiveSceneFill {
     const scene = resolveLiveSceneElements({ overlayLayouts: this.layouts }, input.scene);
-    return liveSceneFill(scene, input, { session, program: this.store.stage() });
+    return liveSceneFill(scene, input, { program: this.store.stage() });
   }
   /**
    * A screen draws the scene its room set up for it from the start, before
@@ -192,7 +192,7 @@ export class LiveRoomGraphics {
       const held = this.store.aux(output.key);
       if (held.scene === output.scene) continue;
       const input = { ...liveCompositionInput(held), scene: output.scene };
-      const fill = output.role === "follow" ? this.comesOn(room.session, input) : {};
+      const fill = output.role === "follow" ? this.comesOn(input) : {};
       const resolved: Record<string, unknown> = await this.resolve(room.session, { ...input, ...fill }, at);
       // Only what the scene switched on changes; the store reads the whole composition again before it saves.
       const brought = Object.fromEntries(Object.keys(fill).map((graphic) => [graphic, resolved[graphic]]));

@@ -140,9 +140,9 @@ describe("scene thumbnails", () => {
     });
     // Preview's own list stays exactly as it is.
     expect(stageOf(studio({ topQuestions: listed }), "questions").topQuestions).toBe(listed);
-    // A session with one speaker has no panel to bring on.
+    // A session with one speaker still brings its session graphic on.
     const solo = studio({}, { session: liveSnapshot().session });
-    expect(stageOf(solo, "panel").panelists).toBeNull();
+    expect(stageOf(solo, "panel").panelists).toEqual({ layout: "panel" });
     // Another session is on air: the looks are the standard ones.
     expect(stageOf(studio({}, {}, { program: null }), "questions").topQuestions?.config).toEqual({ count: 3 });
   });

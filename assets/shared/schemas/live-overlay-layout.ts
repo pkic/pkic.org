@@ -35,7 +35,7 @@ export const LIVE_OVERLAY_ELEMENT_LABELS: Record<LiveOverlayElement, string> = {
   timer: "Timer graphic",
   ticker: "News ticker",
   schedule: "Up next",
-  panelists: "Panel",
+  panelists: "Session",
   checkIn: "Check-in code",
   topQuestions: "Top questions",
   chat: "Chat",

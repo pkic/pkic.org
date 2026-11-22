@@ -38,6 +38,8 @@ export const LIVE_ROOM_POLICY = {
   chatPerPerson: { limit: 10, windowSeconds: 60 },
   questionMinLength: 3,
   questionMaxLength: 280,
+  /** The most of a session's abstract the session graphic shows, cut at a word. */
+  sessionAbstractMaxLength: 480,
   /** The room refuses new questions once it holds this many. */
   maxQuestionsPerRoom: 300,
   /** Question creation and unreviewed author edits share this durable write allowance. */

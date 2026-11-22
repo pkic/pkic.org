@@ -276,6 +276,8 @@ export const liveRoomSessionSchema = z
     /** The location the session takes place in, whose chat it shows on air; a room admitted before this field has none. */
     roomId: databaseIdSchema.nullable().optional(),
     credits: z.array(liveCreditSchema).max(50),
+    /** The session's abstract as plain text, cut to fit a board; null when it has none, absent for a room admitted before it. */
+    abstract: z.string().min(1).max(LIVE_ROOM_POLICY.sessionAbstractMaxLength).nullable().optional(),
     /** The outputs its physical room sets up beside Program; a room admitted before this field reads the built-in ones. */
     roomOutputs: liveRoomOutputsSchema.optional(),
   })

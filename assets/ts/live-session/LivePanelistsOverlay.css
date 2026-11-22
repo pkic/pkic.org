@@ -14,6 +14,47 @@
   .pk-live-board:is([data-shape="tall"], [data-shape="strip"]) .pk-live-panelists__session {
     font-size: var(--pk-live-board-headline-type-compact);
   }
+  /* The abstract under the title, clamped to the lines the board's shape holds. */
+  .pk-live-panelists__abstract {
+    --abstract-lines: 5;
+    display: -webkit-box;
+    flex: none;
+    max-inline-size: 64ch;
+    margin: 0;
+    overflow: hidden;
+    color: var(--pk-pqc-on-field-muted);
+    font-size: calc(var(--pk-live-question-byline-type) * 1.1);
+    font-weight: 500;
+    line-height: 1.4;
+    text-wrap: pretty;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: var(--abstract-lines);
+    line-clamp: var(--abstract-lines);
+  }
+  .pk-live-board[data-shape="tall"] .pk-live-panelists__abstract {
+    --abstract-lines: 8;
+  }
+  /* A thin strip has no room for it beside the people. */
+  .pk-live-board[data-shape="strip"] .pk-live-panelists__abstract {
+    display: none;
+  }
+  /*
+   * Centered in the board's height: title only, and in a column beside the
+   * camera, so neither leaves the bottom of the board empty. Title only sets
+   * the title large, the abstract under it with more lines.
+   */
+  :is(.pk-live-panelists--title, .pk-live-board[data-shape="tall"].pk-live-panelists) .pk-live-panelists__heading {
+    margin-block-start: auto;
+  }
+  :is(.pk-live-panelists--title, .pk-live-board[data-shape="tall"].pk-live-panelists) > :last-child {
+    margin-block-end: auto;
+  }
+  .pk-live-board:not([data-shape="strip"]).pk-live-panelists--title .pk-live-panelists__session {
+    font-size: calc(var(--pk-live-board-headline-type) * 1.4);
+  }
+  .pk-live-board:not([data-shape="strip"]).pk-live-panelists--title .pk-live-panelists__abstract {
+    --abstract-lines: 7;
+  }
   /* A thin strip across the frame: the session beside the row of people, under the eyebrow. */
   .pk-live-board[data-shape="strip"].pk-live-panelists {
     display: grid;
@@ -163,6 +204,47 @@
     --name-type: 30px;
     --title-type: 22px;
     gap: 12px;
+  }
+  /*
+   * A column beside the camera is tall and narrow, so its list takes the
+   * height the board has: larger photos and names, and fewer abstract lines
+   * once four or more people share the column.
+   */
+  .pk-live-board[data-shape="tall"] .pk-live-panelists__credits[data-arrangement="rows"] {
+    --headshot: 168px;
+    --name-type: 50px;
+    --title-type: 33px;
+    gap: 40px;
+    margin-block-start: 40px;
+  }
+  .pk-live-board[data-shape="tall"] .pk-live-panelists__credits[data-arrangement="rows"][data-count="4"] {
+    --headshot: 132px;
+    --name-type: 44px;
+    --title-type: 30px;
+    gap: 30px;
+  }
+  .pk-live-board[data-shape="tall"]
+    .pk-live-panelists__credits[data-arrangement="rows"]:is([data-count="5"], [data-count="6"]) {
+    --headshot: 112px;
+    --name-type: 40px;
+    --title-type: 28px;
+    gap: 22px;
+  }
+  /* Under an abstract, a full panel steps down once more so the column still holds everyone. */
+  .pk-live-board[data-shape="tall"]
+    .pk-live-panelists__abstract
+    + .pk-live-panelists__credits[data-arrangement="rows"]:is([data-count="5"], [data-count="6"]) {
+    --headshot: 96px;
+    --name-type: 38px;
+    --title-type: 26px;
+    gap: 18px;
+  }
+  .pk-live-board[data-shape="tall"] .pk-live-panelists__abstract:has(+ .pk-live-panelists__credits[data-count="4"]) {
+    --abstract-lines: 4;
+  }
+  .pk-live-board[data-shape="tall"]
+    .pk-live-panelists__abstract:has(+ .pk-live-panelists__credits:is([data-count="5"], [data-count="6"])) {
+    --abstract-lines: 3;
   }
   /*
    * A photo in a list is too small to carry the badge, so the badge follows

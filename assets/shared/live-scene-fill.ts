@@ -5,7 +5,7 @@ import {
   type LiveSelfFillingElement,
 } from "./schemas/live-overlay-layout";
 import { DEFAULT_LIVE_CHAT_FEED_CONFIG, DEFAULT_LIVE_TOP_QUESTIONS_CONFIG } from "./schemas/live-session-on-screen";
-import type { LiveCompositionInput, LivePanelists, LiveRoomSession, LiveStage } from "./schemas/live-session-room";
+import type { LiveCompositionInput, LivePanelists, LiveStage } from "./schemas/live-session-room";
 import { DEFAULT_LIVE_SCHEDULE_CONFIG } from "./schemas/live-session-schedule";
 import { DEFAULT_LIVE_TICKER_CONFIG } from "./schemas/live-session-ticker";
 
@@ -19,16 +19,11 @@ import { DEFAULT_LIVE_TICKER_CONFIG } from "./schemas/live-session-ticker";
  * and one of the event's own behave the same.
  */
 
-/** The panel's layout when a scene brings it on and Program shows none. */
+/** The session graphic's look when a scene brings it on and Program shows none: the title and its people in a row. */
 export const DEFAULT_LIVE_PANELISTS: LivePanelists = { layout: "panel" };
 
-/** A line-up of every speaker only means something when there is more than one. */
-export function liveSessionHasPanel(creditCount: number): boolean {
-  return creditCount > 1;
-}
-
-/** What the fill reads from the room: who the session credits, and how Program shows each graphic now. */
-export type LiveSceneFillRoom = { session: Pick<LiveRoomSession, "credits">; program: LiveStage };
+/** What the fill reads from the room: how Program shows each graphic now. */
+export type LiveSceneFillRoom = { program: LiveStage };
 
 /** The sources a scene switches on, as part of a composition. */
 export type LiveSceneFill = Partial<LiveCompositionInput>;
@@ -55,10 +50,8 @@ const FILLS: Record<
     input.schedule
       ? null
       : { schedule: { ...(program.schedule?.config ?? DEFAULT_LIVE_SCHEDULE_CONFIG), scope: "all-rooms" } },
-  panelists: (input, { program, session }) =>
-    input.panelists || !liveSessionHasPanel(session.credits.length)
-      ? null
-      : { panelists: program.panelists ?? DEFAULT_LIVE_PANELISTS },
+  panelists: (input, { program }) =>
+    input.panelists ? null : { panelists: program.panelists ?? DEFAULT_LIVE_PANELISTS },
   topQuestions: (input, { program }) =>
     input.topQuestions ? null : { topQuestions: program.topQuestions?.config ?? DEFAULT_LIVE_TOP_QUESTIONS_CONFIG },
   chat: (input, { program }) =>

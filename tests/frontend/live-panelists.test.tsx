@@ -5,10 +5,12 @@ import { afterEach, expect, it, vi } from "vitest";
 import {
   liveRoomClientMessageSchema,
   liveStageSchema,
+  type LivePanelists,
   type LiveRoomClientMessage,
 } from "../../assets/shared/schemas/live-session-room";
 import { LivePanelistsOverlay, livePanelistsArrangement } from "../../assets/ts/live-session/LivePanelistsOverlay";
 import { liveBoardSize } from "../../assets/ts/live-session/LiveBoard";
+import { LivePanelQuestionOverlay } from "../../assets/ts/live-session/LivePanelQuestionOverlay";
 import { LivePanelistControls } from "../../assets/ts/member-flows/portal/sections/events/detail/live/LivePanelistControls";
 import { liveSnapshot, liveTargets } from "./helpers/live-room-socket";
 import { applyLiveRoomMessage } from "../../assets/ts/live-session/live-room-state";
@@ -52,6 +54,61 @@ it.each(["panel", "list", "columns"] as const)(
     expect(host.textContent).toBe("");
   },
 );
+it("shows the session's title alone or with its abstract, and its one speaker", async () => {
+  const session = { ...liveSnapshot().session, abstract: "How to plan the move to post-quantum certificates." };
+  session.credits = session.credits.slice(0, 1);
+  host = document.body.appendChild(document.createElement("div"));
+  const draw = (panelists: LivePanelists) =>
+    act(() => render(<LivePanelistsOverlay session={session} panelists={panelists} box={BOX} />, host!));
+  await draw({ layout: "title" });
+  expect(host.querySelector(".pk-live-panelists__session")?.textContent).toBe(session.title);
+  expect(host.querySelector(".pk-live-panelists__credits")).toBeNull();
+  expect(host.querySelector(".pk-live-panelists__abstract")).toBeNull();
+  await draw({ layout: "title", abstract: true });
+  expect(host.querySelector(".pk-live-panelists__abstract")?.textContent).toBe(session.abstract);
+  await draw({ layout: "panel", abstract: true });
+  expect(host.querySelectorAll(".pk-live-panelists__speaker")).toHaveLength(1);
+  expect(host.querySelector(".pk-live-panelists__abstract")).not.toBeNull();
+  // A session without an abstract shows none, whatever the operator chose.
+  await act(() =>
+    render(
+      <LivePanelistsOverlay
+        session={{ ...session, abstract: null }}
+        panelists={{ layout: "title", abstract: true }}
+        box={BOX}
+      />,
+      host!,
+    ),
+  );
+  expect(host.querySelector(".pk-live-panelists__abstract")).toBeNull();
+});
+it("gives a question to the panel the room its session title would take", async () => {
+  const snapshot = liveSnapshot();
+  const session = { ...snapshot.session, abstract: "How to plan the move to post-quantum certificates." };
+  const question = {
+    id: "question-1",
+    text: "Is hybrid signing worth it?",
+    authorName: null,
+    authorPhotoUrl: null,
+    authorAffiliation: null,
+    addressedTo: null,
+  };
+  host = document.body.appendChild(document.createElement("div"));
+  await act(() =>
+    render(
+      <LivePanelQuestionOverlay
+        stage={{ ...snapshot.stage, question, panelists: { layout: "panel", abstract: true } }}
+        session={session}
+        box={BOX}
+      />,
+      host!,
+    ),
+  );
+  expect(host.textContent).toContain(question.text);
+  expect(host.querySelectorAll(".pk-live-panelists__speaker")).toHaveLength(session.credits.length);
+  expect(host.textContent).not.toContain(session.title);
+  expect(host.querySelector(".pk-live-panelists__abstract")).toBeNull();
+});
 it("sits two speakers or a full panel in one row across a wide board and lists them beside the camera", () => {
   const wide = liveBoardSize(BOX).shape;
   const column = liveBoardSize({ width: 560, height: 520 }).shape;
@@ -118,8 +175,8 @@ it("routes panelist preview and program independently and preserves canonical at
       host!,
     ),
   );
-  host.querySelector<HTMLButtonElement>('button[aria-label="Show panelists in preview"]')!.click();
-  host.querySelector<HTMLButtonElement>('button[aria-label="Show panelists on air"]')!.click();
+  host.querySelector<HTMLButtonElement>('button[aria-label="Show session graphic in preview"]')!.click();
+  host.querySelector<HTMLButtonElement>('button[aria-label="Show session graphic on air"]')!.click();
   expect(sendProgram.mock.calls.map(([message]) => liveRoomClientMessageSchema.parse(message))).toEqual([
     { type: "preview.set", composition: { panelists: null } },
     { type: "stage.panelists", panelists: { layout: "panel" } },

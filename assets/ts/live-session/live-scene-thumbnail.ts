@@ -120,7 +120,6 @@ function fillContent(
 export function liveSceneThumbnail(room: LiveSceneThumbnailRoom, scene: string, now: number): LiveSceneThumbnail {
   const { preview } = room;
   const fill = liveSceneFill(resolveLiveSceneElements(preview, scene), mergeLivePreview(preview.stage, { scene }), {
-    session: preview.session,
     program: room.program ?? EMPTY_LIVE_STAGE,
   });
   const { stage, unfilled } = fillContent(fill, room, now);

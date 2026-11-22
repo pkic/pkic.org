@@ -24,7 +24,14 @@ import {
 } from "./live-session-graphic-settings";
 import { liveOverlayLayoutSlugSchema } from "./live-overlay-layout";
 
-export const livePanelistsSchema = z.object({ layout: z.enum(["panel", "list", "columns"]) }).strict();
+/**
+ * The session graphic: its title with its people in a row, one column or two
+ * columns, or its title alone; `abstract` adds the session's abstract under the
+ * title. A room saved before the abstract reads without it.
+ */
+export const livePanelistsSchema = z
+  .object({ layout: z.enum(["panel", "list", "columns", "title"]), abstract: z.boolean().optional() })
+  .strict();
 export type LivePanelists = z.infer<typeof livePanelistsSchema>;
 export const livePanelistsCommandSchema = z
   .object({ type: z.literal("stage.panelists"), panelists: livePanelistsSchema.nullable() })

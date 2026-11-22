@@ -23,7 +23,6 @@ import { DEFAULT_LIVE_TOP_QUESTIONS_CONFIG } from "../assets/shared/schemas/live
 import {
   EMPTY_LIVE_STAGE,
   type LiveCompositionInput,
-  type LiveCredit,
   type LiveStage,
 } from "../assets/shared/schemas/live-session-room";
 import { DEFAULT_LIVE_SCHEDULE_CONFIG } from "../assets/shared/schemas/live-session-schedule";
@@ -48,12 +47,7 @@ const sameSpot = (a: LiveOverlayElementPlacement, b: LiveOverlayElementPlacement
   a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
 
 const EMPTY = liveCompositionInput(EMPTY_LIVE_STAGE);
-const credits = (count: number) =>
-  Array.from({ length: count }, (_, index) => ({ key: `user:${index}` }) as LiveCredit);
-const room = (program: Partial<LiveStage> = {}, speakers = 2) => ({
-  session: { credits: credits(speakers) },
-  program: { ...EMPTY_LIVE_STAGE, ...program },
-});
+const room = (program: Partial<LiveStage> = {}) => ({ program: { ...EMPTY_LIVE_STAGE, ...program } });
 /** A composition with every pick made and every self-filling graphic off. */
 const PICKED: LiveCompositionInput = {
   ...EMPTY,
@@ -255,14 +249,13 @@ describe("loading a scene on a composition", () => {
     expect(liveSceneFill(preset("panel"), EMPTY, room())).toEqual({ panelists: { layout: "panel" } });
   });
 
-  it("gives a graphic the look Program shows it in, and leaves the panel off for a session with one speaker", () => {
+  it("gives a graphic the look Program shows it in", () => {
     const program = {
       panelists: { layout: "columns" as const },
       topQuestions: { config: { count: 3 }, questions: [] },
     };
     expect(liveSceneFill(preset("panel"), EMPTY, room(program))).toEqual({ panelists: { layout: "columns" } });
     expect(liveSceneFill(preset("questions"), EMPTY, room(program))).toEqual({ topQuestions: { count: 3 } });
-    expect(liveSceneFill(preset("panel"), EMPTY, room({}, 1))).toEqual({});
   });
 
   it("never touches a pick, and never switches on a graphic the scene only places", () => {

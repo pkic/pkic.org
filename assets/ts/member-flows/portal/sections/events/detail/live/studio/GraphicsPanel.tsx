@@ -1,6 +1,5 @@
 import type { ComponentType } from "preact";
 import { formatClockInZone } from "../../../../../../../../shared/format-date";
-import { liveSessionHasPanel } from "../../../../../../../../shared/live-scene-fill";
 import { resolveUpcomingRooms } from "../../../../../../../../shared/live-session-schedule";
 import type { AgendaSnapshot } from "../../../../../../../../shared/schemas/event-agenda";
 import { DEFAULT_LIVE_SCHEDULE_CONFIG } from "../../../../../../../../shared/schemas/live-session-schedule";
@@ -44,12 +43,7 @@ export const LIVE_GRAPHICS: ReadonlyArray<{
   applies?: (context: LiveGraphicContext) => boolean;
   Row: ComponentType<LiveGraphicContext>;
 }> = [
-  {
-    id: "panel",
-    // The same rule a scene follows before it brings the panel on, so a panel that is on always has its row.
-    applies: ({ targets }) => liveSessionHasPanel(targets.state.session.credits.length),
-    Row: ({ targets }) => <LivePanelistControls targets={targets} />,
-  },
+  { id: "session", Row: ({ targets }) => <LivePanelistControls targets={targets} /> },
   { id: "ticker", Row: ({ targets }) => <LiveTickerControls targets={targets} /> },
   {
     id: "check-in",

@@ -5,7 +5,11 @@
  * background. Synthetic room, fixed clock.
  */
 import type { PreviewSection } from "./PreviewShell";
-import { EMPTY_LIVE_AUX_COMPOSITION, type LiveStage } from "../../../shared/schemas/live-session-room";
+import {
+  EMPTY_LIVE_AUX_COMPOSITION,
+  type LivePanelists,
+  type LiveStage,
+} from "../../../shared/schemas/live-session-room";
 import type { LiveRoomState } from "../../live-session/live-room-state";
 import { LivestreamOverlay, presetWith, ROOM, roomWith } from "./studio-on-screen-fixtures";
 
@@ -32,6 +36,18 @@ const NAMED_QUESTION = {
   addressedTo: "sample:panelist",
 };
 const ON_POLL: Partial<LiveStage> = { poll: ROOM.stage.poll };
+
+const ABSTRACT =
+  "Most organizations know they must move to post-quantum cryptography, but few know where to start. This session walks through building a cryptographic inventory, choosing between hybrid and pure post-quantum certificates, and planning a migration that keeps existing clients working.";
+/** The sample session with an abstract and one speaker, or a full panel, showing the session graphic as the operator set it. */
+function sessionGraphic(panelists: LivePanelists, people: 1 | 6 = 1): LiveRoomState {
+  const { session } = people === 1 ? ROOM : sessionWith(people);
+  return {
+    ...ROOM,
+    session: { ...session, credits: session.credits.slice(0, people), abstract: ABSTRACT },
+    stage: { ...EMPTY_LIVE_AUX_COMPOSITION, panelists },
+  };
+}
 
 export const studioBoardSections: PreviewSection[] = [
   {
@@ -104,6 +120,39 @@ export const studioBoardSections: PreviewSection[] = [
     ),
   },
   {
+    id: "onscreen-session-title-abstract",
+    title: "Session title with its abstract",
+    note: "Title only, with the abstract: the session's title large and centered, the abstract under it.",
+    render: () => (
+      <LivestreamOverlay
+        state={sessionGraphic({ layout: "title", abstract: true })}
+        elements={presetWith("full-board", ["background", "panelists"])}
+      />
+    ),
+  },
+  {
+    id: "onscreen-session-speaker-abstract",
+    title: "One speaker with the abstract",
+    note: "The session graphic for a talk: the title, the abstract and its one speaker.",
+    render: () => (
+      <LivestreamOverlay
+        state={sessionGraphic({ layout: "panel", abstract: true })}
+        elements={presetWith("full-board", ["background", "panelists"])}
+      />
+    ),
+  },
+  {
+    id: "onscreen-session-column",
+    title: "Session beside the camera",
+    note: "In a column the session graphic lists the title, the abstract and the panel one under the other.",
+    render: () => (
+      <LivestreamOverlay
+        state={sessionGraphic({ layout: "panel", abstract: true }, 6)}
+        elements={presetWith("check-in", ["background", "panelists", "lowerThird"])}
+      />
+    ),
+  },
+  {
     id: "onscreen-question-poll-board",
     title: "Question on the board",
     note: "In Full board the background covers the whole frame and a board draws on it; one board shows at a time.",
@@ -111,6 +160,17 @@ export const studioBoardSections: PreviewSection[] = [
       <LivestreamOverlay
         state={roomWith({}, { question: NAMED_QUESTION })}
         elements={presetWith("full-board", ["background", "question"])}
+      />
+    ),
+  },
+  {
+    id: "onscreen-question-qa-column",
+    title: "Question in the Q&A column",
+    note: "The Q&A scene: the question in the column on the right, beside the camera, as the projector shows it.",
+    render: () => (
+      <LivestreamOverlay
+        state={roomWith({}, { question: NAMED_QUESTION })}
+        elements={presetWith("questions", ["background", "question"])}
       />
     ),
   },

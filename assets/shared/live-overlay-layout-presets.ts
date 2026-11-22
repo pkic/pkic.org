@@ -180,13 +180,16 @@ const PRESETS: Record<LiveOverlayPreset, { name: string; elements: LiveOverlayLa
   /**
    * The top questions in a column on the right, on the background, coming on
    * with the scene; a question or a poll takes their place when picked. The
-   * speaker's name, the time and the ticker sit on the camera beside them.
+   * session graphic shows there too when the operator switches it on and no
+   * question board covers it. The speaker's name, the time and the ticker
+   * sit on the camera beside them.
    */
   questions: {
     name: "Q&A",
-    elements: comingOn(only(column("right"), ["background", ...QUESTION_BOARDS, "lowerThird", ...ALWAYS]), [
-      "topQuestions",
-    ]),
+    elements: comingOn(
+      only(column("right"), ["background", "panelists", ...QUESTION_BOARDS, "lowerThird", ...ALWAYS]),
+      ["topQuestions"],
+    ),
   },
   /**
    * A panel on stage, coming on with the scene: the panelists across the
