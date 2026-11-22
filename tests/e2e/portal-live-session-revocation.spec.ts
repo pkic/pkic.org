@@ -56,7 +56,7 @@ async function prepareDraftPoll(page: Page, label: string) {
 /** Live messages cross a socket and a busy server, so they get longer than an assertion's default to arrive. */
 const livePoll = <T>(fn: () => Promise<T> | T) => expect.poll(fn, { timeout: 20_000 });
 
-test("two already-open live moderator clients stop receiving private questions, polls and queue updates after grant revocation", async ({
+test("Studio queue stays private and moderators lose question and poll access after revocation", async ({
   page: staff,
   browser,
 }, info) => {
@@ -145,20 +145,22 @@ test("two already-open live moderator clients stop receiving private questions, 
     expect(question.question.status).toBe("pending");
     const privatePoll = await prepareDraftPoll(staff, `Baseline private draft ${marker}`);
     await sendLiveMessage(staff, { type: "queue.add", view: "poll", itemId: privatePoll.id });
+    await livePoll(async () =>
+      (await liveMessages(staff)).some(
+        (message) => message.type === "queue.changed" && message.queue.poll.includes(privatePoll.id),
+      ),
+    ).toBe(true);
     for (const page of pages) {
       await livePoll(async () =>
-        (await liveMessages(page)).some(
-          (message) => message.type === "queue.changed" && message.queue.poll.includes(privatePoll.id),
-        ),
-      ).toBe(true);
-      const received = (await liveMessages(page)).find(
-        (message) => message.type === "question.changed" && message.question.id === question.question.id,
-      );
-      expect(
         (await liveMessages(page)).some(
           (message) => message.type === "poll.changed" && message.poll.id === privatePoll.id,
         ),
       ).toBe(true);
+      const messages = await liveMessages(page);
+      const received = messages.find(
+        (message) => message.type === "question.changed" && message.question.id === question.question.id,
+      );
+      expect(messages.some((message) => message.type === "queue.changed")).toBe(false);
       expect(received).toMatchObject({
         question: { anonymous: true, status: "pending", authorName: expect.any(String) },
       });
