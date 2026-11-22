@@ -1,7 +1,10 @@
 import { buildEventEmailVariables } from "../email/event-email-variables";
 import type { InviteEmailQueueRow } from "../email/outbox";
 import { emailPlainText } from "../email/plain-text";
-import { buildEventInviteRecipientVariables } from "./event-invite-email-variables";
+import {
+  buildEventInvitationMessageVariables,
+  buildEventInviteRecipientVariables,
+} from "./event-invite-email-variables";
 import { queuedCapabilityToken } from "./capability-links";
 import { inviteDeclineUrl, proposalPageUrl, registrationPageUrl } from "./frontend-links";
 import type { EventRouteRow } from "./reminders-support";
@@ -18,7 +21,8 @@ interface InviteEmailRecipient {
 }
 
 export function buildInviteEmailQueueRow(payload: {
-  event: EventRouteRow;
+  /** Visibility picks the registration link: the public page or the portal. */
+  event: EventRouteRow & { visibility: string };
   invite: InviteEmailRecipient;
   appBaseUrl: string;
   source: string;
@@ -65,6 +69,7 @@ export function buildInviteEmailQueueRow(payload: {
         { firstName: invite.invitee_first_name, lastName: invite.invitee_last_name },
         isAttendee ? "Attendee" : "Speaker",
       ),
+      ...(isAttendee ? buildEventInvitationMessageVariables(event) : {}),
       inviterName: emailPlainText(payload.inviterName ?? ""),
       registrationUrl: isAttendee ? actionUrl : undefined,
       proposalUrl: isAttendee ? undefined : actionUrl,

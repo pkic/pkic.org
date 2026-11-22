@@ -737,7 +737,12 @@ describe("resend-manage-link endpoint", () => {
       await env.DB.prepare("UPDATE user_emails SET email=?,normalized_email=? WHERE id=?")
         .bind("work@bücher.example", "work@xn--bcher-kva.example", f.emailId)
         .run();
-      expect((await resendManageLink(env, email)).status).toBe(200);
+      const limited = {
+        ...env,
+        EMAIL_RATE_LIMITER: createTestRateLimiter(10),
+        IP_RATE_LIMITER: createTestRateLimiter(10),
+      };
+      expect((await resendManageLink(limited, email)).status).toBe(200);
       expect(
         await queryAll(
           env.DB,
@@ -785,7 +790,8 @@ describe("resend-manage-link endpoint", () => {
   });
 
   it("sends a fresh manage link without invalidating the earlier link", async () => {
-    await seedEventAndAdmin(env.DB);
+    // A public event's manage link is the token page; other events manage in the portal.
+    await seedEventAndAdmin(env.DB, { visibility: "public" });
     const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     await seedWorkflowEmailTemplates(env.DB, admin.id);
 
@@ -839,6 +845,36 @@ describe("resend-manage-link endpoint", () => {
     expect(secretAfter).toBe(secretBefore);
   });
 
+  it("sends a person registered for an event without public pages to their portal registration", async () => {
+    await seedEventAndAdmin(env.DB);
+    const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
+    await seedWorkflowEmailTemplates(env.DB, admin.id);
+    const { registrationId, email } = await registerAttendee();
+    await env.DB.prepare("UPDATE registrations SET status = 'registered', confirmation_link_secret = NULL WHERE id = ?")
+      .bind(registrationId)
+      .run();
+
+    const limited = {
+      ...env,
+      EMAIL_RATE_LIMITER: createTestRateLimiter(10),
+      IP_RATE_LIMITER: createTestRateLimiter(10),
+    };
+    expect((await resendManageLink(limited, email)).status).toBe(200);
+    const [queued] = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_manage_link' ORDER BY created_at DESC LIMIT 1",
+    );
+    const delivered = await materializeQueuedCapabilityLinks(
+      env.DB,
+      env,
+      JSON.parse(queued.payload_json) as Record<string, unknown>,
+    );
+    const manageUrl = new URL(delivered.manageUrl as string);
+    expect(manageUrl.pathname).toBe("/portal/");
+    expect(manageUrl.hash).toBe(`#/events/pqc-2026/registrations/${registrationId}`);
+    expect(manageUrl.searchParams.get("token")).toBeNull();
+  });
+
   it("never sends a manage capability to an unverified pending address", async () => {
     await seedEventAndAdmin(env.DB);
     const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
@@ -859,7 +895,12 @@ describe("resend-manage-link endpoint", () => {
     );
     expect(afterPendingRequest).toEqual(before);
 
-    expect((await resendManageLink(env, email)).status).toBe(200);
+    const limited = {
+      ...env,
+      EMAIL_RATE_LIMITER: createTestRateLimiter(10),
+      IP_RATE_LIMITER: createTestRateLimiter(10),
+    };
+    expect((await resendManageLink(limited, email)).status).toBe(200);
     await expect(
       queryAll<{ recipient_email: string }>(
         env.DB,

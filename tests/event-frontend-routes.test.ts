@@ -120,7 +120,7 @@ describe("event frontend routes and hydration contracts", () => {
   });
 
   it("redirects referral links to configured event registration route", async () => {
-    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { eventId } = await seedEventAndAdmin(env.DB, { visibility: "public" });
 
     await env.DB.prepare(
       `
@@ -148,7 +148,7 @@ describe("event frontend routes and hydration contracts", () => {
   });
 
   it("returns required terms in forms hydration response", async () => {
-    await seedEventAndAdmin(env.DB);
+    await seedEventAndAdmin(env.DB, { visibility: "public" });
 
     const response = await app.fetch(
       new Request("https://app.test/api/v1/events/pqc-2026/forms/placements/event_registration"),
@@ -166,7 +166,7 @@ describe("event frontend routes and hydration contracts", () => {
   });
 
   it("uses the explicit event placement instead of settings links or the newest definition", async () => {
-    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { eventId } = await seedEventAndAdmin(env.DB, { visibility: "public" });
     const registrationLinkedKey = "reg-linked";
     const registrationNewestKey = "reg-newest";
     const proposalLinkedKey = "prop-linked";
@@ -237,7 +237,7 @@ describe("event frontend routes and hydration contracts", () => {
   });
 
   it("does not infer a form from an unplaced event definition", async () => {
-    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { eventId } = await seedEventAndAdmin(env.DB, { visibility: "public" });
 
     await env.DB.batch([
       env.DB.prepare(

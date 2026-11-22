@@ -17,14 +17,24 @@ import { basicSections } from "./sections-basics";
 import { dataSections } from "./sections-data";
 import { densitySections } from "./sections-density";
 import { overlaySections } from "./sections-overlays";
-import { patternSections } from "./sections-patterns";
 import { agendaPickerSections } from "./sections-agenda-picker";
-import { eventParticipationSections } from "./sections-event-participation";
 import { speakerProfileReviewSections } from "./sections-speaker-profile-review";
 
 async function main(): Promise<void> {
   const mount = document.getElementById("pk-preview");
   if (!mount) return;
+  // The largest layout groups load as their own chunks, so the gallery's entry stays within the chunk budget.
+  const [
+    { patternSections },
+    { eventParticipationSections },
+    { eventTicketSections },
+    { unfinishedRegistrationSections },
+  ] = await Promise.all([
+    import("./sections-patterns"),
+    import("./sections-event-participation"),
+    import("./sections-event-tickets"),
+    import("./sections-unfinished-registrations"),
+  ]);
   // If the live production chunk fails to load, the rest of the gallery still renders, with a note in its place.
   const live = await import("./sections-live-production").catch(() => null);
   const unloaded: PreviewSection[] = [
@@ -44,6 +54,8 @@ async function main(): Promise<void> {
     ...agendaPickerSections,
     ...speakerProfileReviewSections,
     ...eventParticipationSections,
+    ...eventTicketSections,
+    ...unfinishedRegistrationSections,
     badgePrintingSection,
     registrationRosterActionsSection,
     badgeLabelDeskSection,

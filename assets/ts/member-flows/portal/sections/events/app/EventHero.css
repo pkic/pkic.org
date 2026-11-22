@@ -72,7 +72,7 @@
     inset: auto 0 0;
     z-index: -1;
     block-size: 2.75rem;
-    background: url("/img/pqc/canal-houses.svg") left bottom / auto 100% repeat-x;
+    background: var(--pk-event-hero-motif, url("/img/pqc/canal-houses.svg")) left bottom / auto 100% repeat-x;
     opacity: 0.32;
     pointer-events: none;
   }

@@ -47,6 +47,7 @@ export async function runInviteReminders(
          ${effectiveInviteExpirySql("i", "e")} AS expires_at,
          e.name AS event_name, e.slug AS event_slug, e.base_path AS event_base_path,
          e.starts_at AS event_starts_at, e.ends_at AS event_ends_at, ${eventCommunicationSettingsSql("e.settings_json")} AS event_settings_json,
+         e.visibility AS event_visibility,
          CASE WHEN json_valid(e.settings_json)
            THEN COALESCE(
              json_extract(e.settings_json, '$.registration.closesAt'),
@@ -66,7 +67,7 @@ export async function runInviteReminders(
      SELECT
        id, event_id, invitee_email, invitee_first_name, invitee_last_name,
        invite_type, link_secret, reminder_count, transition_revision, expires_at, event_name, event_slug,
-       event_base_path, event_starts_at, event_ends_at, event_settings_json
+       event_base_path, event_starts_at, event_ends_at, event_settings_json, event_visibility
      FROM candidates
      WHERE invite_type <> 'attendee'
        OR (
@@ -85,13 +86,14 @@ export async function runInviteReminders(
   const attendeeInvites: ReminderCandidatePreview[] = [];
   const speakerInvites: ReminderCandidatePreview[] = [];
   for (const invite of dueInvites) {
-    const event: EventRouteRow = {
+    const event: EventRouteRow & { visibility: string } = {
       id: invite.event_id,
       name: invite.event_name,
       slug: invite.event_slug,
       base_path: invite.event_base_path,
       starts_at: invite.event_starts_at,
       settings_json: invite.event_settings_json,
+      visibility: invite.event_visibility,
     };
     const isAttendee = invite.invite_type === "attendee";
     const deadlineForUrgency = isAttendee ? attendeeEffectiveDeadline(invite) : invite.expires_at;
@@ -139,13 +141,14 @@ export async function runInviteReminders(
 
     const emailRows = await Promise.all(
       dueInvites.map(async (invite) => {
-        const event: EventRouteRow = {
+        const event: EventRouteRow & { visibility: string } = {
           id: invite.event_id,
           name: invite.event_name,
           slug: invite.event_slug,
           base_path: invite.event_base_path,
           starts_at: invite.event_starts_at,
           settings_json: invite.event_settings_json,
+          visibility: invite.event_visibility,
         };
         const isAttendee = invite.invite_type === "attendee";
         const deadlineForUrgency = isAttendee ? attendeeEffectiveDeadline(invite) : invite.expires_at;

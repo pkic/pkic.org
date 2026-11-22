@@ -47,6 +47,16 @@ it("reviews every configured day, including unselected days, and updates when a 
   await act(() => form.querySelector<HTMLInputElement>('input[name="dayAttendance.2027-09-02"]')!.click());
   await act(refresh);
   expect(review.textContent?.match(/Not attending/g)).toHaveLength(1);
+  // The ticket step's items follow the days, so the review states the ticket and its total.
+  await act(() =>
+    updateRegistrationReview(host, form, [], "Ada Lovelace", [
+      { term: "Ticket", value: "Vendor" },
+      { term: "Total", value: "$395" },
+    ]),
+  );
+  const terms = [...review.querySelectorAll("dt")].map((term) => term.textContent);
+  expect(terms.slice(-2)).toEqual(["Ticket", "Total"]);
+  expect(review.textContent).toContain("$395");
 });
 
 it("preserves duplicate-label custom answer rows when a question is removed", async () => {

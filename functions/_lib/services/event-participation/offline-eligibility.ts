@@ -1,3 +1,4 @@
+import { registrationTicketSettledSql } from "./badge-attendees";
 import { eligibilityPageDigest } from "../../../../assets/shared/event-eligibility-digest";
 import { instantToCalendarDate } from "../../../../assets/shared/timezone";
 import { operationalAllocationCompatibleSql } from "./session-allocation";
@@ -100,7 +101,7 @@ export function prepareOfflineEligibility(
         SELECT b.id AS badgeId,b.user_id AS userId,b.credential_hash AS credentialHash,
           ${query.includeBadgeNames ? `CASE WHEN person.pii_redacted_at IS NULL AND person.merged_into_user_id IS NULL AND person.active=1 AND r.status='registered' AND b.revoked_at IS NULL AND ${eventContactAccessSql("b.event_id")} THEN ${personNameSql("person")} END` : "NULL"} AS displayName,
           ${query.includeBadgeNames ? "b.print_credential_json" : "NULL"} AS printCredential,
-          b.revoked_at IS NOT NULL AS revoked,b.expires_at AS expiresAt,COALESCE(r.status='registered',0) AS eventRegistered,
+          b.revoked_at IS NOT NULL AS revoked,b.expires_at AS expiresAt,COALESCE(r.status='registered' AND ${registrationTicketSettledSql("r")},0) AS eventRegistered,
           r.id IS NOT NULL AS registered,
           ${registrationSessionDayOptionsSql("r", "target")} AS registration_days_json,
           ${operationalAllocationCompatibleSql("target.occurrence_id", "b.user_id", "'physical'", "target.room_id")} AS allocationCompatible,

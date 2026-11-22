@@ -10,16 +10,19 @@
  */
 import { mcpOauthRequestIdSchema } from "../../../shared/schemas/mcp-oauth";
 import { portalReturnPathSchema } from "../../../shared/schemas/user-auth";
-import { MEMBERSHIP_JOIN_PATH } from "../../../shared/membership-join-path";
-import { parseEventFlowPath } from "../../../shared/event-flow-paths";
 
 /** The route part of a hash location: `#/groups/cm?tab=x` → `/groups/cm`. */
 export function portalHashPath(hash: string): string {
   return (hash.replace(/^#/, "").split("?", 1)[0] || "/").replace(/\/$/, "") || "/";
 }
 
+/** The query part of a hash location: `#/a?day=2026-12-01` → `day=2026-12-01`. */
+export function portalHashSearch(hash: string): string {
+  return hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "";
+}
+
 function hashQuery(hash: string): URLSearchParams {
-  return new URLSearchParams(hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "");
+  return new URLSearchParams(portalHashSearch(hash));
 }
 
 /** One named query parameter of a hash location: `#/a?day=2026-12-01` → `2026-12-01`. */
@@ -50,18 +53,6 @@ export function portalMagicLinkReturnPath(hash: string): string | null {
   if (portalHashPath(hash) !== "/verify") return null;
   const next = hashQuery(hash).get("next");
   return next && portalReturnPathSchema.safeParse(next).success ? next : null;
-}
-
-/**
- * A sign-in link requested from a public form (registering, proposing,
- * joining) returns to that form on this site rather than to a portal route.
- * Only the platform's own flow pages qualify, so the link still cannot leave
- * the site.
- */
-export function eventFlowReturnPath(next: string | null): string | null {
-  if (!next) return null;
-  const path = next.split("?", 1)[0];
-  return parseEventFlowPath(path) || path === MEMBERSHIP_JOIN_PATH ? next : null;
 }
 
 /**

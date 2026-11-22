@@ -42,6 +42,7 @@ const portalEvent = {
   inviteLimitAttendee: 5,
   updatedAt: "2026-08-29T00:00:00.000Z",
   basePath: null,
+  motifUrl: null,
   userRetentionDays: null,
   venue: null,
   virtualUrl: null,

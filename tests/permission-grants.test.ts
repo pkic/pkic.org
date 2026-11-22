@@ -12,7 +12,7 @@ import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { hasPermission } from "../functions/_lib/auth/permissions";
 import type { AuthAdmin } from "../functions/_lib/types";
-import { createAccessGrant, revokeAccessGrant } from "../functions/_lib/services/access-control/access-grants";
+import { createAccessGrants, revokeAccessGrant } from "../functions/_lib/services/access-control/access-grants";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
@@ -80,7 +80,7 @@ describe("permission_grants (Permission grants)", () => {
       method: "POST",
       body: JSON.stringify({
         userId: staffUserId,
-        permission: "events:write",
+        permissions: ["events:write"],
         contextType: "event",
         contextId: eventAId,
         expiresAt,
@@ -89,15 +89,15 @@ describe("permission_grants (Permission grants)", () => {
 
     expect(response.status).toBe(201);
     const payload = (await response.json()) as {
-      grant: { id: string; permission: string; contextId: string };
+      grants: { id: string; permission: string; contextId: string }[];
     };
-    expect(payload.grant.permission).toBe("events:write");
-    expect(payload.grant.contextId).toBe(eventAId);
+    expect(payload.grants[0]!.permission).toBe("events:write");
+    expect(payload.grants[0]!.contextId).toBe(eventAId);
 
     const rows = await queryAll<{ id: string; expires_at: string }>(
       env.DB,
       "SELECT id, expires_at FROM permission_grants WHERE id = ?",
-      payload.grant.id,
+      payload.grants[0]!.id,
     );
     expect(rows).toHaveLength(1);
     expect(rows[0].expires_at).toBe(expiresAt);
@@ -114,7 +114,12 @@ describe("permission_grants (Permission grants)", () => {
     for (const permission of ["agenda:leads_capture", "agenda:leads_view", "agenda:leads_export"] as const) {
       const response = await call(adminToken, "/api/v1/permissions/grants", {
         method: "POST",
-        body: JSON.stringify({ userId: staffUserId, permission, contextType: "event_sponsor", contextId: sponsorId }),
+        body: JSON.stringify({
+          userId: staffUserId,
+          permissions: [permission],
+          contextType: "event_sponsor",
+          contextId: sponsorId,
+        }),
       });
       expect(response.status, await response.clone().text()).toBe(201);
     }
@@ -125,7 +130,7 @@ describe("permission_grants (Permission grants)", () => {
       method: "POST",
       body: JSON.stringify({
         userId: staffUserId,
-        permission: "donations:read",
+        permissions: ["donations:read"],
       }),
     });
 
@@ -157,7 +162,7 @@ describe("permission_grants (Permission grants)", () => {
         method: "POST",
         body: JSON.stringify({
           userId: staffUserId,
-          permission: "donations:read",
+          permissions: ["donations:read"],
         }),
       });
       expect(response.status).toBe(500);
@@ -173,12 +178,44 @@ describe("permission_grants (Permission grants)", () => {
     }
   });
 
+  it("grants several permissions in one command, or none when one of them is already held", async () => {
+    const grant = (permissions: string[]) =>
+      call(adminToken, "/api/v1/permissions/grants", {
+        method: "POST",
+        body: JSON.stringify({ userId: staffUserId, permissions }),
+      });
+    const held = () =>
+      queryAll<{ permission: string }>(
+        env.DB,
+        "SELECT permission FROM permission_grants WHERE user_id = ? AND revoked_at IS NULL ORDER BY permission",
+        [staffUserId],
+      );
+
+    const both = await grant(["events:read", "users:read"]);
+    expect(both.status).toBe(201);
+    const { grants } = (await both.json()) as { grants: { permission: string }[] };
+    expect(grants.map((item) => item.permission)).toEqual(["events:read", "users:read"]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'access_grant_created' AND actor_id = ?", [
+        adminId,
+      ]),
+    ).toHaveLength(2);
+
+    // One of the next two is already held: nothing new is granted.
+    const partly = await grant(["groups:read", "users:read"]);
+    expect(partly.status).toBe(409);
+    expect((await held()).map((row) => row.permission)).toEqual(["events:read", "users:read"]);
+
+    // A request that names nothing is refused by the contract.
+    expect((await grant([])).status).toBe(400);
+  });
+
   it("returns a precise conflict when an active matching grant already exists", async () => {
     const first = await call(adminToken, "/api/v1/permissions/grants", {
       method: "POST",
       body: JSON.stringify({
         userId: staffUserId,
-        permission: "donations:read",
+        permissions: ["donations:read"],
       }),
     });
     expect(first.status).toBe(201);
@@ -187,7 +224,7 @@ describe("permission_grants (Permission grants)", () => {
       method: "POST",
       body: JSON.stringify({
         userId: staffUserId,
-        permission: "donations:read",
+        permissions: ["donations:read"],
       }),
     });
     expect(duplicate.status).toBe(409);
@@ -329,7 +366,7 @@ describe("permission_grants (Permission grants)", () => {
       method: "POST",
       body: JSON.stringify({
         userId: staffUserId,
-        permission: "events:read",
+        permissions: ["events:read"],
         contextType: "event",
         contextId: eventAId,
       }),
@@ -382,12 +419,12 @@ describe("permission_grants (Permission grants)", () => {
       method: "POST",
       body: JSON.stringify({
         userId: staffUserId,
-        permission: "donations:read",
+        permissions: ["donations:read"],
       }),
     });
-    const created = (await createResponse.json()) as { grant: { id: string } };
+    const created = (await createResponse.json()) as { grants: { id: string }[] };
 
-    const deleteResponse = await call(adminToken, `/api/v1/permissions/grants/${created.grant.id}`, {
+    const deleteResponse = await call(adminToken, `/api/v1/permissions/grants/${created.grants[0]!.id}`, {
       method: "DELETE",
     });
     expect(deleteResponse.status).toBe(200);
@@ -395,14 +432,14 @@ describe("permission_grants (Permission grants)", () => {
     const rows = await queryAll<{ revoked_at: string | null }>(
       env.DB,
       "SELECT revoked_at FROM permission_grants WHERE id = ?",
-      created.grant.id,
+      created.grants[0]!.id,
     );
     expect(rows[0].revoked_at).not.toBeNull();
 
     const auditRows = await queryAll<{ action: string }>(
       env.DB,
       "SELECT action FROM audit_log WHERE action = 'access_grant_revoked' AND entity_id = ?",
-      created.grant.id,
+      created.grants[0]!.id,
     );
     expect(auditRows).toHaveLength(1);
   });
@@ -421,9 +458,9 @@ describe("permission_grants (Permission grants)", () => {
     );
 
     await expect(
-      createAccessGrant(racingDb, actor, {
+      createAccessGrants(racingDb, actor, {
         userId: staffUserId,
-        permission: "donations:read",
+        permissions: ["donations:read"],
       }),
     ).rejects.toMatchObject({
       status: 409,
@@ -455,9 +492,9 @@ describe("permission_grants (Permission grants)", () => {
     );
 
     await expect(
-      createAccessGrant(racingDb, actor, {
+      createAccessGrants(racingDb, actor, {
         userId: staffUserId,
-        permission: "donations:read",
+        permissions: ["donations:read"],
       }),
     ).rejects.toMatchObject({
       status: 409,
@@ -555,7 +592,7 @@ describe("permission_grants (Permission grants)", () => {
       method: "POST",
       body: JSON.stringify({
         userId: staffUserId,
-        permission: "donations:read",
+        permissions: ["donations:read"],
       }),
     });
     expect(deniedCreate.status).toBe(403);
@@ -573,7 +610,7 @@ describe("permission_grants (Permission grants)", () => {
       method: "POST",
       body: JSON.stringify({
         userId: staffUserId,
-        permission: "donations:read",
+        permissions: ["donations:read"],
       }),
     });
     expect(deniedUncontained.status).toBe(403);
@@ -590,14 +627,14 @@ describe("permission_grants (Permission grants)", () => {
       method: "POST",
       body: JSON.stringify({
         userId: granteeUserId,
-        permission: "donations:read",
+        permissions: ["donations:read"],
       }),
     });
     expect(createResponse.status).toBe(201);
-    const created = (await createResponse.json()) as { grant: { id: string } };
+    const created = (await createResponse.json()) as { grants: { id: string }[] };
 
     // access:grant alone must not authorize revocation.
-    const deniedRevoke = await call(staffToken, `/api/v1/permissions/grants/${created.grant.id}`, {
+    const deniedRevoke = await call(staffToken, `/api/v1/permissions/grants/${created.grants[0]!.id}`, {
       method: "DELETE",
     });
     expect(deniedRevoke.status).toBe(403);
@@ -609,7 +646,7 @@ describe("permission_grants (Permission grants)", () => {
       .bind(crypto.randomUUID(), staffUserId, adminId)
       .run();
 
-    const allowedRevoke = await call(staffToken, `/api/v1/permissions/grants/${created.grant.id}`, {
+    const allowedRevoke = await call(staffToken, `/api/v1/permissions/grants/${created.grants[0]!.id}`, {
       method: "DELETE",
     });
     expect(allowedRevoke.status).toBe(200);

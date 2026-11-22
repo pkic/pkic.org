@@ -50,6 +50,7 @@ import { methodNotAllowed } from "../../../../_lib/http";
 import { EventFormsCreatePost, EventFormsListGet } from "./forms";
 import { EventFormPlacementGet } from "./forms/placements";
 import { EventsEventSlugInvitesPost } from "./invites";
+import { EventInvitationDeclinePost, EventInvitationRemindersPost } from "./invitation-responses";
 import { EventProposalsListGet, EventsEventSlugProposalsPost } from "./proposals";
 import { EventsEventSlugRegistrationsPost } from "./registrations";
 import { EventSpeakerInvitationsPost } from "./speakers/invitations";
@@ -58,7 +59,7 @@ import { TermsGet } from "./terms";
 import { EventSponsorTiersGet, EventSponsorTiersPut } from "./sponsors/tiers";
 import { EventDetailGet } from "./index";
 import { EventSettingsPatch } from "./settings";
-import { EventHeroImageGet, EventHeroImagePost } from "./images";
+import { EventHeroImageGet, EventHeroImagePost, EventMotifGet } from "./images";
 import {
   EventLiveOverlayLayoutDelete,
   EventLiveOverlayLayoutPut,
@@ -67,6 +68,8 @@ import {
   EventLiveOverlayPositionsPut,
 } from "./live-overlay-layouts";
 import { EventDaysGet, EventDaysPut } from "./days";
+import { registerTicketRoutes } from "./tickets";
+import { registerUnfinishedRegistrationRoutes } from "./unfinished-registrations";
 import { EventTeamRoleCandidatesList, EventTeamRosterList, EventTeamRoleCreate, EventTeamRolesList } from "./roles";
 import { EventTeamRoleDelete } from "./roles/[roleAssignmentId]";
 import { EventPromotersList } from "./promoters";
@@ -84,17 +87,8 @@ import {
   AgendaPublication,
   AgendaImport,
 } from "./agenda";
-import { SponsorLeadsExportGet } from "./lead-export";
-import {
-  SponsorLeadSponsorsGet,
-  SponsorLeadsGet,
-  SponsorLeadDetailGet,
-  SponsorLeadOwnCapturesDelete,
-  SponsorLeadDelete,
-  SponsorLeadCapturesGet,
-  SponsorLeadConfirmationGet,
-} from "./lead-list";
-import { EventAttendanceGet, EventSponsorLeadCreate, SessionAttendancePeopleGet } from "./attendance";
+import { EventAttendanceGet, SessionAttendancePeopleGet } from "./attendance";
+import { registerSponsorLeadRoutes } from "./register-sponsor-lead-routes";
 import { registerAttendanceRoutes } from "./register-attendance-routes";
 import { AgendaScheduleReviewPost, AgendaScheduleApplyPost } from "./agenda/schedule";
 import {
@@ -154,6 +148,8 @@ openapi.get("/forms", EventFormsListGet);
 openapi.post("/forms", EventFormsCreatePost);
 openapi.route("/forms/:formKey", eventForms_Router);
 openapi.post("/invites", EventsEventSlugInvitesPost);
+openapi.post("/invites/:inviteId/decline", EventInvitationDeclinePost);
+openapi.post("/invites/:inviteId/reminders", EventInvitationRemindersPost);
 openapi.post("/proposals", EventsEventSlugProposalsPost);
 openapi.get("/proposals", EventProposalsListGet);
 openapi.post("/registrations", EventsEventSlugRegistrationsPost);
@@ -264,21 +260,17 @@ openapi.get("/push/config", EventWebPushConfigurationGet);
 openapi.get("/push/devices/:deviceId", EventWebPushStatusGet);
 openapi.post("/push/devices", EventWebPushRegisterPost);
 openapi.delete("/push/devices/:deviceId", EventWebPushRevokeDelete);
-openapi.get("/sponsors/:sponsorId/leads.csv", SponsorLeadsExportGet);
-openapi.get("/sponsors/leads", SponsorLeadSponsorsGet);
-openapi.get("/sponsors/:sponsorId/leads", SponsorLeadsGet);
-openapi.get("/sponsors/:sponsorId/leads/:leadId", SponsorLeadDetailGet);
-openapi.delete("/sponsors/:sponsorId/leads/:leadId/captures", SponsorLeadOwnCapturesDelete);
-openapi.delete("/sponsors/:sponsorId/leads/:leadId", SponsorLeadDelete);
-openapi.get("/sponsors/:sponsorId/leads/confirmations/:operationId", SponsorLeadConfirmationGet);
-openapi.get("/sponsors/:sponsorId/leads/:leadId/captures", SponsorLeadCapturesGet);
-openapi.post("/sponsors/:sponsorId/leads", EventSponsorLeadCreate);
+registerSponsorLeadRoutes(openapi);
 openapi.route("/email", emailRouter);
 openapi.route("/proposals", proposals_Router);
+// Before the registration router, whose `:registrationId` would take this path.
+registerUnfinishedRegistrationRoutes(openapi);
 openapi.route("/registrations", registrations_Router);
 openapi.get("/days", EventDaysGet);
 openapi.put("/days", EventDaysPut);
+registerTicketRoutes(openapi);
 openapi.post("/images/hero", EventHeroImagePost);
+openapi.get("/images/motif", EventMotifGet);
 openapi.get("/images/:file", EventHeroImageGet);
 openapi.patch("/settings", EventSettingsPatch);
 openapi.get("/settings/live/layouts", EventLiveOverlayLayoutsGet);

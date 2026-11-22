@@ -49,6 +49,9 @@ export function registrationOffer(event: ParticipantEventDetail, ended: boolean)
   if (ended) return { kind: "closed", reason: "This event has ended." };
   // Both event projections carry the one registration path; it is set only while registration is offered.
   if (event.registrationPath) return { kind: "open" };
+  const takesRegistrations = event.registrationPolicy !== "no_registration" && event.registrationPolicy !== "automatic";
+  // A held invitation or group register access admits the reader where registration is not open to everyone.
+  if (takesRegistrations && event.participation?.registrationAccess) return { kind: "open" };
   switch (event.registrationPolicy) {
     case "invitation_only":
       return { kind: "closed", reason: "Registration for this event is by invitation only." };

@@ -2869,8 +2869,12 @@ describe("speaker nomination by attendees", () => {
     vi.unstubAllGlobals();
   });
 
-  async function registerSignedInAttendee(): Promise<string> {
+  /** Registers a signed-in attendee; a public event's confirmation email also carries a token manage link. */
+  async function registerSignedInAttendee(
+    visibility: "public" | "group_members" = "public",
+  ): Promise<{ manageUrl: string; headers: Record<string, string> }> {
     const { eventId } = await setupWorkflow();
+    await env.DB.prepare("UPDATE events SET visibility = ? WHERE id = ?").bind(visibility, eventId).run();
     await seedSessionAttendanceDays(env.DB, eventId, ["2026-12-01"]);
     const attendee = await signInRegistrant(env.DB, "nominator@pkic.org", {
       firstName: "Attendee",
@@ -2907,7 +2911,11 @@ describe("speaker nomination by attendees", () => {
       "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirmed' ORDER BY created_at DESC LIMIT 1",
     );
     const emailPayload = await deliveredEmailPayload<{ manageUrl: string }>(env.DB, env, outbox[0].payload_json);
-    const manageToken = new URL(emailPayload.manageUrl).searchParams.get("token");
+    return { manageUrl: emailPayload.manageUrl, headers: attendee.headers };
+  }
+
+  function manageTokenOf(manageUrl: string): string {
+    const manageToken = new URL(manageUrl).searchParams.get("token");
     if (!manageToken) throw new Error("The confirmation email must carry the manage link");
     return manageToken;
   }
@@ -2959,8 +2967,8 @@ describe("speaker nomination by attendees", () => {
   }
 
   it("allows a registered attendee to nominate a speaker", async () => {
-    const manageToken = await registerSignedInAttendee();
-    const response = await postSpeakerNomination(manageToken, "nominee@example.test");
+    const { manageUrl } = await registerSignedInAttendee();
+    const response = await postSpeakerNomination(manageTokenOf(manageUrl), "nominee@example.test");
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
@@ -2985,6 +2993,33 @@ describe("speaker nomination by attendees", () => {
     expect(JSON.parse(outbox[0].payload_json)).toMatchObject({
       attendeeName: { __pkicEmailPlainText: "Nominee Speaker" },
     });
+  });
+
+  it("lets a signed-in attendee of a group-members event nominate from the portal registration", async () => {
+    const { manageUrl, headers } = await registerSignedInAttendee("group_members");
+    // The group-members event's manage link opens the portal registration, which carries no token.
+    expect(new URL(manageUrl).searchParams.get("token")).toBeNull();
+    const response = await mountedSpeakerRoute(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/events/pqc-2026/speakers/invitations", {
+          method: "POST",
+          headers: { "content-type": "application/json", ...headers },
+          body: JSON.stringify({
+            invites: [{ email: "portal-nominee@example.test", firstName: "Nominee", lastName: "Speaker" }],
+          }),
+        }),
+        { eventSlug: "pqc-2026" },
+      ),
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+    await expect(
+      queryAll(
+        env.DB,
+        "SELECT id FROM invites WHERE invitee_email = ? AND invite_type = 'speaker'",
+        "portal-nominee@example.test",
+      ),
+    ).resolves.toHaveLength(1);
   });
 
   it("accepts a custom speaker nomination deadline within the event window", async () => {

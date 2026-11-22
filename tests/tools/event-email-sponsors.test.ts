@@ -12,6 +12,7 @@ const SPONSORS = "{{> sponsors_block}}";
 const WITHOUT_SPONSORS = new Set([
   "event_proposal_verify",
   "user_sign_up_link",
+  "user_magic_link",
   "registration_unauthorized",
   "agenda_speaker_declined",
 ]);

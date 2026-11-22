@@ -7,7 +7,10 @@ import { registrationPageUrl, proposalPageUrl, inviteDeclineUrl } from "../front
 import { resolveEventInviteExpiry } from "../../invite-validity";
 import { requireValidEventInviteRecipientBatch, type EventInviteType } from "../event-invite-preview";
 import { buildEventInvitePreview } from "../event-invite-preview-email";
-import { buildEventInviteRecipientVariables } from "../event-invite-email-variables";
+import {
+  buildEventInvitationMessageVariables,
+  buildEventInviteRecipientVariables,
+} from "../event-invite-email-variables";
 import { bulkCreateAttendeeInvites, bulkCreateSpeakerInvites } from "../invites";
 import type { BulkInviteOutcome } from "../invite-bulk";
 import {
@@ -151,6 +154,7 @@ export async function bulkCreateGroupEventAttendeeInvites(
               { firstName: invite.inviteeFirstName, lastName: invite.inviteeLastName },
               "Attendee",
             ),
+            ...buildEventInvitationMessageVariables(event),
             registrationUrl,
             declineUrl,
           },

@@ -330,13 +330,13 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
       const renewed = await staff.request.post("/api/v1/permissions/grants", {
         data: accessGrantCreateSchema.parse({
           userId: fixture.operator.userId,
-          permission,
+          permissions: [permission],
           contextType: "event_sponsor",
           contextId: fixture.sponsorId,
         }),
       });
       expect(renewed.status()).toBe(201);
-      fixture.grants[index] = accessGrantCreateResponseSchema.parse(await renewed.json()).grant.id;
+      fixture.grants[index] = accessGrantCreateResponseSchema.parse(await renewed.json()).grants[0]!.id;
     }
     await openSponsor();
 

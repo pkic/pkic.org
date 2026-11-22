@@ -24,6 +24,7 @@ import { eventPromotionDesignSchema } from "./event-promotion-design";
 import { countryCodeSchema } from "../countries";
 import { eventCitySchema, eventPlaceSchema } from "../event-place";
 import { eventAttendanceSettingsSchema } from "../attendance-attribution";
+import { eventInvitationMessageSchema } from "./event-invitation-message";
 import { eventLiveChatSettingsSchema } from "../live-chat-retention";
 import { eventProductionPartnerCreditsSchema, eventProductionPartnersSchema } from "./event-production-partners";
 
@@ -57,6 +58,7 @@ export const EVENT_MANAGED_SETTING_KEYS = [
   "forms",
   "frontend",
   "heroImageUrl",
+  "invitationMessage",
   "liveChat",
   "productionPartners",
   "proposal",
@@ -106,6 +108,8 @@ export const eventSettingsSchema = z.object({
   venue: trimmedString(2, 500).nullable().optional(),
   virtualUrl: httpUrlSchema.nullable().optional(),
   heroImageUrl: httpOrSameOriginUrlSchema.nullable().optional(),
+  /** The event's own invitation wording; null restores the neutral default. */
+  invitationMessage: eventInvitationMessageSchema.nullable().optional(),
   city: eventCitySchema.nullable().optional(),
   country: countryCodeSchema.nullable().optional(),
   sessionTypes: proposalSessionTypesSchema.nullable().optional(),
@@ -182,6 +186,8 @@ export const eventResourceCoreSchema = z.object({
   name: z.string(),
   /** Existing event hero used by bounded discovery cards. */
   heroImageUrl: httpOrSameOriginUrlSchema.nullable().optional(),
+  /** The event's own invitation wording for invitation cards, dialogs and emails; null uses the default. */
+  invitationMessage: eventInvitationMessageSchema.nullable().optional(),
   timezone: z.string(),
   startsAt: z.string().nullable(),
   endsAt: z.string().nullable(),
@@ -225,6 +231,15 @@ export const eventViewerStateSchema = z.object({
   registrationStatus: registrationLifecycleStatusSchema,
   waitlisted: z.boolean(),
   days: z.array(eventViewerDaySchema).max(31),
+  /**
+   * The registration's ticket still waits for payment, so the registration is not complete.
+   * Absent in an event a device stored before tickets existed, which owes nothing.
+   */
+  paymentDue: z.boolean().default(false),
+  /** That payment was made by a method that takes days and is on its way, so nothing more is asked. */
+  paymentProcessing: z.boolean().default(false),
+  /** A payment adjustment suspends badge and check-in access until the organizers review it. */
+  paymentUnderReview: z.boolean().default(false),
   /** Whether any of the viewer's verified addresses, primary or secondary, is a work address. */
   holdsWorkAddress: z.boolean(),
 });
@@ -243,6 +258,8 @@ export const eventAudienceDetailSchema = eventResourceCoreSchema
     links: linksSchema,
     /** The public page path for this event, when the event has one. */
     basePath: z.string().nullable(),
+    /** The event's own decorative artwork for the event app's header; null uses the default. */
+    motifUrl: z.string().nullable().default(null),
     scannerAccess: eventScannerAccessSchema.optional(),
     /** Discovery only; each contact request independently checks the exact live sponsor scope. */
     sponsorLeadAccess: z.boolean(),
@@ -289,6 +306,13 @@ export const eventsListQuerySchema = listQuerySchema(EVENT_MANAGEMENT_LIST_SORT_
   phase: z.enum(EVENT_PHASES).optional(),
   from: utcInstantSchema.optional(),
   to: utcInstantSchema.optional(),
+  /**
+   * The signed-in reader's open attendee invitations. `open`: events not yet
+   * ended that invite the reader, who has not registered or declined; Home
+   * shows one invitation card per event from it. `none`: every other event,
+   * so a list beside those cards does not repeat them.
+   */
+  invitation: z.enum(["open", "none"]).optional(),
 });
 export type EventsListQuery = z.infer<typeof eventsListQuerySchema>;
 /**
@@ -309,7 +333,10 @@ export const eventDetailSchema = eventResourceCoreSchema.extend({
   scannerAccess: eventScannerAccessSchema.optional(),
   ownerGroupId: groupIdSchema.nullable(),
   seriesId: databaseIdSchema.nullable(),
+  /** The public page path for this event, when the event has one. */
   basePath: z.string().nullable(),
+  /** The event's own decorative artwork for the event app's header; null uses the default. */
+  motifUrl: z.string().nullable().default(null),
   userRetentionDays: z.number().int().positive().nullable(),
   venue: z.string().nullable(),
   virtualUrl: httpUrlSchema.nullable(),

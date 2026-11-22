@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import { onRequest as apiMiddlewareOnRequest } from "../functions/api/v1/_middleware";
 import { onRequest as donationRedirectMiddlewareOnRequest } from "../functions/donate/r/_middleware";
 import { onRequest as redirectMiddlewareOnRequest } from "../functions/r/_middleware";
+import { SANDBOXED_IMAGE_CONTENT_SECURITY_POLICY } from "../functions/_lib/services/image-response";
 import type { PagesContext } from "../functions/_lib/types";
 
 function createMiddlewareContext(request: Request, nextResponse: Response): PagesContext {
@@ -80,6 +81,30 @@ describe("cache policy middleware", () => {
 
     expect(response.headers.get("cache-control")).toBe("no-store, max-age=0");
     expect(response.headers.get("content-security-policy")).toContain("default-src 'none'");
+  });
+
+  it.each([
+    ["keeps the sandboxed image policy", SANDBOXED_IMAGE_CONTENT_SECURITY_POLICY, true],
+    [
+      "replaces any other route policy that mentions a sandbox",
+      "default-src *; script-src 'unsafe-inline'; sandbox allow-scripts",
+      false,
+    ],
+  ])("%s on a sensitive response", async (_label, routePolicy, kept) => {
+    const response = await apiMiddlewareOnRequest(
+      createMiddlewareContext(
+        new Request("https://app.test/api/v1/events/pqc-2026/images/motif", {
+          headers: { authorization: "Bearer x" },
+        }),
+        new Response("<svg/>", { status: 200, headers: { "content-security-policy": routePolicy } }),
+      ),
+    );
+
+    expect(response.headers.get("content-security-policy")).toBe(
+      kept
+        ? `${SANDBOXED_IMAGE_CONTENT_SECURITY_POLICY}; frame-ancestors 'none'`
+        : "default-src 'none'; frame-ancestors 'none'",
+    );
   });
 
   it.each(["pkic_session", "pkic_meeting_guest_session"])(

@@ -128,6 +128,24 @@ export const ACCOUNT_DELETION_REMOVED_TABLES: readonly AccountDeletionRemovedTab
     kind: "registration",
     links: [user("user_id"), child("registration_id", "registrations")],
   }),
+  part({ table: "registration_tickets", kind: "registration", links: [child("registration_id", "registrations")] }),
+  part({
+    table: "registration_ticket_checkouts",
+    kind: "registration",
+    links: [child("ticket_id", "registration_tickets")],
+  }),
+  part({
+    table: "registration_ticket_payment_events",
+    kind: "registration",
+    links: [child("ticket_id", "registration_tickets")],
+  }),
+  part({
+    table: "registration_ticket_refunds",
+    kind: "registration",
+    links: [child("ticket_id", "registration_tickets")],
+  }),
+  part({ table: "event_ticket_selections", kind: "registration", links: [user("user_id")] }),
+  part({ table: "unfinished_registrations", kind: "registration", links: [user("user_id")] }),
   part({ table: "event_participants", kind: "registration", links: [user("user_id")] }),
   part({ table: "event_badge_credentials", kind: "registration", links: [user("user_id")] }),
   { table: "event_occurrence_rsvps", kind: "registration", links: [{ column: "user_id", foreignKey: false }] },
@@ -292,6 +310,16 @@ export const ACCOUNT_DELETION_BLOCKING_RULES: readonly AccountDeletionBlockingRu
     ) => `EXISTS (SELECT 1 FROM event_evidence_retention_state retention WHERE retention.event_id = ${a}.event_id
       AND (retention.capture_closed_at IS NOT NULL OR retention.active_run_id IS NOT NULL))`,
   }),
+  // Keep provider history even after a pending ticket is canceled: an open payment page or an asynchronous
+  // payment may still settle. An expired payment page that never reached the provider settles nothing.
+  rule("ticket_payment", "registration_tickets", "registration_id", {
+    from: "registrations",
+    where: (a) => `(${a}.status IN ('pending_payment','paid','refunded') OR ${a}.paid_amount > 0
+      OR EXISTS (SELECT 1 FROM registration_ticket_checkouts checkout WHERE checkout.ticket_id = ${a}.id
+        AND checkout.expires_at > ${nowSql})
+      OR EXISTS (SELECT 1 FROM registration_ticket_payment_events payment WHERE payment.ticket_id = ${a}.id)
+      OR EXISTS (SELECT 1 FROM registration_ticket_refunds refund WHERE refund.ticket_id = ${a}.id))`,
+  }),
   rule("vote", "ec_decisions", "ec_member_user_id"),
   rule("vote", "vote_ballots", "user_id"),
   rule("vote", "vote_candidates", "user_id"),
@@ -357,6 +385,9 @@ export const ACCOUNT_DELETION_BLOCKING_RULES: readonly AccountDeletionBlockingRu
   authored("event_resource_management_guards", "actor_user_id"),
   authored("event_scan_attempts", "operator_user_id"),
   authored("event_scanner_device_sessions", "operator_user_id"),
+  authored("event_ticket_codes", "created_by_user_id"),
+  authored("ticket_classifier_decisions", "decided_by_user_id"),
+  authored("registration_ticket_refunds", "requested_by_user_id"),
   authored("event_session_polls", "closed_by"),
   authored("event_session_polls", "created_by"),
   authored("event_session_polls", "opened_by"),

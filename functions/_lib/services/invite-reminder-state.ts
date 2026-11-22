@@ -1,7 +1,7 @@
 import { all, run } from "../db/queries";
 import { nowIso } from "../utils/time";
 import { issueDatabaseCapability } from "./capability-links";
-import type { DatabaseLike } from "../types";
+import type { DatabaseLike, StatementLike } from "../types";
 import { inviteColumnProjection, type InviteRecord } from "./invite-types";
 import { activeEffectiveInviteExpirySql, effectiveInviteExpirySql } from "../invite-validity";
 
@@ -36,14 +36,13 @@ export async function markInviteReminderSent(db: DatabaseLike, inviteId: string)
   );
 }
 
-export async function setInviteRemindersPausedUntil(
+/** Pauses (or, with null, resumes) reminders for an invitation that is still open. */
+export function prepareInviteRemindersPausedUntil(
   db: DatabaseLike,
   inviteId: string,
-  pausedUntilIso: string,
-): Promise<void> {
-  await run(db, "UPDATE invites SET reminders_paused_until = ? WHERE id = ?", [pausedUntilIso, inviteId]);
-}
-
-export async function clearInviteRemindersPause(db: DatabaseLike, inviteId: string): Promise<void> {
-  await run(db, "UPDATE invites SET reminders_paused_until = NULL WHERE id = ?", [inviteId]);
+  pausedUntilIso: string | null,
+): StatementLike {
+  return db
+    .prepare("UPDATE invites SET reminders_paused_until = ? WHERE id = ? AND status = 'sent'")
+    .bind(pausedUntilIso, inviteId);
 }

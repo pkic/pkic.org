@@ -283,15 +283,19 @@ describe("event home", () => {
     expect([...host.querySelectorAll("a")].some((link) => link.textContent === "Manage event")).toBe(false);
   });
 
-  it("explains an invitation-only event instead of offering a registration link", async () => {
-    await act(() =>
-      render(
-        <ParticipantEvent event={event({ registrationPolicy: "invitation_only", registrationPath: null })} />,
-        host,
-      ),
-    );
-    expect(host.textContent).toContain("by invitation only");
-    expect([...host.querySelectorAll("a")].some((link) => link.textContent === "Register")).toBe(false);
+  it.each([
+    ["explains an invitation-only event instead of offering a registration link", null, false],
+    ["offers registration to a reader who holds an invitation", "invitation", true],
+  ] as const)("%s", async (_, registrationAccess, offered) => {
+    const participation = { registrationId: null, registrationStatus: null, proposals: 0, speakerProposals: 0 };
+    const invited = event({
+      registrationPolicy: "invitation_only",
+      registrationPath: null,
+      ...(registrationAccess ? { participation: { ...participation, registrationAccess } } : {}),
+    });
+    await act(() => render(<ParticipantEvent event={invited} />, host));
+    expect(host.textContent?.includes("by invitation only")).toBe(!offered);
+    expect([...host.querySelectorAll("a")].some((link) => link.textContent === "Register")).toBe(offered);
   });
 
   it("leaves registration off the home of an event that has ended", async () => {
@@ -385,7 +389,11 @@ describe("event home", () => {
     expect(document).toContain(encodeURIComponent("ABCD-EFGH-JKLM-NPQR"));
     expect(document).toContain('aria-label="Synthetic Sponsor"');
     expect(host.textContent).not.toContain("Check-in code on your printed badge");
-    expect(requests).toEqual(["/api/v1/events/summit/badges/current"]);
+    // The ticket's own state is read first, so an unsettled ticket never shows a badge; then the badge.
+    expect(requests).toEqual([
+      "/api/v1/events/summit/registrations/a0000000-0000-4000-8000-000000000002/ticket",
+      "/api/v1/events/summit/badges/current",
+    ]);
   });
 
   it("keeps sharing and promotion materials out of Ticket", async () => {
@@ -396,7 +404,10 @@ describe("event home", () => {
     expect(host.querySelector("[data-og-badge-img]")).toBeNull();
     expect(host.textContent).not.toContain("Invite a colleague");
     expect(host.textContent).not.toContain("Prepare downloads");
-    expect(requests).toEqual(["/api/v1/events/summit/badges/current"]);
+    expect(requests).toEqual([
+      "/api/v1/events/summit/registrations/a0000000-0000-4000-8000-000000000002/ticket",
+      "/api/v1/events/summit/badges/current",
+    ]);
   });
 
   describe("an attendee waiting for an in-person seat", () => {

@@ -13,6 +13,7 @@ import { inviteDeclineInfoResponseSchema, inviteDeclineResponseSchema } from "..
 import { getJson, postJson, ApiClientError } from "./shared/api-client";
 import { showManageLinkRecoveryForm } from "./shared/widgets/link-recovery";
 import { wireForwardList } from "./invite-decline-forward-list";
+import { ATTENDEE_DECLINE_COPY, ATTENDEE_DECLINE_REASON_LABELS } from "../shared/event-invitation-copy";
 import type { z } from "zod";
 
 type DeclineInfo = z.infer<typeof inviteDeclineInfoResponseSchema>;
@@ -42,11 +43,19 @@ const STATUS_TONE_CLASS: Record<"warning" | "danger" | "info", string> = {
 
 type CopyVariants = Record<string, { attendee: string; speaker: string }>;
 
+const SPEAKER_DECLINE_REASON_LABELS = {
+  schedule_conflict: "I won't be able to prepare or submit in time",
+  travel_not_possible: "Travel to the event is not realistic for me as a speaker",
+  content_not_relevant: "This call for proposals is not a fit for what I would present",
+  organization_policy: "Organization policy prevents me from speaking or submitting",
+  not_interested: "Speaking at this event doesn't match my current focus",
+  already_registered: "I'm already involved in a proposal or already submitted",
+} as const;
+
 const COPY_TARGETS: CopyVariants = {
-  heading: { attendee: "Not able to make it?", speaker: "Not able to submit a proposal?" },
+  heading: { attendee: ATTENDEE_DECLINE_COPY.heading, speaker: "Not able to submit a proposal?" },
   intro: {
-    attendee:
-      "Please let us know why. It helps us improve future events and make them more relevant to people like you.",
+    attendee: ATTENDEE_DECLINE_COPY.intro,
     speaker:
       "Please let us know why. It helps us improve future calls for proposals and make the event more relevant to speakers like you.",
   },
@@ -63,7 +72,7 @@ const COPY_TARGETS: CopyVariants = {
     speaker: "On a scale of 1-10, how likely are you to submit to a future PKI Consortium call for proposals?",
   },
   unsubscribe: {
-    attendee: "Don't send me invitations to future events",
+    attendee: ATTENDEE_DECLINE_COPY.unsubscribe,
     speaker: "Don't send me proposal invitations to future events",
   },
   "forward-toggle": {
@@ -74,7 +83,7 @@ const COPY_TARGETS: CopyVariants = {
     attendee: "They'll receive a personal invitation by email.",
     speaker: "They'll receive a personal proposal invitation by email.",
   },
-  submit: { attendee: "Decline this invitation", speaker: "Decline this proposal invitation" },
+  submit: { attendee: ATTENDEE_DECLINE_COPY.submit, speaker: "Decline this proposal invitation" },
   "success-title": { attendee: "Thank you for letting us know", speaker: "Thank you for letting us know" },
   "success-body": {
     attendee: "We hope to see you at a future event!",
@@ -82,32 +91,12 @@ const COPY_TARGETS: CopyVariants = {
   },
 };
 
-const REASON_LABELS: CopyVariants = {
-  schedule_conflict: {
-    attendee: "Schedule conflict - I have another commitment",
-    speaker: "I won't be able to prepare or submit in time",
-  },
-  travel_not_possible: {
-    attendee: "Travel is not possible for me",
-    speaker: "Travel to the event is not realistic for me as a speaker",
-  },
-  content_not_relevant: {
-    attendee: "Content is not relevant to my role",
-    speaker: "This call for proposals is not a fit for what I would present",
-  },
-  organization_policy: {
-    attendee: "Organization policy prevents me from attending",
-    speaker: "Organization policy prevents me from speaking or submitting",
-  },
-  not_interested: {
-    attendee: "This event doesn't match my current focus",
-    speaker: "Speaking at this event doesn't match my current focus",
-  },
-  already_registered: {
-    attendee: "I'm already registered through another link",
-    speaker: "I'm already involved in a proposal or already submitted",
-  },
-};
+const REASON_LABELS: CopyVariants = Object.fromEntries(
+  Object.entries(SPEAKER_DECLINE_REASON_LABELS).map(([reason, speaker]) => [
+    reason,
+    { attendee: ATTENDEE_DECLINE_REASON_LABELS[reason as keyof typeof SPEAKER_DECLINE_REASON_LABELS], speaker },
+  ]),
+);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

@@ -2,7 +2,7 @@ import { prepareUserBackedAdminFromRequest, readAdminCredential } from "./admin"
 import { createUserBackedAuthAdmin } from "./admin-identity";
 import { userSessionMemberSelection } from "./identity-capacities";
 import { prepareOptionalUserSessionRequest } from "./user-session-request";
-import { getUserSessionToken } from "./user-session-token";
+import { getUserSessionToken, type UserSessionTokenClaims } from "./user-session-token";
 import type { UserSessionResult } from "./user-session-result";
 import type { AuthorizationEvidence } from "../db/authorization-guard";
 import type { DatabaseLike, D1StatementResult, Env, StatementLike, UserBackedAuthAdmin } from "../types";
@@ -10,6 +10,8 @@ import type { DatabaseLike, D1StatementResult, Env, StatementLike, UserBackedAut
 export interface PreparedRequestViewerRead {
   /** Only a human session can supply implicit membership and participation access. */
   userId: string | null;
+  /** The verified human session token, so a later write can recheck it without verifying it again. */
+  claims: UserSessionTokenClaims | null;
   permissionActor: UserBackedAuthAdmin;
   memberSelection?: AuthorizationEvidence;
   statements: StatementLike[];
@@ -28,6 +30,7 @@ export async function prepareOptionalRequestViewer(
     if (!read) throw new Error("Delegated credential did not resolve an attributable actor");
     return {
       userId: null,
+      claims: null,
       permissionActor: read.permissionActor,
       memberSelection: read.memberSelection,
       statements: read.statements,
@@ -40,6 +43,7 @@ export async function prepareOptionalRequestViewer(
   if (!read) return null;
   return {
     userId: read.claims.sub,
+    claims: read.claims,
     permissionActor: createUserBackedAuthAdmin({ id: read.claims.sub, sessionId: read.claims.sid, email: "" }),
     memberSelection: userSessionMemberSelection(read.claims.sub, read.claims.iid),
     statements: read.statements,

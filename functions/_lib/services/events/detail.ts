@@ -8,13 +8,15 @@ import type { AuthorizationEvidence } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
+import { readEventInvitationMessage } from "../../../../assets/shared/schemas/event-invitation-message";
 import { resolveEventSessionTypes } from "../events";
 import { eventColumns, type EventRecord } from "../event-types";
 import { EVENT_FORM_PURPOSES } from "../../../../assets/shared/schemas/forms";
 import { placedEventFormSelection } from "../forms/event-placement-read";
 import { readEventAudienceAccess } from "./scanner-access";
 import type { EventAudienceViewer } from "./visibility";
-import { eventRegistrationPath } from "../event-presentation";
+import { eventPublicPagePath, eventRegistrationPath } from "../event-presentation";
+import { eventMotifPath, eventOwnMotif } from "../../../../assets/shared/schemas/event-promotion-design";
 import { persistedUtcInstant } from "../../utils/time";
 import { decodeEventProductionPartners, eventProductionPartnersJsonSql } from "./production-partners";
 
@@ -109,11 +111,13 @@ export function decodeEventDetail(
     updatedAt: persistedUtcInstant(event.updated_at),
     ownerGroupId: event.owner_group_id ?? null,
     seriesId: event.series_id,
-    basePath: event.base_path,
+    basePath: eventPublicPagePath(event),
+    motifUrl: eventOwnMotif(settings) ? eventMotifPath(event.slug) : null,
     userRetentionDays: event.user_retention_days,
     venue: typeof settings.venue === "string" ? settings.venue : null,
     virtualUrl: typeof settings.virtualUrl === "string" ? settings.virtualUrl : null,
     heroImageUrl: typeof settings.heroImageUrl === "string" ? settings.heroImageUrl : null,
+    invitationMessage: readEventInvitationMessage(settings),
     sessionTypes: resolveEventSessionTypes(event.settings_json),
     links: parseLinksJson(event.links_json),
     registrationPath: eventRegistrationPath(event),

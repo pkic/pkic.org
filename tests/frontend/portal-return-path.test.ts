@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  eventFlowReturnPath,
   portalHashPath,
   portalIdentityInvitationToken,
   portalMagicLinkReturnPath,
@@ -8,6 +7,7 @@ import {
   portalReturnPath,
 } from "../../assets/ts/member-flows/portal/hash-route";
 import { userAuthRequestSchema } from "../../assets/shared/schemas/user-auth";
+import { signInReturnHref, siteFlowReturnPath } from "../../assets/shared/sign-in-purpose";
 
 describe("portal return path", () => {
   it("names a deep link as the route to come back to, but not the portal's own entry points", () => {
@@ -59,9 +59,20 @@ describe("portal return path", () => {
   it("returns a sign-in begun on a public event form to that form, and nowhere else outside the portal", () => {
     const next = portalMagicLinkReturnPath("#/verify?next=%2Fevents%2F2026%2Fpqc%2Fregister%2F%3Fref%3Dx&token=t");
     expect(next).toBe("/events/2026/pqc/register/?ref=x");
-    expect(eventFlowReturnPath(next)).toBe("/events/2026/pqc/register/?ref=x");
-    expect(eventFlowReturnPath("/events/2026/pqc/")).toBeNull();
-    expect(eventFlowReturnPath("/groups/cm")).toBeNull();
-    expect(eventFlowReturnPath(null)).toBeNull();
+    expect(siteFlowReturnPath(next)).toBe("/events/2026/pqc/register/?ref=x");
+    expect(siteFlowReturnPath("/events/2026/pqc/")).toBeNull();
+    expect(siteFlowReturnPath("/groups/cm")).toBeNull();
+    expect(siteFlowReturnPath(null)).toBeNull();
+  });
+
+  it("keeps a portal event route in the portal, though it looks like a yearless event page", () => {
+    const next = portalMagicLinkReturnPath(
+      "#/verify?next=%2Fevents%2Fpqc%2Fregister%3Fid%3Dinv-1%26source%3Dinvite_resend&token=t",
+    );
+    expect(next).toBe("/events/pqc/register?id=inv-1&source=invite_resend");
+    expect(siteFlowReturnPath(next)).toBeNull();
+    expect(signInReturnHref(next ?? undefined)).toBe("/portal/#/events/pqc/register?id=inv-1&source=invite_resend");
+    expect(signInReturnHref("/events/2026/pqc/register/?ref=x")).toBe("/events/2026/pqc/register/?ref=x");
+    expect(signInReturnHref(undefined)).toBe("/portal/");
   });
 });

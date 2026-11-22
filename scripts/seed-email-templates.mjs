@@ -312,6 +312,7 @@ The PKI Consortium is a vendor-neutral community of PKI practitioners working to
 > {{/if}}{{#if email}}**Email:** {{email}}<br>
 > {{/if}}{{#if organizationName}}**Organization:** {{organizationName}}<br>
 > {{/if}}{{#if jobTitle}}**Job title:** {{jobTitle}}<br>
+> {{/if}}{{#if paymentDue}}**Payment:** {{ticketPrice}}{{#if paymentProcessing}}, being processed{{else}} to pay{{#if paymentUrl}} — [Pay for your ticket]({{paymentUrl}}){{/if}}{{/if}}<br>
 > {{/if}}{{#each dayAttendance}}**{{dayLabel}}:** {{attendanceLabel}}{{#if statusNote}} — {{statusNote}}{{/if}}<br>
 > {{/each}}{{#if attendanceLabel}}**Attendance:** {{attendanceLabel}}<br>
 > {{/if}}{{#each customAnswerRows}}**{{label}}:** {{displayValue}}<br>
@@ -525,11 +526,21 @@ Plan the sessions you want to attend in [My agenda &rarr;]({{myAgendaUrl}})
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "registration_updated",
-    subjectTemplate: `{{#if adminAdmitNotice}}Your in-person seat is confirmed — {{eventName}}{{else}}{{#if waitlistOfferNotice}}A seat is available — {{eventName}}{{else}}{{#if eq status "cancelled"}}Your registration is cancelled — {{eventName}}{{else}}Your registration was updated — {{eventName}}{{/if}}{{/if}}{{/if}}`,
+    subjectTemplate: `{{#if adminAdmitNotice}}Your in-person seat is confirmed — {{eventName}}{{else}}{{#if waitlistOfferNotice}}A seat is available — {{eventName}}{{else}}{{#if eq status "cancelled"}}Your registration is cancelled — {{eventName}}{{else}}{{#if payNow}}Pay for your ticket to complete your registration — {{eventName}}{{else}}Your registration was updated — {{eventName}}{{/if}}{{/if}}{{/if}}{{/if}}`,
     content: `{{> greeting}}
 
+{{#if eq status "cancelled"}}
+<div class="notice notice-danger">Your registration for <strong>{{eventName}}</strong> is <strong>cancelled</strong>{{#if unpaidRelease}} because your ticket was not paid in time. You can register again on the event page while places are available{{else}}. If this was a mistake, register again on the event page{{/if}}.</div>
+{{else}}
 Your registration for **{{eventName}}** was updated.
+{{/if}}
 
+{{#if payNow}}
+<div class="notice notice-warning"><strong>You're not registered until your ticket is paid.</strong> {{ticketPrice}} is still to pay. <a href="{{paymentUrl}}">Pay for your ticket</a>.</div>
+{{/if}}
+{{#if paymentProcessing}}
+<div class="notice notice-info"><strong>Your payment of {{ticketPrice}} is being processed.</strong> Some payment methods take a few days. You're registered once it arrives, and we email your confirmation then.</div>
+{{/if}}
 {{#if adminAdmitNotice}}
 <div class="notice notice-success"><strong>Good news:</strong> you have an in-person seat for the days marked confirmed below.</div>
 {{/if}}
@@ -546,9 +557,6 @@ Your registration for **{{eventName}}** was updated.
 
 {{#if eq status "waitlisted"}}
 {{> budget_waitlist_notice}}
-{{/if}}
-{{#if eq status "cancelled"}}
-<div class="notice notice-danger">Your registration is <strong>cancelled</strong>. If this was a mistake, register again on the event page.</div>
 {{/if}}
 
 {{#if eq status "cancelled"}}{{else}}Something not right? [Review or change your registration]({{manageUrl}}).{{/if}}
@@ -712,7 +720,8 @@ Is this a mistake, and do you still want to come in person? [Update your registr
   // ─────────────────────────────────────────────────────────────────────────
   // 4. Attendee invite
   // Variables: eventName, firstName, lastName, inviterName, registrationUrl, declineUrl,
-  //            sponsorsImageUrl, heroImageUrl
+  //            sponsorsImageUrl, heroImageUrl, invitationHeadline (the event's headline, or
+  //            "You're invited to <event>"), invitationMessage (the event's Markdown, or empty)
   // Partials:  {{> about_pkic}}, {{> sponsors_block}}
   // ─────────────────────────────────────────────────────────────────────────
   {
@@ -726,7 +735,13 @@ Is this a mistake, and do you still want to come in person? [Update your registr
 
 {{#if inviterName}}You have been personally invited by **{{inviterName}}** to attend **{{eventName}}**, an event organized by the [PKI Consortium]({{brandBaseUrl}}).{{else}}You have been personally invited to attend **{{eventName}}**, an event organized by the [PKI Consortium]({{brandBaseUrl}}).{{/if}}
 
+{{#if invitationMessage}}
+**{{invitationHeadline}}**
+
+{{invitationMessage}}
+{{else}}
 Join security experts, researchers, and industry leaders to explore the latest developments in public key infrastructure and post-quantum cryptography.
+{{/if}}
 
 :::button
 [Register now →]({{registrationUrl}})
@@ -1225,17 +1240,19 @@ Trouble uploading, or need more time? Please [contact us](mailto:{{contactEmail}
 
   // ─────────────────────────────────────────────────────────────────────────
   // 8. User magic link
-  // Variables: email, magicLinkUrl, expiresInMinutes
+  // Variables: email, magicLinkUrl, expiresInMinutes; registration/proposal + eventName, or join, name
+  // what the person came for when the link returns them to it.
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "user_magic_link",
-    subjectTemplate: "Your PKI Consortium sign-in link",
+    subjectTemplate:
+      "{{#if registration}}Sign in to register for {{eventName}}{{else}}{{#if proposal}}Sign in to submit a proposal for {{eventName}}{{else}}{{#if join}}Sign in to continue your membership application{{else}}Your PKI Consortium sign-in link{{/if}}{{/if}}{{/if}}",
     content: `Hello,
 
-Here's your link to sign in to the **PKI Consortium portal**.
+{{#if registration}}Here's your link to sign in and register for **{{eventName}}**.{{else}}{{#if proposal}}Here's your link to sign in and submit a proposal for **{{eventName}}**.{{else}}{{#if join}}Here's your link to sign in and continue your application to join the **PKI Consortium**.{{else}}Here's your link to sign in to the **PKI Consortium portal**.{{/if}}{{/if}}{{/if}}
 
 :::button
-[Sign in →]({{magicLinkUrl}})
+[{{#if registration}}Sign in and register{{else}}{{#if proposal}}Sign in and continue{{else}}{{#if join}}Sign in and continue{{else}}Sign in{{/if}}{{/if}}{{/if}} →]({{magicLinkUrl}})
 :::
 
 {{> link_safety_notice}}

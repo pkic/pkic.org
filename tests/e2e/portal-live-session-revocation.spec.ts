@@ -107,13 +107,13 @@ test("Studio queue stays private and moderators lose question and poll access af
   const granting = await staff.request.post("/api/v1/permissions/grants", {
     data: accessGrantCreateSchema.parse({
       userId: moderator.userId,
-      permission: "agenda:live_moderate",
+      permissions: ["agenda:live_moderate"],
       contextType: "event",
       contextId: fixture.eventId,
     }),
   });
   expect(granting.status(), await granting.text()).toBe(201);
-  const grant = accessGrantCreateResponseSchema.parse(await granting.json()).grant;
+  const grant = accessGrantCreateResponseSchema.parse(await granting.json()).grants[0]!;
   const contexts = await Promise.all([0, 1].map(() => browser.newContext({ baseURL: new URL(staff.url()).origin })));
   const pages = await Promise.all(contexts.map((context) => context.newPage()));
   const path = `${api}/occurrences/${occurrence.id}/live`;

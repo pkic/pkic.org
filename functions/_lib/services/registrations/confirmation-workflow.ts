@@ -15,6 +15,7 @@ import type { RegistrationConfirmOrganization } from "../../../../assets/shared/
 import { linkConfirmedRegistrationOrganization } from "./confirmation-organization";
 import { workEmailDomain } from "../../email-domains/classification";
 import { outboxIdForOperation } from "../../email/outbox-queue";
+import { prepareHoldConfirmationForPayment } from "../event-tickets/payment-emails";
 
 export interface ConfirmRegistrationWorkflowPayload {
   event: EventRecord;
@@ -44,10 +45,10 @@ export interface ConfirmRegistrationWorkflowResult {
 async function commitConfirmationIntent(
   db: DatabaseLike,
   prepared: PreparedConfirmation,
-  emailStatement: StatementLike,
+  emailStatements: StatementLike[],
 ): Promise<void> {
   try {
-    await db.batch([...prepared.statements, emailStatement]);
+    await db.batch([...prepared.statements, ...emailStatements]);
   } catch (error) {
     if (prepared.affiliationConfirmed && isStateGuardFailure(error))
       throw new AppError(
@@ -80,7 +81,10 @@ function confirmationResult(
     manageToken: prepared.manageToken,
     // The email outbox stores queued capability placeholders, while this
     // synchronous response must expose the already signed manage token.
-    manageUrl: registrationManagePageUrl(payload.appBaseUrl, payload.event, prepared.manageToken),
+    manageUrl: registrationManagePageUrl(payload.appBaseUrl, payload.event, {
+      token: prepared.manageToken,
+      registrationId: prepared.registration.id,
+    }),
     shareUrl,
     outboxId,
     organizationOutcome,
@@ -141,7 +145,13 @@ async function confirmRegistrationWithNotificationOnce(
     idempotencyKey,
     outboxId: await outboxIdForOperation(idempotencyKey),
   });
-  await commitConfirmationIntent(db, prepared, email.statement);
+  // A ticket that still has to be paid holds the confirmation and asks for the payment instead.
+  const heldForPayment = await prepareHoldConfirmationForPayment(db, payload.appBaseUrl, {
+    registrationId: prepared.registration.id,
+    outboxId: email.outboxId,
+    userId: prepared.registration.user_id,
+  });
+  await commitConfirmationIntent(db, prepared, [email.statement, ...heldForPayment]);
   // Its own atomic command after the confirmation: the committed confirmation is the mailbox proof,
   // and an organization that needs review never undoes the confirmation itself.
   const organizationOutcome = prepared.affiliationConfirmed

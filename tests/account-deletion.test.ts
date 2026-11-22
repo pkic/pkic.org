@@ -232,6 +232,77 @@ describe("account deletion", () => {
     expect(await queryAll(env.DB, "SELECT 1 FROM group_membership_erasures")).toEqual([]);
   });
 
+  /** A canceled registration whose priced ticket had a payment page opened, expiring at `expiresAt`. */
+  async function insertCanceledTicketCheckout(email: string, expiresAt: string) {
+    const userId = await insertUser(env.DB, email);
+    const registrationId = crypto.randomUUID();
+    const ticketTypeId = crypto.randomUUID();
+    const ticketId = crypto.randomUUID();
+    const at = nowIso();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO registrations (id, event_id, user_id, status, source_type, manage_link_secret, cancelled_at, created_at, updated_at)
+         VALUES (?, ?, ?, 'cancelled', 'test', ?, ?, ?, ?)`,
+      ).bind(registrationId, eventId, userId, crypto.randomUUID(), at, at, at),
+      env.DB.prepare(
+        `INSERT INTO event_ticket_types (id, event_id, ticket_key, name, created_at, updated_at)
+         VALUES (?, ?, ?, 'Attendee', ?, ?)`,
+      ).bind(ticketTypeId, eventId, `attendee-${ticketTypeId}`, at, at),
+    ]);
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO registration_tickets (id, registration_id, event_id, ticket_type_id, assignment_source,
+           amount, currency, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'decided', 1000, 'eur', 'canceled', ?, ?)`,
+      ).bind(ticketId, registrationId, eventId, ticketTypeId, at, at),
+      env.DB.prepare(
+        `INSERT INTO registration_ticket_checkouts (id, ticket_id, created_at, expires_at)
+         VALUES (?, ?, ?, ?)`,
+      ).bind(crypto.randomUUID(), ticketId, at, expiresAt),
+    ]);
+    return { userId, ticketId };
+  }
+
+  async function expectTicketKeepsAccount(userId: string, ticketId: string) {
+    const deletion = await preview(userId);
+    expect(deletion.deletable).toBe(false);
+    expect(deletion.blockers).toContainEqual({ kind: "ticket_payment", count: 1 });
+    expect((await request(`/api/v1/users/${userId}?revision=${deletion.revision}`, "DELETE")).status).toBe(409);
+    expect(await accountExists(userId)).toBe(true);
+    expect(await queryAll(env.DB, "SELECT id FROM registration_tickets WHERE id = ?", [ticketId])).toHaveLength(1);
+  }
+
+  it("keeps a canceled account's ticket history while an asynchronous payment may settle", async () => {
+    const past = new Date(Date.now() - 60_000).toISOString();
+    const { userId, ticketId } = await insertCanceledTicketCheckout("processing-payment@example.test", past);
+    await env.DB.prepare(
+      `INSERT INTO registration_ticket_payment_events (provider_event_id, ticket_id, event_type, outcome, created_at)
+       VALUES (?, ?, 'checkout.session.completed', 'processing', ?)`,
+    )
+      .bind(`evt_${crypto.randomUUID()}`, ticketId, nowIso())
+      .run();
+
+    await expectTicketKeepsAccount(userId, ticketId);
+  });
+
+  it("keeps a canceled account's ticket while its payment page is still open", async () => {
+    const future = new Date(Date.now() + 3_600_000).toISOString();
+    const { userId, ticketId } = await insertCanceledTicketCheckout("open-checkout@example.test", future);
+
+    await expectTicketKeepsAccount(userId, ticketId);
+  });
+
+  it("deletes a canceled ticket whose payment page expired unpaid with the account", async () => {
+    const past = new Date(Date.now() - 60_000).toISOString();
+    const { userId, ticketId } = await insertCanceledTicketCheckout("expired-checkout@example.test", past);
+
+    const deletion = await preview(userId);
+    expect(deletion.blockers).toEqual([]);
+    expect((await request(`/api/v1/users/${userId}?revision=${deletion.revision}`, "DELETE")).status).toBe(200);
+    expect(await accountExists(userId)).toBe(false);
+    expect(await queryAll(env.DB, "SELECT id FROM registration_tickets WHERE id = ?", [ticketId])).toEqual([]);
+  });
+
   it("keeps an account that other records depend on", async () => {
     const userId = await insertUser(env.DB, "staff@example.test");
     await env.DB.prepare(

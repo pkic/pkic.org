@@ -32,6 +32,27 @@ function decodedSegment(segment: string): string | null {
   }
 }
 
+/**
+ * A return path that names a page on this site rather than a portal route: a
+ * public event form or the membership join page. Public event pages are
+ * year-scoped (`/events/2026/<slug>/register/`); a yearless
+ * `/events/<slug>/register` is the portal's own route for an event without
+ * public pages, so it stays in the portal.
+ */
+export function siteFlowReturnPath(returnPath: string | null | undefined): string | null {
+  if (!returnPath) return null;
+  const path = returnPath.split("?", 1)[0] ?? "";
+  if (path === MEMBERSHIP_JOIN_PATH) return returnPath;
+  const page = parseEventFlowPath(path);
+  return page && page.eventBasePath !== `/events/${page.eventSlug}/` ? returnPath : null;
+}
+
+/** Where a return path lands, relative to the site origin: the site page it names, else that portal route. */
+export function signInReturnHref(returnPath: string | undefined): string {
+  if (!returnPath) return "/portal/";
+  return siteFlowReturnPath(returnPath) ?? `/portal/#${returnPath}`;
+}
+
 /** The purpose a return path names, or null for a plain sign-in. */
 export function signInPurpose(returnPath: string | undefined): SignInPurpose | null {
   if (!returnPath) return null;

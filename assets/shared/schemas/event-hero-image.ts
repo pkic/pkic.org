@@ -95,3 +95,16 @@ export const eventHeroImageGetRouteSchema = {
     "404": jsonErrorResponse("Image is no longer current or does not exist."),
   },
 };
+
+export const eventMotifGetRouteSchema = {
+  tags: ["Events"],
+  summary: "Read the event's own decorative artwork",
+  request: { params: eventSlugParamsSchema },
+  responses: {
+    "200": {
+      description: "The SVG artwork the event's promotion design names, served sandboxed.",
+      content: { "image/svg+xml": { schema: z.any() } },
+    },
+    "404": jsonErrorResponse("The event uses the default artwork or does not exist."),
+  },
+};

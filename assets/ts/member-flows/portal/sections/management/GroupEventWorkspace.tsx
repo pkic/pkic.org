@@ -33,6 +33,9 @@ const RegistrationBadgePrinting = lazy(() =>
 const ProposalDetailPage = lazy(() =>
   import("../events/detail/ProposalDetailPage").then((module) => ({ default: module.ProposalDetailPage })),
 );
+const GroupEventTickets = lazy(() =>
+  import("./GroupEventTickets").then((module) => ({ default: module.GroupEventTickets })),
+);
 const GroupEventCommunications = lazy(() =>
   import("./GroupEventCommunications").then((module) => ({ default: module.GroupEventCommunications })),
 );
@@ -210,7 +213,7 @@ export function GroupEventWorkspace({
     !responsesActive &&
     !speakersActive &&
     !callActive &&
-    ((activeTab === "registrations" && detailId !== "badges") || activeTab === "proposals");
+    ((activeTab === "registrations" && detailId !== "badges" && detailId !== "tickets") || activeTab === "proposals");
 
   return (
     <BreadcrumbBranch
@@ -287,6 +290,16 @@ export function GroupEventWorkspace({
                     eventSlug={event.slug}
                     purpose="event_registration"
                     badgesActive={detailId === "badges"}
+                    ticketsActive={detailId === "tickets"}
+                    tickets={
+                      canManage ? (
+                        <GroupEventTickets
+                          eventSlug={event.slug}
+                          registrationsPath={tabPath("registrations")}
+                          canManage={canManage}
+                        />
+                      ) : undefined
+                    }
                     badges={
                       canManage ? (
                         <Suspense fallback={<Spinner />}>

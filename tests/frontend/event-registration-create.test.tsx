@@ -7,6 +7,72 @@ import { registrationCreateForTermsSchema, registrationCreateSchema } from "../.
 import { EventRegistrationCreate } from "../../assets/ts/components/events/EventRegistrationCreate";
 import { portalProfileFixture, portalSessionFixture } from "../helpers/portal-session";
 
+const config = eventFormsResponseSchema.parse({
+  event: { id: "event-1", slug: "summit", name: "Summit" },
+  purpose: "event_registration",
+  registrationPolicy: "public",
+  eventDays: [
+    {
+      dayDate: "2027-09-10",
+      label: "Workshop",
+      sortOrder: 0,
+      inPersonCapacity: null,
+      attendanceOptions: [
+        { value: "virtual", label: "Watch online" },
+        { value: "in_person", label: "At the venue" },
+      ],
+    },
+  ],
+  requiredTerms: [
+    {
+      termKey: "privacy",
+      version: "1",
+      required: true,
+      contentRef: null,
+      displayText: "I agree to the privacy policy",
+    },
+  ],
+  allowedSessionTypes: [],
+  form: {
+    id: "00000000-0000-4000-8000-000000000011",
+    key: "registration",
+    title: "Event questions",
+    description: null,
+    fields: [
+      {
+        id: "00000000-0000-4000-8000-000000000012",
+        key: "interest",
+        label: "Your interest",
+        fieldType: "text",
+        required: true,
+        options: null,
+        optionSource: null,
+        validation: null,
+        sortOrder: 0,
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        archivedAt: null,
+      },
+      {
+        id: "00000000-0000-4000-8000-000000000014",
+        key: "dietary_restrictions",
+        label: "Dietary restrictions",
+        fieldType: "multi_select",
+        required: false,
+        options: ["Nut allergy", "Vegan"],
+        optionSource: null,
+        validation: {
+          uiWidget: "checkboxes",
+          showWhen: { dayAttendanceIn: ["in_person"] },
+          helpText: "The venue receives these answers. Accommodation cannot be guaranteed.",
+        },
+        sortOrder: 1,
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        archivedAt: null,
+      },
+    ],
+  },
+});
+
 let host: HTMLDivElement;
 afterEach(() => {
   if (host) {
@@ -26,71 +92,6 @@ it("uses the session address, validates event questions, and submits the shared 
     lastName: "Lovelace",
     email: "other@example.test",
   };
-  const config = eventFormsResponseSchema.parse({
-    event: { id: "event-1", slug: "summit", name: "Summit" },
-    purpose: "event_registration",
-    registrationPolicy: "public",
-    eventDays: [
-      {
-        dayDate: "2027-09-10",
-        label: "Workshop",
-        sortOrder: 0,
-        inPersonCapacity: null,
-        attendanceOptions: [
-          { value: "virtual", label: "Watch online" },
-          { value: "in_person", label: "At the venue" },
-        ],
-      },
-    ],
-    requiredTerms: [
-      {
-        termKey: "privacy",
-        version: "1",
-        required: true,
-        contentRef: null,
-        displayText: "I agree to the privacy policy",
-      },
-    ],
-    allowedSessionTypes: [],
-    form: {
-      id: "00000000-0000-4000-8000-000000000011",
-      key: "registration",
-      title: "Event questions",
-      description: null,
-      fields: [
-        {
-          id: "00000000-0000-4000-8000-000000000012",
-          key: "interest",
-          label: "Your interest",
-          fieldType: "text",
-          required: true,
-          options: null,
-          optionSource: null,
-          validation: null,
-          sortOrder: 0,
-          updatedAt: "2026-01-01T00:00:00.000Z",
-          archivedAt: null,
-        },
-        {
-          id: "00000000-0000-4000-8000-000000000014",
-          key: "dietary_restrictions",
-          label: "Dietary restrictions",
-          fieldType: "multi_select",
-          required: false,
-          options: ["Nut allergy", "Vegan"],
-          optionSource: null,
-          validation: {
-            uiWidget: "checkboxes",
-            showWhen: { dayAttendanceIn: ["in_person"] },
-            helpText: "The venue receives these answers. Accommodation cannot be guaranteed.",
-          },
-          sortOrder: 1,
-          updatedAt: "2026-01-01T00:00:00.000Z",
-          archivedAt: null,
-        },
-      ],
-    },
-  });
   const terms = [...config.requiredTerms, { ...config.requiredTerms[0], termKey: "conduct" }];
   const consentContract = registrationCreateForTermsSchema(terms);
   const request = {
@@ -187,4 +188,45 @@ it("uses the session address, validates event questions, and submits the shared 
   });
   expect(posted[0]).not.toHaveProperty("emailProof");
   expect(posted[0]).not.toHaveProperty("firstName");
+});
+
+it("keeps the entered details when a refused invitation leaves the link", async () => {
+  host = document.createElement("div");
+  document.body.append(host);
+  const session = portalSessionFixture({});
+  const profile = portalProfileFixture(session);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const path = new URL(String(input), location.origin).pathname;
+      let body: unknown;
+      if (path === "/api/v1/auth/session") body = session;
+      else if (path === "/api/v1/users/current") body = profile;
+      else if (path.endsWith("/forms/placements/event_registration")) body = config;
+      else if (path === "/api/v1/users/current/identities")
+        body = { identities: [], page: { limit: 1, offset: 0, total: 0, hasMore: false } };
+      // The invitation check stays pending; this test is about the form instance.
+      else return new Promise<Response>(() => {});
+      return new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
+    }),
+  );
+  const onRegistered = vi.fn(async () => {});
+  const invited = "invite=refused-token&id=00000000-0000-4000-8000-000000000021&source=invite";
+  await act(() =>
+    render(<EventRegistrationCreate slug="summit" entrySearch={invited} onRegistered={onRegistered} />, host),
+  );
+  await vi.waitFor(() => expect(host.querySelector("form")).not.toBeNull());
+  const form = host.querySelector("form");
+  // Continuing without the refused invitation drops it from the link; the form stays.
+  await act(() =>
+    render(<EventRegistrationCreate slug="summit" entrySearch="step=2" onRegistered={onRegistered} />, host),
+  );
+  expect(host.querySelector("form")).toBe(form);
+  // Another invitation starts the flow afresh.
+  const another = "invite=other-token&id=00000000-0000-4000-8000-000000000022&source=invite";
+  await act(() =>
+    render(<EventRegistrationCreate slug="summit" entrySearch={another} onRegistered={onRegistered} />, host),
+  );
+  await vi.waitFor(() => expect(host.querySelector("form")).not.toBeNull());
+  expect(host.querySelector("form")).not.toBe(form);
 });

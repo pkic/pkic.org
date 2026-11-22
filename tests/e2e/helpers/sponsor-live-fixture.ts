@@ -137,13 +137,13 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
       const response = await staff.request.post("/api/v1/permissions/grants", {
         data: accessGrantCreateSchema.parse({
           userId: operator.userId,
-          permission,
+          permissions: [permission],
           contextType: "event_sponsor",
           contextId: sponsorId,
         }),
       });
       expect(response.status()).toBe(201);
-      grants.push(accessGrantCreateResponseSchema.parse(await response.json()).grant.id);
+      grants.push(accessGrantCreateResponseSchema.parse(await response.json()).grants[0]!.id);
     }
     const consenting = await issueBadge(staff, email);
     const denied = await issueBadge(staff, deniedEmail);

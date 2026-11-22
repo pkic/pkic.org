@@ -45,6 +45,7 @@ export const ACCOUNT_DELETION_BLOCKER_KINDS = [
   "membership",
   "proposal",
   "event_participation",
+  "ticket_payment",
   "vote",
   "mailing_list",
   "promotion_render",
@@ -98,6 +99,7 @@ const BLOCKER_LABELS: Record<AccountDeletionBlockerKind, (count: number) => stri
       : `${n} proposals that are still open, decided, or shared with other speakers`,
   event_participation: (n) =>
     counted(n, "session role, check-in, or question", "session roles, check-ins, and questions"),
+  ticket_payment: (n) => counted(n, "ticket with a payment record", "tickets with payment records"),
   vote: (n) => counted(n, "vote or ballot", "votes and ballots"),
   mailing_list: (n) =>
     `Still on ${counted(n, "group or mailing list", "groups or mailing lists")}. Deactivate the account, then delete it once Google Groups has removed them.`,

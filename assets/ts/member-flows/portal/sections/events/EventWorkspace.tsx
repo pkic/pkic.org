@@ -293,6 +293,7 @@ export function EventWorkspace(props: EventWorkspaceProps) {
           !tab ||
           tab === "overview" ||
           tab === "register" ||
+          tab === "not-registering" ||
           tab === "submissions" ||
           tab === "agenda" ||
           tab === "promotion" ||

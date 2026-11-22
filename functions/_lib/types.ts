@@ -221,6 +221,10 @@ export interface Env {
    * a Bearer token is granted admin privileges without a DB session lookup.
    */
   ADMIN_API_KEY?: string;
+  /** Workers AI binding; the ticket classifier is its only caller. Absent in tests and local runs without it. */
+  AI?: { run(model: string, input: Record<string, unknown>): Promise<unknown> };
+  /** The decision model the ticket classifier asks. Defaults to the platform's current decision model. */
+  TICKET_CLASSIFIER_MODEL?: string;
   /** Stripe secret key for creating Checkout Sessions (donation flow). */
   STRIPE_SECRET_KEY?: string;
   STRIPE_API_BASE?: string;

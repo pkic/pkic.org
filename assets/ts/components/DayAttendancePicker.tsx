@@ -17,6 +17,7 @@ import type { EventFormsResponse } from "../shared/types";
 import { IconClock } from "../ui/MediaIcons";
 import { AttendanceIcon } from "./AttendanceIcon";
 import type { FieldControlProps } from "../ui/Field";
+import { useAttendancePricing, type AttendanceOptionPrice } from "./attendance-pricing";
 
 type EventDay = EventFormsResponse["eventDays"][number];
 type AttendanceOptionRead = EventDay["attendanceOptions"][number];
@@ -38,6 +39,10 @@ interface DayAttendancePickerProps {
   lowCapacityThreshold?: number;
   value?: Readonly<Record<string, string>>;
   onChange?: (dayDate: string, attendanceType: string) => void;
+  /** What each way of attending costs, keyed by its value. */
+  optionPrices?: Readonly<Record<string, AttendanceOptionPrice>>;
+  /** What the prices are for, above them: "Vendor ticket". */
+  priceHeading?: string;
 }
 
 type MatrixRow = { option: AttendanceOptionRead } | { day: EventDay };
@@ -61,8 +66,11 @@ function MatrixCell({
   id,
   threshold,
   invalid,
+  price,
   onSelect,
 }: {
+  /** What this day costs with this option, when the day has a price of its own. */
+  price?: string;
   day: EventDay;
   row: AttendanceOptionRead;
   selected: boolean;
@@ -119,6 +127,10 @@ function MatrixCell({
                 Few left
               </span>
             )}
+            <span class="pk-attendance-matrix__cell-day" aria-hidden="true">
+              {calendarDateParts(day.dayDate).weekday} {calendarDateParts(day.dayDate).day}
+            </span>
+            {price && <span class="pk-attendance-matrix__day-price">{price}</span>}
           </>
         }
       />
@@ -139,14 +151,62 @@ export function DayAttendancePicker({
   lowCapacityThreshold = 0,
   value,
   onChange,
+  optionPrices,
+  priceHeading,
 }: DayAttendancePickerProps) {
   const id = useId();
   const root = useRef<HTMLDivElement>(null);
   const focusedDay = useRef<string | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const phone = useMediaQuery("(max-width: 40rem)");
-  const transposed = phone && days.length > 3;
+  // A week fits a phone as grouped rows; a longer schedule turns its days into the rows.
+  const transposed = phone && days.length > 7;
   const selected = value ?? draft;
+  const pricing = useAttendancePricing();
+  const prices = optionPrices ?? pricing?.optionPrices;
+  const heading = prices && Object.keys(prices).length > 0 ? (priceHeading ?? pricing?.priceHeading) : undefined;
+  /**
+   * The price sits on what is paid for: an amount for the event once, on the option;
+   * an amount per day on each day.
+   */
+  const priced = (option: AttendanceOptionRead) => {
+    const price = prices?.[option.value];
+    if (!price) return null;
+    const byDay = price.byDay && Object.keys(price.byDay).length > 0 ? price.byDay : undefined;
+    const perDay = price.per === "day";
+    return {
+      perDay,
+      amount: perDay ? undefined : price.amount,
+      covers:
+        price.covers ??
+        (perDay
+          ? "per day"
+          : price.per === "event" && days.length > 1
+            ? byDay
+              ? "for the other days"
+              : "for the event"
+            : undefined),
+      onDay: (dayDate: string) => byDay?.[dayDate] ?? (perDay ? price.amount : undefined),
+    };
+  };
+  const optionPrice = (option: AttendanceOptionRead) => {
+    const price = priced(option);
+    if (!price || (!price.amount && !price.covers)) return null;
+    return (
+      <span class="pk-attendance-matrix__price" data-per-day={price.perDay || undefined}>
+        {price.amount && <strong>{price.amount}</strong>}
+        {price.covers && <span>{price.covers}</span>}
+      </span>
+    );
+  };
+  const reportSelection = pricing?.onSelection;
+  // The selection object is new every render; its content decides when the host hears about it.
+  const selectionKey = JSON.stringify(selected);
+  const latestSelection = useRef(selected);
+  latestSelection.current = selected;
+  useEffect(() => {
+    reportSelection?.(latestSelection.current);
+  }, [selectionKey, reportSelection]);
   useEffect(() => {
     if (!focusDay) {
       focusedDay.current = null;
@@ -206,6 +266,7 @@ export function DayAttendancePicker({
       id={id}
       threshold={lowCapacityThreshold}
       invalid={control?.["aria-invalid"]}
+      price={priced(option)?.onDay(day.dayDate)}
       onSelect={() => select(day, option)}
     />
   );
@@ -230,6 +291,7 @@ export function DayAttendancePicker({
             >
               <AttendanceIcon type={option.value} icon={option.icon} />
               <span>{option.label}</span>
+              {optionPrice(option)}
             </Button>
           ),
           align: "center",
@@ -240,32 +302,38 @@ export function DayAttendancePicker({
         {
           id: "method",
           header: "Attendance",
-          headerHidden: true,
+          headerHidden: !heading,
+          headerContent: heading ? <span class="pk-attendance-matrix__price-heading">{heading}</span> : undefined,
           cell: (row) => {
             if (!("option" in row)) return null;
             const { option } = row;
             const unavailable = fullDays(option);
             return (
               <div class="pk-attendance-matrix__method">
-                <AttendanceIcon type={option.value} icon={option.icon} />
-                <div>
-                  <strong>{option.label}</strong>
-                  {option.description && (
-                    <p class="pk-small pk-muted pk-attendance-matrix__description">{option.description}</p>
-                  )}
-                  {unavailable.length > 0 && (
-                    <p class="pk-attendance-matrix__full">
-                      {unavailable.length === days.length
-                        ? "Full on all days"
-                        : unavailable.length > 7
-                          ? `Full on ${formatNumber(unavailable.length)} days`
-                          : `Full on ${formatDayList(
-                              unavailable.map((day) => day.dayDate),
-                              { includeDates: days.length > 7, weekday: "long" },
-                            )}`}
-                    </p>
-                  )}
+                <div class="pk-attendance-matrix__option">
+                  <AttendanceIcon type={option.value} icon={option.icon} />
+                  <div>
+                    <strong>{option.label}</strong>
+                    {option.description && (
+                      <p class="pk-small pk-muted pk-attendance-matrix__description">{option.description}</p>
+                    )}
+                    {unavailable.length > 0 && (
+                      <p class="pk-attendance-matrix__full">
+                        {unavailable.length === days.length
+                          ? "Full on all days"
+                          : unavailable.length > 7
+                            ? `Full on ${formatNumber(unavailable.length)} days`
+                            : `Full on ${formatDayList(
+                                unavailable.map((day) => day.dayDate),
+                                { includeDates: days.length > 7, weekday: "long" },
+                              )}`}
+                      </p>
+                    )}
+                  </div>
                 </div>
+                {/* Every row keeps the price column, so the prices read as one column down the grid. */}
+                {optionPrice(option) ??
+                  (heading ? <span class="pk-attendance-matrix__price" aria-hidden="true" /> : null)}
               </div>
             );
           },
@@ -273,7 +341,8 @@ export function DayAttendancePicker({
         ...days.map((day): DataTableColumn<MatrixRow> => ({
           id: day.dayDate,
           header: day.label?.trim() || formatDayAndMonth(day.dayDate),
-          headerContent: <DayHeading day={day} compact={phone} />,
+          // Full weekday names break mid-word once a long schedule narrows the columns.
+          headerContent: <DayHeading day={day} compact={phone || days.length > 7} />,
           align: "center",
           cell: (row) => ("option" in row ? cell(day, row.option) : null),
         })),
@@ -289,15 +358,17 @@ export function DayAttendancePicker({
       aria-describedby={control?.["aria-describedby"]}
       tabIndex={control?.["aria-invalid"] ? -1 : undefined}
     >
+      {pricing?.above}
       <p class="pk-small">
         {transposed
           ? "Pick one option per day. Tap a mode’s column header to use it for every available day."
           : "Pick one option per day. Click an option’s name to use it for every available day."}
       </p>
-      {/* Each orientation is its own table. Reusing one table for the other orientation's
-          columns left Chromium with no layout box for it after a resize. */}
+      {/* Each orientation, and each ticket's prices, is its own table. Reusing one table for
+          other columns or prices left Chromium with no layout box for it: after a resize, and
+          after a code changed the ticket. */}
       <DataTable
-        key={transposed ? "by-option" : "by-day"}
+        key={`${transposed ? "by-option" : "by-day"}:${heading ?? ""}`}
         caption="Attendance by day"
         narrowLayout="columns"
         columns={columns}
@@ -345,6 +416,7 @@ export function DayAttendancePicker({
           ) && " You can watch live online while you wait."}
         </Alert>
       )}
+      {pricing?.below}
     </div>
   );
 }

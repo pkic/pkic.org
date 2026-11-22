@@ -137,7 +137,10 @@ export async function getManagedFormWithFields(
   return read.decode(await db.batch(read.statements));
 }
 
-/** Resolve one form through its event ownership or an unowned event placement. */
+/**
+ * Resolve one form through its event ownership, an unowned event placement, or a placement made by the group
+ * that owns the event: a portal event's forms belong to its group, and are read for the event all the same.
+ */
 export function prepareManagedEventForm(
   db: DatabaseLike,
   event: EventReadSelection,
@@ -158,13 +161,14 @@ export function prepareManagedEventForm(
             OR (? = 0 AND EXISTS (
               SELECT 1 FROM form_placements placement
                WHERE placement.form_id = form.id
-                 AND placement.owner_group_id IS NULL
                  AND placement.context_type = 'event'
                  AND placement.context_ref = ${eventId.sql}
+                 AND (placement.owner_group_id IS NULL
+                      OR placement.owner_group_id = (SELECT owner_group_id FROM events WHERE id = ${eventId.sql}))
             ))
           )
         LIMIT 1`)
-        .bind(formKey, ...eventId.bindings, options.ownedOnly ? 1 : 0, ...eventId.bindings),
+        .bind(formKey, ...eventId.bindings, options.ownedOnly ? 1 : 0, ...eventId.bindings, ...eventId.bindings),
     ],
     decode(results: D1StatementResult[]): ManagedFormWithFields {
       const loaded = aggregate.decode(results);

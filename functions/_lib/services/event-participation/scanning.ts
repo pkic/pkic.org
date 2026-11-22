@@ -1,3 +1,4 @@
+import { registrationTicketSettledSql } from "./badge-attendees";
 import { readScannerAttemptBasis, type ScannerAttemptBasis } from "./scanner-attempt-basis";
 import { prepareScannerAttemptReceipt, type ScannerAttemptReceipt } from "./scanner-attempt-receipt";
 import { prepareCheckInStanding } from "../member-standing/awards";
@@ -97,7 +98,8 @@ export async function recordScan(
   const capture = decodeCapture();
   const id = crypto.randomUUID();
   const now = nowIso();
-  const registration = "COALESCE(reg.status,'')<>'registered'";
+  // A ticket that awaits payment or was refunded admits nobody: it scans as no registration.
+  const registration = `(COALESCE(reg.status,'')<>'registered' OR NOT ${registrationTicketSettledSql("reg")})`;
   const missingBooking = scan.occurrenceId
     ? `NOT EXISTS(SELECT 1 FROM (${publishedSessionsSql}) session WHERE session.id=target.occurrence_id AND session.event_id=badge.event_id AND ${sessionAccessEligibleSql("session", "badge.user_id", "'physical'")})`
     : "0=1";

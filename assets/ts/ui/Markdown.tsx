@@ -63,10 +63,11 @@ function MarkdownLink({
   );
 }
 
-/** Render tokens as elements, never as HTML from the author. */
-function renderTokens(tokens: Token[]): ComponentChildren {
+/** Render tokens as elements, never as HTML from the author. Text-only messages load no authored media. */
+function renderTokens(tokens: Token[], media = true): ComponentChildren {
   return tokens.map((token, index) => {
-    const children = "tokens" in token && token.tokens ? renderTokens(token.tokens) : "text" in token ? token.text : "";
+    const children =
+      "tokens" in token && token.tokens ? renderTokens(token.tokens, media) : "text" in token ? token.text : "";
     switch (token.type) {
       case "aside":
       case "columns":
@@ -86,7 +87,7 @@ function renderTokens(tokens: Token[]): ComponentChildren {
       case "space":
         return null;
       case "paragraph": {
-        const embed = markdownVideoEmbed(token.text);
+        const embed = media ? markdownVideoEmbed(token.text) : null;
         return embed ? (
           <iframe
             key={index}
@@ -134,7 +135,7 @@ function renderTokens(tokens: Token[]): ComponentChildren {
           children
         );
       case "image":
-        return markdownSafeUrl(token.href, true) ? (
+        return media && markdownSafeUrl(token.href, true) ? (
           <SiteImage key={index} src={token.href} alt={token.text} title={token.title ?? undefined} loading="lazy" />
         ) : (
           token.text
@@ -144,7 +145,7 @@ function renderTokens(tokens: Token[]): ComponentChildren {
         return (
           <List key={index} start={token.ordered ? token.start || 1 : undefined}>
             {(token as Tokens.List).items.map((item, i) => (
-              <li key={i}>{renderTokens(item.tokens)}</li>
+              <li key={i}>{renderTokens(item.tokens, media)}</li>
             ))}
           </List>
         );
@@ -156,7 +157,7 @@ function renderTokens(tokens: Token[]): ComponentChildren {
               <thead>
                 <tr>
                   {(token as Tokens.Table).header.map((cell, i) => (
-                    <th key={i}>{renderTokens(cell.tokens)}</th>
+                    <th key={i}>{renderTokens(cell.tokens, media)}</th>
                   ))}
                 </tr>
               </thead>
@@ -164,7 +165,7 @@ function renderTokens(tokens: Token[]): ComponentChildren {
                 {(token as Tokens.Table).rows.map((row, i) => (
                   <tr key={i}>
                     {row.map((cell, j) => (
-                      <td key={j}>{renderTokens(cell.tokens)}</td>
+                      <td key={j}>{renderTokens(cell.tokens, media)}</td>
                     ))}
                   </tr>
                 ))}
@@ -186,6 +187,8 @@ function renderTokens(tokens: Token[]): ComponentChildren {
 
 /** Chat is written by any participant, so a single line break counts and only inline marks are read. */
 const chatParser = new Marked({ gfm: true, breaks: true });
+/** Standard Markdown without content containers or shortcode expansion for brief attendee-facing messages. */
+const textParser = new Marked({ gfm: true });
 
 /**
  * The chat profile: bold, italic, inline code, links and line breaks, and
@@ -248,15 +251,17 @@ export function Markdown({
 }: {
   markdown?: string | null;
   className?: string;
-  /** `chat` reads the inline subset participants may use in a live chat. */
-  profile?: "content" | "chat";
+  /** `text` keeps ordinary formatting but loads no authored media; `chat` reads the live chat subset. */
+  profile?: "content" | "text" | "chat";
   /** Reading typography for a complete page; compact content keeps its application's scale. */
   layout?: "compact" | "reading";
 }) {
   const children =
     profile === "chat"
       ? renderChatTokens(chatParser.lexer(markdown ?? ""))
-      : renderTokens(parser.lexer(resolveMarkdownShortcodes(markdown ?? "")));
+      : profile === "text"
+        ? renderTokens(textParser.lexer(markdown ?? ""), false)
+        : renderTokens(parser.lexer(resolveMarkdownShortcodes(markdown ?? "")));
   const classes = ["pk-markdown", className].filter(Boolean).join(" ");
   if (profile === "content" && layout === "reading") return <ContentProse class={classes}>{children}</ContentProse>;
   return <div class={classes}>{children}</div>;

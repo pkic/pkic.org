@@ -34,6 +34,10 @@ function mergeEventSettings(
   assignNullable("promotionDesign", input.promotionDesign);
   assignNullable("virtualUrl", input.virtualUrl);
   assignNullable("attendance", input.attendance);
+  if (input.invitationMessage !== undefined) {
+    const message = input.invitationMessage;
+    assignNullable("invitationMessage", message && (message.headline || message.message) ? message : null);
+  }
   assignNullable("liveChat", input.liveChat);
   // An emptied list removes the setting, as null does.
   assignNullable("productionPartners", input.productionPartners?.length === 0 ? null : input.productionPartners);

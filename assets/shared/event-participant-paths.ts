@@ -1,5 +1,8 @@
+import { eventRegistrationRecordRoute } from "./event-participation-link";
+
 export function eventParticipantRecordPath(slug: string, kind: "registration" | "proposal", id: string) {
-  return `/events/${encodeURIComponent(slug)}/${kind === "registration" ? "registrations" : "proposals"}/${encodeURIComponent(id)}`;
+  if (kind === "registration") return eventRegistrationRecordRoute(slug, id);
+  return `/events/${encodeURIComponent(slug)}/proposals/${encodeURIComponent(id)}`;
 }
 
 /** The event app's check-in page: the camera, or with a scanned code its confirmation. */
