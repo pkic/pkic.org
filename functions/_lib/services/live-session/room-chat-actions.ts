@@ -261,17 +261,20 @@ export class LiveRoomChatActions {
 
   /** Starts the check once its author has the message, so its verdict always follows the message itself. */
   private check(row: LiveChatRow): void {
+    let answered = false;
+    // Releases only the words this check examined: an edit meanwhile has a check of its own.
+    const release = () =>
+      this.chat.message(row.id)?.body === row.body ? this.releaseFromCheck(row.id) : Promise.resolve();
     const expiry = setTimeout(() => {
-      // Still the same words: a check that has not answered by now lets them go on.
-      if (this.chat.message(row.id)?.body === row.body)
-        void this.releaseFromCheck(row.id).catch((error: unknown) => console.error("Live chat release failed", error));
+      // A check that has not answered by now lets the words go on; a verdict that arrived stays.
+      if (!answered) void release().catch((error: unknown) => console.error("Live chat release failed", error));
     }, this.checkWaitMs);
     this.ctx.waitUntil(
-      this.settleCheck(row)
+      this.settleCheck(row, () => (answered = true))
         .catch(async (error: unknown) => {
           console.error("Live chat check failed", error);
           // A check that fails lets the message go on rather than keeping it from the room.
-          await this.releaseFromCheck(row.id).catch(() => undefined);
+          await release().catch(() => undefined);
         })
         .finally(() => clearTimeout(expiry)),
     );
@@ -286,8 +289,9 @@ export class LiveRoomChatActions {
     this.nudgeTicker();
   }
 
-  private async settleCheck(sent: LiveChatRow): Promise<void> {
+  private async settleCheck(sent: LiveChatRow, answered: () => void): Promise<void> {
     const run = await this.checks.run("chat_message", liveChatPlainText(sent.body));
+    answered();
     const row = this.chat.message(sent.id);
     // Deleted, or edited again meanwhile: the newer words have a check of their own.
     if (!row || row.body !== sent.body) return;
