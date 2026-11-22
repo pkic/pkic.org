@@ -97,7 +97,6 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
                   {
                     id: sponsorId,
                     name: "Example sponsor",
-                    capturedCount: 1,
                     canView: true,
                     canCapture: false,
                     canExport: false,
@@ -108,7 +107,6 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
                         {
                           id: secondSponsorId,
                           name: "Second sponsor",
-                          capturedCount: 0,
                           canView: true,
                           canCapture: false,
                           canExport: false,

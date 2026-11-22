@@ -35,18 +35,23 @@ export function sponsorOrganizationCaptureExistsSql(
       ${eventExpression ? `AND linked_sponsor.event_id=${eventExpression}` : ""})`;
 }
 
+function verifiedSponsorMailboxSql(userAlias: string, sponsorAlias: string): string {
+  const mailbox = `lower(trim(${sponsorAlias}.contact_email))`;
+  return `(${sponsorAlias}.contact_email IS NOT NULL AND (
+    (${userAlias}.email_verified_at IS NOT NULL AND ${userAlias}.normalized_email=${mailbox})
+    OR EXISTS(SELECT 1 FROM user_emails verified_email
+      WHERE verified_email.user_id=${userAlias}.id AND verified_email.verified_at IS NOT NULL
+        AND verified_email.normalized_email=${mailbox})
+  ))`;
+}
+
 /** Only the verified sponsorship mailbox or its member organization's active primary contact sees all leads. */
 export function sponsorLeadViewerPredicateSql(userExpression: string, sponsorAlias: string): string {
   return `${activeEventSponsorSql(sponsorAlias)}
     AND EXISTS(SELECT 1 FROM users viewer WHERE viewer.id=${userExpression}
       AND viewer.active=1 AND viewer.pii_redacted_at IS NULL AND viewer.merged_into_user_id IS NULL
       AND (
-        (${sponsorAlias}.contact_email IS NOT NULL AND (
-          viewer.normalized_email=lower(trim(${sponsorAlias}.contact_email))
-          OR EXISTS(SELECT 1 FROM user_emails verified_email
-            WHERE verified_email.user_id=viewer.id AND verified_email.verified_at IS NOT NULL
-              AND verified_email.normalized_email=lower(trim(${sponsorAlias}.contact_email)))
-        ))
+        ${verifiedSponsorMailboxSql("viewer", sponsorAlias)}
         OR EXISTS(SELECT 1 FROM members member
           JOIN user_roles role ON role.context_type='organization' AND role.context_id=member.id
             AND role.role_id='${REPRESENTATIVE_ROLE_IDS.primaryContact}' AND role.user_id=viewer.id
@@ -77,9 +82,6 @@ export function sponsorContactMailboxExistsSql(userExpression: string): string {
     ON contact_user.id=${userExpression}
     WHERE ${activeEventSponsorSql("contact_sponsor")}
       AND contact_user.active=1 AND contact_user.pii_redacted_at IS NULL
-      AND contact_user.merged_into_user_id IS NULL AND contact_sponsor.contact_email IS NOT NULL
-      AND (contact_user.normalized_email=lower(trim(contact_sponsor.contact_email))
-        OR EXISTS(SELECT 1 FROM user_emails verified_contact
-          WHERE verified_contact.user_id=contact_user.id AND verified_contact.verified_at IS NOT NULL
-            AND verified_contact.normalized_email=lower(trim(contact_sponsor.contact_email)))))`;
+      AND contact_user.merged_into_user_id IS NULL
+      AND ${verifiedSponsorMailboxSql("contact_user", "contact_sponsor")})`;
 }

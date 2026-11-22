@@ -67,7 +67,6 @@ async function mount(
               {
                 id: sponsorId,
                 name: "Authorized sponsor",
-                capturedCount: 0,
                 canView,
                 canExport,
                 canCapture,

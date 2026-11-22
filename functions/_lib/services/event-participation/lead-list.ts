@@ -16,7 +16,7 @@ import type { DatabaseLike } from "../../db/types";
 import { AppError } from "../../errors";
 import { assertEventContactAccess, eventContactAccessSql } from "./evidence-retention";
 import { sponsorConsentSql } from "./sponsor-consent";
-import { sponsorLeadPermissionBindings, sponsorLeadPermissionSql } from "./lead-scope";
+import { sponsorLeadReadEvidence } from "./lead-scope";
 import { activeEventSponsorSql, sponsorLeadViewerPredicateSql } from "../../auth/sponsor-organization-lead-access";
 import { activeSponsorCaptureSql, activeSponsorLeadOriginSql } from "./sponsor-lead-active";
 import { requireTokenPermission, tokenAllowsPermission } from "../../auth/permissions";
@@ -34,20 +34,13 @@ async function resolveSponsorLeadReadScope(
   const canView = tokenAllowsPermission(actor, "agenda:leads_view");
   const canCapture = tokenAllowsPermission(actor, "agenda:leads_capture");
   if (!canView && !canCapture) requireTokenPermission(actor, "agenda:leads_view");
-  const all = sponsorLeadPermissionSql("agenda:leads_view", "sponsor.id");
-  const mine = sponsorLeadPermissionSql("agenda:leads_capture", "sponsor.id");
+  const all = sponsorLeadReadEvidence(actor, "agenda:leads_view", "sponsor.id");
+  const mine = sponsorLeadReadEvidence(actor, "agenda:leads_capture", "sponsor.id");
   const row = await first<{ scope: LeadReadScope | null }>(
     db,
-    `SELECT CASE WHEN ? AND (${all}) THEN 'all' WHEN ? AND (${mine}) THEN 'mine' END AS scope
+    `SELECT CASE WHEN (${all.sql}) THEN 'all' WHEN (${mine.sql}) THEN 'mine' END AS scope
      FROM sponsorships sponsor WHERE sponsor.id=? AND sponsor.event_id=? AND ${activeEventSponsorSql("sponsor")}`,
-    [
-      canView ? 1 : 0,
-      ...sponsorLeadPermissionBindings("agenda:leads_view", actor.id),
-      canCapture ? 1 : 0,
-      ...sponsorLeadPermissionBindings("agenda:leads_capture", actor.id),
-      sponsorId,
-      eventId,
-    ],
+    [...all.bindings, ...mine.bindings, sponsorId, eventId],
   );
   if (!row) throw new AppError(404, "LEAD_SPONSOR_NOT_FOUND", "Active sponsorship not found in this event.");
   if (!row.scope)
@@ -68,8 +61,7 @@ export async function listSponsorLeads(
   const readScope = await resolveSponsorLeadReadScope(db, eventId, sponsorId, actor);
   await assertEventContactAccess(db, eventId);
   const permission = readScope === "all" ? "agenda:leads_view" : "agenda:leads_capture";
-  const scope = sponsorLeadPermissionSql(permission, "sponsor.id");
-  const scopeValues = sponsorLeadPermissionBindings(permission, operatorUserId);
+  const { sql: scope, bindings: scopeValues } = sponsorLeadReadEvidence(actor, permission, "sponsor.id");
   const ownCaptures =
     readScope === "mine"
       ? `JOIN (SELECT user_id,MAX(observed_at) AS captured_at FROM event_scan_attempts
@@ -146,20 +138,14 @@ export async function listLeadSponsors(
   const name = "COALESCE(org.name,sponsor.non_member_name,sponsor.contact_name,'Unspecified sponsor')";
   const search = query.q ? buildD1TextSearchFilter(query.q, [name]) : null;
   const permissions = ["agenda:leads_view", "agenda:leads_capture", "agenda:leads_export"] as const;
-  const expressions = permissions.map((permission) =>
-    tokenAllowsPermission(actor, permission) ? sponsorLeadPermissionSql(permission, "sponsor.id") : "0",
-  );
-  const values = permissions.flatMap((permission) =>
-    tokenAllowsPermission(actor, permission) ? sponsorLeadPermissionBindings(permission, actor.id) : [],
-  );
-  const canRemoveAll = tokenAllowsPermission(actor, "agenda:leads_view")
-    ? sponsorLeadViewerPredicateSql("?", "sponsor")
-    : "0";
+  const authority = permissions.map((permission) => sponsorLeadReadEvidence(actor, permission, "sponsor.id"));
+  const expressions = authority.map(({ sql }) => sql);
+  const values = authority.flatMap(({ bindings }) => bindings);
+  const canRemoveAll = actor.scopeRestricted ? "0" : sponsorLeadViewerPredicateSql("?", "sponsor");
   const removeBindings = canRemoveAll === "0" ? [] : [actor.id];
   const { rows, total } = await queryPage<{
     id: string;
     name: string;
-    capturedCount: number;
     canView: number;
     canCapture: number;
     canExport: number;
@@ -167,7 +153,6 @@ export async function listLeadSponsors(
   }>(db, {
     source: {
       selectSql: `SELECT sponsor.id,${name} AS name,
-        (SELECT COUNT(*) FROM event_sponsor_leads saved WHERE saved.event_id=sponsor.event_id AND saved.sponsor_id=sponsor.id) AS capturedCount,
         (${expressions[0]}) AS canView,(${expressions[1]}) AS canCapture,(${expressions[2]}) AS canExport,
         (${canRemoveAll}) AS canRemoveAll`,
       fromSql: `FROM sponsorships sponsor LEFT JOIN organizations org ON org.id=sponsor.organization_id
@@ -218,8 +203,7 @@ export async function listSponsorLeadCaptures(
   const readScope = await resolveSponsorLeadReadScope(db, eventId, sponsorId, actor);
   await assertEventContactAccess(db, eventId);
   const permission = readScope === "all" ? "agenda:leads_view" : "agenda:leads_capture";
-  const scope = sponsorLeadPermissionSql(permission, "sponsor.id");
-  const scopeValues = sponsorLeadPermissionBindings(permission, operatorUserId);
+  const { sql: scope, bindings: scopeValues } = sponsorLeadReadEvidence(actor, permission, "sponsor.id");
   const ownOnly = readScope === "mine" ? "AND attempt.operator_user_id=?" : "";
   const source = `FROM event_scan_attempts attempt
     JOIN event_sponsor_leads lead ON lead.event_id=attempt.event_id AND lead.sponsor_id=attempt.sponsor_id AND lead.user_id=attempt.user_id

@@ -17,6 +17,7 @@ import {
   sponsorCaptureAuthorizationEvidence,
 } from "./lead-scope";
 import { hashBadgeCredential } from "./badge-hash";
+import { activeEventSponsorSql } from "../../auth/sponsor-organization-lead-access";
 import { eventReadIdSql, type EventReadSelection } from "../events/selection";
 import type { EventScanRequest } from "../../../../assets/shared/schemas/event-participation-scanning";
 import type { z } from "zod";
@@ -51,7 +52,7 @@ export async function prepareSponsorLeadBasis(
       db.prepare(evidence.sql).bind(...evidence.bindings),
       db
         .prepare(
-          `SELECT id FROM sponsorships WHERE id=? AND event_id=${scope.sql} AND sponsor_type='event' AND pipeline_stage='active'`,
+          `SELECT sponsor.id FROM sponsorships sponsor WHERE sponsor.id=? AND sponsor.event_id=${scope.sql} AND ${activeEventSponsorSql("sponsor")}`,
         )
         .bind(sponsorId, ...scope.bindings),
       db
@@ -117,7 +118,7 @@ export async function captureSponsorLead(
       db
         .prepare(
           `INSERT INTO event_scan_attempts(id,event_id,sponsor_id,operator_user_id,device_id,operation_id,request_hash,outcome,reason,action,observed_at,created_at,scanned_value,scanned_value_truncated)
-      SELECT ?,?,?,?,?,?,?,'unknown','unknown_credential','lead',?,?,?,? FROM sponsorships sponsorship WHERE sponsorship.id=? AND sponsorship.event_id=? AND sponsorship.pipeline_stage='active' AND (${sponsorLeadPermissionSql("agenda:leads_capture")}) ON CONFLICT(operation_id) DO NOTHING`,
+      SELECT ?,?,?,?,?,?,?,'unknown','unknown_credential','lead',?,?,?,? FROM sponsorships sponsorship WHERE sponsorship.id=? AND sponsorship.event_id=? AND ${activeEventSponsorSql("sponsorship")} AND (${sponsorLeadPermissionSql("agenda:leads_capture")}) ON CONFLICT(operation_id) DO NOTHING`,
         )
         .bind(
           crypto.randomUUID(),
@@ -151,7 +152,7 @@ export async function captureSponsorLead(
    SELECT ?,b.event_id,?,b.id,b.user_id,?,?,?,?,CASE WHEN NOT (${capture.sql}) THEN 'unverified' WHEN b.revoked_at IS NOT NULL OR (b.expires_at IS NOT NULL AND b.expires_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now')) OR COALESCE(reg.status,'')<>'registered' THEN 'denied' WHEN NOT (${eventContactAccessSql("b.event_id")}) THEN 'denied' WHEN ${consent} THEN 'eligible' ELSE 'warning' END,
    CASE WHEN NOT (${capture.sql}) THEN 'verification_required' WHEN b.revoked_at IS NOT NULL THEN 'revoked_badge' WHEN b.expires_at IS NOT NULL AND b.expires_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now') THEN 'expired_badge' WHEN COALESCE(reg.status,'')<>'registered' THEN 'missing_registration' WHEN NOT (${eventContactAccessSql("b.event_id")}) THEN 'contact_retention_expired' WHEN ${consent} THEN 'eligible' ELSE 'consent_required' END,'lead',?,?,?,?,?,?
    FROM event_badge_credentials b LEFT JOIN registrations reg ON reg.event_id=b.event_id AND reg.user_id=b.user_id
-   WHERE b.id=? AND b.event_id=? AND (${permission}) AND EXISTS(SELECT 1 FROM sponsorships sp WHERE sp.id=? AND sp.event_id=b.event_id AND sp.pipeline_stage='active')
+   WHERE b.id=? AND b.event_id=? AND (${permission}) AND EXISTS(SELECT 1 FROM sponsorships sp WHERE sp.id=? AND sp.event_id=b.event_id AND ${activeEventSponsorSql("sp")})
    ON CONFLICT(operation_id) DO NOTHING`,
       )
       .bind(

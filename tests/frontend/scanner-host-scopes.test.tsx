@@ -126,7 +126,6 @@ describe("scanner hosts", () => {
                 {
                   id,
                   name: "Sponsor",
-                  capturedCount: 0,
                   canCapture: true,
                   canView: false,
                   canExport: false,

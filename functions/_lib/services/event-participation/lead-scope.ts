@@ -1,4 +1,5 @@
-import type { DatabaseLike } from "../../types";
+import type { DatabaseLike, UserBackedAuthAdmin } from "../../types";
+import { permissionAuthorizationEvidenceForResource, tokenAllowsPermission } from "../../auth/permissions";
 import { guardAuthorizedDatabase } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import type { AuthorizationEvidence } from "../../db/authorization-guard";
@@ -35,6 +36,23 @@ export function sponsorLeadPermissionBindings(
   const scope = sponsorId === undefined ? [] : [sponsorId];
   const liveCapacity = permission === "agenda:leads_capture" ? [userId, ...scope] : [...scope, userId];
   return [userId, ...scope, userId, ...scope, ...liveCapacity];
+}
+
+/** Lead access needs both an exact sponsor relationship and any delegated credential's resource ceiling. */
+export function sponsorLeadReadEvidence(
+  actor: UserBackedAuthAdmin,
+  permission: "agenda:leads_view" | "agenda:leads_capture" | "agenda:leads_export",
+  sponsorExpression: string,
+): AuthorizationEvidence {
+  if (!tokenAllowsPermission(actor, permission)) return { sql: "0", bindings: [] };
+  const sql = sponsorLeadPermissionSql(permission, sponsorExpression);
+  const bindings = sponsorLeadPermissionBindings(permission, actor.id);
+  if (!actor.scopeRestricted) return { sql, bindings };
+  const delegated = permissionAuthorizationEvidenceForResource(actor, permission, {
+    type: "event_sponsor",
+    idSql: sponsorExpression,
+  });
+  return { sql: `(${sql}) AND EXISTS (${delegated.sql})`, bindings: [...bindings, ...delegated.bindings] };
 }
 
 /** Recheck exact sponsor ownership atomically, including transport receipts in the same batch. */

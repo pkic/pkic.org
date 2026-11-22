@@ -20,7 +20,6 @@ export const sponsorLeadListSchema = paginatedResponseSchema("leads", sponsorLea
 export const sponsorLeadDetailSchema = z.object({ lead: sponsorLeadSchema, sponsorName: z.string() });
 export const sponsorLeadRemovalResponseSchema = z.object({
   removedCaptures: z.number().int().positive(),
-  remainingCaptures: z.number().int().nonnegative(),
 });
 export const sponsorLeadSponsorsQuerySchema = listQuerySchema(["name"] as const, { maxLimit: 100 }).extend({
   sponsorId: databaseIdSchema.optional(),
@@ -28,7 +27,6 @@ export const sponsorLeadSponsorsQuerySchema = listQuerySchema(["name"] as const,
 export const sponsorLeadSponsorSchema = z.object({
   id: databaseIdSchema,
   name: z.string(),
-  capturedCount: z.number().int().nonnegative(),
   canView: z.boolean(),
   canCapture: z.boolean(),
   canExport: z.boolean(),

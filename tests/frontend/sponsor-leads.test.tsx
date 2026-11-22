@@ -37,7 +37,7 @@ async function mount(canView: boolean, canCapture = false, canExport = false, ca
           page,
         })
       : json({
-          sponsors: [{ id, name: "Sponsor", capturedCount: 1, canView, canCapture, canExport, canRemoveAll }],
+          sponsors: [{ id, name: "Sponsor", canView, canCapture, canExport, canRemoveAll }],
           page,
         });
   });
@@ -85,7 +85,6 @@ describe("Live sponsor leads", () => {
           {
             id,
             name: "First sponsor",
-            capturedCount: 1,
             canView: false,
             canCapture: true,
             canExport: false,
@@ -94,7 +93,6 @@ describe("Live sponsor leads", () => {
           {
             id: secondId,
             name: "Second sponsor",
-            capturedCount: 2,
             canView: true,
             canCapture: false,
             canExport: false,
@@ -146,7 +144,6 @@ describe("Live sponsor leads", () => {
             {
               id: thirdId,
               name: "Chosen sponsor",
-              capturedCount: 0,
               canView: true,
               canCapture: false,
               canExport: false,
@@ -162,7 +159,6 @@ describe("Live sponsor leads", () => {
           {
             id,
             name: "Other sponsor",
-            capturedCount: 0,
             canView: true,
             canCapture: true,
             canExport: false,
@@ -171,7 +167,6 @@ describe("Live sponsor leads", () => {
           {
             id: "10000000-0000-4000-8000-000000000002",
             name: "Second sponsor",
-            capturedCount: 0,
             canView: true,
             canCapture: true,
             canExport: false,
@@ -236,7 +231,6 @@ describe("Live sponsor leads", () => {
               {
                 id,
                 name: "Sponsor",
-                capturedCount: 0,
                 canView: true,
                 canCapture: false,
                 canExport: false,

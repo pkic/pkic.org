@@ -1,6 +1,8 @@
 import { sponsorLeadRemovalResponseSchema } from "../../../../assets/shared/schemas/event-sponsor-lead-list";
 import { batchFirst } from "../../db/pagination";
 import type { DatabaseLike } from "../../db/types";
+import type { UserBackedAuthAdmin } from "../../types";
+import { guardPermissionDatabase } from "../../auth/permissions";
 import { AppError } from "../../errors";
 import { nowIso } from "../../utils/time";
 import { auditActorIdentityId } from "../audit-actor";
@@ -10,13 +12,27 @@ import { activeSponsorCaptureSql } from "./sponsor-lead-active";
 
 /** Clears selected lead scans and refreshes the shared lead in one guarded command. */
 export async function removeSponsorLeadCaptures(
-  db: DatabaseLike,
+  sourceDb: DatabaseLike,
   eventId: string,
   sponsorId: string,
   leadId: string,
-  actorUserId: string,
+  actor: UserBackedAuthAdmin,
   scope: "mine" | "all",
 ) {
+  if (!actor.sessionId || actor.scopeRestricted)
+    throw new AppError(403, "HUMAN_SESSION_REQUIRED", "Sign in to the event app to remove lead captures.");
+  const actorUserId = actor.id;
+  const db = guardPermissionDatabase(
+    sourceDb,
+    actor,
+    [
+      {
+        permission: scope === "all" ? "agenda:leads_view" : "agenda:leads_capture",
+        context: { type: "event_sponsor", id: sponsorId },
+      },
+    ],
+    () => new AppError(404, "LEAD_NOT_FOUND", "Active lead captures not found in your scope."),
+  );
   const removalId = crypto.randomUUID();
   const removedAt = nowIso();
   const scopeSql =
@@ -71,14 +87,10 @@ export async function removeSponsorLeadCaptures(
           AND attempt.action='lead' AND attempt.outcome='eligible' AND ${activeSponsorCaptureSql("attempt")})`)
       .bind(leadId, eventId, sponsorId, removalId),
     db
-      .prepare(`SELECT
-      (SELECT COUNT(*) FROM event_scan_attempts WHERE sponsor_lead_removal_id=?) AS removedCaptures,
-      (SELECT COUNT(*) FROM event_scan_attempts attempt
-        WHERE attempt.event_id=? AND attempt.sponsor_id=? AND attempt.user_id=(SELECT user_id FROM event_sponsor_leads WHERE id=?)
-          AND attempt.action='lead' AND attempt.outcome='eligible' AND ${activeSponsorCaptureSql("attempt")}) AS remainingCaptures`)
-      .bind(removalId, eventId, sponsorId, leadId),
+      .prepare("SELECT COUNT(*) AS removedCaptures FROM event_scan_attempts WHERE sponsor_lead_removal_id=?")
+      .bind(removalId),
   ]);
-  const receipt = batchFirst<{ removedCaptures: number; remainingCaptures: number }>(results[3]!);
+  const receipt = batchFirst<{ removedCaptures: number }>(results[3]!);
   if (!receipt?.removedCaptures)
     throw new AppError(404, "LEAD_NOT_FOUND", "Active lead captures not found in your scope.");
   return sponsorLeadRemovalResponseSchema.parse(receipt);

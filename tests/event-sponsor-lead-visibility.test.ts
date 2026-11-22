@@ -217,7 +217,6 @@ describe("sponsor lead event discovery", () => {
     const savedCount = await request("/pqc-2026/sponsors/leads", token);
     expect(savedCount.status).toBe(200);
     expect(sponsorLeadSponsorsSchema.parse(await savedCount.json()).sponsors[0]).toMatchObject({
-      capturedCount: 1,
       canView: false,
       canCapture: true,
     });
@@ -238,6 +237,12 @@ describe("sponsor lead event discovery", () => {
       .run();
     await env.DB.prepare("UPDATE sponsorships SET renewal_date='2000-01-01' WHERE id=?").bind(sponsorId).run();
     expect((await request(confirmationPath, token)).status).toBe(404);
+    const expiredCapture = await callApi(env, `/api/v1/events/pqc-2026/sponsors/${sponsorId}/leads`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ ...input, operationId: crypto.randomUUID() }),
+    });
+    expect(expiredCapture.status, await expiredCapture.clone().text()).toBe(404);
     await env.DB.prepare("UPDATE sponsorships SET renewal_date=NULL,ended_reason='cancelled' WHERE id=?")
       .bind(sponsorId)
       .run();

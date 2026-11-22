@@ -301,7 +301,9 @@ export function permissionsAuthorizationEvidence(
     "all",
     undefined,
     unique.some(
-      ({ permission, context }) => permission === "agenda:leads_capture" && context?.type === "event_sponsor",
+      ({ permission, context }) =>
+        ["agenda:leads_capture", "agenda:leads_view", "agenda:leads_export"].includes(permission) &&
+        context?.type === "event_sponsor",
     ),
   );
 }

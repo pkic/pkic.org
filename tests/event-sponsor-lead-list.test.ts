@@ -3,7 +3,10 @@ import { generateBadgeCredential } from "../assets/shared/schemas/badge-credenti
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
-import { createAdminSession } from "./helpers/auth";
+import { createAdminSession, createMcpSession } from "./helpers/auth";
+import { createMcpOauthTestClient } from "./helpers/mcp-oauth";
+import { signMcpSessionToken } from "../functions/_lib/auth/mcp-session";
+import { verifyUserSessionToken } from "../functions/_lib/auth/user-session";
 import { callApi } from "./helpers/app";
 import { queryAll } from "./helpers/context";
 import {
@@ -24,7 +27,7 @@ import {
 import { captureSponsorLead } from "../functions/_lib/services/event-participation/sponsor-leads";
 import { prepareAttemptCapturedValue } from "../functions/_lib/services/event-participation/scan-attempt-capture";
 import { hashBadgeCredential } from "../functions/_lib/services/event-participation/scanning";
-import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { mutateBeforeMatchingQuery, mutateBeforeNextBatch } from "./helpers/database-races";
 import { exportSponsorLeads } from "../functions/_lib/services/event-participation/lead-export";
 import { eventContactAccessSql } from "../functions/_lib/services/event-participation/evidence-retention";
 import { listSponsorLeads } from "../functions/_lib/services/event-participation/lead-list";
@@ -162,7 +165,6 @@ describe("sponsor live lead viewing through the mounted API", () => {
     expect(removed.status, await removed.clone().text()).toBe(200);
     expect(sponsorLeadRemovalResponseSchema.parse(await removed.json())).toMatchObject({
       removedCaptures: 1,
-      remainingCaptures: 0,
     });
     expect((await request(`/sponsors/${sponsorId}/leads/${lead.id}`)).status).toBe(404);
     const attempt = await env.DB.prepare(
@@ -182,6 +184,44 @@ describe("sponsor live lead viewing through the mounted API", () => {
     expect(await env.DB.prepare("SELECT id FROM event_sponsor_leads WHERE id=?").bind(lead.id).first()).toBeNull();
   });
 
+  it("keeps delegated lead reads within the approved sponsorship after account permissions expand", async () => {
+    const signingSecret = "synthetic-sponsor-leads-oauth-signing-secret";
+    const delegatedEnv = { ...env, INTERNAL_SIGNING_SECRET: signingSecret };
+    const session = await createAdminSession(env.DB, operator, crypto.randomUUID(), signingSecret);
+    const { authorize } = createMcpOauthTestClient(delegatedEnv);
+    const approval = await authorize(session, ["agenda:leads_view"]);
+    const verified = await verifyUserSessionToken(signingSecret, session);
+    if (!verified.ok) throw new Error("Expected a valid synthetic sponsor session");
+    const delegatedToken = await signMcpSessionToken(signingSecret, {
+      sub: operator,
+      sid: verified.claims.sid,
+      exp: verified.claims.exp,
+      email: "operator@synthetic.test",
+      scopes: ["agenda:leads_view"],
+      authorizationId: approval.authorizationId,
+    });
+    const secondSponsor = crypto.randomUUID();
+    await env.DB.prepare(
+      "INSERT INTO sponsorships(id,sponsor_type,event_id,non_member_name,pipeline_stage,created_at,updated_at) SELECT ?,'event',event_id,'Second Sponsor','active',created_at,updated_at FROM sponsorships WHERE id=?",
+    )
+      .bind(secondSponsor, sponsorId)
+      .run();
+    await grant("agenda:leads_view", "event_sponsor", secondSponsor);
+    const read = (path: string) =>
+      callApi(delegatedEnv, `/api/v1/events/live-leads/sponsors/${path}`, {
+        headers: { authorization: `Bearer ${delegatedToken}`, "x-pkic-machine-auth": "mcp" },
+      });
+    const approved = await read(`${sponsorId}/leads`);
+    expect(approved.status, await approved.clone().text()).toBe(200);
+    expect(sponsorLeadListSchema.parse(await approved.json()).page.total).toBe(3);
+    expect((await read(`${secondSponsor}/leads`)).status).toBe(403);
+    const discovery = await read("leads");
+    expect(discovery.status, await discovery.clone().text()).toBe(200);
+    expect(sponsorLeadSponsorsSchema.parse(await discovery.json()).sponsors.map((sponsor) => sponsor.id)).toEqual([
+      sponsorId,
+    ]);
+  });
+
   it("lets the verified sponsorship contact see all captured leads and revokes access when the contact changes", async () => {
     const contactId = await insertUser(env.DB, "sponsor-contact@synthetic.test");
     await env.DB.prepare("UPDATE sponsorships SET contact_email=? WHERE id=?")
@@ -190,10 +230,13 @@ describe("sponsor live lead viewing through the mounted API", () => {
     const contactToken = await createAdminSession(env.DB, contactId, crypto.randomUUID());
     const read = (path: string) =>
       callApi(env, `/api/v1/events/live-leads${path}`, { headers: { Authorization: `Bearer ${contactToken}` } });
+    expect((await read(`/sponsors/${sponsorId}/leads`)).status).toBe(403);
+    await env.DB.prepare("UPDATE users SET email_verified_at=? WHERE id=?")
+      .bind(new Date().toISOString(), contactId)
+      .run();
     const discovered = await read("/sponsors/leads");
     expect(discovered.status, await discovered.clone().text()).toBe(200);
     expect(sponsorLeadSponsorsSchema.parse(await discovered.json()).sponsors[0]).toMatchObject({
-      capturedCount: 3,
       canView: true,
       canExport: true,
       canRemoveAll: true,
@@ -344,12 +387,27 @@ describe("sponsor live lead viewing through the mounted API", () => {
         headers: { Authorization: `Bearer ${actorToken}` },
       });
     expect((await remove(colleagueToken, ownPath)).status).toBe(404);
+    const revokedSession = await createAdminSession(env.DB, operator, crypto.randomUUID());
+    const verified = await verifyUserSessionToken(env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret", revokedSession);
+    if (!verified.ok) throw new Error("Expected a valid synthetic scanner session");
+    const racingDb = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.startsWith("UPDATE event_scan_attempts SET sponsor_lead_removed_at"),
+      () =>
+        env.DB.prepare("UPDATE sessions SET revoked_at=? WHERE id=?")
+          .bind(new Date().toISOString(), verified.claims.sid)
+          .run(),
+    );
+    const revokedRemoval = await callApi({ ...env, DB: racingDb }, `${ownPath}/captures`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${revokedSession}` },
+    });
+    expect(revokedRemoval.status).toBe(404);
     const ownRemoval = await remove(token, `${ownPath}/captures`);
     expect(ownRemoval.status, await ownRemoval.clone().text()).toBe(200);
-    expect(sponsorLeadRemovalResponseSchema.parse(await ownRemoval.json())).toMatchObject({
-      removedCaptures: 1,
-      remainingCaptures: 1,
-    });
+    const ownReceipt: unknown = await ownRemoval.json();
+    expect(ownReceipt).toEqual({ removedCaptures: 1 });
+    expect(sponsorLeadRemovalResponseSchema.parse(ownReceipt).removedCaptures).toBe(1);
     const removedAttempt = await env.DB.prepare(
       "SELECT user_id,badge_id,scanned_value,request_hash,sponsor_lead_removal_id FROM event_scan_attempts WHERE operation_id=?",
     )
@@ -387,23 +445,33 @@ describe("sponsor live lead viewing through the mounted API", () => {
     expect(sponsorLeadDetailSchema.parse(await colleagueLead.json()).lead.capturedAt).toBe("2026-10-04T11:00:00.000Z");
     await grant("agenda:leads_view", "event_sponsor", sponsorId, operator);
     expect((await remove(token, ownPath)).status).toBe(404);
+    await env.DB.prepare("UPDATE users SET email_verified_at=? WHERE id=?")
+      .bind(new Date().toISOString(), operator)
+      .run();
     await env.DB.prepare("UPDATE sponsorships SET contact_email='operator@synthetic.test' WHERE id=?")
       .bind(sponsorId)
       .run();
     const sponsorLead = await request(`/sponsors/${sponsorId}/leads/${lead.id}`);
     expect(sponsorLead.status).toBe(200);
     expect(sponsorLeadDetailSchema.parse(await sponsorLead.json()).lead.capturedAt).toBe("2026-10-04T11:00:00.000Z");
+    const delegatedToken = await createMcpSession(
+      env.DB,
+      { id: operator, email: "operator@synthetic.test" },
+      crypto.randomUUID(),
+      ["agenda:leads_view"],
+    );
+    const delegatedRemoval = await callApi(env, ownPath, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${delegatedToken}`, "x-pkic-machine-auth": "mcp" },
+    });
+    expect(delegatedRemoval.status).toBe(403);
     const allRemoval = await remove(token, ownPath);
     expect(allRemoval.status, await allRemoval.clone().text()).toBe(200);
     expect(sponsorLeadRemovalResponseSchema.parse(await allRemoval.json())).toMatchObject({
       removedCaptures: 1,
-      remainingCaptures: 0,
     });
     expect(await env.DB.prepare("SELECT id FROM event_sponsor_leads WHERE id=?").bind(lead.id).first()).toBeNull();
     expect((await request(`/sponsors/${sponsorId}/leads/${lead.id}`)).status).toBe(404);
-    expect(
-      sponsorLeadSponsorsSchema.parse(await (await request("/sponsors/leads")).json()).sponsors[0]?.capturedCount,
-    ).toBe(2);
     expect((await callApi(env, ownPath, { headers: { Authorization: `Bearer ${colleagueToken}` } })).status).toBe(404);
     await grant("agenda:leads_export", "event_sponsor", sponsorId, operator);
     expect(await (await request(`/sponsors/${sponsorId}/leads.csv`)).text()).not.toContain("attendee0@synthetic.test");
@@ -433,9 +501,6 @@ describe("sponsor live lead viewing through the mounted API", () => {
     const rescanned = await request(`/sponsors/${sponsorId}/leads/${newLeadId}`);
     expect(rescanned.status).toBe(200);
     expect(sponsorLeadDetailSchema.parse(await rescanned.json()).lead.capturedAt).toBe("2026-10-04T12:00:00.000Z");
-    expect(
-      sponsorLeadSponsorsSchema.parse(await (await request("/sponsors/leads")).json()).sponsors[0]?.capturedCount,
-    ).toBe(3);
     expect(await (await request(`/sponsors/${sponsorId}/leads.csv`)).text()).toContain("attendee0@synthetic.test");
     const audits = await env.DB.prepare(
       "SELECT audit.details_json,removed.id AS attempt_id FROM audit_log audit JOIN event_scan_attempts removed ON removed.sponsor_lead_removal_id=audit.id WHERE audit.entity_type='event_sponsor_lead' AND audit.entity_id=? AND audit.action='sponsor_lead_captures_removed' ORDER BY audit.created_at,audit.id",
@@ -709,7 +774,6 @@ describe("sponsor live lead viewing through the mounted API", () => {
       {
         id: sponsorId,
         name: "Our sponsor",
-        capturedCount: 3,
         canView: true,
         canCapture: true,
         canExport: false,
