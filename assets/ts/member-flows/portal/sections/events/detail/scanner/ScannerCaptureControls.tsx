@@ -3,8 +3,7 @@ import type { ContractForm, FieldPresentation } from "../../../../../../hooks/us
 import type { useScannerManualEntry } from "./useScannerManualEntry";
 import type { ScannerOfflineContext } from "../../../../../../../shared/schemas/event-scanner-offline-context";
 import { Button } from "../../../../../../ui/Button";
-import { Checkbox } from "../../../../../../ui/Checkbox";
-import { Field } from "../../../../../../ui/Field";
+import { ScannerLeadConsent, type ScannerLeadConsentProps } from "./ScannerLeadConsent";
 import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
 import { ScannerSetup } from "./ScannerSetup";
 import { ScannerManualEntry } from "./ScannerManualEntry";
@@ -78,6 +77,10 @@ export function ScannerCaptureControls({
   preparing,
   cameraError,
   start,
+  leadConsent,
+  leadConsentConfirmed = false,
+  leadNeedsAdvance = false,
+  onNextLead,
   children,
 }: {
   children?: ComponentChildren;
@@ -89,6 +92,10 @@ export function ScannerCaptureControls({
   preparing: boolean;
   cameraError: string;
   start: () => void;
+  leadConsent?: ScannerLeadConsentProps;
+  leadConsentConfirmed?: boolean;
+  leadNeedsAdvance?: boolean;
+  onNextLead?: () => void;
 }) {
   return (
     <>
@@ -99,13 +106,19 @@ export function ScannerCaptureControls({
           <ScannerSetup {...setup} allowedActions={mode.allowedActions} onAction={mode.onAction} onStart={start} />
         </>
       )}
+      {leadConsent && <ScannerLeadConsent {...leadConsent} />}
       <div class="pk-cluster">
         {(collector || mode.action === "lead") && mode.allowedActions?.includes(mode.action) && (
-          <Button type="button" variant="primary" disabled={!canStart} onClick={start}>
-            Start scanning
+          <Button
+            type="button"
+            variant="primary"
+            disabled={!leadNeedsAdvance && (!canStart || (mode.action === "lead" && !leadConsentConfirmed))}
+            onClick={leadNeedsAdvance ? onNextLead : start}
+          >
+            {leadNeedsAdvance ? "Next" : "Start scanning"}
           </Button>
         )}
-        {(collector || mode.action === "lead") && children}
+        {!leadNeedsAdvance && (collector || mode.action === "lead") && children}
       </div>
       {preparing && <p role="status">Preparing scanner for this session…</p>}
       {cameraError && <p role="status">{cameraError}</p>}
@@ -125,9 +138,11 @@ export function ScannerManualControls({
   consent,
   inline = false,
   handlers,
+  error,
 }: {
   inline?: boolean;
   handlers?: ContractForm<unknown>["handlers"];
+  error?: string;
   action: EventScanRequest["action"];
   busy: boolean;
   ready: boolean;
@@ -140,18 +155,8 @@ export function ScannerManualControls({
 }) {
   const content = (
     <ScannerManualEntry {...entry}>
-      {action === "lead" && consent && (
-        <Field label="Attendee consent" {...consent.field} required group>
-          {(control) => (
-            <Checkbox
-              {...control}
-              name="consentConfirmed"
-              checked={consent.confirmed}
-              onChange={(event) => consent.onChange(event.currentTarget.checked)}
-              label="The attendee agrees to share their contact details with this sponsor."
-            />
-          )}
-        </Field>
+      {action === "lead" && consent && !consent.confirmed && (
+        <p role="alert">Confirm the attendee’s permission before scanning.</p>
       )}
     </ScannerManualEntry>
   );
@@ -167,11 +172,22 @@ export function ScannerManualControls({
         }}
       >
         {content}
+        {error && <p role="alert">{error}</p>}
         <div class="pk-cluster">
-          <Button type="submit" disabled={busy || !ready}>
+          <Button type="submit" disabled={busy || !ready || (action === "lead" && !consent?.confirmed)}>
             {action === "lead" ? "Confirm lead" : scannerActionLabel(action)}
           </Button>
-          <Button type="button" variant="secondary" onClick={onClose}>
+          <Button
+            type="button"
+            variant="secondary"
+            onPointerDown={(event) => {
+              // Close before the input's focus-out validation can replace this button.
+              if (event.button === 0) onClose();
+            }}
+            onClick={(event) => {
+              if (event.detail === 0) onClose();
+            }}
+          >
             Return to scanning
           </Button>
         </div>
@@ -179,14 +195,14 @@ export function ScannerManualControls({
     );
   return (
     <>
-      <Button type="button" variant="secondary" onClick={onOpen}>
-        {entry.lookup?.online === false ? "Enter badge code" : "Find attendee or badge"}
+      <Button type="button" variant="secondary" disabled={action === "lead" && !consent?.confirmed} onClick={onOpen}>
+        {entry.lookup?.online ? "Find attendee or badge" : "Enter badge code"}
       </Button>
       <Dialog
         open={open}
         title={action === "lead" ? "Review sponsor lead" : "Enter badge code"}
         confirmLabel={action === "lead" ? "Confirm lead" : scannerActionLabel(action)}
-        confirmDisabled={busy || !ready}
+        confirmDisabled={busy || !ready || (action === "lead" && !consent?.confirmed)}
         onConfirm={onCapture}
         onCancel={onClose}
       >
@@ -207,6 +223,7 @@ export function scannerManualControlProps({
   onCapture,
   consentConfirmed,
   onConsent,
+  onOpen,
   slug,
   offline,
 }: {
@@ -220,6 +237,7 @@ export function scannerManualControlProps({
   onCapture: () => void;
   consentConfirmed: boolean;
   onConsent: (confirmed: boolean) => void;
+  onOpen?: () => void;
   slug: string;
   offline: boolean;
 }): ComponentProps<typeof ScannerManualControls> {
@@ -234,7 +252,7 @@ export function scannerManualControlProps({
       action === "lead"
         ? { confirmed: consentConfirmed, field: form.of("consentConfirmed"), onChange: onConsent }
         : undefined,
-    onOpen: manual.show,
+    onOpen: onOpen ?? manual.show,
     onClose: manual.hide,
     entry: {
       focusRequested: manual.focusRequested,

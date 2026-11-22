@@ -8,7 +8,9 @@ import { refineAttendanceCaptureIntent } from "./event-attendance-capture";
 import { portalReturnPathSchema } from "./user-auth";
 
 export const scannerOfflineRouteSchema = portalReturnPathSchema.refine(
-  (path) => /^\/events\/[^/?#]+\/scanner$/u.test(path) || /^\/groups\/[^/?#]+\/events\/[^/?#]+\/scanner$/u.test(path),
+  (path) =>
+    /^\/events\/[^/?#]+\/(?:scanner|leads|sponsors\/[^/?#]+\/scanner)$/u.test(path) ||
+    /^\/groups\/[^/?#]+\/events\/[^/?#]+\/scanner$/u.test(path),
   "Use an event scanner route.",
 );
 
@@ -31,7 +33,8 @@ export const scannerOfflineContextSchema = enrolledOfflineEligibilityResponseSch
     route: scannerOfflineRouteSchema,
     sessionId: databaseIdSchema,
     contextId: databaseIdSchema.optional(),
-    action: scanActionSchema.exclude(["lead", "exception"]),
+    sponsorId: databaseIdSchema.optional(),
+    action: scanActionSchema.exclude(["exception"]),
     purpose: z.enum(["scan", "collection"]).optional(),
     targetLabel: z.string().trim().max(200).optional(),
     roomLabel: z.string().trim().max(200).optional(),
@@ -39,13 +42,23 @@ export const scannerOfflineContextSchema = enrolledOfflineEligibilityResponseSch
     lastObservedAt: utcInstantSchema,
   })
   .strict()
-  .refine(
-    (value) =>
-      value.route.startsWith("/groups/")
+  .refine((value) => {
+    if (value.action === "lead")
+      return (
+        Boolean(value.sponsorId) &&
+        value.purpose === "scan" &&
+        value.occurrenceId === null &&
+        value.roomId === null &&
+        (value.route === `/events/${encodeURIComponent(value.slug)}/leads` ||
+          value.route === `/events/${encodeURIComponent(value.slug)}/sponsors/${value.sponsorId}/scanner`)
+      );
+    return (
+      !value.sponsorId &&
+      (value.route.startsWith("/groups/")
         ? value.route.split("/")[4] === value.eventId
-        : value.route === `/events/${encodeURIComponent(value.slug)}/scanner`,
-    "Scanner route must match its prepared event.",
-  )
+        : value.route === `/events/${encodeURIComponent(value.slug)}/scanner`)
+    );
+  }, "Scanner route must match its prepared event.")
   .superRefine((value, context) =>
     refineAttendanceCaptureIntent(
       {

@@ -11,6 +11,11 @@ import type { UserSessionResult } from "../../auth/user-session";
 import { activeEffectiveInviteExpirySql, effectiveInviteExpirySql } from "../../invite-validity";
 import type { AuthAdmin, DatabaseLike, PermissionGrant } from "../../types";
 import { AppError } from "../../errors";
+import {
+  activeEventSponsorSql,
+  sponsorLeadViewerPredicateSql,
+  sponsorOrganizationCaptureExistsSql,
+} from "../../auth/sponsor-organization-lead-access";
 
 export interface EventAudienceViewer {
   userId: string | null;
@@ -83,8 +88,7 @@ export function buildEventAudiencePredicate(
         UNION ALL
         SELECT permission.value AS permission, 'event_sponsor' AS context_type, sponsor_scope.id AS context_id
         FROM sponsorships sponsor_scope CROSS JOIN json_each(?) permission
-        WHERE sponsor_scope.event_id=${eventAlias}.id AND sponsor_scope.sponsor_type='event'
-          AND sponsor_scope.pipeline_stage='active'`,
+        WHERE sponsor_scope.event_id=${eventAlias}.id AND ${activeEventSponsorSql("sponsor_scope")}`,
       bindings: [JSON.stringify(allowedEvents), JSON.stringify(allowedSponsors)],
     });
     return {
@@ -179,9 +183,24 @@ export function buildEventAudiencePredicate(
       )
       OR EXISTS (${eventRead.sql})
       OR EXISTS (SELECT 1 FROM sponsorships sponsor_scope
-        WHERE sponsor_scope.event_id=${eventAlias}.id AND sponsor_scope.sponsor_type='event'
-          AND sponsor_scope.pipeline_stage='active' AND EXISTS (${sponsorRead.sql}))
+        WHERE sponsor_scope.event_id=${eventAlias}.id AND ${activeEventSponsorSql("sponsor_scope")} AND EXISTS (${sponsorRead.sql}))
+      ${tokenAllowsPermission(actor, "agenda:leads_capture") ? `OR ${sponsorOrganizationCaptureExistsSql("?", undefined, `${eventAlias}.id`)}` : ""}
+      ${
+        tokenAllowsPermission(actor, "agenda:leads_view") || tokenAllowsPermission(actor, "agenda:leads_export")
+          ? `OR EXISTS(SELECT 1 FROM sponsorships viewer_sponsor
+          WHERE viewer_sponsor.event_id=${eventAlias}.id AND ${sponsorLeadViewerPredicateSql("?", "viewer_sponsor")})`
+          : ""
+      }
     )`,
-    bindings: [...globalRead.bindings, userId, ...eventRead.bindings, ...sponsorRead.bindings],
+    bindings: [
+      ...globalRead.bindings,
+      userId,
+      ...eventRead.bindings,
+      ...sponsorRead.bindings,
+      ...(tokenAllowsPermission(actor, "agenda:leads_capture") ? [userId] : []),
+      ...(tokenAllowsPermission(actor, "agenda:leads_view") || tokenAllowsPermission(actor, "agenda:leads_export")
+        ? [userId]
+        : []),
+    ],
   };
 }

@@ -1,0 +1,11 @@
+@layer components {
+  .pk-scanner-lead-confirmation {
+    display: grid;
+    gap: var(--pk-1);
+    margin-block: var(--pk-2);
+    text-align: center;
+  }
+  .pk-scanner-lead-confirmation strong {
+    font-size: var(--pk-text-lg);
+  }
+}

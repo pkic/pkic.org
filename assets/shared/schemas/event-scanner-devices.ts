@@ -9,6 +9,16 @@ export const scannerReceiptSchema = scannerSessionSchema.extend({
   operationId: databaseIdSchema,
   receivedAt: utcInstantSchema,
 });
+/** Sponsor lead recovery carries authorization scope and expiry, never attendee records. */
+export const scannerLeadLeaseSchema = z
+  .object({
+    eventId: databaseIdSchema,
+    sponsorId: databaseIdSchema,
+    serverNow: utcInstantSchema,
+    expiresAt: utcInstantSchema,
+  })
+  .strict();
+export type ScannerLeadLease = z.infer<typeof scannerLeadLeaseSchema>;
 export const scannerDeviceSessionEnrollmentSchema = z
   .object({
     operationId: databaseIdSchema,
@@ -23,6 +33,7 @@ export const scannerDeviceSessionEnrollmentResponseSchema = z
     operatorUserId: databaseIdSchema,
     deviceId: databaseIdSchema,
     openedAt: utcInstantSchema,
+    leadLease: scannerLeadLeaseSchema.optional(),
   })
   .strict();
 export const scannerDeviceSessionClosingSchema = z
@@ -52,6 +63,7 @@ export const scannerDeviceSessionStatusSchema = z
     closingDeclaredAt: utcInstantSchema.nullable(),
     closingOperationId: databaseIdSchema.nullable(),
     closedAt: utcInstantSchema.nullable(),
+    leadLease: scannerLeadLeaseSchema.optional(),
   })
   .strict();
 export type ScannerDeviceSessionStatus = z.infer<typeof scannerDeviceSessionStatusSchema>;

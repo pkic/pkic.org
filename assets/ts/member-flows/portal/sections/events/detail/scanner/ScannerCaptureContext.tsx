@@ -21,7 +21,7 @@ export function scannerContextLabel({
   rooms: ReadonlyArray<{ id: string; name: string }>;
 }): string {
   if (badgeCollection) return "Badge collection";
-  if (action === "lead") return `${sponsorName || "Sponsor lead capture"} · Event-wide`;
+  if (action === "lead") return sponsorName || "Sponsor leads";
   const place =
     targetLabel || (targetId ? "Session check-in" : action === "checkout" ? "Venue exit" : "Venue entrance");
   return roomId ? `${place} · ${rooms.find((room) => room.id === roomId)?.name ?? "Room"}` : place;

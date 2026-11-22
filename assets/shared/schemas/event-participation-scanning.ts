@@ -124,7 +124,7 @@ function refineScanIntent(value: z.infer<typeof eventScanRequestFieldsSchema>, c
     context.addIssue({
       code: "custom",
       path: ["consentConfirmed"],
-      message: "Confirm the attendee agrees to share their contact details with this sponsor.",
+      message: "Confirm you will ask each attendee for permission before scanning.",
     });
 }
 export const eventScanRequestSchema = eventScanRequestFieldsSchema.superRefine(refineScanIntent);

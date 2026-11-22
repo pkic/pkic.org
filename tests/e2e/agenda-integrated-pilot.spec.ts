@@ -45,12 +45,7 @@ import { signInToPortal } from "./helpers/portal-auth";
 import { publishE2eSite } from "./helpers/site-publication";
 import { runAgendaAction } from "./helpers/agenda-actions";
 import { correctPilotAttendance } from "./helpers/attendance-correction";
-import {
-  scannerStorage,
-  reconnectScannerBrowser,
-  openScannerSessionDetails,
-  closeScannerDiagnostics,
-} from "./helpers/scanner-recovery-storage";
+import { scannerStorage, reconnectScannerBrowser, openScannerSessionDetails } from "./helpers/scanner-recovery-storage";
 import {
   prepareSponsorLiveFixture,
   expectContactBadgeRejected,
@@ -80,7 +75,7 @@ test.use({ actionTimeout: 30_000 });
 
 async function closePilotScanner(page: Page, scan: ReturnType<typeof enrolledEventScanRequestSchema.parse>) {
   await expect.poll(async () => (await scannerStorage(page)).pending.length).toBe(0);
-  // Manual entry is a modal dialog; leave it before reaching the scanner's diagnostics.
+  // Leave a door scanner's manual dialog before reaching its diagnostics.
   const manual = page.getByRole("dialog", { name: /^(Enter badge code|Review sponsor lead)$/ });
   if (await manual.isVisible()) await manual.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(manual).not.toBeVisible();
@@ -93,6 +88,31 @@ async function closePilotScanner(page: Page, scan: ReturnType<typeof enrolledEve
       return session?.epochId === scan.scannerSession.epochId ? [session.sequence] : [];
     }),
   );
+  if (scan.action === "lead") {
+    const input = scannerDeviceSessionClosingSchema.parse({
+      operationId: randomUUID(),
+      highWaterSequence: highWater,
+      pendingCount: 0,
+      recoveryCount: 0,
+      sponsorId: scan.sponsorId,
+    });
+    const response = await page.request.post(
+      `/api/v1/events/${sponsorEventSlug}/scanner/devices/sessions/${scan.scannerSession.epochId}/closing`,
+      { data: input },
+    );
+    expect(response.status()).toBe(200);
+    const status = scannerDeviceSessionStatusSchema.parse(await response.json());
+    expect(status).toMatchObject({
+      epochId: scan.scannerSession.epochId,
+      deviceId: scan.deviceId,
+      closingOperationId: input.operationId,
+      highWaterSequence: highWater,
+      receivedCount: highWater,
+      missingCount: 0,
+    });
+    expect(status.closedAt).not.toBeNull();
+    return status;
+  }
   const diagnostics = await openScannerSessionDetails(page);
   const closing = page
     .waitForResponse(
@@ -439,7 +459,7 @@ test("one recurring meeting and conference retain the same actors through organi
     expect(scope).toMatchObject({ canView: true, canCapture: true, canExport: true });
     if (!scope) throw new Error("The pilot sponsor needs its own active scope");
     await sponsor.goto(fixture.workspace);
-    await sponsor.getByRole("button", { name: `Open leads for ${scope.name}`, exact: true }).click();
+    await expect(sponsor.getByRole("heading", { name: "Leads", exact: true })).toBeVisible();
     await sponsor.getByRole("button", { name: "Scan leads", exact: true }).click();
     const captured = await captureOfflineSponsorBadge(
       sponsor,
@@ -478,11 +498,13 @@ test("one recurring meeting and conference retain the same actors through organi
     expect(registrationManageUpdateResponseSchema.parse(await withdrawn.json()).sponsorSharing.allowed).toBe(false);
     expect(sponsorLeadListSchema.parse(await (await sponsor.request.get(leadsPath)).json()).leads).toHaveLength(0);
     expect(await (await sponsor.request.get(`${leadsPath}.csv`)).text()).not.toContain(fixture.email);
-    // The closed session's diagnostics dialog sits over the lead workspace until dismissed.
-    await closeScannerDiagnostics(sponsor);
-    await sponsor.getByRole("button", { name: "Close scanner", exact: true }).click();
+    // Leave the full-screen sponsor scanner to review the live lead list.
+    await sponsor
+      .getByRole("dialog", { name: "Continuous badge scanner", exact: true })
+      .getByRole("button", { name: "Close scanner", exact: true })
+      .click();
     await sponsor.reload();
-    await sponsor.getByRole("button", { name: `Open leads for ${scope.name}`, exact: true }).click();
+    await expect(sponsor.getByRole("heading", { name: "Leads", exact: true })).toBeVisible();
     await expect(sponsor.getByText("No currently consenting leads match this search.", { exact: true })).toBeVisible();
     await capturePilot(sponsor, info, "pilot-sharing-withdrawn");
 
