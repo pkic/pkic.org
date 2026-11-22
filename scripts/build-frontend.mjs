@@ -125,6 +125,16 @@ const config = {
               includeDependenciesRecursively: false,
               test: /assets[\\/]ts[\\/]live-session[\\/]/,
             },
+            // The studio's own controls: the desk, its panels and the phone
+            // layout. They grow with every studio feature, so they split into
+            // bounded chunks rather than one that every addition pushes past
+            // the chunk budget.
+            {
+              name: "live-studio",
+              includeDependenciesRecursively: false,
+              test: /sections[\\/]events[\\/]detail[\\/]live[\\/]/,
+              maxSize: 100 * 1024,
+            },
             // Gallery specimens grow independently of the shared components they demonstrate.
             {
               name: "component-gallery",
