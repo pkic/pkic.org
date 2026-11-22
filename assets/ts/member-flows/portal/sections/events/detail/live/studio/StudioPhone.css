@@ -3,14 +3,24 @@
  * the Transition and Program at the top; one panel below; the panel tabs at the thumb.
  * Every primary control takes at least a 44px target.
  */
+/* A number, so a zoomed picture scales by it as computed on its frame. */
+@property --pk-studio-picture-fit {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+
 @layer components {
   .pk-studio-phone {
     display: flex;
     flex-direction: column;
     gap: var(--pk-1);
     min-inline-size: 0;
-    /* Room for the tab bar, so the panel's end is never under it. */
-    padding-block-end: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+    /*
+     * The studio scrolls inside its own full-window layer, so the page's clearance for the fixed tab bar does
+     * not reach it: the last row of a view, such as the chat's composer, keeps clear of the bar here.
+     */
+    padding-block-end: calc(var(--pk-app-tabbar-height) + env(safe-area-inset-bottom, 0px));
   }
   .pk-studio-phone__bar {
     position: sticky;
@@ -23,7 +33,7 @@
     background: var(--pk-surface);
     box-shadow: var(--pk-shadow-1);
   }
-  /* Room, session title and time on one row; a notice takes a row of its own. */
+  /* Room, session title, time and the virtual room on one row; a notice takes a row of its own. */
   .pk-studio-phone__session {
     display: flex;
     flex-wrap: wrap;
@@ -60,19 +70,38 @@
     align-items: stretch;
     gap: var(--pk-2);
   }
-  .pk-studio-phone__thumb {
-    --tally: var(--live-tally-stream);
+  .pk-studio-phone__switcher .pk-studio-transition {
+    gap: var(--pk-2);
+    padding: 0;
+  }
+  /*
+   * On a phone a take button is its arrow alone, small, in the color of the output it goes to, between the two
+   * pictures. It keeps its full name for a screen reader. The button is drawn smaller than a thumb, by the
+   * owner's choice, and takes a touch a little outside its edge, up to the gap around it.
+   */
+  .pk-studio-phone__switcher .pk-studio-transition__name {
+    display: none;
+  }
+  .pk-studio-phone__switcher .pk-studio-transition > .pk-btn.pk-studio-transition__take {
     position: relative;
+    justify-content: center;
+    min-block-size: 2rem;
+    min-inline-size: 2rem;
+    padding: 0;
+  }
+  .pk-studio-phone__switcher .pk-studio-transition > .pk-btn.pk-studio-transition__take::after {
+    content: "";
+    position: absolute;
+    inset: calc(var(--pk-1) * -1);
+  }
+  .pk-studio-phone__thumb {
+    position: relative;
+    display: flex;
+    flex-direction: column;
     min-inline-size: 0;
-    border: 2px solid var(--tally);
+    border: 2px solid var(--tally, var(--pk-line));
     border-radius: var(--pk-radius);
     background: var(--pk-chrome-deep);
-  }
-  .pk-studio-phone__thumb[data-tally="preview"] {
-    --tally: var(--live-tally-preview);
-  }
-  .pk-studio-phone__thumb[data-tally="program"] {
-    --tally: var(--live-tally-program);
   }
   /* The picture is the button that shows the output's tools. */
   .pk-studio-phone__thumb-screen {
@@ -95,14 +124,168 @@
     inline-size: 100%;
     block-size: 100%;
   }
-  /* Tag at the start, Clear and Full screen at the end, over the picture's top edge. */
+  /*
+   * A picture of an output is the 1920 × 1080 canvas made small. Scaled down by
+   * a transform alone, anything moving in it (the ticker, a lower third coming
+   * on) makes the browser keep several layers per picture at the full broadcast
+   * size: with a few pictures that is over a gigabyte, more than a phone's
+   * browser has, so it reloads the page. A phone's monitors and its large view
+   * draw the canvas at half size (zoom) and scale that, so those layers are a
+   * quarter of the size and the pictures move as the output does: about 380 MB
+   * with everything moving, against 1,170 MB (Safari engine, four pictures).
+   * Half is as small as zoom goes: Safari draws no zoomed text under 9px, and
+   * the smallest type on an output is 18px. The fit is a number, worked out on
+   * the frame, as the browsers zoom lengths in a transform differently.
+   */
+  .pk-studio[data-phone] .pk-studio-monitor__screen .pk-live-overlay__frame:not([data-crop]) {
+    --pk-studio-picture-fit: min(tan(atan2(100cqi, 1920px)), tan(atan2(100cqb, 1080px)));
+  }
+  .pk-studio[data-phone] .pk-studio-monitor__screen .pk-live-overlay__frame:not([data-crop]) > .pk-live-overlay {
+    zoom: 0.5;
+    transform: scale(calc(var(--pk-studio-picture-fit) * 2));
+  }
+  /*
+   * The thumbnails are too small to draw that way, as text sizes round apart,
+   * so they keep the transform and hold still: a graphic cuts between its
+   * states (see LiveStillPictures). The two an operator reads content from
+   * keep going in a way that needs no layer: the ticker travels by its margin,
+   * ten steps a second, and a person's titles change by a cut.
+   */
+  .pk-studio[data-phone] .pk-studio-phone__thumb-screen *:not(.pk-live-ticker__track, .pk-affiliation-rotation__unit),
+  .pk-studio[data-phone] .pk-studio-phone__thumb-screen *::before,
+  .pk-studio[data-phone] .pk-studio-phone__thumb-screen *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  /* A reaction only exists as its float up the frame; held still it would sit in the picture. */
+  .pk-studio[data-phone] .pk-studio-phone__thumb-screen .pk-live-overlay__reaction {
+    display: none;
+  }
+  /* One pass of the messages, by the length the ticker measured; the loop lasts as long as on the output. */
+  @keyframes pk-studio-picture-ticker {
+    to {
+      margin-inline-start: calc(var(--pk-live-ticker-travel) * -1);
+    }
+  }
+  .pk-studio[data-phone] .pk-studio-phone__thumb-screen .pk-live-ticker__track {
+    animation-name: pk-studio-picture-ticker !important;
+    animation-timing-function: steps(300) !important;
+    transition: none !important;
+  }
+  /*
+   * Each of a person's titles in its turn, on the rotation's own timing and
+   * delays: shown for its share of the loop, hidden for the rest and while it
+   * waits for its first turn.
+   */
+  @keyframes pk-studio-picture-titles-2 {
+    0% {
+      visibility: hidden;
+    }
+    0.01%,
+    50% {
+      visibility: visible;
+    }
+    50.01%,
+    100% {
+      visibility: hidden;
+    }
+  }
+  @keyframes pk-studio-picture-titles-3 {
+    0% {
+      visibility: hidden;
+    }
+    0.01%,
+    33.33% {
+      visibility: visible;
+    }
+    33.34%,
+    100% {
+      visibility: hidden;
+    }
+  }
+  @keyframes pk-studio-picture-titles-4 {
+    0% {
+      visibility: hidden;
+    }
+    0.01%,
+    25% {
+      visibility: visible;
+    }
+    25.01%,
+    100% {
+      visibility: hidden;
+    }
+  }
+  @keyframes pk-studio-picture-titles-5 {
+    0% {
+      visibility: hidden;
+    }
+    0.01%,
+    20% {
+      visibility: visible;
+    }
+    20.01%,
+    100% {
+      visibility: hidden;
+    }
+  }
+  .pk-studio[data-phone] .pk-studio-phone__thumb-screen .pk-affiliation-rotation__unit {
+    transition: none !important;
+  }
+  .pk-studio[data-phone]
+    .pk-studio-phone__thumb-screen
+    .pk-affiliation-rotation--rotate-2
+    .pk-affiliation-rotation__unit {
+    animation-name: pk-studio-picture-titles-2 !important;
+  }
+  .pk-studio[data-phone]
+    .pk-studio-phone__thumb-screen
+    .pk-affiliation-rotation--rotate-3
+    .pk-affiliation-rotation__unit {
+    animation-name: pk-studio-picture-titles-3 !important;
+  }
+  .pk-studio[data-phone]
+    .pk-studio-phone__thumb-screen
+    .pk-affiliation-rotation--rotate-4
+    .pk-affiliation-rotation__unit {
+    animation-name: pk-studio-picture-titles-4 !important;
+  }
+  .pk-studio[data-phone]
+    .pk-studio-phone__thumb-screen
+    .pk-affiliation-rotation--rotate-5
+    .pk-affiliation-rotation__unit {
+    animation-name: pk-studio-picture-titles-5 !important;
+  }
+  /* The output's scene under its picture, filling the height the Transition's buttons give the row. */
+  .pk-studio-phone__thumb-scene {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: 0;
+    gap: var(--pk-1);
+    padding: 2px var(--pk-1);
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-2xs);
+  }
+  /* Each output's tag and its scene's name sit under its picture; Preview's scenes open from the tools on the picture. */
+  .pk-studio-phone__thumb-scene .pk-studio-monitor__purpose {
+    font-size: inherit;
+    text-align: center;
+  }
+  /*
+   * The scenes, Clear and Full screen at the end of the picture's top edge. Three thumb-sized tools fit a
+   * picture on most phones; on a narrower one the last wraps under the others instead of leaving the picture.
+   */
   .pk-studio-phone__thumb-tools {
     position: absolute;
     z-index: 1;
     inset-block-start: 2px;
     inset-inline: 2px;
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-start;
+    justify-content: flex-end;
     gap: 2px;
     pointer-events: none;
   }
@@ -110,7 +293,7 @@
     pointer-events: auto;
   }
   .pk-studio-phone__thumb-tag {
-    margin-inline-end: auto;
+    flex: none;
     padding: 0 var(--pk-1);
     border-radius: var(--pk-radius-sm);
     background: var(--tally);
@@ -188,74 +371,17 @@
   .pk-studio-phone .pk-studio-monitor__tile > .pk-studio-monitor__screen {
     inline-size: 100%;
   }
-  .pk-studio-phone__tabs {
-    position: fixed;
-    z-index: 6;
-    inset-inline: 0;
-    /* On the visible bottom edge even when the browser leaves it offset (see visual-viewport-shift.ts). */
-    inset-block-end: var(--pk-viewport-shift-bottom, 0px);
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    padding-block-end: env(safe-area-inset-bottom, 0px);
-    border-block-start: 1px solid var(--pk-line);
-    background: var(--pk-surface);
-  }
-  /* Icon over a short label, as the portal's own tab bar draws its tabs. */
-  .pk-studio-phone__tabs > * {
-    display: flex;
-    min-inline-size: 0;
-  }
-  /* More is a menu's trigger; it wears the tabs' face, not the menu trigger's own. */
-  .pk-studio-phone__tabs .pk-menu__trigger.pk-studio-phone__tab {
-    block-size: 100%;
-    border-width: 3px 0 0;
-    border-style: solid;
-    border-color: transparent;
-    border-radius: 0;
-    background: none;
-    color: var(--pk-ink-muted);
-  }
-  .pk-studio-phone__tabs .pk-menu__trigger.pk-studio-phone__tab--current {
-    border-block-start-color: var(--pk-accent);
-    color: var(--pk-accent-ink);
-  }
-  .pk-studio-phone__tab {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 2px;
-    inline-size: 100%;
-    min-inline-size: 0;
-    min-block-size: 3.5rem;
-    padding: var(--pk-1) 2px;
-    border: 0;
-    border-block-start: 3px solid transparent;
-    background: none;
-    color: var(--pk-ink-muted);
-    font: inherit;
-    font-size: var(--pk-text-xs);
-    font-weight: 500;
-    line-height: 1.2;
-    overflow-wrap: anywhere;
-    cursor: pointer;
-  }
-  .pk-studio-phone__tab-icon {
-    flex: none;
-  }
-  .pk-studio-phone__tab:is([aria-current="page"], .pk-studio-phone__tab--current) {
-    border-block-start-color: var(--pk-accent);
-    color: var(--pk-accent-ink);
-    font-weight: 700;
-  }
-  /* The open tab's glyph is filled and heavier, so it is not told by color alone. */
-  .pk-studio-phone__tab:is([aria-current="page"], .pk-studio-phone__tab--current) .pk-studio-phone__tab-icon {
-    fill: currentColor;
-    fill-opacity: 0.22;
-    stroke-width: var(--pk-icon-stroke-strong);
-  }
-  .pk-studio-phone__tab:focus-visible {
-    outline: 2px solid var(--pk-focus);
-    outline-offset: -2px;
+}
+
+/*
+ * Touch sizing gives every button a thumb's size in the utilities layer; the phone's take buttons are the one
+ * exception, so they answer it there.
+ */
+@layer utilities {
+  @media (any-pointer: coarse) {
+    .pk-studio-phone__switcher .pk-studio-transition > .pk-btn.pk-studio-transition__take {
+      min-block-size: 2rem;
+      min-inline-size: 2rem;
+    }
   }
 }

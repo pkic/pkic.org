@@ -5,11 +5,15 @@ import {
   liveProgramSelectionSchema,
   type LiveProgramSelection,
 } from "../../shared/schemas/live-room-program";
-import { LIVE_OVERLAY_PROTOCOL_PREFIX, liveRoomRefusalFromClose } from "../../shared/schemas/live-session-room";
+import {
+  LIVE_OVERLAY_PROTOCOL_PREFIX,
+  liveRoomFaultFromClose,
+  liveRoomRefusalFromClose,
+} from "../../shared/schemas/live-session-room";
 import { getJson, postJson } from "../shared/api-client";
 import { liveRoomOpenFailure } from "./live-room-copy";
-import type { LiveSocketFactory } from "./useLiveRoom";
-import { persistentRetryDelay, type LivePersistence } from "./live-socket-retry";
+import type { LiveSocketFactory } from "./useLiveSocket";
+import { persistentRetryDelay, retryWhenBack, watchLiveSocket, type LivePersistence } from "./live-socket-retry";
 const socketFactory: LiveSocketFactory = (url, protocols) => new WebSocket(url, protocols);
 export function liveProgramPath(slug: string, roomId: string) {
   return `/api/v1/events/${encodeURIComponent(slug)}/agenda/rooms/${encodeURIComponent(roomId)}/live/program`;
@@ -43,7 +47,7 @@ export function useLiveRoomProgram({
   useEffect(() => {
     let stopped = false,
       retry: ReturnType<typeof setTimeout> | undefined,
-      ping: ReturnType<typeof setInterval> | undefined,
+      watch: ReturnType<typeof watchLiveSocket> | undefined,
       socket: WebSocket | null = null,
       attempts = 0;
     if (!keepsTrying) setSelection(null);
@@ -76,10 +80,15 @@ export function useLiveRoomProgram({
         // A refused handshake opens before it closes: a persistent feed only
         // starts over once the program answers.
         if (!keepsTrying) attempts = 0;
-        ping = setInterval(() => current.send("ping"), 25000);
+        watch = watchLiveSocket(current, () => {
+          // Silent too long: the network changed or the computer slept. Drop it and start over.
+          lost(current);
+          current.close(4000, "No answer");
+        });
       });
       current.addEventListener("message", (event) => {
         if (stopped || socket !== current) return;
+        watch?.heard();
         persistence.current?.onActivity?.();
         if (event.data === "pong") return;
         try {
@@ -108,24 +117,44 @@ export function useLiveRoomProgram({
         setError(new Error(liveRoomOpenFailure(null, "operator")));
       });
       current.addEventListener("close", (event) => {
-        clearInterval(ping);
-        if (stopped || socket !== current) return;
+        if (socket !== current) return;
+        watch?.stop();
+        socket = null;
+        if (stopped) return;
         setStatus("offline");
         const refused = liveRoomRefusalFromClose(event.code, event.reason);
         if (refused && keepsTrying) persistence.current?.onRefusal?.(refused);
         else if (refused) {
           setSelection(null);
           setError(new Error(liveRoomOpenFailure(refused, "operator")));
+          retry = undefined;
           return;
         }
+        const fault = liveRoomFaultFromClose(event.code, event.reason);
+        if (fault) setError(new Error(liveRoomOpenFailure(null, "operator", fault)));
         again();
       });
     }
+    /** A socket the watch gave up on: the next attempt starts as after a close. */
+    function lost(current: WebSocket) {
+      if (socket !== current) return;
+      watch?.stop();
+      socket = null;
+      setStatus("offline");
+      again();
+    }
     open();
+    const stopWaiting = retryWhenBack(() => {
+      // Waiting out a backoff while the network was away: try now.
+      if (stopped || socket || retry === undefined) return;
+      clearTimeout(retry);
+      open();
+    });
     return () => {
       stopped = true;
+      stopWaiting();
       clearTimeout(retry);
-      clearInterval(ping);
+      watch?.stop();
       socket?.close(1000, "Left the physical room program");
     };
   }, [slug, roomId, accessKey, keepsTrying]);

@@ -3,6 +3,7 @@ import { resolveOptionalGroupViewer } from "../../../_lib/auth/group-access";
 import type { AuthAdmin, AuthMember, DatabaseLike, Env } from "../../../_lib/types";
 import { AppError } from "../../../_lib/errors";
 import { getAuthenticatedGroupContext } from "../../../_lib/services/groups";
+import type { GroupContextOptions } from "../../../_lib/services/groups/read-model";
 import type { GroupResourceViewer } from "../../../_lib/services/resource-grants";
 
 export interface GroupResourceContext {
@@ -31,6 +32,7 @@ export async function requireGroupResourceContext(
   request: Request,
   env: Pick<Env, "ADMIN_API_KEY" | "INTERNAL_SIGNING_SECRET">,
   groupIdOrSlug: string,
+  options: GroupContextOptions = {},
 ): Promise<GroupResourceContext> {
   const resolved = await resolveOptionalGroupViewer(db, request, env);
   if (resolved.kind === "public") {
@@ -43,6 +45,7 @@ export async function requireGroupResourceContext(
       ...(resolved.staff ? { admin: resolved.staff } : {}),
     },
     groupIdOrSlug,
+    options,
   );
   return {
     group: context.group,

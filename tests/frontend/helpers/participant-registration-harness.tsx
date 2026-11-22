@@ -15,6 +15,10 @@ import {
 } from "./participant-registration-fixtures";
 
 import { emailDomainResponseSchema } from "../../../assets/shared/schemas/email-domains";
+import {
+  identityAffiliationPreviewResponseSchema,
+  identityAffiliationPreviewSchema,
+} from "../../../assets/shared/schemas/identity-affiliation";
 
 const mounted: HTMLElement[] = [];
 
@@ -26,6 +30,8 @@ export function installApi(
     identities?: SessionIdentity[];
     /** The account's address is on an organization domain. */
     workEmail?: boolean;
+    /** The person said at sign-in that the work address is personal, and no organization claims its domain. */
+    personalAddress?: boolean;
   } = {},
 ) {
   const requests: Array<{ method: string; path: string; search: string; body?: unknown }> = [];
@@ -47,6 +53,19 @@ export function installApi(
       if (method === "GET" && url.pathname.startsWith("/api/v1/email/domains/")) {
         const domain = decodeURIComponent(url.pathname.slice("/api/v1/email/domains/".length));
         return json(emailDomainResponseSchema.parse({ domain, kind: options.workEmail ? "work" : "free" }));
+      }
+      if (method === "POST" && url.pathname === "/api/v1/users/current/identities/preview") {
+        const preview = identityAffiliationPreviewSchema.parse(body);
+        return json(
+          identityAffiliationPreviewResponseSchema.parse({
+            email: preview.email,
+            domain: preview.email.split("@")[1],
+            domains: [],
+            organization: null,
+            organizations: [],
+            personalAddress: options.personalAddress ?? false,
+          }),
+        );
       }
       if (method === "GET" && url.pathname.endsWith("/forms/placements/event_registration")) {
         return json({ ...(options.forms ?? FORMS), eventDays: read.eventDays });

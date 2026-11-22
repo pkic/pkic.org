@@ -1,6 +1,6 @@
 /*
- * A broadcast graphic's theme: white or black type on a transparent, black or
- * white ground. Each themed graphic reads these four properties and nothing
+ * A broadcast graphic's theme: white type on the event's field, or white or
+ * black type on a transparent, black or white ground. Each themed graphic reads these four properties and nothing
  * else for its colors, so every graphic agrees on what a theme means. The
  * values are the fixed broadcast tokens, never the portal's light or dark
  * surfaces: an output looks the same in any operator's theme.
@@ -9,7 +9,12 @@
  * - `--graphic-ink-muted`: secondary type, still above 4.5:1 on its ground;
  * - `--graphic-ground`: the plate behind the graphic, or none;
  * - `--graphic-halo`: a soft shadow that keeps type legible over a moving
- *   picture, only on a transparent ground.
+ *   picture, only on a transparent ground;
+ * - `--graphic-plate`: the ground as a background, the event's field in the
+ *   event theme (a gradient, so SVG fills read `--graphic-ground` instead);
+ * - `--graphic-stripe`: a band along the graphic's foot, the event's stripe
+ *   in the event theme and none in the others;
+ * - `--graphic-radius`: the plate's corners, square like the event's boards.
  */
 @layer components {
   [data-graphic-theme] {
@@ -20,11 +25,24 @@
     --graphic-rule: color-mix(in srgb, var(--graphic-ink) 22%, transparent);
     --graphic-tint: color-mix(in srgb, var(--graphic-ink) 9%, transparent);
     --graphic-halo: none;
+    --graphic-plate: var(--graphic-ground);
+    --graphic-stripe: none;
+    --graphic-radius: var(--pk-radius-card);
+  }
+  [data-graphic-theme="event"] {
+    --graphic-ink: var(--pk-pqc-on-field);
+    --graphic-contrast: var(--pk-pqc-forest);
+    --graphic-ground: var(--pk-pqc-forest);
+    --graphic-ink-muted: var(--pk-pqc-on-field-muted);
+    --graphic-plate: var(--pk-pqc-light), var(--pk-pqc-field);
+    --graphic-stripe: var(--pk-pqc-stripe);
+    --graphic-radius: 0;
   }
   [data-graphic-theme="white-on-transparent"] {
     --graphic-ground: transparent;
     --graphic-ink-muted: color-mix(in srgb, var(--graphic-ink) 88%, var(--graphic-contrast));
-    --graphic-halo: 0 2px 3px color-mix(in srgb, var(--graphic-contrast) 85%, transparent),
+    --graphic-halo:
+      0 2px 3px color-mix(in srgb, var(--graphic-contrast) 85%, transparent),
       0 0 18px color-mix(in srgb, var(--graphic-contrast) 70%, transparent);
   }
   [data-graphic-theme="black-on-transparent"],
@@ -36,7 +54,8 @@
   [data-graphic-theme="black-on-transparent"] {
     --graphic-ground: transparent;
     --graphic-ink-muted: color-mix(in srgb, var(--graphic-ink) 88%, var(--graphic-contrast));
-    --graphic-halo: 0 1px 3px color-mix(in srgb, var(--graphic-contrast) 90%, transparent),
+    --graphic-halo:
+      0 1px 3px color-mix(in srgb, var(--graphic-contrast) 90%, transparent),
       0 0 18px color-mix(in srgb, var(--graphic-contrast) 75%, transparent);
   }
 }

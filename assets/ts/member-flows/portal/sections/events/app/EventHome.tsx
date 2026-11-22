@@ -23,6 +23,7 @@ import {
 import { viewerTimeZone } from "../../../../../../shared/timezone";
 import { formatNumber } from "../../../../../../shared/format-number";
 import { usePortalHashLocation } from "../../../hash-location";
+import { portalSession } from "../../../state";
 import { formatDateRange } from "../../../ui";
 import { eventParticipantRecordPath } from "../../../../../../shared/event-participant-paths";
 import { EventCard } from "./EventCard";
@@ -58,7 +59,7 @@ export function EventAppHero({ event }: { event: ParticipantEventDetail }) {
   const phase = eventPhase(event.startsAt, event.endsAt);
   const place = eventPlaceSummary(event);
   // An organizer opening the attendee app still needs the way to the workspace where the event is run.
-  const managementPath = eventManagementPath(event);
+  const managementPath = eventManagementPath(event, portalSession.value);
   const eventPage = event.basePath ? (
     <ButtonLink href={event.basePath} external>
       Event page

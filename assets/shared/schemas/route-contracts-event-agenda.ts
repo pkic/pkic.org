@@ -104,7 +104,7 @@ export const agendaImportRouteSchema = {
 
 export const agendaPeopleRouteSchema = {
   ...common,
-  ...requiresAnyPermissions(["agenda:write"], ["agenda:live_moderate"]),
+  ...requiresAnyPermissions(["agenda:write"], ["agenda:live_studio"]),
   summary: "Search event speakers and staff",
   request: { params: eventSlugParamsSchema, query: agendaPeopleQuerySchema },
   responses: { ...responses, ...ok("Event people", agendaPeopleListSchema) },
@@ -112,7 +112,7 @@ export const agendaPeopleRouteSchema = {
 
 export const agendaPeopleIdentitiesRouteSchema = {
   ...common,
-  ...requiresAnyPermissions(["agenda:write"], ["agenda:live_moderate"]),
+  ...requiresAnyPermissions(["agenda:write"], ["agenda:live_studio"]),
   summary: "Search the identities of the event's people, one result per identity",
   request: { params: eventSlugParamsSchema, query: liveSpeakerCandidatesQuerySchema },
   responses: { ...responses, ...ok("Event people's identities", liveSpeakerCandidatesResponseSchema) },

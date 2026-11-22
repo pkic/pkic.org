@@ -140,6 +140,7 @@ describe("portal event statistics", () => {
       "Calendar",
       "Promoters",
       "Session demand",
+      "Session popularity",
     ]);
     expect([...container.querySelectorAll("caption")].map((node) => node.textContent)).not.toContain(
       "Attendee invites by status",

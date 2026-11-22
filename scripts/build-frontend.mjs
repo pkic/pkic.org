@@ -117,6 +117,24 @@ const config = {
               test: /node_modules[\\/](pdf-lib|@pdf-lib|pako)[\\/]/,
               maxSize: 100 * 1024,
             },
+            // The on-screen graphics renderer draws the overlays, the screens and
+            // the studio's monitors and scene thumbnails; it changes far less
+            // often than the studio's controls, so it caches on its own.
+            {
+              name: "live-graphics",
+              includeDependenciesRecursively: false,
+              test: /assets[\\/]ts[\\/]live-session[\\/]/,
+            },
+            // The studio's own controls: the desk, its panels and the phone
+            // layout. They grow with every studio feature, so they split into
+            // bounded chunks rather than one that every addition pushes past
+            // the chunk budget.
+            {
+              name: "live-studio",
+              includeDependenciesRecursively: false,
+              test: /sections[\\/]events[\\/]detail[\\/]live[\\/]/,
+              maxSize: 100 * 1024,
+            },
             // Gallery specimens grow independently of the shared components they demonstrate.
             {
               name: "component-gallery",

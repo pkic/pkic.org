@@ -57,11 +57,12 @@ export async function updateManagedRegistration(
   }
   if (body.identityChange && (!input.identitySessionClaims || input.isAdminManageJwt))
     throw new AppError(403, "REGISTRATION_IDENTITY_UNAVAILABLE", "Sign in to change your own representation.");
-  if (body.identityChange)
-    await requireRegistrationIdentityChangeRepresentation(db, {
-      userId: current.user_id,
-      identityId: body.identityChange.identityId,
-    });
+  const personalAddressGuard = body.identityChange
+    ? await requireRegistrationIdentityChangeRepresentation(db, {
+        userId: current.user_id,
+        identityId: body.identityChange.identityId,
+      })
+    : null;
   const event = await getEventById(db, current.event_id);
   const validatedForm =
     body.customAnswers !== undefined
@@ -98,7 +99,7 @@ export async function updateManagedRegistration(
     action: body.action,
     identityChange:
       body.identityChange && input.identitySessionClaims
-        ? { change: body.identityChange, claims: input.identitySessionClaims }
+        ? { change: body.identityChange, claims: input.identitySessionClaims, personalAddressGuard }
         : undefined,
     dayAttendance: body.dayAttendance,
     claimDayWaitlistOffers: body.claimDayWaitlistOffers,

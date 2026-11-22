@@ -196,6 +196,25 @@ describe("persistent scanner preparation", () => {
     expect((await prepareScannerEpoch("synthetic-event", operator, device)).state).toBe("open");
     expect(mocks.put).not.toHaveBeenCalled();
   });
+  it.each([403, 429, 500])("keeps a freshly received sponsor lease through HTTP %s", async (httpStatus) => {
+    const sponsorId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const serverNow = new Date().toISOString();
+    mocks.epoch = {
+      ...mocks.epoch,
+      leadLease: {
+        eventId: operationId,
+        sponsorId,
+        serverNow,
+        expiresAt: new Date(Date.parse(serverNow) + 60_000).toISOString(),
+      },
+      leadLeaseReceivedAt: Date.now(),
+    };
+    mocks.get.mockRejectedValue(
+      new ApiClientError({ error: { code: "SERVER_REFUSAL", message: "Unavailable" } }, httpStatus),
+    );
+    expect((await prepareScannerEpoch("synthetic-event", operator, device, sponsorId)).state).toBe("open");
+    expect(mocks.put).not.toHaveBeenCalled();
+  });
   it("uses saved authorization only for connectivity errors", async () => {
     mocks.get.mockRejectedValue(new ApiClientError({ error: { code: "NETWORK_UNAVAILABLE", message: "Offline" } }, 0));
     expect((await prepareScannerEpoch("synthetic-event", operator, device)).state).toBe("open");

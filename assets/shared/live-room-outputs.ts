@@ -1,3 +1,11 @@
+import { LIVE_OVERLAY_DEFAULT_LAYOUT } from "./schemas/live-overlay-layout";
+import {
+  DEFAULT_LIVE_ROOM_OUTPUTS,
+  LIVE_SPEAKER_OUTPUT_KEY,
+  type LiveRoomOutput,
+  type LiveRoomOutputRole,
+} from "./schemas/live-room-output-setup";
+
 /**
  * The outputs a live room composes. Program (PGM) is the broadcast the room
  * puts on air; each auxiliary (AUX) output is a separate composition for a
@@ -5,15 +13,126 @@
  * room read the outputs, their names and their purpose from here.
  */
 
-/** Auxiliary outputs, in the order an operator meets them. */
-export const LIVE_AUX_OUTPUTS = ["projector", "stage-preview", "stage-display"] as const;
-export type LiveAuxOutput = (typeof LIVE_AUX_OUTPUTS)[number];
+/**
+ * The outputs every room holds a composition for, whether or not it lists
+ * them: the projector and the speaker's screen it always had, and the stage
+ * preview, the speaker screen's lineup. A screen can always show one.
+ */
+export const LIVE_AUX_OUTPUTS = ["projector", "stage-preview", LIVE_SPEAKER_OUTPUT_KEY] as const;
+/** One of the room's outputs besides Program, by its key: one it sets up, or one it always holds. */
+export type LiveAuxOutput = string;
+export const LIVE_STAGE_PREVIEW_OUTPUT = "stage-preview";
 
-export const LIVE_AUX_OUTPUT_DETAILS: Record<LiveAuxOutput, { label: string; short: string; purpose: string }> = {
+export const LIVE_AUX_OUTPUT_DETAILS: Record<(typeof LIVE_AUX_OUTPUTS)[number], LiveOutputDetails> = {
   projector: { label: "Projector", short: "PRJ", purpose: "Room screen" },
   "stage-preview": { label: "Stage preview", short: "SPV", purpose: "Speaker-facing" },
   "stage-display": { label: "Stage display", short: "DSP", purpose: "Speaker-facing" },
 };
+
+export type LiveOutputDetails = { label: string; short: string; purpose: string };
+
+/** The room's outputs as it set them up, or the ones it always had. */
+export function liveRoomOutputs(session: { roomOutputs?: readonly LiveRoomOutput[] } | null | undefined) {
+  return session?.roomOutputs ?? DEFAULT_LIVE_ROOM_OUTPUTS;
+}
+
+/** Each role as the room's settings and the studio say it: its name, and what a screen in it shows. */
+export const LIVE_ROOM_OUTPUT_ROLE_COPY: Record<LiveRoomOutputRole, { label: string; shows: string; hint: string }> = {
+  exact: {
+    label: "Exact",
+    shows: "Shows what you take to it",
+    hint: "Nothing from Program appears on it.",
+  },
+  follow: {
+    label: "Follow Program",
+    shows: "Shows what is on Program, in its own scene",
+    hint: "Its scene decides which graphics show, lower third and ticker included. A Transition to it shows Preview exactly; changes on Program still reach it.",
+  },
+  speaker: {
+    label: "Speaker",
+    shows: "Time, next question, messages",
+    hint: "For the speaker on stage. One per room.",
+  },
+};
+
+/** Where Program's scene comes from: whatever is taken to it from Preview. */
+export const LIVE_ROOM_OUTPUT_SCENE_TAKEN = "From Preview";
+/** The speaker's screen draws its own layout, not a scene. */
+export const LIVE_SPEAKER_SCENE = "Fixed";
+
+/** A screen's scene as its room set it up: "Always Break" for a locked one, "Starts in Default" otherwise. */
+export function liveOutputSceneLabel(
+  output: Pick<LiveRoomOutput, "role" | "scene" | "sceneLocked">,
+  scenes: ReadonlyArray<{ slug: string; name: string }>,
+): string {
+  if (output.role === "speaker") return LIVE_SPEAKER_SCENE;
+  const slug = output.scene ?? LIVE_OVERLAY_DEFAULT_LAYOUT;
+  const name = scenes.find((scene) => scene.slug === slug)?.name ?? slug;
+  return output.sceneLocked ? `Always ${name}` : `Starts in ${name}`;
+}
+
+/** The scene a locked screen always draws; null for a screen that draws the scene last taken to it. */
+export function liveOutputFixedScene(outputs: readonly LiveRoomOutput[], key: LiveAuxOutput): string | null {
+  const output = outputs.find((entry) => entry.key === key);
+  return output?.sceneLocked ? (output.scene ?? LIVE_OVERLAY_DEFAULT_LAYOUT) : null;
+}
+
+/** An output's name, code and purpose; an output the room no longer lists keeps its built-in name. */
+export function liveOutputDetails(outputs: readonly LiveRoomOutput[], key: LiveAuxOutput): LiveOutputDetails {
+  const output = outputs.find((entry) => entry.key === key);
+  if (output) return { label: output.name, short: output.code, purpose: LIVE_ROOM_OUTPUT_ROLE_COPY[output.role].shows };
+  return (
+    (LIVE_AUX_OUTPUT_DETAILS as Record<string, LiveOutputDetails>)[key] ?? {
+      label: key,
+      short: key.slice(0, 5).toUpperCase(),
+      purpose: "",
+    }
+  );
+}
+
+/** What an output shows; the stage preview, the speaker screen's own lineup, has no role of its own. */
+export function liveOutputRole(outputs: readonly LiveRoomOutput[], key: LiveAuxOutput): LiveRoomOutputRole | null {
+  if (key === LIVE_STAGE_PREVIEW_OUTPUT) return null;
+  const output = outputs.find((entry) => entry.key === key);
+  if (output) return output.role;
+  return key === LIVE_SPEAKER_OUTPUT_KEY ? "speaker" : "follow";
+}
+
+/**
+ * Where the studio's Transition puts Preview: Program, then each of the
+ * room's screens in order. Each one shows Preview exactly; a screen that
+ * follows Program keeps changing with Program afterwards. The speaker's
+ * screen is no target: it draws its own fixed layout, not a scene, and a
+ * graphic reaches it from its row's menu.
+ */
+export type LiveTakeTarget = "program" | LiveAuxOutput;
+export function liveTakeTargets(outputs: readonly LiveRoomOutput[]): LiveTakeTarget[] {
+  return ["program", ...outputs.filter((output) => output.role !== "speaker").map((output) => output.key)];
+}
+
+/** The outputs the studio sends graphics to: every one the room lists. */
+export function liveStudioOutputs(outputs: readonly LiveRoomOutput[]): LiveAuxOutput[] {
+  return outputs.map((output) => output.key);
+}
+
+/** How many tally tones the outputs take in turn, after Program and Preview. */
+/** The speaker's screen keeps the stage display's amber in every room. */
+const SPEAKER_TONE = 2;
+/** The tones the room's other outputs take in their order; the first is the projector's blue. */
+const OUTPUT_TONES = [1, 3, 4, 5, 6] as const;
+/**
+ * The tally tone an output takes, so each output in a room reads by color
+ * alone: the speaker's screen always amber, every other one by its place
+ * among the rest. The stage preview shares the speaker screen's.
+ */
+export function liveOutputTone(outputs: readonly LiveRoomOutput[], key: LiveAuxOutput): number | null {
+  const lookup = key === LIVE_STAGE_PREVIEW_OUTPUT ? LIVE_SPEAKER_OUTPUT_KEY : key;
+  const output = outputs.find((entry) => entry.key === lookup);
+  if (!output) return null;
+  if (output.role === "speaker") return SPEAKER_TONE;
+  const index = outputs.filter((entry) => entry.role !== "speaker").indexOf(output);
+  return OUTPUT_TONES[index % OUTPUT_TONES.length]!;
+}
 
 /** The broadcast the room puts on air, as the studio and the room's screens name it. */
 export const LIVE_PROGRAM_OUTPUT_DETAILS = { label: "Program", short: "PGM", purpose: "What is on air" } as const;

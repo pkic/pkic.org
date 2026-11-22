@@ -8,7 +8,7 @@
 
 import { render } from "preact";
 
-import { PreviewShell } from "./PreviewShell";
+import { PreviewShell, previewSectionsShown, type PreviewSection } from "./PreviewShell";
 import { badgeLabelDeskSection } from "./badge-label-desk";
 import { scannerPresentationSection, scannerDestinationsSection } from "./scanner-presentation";
 import { badgePrintingSection } from "./badge-printing";
@@ -19,14 +19,6 @@ import { densitySections } from "./sections-density";
 import { overlaySections } from "./sections-overlays";
 import { agendaPickerSections } from "./sections-agenda-picker";
 import { speakerProfileReviewSections } from "./sections-speaker-profile-review";
-import { eventScreenSections } from "./sections-event-screens";
-import { eventScreenStaffSections } from "./sections-event-screens-staff";
-import { eventScreenMonitorSections } from "./sections-event-screens-monitor";
-import { studioOnScreenSections } from "./sections-studio-on-screen";
-import { studioTimerSections } from "./sections-studio-timers";
-import { eventScreenBrowserSections } from "./sections-event-screens-browser";
-import { stageDisplaySections } from "./sections-stage-display";
-import { liveReactionsSections } from "./sections-live-reactions";
 
 async function main(): Promise<void> {
   const mount = document.getElementById("pk-preview");
@@ -43,6 +35,16 @@ async function main(): Promise<void> {
     import("./sections-event-tickets"),
     import("./sections-unfinished-registrations"),
   ]);
+  // If the live production chunk fails to load, the rest of the gallery still renders, with a note in its place.
+  const live = await import("./sections-live-production").catch(() => null);
+  const unloaded: PreviewSection[] = [
+    {
+      id: "live-production-unavailable",
+      title: "Live production sections",
+      note: "These sections did not load. Reload the page to try again.",
+      render: () => null,
+    },
+  ];
   const sections = [
     ...basicSections,
     ...dataSections,
@@ -59,18 +61,11 @@ async function main(): Promise<void> {
     badgeLabelDeskSection,
     scannerPresentationSection,
     scannerDestinationsSection,
-    ...eventScreenSections,
-    ...eventScreenStaffSections,
-    ...eventScreenMonitorSections,
-    ...studioOnScreenSections,
-    ...studioTimerSections,
-    ...eventScreenBrowserSections,
-    ...stageDisplaySections,
-    ...liveReactionsSections,
+    ...(live?.liveProductionSections ?? unloaded),
   ];
   // `?only=<id>` renders one section alone, for a tight screenshot of one control.
   const only = new URLSearchParams(window.location.search).get("only");
-  const shown = only ? sections.filter((section) => section.id === only) : sections;
+  const shown = previewSectionsShown(sections, only, live ? [] : unloaded);
   render(<PreviewShell sections={shown} />, mount);
 }
 

@@ -1,20 +1,34 @@
-import type { ComponentChildren } from "preact";
+import { Fragment, type ComponentChildren } from "preact";
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { ClockZone } from "../../../../../../../shared/event-clock";
 import { liveCompositionInput } from "../../../../../../../shared/live-room-preview";
+import {
+  liveRoomOutputs,
+  type LiveAuxOutput,
+  type LiveTakeTarget,
+} from "../../../../../../../shared/live-room-outputs";
+import { liveScreenTake } from "../../../../../../../shared/live-screen-sync";
 import type { AgendaSnapshot } from "../../../../../../../shared/schemas/event-agenda";
-import { EMPTY_LIVE_STAGE, type LiveRoomClientMessage } from "../../../../../../../shared/schemas/live-session-room";
-import { formatNumber } from "../../../../../../../shared/format-number";
+import {
+  EMPTY_LIVE_STAGE,
+  liveOutputComposition,
+  type LiveRoomClientMessage,
+} from "../../../../../../../shared/schemas/live-session-room";
+import type { LiveSyncedScreen } from "../../../../../../../shared/schemas/live-screen-sync";
 import { useBoundaryClock } from "../../../../../../hooks/useBoundaryClock";
 import { liveRoomOpenFailure } from "../../../../../../live-session/live-room-copy";
 import type { LiveRoomState } from "../../../../../../live-session/live-room-state";
-import { useLiveRoom, type LiveSocketFactory } from "../../../../../../live-session/useLiveRoom";
+import { useLiveRoom } from "../../../../../../live-session/useLiveRoom";
+import type { LiveSocketFactory } from "../../../../../../live-session/useLiveSocket";
 import { Spinner } from "../../../../../../components/Spinner";
 import { Alert } from "../../../../../../ui/Alert";
+import { ControlTooltips } from "../../../../../../ui/ControlTooltips";
 import { LiveChatPanel } from "./LiveChatPanel";
+import { LocationChatJoining } from "../../../../../../live-session/LocationChat";
+import { useLocationChat } from "../../../../../../live-session/useLocationChat";
 
 import { LivePollsCreateAction, LivePollsPanel } from "./LivePollsPanel";
-import { LiveQuestionsPanel, openLiveQuestions } from "./LiveQuestionsPanel";
+import { LivePreparedQuestionTimes, LiveQuestionsHeader, LiveQuestionsPanel } from "./LiveQuestionsPanel";
 import { LiveLowerThirdSettings } from "./LiveLowerThirdSettings";
 import { LiveAddPersonAction, LiveSpeakerCards } from "./LiveSpeakerCards";
 import type { LiveTargets } from "./live-output-targets";
@@ -22,12 +36,14 @@ import { createLivePresence, livePresenceFocusAt, LivePresenceContext } from "./
 import { LivePanelPresence } from "./presence/LivePresenceTag";
 import { GraphicsPanel, nextInRoom } from "./studio/GraphicsPanel";
 import { monitorPanelView } from "./studio/MonitorPanel";
+import { RoomOpeningMenu } from "./studio/RoomOpeningMenu";
 import { StudioScreensBody, StudioScreensConnection } from "./studio/ScreensPanel";
 import { SpeakerMessagePanel } from "./studio/SpeakerMessagePanel";
 import { stageDisplaySettingsMenu } from "./studio/stage-display-settings-menu";
 import { StudioGrid, type StudioPanelView } from "./studio/StudioGrid";
 import { StudioHeader, type StudioNoticeContent } from "./studio/StudioHeader";
 import { StudioToolbar } from "./studio/StudioToolbar";
+import { StudioTour } from "./studio/StudioTour";
 import { LiveAddTimerAction, TimePanel } from "./studio/TimePanel";
 import {
   STUDIO_PANEL_LABELS,
@@ -35,10 +51,11 @@ import {
   type StudioOutput,
   type StudioPanel,
 } from "./studio/studio-layout";
-import { StudioPhone, useStudioPhone } from "./studio/StudioPhone";
+import { StudioPhone, useStudioPhone, useStudioPhonePanels, useStudioPhoneView } from "./studio/StudioPhone";
 import { StudioPhoneHome } from "./studio/StudioPhoneHome";
 import { useStudioFullscreen } from "./studio/useStudioFullscreen";
 import { ProgramUndoToast, TransitionControl, useTakeShortcut } from "./studio/StudioSwitcher";
+import { liveSceneName } from "./live-layer-unseen";
 import { Dialog } from "../../../../../../ui/Dialog";
 import { useStudioLayout } from "./studio/useStudioLayout";
 import { useStudioScreens } from "./studio/useStudioScreens";
@@ -52,6 +69,8 @@ function changesBroadcast(message: LiveRoomClientMessage): boolean {
     message.type === "program.clear" ||
     message.type === "program.restore" ||
     message.type === "aux.set" ||
+    message.type === "aux.scene" ||
+    message.type === "screen.sync" ||
     message.type === "speaker.message"
   );
 }
@@ -79,7 +98,10 @@ export function LiveSessionDesk({
   clock,
   approvedAgenda,
   agendaNotice = null,
+  eventPath,
 }: {
+  /** The event's own page, which the phone studio links back to. */
+  eventPath?: string;
   /** How the session stands against the agenda, or why the desk could not act, for the session bar. */
   agendaNotice?: StudioNoticeContent | null;
   slug: string;
@@ -99,6 +121,8 @@ export function LiveSessionDesk({
   const sendPresence = useRef<(message: LiveRoomClientMessage) => boolean>(() => false);
   const presence = useMemo(() => createLivePresence((message) => sendPresence.current(message)), []);
   useEffect(() => () => presence.dispose(), [presence]);
+  // The location's chat for the day: it stays when the studio loads another session.
+  const chat = useLocationChat({ slug, roomId, createSocket });
   const room = useLiveRoom({ slug, occurrenceId, createSocket, onPresence: presence.receive });
   sendPresence.current = room.send;
   const otherProgram = Boolean(activeOccurrenceId && activeOccurrenceId !== occurrenceId);
@@ -111,16 +135,26 @@ export function LiveSessionDesk({
   const live = room.status === "live";
   const now = useBoundaryClock(useCallback((at: number) => at + 30000, []));
   const layout = useStudioLayout();
-  // The room's screens connect only while a Screens panel is open.
+  const phone = useStudioPhone();
+  const phonePanels = useStudioPhonePanels();
+  const [phoneView] = useStudioPhoneView();
+  // The room's screens connect only while a Screens panel is open: on the desk's grid, or as the phone's view.
   const roomScreens = useStudioScreens({
     slug,
     roomId,
-    enabled: layout.panels.some((panel) => panel.type === "screens"),
+    enabled: phone ? phoneView === "screens" : layout.panels.some((panel) => panel.type === "screens"),
   });
   const fullscreen = useStudioFullscreen();
+  const studio = useRef<HTMLDivElement>(null);
+  const [touring, setTouring] = useState(false);
   const [broadcasting, setBroadcasting] = useState(false);
   const [lowerThirdSettings, setLowerThirdSettings] = useState(false);
+  const [releaseTimes, setReleaseTimes] = useState(false);
+  // The output this operator's last take went to, for the spinner on its button.
+  const [takenTo, setTakenTo] = useState<LiveTakeTarget>("program");
   const runningBroadcast = useRef(false);
+  // The picture Program showed last, held while the session it shows is still on its way.
+  const lastProgram = useRef<LiveRoomState | null>(null);
   const state = room.state;
   // Where the others were is unknown after a reconnect; they appear again as they move.
   useEffect(() => {
@@ -130,7 +164,8 @@ export function LiveSessionDesk({
   /** Sends a command; the other operators briefly see who changed the control it came from. */
   const sendProgram = (message: LiveRoomClientMessage): boolean => {
     const sent = sendToRoom([message]);
-    if (sent && message.type !== "chat.send") presence.changed();
+    // Chatting and reading a question's answers change no control.
+    if (sent && message.type !== "chat.send" && message.type !== "question.answers.watch") presence.changed();
     return sent;
   };
   /** Sends commands in order; those that change what is on air go out as one broadcast, so none is refused. */
@@ -152,27 +187,55 @@ export function LiveSessionDesk({
     });
     return true;
   };
-  useTakeShortcut(() => sendProgram({ type: "preview.take" }), live && !broadcasting);
-  const phone = useStudioPhone();
+  /** Program takes Preview through the room's Take; a room screen takes the shot as Preview shows it. */
+  const take = (target: LiveTakeTarget = "program") => {
+    const current = room.state;
+    if (!current) return;
+    setTakenTo(target);
+    if (target === "program") return void sendProgram({ type: "preview.take" });
+    sendProgram(liveScreenTake(target, current.preview));
+  };
+  useTakeShortcut(() => take("program"), live && !broadcasting);
   if (!state)
     return room.admissionRefusal ? (
       <Alert tone="danger">{liveRoomOpenFailure(room.admissionRefusal, "operator")}</Alert>
     ) : room.status === "offline" ? (
-      <Alert tone="warn">{liveRoomOpenFailure(null, "operator")}</Alert>
+      <Alert tone={room.serverFault ? "danger" : "warn"}>
+        {liveRoomOpenFailure(null, "operator", room.serverFault)}
+      </Alert>
     ) : (
       <Spinner label="Joining the live room…" />
     );
-  const programActive = activeOccurrenceId === occurrenceId;
-  const disabled = !live || broadcasting;
+  // Moving to another session keeps the last one on screen, paused, until the next one's room answers.
+  const shownId = state.session.occurrenceId;
+  const switching = shownId !== occurrenceId;
+  const programActive = activeOccurrenceId === shownId;
+  const disabled = !live || broadcasting || switching;
   const targets: LiveTargets = { state, programActive, disabled, sendProgram, sendPrograms };
-  const take = () => sendProgram({ type: "preview.take" });
+  // Loaded or not, an operator decides here whether attendees take part in this session's virtual room.
+  const status = (
+    <>
+      {sessionStatus}
+      <RoomOpeningMenu opening={state.opening} disabled={!live || switching} send={sendProgram} />
+    </>
+  );
   const agenda = approvedAgenda ?? null;
   const preview = previewProjection(state);
-  const transition = <TransitionControl disabled={disabled} transitioning={broadcasting} onTransition={take} />;
+  const outputs = liveRoomOutputs(state.session);
+  const transition = (
+    <TransitionControl
+      outputs={outputs}
+      disabled={disabled}
+      transitioning={broadcasting ? takenTo : null}
+      screenSync={state.screenSync}
+      onTransition={take}
+    />
+  );
   const clearProgram = () => sendProgram({ type: "program.clear" });
   const empty = liveCompositionInput(EMPTY_LIVE_STAGE);
   const switcher = {
-    // Program's clear is the room's one undoable clear; Preview and the screens are set empty.
+    // Program's clear is the room's one undoable clear. Program and Preview go back to the Default scene, a blank
+    // frame; a room screen is set empty and keeps its scene.
     clear: (output: StudioOutput) =>
       output === "program"
         ? clearProgram()
@@ -180,12 +243,30 @@ export function LiveSessionDesk({
           ? sendProgram({ type: "preview.set", composition: empty })
           : output === "livestream"
             ? undefined
-            : sendProgram({ type: "aux.set", output, composition: empty }),
+            : sendProgram({
+                type: "aux.set",
+                output,
+                composition: { ...empty, scene: liveOutputComposition(state.outputs, output).scene },
+              }),
+    screenSync: state.screenSync,
+    sync: (output: LiveSyncedScreen, sync: boolean) => sendProgram({ type: "screen.sync", output, sync }),
+    previewScene: (scene: string) => sendProgram({ type: "preview.set", composition: { scene } }),
+    screenScene: (output: LiveAuxOutput, scene: string) => sendProgram({ type: "aux.scene", output, scene }),
     disabled,
   };
+  /** A room's state when it is of the session on air. */
+  const onAirState = (candidate: LiveRoomState | null) =>
+    candidate && candidate.session.occurrenceId === activeOccurrenceId ? candidate : null;
+  const program =
+    onAirState(state) ??
+    (otherProgram && onAir.status === "live" ? onAirState(onAir.state) : null) ??
+    (switching || onAir.status === "connecting" ? onAirState(lastProgram.current) : null);
+  lastProgram.current = program;
   const sources = {
     preview,
-    program: programActive ? state : otherProgram && onAir.status === "live" ? onAir.state : null,
+    program,
+    agenda,
+    connected: live,
     slug,
     roomId,
     startAt: state.session.startAt,
@@ -193,21 +274,27 @@ export function LiveSessionDesk({
   /** Each panel's view, with the other operators working in it named in its header. */
   const render = (panel: StudioPanel): StudioPanelView => {
     const view = renderPanel(panel);
+    // A panel's controls start afresh with each session's own room; the monitors keep their picture across the move.
+    const ofSession = (children: ComponentChildren) =>
+      panel.type === "monitor" ? children : <Fragment key={shownId}>{children}</Fragment>;
     return {
       ...view,
-      actions: (
+      body: ofSession(view.body),
+      actions: ofSession(
         <>
           <LivePanelPresence panel={panel.type} />
           {view.actions}
-        </>
+        </>,
       ),
     };
   };
+  // A panel's own choices go to the arrangement that holds it: the phone's panels, or the desk's saved grid.
+  const changePanels = phone ? phonePanels.change : layout.change;
   const renderPanel = (panel: StudioPanel): StudioPanelView => {
     const title = STUDIO_PANEL_LABELS[panel.type];
     switch (panel.type) {
       case "monitor":
-        return monitorPanelView(panel, sources, layout.change, switcher);
+        return monitorPanelView(panel, sources, changePanels, switcher);
       case "transition":
         // A small panel holding only the button; its name truncates in a narrow header, and the button can say it too.
         return {
@@ -216,14 +303,17 @@ export function LiveSessionDesk({
             {
               id: "label",
               label: panel.labeled ? "Hide label" : "Show label",
-              onSelect: () => layout.change((panels) => setStudioPanelLabeled(panels, panel.id, !panel.labeled)),
+              tooltip: "Whether each transition button says its output's full name or only its code.",
+              onSelect: () => changePanels((panels) => setStudioPanelLabeled(panels, panel.id, !panel.labeled)),
             },
           ],
           body: (
             <TransitionControl
+              outputs={outputs}
               disabled={disabled}
-              transitioning={broadcasting}
+              transitioning={broadcasting ? takenTo : null}
               labeled={panel.labeled}
+              screenSync={state.screenSync}
               onTransition={take}
             />
           ),
@@ -236,6 +326,7 @@ export function LiveSessionDesk({
             {
               id: "lower-third",
               label: "Lower third settings",
+              tooltip: "How lower thirds go on and off air: animated, or at once.",
               disabled,
               onSelect: () => setLowerThirdSettings(true),
             },
@@ -257,7 +348,7 @@ export function LiveSessionDesk({
               targets={targets}
               slug={slug}
               approvedAgenda={agenda}
-              occurrenceId={occurrenceId}
+              occurrenceId={shownId}
               roomId={roomId}
               now={now}
             />
@@ -266,21 +357,40 @@ export function LiveSessionDesk({
       case "questions":
         return {
           title,
-          actions: (
-            <span class="pk-studio-panel__meta">{formatNumber(openLiveQuestions(state.questions).length)} open</span>
+          actions: <LiveQuestionsHeader targets={targets} send={sendProgram} />,
+          menu: [
+            {
+              id: "release-times",
+              label: "Release times",
+              tooltip: "When each prepared question comes in.",
+              disabled,
+              onSelect: () => setReleaseTimes(true),
+            },
+          ],
+          body: (
+            <>
+              <LiveQuestionsPanel
+                targets={targets}
+                clock={clock ?? state.session.timeZone}
+                send={sendProgram}
+                answers={{ connected: live, result: room.answerResult }}
+              />
+              {releaseTimes ? (
+                <LivePreparedQuestionTimes
+                  targets={targets}
+                  clock={clock ?? state.session.timeZone}
+                  send={sendProgram}
+                  onClose={() => setReleaseTimes(false)}
+                />
+              ) : null}
+            </>
           ),
-          body: <LiveQuestionsPanel targets={targets} send={sendProgram} />,
         };
       case "time":
         return {
           title,
           actions: (
-            <LiveAddTimerAction
-              state={state}
-              clock={clock ?? state.session.timeZone}
-              send={sendProgram}
-              disabled={disabled}
-            />
+            <LiveAddTimerAction clock={clock ?? state.session.timeZone} send={sendProgram} disabled={disabled} />
           ),
           body: (
             <TimePanel
@@ -289,7 +399,7 @@ export function LiveSessionDesk({
               clock={clock ?? state.session.timeZone}
               send={sendProgram}
               disabled={disabled}
-              next={nextInRoom(agenda, occurrenceId, roomId, now)}
+              next={nextInRoom(agenda, shownId, roomId, now)}
             />
           ),
         };
@@ -306,7 +416,14 @@ export function LiveSessionDesk({
           body: <LivePollsPanel targets={targets} send={sendProgram} />,
         };
       case "chat":
-        return { title, body: <LiveChatPanel studio state={state} disabled={!live} send={sendProgram} /> };
+        return {
+          title,
+          body: chat.state ? (
+            <LiveChatPanel studio state={chat.state} disabled={chat.status !== "live"} send={chat.send} />
+          ) : (
+            <LocationChatJoining chat={chat} />
+          ),
+        };
       case "screens":
         return {
           title,
@@ -314,6 +431,8 @@ export function LiveSessionDesk({
             {
               id: "notify",
               label: "Notify me in this browser",
+              tooltip:
+                "A notification when a screen has a serious problem, and when it has recovered. Only while the studio is open.",
               checked: roomScreens.controller.notifications.enabled,
               multiple: true,
               disabled: !roomScreens.controller.notifications.supported,
@@ -326,15 +445,24 @@ export function LiveSessionDesk({
     }
   };
   // Room status lives in the session bar's one status line; nothing is inserted above the panels.
-  const notice: StudioNoticeContent | null = state.refusal
-    ? { tone: "danger", text: state.refusal.message }
-    : !live
-      ? { tone: "warn", text: "Reconnecting to the live room. Controls are paused until it is back." }
-      : agendaNotice;
+  const notice: StudioNoticeContent | null = switching
+    ? room.admissionRefusal
+      ? { tone: "danger", text: liveRoomOpenFailure(room.admissionRefusal, "operator") }
+      : room.status === "offline"
+        ? { tone: room.serverFault ? "danger" : "warn", text: liveRoomOpenFailure(null, "operator", room.serverFault) }
+        : { tone: "warn", text: "Opening the session. Controls are paused until it is ready." }
+    : state.refusal
+      ? { tone: "danger", text: state.refusal.message }
+      : !live
+        ? room.serverFault
+          ? { tone: "danger", text: liveRoomOpenFailure(null, "operator", room.serverFault) }
+          : { tone: "warn", text: "Reconnecting to the live room. Controls are paused until it is back." }
+        : agendaNotice;
   const reportFocus = (event: Event) => presence.focus(livePresenceFocusAt(event.target as Element | null));
   return (
     <LivePresenceContext.Provider value={presence}>
       <div
+        ref={studio}
         class="pk-studio"
         data-phone={phone ? "" : undefined}
         data-expanded={fullscreen.expanded ? "true" : undefined}
@@ -345,30 +473,23 @@ export function LiveSessionDesk({
           if (!event.relatedTarget) presence.focus(null);
         }}
       >
+        <ControlTooltips scope={studio} />
         {phone ? (
           <StudioPhone
             state={state}
             sources={sources}
             clock={clock ?? state.session.timeZone}
             active={programActive}
-            sessionStatus={sessionStatus}
+            sessionStatus={status}
             roomControl={roomControl}
             transition={transition}
-            clearDisabled={disabled}
+            disabled={disabled}
             onClear={switcher.clear}
+            onScene={switcher.previewScene}
             notice={notice}
-            home={<StudioPhoneHome targets={targets} send={sendProgram} />}
-            panel={(type) =>
-              render({
-                id: `phone-${type}`,
-                type,
-                x: 0,
-                y: 0,
-                w: 12,
-                h: 8,
-                ...(type === "monitor" ? { outputs: ["preview", "program"] as StudioOutput[] } : {}),
-              })
-            }
+            eventPath={eventPath}
+            home={<StudioPhoneHome key={shownId} targets={targets} send={sendProgram} />}
+            panel={(type) => render(phonePanels.panel(type))}
           />
         ) : null}
         <div class="pk-panel pk-studio__bar" hidden={phone}>
@@ -376,7 +497,7 @@ export function LiveSessionDesk({
             state={state}
             clock={clock ?? state.session.timeZone}
             roomControl={roomControl}
-            sessionStatus={sessionStatus}
+            sessionStatus={status}
             active={programActive}
             notice={notice}
           />
@@ -388,13 +509,17 @@ export function LiveSessionDesk({
             reset={layout.reset}
             expanded={fullscreen.expanded}
             toggleExpanded={fullscreen.toggle}
+            touring={touring}
+            toggleTour={() => setTouring(!touring)}
           />
         </div>
         {phone ? null : (
           <StudioGrid workspace={layout.workspace} panels={layout.panels} change={layout.change} render={render} />
         )}
+        {touring && !phone ? <StudioTour scope={studio} onClose={() => setTouring(false)} /> : null}
         <ProgramUndoToast
           undo={state.programUndo}
+          defaultScene={liveSceneName(state, null)}
           onUndo={(snapshotId) => sendProgram({ type: "program.restore", snapshotId })}
         />
         {fullscreen.confirmingExit ? (

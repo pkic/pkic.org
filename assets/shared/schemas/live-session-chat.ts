@@ -5,12 +5,12 @@ import { liveChangeSchema, livePersonNameSchema } from "./live-session-change";
 import { publicSessionPortraitUrlSchema } from "./event-session-history";
 import { liveAuthorFields } from "./live-session-author";
 import { LIVE_ROOM_POLICY } from "../live-session-policy";
+import { LIVE_CHAT_POLICY, LIVE_CHAT_REACTION_IDS } from "../live-chat-policy";
 import {
-  LIVE_CHAT_POLICY,
-  LIVE_CHAT_REACTION_IDS,
-  LIVE_CHAT_REPORT_REASON_IDS,
-  LIVE_CHAT_RESTRICTIONS,
-} from "../live-chat-policy";
+  liveModerationReasonSchema,
+  liveParticipationRestrictionSchema,
+  liveRemovalSchema,
+} from "./live-session-moderation";
 
 /**
  * The chat part of the live room protocol: messages with their reactions,
@@ -21,8 +21,6 @@ import {
 export const liveChatChannelSchema = z.enum(["attendee", "operator"]);
 export type LiveChatChannel = z.infer<typeof liveChatChannelSchema>;
 export const liveChatReactionSchema = z.enum(LIVE_CHAT_REACTION_IDS);
-export const liveChatReportReasonSchema = z.enum(LIVE_CHAT_REPORT_REASON_IDS);
-export const liveChatRestrictionSchema = z.enum(LIVE_CHAT_RESTRICTIONS);
 /** Reactions per emoji; an emoji nobody chose is absent. */
 export const liveChatReactionCountsSchema = z.partialRecord(liveChatReactionSchema, z.number().int().positive());
 const myReactionsSchema = z.array(liveChatReactionSchema).max(LIVE_CHAT_REACTION_IDS.length);
@@ -30,17 +28,21 @@ const myReactionsSchema = z.array(liveChatReactionSchema).max(LIVE_CHAT_REACTION
 /** Moderators only: what the room knows about a message beyond its words. */
 export const liveChatModerationSchema = z
   .object({
-    /** Who hid it and when; null while it is shown. */
+    /** Who removed it and when; null while it is shown. */
     hidden: liveChangeSchema.nullable(),
+    /** Cleared from the studio queue; attendees still see it. */
+    done: liveChangeSchema.nullable(),
     /** Hidden because enough people reported it, until a moderator reviews it. */
     held: z.boolean(),
     reports: z.number().int().nonnegative(),
-    reportReasons: z.partialRecord(liveChatReportReasonSchema, z.number().int().positive()),
+    reportReasons: z.partialRecord(liveModerationReasonSchema, z.number().int().positive()),
     /** The live question this message became. */
     questionId: databaseIdSchema.nullable(),
     /** The author operates this room. */
     authorStaff: z.boolean(),
-    authorRestriction: liveChatRestrictionSchema.nullable(),
+    authorRestriction: liveParticipationRestrictionSchema.nullable(),
+    /** What the author first sent, when they edited it since. */
+    originalText: z.string().max(LIVE_ROOM_POLICY.chatMaxLength).nullable().optional(),
   })
   .strict();
 export type LiveChatModeration = z.infer<typeof liveChatModerationSchema>;
@@ -50,6 +52,22 @@ export const liveChatTextSchema = z
   .trim()
   .min(1, "Write a message.")
   .max(LIVE_ROOM_POLICY.chatMaxLength, `Keep your message under ${LIVE_ROOM_POLICY.chatMaxLength} characters.`);
+
+/** The message a reply answers, as the room holds it now: its author and first words, or neither once removed. */
+export const liveChatReplyQuoteSchema = z
+  .object({
+    messageId: databaseIdSchema,
+    authorName: livePersonNameSchema.nullable(),
+    // Characters, so up to two code units each.
+    excerpt: z
+      .string()
+      .max(LIVE_CHAT_POLICY.replyExcerptLength * 2)
+      .nullable(),
+    /** The viewer wrote the message answered. */
+    mine: z.boolean(),
+  })
+  .strict();
+export type LiveChatReplyQuote = z.infer<typeof liveChatReplyQuoteSchema>;
 
 export const liveChatMessageSchema = z
   .object({
@@ -63,9 +81,18 @@ export const liveChatMessageSchema = z
     ...liveAuthorFields,
     mine: z.boolean(),
     sentAt: utcInstantSchema,
+    /** When its author last edited it. */
+    editedAt: utcInstantSchema.optional(),
+    /** The author only: reported, asked as a question or shown on screen, so it can no longer be edited. */
+    editLocked: z.boolean().optional(),
+    replyTo: liveChatReplyQuoteSchema.optional(),
+    /** In a location's chat, the session on there when it was sent; absent in a break. */
+    occurrenceId: databaseIdSchema.optional(),
     reactions: liveChatReactionCountsSchema.optional(),
     myReactions: myReactionsSchema.optional(),
     reportedByMe: z.boolean().optional(),
+    /** The author and moderators only: a moderator removed it, and why. */
+    removal: liveRemovalSchema.nullable().optional(),
     /** Absent or null for everyone but moderators. */
     moderation: liveChatModerationSchema.nullable().optional(),
   })
@@ -78,15 +105,27 @@ const messageRefSchema = { messageId: databaseIdSchema };
 
 /** The composer's contract: the socket message carries exactly these fields. */
 export const liveChatSendSchema = z
-  .object({ type: z.literal("chat.send"), text: liveChatTextSchema, channel: liveChatChannelSchema.optional() })
+  .object({
+    type: z.literal("chat.send"),
+    text: liveChatTextSchema,
+    channel: liveChatChannelSchema.optional(),
+    /** The message this one answers, in the same channel. */
+    replyTo: databaseIdSchema.optional(),
+  })
+  .strict();
+
+/** The author changes the words of their own message, within the edit window. */
+export const liveChatEditSchema = z
+  .object({ type: z.literal("chat.edit"), messageId: databaseIdSchema, text: liveChatTextSchema })
   .strict();
 
 export const liveChatReportSchema = z
-  .object({ type: z.literal("chat.report"), ...messageRefSchema, reason: liveChatReportReasonSchema })
+  .object({ type: z.literal("chat.report"), ...messageRefSchema, reason: liveModerationReasonSchema })
   .strict();
 
 export const liveChatClientMessageSchemas = [
   liveChatSendSchema,
+  liveChatEditSchema,
   /** Adds or withdraws this person's one reaction of a kind. */
   z
     .object({ type: z.literal("chat.react"), ...messageRefSchema, reaction: liveChatReactionSchema, on: z.boolean() })
@@ -94,18 +133,27 @@ export const liveChatClientMessageSchemas = [
   liveChatReportSchema,
   /** The author removes their own message for everyone. */
   z.object({ type: z.literal("chat.delete"), ...messageRefSchema }).strict(),
-  /** A moderator hides a message from attendees, or keeps it: shown again and its reports cleared. */
-  z.object({ type: z.literal("chat.moderate"), ...messageRefSchema, decision: z.enum(["hide", "keep"]) }).strict(),
-  /** An organizer mutes or bans a message's author for the session, or lifts it (null). */
+  /**
+   * A moderator removes a message from everyone, with a reason the author
+   * sees, or keeps it: shown again and its reports cleared.
+   */
   z
     .object({
-      type: z.literal("chat.restrict"),
+      type: z.literal("chat.moderate"),
       ...messageRefSchema,
-      restriction: liveChatRestrictionSchema.nullable(),
+      decision: z.enum(["remove", "keep"]),
+      reason: liveModerationReasonSchema.optional(),
     })
-    .strict(),
+    .strict()
+    .superRefine((value, context) => {
+      if (value.decision === "remove" && !value.reason)
+        context.addIssue({ code: "custom", path: ["reason"], message: "Choose why you remove this message." });
+    }),
   /** A moderator turns an attendee message into an approved live question by the same author. */
   z.object({ type: z.literal("chat.convert"), ...messageRefSchema }).strict(),
+  /** A moderator pins an attendee message above the chat, in place of the one pinned before. */
+  z.object({ type: z.literal("chat.pin"), ...messageRefSchema }).strict(),
+  z.object({ type: z.literal("chat.unpin") }).strict(),
   /** Asks for the page of messages before one; null asks for the latest page. */
   z
     .object({ type: z.literal("chat.history"), channel: liveChatChannelSchema, before: databaseIdSchema.nullable() })
@@ -130,6 +178,8 @@ export const liveChatServerMessageSchemas = [
       myReactions: myReactionsSchema.nullable(),
     })
     .strict(),
+  /** The message pinned above the chat as this viewer sees it, or none. */
+  z.object({ type: z.literal("chat.pinned"), message: liveChatMessageSchema.nullable() }).strict(),
   /** One earlier page for this viewer, oldest first. */
   z
     .object({
@@ -139,8 +189,6 @@ export const liveChatServerMessageSchemas = [
       hasEarlier: z.boolean(),
     })
     .strict(),
-  /** This viewer's own chat restriction changed. */
-  z.object({ type: z.literal("chat.access"), restriction: liveChatRestrictionSchema.nullable() }).strict(),
 ] as const;
 
 /** The chat a viewer receives on joining. */
@@ -151,6 +199,8 @@ export const liveChatSnapshotFields = {
     .default([]),
   /** Channels with messages before the ones sent. */
   chatEarlier: z.partialRecord(liveChatChannelSchema, z.boolean()).optional(),
+  /** The attendee message a moderator pinned above the chat. */
+  chatPinned: liveChatMessageSchema.nullable().optional(),
   /** Moderators only: reported messages awaiting review, newest first. */
   chatReports: z.array(liveChatMessageSchema).max(LIVE_CHAT_POLICY.reportQueueLimit).optional(),
 };

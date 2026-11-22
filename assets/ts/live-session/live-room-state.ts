@@ -1,13 +1,13 @@
 import type { liveQuestionAnswersSchema } from "../../shared/schemas/live-session-answer";
 import type { z } from "zod";
-import { applyLiveChatMessage } from "./live-chat-state";
 import type { LiveAuthorDetails } from "../../shared/schemas/live-session-author";
 import { compareLiveQuestions, type LiveQuestionOrder, type LiveReactionId } from "../../shared/live-session-policy";
 import { compareLivePolls, type LivePoll } from "../../shared/schemas/live-session-poll";
 import type { LiveQuestion, LiveRoomServerMessage, LiveRoomSnapshot } from "../../shared/schemas/live-session-room";
+import type { LiveChatAnswers } from "./live-chat-state";
 
 /** What a browser knows about a room: the last snapshot with every pushed change applied. */
-export interface LiveRoomState extends Omit<LiveRoomSnapshot, "type"> {
+export interface LiveRoomState extends Omit<LiveRoomSnapshot, "type">, LiveChatAnswers {
   /** Only the question the viewer currently expanded; replaced after each reconnect. */
   thread?: z.infer<typeof liveQuestionAnswersSchema> | null;
   /** The latest reaction burst, numbered so a view can replay it once. */
@@ -61,6 +61,14 @@ export function applyLiveRoomMessage(
     case "question.answer.result":
     case "question.accepted":
     case "question.updated":
+    case "location.chat.snapshot":
+    case "location.chat.access":
+    case "chat.message":
+    case "chat.removed":
+    case "chat.reactions":
+    case "chat.pinned":
+    case "chat.history":
+      // A session's chat is its location's, which speaks on a connection of its own.
       return state;
     case "question.changed":
       return {
@@ -100,16 +108,22 @@ export function applyLiveRoomMessage(
       return { ...state, stageDisplayNext: message.question, stageDisplayNextVotes: message.votes ?? null };
     case "stage.display.settings.changed":
       return { ...state, stageDisplaySettings: message.settings };
+    case "screen.sync.changed":
+      return { ...state, screenSync: message.screenSync };
+    case "room.opening.changed":
+      return { ...state, opening: message.opening };
+    case "room.moved.changed":
+      return { ...state, movedOn: message.movedOn };
+    case "sources.changed":
+      return { ...state, sources: message.sources };
     case "program.cleared":
       return { ...state, programUndo: { snapshotId: message.snapshotId, change: message.change } };
     case "credits.added.changed":
       return { ...state, addedCredits: message.addedCredits };
-    case "chat.message":
-    case "chat.removed":
-    case "chat.reactions":
-    case "chat.history":
-    case "chat.access":
-      return applyLiveChatMessage(state, message);
+    case "question.prepared.changed":
+      return { ...state, preparedQuestions: message.preparedQuestions, preparedQuestionWindow: message.window };
+    case "participation.access":
+      return { ...state, viewer: { ...state.viewer, participation: message.restriction } };
     case "overlay.mode.changed":
       return { ...state, overlayMode: message.mode };
     case "overlay.layouts.changed":

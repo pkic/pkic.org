@@ -85,8 +85,9 @@ async function readLayouts(db: DatabaseLike, eventId: string): Promise<LiveOverl
           updatedAt: null,
         };
   });
+  // A built-in scene the event saved before it was retired is left out with it; the event's own scenes stay.
   const own = saved
-    .filter((row) => !isLiveOverlayPreset(row.slug))
+    .filter((row) => !isLiveOverlayPreset(row.slug) && row.preset !== row.slug)
     .map((row): LiveOverlayLayout => ({
       slug: row.slug,
       name: row.name,
@@ -109,9 +110,10 @@ export async function readLiveOverlayLayoutGeometries(
   eventId: string,
 ): Promise<LiveOverlayLayoutGeometry[]> {
   const [layouts, positions] = await Promise.all([readLayouts(db, eventId), readLiveOverlayPositions(db, eventId)]);
-  return layouts.map(({ slug, name, elements }) => ({
+  return layouts.map(({ slug, name, preset, elements }) => ({
     slug,
     name,
+    preset,
     elements: resolveLiveOverlayElements(elements, positions.elements),
   }));
 }

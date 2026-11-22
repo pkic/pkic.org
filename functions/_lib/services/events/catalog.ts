@@ -1,5 +1,5 @@
 import { nowIso } from "../../utils/time";
-import { readEventAudienceAccess } from "./scanner-access";
+import { readEventAudienceAccess, type EventAudienceAccess } from "./scanner-access";
 import type { CountryCode } from "../../../../assets/shared/countries";
 import { fetchEventParticipation } from "./participation";
 import { eventPublicPagePath, eventRegistrationPath, resolveHeroImageUrl } from "../event-presentation";
@@ -45,16 +45,18 @@ export interface EventAudienceRow {
   country: CountryCode | null;
   links_json: string | null;
   base_path: string | null;
+  owner_group_id: string | null;
 }
 
 const EVENT_AUDIENCE_SELECT = `SELECT event.id, event.slug, event.name, event.timezone,
   event.starts_at, event.ends_at, event.profile_key, event.registration_mode,
-  event.visibility, event.settings_json, event.city, event.country, event.links_json, event.base_path`;
+  event.visibility, event.settings_json, event.city, event.country, event.links_json, event.base_path,
+  event.owner_group_id`;
 
 export function mapEventAudience(
   row: EventAudienceRow,
   viewer: EventViewerState | null,
-  access?: Pick<EventAudienceDetail, "scannerAccess" | "sponsorLeadAccess">,
+  access?: EventAudienceAccess,
 ): EventAudienceDetail {
   const settings = parseJsonSafe<Record<string, unknown>>(row.settings_json, {});
   return eventAudienceDetailSchema.parse({
@@ -79,6 +81,8 @@ export function mapEventAudience(
     sponsorLeadAccess: access?.sponsorLeadAccess ?? false,
     viewer,
     registrationPath: eventRegistrationPath(row),
+    // The event's team opens it in the owning group's workspace; nobody else learns the group from here.
+    ...(access?.team ? { ownerGroupId: row.owner_group_id } : {}),
   });
 }
 

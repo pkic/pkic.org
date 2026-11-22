@@ -103,6 +103,28 @@ describe("permission_grants (Permission grants)", () => {
     expect(rows[0].expires_at).toBe(expiresAt);
   });
 
+  it("creates each sponsor lead grant through the mounted route without exceeding D1 expression depth", async () => {
+    const sponsorId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO sponsorships(id,sponsor_type,event_id,non_member_name,pipeline_stage,created_at,updated_at)
+       VALUES(?,'event',?,'Synthetic sponsor','active',datetime('now'),datetime('now'))`,
+    )
+      .bind(sponsorId, eventAId)
+      .run();
+    for (const permission of ["agenda:leads_capture", "agenda:leads_view", "agenda:leads_export"] as const) {
+      const response = await call(adminToken, "/api/v1/permissions/grants", {
+        method: "POST",
+        body: JSON.stringify({
+          userId: staffUserId,
+          permissions: [permission],
+          contextType: "event_sponsor",
+          contextId: sponsorId,
+        }),
+      });
+      expect(response.status, await response.clone().text()).toBe(201);
+    }
+  });
+
   it("rejects API-key authentication because System access control requires a user-backed session", async () => {
     const response = await call(env.ADMIN_API_KEY ?? "test-admin-key", "/api/v1/permissions/grants", {
       method: "POST",

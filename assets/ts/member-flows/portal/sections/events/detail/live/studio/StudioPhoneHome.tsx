@@ -31,7 +31,7 @@ function MessageButton({
       data-speaker-tone={preset.tone}
       disabled={disabled}
       aria-pressed={onStage}
-      title="Tap to show on the stage display, tap again to clear. Hold to flash."
+      title={"Message to the speaker\nTap to show it on the stage display, tap again to clear. Hold to flash."}
       {...press.handlers}
       onClick={() => {
         if (press.tapped()) show(onStage ? null : preset.text, false);

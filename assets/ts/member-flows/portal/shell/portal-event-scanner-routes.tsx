@@ -2,16 +2,29 @@ import { Route } from "wouter";
 import { LazyEventWorkspace } from "./LazyEventWorkspace";
 export function portalEventScannerRoutes() {
   return (
-    <Route path="/events/:slug/sponsors/:sponsorId/scanner">
-      {(params: { slug: string; sponsorId: string }) => (
-        <LazyEventWorkspace
-          view="detail"
-          slug={params.slug}
-          tab="sponsors"
-          subTab={params.sponsorId}
-          detailSegment="scanner"
-        />
-      )}
-    </Route>
+    <>
+      <Route path="/events/:slug/leads/:sponsorId/:leadId">
+        {(params: { slug: string; sponsorId: string; leadId: string }) => (
+          <LazyEventWorkspace
+            view="detail"
+            slug={params.slug}
+            tab="leads"
+            subTab={params.sponsorId}
+            detailSegment={params.leadId}
+          />
+        )}
+      </Route>
+      <Route path="/events/:slug/sponsors/:sponsorId/scanner">
+        {(params: { slug: string; sponsorId: string }) => (
+          <LazyEventWorkspace
+            view="detail"
+            slug={params.slug}
+            tab="sponsors"
+            subTab={params.sponsorId}
+            detailSegment="scanner"
+          />
+        )}
+      </Route>
+    </>
   );
 }

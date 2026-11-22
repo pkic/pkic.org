@@ -10,6 +10,7 @@ export function useScannerFeedback({
   enabled,
   durationMs,
   collector,
+  holdEligible = false,
   currentOperation: lastOperation,
   committedOperation: lastCommittedOperation,
   authorityPaused,
@@ -17,6 +18,7 @@ export function useScannerFeedback({
   enabled: boolean;
   durationMs: number;
   collector: boolean;
+  holdEligible?: boolean;
   currentOperation: MutableRef<string | null>;
   committedOperation: MutableRef<string | null>;
   authorityPaused: MutableRef<boolean>;
@@ -37,25 +39,31 @@ export function useScannerFeedback({
     updateMessage(value);
   }
   const [failed, setFailed] = useState(false);
+  const [retryableFailure, setRetryableFailure] = useState(false);
   const [checking, setChecking] = useState<string | null>(null);
   function setResult(value: EventScanResponse | null) {
     setChecking(null);
     setFailed(false);
+    setRetryableFailure(false);
     updateResult(value);
     if (value) {
       lastDisplayedOperation.current = value.operationId;
       setLastResult(value);
     }
   }
-  function failure(value: string) {
+  function failure(value: string, retryable = false) {
     setFailed(true);
+    setRetryableFailure(retryable);
     setMessage(value);
   }
   const requiresAdvance = (value: EventScanResponse | null) =>
     Boolean(
-      value && (value.outcome !== "eligible" || (value.admissionRecorded && value.admissionDecision !== "allowed")),
+      value &&
+      (holdEligible ||
+        value.outcome !== "eligible" ||
+        (value.admissionRecorded && value.admissionDecision !== "allowed")),
     );
-  const needsAdvance = failed || requiresAdvance(result);
+  const needsAdvance = (failed && !retryableFailure) || requiresAdvance(result);
   const feedbackOperation = lastOperation.current;
   useScannerFeedbackReset(
     enabled,
@@ -71,7 +79,6 @@ export function useScannerFeedback({
   );
   function presentReceipt(receipt: EventScanResponse) {
     if (collector || authorityPaused.current) return;
-    setLastResult((last) => (last?.operationId === receipt.operationId ? receipt : last));
     if (!receiptMatchesOperation(receipt.operationId, lastOperation.current)) {
       // A late refusal still needs attention if the successful local result
       // cleared and no newer badge has taken its place.
@@ -82,6 +89,7 @@ export function useScannerFeedback({
       )
         return;
     }
+    setLastResult((last) => (last?.operationId === receipt.operationId ? receipt : last));
     lastCommittedOperation.current = receipt.operationId;
     setResult(receipt);
     if (messageOperation.current === receipt.operationId) setMessage("");
@@ -101,7 +109,11 @@ export function useScannerFeedback({
     saved: { scan: EventScanRequest; local?: LocalEligibility },
     verifyQueuedScan: (operationId: string) => Promise<boolean>,
   ) {
-    const local = saved.local ?? unverifiedSavedFeedback;
+    const local =
+      saved.local ??
+      (holdEligible
+        ? { ...unverifiedSavedFeedback, message: "The lead will be confirmed after upload." }
+        : unverifiedSavedFeedback);
     if (lastCommittedOperation.current === saved.scan.operationId)
       return receiptMatchesOperation(saved.scan.operationId, lastOperation.current);
     if (!receiptMatchesOperation(saved.scan.operationId, lastOperation.current)) return false;
@@ -112,7 +124,9 @@ export function useScannerFeedback({
           ? {
               outcome: "unverified",
               reason: "verification_required",
-              message: "Badge not found in saved badge data. Reconnect to verify.",
+              message: holdEligible
+                ? "Reconnect to confirm the lead."
+                : "Badge not found in saved badge data. Reconnect to verify.",
             }
           : local,
       );

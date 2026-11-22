@@ -8,7 +8,10 @@ import { LocationLiveStreamGet, LocationLiveStreamPut, VirtualRoomGet } from "./
 import { AgendaBreaksPost } from "./agenda/breaks";
 import { LiveProgramGet, LiveProgramPost } from "./agenda/live-program";
 import { LiveOverlayAccessPost } from "./agenda/live-overlays";
+import { LiveRoomOutputsGet, LiveRoomOutputsPut } from "./agenda/live-room-outputs";
 import { LivePollResultsGet } from "./agenda/live-poll-results";
+import { SessionPopularityReportGet } from "./agenda/session-popularity-report";
+import { LiveChatArchiveExportGet, LiveChatEraseDelete } from "./agenda/live-chat-archive";
 import { EventScreenPairingPost, EventScreensGet } from "./screens";
 import { AgendaSponsorChoicesGet } from "./agenda/sponsors";
 import { registerAgendaReadRoutes } from "./agenda/register-read-routes";
@@ -85,7 +88,15 @@ import {
   AgendaImport,
 } from "./agenda";
 import { SponsorLeadsExportGet } from "./lead-export";
-import { SponsorLeadSponsorsGet, SponsorLeadsGet, SponsorLeadCapturesGet } from "./lead-list";
+import {
+  SponsorLeadSponsorsGet,
+  SponsorLeadsGet,
+  SponsorLeadDetailGet,
+  SponsorLeadOwnCapturesDelete,
+  SponsorLeadDelete,
+  SponsorLeadCapturesGet,
+  SponsorLeadConfirmationGet,
+} from "./lead-list";
 import { EventAttendanceGet, EventSponsorLeadCreate, SessionAttendancePeopleGet } from "./attendance";
 import { registerAttendanceRoutes } from "./register-attendance-routes";
 import { AgendaScheduleReviewPost, AgendaScheduleApplyPost } from "./agenda/schedule";
@@ -170,6 +181,9 @@ openapi.post("/agenda/settings", AgendaSettingsPost);
 openapi.get("/agenda/occurrences/:occurrenceId/room-recommendations", SessionRoomRecommendationsGet);
 openapi.get("/agenda/reports/demand", SessionDemandReportGet);
 openapi.get("/agenda/reports/demand/exports", SessionDemandReportExportGet);
+openapi.get("/agenda/reports/popularity", SessionPopularityReportGet);
+openapi.get("/agenda/chat/exports", LiveChatArchiveExportGet);
+openapi.delete("/agenda/chat", LiveChatEraseDelete);
 openapi.post("/agenda/rooms", AgendaRoomCreate);
 openapi.post("/agenda/rooms/order", AgendaRoomsOrderPost);
 openapi.put("/agenda/rooms/:roomId", AgendaRoomUpdate);
@@ -237,6 +251,8 @@ openapi.get("/agenda/participation/program", PersonalAgendaProgramGet);
 openapi.get("/agenda/occurrences/:occurrenceId/virtual-room", SessionVirtualRoomGet);
 // The room's socket itself (GET …/live with Upgrade: websocket) is dispatched before this router; see live-session-socket.
 openapi.post("/agenda/rooms/:roomId/live/overlays", LiveOverlayAccessPost);
+openapi.get("/agenda/rooms/:roomId/live/outputs", LiveRoomOutputsGet);
+openapi.put("/agenda/rooms/:roomId/live/outputs", LiveRoomOutputsPut);
 openapi.get("/agenda/rooms/:roomId/live/program", LiveProgramGet);
 openapi.post("/agenda/rooms/:roomId/live/program", LiveProgramPost);
 openapi.get("/agenda/occurrences/:occurrenceId/live/polls", LivePollResultsGet);
@@ -256,6 +272,10 @@ openapi.delete("/push/devices/:deviceId", EventWebPushRevokeDelete);
 openapi.get("/sponsors/:sponsorId/leads.csv", SponsorLeadsExportGet);
 openapi.get("/sponsors/leads", SponsorLeadSponsorsGet);
 openapi.get("/sponsors/:sponsorId/leads", SponsorLeadsGet);
+openapi.get("/sponsors/:sponsorId/leads/:leadId", SponsorLeadDetailGet);
+openapi.delete("/sponsors/:sponsorId/leads/:leadId/captures", SponsorLeadOwnCapturesDelete);
+openapi.delete("/sponsors/:sponsorId/leads/:leadId", SponsorLeadDelete);
+openapi.get("/sponsors/:sponsorId/leads/confirmations/:operationId", SponsorLeadConfirmationGet);
 openapi.get("/sponsors/:sponsorId/leads/:leadId/captures", SponsorLeadCapturesGet);
 openapi.post("/sponsors/:sponsorId/leads", EventSponsorLeadCreate);
 openapi.route("/email", emailRouter);

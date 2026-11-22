@@ -1,16 +1,24 @@
 import { withoutLiveTimerGraphic } from "../../../../assets/shared/live-timer-policy";
 import {
-  LIVE_AUX_OUTPUTS,
+  liveRoomOutputs,
   type LiveAuxOutput,
   type LiveSpeakerMessageTone,
 } from "../../../../assets/shared/live-room-outputs";
+import {
+  liveScreenAfterProgramChange,
+  liveScreenCaughtUp,
+  liveScreenTakesProgramChanges,
+} from "../../../../assets/shared/live-screen-sync";
+import { LIVE_HELD_OUTPUTS_MAX } from "../../../../assets/shared/schemas/live-session-stage";
 import type {
   LiveAuxComposition,
   LiveRoomClientMessage,
   LiveRoomServerMessage,
   LiveRoomSession,
+  LiveStage,
 } from "../../../../assets/shared/schemas/live-session-room";
 import type { LiveStageDisplaySettingsPatch } from "../../../../assets/shared/schemas/live-stage-display-settings";
+import type { LiveSyncedScreen } from "../../../../assets/shared/schemas/live-screen-sync";
 import type { LiveControlOutcome } from "./room-controls";
 import { composeLiveStage, type ResolvedComposition } from "./room-composition";
 import type { LivePollStore } from "./room-poll-store";
@@ -37,6 +45,9 @@ export class LiveRoomOutputs {
     input: ResolvedComposition,
     at: string,
   ): LiveControlOutcome {
+    const held = this.store.auxOutputs();
+    if (!held.includes(output) && held.length >= LIVE_HELD_OUTPUTS_MAX)
+      return { code: "LIVE_OUTPUTS_FULL", message: "This room holds as many outputs as it can. Reload the studio." };
     const stage = composeLiveStage(this.store, this.polls, session, input, { operatorName: operator.name, at });
     if ("code" in stage) return stage;
     const previous = this.store.aux(output);
@@ -47,6 +58,23 @@ export class LiveRoomOutputs {
       messages: [{ type: "aux.changed", output, composition }],
       polls: [previous.poll?.id, input.pollId].filter((id): id is string => Boolean(id)),
     };
+  }
+
+  /**
+   * Puts on an output a composition the room made itself, such as the scene
+   * its room fixed for it. No operator acted, so nothing is recorded; an
+   * output that changed since `from` was read keeps what it holds.
+   */
+  adopt(
+    output: LiveAuxOutput,
+    from: LiveAuxComposition,
+    composition: LiveAuxComposition,
+  ): LiveRoomServerMessage | null {
+    const held = this.store.auxOutputs();
+    if (!held.includes(output) && held.length >= LIVE_HELD_OUTPUTS_MAX) return null;
+    if (JSON.stringify(this.store.aux(output)) !== JSON.stringify(from)) return null;
+    this.store.saveAux(output, composition);
+    return { type: "aux.changed", output, composition: this.store.aux(output) };
   }
 
   private setSpeakerMessage(
@@ -85,6 +113,60 @@ export class LiveRoomOutputs {
     return { messages: [{ type: "stage.display.settings.changed", settings }] };
   }
 
+  /**
+   * Whether one of the room's screens follows Program. A screen that starts
+   * following again first catches up: it shows every graphic as Program has
+   * it now, in its own scene.
+   */
+  setScreenSync(
+    operator: Operator,
+    session: LiveRoomSession,
+    output: LiveSyncedScreen,
+    sync: boolean,
+    at: string,
+  ): LiveControlOutcome {
+    const screenSync = { ...this.store.screenSync(), [output]: sync };
+    this.store.saveScreenSync(screenSync);
+    this.store.recordStaffAction(operator.userId, "live_session.screen_sync", { output, sync }, at);
+    const messages: LiveRoomServerMessage[] = [{ type: "screen.sync.changed", screenSync }];
+    if (sync && liveScreenTakesProgramChanges(screenSync, liveRoomOutputs(session), output)) {
+      const caughtUp = this.hold(output, liveScreenCaughtUp(this.store.aux(output), this.store.stage()));
+      if (caughtUp) messages.push(caughtUp);
+    }
+    return { messages };
+  }
+
+  /**
+   * Program changed: every screen that follows it takes the graphics that
+   * changed, and keeps the rest of what it holds, its scene included. A
+   * screen nobody composed yet takes all of Program, in the scene its room
+   * set up for it.
+   */
+  followProgram(session: LiveRoomSession, before: LiveStage, after: LiveStage): LiveRoomServerMessage[] {
+    const sync = this.store.screenSync();
+    const outputs = liveRoomOutputs(session);
+    const messages: LiveRoomServerMessage[] = [];
+    for (const { key, scene } of outputs) {
+      if (!liveScreenTakesProgramChanges(sync, outputs, key)) continue;
+      const own = this.store.aux(key);
+      const next = this.store.composed(key)
+        ? liveScreenAfterProgramChange(own, before, after)
+        : liveScreenCaughtUp({ ...own, scene }, after);
+      const message = next && this.hold(key, next);
+      if (message) messages.push(message);
+    }
+    return messages;
+  }
+
+  /** Saves what a screen holds once the room itself changed it; nothing when it holds that already. */
+  private hold(output: LiveAuxOutput, composition: LiveAuxComposition): LiveRoomServerMessage | null {
+    const held = this.store.auxOutputs();
+    if (!held.includes(output) && held.length >= LIVE_HELD_OUTPUTS_MAX) return null;
+    if (JSON.stringify(this.store.aux(output)) === JSON.stringify(composition)) return null;
+    this.store.saveAux(output, composition);
+    return { type: "aux.changed", output, composition: this.store.aux(output) };
+  }
+
   /** A rewritten question already on an auxiliary output or Preview shows its new text there too. */
   refreshQuestion(questionId: string): LiveRoomServerMessage[] {
     const row = this.store.question(questionId);
@@ -120,7 +202,7 @@ export class LiveRoomOutputs {
   /** Applies one change to every auxiliary output and to the shared Preview, which hold the same kind of composition. */
   private each(update: (composition: LiveAuxComposition) => LiveAuxComposition | null): LiveRoomServerMessage[] {
     const messages: LiveRoomServerMessage[] = [];
-    for (const output of LIVE_AUX_OUTPUTS) {
+    for (const output of this.store.auxOutputs()) {
       const next = update(this.store.aux(output));
       if (!next) continue;
       this.store.saveAux(output, next);

@@ -1,0 +1,7 @@
+@layer components {
+  /* Held on an output that does not show it: the exception, in words, before the row's summary. */
+  .pk-live-unseen {
+    color: var(--pk-warn-ink);
+    font-weight: 600;
+  }
+}

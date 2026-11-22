@@ -7,6 +7,8 @@ import type { z } from "zod";
 import type { eventDetailResponseSchema } from "../../../../../../shared/schemas/event-management";
 import { canSendPeerInvitations } from "../../../../../../shared/peer-invitation-policy";
 import { formatEventPlace } from "../../../../../../shared/event-place";
+import type { PortalSession } from "../../../types";
+import { canOpenGroupWorkspace } from "../event-destination";
 
 export type ParticipantEventDetail = z.infer<typeof eventDetailResponseSchema>["event"];
 
@@ -62,14 +64,13 @@ export function registrationOffer(event: ParticipantEventDetail, ended: boolean)
 }
 
 /**
- * Where an organizer manages this event, when the reader may: the group
- * workspace that owns it. The management projection is served only to a
- * reader the backend grants event capabilities, so its presence is the
- * permission; the audience projection never carries one.
+ * Where the event is run, when this session may open it: the owning group's workspace on this event, for the
+ * group's managers and for the event's team (see `canOpenGroupWorkspace`).
  */
-export function eventManagementPath(event: ParticipantEventDetail): string | null {
-  if (!("capabilities" in event) || event.capabilities.length === 0 || !event.ownerGroupId) return null;
-  return `/groups/${encodeURIComponent(event.ownerGroupId)}/events/${encodeURIComponent(event.id)}`;
+export function eventManagementPath(event: ParticipantEventDetail, session: PortalSession | null): string | null {
+  const ownerGroupId = "ownerGroupId" in event ? event.ownerGroupId : null;
+  if (!ownerGroupId || !canOpenGroupWorkspace(session, ownerGroupId, event.id)) return null;
+  return `/groups/${encodeURIComponent(ownerGroupId)}/events/${encodeURIComponent(event.id)}`;
 }
 
 /** The full venue address and the city and country for the venue details, without repeating a line. */

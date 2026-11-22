@@ -75,6 +75,8 @@ export interface ContractForm<Output> {
 
 interface Touch {
   hasValue: boolean;
+  /** A select picks from a fixed list, so a valid pick is not a result worth marking. */
+  fixedChoice: boolean;
 }
 
 type Control = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
@@ -174,7 +176,10 @@ export function useContractForm<Schema extends z.ZodType>(
       )
         return;
       const name = fieldKey.current(fieldOf ? fieldOf(control.name, control) : control.name);
-      setTouched((current) => ({ ...current, [name]: { hasValue: hasValue(control) } }));
+      setTouched((current) => ({
+        ...current,
+        [name]: { hasValue: hasValue(control), fixedChoice: control instanceof HTMLSelectElement },
+      }));
       // A field being retyped is no longer the field the server refused.
       setRefused((current) => {
         if (!(name in current)) return current;
@@ -194,7 +199,7 @@ export function useContractForm<Schema extends z.ZodType>(
     const seen = !quiet && (showAll || (!deferUntilSubmit.some((path) => keyOf(path) === name) && name in touched));
     const message = refused[name] ?? (seen ? issues[name] : undefined);
     if (message) return { state: "invalid", message };
-    return seen && touched[name]?.hasValue ? { state: "ok" } : {};
+    return seen && touched[name]?.hasValue && !touched[name].fixedChoice ? { state: "ok" } : {};
   };
 
   const submit = () => {

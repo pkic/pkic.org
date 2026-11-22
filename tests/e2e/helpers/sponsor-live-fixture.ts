@@ -115,7 +115,7 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
       sponsorType: "event",
       eventId: event.id,
       tier: "Leader",
-      nonMemberName: `Synthetic lead sponsor ${stamp}`,
+      nonMemberName: `Synthetic sponsor ${stamp.slice(0, 8)}`,
       contactName: "Sponsor fixture contact",
       contactEmail: `lead-sponsor-${stamp}@example.test`,
       renewalDate: "2027-12-31",
@@ -175,7 +175,18 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
   }
 }
 
-async function openManualBadgeEntry(page: Page) {
+async function openManualBadgeEntry(page: Page, sponsor = false) {
+  const acknowledgement = page.getByRole("checkbox", {
+    name: "I will ask each person for permission to collect their contact information before scanning their badge.",
+    exact: true,
+  });
+  const continuous = page.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
+  if (sponsor)
+    await expect.poll(async () => (await acknowledgement.isVisible()) || (await continuous.isVisible())).toBe(true);
+  if (await acknowledgement.isVisible()) {
+    await acknowledgement.check();
+    await page.getByRole("button", { name: "Start scanning", exact: true }).click();
+  }
   await openScannerManualEntry(page);
 }
 
@@ -190,16 +201,17 @@ async function expectDoorScannerReady(page: Page) {
   await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeEnabled();
 }
 
-export async function captureSponsorBadge(page: Page, badgeId: string, sponsorId: string, operatorUserId: string) {
-  await openManualBadgeEntry(page);
-  const manual = page.getByRole("dialog", { name: "Review sponsor lead", exact: true });
+export async function captureSponsorBadge(
+  page: Page,
+  badgeId: string,
+  sponsorId: string,
+  operatorUserId: string,
+  onResult?: () => Promise<void>,
+) {
+  await openManualBadgeEntry(page, true);
+  const scanner = page.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
+  const manual = scanner.locator(".pk-fast-scanner__manual");
   await manual.getByLabel("Badge code", { exact: true }).fill(badgeId);
-  await page
-    .getByRole("checkbox", {
-      name: "The attendee agrees to share their contact details with this sponsor.",
-      exact: true,
-    })
-    .check();
   const receiving = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === `${eventApi}/scans` &&
@@ -228,16 +240,21 @@ export async function captureSponsorBadge(page: Page, badgeId: string, sponsorId
     .poll(async () => (await scannerStorage(page)).history.some((row) => row.scan.operationId === request.operationId))
     .toBe(true);
   await expect(manual).not.toBeVisible();
-  await openManualBadgeEntry(page);
+  const next = scanner.getByRole("button", { name: "Next badge", exact: true });
+  await expect(next).toBeVisible();
+  if (receipt.outcome === "eligible")
+    await expect(scanner.locator(".pk-fast-scanner__label")).toHaveText("Lead captured");
+  await onResult?.();
+  await next.click();
+  await openManualBadgeEntry(page, true);
   await expect(manual.getByLabel("Badge code", { exact: true })).toHaveValue("");
   await expect(manual.getByLabel("Badge code", { exact: true })).not.toHaveAttribute("aria-invalid", "true");
   await expect(
-    manual.getByRole("checkbox", {
-      name: "The attendee agrees to share their contact details with this sponsor.",
-      exact: true,
+    page.getByRole("checkbox", {
+      name: "I will ask each person for permission to collect their contact information before scanning their badge.",
     }),
-  ).not.toBeChecked();
-  await manual.getByRole("button", { name: "Cancel", exact: true }).click();
+  ).toHaveCount(0);
+  await manual.getByRole("button", { name: "Return to scanning", exact: true }).click();
   await expect(manual).not.toBeVisible();
   return { request, receipt };
 }
@@ -251,14 +268,6 @@ export async function captureOfflineSponsorBadge(
   forbidden: readonly string[],
   readConsole: ReturnType<typeof captureDeviceConsole>,
 ) {
-  const diagnostics = await openScannerDiagnostics(page);
-  await expect(
-    diagnostics.getByText("Scanner session: open. Offline preparation uses the last saved authorization.", {
-      exact: true,
-    }),
-  ).toBeVisible();
-  await closeScannerDiagnostics(page);
-  await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeEnabled();
   expect((await scannerStorage(page)).pending).toHaveLength(0);
   const offlineReceipts: number[] = [];
   const observeReceipt = (response: import("@playwright/test").Response) => {
@@ -275,23 +284,17 @@ export async function captureOfflineSponsorBadge(
   let pendingPrivacy: Awaited<ReturnType<typeof expectNoStoredSponsorContacts>> | undefined;
   try {
     await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
-    await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeEnabled();
-    await openManualBadgeEntry(page);
+    await expect(page.getByRole("dialog", { name: "Continuous badge scanner", exact: true })).toBeVisible();
+    await openManualBadgeEntry(page, true);
     await page.getByLabel("Badge code", { exact: true }).fill(badgeId);
-    await page
-      .getByRole("checkbox", {
-        name: "The attendee agrees to share their contact details with this sponsor.",
-        exact: true,
-      })
-      .check();
-    const manual = page.getByRole("dialog", { name: "Review sponsor lead", exact: true });
+    const manual = page
+      .getByRole("dialog", { name: "Continuous badge scanner", exact: true })
+      .locator(".pk-fast-scanner__manual");
     const capture = manual.getByRole("button", { name: "Confirm lead", exact: true });
     expect(
       await capture.evaluate((button) => {
         const form = (button as HTMLButtonElement).form;
-        return Boolean(
-          form?.noValidate && form.querySelector('[name="badgeId"]') && form.querySelector('[name="consentConfirmed"]'),
-        );
+        return Boolean(form?.noValidate && form.querySelector('[name="badgeId"]'));
       }),
     ).toBe(true);
     await capture.click();
@@ -326,7 +329,6 @@ export async function captureOfflineSponsorBadge(
   }
   if (!pendingLead || !pendingPrivacy) throw new Error("The inspected offline lead must survive to reconciliation");
   const request = pendingLead;
-  await page.getByRole("button", { name: "Sync now", exact: true }).click();
   await expect.poll(async () => (await scannerStorage(page)).pending.length).toBe(0);
   const archived = (await scannerStorage(page)).history.find((row) => row.scan.operationId === request.operationId);
   expect(archived?.scan).toEqual(request);
@@ -342,6 +344,18 @@ export async function captureOfflineSponsorBadge(
 }
 
 export async function captureSponsorViews(page: Page, info: TestInfo, checkpoint: string) {
+  const scanner = page.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
+  if (await scanner.isVisible()) {
+    const width = page.viewportSize()?.width;
+    if (width)
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await page.screenshot({
+      fullPage: true,
+      animations: "disabled",
+      path: info.outputPath(`sponsor-${checkpoint}-scanner-phone.png`),
+    });
+    return;
+  }
   for (const [name, width, height] of [
     ["desktop", 1280, 900],
     ["phone", 390, 844],
@@ -364,6 +378,12 @@ export async function captureSponsorViews(page: Page, info: TestInfo, checkpoint
       animations: "disabled",
       path: info.outputPath(`sponsor-${checkpoint}-${name}.png`),
     });
+    const scannerPanel = page
+      .locator(".pk-panel")
+      .filter({ has: page.getByRole("button", { name: /^(Next|Start scanning)$/ }) })
+      .last();
+    if (await scannerPanel.count())
+      await scannerPanel.screenshot({ path: info.outputPath(`sponsor-${checkpoint}-${name}-scanner.png`) });
   }
 }
 

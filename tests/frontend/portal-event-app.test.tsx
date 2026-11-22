@@ -1,4 +1,3 @@
-import { eventPlaceSummary } from "../../assets/shared/event-place";
 // @vitest-environment jsdom
 import { render, type JSX } from "preact";
 import { act } from "preact/test-utils";
@@ -11,18 +10,13 @@ import { badgeFaceBadge, badgeFacePrinting } from "./helpers/badge-face-fixture"
 import { ParticipantEvent } from "../../assets/ts/member-flows/portal/sections/events/ParticipantEvent";
 import { PortalNavigationShell } from "../../assets/ts/member-flows/portal/shell/PortalNavigationShell";
 import { portalAppTabForLocation, portalAppTabs } from "../../assets/ts/member-flows/portal/shell/portal-app-tabs";
-import { pickEventNow } from "../../assets/ts/member-flows/portal/sections/events/app/useEventNow";
-import { eventPhase } from "../../assets/ts/member-flows/portal/sections/events/app/event-timing";
 import { formatDateTimeInZone } from "../../assets/shared/format-date";
-import {
-  eventVenueLines,
-  type ParticipantEventDetail,
-} from "../../assets/ts/member-flows/portal/sections/events/app/event-app-model";
 import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import { PERSONAL_ADDRESS_FOLLOW_UP_COPY } from "../../assets/shared/email-first-copy";
 import { portalSessionFixture } from "../helpers/portal-session";
 import {
   participantEventFixture,
+  participantAgendaSession,
   participantEventId,
   participantRegistrationId,
   registeredParticipant,
@@ -35,6 +29,20 @@ vi.mock("wouter", () => ({
     </a>
   ),
 }));
+/** The virtual room as the event app holds it: each time it mounts, and whether the attendee is away. */
+const roomStub = vi.hoisted(() => ({ mounts: 0, away: null as boolean | null }));
+vi.mock("../../assets/ts/member-flows/portal/sections/events/app/virtual-room/VirtualRoom", async () => {
+  const { useEffect } = await import("preact/hooks");
+  return {
+    VirtualRoom: ({ away = false }: { away?: boolean }) => {
+      useEffect(() => {
+        roomStub.mounts += 1;
+      }, []);
+      roomStub.away = away;
+      return <p>Room stub</p>;
+    },
+  };
+});
 const currentLocation = { value: "/home" };
 const navigateHash = vi.fn();
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => [currentLocation.value, navigateHash] }));
@@ -49,21 +57,6 @@ let requests: string[];
 const event = participantEventFixture;
 
 const registered = registeredParticipant;
-
-function agendaSession(id: string, title: string, startAt: string, endAt: string, status: string | null) {
-  return {
-    id,
-    publishedRevision: 1,
-    title,
-    timeZone: "Europe/Amsterdam",
-    startAt,
-    endAt,
-    rooms: [{ id: sessionIds[0], name: "Blue hall" }],
-    admissionPolicy: "optional_reservation",
-    status,
-    attendanceMode: null,
-  };
-}
 
 function json(value: unknown): Response {
   return new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
@@ -86,14 +79,14 @@ beforeEach(() => {
         return json(
           personalAgendaResponseSchema.parse({
             sessions: [
-              agendaSession(
+              participantAgendaSession(
                 sessionIds[0]!,
                 "Opening keynote",
                 "2026-12-01T09:30:00.000Z",
                 "2026-12-01T10:30:00.000Z",
                 null,
               ),
-              agendaSession(
+              participantAgendaSession(
                 sessionIds[1]!,
                 "Migration panel",
                 "2026-12-01T13:00:00.000Z",
@@ -208,15 +201,16 @@ describe("portal-wide bottom tabs", () => {
 describe("event bottom tabs", () => {
   it("shows an attendee's tabs, opens More as a sheet, and files pages without a tab under More", async () => {
     await act(() => render(<ParticipantEvent event={event(registered)} tab="more" />, host));
-    expect(tabLabels("Event app")).toEqual(["Home", "Agenda", "My agenda", "Ticket", "More"]);
+    expect(tabLabels("Event app")).toEqual(["Home", "My agenda", "Virtual room", "Ticket", "More"]);
     const bar = host.querySelector('nav[aria-label="Event app"]')!;
     // More opens the sheet; on a page without a tab it is the current one.
     const more = bar.querySelector<HTMLButtonElement>('button[data-app-tab="more"]')!;
     expect(more.getAttribute("aria-current")).toBe("page");
     expect(more.getAttribute("aria-haspopup")).toBe("dialog");
-    // Agenda stays in the app: the whole program, and the same view pre-filtered to the reader's sessions.
-    expect(bar.querySelector('[data-app-tab="program"]')?.getAttribute("href")).toBe("#/events/summit/agenda");
+    // My agenda is the agenda pre-filtered to the reader's sessions; the whole program is under More.
     expect(bar.querySelector('[data-app-tab="agenda"]')?.getAttribute("href")).toBe("#/events/summit/agenda?mine=1");
+    expect(bar.querySelector('[data-app-tab="virtual"]')?.getAttribute("href")).toBe("#/events/summit/virtual");
+    expect(host.querySelector('[data-event-more="program"]')?.getAttribute("href")).toBe("#/events/summit/agenda");
     expect(bar.querySelector('[data-app-tab="ticket"]')?.getAttribute("href")).toBe("#/events/summit/ticket");
     // Each tab has a decorative glyph over its label; the label stays the accessible name.
     for (const tab of bar.querySelectorAll("a, button"))
@@ -494,9 +488,37 @@ describe("event home", () => {
   });
 });
 
+describe("event app virtual room", () => {
+  it("keeps the room connected for ten minutes while the attendee looks at another page of the event", async () => {
+    roomStub.mounts = 0;
+    const shown = (tab: string) => act(() => render(<ParticipantEvent event={event(registered)} tab={tab} />, host));
+    const room = () => host.querySelector<HTMLElement>(".pk-participant-event__room");
+    await shown("virtual");
+    await vi.waitFor(() => expect(host.textContent).toContain("Room stub"));
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    await shown("more");
+    expect(room()?.hidden).toBe(true);
+    expect(roomStub).toEqual({ mounts: 1, away: true });
+    await shown("virtual");
+    expect(room()?.hidden).toBe(false);
+    expect(roomStub).toEqual({ mounts: 1, away: false });
+    await shown("more");
+    await act(() => {
+      vi.advanceTimersByTime(10 * 60_000 - 1);
+    });
+    expect(room()).not.toBeNull();
+    await act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(room()).toBeNull();
+    vi.useRealTimers();
+  });
+});
+
 describe("event app agenda and pages", () => {
   it.each([
-    ["/events/summit/agenda", "Agenda", "program"],
+    // My agenda's tab owns the whole agenda too: it is the same view with the filter off.
+    ["/events/summit/agenda", "Agenda", "agenda"],
     ["/events/summit/agenda?mine=1", "My agenda", "agenda"],
   ])("opens %s as the %s tab under the persistent event hero", async (location, title, tab) => {
     currentLocation.value = location;
@@ -558,42 +580,5 @@ describe("event app agenda and pages", () => {
       render(<ParticipantEvent event={event({ proposalCall: { open: false, path: null, closesAt: null } })} />, host),
     );
     expect(host.textContent).not.toContain("Submit a proposal");
-  });
-
-  it("names the venue and city once and keeps the full address for the venue details", () => {
-    const managed = {
-      ...event(),
-      venue: "Meervaart, Meer en Vaart 300, 1068 LE, Amsterdam, Netherlands",
-      city: "Amsterdam",
-      country: "NL",
-    } as ParticipantEventDetail;
-    expect(eventPlaceSummary(managed)).toBe("Meervaart · Amsterdam");
-    expect(eventVenueLines(managed)).toEqual(["Meervaart, Meer en Vaart 300, 1068 LE, Amsterdam, Netherlands"]);
-    expect(eventVenueLines({ ...managed, city: "Amstelveen" })).toEqual([
-      "Meervaart, Meer en Vaart 300, 1068 LE, Amsterdam, Netherlands",
-      "Amstelveen, Netherlands",
-    ]);
-    expect(eventPlaceSummary({ ...event(), city: "Amsterdam" })).toBe("Amsterdam");
-  });
-});
-
-describe("event timing", () => {
-  it("names the event's phase relative to now", () => {
-    expect(eventPhase(null, null).kind).toBe("unscheduled");
-    expect(eventPhase("2026-12-01T08:00:00.000Z", "2026-12-03T17:00:00.000Z", NOW).label).toBe("Live now");
-    expect(eventPhase("2026-11-01T08:00:00.000Z", "2026-11-02T17:00:00.000Z", NOW).label).toBe("Ended");
-    expect(eventPhase(new Date(Date.now() + 3 * 86_400_000).toISOString(), null).label).toBe("Starts in 3 days");
-  });
-
-  it("picks the reader's next unfinished session, not one that has ended", () => {
-    const sessions = personalAgendaResponseSchema.parse({
-      sessions: [
-        agendaSession(sessionIds[0]!, "Done", "2026-12-01T08:00:00.000Z", "2026-12-01T09:00:00.000Z", "reserved"),
-        agendaSession(sessionIds[1]!, "Next", "2026-12-01T11:00:00.000Z", "2026-12-01T12:00:00.000Z", "saved"),
-      ],
-      page: { limit: 100, offset: 0, total: 2, hasMore: false },
-    }).sessions;
-    expect(pickEventNow(sessions, NOW).next?.title).toBe("Next");
-    expect(pickEventNow(sessions, NOW).live).toEqual([]);
   });
 });

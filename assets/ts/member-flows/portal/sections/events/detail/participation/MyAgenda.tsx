@@ -4,15 +4,12 @@ import { useSyncExternalStore } from "preact/compat";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 import { databaseIdSchema } from "../../../../../../../shared/schemas/identifiers";
-import {
-  personalAgendaProgramResponseSchema,
-  type personalAgendaMarkSchema,
-  type personalAgendaSessionSchema,
+import type {
+  personalAgendaMarkSchema,
+  personalAgendaSessionSchema,
 } from "../../../../../../../shared/schemas/event-personal-agenda";
 import type { sessionParticipationResponseSchema } from "../../../../../../../shared/schemas/event-participation-scanning";
 import { agendaContent } from "../../../../../../../shared/public-agenda-content";
-import { getJson } from "../../../../../../shared/api-client";
-import { useData } from "../../../../../../hooks/useData";
 import { ContentAgenda } from "../../../../../../site/ContentAgenda";
 import type { AgendaPersonalSession } from "../../../../../../site/AgendaParticipationControls";
 import { AGENDA_CALENDAR_TITLE, AgendaCalendarSettings } from "./AgendaCalendarSettings";
@@ -24,12 +21,8 @@ import { Spinner } from "../../../../../../components/Spinner";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import { EmptyState } from "../../../../../../ui/EmptyState";
 import { Panel, PanelBody } from "../../../../../../ui/Panel";
-import {
-  eventAgendaRoute,
-  eventSessionRoute,
-  sessionSeatAction,
-} from "../../../../../../../shared/event-participation-link";
-import { MyAgendaList } from "./MyAgendaList";
+import { eventAgendaRoute, sessionSeatAction } from "../../../../../../../shared/event-participation-link";
+import { useAgendaProgram, type AgendaProgram } from "./useAgendaProgram";
 import { ButtonLink } from "../../../../../../ui/Button";
 import { IconCalendar } from "../../../../../../ui/MediaIcons";
 import { usePortalHashLocation } from "../../../../hash-location";
@@ -58,16 +51,26 @@ export function MyAgenda({
   eventName,
   mine = false,
   canPersonalize = false,
+  embedded = false,
+  program,
 }: {
   slug: string;
   eventId?: string;
   eventName?: string;
   mine?: boolean;
   canPersonalize?: boolean;
+  /**
+   * Shown inside another page, as in the virtual room: that page owns the address, so the agenda opens no
+   * session and no calendar view from it, and offers no link that would leave that page.
+   */
+  embedded?: boolean;
+  /** The published program, where the page showing the agenda has loaded it already. */
+  program?: AgendaProgram;
 }) {
   const rawLocation = useSyncExternalStore(subscribeHashQuery, hashQuerySnapshot);
   const { path, params: query } = splitHash(rawLocation);
-  const focus = databaseIdSchema.safeParse(query.get("session"));
+  const focus = databaseIdSchema.safeParse(embedded ? null : query.get("session"));
+  const view = embedded ? null : query.get("view");
   const destination = (values: { view?: string }) => {
     const next = splitHash().params;
     next.delete("session");
@@ -75,7 +78,7 @@ export function MyAgenda({
     if (values.view) next.set("view", values.view);
     return path + (next.size ? `?${next}` : "");
   };
-  if (!canPersonalize && (mine || query.get("view") === "calendar"))
+  if (!canPersonalize && (mine || view === "calendar"))
     return (
       <EmptyState
         title="Register to create your agenda"
@@ -84,15 +87,18 @@ export function MyAgenda({
         <ButtonLink href={usePortalHashLocation.hrefs(`/events/${encodeURIComponent(slug)}`)}>View event</ButtonLink>
       </EmptyState>
     );
-  if (query.get("view") === "calendar") return <AgendaCalendarSettings slug={slug} eventName={eventName} />;
+  if (view === "calendar") return <AgendaCalendarSettings slug={slug} eventName={eventName} />;
+  const Agenda = program ? PersonalAgenda : LoadedPersonalAgenda;
   return (
-    <PersonalAgenda
+    <Agenda
+      program={program!}
       slug={slug}
       eventId={eventId}
       focus={focus.success ? focus.data : undefined}
       mine={mine}
       canPersonalize={canPersonalize}
-      calendarHref={usePortalHashLocation.hrefs(destination({ view: "calendar" }))}
+      calendarHref={embedded ? null : usePortalHashLocation.hrefs(destination({ view: "calendar" }))}
+      compact={embedded}
       onFocusClosed={() => {
         const current = splitHash();
         const next = new URLSearchParams(current.params);
@@ -103,32 +109,36 @@ export function MyAgenda({
   );
 }
 
+interface PersonalAgendaProps {
+  slug: string;
+  eventId?: string;
+  focus?: string;
+  mine: boolean;
+  canPersonalize: boolean;
+  /** The calendar and reminder settings, where the agenda may lead away from its page. */
+  calendarHref: string | null;
+  /** Shown beside something else: the agenda as a list, with today's finished sessions folded away. */
+  compact?: boolean;
+  onFocusClosed: () => void;
+}
+
+/** The agenda on its own page, which reads the program itself. */
+function LoadedPersonalAgenda(props: PersonalAgendaProps) {
+  return <PersonalAgenda {...props} program={useAgendaProgram(props.slug)} />;
+}
+
 /** The published agenda, shared with the public site and organizer editor, with the viewer's own marks. */
 function PersonalAgenda({
+  program,
   slug,
   eventId,
   focus,
   mine,
   canPersonalize,
   calendarHref,
+  compact = false,
   onFocusClosed,
-}: {
-  slug: string;
-  eventId?: string;
-  focus?: string;
-  mine: boolean;
-  canPersonalize: boolean;
-  calendarHref: string;
-  onFocusClosed: () => void;
-}) {
-  const program = useData(
-    () =>
-      getJson(
-        `/api/v1/events/${encodeURIComponent(slug)}/agenda/participation/program`,
-        personalAgendaProgramResponseSchema,
-      ),
-    [slug],
-  );
+}: PersonalAgendaProps & { program: AgendaProgram }) {
   const snapshot = program.data?.agenda;
   // The server scoped private sessions to the ones this reader is invited to or booked on.
   const content = useMemo(
@@ -289,7 +299,7 @@ function PersonalAgenda({
           ) : undefined,
       };
     },
-    toolbarControls: (
+    toolbarControls: calendarHref ? (
       <ButtonLink
         icon
         variant="secondary"
@@ -299,26 +309,8 @@ function PersonalAgenda({
       >
         <IconCalendar />
       </ButtonLink>
-    ),
+    ) : undefined,
   };
-  if (mineOnly && content && snapshot)
-    return (
-      <div class="pk-stack">
-        {program.error && <ErrorAlert error={program.error} />}
-        <div class="pk-cluster">
-          <ButtonLink variant="secondary" href={calendarHref}>
-            <IconCalendar />
-            <span>{AGENDA_CALENDAR_TITLE}</span>
-          </ButtonLink>
-        </div>
-        <MyAgendaList
-          days={content.days}
-          clock={contractClock(snapshot)}
-          session={personal.session}
-          sessionHref={(id) => usePortalHashLocation.hrefs(eventSessionRoute(slug, id, { mine: true }))}
-        />
-      </div>
-    );
   return (
     <div class="pk-stack" ref={host}>
       {program.error && <ErrorAlert error={program.error} />}
@@ -330,14 +322,22 @@ function PersonalAgenda({
           legacySpeakerFragments={content.legacySpeakerFragments}
           personal={canPersonalize ? personal : undefined}
           openOccurrence={focus ?? revised ?? undefined}
+          compact={compact}
         />
       ) : (
         <Panel>
           <PanelBody>
             <p>{snapshot ? "No public sessions are scheduled yet." : "The agenda has not been published yet."}</p>
-            {canPersonalize && <ButtonLink href={calendarHref}>{AGENDA_CALENDAR_TITLE}</ButtonLink>}
+            {canPersonalize && calendarHref && <ButtonLink href={calendarHref}>{AGENDA_CALENDAR_TITLE}</ButtonLink>}
           </PanelBody>
         </Panel>
+      )}
+      {mineOnly && (
+        <div class="pk-cluster">
+          <ButtonLink variant="secondary" href={usePortalHashLocation.hrefs(eventAgendaRoute(slug))}>
+            Browse the agenda
+          </ButtonLink>
+        </div>
       )}
     </div>
   );

@@ -34,8 +34,18 @@ const RawEvidenceRetentionPolicy = lazy(() =>
 const EventRecordings = lazy(() =>
   import("../events/detail/settings/EventRecordings").then((module) => ({ default: module.EventRecordings })),
 );
+const LiveChatRetentionSettings = lazy(() =>
+  import("../events/detail/settings/LiveChatRetentionSettings").then((module) => ({
+    default: module.LiveChatRetentionSettings,
+  })),
+);
 const EventLiveSettings = lazy(() =>
   import("../events/detail/settings/EventLiveSettings").then((module) => ({ default: module.EventLiveSettings })),
+);
+const ProductionPartnersSettings = lazy(() =>
+  import("../events/detail/settings/ProductionPartnersSettings").then((module) => ({
+    default: module.ProductionPartnersSettings,
+  })),
 );
 const GroupEventScheduling = lazy(() =>
   import("./GroupEventScheduling").then((module) => ({ default: module.GroupEventScheduling })),
@@ -92,7 +102,7 @@ export function GroupEventSettingsTab({
           ...(!canManage && hasEventAgendaPermission(event.id, "agenda:write")
             ? [{ key: "scheduling", label: "Scheduling" }]
             : []),
-          ...(hasEventAgendaPermission(event.id, "agenda:live_moderate") ? [{ key: "live", label: "Studio" }] : []),
+          ...(hasEventAgendaPermission(event.id, "agenda:live_studio") ? [{ key: "live", label: "Studio" }] : []),
         ]}
         active={
           detailId === "scheduling" && canManage
@@ -100,7 +110,7 @@ export function GroupEventSettingsTab({
             : ["access", "tickets", "invitation", "terms", "attendance-days", "sponsors"].includes(detailId ?? "")
               ? "registration"
               : (detailId ??
-                (canManage ? "general" : hasEventAgendaPermission(event.id, "agenda:live_moderate") ? "live" : "team"))
+                (canManage ? "general" : hasEventAgendaPermission(event.id, "agenda:live_studio") ? "live" : "team"))
         }
         hrefFor={(key) => (key === "general" ? settingsPath : `${settingsPath}/${key}`)}
       />
@@ -135,7 +145,7 @@ export function GroupEventSettingsTab({
           />
         )}
       {(detailId === "team" && (canManage || hasEventAgendaPermission(event.id, "agenda:read"))) ||
-      (!canManage && !detailId && !hasEventAgendaPermission(event.id, "agenda:live_moderate")) ? (
+      (!canManage && !detailId && !hasEventAgendaPermission(event.id, "agenda:live_studio")) ? (
         <Suspense fallback={<Spinner label="Loading team…" />}>
           <EventTeamSettings
             slug={event.slug}
@@ -158,9 +168,13 @@ export function GroupEventSettingsTab({
           />
         </Suspense>
       ) : (detailId === "live" || (!canManage && !detailId)) &&
-        hasEventAgendaPermission(event.id, "agenda:live_moderate") ? (
+        hasEventAgendaPermission(event.id, "agenda:live_studio") ? (
         <Suspense fallback={<Spinner label="Loading live settings…" />}>
-          <EventLiveSettings slug={event.slug} />
+          <div class="pk-stack">
+            <EventLiveSettings slug={event.slug} canEdit={hasEventAgendaPermission(event.id, "agenda:live_setup")} />
+            {/* The partners come from the event's management record, which only the group's managers read. */}
+            {canManage && <ProductionPartnersSettings slug={event.slug} groupId={groupId} canEdit />}
+          </div>
         </Suspense>
       ) : detailId === "scheduling" ? (
         <Suspense fallback={<Spinner />}>
@@ -205,7 +219,10 @@ export function GroupEventSettingsTab({
         />
       ) : detailId === "retention" && canManage ? (
         <Suspense fallback={<Spinner />}>
-          <RawEvidenceRetentionPolicy event={event} />
+          <div class="pk-stack">
+            <LiveChatRetentionSettings slug={event.slug} groupId={groupId} canEdit={canManage} />
+            <RawEvidenceRetentionPolicy event={event} />
+          </div>
         </Suspense>
       ) : detailId === "tickets" && canManage ? (
         <LazyTicketsTab

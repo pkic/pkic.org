@@ -19,6 +19,7 @@ import { signUserSessionToken, verifyUserSessionToken } from "../functions/_lib/
 
 import { createGroupEventInvitationFixture } from "./helpers/group-event-invitations";
 import { signJwt } from "../functions/_lib/utils/jwt";
+import { STAFF_CAPACITY_TTL_HOURS } from "../functions/_lib/auth/session-policy";
 
 const TEST_SIGNING_SECRET = "test-signing-secret";
 
@@ -213,7 +214,7 @@ describe("canonical user authentication", () => {
     ).toEqual([{ points: 2, source_ref: new Date().toISOString().slice(0, 7) }]);
 
     await env.DB.prepare("UPDATE sessions SET created_at = ?")
-      .bind(new Date(Date.now() - 9 * 60 * 60 * 1000).toISOString())
+      .bind(new Date(Date.now() - (STAFF_CAPACITY_TTL_HOURS + 1) * 60 * 60 * 1000).toISOString())
       .run();
     const expiredElevation = await call("/api/v1/auth/session", { headers: { cookie } });
     expect(expiredElevation.status).toBe(401);

@@ -11,6 +11,7 @@ import { scannerReadinessLabel, type ScannerReadiness } from "./ScannerConnectio
 export function ScannerLaunchPanel({
   title = "Start scanning",
   connection,
+  connectionBelow = false,
   context,
   feedback,
   form,
@@ -25,6 +26,7 @@ export function ScannerLaunchPanel({
 }: {
   title?: string;
   connection: ComponentChildren;
+  connectionBelow?: boolean;
   context?: ComponentProps<typeof ScannerCaptureContext>;
   feedback?: ComponentProps<typeof ScannerFeedback>;
   form: Pick<import("../../../../../../hooks/useContractForm").ContractForm<unknown>, "handlers">;
@@ -50,8 +52,8 @@ export function ScannerLaunchPanel({
   return (
     <Panel>
       <PanelHeader title={title} />
-      <PanelBody>
-        {connection}
+      <PanelBody class={connectionBelow ? "pk-stack" : undefined}>
+        {!connectionBelow && connection}
         {devicePreparation?.error && !pendingStart && (
           <Button type="button" variant="secondary" onClick={retryStart}>
             Retry scanner preparation
@@ -71,6 +73,7 @@ export function ScannerLaunchPanel({
         >
           {controls}
         </form>
+        {connectionBelow && connection}
         {children}
       </PanelBody>
       <Dialog

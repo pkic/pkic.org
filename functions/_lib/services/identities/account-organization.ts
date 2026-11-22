@@ -9,8 +9,8 @@
  * recorded personal answer settles it, and a later claim of the domain asks
  * again because a claimed domain is never personal.
  *
- * The personal answer is the existing "I am independent" record
- * (`affiliation_offer_dismissals` with no organization), not new storage.
+ * The personal answer is the existing "I am independent" record, read
+ * through the shared rule in `personal-address.ts` that registration reads too.
  *
  * The step never locks a person out. An address that no longer signs in, such
  * as a work address retired when its representation ended, asks nothing: it no
@@ -31,7 +31,7 @@ import type {
 import { accountAddressSignsInSql } from "../../auth/email-sign-in-policy";
 import { prepareStateGuard } from "../../db/authorization-guard";
 import { batchFirst } from "../../db/pagination";
-import { mailboxKind, organizationDomainCandidates } from "../../email-domains/classification";
+import { mailboxKind } from "../../email-domains/classification";
 import { normalizeOrgName } from "../../../../assets/shared/organization-name";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
@@ -39,6 +39,7 @@ import { uuid } from "../../utils/ids";
 import { signJwt, verifyJwt } from "../../utils/jwt";
 import { nowIso } from "../../utils/time";
 import { prepareOwnAffiliationReviewResolution } from "./affiliation-offer";
+import { claimedDomainSql, saidPersonalSql } from "./personal-address";
 import { verifiedAffiliationBasisSchema } from "./verified-affiliation-basis";
 import { planVerifiedAffiliation } from "./verified-affiliation-plan";
 import { verifiedAffiliationPreview } from "./verified-affiliation-preview";
@@ -68,14 +69,6 @@ export type AccountOrganizationSubject = { userId: string } | { userId: null };
 
 function subjectSql(subject: AccountOrganizationSubject) {
   return { sql: "?", bindings: [subject.userId] };
-}
-
-function claimedDomainSql(email: string) {
-  return {
-    sql: `SELECT 1 FROM organization_domain_claims claim JOIN json_each(?) requested ON requested.value=claim.domain
-      WHERE claim.organization_id IS NOT NULL LIMIT 1`,
-    bindings: [JSON.stringify(organizationDomainCandidates(email))],
-  };
 }
 
 /**
@@ -108,7 +101,7 @@ export async function readAccountOrganizationStep(
         -- An open invitation counts: the organization already named this person, who accepts it instead.
         EXISTS (SELECT 1 FROM identities WHERE user_id=subject.id AND organization_id IS NOT NULL
           AND ended_at IS NULL AND blocked_at IS NULL) AS has_organization,
-        EXISTS (SELECT 1 FROM affiliation_offer_dismissals WHERE user_id=subject.id AND organization_id IS NULL) AS said_personal,
+        ${saidPersonalSql("subject.id")} AS said_personal,
         EXISTS (${claimed.sql}) AS claimed,
         (subject.id IS NULL OR ${accountAddressSignsInSql("subject.id", "subject.email")}) AS signs_in
         FROM (SELECT ? AS id, ? AS email) subject`)

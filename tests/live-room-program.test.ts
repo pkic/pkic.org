@@ -128,6 +128,29 @@ describe("stable physical room broadcast sources", () => {
     expect((await env.LIVE_SESSION_ROOMS!.getByName(`${f.eventId}:${next}`).programStage()).question).toBeNull();
   });
 
+  it("moves the old session's attendees to the session loaded next and hands its opening back to the schedule", async () => {
+    const next = await secondSession();
+    expect((await select(f.occurrenceId, 0)).status).toBe(200);
+    const operator = await f.connect({ person: "operator" });
+    const attendee = await f.connect({ person: "attendee" });
+    expect((await attendee.next("room.snapshot")).movedOn).toBeNull();
+    operator.send({ type: "room.opening", opening: "open" });
+    await attendee.next("room.opening.changed");
+    const pointer = env.LIVE_SESSION_ROOMS!.getByName(liveProgramName(f.eventId, f.roomId));
+    expect(await pointer.loadedProgram(f.eventId, f.roomId)).toBe(f.occurrenceId);
+
+    expect((await select(next, 1)).status).toBe(200);
+    expect((await attendee.next("room.moved.changed")).movedOn).toEqual({ occurrenceId: next });
+    expect((await attendee.next("room.opening.changed", (m) => m.opening === "scheduled")).opening).toBe("scheduled");
+    expect(await pointer.loadedProgram(f.eventId, f.roomId)).toBe(next);
+    const late = await f.connect({ person: "secondAttendee" });
+    expect((await late.next("room.snapshot")).movedOn).toEqual({ occurrenceId: next });
+
+    // Loaded again, the session keeps its attendees.
+    expect((await select(f.occurrenceId, 2)).status).toBe(200);
+    expect((await attendee.next("room.moved.changed", (m) => m.movedOn === null)).movedOn).toBeNull();
+  });
+
   it("keeps the same signed source across sessions and stops old-session fanout after switching or clearing", async () => {
     const next = await secondSession();
     expect((await select(f.occurrenceId, 0)).status).toBe(200);

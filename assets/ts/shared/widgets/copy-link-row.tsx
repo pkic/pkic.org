@@ -7,6 +7,7 @@
  * read-only field that selects itself on focus, which is the manual fallback
  * the failure message points to.
  */
+import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 
 import { copyText } from "../clipboard";
@@ -28,11 +29,17 @@ export function CopyLinkRow({
   label,
   help,
   compact = false,
+  labelHidden = false,
+  actions,
 }: {
   url: string;
   label: string;
   help?: string;
   compact?: boolean;
+  /** A compact row in a table whose row already names the link: the name stays for screen readers only. */
+  labelHidden?: boolean;
+  /** A compact row's other actions on this link, before its copy control. */
+  actions?: ComponentChildren;
 }) {
   const [copyStatus, setCopyStatus] = useState("");
   const [failed, setFailed] = useState(false);
@@ -64,11 +71,12 @@ export function CopyLinkRow({
     return (
       <div class="pk-stack pk-stack--snug" data-copy-link-row>
         <div class="pk-cluster pk-cluster--between">
-          <span>{label}</span>
+          <span class={labelHidden ? "pk-sr-only" : undefined}>{label}</span>
           <div class="pk-cluster">
             <p class="pk-small" role="status">
               {copyStatus}
             </p>
+            {actions}
             <Button data-copy-link-button aria-label={`Copy the ${label} link`} onClick={copy}>
               Copy link
             </Button>

@@ -1,14 +1,13 @@
 // @vitest-environment jsdom
-import { render, type ComponentChildren } from "preact";
+import { type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { EventList } from "../../assets/ts/member-flows/portal/sections/events/EventList";
 import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 import { axeViolations } from "./helpers/axe";
-import { portalSession } from "../../assets/ts/member-flows/portal/state";
-import { portalSessionFixture } from "../helpers/portal-session";
 import { managementEventRow, audienceEventRow } from "./helpers/event-list-fixtures";
 import { eventsListQuerySchema } from "../../assets/shared/schemas/event-management";
+import { json, mount, settle, useEventListHarness } from "./helpers/event-list-harness";
 
 const { navigateMock } = vi.hoisted(() => ({ navigateMock: vi.fn() }));
 
@@ -17,46 +16,7 @@ vi.mock("wouter", () => ({
   Link: ({ children, href }: { children?: ComponentChildren; href: string }) => <a href={`#${href}`}>{children}</a>,
 }));
 
-const mounted: HTMLElement[] = [];
-
-function mount(node: ComponentChildren, view: "grid" | "list" = "list"): HTMLElement {
-  const container = document.createElement("div");
-  document.body.append(container);
-  mounted.push(container);
-  void act(() => render(node, container));
-  if (view === "list") {
-    const button = [...container.querySelectorAll("button")].find((button) => button.textContent === "List");
-    void act(() => button?.click());
-  }
-  return container;
-}
-
-async function settle(): Promise<void> {
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
-}
-
-function json(value: unknown): Response {
-  return new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
-}
-
-beforeEach(() => {
-  vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-17T00:00:00.000Z"));
-  portalSession.value = portalSessionFixture({ member: true });
-});
-
-afterEach(() => {
-  history.replaceState(null, "", location.pathname);
-  for (const container of mounted.splice(0)) {
-    void act(() => render(null, container));
-    container.remove();
-  }
-  portalSession.value = null;
-  vi.unstubAllGlobals();
-  vi.restoreAllMocks();
-  navigateMock.mockReset();
-});
+useEventListHarness(navigateMock);
 
 describe("portal event list", () => {
   it("keeps next year's event visible without an Upcoming badge", async () => {
@@ -336,39 +296,6 @@ describe("portal event list", () => {
     expect(container.querySelector("tbody tr a[href='#/events/pqc-2026']")).not.toBeNull();
     expect(container.querySelector("tbody tr a[href*='/events/e0000000']")).toBeNull();
     expect(rowActionControlNames(container)).toEqual(["Actions for PQC Conference 2026"]);
-  });
-
-  it("offers no group workspace to an event-scoped staff identity that cannot open the group", async () => {
-    portalSession.value = portalSessionFixture({
-      staff: true,
-      grants: [
-        { permission: "events:manage", contextType: "event", contextId: "e0000000-0000-4000-8000-000000000009" },
-      ],
-    });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
-        json({
-          events: [
-            managementEventRow({
-              id: "e0000000-0000-4000-8000-000000000009",
-              ownerGroupId: "20000000-0000-4000-8000-000000000001",
-              ownerGroupName: "Post-Quantum Cryptography",
-            }),
-          ],
-          page: { limit: 25, offset: 0, total: 1, hasMore: false },
-        }),
-      ),
-    );
-
-    const container = mount(<EventList />);
-    await settle();
-    await settle();
-
-    expect(rowActionControlNames(container)).toEqual([]);
-    expect(container.querySelector('a[href^="#/groups/"]')).toBeNull();
-    expect(container.textContent).toContain("Post-Quantum Cryptography");
-    expect(container.querySelector("tbody tr a[href='#/events/pqc-2026']")).not.toBeNull();
   });
 
   it.each([

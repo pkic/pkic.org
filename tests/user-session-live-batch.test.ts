@@ -218,7 +218,10 @@ describe("setwise selected identity, membership, and verified sponsor email pari
       name: "Synthetic attendee",
       sessionClaims: { ...claim },
     }));
-    const results = await revalidateLiveRoomParticipants(db, participants, f.eventId, f.occurrenceId);
+    const results = await revalidateLiveRoomParticipants(db, participants, {
+      eventId: f.eventId,
+      session: { occurrenceId: f.occurrenceId },
+    });
     expect(results.every((result) => result.ok)).toBe(true);
     expect(queries).toBe(8 * Math.ceil(count / 512));
     expect(batches).toBe(Math.ceil(count / 512));
@@ -277,7 +280,10 @@ describe("distinct live recipient query bounds", () => {
       name: "Synthetic attendee",
       sessionClaims: claim,
     }));
-    const audience = await revalidateLiveRoomParticipants(db, participants, f.eventId, f.occurrenceId);
+    const audience = await revalidateLiveRoomParticipants(db, participants, {
+      eventId: f.eventId,
+      session: { occurrenceId: f.occurrenceId },
+    });
     expect(queries).toBe(8);
     expect(batches).toBe(1);
     expect(audience.every((result) => result.ok && result.participant.role === "attendee")).toBe(true);
@@ -311,7 +317,10 @@ describe("live command read lifetime", () => {
       participants[0],
       [f.users.attendee],
       async () => {
-        const sender = await revalidateLiveRoomParticipants(profile.db, [participants[0]], f.eventId, f.occurrenceId);
+        const sender = await revalidateLiveRoomParticipants(profile.db, [participants[0]], {
+          eventId: f.eventId,
+          session: { occurrenceId: f.occurrenceId },
+        });
         expect(sender[0].ok).toBe(true);
         if (!sender[0].ok) throw sender[0].error;
         expect(await readLiveAuthorStamp(profile.db, f.eventId, sender[0].participant)).toEqual({
@@ -320,12 +329,20 @@ describe("live command read lifetime", () => {
         });
         expect(await anonymizedLiveParticipantIds(profile.db, [f.users.attendee])).toEqual([]);
         expect(
-          (await revalidateLiveRoomParticipants(profile.db, participants, f.eventId, f.occurrenceId)).every(
-            (result) => result.ok,
-          ),
+          (
+            await revalidateLiveRoomParticipants(profile.db, participants, {
+              eventId: f.eventId,
+              session: { occurrenceId: f.occurrenceId },
+            })
+          ).every((result) => result.ok),
         ).toBe(true);
         // A timer or other continuation inherited from this command must not inherit its authority after completion.
-        deferred = gate.then(() => revalidateLiveRoomParticipants(profile.db, participants, f.eventId, f.occurrenceId));
+        deferred = gate.then(() =>
+          revalidateLiveRoomParticipants(profile.db, participants, {
+            eventId: f.eventId,
+            session: { occurrenceId: f.occurrenceId },
+          }),
+        );
       },
     );
     expect((await profile.report()).roundTrips).toBe(1);
@@ -339,7 +356,12 @@ describe("live command read lifetime", () => {
     expect((await profile.report()).roundTrips).toBe(2);
     await withLiveRoomCommandRead(profile.db, env.LIVE_SESSION_ROOMS, room, participants, null, [], async () => {
       expect(
-        (await revalidateLiveRoomParticipants(profile.db, [participants[0]], f.eventId, f.occurrenceId))[0],
+        (
+          await revalidateLiveRoomParticipants(profile.db, [participants[0]], {
+            eventId: f.eventId,
+            session: { occurrenceId: f.occurrenceId },
+          })
+        )[0],
       ).toMatchObject({ ok: false, error: { status: 401 } });
     });
     expect((await profile.report()).roundTrips).toBe(3);

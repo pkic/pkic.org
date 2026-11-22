@@ -40,7 +40,8 @@ async function handlePublicRegistration(
     ? await selectRegistrationIdentity(c.env.DB, actor.userId, data.body.identityId)
     : undefined;
   const config = getConfig(c.env, request);
-  requireRegistrationWorkRepresentation({
+  const personalAddressGuard = await requireRegistrationWorkRepresentation(c.env.DB, {
+    userId: actor.userId,
     email: data.body.email,
     verified: true,
     organizationId: selectedIdentity?.organizationId,
@@ -50,16 +51,19 @@ async function handlePublicRegistration(
     verifiedIdentity: selectedIdentity
       ? { userId: selectedIdentity.userId, selectedIdentity }
       : { userId: actor.userId },
-    authorizationGuards: selectedIdentity
-      ? [
-          prepareSelectedRegistrationIdentityGuard(
-            c.env.DB,
-            selectedIdentity,
-            actor.sessionId,
-            data.body.email.toLowerCase(),
-          ),
-        ]
-      : [],
+    authorizationGuards: [
+      ...(selectedIdentity
+        ? [
+            prepareSelectedRegistrationIdentityGuard(
+              c.env.DB,
+              selectedIdentity,
+              actor.sessionId,
+              data.body.email.toLowerCase(),
+            ),
+          ]
+        : []),
+      ...(personalAddressGuard ? [personalAddressGuard] : []),
+    ],
     eventBasePath: request.headers.get("x-event-base-path"),
     clientIp: getClientIp(request),
     userAgent: getUserAgent(request),

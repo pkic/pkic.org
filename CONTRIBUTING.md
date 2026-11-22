@@ -478,7 +478,7 @@ finding a nested template may require multiple discovery pages.
 
 Email-authenticated and existing unmarked sessions retain the current staff
 inactivity deadline for MCP authorization. A successful, user-verified passkey
-sign-in can authorize longer access, capped by the eight-hour staff-session
+sign-in can authorize longer access, capped by the sixteen-hour staff-session
 lifetime. Registering a passkey alone does not qualify.
 
 `MCP_OAUTH_PASSKEY_AUTHORIZATION_TTL_SECONDS` limits longer access from the

@@ -25,6 +25,12 @@ import { useScreenIssueNotifications } from "../../assets/ts/member-flows/portal
 import { useScreenMonitorStaff } from "../../assets/ts/member-flows/portal/sections/events/detail/screens/useScreenMonitorStaff";
 import { LIVE_PERSISTENT_RETRY_MAX_MS } from "../../assets/ts/live-session/live-socket-retry";
 import { loadRoomScreens } from "../../assets/ts/member-flows/portal/sections/events/detail/live/studio/useStudioScreens";
+import { portalSession, savePortalSession } from "../../assets/ts/member-flows/portal/state";
+import {
+  SESSION_ACTIVITY_REFRESH_INTERVAL_MS,
+  useSessionActivity,
+} from "../../assets/ts/member-flows/portal/use-session-activity";
+import { portalSessionFixture } from "../helpers/portal-session";
 import { fakeLiveSockets } from "./helpers/live-room-socket";
 import { at, message, NOW, SLUG, status } from "./helpers/screen-monitor-staff-fixture";
 
@@ -358,6 +364,46 @@ describe("the studio's room screens", () => {
     await expect(
       loadRoomScreens(SLUG, "30000000-0000-4000-8000-000000000001", new AbortController().signal),
     ).rejects.toThrow("more screens");
+  });
+});
+
+describe("a watching role holder's sign-in", () => {
+  afterEach(() => {
+    portalSession.value = null;
+    vi.useRealTimers();
+  });
+
+  it("keeps renewing while the Screens page follows the monitor, with no click at all", async () => {
+    vi.useFakeTimers();
+    const session = portalSessionFixture({ staff: true });
+    const fetched = vi.fn(async () => Response.json(session));
+    vi.stubGlobal("fetch", fetched);
+    savePortalSession(session);
+    const sockets = fakeLiveSockets();
+    function Probe() {
+      useSessionActivity();
+      useScreenMonitorStaff({ slug: SLUG, createSocket: sockets.factory });
+      return null;
+    }
+    host = document.body.appendChild(document.createElement("div"));
+    await act(async () => render(<Probe />, host!));
+    const deliver = (value: ScreenMonitorServerMessage | "pong") => {
+      sockets
+        .latest()
+        .dispatchEvent(new MessageEvent("message", { data: value === "pong" ? value : JSON.stringify(value) }));
+    };
+    await act(async () =>
+      deliver({ type: "screens.snapshot", serverNow: NOW, control: true, screens: [], quality: [] }),
+    );
+    // The monitor answers the page's keep-alive questions for as long as the page stays open.
+    await act(async () => {
+      for (let waited = 0; waited < SESSION_ACTIVITY_REFRESH_INTERVAL_MS; waited += 10_000) {
+        await vi.advanceTimersByTimeAsync(10_000);
+        if (sockets.latest().sent.at(-1) === "ping") deliver("pong");
+      }
+    });
+    expect(fetched).toHaveBeenCalledWith("/api/v1/auth/session", expect.objectContaining({ method: "GET" }));
+    expect(portalSession.value).not.toBeNull();
   });
 });
 

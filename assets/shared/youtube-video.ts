@@ -45,8 +45,3 @@ export function youtubePrivacyEmbedUrl(videoId: string, parameters: Record<strin
   const query = new URLSearchParams({ rel: "0", modestbranding: "1", ...parameters });
   return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?${query}`;
 }
-
-/** The video's own page on YouTube, for a viewer whose player will not start. */
-export function youtubeWatchUrl(videoId: string): string {
-  return `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
-}

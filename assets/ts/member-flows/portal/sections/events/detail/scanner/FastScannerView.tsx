@@ -1,16 +1,16 @@
 import { ScannerCollectionAttendee } from "./ScannerCollectionAttendee";
 import { ScannerHelpTour } from "./ScannerHelpTour";
-import { IconScannerHelp, IconScannerSound } from "../../../../../../components/icons/scanner-controls";
+import { IconHelp, IconScannerSound } from "../../../../../../components/icons";
 import type { ScannerSound } from "./scanner-audio-feedback";
 import { scannerRole } from "./scanner-role";
 import { ScannerTaskNavigation, useScannerTaskSwipe } from "./ScannerTaskNavigation";
 import { ScannerModeIcon } from "./ScannerModeIcon";
 import { ScannerPreparationStatus } from "./ScannerPreparationStatus";
 import type { ComponentChildren, ComponentProps } from "preact";
-import { scanFeedbackLabel, scanFeedbackOutcome, scanEligibilityLabel } from "./scan-stream";
+import { scanFeedbackLabel, scanFeedbackOutcome } from "./scan-stream";
 import "../../../../../../../design/tokens.scanner.generated.css";
 import "../../../../../../../design/tokens.event.generated.css";
-import { ScannerExceptionReview } from "./ScannerExceptionReview";
+import { ScannerOperatorDrawer } from "./ScannerOperatorDrawer";
 import { ScannerResultTrail, ScannerStatusIcon, useScannerStatus, type ScannerStatus } from "./ScannerStatus";
 import { useContext, useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type {
@@ -18,14 +18,14 @@ import type {
   EventScanRequest,
 } from "../../../../../../../shared/schemas/event-participation-scanning";
 import { Button } from "../../../../../../ui/Button";
+import { scannerStartMessage } from "./ScannerCaptureControls";
+import { ScannerLeadConfirmation, type LeadConfirmation } from "./ScannerLeadConfirmation";
 import { CloseButton } from "../../../../../../ui/CloseButton";
 import { IconTools } from "../../../../../../components/icons/indicators";
 import { IconRefresh, IconVirtual, IconSearch, IconBulletList } from "../../../../../../components/icons";
 import { scannerSwipeDirection, trapScannerDrawerTab } from "./scanner-gestures";
 import "../../../../../../components/sign-in/Login.css";
 import "./FastScannerView.css";
-import { HeadingOutline } from "../../../../../../ui/HeadingOutline";
-import { SectionHeading } from "../../../../../../ui/SectionHeading";
 import { IconFullscreen } from "../../../../../../components/icons/app-navigation";
 
 export function FastScannerView({
@@ -70,11 +70,17 @@ export function FastScannerView({
   helpOnStart = false,
   collection,
   needsAdvance = false,
+  failed = false,
   onNextBadge,
+  leadConsentConfirmed = false,
+  leadConfirmation,
 }: {
   collection?: ComponentProps<typeof ScannerCollectionAttendee> & { waiting: boolean; onNext: () => void };
   needsAdvance?: boolean;
+  failed?: boolean;
   onNextBadge?: () => void;
+  leadConsentConfirmed?: boolean;
+  leadConfirmation?: LeadConfirmation | null;
   helpOnStart?: boolean;
   onTourSound?: (sound: ScannerSound) => void;
   presentation?: "embedded" | "fullscreen";
@@ -119,13 +125,11 @@ export function FastScannerView({
   const [tourDemo, setTourDemo] = useState<ScannerStatus>();
   const [tourResults, setTourResults] = useState<ScannerStatus[]>();
   const surface = useRef<HTMLDivElement>(null);
-  const [review, setReview] = useState<EventScanRequest | null>(null);
   const [operatorOpen, setOperatorOpen] = useState(false);
   const operatorPause = useRef(onOperatorPause);
   operatorPause.current = onOperatorPause;
   useLayoutEffect(() => {
     operatorPause.current?.(operatorOpen || helpOpen);
-    if (!operatorOpen) setReview(null);
     return () => operatorPause.current?.(false);
   }, [operatorOpen, helpOpen]);
   const visualRole = scannerRole(mode, Boolean(preparation?.occurrenceId), purpose === "print");
@@ -276,12 +280,16 @@ export function FastScannerView({
                   ? "Finding attendee…"
                   : (visibleStatus?.title ?? (cameraStarting ? "Starting camera…" : readyLabel))}
               </strong>
+              {leadConfirmation && result?.outcome === "eligible" && !helpOpen && (
+                <ScannerLeadConfirmation confirmation={leadConfirmation} />
+              )}
               {collection?.waiting && !helpOpen && (
                 <ScannerCollectionAttendee {...collection} saving={collection.saving || cooldown?.saving} />
               )}
-              {detail && detail !== "Ready to scan" && detail !== visibleStatus?.title && (
-                <p class="pk-fast-scanner__message">{detail}</p>
-              )}
+              {detail &&
+                detail !== "Ready to scan" &&
+                detail !== scannerStartMessage(true, false, mode) &&
+                detail !== visibleStatus?.title && <p class="pk-fast-scanner__message">{detail}</p>}
             </div>
             {purpose === "print" && !helpOpen && <div class="pk-fast-scanner__print-status">{statusActions}</div>}
             {!visibleStatus && context && !collection && <p class="pk-fast-scanner__context">{context}</p>}
@@ -334,11 +342,16 @@ export function FastScannerView({
               Next
             </Button>
           )}
-          {needsAdvance && !collection?.waiting && !helpOpen && !manualEntry && !recentScans && onNextBadge && (
-            <Button onClick={onNextBadge} disabled={cooldown?.saving} aria-label="Next badge">
-              Next
-            </Button>
-          )}
+          {(needsAdvance || failed) &&
+            !collection?.waiting &&
+            !helpOpen &&
+            !manualEntry &&
+            !recentScans &&
+            onNextBadge && (
+              <Button onClick={onNextBadge} disabled={cooldown?.saving} aria-label="Next badge">
+                Next
+              </Button>
+            )}
           {onPresentation && presentation === "embedded" && (
             <Button variant="secondary" onClick={onPresentation}>
               <IconFullscreen />
@@ -366,6 +379,7 @@ export function FastScannerView({
               aria-label={cameraError ? "Retry camera" : "Start camera"}
               title={cameraError ? "Retry camera" : "Start camera"}
               loading={cameraStarting}
+              disabled={mode === "lead" && !leadConsentConfirmed}
               onClick={onCameraRetry}
             >
               <IconVirtual />
@@ -378,6 +392,7 @@ export function FastScannerView({
               data-scanner-help="find"
               aria-label={manualLabel}
               title={manualLabel}
+              disabled={mode === "lead" && !leadConsentConfirmed}
               onClick={onManual}
             >
               <IconSearch />
@@ -419,7 +434,7 @@ export function FastScannerView({
                 setHelpOpen(!helpOpen);
               }}
             >
-              <IconScannerHelp />
+              <IconHelp />
             </Button>
           )}
           <CloseButton variant="secondary" data-scanner-help="close" label="Close scanner" onClick={onExit} />
@@ -477,123 +492,34 @@ export function FastScannerView({
           }}
         />
       )}
-      <section
-        ref={drawer}
+      <ScannerOperatorDrawer
+        sectionRef={drawer}
         id={drawerId}
-        class="pk-fast-scanner__drawer"
-        hidden={!operatorOpen}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Scanner operator controls"
-        onKeyDown={(event) => {
-          event.stopPropagation();
-          if (event.key === "Escape") {
-            event.preventDefault();
-            setOperatorOpen(false);
-          } else trapScannerDrawerTab(event.currentTarget, event);
-        }}
-      >
-        {/* The drawer is a modal dialog, so its outline restarts at its own <h2> title. */}
-        <HeadingOutline titleLevel={2}>
-          <header>
-            <SectionHeading level={2}>Scanner operator controls</SectionHeading>
-            <CloseButton label="Close operator controls" onClick={() => setOperatorOpen(false)} />
-          </header>
-          {operatorControls}
-          <dl>
-            <div>
-              <dt>Scanning scope</dt>
-              <dd>{context}</dd>
-            </div>
-            <div>
-              <dt>Current result</dt>
-              <dd>{feedback.visible?.title ?? label}</dd>
-            </div>
-            {result?.admissionRecorded && result.admissionDecision && (
-              <>
-                <div>
-                  <dt>Eligibility</dt>
-                  <dd>{scanEligibilityLabel(result)}</dd>
-                </div>
-                <div>
-                  <dt>Attendance</dt>
-                  <dd>{result.attendanceRecorded ? "Recorded" : "Not recorded"}</dd>
-                </div>
-              </>
-            )}
-            <div>
-              <dt>Details</dt>
-              <dd>{message}</dd>
-            </div>
-            <div>
-              <dt>Uploads</dt>
-              <dd>
-                {pending} pending{visibleUploadStatus && <small>{visibleUploadStatus}</small>}
-              </dd>
-            </div>
-            <div>
-              <dt>Screen</dt>
-              <dd>{screenAwake ? "Screen awake" : "Screen may turn off"}</dd>
-            </div>
-            <div>
-              <dt>Next badge</dt>
-              <dd>{readiness}</dd>
-            </div>
-          </dl>
-          {preparation && (
-            <section aria-label="Preparation details">
-              <SectionHeading level={3}>Preparation details</SectionHeading>
-              <ScannerPreparationStatus {...preparation} />
-            </section>
-          )}
-          <p>
-            {cameraActive
-              ? "Camera scanning continuously."
-              : "Use a connected badge reader here, or exit to retry the camera."}
-          </p>
-          {review && onExceptionConfirm && (
-            <ScannerExceptionReview
-              canRecordAttendance={canRecordAttendance}
-              request={review}
-              onConfirm={onExceptionConfirm}
-              onCancel={() => {
-                setReview(null);
-                setOperatorOpen(false);
-              }}
-            />
-          )}
-          {!review &&
-            exceptionRequest &&
-            mode !== "lead" &&
-            mode !== "checkout" &&
-            onExceptionConfirm &&
-            result &&
-            result.outcome !== "eligible" &&
-            result.outcome !== "unknown" &&
-            result.reason !== "revoked_badge" &&
-            result.reason !== "expired_badge" && (
-              <Button variant="secondary" onClick={() => setReview(exceptionRequest)}>
-                Review admission exception
-              </Button>
-            )}
-          <div class="pk-cluster">
-            {cameraActive && !manualEntry && !recentScans && (
-              <Button variant="secondary" onClick={onPreview}>
-                {preview ? "Hide preview" : "Show preview"}
-              </Button>
-            )}
-            {!collection?.waiting && cooldown && cooldown.remainingMs > 0 && (
-              <Button variant="secondary" onClick={cooldown.skip}>
-                Scan next now
-              </Button>
-            )}
-            <Button variant="secondary" onClick={() => setOperatorOpen(false)}>
-              Return to scanning
-            </Button>
-            <Button onClick={onExit}>Close scanner</Button>
-          </div>
-        </HeadingOutline>
-      </section>
+        open={operatorOpen}
+        onClose={() => setOperatorOpen(false)}
+        operatorControls={operatorControls}
+        context={context}
+        currentResult={feedback.visible?.title ?? label}
+        result={result}
+        message={message}
+        pending={pending}
+        uploadStatus={visibleUploadStatus}
+        screenAwake={screenAwake}
+        readiness={readiness}
+        preparation={preparation}
+        cameraActive={cameraActive}
+        canRecordAttendance={canRecordAttendance}
+        exceptionRequest={exceptionRequest}
+        onExceptionConfirm={onExceptionConfirm}
+        mode={mode}
+        preview={preview}
+        onPreview={onPreview}
+        manualEntry={manualEntry}
+        recentScans={recentScans}
+        collectionWaiting={collection?.waiting}
+        cooldown={cooldown}
+        onExit={onExit}
+      />
     </div>
   );
 }

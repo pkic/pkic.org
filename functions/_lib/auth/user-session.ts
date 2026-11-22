@@ -43,6 +43,7 @@ import {
 } from "./email-auth-capabilities";
 import { prepareVerifyPrimaryEmailStatements } from "../services/email-verification";
 import { findActiveSponsorCapacitiesByUserId } from "./sponsor-capacity";
+import { acknowledgedSessionActivity } from "./user-session-activity";
 import {
   DEFAULT_USER_SESSION_IDLE_TTL_HOURS,
   sessionIdleExpiresAt,
@@ -219,8 +220,7 @@ export async function refreshUserSessionFromRequest(
     identityId: claims.iid,
     state: claims.state,
     passkeyAuthentication: claims.passkeyAuthentication,
-    lastActivityAt: activityAt,
-    staffLastActivityAt: session.staff ? activityAt : (claims.staffLastActivityAt ?? 0),
+    ...acknowledgedSessionActivity(claims, Boolean(session.staff), activityAt),
   });
   await recordMonthlyActivity(db, claims.sub, claims.sid, nowIso());
   return {

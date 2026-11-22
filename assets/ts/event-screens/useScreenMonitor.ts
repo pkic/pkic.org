@@ -11,7 +11,7 @@ import {
 } from "../../shared/schemas/event-screen-monitor";
 import type { ScreenId } from "../../shared/schemas/event-screens";
 import { LIVE_PERSISTENT_RETRY_MAX_MS, persistentRetryDelay } from "../live-session/live-socket-retry";
-import type { LiveSocketFactory } from "../live-session/useLiveRoom";
+import type { LiveSocketFactory } from "../live-session/useLiveSocket";
 import { readLivestreamPlayback, type LivestreamPlaybackReader } from "./livestream-player-report";
 import { readScreenDeviceMetrics, type ScreenMetricsReader } from "./screen-device-metrics";
 import { readScreenDeviceScreenshot, type ScreenScreenshotReader } from "./screen-device-screenshot";

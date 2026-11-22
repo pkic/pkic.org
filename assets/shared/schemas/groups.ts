@@ -142,7 +142,11 @@ export type GroupManagementConfiguration = z.infer<typeof groupManagementConfigu
 export const groupSettingsDetailSchema = authenticatedGroupSchema.extend(groupManagementConfigurationSchema.shape);
 export type GroupSettingsDetail = z.infer<typeof groupSettingsDetailSchema>;
 
-export const GROUP_CAPABILITIES = ["view", "participate", "manage"] as const;
+/**
+ * What the viewer may do in a group. `guest`: on the team of an event the group owns, without being a member;
+ * it opens that event's record and nothing else of the group.
+ */
+export const GROUP_CAPABILITIES = ["view", "participate", "manage", "guest"] as const;
 export const groupCapabilitySchema = z.enum(GROUP_CAPABILITIES);
 export type GroupCapability = z.infer<typeof groupCapabilitySchema>;
 export const authenticatedGroupDetailResponseSchema = z.object({
@@ -151,11 +155,18 @@ export const authenticatedGroupDetailResponseSchema = z.object({
   configuration: groupManagementConfigurationSchema.optional(),
 });
 export type AuthenticatedGroupDetailResponse = z.infer<typeof authenticatedGroupDetailResponseSchema>;
-export const publicGroupDetailResponseSchema = z.object({ group: publicGroupSchema });
-export const groupDetailResponseSchema = z.union([
+export const guestGroupDetailResponseSchema = z.object({
+  kind: z.literal("guest"),
+  group: groupLabelSchema,
+  capabilities: z.tuple([z.literal("guest")]),
+});
+export const groupWorkspaceResponseSchema = z.union([
   authenticatedGroupDetailResponseSchema,
-  publicGroupDetailResponseSchema,
+  guestGroupDetailResponseSchema,
 ]);
+export type GroupWorkspaceResponse = z.infer<typeof groupWorkspaceResponseSchema>;
+export const publicGroupDetailResponseSchema = z.object({ group: publicGroupSchema });
+export const groupDetailResponseSchema = z.union([groupWorkspaceResponseSchema, publicGroupDetailResponseSchema]);
 export type GroupDetailResponse = z.infer<typeof groupDetailResponseSchema>;
 
 const groupPolicyInputShape = {

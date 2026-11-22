@@ -45,13 +45,9 @@ export function liveScheduleArrangement(
     : "rows";
 }
 
-function prefersReducedMotion(): boolean {
-  return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
 /** The room brought forward now, or null when every room stays as it is. */
-function useSpotlight(count: number): number | null {
-  const cycling = count >= LIVE_SCHEDULE_SPOTLIGHT_MIN && !prefersReducedMotion();
+function useSpotlight(count: number, animate: boolean): number | null {
+  const cycling = count >= LIVE_SCHEDULE_SPOTLIGHT_MIN && animate;
   const [index, setIndex] = useState(0);
   useEffect(() => {
     setIndex(0);
@@ -86,19 +82,22 @@ function Speakers({ speakers }: { speakers: LiveScheduleRoom["speakers"] }) {
  * broadcast graphic: the room and its start time lead, then the session and
  * its speakers with their headshots. With several rooms one room at a time
  * comes forward, its speakers named, while the others keep their place; with
- * reduced motion every room stays as it is. It takes its colors from the
+ * no motion (a monitor whose viewer prefers reduced motion) every room stays as it is. It takes its colors from the
  * operator's theme and its width from the layout box it is drawn into.
  */
 export function LiveScheduleOverlay({
   schedule,
   box = { width: 1680 },
+  animate,
 }: {
   schedule: LiveScheduleProjection | null;
   /** The layout box in frame pixels, so the graphic is set for its shape; a full-frame box by default. */
   box?: Pick<OverlayRect, "width">;
+  /** Whether the rooms may move: always on air, and on a monitor unless its viewer prefers reduced motion. */
+  animate: boolean;
 }) {
   const rooms = schedule?.available ? schedule.rooms : [];
-  const spotlight = useSpotlight(rooms.length);
+  const spotlight = useSpotlight(rooms.length, animate);
   if (!schedule || !rooms.length) return null;
   const zone = schedule.timeZone;
   const fit = liveScheduleFit(box);

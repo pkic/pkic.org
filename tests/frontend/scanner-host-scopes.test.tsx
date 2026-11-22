@@ -98,6 +98,14 @@ describe("scanner hosts", () => {
       canAdmitExceptions: true,
     });
   });
+  it.each([
+    [["agenda:check"], false],
+    [["agenda:check", "agenda:badge_print"], true],
+  ])("offers the badge print desk to %j: %s", async (permissions, offered) => {
+    portalSession.value = session(permissions);
+    await mountGroup();
+    expect(Boolean(mounts.props.at(-1)?.printHref)).toBe(offered);
+  });
   it("remounts group scanner when operator or event changes", async () => {
     portalSession.value = session(["agenda:scan"]);
     await mountGroup();
@@ -122,7 +130,16 @@ describe("scanner hosts", () => {
         async () =>
           new Response(
             JSON.stringify({
-              sponsors: [{ id, name: "Sponsor", canCapture: true, canView: false, canExport: false }],
+              sponsors: [
+                {
+                  id,
+                  name: "Sponsor",
+                  canCapture: true,
+                  canView: false,
+                  canExport: false,
+                  canRemoveAll: false,
+                },
+              ],
               page: { limit: 50, offset: 0, total: 1, hasMore: false },
             }),
             { headers: { "content-type": "application/json" } },
@@ -134,13 +151,7 @@ describe("scanner hosts", () => {
     document.body.append(host);
     await act(() => render(<SponsorLeads slug="event" timeZone="UTC" />, host));
     await settle();
-    await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Open leads for Sponsor"]')!.click());
-    await settle();
-    await act(() =>
-      [...host.querySelectorAll<HTMLButtonElement>("button")]
-        .find((button) => button.textContent === "Scan leads")!
-        .click(),
-    );
+    await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Scan leads"]')!.click());
     await settle();
     expect(mounts.props.at(-1)).toMatchObject({ allowedActions: ["lead"] });
     const initial = mounts.count;
@@ -150,13 +161,7 @@ describe("scanner hosts", () => {
     await settle();
     expect(host.textContent).not.toContain("Scoped scanner");
     expect(mounts.count).toBe(initial);
-    await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Open leads for Sponsor"]')!.click());
-    await settle();
-    await act(() =>
-      [...host.querySelectorAll<HTMLButtonElement>("button")]
-        .find((button) => button.textContent === "Scan leads")!
-        .click(),
-    );
+    await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Scan leads"]')!.click());
     await settle();
     expect(mounts.count).toBe(initial + 1);
     expect(mounts.props.at(-1)?.operatorUserId).toBe("second");

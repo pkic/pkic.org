@@ -1,3 +1,4 @@
+import type { LiveModerationReason } from "../../../../assets/shared/live-moderation-policy";
 import { readStoredLiveTicker } from "../../../../assets/shared/schemas/live-session-ticker";
 import {
   LIVE_ROOM_POLICY,
@@ -32,46 +33,25 @@ import {
   liveStageDisplaySettingsSnapshotSchema,
   type LiveStageDisplaySettings,
 } from "../../../../assets/shared/schemas/live-stage-display-settings";
+import {
+  liveScreenSyncSchema,
+  liveScreenSyncSnapshotSchema,
+  type LiveScreenSync,
+} from "../../../../assets/shared/schemas/live-screen-sync";
+import {
+  liveRoomOpeningSnapshotSchema,
+  type LiveRoomOpening,
+  liveRoomMovedOnSnapshotSchema,
+  type LiveRoomMovedOn,
+} from "../../../../assets/shared/schemas/live-room-opening";
 import { copyableLivePolls, type LivePollCopy } from "./room-poll-store";
 import type { LiveRoomSql } from "./room-sql";
-
-export interface LiveQuestionAuthorChangeRow {
-  question_id: string;
-  text: string;
-  revision: number;
-  withdrawn: number;
-  operation_id: string;
-  operation_type: "question.edit" | "question.withdraw";
-  basis_revision: number;
-  changed_at: string;
-}
-
-export interface LiveQuestionRow {
-  id: string;
-  author_user_id: string;
-  author_name: string;
-  anonymous: number;
-  body: string;
-  submitted_body: string;
-  author_revision: number;
-  author_withdrawn: number;
-  status: LiveQuestionStatus;
-  votes: number;
-  asked_at: string;
-  answered_at: string | null;
-  moderated_by_user_id: string | null;
-  moderated_by_name: string | null;
-  moderated_at: string | null;
-  rewrite_text: string | null;
-  rewritten_by_user_id: string | null;
-  rewritten_by_name: string | null;
-  rewritten_at: string | null;
-  /** The author's profile photo as they asked; the projection withholds it from an anonymous question. */
-  author_photo_url: string | null;
-  /** Who the author was as they asked (`LiveAuthorStamp` JSON); withheld like the photo from an anonymous question. */
-  author_json: string | null;
-  change_seq: number;
-}
+import {
+  LIVE_QUESTION_SELECT,
+  type LiveQuestionAddressee,
+  type LiveQuestionAuthorChangeRow,
+  type LiveQuestionRow,
+} from "./room-question-rows";
 
 export interface LiveStaffActionRow {
   seq: number;
@@ -89,18 +69,24 @@ export interface LiveRoomPendingCopy {
   questions: LiveQuestionRow[];
   polls: LivePollCopy[];
   reactions: Array<{ reaction: string; total: number }>;
+  answers: LiveAnswerCopyRow[];
   staffActions: LiveStaffActionRow[];
 }
 
-const QUESTION_SELECT = `SELECT q.id, q.author_user_id, q.author_name, q.anonymous, COALESCE(author_change.text,q.body) AS body, q.body AS submitted_body,
-  COALESCE(author_change.revision,0) AS author_revision, COALESCE(author_change.withdrawn,0) AS author_withdrawn, q.status, q.votes, q.asked_at,
-  q.answered_at, q.moderated_by_user_id, q.moderated_by_name, q.moderated_at, r.text AS rewrite_text,
-  r.by_user_id AS rewritten_by_user_id, r.by_name AS rewritten_by_name, r.at AS rewritten_at,
-  photo.photo_url AS author_photo_url, authorship.author_json, q.change_seq
-  FROM questions q LEFT JOIN question_rewrites r ON r.question_id = q.id
-  LEFT JOIN question_author_photos photo ON photo.question_id = q.id
-  LEFT JOIN question_authorship authorship ON authorship.question_id = q.id
-  LEFT JOIN question_author_changes author_change ON author_change.question_id = q.id`;
+/** An answer as reporting reads it: who wrote and accepted it, its votes, and whether a moderator removed it. */
+export interface LiveAnswerCopyRow {
+  id: string;
+  question_id: string;
+  author_user_id: string;
+  body: string;
+  created_at: string;
+  vote_count: number;
+  accepted_by_user_id: string | null;
+  accepted_at: string | null;
+  hidden_by: string | null;
+  hidden_at: string | null;
+  removed_reason: LiveModerationReason | null;
+}
 
 const EMPTY_QUEUE: LiveQueue = { question: [], "lower-third": [], poll: [], change: null };
 
@@ -121,7 +107,8 @@ export class LiveRoomStore {
     );
   }
 
-  saveSession(eventId: string, session: LiveRoomSession): void {
+  saveSession(eventId: string, session: LiveRoomSession, roomIds?: string[]): void {
+    if (roomIds) this.saveControl("chatLocations", roomIds);
     this.sql.exec(
       "INSERT INTO room_session(id, event_id, session_json) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET event_id = excluded.event_id, session_json = excluded.session_json",
       eventId,
@@ -136,8 +123,13 @@ export class LiveRoomStore {
     return row ? { eventId: row.event_id, session: liveRoomSessionSchema.parse(JSON.parse(row.session_json)) } : null;
   }
 
+  chatLocations(primary: string | null | undefined): readonly string[] {
+    const saved = this.control("chatLocations");
+    return Array.isArray(saved) ? saved : primary ? [primary] : [];
+  }
+
   question(id: string): LiveQuestionRow | null {
-    return this.sql.rows<LiveQuestionRow>(`${QUESTION_SELECT} WHERE q.id = ?`, id)[0] ?? null;
+    return this.sql.rows<LiveQuestionRow>(`${LIVE_QUESTION_SELECT} WHERE q.id = ?`, id)[0] ?? null;
   }
 
   /** A rolling question-write allowance survives room hibernation/restarts; expired times have no history role. */
@@ -193,7 +185,7 @@ export class LiveRoomStore {
 
   /** All questions, most voted first, newest first on a tie (the shared `top` order). */
   questions(): LiveQuestionRow[] {
-    return this.sql.rows<LiveQuestionRow>(`${QUESTION_SELECT} ORDER BY q.votes DESC, q.asked_at DESC, q.id`);
+    return this.sql.rows<LiveQuestionRow>(`${LIVE_QUESTION_SELECT} ORDER BY q.votes DESC, q.asked_at DESC, q.id`);
   }
 
   questionCount(): number {
@@ -223,6 +215,9 @@ export class LiveRoomStore {
     askedAt: string;
     /** Kept only for a question asked by name; an anonymous one never stores a photo. */
     authorPhotoUrl: string | null;
+    addressee?: LiveQuestionAddressee | null;
+    /** Operators prepared it; the room tells nobody else. */
+    prepared?: boolean;
   }): void {
     this.sql.exec(
       "INSERT INTO questions(id, author_user_id, author_name, anonymous, body, status, votes, asked_at, change_seq) VALUES (?, ?, ?, ?, ?, 'pending', 0, ?, ?)",
@@ -240,6 +235,14 @@ export class LiveRoomStore {
         question.id,
         question.authorPhotoUrl,
       );
+    if (question.addressee)
+      this.sql.exec(
+        "INSERT INTO question_addressees(question_id, credit_key, user_id) VALUES (?, ?, ?)",
+        question.id,
+        question.addressee.creditKey,
+        question.addressee.userId,
+      );
+    if (question.prepared) this.sql.exec("INSERT INTO question_prepared(question_id) VALUES (?)", question.id);
   }
 
   /** One vote per person: records or withdraws it and recounts. */
@@ -317,6 +320,14 @@ export class LiveRoomStore {
       "DELETE FROM question_author_changes WHERE question_id IN (SELECT id FROM questions WHERE author_user_id=?)",
       userId,
     );
+    this.sql.exec(
+      "DELETE FROM question_addressees WHERE question_id IN (SELECT id FROM questions WHERE author_user_id=?)",
+      userId,
+    );
+    this.sql.exec(
+      "DELETE FROM question_prepared WHERE question_id IN (SELECT id FROM questions WHERE author_user_id=?)",
+      userId,
+    );
     this.sql.exec("DELETE FROM question_write_times WHERE user_id=?", userId);
     this.sql.exec("DELETE FROM questions WHERE author_user_id = ?", userId);
     for (const id of recounted) this.recountQuestion(id);
@@ -357,12 +368,25 @@ export class LiveRoomStore {
     return saved ? liveAuxCompositionSchema.parse(saved) : EMPTY_LIVE_AUX_COMPOSITION;
   }
 
+  /** Whether anyone composed this output yet, a take or the room loading its starting scene. */
+  composed(output: LiveAuxOutput): boolean {
+    return this.control(`aux:${output}`) !== null;
+  }
+
   saveAux(output: LiveAuxOutput, composition: LiveAuxComposition): void {
     this.saveControl(`aux:${output}`, liveAuxCompositionSchema.parse(composition));
   }
 
+  /** Every output the room holds a composition for: the ones it always holds, then any an operator composed. */
+  auxOutputs(): LiveAuxOutput[] {
+    const stored = this.sql
+      .rows<{ name: string }>("SELECT name FROM room_controls WHERE name LIKE 'aux:%' ORDER BY name")
+      .map((row) => row.name.slice("aux:".length));
+    return [...new Set<string>([...LIVE_AUX_OUTPUTS, ...stored])];
+  }
+
   outputs(): LiveOutputs {
-    return Object.fromEntries(LIVE_AUX_OUTPUTS.map((output) => [output, this.aux(output)])) as LiveOutputs;
+    return Object.fromEntries(this.auxOutputs().map((output) => [output, this.aux(output)]));
   }
 
   /**
@@ -381,7 +405,7 @@ export class LiveRoomStore {
 
   /** Whether Program or any auxiliary output shows this poll's results; Preview is not on air. */
   pollOnAir(pollId: string): boolean {
-    return this.stage().poll?.id === pollId || LIVE_AUX_OUTPUTS.some((output) => this.aux(output).poll?.id === pollId);
+    return this.stage().poll?.id === pollId || this.auxOutputs().some((output) => this.aux(output).poll?.id === pollId);
   }
 
   speakerMessage(): LiveSpeakerMessage | null {
@@ -401,6 +425,16 @@ export class LiveRoomStore {
 
   saveStageDisplaySettings(settings: LiveStageDisplaySettings): void {
     this.saveControl("stageDisplaySettings", liveStageDisplaySettingsSchema.parse(settings));
+  }
+
+  /** Whether each room screen follows Program; a stored value that no longer parses reads as the defaults. */
+  screenSync(): LiveScreenSync {
+    const saved = liveScreenSyncSnapshotSchema.safeParse(this.control("screenSync") ?? undefined);
+    return saved.success ? saved.data : liveScreenSyncSnapshotSchema.parse(undefined);
+  }
+
+  saveScreenSync(sync: LiveScreenSync): void {
+    this.saveControl("screenSync", liveScreenSyncSchema.parse(sync));
   }
 
   queue(): LiveQueue {
@@ -452,6 +486,26 @@ export class LiveRoomStore {
     this.saveControl("overlayMode", mode);
   }
 
+  /** Whether attendees take part on schedule, or because an operator opened or closed the room. */
+  opening(): LiveRoomOpening {
+    const saved = liveRoomOpeningSnapshotSchema.safeParse(this.control("opening") ?? undefined);
+    return saved.success ? saved.data : liveRoomOpeningSnapshotSchema.parse(undefined);
+  }
+
+  saveOpening(opening: LiveRoomOpening): void {
+    this.saveControl("opening", opening);
+  }
+
+  /** Where the studio went on from this session, or null while it has not. */
+  movedOn(): LiveRoomMovedOn | null {
+    const saved = liveRoomMovedOnSnapshotSchema.safeParse(this.control("moved-on") ?? undefined);
+    return saved.success ? saved.data : null;
+  }
+
+  saveMovedOn(movedOn: LiveRoomMovedOn | null): void {
+    this.saveControl("moved-on", movedOn);
+  }
+
   private control(name: string): unknown {
     const [row] = this.sql.rows<{ value_json: string }>("SELECT value_json FROM room_controls WHERE name = ?", name);
     return row ? JSON.parse(row.value_json) : null;
@@ -492,11 +546,21 @@ export class LiveRoomStore {
       occurrenceId: room.session.occurrenceId,
       throughSeq,
       questions: this.sql.rows<LiveQuestionRow>(
-        `${QUESTION_SELECT} WHERE q.change_seq > ? ORDER BY q.change_seq`,
+        `${LIVE_QUESTION_SELECT} WHERE q.change_seq > ? ORDER BY q.change_seq`,
         copiedSeq,
       ),
       polls: copyableLivePolls(this.sql, copiedSeq),
       reactions: this.sql.rows("SELECT reaction, total FROM reaction_totals WHERE change_seq > ?", copiedSeq),
+      answers: this.sql.rows<LiveAnswerCopyRow>(
+        `SELECT a.id, a.question_id, a.author_user_id, a.body, a.created_at,
+           (SELECT COUNT(*) FROM question_answer_votes v WHERE v.answer_id = a.id) AS vote_count,
+           a.accepted_by_user_id, a.accepted_at, removal.by_user_id AS hidden_by, removal.at AS hidden_at,
+           removal.reason AS removed_reason
+         FROM question_answer_changes change JOIN question_answers a ON a.id = change.answer_id
+         LEFT JOIN room_removals removal ON removal.item_id = a.id
+         WHERE change.change_seq > ? ORDER BY change.change_seq`,
+        copiedSeq,
+      ),
       staffActions,
     };
   }
