@@ -10,6 +10,7 @@ import type { DatabaseLike, StatementLike, D1StatementResult } from "../../types
 import { AppError } from "../../errors";
 import { nowIso } from "../../utils/time";
 import { hashBadgeCredential } from "./badge-hash";
+import { scanAttemptAcceptsCapturedValueSql } from "./scan-attempt-capture";
 import { eventReadIdSql, type EventReadSelection } from "../events/selection";
 
 interface ScannerUploadReceiptRow {
@@ -165,7 +166,7 @@ export async function receiveScannerUpload(
       );
     const capturedValue = db
       .prepare(
-        "UPDATE event_scan_attempts SET scanned_value=?,scanned_value_truncated=? WHERE operation_id=? AND event_id=? AND operator_user_id=? AND sponsor_lead_removed_at IS NULL",
+        `UPDATE event_scan_attempts SET scanned_value=?,scanned_value_truncated=? WHERE operation_id=? AND event_id=? AND operator_user_id=? AND ${scanAttemptAcceptsCapturedValueSql}`,
       )
       .bind(scan.scannedValue, scan.scannedValueTruncated ? 1 : 0, scan.operationId, eventId, scan.operatorUserId);
     const results = await db.batch([

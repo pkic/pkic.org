@@ -119,70 +119,43 @@ beforeEach(async () => {
   token = await createAdminSession(env.DB, operator, crypto.randomUUID());
 });
 describe("sponsor live lead viewing through the mounted API", () => {
-  it("clears an unauthorized lead scan after evidence capture closes while blocking ordinary edits", async () => {
+  it("refuses lead removal during an active evidence purge without changing the lead or audit log", async () => {
     await grant("agenda:leads_capture");
     const lead = await env.DB.prepare("SELECT id,user_id FROM event_sponsor_leads WHERE sponsor_id=? LIMIT 1")
       .bind(sponsorId)
       .first<{ id: string; user_id: string }>();
     if (!lead) throw new Error("Seeded lead missing");
     const attemptId = crypto.randomUUID();
-    const badgeId = crypto.randomUUID();
-    await env.DB.prepare(
-      "INSERT INTO event_badge_credentials(id,event_id,user_id,credential_hash,created_at) VALUES(?,?,?,?,?)",
-    )
-      .bind(badgeId, eventId, lead.user_id, crypto.randomUUID(), "2026-10-04T10:00:00.000Z")
-      .run();
+    const now = "2026-10-04T10:00:00.000Z";
     await env.DB.prepare(
       `INSERT INTO event_scan_attempts
-        (id,event_id,sponsor_id,badge_id,user_id,operator_user_id,device_id,operation_id,request_hash,outcome,reason,action,observed_at,created_at,scanned_value)
-       VALUES(?,?,?,?,?,?,?,?,?,'eligible','captured','lead',?,?,?)`,
+        (id,event_id,sponsor_id,user_id,operator_user_id,device_id,operation_id,request_hash,outcome,reason,action,observed_at,created_at)
+       VALUES(?,?,?,?,?,?,?,?,'eligible','captured','lead',?,?)`,
     )
-      .bind(
-        attemptId,
-        eventId,
-        sponsorId,
-        badgeId,
-        lead.user_id,
-        operator,
-        crypto.randomUUID(),
-        crypto.randomUUID(),
-        crypto.randomUUID(),
-        "2026-10-04T10:00:00.000Z",
-        "2026-10-04T10:00:00.000Z",
-        "SYNTHETIC_BADGE",
-      )
+      .bind(attemptId, eventId, sponsorId, lead.user_id, operator, "device", "operation", "hash", now, now)
       .run();
-    await env.DB.prepare("UPDATE event_evidence_retention_state SET capture_closed_at=? WHERE event_id=?")
-      .bind("2026-10-04T12:00:00.000Z", eventId)
+    await env.DB.prepare(
+      "UPDATE event_evidence_retention_state SET capture_closed_at=?,active_run_id=? WHERE event_id=?",
+    )
+      .bind(now, crypto.randomUUID(), eventId)
       .run();
-    await expect(
-      env.DB.prepare("UPDATE event_scan_attempts SET outcome='denied' WHERE id=?").bind(attemptId).run(),
-    ).rejects.toThrow("EVENT_EVIDENCE_CAPTURE_CLOSED");
 
     const removed = await callApi(env, `/api/v1/events/live-leads/sponsors/${sponsorId}/leads/${lead.id}/captures`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
     });
-    expect(removed.status, await removed.clone().text()).toBe(200);
-    expect(sponsorLeadRemovalResponseSchema.parse(await removed.json())).toMatchObject({
-      removedCaptures: 1,
-    });
-    expect((await request(`/sponsors/${sponsorId}/leads/${lead.id}`)).status).toBe(404);
-    const attempt = await env.DB.prepare(
-      "SELECT user_id,badge_id,scanned_value,sponsor_lead_removed_at,sponsor_lead_removal_id FROM event_scan_attempts WHERE id=?",
-    )
-      .bind(attemptId)
-      .first<{
-        user_id: string | null;
-        badge_id: string | null;
-        scanned_value: string | null;
-        sponsor_lead_removed_at: string | null;
-        sponsor_lead_removal_id: string | null;
-      }>();
-    expect(attempt).toMatchObject({ user_id: null, badge_id: null, scanned_value: null });
-    expect(attempt?.sponsor_lead_removed_at).toMatch(/Z$/);
-    expect(attempt?.sponsor_lead_removal_id).toBeTruthy();
-    expect(await env.DB.prepare("SELECT id FROM event_sponsor_leads WHERE id=?").bind(lead.id).first()).toBeNull();
+    expect(removed.status).toBe(404);
+    expect(
+      await env.DB.prepare("SELECT user_id FROM event_scan_attempts WHERE id=?").bind(attemptId).first("user_id"),
+    ).toBe(lead.user_id);
+    expect(await env.DB.prepare("SELECT id FROM event_sponsor_leads WHERE id=?").bind(lead.id).first("id")).toBe(
+      lead.id,
+    );
+    expect(
+      await env.DB.prepare("SELECT id FROM audit_log WHERE entity_id=? AND action='sponsor_lead_captures_removed'")
+        .bind(lead.id)
+        .first(),
+    ).toBeNull();
   });
 
   it("keeps delegated lead reads within the approved sponsorship after account permissions expand", async () => {
@@ -411,7 +384,7 @@ describe("sponsor live lead viewing through the mounted API", () => {
     if (!verified.ok) throw new Error("Expected a valid synthetic scanner session");
     const racingDb = mutateBeforeMatchingQuery(
       env.DB,
-      (sql) => sql.startsWith("UPDATE event_scan_attempts SET sponsor_lead_removed_at"),
+      (sql) => sql.startsWith("UPDATE event_scan_attempts SET user_id=NULL,badge_id=NULL"),
       () =>
         env.DB.prepare("UPDATE sessions SET revoked_at=? WHERE id=?")
           .bind(new Date().toISOString(), verified.claims.sid)
@@ -428,7 +401,7 @@ describe("sponsor live lead viewing through the mounted API", () => {
     expect(ownReceipt).toEqual({ removedCaptures: 1 });
     expect(sponsorLeadRemovalResponseSchema.parse(ownReceipt).removedCaptures).toBe(1);
     const removedAttempt = await env.DB.prepare(
-      "SELECT user_id,badge_id,scanned_value,request_hash,sponsor_lead_removal_id FROM event_scan_attempts WHERE operation_id=?",
+      "SELECT user_id,badge_id,scanned_value,scanned_value_truncated,request_hash FROM event_scan_attempts WHERE operation_id=?",
     )
       .bind(operatorOperationId)
       .first<{
@@ -436,10 +409,14 @@ describe("sponsor live lead viewing through the mounted API", () => {
         badge_id: string | null;
         scanned_value: string | null;
         request_hash: string;
-        sponsor_lead_removal_id: string | null;
+        scanned_value_truncated: number | null;
       }>();
-    expect(removedAttempt).toMatchObject({ user_id: null, badge_id: null, scanned_value: null });
-    expect(removedAttempt?.sponsor_lead_removal_id).toBeTruthy();
+    expect(removedAttempt).toMatchObject({
+      user_id: null,
+      badge_id: null,
+      scanned_value: null,
+      scanned_value_truncated: null,
+    });
     expect(removedAttempt?.request_hash).not.toBe(originalHash);
     await prepareAttemptCapturedValue(
       env.DB,
@@ -522,11 +499,17 @@ describe("sponsor live lead viewing through the mounted API", () => {
     expect(sponsorLeadDetailSchema.parse(await rescanned.json()).lead.capturedAt).toBe("2026-10-04T12:00:00.000Z");
     expect(await (await request(`/sponsors/${sponsorId}/leads.csv`)).text()).toContain("attendee0@synthetic.test");
     const audits = await env.DB.prepare(
-      "SELECT audit.details_json,removed.id AS attempt_id FROM audit_log audit JOIN event_scan_attempts removed ON removed.sponsor_lead_removal_id=audit.id WHERE audit.entity_type='event_sponsor_lead' AND audit.entity_id=? AND audit.action='sponsor_lead_captures_removed' ORDER BY audit.created_at,audit.id",
+      "SELECT details_json FROM audit_log WHERE entity_type='event_sponsor_lead' AND entity_id=? AND action='sponsor_lead_captures_removed'",
     )
       .bind(lead.id)
-      .all<{ details_json: string; attempt_id: string }>();
-    expect(audits.results.map((row) => JSON.parse(row.details_json).scope).sort()).toEqual(["all", "mine"]);
+      .all<{ details_json: string }>();
+    expect(audits.results.map((row) => JSON.parse(row.details_json))).toEqual(
+      expect.arrayContaining([
+        { scope: "all", captureCount: 1 },
+        { scope: "mine", captureCount: 1 },
+      ]),
+    );
+    expect(audits.results).toHaveLength(2);
   });
 
   it("shares real captures between two independently authorized sponsor staff and refuses unrelated or ended scope", async () => {
