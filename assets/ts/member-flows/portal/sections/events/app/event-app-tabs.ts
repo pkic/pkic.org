@@ -34,6 +34,8 @@ export interface EventAppSubject {
   /** The audience projection's own standing; the management projection has none. */
   viewer?: { registrationStatus: EventParticipation["registrationStatus"] } | null;
   scannerAccess?: ScannerAccess;
+  /** Whether this reader may open their own scans or the sponsor's contact list. */
+  sponsorLeadAccess?: boolean;
   /** The public event page, when the event has one. */
   basePath?: string | null;
   /** The owning group, on the management projection only. */
@@ -125,13 +127,20 @@ export function eventAppDestinations(event: EventAppSubject, session: PortalSess
     destinations.push({
       id: "lead-scanner",
       label: "Lead scanner",
-      tabLabel: "Leads",
+      tabLabel: "Scanner",
       // One sponsor opens its scanner directly; several are chosen between explicitly.
       href: href(
         scanners.sponsors.length === 1
           ? `${base}/sponsors/${encodeURIComponent(scanners.sponsors[0]!.id)}/scanner`
           : base + "/lead-scanner",
       ),
+      icon: "leads",
+    });
+  if (event.sponsorLeadAccess)
+    destinations.push({
+      id: "sponsor-leads",
+      label: "Leads",
+      href: href(base + "/leads"),
       icon: "leads",
     });
   if (standing.registrationId)

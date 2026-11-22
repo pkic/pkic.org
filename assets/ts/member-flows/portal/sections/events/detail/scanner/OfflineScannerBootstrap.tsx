@@ -16,7 +16,15 @@ import { ScannerTaskTile } from "./ScannerDestinationTiles";
 function preparedTaskOrder(context: ScannerOfflineContext): number {
   if (context.purpose === "collection") return 0;
   if (context.occurrenceId) return 5;
-  return context.action === "attendance" ? 1 : context.action === "admission" ? 2 : context.action === "check" ? 3 : 4;
+  return context.action === "lead"
+    ? 1
+    : context.action === "attendance"
+      ? 2
+      : context.action === "admission"
+        ? 3
+        : context.action === "check"
+          ? 4
+          : 5;
 }
 
 /** The offline collector deliberately never mounts the authenticated portal shell. */
@@ -167,11 +175,13 @@ export function OfflineScannerBootstrap({ route, onSignIn }: { route: string | n
         </Alert>
       ) : (
         <EventScanner
-          key={`${context.sessionId}:${context.epochId}:${context.action}:${context.occurrenceId}:${context.roomId}`}
+          key={`${context.sessionId}:${context.epochId}:${context.action}:${context.sponsorId}:${context.occurrenceId}:${context.roomId}`}
           slug={context.slug}
           operatorUserId={context.operatorUserId}
           occurrenceId={context.occurrenceId}
           allowedActions={[context.action]}
+          sponsorId={context.sponsorId}
+          sponsorName={context.action === "lead" ? context.targetLabel : undefined}
           collectorContext={context}
           onSignIn={onSignIn}
         />

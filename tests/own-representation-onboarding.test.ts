@@ -15,6 +15,7 @@ import {
 import { currentUserIdentityCreateSchema, identityMutationResponseSchema } from "../assets/shared/schemas/identity";
 import { affiliationOfferResponseSchema } from "../assets/shared/schemas/affiliation-offer";
 import type { DatabaseLike } from "../functions/_lib/types";
+import { recordPersonalAddressAnswer } from "./helpers/account-organization";
 
 const PREVIEW = "/api/v1/users/current/identities/preview";
 const CREATE = "/api/v1/users/current/identities";
@@ -90,6 +91,18 @@ async function claim(domain: string, organizationId: string) {
     .run();
 }
 describe("email-first own representation", () => {
+  it("says a work address is personal only after the person said so and while no organization claims its domain", async () => {
+    const p = await person("person@said-personal.test");
+    const resolve = async () =>
+      identityAffiliationPreviewResponseSchema.parse(
+        await (await preview(p, { phase: "resolve", email: p.email, emailId: null })).json(),
+      ).personalAddress;
+    expect(await resolve()).toBe(false);
+    await recordPersonalAddressAnswer(env.DB, p.userId);
+    expect(await resolve()).toBe(true);
+    await claim("said-personal.test", await insertOrganization(env.DB, "Claiming Organization"));
+    expect(await resolve()).toBe(false);
+  });
   it.each([false, true])(
     "creates an affiliation and claims its domain beside any other organization (already claimed: %s)",
     async (shared) => {

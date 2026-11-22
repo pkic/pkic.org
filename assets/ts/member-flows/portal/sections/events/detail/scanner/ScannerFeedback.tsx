@@ -4,6 +4,7 @@ import type {
   EventScanResponse,
 } from "../../../../../../../shared/schemas/event-participation-scanning";
 import { scanFeedbackLabel, scanFeedbackOutcome, scanEligibilityLabel } from "./scan-stream";
+import { ScannerLeadConfirmation, type LeadConfirmation } from "./ScannerLeadConfirmation";
 
 export function ScannerFeedback({
   result,
@@ -11,6 +12,7 @@ export function ScannerFeedback({
   message,
   compact = false,
   status,
+  leadConfirmation,
 }: {
   result: EventScanResponse | null;
   action: EventScanRequest["action"];
@@ -18,6 +20,7 @@ export function ScannerFeedback({
   pending: number;
   compact?: boolean;
   status?: ScannerStatus;
+  leadConfirmation?: LeadConfirmation | null;
 }) {
   const outcome = status?.tone ?? scanFeedbackOutcome(result, action);
   return (
@@ -32,6 +35,9 @@ export function ScannerFeedback({
         </span>
       )}
       <strong>{status?.title ?? scanFeedbackLabel(result, action)}</strong>
+      {leadConfirmation && result?.outcome === "eligible" && (
+        <ScannerLeadConfirmation confirmation={leadConfirmation} />
+      )}
       {result?.admissionRecorded && result.admissionDecision && (
         <p>
           Eligibility: {scanEligibilityLabel(result)}. Attendance:{" "}

@@ -165,7 +165,7 @@ export async function receiveScannerUpload(
       );
     const capturedValue = db
       .prepare(
-        "UPDATE event_scan_attempts SET scanned_value=?,scanned_value_truncated=? WHERE operation_id=? AND event_id=? AND operator_user_id=?",
+        "UPDATE event_scan_attempts SET scanned_value=?,scanned_value_truncated=? WHERE operation_id=? AND event_id=? AND operator_user_id=? AND sponsor_lead_removed_at IS NULL",
       )
       .bind(scan.scannedValue, scan.scannedValueTruncated ? 1 : 0, scan.operationId, eventId, scan.operatorUserId);
     const results = await db.batch([

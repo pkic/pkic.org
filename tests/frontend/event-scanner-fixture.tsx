@@ -42,6 +42,7 @@ const mocks = vi.hoisted(() => ({
     state: "complete",
   })),
   cameraDestroyed: vi.fn(),
+  cameraStarted: vi.fn(),
   cameraScan: null as null | ((code: { data: string }) => void),
   suspended: vi.fn(async (_operatorUserId?: string, _sessionId?: string) => false),
   sessionListeners: new Set<() => void>(),
@@ -55,7 +56,9 @@ vi.mock("qr-scanner", () => ({
     constructor(_video: HTMLVideoElement, onDecode: (code: { data: string }) => void) {
       mocks.cameraScan = onDecode;
     }
-    async start() {}
+    async start() {
+      mocks.cameraStarted();
+    }
     destroy() {
       mocks.cameraDestroyed();
     }
@@ -169,6 +172,7 @@ export async function mount(
   actions: EventScanRequest["action"][] = ["check"],
   sponsorId?: string,
   printHref?: string,
+  canAdmitExceptions = false,
 ) {
   mocks.ready = ready;
   mocks.state = ready ? "open" : "preparing";
@@ -186,6 +190,7 @@ export async function mount(
         allowedActions={actions}
         sponsorId={sponsorId}
         printHref={printHref}
+        canAdmitExceptions={canAdmitExceptions}
       />,
       host,
     );
@@ -196,7 +201,7 @@ export async function mount(
   )!;
   await vi.waitFor(async () => {
     await act(async () => {});
-    expect(start.disabled).toBe(!ready);
+    expect(start.disabled).toBe(!ready || actions.includes("lead"));
   });
 }
 export function scannerDialog(title: string) {

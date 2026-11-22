@@ -278,12 +278,12 @@ describe("continuous scanner presentation", () => {
     await Promise.resolve();
     vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
     document.dispatchEvent(new Event("visibilitychange"));
-    expect(exit).toHaveBeenCalledOnce();
+    expect(exit).not.toHaveBeenCalled();
     expect(lock.release).toHaveBeenCalledOnce();
     release();
   });
   it.each(["Escape", "hidden"] as const)(
-    "keeps the immersive viewport after native fullscreen loss until %s, then cleans up",
+    "keeps the immersive viewport after native fullscreen loss and %s, then cleans up",
     async (stop) => {
       const element = document.createElement("div");
       let fullscreen: Element | null = element;
@@ -309,6 +309,14 @@ describe("continuous scanner presentation", () => {
           vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
           document.dispatchEvent(new Event("visibilitychange"));
           expect(lock.release).toHaveBeenCalledOnce();
+        }
+        if (stop === "hidden") {
+          expect(exit).not.toHaveBeenCalled();
+          expect(document.body.classList.contains("pk-scanner-immersive")).toBe(true);
+          vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+          document.dispatchEvent(new Event("visibilitychange"));
+          expect(lock.release).toHaveBeenCalledOnce();
+          document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
         }
         expect(exit).toHaveBeenCalledOnce();
         cleanup();

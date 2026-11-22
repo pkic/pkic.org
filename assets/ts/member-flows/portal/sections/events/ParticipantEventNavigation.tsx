@@ -9,7 +9,8 @@ import { Panel, PanelHeader, PanelBody } from "../../../../ui/Panel";
 import { Alert } from "../../../../ui/Alert";
 import { usePortalHashLocation } from "../../hash-location";
 import { EventAppBar } from "./app/EventAppBar";
-import { participantEventAppSubject, type EventAppSubject } from "./app/event-app-tabs";
+import { eventAppDestinations, participantEventAppSubject, type EventAppSubject } from "./app/event-app-tabs";
+import { portalSession } from "../../state";
 import "./ParticipantEventNavigation.css";
 
 type ScannerAccess = z.infer<typeof eventScannerAccessSchema>;
@@ -26,8 +27,10 @@ export function ParticipantEventNavigation({
   /** False on a page that brings a bottom bar of its own, as the virtual room does on a phone. */
   appBar?: boolean;
 }) {
-  const access = participantScannerAccess(event.id, event.scannerAccess);
   const base = `/events/${encodeURIComponent(event.slug)}`;
+  const operatorDestinations = eventAppDestinations(event, portalSession.value).filter((destination) =>
+    ["scanner", "lead-scanner", "sponsor-leads"].includes(destination.id),
+  );
   return (
     <>
       {/* Desktop and tablets: the page's own top tabs. Phones: the event app's bottom bar. */}
@@ -37,23 +40,11 @@ export function ParticipantEventNavigation({
         activeId={activeId}
         items={[
           ...items,
-          // The open scanner stays named in its own navigation; its route authorized it already.
-          ...(access.canScan || activeId === "scanner"
+          // The open scanner stays named even if its live discovery response has not arrived.
+          ...(activeId === "scanner" && !operatorDestinations.some((destination) => destination.id === "scanner")
             ? [{ id: "scanner", label: "Badge scanner", href: usePortalHashLocation.hrefs(base + "/scanner") }]
             : []),
-          ...(access.sponsors.length
-            ? [
-                {
-                  id: "lead-scanner",
-                  label: "Lead scanner",
-                  href: usePortalHashLocation.hrefs(
-                    access.sponsors.length === 1
-                      ? `${base}/sponsors/${encodeURIComponent(access.sponsors[0]!.id)}/scanner`
-                      : base + "/lead-scanner",
-                  ),
-                },
-              ]
-            : []),
+          ...operatorDestinations.map(({ id, label, href }) => ({ id, label, href })),
         ]}
       />
       {appBar && <EventAppBar event={event} activeId={activeId} />}

@@ -20,13 +20,12 @@ export function scannerImmersiveLifecycle(
       return;
     }
     wakeLock.release();
-    onExit();
   };
   const escape = (event: KeyboardEvent) => {
     if (event.key === "Escape") onExit();
   };
-  // Permission prompts can end native fullscreen. The fixed immersive viewport
-  // remains active until an explicit exit or the document becomes hidden.
+  // Permission prompts and phone sleep can end native fullscreen. The fixed
+  // immersive viewport remains active until the operator explicitly exits.
   document.addEventListener("visibilitychange", visibility);
   document.addEventListener("keydown", escape);
   void wakeLock.acquire();

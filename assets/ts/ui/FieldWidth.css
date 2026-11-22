@@ -11,7 +11,7 @@
  */
 
 @layer components {
-  .pk-field__control:has(> .pk-input:not(textarea), > .pk-input-group) {
+  .pk-field__control:has(> .pk-input:not(textarea), > .pk-input-group, > .pk-control-stack) {
     /* Room for a long address or organization name. */
     max-inline-size: 32rem;
   }
