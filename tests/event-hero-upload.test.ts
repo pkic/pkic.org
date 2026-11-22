@@ -277,12 +277,19 @@ describe("event decorative artwork", () => {
 
   const skyline = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 4"><path d="M0 4V1H10V4"/></svg>';
 
-  async function readMotif() {
-    return app.fetch(new Request("https://app.test/api/v1/events/pqc-2026/images/motif"), env, context as any);
+  async function readMotif(token?: string) {
+    return app.fetch(
+      new Request("https://app.test/api/v1/events/pqc-2026/images/motif", {
+        headers: token ? { authorization: `Bearer ${token}` } : {},
+      }),
+      env,
+      context as any,
+    );
   }
 
   it("serves the event's own artwork sandboxed and links it from the event", async () => {
     const { eventId, token } = await fixture();
+    await env.DB.prepare("UPDATE events SET visibility = 'public' WHERE id = ?").bind(eventId).run();
     await env.DB.prepare(
       "UPDATE events SET settings_json=json_set(settings_json, '$.promotionDesign', json(?)) WHERE id=?",
     )
@@ -308,5 +315,18 @@ describe("event decorative artwork", () => {
   it("has nothing to serve for an event on the default artwork", async () => {
     await fixture();
     expect((await readMotif()).status).toBe(404);
+  });
+
+  it("serves private artwork only to an event viewer", async () => {
+    const { eventId, token } = await fixture();
+    await env.DB.prepare(
+      "UPDATE events SET visibility = 'invitation_only', settings_json=json_set(settings_json, '$.promotionDesign', json(?)) WHERE id=?",
+    )
+      .bind(JSON.stringify({ assets: { motif: { mime: "image/svg+xml", base64: btoa(skyline) } } }), eventId)
+      .run();
+    expect((await readMotif()).status).toBe(404);
+    const visible = await readMotif(token);
+    expect(visible.status).toBe(200);
+    expect(visible.headers.get("content-security-policy")).toContain("sandbox");
   });
 });

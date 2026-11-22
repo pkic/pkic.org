@@ -40,7 +40,13 @@ function applyResponsePolicy(request: Request, response: Response, sensitive?: b
   }
 
   if (isSensitive) {
-    response.headers.set("content-security-policy", "default-src 'none'; frame-ancestors 'none'");
+    const routePolicy = response.headers.get("content-security-policy");
+    response.headers.set(
+      "content-security-policy",
+      routePolicy?.includes("sandbox")
+        ? `${routePolicy}; frame-ancestors 'none'`
+        : "default-src 'none'; frame-ancestors 'none'",
+    );
     response.headers.set("referrer-policy", "no-referrer");
     response.headers.set("x-content-type-options", "nosniff");
     response.headers.set("x-robots-tag", "noindex, nofollow, noarchive");

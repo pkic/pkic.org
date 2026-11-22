@@ -51,6 +51,7 @@ import {
 } from "../functions/_lib/services/event-tickets/issued-list";
 import { issuedTicketsQuerySchema } from "../assets/shared/schemas/event-issued-tickets";
 import { releaseUnpaidTickets } from "../functions/_lib/services/event-tickets/unpaid-release";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { listEventTicketCodes } from "../functions/_lib/services/event-tickets/code-list";
 import { reviewDisputedTicket } from "../functions/_lib/services/event-tickets/dispute";
 import { issueSponsorPassCodes, saveSponsorPasses } from "../functions/_lib/services/event-tickets/sponsor-passes";
@@ -1612,6 +1613,45 @@ describe("event tickets", () => {
     ).toEqual({ n: 1 });
     // A second run finds nothing more to release.
     expect(await releaseUnpaidTickets(env.DB, "https://example.test")).toEqual({ released: 0, failed: 0 });
+  });
+
+  it("keeps an overdue place when payment starts after the due read but before cancellation", async () => {
+    const { event, admin } = await seedTickets();
+    const configuration = await readEventTicketsConfiguration(env.DB, event);
+    await updateEventTicketSettings(env.DB, admin, event, {
+      expectedRevision: configuration.revision,
+      ...configuration.settings,
+      unpaidHoldDays: 3,
+    });
+    const pending = await register(event, "raced-hold@gmail.com");
+    const ticket = (await readRegistrationTicket(env.DB, {
+      eventId: event.id,
+      registrationId: pending.registration.id,
+    }))!;
+    await env.DB.prepare("UPDATE registration_tickets SET pay_by = ? WHERE id = ?")
+      .bind(new Date(Date.now() - 1000).toISOString(), ticket.id)
+      .run();
+
+    const racedDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare(
+        `INSERT INTO registration_ticket_payment_events (provider_event_id, ticket_id, event_type, outcome, created_at)
+       VALUES (?, ?, 'checkout.session.completed', 'processing', ?)`,
+      )
+        .bind(`evt_raced_${crypto.randomUUID()}`, ticket.id, new Date().toISOString())
+        .run(),
+    );
+    expect(await releaseUnpaidTickets(racedDb, "https://example.test")).toEqual({ released: 0, failed: 0 });
+    expect(
+      await env.DB.prepare("SELECT status FROM registrations WHERE id = ?").bind(pending.registration.id).first(),
+    ).toEqual({ status: "registered" });
+    expect(
+      await readRegistrationTicket(env.DB, { eventId: event.id, registrationId: pending.registration.id }),
+    ).toMatchObject({ status: "pending_payment", paymentProcessing: true });
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) AS n FROM audit_log WHERE action = 'registration_cancelled_unpaid'",
+      ).first(),
+    ).toEqual({ n: 0 });
   });
 
   it("runs the scheduled ticket job on request: it reminds, and releases a place that was not paid in time", async () => {

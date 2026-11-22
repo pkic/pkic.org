@@ -61,7 +61,7 @@ async function fixture() {
       { termKey: "code-of-conduct", version: "v1" },
     ],
   });
-  return { eventId, email, userId, token, body };
+  return { eventId, email, userId, identityId: identity.identityId, token, body };
 }
 
 async function invite(eventId: string, email: string, overrides: { status?: string; expiresAt?: string } = {}) {
@@ -158,6 +158,40 @@ describe("the invited reader's portal projections", () => {
     expect(invited[0]?.participation?.invitation).toEqual({ id: inviteId, remindersPausedUntil: null });
   });
 
+  it("hides an invitation after its added address loses its active identity", async () => {
+    const f = await fixture();
+    const added = `work-${crypto.randomUUID()}@example.test`;
+    await env.DB.prepare(
+      `INSERT INTO user_emails (id, user_id, email, normalized_email, verified_at, identity_id, created_at)
+       VALUES (?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+    )
+      .bind(crypto.randomUUID(), f.userId, added, added, f.identityId)
+      .run();
+    await invite(f.eventId, added);
+    expect((await call(EVENT_PATH, f.token)).status).toBe(200);
+    expect((await upcoming(f.token)).events).toHaveLength(1);
+
+    await env.DB.prepare("UPDATE identities SET ended_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?")
+      .bind(f.identityId)
+      .run();
+    expect((await call(EVENT_PATH, f.token)).status).toBe(404);
+    expect((await upcoming(f.token)).events).toEqual([]);
+  });
+
+  it("does not show an invite to an unverified primary when another mailbox is verified", async () => {
+    const f = await fixture();
+    const added = `verified-${crypto.randomUUID()}@example.test`;
+    await env.DB.prepare(
+      `INSERT INTO user_emails (id, user_id, email, normalized_email, verified_at, created_at)
+       VALUES (?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+    )
+      .bind(crypto.randomUUID(), f.userId, added, added)
+      .run();
+    await invite(f.eventId, f.email);
+    expect((await call(EVENT_PATH, f.token)).status).toBe(404);
+    expect((await upcoming(f.token)).events).toEqual([]);
+  });
+
   it("offers nothing to a signed-in reader without an invitation", async () => {
     const f = await fixture();
     await env.DB.prepare("UPDATE events SET visibility = 'public' WHERE id = ?").bind(f.eventId).run();
@@ -242,6 +276,34 @@ describe("registration form placements follow event visibility", () => {
     const f = await fixture();
     await env.DB.prepare("UPDATE events SET visibility = 'public' WHERE id = ?").bind(f.eventId).run();
     expect((await call(PLACEMENT)).status).toBe(200);
+  });
+});
+
+describe("ticket and unfinished registration reads follow event visibility", () => {
+  it("hides an invitation-only event until the account holds an invitation", async () => {
+    const f = await fixture();
+    const quote = () =>
+      call(`${EVENT_PATH}/tickets/quote`, f.token, {
+        method: "POST",
+        body: JSON.stringify({ dayAttendance: [], save: false }),
+      });
+    const start = () =>
+      call(`${EVENT_PATH}/registrations/unfinished`, f.token, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+    expect((await call(`${EVENT_PATH}/tickets/offer`)).status).toBe(404);
+    expect((await call(`${EVENT_PATH}/tickets/offer`, f.token)).status).toBe(404);
+    expect((await quote()).status).toBe(404);
+    expect((await call(`${EVENT_PATH}/registrations/unfinished/current`, f.token)).status).toBe(404);
+    expect((await start()).status).toBe(404);
+
+    await invite(f.eventId, f.email);
+    expect((await call(`${EVENT_PATH}/tickets/offer`, f.token)).status).toBe(200);
+    // The fixture has no ticket choices, so an authorized quote reaches that policy refusal.
+    expect((await quote()).status).toBe(409);
+    expect((await call(`${EVENT_PATH}/registrations/unfinished/current`, f.token)).status).toBe(200);
+    expect((await start()).status).toBe(200);
   });
 });
 

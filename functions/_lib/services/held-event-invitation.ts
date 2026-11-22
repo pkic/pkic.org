@@ -12,18 +12,17 @@ type HeldInvitationStatus = Extract<InviteRecord["status"], "sent" | "accepted">
 
 /**
  * The one match for "this user holds an active invitation to this event": an
- * invitation addressed to the account's primary address or a verified added
- * one, in one of the given
+ * invitation addressed to one of the account's sign-in eligible addresses,
+ * in one of the given
  * statuses, whose effective deadline under the event window has not passed.
  * Event visibility, registration access and the portal prompt all read it, so
  * the person who can see an invitation-only event is the person it admits.
  *
  * Aliases and the user expression are trusted source constants; statuses come
  * from the closed union above. The user expression appears once, so a `?`
- * placeholder binds once. Acting on an invitation applies the full sign-in
- * address rule (`readRegistrationAccessEvidence` for registration,
- * `findHeldAttendeeInvitation` for declining or postponing); this shallower
- * match keeps visibility and lists within D1's expression depth limit.
+ * placeholder binds once. The address must still sign in to the account;
+ * ownership alone does not keep an ended work identity's invitations visible.
+ * The policy stays in a JOIN condition to fit D1's expression-depth limit.
  */
 export function heldEventInvitationConditions(input: {
   inviteAlias: string;
@@ -36,12 +35,9 @@ export function heldEventInvitationConditions(input: {
 }): string {
   const { inviteAlias: invite, eventAlias: event } = input;
   return `${invite}.event_id = ${event}.id
-    AND EXISTS (SELECT 1 FROM (SELECT ${input.userIdSql} AS id) held_account
-      WHERE EXISTS (SELECT 1 FROM users held_person
-              WHERE held_person.id = held_account.id AND held_person.normalized_email = ${invite}.invitee_email)
-         OR EXISTS (SELECT 1 FROM user_emails held_address
-              WHERE held_address.user_id = held_account.id AND held_address.normalized_email = ${invite}.invitee_email
-                AND held_address.verified_at IS NOT NULL))
+    AND EXISTS (SELECT 1 FROM (SELECT 1) held_anchor
+      JOIN (SELECT ${input.userIdSql} AS id) held_account
+        ON ${accountAddressSignsInSql("held_account.id", `${invite}.invitee_email`)})
     AND ${invite}.status IN (${input.statuses.map((status) => `'${status}'`).join(", ")})
     ${input.attendeeOnly ? `AND ${invite}.invite_type = 'attendee'` : ""}
     AND ${activeEffectiveInviteExpirySql(effectiveInviteExpirySql(invite, event), NOW_SQL)}`;
@@ -73,7 +69,6 @@ function heldAttendeeInvitationSelection(eventId: string, userId: string, invite
               attendeeOnly: true,
             })}
            WHERE held_event.id = ? ${inviteId ? "AND held_invite.id = ?" : ""}
-             AND ${accountAddressSignsInSql("held_user.id", "held_invite.invitee_email")}
            LIMIT 1`,
     bindings: [userId, eventId, ...(inviteId ? [inviteId] : [])],
   };

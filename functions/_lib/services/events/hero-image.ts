@@ -14,7 +14,7 @@ import { parseJsonSafe } from "../../utils/json";
 import { eventOwnMotif } from "../../../../assets/shared/schemas/event-promotion-design";
 import { base64ToBytes } from "../../../../assets/shared/base64";
 import { isAuditChangeGuardFailure } from "../audit";
-import { getEventBySlug } from "../events";
+import { getEventBySlug, type EventRecord } from "../events";
 import { guardEventResourceManagementDatabase } from "../event-series/management";
 import { withStorageUploadCompensation } from "../storage-deletion-outbox";
 import { prepareEventDetail, decodeEventDetail, type EventDetailRow } from "./detail";
@@ -168,8 +168,7 @@ export async function currentEventHeroImage(
  * The event's own decorative artwork. Uploaded SVG is served under a sandbox
  * policy, so opening it directly can never run script on this origin.
  */
-export async function currentEventMotif(db: DatabaseLike, slug: string): Promise<Response> {
-  const event = await getEventBySlug(db, slug);
+export function currentEventMotif(event: Pick<EventRecord, "settings_json">): Response {
   const motif = eventOwnMotif(parseJsonSafe<Record<string, unknown>>(event.settings_json, {}));
   if (!motif) throw new AppError(404, "IMAGE_NOT_FOUND", "Image not found");
   return new Response(base64ToBytes(motif.base64).buffer as ArrayBuffer, {

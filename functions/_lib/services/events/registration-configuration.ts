@@ -14,19 +14,13 @@ import {
   type EventDayAttendanceCountRow,
 } from "../event-days";
 import { eventDayReadModels, requiredTermReadModel } from "../event-read-models";
-import {
-  EVENT_COLUMNS,
-  prepareRequiredTerms,
-  resolveEventSessionTypes,
-  type EventRecord,
-  type EventTermRecord,
-} from "../events";
+import { prepareRequiredTerms, resolveEventSessionTypes, type EventRecord, type EventTermRecord } from "../events";
 import { toEventFormResolutionEvent, prepareEventFormDefinitionRead, type ActiveFormDefinition } from "../forms";
 import { preparePlacedEventFormDefinition } from "../forms/read";
 import type { EventReadSelection } from "./selection";
 import { AppError } from "../../errors";
 import type { PreparedRequestViewerRead } from "../../auth/optional-request-viewer";
-import { buildEventAudiencePredicate } from "./visibility";
+import { prepareAudienceEventBySlug } from "./audience-event";
 
 type EventConfigurationEvent = Pick<
   EventRecord,
@@ -61,16 +55,10 @@ export async function getEventRegistrationConfigurationBySlug(
   const selection = { slug: eventSlug };
   const formRead = preparePlacedEventFormDefinition(db, selection, purpose);
   const read = prepareRegistrationConfiguration(db, selection, purpose, formRead);
-  const audience = buildEventAudiencePredicate("events", {
-    userId: auth?.userId ?? null,
-    ...(auth ? { admin: auth.permissionActor } : {}),
-  });
   const authentication = auth?.statements ?? [];
   const loaded = await db.batch([
     ...authentication,
-    db
-      .prepare(`SELECT ${EVENT_COLUMNS} FROM events WHERE slug = ? AND ${audience.sql}`)
-      .bind(eventSlug, ...audience.bindings),
+    prepareAudienceEventBySlug(db, eventSlug, auth),
     ...read.statements,
   ]);
   if (auth) await auth.decode(loaded.slice(0, authentication.length));

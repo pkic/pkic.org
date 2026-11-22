@@ -28,7 +28,7 @@ let admin: Awaited<ReturnType<typeof seedEventAndAdmin>>["admin"];
 
 beforeEach(async () => {
   await resetDb();
-  ({ eventId, admin } = await seedEventAndAdmin(env.DB));
+  ({ eventId, admin } = await seedEventAndAdmin(env.DB, { visibility: "public" }));
   await env.DB.batch([
     // The event is always ahead of the test's clock.
     env.DB.prepare("UPDATE events SET starts_at = ?, ends_at = ? WHERE id = ?").bind(

@@ -60,6 +60,7 @@ import {
   readRegistrationTicket,
 } from "../../../../_lib/services/event-tickets/registration-ticket";
 import { readEventAdminContext } from "../../../../_lib/services/events/authorized-context";
+import { readAudienceEventBySlug } from "../../../../_lib/services/events/audience-event";
 import { getEventBySlug } from "../../../../_lib/services/events";
 import { requireEventPermission } from "./authorization";
 
@@ -107,18 +108,21 @@ const EventTicketCodePatch = openApiRoute(eventTicketCodeUpdateRouteSchema, asyn
 const EventTicketOfferGet = openApiRoute(eventTicketOfferRouteSchema, async (c: AdminContext, data) => {
   markResponseSensitive(c);
   const db = requestDb(c);
-  const event = await getEventBySlug(db, data.params.eventSlug);
+  const { event, identity } = await readAudienceEventBySlug(db, c.req.raw, c.env, data.params.eventSlug);
   // A guest has no ticket to be shown yet: theirs is issued with the registration, from the same rules.
-  if (!getUserSessionToken(c.req.raw)) return json(guestTicketOffer(event));
-  const identity = await requireIdentityFromRequest(db, c.req.raw, c.env);
+  if (!identity) {
+    if (getUserSessionToken(c.req.raw)) throw new AppError(401, "AUTH_REQUIRED", "A human session is required");
+    return json(guestTicketOffer(event));
+  }
   return json(await readEventTicketOffer(db, c.env, event, identity, data.query.identityId));
 });
 
 const EventTicketQuotePost = openApiRoute(eventTicketQuoteRouteSchema, async (c: AdminContext, data) => {
   markResponseSensitive(c);
+  if (!getUserSessionToken(c.req.raw)) throw new AppError(401, "AUTH_REQUIRED", "Missing user session token");
   const db = requestDb(c);
-  const identity = await requireIdentityFromRequest(db, c.req.raw, c.env);
-  const event = await getEventBySlug(db, data.params.eventSlug);
+  const { event, identity } = await readAudienceEventBySlug(db, c.req.raw, c.env, data.params.eventSlug);
+  if (!identity) throw new AppError(401, "AUTH_REQUIRED", "Missing user session token");
   return json(await quoteEventTicket(db, c.env, event, identity, data.body));
 });
 

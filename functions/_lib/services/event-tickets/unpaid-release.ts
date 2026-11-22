@@ -7,6 +7,7 @@
  */
 import { all } from "../../db/queries";
 import { isStateGuardFailure, prepareStateGuard } from "../../db/authorization-guard";
+import { AppError } from "../../errors";
 import { logError } from "../../logging";
 import type { DatabaseLike } from "../../types";
 import { nowIso } from "../../utils/time";
@@ -54,8 +55,9 @@ export async function releaseUnpaidTickets(
         (statements) =>
           db.batch([
             prepareStateGuard(db, {
-              sql: `SELECT 1 FROM registration_tickets
-                    WHERE id = ? AND status = 'pending_payment' AND pay_by IS NOT NULL AND pay_by <= ?`,
+              sql: `SELECT 1 FROM registration_tickets ticket
+                    WHERE ticket.id = ? AND ticket.status = 'pending_payment' AND ticket.pay_by IS NOT NULL
+                      AND ticket.pay_by <= ? AND NOT ${ticketPaymentProcessingSql("ticket.id")}`,
               bindings: [ticket.id, nowIso()],
             }),
             ...statements,
@@ -75,7 +77,7 @@ export async function releaseUnpaidTickets(
       released += 1;
     } catch (error) {
       // Paid or changed meanwhile: nothing was written, and the next run judges it again.
-      if (isStateGuardFailure(error)) continue;
+      if (isStateGuardFailure(error) || (error instanceof AppError && error.code === "REGISTRATION_CHANGED")) continue;
       failed += 1;
       logError("TICKET_UNPAID_RELEASE_FAILED", { registrationId: ticket.registration_id });
     }

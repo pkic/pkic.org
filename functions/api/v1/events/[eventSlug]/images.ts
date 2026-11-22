@@ -13,6 +13,7 @@ import {
   currentEventMotif,
   saveEventHeroImage,
 } from "../../../../_lib/services/events/hero-image";
+import { readAudienceEventBySlug } from "../../../../_lib/services/events/audience-event";
 
 export const EventHeroImagePost = openApiRoute(eventHeroImageSaveRouteSchema, async (c: AdminContext, data) => {
   markResponseSensitive(c);
@@ -38,6 +39,8 @@ export const EventHeroImageGet = openApiRoute(eventHeroImageGetRouteSchema, asyn
   ),
 );
 
-export const EventMotifGet = openApiRoute(eventMotifGetRouteSchema, async (c: AdminContext, data) =>
-  currentEventMotif(requestDb(c), data.params.eventSlug),
-);
+export const EventMotifGet = openApiRoute(eventMotifGetRouteSchema, async (c: AdminContext, data) => {
+  markResponseSensitive(c);
+  const { event } = await readAudienceEventBySlug(requestDb(c), c.req.raw, c.env, data.params.eventSlug);
+  return currentEventMotif(event);
+});

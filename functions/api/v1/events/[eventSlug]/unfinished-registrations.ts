@@ -5,11 +5,13 @@ import {
   unfinishedRegistrationStartRouteSchema,
   unfinishedRegistrationSummaryRouteSchema,
 } from "../../../../../assets/shared/schemas/unfinished-registrations";
-import { requireIdentityFromRequest } from "../../../../_lib/auth/user-session";
+import { getUserSessionToken, requireIdentityFromRequest } from "../../../../_lib/auth/user-session";
+import { AppError } from "../../../../_lib/errors";
 import { markResponseSensitive, requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { json } from "../../../../_lib/http";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { getEventBySlug } from "../../../../_lib/services/events";
+import { readAudienceEventBySlug } from "../../../../_lib/services/events/audience-event";
 import {
   listUnfinishedRegistrationNotes,
   readOwnUnfinishedRegistration,
@@ -38,9 +40,11 @@ const UnfinishedRegistrationNotesGet = openApiRoute(
 const UnfinishedRegistrationStartPost = openApiRoute(
   unfinishedRegistrationStartRouteSchema,
   async (c: AdminContext, data) => {
+    if (!getUserSessionToken(c.req.raw)) throw new AppError(401, "AUTH_REQUIRED", "Missing user session token");
     const db = requestDb(c);
-    const identity = await requireIdentityFromRequest(db, c.req.raw, c.env);
-    await startUnfinishedRegistration(db, await getEventBySlug(db, data.params.eventSlug), identity.userId);
+    const { event, identity } = await readAudienceEventBySlug(db, c.req.raw, c.env, data.params.eventSlug);
+    if (!identity) throw new AppError(401, "AUTH_REQUIRED", "Missing user session token");
+    await startUnfinishedRegistration(db, event, identity.userId);
     return json({ success: true });
   },
 );
@@ -49,11 +53,11 @@ const OwnUnfinishedRegistrationGet = openApiRoute(
   ownUnfinishedRegistrationGetRouteSchema,
   async (c: AdminContext, data) => {
     markResponseSensitive(c);
+    if (!getUserSessionToken(c.req.raw)) throw new AppError(401, "AUTH_REQUIRED", "Missing user session token");
     const db = requestDb(c);
-    const identity = await requireIdentityFromRequest(db, c.req.raw, c.env);
-    return json(
-      await readOwnUnfinishedRegistration(db, await getEventBySlug(db, data.params.eventSlug), identity.userId),
-    );
+    const { event, identity } = await readAudienceEventBySlug(db, c.req.raw, c.env, data.params.eventSlug);
+    if (!identity) throw new AppError(401, "AUTH_REQUIRED", "Missing user session token");
+    return json(await readOwnUnfinishedRegistration(db, event, identity.userId));
   },
 );
 
