@@ -1,5 +1,6 @@
 import type { EventHeroVariantWidth } from "../../../../assets/shared/event-hero-image-variants";
 import { storedRasterRenditionResponse } from "../raster-image-renditions";
+import { SANDBOXED_IMAGE_CONTENT_SECURITY_POLICY } from "../image-response";
 import type { EventHeroImageSave } from "../../../../assets/shared/schemas/event-hero-image";
 import {
   EVENT_HERO_IMAGE_MAX_BYTES,
@@ -175,7 +176,7 @@ export function currentEventMotif(event: Pick<EventRecord, "settings_json">): Re
     headers: {
       "content-type": motif.mime,
       "cache-control": "no-store",
-      "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+      "content-security-policy": SANDBOXED_IMAGE_CONTENT_SECURITY_POLICY,
       "x-content-type-options": "nosniff",
       "x-robots-tag": "noindex, nofollow",
     },

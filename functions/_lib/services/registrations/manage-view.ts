@@ -27,7 +27,11 @@ import {
   type RegistrationSponsorSharingRow,
 } from "../event-participation/sponsor-consent";
 import { holdsWorkAddress } from "../../email-domains/contact-kind";
-import { prepareTicketPaymentDue, type TicketPaymentDue } from "../event-tickets/registration-ticket";
+import {
+  prepareTicketPaymentDue,
+  ticketPaymentDisputedSql,
+  type TicketPaymentDue,
+} from "../event-tickets/registration-ticket";
 import { parseVerifiedAddresses, verifiedAddressesJsonSql } from "../user-emails";
 import { persistedUtcInstant } from "../../utils/time";
 
@@ -84,11 +88,7 @@ export async function buildRegistrationManageView(
       )
       .bind(registration.user_id, registration.id),
     prepareTicketPaymentDue(db, registration.id),
-    db
-      .prepare(
-        "SELECT 1 AS disputed FROM registration_tickets WHERE registration_id = ? AND status = 'payment_under_review'",
-      )
-      .bind(registration.id),
+    db.prepare(`SELECT ${ticketPaymentDisputedSql("?")} AS disputed`).bind(registration.id),
   ]);
   const event = batchFirst<EventRecord>(eventResult);
   if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");

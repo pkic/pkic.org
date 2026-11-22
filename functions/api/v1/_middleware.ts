@@ -1,4 +1,5 @@
 import { hasAuthenticationCredential } from "../../_lib/auth/session-cookies";
+import { SANDBOXED_IMAGE_CONTENT_SECURITY_POLICY } from "../../_lib/services/image-response";
 
 const NO_STORE_CACHE_CONTROL = "no-store, max-age=0";
 
@@ -40,11 +41,12 @@ function applyResponsePolicy(request: Request, response: Response, sensitive?: b
   }
 
   if (isSensitive) {
-    const routePolicy = response.headers.get("content-security-policy");
+    // A served image opts in by setting exactly the sandboxed image policy; every other route gets none.
+    const sandboxedImage = response.headers.get("content-security-policy") === SANDBOXED_IMAGE_CONTENT_SECURITY_POLICY;
     response.headers.set(
       "content-security-policy",
-      routePolicy?.includes("sandbox")
-        ? `${routePolicy}; frame-ancestors 'none'`
+      sandboxedImage
+        ? `${SANDBOXED_IMAGE_CONTENT_SECURITY_POLICY}; frame-ancestors 'none'`
         : "default-src 'none'; frame-ancestors 'none'",
     );
     response.headers.set("referrer-policy", "no-referrer");

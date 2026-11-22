@@ -92,7 +92,8 @@ function financialStatus(event: StripeEvent, object: StripeObject, domainOutcome
     case "charge.dispute.created":
       return "disputed";
     case "charge.dispute.closed":
-      return object.status === "won" ? "paid" : "disputed";
+      // Won, or an inquiry closed without a chargeback: the money stayed.
+      return object.status === "won" || object.status === "warning_closed" ? "paid" : "disputed";
     default:
       return null;
   }

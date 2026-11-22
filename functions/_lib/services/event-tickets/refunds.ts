@@ -272,7 +272,7 @@ export function prepareRefundedTotal(
     db
       .prepare(
         `UPDATE registration_tickets SET refunded_amount = ${returnedSql},
-           status = CASE WHEN status = 'paid' THEN ${statusAfterRefundSql(returnedSql)} ELSE status END,
+           status = CASE WHEN status IN ('paid', 'payment_under_review') THEN ${statusAfterRefundSql(returnedSql)} ELSE status END,
            refunds_seen_at = ?, revision = revision + 1, updated_at = ?
          WHERE id = ? AND payment_intent_id = ? AND (refunds_seen_at IS NULL OR refunds_seen_at < ?)`,
       )
@@ -440,8 +440,14 @@ export async function processTicketRefunds(
               { fetcher, apiBase: env.STRIPE_API_BASE },
             )
           : null;
+      // Past the provider's idempotency window with no refund found for this request: it was never sent. It fails
+      // where organizers see it, rather than being sent again unguarded or retried unseen.
       if (refund.attempts > 0 && !prior && Date.now() - Date.parse(refund.created_at) >= SAFE_REFUND_RETRY_AGE_MS)
-        throw new AppError(502, "STRIPE_ERROR", "The refund needs manual reconciliation before another send");
+        throw new AppError(
+          409,
+          STRIPE_REFUND_REFUSED,
+          "The payment provider has no record of this refund. Request it again.",
+        );
       const created =
         prior ??
         (await createStripeRefund(

@@ -16,6 +16,7 @@ import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { priceTicket, readTicketPerson, resolveTicket } from "./assignment";
 import { ticketPaymentProcessingSql } from "./payment";
+import { ticketPaymentNeedsReviewSql } from "./payment-review";
 import { refundDeadlineSql } from "./refund-policy";
 import { OPEN_REFUND_SQL } from "./refunds";
 import { planRepriceTicketForDays } from "./reprice";
@@ -269,10 +270,18 @@ export const ticketPaymentOnItsWaySql = (registrationId: string) =>
   `EXISTS (SELECT 1 FROM registration_tickets due WHERE due.registration_id = ${registrationId}
            AND due.status = 'pending_payment' AND ${ticketPaymentProcessingSql("due.id")})`;
 
-/** A contested payment suspends the ticket until organizers settle its standing. */
+/**
+ * A contested payment suspends the ticket until organizers settle its standing.
+ * A settled ticket whose provider record already shows the dispute or refund
+ * counts too, before the ticket itself has caught up. A refund the ticket has
+ * already applied, such as all of it going back after a move to free days, does not.
+ */
 export const ticketPaymentDisputedSql = (registrationId: string) =>
   `EXISTS (SELECT 1 FROM registration_tickets disputed WHERE disputed.registration_id = ${registrationId}
-           AND disputed.status = 'payment_under_review')`;
+           AND (disputed.status = 'payment_under_review'
+             OR (disputed.status IN ('free', 'paid') AND disputed.payment_intent_id IS NOT NULL
+                 AND disputed.refunded_amount < disputed.paid_amount
+                 AND ${ticketPaymentNeedsReviewSql("disputed.payment_intent_id")})))`;
 
 /** What is still owed for a registration's ticket; no row when nothing is. */
 export interface TicketPaymentDue {

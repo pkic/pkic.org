@@ -41,11 +41,17 @@ export async function readRefundPolicy(
 /**
  * A paid ticket's status once `refunded` of its payment has gone back: refunded when nothing of the payment
  * is left but fees kept from its refunds, and the ticket costs something. A ticket that moved to days that
- * cost nothing got its money back and still stands; so does one that got part of its payment back.
+ * cost nothing got its money back and still stands; so does one that got part of its payment back. A ticket
+ * under payment review leaves the review only when all of its payment went back.
  */
 export const statusAfterRefundSql = (refunded: string) =>
-  `CASE WHEN status NOT IN ('paid', 'refunded') THEN status
-        WHEN amount > 0 AND paid_amount - (${refunded}) <= kept_fee THEN 'refunded' ELSE 'paid' END`;
+  `CASE WHEN status NOT IN ('paid', 'refunded', 'payment_under_review') THEN status
+        WHEN amount > 0 AND paid_amount - (${refunded}) <= kept_fee THEN 'refunded'
+        WHEN status = 'payment_under_review' THEN status ELSE 'paid' END`;
+
+/** A ticket under payment review whose payment the provider kept after all: paid, or refunded if all went back. */
+export const statusAfterKeptPaymentSql = `CASE WHEN amount > 0 AND paid_amount - refunded_amount <= kept_fee
+  THEN 'refunded' ELSE 'paid' END`;
 
 /** A ticket that can take a refund now: paid, with money left on it, and no other refund under way. */
 const REFUNDABLE_TICKET_SQL = `ticket.status = 'paid' AND ticket.paid_amount > ticket.refunded_amount

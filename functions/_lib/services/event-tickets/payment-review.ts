@@ -12,8 +12,9 @@ export const ticketPaymentNeedsReviewSql = (paymentIntent: string) => `EXISTS (
 export async function suspendTicketWithPaymentReview(db: DatabaseLike, paymentIntent: string): Promise<void> {
   await db
     .prepare(
-      `UPDATE registration_tickets SET status = 'payment_under_review', revision = revision + 1, updated_at = ?
-     WHERE payment_intent_id = ? AND status = 'paid'
+      `UPDATE registration_tickets SET status = 'payment_under_review', revision = revision + 1, updated_at = ?1
+     WHERE id = (SELECT ticket_id FROM registration_ticket_checkouts WHERE payment_intent_id = ?2)
+       AND payment_intent_id = ?2 AND status = 'paid'
        AND ${ticketPaymentNeedsReviewSql("registration_tickets.payment_intent_id")}`,
     )
     .bind(nowIso(), paymentIntent)

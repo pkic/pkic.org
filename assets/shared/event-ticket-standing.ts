@@ -42,7 +42,7 @@ export const TICKET_STANDING_COPY = {
     title: "Payment under review",
     noticeTitle: "Your payment is under review",
     status: "Payment under review",
-    body: "Your badge and check-in code are unavailable while the payment is under review. Contact the event organizers.",
+    body: "Your printed badge and check-in code are unavailable while the payment is under review. Contact the event organizers.",
     action: null,
     tone: "danger",
   },

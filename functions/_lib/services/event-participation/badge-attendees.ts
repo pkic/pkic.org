@@ -14,15 +14,15 @@ import { eventReadIdSql, type EventReadSelection } from "../events/selection";
 import { eventContactAccessSql } from "./evidence-retention";
 import type { D1StatementResult } from "../../types";
 import type { DatabaseLike } from "../../types";
-import { ticketPaymentNeedsReviewSql } from "../event-tickets/payment-review";
+import { ticketPaymentDisputedSql } from "../event-tickets/registration-ticket";
 /**
  * A registration's ticket is settled when it holds none, or one that is free
- * or paid. One that awaits payment, or was refunded or canceled, admits nobody.
+ * or paid and not under review. One that awaits payment, or was refunded or
+ * canceled, admits nobody.
  */
 export function registrationTicketSettledSql(registrationAlias: string): string {
-  return `NOT EXISTS(SELECT 1 FROM registration_tickets unsettled WHERE unsettled.registration_id=${registrationAlias}.id
-    AND (unsettled.status NOT IN ('free','paid') OR
-         (unsettled.payment_intent_id IS NOT NULL AND ${ticketPaymentNeedsReviewSql("unsettled.payment_intent_id")})))`;
+  return `(NOT EXISTS(SELECT 1 FROM registration_tickets unsettled WHERE unsettled.registration_id=${registrationAlias}.id
+    AND unsettled.status NOT IN ('free','paid')) AND NOT ${ticketPaymentDisputedSql(`${registrationAlias}.id`)})`;
 }
 /** Eligibility shared by attendee selection and the all-matching print population. */
 export function badgeAttendeeEligibilitySql(registrationAlias: string, userAlias: string): string {

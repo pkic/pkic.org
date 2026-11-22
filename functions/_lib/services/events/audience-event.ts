@@ -43,5 +43,5 @@ export async function readAudienceEventBySlug(
     userId: auth?.userId ?? null,
     ...(auth ? { admin: auth.permissionActor } : {}),
   });
-  return { event, identity, audienceEvidence };
+  return { event, identity, claims: identity ? (auth?.claims ?? null) : null, audienceEvidence };
 }

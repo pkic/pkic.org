@@ -32,6 +32,7 @@ import {
   prepareCancelRegistrationTicket,
   prepareRestoreRegistrationTicket,
   readRegistrationTicket,
+  ticketPaymentDisputedSql,
 } from "../functions/_lib/services/event-tickets/registration-ticket";
 import { handleEventTicketStripeEvent, openTicketCheckout } from "../functions/_lib/services/event-tickets/payment";
 import { dispatchStripePaymentEvent } from "../functions/_lib/services/payments/stripe-webhook";
@@ -552,10 +553,11 @@ describe("event tickets", () => {
     await openTicketCheckout(env.DB, paymentEnv, "https://example.test", input, stripe);
     const ticketId = (await readRegistrationTicket(env.DB, input))!.id;
     await paidEvent(ticketId, "cs_test_ticket", 19500);
-    const dispute = (id: string, type: string, status: string) =>
+    const dispute = (id: string, type: string, status: string, created?: number) =>
       handleEventTicketStripeEvent(env.DB, {
         id,
         type,
+        ...(created === undefined ? {} : { created }),
         data: { object: { id: "dp_synthetic", payment_intent: "pi_synthetic", status } },
       });
     expect(await dispute("evt_dispute_created", "charge.dispute.created", "needs_response")).toMatchObject({
@@ -616,17 +618,21 @@ describe("event tickets", () => {
         .bind(ticketId)
         .first(),
     ).toEqual({ count: 0 });
-    expect(await dispute("evt_dispute_won", "charge.dispute.closed", "won")).toMatchObject({
-      outcome: "dispute_won_review",
+    expect(await dispute("evt_dispute_won", "charge.dispute.closed", "won", 2_000)).toMatchObject({
+      outcome: "dispute_kept",
     });
-    expect((await readRegistrationTicket(env.DB, input))!.status).toBe("payment_under_review");
+    // The payment stayed, so the ticket admits again.
+    expect((await readRegistrationTicket(env.DB, input))!.status).toBe("paid");
     expect(
       await env.DB.prepare(
         "SELECT status FROM payment_ledger_entries WHERE provider_payment_intent_id = 'pi_synthetic'",
       ).first(),
     ).toEqual({ status: "paid" });
-    // A provider-verified manual correction can restore admission after a won dispute.
-    await env.DB.prepare("UPDATE registration_tickets SET status = 'paid' WHERE id = ?").bind(ticketId).run();
+    // The dispute's opening arriving again after its close reopens nothing.
+    expect(await dispute("evt_dispute_created_late", "charge.dispute.created", "needs_response", 1_000)).toMatchObject({
+      outcome: "handling_required",
+    });
+    expect((await readRegistrationTicket(env.DB, input))!.status).toBe("paid");
     expect(
       await env.DB.prepare(
         `SELECT ${badgeAttendeeEligibilitySql("registration", "person")} AS eligible
@@ -830,6 +836,69 @@ describe("event tickets", () => {
     expect((await readRegistrationTicket(env.DB, input))!.status).toBe("pending_payment");
     expect(await paidEvent(ticketId, "cs_test_ticket", 19500)).toMatchObject({ outcome: "handling_required" });
     expect((await readRegistrationTicket(env.DB, input))!.status).toBe("payment_under_review");
+  });
+
+  it("ends the payment review when the provider keeps the payment or returns all of it", async () => {
+    const { event } = await seedTickets();
+    const { registration, user } = await register(event, "review-ends@gmail.com");
+    const input = { eventId: event.id, registrationId: registration.id, userId: user.id };
+    await openTicketCheckout(env.DB, paymentEnv, "https://example.test", input, stripe);
+    const ticketId = (await readRegistrationTicket(env.DB, input))!.id;
+    await paidEvent(ticketId, "cs_test_ticket", 19500);
+    const send = (id: string, type: string, object: Record<string, unknown>, created: number) =>
+      handleEventTicketStripeEvent(env.DB, {
+        id,
+        type,
+        created,
+        data: { object: { payment_intent: "pi_synthetic", ...object } },
+      });
+    const status = async () => (await readRegistrationTicket(env.DB, input))!.status;
+
+    // An inquiry closed without a chargeback keeps the payment, so the ticket admits again.
+    await send(
+      "evt_inquiry_opened",
+      "charge.dispute.created",
+      { id: "dp_inquiry", status: "warning_needs_response" },
+      1_000,
+    );
+    expect(await status()).toBe("payment_under_review");
+    await send("evt_inquiry_closed", "charge.dispute.closed", { id: "dp_inquiry", status: "warning_closed" }, 2_000);
+    expect(await status()).toBe("paid");
+
+    // All of a payment under review refunded at the provider: the ticket is refunded, not held for review.
+    await env.DB.prepare("UPDATE registration_tickets SET status = 'payment_under_review' WHERE id = ?")
+      .bind(ticketId)
+      .run();
+    await send(
+      "evt_full_refund",
+      "charge.refunded",
+      { id: "ch_synthetic", amount_refunded: 19500, refunded: true },
+      3_000,
+    );
+    expect(await status()).toBe("refunded");
+  });
+
+  it("does not hold a ticket for review over a refund it already applied", async () => {
+    const { event } = await seedTickets();
+    const { registration, user } = await register(event, "moved-to-free-days@gmail.com");
+    const input = { eventId: event.id, registrationId: registration.id, userId: user.id };
+    await openTicketCheckout(env.DB, paymentEnv, "https://example.test", input, stripe);
+    const ticketId = (await readRegistrationTicket(env.DB, input))!.id;
+    await paidEvent(ticketId, "cs_test_ticket", 19500);
+    // The holder moved to days that cost nothing, so all of the payment goes back and the ticket still stands.
+    await env.DB.prepare("UPDATE registration_tickets SET amount = 0 WHERE id = ?").bind(ticketId).run();
+    await handleEventTicketStripeEvent(env.DB, {
+      id: "evt_all_back_for_free_days",
+      type: "charge.refunded",
+      created: 1_000,
+      data: { object: { id: "ch_synthetic", payment_intent: "pi_synthetic", amount_refunded: 19500, refunded: true } },
+    });
+    expect((await readRegistrationTicket(env.DB, input))!.status).toBe("paid");
+    expect(
+      await env.DB.prepare(`SELECT ${ticketPaymentDisputedSql("?")} AS disputed`)
+        .bind(registration.id)
+        .first(),
+    ).toEqual({ disputed: 0 });
   });
 
   it("converges the ticket to disputed when fallback evidence records just after settlement", async () => {
@@ -1255,7 +1324,12 @@ describe("event tickets", () => {
       )
         .bind(refundId)
         .first();
-      expect(row).toMatchObject({ attempts: 2, submitted_at: null, failed_at: null });
+      // Past the provider's idempotency window with no refund found, it was never sent: it fails where organizers see it.
+      expect(row).toMatchObject({
+        attempts: 2,
+        submitted_at: null,
+        failed_at: caseName === "expired_key" ? expect.any(String) : null,
+      });
     },
   );
 

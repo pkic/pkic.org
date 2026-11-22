@@ -131,16 +131,14 @@ export function TicketsTab({
           }
           tone={data.totals.awaitingCount ? "warn" : undefined}
         />
-        <StatCard
-          label="Payment under review"
-          value={formatNumber(data.totals.underReviewCount)}
-          note={
-            data.totals.underReviewCount
-              ? `${formatTicketAmount(data.totals.underReviewAmount, currency)} under review`
-              : undefined
-          }
-          tone={data.totals.underReviewCount ? "danger" : undefined}
-        />
+        {data.totals.underReviewCount > 0 && (
+          <StatCard
+            label="Payment under review"
+            value={formatNumber(data.totals.underReviewCount)}
+            note={`${formatTicketAmount(data.totals.underReviewAmount, currency)} under review`}
+            tone="danger"
+          />
+        )}
         <StatCard label="Free tickets" value={formatNumber(data.totals.freeCount)} />
         <StatCard label="Next price change" value={next?.startsOn ? formatCalendarDate(next.startsOn) : "None"} />
       </div>
@@ -236,7 +234,7 @@ export function TicketsTab({
           await codes.current?.reload();
         }}
       />
-      <TicketCodesPanel slug={slug} configuration={data} canWrite={canWrite} table={codes} />
+      {canWrite && <TicketCodesPanel slug={slug} configuration={data} canWrite={canWrite} table={codes} />}
       <TicketStepTextsPanel slug={slug} configuration={data} canWrite={canWrite} onSaved={reload} />
       <TicketPaymentPanel slug={slug} configuration={data} canWrite={canWrite} onSaved={reload} />
     </div>

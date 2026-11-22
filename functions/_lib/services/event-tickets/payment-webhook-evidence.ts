@@ -61,3 +61,6 @@ export const providerInstant = (seconds: unknown): string | null =>
 
 /** Stripe's events about one refund, by whichever name the account's API version sends them. */
 export const REFUND_EVENT_TYPES = ["refund.updated", "refund.failed", "charge.refund.updated"];
+
+/** How a dispute closes when the payment stays with the event: won, or an inquiry closed without a chargeback. */
+export const DISPUTE_KEPT_STATUSES = ["won", "warning_closed"];

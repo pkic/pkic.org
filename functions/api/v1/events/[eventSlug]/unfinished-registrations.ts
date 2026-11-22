@@ -5,10 +5,9 @@ import {
   unfinishedRegistrationStartRouteSchema,
   unfinishedRegistrationSummaryRouteSchema,
 } from "../../../../../assets/shared/schemas/unfinished-registrations";
-import { getUserSessionToken, requireIdentityFromRequest } from "../../../../_lib/auth/user-session";
-import { verifyUserSessionRequest } from "../../../../_lib/auth/user-session-request";
+import { guardUserSessionRequestDatabase } from "../../../../_lib/auth/member";
+import { getUserSessionToken, resolveUserSessionContext } from "../../../../_lib/auth/user-session";
 import { userSessionRequestAuthorizationEvidence } from "../../../../_lib/auth/user-session-evidence";
-import { guardAuthorizedDatabase } from "../../../../_lib/db/authorization-guard";
 import { AppError } from "../../../../_lib/errors";
 import { markResponseSensitive, requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { json } from "../../../../_lib/http";
@@ -45,14 +44,13 @@ const UnfinishedRegistrationStartPost = openApiRoute(
   async (c: AdminContext, data) => {
     if (!getUserSessionToken(c.req.raw)) throw new AppError(401, "AUTH_REQUIRED", "Missing user session token");
     const db = requestDb(c);
-    const { event, identity, audienceEvidence } = await readAudienceEventBySlug(
+    const { event, identity, claims, audienceEvidence } = await readAudienceEventBySlug(
       db,
       c.req.raw,
       c.env,
       data.params.eventSlug,
     );
-    if (!identity) throw new AppError(401, "AUTH_REQUIRED", "Missing user session token");
-    const claims = await verifyUserSessionRequest(c.req.raw, c.env);
+    if (!identity || !claims) throw new AppError(401, "AUTH_REQUIRED", "Missing user session token");
     await startUnfinishedRegistration(
       db,
       event,
@@ -80,15 +78,14 @@ const OwnUnfinishedRegistrationStopPost = openApiRoute(
   ownUnfinishedRegistrationStopRouteSchema,
   async (c: AdminContext, data) => {
     const db = requestDb(c);
-    const identity = await requireIdentityFromRequest(db, c.req.raw, c.env);
+    const { claims, session } = await resolveUserSessionContext(db, c.req.raw, c.env);
     const event = await getEventBySlug(db, data.params.eventSlug);
-    const claims = await verifyUserSessionRequest(c.req.raw, c.env);
-    const guardedDb = guardAuthorizedDatabase(
-      db,
-      userSessionRequestAuthorizationEvidence(claims),
-      () => new AppError(409, "AUTHORIZATION_CONTEXT_CHANGED", "The active user session changed"),
+    await stopUnfinishedRegistration(
+      guardUserSessionRequestDatabase(db, claims),
+      event,
+      session.identity.id,
+      data.body,
     );
-    await stopUnfinishedRegistration(guardedDb, event, identity.userId, data.body);
     return json({ success: true });
   },
 );

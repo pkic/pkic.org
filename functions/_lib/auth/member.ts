@@ -4,6 +4,8 @@ import type { AuthMember, DatabaseLike, Env } from "../types";
 import { guardAuthorizedDatabase } from "../db/authorization-guard";
 import { getUserSessionToken, resolveUserSessionFromRequest } from "./user-session";
 import { memberSessionAuthorizationEvidence, userSessionAuthorizationEvidence } from "./identity-capacities";
+import { userSessionRequestAuthorizationEvidence } from "./user-session-evidence";
+import type { UserSessionTokenClaims } from "./user-session-token";
 export {
   findEligibleMemberById,
   memberSignInAuthorizationEvidence,
@@ -57,8 +59,17 @@ export function guardUserSessionDatabase(
   return guardAuthorizedDatabase(
     db,
     userSessionAuthorizationEvidence(account.userId, account.sessionId),
-    () => new AppError(409, "AUTHORIZATION_CONTEXT_CHANGED", "The active user session changed"),
+    sessionChanged,
   );
+}
+
+/** A current-user command rechecks the verified token's live session, with its idle and staff limits, in its write batch. */
+export function guardUserSessionRequestDatabase(db: DatabaseLike, claims: UserSessionTokenClaims): DatabaseLike {
+  return guardAuthorizedDatabase(db, userSessionRequestAuthorizationEvidence(claims), sessionChanged);
+}
+
+function sessionChanged(): AppError {
+  return new AppError(409, "AUTHORIZATION_CONTEXT_CHANGED", "The active user session changed");
 }
 
 const memberByRequest = new WeakMap<Request, AuthMember>();

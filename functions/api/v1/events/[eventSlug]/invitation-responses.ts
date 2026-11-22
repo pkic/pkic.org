@@ -2,11 +2,11 @@ import {
   eventInvitationDeclineRouteSchema,
   eventInvitationRemindersRouteSchema,
 } from "../../../../../assets/shared/schemas/route-contracts-event-invitation";
+import { guardUserSessionRequestDatabase } from "../../../../_lib/auth/member";
 import { resolveUserSessionContext } from "../../../../_lib/auth/user-session";
-import { userSessionRequestAuthorizationEvidence } from "../../../../_lib/auth/user-session-evidence";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
 import { markResponseSensitive, requestDb, type AdminContext } from "../../../../_lib/db/context";
-import { guardAuthorizedDatabase, prepareAuthorizationGuard } from "../../../../_lib/db/authorization-guard";
+import { prepareAuthorizationGuard } from "../../../../_lib/db/authorization-guard";
 import { processOutboxByIdBackground } from "../../../../_lib/email/outbox";
 import { AppError } from "../../../../_lib/errors";
 import { json } from "../../../../_lib/http";
@@ -28,11 +28,7 @@ async function heldInvitationContext(c: AdminContext, params: { eventSlug: strin
   const scope = { eventId: event.id, userId: session.identity.id, inviteId: params.inviteId };
   const invite = await findHeldAttendeeInvitation(db, scope);
   if (!invite) throw new AppError(404, "INVITE_NOT_FOUND", "No open invitation to this event for your account.");
-  const guardedDb = guardAuthorizedDatabase(
-    db,
-    userSessionRequestAuthorizationEvidence(claims),
-    () => new AppError(409, "AUTHORIZATION_CONTEXT_CHANGED", "The active user session changed"),
-  );
+  const guardedDb = guardUserSessionRequestDatabase(db, claims);
   return {
     db: guardedDb,
     invite,

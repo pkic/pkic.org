@@ -10,6 +10,7 @@ import { ticketPaymentNeedsReviewSql } from "./payment-review";
 import {
   providerInstant,
   REFUND_EVENT_TYPES,
+  DISPUTE_KEPT_STATUSES,
   stripeObjectFields,
   type SettlementRow,
   type StripeEvent,
@@ -22,7 +23,7 @@ import { ticketRefundNote } from "../../../../assets/shared/event-ticket-display
 import { eventTicketPath } from "../../../../assets/shared/event-participation-link";
 import { prepareStripePaymentEvent } from "../payments/ledger";
 import { primaryIdentityIdSql } from "../identities/affiliation-projection";
-import { readRefundPolicy, refundDeadlineSql } from "./refund-policy";
+import { readRefundPolicy, refundDeadlineSql, statusAfterKeptPaymentSql } from "./refund-policy";
 import {
   prepareCompleteRefund,
   prepareFailRefund,
@@ -537,19 +538,29 @@ export async function handleEventTicketStripeEvent(
     object.payment_intent &&
     (object.payment_intent === row.payment_intent_id || object.payment_intent === row.checkout_payment_intent_id)
   ) {
-    // A contested or lost payment cannot admit its holder. A later "won" event does not by itself restore
-    // admission: provider events can arrive out of order and the payment may also have been refunded.
-    const blocked = event.type === "charge.dispute.created" || object.status !== "won";
-    outcome = blocked ? "handling_required" : "dispute_won_review";
-    if (blocked && row.status === "paid")
-      statements.push(
-        db
-          .prepare(
-            `UPDATE registration_tickets SET status = 'payment_under_review', revision = revision + 1, updated_at = ?
-             WHERE id = ? AND payment_intent_id = ? AND status = 'paid'`,
-          )
-          .bind(now, row.ticket_id, row.payment_intent_id),
-      );
+    // A contested or lost payment cannot admit its holder. One the provider kept after all, because the dispute
+    // was won or the inquiry closed without a chargeback, admits again: paid, or refunded if all of it went back.
+    // A charge has one dispute, so its "created" event arriving after its close reopens nothing.
+    const kept = event.type === "charge.dispute.closed" && DISPUTE_KEPT_STATUSES.includes(object.status ?? "");
+    outcome = kept ? "dispute_kept" : "handling_required";
+    statements.push(
+      kept
+        ? db
+            .prepare(
+              `UPDATE registration_tickets SET status = ${statusAfterKeptPaymentSql},
+                 revision = revision + 1, updated_at = ?
+               WHERE id = ? AND payment_intent_id = ? AND status = 'payment_under_review'`,
+            )
+            .bind(now, row.ticket_id, object.payment_intent)
+        : db
+            .prepare(
+              `UPDATE registration_tickets SET status = 'payment_under_review', revision = revision + 1, updated_at = ?
+               WHERE id = ? AND payment_intent_id = ? AND status = 'paid'
+                 AND NOT EXISTS (SELECT 1 FROM registration_ticket_payment_events closed
+                                 WHERE closed.ticket_id = registration_tickets.id AND closed.outcome = 'dispute_kept')`,
+            )
+            .bind(now, row.ticket_id, object.payment_intent),
+    );
   }
   statements.push(
     db
