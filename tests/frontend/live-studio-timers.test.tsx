@@ -58,10 +58,25 @@ describe("studio timers", () => {
     expect(commands(live).at(-1)).toEqual({ type: "timer.control", timerId: "qa", action: "start" });
   });
 
-  it("resets a timer from its row, sets what it does at zero, and hands a session timer back to the agenda", () => {
+  it("runs a session timer with the agenda, offering only a minute either way until it is nudged", () => {
     const { host, live } = mountDesk(liveSnapshot({ viewer: OPERATOR }), "stage");
     const time = panel(host, "Time");
-    void act(() => labeled(time, "Reset Session").click());
+    const [session] = liveSnapshot().timers;
+    void act(() =>
+      live.latest().deliver({ type: "timers.changed", timers: [{ ...session!, followsAgenda: true, heldMs: 0 }] }),
+    );
+    for (const control of ["Start Session", "Pause Session", "Reset Session", "Session: follow the agenda"])
+      expect(time.querySelector(`[aria-label="${control}"]`)).toBeNull();
+    expect(labeled(time, "Add a minute to Session")).toBeTruthy();
+    expect(labeled(time, "Take a minute from Session")).toBeTruthy();
+  });
+
+  it("hands a nudged session timer back to the agenda from its row, and sets what it does at zero", () => {
+    const { host, live } = mountDesk(liveSnapshot({ viewer: OPERATOR }), "stage");
+    const time = panel(host, "Time");
+    expect(time.textContent).toContain("Off the agenda");
+    expect(time.querySelector('[aria-label="Reset Session"]')).toBeNull();
+    void act(() => labeled(time, "Session: follow the agenda").click());
     void act(() => labeled(time, "Session timer").click());
     void act(() => button(document.body, "Timer settings").click());
     const dialog = document.querySelector<HTMLElement>("dialog[open]")!;
@@ -77,7 +92,7 @@ describe("studio timers", () => {
     void act(() => labeled(time, "Session timer").click());
     void act(() => button(document.body, "Follow the agenda").click());
     expect(commands(live).map((sent) => liveRoomClientMessageSchema.parse(sent))).toEqual([
-      { type: "timer.control", timerId: "session", action: "reset" },
+      { type: "timer.control", timerId: "session", action: "follow" },
       {
         type: "timer.configure",
         timerId: "session",

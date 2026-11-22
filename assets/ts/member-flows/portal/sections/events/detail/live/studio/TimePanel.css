@@ -47,6 +47,8 @@
   @container studio-time (width < 46rem) {
     .pk-studio-time__minus,
     .pk-studio-time__plus,
+    /* A session on the agenda has only the minutes, so its control goes with them. */
+    .pk-studio-time__transport[data-following],
     .pk-studio-time__outputs .pk-output-target > .pk-menu {
       display: none;
     }
@@ -136,6 +138,7 @@
   }
   .pk-studio-time__transport {
     grid-area: transport;
+    justify-self: end;
   }
   .pk-studio-time__menu {
     display: flex;

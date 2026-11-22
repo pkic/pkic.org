@@ -93,6 +93,11 @@ describe("a session timer that follows the agenda", () => {
     expect(controlLiveTimer(reset, session, "follow", now)).toMatchObject({ followsAgenda: true, heldMs: 0 });
   });
 
+  it("keeps waiting for its session when nudged before it starts, so it still starts on time", () => {
+    const timer = sessionLiveTimer();
+    expect(adjustLiveTimer(timer, future, 60, now)).toBe(timer);
+  });
+
   it("takes a minute while running and leaves the agenda for the operators' clock", () => {
     const taken = adjustLiveTimer(sessionLiveTimer(), session, -60, now);
     expect(taken).toMatchObject({ followsAgenda: false, running: true, anchorAt: at(49 * MINUTE) });

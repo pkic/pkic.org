@@ -40,7 +40,7 @@ function Fixed({ children }: { children: ComponentChildren }) {
   return <LiveClockContext.Provider value={fixedClock}>{children}</LiveClockContext.Provider>;
 }
 
-function TimeSpecimen() {
+function TimeSpecimen({ state = panelState }: { state?: LiveRoomState }) {
   return (
     <Fixed>
       <div data-density="compact">
@@ -52,12 +52,12 @@ function TimeSpecimen() {
           </header>
           <div class="pk-studio-panel__body">
             <TimePanel
-              state={panelState}
-              clock={panelState.session.timeZone}
+              state={state}
+              clock={state.session.timeZone}
               send={send}
               disabled={false}
               next={null}
-              targets={{ state: panelState, programActive: true, disabled: false, sendProgram: send }}
+              targets={{ state, programActive: true, disabled: false, sendProgram: send }}
             />
           </div>
         </Panel>
@@ -121,8 +121,14 @@ export const studioTimerSections: PreviewSection[] = [
   {
     id: "studio-time-panel",
     title: "Studio: Time panel",
-    note: "One row per timer: value and progress, PVW and PGM first, then Start, Reset and a minute either way; the menu holds every action.",
+    note: "One row per timer: value and progress, PVW and PGM first, then Start, Reset and a minute either way; the menu holds every action. The session timer waits on the agenda with no controls.",
     render: () => <TimeSpecimen />,
+  },
+  {
+    id: "studio-time-panel-session-running",
+    title: "Studio: session timer during its session",
+    note: "On the agenda the session timer runs by itself: its row offers only a minute either way.",
+    render: () => <TimeSpecimen state={stageClockState} />,
   },
   {
     id: "studio-timer-settings",
