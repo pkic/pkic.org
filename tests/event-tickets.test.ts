@@ -291,7 +291,7 @@ describe("event tickets", () => {
     expect(third.ticket).toMatchObject({ ticketName: "Vendor" });
   });
 
-  it("keeps decisions when another ticket joins the classifier", async () => {
+  it("keeps decisions when other tickets join or leave the classifier", async () => {
     const { event, admin } = await seedTickets();
     await register(event, "one@vendor-example.test", classifier({ pqcc_vendor: 0.97, pqcc_attendee: 0.03 }));
     // Decisions for another organization from earlier questions: an organizer's, which counts, and an older answer.
@@ -334,6 +334,24 @@ describe("event tickets", () => {
       type.presetOrganizations,
     ]);
     expect(Object.fromEntries(counts)).toEqual({ pqcc_attendee: 0, pqcc_vendor: 2, pqcc_academic: 0 });
+
+    // Only the vendor ticket keeps a description: its decisions still apply, though the model is no longer asked.
+    for (const key of ["pqcc_attendee", "pqcc_academic"]) {
+      const current = await readEventTicketsConfiguration(env.DB, event);
+      const type = current.types.find((candidate) => candidate.key === key)!;
+      await saveEventTicketType(env.DB, admin, event, type.id, {
+        expectedRevision: current.revision,
+        key: type.key,
+        name: type.name,
+        descriptionMarkdown: type.descriptionMarkdown,
+        classifierDescription: "",
+        classifierThresholdPercent: type.classifierThresholdPercent,
+        isDefault: type.isDefault,
+        freeRequiresWorkEmail: type.freeRequiresWorkEmail,
+        active: type.active,
+      });
+    }
+    expect((await register(event, "three@vendor-example.test")).ticket).toMatchObject({ ticketName: "Vendor" });
   });
 
   it("lets the person choose when the classifier is unsure and falls back to the default when it fails", async () => {

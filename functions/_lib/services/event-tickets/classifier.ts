@@ -223,11 +223,11 @@ export async function decideOrganizationTicket(
   subject: TicketClassifierSubject,
 ): Promise<StoredTicketDecision | null> {
   const options = classifierOptions(types);
-  if (options.length < 2) return null;
-  const key = subjectKey(subject);
-  if (!key.organizationName && !key.emailDomain) return null;
+  // An event without a classifier reads no decisions. One that still describes a ticket keeps those made for it.
+  if (!options.length) return null;
   const stored = await readStoredTicketDecision(db, types, subject);
   if (stored) return stored;
+  if (options.length < 2) return null;
   const asked = await askTicketClassifier(env, options, subject);
   if (!asked) return null;
   const decided = decideClassifiedTicket(options, asked.probabilities);
