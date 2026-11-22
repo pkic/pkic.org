@@ -46,13 +46,25 @@ function sessionTokenFrom(response: Response): string {
   return decodeURIComponent(cookie.split(";")[0].split("=")[1]);
 }
 
+/** A sponsor contact has no separate way in: they start with their email like anyone else. */
+async function signUpToken(email: string): Promise<string> {
+  expect((await call(jsonRequest("/api/v1/auth/sign-up", { email, acceptsAccountPolicies: true }))).status).toBe(200);
+  const [outbox] = await queryAll<{ payload_json: string }>(
+    env.DB,
+    "SELECT payload_json FROM email_outbox WHERE template_key = 'user_sign_up_link' ORDER BY rowid DESC LIMIT 1",
+  );
+  const payload = await deliveredEmailPayload<{ magicLinkUrl: string }>(env.DB, env, outbox.payload_json);
+  const query = new URL(payload.magicLinkUrl).hash.split("?", 2)[1] ?? "";
+  return new URLSearchParams(query).get("token")!;
+}
+
 async function readSponsorAccessToken(): Promise<string> {
   const [outbox] = await queryAll<{ payload_json: string }>(
     env.DB,
     "SELECT payload_json FROM email_outbox WHERE template_key = 'sponsor-portal-access' ORDER BY created_at DESC LIMIT 1",
   );
   const stored = JSON.parse(outbox.payload_json) as { portalUrl: string; __authorizedCapabilityMarkers?: unknown[] };
-  expect(stored.portalUrl).toContain("/portal/#/verify?token=pkcq1_");
+  expect(stored.portalUrl).toContain("/portal/#/verify?next=%2Fsponsors&token=pkcq1_");
   expect(stored.__authorizedCapabilityMarkers).toHaveLength(1);
   const payload = await deliveredEmailPayload<{ portalUrl: string }>(env.DB, env, outbox.payload_json);
   const query = new URL(payload.portalUrl).hash.split("?", 2)[1] ?? "";
@@ -144,16 +156,17 @@ describe("sponsor capacity in the canonical portal session", () => {
     return createAdminSession(env.DB, user.id, `sponsor-user-${crypto.randomUUID()}`);
   }
 
-  it("redeems a sponsor access link into pkic_session and lists only consenting attendees", async () => {
+  it("signs a sponsor contact up into pkic_session and lists only consenting attendees", async () => {
     const sponsorId = await createActiveEventSponsor("Leader", "leader@sponsor.test");
     await seedConsentingRegistration(eventId, "yes@attendee.test", "sponsor-data-sharing");
     await seedConsentingRegistration(eventId, "no@attendee.test", "privacy-policy");
 
-    const requested = await call(
-      jsonRequest("/api/v1/sponsors/access-links", { email: "leader@sponsor.test", eventSlug: "pqc-2026" }),
+    const verified = await call(
+      jsonRequest("/api/v1/auth/verify-link", {
+        token: await signUpToken("leader@sponsor.test"),
+        organization: { personal: true },
+      }),
     );
-    expect(requested.status).toBe(200);
-    const verified = await call(jsonRequest("/api/v1/auth/verify-link", { token: await readSponsorAccessToken() }));
     expect(verified.status).toBe(200);
     const body = (await verified.json()) as {
       identity: { email: string };
@@ -310,6 +323,68 @@ describe("sponsor capacity in the canonical portal session", () => {
     ).toMatchObject({ status: 403 });
   });
 
+  it("asks a new work address for its organization before the sponsor link opens a session", async () => {
+    await createActiveEventSponsor("Leader", "setup@sponsor-setup.test");
+    const token = await readSponsorAccessToken();
+    const redeem = (organization?: { answer: { personal: true } }) =>
+      redeemSponsorSignInCapability(env.DB, {
+        token,
+        signingSecret: env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret",
+        sessionTtlHours: 8,
+        organization,
+      });
+    const before = (await queryAll(env.DB, "SELECT id FROM sessions")).length;
+    const asked = await redeem();
+    expect(asked).toMatchObject({ required: { organizationRequired: { personalAllowed: true } } });
+    expect(await queryAll(env.DB, "SELECT id FROM sessions")).toHaveLength(before);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = 'setup@sponsor-setup.test'"),
+    ).toHaveLength(0);
+
+    const established = await redeem({ answer: { personal: true } });
+    expect("session" in established).toBe(true);
+    expect(await queryAll(env.DB, "SELECT id FROM sessions")).toHaveLength(before + 1);
+  });
+
+  it("sends the first-sign-in notice when a sponsor link signs in through an added address", async () => {
+    const userId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO users (id, email, normalized_email, email_verified_at, active, created_at, updated_at)
+         VALUES (?, 'owner@gmail.com', 'owner@gmail.com', datetime('now'), 1, datetime('now'), datetime('now'))`,
+      ).bind(userId),
+      env.DB.prepare(
+        `INSERT INTO user_emails (id, user_id, email, normalized_email, verified_at, created_at)
+         VALUES (?, ?, 'contact@gmail.com', 'contact@gmail.com', datetime('now'), datetime('now'))`,
+      ).bind(crypto.randomUUID(), userId),
+      env.DB.prepare(
+        `INSERT INTO identities (id, user_id, organization_id, source, show_on_organization_profile,
+           invited_at, started_at, created_at, updated_at)
+         VALUES (?, ?, NULL, 'account', 0, datetime('now'), datetime('now'), datetime('now'), datetime('now'))`,
+      ).bind(crypto.randomUUID(), userId),
+    ]);
+    await createActiveEventSponsor("Leader", "contact@gmail.com");
+    const result = await redeemSponsorSignInCapability(env.DB, {
+      token: await readSponsorAccessToken(),
+      signingSecret: env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret",
+      sessionTtlHours: 8,
+    });
+    expect("session" in result && result.session.identity.id).toBe(userId);
+    expect(await queryAll(env.DB, "SELECT email_id IS NOT NULL AS marked FROM session_email_authentication")).toEqual([
+      { marked: 1 },
+    ]);
+    expect(
+      await queryAll(env.DB, "SELECT first_signed_in_at IS NOT NULL AS noticed FROM user_emails WHERE user_id = ?", [
+        userId,
+      ]),
+    ).toEqual([{ noticed: 1 }]);
+    const notices = await queryAll<{ recipient: string }>(
+      env.DB,
+      "SELECT json_extract(payload_json, '$.to') AS recipient FROM email_outbox WHERE template_key = 'account_security_notice' ORDER BY recipient",
+    );
+    expect(notices).toHaveLength(2);
+  });
+
   it("rolls back sponsor redemption if the contact changes before its D1 batch", async () => {
     const sponsorId = await createActiveEventSponsor("Leader", "race@sponsor.test");
     const token = await readSponsorAccessToken();
@@ -318,6 +393,7 @@ describe("sponsor capacity in the canonical portal session", () => {
       token,
       signingSecret: env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret",
       sessionTtlHours: 8,
+      organization: { answer: { personal: true } },
     });
     await gate.reached;
     await env.DB.prepare("UPDATE sponsorships SET contact_email = ?, updated_at = datetime('now') WHERE id = ?")
@@ -382,11 +458,12 @@ describe("sponsor capacity in the canonical portal session", () => {
 
   it("logs out through canonical auth and revokes the one user session", async () => {
     await createActiveEventSponsor("Leader", "logout@sponsor.test");
-    const requested = await call(
-      jsonRequest("/api/v1/sponsors/access-links", { email: "logout@sponsor.test", eventSlug: "pqc-2026" }),
+    const verified = await call(
+      jsonRequest("/api/v1/auth/verify-link", {
+        token: await signUpToken("logout@sponsor.test"),
+        organization: { personal: true },
+      }),
     );
-    expect(requested.status).toBe(200);
-    const verified = await call(jsonRequest("/api/v1/auth/verify-link", { token: await readSponsorAccessToken() }));
     const token = sessionTokenFrom(verified);
     const logout = await call(
       new Request("https://app.test/api/v1/auth/logout", {

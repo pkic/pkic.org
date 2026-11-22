@@ -33,6 +33,9 @@ const RegistrationBadgePrinting = lazy(() =>
 const ProposalDetailPage = lazy(() =>
   import("../events/detail/ProposalDetailPage").then((module) => ({ default: module.ProposalDetailPage })),
 );
+const GroupEventTickets = lazy(() =>
+  import("./GroupEventTickets").then((module) => ({ default: module.GroupEventTickets })),
+);
 const GroupEventCommunications = lazy(() =>
   import("./GroupEventCommunications").then((module) => ({ default: module.GroupEventCommunications })),
 );
@@ -67,9 +70,6 @@ const EventStaffScanner = lazy(() =>
 );
 const BadgeCredentials = lazy(() =>
   import("../events/detail/badges/BadgeCredentials").then((module) => ({ default: module.BadgeCredentials })),
-);
-const SponsorLeads = lazy(() =>
-  import("../events/detail/agenda/SponsorLeads").then((module) => ({ default: module.SponsorLeads })),
 );
 const AgendaEditor = lazy(() =>
   import("../events/detail/agenda/AgendaEditor").then((module) => ({ default: module.AgendaEditor })),
@@ -213,7 +213,7 @@ export function GroupEventWorkspace({
     !responsesActive &&
     !speakersActive &&
     !callActive &&
-    ((activeTab === "registrations" && detailId !== "badges") || activeTab === "proposals");
+    ((activeTab === "registrations" && detailId !== "badges" && detailId !== "tickets") || activeTab === "proposals");
 
   return (
     <BreadcrumbBranch
@@ -290,6 +290,16 @@ export function GroupEventWorkspace({
                     eventSlug={event.slug}
                     purpose="event_registration"
                     badgesActive={detailId === "badges"}
+                    ticketsActive={detailId === "tickets"}
+                    tickets={
+                      canManage ? (
+                        <GroupEventTickets
+                          eventSlug={event.slug}
+                          registrationsPath={tabPath("registrations")}
+                          canManage={canManage}
+                        />
+                      ) : undefined
+                    }
                     badges={
                       canManage ? (
                         <Suspense fallback={<Spinner />}>
@@ -404,7 +414,7 @@ export function GroupEventWorkspace({
                   slug={event.slug}
                   basePath={tabPath("scanner")}
                   section={detailId}
-                  canPrintLabels={canManage}
+                  canPrintLabels={canManage || hasEventAgendaPermission(event.id, "agenda:badge_print")}
                 />
               )}
               {activeTab === "live" && (
@@ -423,11 +433,6 @@ export function GroupEventWorkspace({
                     slug={event.slug}
                     canManage={canManageScreens((permission) => hasEventAgendaPermission(event.id, permission))}
                   />
-                </Suspense>
-              )}
-              {activeTab === "leads" && (
-                <Suspense fallback={<Spinner />}>
-                  <SponsorLeads slug={event.slug} timeZone={event.timezone} />
                 </Suspense>
               )}
               {activeTab === "stats" && (

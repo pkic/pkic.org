@@ -2,7 +2,6 @@ import { useContext, useState } from "preact/hooks";
 import { toast } from "../../../../../ui";
 import type { ClockZone } from "../../../../../../../../shared/event-clock";
 import { format24HourClockInZone } from "../../../../../../../../shared/format-date";
-import { LIVE_AUX_OUTPUTS, LIVE_AUX_OUTPUT_DETAILS } from "../../../../../../../../shared/live-room-outputs";
 import { formatLiveDuration } from "../../../../../../../../shared/live-timer-format";
 import { countsUp, liveTimerCounts, liveTimerTotalMs } from "../../../../../../../../shared/live-timer-policy";
 import type {
@@ -18,7 +17,9 @@ import { StrokeIcon } from "../../../../../../../ui/MediaIcons";
 import { Menu, type MenuItem } from "../../../../../../../ui/Menu";
 import { Meter } from "../../../../../../../ui/Meter";
 import { LiveLayerTargets } from "../LiveLayerTargets";
+import { LiveScreenTrigger, liveScreenItems, liveScreens, liveScreensTitle } from "../LiveRowMenu";
 import { useLiveTimerGraphic } from "../LiveTimerGraphicControls";
+import { LiveLayerDetail, liveLayerUnseenOf } from "../LiveLayerDetail";
 import { liveLayerTargets, sendLayerToggle, type LiveTargets } from "../live-output-targets";
 import type { LiveDestination } from "../OutputTargetControl";
 import { LiveTimerDialog } from "./LiveTimerDialog";
@@ -36,6 +37,7 @@ function outputItems(
   where: ReturnType<typeof liveLayerTargets>,
   toggle: (destination: LiveDestination) => void,
   disabled: boolean,
+  screens: readonly MenuItem[],
 ): MenuItem[] {
   const item = (id: LiveDestination, label: string, checked: boolean, first = false): MenuItem => ({
     id: `output-${id}`,
@@ -47,17 +49,16 @@ function outputItems(
     disabled,
     onSelect: () => toggle(id),
   });
-  return [
-    item("preview", "Preview", where.preview, true),
-    item("program", "Program", where.program),
-    ...LIVE_AUX_OUTPUTS.map((output) => item(output, LIVE_AUX_OUTPUT_DETAILS[output].label, where.aux(output))),
-  ];
+  return [item("preview", "Preview", where.preview, true), item("program", "Program", where.program), ...screens];
 }
 
 /**
  * One timer in one row: its name and what it counts to, its value over a
  * thin progress line, where it shows (PVW and PGM), one joined control for
- * Start or Pause, Reset and a minute either way, and the menu. The row adapts to the panel's width
+ * Start or Pause, Reset and a minute either way, and the menu. A session
+ * timer runs by itself with the agenda, so while it follows the agenda its
+ * row offers only a minute either way; once nudged or run by hand, its
+ * reset hands it back to the agenda. The row adapts to the panel's width
  * (see TimePanel.css); whatever it hides stays one tap away in the menu,
  * which holds every action. Only setup opens a dialog.
  */
@@ -87,6 +88,13 @@ export function TimerRow({
   const before = reading.startsInMs !== null;
   const tone = before ? undefined : liveTimeTone(timer, reading.valueMs);
   const startLabel = reading.running ? "Pause" : "Start";
+  const agenda = timer.kind === "session";
+  const following = agenda && timer.followsAgenda;
+  // Before its session starts, a session on the agenda has no time to nudge yet.
+  const nudge = disabled || (following && before);
+  const nudgeNote = following
+    ? "The timer then runs on its own; Follow the agenda goes back."
+    : "Every screen that shows the timer follows.";
   const control = (action: LiveTimerAction) => send({ type: "timer.control", timerId: timer.id, action });
   const adjust = (deltaSeconds: number) => send({ type: "timer.adjust", timerId: timer.id, deltaSeconds });
   const remove = async () => {
@@ -101,14 +109,15 @@ export function TimerRow({
   const live: MenuItem[] = counts
     ? [
         { id: "start", label: startLabel, disabled, onSelect: () => control(reading.running ? "pause" : "start") },
-        { id: "reset", label: "Reset", disabled, onSelect: () => control("reset") },
-        { id: "minus", label: "Take a minute", keepOpen: true, disabled, onSelect: () => adjust(-60) },
-        { id: "plus", label: "Add a minute", keepOpen: true, disabled, onSelect: () => adjust(60) },
-        ...(timer.kind === "session"
+        ...(agenda ? [] : [{ id: "reset", label: "Reset", disabled, onSelect: () => control("reset") }]),
+        { id: "minus", label: "Take a minute", keepOpen: true, disabled: nudge, onSelect: () => adjust(-60) },
+        { id: "plus", label: "Add a minute", keepOpen: true, disabled: nudge, onSelect: () => adjust(60) },
+        ...(agenda
           ? [
               {
                 id: "follow",
                 label: "Follow the agenda",
+                tooltip: "Goes back to the session's times on the agenda, after you nudged or ran the timer by hand.",
                 checked: timer.followsAgenda,
                 disabled: disabled || timer.followsAgenda,
                 onSelect: () => control("follow"),
@@ -123,6 +132,7 @@ export function TimerRow({
       liveLayerTargets(targets, layer),
       (destination) => sendLayerToggle(targets, layer, destination),
       targets.disabled,
+      liveScreenItems(targets, layer),
     ).map((item, index) => (index === 0 && !live.length ? { ...item, separatorBefore: false } : item)),
     {
       id: "settings",
@@ -148,9 +158,7 @@ export function TimerRow({
       <span class="pk-studio-time__name" title={timer.name}>
         {timer.name}
       </span>
-      <span class="pk-studio-time__detail" title={detail}>
-        {detail}
-      </span>
+      <LiveLayerDetail class="pk-studio-time__detail" detail={detail} unseen={liveLayerUnseenOf({ targets, layer })} />
       <span class="pk-studio-time__reading">
         <output
           class="pk-studio-time__value"
@@ -176,36 +184,61 @@ export function TimerRow({
         )}
       </span>
       <span class="pk-studio-time__outputs">
-        <LiveLayerTargets targets={targets} subject={`${timer.name} timer`} layer={layer} short />
+        <LiveLayerTargets targets={targets} subject={`${timer.name} timer`} layer={layer} />
       </span>
-      {counts ? (
+      {/* A session waiting on the agenda has nothing to control yet: it starts on time by itself. */}
+      {counts && !(following && before) ? (
         // One joined control, like PVW | PGM: Start or Pause, Reset, and a minute either way.
-        <span class="pk-segmented pk-studio-time__transport" role="group" aria-label={`${timer.name} controls`}>
-          <Button
-            icon
-            variant={reading.running ? "secondary" : "primary"}
-            aria-label={`${startLabel} ${timer.name}`}
-            title={reading.running ? "Pause" : before ? "Start now, from its full length" : "Start"}
-            disabled={disabled}
-            onClick={() => control(reading.running ? "pause" : "start")}
-          >
-            <StrokeIcon>{reading.running ? PAUSE : PLAY}</StrokeIcon>
-          </Button>
-          <Button
-            icon
-            class="pk-studio-time__reset"
-            aria-label={`Reset ${timer.name}`}
-            title={timer.kind === "until" ? "Count to its time again" : "Back to its full length, stopped"}
-            disabled={disabled}
-            onClick={() => control("reset")}
-          >
-            <StrokeIcon>{RESET}</StrokeIcon>
-          </Button>
+        <span
+          class="pk-segmented pk-studio-time__transport"
+          role="group"
+          aria-label={`${timer.name} controls`}
+          data-following={following ? "" : undefined}
+        >
+          {following ? null : (
+            <Button
+              icon
+              variant={reading.running ? "secondary" : "primary"}
+              aria-label={`${startLabel} ${timer.name}`}
+              title={`${startLabel} ${timer.name}\n${
+                reading.running
+                  ? "Hold the timer where it is, on every screen that shows it."
+                  : "Run the timer from where it stands."
+              }`}
+              disabled={disabled}
+              onClick={() => control(reading.running ? "pause" : "start")}
+            >
+              <StrokeIcon>{reading.running ? PAUSE : PLAY}</StrokeIcon>
+            </Button>
+          )}
+          {following ? null : agenda ? (
+            <Button
+              icon
+              aria-label={`${timer.name}: follow the agenda`}
+              title={`Follow the agenda\nBack to the session's times on the agenda, without the minutes added or taken.`}
+              disabled={disabled}
+              onClick={() => control("follow")}
+            >
+              <StrokeIcon>{RESET}</StrokeIcon>
+            </Button>
+          ) : (
+            <Button
+              icon
+              aria-label={`Reset ${timer.name}`}
+              title={`Reset ${timer.name}\n${
+                timer.kind === "until" ? "Count to its set time again." : "Put it back to its full length, stopped."
+              }`}
+              disabled={disabled}
+              onClick={() => control("reset")}
+            >
+              <StrokeIcon>{RESET}</StrokeIcon>
+            </Button>
+          )}
           <Button
             class="pk-studio-time__minus"
             aria-label={`Take a minute from ${timer.name}`}
-            title="Take a minute"
-            disabled={disabled}
+            title={`Take a minute from ${timer.name}\n${nudgeNote}`}
+            disabled={nudge}
             onClick={() => adjust(-60)}
           >
             −1m
@@ -213,8 +246,8 @@ export function TimerRow({
           <Button
             class="pk-studio-time__plus"
             aria-label={`Add a minute to ${timer.name}`}
-            title="Add a minute"
-            disabled={disabled}
+            title={`Add a minute to ${timer.name}\n${nudgeNote}`}
+            disabled={nudge}
             onClick={() => adjust(60)}
           >
             +1m
@@ -222,12 +255,19 @@ export function TimerRow({
         </span>
       ) : null}
       <span class="pk-studio-time__menu">
-        <Menu label={`${timer.name} timer`} heading={timer.name} align="end" items={items} />
+        <Menu
+          label={`${timer.name} timer`}
+          heading={timer.name}
+          align="end"
+          title={liveScreensTitle(liveScreens(targets, layer))}
+          items={items}
+        >
+          <LiveScreenTrigger screens={liveScreens(targets, layer)} />
+        </Menu>
       </span>
       {dialog ? (
         <LiveTimerDialog
           timer={timer}
-          session={session}
           clock={clock}
           graphic={graphic}
           send={send}

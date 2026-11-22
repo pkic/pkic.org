@@ -27,6 +27,8 @@ export type ResolvedComposition = {
   topQuestions: LiveStage["topQuestions"];
   chatFeed: LiveStage["chatFeed"];
   reactions: boolean;
+  reactionsGraphic: LiveStage["reactionsGraphic"];
+  scene: LiveStage["scene"];
 };
 
 export const LIVE_CREDIT_NOT_FOUND: LiveRefusal = {
@@ -61,6 +63,7 @@ export function onAirQuestion(
     authorName: anonymous ? null : row.author_name,
     authorPhotoUrl: anonymous ? null : row.author_photo_url,
     authorAffiliation: anonymous ? null : parseLiveAuthorStamp(row.author_json).affiliation,
+    addressedTo: row.addressed_to,
   };
 }
 
@@ -110,5 +113,7 @@ export function composeLiveStage(
     topQuestions: input.topQuestions,
     chatFeed: input.chatFeed,
     reactions: input.reactions,
+    reactionsGraphic: input.reactionsGraphic,
+    scene: input.scene,
   };
 }

@@ -8,6 +8,7 @@ import {
 } from "../../assets/ts/member-flows/portal/sections/events/detail/live/LivePollsPanel";
 import { applyLiveRoomMessage, type LiveRoomState } from "../../assets/ts/live-session/live-room-state";
 import { liveSnapshot, livePoll, livePollResults, liveTargets } from "./helpers/live-room-socket";
+import { menuItemLabel } from "./helpers/live-desk";
 
 const hosts: HTMLElement[] = [];
 afterEach(() => {
@@ -46,16 +47,17 @@ async function menu(row: Element): Promise<HTMLElement[]> {
 it("shows one compact row per poll with its state, answers and leading answer, outputs and menu, and no chart", async () => {
   const closed = livePoll({ status: "closed", results: livePollResults({ "Root CA": 3, "TLS endpoints": 1 }) });
   const { host, send } = panel(stateWith([closed, livePoll({ id: DRAFT, status: "draft" })]));
-  const rows = [...host.querySelectorAll(".pk-live-polls__row")];
+  const rows = [...host.querySelectorAll(".pk-studio-row")];
   expect(rows).toHaveLength(2);
   expect(host.querySelector(".pk-chart")).toBeNull();
   expect(rows[0].textContent).toContain("Closed");
   expect(rows[0].textContent).toContain("4 answers · Root CA · 75%");
-  expect(rows[0].querySelector(".pk-live-polls__outputs button")).not.toBeNull();
+  expect(rows[0].querySelector(".pk-studio-row__actions button")).not.toBeNull();
   expect(rows[1].textContent).toContain("Prepared");
   const items = await menu(rows[0]);
-  expect(items.map((item) => item.textContent?.trim())).toEqual(["Results and settings", "Reopen voting"]);
-  await act(async () => items[1].click());
+  // The room's screens come first in the row's menu, then the poll's own actions.
+  expect(items.map(menuItemLabel)).toEqual(["Projector", "Stage display", "Results and settings", "Reopen voting"]);
+  await act(async () => items[3].click());
   expect(send.mock.calls.map(([message]) => liveRoomClientMessageSchema.parse(message))).toEqual([
     { type: "poll.status", pollId: closed.id, status: "open" },
   ]);
@@ -77,7 +79,7 @@ it("opens a new poll from the panel header's create button", async () => {
   const send = vi.fn((_message: LiveRoomClientMessage) => true);
   await act(async () => render(<LivePollsCreateAction disabled={false} send={send} />, header));
   const create = header.querySelector<HTMLButtonElement>("button[aria-label='New poll']")!;
-  expect(create.getAttribute("title")).toBe("New poll");
+  expect(create.getAttribute("title")).toBe("New poll\nWrite a poll as a draft. Voting starts when you open it.");
   await act(async () => create.click());
   expect(document.querySelector("dialog[open]")?.textContent).toContain("New poll");
 });
@@ -86,7 +88,7 @@ it("opens a poll in one dialog with live results, its editor and its chart, neve
   const poll = livePoll({ status: "open", results: livePollResults({ "Root CA": 1 }) });
   const { host, send, redraw } = panel(stateWith([poll]));
   expect(host.querySelector(".pk-live-overlay")).toBeNull();
-  await act(async () => host.querySelector<HTMLButtonElement>(".pk-live-polls__open")!.click());
+  await act(async () => host.querySelector<HTMLButtonElement>(".pk-studio-row__open")!.click());
   const dialog = () => document.querySelector<HTMLDialogElement>("dialog[open]")!;
   const tabs = () => [
     ...dialog().querySelectorAll<HTMLButtonElement>('[role="tablist"][aria-label="Poll"] [role="tab"]'),

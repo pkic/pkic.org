@@ -48,6 +48,8 @@ export type CurrentUserRegistration = z.infer<typeof currentUserRegistrationSche
 export const currentUserRegistrationsListQuerySchema = paginationQuerySchemaWithDefaults().extend({
   from: utcInstantSchema.optional(),
   to: utcInstantSchema.optional(),
+  /** One event's registration, such as the register page looking for the one the person already holds. */
+  eventSlug: eventResourceCoreSchema.shape.slug.optional(),
 });
 export type CurrentUserRegistrationsListQuery = z.infer<typeof currentUserRegistrationsListQuerySchema>;
 

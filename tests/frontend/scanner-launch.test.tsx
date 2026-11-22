@@ -3,6 +3,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, expect, it, vi } from "vitest";
 import { useScannerAutoStart } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/useScannerAutoStart";
+import { ScannerLaunchPanel } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/ScannerLaunchPanel";
 
 const host = document.createElement("div");
 document.body.append(host);
@@ -59,6 +60,115 @@ it("can start with unverified feedback after preparation fails, while Cancel pre
   expect(onStart).not.toHaveBeenCalled();
   await act(() => host.querySelector<HTMLButtonElement>("button")!.click());
   expect(onStart).toHaveBeenCalledOnce();
+});
+
+it("keeps badge collection waiting when preparation fails and starts after a successful retry", async () => {
+  const onStart = vi.fn();
+  const manifest: Options["manifest"] = { current: null };
+  const props: Options = {
+    ready: true,
+    preparing: true,
+    manifestReady: false,
+    manifest,
+    targetId: null,
+    roomId: null,
+    onStart,
+    allowUnverified: false,
+  };
+  await act(() => render(<Harness {...props} />, host));
+  await act(() => host.querySelector<HTMLButtonElement>("button")!.click());
+  await act(() => render(<Harness {...props} preparing={false} error="Badge refresh failed" />, host));
+  expect(onStart).not.toHaveBeenCalled();
+  expect(host.querySelector("output")?.textContent).toBe("true");
+  manifest.current = { occurrenceId: null, roomId: null };
+  await act(() => render(<Harness {...props} preparing={false} manifestReady error="" />, host));
+  expect(onStart).toHaveBeenCalledOnce();
+});
+
+it("shows preparation progress and retryable errors in a modal", async () => {
+  const cancel = vi.fn();
+  const retry = vi.fn();
+  const props = {
+    connection: <p>Online</p>,
+    form: { handlers: { onInput: () => {}, onChange: () => {}, onFocusOut: () => {} } },
+    busy: false,
+    capture: () => {},
+    controls: <p>Choose a scanner task</p>,
+    cancelStart: cancel,
+    retryStart: retry,
+  };
+  await act(() =>
+    render(
+      <ScannerLaunchPanel
+        {...props}
+        pendingStart={{ preparing: true, ready: false, error: "", checkedBadges: 250, badgeCollection: true }}
+      />,
+      host,
+    ),
+  );
+  const dialog = host.querySelector("dialog")!;
+  expect(dialog.open).toBe(true);
+  expect(dialog.textContent).toContain("250 badges checked");
+  expect(host.querySelector("form")?.textContent).not.toContain("250 badges checked");
+  await act(() =>
+    render(
+      <ScannerLaunchPanel
+        {...props}
+        pendingStart={{ preparing: false, ready: false, error: "Badge data could not be refreshed" }}
+        devicePreparation={{ ready: false, error: "" }}
+      />,
+      host,
+    ),
+  );
+  expect(dialog.querySelector('[role="alert"]')?.textContent).toContain("Badge data could not be refreshed");
+  await act(() =>
+    render(
+      <ScannerLaunchPanel
+        {...props}
+        pendingStart={{ preparing: false, ready: false, error: "" }}
+        devicePreparation={{ ready: false, error: "Scanner preparation unavailable" }}
+      />,
+      host,
+    ),
+  );
+  expect(dialog.querySelector('[role="alert"]')?.textContent).toContain("Scanner preparation unavailable");
+  await act(() =>
+    Array.from(dialog.querySelectorAll("button"))
+      .find((button) => button.textContent?.trim() === "Retry preparation")!
+      .click(),
+  );
+  expect(retry).toHaveBeenCalledOnce();
+  await act(() =>
+    Array.from(dialog.querySelectorAll("button"))
+      .find((button) => button.textContent?.trim() === "Cancel")!
+      .click(),
+  );
+  expect(cancel).toHaveBeenCalledOnce();
+  await act(() =>
+    render(
+      <ScannerLaunchPanel
+        {...props}
+        pendingStart={{ preparing: false, ready: true, error: "" }}
+        devicePreparation={{ ready: false, error: "" }}
+      />,
+      host,
+    ),
+  );
+  expect(dialog.textContent).toContain("Preparing scanner");
+  expect(dialog.textContent).not.toContain("Badge data ready");
+  await act(() =>
+    render(
+      <ScannerLaunchPanel {...props} devicePreparation={{ ready: false, error: "Scanner preparation unavailable" }} />,
+      host,
+    ),
+  );
+  expect(dialog.open).toBe(false);
+  const retryWithoutStart = Array.from(host.querySelectorAll("button")).find(
+    (button) => button.textContent?.trim() === "Retry scanner preparation",
+  );
+  expect(retryWithoutStart).toBeDefined();
+  await act(() => retryWithoutStart!.click());
+  expect(retry).toHaveBeenCalledTimes(2);
 });
 
 it("places authorized printing beside the scanner tasks using the shared action tile", async () => {

@@ -23,6 +23,20 @@ export interface EventFlowPathContext {
   flow: EventFlowKind;
 }
 
+/** An event's site path: its own base path, else `/events/{year}/{slug}/` from its start date. */
+export function deriveEventBasePath(event: {
+  slug: string;
+  base_path?: string | null;
+  starts_at?: string | null;
+}): string {
+  if (event.base_path) return event.base_path;
+  if (event.starts_at) {
+    const year = event.starts_at.substring(0, 4);
+    if (/^\d{4}$/.test(year)) return `/events/${year}/${event.slug}/`;
+  }
+  return `/events/${event.slug}/`;
+}
+
 /** Builds one canonical event-flow path from the shared suffix registry. */
 export function buildEventFlowPath(eventBasePath: string, flow: EventFlowKind): string {
   const base = eventBasePath.endsWith("/") ? eventBasePath : `${eventBasePath}/`;

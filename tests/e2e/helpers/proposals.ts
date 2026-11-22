@@ -1,23 +1,18 @@
 import type { z } from "zod";
 import { coSpeakerInviteSchema } from "../../../assets/shared/schemas/proposal-management";
-import { expect, request, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 import { eventFormsResponseSchema, eventTermsResponseSchema } from "../../../assets/shared/schemas/forms";
-import {
-  eventProposalProofStartSchema,
-  eventProposalProofStartResponseSchema,
-  eventProposalProofVerifySchema,
-  eventProposalProofVerifyResponseSchema,
-} from "../../../assets/shared/schemas/event-proposal-proof";
 import { proposalCreateSchema, proposalCreateResponseSchema } from "../../../assets/shared/schemas/proposal-management";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./sendgrid";
-import { clientIpForIdentity } from "./portal-auth";
+import { signedInRequest } from "./sign-in-card";
 import { INDEPENDENT_CAPACITY_FIXTURE } from "./independent-capacity";
 
 export const PROPOSAL_EVENT_SLUG = "pqc-conference-amsterdam-nl";
 
 /**
- * Submits a proposal the way the public form does, and returns the proposer's
- * own management capability from the confirmation mail.
+ * Submits a proposal the way the public form does (as the signed-in proposer,
+ * whose account starts from the emailed link when the address is new) and
+ * returns the proposer's own management capability from the confirmation mail.
  *
  * Consents come from the event's live speaker terms rather than a hard-coded
  * list, so a change to the required terms surfaces as a submission failure
@@ -36,10 +31,14 @@ export async function submitProposal(
     actingIdentityId?: string | null;
   },
 ): Promise<{ accessToken: string; proposalId: string }> {
-  // The caller may be staff; the verified fixture belongs to its own mailbox, not that staff session.
-  const proposerRequest = await request.newContext({
-    baseURL: new URL(page.url()).origin,
-    extraHTTPHeaders: { "cf-connecting-ip": clientIpForIdentity(options.proposerEmail) },
+  // These positive API fixtures deliberately attest individual participation.
+  // Human-flow tests make this choice through the visible qualifier instead.
+  const unaffiliatedAttestation = options.unaffiliatedAttestation ?? true;
+  if (!unaffiliatedAttestation && options.actingIdentityId === undefined)
+    throw new Error("Organization proposal fixtures require an explicit reviewed identity.");
+  // The caller may be staff; the fixture belongs to its own signed-in proposer, not that staff session.
+  const proposerRequest = await signedInRequest(new URL(page.url()).origin, options.proposerEmail, {
+    individual: unaffiliatedAttestation,
   });
   try {
     const slug = options.eventSlug ?? PROPOSAL_EVENT_SLUG;
@@ -48,34 +47,6 @@ export async function submitProposal(
     expect(termsResponse.status(), await termsResponse.text()).toBe(200);
     const terms = eventTermsResponseSchema.parse(await termsResponse.json());
     const consents = terms.terms.map(({ termKey, version }) => ({ termKey, version }));
-    // These positive API fixtures deliberately attest individual participation.
-    // Human-flow tests make this choice through the visible qualifier instead.
-    const unaffiliatedAttestation = options.unaffiliatedAttestation ?? true;
-    if (!unaffiliatedAttestation && options.actingIdentityId === undefined)
-      throw new Error("Organization proposal fixtures require an explicit reviewed identity.");
-    const proofSince = await capturedEmailCount();
-    const startProof = () =>
-      proposerRequest.post(`${endpoint}/proof`, {
-        data: eventProposalProofStartSchema.parse({ email: options.proposerEmail, consents, unaffiliatedAttestation }),
-      });
-    let started = await startProof();
-    // The local D1 binding occasionally drops its connection under load; the refused start sent no mail, so asking once more is safe.
-    if (started.status() === 500 && (await started.text()).includes("Network connection lost"))
-      started = await startProof();
-    expect(started.status(), await started.text()).toBe(200);
-    expect(eventProposalProofStartResponseSchema.parse(await started.json()).status).toBe("verification_sent");
-    const proofMail = await waitForCapturedEmail(options.proposerEmail, "Verify your email for", { since: proofSince });
-    const verificationUrl = extractEmailUrl(proofMail, "/propose/");
-    const token = new URLSearchParams(new URL(verificationUrl).hash.slice(1)).get("verify");
-    const verified = await proposerRequest.post(`${endpoint}/proof/verify`, {
-      data: eventProposalProofVerifySchema.parse({ token }),
-    });
-    expect(verified.status(), await verified.text()).toBe(200);
-    const proof = eventProposalProofVerifyResponseSchema.parse(await verified.json());
-    if (proof.status !== "ready") throw new Error("The positive proposal fixture requires a verified mailbox.");
-    expect(proof.email).toBe(options.proposerEmail.toLowerCase());
-    expect(proof.applicantKind).toBe(unaffiliatedAttestation ? "individual" : "organization");
-
     const placementResponse = await proposerRequest.get(`/api/v1/events/${slug}/forms/placements/proposal_submission`);
     expect(placementResponse.status(), await placementResponse.text()).toBe(200);
     const placement = eventFormsResponseSchema.parse(await placementResponse.json());
@@ -95,12 +66,12 @@ export async function submitProposal(
     const since = await capturedEmailCount();
     const response = await proposerRequest.post(endpoint, {
       data: proposalCreateSchema.parse({
-        continuationToken: proof.continuationToken,
         unaffiliatedAttestation,
         ...(unaffiliatedAttestation ? { independentCapacity: INDEPENDENT_CAPACITY_FIXTURE } : {}),
         proposer: {
-          email: proof.email,
-          ...(proof.person ? {} : { firstName: options.firstName, lastName: options.lastName }),
+          // Names fill only what the account does not hold yet.
+          firstName: options.firstName,
+          lastName: options.lastName,
           actingIdentityId: unaffiliatedAttestation ? null : options.actingIdentityId,
           bio: "A proposer biography long enough to satisfy the shared speaker profile validation rules.",
         },

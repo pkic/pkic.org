@@ -1,4 +1,4 @@
-import type { LiveChatReportReason, LiveChatRestriction } from "../../../../assets/shared/live-chat-policy";
+import type { LiveModerationReason } from "../../../../assets/shared/live-moderation-policy";
 import type { LiveRoomSql } from "./room-sql";
 
 export interface LiveChatHiding {
@@ -9,7 +9,7 @@ export interface LiveChatHiding {
 
 export interface LiveChatReports {
   count: number;
-  reasons: Partial<Record<LiveChatReportReason, number>>;
+  reasons: Partial<Record<LiveModerationReason, number>>;
 }
 
 /** A message reported and not yet reviewed: shown, or held after enough reports. */
@@ -22,8 +22,8 @@ function idList(ids: readonly string[]): string {
 
 /**
  * What moderators decided about chat, kept in the session's room: hidden
- * and held messages, reports, messages made into questions, and the people
- * an organizer muted or banned for the session.
+ * and held messages, reports and messages made into questions. Removal
+ * reasons and blocks are the shared moderation store's.
  */
 export class LiveChatModerationStore {
   constructor(private readonly sql: LiveRoomSql) {}
@@ -49,6 +49,23 @@ export class LiveChatModerationStore {
       by,
       at,
     );
+    // A hidden message leaves the top of the chat, and stays off it when it is shown again.
+    this.sql.exec("DELETE FROM room_chat_pin WHERE message_id = ?", messageId);
+  }
+
+  /** The attendee message pinned above the chat. */
+  pinned(): string | null {
+    return this.sql.rows<{ message_id: string }>("SELECT message_id FROM room_chat_pin LIMIT 1")[0]?.message_id ?? null;
+  }
+
+  /** Pins one message, in place of any pinned before. */
+  pin(messageId: string, by: string, at: string): void {
+    this.sql.exec("DELETE FROM room_chat_pin");
+    this.sql.exec("INSERT INTO room_chat_pin(message_id, by_name, at) VALUES (?, ?, ?)", messageId, by, at);
+  }
+
+  unpin(): void {
+    this.sql.exec("DELETE FROM room_chat_pin");
   }
 
   /** Keeps a message: shown again, its reports reviewed and cleared. */
@@ -58,7 +75,7 @@ export class LiveChatModerationStore {
   }
 
   /** Records one person's report; false when they had already reported the message. */
-  report(messageId: string, userId: string, reason: LiveChatReportReason, at: string): boolean {
+  report(messageId: string, userId: string, reason: LiveModerationReason, at: string): boolean {
     const before = this.reportCount(messageId);
     this.sql.exec(
       "INSERT OR IGNORE INTO room_chat_reports(message_id, user_id, reason, reported_at) VALUES (?, ?, ?, ?)",
@@ -80,7 +97,7 @@ export class LiveChatModerationStore {
   reports(ids: readonly string[]): Map<string, LiveChatReports> {
     const reports = new Map<string, LiveChatReports>();
     if (!ids.length) return reports;
-    for (const row of this.sql.rows<{ message_id: string; reason: LiveChatReportReason; total: number }>(
+    for (const row of this.sql.rows<{ message_id: string; reason: LiveModerationReason; total: number }>(
       `SELECT message_id, reason, COUNT(*) AS total FROM room_chat_reports
        WHERE message_id IN (SELECT value FROM json_each(?)) GROUP BY message_id, reason`,
       idList(ids),
@@ -142,52 +159,6 @@ export class LiveChatModerationStore {
           idList(ids),
         )
         .map((row) => [row.message_id, row.question_id]),
-    );
-  }
-
-  restriction(userId: string | null): LiveChatRestriction | null {
-    if (!userId) return null;
-    return (
-      this.sql.rows<{ restriction: LiveChatRestriction }>(
-        "SELECT restriction FROM room_chat_restrictions WHERE user_id = ?",
-        userId,
-      )[0]?.restriction ?? null
-    );
-  }
-
-  restrictions(userIds: readonly string[]): Map<string, LiveChatRestriction> {
-    if (!userIds.length) return new Map();
-    return new Map(
-      this.sql
-        .rows<{ user_id: string; restriction: LiveChatRestriction }>(
-          "SELECT user_id, restriction FROM room_chat_restrictions WHERE user_id IN (SELECT value FROM json_each(?))",
-          idList(userIds),
-        )
-        .map((row) => [row.user_id, row.restriction]),
-    );
-  }
-
-  restrict(userId: string, restriction: LiveChatRestriction | null, by: string, at: string): void {
-    if (restriction === null) {
-      this.sql.exec("DELETE FROM room_chat_restrictions WHERE user_id = ?", userId);
-      return;
-    }
-    this.sql.exec(
-      `INSERT INTO room_chat_restrictions(user_id, restriction, by_name, at) VALUES (?, ?, ?, ?)
-       ON CONFLICT(user_id) DO UPDATE SET restriction = excluded.restriction, by_name = excluded.by_name, at = excluded.at`,
-      userId,
-      restriction,
-      by,
-      at,
-    );
-  }
-
-  /** Everyone banned from the chat; they receive none of it. */
-  banned(): Set<string> {
-    return new Set(
-      this.sql
-        .rows<{ user_id: string }>("SELECT user_id FROM room_chat_restrictions WHERE restriction = 'banned'")
-        .map((row) => row.user_id),
     );
   }
 }

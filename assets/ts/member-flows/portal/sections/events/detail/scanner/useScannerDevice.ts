@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { prepareScannerDevice, prepareScannerEpoch, type ScannerEpoch } from "./scanner-device-ledger";
 import type { ScannerOfflineContext } from "../../../../../../../shared/schemas/event-scanner-offline-context";
-import { readScannerOfflineEpoch } from "./scanner-offline-context";
+import {
+  readScannerOfflineEpoch,
+  scannerLeadLeaseCurrent,
+  scannerOfflineLeaseCurrent,
+} from "./scanner-offline-context";
 export function useScannerDevice(
   slug: string,
   operatorUserId: string,
@@ -18,6 +22,7 @@ export function useScannerDevice(
         collector.deviceId,
         collector.epochId,
         collector.action,
+        collector.sponsorId,
         collector.occurrenceId,
         collector.roomId,
         collector.serverNow,
@@ -26,11 +31,13 @@ export function useScannerDevice(
   const [deviceId, setDeviceId] = useState("");
   const [epoch, setEpoch] = useState<ScannerEpoch | null>(null);
   const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let active = true;
     const collector = context.current;
     setEpoch(null);
     setDeviceId("");
+    setError("");
     void (async () => {
       try {
         const device = collector?.deviceId ?? (await prepareScannerDevice(operatorUserId));
@@ -48,7 +55,7 @@ export function useScannerDevice(
     return () => {
       active = false;
     };
-  }, [slug, operatorUserId, sponsorId, scope]);
+  }, [slug, operatorUserId, sponsorId, scope, attempt]);
   async function reconcile() {
     if (!deviceId || collector) return;
     try {
@@ -61,5 +68,18 @@ export function useScannerDevice(
       );
     }
   }
-  return { deviceId, epoch, setEpoch, reconcile, error, ready: epoch?.state === "open" };
+  return {
+    deviceId,
+    epoch,
+    setEpoch,
+    reconcile,
+    retry: () => setAttempt((value) => value + 1),
+    error,
+    ready:
+      epoch?.state === "open" &&
+      (sponsorId
+        ? epoch.leadLease?.sponsorId === sponsorId &&
+          (scannerLeadLeaseCurrent(epoch) || scannerOfflineLeaseCurrent(epoch))
+        : !epoch.leadLease),
+  };
 }

@@ -20,6 +20,7 @@ import {
   savePortalSession,
 } from "../../assets/ts/member-flows/portal/state";
 import { portalSessionFixture } from "../helpers/portal-session";
+import { parseQueryContext, signInReturnPath } from "../../assets/ts/shared/query-context";
 const cleanup = vi.hoisted(() => vi.fn(async () => {}));
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/eligibility-manifest", () => ({
   clearOperatorEligibilityManifests: cleanup,
@@ -39,6 +40,10 @@ beforeEach(() => {
       setItem: (key: string, value: string) => storage.set(key, value),
       removeItem: (key: string) => storage.delete(key),
       clear: () => storage.clear(),
+      key: (index: number) => [...storage.keys()][index] ?? null,
+      get length() {
+        return storage.size;
+      },
     });
   }
   clearAuth();
@@ -191,10 +196,15 @@ describe("durable exact-session local sign-out", () => {
     await recordCanonicalSession(A);
     savePortalSession(session);
     sessionStorage.setItem("pkic_portal_return_path", "#/private");
+    signInReturnPath("/events/toronto-2027/register?invite=secret-token&id=inv-1");
+    localStorage.setItem("pkic-browser-notification-device", "00000000-0000-4000-8000-000000000010");
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
     const fetcher = vi.fn();
     vi.stubGlobal("fetch", fetcher);
     await signOutPortalSession(session);
+    // A shared computer keeps no invitation token after sign-out, and nothing else of the browser is touched.
+    expect(parseQueryContext("?id=inv-1").inviteToken).toBeNull();
+    expect(localStorage.getItem("pkic-browser-notification-device")).not.toBeNull();
     expect(authStatus.value).toBe("anonymous");
     expect(portalSession.value).toBeNull();
     expect(profile.value).toBeNull();

@@ -8,7 +8,7 @@ import type { AdminContext } from "../../../_lib/db/context";
 import { json } from "../../../_lib/http";
 import { openApiRoute } from "../../../_lib/openapi/route";
 import {
-  createAccessGrant,
+  createAccessGrants,
   listAccessGrants,
   revokeAccessGrant,
 } from "../../../_lib/services/access-control/access-grants";
@@ -23,7 +23,7 @@ export const PermissionGrantCreate = openApiRoute(accessGrantsCreateRouteSchema,
   const { db, staff } = await requireStaffPermission(c, "access:grant");
   return json(
     accessGrantCreateResponseSchema.parse({
-      grant: await createAccessGrant(db, staff, data.body),
+      grants: await createAccessGrants(db, staff, data.body),
     }),
     201,
   );

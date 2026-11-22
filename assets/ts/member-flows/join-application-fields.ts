@@ -9,18 +9,6 @@ type MembershipApplicationField = NonNullable<MemberApplicationFormResponse["for
 import "../ui/Content.css";
 import "../ui/Field.css";
 
-/** The category catalog is server-provided; this only mirrors its selected presentation state. */
-export function applyCategoryUI(form: HTMLFormElement, category: MembershipCategory | undefined): void {
-  const orgField = form.querySelector<HTMLInputElement>("#organizationName");
-  const orgFieldContainer = form.querySelector<HTMLElement>("[data-organization-name-field]");
-  if (!orgField || !orgFieldContainer) return;
-  const individual = category?.isIndividual ?? false;
-  orgField.required = !individual;
-  orgField.disabled = individual;
-  orgFieldContainer.hidden = individual;
-  if (individual) orgField.value = "";
-}
-
 export function filterCategoriesForApplicantKind(
   categories: MembershipCategory[],
   applicantKind: JoinApplicantKind,
@@ -40,41 +28,6 @@ function membershipLegalLabel(key: string, configuredLabel: string, applicantKin
   }
   return configuredLabel.replace(/^I and my organization \(if applicable\)/, "I");
 }
-export function renderMembershipCategorySummary(container: HTMLElement, categories: MembershipCategory[]): void {
-  if (categories.length === 0) {
-    container.textContent = "No eligible individual categories are currently available.";
-    return;
-  }
-
-  const list = document.createElement("ul");
-  // The bullet without the browser's 40px indent, so the summary lines up
-  // with the label above it instead of hanging off to the right.
-  list.className = "pk-answer-list";
-  for (const category of categories) {
-    const item = document.createElement("li");
-    const title = document.createElement("strong");
-    title.textContent = `${category.code} — ${category.label}`;
-    item.append(title);
-    if (category.description) {
-      // A block element rather than a span carrying a display utility: the
-      // description is its own line, which is what a div already means.
-      const description = document.createElement("div");
-      description.className = "pk-small";
-      description.textContent = category.description;
-      item.append(description);
-    }
-    const fee = membershipCategoryFeeText(category);
-    if (fee) {
-      const feeSummary = document.createElement("div");
-      feeSummary.className = "pk-small pk-strong";
-      feeSummary.textContent = fee;
-      item.append(feeSummary);
-    }
-    list.append(item);
-  }
-  container.replaceChildren(list);
-}
-
 /**
  * Binds D1 form-field policy to the server-rendered canonical legal documents
  * and removes those fields from the generic custom-question renderer.

@@ -1,0 +1,35 @@
+@layer components {
+  /*
+   * A control's hint: the Tooltip's surface, compact, never in the pointer's way. As a popover it stands in the
+   * top layer, above an open dialog or menu, so the popover's centered inset, margin and scrolling box are dropped;
+   * where the browser has no popovers it is a fixed element above everything the studio draws.
+   */
+  .pk-control-tooltip {
+    position: fixed;
+    z-index: 1100;
+    inset: auto;
+    display: grid;
+    gap: var(--pk-1);
+    max-inline-size: min(20rem, calc(100vw - 1rem));
+    margin: 0;
+    padding: var(--pk-1) var(--pk-2);
+    overflow: visible;
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius);
+    background: var(--pk-surface-raise);
+    color: var(--pk-ink);
+    box-shadow: var(--pk-shadow-2);
+    font-size: var(--pk-text-xs);
+    line-height: 1.4;
+    pointer-events: none;
+  }
+  /* What the control is and its state, over what a click does. */
+  .pk-control-tooltip__lead {
+    font-weight: 600;
+  }
+  .pk-control-tooltip__more {
+    display: grid;
+    gap: var(--pk-1);
+    color: var(--pk-ink-muted);
+  }
+}

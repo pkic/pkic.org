@@ -47,6 +47,32 @@ async function scan(continuous: boolean) {
 }
 
 describe("Online verification after a local badge miss", () => {
+  it("permits retry when storage confirms a lead was not saved", async () => {
+    let feedback!: ReturnType<typeof useScannerFeedback>;
+    function LeadFeedback() {
+      feedback = useScannerFeedback({
+        enabled: true,
+        holdEligible: true,
+        durationMs: 10000,
+        collector: false,
+        currentOperation: useRef(null),
+        committedOperation: useRef(null),
+        authorityPaused: useRef(false),
+      });
+      return <output>{feedback.needsAdvance ? "Next required" : "Retry available"}</output>;
+    }
+    const container = document.createElement("div");
+    try {
+      await act(async () => render(<LeadFeedback />, container));
+      await act(async () => feedback.failure("Scan was not saved", true));
+      expect(container.textContent).toBe("Retry available");
+      expect(feedback.captureStatus?.detail).toBe("Scan was not saved");
+      await act(async () => feedback.failure("Storage state is uncertain"));
+      expect(container.textContent).toBe("Next required");
+    } finally {
+      await act(async () => render(null, container));
+    }
+  });
   it("keeps an offline collector's complete-roster miss without attempting online verification", async () => {
     let feedback!: ReturnType<typeof useScannerFeedback>;
     const operationId = crypto.randomUUID();
@@ -188,7 +214,7 @@ describe("Online verification after a local badge miss", () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
-  it("accepts another badge after the verification and feedback deadlines while the first upload is pending", async () => {
+  it("accepts another badge after Next badge while the first upload is pending", async () => {
     await mount(true, ["attendance"]);
     captureMissingBadge();
     const requests: EventScanRequest[] = [];
@@ -237,6 +263,13 @@ describe("Online verification after a local badge miss", () => {
         await vi.advanceTimersByTimeAsync(1);
         mocks.hardwareScan!(nextBadge);
       });
+      expect(mocks.persist).toHaveBeenCalledTimes(1);
+      await act(async () =>
+        Array.from(host.querySelectorAll("button"))
+          .find((button) => button.getAttribute("aria-label") === "Next badge")!
+          .click(),
+      );
+      await act(async () => mocks.hardwareScan!(nextBadge));
       expect(mocks.persist).toHaveBeenCalledTimes(2);
       await vi.waitFor(() => expect(requests).toHaveLength(2));
       expect(requests[1]!.badgeId).toBe(nextBadge);
@@ -344,6 +377,7 @@ describe("Online verification after a local badge miss", () => {
     vi.stubGlobal("fetch", fetcher);
     await scan(true);
     await vi.waitFor(() => expect(host.textContent).toContain("Verification pending"));
+    expect(host.textContent).toContain("Badge not found in saved badge data. Reconnect to verify.");
     expect(host.textContent).not.toContain("Unknown badge");
     expect(host.querySelector(".pk-event-scanner--unknown")).toBeNull();
     expect(mocks.persist).toHaveBeenCalledTimes(1);

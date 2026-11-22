@@ -8,12 +8,13 @@ import { Button } from "../../../../ui/Button";
 import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { RowActions } from "../../../../ui/RowActions";
-import { Select, TextInput } from "../../../../ui/TextControl";
+import { TextInput } from "../../../../ui/TextControl";
 import { useContractForm } from "../../../../hooks/useContractForm";
 import { deleteJson, postJson } from "../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import { fmt, fmtDate, toast } from "../../ui";
-import { PERMISSIONS } from "../../../../../shared/schemas/permissions";
+import type { Permission } from "../../../../../shared/schemas/permissions";
+import { RolePermissions } from "./roles/RolePermissions";
 import { UserPicker, type PickedUser } from "../../../../components/UserPicker";
 import { confirmPrivilegedAccess } from "./confirm-privileged-access";
 import { NO_TARGET, TargetPicker, type PickedTarget } from "./TargetPicker";
@@ -59,9 +60,8 @@ export function Grants({
   const tableRef = useRef<ApiTableActions | null>(null);
   const creating = grantSegment === NEW_GRANT_SEGMENT;
   const [user, setUser] = useState<PickedUser | null>(null);
-  // No permission is picked until the reader picks one, so a grant is never
-  // whatever happened to be listed first.
-  const [permission, setPermission] = useState("");
+  // Nothing is ticked until the reader ticks it, in the same matrix the role editor uses.
+  const [permissions, setPermissions] = useState<ReadonlySet<Permission>>(new Set());
   const [target, setTarget] = useState<PickedTarget>(NO_TARGET);
   const [expiresAt, setExpiresAt] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -101,7 +101,7 @@ export function Grants({
    */
   const form = useContractForm(accessGrantCreateSchema, {
     userId: user?.id,
-    permission,
+    permissions: [...permissions],
     contextType: target.targetType,
     contextId: target.targetId,
     expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
@@ -125,18 +125,17 @@ export function Grants({
       setFormError(checked.formMessage);
       return;
     }
-    const { permission: granted } = checked.data;
-    if (
-      !(await confirmPrivilegedAccess({ grant: `the "${granted}" permission`, permissions: [granted], user, target }))
-    ) {
+    const granted = checked.data.permissions;
+    const grant = granted.length === 1 ? `the "${granted[0]}" permission` : `${granted.length} permissions`;
+    if (!(await confirmPrivilegedAccess({ grant, permissions: granted, user, target }))) {
       return;
     }
     setSubmitting(true);
     try {
       await postJson("/api/v1/permissions/grants", checked.data, accessGrantCreateResponseSchema);
-      toast("Permission granted", "success");
+      toast(granted.length === 1 ? "Permission granted" : `${granted.length} permissions granted`, "success");
       setUser(null);
-      setPermission("");
+      setPermissions(new Set());
       setTarget(NO_TARGET);
       setExpiresAt("");
       form.reset();
@@ -184,24 +183,14 @@ export function Grants({
                     disabled={submitting}
                   />
                 </fieldset>
-                <Field label="Permission" {...form.of("permission")}>
-                  {(control) => (
-                    <Select
-                      {...control}
-                      name="permission"
-                      value={permission}
-                      onChange={(e) => setPermission((e.target as HTMLSelectElement).value)}
-                      disabled={submitting}
-                    >
-                      <option value="">Select permission…</option>
-                      {PERMISSIONS.map((p) => (
-                        <option key={p} value={p}>
-                          {p}
-                        </option>
-                      ))}
-                    </Select>
-                  )}
-                </Field>
+                {/* The matrix is many controls, so a legend names it; a refusal about it shows in the form's alert. */}
+                <fieldset class="pk-fieldset pk-field">
+                  <legend class="pk-field__label">Permissions</legend>
+                  <RolePermissions selected={permissions} onSelect={setPermissions} disabled={submitting} />
+                  <p class="pk-field__help">
+                    Each one is granted to this person on its own. For a job that many people do, assign a role instead.
+                  </p>
+                </fieldset>
                 <TargetPicker value={target} onChange={setTarget} disabled={submitting} />
                 <Field
                   label="Expires (optional)"

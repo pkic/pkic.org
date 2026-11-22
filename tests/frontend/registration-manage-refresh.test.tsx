@@ -64,3 +64,42 @@ it("keeps the latest saved profile in the manage summary when refreshes finish o
   expect(summary.textContent).toContain("Latest saved title");
   expect(summary.textContent).not.toContain("Older saved title");
 });
+
+it("shows a payment under review without a confirmed place or another payment action", async () => {
+  vi.resetModules();
+  window.history.replaceState({}, "", "/events/2026/pqc-2026/manage/?token=manage-token");
+  document.body.innerHTML = renderToString(<EventRegistrationManagement />);
+  document.querySelector<HTMLElement>("[data-event-registration-manage]")!.dataset.eventSlug = "pqc-2026";
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: RequestInfo | URL) =>
+      Promise.resolve(
+        Response.json(
+          String(input).includes("/forms/placements/")
+            ? FORMS
+            : readResponse({
+                paymentUnderReview: true,
+                dayWaitlist: [
+                  {
+                    dayDate: "2026-12-01",
+                    status: "offered",
+                    priorityLane: "general",
+                    offerExpiresAt: "2026-11-30T09:00:00.000Z",
+                  },
+                ],
+              }),
+        ),
+      ),
+    ),
+  );
+  await act(async () => {
+    await import("../../assets/ts/event-flows/registration-manage-page");
+  });
+  await vi.waitFor(() =>
+    expect(document.querySelector("[data-manage-greeting]")?.textContent).toContain("Payment under review"),
+  );
+  const banner = document.querySelector<HTMLElement>("[data-manage-status-banner]")!;
+  expect(banner.textContent).toContain("Payment under review");
+  expect(banner.textContent).not.toContain("Confirmed");
+  expect(document.querySelector("[data-manage-pay-link]")).toBeNull();
+});

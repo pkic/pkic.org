@@ -1,19 +1,16 @@
-import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 /**
  * invite-accept-info-reminders.test.ts
  *
  * Covers:
  *  - GET  /api/v1/invites/:token/info       (positive, negative, edge cases)
- *  - POST /api/v1/invites/:token/accept      (speaker accept, attendee accept, negative)
+ *  - POST /api/v1/invites/:token/accept      (speaker accept, attendee refusal, negative)
  *  - POST /api/v1/invites/:token/reminders   (postpone, resume, unsubscribe)
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
-import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { env } from "cloudflare:workers";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
-import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 import { run } from "../functions/_lib/db/queries";
 import { createInvite, declineInvite, acceptInvite } from "../functions/_lib/services/invites";
 import { onRequestGet as inviteInfo } from "../functions/api/v1/invites/[token]/info";
@@ -273,16 +270,12 @@ describe("invite accept endpoint", () => {
     expect(body.next).toContain("propose");
   });
 
-  it("accepts an attendee invite with valid consents", async () => {
+  it("refuses an attendee invite here; attendees register for the event", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    await seedSessionAttendanceDays(env.DB, eventId, ["2026-12-01"]);
-    const adminUser = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
-    await seedWorkflowEmailTemplates(env.DB, adminUser.id);
 
     const { token } = await createInvite(env.DB, {
       eventId,
       inviteeEmail: "attendee@example.test",
-      inviteeFirstName: "Alice",
       inviteType: "attendee",
       signingSecret: "test-signing-secret",
     });
@@ -293,68 +286,16 @@ describe("invite accept endpoint", () => {
         new Request(`https://app.test/api/v1/invites/${token}/accept`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            email: "attendee@example.test",
-            firstName: "Alice",
-            lastName: "Test",
-            dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
-            consents: [
-              { termKey: "privacy-policy", version: "v1" },
-              { termKey: "code-of-conduct", version: "v1" },
-            ],
-          }),
-        }),
-        { token },
-      ),
-    );
-
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as {
-      success: boolean;
-      registrationId: string;
-      status: string;
-      shareUrl: string;
-    };
-    expect(body.success).toBe(true);
-    expect(body.registrationId).toBeTruthy();
-    expect(body.shareUrl).toContain("/r/");
-  });
-
-  it("rejects attendee accept with mismatched email", async () => {
-    const { eventId } = await seedEventAndAdmin(env.DB);
-    await seedSessionAttendanceDays(env.DB, eventId, ["2026-12-01"]);
-
-    const { token } = await createInvite(env.DB, {
-      eventId,
-      inviteeEmail: "real@example.test",
-      inviteType: "attendee",
-      signingSecret: "test-signing-secret",
-    });
-
-    const response = await inviteAccept(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/invites/${token}/accept`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            email: "wrong@example.test",
-            firstName: "Alice",
-            lastName: "Test",
-            dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
-            consents: [
-              { termKey: "privacy-policy", version: "v1" },
-              { termKey: "code-of-conduct", version: "v1" },
-            ],
-          }),
+          body: JSON.stringify({}),
         }),
         { token },
       ),
     );
 
     expect(response.status).toBe(400);
-    const body = (await response.json()) as { error: { code: string } };
-    expect(body.error.code).toBe("EMAIL_MISMATCH");
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "INVITE_INVALID" } });
+    expect(await queryAll(env.DB, "SELECT status FROM invites")).toEqual([{ status: "sent" }]);
+    expect(await queryAll(env.DB, "SELECT id FROM registrations")).toEqual([]);
   });
 
   it("rejects accept with invalid/non-existent token", async () => {

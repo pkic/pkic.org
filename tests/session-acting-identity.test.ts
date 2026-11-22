@@ -104,7 +104,7 @@ async function signInWithLink(email: string): Promise<string> {
   const capability = new URLSearchParams(new URL(delivered.magicLinkUrl).hash.split("?", 2)[1]).get("token");
   const verified = await call(null, "/api/v1/auth/verify-link", {
     method: "POST",
-    body: JSON.stringify({ token: capability }),
+    body: JSON.stringify({ token: capability, organization: { personal: true } }),
     headers: { "cf-connecting-ip": "203.0.113.40" },
   });
   expect(verified.status).toBe(200);

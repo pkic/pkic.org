@@ -8,34 +8,38 @@ import { readLiveTickerContext } from "./room-ticker-context";
 import { readPublishedLiveAgenda } from "./approved-agenda";
 import type { LiveRoomChat } from "./room-chat";
 import { filterLiveChatForAir } from "./room-chat-on-air-filter";
+import type { LiveChatOnAirMessage, LiveChatOnAirOptions, LiveOnAirChat } from "./location-chat-on-air";
 export const LIVE_TICKER_REFRESH_MS = 30000;
 
 /**
  * The latest attendee messages a broadcast may show, oldest first, as plain
- * words cut to the broadcast's length. Hidden and reported messages, and
+ * words; the ticker cuts each to its length, while the chat graphic takes them
+ * whole and its board clamps them to whole lines. Hidden and reported messages, and
  * anything by a muted or banned person, never reach an output, nor does a
  * message still within its wait (`sentBy`) or one the on-air filter holds
  * back: the chat ticker and the chat graphic both read them here.
  */
-export async function liveChatOnAirMessages(chat: LiveRoomChat, limit: number, sentBy: string | null = null) {
+export async function liveChatOnAirMessages(
+  chat: Pick<LiveRoomChat, "tickerRows">,
+  occurrenceId: string,
+  limit: number,
+  { sentBy = null, cutAt = null, blockedUserIds = [] }: LiveChatOnAirOptions = {},
+): Promise<LiveChatOnAirMessage[]> {
   const messages = chat
-    .tickerRows(limit, sentBy)
+    .tickerRows(occurrenceId, limit, sentBy, blockedUserIds)
     .reverse()
     .flatMap((row) => {
       const text = liveChatPlainText(row.body);
       if (!text) return [];
-      const words =
-        text.length > LIVE_CHAT_POLICY.tickerMessageLength
-          ? `${text.slice(0, LIVE_CHAT_POLICY.tickerMessageLength - 1).trimEnd()}…`
-          : text;
+      const words = cutAt !== null && text.length > cutAt ? `${text.slice(0, cutAt - 1).trimEnd()}…` : text;
       return [{ id: row.id, authorName: row.author_name, text: words }];
     });
   return filterLiveChatForAir(messages);
 }
 
 /** The chat ticker's lines: the latest messages a broadcast may show, each after its author's name. */
-export async function liveChatTickerLines(chat: LiveRoomChat): Promise<string[]> {
-  return (await liveChatOnAirMessages(chat, LIVE_CHAT_POLICY.tickerMessages)).map(
+export async function liveChatTickerLines(chat: LiveOnAirChat): Promise<string[]> {
+  return (await chat.messages(LIVE_CHAT_POLICY.tickerMessages, { cutAt: LIVE_CHAT_POLICY.tickerMessageLength })).map(
     (message) => `${message.authorName}: ${message.text}`,
   );
 }

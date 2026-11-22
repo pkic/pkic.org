@@ -55,8 +55,6 @@ async function fixture(delegated = false) {
   const token = await createMemberSession(env.DB, member.userId, crypto.randomUUID());
   const body = registrationCreateSchema.parse({
     identityId: member.identityId,
-    firstName: "Test",
-    lastName: "Attendee",
     email,
     dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
     consents: [
@@ -103,6 +101,8 @@ describe("group access through the canonical registration route", () => {
 
   it.each(["submission", "confirmation"])("preserves sign-in-free calendar access after %s", async (producer) => {
     const f = await fixture();
+    // The token management page is a public event's; an event without public pages manages in the portal.
+    await env.DB.prepare("UPDATE events SET visibility = 'public' WHERE id = ?").bind(f.eventId).run();
     const response = await f.submit();
     expect(response.status, await response.clone().text()).toBe(200);
     const result = registrationSubmissionResponseSchema.parse(await response.json());
@@ -202,8 +202,12 @@ describe("group access through the canonical registration route", () => {
   it("never authorizes an anonymous caller or a client-supplied group ID", async () => {
     const f = await fixture();
     const { identityId: _identityId, ...unselectedBody } = f.body;
-    expect((await f.submit(unselectedBody, false)).status).toBe(403);
+    const anonymous = await f.submit(unselectedBody, false);
+    expect(anonymous.status).toBe(401);
+    expect(await anonymous.json()).toMatchObject({ error: { code: "AUTH_REQUIRED" } });
     expect((await f.submit({ ...f.body, registrationGroupId: f.groupId })).status).toBe(400);
-    expect((await f.submit({ ...unselectedBody, email: "other-attendee@example.test" })).status).toBe(403);
+    const otherAddress = await f.submit({ ...unselectedBody, email: "other-attendee@example.test" });
+    expect(otherAddress.status).toBe(422);
+    expect(await otherAddress.json()).toMatchObject({ error: { code: "REGISTRATION_SESSION_EMAIL_REQUIRED" } });
   });
 });

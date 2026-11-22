@@ -49,7 +49,12 @@ vi.mock("../../assets/ts/components/ApiDataTable", () => ({
       {props.createAction && "onSelect" in props.createAction && (
         <button onClick={props.createAction.onSelect}>{props.createAction.label}</button>
       )}
-      {props.toolbar?.({ reload: async () => {}, resetPage: () => {} }, {})}
+      {props.toolbar?.(
+        { reload: async () => {}, resetPage: () => {} },
+        {},
+        { sort: "", onSort: () => {} },
+        { hidden: new Set() },
+      )}
       {(() => {
         const action = props.rowAction?.(agendaContentSchema.parse(mocks.row), 0);
         return action && <button onClick={action.onSelect}>{action.label}</button>;

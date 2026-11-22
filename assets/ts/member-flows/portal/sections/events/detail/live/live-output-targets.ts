@@ -1,5 +1,6 @@
 import { updateLiveTimerGraphics } from "../../../../../../../shared/live-timer-policy";
-import { LIVE_AUX_OUTPUTS, type LiveAuxOutput } from "../../../../../../../shared/live-room-outputs";
+import { liveRoomOutputs, liveStudioOutputs, type LiveAuxOutput } from "../../../../../../../shared/live-room-outputs";
+import { liveOutputComposition } from "../../../../../../../shared/schemas/live-session-stage";
 import type { LivePollPresentation } from "../../../../../../../shared/schemas/live-session-poll";
 import {
   type LivePanelists,
@@ -16,6 +17,8 @@ import type {
   LiveTopQuestionsConfig,
 } from "../../../../../../../shared/schemas/live-session-on-screen";
 import type { LiveRoomState } from "../../../../../../live-session/live-room-state";
+import type { LiveProgramLayer } from "../../../../../../../shared/live-overlay-stacking";
+import { liveLayerUnseen } from "./live-layer-unseen";
 import { liveCompositionInput, previewLiveStage, takeLiveStage } from "./live-stage-preview";
 
 type Send = (message: LiveRoomClientMessage) => boolean;
@@ -56,7 +59,12 @@ export const sendLivePrograms = (targets: LiveTargets, messages: readonly LiveRo
 
 const sameConfig = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
 
-/** Whether a composition shows this graphic. */
+/**
+ * Whether a composition shows this graphic. An output has one news ticker,
+ * Up next, panel, top questions and chat, so it shows that graphic whatever
+ * its settings there: a row never says off while its graphic is on screen,
+ * whether a scene, another operator or this one put it on.
+ */
 export function liveLayerShown(stage: LiveStage, layer: LiveLayer): boolean {
   switch (layer.kind) {
     case "lowerThird":
@@ -66,14 +74,11 @@ export function liveLayerShown(stage: LiveStage, layer: LiveLayer): boolean {
     case "poll":
       return stage.poll?.id === layer.id;
     case "ticker":
-      return (
-        stage.ticker !== null &&
-        sameConfig({ style: stage.ticker.style, messages: stage.ticker.messages }, layer.config)
-      );
+      return stage.ticker !== null;
     case "schedule":
-      return stage.schedule !== null && sameConfig(stage.schedule.config, layer.config);
+      return stage.schedule !== null;
     case "panelists":
-      return stage.panelists?.layout === layer.panelists.layout;
+      return stage.panelists !== null;
     case "timer":
       // An output shows each timer once; it shows this one whatever its settings there.
       return stage.timerGraphics.some((graphic) => graphic.timerId === layer.graphic.timerId);
@@ -84,9 +89,9 @@ export function liveLayerShown(stage: LiveStage, layer: LiveLayer): boolean {
         sameConfig(stage.checkIn?.text, layer.checkIn.text)
       );
     case "topQuestions":
-      return stage.topQuestions !== null && sameConfig(stage.topQuestions.config, layer.config);
+      return stage.topQuestions !== null;
     case "chatFeed":
-      return stage.chatFeed !== null && sameConfig(stage.chatFeed.config, layer.config);
+      return stage.chatFeed !== null;
     case "reactions":
       return stage.reactions;
   }
@@ -137,20 +142,28 @@ export function liveLayerToggle(
 }
 
 /** The complete composition an auxiliary output takes when one graphic is toggled on it. */
-export function liveAuxToggle(state: LiveRoomState, output: LiveAuxOutput, layer: LiveLayer): LiveRoomClientMessage {
-  const current = state.outputs[output];
+export function liveAuxToggle(
+  state: LiveRoomState,
+  output: LiveAuxOutput,
+  layer: LiveLayer,
+  shown?: boolean,
+): LiveRoomClientMessage {
+  const current = liveOutputComposition(state.outputs, output);
   const next = previewLiveStage(
     state,
     current,
-    liveLayerToggle(current, layer),
+    liveLayerToggle(current, layer, shown),
     layer.kind === "checkIn" ? layer.checkIn : null,
   );
   return { type: "aux.set", output, composition: liveCompositionInput(next) };
 }
 
 /** The change to the shared Preview that shows the graphic there, or takes it off: only its own layer. */
-export function livePreviewToggle(state: LiveRoomState, layer: LiveLayer): LiveRoomClientMessage {
-  const shown = liveLayerShown(state.preview, layer);
+export function livePreviewToggle(
+  state: LiveRoomState,
+  layer: LiveLayer,
+  shown = liveLayerShown(state.preview, layer),
+): LiveRoomClientMessage {
   const composition: LivePreviewPatch = (() => {
     switch (layer.kind) {
       case "lowerThird":
@@ -185,13 +198,25 @@ export function livePreviewToggle(state: LiveRoomState, layer: LiveLayer): LiveR
   return { type: "preview.set", composition };
 }
 
+/** The scene element a graphic draws as, which a scene places. */
+export const liveLayerElement = (layer: LiveLayer): LiveProgramLayer =>
+  layer.kind === "chatFeed" ? "chat" : layer.kind;
+
 /** Where a graphic is now: Preview, Program and each auxiliary output. */
 export function liveLayerTargets(targets: LiveTargets, layer: LiveLayer) {
   const { state, programActive } = targets;
+  const preview = liveLayerShown(state.preview, layer);
+  const program = programActive && liveLayerShown(state.stage, layer);
+  const drawn = liveLayerElement(layer);
   return {
-    preview: liveLayerShown(state.preview, layer),
-    program: programActive && liveLayerShown(state.stage, layer),
-    aux: (output: LiveAuxOutput) => programActive && liveLayerShown(state.outputs[output], layer),
+    preview,
+    program,
+    /** Why Preview holds it but would not show it: a board over it, or a scene without it. */
+    previewUnseen: preview ? liveLayerUnseen(state, state.preview, drawn) : null,
+    /** Why it is on air but nobody sees it, in Program's scene, the one a source draws unless it names another. */
+    programUnseen: program ? liveLayerUnseen(state, state.stage, drawn) : null,
+    aux: (output: LiveAuxOutput) =>
+      programActive && liveLayerShown(liveOutputComposition(state.outputs, output), layer),
   };
 }
 
@@ -211,36 +236,24 @@ export function sendLayerToggle(
   return targets.sendProgram(liveAuxToggle(state, destination, layer));
 }
 
+/** Every output the room holds a composition for, or lists: a graphic replaced anywhere is replaced on each. */
+function heldOutputs(state: LiveRoomState): LiveAuxOutput[] {
+  return [...new Set([...Object.keys(state.outputs), ...liveStudioOutputs(liveRoomOutputs(state.session))])];
+}
+
 /**
- * Saving a timer graphic's settings: the commands that replace it, by its
- * timer, on every destination that shows it now, so what is on air changes
- * with the save. A destination that does not show it is left alone.
+ * Saving a graphic's settings: the commands that put it, as it is now, on
+ * every destination that shows it, so what is on screen changes with the
+ * save. A destination that does not show it is left alone.
  */
-export function liveTimerGraphicReplacements(
-  targets: LiveTargets,
-  previous: LiveTimerGraphic,
-  next: LiveTimerGraphic,
-): LiveRoomClientMessage[] {
+export function liveLayerReplacements(targets: LiveTargets, layer: LiveLayer): LiveRoomClientMessage[] {
   const { state } = targets;
-  const where = liveLayerTargets(targets, { kind: "timer", graphic: previous });
-  const replace = { type: "stage.timer", timer: next, visible: true } as const;
+  const where = liveLayerTargets(targets, layer);
   return [
-    ...(where.preview
-      ? [
-          {
-            type: "preview.set",
-            composition: { timerGraphics: updateLiveTimerGraphics(state.preview.timerGraphics, next, true) },
-          } as const,
-        ]
-      : []),
-    ...(where.program ? [replace] : []),
-    ...LIVE_AUX_OUTPUTS.filter((output) => where.aux(output)).map(
-      (output) =>
-        ({
-          type: "aux.set",
-          output,
-          composition: liveCompositionInput(previewLiveStage(state, state.outputs[output], replace)),
-        }) as const,
-    ),
+    ...(where.preview ? [livePreviewToggle(state, layer, false)] : []),
+    ...(where.program ? [liveLayerToggle(state.stage, layer, false)] : []),
+    ...heldOutputs(state)
+      .filter((output) => where.aux(output))
+      .map((output) => liveAuxToggle(state, output, layer, false)),
   ];
 }

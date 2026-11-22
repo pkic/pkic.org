@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
 import type { RequestDbContext } from "../../../_lib/db/context";
-import { SponsorAccessLinksCreate } from "./access-links";
 import { SponsorCheckoutCreate } from "./checkouts/index";
 import { SponsorCompaniesGet } from "./companies/index";
 import { SponsorInquiriesCreate } from "./inquiries";
@@ -26,7 +25,6 @@ openapi.post("/inquiries", SponsorInquiriesCreate);
 openapi.post("/checkouts", SponsorCheckoutCreate);
 openapi.get("/tiers", publicReadRoute(SponsorTiersGet));
 openapi.patch("/tiers/:id", SponsorTierUpdate);
-openapi.post("/access-links", SponsorAccessLinksCreate);
 openapi.get("/companies", SponsorCompaniesGet);
 openapi.get("/:id/events/:eventId/attendees", SponsorAttendeesList);
 openapi.get("/:id/events", SponsorEventsGet);

@@ -1,23 +1,96 @@
 /** Membership discovery reuses the verified public application flow. */
+import type { z } from "zod";
 import { myApplicationsListResponseSchema, myProfileSchema } from "../../../../shared/schemas/me";
+import {
+  organizationCurrentApplicationResponseSchema,
+  type organizationCurrentApplicationSchema,
+} from "../../../../shared/schemas/organization-self-service";
+import type { SessionActingIdentity } from "../../../../shared/session-acting-identity";
 import { getJson } from "../../../shared/api-client";
 import { useData } from "../../../hooks/useData";
 import { SupportBanner } from "../../../site/SupportBanner";
 import { statusLabel } from "../../../components/Badge";
 import { ButtonLink } from "../../../ui/Button";
+import { DescriptionList } from "../../../ui/DescriptionList";
+import { PersonCellPreview } from "../../../components/identities/PersonCellPreview";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { usePortalHashLocation } from "../hash-location";
 import { fmtDate } from "../ui";
 import { portalSession } from "../state";
 
-function NonMemberJoinPrompt({ userId }: { userId: string }) {
+type OrganizationApplication = z.infer<typeof organizationCurrentApplicationSchema> & {
+  organizationId: string;
+  organizationName: string;
+};
+
+/**
+ * The open application of each organization the person represents, so a colleague waits for it rather than applying.
+ * Each organization is asked once, and one that cannot answer leaves the others on screen.
+ */
+async function representedOrganizationApplications(
+  identities: readonly SessionActingIdentity[],
+): Promise<OrganizationApplication[]> {
+  const organizations = new Map<string, string>();
+  for (const identity of identities)
+    if (identity.organizationId && !organizations.has(identity.organizationId))
+      organizations.set(identity.organizationId, identity.organizationName ?? "Your organization");
+  const found = await Promise.allSettled(
+    [...organizations].map(async ([organizationId, organizationName]) => {
+      const { application } = await getJson(
+        `/api/v1/organizations/${encodeURIComponent(organizationId)}/applications/current`,
+        organizationCurrentApplicationResponseSchema,
+      );
+      return application ? { ...application, organizationId, organizationName } : null;
+    }),
+  );
+  return found.flatMap((result) => (result.status === "fulfilled" && result.value ? [result.value] : []));
+}
+
+function OrganizationApplicationPanel({ application }: { application: OrganizationApplication }) {
+  const applicant = application.applicant;
+  return (
+    <Panel>
+      <PanelHeader title={`Membership application for ${application.organizationName}`} />
+      <PanelBody class="pk-stack">
+        <DescriptionList
+          items={[
+            { term: "Status", value: statusLabel(application.stage) },
+            { term: "Applied", value: fmtDate(application.createdAt) },
+            {
+              term: "Applied by",
+              value: applicant && (
+                <div class="pk-cluster">
+                  <PersonCellPreview
+                    name={applicant.userName}
+                    title={applicant.jobTitle}
+                    avatarSrc={applicant.headshotUrl}
+                  />
+                  <ButtonLink href={`mailto:${applicant.email}`} external={false}>
+                    Email {applicant.userName}
+                  </ButtonLink>
+                </div>
+              ),
+            },
+          ]}
+        />
+        <p>
+          You do not need to apply. Once the application is approved, you are admitted automatically as one of the
+          organization&rsquo;s representatives and can join working groups here.
+        </p>
+      </PanelBody>
+    </Panel>
+  );
+}
+
+function NonMemberJoinPrompt({ userId, identities }: { userId: string; identities: readonly SessionActingIdentity[] }) {
   const status = useData(async () => {
-    const [person, applications] = await Promise.all([
+    const [person, applications, organizationApplications] = await Promise.all([
       getJson("/api/v1/users/current", myProfileSchema),
       getJson("/api/v1/users/current/applications?limit=1", myApplicationsListResponseSchema),
+      representedOrganizationApplications(identities),
     ]);
-    return { person, applications };
-  }, [userId]);
+    return { person, applications, organizationApplications };
+  }, [userId, identities.map((identity) => identity.organizationId ?? "").join()]);
   if (status.loading || status.error || !status.data || status.data.person.userId !== userId) return null;
   // Someone who has applied comes here to follow it, so it is the first thing their home offers.
   const application = status.data.applications.applications[0];
@@ -35,6 +108,18 @@ function NonMemberJoinPrompt({ userId }: { userId: string }) {
           </PanelBody>
         )}
       </Panel>
+    );
+  // A colleague's application already speaks for the organization; its representatives wait for it.
+  const colleagues = status.data.organizationApplications.filter(
+    (application) => application.applicant?.userId !== userId,
+  );
+  if (colleagues.length)
+    return (
+      <>
+        {colleagues.map((application) => (
+          <OrganizationApplicationPanel key={application.organizationId} application={application} />
+        ))}
+      </>
     );
   if (status.data.person.activeIdentities.length) return null;
   return (
@@ -55,5 +140,7 @@ function NonMemberJoinPrompt({ userId }: { userId: string }) {
 export function JoinPrompt() {
   const session = portalSession.value;
   if (!session || session.member || session.pendingIdentityCount > 0) return null;
-  return <NonMemberJoinPrompt key={session.sessionId} userId={session.identity.id} />;
+  return (
+    <NonMemberJoinPrompt key={session.sessionId} userId={session.identity.id} identities={session.actingIdentities} />
+  );
 }

@@ -35,7 +35,7 @@ it("reviews every configured day, including unselected days, and updates when a 
     ),
   );
   const form = host.querySelector("form")!;
-  const refresh = () => updateRegistrationReview(host, form, []);
+  const refresh = () => updateRegistrationReview(host, form, [], "Ada Lovelace");
   await act(refresh);
   const review = host.querySelector("[data-registration-review]")!;
   expect(review.textContent?.match(/Not attending/g)).toHaveLength(3);
@@ -47,6 +47,16 @@ it("reviews every configured day, including unselected days, and updates when a 
   await act(() => form.querySelector<HTMLInputElement>('input[name="dayAttendance.2027-09-02"]')!.click());
   await act(refresh);
   expect(review.textContent?.match(/Not attending/g)).toHaveLength(1);
+  // The ticket step's items follow the days, so the review states the ticket and its total.
+  await act(() =>
+    updateRegistrationReview(host, form, [], "Ada Lovelace", [
+      { term: "Ticket", value: "Vendor" },
+      { term: "Total", value: "$395" },
+    ]),
+  );
+  const terms = [...review.querySelectorAll("dt")].map((term) => term.textContent);
+  expect(terms.slice(-2)).toEqual(["Ticket", "Total"]);
+  expect(review.textContent).toContain("$395");
 });
 
 it("preserves duplicate-label custom answer rows when a question is removed", async () => {
@@ -72,10 +82,10 @@ it("preserves duplicate-label custom answer rows when a question is removed", as
     ),
   );
   const form = host.querySelector("form")!;
-  await act(() => updateRegistrationReview(host, form, fields));
+  await act(() => updateRegistrationReview(host, form, fields, "Ada Lovelace"));
   const values = [...host.querySelectorAll("[data-registration-review] dd")];
   const second = values.find((value) => value.textContent === "second");
   expect(second).toBeDefined();
-  await act(() => updateRegistrationReview(host, form, [fields[1]]));
+  await act(() => updateRegistrationReview(host, form, [fields[1]], "Ada Lovelace"));
   expect([...host.querySelectorAll("dd")].find((value) => value.textContent === "second")).toBe(second);
 });

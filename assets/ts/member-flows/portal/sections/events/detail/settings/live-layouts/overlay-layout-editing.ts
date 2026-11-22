@@ -22,7 +22,8 @@ export const NUDGE_PX = 1;
 
 /** The edges a box can be dragged by: a side, or a corner (two sides). */
 export type ResizeHandle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
-export const RESIZE_HANDLES: readonly ResizeHandle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+/** The handles the scene editor draws on the selected box: its corners. */
+export const CORNER_HANDLES: readonly ResizeHandle[] = ["nw", "ne", "se", "sw"];
 
 /** The lines a box snaps to along one axis, and the ones a guide is drawn for. */
 export interface SnapTargets {

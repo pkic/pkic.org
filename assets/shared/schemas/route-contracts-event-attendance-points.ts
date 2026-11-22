@@ -20,7 +20,14 @@ import {
   selfCheckInsQuerySchema,
   selfCheckInsResponseSchema,
 } from "./event-attendance-movement";
-import { authErrors, created, ok, requiresPermissions, requiresSession } from "./route-contract";
+import {
+  authErrors,
+  created,
+  ok,
+  requiresAnyPermissions,
+  requiresPermissions,
+  requiresSession,
+} from "./route-contract";
 
 const commandBody = {
   content: { "application/json": { schema: attendancePointCommandSchema } },
@@ -28,7 +35,7 @@ const commandBody = {
 } as const;
 
 export const attendancePointsRouteSchema = {
-  ...requiresPermissions("agenda:attendance_read"),
+  ...requiresAnyPermissions(["agenda:attendance_read"], ["agenda:live_studio"]),
   tags: ["Events"],
   summary: "List the event's check-in codes",
   description:

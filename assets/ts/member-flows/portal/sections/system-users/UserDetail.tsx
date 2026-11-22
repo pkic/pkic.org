@@ -64,6 +64,7 @@ export interface UserPermissions {
   canWrite: boolean;
   canGrantAccess: boolean;
   canAnonymize: boolean;
+  canDelete: boolean;
   canManageMembership: boolean;
   canActivateIdentity: boolean;
 }
@@ -172,9 +173,12 @@ export function UserDetail({
     selfEditable,
     canWrite: permissions.canWrite,
     canAnonymize: permissions.canAnonymize,
+    // Staff never delete their own account; the server refuses it too.
+    canDelete: permissions.canDelete && !isSelf,
     editing: editingProfile,
     onEdit: () => setEditingProfile(true),
     onOpenProfile: () => navigate(`${recordPath}/profile`),
+    onDeleted: () => navigate("/users"),
     reload: load,
   });
 

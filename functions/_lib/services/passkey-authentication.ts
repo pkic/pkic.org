@@ -3,6 +3,8 @@ import { generateAuthenticationOptions, verifyAuthenticationResponse } from "@si
 import type { AuthenticationResponseJSON, WebAuthnCredential } from "@simplewebauthn/server";
 import { isoBase64URL } from "@simplewebauthn/server/helpers";
 import type { z } from "zod";
+import { ACCOUNT_ORGANIZATION_COPY } from "../../../assets/shared/account-organization-copy";
+import { readAccountOrganizationStep } from "./identities/account-organization";
 import { AppError } from "../errors";
 import { first } from "../db/queries";
 import { nowIso } from "../utils/time";
@@ -33,7 +35,7 @@ import {
   wasPasskeyChallengeConsumed,
 } from "./passkey-challenges";
 import {
-  expectedPasskeyOrigin,
+  expectedPasskeyIdentity,
   PASSKEY_USER_VERIFICATION_POLICY,
   requireEnvVar,
   type WebAuthnEnv,
@@ -49,8 +51,7 @@ export async function beginPasskeyAuthentication(
   env: WebAuthnEnv,
   requestUrl: string,
 ): Promise<{ options: Record<string, unknown>; challengeToken: string }> {
-  expectedPasskeyOrigin(env, requestUrl);
-  const rpId = requireEnvVar(env.WEBAUTHN_RP_ID, "WEBAUTHN_RP_ID");
+  const { rpId } = expectedPasskeyIdentity(env, requestUrl);
   const signingSecret = requireEnvVar(env.INTERNAL_SIGNING_SECRET, "INTERNAL_SIGNING_SECRET");
 
   // No `allowCredentials` — a usernameless/discoverable-credential flow
@@ -80,8 +81,7 @@ export async function completePasskeyAuthentication(
   requestUrl: string,
   payload: { challengeToken: string; response: AuthenticationResponseInput },
 ): Promise<PasskeyAuthenticationResult> {
-  const rpId = requireEnvVar(env.WEBAUTHN_RP_ID, "WEBAUTHN_RP_ID");
-  const origin = expectedPasskeyOrigin(env, requestUrl);
+  const { rpId, origin } = expectedPasskeyIdentity(env, requestUrl);
   const signingSecret = requireEnvVar(env.INTERNAL_SIGNING_SECRET, "INTERNAL_SIGNING_SECRET");
 
   const claims = await verifyPasskeyChallengeToken(signingSecret, payload.challengeToken, "authentication");
@@ -141,6 +141,15 @@ export async function completePasskeyAuthentication(
   if (!resolved) {
     throw new AppError(403, "AUTH_FORBIDDEN", "This account is no longer eligible to sign in");
   }
+  // Account setup's organization step needs the mailbox proof an email link carries.
+  if (
+    await readAccountOrganizationStep(db, {
+      subject: { userId: resolved.identity.id },
+      email: normalizeEmail(resolved.identity.email),
+      verifiedAt: nowIso(),
+    })
+  )
+    throw new AppError(409, "ACCOUNT_ORGANIZATION_REQUIRED", ACCOUNT_ORGANIZATION_COPY.passkeyRefused);
   const prepared = await prepareUserSession(
     db,
     resolved.identity.id,

@@ -1,7 +1,16 @@
+import { liveOverlayCoveredBy } from "../assets/shared/live-overlay-cover";
+import {
+  LIVE_PROGRAM_LAYER_ORDER,
+  liveOverlayClearOfTicker,
+  liveProgramLayers,
+  moveLiveProgramLayer,
+} from "../assets/shared/live-overlay-stacking";
+import { EMPTY_LIVE_STAGE, type LiveStage } from "../assets/shared/schemas/live-session-room";
 import { describe, expect, it } from "vitest";
 import { liveOverlayLayerTransform, placeOverlayGraphic } from "../assets/shared/live-overlay-geometry";
 import {
   LIVE_OVERLAY_PRESET_LAYOUTS,
+  LIVE_OVERLAY_STANDARD_ELEMENTS,
   liveOverlayLayoutChoices,
   resolveLiveOverlayLayout,
 } from "../assets/shared/live-overlay-layout-presets";
@@ -24,7 +33,8 @@ import { layoutSlugFor } from "../assets/ts/member-flows/portal/sections/events/
 import { layoutLabelSides } from "../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-labels";
 import { LIVE_OVERLAY_ELEMENT_LABELS } from "../assets/shared/schemas/live-overlay-layout";
 
-const FULL_FRAME = LIVE_OVERLAY_PRESET_LAYOUTS["full-frame"].elements;
+/** Every graphic at its standard box, all shown. */
+const STANDARD = LIVE_OVERLAY_STANDARD_ELEMENTS;
 const placement = (box: Box, anchor: Partial<LiveOverlayElementPlacement> = {}): LiveOverlayElementPlacement => ({
   visible: true,
   shared: false,
@@ -89,14 +99,16 @@ describe("built-in layouts", () => {
       expect(liveOverlayLayoutElementsSchema.safeParse(LIVE_OVERLAY_PRESET_LAYOUTS[preset].elements).success).toBe(
         true,
       );
-    expect(resolveLiveOverlayLayout([], "no-such-layout")).toBe(FULL_FRAME);
-    const saved = { slug: "keynote", name: "Keynote", elements: LIVE_OVERLAY_PRESET_LAYOUTS["ticker-only"].elements };
+    expect(resolveLiveOverlayLayout([], "no-such-layout")).toBe(LIVE_OVERLAY_PRESET_LAYOUTS.default.elements);
+    const saved = { slug: "keynote", name: "Keynote", elements: LIVE_OVERLAY_PRESET_LAYOUTS["break"].elements };
     expect(resolveLiveOverlayLayout([saved], "keynote")).toBe(saved.elements);
-    expect(resolveLiveOverlayLayout([saved], "lower-third").lowerThird.visible).toBe(true);
-    expect(resolveLiveOverlayLayout([saved], "lower-third").question.visible).toBe(false);
-    expect(liveOverlayLayoutChoices([saved, { ...saved, slug: "panel", name: "Our panel" }]).slice(-3)).toEqual([
+    expect(resolveLiveOverlayLayout([saved], "check-in").checkIn.visible).toBe(true);
+    expect(resolveLiveOverlayLayout([saved], "check-in").question.visible).toBe(false);
+    expect(liveOverlayLayoutChoices([saved, { ...saved, slug: "panel", name: "Our panel" }]).slice(-5)).toEqual([
       { slug: "panel", name: "Our panel" },
-      { slug: "ticker-only", name: "Ticker only" },
+      { slug: "break", name: "Break" },
+      { slug: "check-in", name: "Check-in" },
+      { slug: "full-board", name: "Full board" },
       { slug: "keynote", name: "Keynote" },
     ]);
   });
@@ -154,13 +166,90 @@ describe("editing a box", () => {
   });
 
   it("moves a box's label to its bottom edge when it would cover another box's label", () => {
-    const sides = layoutLabelSides(FULL_FRAME, ["reactions", "timer", "ticker"], LIVE_OVERLAY_ELEMENT_LABELS);
+    const sides = layoutLabelSides(STANDARD, ["reactions", "timer", "ticker"], LIVE_OVERLAY_ELEMENT_LABELS);
     expect(sides).toEqual({ reactions: "top", timer: "bottom", ticker: "top" });
   });
 
   it("names a new layout for source links, numbered when the name is taken", () => {
     expect(layoutSlugFor("Keynote — Main Hall", new Set())).toBe("keynote-main-hall");
-    expect(layoutSlugFor("Full frame", new Set(["full-frame"]))).toBe("full-frame-2");
+    expect(layoutSlugFor("Talk", new Set(["talk"]))).toBe("talk-2");
     expect(layoutSlugFor("!!!", new Set())).toBe("layout");
+  });
+});
+
+describe("a graphic a board covers", () => {
+  const onAir = (stage: Partial<LiveStage>): LiveStage => ({ ...EMPTY_LIVE_STAGE, ...stage }) as LiveStage;
+  const schedule = { config: {} } as unknown as LiveStage["schedule"];
+  const question = { id: "q1" } as unknown as LiveStage["question"];
+
+  it("names the full-screen question that hides Up next, and nothing once the question is off", () => {
+    expect(liveOverlayCoveredBy(onAir({ schedule, question }), STANDARD, "schedule")).toBe("question");
+    expect(liveOverlayCoveredBy(onAir({ schedule }), STANDARD, "schedule")).toBeNull();
+  });
+
+  it("never reports a graphic drawn above the board, such as a timer over a question", () => {
+    const timerGraphics = [{ timerId: "t1" }] as unknown as LiveStage["timerGraphics"];
+    expect(liveOverlayCoveredBy(onAir({ question, timerGraphics }), STANDARD, "timer")).toBeNull();
+  });
+
+  it("keeps Up next and the check-in code clear of each other at their standard boxes", () => {
+    const checkIn = { selection: {} } as unknown as LiveStage["checkIn"];
+    expect(liveOverlayCoveredBy(onAir({ schedule, checkIn }), STANDARD, "schedule")).toBeNull();
+  });
+});
+
+describe("stacking a scene's graphics", () => {
+  it("keeps the built-in order until a scene orders them, and saves a move as the scene's own stack", () => {
+    expect(liveProgramLayers(STANDARD)).toEqual([...LIVE_PROGRAM_LAYER_ORDER]);
+    // Up in the editor's front-first list: Up next draws in front of the check-in code.
+    const moved = moveLiveProgramLayer(STANDARD, "schedule", -1);
+    const stack = liveProgramLayers(moved);
+    expect(stack.indexOf("schedule")).toBe(stack.indexOf("checkIn") + 1);
+    expect(liveOverlayLayoutElementsSchema.parse(moved).schedule.layer).toBe(stack.indexOf("schedule"));
+    // The front of the list cannot move further up.
+    expect(moveLiveProgramLayer(STANDARD, "reactions", -1)).toBe(STANDARD);
+  });
+
+  it("reads a scene saved before backgrounds with the background hidden, so it looks as it did", () => {
+    const { background: _added, ...saved } = STANDARD;
+    const read = liveOverlayLayoutElementsSchema.parse(saved);
+    expect(read.background.visible).toBe(false);
+    expect(liveProgramLayers(read)[0]).toBe("background");
+    // At the back it moves no further back; a scene can still bring it forward like any other graphic.
+    expect(moveLiveProgramLayer(read, "background", 1)).toBe(read);
+    const forward = liveProgramLayers(moveLiveProgramLayer(read, "background", -1));
+    expect(forward.slice(0, 2)).toEqual(["panelists", "background"]);
+  });
+
+  it("lets a board drawn in front hide a graphic only from where the scene stacks it", () => {
+    const onAir = { ...EMPTY_LIVE_STAGE, schedule: { config: {} }, question: { id: "q1" } } as unknown as LiveStage;
+    // Up next starts four places behind the question: the check-in code and the two lists sit between them.
+    const scheduleInFront = [1, 2, 3, 4].reduce((scene) => moveLiveProgramLayer(scene, "schedule", -1), STANDARD);
+    expect(liveOverlayCoveredBy(onAir, STANDARD, "schedule")).toBe("question");
+    expect(liveOverlayCoveredBy(onAir, scheduleInFront, "schedule")).toBeNull();
+  });
+
+  it("keeps every graphic clear of the ticker while it is on air, boards flush and floating graphics with a gap, and gives the full height back once it is off", () => {
+    const scene = {
+      ...STANDARD,
+      topQuestions: placement(px(0, 0, 1920, 1080)),
+      reactions: placement(px(0, 0, 1920, 1080)),
+    };
+    const clear = liveOverlayClearOfTicker(scene, true);
+    // A board that runs to the bottom edge meets the ticker flush, so its background has no seam.
+    expect(clear.topQuestions.y + clear.topQuestions.h).toBeCloseTo(scene.ticker.y);
+    // A floating graphic is pushed up, keeping its size, to a small gap above it.
+    expect(clear.lowerThird.y + clear.lowerThird.h).toBeCloseTo(scene.ticker.y - 24 / 1080);
+    expect(clear.lowerThird.h).toBe(scene.lowerThird.h);
+    // Reactions float over everything, the ticker included.
+    expect(clear.reactions).toEqual(scene.reactions);
+    // A graphic beside the ticker, not above it, keeps its box.
+    const beside = {
+      ...scene,
+      ticker: { ...scene.ticker, ...px(768, 954, 1152, 126) },
+      question: placement(px(0, 0, 768, 1080)),
+    };
+    expect(liveOverlayClearOfTicker(beside, true).question).toEqual(beside.question);
+    expect(liveOverlayClearOfTicker(scene, false)).toBe(scene);
   });
 });

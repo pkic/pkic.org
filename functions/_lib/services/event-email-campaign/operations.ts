@@ -1,3 +1,4 @@
+import { buildEventEmailVariables } from "../../email/event-email-variables";
 import { isAttendeeCampaignAudience } from "../../../../assets/shared/schemas/event-email-campaigns";
 import type {
   EventEmailCampaignCreateInput,
@@ -15,7 +16,7 @@ import { loadEmailRenderResources } from "../../email/partials";
 import { renderEmail, renderSubject } from "../../email/render";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
-import { buildEventEmailVariables, type EventRecord } from "../events";
+import { type EventRecord } from "../events";
 import {
   promotionKitPageUrl,
   proposalPageUrl,
@@ -109,6 +110,7 @@ export async function previewEventEmailCampaign(
     "customText",
     "baseUrl",
     "brandBaseUrl",
+    "contactEmail",
   ]);
   const authored = campaignAuthoredTemplates(input, template);
   const templateReferences = authored.map((source) => analyzeTemplateReferences(source, partials));
@@ -129,7 +131,10 @@ export async function previewEventEmailCampaign(
   assertCampaignAuthoredReferences(input, known, templateReferences);
   const sampleData = buildPersonalCampaignTemplateData(sample, canonicalData, known);
   if (input.filter.audience === "attendees") {
-    sampleData.manageUrl = registrationManagePageUrl(options.appBaseUrl, event, "preview-token");
+    sampleData.manageUrl = registrationManagePageUrl(options.appBaseUrl, event, {
+      token: "preview-token",
+      registrationId: "preview-registration",
+    });
   }
 
   let subject: string;

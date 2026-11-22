@@ -1,3 +1,18 @@
+/** Preserve small printed codes across the whole camera frame. */
+export function badgeCameraScanRegion(source: Pick<HTMLVideoElement, "videoWidth" | "videoHeight">) {
+  const width = source.videoWidth;
+  const height = source.videoHeight;
+  const scale = Math.min(1, 1600 / Math.max(width, height, 1));
+  return {
+    x: 0,
+    y: 0,
+    width,
+    height,
+    downScaledWidth: Math.max(1, Math.round(width * scale)),
+    downScaledHeight: Math.max(1, Math.round(height * scale)),
+  };
+}
+
 /** One camera stream stays open while successive badges are decoded. */
 export async function openBadgeCamera(
   video: HTMLVideoElement,
@@ -27,6 +42,7 @@ export async function openBadgeCamera(
       {
         preferredCamera: "environment",
         maxScansPerSecond: 8,
+        calculateScanRegion: badgeCameraScanRegion,
         returnDetailedScanResult: true,
       },
     );

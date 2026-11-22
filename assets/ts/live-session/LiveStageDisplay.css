@@ -113,6 +113,22 @@
   .pk-live-stage-display__timer[data-size="small"] .pk-live-stage-display__countdown {
     font-size: var(--pk-stage-type-timer-small);
   }
+  /*
+   * The timers beside a question or a poll: one column as wide as their
+   * digits, so the content keeps the rest. Two fit the area's height, each
+   * with a closer label.
+   */
+  .pk-live-stage-display__timers {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    justify-content: center;
+    gap: 12px;
+  }
+  .pk-live-stage-display__timers .pk-live-stage-display__timer {
+    gap: 12px;
+  }
+
   .pk-live-stage-display__countdown[data-tone="warn"] {
     color: var(--pk-stage-warn);
   }
@@ -164,6 +180,16 @@
     -webkit-line-clamp: 3;
     line-clamp: 3;
   }
+  /*
+   * A question longer than three lines at the lead size steps down to the
+   * smallest size and takes up to five, so the speaker reads all of it.
+   */
+  .pk-live-stage-display__question-text:not([data-fit="regular"]),
+  .pk-live-stage-display__next[data-leads] .pk-live-stage-display__next-text:not([data-fit="regular"]) {
+    font-size: var(--pk-stage-type);
+    -webkit-line-clamp: 5;
+    line-clamp: 5;
+  }
   .pk-live-stage-display__next {
     display: flex;
     align-items: center;
@@ -171,12 +197,21 @@
     margin: 0;
     min-inline-size: 0;
   }
+  /* Under the question being answered, the next one sits apart behind a rule, so the two never read as one. */
+  .pk-live-stage-display__question-text + .pk-live-stage-display__next {
+    padding-block-start: 32px;
+    border-block-start: 4px solid var(--pk-stage-rule);
+  }
+  /* Beside its tag and votes, the next question takes two lines before it gives way. */
   .pk-live-stage-display__next-text {
+    display: -webkit-box;
     flex: 1 1 auto;
     min-inline-size: 0;
     overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
   }
   .pk-live-stage-display__votes {
     flex: none;
@@ -292,7 +327,7 @@
     color: var(--pk-stage-live);
   }
   .pk-live-stage-display__marker[data-marker="next"] {
-    color: var(--pk-stage-next);
+    color: var(--pk-stage-ink-muted);
   }
   .pk-live-stage-display__speakers {
     display: flex;

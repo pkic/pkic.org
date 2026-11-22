@@ -8,9 +8,12 @@ import {
   formatEventPlace,
 } from "../../assets/shared/event-place";
 import { formatClockName } from "../../assets/shared/format-date";
+import type { ParticipantEventDetail } from "../../assets/ts/member-flows/portal/sections/events/app/event-app-model";
+import { eventVenueLines } from "../../assets/ts/member-flows/portal/sections/events/app/event-app-model";
 import { eventSettingsUpdateSchema } from "../../assets/shared/schemas/event-management";
 import { groupEventCreateSchema } from "../../assets/shared/schemas/group-events";
 import { eventPlaceStructuredData } from "../../functions/_lib/services/site-history-structured-data";
+import { participantEventFixture } from "../helpers/participant-event";
 
 const revision = { expectedUpdatedAt: "2026-10-01T00:00:00.000Z" };
 
@@ -105,5 +108,21 @@ describe("the event settings contract", () => {
     });
     expect(created).toMatchObject({ city: "Ottawa", country: "CA" });
     expect(groupEventCreateSchema.safeParse({ ...created, country: "Canada" }).success).toBe(false);
+  });
+
+  it("names the venue and city once and keeps the full address for the venue details", () => {
+    const managed = {
+      ...participantEventFixture(),
+      venue: "Meervaart, Meer en Vaart 300, 1068 LE, Amsterdam, Netherlands",
+      city: "Amsterdam",
+      country: "NL",
+    } as ParticipantEventDetail;
+    expect(eventPlaceSummary(managed)).toBe("Meervaart · Amsterdam");
+    expect(eventVenueLines(managed)).toEqual(["Meervaart, Meer en Vaart 300, 1068 LE, Amsterdam, Netherlands"]);
+    expect(eventVenueLines({ ...managed, city: "Amstelveen" })).toEqual([
+      "Meervaart, Meer en Vaart 300, 1068 LE, Amsterdam, Netherlands",
+      "Amstelveen, Netherlands",
+    ]);
+    expect(eventPlaceSummary({ ...participantEventFixture(), city: "Amsterdam" })).toBe("Amsterdam");
   });
 });

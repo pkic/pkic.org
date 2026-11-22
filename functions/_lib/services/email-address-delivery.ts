@@ -19,6 +19,17 @@ export const DELIVERY_COLUMNS = [
 ] as const;
 export type AddressDeliveryRow = Record<(typeof DELIVERY_COLUMNS)[number], string | null>;
 
+/** A failure no later delivery to the address has resolved. */
+function unresolvedDeliverySql(address: string, column: (typeof DELIVERY_COLUMNS)[number]): string {
+  const delivered = `${address}.delivery_delivered_at`;
+  return `${address}.${column} IS NOT NULL AND (${delivered} IS NULL OR ${address}.${column} >= ${delivered})`;
+}
+
+/** The address bounces or is blocked, and no later delivery has reached it. */
+export function emailAddressUndeliverableSql(address: string): string {
+  return `((${unresolvedDeliverySql(address, "delivery_bounced_at")}) OR (${unresolvedDeliverySql(address, "delivery_blocked_at")}))`;
+}
+
 /** Internal table aliases only; no message or audit history participates in this projection. */
 export function emailAddressDeliveryJsonSql(address: string): string {
   const delivered = `${address}.delivery_delivered_at`;
@@ -27,8 +38,7 @@ export function emailAddressDeliveryJsonSql(address: string): string {
     ["blocked", "delivery_blocked_at"],
     ["delayed", "delivery_delayed_at"],
   ] as const;
-  const unresolved = (column: string) =>
-    `${address}.${column} IS NOT NULL AND (${delivered} IS NULL OR ${address}.${column} >= ${delivered})`;
+  const unresolved = (column: (typeof DELIVERY_COLUMNS)[number]) => unresolvedDeliverySql(address, column);
   return `json_object('status', CASE ${signals.map(([status, column]) => `WHEN ${unresolved(column)} THEN '${status}'`).join(" ")} WHEN ${delivered} IS NOT NULL THEN 'delivered' ELSE 'unknown' END,
     'observedAt', CASE ${signals.map(([, column]) => `WHEN ${unresolved(column)} THEN ${address}.${column}`).join(" ")} ELSE ${delivered} END)`;
 }

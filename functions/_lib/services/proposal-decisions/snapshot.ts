@@ -1,4 +1,8 @@
-import { proposalSpeakerProfileValueSql, type ProposalSpeakerWithUser } from "../proposal-speakers";
+import {
+  proposalSpeakerProfileValueSql,
+  proposalSpeakerRecipientEmailSql,
+  type ProposalSpeakerWithUser,
+} from "../proposal-speakers";
 
 export interface ProposalDecisionEventSnapshot {
   name: string;
@@ -24,7 +28,7 @@ export function snapshotProposalDecisionSpeaker(speaker: ProposalSpeakerWithUser
     speakerId: speaker.speaker_id,
     userId: speaker.user_id,
     status: speaker.status,
-    email: speaker.email,
+    email: speaker.recipient_email,
     firstName: speaker.first_name,
     lastName: speaker.last_name,
     biography: speaker.biography,
@@ -41,7 +45,7 @@ export function proposalDecisionSnapshotPredicate(
       SELECT 1 FROM proposal_speakers ps
       JOIN users u ON u.id = ps.user_id
       WHERE ps.proposal_id = sp.id AND ps.id = ? AND ps.user_id = ? AND ps.status = ?
-        AND u.email = ?
+        AND ${proposalSpeakerRecipientEmailSql("ps", "u")} = ?
         AND ${proposalSpeakerProfileValueSql("u", "ps", "firstName")} IS ?
         AND ${proposalSpeakerProfileValueSql("u", "ps", "lastName")} IS ?
         AND ${proposalSpeakerProfileValueSql("u", "ps", "biography")} IS ?

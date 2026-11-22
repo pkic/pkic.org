@@ -8,6 +8,7 @@
 import { useState } from "preact/hooks";
 import type { RegistrationManageReadResponse } from "../../../shared/schemas/registration";
 import { userAuthSessionResponseSchema } from "../../../shared/schemas/user-auth";
+import { readRegistrationAddress } from "../../shared/registration-address";
 import type { SessionActingIdentity } from "../../../shared/session-acting-identity";
 import { ApiClientError, getJson } from "../../shared/api-client";
 import { RegistrationIdentityField } from "../RegistrationIdentitySelect";
@@ -30,7 +31,10 @@ export function RegistrationRepresentationField({
   const session = useData(async () => {
     if (!data.canChangeIdentity) return null;
     try {
-      return await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);
+      const current = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);
+      // A work address stays with an organization, as when registering, unless the person said it is personal.
+      const address = await readRegistrationAddress(current.identity.email);
+      return { ...current, workEmail: address.organizationRequired };
     } catch (error) {
       if (error instanceof ApiClientError && error.status === 401) return null;
       throw error;
@@ -78,6 +82,7 @@ export function RegistrationRepresentationField({
       <RegistrationIdentityField
         presentation="picker"
         personalAdvisory={false}
+        organizationOnly={session.data.workEmail}
         preferred={session.data.actingIdentities.find((identity) => identity.id === data.identityId) ?? null}
         available={session.data.actingIdentities}
         userId={session.data.identity.id}

@@ -409,10 +409,15 @@ export async function grantPilotDoor(staff: Page, userId: string, eventId: strin
   const ids: string[] = [];
   for (const permission of ["agenda:check", "agenda:admit", "agenda:attendance_record"] as const) {
     const response = await staff.request.post("/api/v1/permissions/grants", {
-      data: accessGrantCreateSchema.parse({ userId, permission, contextType: "event", contextId: eventId }),
+      data: accessGrantCreateSchema.parse({
+        userId,
+        permissions: [permission],
+        contextType: "event",
+        contextId: eventId,
+      }),
     });
     expect(response.status()).toBe(201);
-    ids.push(accessGrantCreateResponseSchema.parse(await response.json()).grant.id);
+    ids.push(accessGrantCreateResponseSchema.parse(await response.json()).grants[0]!.id);
   }
   return ids;
 }

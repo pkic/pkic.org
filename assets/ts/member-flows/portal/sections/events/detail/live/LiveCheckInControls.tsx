@@ -29,7 +29,6 @@ import {
   type LiveGraphicTheme,
 } from "../../../../../../../shared/live-graphic-theme";
 import { liveCheckInChoiceSchema, type LiveCheckInChoice } from "../../../../../../../shared/schemas/live-session-room";
-import { LiveLayerTargets } from "./LiveLayerTargets";
 import type { LiveTargets } from "./live-output-targets";
 
 function selectionOf(point: AttendancePoint): AttendancePointSelection {
@@ -83,6 +82,11 @@ export function LiveCheckInControls({
   return (
     <LiveGraphicRow
       name="Check-in code"
+      outputs={
+        current
+          ? { targets, subject: "check-in code", layer: { kind: "checkIn", checkIn: { ...current, theme, text } } }
+          : undefined
+      }
       detail={
         current
           ? `${current.label} · ${LIVE_GRAPHIC_THEME_LABELS[theme]}`
@@ -100,13 +104,6 @@ export function LiveCheckInControls({
         },
       }}
     >
-      {current && (
-        <LiveLayerTargets
-          targets={targets}
-          subject="check-in code"
-          layer={{ kind: "checkIn", checkIn: { ...current, theme, text } }}
-        />
-      )}
       {open && (
         <Dialog
           open

@@ -26,6 +26,8 @@ import { prepareVerifiedAffiliationRead } from "./verified-affiliation-read";
 import { ownedIdentityEmailEvidence } from "./owned-email";
 import { prepareIndividualIdentityStatement } from "../users";
 import { first } from "../../db/queries";
+import { batchFirst } from "../../db/pagination";
+import { personalAddressSql } from "./personal-address";
 
 const contextSchema = z.object({
   typ: z.literal("verified-affiliation"),
@@ -51,9 +53,18 @@ export async function previewOwnAffiliation(
 ) {
   const actor = await prepareUserSessionRequest(db, request, env);
   const source = prepareVerifiedAffiliationRead(db, actor.claims.sub, input);
-  const results = await db.batch([...actor.statements, ...source.statements]);
+  const personal = personalAddressSql("subject.id", input.email);
+  const results = await db.batch([
+    ...actor.statements,
+    ...source.statements,
+    db
+      .prepare(`SELECT ${personal.sql} AS personal FROM (SELECT ? AS id) subject`)
+      .bind(...personal.bindings, actor.claims.sub),
+  ]);
   await actor.decode(results.slice(0, actor.statements.length));
-  const { basis, address } = source.decode(results.slice(actor.statements.length));
+  const sourceEnd = actor.statements.length + source.statements.length;
+  const { basis, address } = source.decode(results.slice(actor.statements.length, sourceEnd));
+  const personalAddress = Boolean(batchFirst<{ personal: number }>(results[sourceEnd])?.personal);
   if (input.phase === "resolve" && input.unaffiliatedAttestation) {
     const identity = basis.identities.find(
       (item) => item.organization_id === null && item.started_at && item.ended_at === null && item.blocked_at === null,
@@ -65,6 +76,7 @@ export async function previewOwnAffiliation(
       organizations: [],
       domains: [],
       identityId: identity?.id,
+      personalAddress,
     });
   }
   const preview = verifiedAffiliationPreview(basis, address);
@@ -102,7 +114,7 @@ export async function previewOwnAffiliation(
       }),
     );
   }
-  return { ...preview, ...(contextToken ? { contextToken } : {}) };
+  return { ...preview, personalAddress, ...(contextToken ? { contextToken } : {}) };
 }
 
 /** Create the person's individual identity only after verifying their selected address and session. */

@@ -1,3 +1,4 @@
+import { registrationTicketSettledSql } from "./badge-attendees";
 import { eligibilityPageDigest } from "../../../../assets/shared/event-eligibility-digest";
 import { instantToCalendarDate } from "../../../../assets/shared/timezone";
 import { operationalAllocationCompatibleSql } from "./session-allocation";
@@ -21,6 +22,10 @@ import {
   sessionAccessEligibleSql,
 } from "./session-access";
 import { eventReadIdSql, type EventReadSelection } from "../events/selection";
+import { personNameSql } from "../people/person-name-sql";
+import { eventContactAccessSql } from "./evidence-retention";
+import { recoverBadgeCredential, type BadgePrintEnvironment } from "./badge-print-protection";
+import { badgeCollectionNameDigest, encryptBadgeCollectionName } from "../../../../assets/shared/badge-collection-name";
 
 interface ManifestState {
   id: string;
@@ -28,6 +33,8 @@ interface ManifestState {
   published_revision: number | null;
   timezone: string;
   profile_key: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
 }
 interface ManifestSession {
   admission_policy: string;
@@ -50,6 +57,8 @@ interface ManifestEntry {
   privateAccess: number;
   entryEligible: number;
   sessionStatus: string | null;
+  displayName: string | null;
+  printCredential: string | null;
 }
 
 /** Dated eligibility evidence only; this manifest never allocates admission. */
@@ -64,13 +73,18 @@ export async function offlineEligibility(
 }
 
 /** The schedule, destination and bounded badge page share one transaction snapshot. */
-export function prepareOfflineEligibility(db: DatabaseLike, event: EventReadSelection, query: OfflineEligibilityQuery) {
+export function prepareOfflineEligibility(
+  db: DatabaseLike,
+  event: EventReadSelection,
+  query: OfflineEligibilityQuery,
+  environment?: BadgePrintEnvironment,
+) {
   const scope = eventReadIdSql(event);
   const serverNow = nowIso();
   return {
     statements: [
       db
-        .prepare(`SELECT e.id,COALESCE(s.revision,0) AS revision,s.published_revision,e.profile_key,
+        .prepare(`SELECT e.id,COALESCE(s.revision,0) AS revision,s.published_revision,e.profile_key,e.starts_at,e.ends_at,
         COALESCE(json_extract(p.snapshot_json,'$.timeZone'),e.timezone) AS timezone
         FROM events e LEFT JOIN event_agenda_state s ON s.event_id=e.id
         LEFT JOIN event_agenda_publications p ON p.event_id=e.id AND p.revision=s.published_revision
@@ -85,13 +99,16 @@ export function prepareOfflineEligibility(db: DatabaseLike, event: EventReadSele
         target AS(SELECT ? AS occurrence_id,COALESCE(?,s.room_id) AS room_id,COALESCE(s.start_at,?) AS start_at
           FROM manifest_event event LEFT JOIN (${publishedSessionsSql}) s ON s.event_id=event.id AND s.id=?)
         SELECT b.id AS badgeId,b.user_id AS userId,b.credential_hash AS credentialHash,
-          b.revoked_at IS NOT NULL AS revoked,b.expires_at AS expiresAt,COALESCE(r.status='registered',0) AS eventRegistered,
+          ${query.includeBadgeNames ? `CASE WHEN person.pii_redacted_at IS NULL AND person.merged_into_user_id IS NULL AND person.active=1 AND r.status='registered' AND b.revoked_at IS NULL AND ${eventContactAccessSql("b.event_id")} THEN ${personNameSql("person")} END` : "NULL"} AS displayName,
+          ${query.includeBadgeNames ? "b.print_credential_json" : "NULL"} AS printCredential,
+          b.revoked_at IS NOT NULL AS revoked,b.expires_at AS expiresAt,COALESCE(r.status='registered' AND ${registrationTicketSettledSql("r")},0) AS eventRegistered,
           r.id IS NOT NULL AS registered,
           ${registrationSessionDayOptionsSql("r", "target")} AS registration_days_json,
           ${operationalAllocationCompatibleSql("target.occurrence_id", "b.user_id", "'physical'", "target.room_id")} AS allocationCompatible,
           (s.id IS NULL OR ${sessionAccessEligibleSql("s", "b.user_id", "'physical'", false)}) AS privateAccess,
           (s.id IS NULL OR ${sessionAccessEligibleSql("s", "b.user_id", "'physical'")}) AS entryEligible,p.status AS sessionStatus
         FROM event_badge_credentials b CROSS JOIN target
+        JOIN users person ON person.id=b.user_id
         LEFT JOIN registrations r ON r.event_id=b.event_id AND r.user_id=b.user_id
         LEFT JOIN agenda_session_participations p ON p.user_id=b.user_id AND p.occurrence_id=target.occurrence_id
         LEFT JOIN (${publishedSessionsSql}) s ON s.id=target.occurrence_id AND s.event_id=b.event_id
@@ -130,6 +147,30 @@ export function prepareOfflineEligibility(db: DatabaseLike, event: EventReadSele
       if (query.scopeDate !== undefined && query.scopeDate !== scopeDate)
         throw new AppError(409, "OFFLINE_MANIFEST_CHANGED", "The eligibility date changed. Refresh the manifest.");
       const rows = batchRows<ManifestEntry>(results[2]);
+      const names = new Map<string, { credential: string; displayName: string; badgeNameDigest: string }>();
+      let badgeNamesUnavailable = 0;
+      if (query.includeBadgeNames) {
+        for (const row of rows.slice(0, OFFLINE_ELIGIBILITY_PAGE_SIZE)) {
+          if (!row.eventRegistered || row.revoked) continue;
+          try {
+            if (!environment || !row.displayName || !row.printCredential) throw new Error("Badge name unavailable");
+            const credential = await recoverBadgeCredential(
+              environment,
+              { eventId: state.id, id: row.badgeId, userId: row.userId, credentialHash: row.credentialHash },
+              row.printCredential,
+            );
+            const badgeNameDigest = await badgeCollectionNameDigest(
+              credential,
+              { eventId: state.id, badgeId: row.badgeId, credentialHash: row.credentialHash },
+              row.displayName,
+            );
+            names.set(row.badgeId, { credential, displayName: row.displayName, badgeNameDigest });
+          } catch {
+            // Unreadable legacy print secrets cannot disable independent check-in evidence.
+            badgeNamesUnavailable++;
+          }
+        }
+      }
       const page = offlineEligibilityResponseSchema.omit({ pageDigest: true, unchanged: true }).parse({
         eventId: state.id,
         operatorUserId,
@@ -140,7 +181,12 @@ export function prepareOfflineEligibility(db: DatabaseLike, event: EventReadSele
         publishedRevision: state.published_revision ?? null,
         ...(nativeEventContext ? { nativeEventContext } : {}),
         serverNow,
-        expiresAt: offlineEligibilityExpiresAt(serverNow, timeZone),
+        expiresAt: offlineEligibilityExpiresAt(serverNow, timeZone, {
+          startsAt: state.starts_at,
+          endsAt: state.ends_at,
+        }),
+        eligibilityExpiresAt: offlineEligibilityExpiresAt(serverNow, timeZone),
+        ...(query.includeBadgeNames ? { badgeNamesPrepared: badgeNamesUnavailable === 0, badgeNamesUnavailable } : {}),
         session: session ? { admissionPolicy: session.admission_policy, visibility: session.visibility } : null,
         entries: rows.slice(0, OFFLINE_ELIGIBILITY_PAGE_SIZE).map((row) => {
           const physicalDayEligible =
@@ -150,6 +196,7 @@ export function prepareOfflineEligibility(db: DatabaseLike, event: EventReadSele
             badgeId: row.badgeId,
             userId: row.userId,
             credentialHash: row.credentialHash,
+            ...(names.has(row.badgeId) ? { badgeNameDigest: names.get(row.badgeId)!.badgeNameDigest } : {}),
             revoked: Boolean(row.revoked),
             expiresAt: row.expiresAt,
             eventRegistered: Boolean(row.eventRegistered),
@@ -170,6 +217,17 @@ export function prepareOfflineEligibility(db: DatabaseLike, event: EventReadSele
       });
       const pageDigest = await eligibilityPageDigest(page);
       const unchanged = pageDigest === query.knownDigest;
+      if (!unchanged) {
+        for (const entry of page.entries) {
+          const name = names.get(entry.badgeId);
+          if (name)
+            entry.encryptedName = await encryptBadgeCollectionName(
+              name.credential,
+              { eventId: state.id, badgeId: entry.badgeId, credentialHash: entry.credentialHash },
+              name.displayName,
+            );
+        }
+      }
       return offlineEligibilityResponseSchema.parse({
         ...page,
         pageDigest,

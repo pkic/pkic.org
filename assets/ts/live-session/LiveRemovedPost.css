@@ -1,0 +1,55 @@
+@layer components {
+  /* The whole removed post recedes: who wrote it, when, and its votes; moderator tools stay at full strength. */
+  [data-removed]
+    :is(
+      .pk-avatar,
+      .pk-live-author,
+      .pk-live-question__vote,
+      .pk-live-question__meta,
+      .pk-live-chat__byline > time,
+      .pk-live-chat__reactions
+    ) {
+    opacity: 0.5;
+  }
+  /* A removed post: the note takes the words' place; the words stay one click away. */
+  .pk-live-removed {
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+  }
+  .pk-live-removed > summary {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 0.5rem;
+    cursor: pointer;
+    list-style: none;
+  }
+  .pk-live-removed > summary::-webkit-details-marker {
+    display: none;
+  }
+  .pk-live-removed__note {
+    font-style: italic;
+  }
+  .pk-live-removed__toggle {
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+  }
+  .pk-live-removed > summary:hover .pk-live-removed__toggle {
+    color: var(--pk-ink);
+  }
+  .pk-live-removed:not([open]) .pk-live-removed__toggle[data-when="open"],
+  .pk-live-removed[open] .pk-live-removed__toggle[data-when="closed"] {
+    display: none;
+  }
+  .pk-live-removed__words {
+    margin-block-start: 0.25rem;
+    padding-inline-start: 0.75rem;
+    border-inline-start: 2px solid var(--pk-line);
+    font-size: var(--pk-text-md);
+  }
+  .pk-live-removed__words > :first-child {
+    margin-block-start: 0;
+  }
+  .pk-live-removed__words > :last-child {
+    margin-block-end: 0;
+  }
+}

@@ -116,6 +116,20 @@ describe("DataTable", () => {
     expect(second!.querySelectorAll("td")[2]?.textContent).toContain("—");
   });
 
+  it("names an end-aligned value in a narrow record with its own word, or none when the value says it", () => {
+    const recordColumns: DataTableColumn<Member>[] = [
+      ...columns,
+      { id: "seats", header: "Seats", align: "end", cell: () => "4" },
+      { id: "used", header: "Used", align: "end", recordLabel: "used", cell: () => "1 of 4" },
+      { id: "price", header: "Price", align: "end", recordLabel: null, cell: () => "Free" },
+    ];
+    const container = mount(<DataTable caption="Members" columns={recordColumns} rows={rows} rowKey={(r) => r.id} />);
+    const labels = [...container.querySelectorAll("tbody tr:first-child td")].map(
+      (cell) => cell.querySelector(".pk-table__mobile-label")?.textContent ?? null,
+    );
+    expect(labels.slice(-3)).toEqual(["Seats", "used", null]);
+  });
+
   it("truncates plain-text cells visually while retaining the full value", () => {
     const container = mount(
       <DataTable

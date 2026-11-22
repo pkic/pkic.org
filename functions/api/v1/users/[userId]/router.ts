@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { fromHono } from "chanfana";
 import type { RequestDbContext } from "../../../../_lib/db/context";
 import { UserAnonymizePost } from "./anonymize";
+import { AccountDeletionDelete, AccountDeletionGet } from "./deletion";
 import { UserGravatarPost } from "./gravatar";
 import { UserHeadshotDelete, UserHeadshotGet, UserHeadshotPut } from "./headshot";
 import { UserPatch } from "./index";
@@ -18,6 +19,7 @@ openapi.put("/headshot", UserHeadshotPut);
 openapi.delete("/headshot", UserHeadshotDelete);
 openapi.post("/gravatar", UserGravatarPost);
 openapi.post("/anonymize", UserAnonymizePost);
+openapi.get("/deletion", AccountDeletionGet);
 openapi.route("/participation", participationHistoryRouter);
 openapi.put("/availability", MemberAvailabilityPut);
 openapi.route("/emails", emailsRouter);
@@ -25,5 +27,6 @@ openapi.route("/roles", rolesRouter);
 // Reading the record is not here: it is served by the community-profile
 // router, ahead of this staff boundary, so its subject can open their own.
 openapi.patch("/", UserPatch);
+openapi.delete("/", AccountDeletionDelete);
 
 export default openapi;

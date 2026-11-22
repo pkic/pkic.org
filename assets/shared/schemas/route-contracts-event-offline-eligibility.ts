@@ -7,11 +7,11 @@ import {
 export const offlineEligibilityRouteSchema = {
   ...requiresAnyPermissions(["agenda:scan"], ["agenda:check"], ["agenda:admit"], ["agenda:attendance_record"]),
   tags: ["Events"],
-  summary: "Download scoped identifiers-only offline eligibility evidence",
+  summary: "Download scoped offline eligibility and optional encrypted badge collection names",
   request: { params: eventSlugParamsSchema, query: enrolledOfflineEligibilityQuerySchema },
   responses: {
     "200": {
-      description: "Short-lived eligibility page; no seat allocation",
+      description: "Bounded offline eligibility page; no seat allocation",
       content: { "application/json": { schema: enrolledOfflineEligibilityResponseSchema } },
     },
     "403": jsonErrorResponse("Scanning permission required"),

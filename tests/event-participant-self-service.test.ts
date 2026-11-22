@@ -110,7 +110,7 @@ describe("session-owned event participation", () => {
     const verified = await callApi(env, "/api/v1/auth/verify-link", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ token }),
+      body: JSON.stringify({ token, organization: { personal: true } }),
     });
     expect(verified.status, await verified.clone().text()).toBe(200);
     expect(await verified.json()).toMatchObject({ identity: { id: f.owner }, eventParticipation: true });

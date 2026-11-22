@@ -71,7 +71,7 @@ export async function prepareEventAppScreens(staff: Page, email: string) {
   });
   expect(published.status(), await published.text()).toBe(200);
 
-  await registerStateAttendee(staff, fixture, email, { staticRelease: false });
+  await registerStateAttendee(staff, fixture, email);
 
   const detail = await staff.request.get(`/api/v1/events/${encodeURIComponent(fixture.slug)}`);
   expect(detail.status()).toBe(200);
@@ -180,7 +180,7 @@ export function eventScreens(fixture: Awaited<ReturnType<typeof prepareEventAppS
   const app = `/portal/#/events/${encodeURIComponent(fixture.slug)}`;
   const workspace = `/portal/#${fixture.workspace}`;
   const session = encodeURIComponent(fixture.occurrenceId);
-  const overlay = (view: "program" | "stage-display", layout = "full-frame") => {
+  const overlay = (view: "program" | "stage-display", layout = "talk") => {
     const url = new URL(
       liveOverlayAddress("http://overlay.invalid", {
         view,
@@ -224,7 +224,7 @@ export function eventScreens(fixture: Awaited<ReturnType<typeof prepareEventAppS
     { name: "manage-control-room-session", path: `${workspace}/live/${session}` },
     { name: "manage-settings", path: `${workspace}/settings` },
     { name: "overlay-program", path: overlay("program"), canvas: BROADCAST },
-    { name: "overlay-lower-third", path: overlay("program", "lower-third"), canvas: BROADCAST },
+    { name: "overlay-questions", path: overlay("program", "questions"), canvas: BROADCAST },
     { name: "overlay-stage-display", path: overlay("stage-display"), canvas: BROADCAST },
     {
       name: "account-email",

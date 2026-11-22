@@ -21,7 +21,7 @@ describe("referral, waitlist, and calendar flows", () => {
     await resetDb();
   });
   it("creates short referral redirect and tracks click", async () => {
-    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { eventId } = await seedEventAndAdmin(env.DB, { visibility: "public" });
 
     const code = await createReferralCode(env.DB, {
       eventId,

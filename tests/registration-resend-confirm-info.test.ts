@@ -20,7 +20,7 @@ import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { createTestRateLimiter, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
-import { issueDatabaseCapability, materializeQueuedCapabilityLinks } from "../functions/_lib/services/capability-links";
+import { materializeQueuedCapabilityLinks } from "../functions/_lib/services/capability-links";
 import { getRegistrationByManageToken } from "../functions/_lib/services/registrations";
 import { callApi } from "./helpers/app";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
@@ -29,7 +29,8 @@ import {
   registrationManageReadResponseSchema,
 } from "../assets/shared/schemas/registration";
 import { eventRegistrationManagementUpdateResponseSchema } from "../assets/shared/schemas/route-contracts-event-registration-management";
-import { createAdminSession } from "./helpers/auth";
+import { createAdminSession, signInRegistrant } from "./helpers/auth";
+import { createPendingRegistration } from "./helpers/registration-confirmation";
 
 const signingSecret = "test-signing-secret";
 
@@ -82,53 +83,16 @@ async function confirmationOrganization(token: string) {
   };
 }
 
+/** A registration awaiting its mailbox proof, with the capabilities its confirmation email carries. */
 async function registerAttendee(): Promise<{
   confirmationToken: string;
   registrationId: string;
   email: string;
   manageToken: string;
 }> {
-  await env.DB.prepare(
-    "INSERT INTO event_days(id,event_id,day_date,created_at,updated_at) SELECT ? ,id,'2026-12-01',?,? FROM events WHERE slug='pqc-2026' ON CONFLICT(event_id,day_date) DO NOTHING",
-  )
-    .bind(crypto.randomUUID(), new Date().toISOString(), new Date().toISOString())
-    .run();
-  const registrationEnv = {
-    ...env,
-    EMAIL_RATE_LIMITER: createTestRateLimiter(100),
-    IP_RATE_LIMITER: createTestRateLimiter(100),
-  };
-  const response = await callApi(registrationEnv, "/api/v1/events/pqc-2026/registrations", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      firstName: "Test",
-      lastName: "User",
-      email: "resendtest@pkic.org",
-      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
-      sourceType: "direct",
-      consents: [
-        { termKey: "privacy-policy", version: "v1" },
-        { termKey: "code-of-conduct", version: "v1" },
-      ],
-    }),
-  });
-
-  expect(response.status).toBe(200);
-  const payload = (await response.json()) as { manageToken: string };
-
-  const registration = (
-    await queryAll<{ id: string }>(env.DB, "SELECT id FROM registrations ORDER BY created_at DESC LIMIT 1")
-  )[0];
-  const registrationId = registration.id;
-  const confirmationToken = await issueDatabaseCapability({
-    db: env.DB,
-    signingSecret,
-    purpose: "registration_confirm",
-    resourceId: registrationId,
-  });
-
-  return { confirmationToken, registrationId, email: "resendtest@pkic.org", manageToken: payload.manageToken };
+  const email = "resendtest@pkic.org";
+  const pending = await createPendingRegistration(env.DB, { email });
+  return { ...pending, email };
 }
 
 describe("confirm-info endpoint", () => {
@@ -231,7 +195,7 @@ describe("confirm-info endpoint", () => {
   });
 
   it.each(["shared claim", "pending application"])(
-    "rechecks only relevant organization evidence on confirmation (%s)",
+    "confirms the organization despite an unrelated change on its domain (%s)",
     async (change) => {
       await seedEventAndAdmin(env.DB);
       const { confirmationToken, registrationId } = await registerAttendee();
@@ -255,19 +219,17 @@ describe("confirm-info endpoint", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ token: confirmationToken, id: registrationId, organization }),
       });
-      const pending = change === "pending application";
-      expect(response.status, await response.clone().text()).toBe(pending ? 409 : 200);
-      if (pending) expect(await response.json()).toMatchObject({ error: { code: "ORGANIZATION_AFFILIATION_CHANGED" } });
+      expect(response.status, await response.clone().text()).toBe(200);
       const registration = await env.DB.prepare("SELECT status,registration_identity_id FROM registrations WHERE id=?")
         .bind(registrationId)
         .first<{ status: string; registration_identity_id: string | null }>();
-      expect(registration?.status).toBe(pending ? "pending_email_confirmation" : "registered");
-      expect(Boolean(registration?.registration_identity_id)).toBe(!pending);
+      expect(registration?.status).toBe("registered");
+      expect(registration?.registration_identity_id).toBeTruthy();
       expect(
         await env.DB.prepare("SELECT COUNT(*) AS total FROM organizations WHERE name=?")
           .bind(organization.name)
           .first(),
-      ).toMatchObject({ total: pending ? 0 : 1 });
+      ).toMatchObject({ total: 1 });
     },
   );
 
@@ -613,13 +575,15 @@ describe("resend-confirmation endpoint", () => {
       .bind(registration.id)
       .run();
 
+    const { headers, identityId } = await signInRegistrant(env.DB, "resendtest@pkic.org", {
+      organization: "Resend Test Organization",
+    });
     const response = await callApi(env, "/api/v1/events/pqc-2026/registrations", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...headers },
       body: JSON.stringify({
-        firstName: "Test",
-        lastName: "User",
         email: "resendtest@pkic.org",
+        identityId,
         dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
         sourceType: "direct",
         consents: [
@@ -629,10 +593,11 @@ describe("resend-confirmation endpoint", () => {
       }),
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status, await response.clone().text()).toBe(200);
     const body = (await response.json()) as { registrationId: string; status: string };
     expect(body.registrationId).toBe(registration.id);
-    expect(body.status).toBe("pending_email_confirmation");
+    // Registering again while signed in proves the mailbox, so the reactivated registration is confirmed.
+    expect(body.status).toBe("registered");
 
     const audit = await queryAll<{ action: string }>(
       env.DB,
@@ -772,7 +737,12 @@ describe("resend-manage-link endpoint", () => {
       await env.DB.prepare("UPDATE user_emails SET email=?,normalized_email=? WHERE id=?")
         .bind("work@bücher.example", "work@xn--bcher-kva.example", f.emailId)
         .run();
-      expect((await resendManageLink(env, email)).status).toBe(200);
+      const limited = {
+        ...env,
+        EMAIL_RATE_LIMITER: createTestRateLimiter(10),
+        IP_RATE_LIMITER: createTestRateLimiter(10),
+      };
+      expect((await resendManageLink(limited, email)).status).toBe(200);
       expect(
         await queryAll(
           env.DB,
@@ -820,7 +790,8 @@ describe("resend-manage-link endpoint", () => {
   });
 
   it("sends a fresh manage link without invalidating the earlier link", async () => {
-    await seedEventAndAdmin(env.DB);
+    // A public event's manage link is the token page; other events manage in the portal.
+    await seedEventAndAdmin(env.DB, { visibility: "public" });
     const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     await seedWorkflowEmailTemplates(env.DB, admin.id);
 
@@ -874,6 +845,36 @@ describe("resend-manage-link endpoint", () => {
     expect(secretAfter).toBe(secretBefore);
   });
 
+  it("sends a person registered for an event without public pages to their portal registration", async () => {
+    await seedEventAndAdmin(env.DB);
+    const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
+    await seedWorkflowEmailTemplates(env.DB, admin.id);
+    const { registrationId, email } = await registerAttendee();
+    await env.DB.prepare("UPDATE registrations SET status = 'registered', confirmation_link_secret = NULL WHERE id = ?")
+      .bind(registrationId)
+      .run();
+
+    const limited = {
+      ...env,
+      EMAIL_RATE_LIMITER: createTestRateLimiter(10),
+      IP_RATE_LIMITER: createTestRateLimiter(10),
+    };
+    expect((await resendManageLink(limited, email)).status).toBe(200);
+    const [queued] = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_manage_link' ORDER BY created_at DESC LIMIT 1",
+    );
+    const delivered = await materializeQueuedCapabilityLinks(
+      env.DB,
+      env,
+      JSON.parse(queued.payload_json) as Record<string, unknown>,
+    );
+    const manageUrl = new URL(delivered.manageUrl as string);
+    expect(manageUrl.pathname).toBe("/portal/");
+    expect(manageUrl.hash).toBe(`#/events/pqc-2026/registrations/${registrationId}`);
+    expect(manageUrl.searchParams.get("token")).toBeNull();
+  });
+
   it("never sends a manage capability to an unverified pending address", async () => {
     await seedEventAndAdmin(env.DB);
     const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
@@ -894,7 +895,12 @@ describe("resend-manage-link endpoint", () => {
     );
     expect(afterPendingRequest).toEqual(before);
 
-    expect((await resendManageLink(env, email)).status).toBe(200);
+    const limited = {
+      ...env,
+      EMAIL_RATE_LIMITER: createTestRateLimiter(10),
+      IP_RATE_LIMITER: createTestRateLimiter(10),
+    };
+    expect((await resendManageLink(limited, email)).status).toBe(200);
     await expect(
       queryAll<{ recipient_email: string }>(
         env.DB,

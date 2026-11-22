@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(async () => {}),
   manifestReady: true,
   manifestPreparing: false,
+  manifestError: "",
   closedMessage: "",
   epochId: "77777777-7777-4777-8777-777777777777",
   preparationClosed: null as null | (() => void),
@@ -41,6 +42,7 @@ const mocks = vi.hoisted(() => ({
     state: "complete",
   })),
   cameraDestroyed: vi.fn(),
+  cameraStarted: vi.fn(),
   cameraScan: null as null | ((code: { data: string }) => void),
   suspended: vi.fn(async (_operatorUserId?: string, _sessionId?: string) => false),
   sessionListeners: new Set<() => void>(),
@@ -54,7 +56,9 @@ vi.mock("qr-scanner", () => ({
     constructor(_video: HTMLVideoElement, onDecode: (code: { data: string }) => void) {
       mocks.cameraScan = onDecode;
     }
-    async start() {}
+    async start() {
+      mocks.cameraStarted();
+    }
     destroy() {
       mocks.cameraDestroyed();
     }
@@ -103,7 +107,7 @@ vi.mock(
         eligibilityManifest: { current: { occurrenceId: null, roomId: null, ...mocks.snapshot } },
         manifestReady: mocks.manifestReady,
         manifestPreparing: mocks.manifestPreparing,
-        manifestError: mocks.closedMessage,
+        manifestError: mocks.closedMessage || mocks.manifestError,
         closedMessage: mocks.closedMessage,
         refresh: mocks.refresh,
       };
@@ -154,6 +158,7 @@ afterEach(async () => {
   mocks.preparationClosed = null;
   mocks.manifestReady = true;
   mocks.manifestPreparing = false;
+  mocks.manifestError = "";
   mocks.closedMessage = "";
   mocks.epochId = "77777777-7777-4777-8777-777777777777";
   mocks.error = "";
@@ -162,7 +167,13 @@ afterEach(async () => {
   vi.clearAllMocks();
   vi.unstubAllGlobals();
 });
-export async function mount(ready: boolean, actions: EventScanRequest["action"][] = ["check"], sponsorId?: string) {
+export async function mount(
+  ready: boolean,
+  actions: EventScanRequest["action"][] = ["check"],
+  sponsorId?: string,
+  printHref?: string,
+  canAdmitExceptions = false,
+) {
   mocks.ready = ready;
   mocks.state = ready ? "open" : "preparing";
   host = document.createElement("div");
@@ -178,6 +189,8 @@ export async function mount(ready: boolean, actions: EventScanRequest["action"][
         operatorUserId="11111111-1111-4111-8111-111111111111"
         allowedActions={actions}
         sponsorId={sponsorId}
+        printHref={printHref}
+        canAdmitExceptions={canAdmitExceptions}
       />,
       host,
     );
@@ -188,7 +201,7 @@ export async function mount(ready: boolean, actions: EventScanRequest["action"][
   )!;
   await vi.waitFor(async () => {
     await act(async () => {});
-    expect(start.disabled).toBe(!ready);
+    expect(start.disabled).toBe(!ready || actions.includes("lead"));
   });
 }
 export function scannerDialog(title: string) {
@@ -202,8 +215,10 @@ export async function openManual(title = "Enter badge code") {
     Object.defineProperty(dialog, "close", { configurable: true, value: () => dialog.removeAttribute("open") });
     await act(async () =>
       Array.from(host.querySelectorAll("button"))
-        .find(
-          (button) => (button.getAttribute("aria-label") ?? button.textContent?.trim()) === "Find attendee or badge",
+        .find((button) =>
+          /^(Find attendee or badge|Enter badge code)$/.test(
+            button.getAttribute("aria-label") ?? button.textContent?.trim() ?? "",
+          ),
         )!
         .click(),
     );
@@ -219,8 +234,10 @@ export async function openManual(title = "Enter badge code") {
   if (!host.querySelector('.pk-fast-scanner input[name="badgeId"]')) {
     await act(async () =>
       Array.from(host.querySelectorAll("button"))
-        .find(
-          (button) => (button.getAttribute("aria-label") ?? button.textContent?.trim()) === "Find attendee or badge",
+        .find((button) =>
+          /^(Find attendee or badge|Enter badge code)$/.test(
+            button.getAttribute("aria-label") ?? button.textContent?.trim() ?? "",
+          ),
         )!
         .click(),
     );

@@ -4,6 +4,7 @@ import { AppError } from "../../errors";
 import type { Env } from "../../types";
 import { preserveLiveRoomAttachmentState, type LiveRoomParticipant } from "./room-admission";
 import { revalidateLiveRoomParticipants } from "./room-access";
+import type { LiveRoomAccessScope } from "./room-command-read-scope";
 
 /**
  * The sockets that may receive a protected payload: each one's participant
@@ -13,7 +14,7 @@ import { revalidateLiveRoomParticipants } from "./room-access";
  */
 export async function authorizeLiveRoomRecipients(
   env: Pick<Env, "DB" | "LIVE_SESSION_ROOMS">,
-  room: { eventId: string; session: { occurrenceId: string } } | null,
+  room: LiveRoomAccessScope | null,
   sockets: WebSocket[],
 ): Promise<WebSocket[]> {
   sockets = sockets.filter((socket) => socket.readyState === WebSocket.OPEN);
@@ -21,13 +22,7 @@ export async function authorizeLiveRoomRecipients(
   const viewers = sockets.map((socket) => socket.deserializeAttachment() as LiveRoomParticipant);
   let results: Awaited<ReturnType<typeof revalidateLiveRoomParticipants>>;
   try {
-    results = await revalidateLiveRoomParticipants(
-      env.DB,
-      viewers,
-      room.eventId,
-      room.session.occurrenceId,
-      env.LIVE_SESSION_ROOMS,
-    );
+    results = await revalidateLiveRoomParticipants(env.DB, viewers, room, env.LIVE_SESSION_ROOMS);
   } catch (error) {
     if (error instanceof AppError && error.status >= 400 && error.status < 500) {
       for (const socket of sockets) closeLiveRoomSocket(socket, liveRoomRefusalCloseCode(error.status), error.code);
@@ -51,6 +46,15 @@ export async function authorizeLiveRoomRecipients(
       continue;
     }
     if (!result.ok) continue;
+    if (
+      viewers[index].accessGrant &&
+      (result.participant.studio !== viewers[index].studio ||
+        JSON.stringify(result.participant.locationOccurrenceIds) !==
+          JSON.stringify(viewers[index].locationOccurrenceIds))
+    ) {
+      closeLiveRoomSocket(socket, 1012, "Room access changed");
+      continue;
+    }
     socket.serializeAttachment(
       preserveLiveRoomAttachmentState(result.participant, socket.deserializeAttachment() as LiveRoomParticipant),
     );

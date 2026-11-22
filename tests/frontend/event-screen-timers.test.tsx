@@ -40,7 +40,12 @@ const states: Record<string, [LiveRoomState, number]> = {
   ],
 };
 
-async function drawn(state: LiveRoomState, now: number, marker: ScreenMarker) {
+async function drawn(
+  state: LiveRoomState,
+  now: number,
+  marker: ScreenMarker,
+  output: "stage-display" | "projector" = "stage-display",
+) {
   host ??= document.body.appendChild(document.createElement("div"));
   await act(() =>
     render(
@@ -48,7 +53,7 @@ async function drawn(state: LiveRoomState, now: number, marker: ScreenMarker) {
         <ScreenView
           screenId={SCREEN_FIXTURE.screenId}
           now={now}
-          display={{ kind: "output", output: "stage-display", layout: null, roomId: room.id, state, marker }}
+          display={{ kind: "output", output, layout: null, roomId: room.id, eventSlug: "pqc-2026", state, marker }}
         />
       </LiveClockContext.Provider>,
       host!,
@@ -88,4 +93,13 @@ it("puts the screen's status at the end of the stage display's footer, beside a 
   expect(title).toMatch(/^LiveA very long session title( [a-z]+)+…$/iu);
   expect(footer.querySelector(".pk-live-stage-display__aside")?.textContent).toBe("Offline · 6 min");
   expect(page.querySelector(".pk-screen-marker--corner")).toBeNull();
+});
+
+it("keeps the auto mode badge off the projector the audience reads, showing staff the offline dot", async () => {
+  const [state, now] = states["auto session"]!;
+  const projector = await drawn(state, now, { kind: "auto" }, "projector");
+  expect(projector.textContent).not.toContain("Auto mode");
+  expect(projector.querySelector(".pk-screen-marker--corner.pk-screen-marker--dot")).not.toBeNull();
+  const stage = await drawn(state, now, { kind: "auto" });
+  expect(stage.querySelector(".pk-live-stage-display__aside")?.textContent).toBe("Auto mode");
 });

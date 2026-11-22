@@ -223,10 +223,15 @@ export function controlLiveTimer(
   return runningTo(timer, countsUp(timer) ? now - reading.valueMs : now + reading.valueMs);
 }
 
-/** Adds or takes time: a countdown gains time left, a stopwatch time counted (never below zero). */
+/**
+ * Adds or takes time: a countdown gains time left, a stopwatch time counted
+ * (never below zero). A session timer waiting for its session on the agenda
+ * has no time to nudge yet and stays as it is, so it still starts on time.
+ */
 export function adjustLiveTimer(timer: LiveTimer, session: SessionTime, deltaSeconds: number, now: number): LiveTimer {
   if (!liveTimerCounts(timer)) return timer;
   const reading = liveTimerReading(timer, session, now);
+  if (reading.startsInMs !== null) return timer;
   const value = reading.valueMs + deltaSeconds * 1000;
   const next = clampMs(countsUp(timer) ? Math.max(0, value) : value);
   if (!reading.running) return stopped(timer, next);

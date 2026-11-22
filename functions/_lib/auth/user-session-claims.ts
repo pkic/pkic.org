@@ -74,7 +74,11 @@ export async function resolveUserSessionClaims(
     throw new AppError(401, "AUTH_INVALID", "Invalid user session token");
   if (
     !liveData &&
-    !(await first(db, `SELECT 1 WHERE ${sessionEmailSignInAllowedSql("?", "?")}`, [claims.sid, claims.sub]))
+    !(await first(
+      db,
+      `SELECT 1 FROM (SELECT ? AS sid, ? AS uid) checked WHERE ${sessionEmailSignInAllowedSql("checked.sid", "checked.uid")}`,
+      [claims.sid, claims.sub],
+    ))
   ) {
     throw new AppError(401, "AUTH_INVALID", "This sign-in address no longer permits account access");
   }

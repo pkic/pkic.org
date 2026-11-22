@@ -1,5 +1,5 @@
 import { badgeCredentialSchema } from "./badge-credential";
-import { requiresPermissions } from "./route-contract";
+import { requiresAnyPermissions, requiresPermissions } from "./route-contract";
 import { z } from "zod";
 import { eventSlugParamsSchema, jsonErrorResponse, successResponseSchema, utcInstantSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
@@ -10,7 +10,7 @@ import { badgeTemplateBrandingSchema, eventBadgeTemplateSchema } from "./event-b
 export const badgeAttendeeQuerySchema = listQuerySchema(["email"] as const);
 export const badgeAttendeesResponseSchema = paginatedResponseSchema("users", userCatalogItemSchema);
 export const badgeAttendeesRouteSchema = {
-  ...requiresPermissions("events:manage"),
+  ...requiresAnyPermissions(["events:manage"], ["agenda:badge_print"]),
   tags: ["Events"],
   summary: "Find registered attendees for badge issuance",
   request: { params: eventSlugParamsSchema, query: badgeAttendeeQuerySchema },
@@ -19,7 +19,7 @@ export const badgeAttendeesRouteSchema = {
       description: "Registered attendee choices",
       content: { "application/json": { schema: badgeAttendeesResponseSchema } },
     },
-    "403": jsonErrorResponse("Event management permission required"),
+    "403": jsonErrorResponse("Event management or badge printing permission required"),
   },
 };
 export const badgeIssueRequestSchema = z
@@ -108,7 +108,7 @@ export const badgeCredentialRouteSchema = {
   },
 };
 export const badgeIssueRouteSchema = {
-  ...requiresPermissions("events:manage"),
+  ...requiresAnyPermissions(["events:manage"], ["agenda:badge_print"]),
   tags: ["Events"],
   summary: "Issue or explicitly replace an opaque printable badge credential",
   request: {
@@ -123,7 +123,7 @@ export const badgeIssueRouteSchema = {
       description: "Badge credential; returned only on issuance",
       content: { "application/json": { schema: badgeIssueResponseSchema } },
     },
-    "403": jsonErrorResponse("Event management permission required"),
+    "403": jsonErrorResponse("Event management or badge printing permission required"),
     "404": jsonErrorResponse("Selected badge unavailable"),
     "409": jsonErrorResponse("Badge ownership, registration or operation changed"),
   },
@@ -176,7 +176,7 @@ export const badgePrintingResponseSchema = z
   .strict();
 export type BadgePrintingContext = z.infer<typeof badgePrintingResponseSchema>;
 export const badgePrintingRouteSchema = {
-  ...requiresPermissions("events:manage"),
+  ...requiresAnyPermissions(["events:manage"], ["agenda:badge_print"]),
   tags: ["Events"],
   summary: "Prepare the current event badge template and approved sponsor artwork once per print document",
   request: { params: eventSlugParamsSchema },
@@ -185,7 +185,7 @@ export const badgePrintingRouteSchema = {
       description: "Transient authenticated event print context",
       content: { "application/json": { schema: badgePrintingResponseSchema } },
     },
-    "403": jsonErrorResponse("Event management permission required or changed"),
+    "403": jsonErrorResponse("Event management or badge printing permission required"),
     "409": jsonErrorResponse("Badge template or approved sponsor artwork changed"),
     "413": jsonErrorResponse("Owned sponsor artwork exceeds the print document limits"),
     "422": jsonErrorResponse("Badge template or approved sponsor artwork is invalid or requires replacement"),
@@ -223,7 +223,7 @@ export const badgeLabelRequestSchema = z.discriminatedUnion("source", [
 ]);
 export type BadgeLabelRequest = z.infer<typeof badgeLabelRequestSchema>;
 export const badgeLabelRouteSchema = {
-  ...requiresPermissions("events:manage"),
+  ...requiresAnyPermissions(["events:manage"], ["agenda:badge_print"]),
   tags: ["Events"],
   summary: "Read a printable attendee label directly without event artwork or a render job",
   request: {

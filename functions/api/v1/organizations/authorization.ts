@@ -4,6 +4,7 @@ import { guardMemberSessionMutationDatabase, requireMemberFromRequest } from "..
 import { AppError } from "../../../_lib/errors";
 import { requirePermission } from "../../../_lib/auth/permissions";
 import { requestDb, type AdminContext } from "../../../_lib/db/context";
+import { resolveUserSessionFromRequest } from "../../../_lib/auth/user-session";
 
 /** Resolves an attributable staff identity for a canonical organization route. */
 export async function requireOrganizationStaffPermission(c: AdminContext, permission: Permission) {
@@ -27,4 +28,17 @@ export async function requireOrganizationMember(c: AdminContext, organizationId:
 export async function requireOrganizationMemberMutation(c: AdminContext, organizationId: string) {
   const { db, member } = await requireOrganizationMember(c, organizationId);
   return { db: guardMemberSessionMutationDatabase(db, member), member };
+}
+
+/**
+ * Resolves a session that holds an active identity at the organization,
+ * whether or not the organization is a member yet.
+ */
+export async function requireOrganizationRepresentative(c: AdminContext, organizationId: string) {
+  const db = requestDb(c);
+  const session = await resolveUserSessionFromRequest(db, c.req.raw, c.env);
+  if (!session.actingIdentities.some((identity) => identity.organizationId === organizationId)) {
+    throw new AppError(404, "ORGANIZATION_NOT_FOUND", "Organization not found for your representations");
+  }
+  return { db, session };
 }

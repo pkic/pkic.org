@@ -4,6 +4,40 @@ import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 import { openScannerSessionDetails, scannerShellCachedUrls } from "./helpers/scanner-recovery-storage";
+import { badgeCameraScanRegion } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/camera-driver";
+import { generateBadgeCredential } from "../../assets/shared/schemas/badge-credential";
+
+test("the camera decoder reads a small badge QR away from the frame center", async ({ page }) => {
+  await page.addInitScript(() => Reflect.deleteProperty(globalThis, "BarcodeDetector"));
+  await page.goto("/portal/");
+  const manifestResponse = await page.request.get("/js/built/scanner-offline-inventory-build.json");
+  expect(manifestResponse.ok()).toBe(true);
+  const manifest: { assets: string[] } = await manifestResponse.json();
+  const moduleUrl = manifest.assets.find((url) => /\/qr-scanner\.min\.[^/]+\.js$/u.test(url));
+  expect(moduleUrl).toBeDefined();
+  const value = generateBadgeCredential();
+  const imageData = await QRCode.toDataURL(value, { width: 100, margin: 4 });
+  const region = badgeCameraScanRegion({ videoWidth: 1920, videoHeight: 1080 });
+  const decoded = await page.evaluate(
+    async ({ moduleUrl, imageData, region }) => {
+      const image = new Image();
+      image.src = imageData;
+      await image.decode();
+      const frame = document.createElement("canvas");
+      frame.width = 1920;
+      frame.height = 1080;
+      const context = frame.getContext("2d")!;
+      context.fillStyle = "white";
+      context.fillRect(0, 0, frame.width, frame.height);
+      context.drawImage(image, 100, (frame.height - image.height) / 2);
+      const { default: QrScanner } = await import(moduleUrl);
+      const result = await QrScanner.scanImage(frame, { scanRegion: region, returnDetailedScanResult: true });
+      return result.data;
+    },
+    { moduleUrl: moduleUrl!, imageData, region },
+  );
+  expect(decoded).toBe(value);
+});
 
 test("a fresh offline page decodes a real QR image after preparing with native detection available", async ({
   page,

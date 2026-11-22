@@ -33,6 +33,8 @@ export interface RowActionsProps {
    * to remember the convention or which form its row will take.
    */
   subject?: string;
+  /** What the menu holds, in a sentence: the second line of the trigger's hint, under the menu's name. */
+  hint?: string;
 }
 
 /**
@@ -67,7 +69,7 @@ export function rowActionsMenuName(subject: string | undefined): string {
   return subject === undefined ? "Row actions" : `Actions for ${subject}`;
 }
 
-export function RowActions({ status, actions, subject }: RowActionsProps) {
+export function RowActions({ status, actions, subject, hint }: RowActionsProps) {
   return (
     <div
       class="pk-row-actions"
@@ -87,7 +89,14 @@ export function RowActions({ status, actions, subject }: RowActionsProps) {
        * End-aligned: a start-aligned popup on the last column hangs off the
        * table's right edge before the viewport clamp ever gets a say.
        */}
-      {actions.length > 0 && <Menu label={rowActionsMenuName(subject)} items={actions} align="end" />}
+      {actions.length > 0 && (
+        <Menu
+          label={rowActionsMenuName(subject)}
+          title={hint ? `${rowActionsMenuName(subject)}\n${hint}` : undefined}
+          items={actions}
+          align="end"
+        />
+      )}
     </div>
   );
 }

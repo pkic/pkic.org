@@ -6,29 +6,8 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { EventDetail } from "../../assets/ts/member-flows/portal/sections/events/types";
 import { GeneralTab } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/GeneralTab";
-import { Settings } from "../../assets/ts/member-flows/portal/sections/events/detail/Settings";
-import { eventTeamRosterResponseSchema } from "../../assets/shared/schemas/event-team";
 import { SponsorTiersTab } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/SponsorTiersTab";
 import { controlFor, typeInto } from "./helpers/labeled-control";
-
-/*
- * The surface addresses its own add page, so it reads the portal's location
- * hook. The hook is wouter's, which is React's under preact/compat and has no
- * dispatcher in a bare mount — the same mock every other surface test that
- * navigates uses.
- */
-const navigate = vi.fn();
-vi.mock("wouter/use-hash-location", () => ({
-  useHashLocation: () => ["", navigate],
-}));
-
-vi.mock("wouter", () => ({
-  Link: ({ children, href, ...rest }: { children?: ComponentChildren; href: string } & Record<string, unknown>) => (
-    <a href={`#${href}`} {...rest}>
-      {children}
-    </a>
-  ),
-}));
 
 const mounted: HTMLElement[] = [];
 
@@ -63,6 +42,7 @@ const portalEvent = {
   inviteLimitAttendee: 5,
   updatedAt: "2026-08-29T00:00:00.000Z",
   basePath: null,
+  motifUrl: null,
   userRetentionDays: null,
   venue: null,
   virtualUrl: null,
@@ -76,6 +56,7 @@ const portalEvent = {
   links: [],
   capabilities: ["read"],
   registrationPath: null,
+  productionPartners: [],
   settings: { forms: { event_registration: "legacy-attendee-form" } },
 } as EventDetail;
 
@@ -361,49 +342,13 @@ describe("admin event general settings", () => {
     expect([...container.querySelectorAll("button")].some((button) => button.type === "submit")).toBe(false);
   });
 
-  it("shows team management only with the exact event-management capability", async () => {
-    const requests: URL[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = new URL(
-          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
-          location.origin,
-        );
-        requests.push(url);
-        if (url.pathname.endsWith("/team")) {
-          return json(
-            eventTeamRosterResponseSchema.parse({
-              people: [],
-              page: { limit: 100, offset: 0, total: 0, hasMore: false },
-            }),
-          );
-        }
-        return json({ forms: [], page: { limit: 100, offset: 0, total: 0, hasMore: false } });
-      }),
-    );
-
-    const reader = mount(<Settings event={portalEvent} onUpdated={vi.fn()} subTab="team" />);
-    await settle();
-    expect(reader.textContent).not.toContain("Add team member");
-    expect(requests.some(({ pathname }) => pathname.endsWith("/team"))).toBe(false);
-
-    const manager = mount(
-      <Settings event={{ ...portalEvent, capabilities: ["read", "manage"] }} onUpdated={vi.fn()} subTab="team" />,
-    );
-    await settle();
-    await settle();
-    expect(manager.textContent).toContain("Add team member");
-    expect(requests.some(({ pathname }) => pathname === "/api/v1/events/portal-workshop/team")).toBe(true);
-  });
-
   it("keeps sponsor-tier actions hidden from an event reader", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => json({ tiers: [{ tierName: "Community", hasAttendeeDataAccess: false }] })),
     );
 
-    const container = mount(<Settings event={portalEvent} onUpdated={vi.fn()} subTab="sponsor-tiers" />);
+    const container = mount(<SponsorTiersTab slug="portal-workshop" canWrite={false} />);
     await settle();
     await settle();
 
@@ -448,62 +393,5 @@ describe("admin event general settings", () => {
     const alert = container.querySelector('[role="alert"]');
     expect(alert?.textContent).toContain("Tiers changed elsewhere.");
     expect(container.textContent).not.toContain("✓ Saved");
-  });
-
-  it("replaces the General tab with a series-managed notice for a meeting-series event", async () => {
-    const seriesEvent = {
-      ...portalEvent,
-      seriesId: "60000000-0000-4000-8000-000000000001",
-      ownerGroupId: "20000000-0000-4000-8000-000000000001",
-    };
-    const container = mount(<Settings event={seriesEvent} onUpdated={vi.fn()} />);
-    await settle();
-
-    expect(container.textContent).not.toContain("Event name");
-    expect(container.textContent).toContain("managed by a meeting series");
-    // Tabs are links too now, so "not a tab" is what excludes them, not a role.
-    const link = container.querySelector<HTMLAnchorElement>("a:not(.pk-tabs__link)");
-    expect(link?.getAttribute("href")).toBe(
-      "#/groups/20000000-0000-4000-8000-000000000001/meetings/60000000-0000-4000-8000-000000000001",
-    );
-  });
-
-  it("explains an undetermined owning group instead of linking nowhere", async () => {
-    const seriesEvent = {
-      ...portalEvent,
-      seriesId: "60000000-0000-4000-8000-000000000001",
-      ownerGroupId: null,
-    };
-    const container = mount(<Settings event={seriesEvent} onUpdated={vi.fn()} />);
-    await settle();
-
-    expect(container.textContent).toContain("could not be determined");
-    expect(container.querySelector("a:not(.pk-tabs__link)")).toBeNull();
-  });
-
-  it("keeps sponsor tiers and team working for a meeting-series event", async () => {
-    const seriesEvent = {
-      ...portalEvent,
-      seriesId: "60000000-0000-4000-8000-000000000001",
-      ownerGroupId: "20000000-0000-4000-8000-000000000001",
-      capabilities: ["read", "manage"] as EventDetail["capabilities"],
-    };
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json({ tiers: [] })),
-    );
-    const tiers = mount(<Settings event={seriesEvent} onUpdated={vi.fn()} subTab="sponsor-tiers" />);
-    await settle();
-    await settle();
-    expect(tiers.textContent).toContain("Choose which sponsor tiers can access attendee data");
-
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json({ roles: [], page: { limit: 100, offset: 0, total: 0, hasMore: false } })),
-    );
-    const team = mount(<Settings event={seriesEvent} onUpdated={vi.fn()} subTab="team" />);
-    await settle();
-    await settle();
-    expect(team.textContent).toContain("Add team member");
   });
 });

@@ -1,6 +1,8 @@
+import { eventVirtualRoomUrl } from "../assets/shared/event-participation-link";
+import { buildEventEmailVariables } from "../functions/_lib/email/event-email-variables";
 import { describe, expect, it } from "vitest";
-import { resolveEventVirtualUrl, buildEventEmailVariables } from "../functions/_lib/services/event-presentation";
 import { buildManagementLink } from "../functions/_lib/services/management-links";
+import { registrationPageUrl } from "../functions/_lib/services/frontend-links";
 
 describe("semantic management links", () => {
   const appBaseUrl = "https://app.test";
@@ -35,17 +37,42 @@ describe("system event virtual room links", () => {
   };
 
   it("uses the authenticated attendee room rather than a stored external override", () => {
-    expect(resolveEventVirtualUrl(event, "https://app.test/")).toBe(
+    expect(eventVirtualRoomUrl(event.slug, "https://app.test/")).toBe(
       "https://app.test/portal/#/events/conference/virtual",
     );
-    expect(resolveEventVirtualUrl({ ...event, slug: "conference/one" }, "https://app.test/")).toBe(
+    expect(eventVirtualRoomUrl("conference/one", "https://app.test/")).toBe(
       "https://app.test/portal/#/events/conference%2Fone/virtual",
     );
   });
 
   it("provides the same canonical room to event email templates", () => {
     expect(buildEventEmailVariables(event, "https://app.test").virtualRoomUrl).toBe(
-      resolveEventVirtualUrl(event, "https://app.test"),
+      eventVirtualRoomUrl(event.slug, "https://app.test"),
     );
+  });
+});
+
+describe("invitation registration links", () => {
+  const event = {
+    slug: "conference",
+    base_path: "/events/conference/",
+    starts_at: "2026-12-01T09:00:00.000Z",
+    settings_json: "{}",
+    source_mode: "portal",
+  } as const;
+  const invitation = { invite: "token-1", inviteId: "invite-1", source: "invite_resend" };
+
+  it("opens registration in the portal for an event without public pages", () => {
+    const link = new URL(
+      registrationPageUrl("https://app.test", { ...event, visibility: "invitation_only" }, invitation),
+    );
+    expect(link.pathname).toBe("/portal/");
+    expect(link.hash).toBe("#/events/conference/register?invite=token-1&id=invite-1&source=invite_resend");
+  });
+
+  it("keeps the public registration page for a public event", () => {
+    const link = new URL(registrationPageUrl("https://app.test", { ...event, visibility: "public" }, invitation));
+    expect(link.pathname).toBe("/events/conference/register/");
+    expect(link.searchParams.get("invite")).toBe("token-1");
   });
 });

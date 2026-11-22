@@ -1,8 +1,8 @@
 import { nowIso } from "../../utils/time";
-import { readEventAudienceAccess } from "./scanner-access";
+import { readEventAudienceAccess, type EventAudienceAccess } from "./scanner-access";
 import type { CountryCode } from "../../../../assets/shared/countries";
 import { fetchEventParticipation } from "./participation";
-import { eventRegistrationPath, resolveHeroImageUrl } from "../event-presentation";
+import { eventPublicPagePath, eventRegistrationPath, resolveHeroImageUrl } from "../event-presentation";
 import {
   EVENT_LIST_SORT_COLUMNS,
   EVENT_MANAGEMENT_LIST_SORT_COLUMNS,
@@ -14,6 +14,8 @@ import {
   type EventViewerState,
 } from "../../../../assets/shared/schemas/event-management";
 import { queryPage } from "../../db/pagination";
+import { parseJsonSafe } from "../../utils/json";
+import { readEventInvitationMessage } from "../../../../assets/shared/schemas/event-invitation-message";
 import { eventReadSelectionSql, type EventReadSelection } from "./read-selection";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
@@ -22,8 +24,10 @@ import { AppError } from "../../errors";
 import { permissionsAuthorizationEvidence } from "../../auth/permissions";
 import type { DatabaseLike } from "../../types";
 import { parseLinksJson } from "../../../../assets/shared/schemas/links";
+import { eventMotifPath, eventOwnMotif } from "../../../../assets/shared/schemas/event-promotion-design";
 import { normalizeEventRegistrationPolicy } from "./detail";
 import { buildEventAudiencePredicate, guardEventReadDatabase, type EventAudienceViewer } from "./visibility";
+import { heldEventInvitationExistsSql } from "../held-event-invitation";
 import { fetchViewerEventState, fetchViewerEventStates } from "./viewer-state";
 
 export interface EventAudienceRow {
@@ -41,22 +45,26 @@ export interface EventAudienceRow {
   country: CountryCode | null;
   links_json: string | null;
   base_path: string | null;
+  owner_group_id: string | null;
 }
 
 const EVENT_AUDIENCE_SELECT = `SELECT event.id, event.slug, event.name, event.timezone,
   event.starts_at, event.ends_at, event.profile_key, event.registration_mode,
-  event.visibility, event.settings_json, event.city, event.country, event.links_json, event.base_path`;
+  event.visibility, event.settings_json, event.city, event.country, event.links_json, event.base_path,
+  event.owner_group_id`;
 
 export function mapEventAudience(
   row: EventAudienceRow,
   viewer: EventViewerState | null,
-  access?: Pick<EventAudienceDetail, "scannerAccess" | "sponsorLeadAccess">,
+  access?: EventAudienceAccess,
 ): EventAudienceDetail {
+  const settings = parseJsonSafe<Record<string, unknown>>(row.settings_json, {});
   return eventAudienceDetailSchema.parse({
     id: row.id,
     slug: row.slug,
     name: row.name,
     heroImageUrl: resolveHeroImageUrl(row),
+    invitationMessage: readEventInvitationMessage(settings),
     timezone: row.timezone,
     startsAt: row.starts_at,
     endsAt: row.ends_at,
@@ -67,11 +75,14 @@ export function mapEventAudience(
     city: row.city,
     country: row.country,
     links: parseLinksJson(row.links_json),
-    basePath: row.base_path,
+    basePath: eventPublicPagePath(row),
+    motifUrl: eventOwnMotif(settings) ? eventMotifPath(row.slug) : null,
     scannerAccess: access?.scannerAccess,
     sponsorLeadAccess: access?.sponsorLeadAccess ?? false,
     viewer,
     registrationPath: eventRegistrationPath(row),
+    // The event's team opens it in the owning group's workspace; nobody else learns the group from here.
+    ...(access?.team ? { ownerGroupId: row.owner_group_id } : {}),
   });
 }
 
@@ -118,6 +129,29 @@ function buildEventsListPredicate(
   if (query.to) {
     conditions.push("COALESCE(event.starts_at, event.ends_at) <= ?");
     bindings.push(query.to);
+  }
+  if (query.invitation) {
+    // The reader's own invitations, never a delegated account's.
+    const userId = viewer.admin?.scopeRestricted ? null : viewer.userId;
+    if (!userId) {
+      // No reader holds no invitation: `open` matches nothing and `none` everything.
+      if (query.invitation === "open") conditions.push("0");
+    } else {
+      const open = `(COALESCE(event.ends_at, event.starts_at) >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+        AND event.registration_mode NOT IN ('no_registration', 'automatic')
+        AND ${heldEventInvitationExistsSql({
+          inviteAlias: "open_invite",
+          eventAlias: "event",
+          userIdSql: "?",
+          statuses: ["sent"],
+          attendeeOnly: true,
+        })}
+        AND NOT EXISTS (SELECT 1 FROM registrations own_registration
+              WHERE own_registration.event_id = event.id AND own_registration.user_id = ?
+                AND own_registration.status <> 'cancelled'))`;
+      conditions.push(query.invitation === "open" ? open : `NOT ${open}`);
+      bindings.push(userId, userId);
+    }
   }
   if (query.q) {
     const search = buildD1TextSearchFilter(query.q, ["event.name", "event.slug"]);
@@ -328,6 +362,7 @@ export function mapEventManagementSummary(
     slug: row.slug,
     name: row.name,
     heroImageUrl: resolveHeroImageUrl(row),
+    invitationMessage: readEventInvitationMessage(parseJsonSafe(row.settings_json, {})),
     timezone: row.timezone,
     startsAt: row.starts_at,
     endsAt: row.ends_at,

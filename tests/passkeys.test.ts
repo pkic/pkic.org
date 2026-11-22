@@ -1,4 +1,5 @@
 // Prepare the real HTTP graph before timed journeys, as the shared API test helper does.
+import { recordPersonalAddressAnswer } from "./helpers/account-organization";
 import "../functions/http-router";
 import { grantAdministrator } from "./helpers/administrator";
 /**
@@ -68,6 +69,7 @@ async function insertStaffUser(email: string): Promise<string> {
     .bind(id, email, email)
     .run();
   await grantAdministrator(env.DB, id);
+  await recordPersonalAddressAnswer(env.DB, id);
   return id;
 }
 
@@ -91,6 +93,7 @@ async function insertActiveMemberUser(email: string): Promise<string> {
     identity.statement,
     ...statements,
   ]);
+  await recordPersonalAddressAnswer(env.DB, userId);
   return userId;
 }
 
@@ -323,14 +326,14 @@ describe("passkeys (WebAuthn)", () => {
     expect(body.challengeToken).toBeTruthy();
   });
 
-  it("registers and signs in on a branch preview with the shared preview RP ID", async () => {
-    const rpId = "pkic.workers.dev";
-    const origin = "https://agent-public-upstream-curated-20260923-pkic-org.pkic.workers.dev";
+  it.each([
+    ["preview.pkic.org", "https://feature.preview.pkic.org"],
+    ["pkic.workers.dev", "https://feature-pkic-org.pkic.workers.dev"],
+  ])("registers and signs in on a preview using RP ID %s", async (rpId, origin) => {
     const previewEnv = {
       ...env,
-      WEBAUTHN_RP_ID: rpId,
-      WEBAUTHN_ORIGIN: "https://feature-workers-previews-pkic-org.pkic.workers.dev",
-      WEBAUTHN_PREVIEW_WORKER_NAME: "pkic-org",
+      WEBAUTHN_RP_ID: "preview.pkic.org",
+      WEBAUTHN_ORIGIN: "https://main.preview.pkic.org",
     };
     const previewCall = (url: string, path: string, init: RequestInit = {}, bearer?: string) => {
       const headers = new Headers(init.headers);
@@ -346,16 +349,18 @@ describe("passkeys (WebAuthn)", () => {
       );
     };
 
-    // Workers Previews serve <preview>-pkic-org and <deployment-id>-pkic-org on the
-    // account subdomain. The production Worker's own host and other shapes stay out.
+    // Branches and immutable deployment URLs are direct preview subdomains.
+    // Production, other Workers, nested names, and lookalikes stay out.
     for (const lookalike of [
       "https://other-worker.pkic.workers.dev",
       "https://pkic-org.pkic.workers.dev",
-      "https://nested.branch-pkic-org.pkic.workers.dev",
-      "https://branch-pkic-org.pkic.workers.dev.evil.example",
-      "https://branch--pkic-org.pkic.workers.dev",
-      "http://branch-pkic-org.pkic.workers.dev",
-      "https://branch-pkic-org.pkic.workers.dev:8443",
+      "https://nested.branch.preview.pkic.org",
+      "https://pkic.org",
+      "https://other.pkic.org",
+      "https://branch.preview.pkic.org.evil.example",
+      "https://branch-.preview.pkic.org",
+      "http://branch.preview.pkic.org",
+      "https://branch.preview.pkic.org:8443",
     ]) {
       const unsupportedBegin = await previewCall(lookalike, "/api/v1/auth/passkeys/authenticate/begin");
       expect(unsupportedBegin.status, lookalike).toBe(400);
@@ -363,17 +368,14 @@ describe("passkeys (WebAuthn)", () => {
     }
 
     const deploymentBegin = await previewCall(
-      "https://3f2a9c1e-pkic-org.pkic.workers.dev",
+      "https://3f2a9c1e-feature.preview.pkic.org",
       "/api/v1/auth/passkeys/authenticate/begin",
     );
     expect(deploymentBegin.status).toBe(200);
 
-    const stableBegin = await previewCall(
-      "https://feature-workers-previews-pkic-org.pkic.workers.dev",
-      "/api/v1/auth/passkeys/authenticate/begin",
-    );
+    const stableBegin = await previewCall("https://main.preview.pkic.org", "/api/v1/auth/passkeys/authenticate/begin");
     expect(stableBegin.status).toBe(200);
-    expect(((await stableBegin.json()) as BeginResponse).options.rpId).toBe(rpId);
+    expect(((await stableBegin.json()) as BeginResponse).options.rpId).toBe("preview.pkic.org");
 
     const registrationBeginResponse = await previewCall(
       origin,
@@ -403,6 +405,16 @@ describe("passkeys (WebAuthn)", () => {
     );
     expect(otherWorker.status).toBe(400);
     await expect(otherWorker.json()).resolves.toMatchObject({ error: { code: "PASSKEY_ORIGIN_INVALID" } });
+
+    const otherOrigin =
+      rpId === "preview.pkic.org" ? "https://feature-pkic-org.pkic.workers.dev" : "https://feature.preview.pkic.org";
+    const wrongOrigin = await previewCall(
+      otherOrigin,
+      "/api/v1/auth/passkeys/register/complete",
+      { method: "POST", body: registrationBody },
+      token,
+    );
+    expect(wrongOrigin.status).toBe(400);
 
     const registrationComplete = await previewCall(
       origin,
@@ -807,14 +819,21 @@ describe("passkeys (WebAuthn)", () => {
    * the account once another mailbox is verified, and that mailbox may not sign
    * in until its owner allows it. Returns that mailbox's id.
    */
+  /** The only verified address belongs to an ended representation, and it keeps the unproved primary out. */
   async function leaveNoOtherWayToSignIn(): Promise<string> {
     const emailId = crypto.randomUUID();
+    const identityId = crypto.randomUUID();
+    const organizationId = await insertOrganization(env.DB);
     const at = new Date().toISOString();
     await env.DB.batch([
       env.DB.prepare("UPDATE users SET email_verified_at = NULL WHERE id = ?").bind(userId),
       env.DB.prepare(
-        "INSERT INTO user_emails (id,user_id,email,normalized_email,verified_at,created_at) VALUES (?,?,?,?,?,?)",
-      ).bind(emailId, userId, "added@example.test", "added@example.test", at, at),
+        `INSERT INTO identities (id, user_id, organization_id, source, invited_at, started_at, ended_at, created_at, updated_at)
+         VALUES (?,?,?,'staff',?,?,?,?,?)`,
+      ).bind(identityId, userId, organizationId, at, at, at, at, at),
+      env.DB.prepare(
+        "INSERT INTO user_emails (id,user_id,email,normalized_email,verified_at,identity_id,created_at) VALUES (?,?,?,?,?,?,?)",
+      ).bind(emailId, userId, "added@example.test", "added@example.test", at, identityId, at),
     ]);
     return emailId;
   }
@@ -840,7 +859,6 @@ describe("passkeys (WebAuthn)", () => {
   it("refuses removing the last way to sign in, and allows it once another remains", async () => {
     const { passkeyId } = await registerPasskey();
     const emailId = await leaveNoOtherWayToSignIn();
-    const at = new Date().toISOString();
 
     const refused = await call(`/api/v1/auth/passkeys/${passkeyId}`, { method: "DELETE" }, token);
     expect(refused.status).toBe(409);
@@ -854,9 +872,8 @@ describe("passkeys (WebAuthn)", () => {
     );
     expect(kept[0].revoked_at).toBeNull();
 
-    await env.DB.prepare("INSERT INTO user_email_sign_in_permissions (email_id, revision, enabled_at) VALUES (?,?,?)")
-      .bind(emailId, crypto.randomUUID(), at)
-      .run();
+    // Unbound from the ended representation, the verified address signs in again.
+    await env.DB.prepare("UPDATE user_emails SET identity_id = NULL WHERE id = ?").bind(emailId).run();
     const allowed = await call(`/api/v1/auth/passkeys/${passkeyId}`, { method: "DELETE" }, token);
     expect(allowed.status).toBe(200);
     expect(await passkeyRemovals(passkeyId)).toEqual([{ otherSessionsSignedOut: { from: null, to: true } }]);

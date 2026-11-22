@@ -6,6 +6,7 @@ import { formFieldStatEntries } from "../../../../assets/shared/form-field-stati
 import type { DatabaseLike } from "../../types";
 import type { FieldRow, FieldStatPayload, GetFormSubmissionStatsParams, GetFormSubmissionStatsResult } from "./types";
 import { parseFormFieldOptionSource, resolveFormFieldOptionCatalogs } from "../forms/read";
+import { NORMALIZED_SUBMISSION_ANSWERS_CTE } from "./answer-query";
 import {
   countSubmissionPopulation,
   resolveFormSubmissionPopulation,
@@ -57,36 +58,12 @@ function buildFieldStatistics(
   });
 }
 
-const AGGREGATED_STATISTICS_SELECT = `normalized_answers AS (
-    SELECT m.id AS submission_id, COALESCE(ff.key, a.field_key) AS field_key, a.data_json
-    FROM merged m
-    JOIN form_submission_answers a ON m.source = 'submission' AND a.submission_id = m.source_id
-    LEFT JOIN form_fields ff ON ff.id = a.field_id
-    UNION ALL
-    SELECT m.id AS submission_id, je.key AS field_key,
-           CASE je.type
-             WHEN 'array' THEN json(je.value)
-             WHEN 'object' THEN json(je.value)
-             WHEN 'true' THEN 'true'
-             WHEN 'false' THEN 'false'
-             WHEN 'null' THEN 'null'
-             ELSE json_quote(je.value)
-           END AS data_json
-    FROM merged m
-    CROSS JOIN json_each(
-      CASE WHEN json_valid(m.answers_json) THEN m.answers_json ELSE '{}' END
-    ) je
-    WHERE m.source IN ('registration', 'proposal')
-  ),
+const AGGREGATED_STATISTICS_SELECT = `${NORMALIZED_SUBMISSION_ANSWERS_CTE},
   expanded_raw AS (
     SELECT a.submission_id, a.field_key, value.type AS value_type, value.value AS value
     FROM normalized_answers a
     CROSS JOIN json_each(
-      CASE
-        WHEN json_valid(a.data_json) AND json_type(a.data_json) = 'array' THEN a.data_json
-        WHEN json_valid(a.data_json) THEN json_array(json(a.data_json))
-        ELSE json_array(a.data_json)
-      END
+      CASE WHEN json_type(a.data_json) = 'array' THEN a.data_json ELSE json_array(json(a.data_json)) END
     ) value
   ),
   labeled AS (

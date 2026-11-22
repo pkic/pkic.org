@@ -1,3 +1,4 @@
+import { buildEventEmailVariables } from "../../email/event-email-variables";
 import {
   selectedOrAffiliationOrganizationNameSql,
   selectedOrAffiliationJobTitleSql,
@@ -7,11 +8,12 @@ import {
   personalPromotionSharePath,
 } from "../../../../assets/shared/personal-promotion-image";
 import type { CountryCode } from "../../../../assets/shared/countries";
+import type { EventRecord } from "../events";
 import { batchFirst, batchRows } from "../../db/pagination";
 import { AppError } from "../../errors";
 import { prepareQueueEmailStatement } from "../../email/outbox";
+import { emailPlainText } from "../../email/plain-text";
 import { buildBadgeAttachment } from "../../email/attachments";
-import { buildEventEmailVariables } from "../events";
 import {
   prepareAcceptedRegistrationTerms,
   decodeAcceptedRegistrationTerms,
@@ -30,6 +32,9 @@ import { registrationRecipientEmailSql } from "./recipient-email";
 import type { RegistrationRecord } from "./types";
 import { registrationConfirmationUrl, registrationManageCapability } from "./capability-urls";
 import { myAgendaPageUrl } from "../frontend-links";
+import { formatCurrencyAmount } from "../../../../assets/shared/format-currency";
+import { ticketPageUrl } from "../event-tickets/payment";
+import { prepareTicketPaymentDue, type TicketPaymentDue } from "../event-tickets/registration-ticket";
 
 interface UserRow {
   id: string;
@@ -53,6 +58,8 @@ export interface RegistrationStatusEmailEvent {
   /** Where the event takes place; the calendar invite falls back to it without a venue. */
   city?: string | null;
   country?: CountryCode | null;
+  /** Whether the event has public pages; the management link opens in the portal otherwise. */
+  visibility: EventRecord["visibility"];
 }
 
 /** What an email says about a held day; a builder passing its own rows need not carry timestamps. */
@@ -62,20 +69,25 @@ type DayAttendanceForEmail = Array<{
   label: string | null;
   optionLabel?: string | null;
   accessMode?: import("../../../../assets/shared/event-attendance-access").EventAttendanceAccessMode;
+  waitlistAlternativeJson?: string | null;
   startsAt?: string | null;
   endsAt?: string | null;
 }>;
 
 interface RegistrationEmailOverrides {
+  /** What the ticket owes once the write this email belongs to is made; undefined reads the stored ticket. */
+  paymentDue?: TicketPaymentDue | null;
   registration?: RegistrationRecord;
   profilePatch?: UserProfilePatch;
   dayAttendance?: DayAttendanceForEmail;
   dayWaitlist?: RegistrationDayWaitlistRow[];
 }
 
+type RegistrationEmailContext = Awaited<ReturnType<typeof loadRegistrationEmailContext>>;
+
 async function loadRegistrationEmailContext(
   db: DatabaseLike,
-  event: RegistrationStatusEmailEvent,
+  event: Pick<RegistrationStatusEmailEvent, "id" | "source_mode">,
   registrationId: string,
   overrides: RegistrationEmailOverrides = {},
 ): Promise<{
@@ -85,20 +97,24 @@ async function loadRegistrationEmailContext(
   dayWaitlist: RegistrationDayWaitlistRow[];
   customAnswerRows: Awaited<ReturnType<typeof getCustomAnswerRows>>;
   acceptedTermsText: string;
+  paymentDue: TicketPaymentDue | null;
 }> {
   const selectedIdentity = overrides.registration ? "(SELECT id FROM email_identity)" : "r.registration_identity_id";
-  const [registrationResult, userResult, attendanceResult, waitlistResult, termsResult] = await db.batch([
-    prepareRegistrationByIdForEvent(db, event.id, registrationId),
-    db
-      .prepare(`WITH email_identity AS (SELECT ? AS id) SELECT u.id, ${registrationRecipientEmailSql(selectedIdentity)} AS email,
+  const [registrationResult, userResult, attendanceResult, waitlistResult, termsResult, paymentResult] = await db.batch(
+    [
+      prepareRegistrationByIdForEvent(db, event.id, registrationId),
+      db
+        .prepare(`WITH email_identity AS (SELECT ? AS id) SELECT u.id, ${registrationRecipientEmailSql(selectedIdentity)} AS email,
             u.first_name, u.last_name, ${selectedOrAffiliationOrganizationNameSql(selectedIdentity, "u.id")} AS organization_name, ${selectedOrAffiliationJobTitleSql(selectedIdentity, "u.id")} AS job_title
        FROM registrations r JOIN users u ON u.id = r.user_id
        WHERE r.id = ? AND r.event_id = ?`)
-      .bind(overrides.registration?.registration_identity_id ?? null, registrationId, event.id),
-    prepareRegistrationDayAttendance(db, registrationId),
-    prepareRegistrationDayWaitlist(db, registrationId),
-    prepareAcceptedRegistrationTerms(db, registrationId),
-  ]);
+        .bind(overrides.registration?.registration_identity_id ?? null, registrationId, event.id),
+      prepareRegistrationDayAttendance(db, registrationId),
+      prepareRegistrationDayWaitlist(db, registrationId),
+      prepareAcceptedRegistrationTerms(db, registrationId),
+      prepareTicketPaymentDue(db, registrationId),
+    ],
+  );
   const registration = overrides.registration ?? batchFirst<RegistrationRecord>(registrationResult);
   if (!registration) throw new AppError(404, "REGISTRATION_NOT_FOUND", "Registration not found");
   const storedUser = batchFirst<UserRow>(userResult);
@@ -118,7 +134,54 @@ async function loadRegistrationEmailContext(
     formPlacementId: registration.form_placement_id,
     answersJson: registration.custom_answers_json,
   });
-  return { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText };
+  // A cancelled registration owes nothing, whatever its ticket still says in this write.
+  const paymentDue =
+    registration.status === "cancelled"
+      ? null
+      : overrides.paymentDue === undefined
+        ? (batchFirst<TicketPaymentDue>(paymentResult) ?? null)
+        : overrides.paymentDue;
+  return { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText, paymentDue };
+}
+
+/** The fields of the shared registration details block (`{{> reg_details}}`), as every registration email shows it. */
+function registrationDetailsData(context: RegistrationEmailContext, recipientEmail: string) {
+  const { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText, paymentDue } = context;
+  const attendanceData = buildAttendanceEmailData(
+    dayAttendance,
+    dayWaitlist,
+    registration.status === "cancelled" ? "cancelled" : paymentDue ? "payment_required" : undefined,
+  );
+  return {
+    // An unpaid ticket leaves the registration incomplete, and every email with these details says so.
+    paymentDue: Boolean(paymentDue),
+    // A payment that takes days is on its way: the email says so and asks for nothing.
+    paymentProcessing: paymentDue?.processing === 1,
+    payNow: Boolean(paymentDue) && paymentDue?.processing !== 1,
+    ticketPrice: paymentDue ? formatCurrencyAmount(paymentDue.amount, paymentDue.currency) : "",
+    firstName: user.first_name ?? "",
+    lastName: user.last_name ?? "",
+    email: recipientEmail,
+    organizationName: emailPlainText(user.organization_name ?? ""),
+    jobTitle: user.job_title ?? "",
+    attendanceLabel: attendanceData.attendanceLabel,
+    dayAttendance: attendanceData.dayAttendance,
+    ...attendanceData.venueDayStanding,
+    waitlistAlternatives: attendanceData.waitlistAlternatives,
+    dayWaitlist,
+    customAnswerRows,
+    acceptedTermsText: acceptedTermsText || undefined,
+  };
+}
+
+/** The registration details block for one registration, for an email that is not about the registration itself. */
+export async function registrationDetailsEmailData(
+  db: DatabaseLike,
+  event: Pick<RegistrationStatusEmailEvent, "id" | "source_mode">,
+  registrationId: string,
+) {
+  const context = await loadRegistrationEmailContext(db, event, registrationId);
+  return registrationDetailsData(context, context.user.email);
 }
 
 export interface RegistrationStatusEmailParams extends RegistrationEmailOverrides {
@@ -128,6 +191,8 @@ export interface RegistrationStatusEmailParams extends RegistrationEmailOverride
   templateKey: string;
   subject: string;
   noticeKind?: "status_update" | "waitlist_offer" | "admin_admit";
+  /** The registration was cancelled because its ticket was not paid within the event's hold period. */
+  unpaidRelease?: boolean;
   /** Override only for a deliberately selected pending/bounce fallback address. */
   recipientEmailOverride?: string;
   /** Stable operation identity for notification enqueueing across retried promotion batches. */
@@ -139,9 +204,9 @@ export async function prepareRegistrationStatusEmail(
   db: DatabaseLike,
   params: RegistrationStatusEmailParams,
 ): Promise<{ outboxId: string; statement: StatementLike; manageToken: string; manageUrl: string }> {
-  const { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText } =
-    await loadRegistrationEmailContext(db, params.event, params.registrationId, params);
-  const attendanceData = buildAttendanceEmailData(dayAttendance, dayWaitlist);
+  const context = await loadRegistrationEmailContext(db, params.event, params.registrationId, params);
+  const { registration, user, dayWaitlist } = context;
+  const details = registrationDetailsData(context, params.recipientEmailOverride ?? user.email);
   const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
   const { manageToken, manageUrl } = await registrationManageCapability(params.appBaseUrl, params.event, registration);
   const recipientEmail = params.recipientEmailOverride ?? user.email;
@@ -158,30 +223,20 @@ export async function prepareRegistrationStatusEmail(
     capabilityLinkValues: [manageUrl],
     data: {
       ...buildEventEmailVariables(params.event, params.appBaseUrl),
-      firstName: user.first_name ?? "",
-      lastName: user.last_name ?? "",
-      email: recipientEmail,
-      organizationName: user.organization_name ?? "",
-      jobTitle: user.job_title ?? "",
-      attendanceLabel: attendanceData.attendanceLabel,
-      attendanceSummary: attendanceData.dayAttendance.length
-        ? attendanceData.dayAttendance
-            .map(
-              (day) =>
-                `${day.dayLabel}: ${day.attendanceLabel}${day.statusLabel === day.attendanceLabel ? "" : ` — ${day.statusLabel}`}`,
-            )
+      ...details,
+      attendanceSummary: details.dayAttendance.length
+        ? details.dayAttendance
+            .map((day) => `${day.dayLabel}: ${day.attendanceLabel}${day.statusNote ? ` — ${day.statusNote}` : ""}`)
             .join("; ")
-        : attendanceData.attendanceLabel,
-      dayAttendance: attendanceData.dayAttendance,
-      dayWaitlist,
-      customAnswerRows,
-      acceptedTermsText: acceptedTermsText || undefined,
+        : details.attendanceLabel,
       ...statusData,
       manageUrl,
+      paymentUrl: ticketPageUrl(params.appBaseUrl, params.event.slug),
       myAgendaUrl: myAgendaPageUrl(params.appBaseUrl, params.event),
       shareUrl: null,
       waitlistOfferNotice: params.noticeKind === "waitlist_offer",
       adminAdmitNotice: params.noticeKind === "admin_admit",
+      unpaidRelease: params.unpaidRelease === true,
     },
   });
   return { outboxId: prepared.id, statement: prepared.statement, manageToken, manageUrl };
@@ -213,10 +268,9 @@ export async function prepareRegistrationConfirmedEmail(
   db: DatabaseLike,
   params: RegistrationConfirmedEmailParams,
 ): Promise<{ outboxId: string; statement: StatementLike; manageUrl: string }> {
-  const { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText } =
-    await loadRegistrationEmailContext(db, params.event, params.registrationId, params);
+  const context = await loadRegistrationEmailContext(db, params.event, params.registrationId, params);
+  const { registration, user, dayAttendance, dayWaitlist } = context;
   const recipientEmail = params.recipientEmailOverride ?? user.email;
-  const attendanceData = buildAttendanceEmailData(dayAttendance, dayWaitlist);
   const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
   const { manageUrl } = await registrationManageCapability(params.appBaseUrl, params.event, registration);
   const rsvpAddress = params.internalSigningSecret
@@ -259,19 +313,11 @@ export async function prepareRegistrationConfirmedEmail(
     data: {
       hasCalendarInvite: calendar.files.length > 0,
       ...buildEventEmailVariables(params.event, params.appBaseUrl),
-      firstName: user.first_name ?? "",
-      lastName: user.last_name ?? "",
-      email: recipientEmail,
-      organizationName: user.organization_name ?? "",
-      jobTitle: user.job_title ?? "",
-      attendanceLabel: attendanceData.attendanceLabel,
-      dayAttendance: attendanceData.dayAttendance,
-      dayWaitlist,
-      customAnswerRows,
-      acceptedTermsText: acceptedTermsText || undefined,
+      ...registrationDetailsData(context, recipientEmail),
       ...statusData,
       registrationId: registration.id,
       manageUrl,
+      paymentUrl: ticketPageUrl(params.appBaseUrl, params.event.slug),
       myAgendaUrl: myAgendaPageUrl(params.appBaseUrl, params.event),
       shareUrl,
       ...(shareUrl && params.referralCode
@@ -314,10 +360,9 @@ export async function prepareRegistrationConfirmationEmail(
   db: DatabaseLike,
   params: RegistrationConfirmationEmailParams,
 ): Promise<{ outboxId: string; statement: StatementLike; confirmationUrl: string }> {
-  const { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText } =
-    await loadRegistrationEmailContext(db, params.event, params.registrationId, params);
+  const context = await loadRegistrationEmailContext(db, params.event, params.registrationId, params);
+  const { registration, user, dayWaitlist } = context;
   const recipientEmail = params.recipientEmail ?? user.email;
-  const attendanceData = buildAttendanceEmailData(dayAttendance, dayWaitlist);
   const statusData = buildRegistrationEmailStatusData("pending_email_confirmation", dayWaitlist);
   const kind = params.kind ?? "registration";
   const confirmationUrl = await registrationConfirmationUrl(
@@ -343,18 +388,10 @@ export async function prepareRegistrationConfirmationEmail(
     capabilityLinkValues: [confirmationUrl],
     data: {
       ...buildEventEmailVariables(params.event, params.appBaseUrl),
-      firstName: user.first_name ?? "",
-      lastName: user.last_name ?? "",
-      email: recipientEmail,
-      organizationName: user.organization_name ?? "",
-      jobTitle: user.job_title ?? "",
-      attendanceLabel: attendanceData.attendanceLabel,
-      dayAttendance: attendanceData.dayAttendance,
-      customAnswerRows,
-      dayWaitlist,
-      acceptedTermsText: acceptedTermsText || undefined,
+      ...registrationDetailsData(context, recipientEmail),
       ...statusData,
       registrationId: registration.id,
+      paymentUrl: ticketPageUrl(params.appBaseUrl, params.event.slug),
       confirmationUrl,
       emailChangeConfirmation: kind === "email_change_confirmation",
       currentEmail: params.currentEmail,

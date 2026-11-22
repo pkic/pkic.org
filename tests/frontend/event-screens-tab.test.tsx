@@ -154,7 +154,7 @@ describe("Screens tab visibility", () => {
   it("shows the tab to staff who manage screens or operate the rooms, and to no one else", () => {
     grant("agenda:screens_manage");
     expect(hasTab()).toBe(true);
-    grant("agenda:live_moderate");
+    grant("agenda:live_studio");
     expect(hasTab()).toBe(true);
     grant("agenda:read");
     expect(hasTab()).toBe(false);

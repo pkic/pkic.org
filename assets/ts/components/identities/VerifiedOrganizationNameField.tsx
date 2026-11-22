@@ -5,14 +5,12 @@ import { TextInput } from "../../ui/TextControl";
 
 export function VerifiedOrganizationNameField({
   domain,
-  reviewRequired,
   value,
   disabled,
   onChange,
   validation,
 }: {
   domain: string;
-  reviewRequired?: boolean;
   value: string;
   disabled?: boolean;
   onChange: (value: string) => void;
@@ -22,13 +20,7 @@ export function VerifiedOrganizationNameField({
     <Field
       label="Organization name"
       required
-      help={
-        reviewRequired && domain
-          ? `This organization will be linked to ${domain}. If it already has a pending application, its affiliation requires review.`
-          : domain
-            ? `This organization will be linked to your verified email domain ${domain}.`
-            : undefined
-      }
+      help={domain ? `This organization will be linked to your verified email domain ${domain}.` : undefined}
       {...validation}
     >
       {(control) => (

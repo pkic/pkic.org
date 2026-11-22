@@ -1,8 +1,9 @@
 import type { FormFieldDefinition } from "../services/forms";
 import { parseFormFieldOptions } from "../../../assets/shared/schemas/form-field-rules";
+import { countryName, isCountryCode } from "../../../assets/shared/countries";
 import { parseJsonSafe } from "./json";
 
-type CustomAnswerField = Pick<FormFieldDefinition, "options">;
+type CustomAnswerField = Pick<FormFieldDefinition, "options"> & Partial<Pick<FormFieldDefinition, "validation">>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -31,6 +32,7 @@ export function formatCustomAnswerValue(value: unknown, field?: CustomAnswerFiel
     if (typeof entry === "boolean") return entry ? "Yes" : "No";
     if (isRecord(entry)) return formatCustomAnswerObject(entry);
     const text = String(entry);
+    if (field?.validation?.format === "iso_country" && isCountryCode(text)) return countryName(text, "en-US");
     return optionLabels.get(text) ?? text;
   };
 

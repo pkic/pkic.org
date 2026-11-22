@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { render } from "preact";
+import { liveOutputComposition } from "../../assets/shared/schemas/live-session-stage";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { defaultLiveTimerGraphic } from "../../assets/shared/schemas/live-session-timer";
@@ -45,6 +46,7 @@ async function draw(state: LiveRoomState, now: () => number) {
   return {
     clock: () => host!.querySelector(".pk-live-stage-display__clock")?.textContent,
     countdowns: () => [...host!.querySelectorAll(".pk-live-stage-display__countdown")].map((node) => node.textContent),
+    marks: () => [...host!.querySelectorAll(".pk-live-timer-mark__time")].map((node) => node.textContent),
   };
 }
 
@@ -69,7 +71,9 @@ it("moves on with the synced clock while the countdowns keep pace", async () => 
 
 it("keeps the clock in the top row, out of the countdowns, which fall back to Program's", async () => {
   const shown = await draw(stageClockState, syncedClock().now);
+  // Both as plain digits: the stage display draws no mark, whatever the stream shows.
   expect(shown.countdowns()).toEqual(["15:00", "0:42"]);
+  expect(shown.marks()).toEqual([]);
   // With only a clock of its own, the stage display shows Program's timers and the clock above them.
   const clockOnly = timersOn(stageClockState, ["clock"]);
   const alone = await draw(clockOnly, syncedClock().now);
@@ -81,6 +85,9 @@ const timersOn = (state: LiveRoomState, ids: string[]): LiveRoomState => ({
   ...state,
   outputs: {
     ...state.outputs,
-    "stage-display": { ...state.outputs["stage-display"], timerGraphics: ids.map(defaultLiveTimerGraphic) },
+    "stage-display": {
+      ...liveOutputComposition(state.outputs, "stage-display"),
+      timerGraphics: ids.map(defaultLiveTimerGraphic),
+    },
   },
 });

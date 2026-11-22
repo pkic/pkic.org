@@ -1,14 +1,19 @@
+import { buildEventEmailVariables } from "../email/event-email-variables";
 import { inviteDeclineSchema } from "../../../assets/shared/schemas/registration";
 import { AppError } from "../errors";
-import type { DatabaseLike } from "../types";
-import { buildEventEmailVariables } from "./event-presentation";
+import type { DatabaseLike, StatementLike } from "../types";
+import { isAuthorizationGuardFailure } from "../db/authorization-guard";
 import { getEventById } from "./events";
 import { inviteDeclineUrl, proposalPageUrl, registrationPageUrl } from "./frontend-links";
 import { bulkCreateInvites } from "./invite-bulk";
 import { findInviteByToken, isStaleInviteTransition, prepareDeclineInviteStatements } from "./invite-lifecycle";
+import type { InviteRecord } from "./invite-types";
 import type { z } from "zod";
 import { effectiveStoredInviteExpiry } from "../invite-validity";
-import { buildEventInviteRecipientVariables } from "./event-invite-email-variables";
+import {
+  buildEventInvitationMessageVariables,
+  buildEventInviteRecipientVariables,
+} from "./event-invite-email-variables";
 
 type InviteDeclineBody = z.infer<typeof inviteDeclineSchema>;
 
@@ -35,6 +40,19 @@ export async function declineAndForwardInvite(
   input: DeclineAndForwardInviteInput,
 ): Promise<DeclineAndForwardInviteResult> {
   const invite = await findInviteByToken(db, input.token, input.signingSecret, input.inviteId ?? null);
+  return declineAndForwardResolvedInvite(db, invite, input);
+}
+
+/**
+ * The same decline for an invitation already resolved by its caller: the
+ * emailed link resolves it by token, the signed-in invitee by their address.
+ * `guards` recheck the caller's authorization inside the decline batch.
+ */
+export async function declineAndForwardResolvedInvite(
+  db: DatabaseLike,
+  invite: InviteRecord,
+  input: { body: InviteDeclineBody; appBaseUrl: string; guards?: StatementLike[] },
+): Promise<DeclineAndForwardInviteResult> {
   const event = await getEventById(db, invite.event_id);
 
   let outcomes;
@@ -48,13 +66,16 @@ export async function declineAndForwardInvite(
         inviteeLastName: contact.lastName ?? null,
         sourceType: "declined-forward",
       })),
-      additionalStatements: prepareDeclineInviteStatements(db, invite, {
-        inviteId: invite.id,
-        reasonCode: input.body.reasonCode,
-        reasonNote: input.body.reasonNote,
-        unsubscribeFuture: input.body.unsubscribeFuture,
-        npsScore: input.body.npsScore,
-      }),
+      additionalStatements: [
+        ...(input.guards ?? []),
+        ...prepareDeclineInviteStatements(db, invite, {
+          inviteId: invite.id,
+          reasonCode: input.body.reasonCode,
+          reasonNote: input.body.reasonNote,
+          unsubscribeFuture: input.body.unsubscribeFuture,
+          npsScore: input.body.npsScore,
+        }),
+      ],
       buildEmailRow: ({ inviteId, token, email, invite: contact, linkSecretFingerprint }) => {
         const registrationUrl =
           invite.invite_type === "attendee"
@@ -86,6 +107,7 @@ export async function declineAndForwardInvite(
               { firstName: contact.inviteeFirstName, lastName: contact.inviteeLastName },
               invite.invite_type === "attendee" ? "Attendee" : "Speaker",
             ),
+            ...(invite.invite_type === "attendee" ? buildEventInvitationMessageVariables(event) : {}),
             registrationUrl,
             proposalUrl,
             declineUrl,
@@ -94,7 +116,7 @@ export async function declineAndForwardInvite(
       },
     });
   } catch (error) {
-    if (!isStaleInviteTransition(error)) throw error;
+    if (!isStaleInviteTransition(error) && !isAuthorizationGuardFailure(error)) throw error;
     throw new AppError(409, "INVITE_CHANGED", "Invite state changed; please retry");
   }
 

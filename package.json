@@ -79,7 +79,6 @@
     "check:url-state": "node scripts/check-url-state-contracts.mjs"
   },
   "dependencies": {
-    "@astrojs/markdown-remark": "^7.3.4",
     "@block65/webcrypto-web-push": "2.0.0",
     "@cloudflare/codemode": "^0.3.8",
     "@cloudflare/workers-oauth-provider": "^1.2.4",
@@ -116,8 +115,15 @@
     "preact": "^10.29.2",
     "qr-scanner": "^1.4.2",
     "qrcode": "^1.5.4",
+    "rehype-raw": "^7.0.0",
+    "rehype-stringify": "^10.0.1",
     "remark-gemoji": "^8.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
+    "remark-rehype": "^11.1.2",
+    "unified": "^11.0.5",
     "unist-util-visit": "^5.1.0",
+    "vfile": "^6.0.3",
     "wouter": "^3.10.0",
     "yaml": "^2.9.0",
     "zod": "^4.6.6"

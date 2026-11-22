@@ -74,6 +74,12 @@
     block-size: 100%;
     min-block-size: 0;
   }
+  /* Under a finger the buttons beside it grow to the touch size, and the view choice grows with them. */
+  @media (any-pointer: coarse) {
+    .pk-content-agenda__controls .pk-segmented {
+      block-size: var(--pk-toolbar-height);
+    }
+  }
   .pk-content-agenda__controls .pk-btn {
     padding-block: 0;
     background: var(--pk-surface);
@@ -551,6 +557,31 @@
       gap: 0.5rem 1.25rem;
       padding-block: 0.875rem;
       border-block-end: 1px solid var(--pk-line-soft);
+    }
+    /* My agenda: slots without one of the reader's sessions leave the list. */
+    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__slot[data-agenda-skipped] {
+      display: none;
+    }
+    /* Where slots were left out, the next one opens under a dashed rule that says how long passes there. */
+    .pk-content-agenda[data-agenda-view="list"]
+      .pk-content-agenda__timeline
+      .pk-content-agenda__slot[data-agenda-gap]::before {
+      content: attr(data-agenda-gap);
+      grid-column: 1 / -1;
+      grid-row: 1;
+      color: var(--pk-ink-muted);
+      font-size: var(--pk-agenda-type-13);
+      text-align: center;
+      background:
+        repeating-linear-gradient(90deg, var(--pk-line-strong) 0 0.25rem, transparent 0.25rem 0.5rem) left center /
+          calc(50% - 5rem) 1px no-repeat,
+        repeating-linear-gradient(90deg, var(--pk-line-strong) 0 0.25rem, transparent 0.25rem 0.5rem) right center /
+          calc(50% - 5rem) 1px no-repeat;
+    }
+    .pk-content-agenda[data-agenda-view="list"]
+      .pk-content-agenda__slot[data-agenda-gap]
+      > th.pk-content-agenda__time {
+      grid-row: 2;
     }
     .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__slot > th,
     .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__slot > td {
@@ -1613,9 +1644,60 @@
     font-weight: 700;
     text-align: center;
   }
-  /* On an event day, today's finished slots fold behind one "Earlier today" row in the phone list. */
+  /*
+   * On an event day, today's finished slots fold behind one "Earlier today" row: in the phone list, and at
+   * any width where the agenda is shown compactly beside something else.
+   */
   .pk-content-agenda__earlier {
     display: none;
+  }
+  @media screen {
+    .pk-content-agenda[data-agenda-compact][data-agenda-view="list"] .pk-content-agenda__earlier:not([hidden]) {
+      display: block;
+      padding-block: 0.75rem 2px;
+    }
+    .pk-content-agenda[data-agenda-compact] .pk-content-agenda__earlier > [data-agenda-earlier-toggle] {
+      border-color: var(--agenda-control-line);
+      color: var(--pk-ink-muted);
+    }
+    .pk-content-agenda[data-agenda-compact]
+      .pk-content-agenda__earlier
+      > [data-agenda-earlier-toggle][aria-expanded="true"]
+      svg {
+      transform: rotate(180deg);
+    }
+    .pk-content-agenda[data-agenda-compact][data-agenda-view="list"]
+      .pk-content-agenda__day:not([data-agenda-earlier-open])
+      .pk-content-agenda__slot[data-agenda-finished] {
+      display: none;
+    }
+    /* Beside something else there is no room for a column of times: each is a small line above its card. */
+    .pk-content-agenda[data-agenda-compact][data-agenda-view="list"]
+      .pk-content-agenda__timeline
+      .pk-content-agenda__slot {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0.25rem;
+      padding-block: 0.5rem;
+    }
+    .pk-content-agenda[data-agenda-compact][data-agenda-view="list"]
+      .pk-content-agenda__slot
+      > th.pk-content-agenda__time {
+      grid-row: auto;
+      padding-block: 0;
+    }
+    .pk-content-agenda[data-agenda-compact][data-agenda-view="list"] .pk-content-agenda__slot > td {
+      grid-column: 1;
+    }
+    .pk-content-agenda[data-agenda-compact][data-agenda-view="list"] .pk-content-agenda__clocks {
+      flex-direction: row;
+      align-items: baseline;
+      gap: 0.625rem;
+    }
+    .pk-content-agenda[data-agenda-compact][data-agenda-view="list"] [data-agenda-clock] > time {
+      color: var(--pk-ink-muted);
+      font-size: var(--pk-agenda-type-13);
+      font-weight: 600;
+    }
   }
   @media screen and (max-width: 47.499rem) {
     .pk-content-agenda__toolbar-actions > [data-agenda-filters-toggle] {

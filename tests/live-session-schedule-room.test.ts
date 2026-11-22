@@ -63,7 +63,7 @@ it("publishes independent room times, preserves the shot on refusal, and retains
   expect(stage.schedule?.rooms.map((room) => room.startAt)).toEqual([basis.late.startAt, basis.early.startAt]);
   expect(stage.schedule?.rooms.map((room) => room.title)).toEqual([basis.late.title, basis.early.title]);
   attendee.send({ type: "stage.schedule", schedule: null });
-  expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
+  expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_STUDIO_REQUIRED");
   operator.send({
     type: "stage.set",
     questionId: null,

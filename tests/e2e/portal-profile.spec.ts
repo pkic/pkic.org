@@ -29,7 +29,8 @@ test("a member edits their name fields and toggles organization-page visibility"
   await approveMemberThroughReview(page, { email, name: `Profile Fields ${suffix}`, organizationName });
 
   await page.context().clearCookies();
-  await signInToPortal(page, email);
+  // The account also holds the individual identity it signed up with; the visibility switch is the organization's.
+  await signInToPortal(page, email, { continueAs: organizationName });
   await openMyProfile(page);
   // The record opens with the member, not with a page title: `ProfileHeader`
   // names the subject, and the retired "My Profile" page said nothing the

@@ -161,6 +161,7 @@ export async function runWaitlistPromotionCycle(
        e.ends_at,
        e.base_path,
        e.settings_json,
+       e.visibility,
        e.capacity_in_person
      FROM events e
      WHERE EXISTS (

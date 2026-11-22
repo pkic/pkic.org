@@ -1,3 +1,4 @@
+import { buildEventEmailVariables } from "../email/event-email-variables";
 import type {
   IndependentCapacityReview,
   independentCapacityDecisionSchema,
@@ -12,7 +13,7 @@ import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 import { nowIso } from "../utils/time";
 import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
-import { buildEventEmailVariables, getEventById } from "./events";
+import { getEventById } from "./events";
 import { speakerParticipationPageUrl } from "./frontend-links";
 import { requireProposalSpeakerPermission } from "./proposal-speaker-access";
 import {

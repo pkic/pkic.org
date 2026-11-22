@@ -135,7 +135,6 @@ export function EventSettingsSummary({
                 ...(event.sourceMode === "portal"
                   ? []
                   : [{ term: "Registration mode", value: EVENT_REGISTRATION_POLICY_LABELS[event.registrationPolicy] }]),
-                { term: "Invite limit per attendee", value: event.inviteLimitAttendee },
                 { term: "User retention (days)", value: event.userRetentionDays ?? "No policy" },
                 ...(event.sourceMode === "portal"
                   ? []
