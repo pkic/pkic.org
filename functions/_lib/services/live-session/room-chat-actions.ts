@@ -24,6 +24,7 @@ import { LIVE_PARTICIPATION_REFUSAL } from "./room-participation-refusal";
 import { chatAudienceKey, seesChatOccurrence } from "./room-chat-audience";
 import type { LiveChatQuestion } from "./location-chat-on-air";
 import type { LiveRoomContentChecks } from "./room-content-checks";
+import { LIVE_CHAT_CHECK_WAIT_MS } from "./room-chat-checks";
 
 type ChatCommand = Extract<LiveRoomClientMessage, { type: `chat.${string}` }>;
 type Actor = { userId: string; name: string };
@@ -255,14 +256,24 @@ export class LiveRoomChatActions {
     return true;
   }
 
+  /** How long a check may hold a message back before everyone receives it; a later verdict still applies. */
+  private checkWaitMs = LIVE_CHAT_CHECK_WAIT_MS;
+
   /** Starts the check once its author has the message, so its verdict always follows the message itself. */
   private check(row: LiveChatRow): void {
+    const expiry = setTimeout(() => {
+      // Still the same words: a check that has not answered by now lets them go on.
+      if (this.chat.message(row.id)?.body === row.body)
+        void this.releaseFromCheck(row.id).catch((error: unknown) => console.error("Live chat release failed", error));
+    }, this.checkWaitMs);
     this.ctx.waitUntil(
-      this.settleCheck(row).catch(async (error: unknown) => {
-        console.error("Live chat check failed", error);
-        // A check that fails lets the message go on rather than keeping it from the room.
-        await this.releaseFromCheck(row.id).catch(() => undefined);
-      }),
+      this.settleCheck(row)
+        .catch(async (error: unknown) => {
+          console.error("Live chat check failed", error);
+          // A check that fails lets the message go on rather than keeping it from the room.
+          await this.releaseFromCheck(row.id).catch(() => undefined);
+        })
+        .finally(() => clearTimeout(expiry)),
     );
   }
 
