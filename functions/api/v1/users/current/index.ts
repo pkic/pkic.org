@@ -21,7 +21,7 @@ export const CurrentUserPatch = openApiRoute(myProfileUpdateRouteSchema, async (
   const account = await requireOwnAccountFromRequest(db, c.req.raw, c.env);
   const guarded = guardOwnAccountMutationDatabase(db, account);
   const profile = account.member
-    ? await updateMyProfile(guarded, account.member, data.body)
+    ? await updateMyProfile(guarded, account.member, data.body, { ai: c.env.AI })
     : await updateAccountProfile(guarded, account, data.body);
   return json(profile);
 });

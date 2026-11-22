@@ -64,6 +64,13 @@ export function prepareIncorrectRepresentationRemoval(
         ]
       : []),
     db.prepare("DELETE FROM organization_link_notices WHERE identity_id=? AND user_id=?").bind(identityId, ownerId),
+    // The bio's automatic check verdict goes with the identity it read; it has no foreign key of its own.
+    db
+      .prepare(
+        `DELETE FROM content_check_results WHERE kind='person_profile' AND subject_id=?
+          AND EXISTS(SELECT 1 FROM identities WHERE id=? AND user_id=?)`,
+      )
+      .bind(identityId, identityId, ownerId),
     db.prepare("DELETE FROM affiliation_reviews WHERE resolved_identity_id=? AND user_id=?").bind(identityId, ownerId),
     ...prepareIncorrectRepresentationErasure(
       db,

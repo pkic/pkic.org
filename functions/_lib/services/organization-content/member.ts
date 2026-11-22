@@ -26,7 +26,9 @@ import {
   type ContentReviewFieldInput,
   type ReviewRow,
 } from "./model";
-import type { AuthMember, DatabaseLike, StatementLike } from "../../types";
+import type { AuthMember, DatabaseLike, Env, StatementLike } from "../../types";
+import { screenProfileContent } from "../content-checks/profile-screening";
+import { prepareStoreContentCheckResult } from "../content-checks/results";
 import { prepareStorageDeletion } from "../storage-deletion-outbox";
 import {
   prepareOrganizationContentReviewDigestDeliveryGuard,
@@ -90,10 +92,23 @@ export interface SubmitContentChangeResult {
   organizationName: string;
 }
 
+export interface OrgContentScreening {
+  ai: Env["AI"];
+  /** The contact saw the advice and submits as written; only a block still refuses. */
+  adviceAcknowledged: boolean;
+}
+
+/** The text of a member page that a reader sees; links and addresses are not read by the check. */
+function pageText(changes: Record<string, unknown>, field: "slogan" | "description" | "contentMarkdown"): string {
+  const value = changes[field];
+  return typeof value === "string" ? value.trim() : "";
+}
+
 export async function submitOrgContentChange(
   db: DatabaseLike,
   member: AuthMember,
   input: ContentReviewFieldInput,
+  screening: OrgContentScreening = { ai: undefined, adviceAcknowledged: true },
 ): Promise<SubmitContentChangeResult> {
   const org = await requireOrgContact(db, member);
   if (await fetchPendingReview(db, org.id)) {
@@ -108,6 +123,20 @@ export async function submitOrgContentChange(
   if (Object.keys(changedFields).length === 0) {
     throw new AppError(422, "NO_CHANGES", "No editable fields were submitted");
   }
+
+  // The text is read before anything is written: a blocked page is refused here, advice is given once.
+  const slogan = pageText(changedFields, "slogan");
+  const description = pageText(changedFields, "description");
+  const page = pageText(changedFields, "contentMarkdown");
+  const verdict =
+    slogan || description || page
+      ? await screenProfileContent({ AI: screening.ai }, db, {
+          kind: "organization_profile",
+          subject: { title: org.name, slogan, description, text: page },
+          adviceAcknowledged: screening.adviceAcknowledged,
+          field: page && !description ? "contentMarkdown" : description ? "description" : "slogan",
+        })
+      : null;
 
   const now = nowIso();
   const id = uuid();
@@ -136,6 +165,7 @@ export async function submitOrgContentChange(
         { organizationId: org.id, changedFields: Object.keys(changedFields) },
         now,
       ),
+      ...(verdict ? [prepareStoreContentCheckResult(db, "organization_profile", id, verdict, now)] : []),
     ]);
   } catch (error) {
     if (isAuthorizationGuardFailure(error)) {

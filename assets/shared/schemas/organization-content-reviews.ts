@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { trimmedString } from "./api-common";
+import { contentCheckResultSchema } from "./content-checks";
 import { databaseIdSchema } from "./identifiers";
 import {
   CONTENT_REVIEW_STATUSES,
@@ -76,6 +77,8 @@ export const organizationContentReviewDetailSchema = organizationContentReviewSu
   diff: z.array(organizationContentReviewDiffEntrySchema),
   logoStagingR2Key: z.string().nullable(),
   currentLogoR2Key: z.string().nullable(),
+  /** The automatic check's reading of the proposed text, or null when it was never checked. */
+  automaticReview: contentCheckResultSchema.nullable().default(null),
 });
 export const organizationContentReviewDetailResponseSchema = z.object({
   review: organizationContentReviewDetailSchema,

@@ -29,7 +29,8 @@ export const OrganizationContentReviewPost = openApiRoute(
   organizationContentReviewCreateRouteSchema,
   async (c: AdminContext, data) => {
     const { db, member } = await requireOrganizationMemberMutation(c, data.params.organizationId);
-    const { review } = await submitOrgContentChange(db, member, data.body);
+    const { adviceAcknowledged, ...content } = data.body;
+    const { review } = await submitOrgContentChange(db, member, content, { ai: c.env.AI, adviceAcknowledged });
     return json(organizationContentReviewCreateResponseSchema.parse({ review }));
   },
 );

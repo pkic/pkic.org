@@ -10,7 +10,12 @@
 import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import { useContractForm } from "../../hooks/useContractForm";
-import { identityProfileUpdateSchema, type IdentityProfileUpdate } from "../../../shared/schemas/own-identity-profile";
+import { PROFILE_CHECK_ADVICE } from "../../../shared/content-checks";
+import {
+  identityProfileUpdateSchema,
+  type OwnIdentityProfileUpdate,
+} from "../../../shared/schemas/own-identity-profile";
+import { ApiClientError } from "../../shared/api-client";
 import { withOrganizationJobTitle } from "../../../shared/schemas/identity-job-title";
 import { friendlyErrorMessage } from "../ErrorAlert";
 import { Alert } from "../../ui/Alert";
@@ -44,7 +49,7 @@ export function IdentityProfileForm({
   editor: "owner" | "staff";
   purpose?: "profile" | "speaker";
   /** Stores the checked edit on the identity's resource. */
-  save: (body: IdentityProfileUpdate) => Promise<unknown>;
+  save: (body: OwnIdentityProfileUpdate) => Promise<unknown>;
   onSaved: () => void;
   /** The way back without saving: a link to the page it came from, or a button that closes it. */
   cancel: ComponentChildren;
@@ -52,6 +57,8 @@ export function IdentityProfileForm({
   const [draft, setDraft] = useState<IdentityProfileDraft>(() => identityProfileDraft(identity));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // After the automatic check's advice, saving again keeps the text as written; editing it asks again.
+  const [adviceAcknowledged, setAdviceAcknowledged] = useState(false);
   // Checked by the contract the route parses, live and on submit.
   const form = useContractForm(
     withOrganizationJobTitle(identityProfileUpdateSchema, {
@@ -71,9 +78,10 @@ export function IdentityProfileForm({
     }
     setSaving(true);
     try {
-      await save(checked.data);
+      await save(adviceAcknowledged ? { ...checked.data, adviceAcknowledged } : checked.data);
       onSaved();
     } catch (cause) {
+      if (cause instanceof ApiClientError && cause.code === PROFILE_CHECK_ADVICE) setAdviceAcknowledged(true);
       setError(form.refuse(cause));
     } finally {
       setSaving(false);
@@ -92,7 +100,10 @@ export function IdentityProfileForm({
       <IdentityEditNotice editor={editor} />
       <IdentityProfileFields
         draft={draft}
-        onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
+        onChange={(patch) => {
+          setAdviceAcknowledged(false);
+          setDraft((current) => ({ ...current, ...patch }));
+        }}
         of={form.of}
         organizationId={identity.organizationId}
         organizationName={identity.organizationName}

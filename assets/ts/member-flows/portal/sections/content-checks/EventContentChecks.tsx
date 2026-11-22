@@ -7,8 +7,8 @@
 import { useState } from "preact/hooks";
 import {
   CONTENT_CHECK_KIND_LABELS,
-  CONTENT_CHECK_KINDS,
-  type ContentCheckKind,
+  EVENT_CONTENT_CHECK_KINDS,
+  type EventContentCheckKind,
   type ContentCheckQuestion,
 } from "../../../../../shared/content-checks";
 import {
@@ -30,8 +30,8 @@ import type { ContentCheckQuestionRow } from "./ContentCheckQuestionTable";
 import { ContentCheckTrial } from "./ContentCheckTrial";
 import { EventContentCheckContext } from "./EventContentCheckContext";
 
-function isKind(value: string | undefined): value is ContentCheckKind {
-  return CONTENT_CHECK_KINDS.includes(value as ContentCheckKind);
+function isKind(value: string | undefined): value is EventContentCheckKind {
+  return EVENT_CONTENT_CHECK_KINDS.includes(value as EventContentCheckKind);
 }
 
 /** Every question in one list: PKIC-wide ones first, each marked off or replaced, then the event's own. */
@@ -138,7 +138,7 @@ export function EventContentChecks({
   slug: string;
   kind?: string;
   canEdit: boolean;
-  hrefFor: (kind: ContentCheckKind) => string;
+  hrefFor: (kind: EventContentCheckKind) => string;
 }) {
   const kind = isKind(requested) ? requested : "chat_message";
   const apiPath = `/api/v1/events/${encodeURIComponent(slug)}/content-checks/${kind}`;
@@ -147,9 +147,9 @@ export function EventContentChecks({
     <div class="pk pk-stack">
       <Tabs
         label="Kinds of content"
-        items={CONTENT_CHECK_KINDS.map((key) => ({ key, label: CONTENT_CHECK_KIND_LABELS[key] }))}
+        items={EVENT_CONTENT_CHECK_KINDS.map((key) => ({ key, label: CONTENT_CHECK_KIND_LABELS[key] }))}
         active={kind}
-        hrefFor={(key) => hrefFor(key as ContentCheckKind)}
+        hrefFor={(key) => hrefFor(key as EventContentCheckKind)}
       />
       {state.loading && !state.data ? (
         <Spinner label="Loading the check…" />

@@ -8,6 +8,7 @@ import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import { all, first } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
 import { sha256Hex } from "../../utils/crypto";
+import { readContentCheckResults } from "../content-checks/results";
 import { publicUserHeadshotPath } from "../user-headshot";
 import { creditedIdentityIdSql } from "./credited-identity";
 import { agendaSpeakerDisplayNameSql } from "./speaker-name";
@@ -120,8 +121,17 @@ export async function listSpeakerProfileReviews(
     `${speakerProfilesSql} SELECT ${speakerProfileColumns} FROM reviewed_profiles ${where} ORDER BY display_name ${query.sort === "-displayName" ? "DESC" : "ASC"},user_id,identity_id LIMIT ? OFFSET ?`,
     [...bindings, query.limit, query.offset],
   );
+  const profiles = await Promise.all(rows.map(decodeSpeakerProfile));
+  const verdicts = await readContentCheckResults(
+    db,
+    "person_profile",
+    profiles.flatMap((profile) => (profile.identityId ? [{ id: profile.identityId }] : [])),
+  );
   return {
-    profiles: await Promise.all(rows.map(decodeSpeakerProfile)),
+    profiles: profiles.map((profile) => ({
+      ...profile,
+      automaticReview: profile.identityId ? (verdicts.get(profile.identityId) ?? null) : null,
+    })),
     page: buildPageInfo(query.limit, query.offset, count?.total ?? 0, rows.length),
   };
 }

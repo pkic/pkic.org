@@ -9,6 +9,7 @@ import {
   effectiveContentCheck,
   type ContentCheckEventAdditions,
   type ContentCheckKind,
+  type EventContentCheckKind,
   type ContentCheckQuestion,
   type ContentCheckSettings,
   type EffectiveContentCheck,
@@ -173,7 +174,7 @@ export async function listContentCheckSettings(db: DatabaseLike): Promise<Conten
 export async function readEventContentCheck(
   db: DatabaseLike,
   eventId: string,
-  kind: ContentCheckKind,
+  kind: EventContentCheckKind,
 ): Promise<EventContentCheckResponse> {
   const results = await db.batch(prepareContentCheckSettingsRead(db, eventId, kind));
   const decoded = decodeContentCheckSettings(results, [kind]);
@@ -240,7 +241,7 @@ export async function saveEventContentCheckAdditions(
   db: DatabaseLike,
   actor: UserBackedAuthAdmin,
   eventId: string,
-  kind: ContentCheckKind,
+  kind: EventContentCheckKind,
   input: ContentCheckEventAdditionsInput,
 ): Promise<{ revision: number }> {
   const now = nowIso();

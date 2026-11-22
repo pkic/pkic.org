@@ -23,6 +23,7 @@ import {
   ORGANIZATION_URL_FIELD_ORDER,
   organizationPath,
 } from "../../../shared/organization-content";
+import { PROFILE_CHECK_ADVICE } from "../../../../shared/content-checks";
 import { successResponseSchema } from "../../../../shared/schemas/api-common";
 import {
   organizationContentReviewCreateSchema,
@@ -141,8 +142,11 @@ function ContentEditForm({
   const [links, setLinks] = useState<string[]>(draft.links);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // After the automatic check's advice, submitting again sends the text as written; editing it asks again.
+  const [adviceAcknowledged, setAdviceAcknowledged] = useState(false);
 
   function setField(key: EditableField, value: string): void {
+    setAdviceAcknowledged(false);
     setForm((f) => ({ ...f, [key]: value }));
   }
 
@@ -171,12 +175,13 @@ function ContentEditForm({
     try {
       await postJson(
         `${organizationPath(organizationId)}/content/reviews`,
-        checked.data,
+        { ...checked.data, adviceAcknowledged },
         organizationContentReviewCreateResponseSchema,
       );
       toast("Submitted for staff review", "success");
       await reload();
     } catch (err) {
+      if (err instanceof ApiClientError && err.code === PROFILE_CHECK_ADVICE) setAdviceAcknowledged(true);
       setError(validation.refuse(err));
     } finally {
       setSaving(false);

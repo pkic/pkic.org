@@ -22,6 +22,7 @@ import { RowActions } from "../../../../../../ui/RowActions";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import { Badge } from "../../../../../../ui/Badge";
 import { ExternalLink } from "../../../../../../ui/ExternalLink";
+import { AutomaticReview } from "../../../content-checks/AutomaticReview";
 
 export function speakerProfileReviewColumns(
   canReview: boolean,
@@ -161,6 +162,7 @@ export function ProfileReviewDialog({
           ]}
         />
         {profile.biography ? <Markdown markdown={profile.biography} /> : <p class="pk-muted">No biography provided.</p>}
+        {profile.automaticReview && <AutomaticReview review={profile.automaticReview} />}
         <p class="pk-muted">
           Approval covers this profile across the event. Profile changes require another review. Presentations and
           speaker participation are reviewed separately.

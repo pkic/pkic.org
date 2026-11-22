@@ -12,7 +12,15 @@
  * Nothing is configured per session.
  */
 
-export const CONTENT_CHECK_KINDS = ["chat_message", "audience_question", "proposal", "presentation"] as const;
+/** Kinds an event may add to: its own content. The profile kinds below belong to PKIC alone. */
+export const EVENT_CONTENT_CHECK_KINDS = ["chat_message", "audience_question", "proposal", "presentation"] as const;
+export type EventContentCheckKind = (typeof EVENT_CONTENT_CHECK_KINDS)[number];
+
+/** Kinds that read what members write about themselves; PKIC-wide, never per event. */
+export const PROFILE_CONTENT_CHECK_KINDS = ["organization_profile", "person_profile"] as const;
+export type ProfileContentCheckKind = (typeof PROFILE_CONTENT_CHECK_KINDS)[number];
+
+export const CONTENT_CHECK_KINDS = [...EVENT_CONTENT_CHECK_KINDS, ...PROFILE_CONTENT_CHECK_KINDS] as const;
 export type ContentCheckKind = (typeof CONTENT_CHECK_KINDS)[number];
 
 export const CONTENT_CHECK_KIND_LABELS: Record<ContentCheckKind, string> = {
@@ -20,6 +28,8 @@ export const CONTENT_CHECK_KIND_LABELS: Record<ContentCheckKind, string> = {
   audience_question: "Questions",
   proposal: "Proposals",
   presentation: "Slides",
+  organization_profile: "Member pages",
+  person_profile: "Bios",
 };
 
 /** The model behind every check; the faster one suits chat, the larger one long texts. */
@@ -52,6 +62,9 @@ export const CONTENT_CHECK_MAX_QUESTIONS = 32;
 /** Refusal codes of the proposal screening: a block, or advice the author may set aside by submitting again. */
 export const PROPOSAL_CHECK_BLOCKED = "PROPOSAL_CHECK_BLOCKED";
 export const PROPOSAL_CHECK_ADVICE = "PROPOSAL_CHECK_ADVICE";
+/** Refusal codes of the member page and bio checks, with the same advise-first meaning as the proposal's. */
+export const PROFILE_CHECK_BLOCKED = "PROFILE_CHECK_BLOCKED";
+export const PROFILE_CHECK_ADVICE = "PROFILE_CHECK_ADVICE";
 export const CONTENT_CHECK_QUESTION_ID_PATTERN = /^[a-z][a-z0-9_]{1,39}$/;
 
 export interface ContentCheckFlag {

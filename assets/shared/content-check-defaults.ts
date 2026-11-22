@@ -167,9 +167,101 @@ const PRESENTATION: ContentCheckSettings = {
   ],
 };
 
+const ORGANIZATION_PROFILE: ContentCheckSettings = {
+  enabled: true,
+  model: "clef",
+  context:
+    "This is the public page of a member organization of PKIC, a vendor-neutral consortium on PKI, digital trust and cryptography. A member page describes the organization and what it does in the field, in plain factual terms: who it is, what it works on, and how it takes part. It is not an advertisement. Naming the organization's own products and services factually is fine; selling them, comparing them favorably, or making claims no reader can verify is not. The text is a slogan, a short description and a longer page, and any of them may be empty.",
+  questions: [
+    {
+      id: "commercial",
+      kind: "flag",
+      question:
+        "Is this text commercial: does it sell or advertise products or services with calls to buy, contact sales, request a demo or start a trial, or mention prices, discounts or offers, instead of describing the organization and its work?",
+      adviseAtPercent: 55,
+      blockAtPercent: null,
+      message:
+        "This reads as advertising. Describe what the organization is and does, and leave out calls to buy, prices and offers.",
+    },
+    {
+      id: "biased_claims",
+      kind: "flag",
+      question:
+        "Does this make superlative, comparative or unverifiable claims about the organization or its products, such as leading, best, number one, only, most trusted or unrivaled, or disparage competitors?",
+      adviseAtPercent: 55,
+      blockAtPercent: null,
+      message:
+        "This makes claims that readers cannot verify, such as leading or best. Describe facts about the organization instead.",
+    },
+    {
+      id: "spam",
+      kind: "flag",
+      question:
+        "Is this spam or abuse of the page: repeated or unrelated links, keyword stuffing, text unrelated to the organization, a scam, or random text?",
+      adviseAtPercent: 60,
+      blockAtPercent: 92,
+      message: "This looks like spam rather than a description of the organization.",
+    },
+    {
+      id: "off_topic",
+      kind: "flag",
+      question:
+        "Does this say nothing about the organization and its work, for example because it only covers unrelated topics, politics or personal matters?",
+      adviseAtPercent: 70,
+      blockAtPercent: null,
+      message: "This does not describe the organization and its work.",
+    },
+    { ...CONDUCT, blockAtPercent: 85, message: "This breaks the code of conduct." },
+  ],
+};
+
+const PERSON_PROFILE: ContentCheckSettings = {
+  enabled: true,
+  model: "clef",
+  context:
+    "This is the biography and job title of a person who takes part in PKIC, a vendor-neutral consortium on PKI, digital trust and cryptography; it is shown with their sessions, proposals and registrations, and on organization pages. A good bio is a short professional description of the person, in the first or the third person: their role, their experience and their work in the field. Naming the employer and its work factually is fine. It is not a place to advertise.",
+  questions: [
+    {
+      id: "promotional",
+      kind: "flag",
+      question:
+        "Does this bio promote a company, product, service, event or person instead of describing the person: calls to buy or contact sales, discounts, or marketing language?",
+      adviseAtPercent: 60,
+      blockAtPercent: null,
+      message:
+        "This bio reads as promotion. Describe your role, experience and work, and leave out calls to buy or contact you for offers.",
+    },
+    {
+      id: "spam",
+      kind: "flag",
+      question:
+        "Is this spam or abuse of the profile: repeated or unrelated links, keyword stuffing, a scam, advertising for something unrelated, or random text?",
+      adviseAtPercent: 60,
+      blockAtPercent: 92,
+      message: "This looks like spam rather than a bio.",
+    },
+    {
+      id: "off_topic",
+      kind: "flag",
+      question:
+        "Is this unrelated to a professional bio, for example a joke, a political statement, a rant, or text about someone else?",
+      adviseAtPercent: 70,
+      blockAtPercent: null,
+      message: "This does not read as a professional bio. Describe your role and your work.",
+    },
+    { ...CONDUCT, blockAtPercent: 85, message: "This breaks the code of conduct." },
+    {
+      ...PERSONAL_DATA,
+      message: "This shares private contact details. Keep a bio to your professional work.",
+    },
+  ],
+};
+
 export const DEFAULT_CONTENT_CHECK_SETTINGS: Record<ContentCheckKind, ContentCheckSettings> = {
   chat_message: LIVE_MESSAGE,
   audience_question: LIVE_MESSAGE,
   proposal: PROPOSAL,
   presentation: PRESENTATION,
+  organization_profile: ORGANIZATION_PROFILE,
+  person_profile: PERSON_PROFILE,
 };

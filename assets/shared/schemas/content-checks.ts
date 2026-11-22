@@ -10,14 +10,17 @@ import {
   CONTENT_CHECK_MODELS,
   CONTENT_CHECK_OUTCOMES,
   CONTENT_CHECK_QUESTION_ID_PATTERN,
+  EVENT_CONTENT_CHECK_KINDS,
 } from "../content-checks";
 
 export const contentCheckKindSchema = z.enum(CONTENT_CHECK_KINDS);
+/** The kinds an event may add to; a member page or bio check is PKIC-wide only. */
+export const eventContentCheckKindSchema = z.enum(EVENT_CONTENT_CHECK_KINDS);
 export const contentCheckModelSchema = z.enum(CONTENT_CHECK_MODELS);
 export const contentCheckOutcomeSchema = z.enum(CONTENT_CHECK_OUTCOMES);
 
 export const contentCheckKindParamsSchema = z.object({ kind: contentCheckKindSchema });
-export const eventContentCheckKindParamsSchema = eventSlugParamsSchema.extend({ kind: contentCheckKindSchema });
+export const eventContentCheckKindParamsSchema = eventSlugParamsSchema.extend({ kind: eventContentCheckKindSchema });
 
 const questionIdSchema = z
   .string()
@@ -108,7 +111,7 @@ export const contentCheckSettingsListResponseSchema = z.object({
 });
 
 export const eventContentCheckResponseSchema = z.object({
-  kind: contentCheckKindSchema,
+  kind: eventContentCheckKindSchema,
   settings: contentCheckSettingsResponseSchema,
   additions: z.object({
     revision: z.number().int(),

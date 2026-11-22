@@ -28,14 +28,16 @@ import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { Textarea, TextInput } from "../../../../ui/TextControl";
 
-/** Proposals and slides are read with their title; chat and questions have none. */
-const TITLED_KINDS: ReadonlySet<ContentCheckKind> = new Set(["proposal", "presentation"]);
+/** Proposals, slides and bios are read with a title; chat and questions have none. */
+const TITLED_KINDS: ReadonlySet<ContentCheckKind> = new Set(["proposal", "presentation", "person_profile"]);
 
 const SAMPLE_LABELS: Record<ContentCheckKind, string> = {
   chat_message: "Chat message",
   audience_question: "Question",
   proposal: "Abstract",
   presentation: "Slide text",
+  organization_profile: "Member page",
+  person_profile: "Biography",
 };
 
 function answerResult(check: EffectiveContentCheck, id: string, percent: number, trial: ContentCheckTrialResponse) {
@@ -95,7 +97,7 @@ export function ContentCheckTrial({
         <p class="pk-small">Runs the saved questions on a sample. Nothing is stored.</p>
         <form class="pk-stack" noValidate {...form.handlers} onSubmit={(event) => void run(event)}>
           {titled && (
-            <Field {...form.of("title")} label="Title">
+            <Field {...form.of("title")} label={kind === "person_profile" ? "Job title" : "Title"}>
               {(control) => (
                 <TextInput
                   {...control}
