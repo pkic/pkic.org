@@ -10,7 +10,6 @@ const retirementMigrationName = "0037_retire_legacy_account_role.sql";
 const attendanceMigrationName = "0039_event_promotion_kits.sql";
 const groupErasureMigrationName = "0042_incorrect_representation_group_erasure.sql";
 const sharedDomainsMigrationName = "0043_shared_organization_domains.sql";
-const sponsorLeadRemovalMigrationName = "0053_sponsor_lead_capture_removals.sql";
 const migrationDir = fileURLToPath(new URL("../migrations/", import.meta.url));
 
 function wrangler(args, stdio = "inherit") {
@@ -98,7 +97,6 @@ export function apply(environment) {
     attendanceMigrationName,
     groupErasureMigrationName,
     sharedDomainsMigrationName,
-    sponsorLeadRemovalMigrationName,
   ]) {
     if (pending.includes(cutover)) {
       for (const name of pending.filter((name) => name > previousCutover && name <= cutover)) {
