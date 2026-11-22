@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
-import { insertOrganization } from "./helpers/membership";
+import { insertOrganization, insertUser } from "./helpers/membership";
 import { nowIso } from "../functions/_lib/utils/time";
 import { ticketRefundNote } from "../assets/shared/event-ticket-display";
 import { callApi } from "./helpers/app";
@@ -460,6 +460,35 @@ describe("event tickets", () => {
     });
   });
 
+  it("does not open another checkout when payment starts before the attempt is saved", async () => {
+    const { event } = await seedTickets();
+    const { registration, user } = await register(event, "checkout-race@gmail.com");
+    const ticket = (await readRegistrationTicket(env.DB, { eventId: event.id, registrationId: registration.id }))!;
+    const racedDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare(
+        `INSERT INTO registration_ticket_payment_events (provider_event_id, ticket_id, event_type, outcome, created_at)
+         VALUES (?, ?, 'checkout.session.completed', 'processing', ?)`,
+      )
+        .bind(`evt_checkout_${crypto.randomUUID()}`, ticket.id, nowIso())
+        .run(),
+    );
+
+    await expect(
+      openTicketCheckout(
+        racedDb,
+        paymentEnv,
+        "https://example.test",
+        { eventId: event.id, registrationId: registration.id, userId: user.id },
+        stripe,
+      ),
+    ).rejects.toMatchObject({ code: "TICKET_NOT_PAYABLE" });
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS n FROM registration_ticket_checkouts WHERE ticket_id = ?")
+        .bind(ticket.id)
+        .first(),
+    ).toEqual({ n: 0 });
+  });
+
   it("marks a ticket paid only for a matching payment, once, and releases the held confirmation", async () => {
     const { event, admin } = await seedTickets();
     const { registration, user } = await register(event, "buyer@gmail.com");
@@ -565,6 +594,51 @@ describe("event tickets", () => {
       refundedAmount: 19500,
     });
   });
+
+  it.each(["succeeded", "failed"] as const)(
+    "links a %s refund webhook that arrives before the create response is stored",
+    async (status) => {
+      const { event, admin } = await seedTickets();
+      const { registration, user } = await register(event, `early-refund-${status}@gmail.com`);
+      const input = { eventId: event.id, registrationId: registration.id, userId: user.id };
+      await openTicketCheckout(env.DB, paymentEnv, "https://example.test", input, stripe);
+      const ticketId = (await readRegistrationTicket(env.DB, { eventId: event.id, registrationId: registration.id }))!
+        .id;
+      await paidEvent(ticketId, "cs_test_ticket", 19500);
+      await requestTicketRefund(env.DB, admin, { ...input, reason: "Refund requested" });
+      const refund = await env.DB.prepare("SELECT id FROM registration_ticket_refunds WHERE ticket_id = ?")
+        .bind(ticketId)
+        .first<{ id: string }>();
+      const fetcher = (async () => {
+        expect(
+          await handleEventTicketStripeEvent(env.DB, {
+            id: `evt_early_refund_${status}`,
+            type: "refund.updated",
+            data: {
+              object: {
+                id: `re_early_${status}`,
+                payment_intent: "pi_synthetic",
+                amount: 19500,
+                status,
+                metadata: { registrationTicketId: ticketId, registrationTicketRefundId: refund!.id },
+              },
+            },
+          }),
+        ).toMatchObject({ outcome: status === "succeeded" ? "refund_confirmed" : "refund_failed" });
+        return new Response(JSON.stringify({ id: `re_early_${status}`, status: "pending" }), { status: 200 });
+      }) as unknown as typeof fetch;
+      expect(await processTicketRefunds(env.DB, paymentEnv, 5, fetcher)).toEqual({ processed: 1, failed: 0 });
+      const rows = await env.DB.prepare(
+        "SELECT id, provider_refund_id, completed_at, failed_at FROM registration_ticket_refunds WHERE ticket_id = ?",
+      )
+        .bind(ticketId)
+        .all<{ id: string; provider_refund_id: string; completed_at: string | null; failed_at: string | null }>();
+      expect(rows.results).toHaveLength(1);
+      expect(rows.results[0]).toMatchObject({ id: refund!.id, provider_refund_id: `re_early_${status}` });
+      expect(Boolean(rows.results[0].completed_at)).toBe(status === "succeeded");
+      expect(Boolean(rows.results[0].failed_at)).toBe(status === "failed");
+    },
+  );
 
   it("lets an organizer refund again after the provider fails or refuses a refund", async () => {
     const { event, admin } = await seedTickets();
@@ -1167,6 +1241,57 @@ describe("event tickets", () => {
     expect((await none.refunds()).results).toEqual([]);
   });
 
+  it("reprices a paid ticket when its canceled registration is submitted again for cheaper days", async () => {
+    const { event, admin } = await seedTickets();
+    const configuration = await readEventTicketsConfiguration(env.DB, event);
+    await updateEventTicketSettings(env.DB, admin, event, {
+      expectedRevision: configuration.revision,
+      ...configuration.settings,
+      refundDaysBeforeEvent: 1,
+      refundFee: 0,
+    });
+    const { registration, user } = await register(event, "restore-paid@gmail.com");
+    const read = () => readRegistrationTicket(env.DB, { eventId: event.id, registrationId: registration.id });
+    await openTicketCheckout(
+      env.DB,
+      paymentEnv,
+      "https://example.test",
+      {
+        eventId: event.id,
+        registrationId: registration.id,
+        userId: user.id,
+      },
+      stripe,
+    );
+    await paidEvent((await read())!.id, "cs_test_ticket", 19500);
+    const record = await getRegistrationByIdForEvent(env.DB, event.id, registration.id);
+    const canceled = await buildRegistrationUpdate(env.DB, record, { action: "cancel" }, "admin");
+    await env.DB.batch(canceled.statements);
+    expect(await read()).toMatchObject({ status: "paid", amount: 19500 });
+
+    const replanned = await planRegistrationTicket(
+      env.DB,
+      {},
+      {
+        event,
+        registrationId: registration.id,
+        userId: user.id,
+        email: user.email,
+        identityId: null,
+        organizationName: "Example Organization",
+        dayAttendance: [{ dayDate: DAY, attendanceType: "virtual" }],
+      },
+    );
+    expect(replanned).toMatchObject({ status: "paid", amount: 0 });
+    await env.DB.batch(replanned!.statements);
+    expect(await read()).toMatchObject({ status: "paid", amount: 0, refundPending: true });
+    expect(
+      await env.DB.prepare("SELECT amount FROM registration_ticket_refunds WHERE ticket_id = ?")
+        .bind(replanned!.id)
+        .first(),
+    ).toEqual({ amount: 19500 });
+  });
+
   it("gives each active sponsor its two codes from its tier and only ever raises their limits", async () => {
     const { event, admin, attendee, vendor } = await seedTickets();
     const now = new Date().toISOString();
@@ -1209,6 +1334,23 @@ describe("event tickets", () => {
     expect(configuration.sponsorPasses.tiers).toEqual([
       { tierName: "Gold", staffPasses: 2, customerPasses: 4, sponsors: 1, sponsorsWithCodes: 1 },
     ]);
+  });
+
+  it("does not disclose bearer ticket codes to an event reader", async () => {
+    const { event, admin } = await seedTickets();
+    const readerId = await insertUser(env.DB, "ticket-reader@example.test");
+    await env.DB.prepare(
+      `INSERT INTO permission_grants (id, user_id, permission, context_type, context_id, created_at)
+       VALUES (?, ?, 'events:read', 'event', ?, ?)`,
+    )
+      .bind(crypto.randomUUID(), readerId, event.id, nowIso())
+      .run();
+    const readerToken = await createMemberSession(env.DB, readerId, `code-reader-${crypto.randomUUID()}`);
+    const adminToken = await createAdminSession(env.DB, admin.id, `code-admin-${crypto.randomUUID()}`);
+    const path = "/api/v1/events/pqc-2026/tickets/codes";
+    const request = (token: string) => callApi(env, path, { headers: { authorization: `Bearer ${token}` } });
+    expect((await request(readerToken)).status).toBe(403);
+    expect((await request(adminToken)).status).toBe(200);
   });
 
   it("keeps a registration with an unpaid ticket out of badge and scanner eligibility until it is paid", async () => {
@@ -1746,6 +1888,33 @@ describe("event tickets", () => {
       "SELECT recipient_email FROM email_outbox WHERE idempotency_key LIKE 'ticket-reminder:%'",
     ).all<{ recipient_email: string }>();
     expect(sent.results.map((row) => row.recipient_email)).toEqual([due.user.email]);
+  });
+
+  it("does not queue a payment reminder when processing starts after the due read", async () => {
+    const { event } = await seedTickets();
+    const pending = await register(event, "processing-reminder@gmail.com");
+    const ticket = (await readRegistrationTicket(env.DB, {
+      eventId: event.id,
+      registrationId: pending.registration.id,
+    }))!;
+    await env.DB.prepare("UPDATE registration_tickets SET next_reminder_at = ? WHERE id = ?")
+      .bind(new Date(Date.now() - 1000).toISOString(), ticket.id)
+      .run();
+    const racedDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.batch([
+        env.DB.prepare(
+          `INSERT INTO registration_ticket_payment_events (provider_event_id, ticket_id, event_type, outcome, created_at)
+         VALUES (?, ?, 'checkout.session.completed', 'processing', ?)`,
+        ).bind(`evt_processing_${crypto.randomUUID()}`, ticket.id, nowIso()),
+        env.DB.prepare("UPDATE registration_tickets SET next_reminder_at = NULL WHERE id = ?").bind(ticket.id),
+      ]),
+    );
+    expect(await sendTicketPaymentReminders(racedDb, "https://example.test")).toEqual({ reminded: 0 });
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) AS n FROM email_outbox WHERE idempotency_key LIKE 'ticket-reminder:%'",
+      ).first(),
+    ).toEqual({ n: 0 });
   });
 
   it("brings a ticket in line with the payment provider on request, when its events did not arrive", async () => {

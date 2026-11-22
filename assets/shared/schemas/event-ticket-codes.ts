@@ -6,13 +6,7 @@ import { z } from "zod";
 import { eventSlugParamsSchema, successResponseSchema, trimmedString, utcInstantSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
-import {
-  ticketAmountSchema,
-  ticketOrganizerAuth,
-  ticketReaderAuth,
-  ticketRouteJson,
-  ticketRouteRefusals,
-} from "./event-tickets";
+import { ticketAmountSchema, ticketOrganizerAuth, ticketRouteJson, ticketRouteRefusals } from "./event-tickets";
 
 export const eventTicketCodeSchema = z.object({
   id: databaseIdSchema,
@@ -72,7 +66,7 @@ export const eventTicketCodesGetRouteSchema = {
     "200": { description: "A page of codes.", content: ticketRouteJson(eventTicketCodeListSchema) },
     ...ticketRouteRefusals,
   },
-  ...ticketReaderAuth,
+  ...ticketOrganizerAuth,
 };
 export const eventTicketCodeCreateRouteSchema = {
   tags: ["Events"],

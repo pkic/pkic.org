@@ -41,6 +41,8 @@ const OPEN_STATUSES = ["free", "pending_payment"];
 export interface RepricedTicket {
   statements: StatementLike[];
   due: { amount: number; currency: string } | null;
+  /** The new amount of a paid ticket when its days change during registration. */
+  amount?: number;
 }
 
 const owed = (amount: number, currency: string) => (amount > 0 ? { amount, currency } : null);
@@ -127,7 +129,7 @@ export async function planRepriceTicketForDays(
     const fee = held.refund_fee;
     const within = held.refund_deadline !== null && held.refund_deadline >= input.now;
     const refund = within ? net - total - fee : 0;
-    if (total === held.amount && refund <= 0) return { statements: [], due: null };
+    if (total === held.amount && refund <= 0) return { statements: [], due: null, amount: held.amount };
     const statements = [
       // The ticket is changed only as it was priced here; otherwise nothing of the change is written.
       prepareStateGuard(db, {
@@ -155,7 +157,7 @@ export async function planRepriceTicketForDays(
           })
         : []),
     ];
-    return { statements, due: null };
+    return { statements, due: null, amount: total };
   }
   const status = total > 0 ? "pending_payment" : "free";
   const restored = held.amount > 0 ? "pending_payment" : "free";

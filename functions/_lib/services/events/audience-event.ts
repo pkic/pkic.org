@@ -4,7 +4,7 @@ import { batchFirst } from "../../db/pagination";
 import { AppError } from "../../errors";
 import type { DatabaseLike, Env } from "../../types";
 import { EVENT_COLUMNS, type EventRecord } from "../events";
-import { buildEventAudiencePredicate } from "./visibility";
+import { buildEventAudiencePredicate, eventAudienceEvidenceById } from "./visibility";
 
 /** The canonical event row selection for a viewer, shared with form configuration reads. */
 export function prepareAudienceEventBySlug(db: DatabaseLike, slug: string, auth: PreparedRequestViewerRead | null) {
@@ -39,5 +39,9 @@ export async function readAudienceEventBySlug(
         expiresAt: session.expiresAt,
       }
     : null;
-  return { event, identity };
+  const audienceEvidence = eventAudienceEvidenceById(event.id, {
+    userId: auth?.userId ?? null,
+    ...(auth ? { admin: auth.permissionActor } : {}),
+  });
+  return { event, identity, audienceEvidence };
 }

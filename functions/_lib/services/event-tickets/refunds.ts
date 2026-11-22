@@ -409,7 +409,7 @@ export async function processTicketRefunds(
         {
           paymentIntentId: refund.payment_intent_id,
           amount: refund.amount,
-          metadata: { registrationTicketId: refund.ticket_id },
+          metadata: { registrationTicketId: refund.ticket_id, registrationTicketRefundId: refund.id },
         },
         { idempotencyKey: `registration-ticket-refund:${refund.id}`, fetcher, apiBase: env.STRIPE_API_BASE },
       );

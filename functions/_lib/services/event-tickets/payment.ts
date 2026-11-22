@@ -245,6 +245,7 @@ export async function openTicketCheckout(
           `INSERT INTO registration_ticket_checkouts
              (id, ticket_id, request_params, refund_until, refund_fee, created_at, expires_at)
            SELECT ?, id, ?, ?, ?, ?, ? FROM registration_tickets WHERE id = ? AND status = 'pending_payment'
+             AND NOT ${ticketPaymentProcessingSql("registration_tickets.id")}
              AND NOT EXISTS (SELECT 1 FROM registration_ticket_checkouts open
                              WHERE open.ticket_id = registration_tickets.id AND open.expires_at > ?)`,
         )
@@ -264,7 +265,9 @@ export async function openTicketCheckout(
     const open = await first<CheckoutRow>(
       db,
       `SELECT id, request_params, provider_session_id, checkout_url, expires_at
-       FROM registration_ticket_checkouts WHERE ticket_id = ? AND expires_at > ? ORDER BY created_at DESC, id DESC LIMIT 1`,
+       FROM registration_ticket_checkouts WHERE ticket_id = ? AND expires_at > ?
+         AND NOT ${ticketPaymentProcessingSql("registration_ticket_checkouts.ticket_id")}
+       ORDER BY created_at DESC, id DESC LIMIT 1`,
       [ticket.id, now],
     );
     if (!open) throw new AppError(409, "TICKET_NOT_PAYABLE", "This ticket has nothing left to pay.");
@@ -524,6 +527,19 @@ export async function handleEventTicketStripeEvent(
       );
     }
   } else if (REFUND_EVENT_TYPES.includes(event.type) && object.id && object.payment_intent) {
+    // Stripe may deliver the event before the create-refund response stores its provider ID.
+    // The metadata binds that event to the exact durable request, including its ticket and payment.
+    const refundId = object.metadata?.registrationTicketRefundId;
+    if (typeof refundId === "string")
+      statements.push(
+        db
+          .prepare(
+            `UPDATE registration_ticket_refunds SET provider_refund_id = ?
+             WHERE id = ? AND ticket_id = ? AND payment_intent_id = ?
+               AND (provider_refund_id IS NULL OR provider_refund_id = ?)`,
+          )
+          .bind(object.id, refundId, row.ticket_id, object.payment_intent, object.id),
+      );
     if (object.status === "succeeded") {
       outcome = "refund_confirmed";
       statements.push(...prepareCompleteRefund(db, { column: "provider_refund_id", value: object.id }, now));

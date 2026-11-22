@@ -18,7 +18,7 @@ import { priceTicket, readTicketPerson, resolveTicket } from "./assignment";
 import { ticketPaymentProcessingSql } from "./payment";
 import { refundDeadlineSql } from "./refund-policy";
 import { OPEN_REFUND_SQL } from "./refunds";
-import { prepareRepriceTicketForDays } from "./reprice";
+import { planRepriceTicketForDays } from "./reprice";
 import { eventSellsTickets, readEventTicketSnapshot } from "./snapshot";
 
 export interface IssuedRegistrationTicket {
@@ -107,7 +107,7 @@ export async function planRegistrationTicket(
   // A paid ticket is settled: it is neither priced again nor replaced. It covers what was paid for, so
   // registering again for days that cost more is refused.
   if (held?.status === "paid") {
-    await prepareRepriceTicketForDays(db, {
+    const repriced = await planRepriceTicketForDays(db, {
       eventId: input.event.id,
       registrationId: input.registrationId,
       userId: input.userId,
@@ -119,10 +119,10 @@ export async function planRegistrationTicket(
     return {
       id: held.id,
       ticketName: held.ticket_name,
-      amount: held.amount,
+      amount: repriced.amount ?? held.amount,
       currency: held.currency,
       status: "paid",
-      statements: [clearSelection],
+      statements: [...repriced.statements, clearSelection],
     };
   }
   const kept: SelectionRow | null =

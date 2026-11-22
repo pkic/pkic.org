@@ -13,10 +13,17 @@ import {
   type UnfinishedRegistrationStop,
   type UnfinishedRegistrationSummary,
 } from "../../../../assets/shared/schemas/unfinished-registrations";
-import { queryPage } from "../../db/pagination";
+import { batchFirst, queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
-import { isStateGuardFailure, prepareStateGuard } from "../../db/authorization-guard";
+import {
+  isAuthorizationGuardFailure,
+  isStateGuardFailure,
+  prepareAuthorizationGuard,
+  prepareStateGuard,
+  type AuthorizationEvidence,
+} from "../../db/authorization-guard";
+import { accountAddressSignsInSql, liveAccountSql } from "../../auth/email-sign-in-policy";
 import { all, first } from "../../db/queries";
 import { prepareQueueEmailStatement } from "../../email/outbox";
 import { AppError } from "../../errors";
@@ -24,6 +31,7 @@ import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import type { EventRecord } from "../events";
+import { eventAudienceEvidenceById } from "../events/visibility";
 import { registrationPageUrl } from "../frontend-links";
 
 const HAS_REGISTRATION = `EXISTS (
@@ -41,8 +49,21 @@ export async function startUnfinishedRegistration(
   db: DatabaseLike,
   event: Pick<EventRecord, "id">,
   userId: string,
+  audienceEvidence: AuthorizationEvidence,
+  sessionEvidence: AuthorizationEvidence,
 ): Promise<void> {
-  await prepareRegistrationStart(db, event.id, userId, nowIso()).run();
+  try {
+    await db.batch([
+      prepareAuthorizationGuard(db, sessionEvidence),
+      prepareStateGuard(db, audienceEvidence),
+      prepareRegistrationStart(db, event.id, userId, nowIso()),
+    ]);
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) throw new AppError(401, "AUTH_REQUIRED", "Sign in again to register.");
+    if (isStateGuardFailure(error))
+      throw new AppError(404, "EVENT_NOT_FOUND", "Event not found or not visible to this caller");
+    throw error;
+  }
 }
 
 /** Records that the person started registering, once, unless they are registered already. */
@@ -115,8 +136,17 @@ export async function sendUnfinishedRegistrationReminders(
     }
     const registerUrl = registrationPageUrl(appBaseUrl, row, { source: "unfinished_registration" });
     const stopUrl = notRegisteringPageUrl(appBaseUrl, row.slug);
+    const audience = eventAudienceEvidenceById(row.event_id, { userId: row.user_id });
+    const recipient: AuthorizationEvidence = {
+      sql: `SELECT 1 FROM (SELECT 1) recipient_anchor JOIN users person
+            ON person.id = ? AND ${liveAccountSql("person")}
+              AND ${accountAddressSignsInSql("person.id", "person.normalized_email")}`,
+      bindings: [row.user_id],
+    };
     try {
       await db.batch([
+        prepareStateGuard(db, audience),
+        prepareStateGuard(db, recipient),
         // The reminder goes out only if nobody else sent this one and the person has not answered since.
         prepareStateGuard(db, {
           sql: `SELECT 1 FROM unfinished_registrations unfinished
@@ -149,6 +179,18 @@ export async function sendUnfinishedRegistrationReminders(
       reminded += 1;
     } catch (error) {
       if (!isStateGuardFailure(error)) throw error;
+      const [visible, eligible] = await db.batch([
+        db.prepare(audience.sql).bind(...audience.bindings),
+        db.prepare(recipient.sql).bind(...recipient.bindings),
+      ]);
+      if (!batchFirst(visible) || !batchFirst(eligible)) {
+        const clearedRow = await db
+          .prepare(`UPDATE unfinished_registrations SET next_reminder_at = NULL
+                    WHERE event_id = ? AND user_id = ? AND reminders_sent = ? AND next_reminder_at IS NOT NULL`)
+          .bind(...key, row.reminders_sent)
+          .run();
+        if (clearedRow.meta?.changes) cleared += 1;
+      }
     }
   }
   return { reminded, cleared };

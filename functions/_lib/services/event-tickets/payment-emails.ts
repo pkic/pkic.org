@@ -17,6 +17,7 @@ import {
   payableTicketSql,
   ticketPageUrl,
   ticketPaymentFailedSql,
+  ticketPaymentProcessingSql,
   type PayableTicketRow,
 } from "./payment";
 
@@ -52,8 +53,11 @@ export async function sendTicketPaymentReminders(
       await db.batch([
         // The reminder goes out only if the ticket is still unpaid and nobody else sent this one.
         prepareStateGuard(db, {
-          sql: "SELECT 1 FROM registration_tickets WHERE id = ? AND status = 'pending_payment' AND reminders_sent = ?",
-          bindings: [ticket.id, ticket.reminders_sent],
+          sql: `SELECT 1 FROM registration_tickets ticket
+                WHERE ticket.id = ? AND ticket.status = 'pending_payment' AND ticket.reminders_sent = ?
+                  AND ticket.next_reminder_at IS NOT NULL AND ticket.next_reminder_at <= ?
+                  AND NOT ${ticketPaymentProcessingSql("ticket.id")}`,
+          bindings: [ticket.id, ticket.reminders_sent, now],
         }),
         db
           .prepare(

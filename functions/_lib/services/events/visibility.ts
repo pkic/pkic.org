@@ -9,6 +9,7 @@ import {
 import { scannerCapabilities } from "../../../../assets/shared/event-scanner-permissions";
 import type { UserSessionResult } from "../../auth/user-session";
 import { heldEventInvitationExistsSql } from "../held-event-invitation";
+import type { AuthorizationEvidence } from "../../db/authorization-guard";
 import type { AuthAdmin, DatabaseLike, PermissionGrant } from "../../types";
 import { AppError } from "../../errors";
 
@@ -23,6 +24,16 @@ export function eventAudienceViewer(session: UserSessionResult | null): EventAud
     userId: session?.identity.id ?? null,
     scannerGrants: session?.staff?.grants ?? [],
     admin: session?.staff,
+  };
+}
+
+/** Recheck the same audience rule inside a state-changing D1 command. */
+export function eventAudienceEvidenceById(eventId: string, viewer: EventAudienceViewer): AuthorizationEvidence {
+  const audience = buildEventAudiencePredicate("events", viewer);
+  return {
+    sql: `SELECT 1 FROM (SELECT 1) audience_anchor JOIN events
+          ON events.id = ? AND ${audience.sql}`,
+    bindings: [eventId, ...audience.bindings],
   };
 }
 

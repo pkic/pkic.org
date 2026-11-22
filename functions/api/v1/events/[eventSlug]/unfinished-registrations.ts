@@ -6,6 +6,8 @@ import {
   unfinishedRegistrationSummaryRouteSchema,
 } from "../../../../../assets/shared/schemas/unfinished-registrations";
 import { getUserSessionToken, requireIdentityFromRequest } from "../../../../_lib/auth/user-session";
+import { verifyUserSessionRequest } from "../../../../_lib/auth/user-session-request";
+import { userSessionRequestAuthorizationEvidence } from "../../../../_lib/auth/user-session-evidence";
 import { AppError } from "../../../../_lib/errors";
 import { markResponseSensitive, requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { json } from "../../../../_lib/http";
@@ -42,9 +44,21 @@ const UnfinishedRegistrationStartPost = openApiRoute(
   async (c: AdminContext, data) => {
     if (!getUserSessionToken(c.req.raw)) throw new AppError(401, "AUTH_REQUIRED", "Missing user session token");
     const db = requestDb(c);
-    const { event, identity } = await readAudienceEventBySlug(db, c.req.raw, c.env, data.params.eventSlug);
+    const { event, identity, audienceEvidence } = await readAudienceEventBySlug(
+      db,
+      c.req.raw,
+      c.env,
+      data.params.eventSlug,
+    );
     if (!identity) throw new AppError(401, "AUTH_REQUIRED", "Missing user session token");
-    await startUnfinishedRegistration(db, event, identity.userId);
+    const claims = await verifyUserSessionRequest(c.req.raw, c.env);
+    await startUnfinishedRegistration(
+      db,
+      event,
+      identity.userId,
+      audienceEvidence,
+      userSessionRequestAuthorizationEvidence(claims),
+    );
     return json({ success: true });
   },
 );

@@ -307,10 +307,13 @@ export const ACCOUNT_DELETION_BLOCKING_RULES: readonly AccountDeletionBlockingRu
     ) => `EXISTS (SELECT 1 FROM event_evidence_retention_state retention WHERE retention.event_id = ${a}.event_id
       AND (retention.capture_closed_at IS NOT NULL OR retention.active_run_id IS NOT NULL))`,
   }),
-  // A ticket that was ever owed or paid for is part of the payment records; a free or never-paid one goes with its registration.
+  // Keep provider history even after a pending ticket is canceled: an asynchronous payment may still settle.
   rule("ticket_payment", "registration_tickets", "registration_id", {
     from: "registrations",
-    where: (a) => `(${a}.status IN ('pending_payment','paid','refunded') OR ${a}.paid_amount > 0)`,
+    where: (a) => `(${a}.status IN ('pending_payment','paid','refunded') OR ${a}.paid_amount > 0
+      OR EXISTS (SELECT 1 FROM registration_ticket_checkouts checkout WHERE checkout.ticket_id = ${a}.id)
+      OR EXISTS (SELECT 1 FROM registration_ticket_payment_events payment WHERE payment.ticket_id = ${a}.id)
+      OR EXISTS (SELECT 1 FROM registration_ticket_refunds refund WHERE refund.ticket_id = ${a}.id))`,
   }),
   rule("vote", "ec_decisions", "ec_member_user_id"),
   rule("vote", "vote_ballots", "user_id"),

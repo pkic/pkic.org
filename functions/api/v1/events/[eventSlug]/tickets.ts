@@ -90,7 +90,7 @@ const EventTicketSettingsPut = openApiRoute(eventTicketSettingsPutRouteSchema, a
 });
 
 const EventTicketCodesGet = openApiRoute(eventTicketCodesGetRouteSchema, async (c: AdminContext, data) => {
-  const { db, event } = await requireEventPermission(c, data.params.eventSlug, "events:read");
+  const { db, event } = await requireEventPermission(c, data.params.eventSlug, "events:write");
   return json(await listEventTicketCodes(db, event.id, data.query));
 });
 

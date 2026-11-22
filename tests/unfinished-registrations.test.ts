@@ -12,9 +12,13 @@ import {
   unfinishedRegistrationSummarySchema,
 } from "../assets/shared/schemas/unfinished-registrations";
 import { findOrCreateUser } from "../functions/_lib/services/users";
+import { nowIso } from "../functions/_lib/utils/time";
+import { eventAudienceEvidenceById } from "../functions/_lib/services/events/visibility";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
 import {
   listUnfinishedRegistrationNotes,
   prepareRegistrationStart,
+  startUnfinishedRegistration,
   readUnfinishedRegistrationSummary,
   sendUnfinishedRegistrationReminders,
 } from "../functions/_lib/services/registrations/unfinished";
@@ -76,6 +80,48 @@ it("reminds after a day and after three days, then no more", async () => {
     .bind(due.id)
     .first<{ reminders_sent: number; next_reminder_at: string | null }>();
   expect(row).toEqual({ reminders_sent: 2, next_reminder_at: null });
+});
+
+it("clears a reminder when the person's event access or account eligibility ends", async () => {
+  await start("former-invitee@example.test", 25);
+  const inactive = await start("inactive-reminder@example.test", 25);
+  const inviteId = crypto.randomUUID();
+  await env.DB.batch([
+    env.DB.prepare("UPDATE events SET visibility = 'invitation_only' WHERE id = ?").bind(eventId),
+    env.DB.prepare(
+      `INSERT INTO invites (id, event_id, invitee_email, invite_type, link_secret, status, source_type, created_at)
+       VALUES (?, ?, ?, 'attendee', ?, 'sent', 'direct', ?)`,
+    ).bind(inviteId, eventId, "former-invitee@example.test", crypto.randomUUID(), nowIso()),
+    env.DB.prepare("UPDATE users SET active = 0 WHERE id = ?").bind(inactive.id),
+  ]);
+  await env.DB.prepare("UPDATE invites SET status = 'revoked' WHERE id = ?").bind(inviteId).run();
+
+  expect(await sendUnfinishedRegistrationReminders(env.DB, BASE)).toEqual({ reminded: 0, cleared: 2 });
+  expect((await reminders()).results).toEqual([]);
+  expect(
+    await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM unfinished_registrations WHERE next_reminder_at IS NOT NULL",
+    ).first(),
+  ).toEqual({ n: 0 });
+});
+
+it("rejects a reminder start when event access ends before its write", async () => {
+  const user = await findOrCreateUser(env.DB, {
+    email: "revoked-start@example.test",
+    firstName: "Synthetic",
+    lastName: "Person",
+  });
+  const audience = eventAudienceEvidenceById(eventId, { userId: user.id });
+  const racedDb = mutateBeforeNextBatch(env.DB, () =>
+    env.DB.prepare("UPDATE events SET visibility = 'invitation_only' WHERE id = ?").bind(eventId).run(),
+  );
+  await expect(
+    startUnfinishedRegistration(racedDb, { id: eventId }, user.id, audience, {
+      sql: "SELECT 1",
+      bindings: [],
+    }),
+  ).rejects.toMatchObject({ code: "EVENT_NOT_FOUND" });
+  expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM unfinished_registrations").first()).toEqual({ n: 0 });
 });
 
 it("sends nothing to a person who registered", async () => {
