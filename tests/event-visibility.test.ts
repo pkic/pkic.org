@@ -555,6 +555,8 @@ describe("scoped scanner event discovery", () => {
     )
       .bind(sponsorId, own, now, now)
       .run();
+    expect((await requestAudienceList("/api/v1/events", token)).events).toEqual([]);
+    await env.DB.prepare("UPDATE users SET email_verified_at=? WHERE id=?").bind(now, userId).run();
     const list = await requestAudienceList("/api/v1/events", token);
     expect(list.events.map((event) => event.slug)).toEqual(["mailbox-private"]);
     expect(list.events[0]?.sponsorLeadAccess).toBe(true);
