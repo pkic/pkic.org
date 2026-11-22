@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { prepareScannerDevice, prepareScannerEpoch, type ScannerEpoch } from "./scanner-device-ledger";
 import type { ScannerOfflineContext } from "../../../../../../../shared/schemas/event-scanner-offline-context";
-import { readScannerOfflineEpoch, scannerOfflineLeaseCurrent } from "./scanner-offline-context";
+import {
+  readScannerOfflineEpoch,
+  scannerLeadLeaseCurrent,
+  scannerOfflineLeaseCurrent,
+} from "./scanner-offline-context";
 export function useScannerDevice(
   slug: string,
   operatorUserId: string,
@@ -73,6 +77,9 @@ export function useScannerDevice(
     error,
     ready:
       epoch?.state === "open" &&
-      (sponsorId ? epoch.leadLease?.sponsorId === sponsorId && scannerOfflineLeaseCurrent(epoch) : !epoch.leadLease),
+      (sponsorId
+        ? epoch.leadLease?.sponsorId === sponsorId &&
+          (scannerLeadLeaseCurrent(epoch) || scannerOfflineLeaseCurrent(epoch))
+        : !epoch.leadLease),
   };
 }

@@ -7,7 +7,7 @@ import {
   type ScannerLeadLease,
 } from "../../../../../../../shared/schemas/event-scanner-devices";
 import { ApiClientError, getJson, postJson } from "../../../../../../shared/api-client";
-import { scannerOfflineLeaseCurrent } from "./scanner-offline-context";
+import { scannerLeadLeaseCurrent, scannerOfflineLeaseCurrent } from "./scanner-offline-context";
 import { resumeScannerServerSession } from "./scanner-session-resumption";
 import { scannerEpochKey } from "./scanner-sequence-record";
 import {
@@ -178,7 +178,7 @@ async function refreshScannerEpoch(db: IDBDatabase, epoch: ScannerEpoch, sponsor
     if (
       error instanceof ApiClientError &&
       (error.status === 0 ||
-        (scannerOfflineLeaseCurrent(epoch) &&
+        ((scannerLeadLeaseCurrent(epoch) || scannerOfflineLeaseCurrent(epoch)) &&
           (error.status === 401 || error.status === 403 || error.status === 429 || error.status >= 500)))
     )
       return epoch;
@@ -189,7 +189,10 @@ async function refreshScannerEpoch(db: IDBDatabase, epoch: ScannerEpoch, sponsor
     throw new Error("Scanner lead lease belongs to another sponsor");
   if ((status.closedAt || status.closingDeclaredAt) && !status.closingOperationId)
     throw new Error("Scanner status is missing the original closing operation");
-  if ((status.closedAt || status.closingDeclaredAt) && scannerOfflineLeaseCurrent(epoch)) {
+  if (
+    (status.closedAt || status.closingDeclaredAt) &&
+    (scannerLeadLeaseCurrent(epoch) || scannerOfflineLeaseCurrent(epoch))
+  ) {
     try {
       await resumeScannerServerSession(epoch.eventId, epoch.epochId, epoch.deviceId, sponsorId);
     } catch {

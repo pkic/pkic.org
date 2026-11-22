@@ -17,6 +17,7 @@ import {
   saveScannerOfflineContext,
   listPreparedScannerContexts,
   restoreScannerOfflineContext,
+  readScannerOfflineEpoch,
   assertScannerOfflineContext,
   scannerCollectorPath,
   scannerTransportUnavailable,
@@ -68,6 +69,8 @@ describe("offline sponsor lead context", () => {
     const sponsorId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
     const leadRoute = `/events/${slug}/sponsors/${sponsorId}/scanner`;
     const leadLease = { eventId, sponsorId, serverNow: now, expiresAt: manifest().expiresAt };
+    const enrolled = { ...epoch(), leadLease, leadLeaseReceivedAt: Date.parse(now) };
+    mocks.rows[0] = enrolled;
     const source = {
       ...manifest(),
       occurrenceId: null,
@@ -80,7 +83,7 @@ describe("offline sponsor lead context", () => {
       prepareCode: mocks.warm,
       slug,
       session,
-      epoch: { ...epoch(), leadLease },
+      epoch: enrolled,
       manifest: source,
       action: "lead",
       sponsorId,
@@ -88,6 +91,7 @@ describe("offline sponsor lead context", () => {
       allowedActions: ["lead"],
     });
     expect(prepared).toMatchObject({ action: "lead", sponsorId, route: leadRoute });
+    expect((await readScannerOfflineEpoch(prepared!)).leadLeaseReceivedAt).toBe(Date.parse(now));
     expect(JSON.stringify(mocks.rows)).not.toContain("NEVER_STORE_THIS_BADGE");
     expect(mocks.rows[0]!.collectorContext).toMatchObject({ sponsorId, action: "lead" });
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);

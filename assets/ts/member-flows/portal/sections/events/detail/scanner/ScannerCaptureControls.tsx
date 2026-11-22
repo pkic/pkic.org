@@ -177,7 +177,17 @@ export function ScannerManualControls({
           <Button type="submit" disabled={busy || !ready || (action === "lead" && !consent?.confirmed)}>
             {action === "lead" ? "Confirm lead" : scannerActionLabel(action)}
           </Button>
-          <Button type="button" variant="secondary" onClick={onClose}>
+          <Button
+            type="button"
+            variant="secondary"
+            onPointerDown={(event) => {
+              // Close before the input's focus-out validation can replace this button.
+              if (event.button === 0) onClose();
+            }}
+            onClick={(event) => {
+              if (event.detail === 0) onClose();
+            }}
+          >
             Return to scanning
           </Button>
         </div>

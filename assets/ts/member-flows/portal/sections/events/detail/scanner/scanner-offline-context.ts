@@ -39,6 +39,7 @@ const storedEpochSchema = scannerRecoveryEpochSchema
   .safeExtend({
     key: z.string(),
     leadLease: scannerLeadLeaseSchema.optional(),
+    leadLeaseReceivedAt: z.number().int().nonnegative().optional(),
     collectorContext: scannerOfflineContextSchema.optional(),
     collectorContexts: scannerOfflineContextSchema.array().max(SCANNER_PREPARED_CONTEXT_LIMIT).optional(),
   })
@@ -164,6 +165,21 @@ export function scannerOfflineLeaseCurrent(
   now = Date.now(),
 ): boolean {
   return preparedContexts(epoch).some((context) => contextMatchesEpoch(epoch, context, now));
+}
+
+/** A newly received lead lease is usable before its offline context has been saved. */
+export function scannerLeadLeaseCurrent(epoch: ScannerEpoch, now = Date.now()): boolean {
+  const lease = epoch.leadLease;
+  const receivedAt = epoch.leadLeaseReceivedAt;
+  if (!lease || receivedAt === undefined) return false;
+  const duration = Date.parse(lease.expiresAt) - Date.parse(lease.serverNow);
+  return (
+    epoch.state === "open" &&
+    Number.isFinite(duration) &&
+    duration > 0 &&
+    now >= receivedAt &&
+    now < receivedAt + duration
+  );
 }
 
 /** List only current leases for the locally signed-in operator, without restoring portal access. */
