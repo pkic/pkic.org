@@ -119,7 +119,9 @@ export class LiveRoomParticipation {
     const at = nowIso();
     const eventId = this.eventId();
     let sessionRestriction: LiveParticipationRestriction | undefined;
-    const occurrenceId = this.chatOccurrence(input.item);
+    const moderation = input.block === "event" ? null : this.moderationFor(input.item);
+    // A session's decision covers that session's posts; an event or location decision covers the whole chat.
+    const scope = moderation ? this.chatOccurrence(input.item) : undefined;
     if (input.block === "event") {
       if (!eventId) return REFUSALS.missing;
       const by = organizerSession(viewer, actor);
@@ -127,7 +129,6 @@ export class LiveRoomParticipation {
         return REFUSALS.forbidden;
       this.decisions.decideEventBlock(userId, true);
     } else {
-      const moderation = this.moderationFor(input.item);
       if (moderation) {
         const { restriction } = await moderation.change(userId, {
           kind: "block",
@@ -149,8 +150,8 @@ export class LiveRoomParticipation {
       { userId, block: input.block, reason: input.reason, removePosts: input.removePosts },
       at,
     );
-    if (input.removePosts) await this.removePosts(viewer, actor, userId, input.reason, at, occurrenceId);
-    await this.changed(userId, sessionRestriction, occurrenceId);
+    if (input.removePosts) await this.removePosts(viewer, actor, userId, input.reason, at, input.item, scope);
+    await this.changed(userId, sessionRestriction, scope);
   }
 
   async lift(viewer: LiveRoomParticipant, actor: Actor, item: LiveModerationItem): Promise<LiveRefusal | void> {
@@ -174,7 +175,8 @@ export class LiveRoomParticipation {
       this.decisions.decideEventBlock(userId, false);
     }
     let sessionRestriction: LiveParticipationRestriction | null | undefined;
-    if (moderation && current.block !== "event" && remote) {
+    const sessionLift = moderation !== null && current.block !== "event" && remote;
+    if (sessionLift) {
       sessionRestriction = (await moderation.change(userId, { kind: "lift" })).restriction;
     } else {
       this.decisions.lift(userId);
@@ -185,7 +187,7 @@ export class LiveRoomParticipation {
       { userId, block: current.block },
       at,
     );
-    await this.changed(userId, sessionRestriction, occurrenceId);
+    await this.changed(userId, sessionRestriction, sessionLift ? occurrenceId : undefined);
   }
 
   /** The access refresh read who is blocked for the event; tell everyone whose block started or ended. */
@@ -193,16 +195,19 @@ export class LiveRoomParticipation {
     for (const userId of this.decisions.refreshEventBlocks(checked, blocked, readAt)) await this.changed(userId);
   }
 
-  /** Removes everything the person posted in this session with the block's reason. */
+  /** Removes everything the person posted in the block's scope, and the reported post, with the block's reason. */
   private async removePosts(
     viewer: LiveRoomParticipant,
     actor: Actor,
     userId: string,
     reason: LiveModerationReason,
     at: string,
+    item: LiveModerationItem,
     occurrenceId?: string,
   ): Promise<void> {
     const messages = this.chat.byAuthor(userId, LIVE_CHAT_POLICY.storedMessages, occurrenceId);
+    const reported = item.kind === "chat" ? this.chat.message(item.messageId) : null;
+    if (reported?.author_user_id === userId && !messages.some((row) => row.id === reported.id)) messages.push(reported);
     const shown = messages.filter((row) => !this.decisions.removal(row.id));
     for (const row of shown) this.chatActions.removeWithReason(actor, row, reason, at);
     await this.chatActions.redeliver(shown);

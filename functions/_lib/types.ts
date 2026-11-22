@@ -67,7 +67,9 @@ export interface LiveSessionRoomRpc extends Rpc.DurableObjectBranded {
   readProgram(eventId: string, roomId: string): Promise<LiveProgramSelection>;
   /** The session loaded in a physical room, for the virtual room; null for none. */
   loadedProgram(eventId: string, roomId: string): Promise<string | null>;
+  /** A location's chat: the studio loaded a session in its location, or none; later messages are dated by it. */
   locationChatLoaded(occurrenceId: string | null): Promise<void>;
+  /** A location's chat: a session's opening or one person's block there changed; null means everyone. */
   locationChatAccessChanged(occurrenceId: string, userId: string | null): Promise<void>;
   /** A location's chat: the latest attendee messages a broadcast may show, after their wait. */
   locationChatOnAir(

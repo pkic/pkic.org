@@ -179,3 +179,40 @@ it("quotes the message a reply answers, and lets its author edit it until someon
   speaker.send({ type: "chat.edit", messageId: reply.message.id, text: "Changed again" });
   expect((await speaker.next("room.refused")).code).toBe("LIVE_CHAT_EDIT_CLOSED");
 });
+
+it("removes a blocked person's posts from the whole chat for the event, and the reported break post for a session", async () => {
+  const author = await join("attendee");
+  const reader = await join("secondAttendee");
+  const operator = await join("operator");
+  const say = async (text: string) => {
+    author.send({ type: "chat.send", text });
+    return (await reader.next("chat.message", (message) => message.message.text === text)).message;
+  };
+  const block = (messageId: string, scope: "session" | "event") =>
+    operator.send({
+      type: "participation.block",
+      item: { kind: "chat", messageId },
+      block: scope,
+      reason: "spam",
+      removePosts: true,
+    });
+  const inBreak = await say("Said in the break");
+  await load(fixture.occurrenceId, 0);
+  const during = await say("Said during the session");
+
+  // A session block from a break post removes that post too.
+  block(inBreak.id, "session");
+  await reader.next("chat.removed", (update) => update.messageId === during.id);
+  await reader.next("chat.removed", (update) => update.messageId === inBreak.id);
+  operator.send({ type: "participation.lift", item: { kind: "chat", messageId: during.id } });
+  await author.next("participation.access", (update) => update.restriction === null);
+
+  // An event block removes everything the person said in this chat, in or between sessions.
+  await load(null, 1);
+  const nextBreak = await say("Said in the next break");
+  await load(fixture.occurrenceId, 2);
+  const later = await say("Said later");
+  block(later.id, "event");
+  await reader.next("chat.removed", (update) => update.messageId === later.id);
+  await reader.next("chat.removed", (update) => update.messageId === nextBreak.id);
+});
