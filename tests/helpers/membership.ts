@@ -76,7 +76,7 @@ export async function addRepresentative(
     organizationId: member.organization_id,
     source: "staff",
     jobTitle: opts.jobTitle,
-    showOnOrganizationProfile: opts.showOnOrgProfile,
+    showOnOrganizationProfile: opts.showOnOrgProfile ?? true,
     startImmediately: true,
   });
   await db.batch([statement]);

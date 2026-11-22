@@ -146,7 +146,8 @@ export async function buildCreateIdentityStatement(
     transferFromIdentityId: predecessorIdentityId,
   };
   await requireIdentityEmailAssignable(db, { ...ownership, identityId: null }, observed?.emailOwner);
-  const showOnOrganizationProfile = input.organizationId !== null && input.showOnOrganizationProfile !== false ? 1 : 0;
+  // New organization affiliations start hidden unless the caller explicitly lists them.
+  const showOnOrganizationProfile = input.organizationId !== null && input.showOnOrganizationProfile === true ? 1 : 0;
   const values = [
     identityId,
     input.userId,

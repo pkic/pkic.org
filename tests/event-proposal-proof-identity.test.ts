@@ -46,7 +46,12 @@ const proposalAs = (actingIdentityId: string) =>
         "A sufficiently detailed conference proposal showing that a speaker taking part on behalf of an organization always says what they do there, whichever representation they speak as.",
     },
   });
-async function identityFor(userId: string, name: string, jobTitle = "Original role") {
+async function identityFor(
+  userId: string,
+  name: string,
+  jobTitle = "Original role",
+  showOnOrganizationProfile?: boolean,
+) {
   const organizationId = await insertOrganization(env.DB, name);
   const created = await buildCreateIdentityStatement(env.DB, {
     userId,
@@ -54,12 +59,13 @@ async function identityFor(userId: string, name: string, jobTitle = "Original ro
     source: "staff",
     startImmediately: true,
     jobTitle,
+    showOnOrganizationProfile,
   });
   await env.DB.batch([created.statement]);
   return { identityId: created.identityId, organizationId };
 }
 /** A signed-in person who represents an organization that holds their work domain. */
-async function fixture() {
+async function fixture(showOnOrganizationProfile?: boolean) {
   const { eventId } = await seedEventAndAdmin(env.DB);
   const person = await signInProposer({
     environment: env,
@@ -67,7 +73,12 @@ async function fixture() {
     firstName: "Canonical",
     lastName: "Person",
   });
-  const own = await identityFor(person.userId, "Canonical nonmember organization");
+  const own = await identityFor(
+    person.userId,
+    "Canonical nonmember organization",
+    undefined,
+    showOnOrganizationProfile,
+  );
   // Staff-owned canonical claim, not a claim made by a mailbox-holder's profile edit.
   await env.DB.prepare(
     "INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES(?,?,?,?,?)",
@@ -229,22 +240,33 @@ describe("proposal own representation role update", () => {
     expect(JSON.stringify(await response.json())).toContain(JOB_TITLE_REQUIRED);
     expect((await state()).identities).toEqual(before.identities);
   });
-  it("queues a changed visible member profile through the speaker link, but not an identical repeat", async () => {
-    const input = await fixture();
-    await seedOrganizationAggregate(env.DB, input.organizationId);
-    const body = eventProposalProofIdentityPatchSchema.parse({
-      biography: "Updated member biography",
-      speakerManagementToken: (await speakerLink(input)).token,
-    });
-    const first = await patch(input.identityId, body, input.headers);
-    expect(first.status, await first.clone().text()).toBe(200);
-    expect(await queryAll(env.DB, "SELECT resource_id,reason_code FROM site_publication_requests")).toEqual([
-      { resource_id: input.identityId, reason_code: "identity_profile_changed" },
-    ]);
-    const repeated = await patch(input.identityId, body, input.headers);
-    expect(repeated.status, await repeated.clone().text()).toBe(200);
-    expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests")).toHaveLength(1);
-  });
+  it.each([false, true])(
+    "publishes a changed member profile only when listed, without repeating publication (listed: %s)",
+    async (listed) => {
+      const input = await fixture(listed);
+      await seedOrganizationAggregate(env.DB, input.organizationId);
+      const body = eventProposalProofIdentityPatchSchema.parse({
+        biography: "Updated member biography",
+        speakerManagementToken: (await speakerLink(input)).token,
+      });
+      const first = await patch(input.identityId, body, input.headers);
+      expect(first.status, await first.clone().text()).toBe(200);
+      expect(await queryAll(env.DB, "SELECT resource_id,reason_code FROM site_publication_requests")).toEqual(
+        listed ? [{ resource_id: input.identityId, reason_code: "identity_profile_changed" }] : [],
+      );
+      expect(
+        await env.DB.prepare("SELECT biography,show_on_organization_profile FROM identities WHERE id=?")
+          .bind(input.identityId)
+          .first(),
+      ).toMatchObject({
+        biography: body.biography,
+        show_on_organization_profile: listed ? 1 : 0,
+      });
+      const repeated = await patch(input.identityId, body, input.headers);
+      expect(repeated.status, await repeated.clone().text()).toBe(200);
+      expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests")).toHaveLength(listed ? 1 : 0);
+    },
+  );
 
   it("accepts the current speaker's own capability without altering its selection", async () => {
     const input = await fixture();
