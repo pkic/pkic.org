@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession, createMcpSession } from "./helpers/auth";
-import { createMcpOauthTestClient } from "./helpers/mcp-oauth";
+import { getCurrentUserBackedAdmin } from "../functions/_lib/auth/admin";
+import { approveOauthAuthorization } from "../functions/_lib/services/oauth-authorizations/approval";
 import { signMcpSessionToken } from "../functions/_lib/auth/mcp-session";
 import { verifyUserSessionToken } from "../functions/_lib/auth/user-session";
 import { callApi } from "./helpers/app";
@@ -185,13 +186,31 @@ describe("sponsor live lead viewing through the mounted API", () => {
   });
 
   it("keeps delegated lead reads within the approved sponsorship after account permissions expand", async () => {
-    const signingSecret = "synthetic-sponsor-leads-oauth-signing-secret";
-    const delegatedEnv = { ...env, INTERNAL_SIGNING_SECRET: signingSecret };
-    const session = await createAdminSession(env.DB, operator, crypto.randomUUID(), signingSecret);
-    const { authorize } = createMcpOauthTestClient(delegatedEnv);
-    const approval = await authorize(session, ["agenda:leads_view"]);
-    const verified = await verifyUserSessionToken(signingSecret, session);
+    const signingSecret = env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret";
+    const verified = await verifyUserSessionToken(signingSecret, token);
     if (!verified.ok) throw new Error("Expected a valid synthetic sponsor session");
+    const actor = await getCurrentUserBackedAdmin(env.DB, operator, verified.claims.sid);
+    if (!actor) throw new Error("Expected active synthetic sponsor staff");
+    const approval = await approveOauthAuthorization(env.DB, {
+      actor,
+      request: {
+        responseType: "code",
+        clientId: "synthetic-sponsor-client",
+        redirectUri: "https://client.test/callback",
+        scope: ["agenda:leads_view"],
+        state: "synthetic-state",
+      },
+      member: null,
+      actingIdentityId: null,
+      expectedActingIdentityId: null,
+      staffIdleExpiresAt: new Date(Date.now() + 3600000).toISOString(),
+      clientName: "Synthetic sponsor client",
+      selectedScopes: ["agenda:leads_view"],
+      signingSecret,
+    });
+    await env.DB.prepare("UPDATE oauth_authorizations SET status='active' WHERE id=?")
+      .bind(approval.authorizationId)
+      .run();
     const delegatedToken = await signMcpSessionToken(signingSecret, {
       sub: operator,
       sid: verified.claims.sid,
@@ -208,7 +227,7 @@ describe("sponsor live lead viewing through the mounted API", () => {
       .run();
     await grant("agenda:leads_view", "event_sponsor", secondSponsor);
     const read = (path: string) =>
-      callApi(delegatedEnv, `/api/v1/events/live-leads/sponsors/${path}`, {
+      callApi(env, `/api/v1/events/live-leads/sponsors/${path}`, {
         headers: { authorization: `Bearer ${delegatedToken}`, "x-pkic-machine-auth": "mcp" },
       });
     const approved = await read(`${sponsorId}/leads`);
