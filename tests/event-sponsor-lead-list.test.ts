@@ -479,12 +479,15 @@ describe("sponsor live lead viewing through the mounted API", () => {
         await seedOrganizationAggregate(env.DB, await insertOrganization(env.DB, `Later employer ${email}`), "A"),
         person.id,
       );
-      await env.DB.prepare("UPDATE identities SET is_default = 1 WHERE id = ?").bind(employer).run();
+      await env.DB.prepare("UPDATE identities SET is_default = 1, job_title = 'Later title' WHERE id = ?")
+        .bind(employer)
+        .run();
       const identity = await addRepresentative(
         env.DB,
         await seedOrganizationAggregate(env.DB, await insertOrganization(env.DB, selected), "A"),
         person.id,
       );
+      await env.DB.prepare("UPDATE identities SET job_title = 'Selected title' WHERE id = ?").bind(identity).run();
       await env.DB.prepare("UPDATE registrations SET registration_identity_id = ? WHERE event_id = ? AND user_id = ?")
         .bind(identity, eventId, person.id)
         .run();
@@ -511,6 +514,8 @@ describe("sponsor live lead viewing through the mounted API", () => {
     const csv = await response.text();
     expect(csv).toContain(",attendee0@synthetic.test,Zulu event organization,");
     expect(csv).toContain(",attendee1@synthetic.test,Alpha event organization,");
+    expect(csv).toContain(",Zulu event organization,Selected title,");
+    expect(csv).not.toContain("Later title");
     expect(csv).toContain(",attendee2@synthetic.test,,");
     expect(csv).not.toContain("Later employer");
   });
@@ -550,8 +555,8 @@ describe("sponsor live lead viewing through the mounted API", () => {
     ]);
     await grant("agenda:leads_export");
     const csv = await (await request(`/sponsors/${sponsorId}/leads.csv`)).text();
-    expect(csv.split("\r\n")[0]).toBe("Name,Email,Organization,Personal email address,Captured at");
-    expect(csv).toContain(",lead.person@gmail.com,,true,");
+    expect(csv.split("\r\n")[0]).toBe("Name,Email,Organization,Title,Personal email address,Captured at");
+    expect(csv).toContain(",lead.person@gmail.com,,,true,");
     expect(csv).not.toContain(person.id);
     expect(csv).not.toContain(operator);
     expect(csv).not.toContain("Selected organization");

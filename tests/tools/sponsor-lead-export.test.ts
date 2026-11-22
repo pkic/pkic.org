@@ -49,9 +49,13 @@ describe("sponsor lead export", () => {
   it("exports live contacts only for the selected sponsor with safe CSV fields and no-store", async () => {
     const { sqlite, db } = fixture();
     try {
+      sqlite.exec(
+        "INSERT INTO individual_job_titles(user_id,job_title,created_at,updated_at) VALUES('attendee','Security engineer','2026-10-03','2026-10-03')",
+      );
       const csv = await exportSponsorLeads(db, "event", "sponsor", "operator");
       expect(csv).toContain("attendee@example.test");
-      expect(csv.split("\r\n")[0]).toBe("Name,Email,Organization,Personal email address,Captured at");
+      expect(csv.split("\r\n")[0]).toBe("Name,Email,Organization,Title,Personal email address,Captured at");
+      expect(csv).toContain(",Security engineer,");
       expect(csv).not.toContain("Attendee ID");
       expect(csv).not.toMatch(/(?:^|,)attendee(?:,|$)/m);
       expect(csv).not.toMatch(/(?:^|,)operator(?:,|$)/m);

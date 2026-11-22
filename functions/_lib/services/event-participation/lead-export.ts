@@ -1,4 +1,4 @@
-import { registrationOrganizationSql } from "../registrations/selected-identity";
+import { registrationJobTitleSql, registrationOrganizationSql } from "../registrations/selected-identity";
 import { all, first } from "../../db/queries";
 import { encodeBoundedCsv } from "../../csv";
 import { AppError } from "../../errors";
@@ -16,6 +16,7 @@ interface LeadExportRow {
   name: string;
   email: string;
   organization: string | null;
+  title: string | null;
   observed_at: string;
 }
 
@@ -33,7 +34,9 @@ export async function exportSponsorLeads(db: DatabaseLike, eventId: string, spon
   await assertEventContactAccess(db, eventId);
   const rows = await all<LeadExportRow>(
     db,
-    `SELECT TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')) AS name,u.email,${registrationOrganizationSql("reg")} AS organization,${activeSponsorLeadOriginSql("lead", "observed_at")} AS observed_at
+    `SELECT TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')) AS name,u.email,
+      ${registrationOrganizationSql("reg")} AS organization,${registrationJobTitleSql("reg")} AS title,
+      ${activeSponsorLeadOriginSql("lead", "observed_at")} AS observed_at
     FROM event_sponsor_leads lead JOIN users u ON u.id=lead.user_id
     JOIN registrations reg ON reg.event_id=lead.event_id AND reg.user_id=lead.user_id
     JOIN sponsorships sponsor ON sponsor.id=lead.sponsor_id AND sponsor.event_id=lead.event_id
@@ -48,10 +51,10 @@ export async function exportSponsorLeads(db: DatabaseLike, eventId: string, spon
   if (rows.length > 100000) throw new AppError(413, "CSV_EXPORT_TOO_LARGE", "Export must not exceed 100000 leads.");
   return encodeBoundedCsv(
     [
-      ["Name", "Email", "Organization", "Personal email address", "Captured at"],
+      ["Name", "Email", "Organization", "Title", "Personal email address", "Captured at"],
       ...rows.map((row) => {
         const affiliation = contactAffiliation(row.email, row.organization);
-        return [row.name, row.email, affiliation.organization, affiliation.personalEmail, row.observed_at];
+        return [row.name, row.email, affiliation.organization, row.title, affiliation.personalEmail, row.observed_at];
       }),
     ],
     20 * 1024 * 1024,
