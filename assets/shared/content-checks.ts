@@ -117,25 +117,46 @@ export interface EffectiveContentCheck {
   questions: ContentCheckQuestion[];
 }
 
-export function effectiveContentCheck(
-  settings: ContentCheckSettings,
+/** The questions an event asks: PKIC-wide ones less those it turns off, with its replacements and additions. */
+export function mergedContentCheckQuestions(
+  settingsQuestions: readonly ContentCheckQuestion[],
   additions: ContentCheckEventAdditions | null,
-): EffectiveContentCheck {
-  if (!additions) return { ...settings, questions: [...settings.questions] };
+): ContentCheckQuestion[] {
+  if (!additions) return [...settingsQuestions];
   const disabled = new Set(additions.disabledQuestionIds);
   const replaced = new Map(additions.questions.map((question) => [question.id, question]));
-  const questions = settings.questions
+  const questions = settingsQuestions
     .filter((question) => !disabled.has(question.id))
     .map((question) => replaced.get(question.id) ?? question);
   const kept = new Set(questions.map((question) => question.id));
   for (const question of additions.questions)
     if (!kept.has(question.id) && !disabled.has(question.id)) questions.push(question);
+  return questions;
+}
+
+/** Why an event's questions cannot be saved with the PKIC-wide ones, or null when together they fit. */
+export function contentCheckQuestionLimitRefusal(
+  settingsQuestions: readonly ContentCheckQuestion[],
+  additions: ContentCheckEventAdditions,
+): string | null {
+  const count = mergedContentCheckQuestions(settingsQuestions, additions).length;
+  return count > CONTENT_CHECK_MAX_QUESTIONS
+    ? `With the PKIC-wide questions this event would ask ${count}; the most a check runs is ${CONTENT_CHECK_MAX_QUESTIONS}. Turn some PKIC-wide questions off or add fewer.`
+    : null;
+}
+
+export function effectiveContentCheck(
+  settings: ContentCheckSettings,
+  additions: ContentCheckEventAdditions | null,
+): EffectiveContentCheck {
+  if (!additions) return { ...settings, questions: [...settings.questions] };
   const context = [settings.context.trim(), additions.context.trim()].filter(Boolean).join("\n\n");
   return {
     enabled: settings.enabled,
     model: settings.model,
     context,
-    questions: questions.slice(0, CONTENT_CHECK_MAX_QUESTIONS),
+    // Saving refuses a set above the limit, so nothing saved is dropped here.
+    questions: mergedContentCheckQuestions(settings.questions, additions),
   };
 }
 

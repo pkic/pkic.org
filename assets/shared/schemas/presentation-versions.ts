@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { contentCheckResultSchema } from "./content-checks";
+import { contentCheckResultSchema } from "./content-checks.ts";
 import { databaseIdSchema } from "./identifiers.ts";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination.ts";
 

@@ -31,7 +31,7 @@ import { isEventParticipantSourceConflict } from "./event-participant-source-rev
 import { isProposalSpeakerRosterConflict } from "./proposal-speaker-roster-revision";
 import { formSubmissionContextChangedError, isFormSubmissionContextConflict } from "./forms";
 import type { ContentCheckRun } from "./content-checks/model";
-import { prepareStoreContentCheckResult } from "./content-checks/results";
+import { prepareDeleteContentCheckResult, prepareStoreContentCheckResult } from "./content-checks/results";
 
 export interface ProposalRecord {
   id: string;
@@ -399,6 +399,7 @@ export async function updateProposalForVerifiedOwner(
   if (Object.keys(changes).length === 0) return proposal;
 
   const screening = await payload.screen?.();
+  const changesReviewedContent = ["proposalType", "title", "abstract", "details"].some((key) => key in changes);
   const requiresDecisionRelease = resubmits;
   let updateResults;
   try {
@@ -452,7 +453,12 @@ export async function updateProposalForVerifiedOwner(
         now,
       ),
       ...(payload.formSubmissionStatements ?? []),
-      ...(screening ? [prepareStoreContentCheckResult(db, "proposal", proposal.id, screening, now)] : []),
+      // A verdict describes the words it checked: without a new run, a change to what reviewers read drops it.
+      ...(screening
+        ? [prepareStoreContentCheckResult(db, "proposal", proposal.id, screening, now)]
+        : changesReviewedContent
+          ? [prepareDeleteContentCheckResult(db, "proposal", proposal.id)]
+          : []),
       db
         .prepare(
           `DELETE FROM proposal_decisions

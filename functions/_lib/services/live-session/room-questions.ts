@@ -57,6 +57,16 @@ export const LIVE_QUESTION_REFUSALS = {
 } satisfies Record<string, LiveRefusal>;
 const REFUSALS = LIVE_QUESTION_REFUSALS;
 
+/** Whether the author may still change the words of their own question, as it stands now. */
+function editableByAuthor(question: NonNullable<ReturnType<LiveRoomStore["question"]>>): boolean {
+  return canEditOwnLiveQuestion({
+    mine: true,
+    status: question.status,
+    reviewed: question.moderated_at !== null || question.rewrite_text !== null,
+    withdrawn: false,
+  });
+}
+
 /**
  * The person a question is for: one of the session's speakers or its
  * moderator, read from its current credits, which every viewer holds and
@@ -202,25 +212,18 @@ export class LiveRoomQuestions {
     if (question.author_withdrawn) return REFUSALS.withdrawn;
     if (input.type === "question.edit") {
       if (!open()) return REFUSALS.closed;
-      if (
-        !canEditOwnLiveQuestion({
-          mine: true,
-          status: question.status,
-          reviewed: question.moderated_at !== null || question.rewrite_text !== null,
-          withdrawn: false,
-        })
-      )
-        return REFUSALS.notEditable;
+      if (!editableByAuthor(question)) return REFUSALS.notEditable;
       if (!this.hooks.allowed(actor.userId)) return REFUSALS.tooFast;
     }
     const check = input.type === "question.edit" ? await this.check(input.text) : null;
     if (check && "code" in check) return check;
     if (input.type === "question.edit" && !open()) return REFUSALS.closed;
-    if (
-      input.type === "question.edit" &&
-      this.store.question(question.id)?.author_revision !== question.author_revision
-    )
-      return REFUSALS.changed;
+    if (input.type === "question.edit") {
+      // The check yields: a moderator may have approved the question meanwhile.
+      const current = this.store.question(question.id);
+      if (current?.author_revision !== question.author_revision) return REFUSALS.changed;
+      if (!editableByAuthor(current)) return REFUSALS.notEditable;
+    }
     const at = nowIso();
     const revision = question.author_revision + 1;
     this.store.saveAuthorChange({

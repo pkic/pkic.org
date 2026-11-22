@@ -99,6 +99,8 @@ export interface LiveChatActionSubject {
   /** Held after reports and not yet reviewed. */
   held: boolean;
   reported: boolean;
+  /** The automatic check advised against or blocked it, and no moderator has kept it yet. */
+  flaggedByCheck?: boolean;
   reportedByMe: boolean;
   converted: boolean;
   /** Cleared from the studio queue. */
@@ -134,7 +136,7 @@ export function liveChatEditOpen(sentAt: string, now = Date.now()): boolean {
  * | report     | others', unrestricted | no (removes instead) | no (removes instead) |
  * | delete     | own messages        | own messages          | own messages          |
  * | remove     | no                  | others' shown         | others' shown         |
- * | keep       | no                  | held or reported      | held or reported      |
+ * | keep       | no                  | held, reported or flagged | held, reported or flagged |
  * | done       | no                  | attendee messages     | attendee messages     |
  * | convert    | no                  | attendee messages     | attendee messages     |
  * | pause      | no                  | unrestricted authors  | unrestricted authors  |
@@ -170,7 +172,7 @@ export function liveChatActions(
     actions.add("report");
   if (staff) {
     if (!message.mine && (!message.hidden || message.held)) actions.add("remove");
-    if (message.hidden || message.reported) actions.add("keep");
+    if (message.hidden || message.reported || message.flaggedByCheck) actions.add("keep");
     if (message.channel === "attendee" && !message.hidden && !message.converted) actions.add("convert");
     if (message.channel === "attendee" && !message.done) actions.add("done");
     if (message.channel === "attendee" && !message.hidden) actions.add(message.pinned ? "unpin" : "pin");

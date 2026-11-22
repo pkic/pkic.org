@@ -3,7 +3,7 @@
  * event adds to them, a trial run on sample text, and a stored verdict.
  */
 import { z } from "zod";
-import { eventSlugParamsSchema, jsonErrorResponse, trimmedString, utcInstantSchema } from "./api-common";
+import { eventSlugParamsSchema, jsonErrorResponse, trimmedString, utcInstantSchema } from "./api-common.ts";
 import {
   CONTENT_CHECK_KINDS,
   CONTENT_CHECK_MAX_QUESTIONS,
@@ -11,7 +11,7 @@ import {
   CONTENT_CHECK_OUTCOMES,
   CONTENT_CHECK_QUESTION_ID_PATTERN,
   EVENT_CONTENT_CHECK_KINDS,
-} from "../content-checks";
+} from "../content-checks.ts";
 
 export const contentCheckKindSchema = z.enum(CONTENT_CHECK_KINDS);
 /** The kinds an event may add to; a member page or bio check is PKIC-wide only. */

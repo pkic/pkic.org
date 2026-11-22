@@ -7,9 +7,12 @@ const f = createLiveRoomFixture();
 type Client = Awaited<ReturnType<typeof f.connectChat>>;
 
 /** A stand-in check model: words name the flag it raises, everything else passes. */
+let gate: Promise<void> | null = null;
 const model = {
   run: vi.fn(async (_model: string, input: { state: Record<string, string>; questions: Record<string, unknown> }) => {
     const text = Object.values(input.state).join(" ");
+    // Words marked "slow" wait for the test to let the check finish.
+    if (text.includes("slow") && gate) await gate;
     const probability = (id: string) =>
       id === "spam" && text.includes("cheap certificates")
         ? 0.99
@@ -33,10 +36,18 @@ async function say(author: Client, text: string, reader: Client) {
   return (await reader.next("chat.message", (message) => message.message.text === text)).message;
 }
 
+/** Makes the next "slow" checks wait; the returned function lets them finish. */
+function holdChecks(): () => void {
+  let release = () => {};
+  gate = new Promise<void>((resolve) => (release = resolve));
+  return release;
+}
+
 describe("automatic checks of live chat and questions", () => {
   beforeEach(async () => {
     await f.setup();
     model.run.mockClear();
+    gate = null;
     await giveRoomsTheModel();
   });
 
@@ -45,16 +56,17 @@ describe("automatic checks of live chat and questions", () => {
     const reader = await f.connectChat("secondAttendee");
     const operator = await f.connectChat("operator");
 
-    const spam = await say(author, "Buy cheap certificates at example.test", reader);
-    const held = await operator.next(
-      "chat.message",
-      (update) => update.message.id === spam.id && update.message.moderation?.held === true,
-    );
+    author.send({ type: "chat.send", text: "Buy cheap certificates at example.test" });
+    const held = await operator.next("chat.message", (update) => update.message.moderation?.held === true);
+    const spam = held.message;
     expect(held.message.moderation?.automaticCheck).toEqual({
       outcome: "blocked",
       notes: [expect.any(String)],
     });
     await reader.next("chat.removed", (update) => update.messageId === spam.id);
+    expect(reader.received.some((update) => update.type === "chat.message" && update.message.id === spam.id)).toBe(
+      false,
+    );
 
     const rude = await say(author, "The organizers are idiots", reader);
     const flagged = await operator.next(
@@ -82,6 +94,68 @@ describe("automatic checks of live chat and questions", () => {
     );
     expect(kept.message.moderation?.reports).toBe(0);
     expect(model.run).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps chat from other attendees until the check passes, then delivers it", async () => {
+    const author = await f.connectChat("attendee");
+    const reader = await f.connectChat("secondAttendee");
+    const operator = await f.connectChat("operator");
+    const release = holdChecks();
+    const text = "A slow but friendly question about renewals";
+    author.send({ type: "chat.send", text });
+    const mine = await author.next("chat.message", (update) => update.message.text === text);
+    await operator.next("chat.message", (update) => update.message.text === text);
+    await vi.waitFor(() => expect(model.run).toHaveBeenCalled());
+    expect(reader.received.some((update) => update.type === "chat.message" && update.message.text === text)).toBe(
+      false,
+    );
+    const joining = await f.connectChat("secondAttendee");
+    const waiting = (joining.received[0] as Extract<LiveRoomServerMessage, { type: "location.chat.snapshot" }>).chat;
+    expect(waiting.map((message) => message.id)).not.toContain(mine.message.id);
+    release();
+    const delivered = await reader.next("chat.message", (update) => update.message.id === mine.message.id);
+    expect(delivered.message.text).toBe(text);
+  });
+
+  it("lets a moderator keep a message the check only advised against", async () => {
+    const author = await f.connectChat("attendee");
+    const reader = await f.connectChat("secondAttendee");
+    const operator = await f.connectChat("operator");
+    const rude = await say(author, "The organizers are idiots", reader);
+    await operator.next("chat.message", (update) => update.message.moderation?.automaticCheck !== undefined);
+    operator.send({ type: "chat.moderate", messageId: rude.id, decision: "keep" });
+    const kept = await operator.next(
+      "chat.message",
+      (update) => update.message.id === rude.id && update.message.moderation?.automaticCheck === undefined,
+    );
+    expect(kept.message.moderation?.reports).toBe(0);
+  });
+
+  it("refuses an edit of a question a moderator approved while it was being checked", async () => {
+    const owner = await f.connect({ person: "attendee" });
+    const moderator = await f.connect({ person: "operator" });
+    owner.send({ type: "question.ask", text: "Which certificates first?", anonymous: false });
+    const { questionId } = await owner.next("question.accepted");
+    const release = holdChecks();
+    const edit = {
+      type: "question.edit" as const,
+      questionId,
+      text: "A slow rewrite nobody approved",
+      expectedRevision: 0,
+      operationId: crypto.randomUUID(),
+    };
+    owner.send(edit);
+    await vi.waitFor(() => expect(model.run).toHaveBeenCalledTimes(2));
+    moderator.send({ type: "question.moderate", questionId, status: "approved", expectedRevision: 0 });
+    await moderator.next(
+      "question.changed",
+      (message) => message.question.id === questionId && message.question.status === "approved",
+    );
+    release();
+    const refused = await owner.next("room.refused", (message) => message.operationId === edit.operationId);
+    expect(refused.code).toBe("LIVE_QUESTION_EDIT_CLOSED");
+    const snapshot = await (await f.connect({ person: "operator" })).next("room.snapshot");
+    expect(snapshot.questions.map((question) => question.text)).toEqual(["Which certificates first?"]);
   });
 
   it("refuses a question the check blocks and flags one it advises against", async () => {

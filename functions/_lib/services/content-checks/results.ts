@@ -40,6 +40,15 @@ export function prepareStoreContentCheckResult(
     );
 }
 
+/** Drops a verdict that no longer describes its subject, once the subject changed and nothing checked the new words. */
+export function prepareDeleteContentCheckResult(
+  db: DatabaseLike,
+  kind: ContentCheckKind,
+  subjectId: string,
+): StatementLike {
+  return db.prepare("DELETE FROM content_check_results WHERE kind = ? AND subject_id = ?").bind(kind, subjectId);
+}
+
 export interface ContentCheckResultRow {
   subject_id: string;
   outcome: string;
