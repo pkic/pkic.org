@@ -24,16 +24,7 @@ import type { EventStatsResponse } from "../types";
 import { useData } from "../../../../../hooks/useData";
 import { AttendanceChangeDashboard } from "./AttendanceChangeDashboard";
 import { SectionHeading } from "../../../../../ui/SectionHeading";
-const SessionDemandReport = lazy(() =>
-  import("./SessionDemandReport").then((module) => ({ default: module.SessionDemandReport })),
-);
-const UnfinishedRegistrations = lazy(() =>
-  import("./UnfinishedRegistrations").then((module) => ({ default: module.UnfinishedRegistrations })),
-);
-const SessionPopularityReport = lazy(() =>
-  import("./SessionPopularityReport").then((module) => ({ default: module.SessionPopularityReport })),
-);
-const Promoters = lazy(() => import("./Promoters").then((module) => ({ default: module.Promoters })));
+import { EVENT_STATS_REPORT_SECTIONS, EventStatsReport } from "./EventStatsReports";
 
 /**
  * Chart fills read the state tokens rather than brand hexes, so the bars stay
@@ -154,31 +145,18 @@ export function EventStats({
           />
         </Suspense>
       )}
-      {active === "session-demand" && (
-        <Suspense fallback={<Spinner label="Loading session demand…" />}>
-          <SessionDemandReport slug={slug} clock={attendance?.timeZone} />
-        </Suspense>
+      {active && EVENT_STATS_REPORT_SECTIONS.includes(active) && (
+        <EventStatsReport
+          section={active}
+          slug={slug}
+          clock={attendance?.timeZone}
+          subTab={subTab}
+          basePath={basePath}
+        />
       )}
-      {active === "session-popularity" && (
-        <Suspense fallback={<Spinner label="Loading session popularity…" />}>
-          <SessionPopularityReport slug={slug} clock={attendance?.timeZone} />
-        </Suspense>
+      {active && active !== "attendance" && !EVENT_STATS_REPORT_SECTIONS.includes(active) && canViewAnalytics && (
+        <EventStatsData slug={slug} section={active} />
       )}
-      {active === "unfinished-registrations" && (
-        <Suspense fallback={<Spinner label="Loading unfinished registrations…" />}>
-          <UnfinishedRegistrations slug={slug} />
-        </Suspense>
-      )}
-      {active === "promoters" && (
-        <Suspense fallback={<Spinner label="Loading promoters…" />}>
-          <Promoters slug={slug} subTab={subTab} basePath={`${basePath}/promoters`} />
-        </Suspense>
-      )}
-      {active &&
-        !["attendance", "session-demand", "session-popularity", "promoters", "unfinished-registrations"].includes(
-          active,
-        ) &&
-        canViewAnalytics && <EventStatsData slug={slug} section={active} />}
     </div>
   );
 }
