@@ -66,12 +66,16 @@ describe("event viewer status", () => {
       days: [],
       paymentDue: true,
       paymentProcessing: false,
+      paymentUnderReview: false,
       holdsWorkAddress: true,
     };
     expect(eventViewerStatus({ viewer })).toEqual([{ label: "Payment required", tone: "warn" }]);
     // A payment that takes days is on its way: nothing is asked.
     expect(eventViewerStatus({ viewer: { ...viewer, paymentProcessing: true } })).toEqual([
       { label: "Payment processing", tone: "info" },
+    ]);
+    expect(eventViewerStatus({ viewer: { ...viewer, paymentUnderReview: true } })).toEqual([
+      { label: "Payment under review", tone: "danger" },
     ]);
   });
 

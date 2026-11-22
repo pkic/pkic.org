@@ -11,6 +11,9 @@ import { first } from "../../db/queries";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 
+export const CANCELLATION_REFUND_REASON = "Canceled within the refund period";
+export const CHEAPER_DAYS_REFUND_REASON = "Changed to days that cost less";
+
 /** The instant until which refunds are given, as SQL over the settings and the event; NULL when none are. */
 export const refundDeadlineSql = (settings: string, event: string) =>
   `CASE WHEN ${settings}.refund_days_before_event IS NULL OR ${event}.starts_at IS NULL THEN NULL
@@ -69,7 +72,7 @@ export function prepareRefundOnCancellation(db: DatabaseLike, registrationId: st
            (id, ticket_id, payment_intent_id, amount, reason, next_attempt_at, created_at)
          SELECT ?, ticket.id, ticket.payment_intent_id,
                 ticket.paid_amount - ticket.refunded_amount - ticket.kept_fee - ticket.refund_fee,
-                'Canceled within the refund period', ?, ?
+                '${CANCELLATION_REFUND_REASON}', ?, ?
          FROM registration_tickets ticket WHERE ${CANCELLATION_REFUND_SQL}`,
       )
       .bind(uuid(), now, now, registrationId, now),
@@ -81,7 +84,7 @@ export function prepareRefundOnCancellation(db: DatabaseLike, registrationId: st
          WHERE registration_id = ? AND status = 'paid'
            AND EXISTS (SELECT 1 FROM registration_ticket_refunds refund
                        WHERE refund.ticket_id = registration_tickets.id AND refund.created_at = ?
-                         AND refund.reason = 'Canceled within the refund period'
+                         AND refund.reason = '${CANCELLATION_REFUND_REASON}'
                          AND refund.completed_at IS NULL AND refund.failed_at IS NULL)`,
       )
       .bind(now, registrationId, now),
@@ -102,7 +105,7 @@ export function prepareRefundDifference(
       .prepare(
         `INSERT INTO registration_ticket_refunds
            (id, ticket_id, payment_intent_id, amount, reason, next_attempt_at, created_at)
-         SELECT ?, ticket.id, ticket.payment_intent_id, ?, 'Changed to days that cost less', ?, ?
+         SELECT ?, ticket.id, ticket.payment_intent_id, ?, '${CHEAPER_DAYS_REFUND_REASON}', ?, ?
          FROM registration_tickets ticket
          WHERE ticket.id = ? AND ${REFUNDABLE_TICKET_SQL} AND ticket.paid_amount - ticket.refunded_amount = ?`,
       )

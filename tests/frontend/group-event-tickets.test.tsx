@@ -9,6 +9,7 @@ import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { menuPath } from "./helpers/menu-path";
+import { columnFilterOptions } from "./helpers/column-menu";
 import { issuedTicketsResponseSchema } from "../../assets/shared/schemas/event-issued-tickets";
 import { GroupEventTickets } from "../../assets/ts/member-flows/portal/sections/management/GroupEventTickets";
 
@@ -89,6 +90,7 @@ const list = () =>
       providerFees: 1175,
       refunded: 0,
       refundedCount: 0,
+      underReviewAmount: 0,
       awaitingAmount: 39500,
       unread: 0,
       updatable: 1,
@@ -104,6 +106,29 @@ afterEach(() => {
 });
 
 describe("event ticket list", () => {
+  it("shows payments under review and offers a matching payment filter", async () => {
+    const underReview = list();
+    underReview.tickets[0]!.payment = "payment_under_review";
+    underReview.tickets[0]!.ticket.status = "payment_under_review";
+    underReview.summary.byPayment = { payment_under_review: 1, processing: 1 };
+    underReview.summary.underReviewAmount = 39500;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify(underReview), { status: 200, headers: { "content-type": "application/json" } }),
+      ),
+    );
+    const host = mount(
+      <GroupEventTickets eventSlug="summit" registrationsPath="/groups/g/events/e/registrations" canManage />,
+    );
+    await settle();
+    await settle();
+    expect(host.querySelector("tbody")?.textContent).toContain("Payment under review");
+    expect(host.textContent).toContain("$395 under review");
+    expect(columnFilterOptions(host, "Payment")).toContain("Payment under review (1)");
+  });
+
   it("shows the totals and each ticket's payment, method and net amount", async () => {
     vi.stubGlobal(
       "fetch",

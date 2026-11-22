@@ -2,10 +2,11 @@ import {
   eventInvitationDeclineRouteSchema,
   eventInvitationRemindersRouteSchema,
 } from "../../../../../assets/shared/schemas/route-contracts-event-invitation";
-import { requireIdentityFromRequest } from "../../../../_lib/auth/user-session";
+import { resolveUserSessionContext } from "../../../../_lib/auth/user-session";
+import { userSessionRequestAuthorizationEvidence } from "../../../../_lib/auth/user-session-evidence";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
 import { markResponseSensitive, requestDb, type AdminContext } from "../../../../_lib/db/context";
-import { prepareAuthorizationGuard } from "../../../../_lib/db/authorization-guard";
+import { guardAuthorizedDatabase, prepareAuthorizationGuard } from "../../../../_lib/db/authorization-guard";
 import { processOutboxByIdBackground } from "../../../../_lib/email/outbox";
 import { AppError } from "../../../../_lib/errors";
 import { json } from "../../../../_lib/http";
@@ -18,16 +19,25 @@ import {
 import { declineAndForwardResolvedInvite } from "../../../../_lib/services/invite-decline";
 import { updateInviteReminderPreference } from "../../../../_lib/services/invite-reminder-preference";
 
-/** The signed-in person's own open invitation, and the guard that rechecks it is still theirs when it changes. */
+/** The signed-in person's own open invitation, with live session and ownership rechecked in its write batch. */
 async function heldInvitationContext(c: AdminContext, params: { eventSlug: string; inviteId: string }) {
   markResponseSensitive(c);
   const db = requestDb(c);
-  const person = await requireIdentityFromRequest(db, c.req.raw, c.env);
+  const { claims, session } = await resolveUserSessionContext(db, c.req.raw, c.env);
   const event = await getEventBySlug(db, params.eventSlug);
-  const scope = { eventId: event.id, userId: person.userId, inviteId: params.inviteId };
+  const scope = { eventId: event.id, userId: session.identity.id, inviteId: params.inviteId };
   const invite = await findHeldAttendeeInvitation(db, scope);
   if (!invite) throw new AppError(404, "INVITE_NOT_FOUND", "No open invitation to this event for your account.");
-  return { db, invite, guards: [prepareAuthorizationGuard(db, heldAttendeeInvitationEvidence(scope))] };
+  const guardedDb = guardAuthorizedDatabase(
+    db,
+    userSessionRequestAuthorizationEvidence(claims),
+    () => new AppError(409, "AUTHORIZATION_CONTEXT_CHANGED", "The active user session changed"),
+  );
+  return {
+    db: guardedDb,
+    invite,
+    guards: [prepareAuthorizationGuard(guardedDb, heldAttendeeInvitationEvidence(scope))],
+  };
 }
 
 export const EventInvitationDeclinePost = openApiRoute(
@@ -39,7 +49,8 @@ export const EventInvitationDeclinePost = openApiRoute(
       appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
       guards,
     });
-    for (const outboxId of result.outboxIds) c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, outboxId));
+    for (const outboxId of result.outboxIds)
+      c.executionCtx.waitUntil(processOutboxByIdBackground(requestDb(c), c.env, outboxId));
     return json({ success: true, forwarded: result.forwardedEmails });
   },
 );

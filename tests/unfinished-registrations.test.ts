@@ -13,15 +13,18 @@ import {
 } from "../assets/shared/schemas/unfinished-registrations";
 import { findOrCreateUser } from "../functions/_lib/services/users";
 import { nowIso } from "../functions/_lib/utils/time";
+import { validateEmailDeliveryGuard } from "../functions/_lib/email/delivery-guard";
 import { eventAudienceEvidenceById } from "../functions/_lib/services/events/visibility";
-import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { mutateBeforeMatchingQuery, mutateBeforeNextBatch } from "./helpers/database-races";
 import {
   listUnfinishedRegistrationNotes,
   prepareRegistrationStart,
   startUnfinishedRegistration,
   readUnfinishedRegistrationSummary,
   sendUnfinishedRegistrationReminders,
+  stopUnfinishedRegistration,
 } from "../functions/_lib/services/registrations/unfinished";
+import type { Env } from "../functions/_lib/types";
 
 const BASE = "https://example.test";
 const HOUR = 3_600_000;
@@ -103,6 +106,57 @@ it("clears a reminder when the person's event access or account eligibility ends
       "SELECT COUNT(*) AS n FROM unfinished_registrations WHERE next_reminder_at IS NOT NULL",
     ).first(),
   ).toEqual({ n: 0 });
+});
+
+it("does not queue a reminder to the former address when the primary email changes before the write", async () => {
+  const user = await start("former@example.test", 25);
+  const racedDb = mutateBeforeNextBatch(env.DB, () =>
+    env.DB.prepare("UPDATE users SET email = ?, normalized_email = ? WHERE id = ?")
+      .bind("current@example.test", "current@example.test", user.id)
+      .run(),
+  );
+
+  expect(await sendUnfinishedRegistrationReminders(racedDb, BASE)).toEqual({ reminded: 0, cleared: 1 });
+  expect((await reminders()).results).toEqual([]);
+});
+
+it("makes a queued reminder undeliverable when its address stops being the primary email", async () => {
+  const user = await start("former@example.test", 25);
+  expect((await sendUnfinishedRegistrationReminders(env.DB, BASE)).reminded).toBe(1);
+  const [reminder] = (await reminders()).results;
+  const payload = JSON.parse(reminder.payload_json);
+  await expect(validateEmailDeliveryGuard(env.DB, payload)).resolves.toBeUndefined();
+
+  const now = nowIso();
+  await env.DB.batch([
+    env.DB.prepare("UPDATE users SET email = ?, normalized_email = ? WHERE id = ?").bind(
+      "current@example.test",
+      "current@example.test",
+      user.id,
+    ),
+    // Retaining the former address as a verified alias must not authorize this primary-address reminder.
+    env.DB.prepare(
+      `INSERT INTO user_emails (id, user_id, email, normalized_email, verified_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    ).bind(crypto.randomUUID(), user.id, "former@example.test", "former@example.test", now, now),
+  ]);
+
+  await expect(validateEmailDeliveryGuard(env.DB, payload)).rejects.toMatchObject({
+    code: "CAPABILITY_RESOURCE_STALE",
+  });
+});
+
+it("cancels a reminder awaiting retry when the person says they will not register", async () => {
+  const user = await start("retrying@example.test", 25);
+  expect((await sendUnfinishedRegistrationReminders(env.DB, BASE)).reminded).toBe(1);
+  await env.DB.prepare("UPDATE email_outbox SET status = 'retrying' WHERE recipient_user_id = ?").bind(user.id).run();
+
+  await stopUnfinishedRegistration(env.DB, { id: eventId }, user.id, {});
+
+  const row = await env.DB.prepare("SELECT status FROM email_outbox WHERE recipient_user_id = ?")
+    .bind(user.id)
+    .first<{ status: string }>();
+  expect(row?.status).toBe("cancelled");
 });
 
 it("rejects a reminder start when event access ends before its write", async () => {
@@ -221,5 +275,42 @@ it("lets the person say they are not registering, which stops reminders and reac
     stopped: 0,
     reasons: [],
     wroteNote: 0,
+  });
+});
+
+it("keeps the unfinished registration and queued reminder when the session ends before stopping", async () => {
+  const user = await start("revoked-stop@example.test", 30);
+  const token = await createMemberSession(env.DB, user.id, `session-${crypto.randomUUID()}`);
+  const reminderKey = `unfinished-registration:${eventId}:${user.id}:1`;
+  expect((await sendUnfinishedRegistrationReminders(env.DB, BASE)).reminded).toBe(1);
+  let revoked = false;
+  const racedDb = mutateBeforeMatchingQuery(
+    env.DB,
+    (sql) => sql.includes("UPDATE unfinished_registrations") && sql.includes("SET stopped_at"),
+    async () => {
+      revoked = true;
+      await env.DB.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ?").bind(nowIso(), user.id).run();
+    },
+  );
+  const response = await callApi(
+    { ...env, DB: racedDb } as Env,
+    "/api/v1/events/pqc-2026/registrations/unfinished/current/stop",
+    {
+      method: "POST",
+      body: JSON.stringify({ reasonCode: "price", reasonNote: "Our budget is frozen this year." }),
+      headers: { cookie: `pkic_session=${token}`, "content-type": "application/json" },
+    },
+  );
+  expect(revoked).toBe(true);
+  expect(response.status).toBe(409);
+  expect(
+    await env.DB.prepare("SELECT stopped_at, stop_reason, stop_note FROM unfinished_registrations WHERE user_id = ?")
+      .bind(user.id)
+      .first(),
+  ).toEqual({ stopped_at: null, stop_reason: null, stop_note: null });
+  expect(
+    await env.DB.prepare("SELECT status FROM email_outbox WHERE idempotency_key = ?").bind(reminderKey).first(),
+  ).toEqual({
+    status: "queued",
   });
 });

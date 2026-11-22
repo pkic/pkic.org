@@ -451,6 +451,8 @@ export const registrationManageReadResponseSchema = successResponseSchema.extend
   paymentDue: z.boolean().default(false),
   /** That payment was made by a method that takes days and is on its way, so nothing more is asked. */
   paymentProcessing: z.boolean().default(false),
+  /** A payment dispute suspends badge and check-in access until the organizers review it. */
+  paymentUnderReview: z.boolean().default(false),
   shareUrl: httpUrlSchema.nullable(),
   headshotUrl: httpUrlSchema.nullable(),
 });

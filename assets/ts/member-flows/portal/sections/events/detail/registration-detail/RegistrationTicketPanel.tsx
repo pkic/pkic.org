@@ -35,6 +35,8 @@ const SOURCE_LABELS: Record<TicketAssignmentSource, string> = {
 };
 
 function status(ticket: RegistrationTicket) {
+  if (ticket.status === "payment_under_review")
+    return <Badge tone="danger">{TICKET_STATUS_LABELS.payment_under_review}</Badge>;
   if (ticket.refundPending) return <Badge tone="warn">Refund on its way</Badge>;
   // The person paid by a method that takes days; the provider says when it arrives.
   if (ticket.paymentProcessing) return <Badge tone="info">{TICKET_STANDING_COPY.processing.status}</Badge>;
@@ -142,6 +144,11 @@ export function RegistrationTicketPanel({
         menu={actions.length > 0 ? <Menu label="Ticket actions" align="end" items={actions} /> : undefined}
       />
       <PanelBody class="pk-stack">
+        {ticket.status === "payment_under_review" && (
+          <Alert tone="danger" title="Payment under review">
+            The attendee's badge and check-in code are unavailable. Review the payment with the payment provider.
+          </Alert>
+        )}
         {ticket.disputed && (
           <Alert tone="warn" title="The person chose another ticket than the one decided for their organization">
             {ticket.disputeReason}

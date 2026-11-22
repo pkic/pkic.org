@@ -30,6 +30,7 @@ import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
+import { normalizeEmail } from "../../validation";
 import type { EventRecord } from "../events";
 import { eventAudienceEvidenceById } from "../events/visibility";
 import { registrationPageUrl } from "../frontend-links";
@@ -140,8 +141,9 @@ export async function sendUnfinishedRegistrationReminders(
     const recipient: AuthorizationEvidence = {
       sql: `SELECT 1 FROM (SELECT 1) recipient_anchor JOIN users person
             ON person.id = ? AND ${liveAccountSql("person")}
+              AND person.normalized_email = ?
               AND ${accountAddressSignsInSql("person.id", "person.normalized_email")}`,
-      bindings: [row.user_id],
+      bindings: [row.user_id, normalizeEmail(row.email)],
     };
     try {
       await db.batch([
@@ -173,7 +175,12 @@ export async function sendUnfinishedRegistrationReminders(
           messageType: "transactional",
           outboxId: uuid(),
           idempotencyKey: `unfinished-registration:${row.event_id}:${row.user_id}:${row.reminders_sent + 1}`,
-          data: { eventName: row.event_name, registerUrl, notRegisteringUrl: stopUrl },
+          data: {
+            eventName: row.event_name,
+            registerUrl,
+            notRegisteringUrl: stopUrl,
+            __currentRecipient: { userId: row.user_id, email: row.email, requireCurrentPrimary: true },
+          },
         }).statement,
       ]);
       reminded += 1;
@@ -233,7 +240,7 @@ export async function stopUnfinishedRegistration(
     db
       .prepare(
         `UPDATE email_outbox SET status = 'cancelled', updated_at = ?
-         WHERE status = 'queued' AND idempotency_key >= ? AND idempotency_key < ?`,
+         WHERE status IN ('queued', 'retrying') AND idempotency_key >= ? AND idempotency_key < ?`,
       )
       .bind(now, reminderKeys, `${reminderKeys.slice(0, -1)};`),
   ]);

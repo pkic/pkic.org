@@ -183,6 +183,7 @@ function RegistrationRecord({
             eventSlug={data.event.slug}
             paymentDue={data.paymentDue}
             paymentProcessing={data.paymentProcessing}
+            paymentUnderReview={data.paymentUnderReview}
           />
           {cancelled && (
             <Alert>

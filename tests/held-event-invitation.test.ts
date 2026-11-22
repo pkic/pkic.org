@@ -11,9 +11,11 @@ import {
 import { callApi } from "./helpers/app";
 import { createMemberSession } from "./helpers/auth";
 import { createTestRateLimiter, queryAll, seedEventAndAdmin } from "./helpers/context";
+import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { insertOrganization, insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 import type { Env } from "../functions/_lib/types";
+import { nowIso } from "../functions/_lib/utils/time";
 
 let environment: Env;
 const EVENT_PATH = "/api/v1/events/pqc-2026";
@@ -218,6 +220,18 @@ describe("the invited reader's portal projections", () => {
 describe("answering an invitation while signed in", () => {
   const path = (inviteId: string, action: string) => `${EVENT_PATH}/invites/${inviteId}/${action}`;
 
+  function revokeSessionBeforeWrite(userId: string, matches: (sql: string) => boolean) {
+    let revoked = false;
+    environment = {
+      ...environment,
+      DB: mutateBeforeMatchingQuery(env.DB, matches, async () => {
+        revoked = true;
+        await env.DB.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ?").bind(nowIso(), userId).run();
+      }),
+    };
+    return () => revoked;
+  }
+
   it("postpones reminders for a week, and the invitation stays open", async () => {
     const f = await fixture();
     const inviteId = await invite(f.eventId, f.email);
@@ -249,6 +263,65 @@ describe("answering an invitation while signed in", () => {
     expect((await call("/api/v1/events?invitation=open", f.token).then((r) => r.json())) as unknown).toMatchObject({
       events: [],
     });
+  });
+
+  it("forwards a declined invitation while the session is live", async () => {
+    const f = await fixture();
+    const inviteId = await invite(f.eventId, f.email);
+    const response = await call(path(inviteId, "decline"), f.token, {
+      method: "POST",
+      body: JSON.stringify({
+        reasonCode: "schedule_conflict",
+        forwards: [{ email: "forwarded@example.test" }],
+      }),
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(await response.json()).toMatchObject({ forwarded: ["forwarded@example.test"] });
+    expect(await queryAll(env.DB, "SELECT status FROM invites WHERE id = ?", [inviteId])).toEqual([
+      { status: "declined" },
+    ]);
+    expect(
+      await queryAll(env.DB, "SELECT status FROM invites WHERE invitee_email = ?", ["forwarded@example.test"]),
+    ).toEqual([{ status: "sent" }]);
+  });
+
+  it("does not pause reminders when the session is revoked before the write", async () => {
+    const f = await fixture();
+    const inviteId = await invite(f.eventId, f.email);
+    const wasRevoked = revokeSessionBeforeWrite(f.userId, (sql) =>
+      sql.includes("UPDATE invites SET reminders_paused_until"),
+    );
+    const response = await call(path(inviteId, "reminders"), f.token, {
+      method: "POST",
+      body: JSON.stringify({ action: "pause_30d" }),
+    });
+    expect(wasRevoked()).toBe(true);
+    expect(response.status).toBe(409);
+    expect(
+      await queryAll(env.DB, "SELECT status, reminders_paused_until FROM invites WHERE id = ?", [inviteId]),
+    ).toEqual([{ status: "sent", reminders_paused_until: null }]);
+  });
+
+  it("does not decline, forward, or queue email when the session is revoked before the write", async () => {
+    const f = await fixture();
+    const inviteId = await invite(f.eventId, f.email);
+    const wasRevoked = revokeSessionBeforeWrite(f.userId, (sql) => sql.includes("SET status = 'declined'"));
+    const response = await call(path(inviteId, "decline"), f.token, {
+      method: "POST",
+      body: JSON.stringify({
+        reasonCode: "schedule_conflict",
+        forwards: [{ email: "forwarded@example.test" }],
+      }),
+    });
+    expect(wasRevoked()).toBe(true);
+    expect(response.status).toBe(409);
+    expect(await queryAll(env.DB, "SELECT status FROM invites WHERE id = ?", [inviteId])).toEqual([{ status: "sent" }]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM invites WHERE invitee_email = ?", ["forwarded@example.test"]),
+    ).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE recipient_email = ?", ["forwarded@example.test"]),
+    ).toEqual([]);
   });
 
   it("refuses an invitation that belongs to another address, and an anonymous caller", async () => {

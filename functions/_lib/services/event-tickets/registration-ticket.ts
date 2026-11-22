@@ -104,6 +104,12 @@ export async function planRegistrationTicket(
       "TICKET_REFUND_PENDING",
       "A refund for this ticket is still being checked. Try again in a few minutes.",
     );
+  if (held?.status === "payment_under_review")
+    throw new AppError(
+      409,
+      "TICKET_PAYMENT_UNDER_REVIEW",
+      "This payment is under review. Contact the event organizers.",
+    );
   // A paid ticket is settled: it is neither priced again nor replaced. It covers what was paid for, so
   // registering again for days that cost more is refused.
   if (held?.status === "paid") {
@@ -173,7 +179,7 @@ export async function planRegistrationTicket(
     prepareStateGuard(db, {
       sql: `SELECT 1 WHERE NOT EXISTS
               (SELECT 1 FROM registration_tickets
-               WHERE registration_id = ? AND (status = 'paid' OR refund_reconcile_at IS NOT NULL))`,
+               WHERE registration_id = ? AND (status IN ('paid', 'payment_under_review') OR refund_reconcile_at IS NOT NULL))`,
       bindings: [input.registrationId],
     }),
   ];
@@ -220,7 +226,7 @@ export async function planRegistrationTicket(
            refund_until = NULL, refund_fee = 0, refunds_seen_at = NULL,
            refund_reconcile_at = NULL,
            revision = registration_tickets.revision + 1, updated_at = excluded.updated_at
-         WHERE registration_tickets.status NOT IN ('paid') AND registration_tickets.refund_reconcile_at IS NULL`,
+         WHERE registration_tickets.status NOT IN ('paid', 'payment_under_review') AND registration_tickets.refund_reconcile_at IS NULL`,
       )
       .bind(
         id,
@@ -262,6 +268,11 @@ export const ticketPaymentDueSql = (registrationId: string) =>
 export const ticketPaymentOnItsWaySql = (registrationId: string) =>
   `EXISTS (SELECT 1 FROM registration_tickets due WHERE due.registration_id = ${registrationId}
            AND due.status = 'pending_payment' AND ${ticketPaymentProcessingSql("due.id")})`;
+
+/** A contested payment suspends the ticket until organizers settle its standing. */
+export const ticketPaymentDisputedSql = (registrationId: string) =>
+  `EXISTS (SELECT 1 FROM registration_tickets disputed WHERE disputed.registration_id = ${registrationId}
+           AND disputed.status = 'payment_under_review')`;
 
 /** What is still owed for a registration's ticket; no row when nothing is. */
 export interface TicketPaymentDue {

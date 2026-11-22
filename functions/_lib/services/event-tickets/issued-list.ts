@@ -59,6 +59,7 @@ interface SummaryRow {
   payment: IssuedTicketPaymentState;
   tickets: number;
   collected: number;
+  under_review_amount: number;
   provider_fees: number;
   refunded: number;
   refunded_count: number;
@@ -102,7 +103,10 @@ export async function listIssuedTickets(db: DatabaseLike, event: { id: string },
     all<SummaryRow>(
       db,
       `SELECT ${PAYMENT_STATE_SQL} AS payment, COUNT(*) AS tickets,
-              SUM(ticket.paid_amount - ticket.refunded_amount) AS collected,
+              SUM(CASE WHEN ticket.status = 'payment_under_review' THEN 0
+                       ELSE ticket.paid_amount - ticket.refunded_amount END) AS collected,
+              SUM(CASE WHEN ticket.status = 'payment_under_review' THEN ticket.paid_amount - ticket.refunded_amount
+                       ELSE 0 END) AS under_review_amount,
               SUM(CASE WHEN ticket.settled_currency = ticket.currency
                        THEN ticket.settled_amount - ticket.net_amount ELSE 0 END) AS provider_fees,
               SUM(ticket.refunded_amount) AS refunded, SUM(ticket.refunded_amount > 0) AS refunded_count,
@@ -130,6 +134,7 @@ export async function listIssuedTickets(db: DatabaseLike, event: { id: string },
       currency: settings?.currency ?? "usd",
       byPayment: Object.fromEntries(summary.map((row) => [row.payment, Number(row.tickets)])),
       collected: total("collected"),
+      underReviewAmount: total("under_review_amount"),
       providerFees: total("provider_fees"),
       refunded: total("refunded"),
       refundedCount: total("refunded_count"),

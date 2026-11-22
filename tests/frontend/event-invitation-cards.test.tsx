@@ -127,6 +127,27 @@ describe("event invitation cards", () => {
     expect(container.querySelector("dialog strong")?.textContent).toBe("hands-on");
   });
 
+  it("does not load media from an event's invitation message when Home opens", async () => {
+    stub([
+      invitedRow({
+        invitationMessage: {
+          headline: "Join us",
+          message:
+            "**Welcome.** ![Tracking image](https://tracker.example/pixel)\n\nhttps://www.youtube.com/watch?v=HGoZW7MCF60\n\n{{< youtube HGoZW7MCF60 >}}\n\n- [Read more](https://example.org/program)",
+        },
+      }),
+    ]);
+    const container = await mount();
+    const messages = container.querySelectorAll(".pk-markdown");
+    expect(messages).toHaveLength(2);
+    for (const message of messages) {
+      expect(message.querySelector("img, iframe, video, source")).toBeNull();
+      expect(message.querySelector("strong")?.textContent).toBe("Welcome.");
+      expect(message.querySelector('a[href="https://example.org/program"]')?.textContent).toContain("Read more");
+      expect(message.textContent).toContain("Tracking image");
+    }
+  });
+
   it("postpones the invitation for a week, and the card stays", async () => {
     const fetchMock = stub([invitedRow()]);
     const container = await mount();

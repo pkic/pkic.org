@@ -31,7 +31,7 @@ import {
   waitlistTone,
 } from "./registration-manage-status";
 import { eventMyAgendaPath, eventTicketPath } from "../../shared/event-participation-link";
-import { TICKET_STANDING_COPY, ticketStanding } from "../../shared/event-ticket-standing";
+import { TICKET_STANDING_COPY, ticketStanding, type TicketStanding } from "../../shared/event-ticket-standing";
 import { Kicker } from "../ui/Kicker";
 import { confirmAction } from "../components/ConfirmDialog";
 import { RegistrationManageSummary } from "./registration-manage-summary";
@@ -45,10 +45,10 @@ import "../ui/Content.css";
 function RegistrationStatusBanner({
   dayAttendance,
   dayWaitlist,
-  paymentDue,
+  paymentStanding,
 }: {
-  /** The ticket is still to be paid, so no day is confirmed yet. */
-  paymentDue: boolean;
+  /** An unsettled ticket does not confirm any day. */
+  paymentStanding: TicketStanding;
   dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null; optionLabel?: string | null }>;
   dayWaitlist: Array<{ dayDate: string; status: string }>;
 }) {
@@ -60,15 +60,22 @@ function RegistrationStatusBanner({
     <div class="pk pk-stack pk-stack--snug">
       <p>
         <strong>Registration status:</strong>{" "}
-        {offeredDayWaitlist.length > 0 ? (
+        {paymentStanding === "under_review" ? (
+          <>
+            <Badge tone={TICKET_STANDING_COPY.under_review.tone}>{TICKET_STANDING_COPY.under_review.status}</Badge>{" "}
+            {TICKET_STANDING_COPY.under_review.body}
+          </>
+        ) : offeredDayWaitlist.length > 0 ? (
           <>
             <Badge tone="info">Place available</Badge> A place is available for one or more waitlisted days. Use the
             claim button below while the offer is active.
           </>
-        ) : paymentDue ? (
+        ) : paymentStanding !== "settled" ? (
           <>
-            <Badge tone={TICKET_STANDING_COPY.to_pay.tone}>{TICKET_STANDING_COPY.to_pay.status}</Badge>{" "}
-            {TICKET_STANDING_COPY.to_pay.body}
+            <Badge tone={TICKET_STANDING_COPY[paymentStanding].tone}>
+              {TICKET_STANDING_COPY[paymentStanding].status}
+            </Badge>{" "}
+            {TICKET_STANDING_COPY[paymentStanding].body}
           </>
         ) : (
           <>
@@ -87,7 +94,7 @@ function RegistrationStatusBanner({
               const dayLabel = day.label ?? day.dayDate;
               const attLabel = day.optionLabel ?? attendanceTypeLabel(day.attendanceType);
               const waitlistStatus = waitlistByDay.get(day.dayDate);
-              const confirmation = dayConfirmation(waitlistStatus, paymentDue);
+              const confirmation = dayConfirmation(waitlistStatus, paymentStanding);
               return (
                 <Fragment key={day.dayDate}>
                   <dt>{dayLabel}</dt>
@@ -175,7 +182,7 @@ async function main(): Promise<void> {
         <RegistrationStatusBanner
           dayAttendance={dayAttendance}
           dayWaitlist={dayWaitlist ?? []}
-          paymentDue={manageData.paymentDue}
+          paymentStanding={ticketStanding(manageData)}
         />,
         statusBanner,
       );

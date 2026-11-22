@@ -6,27 +6,28 @@ import { EventRegister } from "../../member-flows/portal/sections/events/app/Eve
 import { EventTicketPayment } from "../../member-flows/portal/sections/events/app/EventTicketPayment";
 import { TicketStandingNotice } from "../../components/events/tickets/TicketStandingNotice";
 
+const ticket = registrationTicketSchema.parse({
+  id: "20000000-0000-4000-8000-0000000000aa",
+  ticketKey: "attendee",
+  ticketName: "Attendee",
+  source: "default",
+  status: "pending_payment",
+  amount: 19500,
+  currency: "usd",
+  codeLabel: null,
+  paidAt: null,
+  disputed: false,
+  disputeReason: null,
+  refundPending: false,
+  refundFailed: false,
+  paymentReference: null,
+  refundableUntil: "2099-11-24T08:00:00.000Z",
+  refundFee: 1000,
+  refundedAmount: 0,
+});
+
 /** The ticket page while a ticket awaits payment: what is owed, the way to pay, and the refund terms. */
 export function TicketAwaitingPayment() {
-  const ticket = registrationTicketSchema.parse({
-    id: "20000000-0000-4000-8000-0000000000aa",
-    ticketKey: "attendee",
-    ticketName: "Attendee",
-    source: "default",
-    status: "pending_payment",
-    amount: 19500,
-    currency: "usd",
-    codeLabel: null,
-    paidAt: null,
-    disputed: false,
-    disputeReason: null,
-    refundPending: false,
-    refundFailed: false,
-    paymentReference: null,
-    refundableUntil: "2099-11-24T08:00:00.000Z",
-    refundFee: 1000,
-    refundedAmount: 0,
-  });
   return (
     <div class="pk-stack">
       <EventTicketPayment
@@ -48,6 +49,18 @@ export function TicketAwaitingPayment() {
         details={<a href="#ticket-payment">Registration details</a>}
       />
     </div>
+  );
+}
+
+/** A payment under review leaves the ticket visible without admission or another payment action. */
+export function TicketPaymentUnderReview() {
+  return (
+    <EventTicketPayment
+      slug="example"
+      registrationId="20000000-0000-4000-8000-0000000000ab"
+      ticket={{ ...ticket, status: "payment_under_review" }}
+      details={<a href="#ticket-under-review">Registration details</a>}
+    />
   );
 }
 

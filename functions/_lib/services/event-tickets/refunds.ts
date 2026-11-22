@@ -14,21 +14,26 @@ import { isStateGuardFailure, prepareStateGuard } from "../../db/authorization-g
 import { all, first, run } from "../../db/queries";
 import { AppError } from "../../errors";
 import { expireStripeCheckoutSession } from "../../integrations/stripe/checkout";
-import { createStripeRefund, readStripeRefundedTotal, STRIPE_REFUND_REFUSED } from "../../integrations/stripe/refunds";
+import {
+  createStripeRefund,
+  findStripeRefundByRequest,
+  readStripeRefundedTotal,
+  STRIPE_REFUND_REFUSED,
+} from "../../integrations/stripe/refunds";
 import { createDurableJobLease } from "../../jobs/lease";
 import type { DatabaseLike, Env, StatementLike, UserBackedAuthAdmin } from "../../types";
 import { uuid } from "../../utils/ids";
-import { statusAfterRefundSql } from "./refund-policy";
+import { CANCELLATION_REFUND_REASON, CHEAPER_DAYS_REFUND_REASON, statusAfterRefundSql } from "./refund-policy";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
 
 /** A refund that is neither confirmed nor failed: nothing else is asked for its ticket meanwhile. */
 export const OPEN_REFUND_SQL = "refund.completed_at IS NULL AND refund.failed_at IS NULL";
 
-/** After this many refused or failed sends the refund is marked failed, so a person looks at it. */
-const MAX_REFUND_ATTEMPTS = 8;
-
 const REFUND_FAILED_STATUSES = ["failed", "canceled"];
+const POLICY_REFUND_REASONS = [CANCELLATION_REFUND_REASON, CHEAPER_DAYS_REFUND_REASON];
+/** Stay below Stripe's minimum idempotency-key retention when the original provider outcome is unknown. */
+const SAFE_REFUND_RETRY_AGE_MS = 23 * 60 * 60 * 1000;
 
 export async function requestTicketRefund(
   db: DatabaseLike,
@@ -192,13 +197,28 @@ export function prepareFailRefund(
     db
       .prepare(
         `UPDATE registration_tickets SET refund_reconcile_at = ?,
+           kept_fee = MAX(0, kept_fee - COALESCE((
+             SELECT CASE WHEN refund.reason IN (${POLICY_REFUND_REASONS.map(() => "?").join(", ")})
+                         THEN registration_tickets.refund_fee ELSE 0 END
+             FROM registration_ticket_refunds refund WHERE refund.provider_refund_id = ?
+               AND refund.failed_at IS NULL LIMIT 1), 0)),
            refunds_seen_at = CASE WHEN refunds_seen_at IS NULL OR refunds_seen_at < ? THEN ? ELSE refunds_seen_at END,
            revision = revision + 1, updated_at = ?
          WHERE id = ? AND payment_intent_id = ?
            AND NOT EXISTS (SELECT 1 FROM registration_ticket_refunds refund
                            WHERE refund.provider_refund_id = ? AND refund.failed_at IS NOT NULL)`,
       )
-      .bind(now, input.at, input.at, now, input.ticketId, input.paymentIntentId, input.providerRefundId),
+      .bind(
+        now,
+        ...POLICY_REFUND_REASONS,
+        input.providerRefundId,
+        input.at,
+        input.at,
+        now,
+        input.ticketId,
+        input.paymentIntentId,
+        input.providerRefundId,
+      ),
     db
       .prepare(
         `INSERT INTO registration_ticket_refunds
@@ -369,10 +389,11 @@ interface DueRefundRow {
   ticket_id: string;
   amount: number;
   attempts: number;
+  created_at: string;
   payment_intent_id: string | null;
 }
 
-/** Sends due refunds to Stripe. A failure is retried later with the same idempotency key, a refusal is final. */
+/** Sends due refunds to Stripe. An unknown outcome keeps the same request and idempotency key retryable. */
 export async function processTicketRefunds(
   db: DatabaseLike,
   env: Pick<Env, "STRIPE_SECRET_KEY" | "STRIPE_API_BASE">,
@@ -383,7 +404,7 @@ export async function processTicketRefunds(
   const now = nowIso();
   const due = await all<DueRefundRow>(
     db,
-    `SELECT refund.id, refund.ticket_id, refund.amount, refund.attempts, refund.payment_intent_id
+    `SELECT refund.id, refund.ticket_id, refund.amount, refund.attempts, refund.created_at, refund.payment_intent_id
      FROM registration_ticket_refunds refund
      WHERE refund.submitted_at IS NULL AND refund.failed_at IS NULL AND refund.next_attempt_at <= ?
        AND (refund.lease_expires_at IS NULL OR refund.lease_expires_at <= ?)
@@ -404,15 +425,34 @@ export async function processTicketRefunds(
     if (!claimed.changes) continue;
     try {
       if (!refund.payment_intent_id) throw new AppError(409, STRIPE_REFUND_REFUSED, "TICKET_PAYMENT_NOT_RECORDED");
-      const created = await createStripeRefund(
-        env.STRIPE_SECRET_KEY,
-        {
-          paymentIntentId: refund.payment_intent_id,
-          amount: refund.amount,
-          metadata: { registrationTicketId: refund.ticket_id, registrationTicketRefundId: refund.id },
-        },
-        { idempotencyKey: `registration-ticket-refund:${refund.id}`, fetcher, apiBase: env.STRIPE_API_BASE },
-      );
+      // A previous send may have reached Stripe while its response or our write was lost. Find it by the durable
+      // request ID before retrying; Stripe does not promise to retain idempotency keys forever.
+      const prior =
+        refund.attempts > 0
+          ? await findStripeRefundByRequest(
+              env.STRIPE_SECRET_KEY,
+              {
+                paymentIntentId: refund.payment_intent_id,
+                ticketId: refund.ticket_id,
+                refundId: refund.id,
+                amount: refund.amount,
+              },
+              { fetcher, apiBase: env.STRIPE_API_BASE },
+            )
+          : null;
+      if (refund.attempts > 0 && !prior && Date.now() - Date.parse(refund.created_at) >= SAFE_REFUND_RETRY_AGE_MS)
+        throw new AppError(502, "STRIPE_ERROR", "The refund needs manual reconciliation before another send");
+      const created =
+        prior ??
+        (await createStripeRefund(
+          env.STRIPE_SECRET_KEY,
+          {
+            paymentIntentId: refund.payment_intent_id,
+            amount: refund.amount,
+            metadata: { registrationTicketId: refund.ticket_id, registrationTicketRefundId: refund.id },
+          },
+          { idempotencyKey: `registration-ticket-refund:${refund.id}`, fetcher, apiBase: env.STRIPE_API_BASE },
+        ));
       const at = nowIso();
       const submitted = db
         .prepare(
@@ -447,24 +487,41 @@ export async function processTicketRefunds(
       processed += 1;
     } catch (error) {
       failed += 1;
-      const final =
-        (error instanceof AppError && error.code === STRIPE_REFUND_REFUSED) ||
-        refund.attempts + 1 >= MAX_REFUND_ATTEMPTS;
+      // A successful provider response may have been followed by a failed database write. Transport errors may
+      // also hide an accepted refund. Neither is evidence that Stripe refused it; retain this row and its key.
+      const refused = error instanceof AppError && error.code === STRIPE_REFUND_REFUSED;
       const delaySeconds = Math.min(3600, 2 ** Math.min(refund.attempts, 8) * 60);
       const at = nowIso();
-      await run(
-        db,
-        `UPDATE registration_ticket_refunds SET next_attempt_at = ?, last_error = ?, failed_at = ?,
-           lease_token = NULL, lease_expires_at = NULL
-         WHERE id = ? AND lease_token = ?`,
-        [
-          new Date(Date.now() + delaySeconds * 1000).toISOString(),
-          error instanceof Error ? error.message.slice(0, 200) : "unknown",
-          final ? at : null,
-          refund.id,
-          lease.token,
-        ],
-      );
+      await db.batch([
+        ...(refused
+          ? [
+              db
+                .prepare(
+                  `UPDATE registration_tickets SET kept_fee = MAX(0, kept_fee - refund_fee),
+                     revision = revision + 1, updated_at = ?
+                   WHERE id = ? AND EXISTS (
+                     SELECT 1 FROM registration_ticket_refunds refund
+                     WHERE refund.id = ? AND refund.ticket_id = registration_tickets.id
+                       AND refund.lease_token = ? AND refund.failed_at IS NULL
+                       AND refund.reason IN (?, ?))`,
+                )
+                .bind(at, refund.ticket_id, refund.id, lease.token, ...POLICY_REFUND_REASONS),
+            ]
+          : []),
+        db
+          .prepare(
+            `UPDATE registration_ticket_refunds SET next_attempt_at = ?, last_error = ?, failed_at = ?,
+               lease_token = NULL, lease_expires_at = NULL
+             WHERE id = ? AND lease_token = ?`,
+          )
+          .bind(
+            new Date(Date.now() + delaySeconds * 1000).toISOString(),
+            error instanceof Error ? error.message.slice(0, 200) : "unknown",
+            refused ? at : null,
+            refund.id,
+            lease.token,
+          ),
+      ]);
     }
   }
   return { processed, failed };

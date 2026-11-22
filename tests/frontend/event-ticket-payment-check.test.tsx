@@ -10,6 +10,8 @@ import { registrationTicketSchema } from "../../assets/shared/schemas/event-tick
 import { EventTicket } from "../../assets/ts/member-flows/portal/sections/events/app/EventTicket";
 import { participantEventFixture, registeredParticipant } from "../helpers/participant-event";
 import { EventTicketPayment } from "../../assets/ts/member-flows/portal/sections/events/app/EventTicketPayment";
+import { RegistrationTicketPanel } from "../../assets/ts/member-flows/portal/sections/events/detail/registration-detail/RegistrationTicketPanel";
+import { menuPath } from "./helpers/menu-path";
 
 const { postJson, getJson, putJson } = vi.hoisted(() => ({ postJson: vi.fn(), getJson: vi.fn(), putJson: vi.fn() }));
 vi.mock("../../assets/ts/shared/api-client", () => ({ postJson, getJson, putJson }));
@@ -96,6 +98,14 @@ describe("ticket payment check", () => {
     expect(host.textContent).toContain("Your payment is being processed");
     expect(host.querySelector("button")).toBeNull();
   });
+
+  it("withholds the badge and payment action while a payment is under review", async () => {
+    await open(vi.fn(), { ...ticket, status: "payment_under_review" });
+    expect(host.textContent).toContain("Payment under review");
+    expect(host.textContent).toContain("Contact the event organizers.");
+    expect(host.querySelector("button")).toBeNull();
+    expect(postJson).not.toHaveBeenCalled();
+  });
 });
 
 describe("ticket page after a payment", () => {
@@ -122,5 +132,30 @@ describe("ticket page after a payment", () => {
     await vi.waitFor(() => expect(getJson).toHaveBeenCalled());
     expect(host.textContent).not.toContain("Payment received");
     expect(postJson).not.toHaveBeenCalled();
+  });
+
+  it("never requests a badge for a ticket under review", async () => {
+    getJson.mockResolvedValue({ ticket: { ...ticket, status: "payment_under_review" } });
+    await act(async () => {
+      render(<EventTicket event={participantEventFixture(registeredParticipant)} />, host);
+    });
+    await vi.waitFor(() => expect(host.textContent).toContain("Payment under review"));
+    expect(putJson).not.toHaveBeenCalled();
+    expect(host.textContent).not.toContain("Pay for your ticket");
+  });
+});
+
+describe("organizer ticket record", () => {
+  it("shows the payment review state and withheld admission on the ticket record", async () => {
+    getJson.mockResolvedValue({ ticket: { ...ticket, status: "payment_under_review" } });
+    await act(async () => {
+      render(<RegistrationTicketPanel slug="summit" registrationId={registrationId} canManage />, host);
+    });
+    await vi.waitFor(() => expect(host.textContent).toContain("Payment under review"));
+    expect(host.textContent).toContain("The attendee's badge and check-in code are unavailable.");
+    await menuPath(document.body, "Ticket actions", ["Update from payment provider"]);
+    expect([...document.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent)).not.toContain(
+      "Refund ticket",
+    );
   });
 });

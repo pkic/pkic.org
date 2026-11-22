@@ -36,6 +36,7 @@ const PAYMENT_LABELS: Record<IssuedTicketPaymentState, { label: string; tone?: "
   free: { label: TICKET_STATUS_LABELS.free },
   to_pay: { label: TICKET_STATUS_LABELS.pending_payment, tone: "warn" },
   processing: { label: TICKET_STANDING_COPY.processing.status, tone: "info" },
+  payment_under_review: { label: TICKET_STATUS_LABELS.payment_under_review, tone: "danger" },
   refunded: { label: TICKET_STATUS_LABELS.refunded, tone: "danger" },
   canceled: { label: TICKET_STATUS_LABELS.canceled, tone: "danger" },
 };
@@ -47,6 +48,7 @@ const EMPTY_SUMMARY: IssuedTicketsSummary = {
   providerFees: 0,
   refunded: 0,
   refundedCount: 0,
+  underReviewAmount: 0,
   awaitingAmount: 0,
   unread: 0,
   updatable: 0,
@@ -87,6 +89,12 @@ function Totals({ summary }: { summary: IssuedTicketsSummary }) {
             : undefined
         }
         tone={awaiting ? "warn" : undefined}
+      />
+      <StatCard
+        label="Payment under review"
+        value={formatNumber(of("payment_under_review"))}
+        note={of("payment_under_review") ? `${money(summary.underReviewAmount)} under review` : undefined}
+        tone={of("payment_under_review") ? "danger" : undefined}
       />
     </div>
   );

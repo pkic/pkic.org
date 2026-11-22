@@ -12,12 +12,14 @@ export function TicketStandingNotice({
   eventSlug,
   paymentDue,
   paymentProcessing,
+  paymentUnderReview = false,
 }: {
   eventSlug: string;
   paymentDue: boolean;
   paymentProcessing: boolean;
+  paymentUnderReview?: boolean;
 }) {
-  const standing = ticketStanding({ paymentDue, paymentProcessing });
+  const standing = ticketStanding({ paymentDue, paymentProcessing, paymentUnderReview });
   if (standing === "settled") return null;
   const copy = TICKET_STANDING_COPY[standing];
   return (

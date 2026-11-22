@@ -45,6 +45,18 @@ describe("event home ticket card", () => {
     expect(host.querySelector('a[href="#/events/summit/ticket"]')?.textContent).toBe("Show ticket");
   });
 
+  it("shows a payment under review without asking to pay or claiming registration is confirmed", async () => {
+    const underReview = participantEventFixture({
+      ...registeredParticipant,
+      viewer: { ...registeredParticipant.viewer, paymentUnderReview: true },
+    });
+    await act(() => render(<TicketCard event={underReview} ended={false} />, host));
+    expect(host.textContent).toContain("Payment under review");
+    expect(host.textContent).toContain("Contact the event organizers.");
+    expect(host.textContent).not.toContain("Pay for your ticket");
+    expect(host.querySelector('a[href="#/events/summit/ticket"]')?.textContent).toBe("Show ticket");
+  });
+
   it("shows the ticket to a registration with nothing to pay", async () => {
     await act(() => render(<TicketCard event={participantEventFixture(registeredParticipant)} ended={false} />, host));
     expect(host.textContent).toContain("You're registered");
@@ -67,5 +79,17 @@ describe("register page for someone who already registered", () => {
   it("says registered once nothing is owed", async () => {
     await act(() => render(<EventRegister event={participantEventFixture(registeredParticipant)} />, host));
     expect(host.textContent).toContain("You're already registered for this event.");
+  });
+
+  it("explains a payment under review on the registration page", async () => {
+    const underReview = participantEventFixture({
+      ...registeredParticipant,
+      viewer: { ...registeredParticipant.viewer, paymentUnderReview: true },
+    });
+    await act(() => render(<EventRegister event={underReview} />, host));
+    expect(host.textContent).toContain("Your payment is under review");
+    expect(host.textContent).toContain("Contact the event organizers.");
+    expect(host.textContent).not.toContain("Pay for your ticket");
+    expect(host.textContent).not.toContain("You're already registered");
   });
 });

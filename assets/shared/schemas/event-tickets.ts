@@ -74,6 +74,7 @@ export const eventTicketTypeSchema = z.object({
   sortOrder: z.number().int(),
   registered: z.number().int(),
   paid: z.number().int(),
+  underReview: z.number().int(),
   awaitingPayment: z.number().int(),
   presetOrganizations: z.number().int(),
 });
@@ -233,6 +234,8 @@ export const eventTicketsConfigurationSchema = z.object({
   totals: z.object({
     collected: z.number().int(),
     paidCount: z.number().int(),
+    underReviewCount: z.number().int(),
+    underReviewAmount: z.number().int(),
     awaitingAmount: z.number().int(),
     awaitingCount: z.number().int(),
     freeCount: z.number().int(),

@@ -11,7 +11,14 @@ import { instantToCalendarDate } from "./timezone";
 export const TICKET_PRICE_CHARGED = ["once", "each_day"] as const;
 export type TicketPriceCharged = (typeof TICKET_PRICE_CHARGED)[number];
 
-export const REGISTRATION_TICKET_STATUSES = ["free", "pending_payment", "paid", "refunded", "canceled"] as const;
+export const REGISTRATION_TICKET_STATUSES = [
+  "free",
+  "pending_payment",
+  "paid",
+  "payment_under_review",
+  "refunded",
+  "canceled",
+] as const;
 export type RegistrationTicketStatus = (typeof REGISTRATION_TICKET_STATUSES)[number];
 
 /** How a person came to hold their ticket, most specific first. */
@@ -224,6 +231,7 @@ export const TICKET_STATUS_LABELS: Record<RegistrationTicketStatus, string> = {
   free: "Free",
   pending_payment: "Awaiting payment",
   paid: "Paid",
+  payment_under_review: "Payment under review",
   refunded: "Refunded",
   canceled: "Canceled",
 };

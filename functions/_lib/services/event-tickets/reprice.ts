@@ -80,6 +80,12 @@ export async function planRepriceTicketForDays(
   );
   // A registration without a ticket was made before the event had any; nothing was priced for it.
   if (!held) return { statements: [], due: null };
+  if (held.status === "payment_under_review")
+    throw new AppError(
+      409,
+      "TICKET_PAYMENT_UNDER_REVIEW",
+      "This payment is under review. Contact the event organizers.",
+    );
   const open =
     OPEN_STATUSES.includes(held.status) || (input.restoring && ["canceled", "refunded"].includes(held.status));
   // A refunded or canceled ticket admits nobody, whatever the days.

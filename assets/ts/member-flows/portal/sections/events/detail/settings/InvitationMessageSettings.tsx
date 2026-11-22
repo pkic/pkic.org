@@ -128,7 +128,7 @@ export function InvitationMessageSettings({
                 },
                 {
                   term: "Message",
-                  value: shown.message ? <Markdown markdown={shown.message} /> : "No message.",
+                  value: shown.message ? <Markdown markdown={shown.message} profile="text" /> : "No message.",
                 },
               ]}
             />

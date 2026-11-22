@@ -11,7 +11,15 @@ import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { stripeCurrencySchema } from "./stripe";
 
 /** Where a ticket's payment stands, as an organizer filters by it. */
-export const ISSUED_TICKET_PAYMENT_STATES = ["paid", "processing", "to_pay", "free", "refunded", "canceled"] as const;
+export const ISSUED_TICKET_PAYMENT_STATES = [
+  "paid",
+  "payment_under_review",
+  "processing",
+  "to_pay",
+  "free",
+  "refunded",
+  "canceled",
+] as const;
 export const issuedTicketPaymentStateSchema = z.enum(ISSUED_TICKET_PAYMENT_STATES);
 export type IssuedTicketPaymentState = z.infer<typeof issuedTicketPaymentStateSchema>;
 
@@ -39,6 +47,7 @@ export const issuedTicketsSummarySchema = z.object({
   byPayment: z.partialRecord(issuedTicketPaymentStateSchema, count),
   /** What was paid and not returned. */
   collected: z.number().int(),
+  underReviewAmount: z.number().int(),
   /** What the payment provider kept of it, for the payments read so far. */
   providerFees: z.number().int(),
   refunded: z.number().int(),

@@ -179,6 +179,24 @@ afterEach(async () => {
   quoteLines = [];
 });
 
+it("does not load remote media from an event's ticket description", async () => {
+  reshape = (offered) => ({
+    ...offered,
+    tickets: offered.tickets.map((entry) => ({
+      ...entry,
+      descriptionMarkdown:
+        "For **attendees**. ![Tracking image](https://tracker.example/pixel)\n\nhttps://www.youtube.com/watch?v=HGoZW7MCF60",
+    })),
+  });
+  await mount(null);
+  const details = host.querySelectorAll(".pk-ticket__detail .pk-markdown");
+  expect(details.length).toBeGreaterThan(0);
+  for (const detail of details) {
+    expect(detail.querySelector("img, iframe, video, source")).toBeNull();
+    expect(detail.querySelector("strong")?.textContent).toBe("attendees");
+  }
+});
+
 it("lets the person choose a ticket when none is decided and prices the days they pick", async () => {
   await mount(null);
   const radios = [...host.querySelectorAll<HTMLInputElement>('input[name="eventTicket"]')];

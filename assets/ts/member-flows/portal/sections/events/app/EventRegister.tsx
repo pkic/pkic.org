@@ -36,6 +36,7 @@ export function EventRegister({
             eventSlug={event.slug}
             paymentDue={Boolean(viewer?.paymentDue)}
             paymentProcessing={Boolean(viewer?.paymentProcessing)}
+            paymentUnderReview={Boolean(viewer?.paymentUnderReview)}
           />
           <a href={registration}>View registration</a>
         </div>

@@ -45,8 +45,10 @@ interface TypeCountRow {
   ticket_type_id: string;
   registered: number;
   paid: number;
+  under_review: number;
   awaiting: number;
   paid_amount: number;
+  under_review_amount: number;
   awaiting_amount: number;
   free: number;
 }
@@ -90,13 +92,15 @@ export async function readEventTicketsConfiguration(
         `SELECT ticket.ticket_type_id,
                 COUNT(*) AS registered,
                 SUM(ticket.status = 'paid') AS paid,
+                SUM(ticket.status = 'payment_under_review') AS under_review,
                 SUM(ticket.status = 'pending_payment') AS awaiting,
                 SUM(CASE WHEN ticket.status = 'paid' THEN ticket.paid_amount - ticket.refunded_amount ELSE 0 END) AS paid_amount,
+                SUM(CASE WHEN ticket.status = 'payment_under_review' THEN ticket.paid_amount - ticket.refunded_amount ELSE 0 END) AS under_review_amount,
                 SUM(CASE WHEN ticket.status = 'pending_payment' THEN ticket.amount ELSE 0 END) AS awaiting_amount,
                 SUM(ticket.status = 'free') AS free
          FROM registration_tickets ticket JOIN registrations registration ON registration.id = ticket.registration_id
          WHERE ticket.event_id = ? AND registration.status <> 'cancelled'
-           AND ticket.status IN ('free', 'pending_payment', 'paid')
+           AND ticket.status IN ('free', 'pending_payment', 'paid', 'payment_under_review')
          GROUP BY ticket.ticket_type_id`,
       )
       .bind(event.id),
@@ -155,6 +159,7 @@ export async function readEventTicketsConfiguration(
       sortOrder: type.sort_order,
       registered: counts.get(type.id)?.registered ?? 0,
       paid: counts.get(type.id)?.paid ?? 0,
+      underReview: counts.get(type.id)?.under_review ?? 0,
       awaitingPayment: counts.get(type.id)?.awaiting ?? 0,
       presetOrganizations: presetCounts.get(type.ticket_key) ?? 0,
     })),
@@ -170,6 +175,8 @@ export async function readEventTicketsConfiguration(
     totals: {
       collected: sum((row) => row.paid_amount),
       paidCount: sum((row) => row.paid),
+      underReviewCount: sum((row) => row.under_review),
+      underReviewAmount: sum((row) => row.under_review_amount),
       awaitingAmount: sum((row) => row.awaiting_amount),
       awaitingCount: sum((row) => row.awaiting),
       freeCount: sum((row) => row.free),
@@ -366,7 +373,7 @@ export async function updateEventTicketSettings(
     db,
     `SELECT settings.currency FROM event_ticket_settings settings WHERE settings.event_id = ?1
        AND EXISTS (SELECT 1 FROM registration_tickets ticket
-                   WHERE ticket.event_id = ?1 AND ticket.status IN ('pending_payment', 'paid', 'refunded'))`,
+                   WHERE ticket.event_id = ?1 AND ticket.status IN ('pending_payment', 'paid', 'payment_under_review', 'refunded'))`,
     [event.id],
   );
   if (fixed && fixed.currency !== input.currency) {
@@ -381,7 +388,7 @@ export async function updateEventTicketSettings(
               AND (settings.currency = ? OR NOT EXISTS (
                 SELECT 1 FROM registration_tickets ticket
                 WHERE ticket.event_id = settings.event_id
-                  AND ticket.status IN ('pending_payment', 'paid', 'refunded')))`,
+                  AND ticket.status IN ('pending_payment', 'paid', 'payment_under_review', 'refunded')))`,
       bindings: [event.id, input.currency],
     }),
     db

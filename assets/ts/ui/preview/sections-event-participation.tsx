@@ -94,7 +94,10 @@ export const eventParticipationSections: PreviewSection[] = [
                 <p>
                   <strong>Join the people leading the PQC migration</strong>
                 </p>
-                <Markdown markdown="Two days of **hands-on** sessions with the teams already migrating." />
+                <Markdown
+                  markdown="Two days of **hands-on** sessions with the teams already migrating."
+                  profile="text"
+                />
               </div>
             }
             actions={

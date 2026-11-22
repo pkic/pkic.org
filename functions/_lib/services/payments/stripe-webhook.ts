@@ -11,7 +11,9 @@ import { handleMembershipPaymentEvent } from "../membership/workflows/fee-events
 import { handleSponsorshipStripeEvent } from "../sponsorship/stripe-webhook";
 import { applySponsorshipPaymentAdjustment } from "../sponsorship/payment-adjustments";
 import { recordStripePaymentEvent } from "./ledger";
-import { handleEventTicketStripeEvent, isEventTicketStripeEvent } from "../event-tickets/payment";
+import { handleEventTicketStripeEvent } from "../event-tickets/payment";
+import { isEventTicketStripeEvent } from "../event-tickets/payment-webhook-evidence";
+import { suspendTicketWithPaymentReview } from "../event-tickets/payment-review";
 
 type StripeEvent = z.infer<typeof stripeEventEnvelopeSchema>;
 type PaymentPurpose = "donation" | "membership" | "sponsorship";
@@ -95,6 +97,18 @@ export async function dispatchStripePaymentEvent(
   // A ticket payment records its own ledger entry in the batch that settles the ticket.
   if (await isEventTicketStripeEvent(db, event)) {
     const result = await handleEventTicketStripeEvent(db, event);
+    // An adjustment may arrive before Checkout supplies the payment intent mapping.
+    // Keep its provider evidence so later settlement cannot grant admission.
+    if (
+      result.outcome === "unknown_ticket" &&
+      (event.type === "charge.refunded" ||
+        event.type === "charge.dispute.created" ||
+        event.type === "charge.dispute.closed")
+    ) {
+      await recordStripePaymentEvent(db, "event", event, null);
+      const paymentIntent = objectIdentity(event).payment_intent;
+      if (paymentIntent) await suspendTicketWithPaymentReview(db, paymentIntent);
+    }
     // How it was paid and what arrived are read after the response; the scheduled run reads what this misses.
     if (result.outcome === "paid") waitUntil(readTicketPaymentDetails(db, env, {}).catch(() => undefined));
     return result;
@@ -120,6 +134,14 @@ export async function dispatchStripePaymentEvent(
       event,
       "outcome" in result && typeof result.outcome === "string" ? result.outcome : null,
     );
+    if (
+      event.type === "charge.refunded" ||
+      event.type === "charge.dispute.created" ||
+      event.type === "charge.dispute.closed"
+    ) {
+      const paymentIntent = objectIdentity(event).payment_intent;
+      if (paymentIntent) await suspendTicketWithPaymentReview(db, paymentIntent);
+    }
     return result;
   }
   if (event.type === "charge.refunded" || event.type === "charge.dispute.created") {

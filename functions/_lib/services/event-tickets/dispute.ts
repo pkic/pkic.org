@@ -79,7 +79,7 @@ export async function reviewDisputedTicket(
     // The ticket is settled only as it was reviewed: another organizer may have settled it, or the person
     // may have registered again for another ticket; then nothing of this review is written.
     prepareStateGuard(db, {
-      sql: `SELECT 1 FROM registration_tickets WHERE id = ? AND revision = ? AND dispute_resolved_at IS NULL${decision === "move" ? " AND status <> 'paid'" : ""}`,
+      sql: `SELECT 1 FROM registration_tickets WHERE id = ? AND revision = ? AND dispute_resolved_at IS NULL${decision === "move" ? " AND status NOT IN ('paid', 'payment_under_review')" : ""}`,
       bindings: [row.id, row.revision],
     }),
     prepareAuditLog(db, "user", actor.id, "registration_ticket_dispute_settled", "registration", registrationId, {
@@ -107,15 +107,21 @@ export async function reviewDisputedTicket(
     await settle(db, statements);
     return;
   }
-  const decided = await readStoredTicketDecision(db, digest, subject);
-  const type = decided && snapshot.types.find((candidate) => candidate.ticket_key === decided.ticketKey);
-  if (!type) throw new AppError(409, "TICKET_DECISION_MISSING", "There is no decided ticket to move this person to.");
+  if (row.status === "payment_under_review")
+    throw new AppError(
+      409,
+      "TICKET_PAYMENT_UNDER_REVIEW",
+      "This payment is under review. Settle it before moving the ticket.",
+    );
   if (row.status === "paid")
     throw new AppError(
       409,
       "TICKET_ALREADY_PAID",
       "This ticket is paid. Refund it first, then the person can register again.",
     );
+  const decided = await readStoredTicketDecision(db, digest, subject);
+  const type = decided && snapshot.types.find((candidate) => candidate.ticket_key === decided.ticketKey);
+  if (!type) throw new AppError(409, "TICKET_DECISION_MISSING", "There is no decided ticket to move this person to.");
   const dayAttendance = await all<{ dayDate: string; attendanceType: string }>(
     db,
     `SELECT day.day_date AS dayDate, attendance.attendance_type AS attendanceType
@@ -151,7 +157,7 @@ export async function reviewDisputedTicket(
         `UPDATE registration_tickets SET ticket_type_id = ?, assignment_source = 'organizer', code_id = NULL, amount = ?, currency = ?,
            status = ?, dispute_resolved_at = ?, reminders_sent = 0, next_reminder_at = ?, reminders_end_at = ?,
            pay_by = ${TICKET_PAY_BY_ON_CHANGE_SQL}, revision = revision + 1, updated_at = ?
-         WHERE id = ? AND dispute_resolved_at IS NULL AND status <> 'paid'`,
+         WHERE id = ? AND dispute_resolved_at IS NULL AND status NOT IN ('paid', 'payment_under_review')`,
       )
       .bind(
         type.id,

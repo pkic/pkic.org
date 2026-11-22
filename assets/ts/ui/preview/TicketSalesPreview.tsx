@@ -19,7 +19,7 @@ interface SaleRow {
   ticket: string;
   amount: number;
   net: number | null;
-  status: "paid" | "processing" | "to_pay" | "refunded";
+  status: "paid" | "processing" | "to_pay" | "payment_under_review" | "refunded";
   method: string | null;
   date: string;
 }
@@ -71,6 +71,17 @@ const ROWS: SaleRow[] = [
   },
   {
     id: "5",
+    name: "Taylor Example",
+    organization: "Example Labs",
+    ticket: "Attendee",
+    amount: 19500,
+    net: null,
+    status: "payment_under_review",
+    method: "card",
+    date: "Nov 14, 2026",
+  },
+  {
+    id: "6",
     name: "Jo Fixture",
     organization: "Fixture GmbH",
     ticket: "Vendor",
@@ -86,6 +97,7 @@ const STATUS = {
   paid: null,
   processing: { label: "Payment processing", tone: "info" },
   to_pay: { label: "Awaiting payment", tone: "warn" },
+  payment_under_review: { label: "Payment under review", tone: "danger" },
   refunded: { label: "Refunded", tone: "danger" },
 } as const;
 
@@ -141,6 +153,7 @@ export function TicketSalesPreview() {
         <StatCard label="Net" value={money(1209380)} />
         <StatCard label="Refunded" value={money(39500)} note="1 ticket" />
         <StatCard label="Awaiting payment" value="3" note={`${money(98500)} open, 1 processing`} tone="warn" />
+        <StatCard label="Payment under review" value="1" note={`${money(19500)} under review`} tone="danger" />
       </div>
       <CollectionToolbar
         label="Ticket sales"

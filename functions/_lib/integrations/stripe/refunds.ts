@@ -64,6 +64,73 @@ export async function createStripeRefund(
   return { id: decoded.id, status: typeof decoded.status === "string" ? decoded.status : null };
 }
 
+/** Find a refund after an uncertain create response, before retrying a request whose idempotency key may expire. */
+export async function findStripeRefundByRequest(
+  secretKey: string,
+  input: { paymentIntentId: string; ticketId: string; refundId: string; amount: number },
+  options: { fetcher?: typeof fetch; apiBase?: string } = {},
+): Promise<{ id: string; status: string | null } | null> {
+  let after: string | null = null;
+  for (let page = 0; page < 10; page += 1) {
+    const endpoint = refundEndpoint(secretKey, "/v1/refunds", options.apiBase);
+    endpoint.searchParams.set("payment_intent", input.paymentIntentId);
+    endpoint.searchParams.set("limit", "100");
+    if (after) endpoint.searchParams.set("starting_after", after);
+    let response: Response;
+    try {
+      response = await (options.fetcher ?? fetch)(endpoint.toString(), {
+        method: "GET",
+        headers: { Authorization: `Bearer ${secretKey}` },
+      });
+    } catch {
+      throw new AppError(502, "STRIPE_ERROR", "Failed to check the refund at the payment provider");
+    }
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined);
+      throw new AppError(502, "STRIPE_ERROR", "Failed to check the refund at the payment provider");
+    }
+    const decoded: unknown = await response.json().catch(() => null);
+    if (!decoded || typeof decoded !== "object" || Array.isArray(decoded))
+      throw new AppError(502, "STRIPE_ERROR", "The payment provider returned an invalid refund list");
+    const list = decoded as { data?: unknown; has_more?: unknown };
+    if (!Array.isArray(list.data) || typeof list.has_more !== "boolean")
+      throw new AppError(502, "STRIPE_ERROR", "The payment provider returned an invalid refund list");
+    for (const value of list.data) {
+      if (!value || typeof value !== "object" || Array.isArray(value))
+        throw new AppError(502, "STRIPE_ERROR", "The payment provider returned an invalid refund");
+      const refund = value as Record<string, unknown>;
+      if (typeof refund.id !== "string" || !/^re_[A-Za-z0-9_]+$/.test(refund.id))
+        throw new AppError(502, "STRIPE_ERROR", "The payment provider returned an invalid refund");
+      if (
+        refund.payment_intent === input.paymentIntentId &&
+        refund.metadata &&
+        typeof refund.metadata === "object" &&
+        !Array.isArray(refund.metadata) &&
+        (refund.metadata as Record<string, unknown>).registrationTicketId === input.ticketId &&
+        (refund.metadata as Record<string, unknown>).registrationTicketRefundId === input.refundId
+      ) {
+        if (
+          refund.amount !== input.amount ||
+          typeof refund.status !== "string" ||
+          !["pending", "requires_action", "succeeded", "failed", "canceled"].includes(refund.status)
+        )
+          throw new AppError(
+            502,
+            "STRIPE_ERROR",
+            "The payment provider returned a refund that does not match the request",
+          );
+        return { id: refund.id, status: refund.status };
+      }
+    }
+    if (!list.has_more) return null;
+    const last = list.data.at(-1) as { id?: unknown } | undefined;
+    if (!last || typeof last.id !== "string" || !last.id)
+      throw new AppError(502, "STRIPE_ERROR", "The payment provider returned an incomplete refund list");
+    after = last.id;
+  }
+  throw new AppError(502, "STRIPE_ERROR", "The payment provider returned too many refunds to check safely");
+}
+
 /**
  * What Stripe holds right now for a payment: how much of it has been returned,
  * and whether all of it has. Read when our own record cannot be trusted, such

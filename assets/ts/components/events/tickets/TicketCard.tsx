@@ -71,7 +71,7 @@ export function TicketCard({
           </span>
         )}
         <div class="pk-ticket__detail" id={`${id}-detail`}>
-          <Markdown markdown={description} />
+          <Markdown markdown={description} profile="text" />
           {reason && <p class="pk-ticket__reason">{reason}</p>}
         </div>
         {note && <p class="pk-ticket__fineprint">{note}</p>}

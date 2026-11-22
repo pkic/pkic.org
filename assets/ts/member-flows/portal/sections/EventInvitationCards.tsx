@@ -50,7 +50,7 @@ function InvitationBody({ event }: { event: EventRow }) {
       <p>
         <strong>{wording.headline}</strong>
       </p>
-      {wording.message && <Markdown markdown={wording.message} />}
+      {wording.message && <Markdown markdown={wording.message} profile="text" />}
     </div>
   );
 }

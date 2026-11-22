@@ -3,11 +3,17 @@
  * webhook is the only thing that marks a ticket paid, and it does so in one
  * batch with the payment ledger and the release of the held confirmation.
  */
-import type { z } from "zod";
-import type { stripeEventEnvelopeSchema } from "../../../../assets/shared/schemas/stripe";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import { prepareStateGuard, isStateGuardFailure } from "../../db/authorization-guard";
+import { ticketPaymentNeedsReviewSql } from "./payment-review";
+import {
+  providerInstant,
+  REFUND_EVENT_TYPES,
+  stripeObjectFields,
+  type SettlementRow,
+  type StripeEvent,
+} from "./payment-webhook-evidence";
 import { createStripeCheckoutSession, expireStripeCheckoutSession } from "../../integrations/stripe/checkout";
 import type { DatabaseLike, Env, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
@@ -23,8 +29,6 @@ import {
   prepareRefundedTotal,
   prepareReturnUnneededPayment,
 } from "./refunds";
-
-type StripeEvent = z.infer<typeof stripeEventEnvelopeSchema>;
 
 const CHECKOUT_LIFETIME_MS = 23 * 3600_000;
 
@@ -308,61 +312,6 @@ function checkoutMatchesTicket(attempt: CheckoutRow, ticket: PayableTicketRow): 
   );
 }
 
-interface StripeObjectFields {
-  id?: string;
-  payment_intent?: string | null;
-  amount?: number | null;
-  amount_total?: number | null;
-  amount_refunded?: number | null;
-  status?: string | null;
-  failure_reason?: string | null;
-  refunded?: boolean;
-  currency?: string | null;
-  payment_status?: string | null;
-  metadata?: Record<string, unknown> | null;
-}
-
-function objectFields(event: StripeEvent): StripeObjectFields {
-  const value = event.data.object;
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as StripeObjectFields) : {};
-}
-
-/** Whether a verified Stripe event belongs to a ticket: by its declared purpose, or by a session or intent we stored. */
-export async function isEventTicketStripeEvent(db: DatabaseLike, event: StripeEvent): Promise<boolean> {
-  const object = objectFields(event);
-  if (object.metadata?.pkic_payment_type === "event") return true;
-  if (object.metadata?.pkic_payment_type) return false;
-  const row = await first<{ found: number }>(
-    db,
-    `SELECT 1 AS found FROM registration_ticket_checkouts
-     WHERE (?1 IS NOT NULL AND provider_session_id = ?1) OR (?2 IS NOT NULL AND payment_intent_id = ?2) LIMIT 1`,
-    [object.id?.startsWith("cs_") ? object.id : null, object.payment_intent ?? null],
-  );
-  return Boolean(row);
-}
-
-interface SettlementRow {
-  ticket_id: string;
-  checkout_id: string;
-  amount: number;
-  currency: string;
-  status: string;
-  payment_intent_id: string | null;
-  paid_amount: number;
-  held_email_id: string | null;
-  request_params: string | null;
-  recorded: number;
-}
-
-/** A provider timestamp in seconds as a UTC instant; null when it is not one. */
-const providerInstant = (seconds: unknown): string | null =>
-  typeof seconds === "number" && Number.isInteger(seconds) && seconds >= 0
-    ? new Date(seconds * 1000).toISOString()
-    : null;
-
-/** Stripe's events about one refund, by whichever name the account's API version sends them. */
-const REFUND_EVENT_TYPES = ["refund.updated", "refund.failed", "charge.refund.updated"];
-
 /**
  * Applies one verified Stripe event to its ticket. Every effect of an
  * accepted event commits in one batch, keyed by the provider event id, so a
@@ -374,18 +323,20 @@ export async function handleEventTicketStripeEvent(
   retried = false,
 ): Promise<{ received: true; outcome: string; outboxIds: string[] }> {
   if (!event.id) return { received: true, outcome: "ignored", outboxIds: [] };
-  const object = objectFields(event);
+  const object = stripeObjectFields(event);
   const sessionId = object.id?.startsWith("cs_") ? object.id : null;
   const row = await first<SettlementRow>(
     db,
     `SELECT ticket.id AS ticket_id, checkout.id AS checkout_id, ticket.amount, ticket.currency, ticket.status,
-            ticket.payment_intent_id, ticket.paid_amount, ticket.held_email_id, checkout.request_params,
-            EXISTS (SELECT 1 FROM registration_ticket_payment_events seen WHERE seen.provider_event_id = ?3) AS recorded
+            ticket.payment_intent_id, checkout.payment_intent_id AS checkout_payment_intent_id,
+            ticket.paid_amount, ticket.held_email_id, checkout.request_params,
+            EXISTS (SELECT 1 FROM registration_ticket_payment_events seen WHERE seen.provider_event_id = ?3) AS recorded,
+            ${ticketPaymentNeedsReviewSql("?4")} AS needs_review
      FROM registration_ticket_checkouts checkout JOIN registration_tickets ticket ON ticket.id = checkout.ticket_id
      WHERE (?1 IS NOT NULL AND checkout.provider_session_id = ?1)
         OR (?2 IS NOT NULL AND checkout.payment_intent_id = ?2)
      LIMIT 1`,
-    [sessionId, object.payment_intent ?? null, event.id],
+    [sessionId, object.payment_intent ?? null, event.id, object.payment_intent ?? null],
   );
   if (!row) return { received: true, outcome: "unknown_ticket", outboxIds: [] };
   if (row.recorded) return { received: true, outcome: "duplicate", outboxIds: [] };
@@ -408,10 +359,13 @@ export async function handleEventTicketStripeEvent(
       object.metadata?.registrationTicketId === row.ticket_id &&
       String(object.amount_total) === asked.get("line_items[0][price_data][unit_amount]") &&
       (object.currency ?? "").toLowerCase() === asked.get("line_items[0][price_data][currency]");
-    if (!matches && !genuine) outcome = "rejected_mismatch";
+    if (!object.payment_intent || (!matches && !genuine)) outcome = "rejected_mismatch";
     else if (!matches || row.status !== "pending_payment") {
       // Paid on a page for an earlier price, or for a ticket that no longer needs it: the money goes back.
-      const settled = matches && row.status === "paid" && object.payment_intent === row.payment_intent_id;
+      const settled =
+        matches &&
+        (row.status === "paid" || row.status === "payment_under_review") &&
+        object.payment_intent === row.payment_intent_id;
       outcome = settled ? "already_paid" : "returned";
       // Money that arrived for a ticket that no longer needs it keeps its payment reference and goes back.
       statements.push(
@@ -429,23 +383,25 @@ export async function handleEventTicketStripeEvent(
             amount: object.amount_total ?? row.amount,
             reason: !matches
               ? "The payment was made on a page for an earlier price"
-              : row.status === "paid"
+              : row.status === "paid" || row.status === "payment_under_review"
                 ? "A second payment arrived for a ticket that was already paid"
                 : "The payment arrived after the ticket no longer needed it",
             now,
           }),
         );
     } else {
-      outcome = "paid";
+      const needsReview = Boolean(row.needs_review);
+      outcome = needsReview ? "handling_required" : "paid";
       statements.push(
         // The ticket is settled only as it was read: a price or status changed meanwhile is judged again.
         prepareStateGuard(db, {
-          sql: "SELECT 1 FROM registration_tickets WHERE id = ? AND status = 'pending_payment' AND amount = ? AND currency = ?",
-          bindings: [row.ticket_id, row.amount, row.currency],
+          sql: `SELECT 1 FROM registration_tickets WHERE id = ? AND status = 'pending_payment'
+            AND amount = ? AND currency = ? AND ${ticketPaymentNeedsReviewSql("?")} = ?`,
+          bindings: [row.ticket_id, row.amount, row.currency, object.payment_intent, needsReview ? 1 : 0],
         }),
         db
           .prepare(
-            `UPDATE registration_tickets SET status = 'paid', paid_at = ?, payment_intent_id = ?, paid_amount = amount,
+            `UPDATE registration_tickets SET status = ?, paid_at = ?, payment_intent_id = ?, paid_amount = amount,
                kept_fee = 0, refunded_amount = 0,
                refund_until = (SELECT refund_until FROM registration_ticket_checkouts WHERE id = ?),
                refund_fee = COALESCE((SELECT refund_fee FROM registration_ticket_checkouts WHERE id = ?), 0),
@@ -453,7 +409,15 @@ export async function handleEventTicketStripeEvent(
                next_reminder_at = NULL, revision = revision + 1, updated_at = ?
              WHERE id = ? AND status = 'pending_payment'`,
           )
-          .bind(now, object.payment_intent ?? null, row.checkout_id, row.checkout_id, now, row.ticket_id),
+          .bind(
+            needsReview ? "payment_under_review" : "paid",
+            now,
+            object.payment_intent,
+            row.checkout_id,
+            row.checkout_id,
+            now,
+            row.ticket_id,
+          ),
         db
           .prepare(
             "UPDATE registration_ticket_checkouts SET payment_intent_id = ? WHERE id = ? AND payment_intent_id IS NULL",
@@ -461,7 +425,7 @@ export async function handleEventTicketStripeEvent(
           .bind(object.payment_intent ?? null, row.checkout_id),
       );
       // The confirmation was queued with the registration and held; paying releases it.
-      if (row.held_email_id)
+      if (row.held_email_id && !needsReview)
         statements.push(
           db
             .prepare("UPDATE email_outbox SET send_after = ?, updated_at = ? WHERE id = ? AND status = 'queued'")
@@ -502,7 +466,15 @@ export async function handleEventTicketStripeEvent(
     );
   } else if (event.type === "charge.refunded") {
     const returned = Math.max(0, object.amount_refunded ?? 0);
-    if (!object.payment_intent || object.payment_intent !== row.payment_intent_id) {
+    if (
+      row.status === "pending_payment" &&
+      object.payment_intent &&
+      object.payment_intent === row.checkout_payment_intent_id
+    ) {
+      // The payment has not settled this ticket yet. Keep the refund evidence
+      // until Checkout arrives, then place the ticket under review.
+      outcome = "handling_required";
+    } else if (!object.payment_intent || object.payment_intent !== row.payment_intent_id) {
       // Another payment than the one that settled the ticket went back: the ticket and its ledger entry stay as they are.
       outcome = "other_payment_refunded";
       if (object.refunded === true && object.payment_intent)
@@ -560,8 +532,24 @@ export async function handleEventTicketStripeEvent(
         ),
       );
     }
-  } else if (event.type === "charge.dispute.created") {
-    outcome = "handling_required";
+  } else if (
+    (event.type === "charge.dispute.created" || event.type === "charge.dispute.closed") &&
+    object.payment_intent &&
+    (object.payment_intent === row.payment_intent_id || object.payment_intent === row.checkout_payment_intent_id)
+  ) {
+    // A contested or lost payment cannot admit its holder. A later "won" event does not by itself restore
+    // admission: provider events can arrive out of order and the payment may also have been refunded.
+    const blocked = event.type === "charge.dispute.created" || object.status !== "won";
+    outcome = blocked ? "handling_required" : "dispute_won_review";
+    if (blocked && row.status === "paid")
+      statements.push(
+        db
+          .prepare(
+            `UPDATE registration_tickets SET status = 'payment_under_review', revision = revision + 1, updated_at = ?
+             WHERE id = ? AND payment_intent_id = ? AND status = 'paid'`,
+          )
+          .bind(now, row.ticket_id, row.payment_intent_id),
+      );
   }
   statements.push(
     db

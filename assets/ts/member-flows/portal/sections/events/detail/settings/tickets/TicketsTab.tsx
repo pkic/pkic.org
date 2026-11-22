@@ -131,6 +131,16 @@ export function TicketsTab({
           }
           tone={data.totals.awaitingCount ? "warn" : undefined}
         />
+        <StatCard
+          label="Payment under review"
+          value={formatNumber(data.totals.underReviewCount)}
+          note={
+            data.totals.underReviewCount
+              ? `${formatTicketAmount(data.totals.underReviewAmount, currency)} under review`
+              : undefined
+          }
+          tone={data.totals.underReviewCount ? "danger" : undefined}
+        />
         <StatCard label="Free tickets" value={formatNumber(data.totals.freeCount)} />
         <StatCard label="Next price change" value={next?.startsOn ? formatCalendarDate(next.startsOn) : "None"} />
       </div>
@@ -204,6 +214,13 @@ export function TicketsTab({
                 width: "fit",
                 align: "end",
                 cell: (row) => formatNumber(row.awaitingPayment),
+              },
+              {
+                id: "under_review",
+                header: "Under review",
+                width: "fit",
+                align: "end",
+                cell: (row) => formatNumber(row.underReview),
               },
             ]}
           />

@@ -8,6 +8,7 @@ import {
 import { getUserSessionToken, requireIdentityFromRequest } from "../../../../_lib/auth/user-session";
 import { verifyUserSessionRequest } from "../../../../_lib/auth/user-session-request";
 import { userSessionRequestAuthorizationEvidence } from "../../../../_lib/auth/user-session-evidence";
+import { guardAuthorizedDatabase } from "../../../../_lib/db/authorization-guard";
 import { AppError } from "../../../../_lib/errors";
 import { markResponseSensitive, requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { json } from "../../../../_lib/http";
@@ -80,7 +81,14 @@ const OwnUnfinishedRegistrationStopPost = openApiRoute(
   async (c: AdminContext, data) => {
     const db = requestDb(c);
     const identity = await requireIdentityFromRequest(db, c.req.raw, c.env);
-    await stopUnfinishedRegistration(db, await getEventBySlug(db, data.params.eventSlug), identity.userId, data.body);
+    const event = await getEventBySlug(db, data.params.eventSlug);
+    const claims = await verifyUserSessionRequest(c.req.raw, c.env);
+    const guardedDb = guardAuthorizedDatabase(
+      db,
+      userSessionRequestAuthorizationEvidence(claims),
+      () => new AppError(409, "AUTHORIZATION_CONTEXT_CHANGED", "The active user session changed"),
+    );
+    await stopUnfinishedRegistration(guardedDb, event, identity.userId, data.body);
     return json({ success: true });
   },
 );

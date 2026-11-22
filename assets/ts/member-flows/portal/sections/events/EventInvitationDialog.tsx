@@ -185,7 +185,7 @@ export function EventInvitationDialog({
         </>
       }
     >
-      {wording.message && <Markdown markdown={wording.message} />}
+      {wording.message && <Markdown markdown={wording.message} profile="text" />}
       {error && <Alert tone="danger">{error}</Alert>}
     </Dialog>
   );

@@ -65,6 +65,15 @@ export function EventTicketPayment({
       setOpening(false);
     }
   }
+  if (ticket.status === "payment_under_review")
+    return (
+      <EventCard eyebrow={`${ticket.ticketName} ticket`} title="Payment under review">
+        <p>
+          Your badge and check-in code are unavailable while the payment is under review. Contact the event organizers.
+        </p>
+        <div class="pk-cluster">{details}</div>
+      </EventCard>
+    );
   if (ticket.status === "refunded" || ticket.status === "canceled")
     return (
       <EventCard

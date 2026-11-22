@@ -34,6 +34,7 @@ import {
   readRegistrationTicket,
 } from "../functions/_lib/services/event-tickets/registration-ticket";
 import { handleEventTicketStripeEvent, openTicketCheckout } from "../functions/_lib/services/event-tickets/payment";
+import { dispatchStripePaymentEvent } from "../functions/_lib/services/payments/stripe-webhook";
 import {
   prepareHoldConfirmationForPayment,
   sendTicketPaymentReminders,
@@ -544,6 +545,320 @@ describe("event tickets", () => {
     ).rejects.toMatchObject({ code: "TICKET_CURRENCY_FIXED" });
   });
 
+  it("suspends admission for a disputed payment without refunding a repeat checkout event", async () => {
+    const { event, admin } = await seedTickets();
+    const { registration, user } = await register(event, "disputed-payment@gmail.com");
+    const input = { eventId: event.id, registrationId: registration.id, userId: user.id };
+    await openTicketCheckout(env.DB, paymentEnv, "https://example.test", input, stripe);
+    const ticketId = (await readRegistrationTicket(env.DB, input))!.id;
+    await paidEvent(ticketId, "cs_test_ticket", 19500);
+    const dispute = (id: string, type: string, status: string) =>
+      handleEventTicketStripeEvent(env.DB, {
+        id,
+        type,
+        data: { object: { id: "dp_synthetic", payment_intent: "pi_synthetic", status } },
+      });
+    expect(await dispute("evt_dispute_created", "charge.dispute.created", "needs_response")).toMatchObject({
+      outcome: "handling_required",
+    });
+    expect((await readRegistrationTicket(env.DB, input))!.status).toBe("payment_under_review");
+    const badge = await env.DB.prepare(
+      `SELECT ${badgeAttendeeEligibilitySql("registration", "person")} AS eligible
+       FROM registrations registration JOIN users person ON person.id = registration.user_id
+       WHERE registration.id = ?`,
+    )
+      .bind(registration.id)
+      .first<{ eligible: number }>();
+    expect(badge?.eligible).toBe(0);
+    const issued = await listIssuedTickets(
+      env.DB,
+      event,
+      issuedTicketsQuerySchema.parse({ payment: "payment_under_review" }),
+    );
+    expect(issued).toMatchObject({
+      page: { total: 1 },
+      summary: { byPayment: { payment_under_review: 1 }, collected: 0, underReviewAmount: 19500 },
+    });
+    const configuration = await readEventTicketsConfiguration(env.DB, event);
+    expect(configuration.totals).toMatchObject({ underReviewCount: 1, underReviewAmount: 19500 });
+    await expect(
+      planRegistrationTicket(
+        env.DB,
+        {},
+        {
+          event,
+          registrationId: registration.id,
+          userId: user.id,
+          email: user.email,
+          identityId: null,
+          dayAttendance: inPerson,
+        },
+      ),
+    ).rejects.toMatchObject({ code: "TICKET_PAYMENT_UNDER_REVIEW" });
+    const record = await getRegistrationByIdForEvent(env.DB, event.id, registration.id);
+    await expect(
+      buildRegistrationUpdate(env.DB, record, {
+        action: "update",
+        dayAttendance: [{ dayDate: DAY, attendanceType: "virtual" }],
+      }),
+    ).rejects.toMatchObject({ code: "TICKET_PAYMENT_UNDER_REVIEW" });
+    await env.DB.prepare("UPDATE registration_tickets SET dispute_reason = 'Synthetic review' WHERE id = ?")
+      .bind(ticketId)
+      .run();
+    await expect(
+      reviewDisputedTicket(env.DB, admin, event, registration.id, "move", "https://example.test"),
+    ).rejects.toMatchObject({ code: "TICKET_PAYMENT_UNDER_REVIEW" });
+    expect(await paidEvent(ticketId, "cs_test_ticket", 19500, "evt_repeat_paid_after_dispute")).toMatchObject({
+      outcome: "already_paid",
+    });
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS count FROM registration_ticket_refunds WHERE ticket_id = ?")
+        .bind(ticketId)
+        .first(),
+    ).toEqual({ count: 0 });
+    expect(await dispute("evt_dispute_won", "charge.dispute.closed", "won")).toMatchObject({
+      outcome: "dispute_won_review",
+    });
+    expect((await readRegistrationTicket(env.DB, input))!.status).toBe("payment_under_review");
+    expect(
+      await env.DB.prepare(
+        "SELECT status FROM payment_ledger_entries WHERE provider_payment_intent_id = 'pi_synthetic'",
+      ).first(),
+    ).toEqual({ status: "paid" });
+    // A provider-verified manual correction can restore admission after a won dispute.
+    await env.DB.prepare("UPDATE registration_tickets SET status = 'paid' WHERE id = ?").bind(ticketId).run();
+    expect(
+      await env.DB.prepare(
+        `SELECT ${badgeAttendeeEligibilitySql("registration", "person")} AS eligible
+       FROM registrations registration JOIN users person ON person.id = registration.user_id
+       WHERE registration.id = ?`,
+      )
+        .bind(registration.id)
+        .first(),
+    ).toEqual({ eligible: 1 });
+  });
+
+  it.each([false, true])(
+    "keeps an early dispute as payment evidence before Checkout maps the intent (declared event: %s)",
+    async (declaredEvent) => {
+      const { event } = await seedTickets();
+      const { registration, user } = await register(event, `early-dispute-${declaredEvent}@gmail.com`);
+      const input = { eventId: event.id, registrationId: registration.id, userId: user.id };
+      await openTicketCheckout(env.DB, paymentEnv, "https://example.test", input, stripe);
+      const ticketId = (await readRegistrationTicket(env.DB, input))!.id;
+      const disputedAt = Math.floor(Date.now() / 1000);
+      const dispute = {
+        id: `evt_early_dispute_${declaredEvent}`,
+        created: disputedAt,
+        type: "charge.dispute.created",
+        data: {
+          object: {
+            id: "dp_early_synthetic",
+            payment_intent: "pi_synthetic",
+            status: "needs_response",
+            ...(declaredEvent ? { metadata: { pkic_payment_type: "event" } } : {}),
+          },
+        },
+      };
+      await dispatchStripePaymentEvent(env.DB, paymentEnv, dispute, "https://example.test", () => undefined);
+      expect(
+        await env.DB.prepare(
+          `SELECT ledger.status, evidence.event_type FROM payment_ledger_entries ledger
+           JOIN payment_ledger_events evidence ON evidence.payment_id = ledger.id
+           WHERE ledger.provider_payment_intent_id = 'pi_synthetic'`,
+        ).first(),
+      ).toMatchObject({ status: "disputed", event_type: "charge.dispute.created" });
+
+      const completed = await dispatchStripePaymentEvent(
+        env.DB,
+        paymentEnv,
+        {
+          id: `evt_checkout_after_dispute_${declaredEvent}`,
+          created: disputedAt,
+          type: "checkout.session.completed",
+          data: {
+            object: {
+              id: "cs_test_ticket",
+              payment_intent: "pi_synthetic",
+              amount_total: 19500,
+              currency: "usd",
+              payment_status: "paid",
+              metadata: { pkic_payment_type: "event", registrationTicketId: ticketId },
+            },
+          },
+        },
+        "https://example.test",
+        () => undefined,
+      );
+      expect(completed).toMatchObject({ outcome: "handling_required" });
+      expect((await readRegistrationTicket(env.DB, input))!.status).toBe("payment_under_review");
+      expect(
+        await env.DB.prepare(
+          "SELECT status FROM payment_ledger_entries WHERE provider_payment_intent_id = 'pi_synthetic'",
+        ).first(),
+      ).toEqual({ status: "disputed" });
+      const eligible = await env.DB.prepare(
+        `SELECT ${badgeAttendeeEligibilitySql("registration", "person")} AS admitted
+         FROM registrations registration JOIN users person ON person.id = registration.user_id
+         WHERE registration.id = ?`,
+      )
+        .bind(registration.id)
+        .first<{ admitted: number }>();
+      expect(eligible?.admitted).toBe(0);
+      expect(
+        await env.DB.prepare(
+          "SELECT purpose, resource_type, resource_id FROM payment_ledger_entries WHERE provider_payment_intent_id = 'pi_synthetic'",
+        ).first(),
+      ).toMatchObject({ purpose: "event", resource_type: "registration_ticket", resource_id: ticketId });
+    },
+  );
+
+  it.each([false, true])(
+    "holds an early refund for review before Checkout maps the intent (declared event: %s)",
+    async (declaredEvent) => {
+      const { event } = await seedTickets();
+      const { registration, user } = await register(event, `early-refund-${declaredEvent}@gmail.com`);
+      const input = { eventId: event.id, registrationId: registration.id, userId: user.id };
+      await openTicketCheckout(env.DB, paymentEnv, "https://example.test", input, stripe);
+      const ticketId = (await readRegistrationTicket(env.DB, input))!.id;
+      const adjustedAt = Math.floor(Date.now() / 1000);
+      await dispatchStripePaymentEvent(
+        env.DB,
+        paymentEnv,
+        {
+          id: `evt_early_refund_${declaredEvent}`,
+          created: adjustedAt,
+          type: "charge.refunded",
+          data: {
+            object: {
+              id: "ch_early_refund",
+              payment_intent: "pi_synthetic",
+              refunded: false,
+              amount_refunded: 500,
+              ...(declaredEvent ? { metadata: { pkic_payment_type: "event" } } : {}),
+            },
+          },
+        },
+        "https://example.test",
+        () => undefined,
+      );
+      expect(
+        await env.DB.prepare(
+          "SELECT status FROM payment_ledger_entries WHERE provider_payment_intent_id = 'pi_synthetic'",
+        ).first(),
+      ).toEqual({ status: "refunded" });
+      const settled = await handleEventTicketStripeEvent(env.DB, {
+        id: `evt_checkout_after_refund_${declaredEvent}`,
+        created: adjustedAt,
+        type: "checkout.session.completed",
+        data: {
+          object: {
+            id: "cs_test_ticket",
+            payment_intent: "pi_synthetic",
+            amount_total: 19500,
+            currency: "usd",
+            payment_status: "paid",
+            metadata: { pkic_payment_type: "event", registrationTicketId: ticketId },
+          },
+        },
+      });
+      expect(settled).toMatchObject({ outcome: "handling_required" });
+      expect((await readRegistrationTicket(env.DB, input))!.status).toBe("payment_under_review");
+      expect(
+        await env.DB.prepare(
+          "SELECT status FROM payment_ledger_entries WHERE provider_payment_intent_id = 'pi_synthetic'",
+        ).first(),
+      ).toEqual({ status: "refunded" });
+    },
+  );
+
+  it("retries checkout settlement as disputed when a dispute arrives before its write batch", async () => {
+    const { event } = await seedTickets();
+    const { registration, user } = await register(event, "racing-dispute@gmail.com");
+    const input = { eventId: event.id, registrationId: registration.id, userId: user.id };
+    await openTicketCheckout(env.DB, paymentEnv, "https://example.test", input, stripe);
+    const ticketId = (await readRegistrationTicket(env.DB, input))!.id;
+    const dispute = {
+      id: "evt_racing_dispute",
+      created: Math.floor(Date.now() / 1000),
+      type: "charge.dispute.created",
+      data: { object: { id: "dp_racing", payment_intent: "pi_synthetic", status: "needs_response" } },
+    };
+    const racedDb = mutateBeforeNextBatch(env.DB, () =>
+      dispatchStripePaymentEvent(env.DB, paymentEnv, dispute, "https://example.test", () => undefined),
+    );
+    const settled = await handleEventTicketStripeEvent(racedDb, {
+      id: "evt_checkout_racing_dispute",
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_test_ticket",
+          payment_intent: "pi_synthetic",
+          amount_total: 19500,
+          currency: "usd",
+          payment_status: "paid",
+          metadata: { pkic_payment_type: "event", registrationTicketId: ticketId },
+        },
+      },
+    });
+    expect(settled).toMatchObject({ outcome: "handling_required" });
+    expect((await readRegistrationTicket(env.DB, input))!.status).toBe("payment_under_review");
+  });
+
+  it("holds a refund received after Checkout maps an unsettled intent", async () => {
+    const { event } = await seedTickets();
+    const { registration, user } = await register(event, "mapped-early-refund@gmail.com");
+    const input = { eventId: event.id, registrationId: registration.id, userId: user.id };
+    await openTicketCheckout(env.DB, paymentEnv, "https://example.test", input, stripe);
+    const ticketId = (await readRegistrationTicket(env.DB, input))!.id;
+    await env.DB.prepare(
+      "UPDATE registration_ticket_checkouts SET payment_intent_id = 'pi_synthetic' WHERE provider_session_id = 'cs_test_ticket'",
+    ).run();
+    const adjustment = await dispatchStripePaymentEvent(
+      env.DB,
+      paymentEnv,
+      {
+        id: "evt_mapped_early_refund",
+        created: Math.floor(Date.now() / 1000),
+        type: "charge.refunded",
+        data: { object: { id: "ch_mapped_refund", payment_intent: "pi_synthetic", amount_refunded: 500 } },
+      },
+      "https://example.test",
+      () => undefined,
+    );
+    expect(adjustment).toMatchObject({ outcome: "handling_required" });
+    expect((await readRegistrationTicket(env.DB, input))!.status).toBe("pending_payment");
+    expect(await paidEvent(ticketId, "cs_test_ticket", 19500)).toMatchObject({ outcome: "handling_required" });
+    expect((await readRegistrationTicket(env.DB, input))!.status).toBe("payment_under_review");
+  });
+
+  it("converges the ticket to disputed when fallback evidence records just after settlement", async () => {
+    const { event } = await seedTickets();
+    const { registration, user } = await register(event, "late-ledger-dispute@gmail.com");
+    const input = { eventId: event.id, registrationId: registration.id, userId: user.id };
+    await openTicketCheckout(env.DB, paymentEnv, "https://example.test", input, stripe);
+    const ticketId = (await readRegistrationTicket(env.DB, input))!.id;
+    const disputedAt = Math.floor(Date.now() / 1000);
+    const dispute = {
+      id: "evt_late_ledger_dispute",
+      created: disputedAt,
+      type: "charge.dispute.created",
+      data: { object: { id: "dp_late_ledger", payment_intent: "pi_synthetic", status: "needs_response" } },
+    };
+    const racedDb = mutateBeforeNextBatch(env.DB, () => paidEvent(ticketId, "cs_test_ticket", 19500));
+    await dispatchStripePaymentEvent(racedDb, paymentEnv, dispute, "https://example.test", () => undefined);
+    expect((await readRegistrationTicket(env.DB, input))!.status).toBe("payment_under_review");
+    expect(
+      await env.DB.prepare(
+        `SELECT ${badgeAttendeeEligibilitySql("registration", "person")} AS admitted
+       FROM registrations registration JOIN users person ON person.id = registration.user_id
+       WHERE registration.id = ?`,
+      )
+        .bind(registration.id)
+        .first(),
+    ).toEqual({ admitted: 0 });
+  });
+
   it("refunds a paid ticket through the refund job and the provider's refund event", async () => {
     const { event, admin } = await seedTickets();
     const { registration, user } = await register(event, "refund@gmail.com");
@@ -734,6 +1049,215 @@ describe("event tickets", () => {
     });
     expect(await read()).toMatchObject({ status: "refunded", refundedAmount: 19500, refundPending: false });
   });
+
+  it.each(["refused", "failed_after_success", "failed_before_response"] as const)(
+    "releases a policy fee when its refund is %s",
+    async (outcome) => {
+      const { event, admin } = await seedTickets();
+      await env.DB.prepare("UPDATE events SET starts_at = ? WHERE id = ?")
+        .bind(new Date(Date.now() + 30 * 86_400_000).toISOString(), event.id)
+        .run();
+      const configuration = await readEventTicketsConfiguration(env.DB, event);
+      await updateEventTicketSettings(env.DB, admin, event, {
+        expectedRevision: configuration.revision,
+        ...configuration.settings,
+        refundDaysBeforeEvent: 7,
+        refundFee: 1000,
+      });
+      const { registration, user } = await register(event, `policy-failure-${outcome}@gmail.com`);
+      const input = { eventId: event.id, registrationId: registration.id, userId: user.id };
+      await openTicketCheckout(env.DB, paymentEnv, "https://example.test", input, stripe);
+      const read = () => readRegistrationTicket(env.DB, { eventId: event.id, registrationId: registration.id });
+      const ticketId = (await read())!.id;
+      await paidEvent(ticketId, "cs_test_ticket", 19500);
+      const change = async (dayAttendance: typeof inPerson) => {
+        const record = await getRegistrationByIdForEvent(env.DB, event.id, registration.id);
+        await env.DB.batch(
+          (await buildRegistrationUpdate(env.DB, record, { action: "update", dayAttendance })).statements,
+        );
+      };
+      await change([{ dayDate: DAY, attendanceType: "virtual" }]);
+      const fee = async () =>
+        env.DB.prepare("SELECT kept_fee FROM registration_tickets WHERE id = ?")
+          .bind(ticketId)
+          .first<{ kept_fee: number }>();
+      expect((await fee())!.kept_fee).toBe(1000);
+      if (outcome === "refused") {
+        await processTicketRefunds(
+          env.DB,
+          paymentEnv,
+          5,
+          (async () => new Response("{}", { status: 400 })) as typeof fetch,
+        );
+      } else {
+        const refundId = (await env.DB.prepare("SELECT id FROM registration_ticket_refunds WHERE ticket_id = ?")
+          .bind(ticketId)
+          .first<{ id: string }>())!.id;
+        const failedEvent = () =>
+          handleEventTicketStripeEvent(env.DB, {
+            id: `evt_policy_refund_failed_${outcome}`,
+            type: "refund.failed",
+            data: {
+              object: {
+                id: "re_policy_failed",
+                payment_intent: "pi_synthetic",
+                amount: 18500,
+                status: "failed",
+                metadata: { registrationTicketId: ticketId, registrationTicketRefundId: refundId },
+              },
+            },
+          });
+        await processTicketRefunds(env.DB, paymentEnv, 5, (async () => {
+          if (outcome === "failed_before_response") await failedEvent();
+          return new Response(
+            JSON.stringify({
+              id: "re_policy_failed",
+              status: outcome === "failed_before_response" ? "failed" : "succeeded",
+            }),
+          );
+        }) as typeof fetch);
+        if (outcome === "failed_after_success") await failedEvent();
+        await reconcileTicketRefunds(
+          env.DB,
+          paymentEnv,
+          5,
+          (async () =>
+            new Response(JSON.stringify({ latest_charge: { amount_refunded: 0, refunded: false } }))) as typeof fetch,
+        );
+      }
+      expect((await fee())!.kept_fee).toBe(0);
+      expect(await read()).toMatchObject({ status: "paid", refundedAmount: 0, refundPending: false });
+      await expect(change(inPerson)).resolves.toBeUndefined();
+    },
+  );
+
+  it("keeps an accepted refund retryable after repeated database write failures", async () => {
+    const { event, admin } = await seedTickets();
+    const { registration, user } = await register(event, "refund-write-failure@gmail.com");
+    const input = { eventId: event.id, registrationId: registration.id, userId: user.id };
+    await openTicketCheckout(env.DB, paymentEnv, "https://example.test", input, stripe);
+    const ticketId = (await readRegistrationTicket(env.DB, input))!.id;
+    await paidEvent(ticketId, "cs_test_ticket", 19500);
+    await requestTicketRefund(env.DB, admin, {
+      eventId: event.id,
+      registrationId: registration.id,
+      reason: "Requested",
+    });
+    const refundId = (await env.DB.prepare("SELECT id FROM registration_ticket_refunds WHERE ticket_id = ?")
+      .bind(ticketId)
+      .first<{ id: string }>())!.id;
+    const keys: string[] = [];
+    let lookups = 0;
+    const accepted = (async (_url: string, init: RequestInit) => {
+      if (init.method === "GET") {
+        lookups += 1;
+        return new Response(
+          JSON.stringify({
+            data: [
+              {
+                id: "re_accepted",
+                status: "succeeded",
+                amount: 19500,
+                payment_intent: "pi_synthetic",
+                metadata: { registrationTicketId: ticketId, registrationTicketRefundId: refundId },
+              },
+            ],
+            has_more: false,
+          }),
+        );
+      }
+      keys.push(String(new Headers(init.headers).get("Idempotency-Key")));
+      return new Response(JSON.stringify({ id: "re_accepted", status: "succeeded" }));
+    }) as typeof fetch;
+    let failPersistence = true;
+    const flakyDb = {
+      prepare: (sql: string) => env.DB.prepare(sql),
+      batch: (statements: D1PreparedStatement[]) => {
+        if (failPersistence) {
+          failPersistence = false;
+          throw new Error("D1 write failed after Stripe accepted the refund");
+        }
+        return env.DB.batch(statements);
+      },
+    } as unknown as typeof env.DB;
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      failPersistence = true;
+      expect(await processTicketRefunds(flakyDb, paymentEnv, 5, accepted)).toEqual({ processed: 0, failed: 1 });
+      const row = await env.DB.prepare(
+        "SELECT id, attempts, provider_refund_id, failed_at FROM registration_ticket_refunds WHERE ticket_id = ?",
+      )
+        .bind(ticketId)
+        .first<{ id: string; attempts: number; provider_refund_id: string | null; failed_at: string | null }>();
+      expect(row).toMatchObject({ attempts: attempt + 1, provider_refund_id: null, failed_at: null });
+      await env.DB.prepare("UPDATE registration_ticket_refunds SET next_attempt_at = ? WHERE id = ?")
+        .bind(nowIso(), row!.id)
+        .run();
+    }
+    expect(keys).toEqual([`registration-ticket-refund:${refundId}`]);
+    expect(lookups).toBe(7);
+    expect(await processTicketRefunds(env.DB, paymentEnv, 5, accepted)).toEqual({ processed: 1, failed: 0 });
+    expect(lookups).toBe(8);
+    expect(keys).toHaveLength(1);
+    expect((await readRegistrationTicket(env.DB, input))!.status).toBe("refunded");
+  });
+
+  it.each(["wrong_amount", "incomplete_list", "expired_key"] as const)(
+    "does not resend an uncertain refund when the provider lookup has a %s",
+    async (caseName) => {
+      const { event, admin } = await seedTickets();
+      const { registration, user } = await register(event, `refund-lookup-${caseName}@gmail.com`);
+      const input = { eventId: event.id, registrationId: registration.id, userId: user.id };
+      await openTicketCheckout(env.DB, paymentEnv, "https://example.test", input, stripe);
+      const ticketId = (await readRegistrationTicket(env.DB, input))!.id;
+      await paidEvent(ticketId, "cs_test_ticket", 19500);
+      await requestTicketRefund(env.DB, admin, {
+        eventId: event.id,
+        registrationId: registration.id,
+        reason: "Requested",
+      });
+      const refundId = (await env.DB.prepare("SELECT id FROM registration_ticket_refunds WHERE ticket_id = ?")
+        .bind(ticketId)
+        .first<{ id: string }>())!.id;
+      // A previous send may have reached Stripe, but our response or write was lost.
+      await env.DB.prepare("UPDATE registration_ticket_refunds SET attempts = 1 WHERE id = ?").bind(refundId).run();
+      if (caseName === "expired_key")
+        await env.DB.prepare("UPDATE registration_ticket_refunds SET created_at = ? WHERE id = ?")
+          .bind(new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(), refundId)
+          .run();
+      let posts = 0;
+      const provider = (async (_url: string, init: RequestInit) => {
+        if (init.method === "POST") posts += 1;
+        return new Response(
+          JSON.stringify(
+            caseName === "incomplete_list"
+              ? { data: [], has_more: true }
+              : caseName === "expired_key"
+                ? { data: [], has_more: false }
+                : {
+                    data: [
+                      {
+                        id: "re_wrong_amount",
+                        status: "succeeded",
+                        amount: 1,
+                        payment_intent: "pi_synthetic",
+                        metadata: { registrationTicketId: ticketId, registrationTicketRefundId: refundId },
+                      },
+                    ],
+                    has_more: false,
+                  },
+          ),
+        );
+      }) as typeof fetch;
+      expect(await processTicketRefunds(env.DB, paymentEnv, 5, provider)).toEqual({ processed: 0, failed: 1 });
+      expect(posts).toBe(0);
+      const row = await env.DB.prepare(
+        "SELECT attempts, submitted_at, failed_at FROM registration_ticket_refunds WHERE id = ?",
+      )
+        .bind(refundId)
+        .first();
+      expect(row).toMatchObject({ attempts: 2, submitted_at: null, failed_at: null });
+    },
+  );
 
   it("returns a payment that arrives after the ticket was canceled and closes its payment page", async () => {
     const { event } = await seedTickets();
