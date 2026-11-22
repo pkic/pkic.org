@@ -103,17 +103,24 @@ export class LiveChatFeed {
     const parentIds = [...new Set(rows.flatMap((row) => row.reply_to ?? []))];
     const parents = new Map(this.chat.messages(parentIds).map((row) => [row.id, row]));
     const parentsHidden = this.moderation.hidden(parentIds);
-    /** The answered message as this viewer sees it: removed once deleted, or hidden from everyone but moderators. */
+    const parentsWaiting = this.moderation.checks.waiting(parentIds, Date.now());
+    /**
+     * The answered message as this viewer sees it: removed once deleted, or hidden from everyone but moderators.
+     * Words still being checked are only for their author and moderators, in a reply's excerpt as well.
+     */
     const quote = (row: LiveChatRow, viewer: LiveRoomParticipant): LiveChatReplyQuote | null => {
       if (!row.reply_to) return null;
       const parent = parents.get(row.reply_to);
       if (!parent || !seesChatOccurrence(viewer, parent.occurrence_id)) return null;
-      const shown = parent.channel === row.channel && (!parentsHidden.has(parent.id) || staff(viewer));
+      const parentMine = viewer.userId !== null && parent.author_user_id === viewer.userId;
+      const shown =
+        parent.channel === row.channel &&
+        ((!parentsHidden.has(parent.id) && (!parentsWaiting.has(parent.id) || parentMine)) || staff(viewer));
       return {
         messageId: row.reply_to,
         authorName: shown ? parent.author_name : null,
         excerpt: shown ? liveChatReplyExcerpt(parent.body) : null,
-        mine: shown && viewer.userId !== null && parent.author_user_id === viewer.userId,
+        mine: shown && parentMine,
       };
     };
     return {

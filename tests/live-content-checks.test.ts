@@ -117,6 +117,39 @@ describe("automatic checks of live chat and questions", () => {
     expect(delivered.message.text).toBe(text);
   });
 
+  it("delivers a message whose check does not answer in time, and still removes it when the check blocks it", async () => {
+    const author = await f.connectChat("attendee");
+    const reader = await f.connectChat("secondAttendee");
+    // The room waits briefly here, so the test need not sit out the real wait limit.
+    await runInDurableObject(f.chatRoom(), (instance) => {
+      Reflect.set(Reflect.get(instance as object, "chatActions") as object, "checkWaitMs", 50);
+    });
+    const release = holdChecks();
+    const text = "A slow offer of cheap certificates";
+    author.send({ type: "chat.send", text });
+    const late = await reader.next("chat.message", (update) => update.message.text === text);
+    release();
+    await reader.next("chat.removed", (update) => update.messageId === late.message.id);
+  });
+
+  it("keeps an edit that is still being checked out of the replies other attendees read", async () => {
+    const author = await f.connectChat("attendee");
+    const reader = await f.connectChat("secondAttendee");
+    const parent = await say(author, "Renewals take a week", reader);
+    reader.send({ type: "chat.send", text: "Thanks", replyTo: parent.id });
+    const reply = await author.next("chat.message", (update) => update.message.text === "Thanks");
+    const release = holdChecks();
+    const edited = "A slow edit with unchecked words";
+    author.send({ type: "chat.edit", messageId: parent.id, text: edited });
+    await author.next("chat.message", (update) => update.message.id === parent.id && update.message.text === edited);
+    await vi.waitFor(() => expect(model.run).toHaveBeenCalledTimes(3));
+    const joining = await f.connectChat("secondAttendee");
+    const seen = (joining.received[0] as Extract<LiveRoomServerMessage, { type: "location.chat.snapshot" }>).chat;
+    const quoted = seen.find((message) => message.id === reply.message.id)?.replyTo;
+    expect(quoted).toMatchObject({ messageId: parent.id, excerpt: null });
+    release();
+  });
+
   it("lets a moderator keep a message the check only advised against", async () => {
     const author = await f.connectChat("attendee");
     const reader = await f.connectChat("secondAttendee");
