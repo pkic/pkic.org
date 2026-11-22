@@ -23,6 +23,44 @@ const DIGIT_HALF_HEIGHT = 0.3;
 const TRAILING_SPACE_HALF = 0.02;
 /** How far out from the center the glare rides on the seats, in the mark's units. */
 const GLARE_RADIUS = 136;
+/**
+ * The circle whose stroke reveals the fill: its stroke runs from the center
+ * to past the seats' tips, so a dash of it is the wedge the time has gone.
+ * Its length is in the stylesheet's dash.
+ */
+const REVEAL_RADIUS = 92;
+
+type Point = { x: number; y: number };
+/** A point at `turn` clockwise from the top, `radius` out from the center. */
+function polar(turn: number, radius: number): Point {
+  const angle = turn * 2 * Math.PI;
+  return { x: CENTER + radius * Math.sin(angle), y: CENTER - radius * Math.cos(angle) };
+}
+const turnOf = ({ x, y }: Point) => (Math.atan2(x - CENTER, CENTER - y) / (2 * Math.PI) + 1) % 1;
+const round = (value: number) => Math.round(value * 100) / 100;
+
+/**
+ * The fill's colors, laid on each seat: green at the top, blue half way
+ * round and orange back at the top, as a sweep would set them. Each seat
+ * gets a straight gradient along its own chord, placed so the colors land
+ * where the sweep has them across the seat. The emblem is three of the same
+ * seat a third of a turn apart, so the orange seat's ends place all three.
+ */
+const SEAT_SWEEPS = [0, 1 / 3, 2 / 3].map((spoke) => {
+  const start = turnOf(LIVE_EMBLEM.orangeSeat.top) + spoke;
+  const end = turnOf(LIVE_EMBLEM.orangeSeat.bottom) + spoke;
+  const from = polar(start, LIVE_EMBLEM.seatRadius);
+  const to = polar(end, LIVE_EMBLEM.seatRadius);
+  const along = (turn: number) => {
+    const share = (turn - start) / (end - start);
+    return { x: round(from.x + share * (to.x - from.x)), y: round(from.y + share * (to.y - from.y)) };
+  };
+  // The third of the circle between two spokes, reaching well past the seat's tips.
+  const sector = [polar(spoke, 0), polar(spoke, 260), polar(spoke + 1 / 6, 260), polar(spoke + 1 / 3, 260)]
+    .map(({ x, y }) => `${round(x)},${round(y)}`)
+    .join(" ");
+  return { sector, zero: along(0), whole: along(1) };
+});
 
 /**
  * How full the seats are: the share of a countdown's length gone, or for a
@@ -74,6 +112,7 @@ export function LiveTimerMark({
   const seats = `${id}-seats`;
   const glow = `${id}-glow`;
   const glare = `${id}-glare`;
+  const reveal = `${id}-reveal`;
   const size = typeSize(text);
   return (
     <div
@@ -99,17 +138,43 @@ export function LiveTimerMark({
           <filter id={glare} x="-100%" y="-100%" width="300%" height="300%">
             <feGaussianBlur stdDeviation="8" />
           </filter>
+          <mask
+            id={reveal}
+            class="pk-live-timer-mark__reveal-mask"
+            maskUnits="userSpaceOnUse"
+            x="0"
+            y="0"
+            width={LIVE_EMBLEM.box}
+            height={LIVE_EMBLEM.box}
+          >
+            <circle class="pk-live-timer-mark__reveal" cx={CENTER} cy={CENTER} r={REVEAL_RADIUS} />
+          </mask>
+          {SEAT_SWEEPS.map((seat, index) => (
+            <linearGradient
+              key={index}
+              id={`${id}-sweep-${index}`}
+              gradientUnits="userSpaceOnUse"
+              x1={seat.zero.x}
+              y1={seat.zero.y}
+              x2={seat.whole.x}
+              y2={seat.whole.y}
+            >
+              <stop class="pk-live-timer-mark__stop-green" offset="0" />
+              <stop class="pk-live-timer-mark__stop-blue" offset="0.5" />
+              <stop class="pk-live-timer-mark__stop-orange" offset="1" />
+            </linearGradient>
+          ))}
         </defs>
         <g class="pk-live-timer-mark__track">
           <LiveEmblemSeats />
         </g>
         <g filter={`url(#${glow})`}>
           <g clip-path={`url(#${seats})`}>
-            <MarkSweep />
+            <MarkSweep id={id} reveal={reveal} />
           </g>
         </g>
         <g clip-path={`url(#${seats})`}>
-          <MarkSweep />
+          <MarkSweep id={id} reveal={reveal} />
           <g class="pk-live-timer-mark__glare">
             <circle cx={CENTER} cy={CENTER - GLARE_RADIUS} r="16" filter={`url(#${glare})`} />
           </g>
@@ -130,11 +195,17 @@ export function LiveTimerMark({
   );
 }
 
-/** The seats' fill: the event's colors swept round from the top, shown as far as the time has gone. */
-function MarkSweep() {
+/**
+ * The seats' fill: the event's colors swept round from the top, shown as far
+ * as the time has gone. It is drawn in the SVG itself, not as HTML inside it:
+ * WebKit draws HTML in an SVG at its own size and outside the clip.
+ */
+function MarkSweep({ id, reveal }: { id: string; reveal: string }) {
   return (
-    <foreignObject width={LIVE_EMBLEM.box} height={LIVE_EMBLEM.box}>
-      <div class="pk-live-timer-mark__sweep" />
-    </foreignObject>
+    <g mask={`url(#${reveal})`}>
+      {SEAT_SWEEPS.map((seat, index) => (
+        <polygon key={index} points={seat.sector} fill={`url(#${id}-sweep-${index})`} />
+      ))}
+    </g>
   );
 }

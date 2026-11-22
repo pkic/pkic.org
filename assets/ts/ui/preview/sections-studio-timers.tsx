@@ -98,7 +98,20 @@ const programTimers = timersRoomState([pitchTimer, lunchTimer, overrunPitchTimer
   },
 });
 
+const programMark = timersRoomState([pitchTimer], [], {
+  stage: {
+    ...timersRoomState([]).stage,
+    timerGraphics: [{ ...defaultLiveTimerGraphic(pitchTimer.id), presentation: "ring", warningSeconds: 30 }],
+  },
+});
+
 export const studioTimerSections: PreviewSection[] = [
+  {
+    id: "program-timer-mark",
+    title: "Program: a timer as the mark",
+    note: "A pitch in the emblem: its seats fill in the event's colors as the time goes, clipped to the seats at any size.",
+    render: () => <ProgramTimers state={programMark} />,
+  },
   {
     id: "program-timers",
     title: "Program: timers in the corner",

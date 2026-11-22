@@ -41,14 +41,32 @@
   .pk-live-timer-mark__track > path {
     fill: var(--pk-live-mark-track);
   }
-  /* The fill: the event's colors swept round from the top, cut off where the time has got to. */
-  .pk-live-timer-mark__sweep {
-    box-sizing: border-box;
-    inline-size: 100%;
-    block-size: 100%;
-    background: conic-gradient(var(--pk-pqc-green), var(--pk-pqc-blue) 0.5turn, var(--pk-pqc-orange));
-    /* The mask reads only alpha: the mark's own opaque white shows the fill. */
-    mask-image: conic-gradient(currentColor calc(var(--mark-fill) * 1turn), transparent 0);
+  /* The fill's colors: green at the top, blue half way round, orange back at the top. */
+  .pk-live-timer-mark__stop-green {
+    stop-color: var(--pk-pqc-green);
+  }
+  .pk-live-timer-mark__stop-blue {
+    stop-color: var(--pk-pqc-blue);
+  }
+  .pk-live-timer-mark__stop-orange {
+    stop-color: var(--pk-pqc-orange);
+  }
+  /*
+   * What the time has gone: a dash of a wide stroke round the center, from
+   * the top, as long as the share gone of the circle's length (2 x pi x 92).
+   * The mask reads its alpha, so its color does not matter.
+   */
+  .pk-live-timer-mark__reveal-mask {
+    mask-type: alpha;
+  }
+  .pk-live-timer-mark__reveal {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 184px;
+    stroke-dasharray: calc(var(--mark-fill) * 578.05px) 600px;
+    transform: rotate(-90deg);
+    transform-origin: 180px 180px;
+    transform-box: view-box;
   }
   /* A soft glare on the fill's leading edge; none before it starts or once full. */
   .pk-live-timer-mark__glare {
