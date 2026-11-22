@@ -62,15 +62,10 @@
    */
   .pk-datalist {
     display: grid;
-    /*
-     * `minmax(0, …)` on both tracks rather than the bare `max-content 1fr` this
-     * started as. A grid track's automatic minimum is its content's minimum, so
-     * one unbreakable value — a URL, which is most of what these lists hold —
-     * made the value column wider than the list and pushed the terms off their
-     * own left edge. Floored at zero the track can be as narrow as the space
-     * allows, and the value wraps inside it instead.
-     */
-    grid-template-columns: var(--pk-datalist-term, minmax(0, max-content)) minmax(0, 1fr);
+    /* A length cap sizes terms consistently in both fixed and intrinsic layouts;
+       percentage caps can wrap terms only after their container has been sized.
+       The zero value minimum keeps an unbreakable URL from widening the grid. */
+    grid-template-columns: var(--pk-datalist-term, fit-content(14rem)) minmax(0, 1fr);
     gap: var(--pk-1) var(--pk-3);
     margin: 0;
   }
@@ -118,6 +113,8 @@
   }
 
   .pk-datalist > dt {
+    min-width: 0;
+    overflow-wrap: break-word;
     color: var(--pk-ink-muted);
   }
 
@@ -132,7 +129,7 @@
 
   /*
    * On a phone there is no width to share. Two columns leave a term like
-   * "Certificate practice statement" holding most of the line and its value
+   * "Certification practice statement" holding most of the line and its value
    * broken across four, so the pairs stack and each term sits above its value.
    */
   @media (max-width: 30rem) {

@@ -1,3 +1,4 @@
+import type { ComponentChildren } from "preact";
 import type { SvgProps } from "./MediaIcons";
 import "./PkicMark.css";
 
@@ -13,8 +14,18 @@ export type PkicMarkElement = "arcs" | "table";
  * with its spokes (the groups). That element draws at full strength and the
  * rest of the logo draws at `--pk-mark-recede`, so a menu icon or a card is
  * still recognizably the whole mark while pointing at one part of it.
+ *
+ * Without the `keyhole`, the table's middle is open for `children`, drawn in
+ * the mark's own coordinates around its center at (180, 180): the timer sets
+ * its time there.
  */
-export function PkicMark({ class: className, highlight, ...props }: SvgProps & { highlight?: PkicMarkElement }) {
+export function PkicMark({
+  class: className,
+  highlight,
+  keyhole = true,
+  children,
+  ...props
+}: SvgProps & { highlight?: PkicMarkElement; keyhole?: boolean; children?: ComponentChildren }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -48,11 +59,14 @@ export function PkicMark({ class: className, highlight, ...props }: SvgProps & {
         fill-rule="evenodd"
         d="M189.905 81.165A99.33 99.33 0 0 1 270.546 220.839L311.47 244.467L301.565 261.623L260.641 237.995A99.33 99.33 0 0 1 99.359 237.995L58.435 261.623L48.53 244.467L89.454 220.839A99.33 99.33 0 0 1 170.095 81.165L170.095 33.91L189.905 33.91ZM180 100.48A79.52 79.52 0 0 0 180 259.52A79.52 79.52 0 0 0 180 100.48Z"
       />
-      <path
-        class="pk-pkic-mark__keyhole"
-        fill="currentColor"
-        d="M169.025 175.7L155.295 228.84L204.705 228.84L190.975 175.7A23.625 23.625 0 1 0 169.025 175.7Z"
-      />
+      {keyhole ? (
+        <path
+          class="pk-pkic-mark__keyhole"
+          fill="currentColor"
+          d="M169.025 175.7L155.295 228.84L204.705 228.84L190.975 175.7A23.625 23.625 0 1 0 169.025 175.7Z"
+        />
+      ) : null}
+      {children}
     </svg>
   );
 }

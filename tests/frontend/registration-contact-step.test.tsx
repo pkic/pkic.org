@@ -1,25 +1,18 @@
 // @vitest-environment jsdom
-import { render } from "preact";
+import { createRef, render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { identitiesListResponseSchema } from "../../assets/shared/schemas/identity";
-import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
+import { identitiesListResponseSchema, identityMutationResponseSchema } from "../../assets/shared/schemas/identity";
 import {
-  registrationProofPersonPatchSchema,
-  registrationEmailProofStartSchema,
-  registrationEmailProofVerifyResponseSchema,
-  registrationEmailProofVerifySchema,
-} from "../../assets/shared/schemas/registration-email-proof";
-import type { ConfirmOrganizationController } from "../../assets/ts/components/RegistrationConfirmOrganization";
+  identityAffiliationPreviewResponseSchema,
+  identityAffiliationPreviewSchema,
+} from "../../assets/shared/schemas/identity-affiliation";
+import { userAuthSessionResponseSchema, userSignUpRequestSchema } from "../../assets/shared/schemas/user-auth";
+import { myProfileUpdateSchema } from "../../assets/shared/schemas/me";
 import { portalProfileFixture, portalSessionFixture } from "../helpers/portal-session";
 import { RegistrationIdentityField } from "../../assets/ts/components/RegistrationIdentitySelect";
 import { RegistrationContactStep } from "../../assets/ts/components/RegistrationContactStep";
-import {
-  PERSONAL_ADDRESS_WAITLIST,
-  EMAIL_FIRST_ADVISORY_COPY,
-  EMAIL_FIRST_COPY,
-  WORK_EMAIL_STEER,
-} from "../../assets/shared/email-first-copy";
+import { PERSONAL_ADDRESS_WAITLIST, EMAIL_FIRST_COPY, WORK_EMAIL_STEER } from "../../assets/shared/email-first-copy";
 import { emailDomainResponseSchema } from "../../assets/shared/schemas/email-domains";
 import { controlFor, buttonNamed } from "./helpers/labeled-control";
 
@@ -30,7 +23,9 @@ const ORGANIZATION_ID = "00000000-0000-4000-8000-000000000044";
 const NOW = "2026-01-01T00:00:00.000Z";
 let host: HTMLDivElement | null = null;
 
-function session(organizationName?: string | null) {
+const PERSONAL_IDENTITY_ID = "00000000-0000-4000-8000-000000000099";
+
+function session(organizationName?: string | null, actingIdentityId: string = IDENTITY_ID) {
   // Event participation is an authenticated capacity without membership.
   return userAuthSessionResponseSchema.parse({
     success: true,
@@ -39,13 +34,13 @@ function session(organizationName?: string | null) {
     idleExpiresAt: "2099-12-31T23:59:59.000Z",
     identity: { id: USER_ID, email: "ada@example.test" },
     eventParticipation: true,
-    actingIdentityId: organizationName === undefined ? null : IDENTITY_ID,
+    actingIdentityId: organizationName === undefined ? null : actingIdentityId,
     actingIdentities:
       organizationName === undefined
         ? []
         : [
             {
-              id: "00000000-0000-4000-8000-000000000099",
+              id: PERSONAL_IDENTITY_ID,
               organizationId: null,
               organizationName: null,
               jobTitle: null,
@@ -96,18 +91,45 @@ function identity(organizationName: string | null) {
 
 interface Recorded {
   path: string;
-  query: URLSearchParams;
+  method: string;
   body: unknown;
 }
 
-/** `signedIn` false answers the session with 401; `organizationName` undefined holds no identity. */
+const CONTEXT_TOKEN = "context-token-".padEnd(40, "x");
+
+/** The domain's organizations as the shared affiliation preview answers them; null fails the preview. */
+function affiliationPreview(
+  organizations: { id: string; name: string }[] | null,
+  prepare = false,
+  personalAddress = false,
+) {
+  return organizations
+    ? identityAffiliationPreviewResponseSchema.parse({
+        email: "ada@example.test",
+        domain: "example.test",
+        domains: [{ domain: "example.test", canLink: true, organizationName: null }],
+        organization: null,
+        organizations: organizations.map((item) => ({ ...item, identityId: null, jobTitle: null })),
+        contextToken: prepare ? CONTEXT_TOKEN : undefined,
+        personalAddress,
+      })
+    : null;
+}
+
+/**
+ * `signedIn` false answers the session with 401; `organizationName` undefined holds no identity.
+ * `organizations` is what the domain resolves to for an account without an organization identity.
+ * `personalAddress` is the Worker's answer that the person said at sign-in the address is personal.
+ */
 function installResponses(
   organizationName: string | null | undefined,
   signedIn = true,
-  verifiedPerson: { firstName: string | null; lastName: string | null } | null = null,
-  asksOrganization = false,
+  actingIdentityId: string = IDENTITY_ID,
+  organizations: { id: string; name: string }[] | null = null,
+  personalAddress = false,
 ): Recorded[] {
   const recorded: Recorded[] = [];
+  let saved = profile();
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
@@ -115,40 +137,35 @@ function installResponses(
         typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
         location.origin,
       );
+      const method = init.method ?? "GET";
       recorded.push({
         path: url.pathname,
-        query: url.searchParams,
+        method,
         body: typeof init.body === "string" ? JSON.parse(init.body) : undefined,
       });
       let body: unknown;
       let status = 200;
-      if (url.pathname === "/api/v1/auth/session") {
-        body = signedIn ? session(organizationName) : { error: { code: "UNAUTHORIZED", message: "Sign in" } };
+      if (url.pathname === "/api/v1/users/current/identities/preview") {
+        const input = identityAffiliationPreviewSchema.parse(JSON.parse(String(init.body)));
+        body = affiliationPreview(organizations, input.phase === "prepare", personalAddress) ?? {
+          error: { code: "UNAVAILABLE", message: "Unavailable" },
+        };
+        status = organizations ? 200 : 503;
+      } else if (url.pathname === "/api/v1/users/current/identities" && method === "POST") {
+        // The confirmed organization becomes the account's organization identity.
+        organizationName = organizations?.[0]?.name ?? null;
+        actingIdentityId = IDENTITY_ID;
+        body = identityMutationResponseSchema.parse({ success: true, identityId: IDENTITY_ID, state: "active" });
+      } else if (url.pathname === "/api/v1/auth/session") {
+        body = signedIn
+          ? session(organizationName, actingIdentityId)
+          : { error: { code: "UNAUTHORIZED", message: "Sign in" } };
         status = signedIn ? 200 : 401;
-      } else if (url.pathname.endsWith("/registrations/proof")) body = { status: "verification_sent" };
-      else if (url.pathname.endsWith("/registrations/proof/verify"))
-        body = registrationEmailProofVerifyResponseSchema.parse({
-          email: "ada@example.test",
-          unaffiliatedAttestation: false,
-          person: verifiedPerson ? { userId: USER_ID, ...verifiedPerson } : null,
-          asksOrganization,
-          affiliation: asksOrganization
-            ? {
-                email: "ada@example.test",
-                domain: "example.test",
-                domains: [{ domain: "example.test", canLink: false, organizationName: null }],
-                organization: organizationName ? { id: ORGANIZATION_ID, name: organizationName } : null,
-                organizations: organizationName
-                  ? [{ id: ORGANIZATION_ID, name: organizationName, identityId: null, jobTitle: null }]
-                  : [],
-              }
-            : null,
-        });
-      else if (url.pathname.endsWith("/registrations/proof/person")) {
-        const patch = registrationProofPersonPatchSchema.parse(JSON.parse(String(init.body)));
-        body = { person: { userId: USER_ID, firstName: patch.firstName, lastName: patch.lastName } };
-      } else if (url.pathname === "/api/v1/users/current") body = profile();
-      else if (url.pathname.startsWith("/api/v1/email/domains/")) {
+      } else if (url.pathname === "/api/v1/auth/sign-up") body = { success: true };
+      else if (url.pathname === "/api/v1/users/current") {
+        if (method === "PATCH") saved = { ...saved, ...myProfileUpdateSchema.parse(JSON.parse(String(init.body))) };
+        body = saved;
+      } else if (url.pathname.startsWith("/api/v1/email/domains/")) {
         // The server's lists; the browser only ever sees this answer.
         const domain = decodeURIComponent(url.pathname.slice("/api/v1/email/domains/".length));
         body = emailDomainResponseSchema.parse({ domain, kind: domain === "ziggo.nl" ? "free" : "work" });
@@ -163,7 +180,11 @@ function installResponses(
             hasMore: false,
           },
         });
-      } else throw new Error(`Unexpected request: ${url.pathname}`);
+      } else {
+        // The component catches a refused fetch, so a stray request is recorded and failed in teardown.
+        unexpectedRequests.push(`${method} ${url.pathname}`);
+        throw new Error(`Unexpected request: ${url.pathname}`);
+      }
       return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
     }),
   );
@@ -177,30 +198,23 @@ async function settle() {
     });
 }
 
+/** The sign-in card's place beside the form, as the registration flow provides it. */
+const signInSlot = createRef<HTMLDivElement>();
+
 async function mount(node: preact.ComponentChild): Promise<HTMLFormElement> {
   host = document.createElement("div");
   document.body.append(host);
+  const slot = document.createElement("div");
+  signInSlot.current = slot;
   const form = document.createElement("form");
   const mountPoint = document.createElement("div");
   form.append(mountPoint);
-  host.append(form);
+  host.append(slot, form);
   await act(async () => {
     render(node, mountPoint);
   });
   await settle();
   return form;
-}
-
-async function continueWith(form: HTMLFormElement, email: string) {
-  await act(() => {
-    const control = controlFor(form, copy.work.label);
-    control.value = email;
-    control.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  await act(async () => {
-    [...form.querySelectorAll("button")].find((button) => button.textContent === copy.work.action)!.click();
-  });
-  await settle();
 }
 
 function value(form: HTMLFormElement, name: string): string | undefined {
@@ -209,79 +223,192 @@ function value(form: HTMLFormElement, name: string): string | undefined {
 
 const copy = EMAIL_FIRST_COPY.registration;
 
+const unexpectedRequests: string[] = [];
+
 afterEach(() => {
-  sessionStorage.clear();
   history.replaceState({}, "", "/");
   if (host) render(null, host.querySelector("form > div")!);
   host?.remove();
   host = null;
   vi.unstubAllGlobals();
+  const stray = unexpectedRequests.splice(0);
+  expect(stray, "requests no stub answers").toEqual([]);
 });
-
-const ENDPOINT = "/api/v1/events/pqc/registrations";
-const PROOF_TOKEN = "proof-token-0123456789abcdefghijklmnopqrstuvwxyz";
 
 function contactStep(
   onReadyChange: (ready: boolean) => void = () => {},
-  organization: ConfirmOrganizationController = {},
+  onSignInChange?: (shown: boolean) => void,
+  onRepresentationMissingChange?: (missing: boolean) => void,
+  confirmRepresentation?: { current: (() => Promise<boolean>) | null },
 ) {
   return (
     <RegistrationContactStep
-      endpoint={ENDPOINT}
-      entry={{ referralCode: "AB12CD" }}
-      organization={organization}
+      signInSlot={signInSlot}
       onReadyChange={onReadyChange}
+      onSignInChange={onSignInChange}
+      onRepresentationMissingChange={onRepresentationMissingChange}
+      confirmRepresentation={confirmRepresentation}
     />
   );
 }
 
 describe("registration contact step", () => {
-  it("asks nothing until the visitor continues, then verifies the address before anything else", async () => {
+  it("hands a signed-out visitor the sign-in card beside the form, returning to this registration", async () => {
     window.history.replaceState({}, "", "/events/2026/pqc/register/?ref=AB12CD");
     const recorded = installResponses(undefined, false);
-    let ready = false;
-    const form = await mount(contactStep((next) => (ready = next)));
-    expect(recorded).toHaveLength(0);
-    expect(form.querySelectorAll('input:not([type="radio"])')).toHaveLength(1);
-
-    await continueWith(form, "Ada@Example.test");
-    const proof = recorded.find((request) => request.path === `${ENDPOINT}/proof`);
-    expect(registrationEmailProofStartSchema.parse(proof!.body)).toEqual({
-      email: "ada@example.test",
-      unaffiliatedAttestation: false,
-      entry: { referralCode: "AB12CD" },
-    });
-    expect(form.textContent).toContain(copy.sentTitle);
-    expect(form.textContent).toContain(copy.sent("ada@example.test"));
-    // Nothing else is asked, and the wizard cannot continue, until the link is opened.
-    expect(form.querySelector('input[name="firstName"]')).toBeNull();
+    let ready = true;
+    let signingIn = false;
+    const form = await mount(
+      contactStep(
+        (next) => (ready = next),
+        (next) => (signingIn = next),
+      ),
+    );
+    const card = signInSlot.current!.querySelector<HTMLElement>('section[aria-label="Sign in"]')!;
+    expect(card).not.toBeNull();
+    // The card owns a form, so it stays outside the registration form and nothing is asked there yet.
+    expect(form.contains(card)).toBe(false);
+    expect(form.querySelector("input")).toBeNull();
     expect(ready).toBe(false);
+    expect(signingIn).toBe(true);
 
-    await act(async () => buttonNamed(form, copy.changeEmail)!.click());
-    expect(controlFor(form, copy.work.label)).not.toBeNull();
+    await act(async () => buttonNamed(card, "Start registration")!.click());
+    await act(() => {
+      const control = controlFor(card, copy.work.label);
+      control.value = "Ada@Example.test";
+      control.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(() => document.querySelector<HTMLInputElement>('input[name="acceptsAccountPolicies"]')!.click());
+    await act(async () => buttonNamed(card, copy.work.action)!.click());
+    await settle();
+    const signUp = recorded.find((request) => request.path === "/api/v1/auth/sign-up");
+    expect(userSignUpRequestSchema.parse(signUp!.body)).toMatchObject({
+      email: "ada@example.test",
+      returnPath: "/events/2026/pqc/register/?ref=AB12CD",
+    });
+    expect(card.textContent).toContain(copy.sent("ada@example.test"));
+    expect(ready).toBe(false);
   });
 
-  it("continues from the opened link with the address verified and a known person's names filled in", async () => {
-    window.history.replaceState({}, "", `/events/2026/pqc/register/?ref=AB12CD#verify=${PROOF_TOKEN}`);
-    const recorded = installResponses(undefined, false, { firstName: "Ada", lastName: "Lovelace" });
+  it("continues a signed-in person with their saved details and selects their organization", async () => {
+    window.history.replaceState({}, "", "/events/2026/pqc/register/");
+    installResponses("Example Corp");
     let ready = false;
-    const form = await mount(contactStep((next) => (ready = next)));
-    const verify = recorded.find((request) => request.path === `${ENDPOINT}/proof/verify`);
-    expect(registrationEmailProofVerifySchema.parse(verify!.body)).toEqual({ token: PROOF_TOKEN });
-    // The token leaves the address bar, so the page can be shared without it.
-    expect(location.hash).toBe("");
-    expect(location.search).toBe("?ref=AB12CD");
-    expect(value(form, "email")).toBe("ada@example.test");
-    expect(value(form, "emailProof")).toBe(PROOF_TOKEN);
-    expect(value(form, "firstName")).toBe("Ada");
-    expect(form.querySelector('input[name="firstName"]')?.getAttribute("type")).toBe("hidden");
-    expect(form.textContent).toContain("Ada Lovelace");
+    let signingIn = true;
+    const form = await mount(
+      contactStep(
+        (next) => (ready = next),
+        (next) => (signingIn = next),
+      ),
+    );
+    expect(signInSlot.current!.childElementCount).toBe(0);
+    expect(signingIn).toBe(false);
     expect(ready).toBe(true);
+    expect(value(form, "email")).toBe("ada@example.test");
+    // The names are the account's own: shown, never posted with the registration.
+    expect(form.querySelector('input[name="firstName"], input[name="lastName"]')).toBeNull();
+    expect(form.textContent).toContain("Ada Lovelace");
+    expect(form.textContent).toContain("Example Corp");
+    expect(value(form, "identityId")).toBe(IDENTITY_ID);
+    expect(form.querySelector('[role="combobox"]')).toBeNull();
+    expect(form.querySelector('button[aria-label="Change representation"]')).not.toBeNull();
   });
 
-  it("corrects an invalid saved name through the shared editor without adding names to the registration", async () => {
-    history.replaceState({}, "", `/events/2026/pqc/register/#verify=${PROOF_TOKEN}`);
-    const requests = installResponses(undefined, false, { firstName: "ZoÃ«", lastName: "Fixture" });
+  it("confirms the domain's only organization in place for a work address with no organization yet", async () => {
+    window.history.replaceState({}, "", "/events/2026/pqc/register/");
+    const recorded = installResponses(null, true, PERSONAL_IDENTITY_ID, [
+      { id: ORGANIZATION_ID, name: "Example Corp" },
+    ]);
+    let missing = true;
+    const confirm: { current: (() => Promise<boolean>) | null } = { current: null };
+    const form = await mount(contactStep(undefined, undefined, (next) => (missing = next), confirm));
+    // The shared organization details select the only organization; the job title is still asked.
+    expect(controlFor(form, "Organization").value).toBe(ORGANIZATION_ID);
+    expect(value(form, "organizationRepresentationMissing")).toBe("false");
+    expect(missing).toBe(false);
+    expect(confirm.current).not.toBeNull();
+
+    // Without a job title, nothing is created and the step stays put.
+    let confirmed: boolean | undefined;
+    await act(async () => {
+      confirmed = await confirm.current!();
+    });
+    expect(confirmed).toBe(false);
+    expect(
+      recorded.some((request) => request.method === "POST" && request.path === "/api/v1/users/current/identities"),
+    ).toBe(false);
+
+    await act(() => {
+      const control = controlFor(form, "Job title");
+      control.value = "Engineer";
+      control.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      confirmed = await confirm.current!();
+    });
+    await settle();
+    expect(confirmed).toBe(true);
+    const created = recorded.find(
+      (request) => request.method === "POST" && request.path === "/api/v1/users/current/identities",
+    );
+    expect(created?.body).toEqual({ contextToken: CONTEXT_TOKEN });
+    expect(confirm.current).toBeNull();
+    expect(value(form, "identityId")).toBe(IDENTITY_ID);
+    expect(form.textContent).toContain("Example Corp");
+  });
+
+  it("keeps a work address from registering as the personal identity a new account starts with", async () => {
+    window.history.replaceState({}, "", "/events/2026/pqc/register/");
+    // The domain's organizations could not be read, so the shared chooser is the way to one.
+    installResponses(null);
+    let missing = false;
+    const form = await mount(contactStep(undefined, undefined, (next) => (missing = next)));
+    // Nothing is selected for it, so the flow holds Continue until an organization is.
+    expect(missing).toBe(true);
+    expect(value(form, "identityId")).toBe("");
+    expect(value(form, "organizationRepresentationMissing")).toBe("true");
+    expect(form.textContent).toContain("Select your organization");
+    expect(form.textContent).not.toContain("Personal");
+
+    // The shared representation chooser is the one way to add the organization.
+    await act(async () => form.querySelector<HTMLButtonElement>('button[aria-label="Change representation"]')!.click());
+    await settle();
+    const chooser = document.querySelector<HTMLDialogElement>("dialog[open]")!;
+    expect(form.contains(chooser)).toBe(false);
+    expect(chooser.querySelector('button[aria-label="Add identity"]')).not.toBeNull();
+  });
+
+  it("registers a work address the person said is personal at sign-in as their personal identity", async () => {
+    window.history.replaceState({}, "", "/events/2026/pqc/register/");
+    // The domain resolves to an organization nobody has claimed; the person already said the address is personal.
+    installResponses(null, true, PERSONAL_IDENTITY_ID, [{ id: ORGANIZATION_ID, name: "Example Corp" }], true);
+    let missing = true;
+    const confirm: { current: (() => Promise<boolean>) | null } = { current: null };
+    const form = await mount(contactStep(undefined, undefined, (next) => (missing = next), confirm));
+    expect(missing).toBe(false);
+    expect(confirm.current).toBeNull();
+    expect(value(form, "identityId")).toBe(PERSONAL_IDENTITY_ID);
+    expect(value(form, "unaffiliatedAttestation")).toBe("true");
+    expect(value(form, "organizationRepresentationMissing")).toBe("false");
+    expect(form.querySelector('[name="organizationName"], [name="jobTitle"]')).toBeNull();
+    expect(form.textContent).not.toContain("Job title");
+    expect(form.textContent).not.toContain("uses an organization domain");
+  });
+
+  it("selects the organization a work address most likely registers for while the session acts personally", async () => {
+    window.history.replaceState({}, "", "/events/2026/pqc/register/");
+    installResponses("Example Corp", true, PERSONAL_IDENTITY_ID);
+    let missing = true;
+    const form = await mount(contactStep(undefined, undefined, (next) => (missing = next)));
+    expect(missing).toBe(false);
+    expect(value(form, "identityId")).toBe(IDENTITY_ID);
+    expect(value(form, "organizationRepresentationMissing")).toBe("false");
+    expect(form.textContent).toContain("Example Corp");
+  });
+
+  it("corrects a saved name through the shared editor on the signed-in person's own profile", async () => {
+    window.history.replaceState({}, "", "/events/2026/pqc/register/");
+    const requests = installResponses("Example Corp");
     const form = await mount(contactStep());
     await act(() => form.querySelector<HTMLButtonElement>('button[aria-label="Edit personal details"]')!.click());
     const dialog = document.querySelector<HTMLDialogElement>("dialog[open]")!;
@@ -294,158 +421,10 @@ describe("registration contact step", () => {
     });
     await act(async () => buttonNamed(dialog, "Save my details")!.click());
     await settle();
-    expect(value(form, "firstName")).toBe("Zoë");
-    expect(value(form, "lastName")).toBe("Fixture");
-    expect(form.textContent).toContain("Zoë Fixture");
-    expect(requests.find((request) => request.path.endsWith("/proof/person"))?.body).toEqual({
-      token: PROOF_TOKEN,
-      userId: USER_ID,
-      firstName: "Zoë",
-      lastName: "Fixture",
-    });
+    expect(form.textContent).toContain("Zoë Lovelace");
+    const patch = requests.find((request) => request.path === "/api/v1/users/current" && request.method === "PATCH");
+    expect(myProfileUpdateSchema.parse(patch!.body)).toMatchObject({ firstName: "Zoë", lastName: "Lovelace" });
     expect(document.querySelector("dialog[open]")).toBeNull();
-  });
-
-  it("continues when the link opens in the tab already showing the form", async () => {
-    window.history.replaceState({}, "", "/events/2026/pqc/register/");
-    installResponses(undefined, false, { firstName: "Ada", lastName: "Lovelace" });
-    let ready = false;
-    const form = await mount(contactStep((next) => (ready = next)));
-    expect(ready).toBe(false);
-    await act(async () => {
-      window.history.replaceState({}, "", `/events/2026/pqc/register/#verify=${PROOF_TOKEN}`);
-      window.dispatchEvent(new HashChangeEvent("hashchange"));
-    });
-    await settle();
-    expect(value(form, "emailProof")).toBe(PROOF_TOKEN);
-    expect(location.hash).toBe("");
-    expect(ready).toBe(true);
-  });
-
-  it("asks a verified work address with an unknown domain for its organization and job title", async () => {
-    window.history.replaceState({}, "", `/events/2026/pqc/register/#verify=${PROOF_TOKEN}`);
-    installResponses(undefined, false, null, true);
-    const organization: ConfirmOrganizationController = {};
-    const form = await mount(contactStep(() => {}, organization));
-    const name = controlFor(form, "Organization name");
-    expect(name.readOnly).toBe(false);
-    expect(form.querySelector("select")).toBeNull();
-    expect(form.querySelector('button[aria-label="Add organization"]')).toBeNull();
-    expect(controlFor(form, "First name").value).toBe("");
-    let named: ReturnType<NonNullable<ConfirmOrganizationController["read"]>> | undefined;
-    await act(() => {
-      named = organization.read?.();
-    });
-    expect(named).toEqual({ refused: true });
-    expect(name.getAttribute("aria-invalid")).not.toBe("true");
-    await act(() => {
-      organization.validate?.();
-    });
-    expect(name.getAttribute("aria-invalid")).toBe("true");
-    expect(name.parentElement?.querySelector(".pk-field__state")).not.toBeNull();
-    await act(() => {
-      name.value = "New Organization";
-      name.dispatchEvent(new Event("input", { bubbles: true }));
-      const title = controlFor(form, "Job title");
-      title.value = "Researcher";
-      title.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await act(() => {
-      named = organization.read?.();
-    });
-    expect(named).toMatchObject({
-      organization: { name: "New Organization", organizationId: null, jobTitle: "Researcher" },
-    });
-  });
-
-  it("embeds the shared chooser for a verified known domain and clears it when the address changes", async () => {
-    window.history.replaceState({}, "", `/events/2026/pqc/register/#verify=${PROOF_TOKEN}`);
-    installResponses("Example Corp", false, null, true);
-    const organization: ConfirmOrganizationController = {};
-    const form = await mount(contactStep(() => {}, organization));
-    const choice = controlFor(form, "Organization") as HTMLSelectElement;
-    expect(choice.value).toBe("");
-    await act(() => {
-      choice.value = ORGANIZATION_ID;
-      choice.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    const title = controlFor(form, "Job title");
-    await act(() => {
-      title.value = "Researcher";
-      title.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    let selected: ReturnType<NonNullable<ConfirmOrganizationController["read"]>> | undefined;
-    await act(() => {
-      selected = organization.read?.();
-    });
-    expect(selected).toMatchObject({
-      organization: { name: "Example Corp", organizationId: ORGANIZATION_ID, jobTitle: "Researcher" },
-    });
-    expect([...choice.options].some((option) => option.textContent === "Another organization")).toBe(false);
-    await act(() => buttonNamed(form, "Add organization").click());
-    const dialog = document.querySelector<HTMLElement>("dialog")!;
-    expect(dialog).not.toBeNull();
-    const name = controlFor(dialog, "Organization name");
-    await act(() => {
-      name.value = "Another Organization";
-      name.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await act(() => buttonNamed(dialog, "Use organization").click());
-    await settle();
-    await act(() => {
-      selected = organization.read?.();
-    });
-    expect(selected).toMatchObject({
-      organization: { name: "Another Organization", organizationId: null, jobTitle: "Researcher" },
-    });
-    const editEmail = buttonNamed(form, "Change email address");
-    expect(editEmail.closest("dd")?.textContent).toContain("ada@example.test");
-    expect(form.querySelectorAll('button[aria-label="Change email address"]')).toHaveLength(1);
-    await act(() => editEmail.click());
-    await settle();
-    expect(organization.read).toBeUndefined();
-  });
-
-  it("continues a signed-in person without verifying again and selects their organization", async () => {
-    window.history.replaceState({}, "", "/events/2026/pqc/register/");
-    const recorded = installResponses("Example Corp");
-    const form = await mount(contactStep());
-    await continueWith(form, "ada@example.test");
-    expect(recorded.some((request) => request.path === `${ENDPOINT}/proof`)).toBe(false);
-    expect(form.querySelector('input[name="firstName"]')?.getAttribute("type")).toBe("hidden");
-    expect(value(form, "firstName")).toBe("Ada");
-    expect(value(form, "lastName")).toBe("Lovelace");
-    expect(value(form, "emailProof")).toBeUndefined();
-    expect(form.textContent).toContain("Example Corp");
-    expect(value(form, "identityId")).toBe(IDENTITY_ID);
-    expect(form.querySelector('[role="combobox"]')).toBeNull();
-    expect(form.querySelector('button[aria-label="Change representation"]')).not.toBeNull();
-  });
-
-  it("steers a free address from the server's answer before sending anything", async () => {
-    window.history.replaceState({}, "", "/events/2026/pqc/register/");
-    const recorded = installResponses(undefined, false);
-    const form = await mount(contactStep());
-    await continueWith(form, "ada@ziggo.nl");
-    expect(recorded.map((request) => request.path)).toEqual(["/api/v1/email/domains/ziggo.nl"]);
-    const field = controlFor(form, copy.work.label).closest(".pk-field")!;
-    expect(field.textContent).toContain(WORK_EMAIL_STEER);
-    expect(field.classList.contains("pk-field--advisory")).toBe(true);
-
-    await act(async () => buttonNamed(form, EMAIL_FIRST_ADVISORY_COPY.usePersonal)!.click());
-    await act(async () => buttonNamed(form, copy.personal.action)!.click());
-    await settle();
-    const proof = recorded.find((request) => request.path === `${ENDPOINT}/proof`);
-    expect(registrationEmailProofStartSchema.parse(proof!.body).unaffiliatedAttestation).toBe(true);
-  });
-
-  it("verifies a different address than the signed-in one", async () => {
-    window.history.replaceState({}, "", "/events/2026/pqc/register/");
-    const recorded = installResponses("Example Corp");
-    const form = await mount(contactStep());
-    await continueWith(form, "colleague@example.test");
-    expect(recorded.some((request) => request.path === `${ENDPOINT}/proof`)).toBe(true);
-    expect(value(form, "identityId")).toBeUndefined();
   });
 });
 

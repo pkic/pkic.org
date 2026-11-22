@@ -1,7 +1,8 @@
+import { eventVirtualRoomUrl } from "../../../assets/shared/event-participation-link";
 import { AppError } from "../errors";
 import ICAL from "ical.js";
 import type { EventRecord } from "../services/events";
-import { resolveEventVenue, resolveEventVirtualUrl } from "../services/events";
+import { resolveEventVenue } from "../services/events";
 import { generateSignedRsvpAddress } from "../email/rsvp";
 import {
   eventAttendanceAccessMode,
@@ -194,7 +195,7 @@ export async function buildRegistrationIcs(
 
   // A calendar file has no reader locale, so the country is named in English.
   const venueAddress = resolveEventVenue(event) ?? formatEventPlace(event, "en");
-  const virtualUrl = resolveEventVirtualUrl(event, baseUrl);
+  const virtualUrl = eventVirtualRoomUrl(event.slug, baseUrl);
 
   const liveDays = dayAttendance.filter(
     (day) => eventAttendanceAccessMode({ value: day.attendanceType, accessMode: day.accessMode }) !== "none",

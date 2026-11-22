@@ -1,5 +1,6 @@
 import { readActiveUserSession, scannerUploadSuspended } from "../../../../../../shared/pending-user-logout";
-import { sequenceScannerRecord } from "./scanner-device-ledger";
+import { sequenceScannerRecord } from "./scanner-sequence-record";
+import { resumeScannerServerSession } from "./scanner-session-resumption";
 import type { ScannerOfflineContext } from "../../../../../../../shared/schemas/event-scanner-offline-context";
 import { scannerReceiptMatches } from "./scanner-receipt";
 import {
@@ -127,6 +128,8 @@ async function claimScan(
 }
 
 import type { ScanDrainResult } from "../../../../../../../shared/schemas/event-scan-upload-status";
+import { scannerRetryAfterMs } from "./scanner-retry-after";
+import { apiErrorPayloadSchema } from "../../../../../../../shared/schemas/api-common";
 export type { ScanDrainResult } from "../../../../../../../shared/schemas/event-scan-upload-status";
 /** Shared by foreground and worker. A receipt is required before deleting anything. */
 export async function drainScanOutbox(
@@ -171,20 +174,38 @@ export async function drainScanOutbox(
       let retryAfterMs = Math.min(60_000, 1000 * 2 ** Math.min(attempts, 6)) + Math.floor(Math.random() * 1000);
       try {
         if (!uploadRecord.success) throw new Error("Retained scanner record requires recovery");
-        const response = (await scannerUploadSuspended(operatorUserId, active.sessionId))
+        const localSignOut = await scannerUploadSuspended(operatorUserId, active.sessionId);
+        let response = localSignOut
           ? new Response(null, { status: 401 })
           : await upload(
               enrolledScannerQueueRecordSchema.parse({ kind: queued.kind, eventId: queued.eventId, scan: queued.scan }),
             );
-        if (response.status === 429 || response.status === 503) {
-          const header = response.headers.get("retry-after");
-          if (header) {
-            const seconds = Number(header);
-            const wait = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(header) - Date.now();
-            if (Number.isFinite(wait)) retryAfterMs = Math.max(retryAfterMs, Math.min(86_400_000, wait));
+        if (!localSignOut && response.status === 409) {
+          const refusal = apiErrorPayloadSchema.safeParse(
+            await response
+              .clone()
+              .json()
+              .catch(() => null),
+          );
+          if (refusal.success && refusal.data.error.code === "SCANNER_SESSION_CLOSED") {
+            if (await scannerUploadSuspended(operatorUserId, active.sessionId)) state = "authentication_required";
+            else {
+              await resumeScannerServerSession(
+                queued.eventId,
+                uploadRecord.data.scan.scannerSession.epochId,
+                queued.scan.deviceId,
+                queued.scan.sponsorId ?? undefined,
+              );
+              if (await scannerUploadSuspended(operatorUserId, active.sessionId)) state = "authentication_required";
+              else response = await upload(uploadRecord.data);
+            }
           }
         }
-        if (response.status === 401 || response.status === 403) state = "authentication_required";
+        if (response.status === 429 || response.status === 503) {
+          const wait = scannerRetryAfterMs(response.headers);
+          if (wait !== null) retryAfterMs = Math.max(retryAfterMs, wait);
+        }
+        if (localSignOut) state = "authentication_required";
         else if (response.ok) {
           receipt = eventScanResponseSchema.parse(await response.json());
           acknowledged = scannerReceiptMatches(receipt, queued.scan);

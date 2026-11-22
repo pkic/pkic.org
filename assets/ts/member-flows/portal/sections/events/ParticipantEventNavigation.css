@@ -1,9 +1,28 @@
 @layer components {
+  /* The virtual room stays in the page while its attendee is elsewhere in the event; shown, it lays out as
+     the page's own content. */
+  .pk-participant-event__room {
+    display: contents;
+  }
   /* On phones the event app's bottom bar (AppTabBar) carries this navigation;
      the destinations without a bottom tab are listed under its "More". */
   @media (max-width: 48rem) {
     .pk-participant-event__navigation {
       display: none;
+    }
+    /* The virtual room is the whole screen on a phone, as the studio is: it opens on the stream, edge to
+       edge, and its own bottom bar leads back to the event and its hero. */
+    [data-event-room] > .pk-event-hero {
+      display: none;
+    }
+    /* Its title stays for assistive technology, as it does beside the tab strip on a desktop. */
+    [data-event-room] > .pk-participant-event__page-title {
+      position: absolute;
+      inline-size: 1px;
+      block-size: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
     }
   }
   /* Where the tab strip shows, its active tab already names the page; the

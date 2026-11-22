@@ -97,11 +97,13 @@ export async function createEstablishedUserSessionResult(
     eventParticipation: boolean;
     actingIdentities: SessionActingIdentity[];
   },
+  /** The identity the person chose while signing in, such as the organization account setup just added. */
+  selectedIdentityId: string | null = null,
 ): Promise<UserSessionResult> {
   const activityAt = Math.floor(new Date(prepared.createdAt).getTime() / 1000);
-  // A new session has selected nothing yet: it acts as the person's only
-  // identity, or asks a person with several which one to act as.
-  const actingIdentityId = resolveSessionActingIdentityId(capacities.actingIdentities, null);
+  // Without a choice made while signing in, a new session acts as the
+  // person's only identity, or asks a person with several which one to act as.
+  const actingIdentityId = resolveSessionActingIdentityId(capacities.actingIdentities, selectedIdentityId);
   const member = selectActingMember(capacities.memberships, actingIdentityId);
   const staffExpiry = capacities.staff ? userStaffExpiresAt(prepared.createdAt, prepared.expiresAt) : null;
   return {

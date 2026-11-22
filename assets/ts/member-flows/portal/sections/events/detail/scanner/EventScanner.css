@@ -1,4 +1,59 @@
 @layer components {
+  .pk-lead-scanner-setup {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: safe center;
+    gap: var(--pk-4);
+    min-height: 100dvh;
+    padding: max(var(--pk-6), env(safe-area-inset-top)) var(--pk-4) max(var(--pk-6), env(safe-area-inset-bottom));
+    overflow: auto;
+    background: var(--pk-pqc-field);
+    box-sizing: border-box;
+  }
+  .pk-lead-scanner-setup > .pk-stack {
+    width: min(100%, 34rem);
+  }
+  .pk-lead-scanner-setup__brand {
+    position: absolute;
+    inset-block-start: max(var(--pk-5), env(safe-area-inset-top));
+    inset-inline-start: 50%;
+    width: 8rem;
+    height: auto;
+    transform: translateX(-50%);
+  }
+  .pk-lead-scanner-setup__close {
+    position: absolute;
+    inset-block-start: max(var(--pk-4), env(safe-area-inset-top));
+    inset-inline-end: max(var(--pk-4), env(safe-area-inset-right));
+  }
+  .pk-lead-scanner-setup__sponsor {
+    width: min(100%, 34rem);
+    margin: 0;
+    color: var(--pk-pqc-on-field);
+    font-size: var(--pk-text-sm);
+  }
+  .pk-scanner-offline-entry {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+  }
+  .pk-scanner-offline-entry .pk-login__card-wrap {
+    max-width: 36rem;
+  }
+  .pk-scanner-offline-entry .pk-scanner-destinations .pk-action-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: none;
+  }
+  .pk-scanner-offline-entry .pk-scanner-destinations .pk-action-tile {
+    min-block-size: 7rem;
+  }
+  .pk-scanner-offline-entry .pk-scanner-destinations .pk-field {
+    margin-block-end: var(--pk-4);
+  }
   .pk-scanner-destinations .pk-action-tiles {
     grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr));
     gap: var(--pk-4);
@@ -16,8 +71,20 @@
     height: var(--pk-7);
   }
   .pk-scanner-connection {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: var(--pk-4);
+    row-gap: var(--pk-1);
     font-size: var(--pk-text-sm);
     margin-block: var(--pk-2) var(--pk-4);
+  }
+  .pk-scanner-connection--compact {
+    margin: 0;
+    font-size: var(--pk-text-sm);
+  }
+  .pk-scanner-connection--compact svg {
+    width: var(--pk-5);
+    height: var(--pk-5);
   }
   @media (max-width: 40rem) {
     .pk-scanner-destinations .pk-action-tiles {

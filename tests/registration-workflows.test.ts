@@ -19,7 +19,9 @@ import { promoteEventWaitlistWithNotifications } from "../functions/_lib/service
 import { listCampaignRecipients } from "../functions/_lib/services/event-email-campaign";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
-import { createAdminSession, createMemberSession } from "./helpers/auth";
+import { createAdminSession, createMemberSession, signInRegistrant } from "./helpers/auth";
+import { createPendingRegistration } from "./helpers/registration-confirmation";
+import { workEmailDomain } from "../functions/_lib/email-domains/classification";
 import {
   addRepresentative,
   insertIndividualMember,
@@ -28,12 +30,6 @@ import {
 } from "./helpers/membership";
 import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
 import { WORK_EMAIL_STEER } from "../assets/shared/email-first-copy";
-
-async function extractConfirmationToken(payloadJson: string): Promise<string> {
-  const payload = await deliveredEmailPayload<{ confirmationUrl: string }>(env.DB, env, payloadJson);
-  const url = new URL(payload.confirmationUrl);
-  return url.searchParams.get("token") as string;
-}
 
 async function ensureRegistrationFixtureDay(eventId: string): Promise<string> {
   const [existing] = await queryAll<{ day_date: string }>(
@@ -57,13 +53,25 @@ async function createRegistrationService(
   const dayDate = await ensureRegistrationFixtureDay(payload.event.id);
   return createRegistrationRaw(db, { ...payload, dayAttendance: [{ dayDate, attendanceType: "virtual" }] });
 }
-async function postRegistration(body: unknown, ip?: string): Promise<Response> {
+/** Registers as the signed-in owner of the address; a work address acts for an organization identity. */
+async function postRegistration(
+  body: { email: string; firstName?: string; lastName?: string } & Record<string, unknown>,
+  ip?: string,
+): Promise<Response> {
   const [event] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM events WHERE slug='pqc-2026'");
   if (event) await ensureRegistrationFixtureDay(event.id);
+  const { firstName, lastName, ...registration } = body;
+  const domain = workEmailDomain(body.email);
+  // The names belong to the account, never to the registration request.
+  const registrant = await signInRegistrant(env.DB, body.email, {
+    firstName,
+    lastName,
+    ...(domain ? { organization: `Organization for ${domain}` } : {}),
+  });
   return callApi(env, "/api/v1/events/pqc-2026/registrations", {
     method: "POST",
-    headers: { "content-type": "application/json", ...(ip ? { "cf-connecting-ip": ip } : {}) },
-    body: JSON.stringify(body),
+    headers: { "content-type": "application/json", ...registrant.headers, ...(ip ? { "cf-connecting-ip": ip } : {}) },
+    body: JSON.stringify(domain ? { identityId: registrant.identityId, ...registration } : registration),
   });
 }
 
@@ -122,7 +130,7 @@ describe("registration workflows", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it.each(["livestream_lounge", "moon_base_42", "interactive_hologram"])(
-    "registers and confirms the configured attendance type %s",
+    "registers the configured attendance type %s",
     async (attendanceType) => {
       const { eventId } = await seedEventAndAdmin(env.DB);
       await env.DB.prepare(
@@ -159,13 +167,8 @@ describe("registration workflows", () => {
       expect(unconfigured.status, await unconfigured.clone().text()).toBe(400);
       const response = await postRegistration(body, testIp);
       expect(response.status, await response.clone().text()).toBe(200);
-      const { registrationId } = (await response.json()) as { registrationId: string };
-      const [email] = await queryAll<{ payload_json: string }>(
-        env.DB,
-        "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' ORDER BY created_at DESC LIMIT 1",
-      );
-      const confirmation = await postConfirmation({ token: await extractConfirmationToken(email.payload_json) });
-      expect(confirmation.status, await confirmation.clone().text()).toBe(200);
+      const { registrationId, status } = (await response.json()) as { registrationId: string; status: string };
+      expect(status).toBe("registered");
       expect(
         await queryAll(
           env.DB,
@@ -195,19 +198,11 @@ describe("registration workflows", () => {
           .run();
 
       const attendeeEmail = "newcomer@claimed-domain.test";
-      const createResponse = await postRegistration({
+      const created = await createPendingRegistration(env.DB, {
+        email: attendeeEmail,
         firstName: "New",
         lastName: "Comer",
-        email: attendeeEmail,
-        dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
-        sourceType: "direct",
-        consents: [
-          { termKey: "privacy-policy", version: "v1" },
-          { termKey: "code-of-conduct", version: "v1" },
-        ],
       });
-      expect(createResponse.status).toBe(200);
-      const created = (await createResponse.json()) as { registrationId: string };
 
       expect(
         await queryAll(
@@ -218,12 +213,8 @@ describe("registration workflows", () => {
         ),
       ).toEqual([]);
 
-      const [confirmationEmail] = await queryAll<{ payload_json: string }>(
-        env.DB,
-        "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' ORDER BY created_at DESC LIMIT 1",
-      );
       const confirmResponse = await postConfirmation({
-        token: await extractConfirmationToken(confirmationEmail.payload_json),
+        token: created.confirmationToken,
         ...(approved ? {} : { organization: { name: "Claimed Domain Corp", jobTitle: "Engineer" } }),
       });
 
@@ -282,23 +273,11 @@ describe("registration workflows", () => {
 
   it("does not confirm a pending registration after all event days are removed", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const created = await postRegistration({
+    const { confirmationToken: token } = await createPendingRegistration(env.DB, {
+      email: "pending-days@example.test",
       firstName: "Pending",
       lastName: "Attendee",
-      email: "pending-days@example.test",
-      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
-      sourceType: "direct",
-      consents: [
-        { termKey: "privacy-policy", version: "v1" },
-        { termKey: "code-of-conduct", version: "v1" },
-      ],
     });
-    expect(created.status).toBe(200);
-    const [mail] = await queryAll<{ payload_json: string }>(
-      env.DB,
-      "SELECT payload_json FROM email_outbox WHERE template_key='registration_confirm_email' LIMIT 1",
-    );
-    const token = await extractConfirmationToken(mail.payload_json);
     await env.DB.prepare(
       "DELETE FROM registration_day_attendance WHERE event_day_id IN (SELECT id FROM event_days WHERE event_id=?)",
     )
@@ -315,23 +294,11 @@ describe("registration workflows", () => {
 
   it("rolls back confirmation if the event schedule is removed after preparation", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const created = await postRegistration({
+    const { confirmationToken: token } = await createPendingRegistration(env.DB, {
+      email: "pending-schedule-race@example.test",
       firstName: "Pending",
       lastName: "Attendee",
-      email: "pending-schedule-race@example.test",
-      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
-      sourceType: "direct",
-      consents: [
-        { termKey: "privacy-policy", version: "v1" },
-        { termKey: "code-of-conduct", version: "v1" },
-      ],
     });
-    expect(created.status).toBe(200);
-    const [mail] = await queryAll<{ payload_json: string }>(
-      env.DB,
-      "SELECT payload_json FROM email_outbox WHERE template_key='registration_confirm_email' LIMIT 1",
-    );
-    const token = await extractConfirmationToken(mail.payload_json);
     const prepared = await prepareConfirmRegistrationByToken(env.DB, {
       token,
       signingSecret: env.INTERNAL_SIGNING_SECRET!,
@@ -349,7 +316,7 @@ describe("registration workflows", () => {
     ]);
   });
 
-  it("enforces consent and supports double opt-in", async () => {
+  it("enforces consent and confirms a signed-in registration at once", async () => {
     await seedEventAndAdmin(env.DB);
 
     const invalidResponse = await postRegistration({
@@ -381,15 +348,16 @@ describe("registration workflows", () => {
       ],
     });
 
-    expect(createResponse.status).toBe(200);
+    expect(createResponse.status, await createResponse.clone().text()).toBe(200);
     const createdPayload = (await createResponse.json()) as { registrationId: string; status: string };
-    expect(createdPayload.status).toBe("pending_email_confirmation");
-    const [identityOrigin] = await queryAll<{ created_identity_user_id: string | null; user_id: string }>(
-      env.DB,
-      "SELECT created_identity_user_id, user_id FROM registrations WHERE id = ?",
-      [createdPayload.registrationId],
-    );
-    expect(identityOrigin.created_identity_user_id).toBe(identityOrigin.user_id);
+    expect(createdPayload.status).toBe("registered");
+    await expect(
+      queryAll<{ created_identity_user_id: string | null }>(
+        env.DB,
+        "SELECT created_identity_user_id FROM registrations WHERE id = ?",
+        [createdPayload.registrationId],
+      ),
+    ).resolves.toEqual([{ created_identity_user_id: null }]);
     expect(
       await queryAll<{ id: string }>(
         env.DB,
@@ -400,25 +368,6 @@ describe("registration workflows", () => {
         [createdPayload.registrationId],
       ),
     ).toHaveLength(1);
-
-    const outbox = await queryAll<{ payload_json: string }>(
-      env.DB,
-      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' ORDER BY created_at DESC LIMIT 1",
-    );
-    const token = await extractConfirmationToken(outbox[0].payload_json);
-
-    const confirmResponse = await postConfirmation({ token });
-
-    expect(confirmResponse.status).toBe(200);
-    const confirmedPayload = (await confirmResponse.json()) as { status: string };
-    expect(confirmedPayload.status).toBe("registered");
-    await expect(
-      queryAll<{ created_identity_user_id: string | null }>(
-        env.DB,
-        "SELECT created_identity_user_id FROM registrations WHERE id = ?",
-        [createdPayload.registrationId],
-      ),
-    ).resolves.toEqual([{ created_identity_user_id: null }]);
   }, 15_000);
 
   it("steers a consumer mailbox to a work address unless the person attends as an individual", async () => {
@@ -441,73 +390,6 @@ describe("registration workflows", () => {
 
     const individual = await postRegistration({ ...body, unaffiliatedAttestation: true });
     expect(individual.status, await individual.clone().text()).toBe(200);
-  });
-
-  it("delivers existing-identity capabilities by email instead of exposing them to the anonymous submitter", async () => {
-    const { admin } = await seedEventAndAdmin(env.DB);
-    await env.DB.prepare("UPDATE users SET first_name='Existing',last_name='Administrator' WHERE id=?")
-      .bind(admin.id)
-      .run();
-
-    const createResponse = await postRegistration({
-      firstName: "Claimed",
-      lastName: "Admin",
-      email: "admin@pkic.org",
-      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
-      sourceType: "direct",
-      consents: [
-        { termKey: "privacy-policy", version: "v1" },
-        { termKey: "code-of-conduct", version: "v1" },
-      ],
-    });
-
-    expect(createResponse.status).toBe(200);
-    const created = (await createResponse.json()) as {
-      registrationId: string;
-      manageToken: string | null;
-      manageUrl: string | null;
-    };
-    expect(created.manageToken).toBeNull();
-    expect(created.manageUrl).toBeNull();
-
-    const [queued] = await queryAll<{ payload_json: string }>(
-      env.DB,
-      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' AND recipient_email = ?",
-      "admin@pkic.org",
-    );
-    const delivered = await deliveredEmailPayload<{ confirmationUrl: string; manageUrl: string }>(
-      env.DB,
-      env,
-      queued.payload_json,
-    );
-    expect(new URL(delivered.manageUrl).searchParams.get("token")).toBeTruthy();
-    await expect(
-      queryAll<{ created_identity_user_id: string | null }>(
-        env.DB,
-        "SELECT created_identity_user_id FROM registrations WHERE id = ?",
-        [created.registrationId],
-      ),
-    ).resolves.toEqual([{ created_identity_user_id: null }]);
-    const deliveredManageToken = new URL(delivered.manageUrl).searchParams.get("token") as string;
-    const unsafeChange = await patchManage(deliveredManageToken, {
-      action: "update",
-      email: "attacker-controlled@example.test",
-    });
-    // A registration link never changes the account's address.
-    expect(unsafeChange.status).toBe(400);
-
-    const confirmationToken = new URL(delivered.confirmationUrl).searchParams.get("token");
-    const confirmResponse = await postConfirmation({ token: confirmationToken, id: created.registrationId });
-    const confirmed = (await confirmResponse.json()) as { manageToken: string; manageUrl: string };
-    expect(confirmed.manageToken).toBeTruthy();
-    expect(new URL(confirmed.manageUrl).searchParams.get("token")).toBe(confirmed.manageToken);
-    await expect(
-      queryAll<{ normalized_email: string }>(
-        env.DB,
-        "SELECT normalized_email FROM users WHERE normalized_email = ?",
-        "admin@pkic.org",
-      ),
-    ).resolves.toEqual([{ normalized_email: "admin@pkic.org" }]);
   });
 
   it("refuses an attendee's own address change; organizers make that correction", async () => {
@@ -545,24 +427,11 @@ describe("registration workflows", () => {
 
   it("rolls back confirmation when the confirmed-email intent cannot be committed", async () => {
     await seedEventAndAdmin(env.DB);
-    const createResponse = await postRegistration({
+    const { confirmationToken: token } = await createPendingRegistration(env.DB, {
+      email: "confirm-rollback@pkic.org",
       firstName: "Confirm",
       lastName: "Rollback",
-      email: "confirm-rollback@pkic.org",
-      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
-      sourceType: "direct",
-      consents: [
-        { termKey: "privacy-policy", version: "v1" },
-        { termKey: "code-of-conduct", version: "v1" },
-      ],
     });
-    expect(createResponse.status).toBe(200);
-    const [confirmationEmail] = await queryAll<{ payload_json: string }>(
-      env.DB,
-      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' AND recipient_email = ?",
-      "confirm-rollback@pkic.org",
-    );
-    const token = await extractConfirmationToken(confirmationEmail.payload_json);
     await env.DB.prepare(
       `CREATE TRIGGER reject_registration_confirmed_email
        BEFORE INSERT ON email_outbox
@@ -598,23 +467,11 @@ describe("registration workflows", () => {
 
   it("commits exactly one confirmation aggregate when the same token is used concurrently", async () => {
     await seedEventAndAdmin(env.DB);
-    await postRegistration({
+    const { confirmationToken: token } = await createPendingRegistration(env.DB, {
+      email: "confirm-concurrent@pkic.org",
       firstName: "Confirm",
       lastName: "Concurrent",
-      email: "confirm-concurrent@pkic.org",
-      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
-      sourceType: "direct",
-      consents: [
-        { termKey: "privacy-policy", version: "v1" },
-        { termKey: "code-of-conduct", version: "v1" },
-      ],
     });
-    const [confirmationEmail] = await queryAll<{ payload_json: string }>(
-      env.DB,
-      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' AND recipient_email = ?",
-      "confirm-concurrent@pkic.org",
-    );
-    const token = await extractConfirmationToken(confirmationEmail.payload_json);
     const responses = await Promise.all([postConfirmation({ token }), postConfirmation({ token })]);
     expect(responses.filter((response) => response.status === 200)).toHaveLength(1);
     expect(responses.filter((response) => response.status === 404)).toHaveLength(1);
@@ -645,9 +502,9 @@ describe("registration workflows", () => {
   it("rolls back the complete registration aggregate when its durable email intent fails", async () => {
     await seedEventAndAdmin(env.DB);
     await env.DB.prepare(
-      `CREATE TRIGGER reject_registration_confirmation_email
+      `CREATE TRIGGER reject_registration_confirmed_email
        BEFORE INSERT ON email_outbox
-       WHEN NEW.template_key = 'registration_confirm_email'
+       WHEN NEW.template_key = 'registration_confirmed'
        BEGIN
          SELECT RAISE(ABORT, 'forced outbox failure');
        END`,
@@ -667,16 +524,16 @@ describe("registration workflows", () => {
       });
       expect(failedRegistration.status).toBe(500);
 
-      for (const table of ["users", "registrations", "consent_acceptances", "referral_codes", "engagement_events"]) {
+      for (const table of ["registrations", "consent_acceptances", "referral_codes", "engagement_events"]) {
         const rows = await queryAll<{ count: number }>(
           env.DB,
-          `SELECT COUNT(*) AS count FROM ${table} WHERE ${table === "users" ? "normalized_email = ?" : table === "registrations" ? "user_id IN (SELECT id FROM users WHERE normalized_email = ?)" : table === "consent_acceptances" || table === "engagement_events" ? "user_id IN (SELECT id FROM users WHERE normalized_email = ?)" : "created_by_user_id IN (SELECT id FROM users WHERE normalized_email = ?)"}`,
+          `SELECT COUNT(*) AS count FROM ${table} WHERE ${table === "referral_codes" ? "created_by_user_id" : "user_id"} IN (SELECT id FROM users WHERE normalized_email = ?)`,
           "atomic-rollback@pkic.org",
         );
         expect(rows[0]?.count).toBe(0);
       }
     } finally {
-      await env.DB.prepare("DROP TRIGGER reject_registration_confirmation_email").run();
+      await env.DB.prepare("DROP TRIGGER reject_registration_confirmed_email").run();
     }
   });
 
@@ -691,25 +548,11 @@ describe("registration workflows", () => {
       signingSecret: env.INTERNAL_SIGNING_SECRET!,
     });
 
-    const createResponse = await postRegistration({
+    const { confirmationToken: token } = await createPendingRegistration(env.DB, {
+      email: "matching-invite@pkic.org",
       firstName: "Match",
       lastName: "Invite",
-      email: "matching-invite@pkic.org",
-      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
-      sourceType: "direct",
-      consents: [
-        { termKey: "privacy-policy", version: "v1" },
-        { termKey: "code-of-conduct", version: "v1" },
-      ],
     });
-
-    expect(createResponse.status).toBe(200);
-
-    const outbox = await queryAll<{ payload_json: string }>(
-      env.DB,
-      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' ORDER BY created_at DESC LIMIT 1",
-    );
-    const token = await extractConfirmationToken(outbox[0].payload_json);
 
     const confirmResponse = await postConfirmation({ token });
 
@@ -735,47 +578,7 @@ describe("registration workflows", () => {
     expect(rows[0].invite_status).toBe("accepted");
   });
 
-  it("commits an invite-acceptance badge render intent with the registration", async () => {
-    const { eventId } = await seedEventAndAdmin(env.DB);
-    await ensureRegistrationFixtureDay(eventId);
-    const createdInvite = await createInvite(env.DB, {
-      eventId,
-      inviteeEmail: "durable-invite-badge@pkic.org",
-      inviteeFirstName: "Durable",
-      inviteType: "attendee",
-      signingSecret: env.INTERNAL_SIGNING_SECRET!,
-    });
-
-    const response = await callApi(env, `/api/v1/invites/${encodeURIComponent(createdInvite.token)}/accept`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        firstName: "Durable",
-        lastName: "Invite",
-        email: "durable-invite-badge@pkic.org",
-        dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
-        consents: [
-          { termKey: "privacy-policy", version: "v1" },
-          { termKey: "code-of-conduct", version: "v1" },
-        ],
-      }),
-    });
-
-    expect(response.status).toBe(200);
-    const payload = (await response.json()) as { registrationId: string };
-    expect(
-      await queryAll<{ id: string }>(
-        env.DB,
-        `SELECT brj.id
-           FROM event_promotion_renders brj
-           JOIN referral_codes rc ON brj.id = 'badge:' || rc.code
-          WHERE rc.owner_type = 'registration' AND rc.owner_id = ?`,
-        [payload.registrationId],
-      ),
-    ).toHaveLength(1);
-  });
-
-  it("keeps the invite token as the source of truth when confirmation email matches a different invite", async () => {
+  it("on an open event, treats another address's forwarded link as an ordinary registration and uses the own invitation", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
     const tokenInvite = await createInvite(env.DB, {
@@ -825,9 +628,10 @@ describe("registration workflows", () => {
       [tokenInvite.invite.id, emailInvite.invite.id, createdPayload.registrationId],
     );
 
-    expect(rows[0].registration_invite_id).toBe(tokenInvite.invite.id);
-    expect(rows[0].token_invite_status).toBe("accepted");
-    expect(rows[0].email_invite_status).toBe("revoked");
+    // The forwarded invitation stays with the person it was sent to.
+    expect(rows[0].registration_invite_id).toBe(emailInvite.invite.id);
+    expect(rows[0].token_invite_status).toBe("sent");
+    expect(rows[0].email_invite_status).toBe("accepted");
   });
 
   it("enforces attendee invite abuse limits per attendee", async () => {
@@ -879,7 +683,8 @@ describe("registration workflows", () => {
   });
 
   it("returns day confirmation details when only some selected days are confirmed", async () => {
-    const { eventId } = await seedEventAndAdmin(env.DB);
+    // The emailed token management page belongs to a public event; other events manage in the portal.
+    const { eventId } = await seedEventAndAdmin(env.DB, { visibility: "public" });
 
     await env.DB.batch([
       env.DB.prepare(`
@@ -992,6 +797,7 @@ describe("registration workflows", () => {
         dayLabel: "Day 1",
         attendanceLabel: "In person",
         statusLabel: "Waitlisted for in-person attendance",
+        statusNote: "waitlisted",
         waitlistStatus: "waiting",
         isWaitlisted: true,
         isWaitlistOffer: false,
@@ -1090,7 +896,8 @@ describe("registration workflows", () => {
   });
 
   it("sends accepted-offer email state and rejects an expired offer without queuing an update", async () => {
-    const { eventId } = await seedEventAndAdmin(env.DB);
+    // The emailed token management page belongs to a public event; other events manage in the portal.
+    const { eventId } = await seedEventAndAdmin(env.DB, { visibility: "public" });
 
     await env.DB.batch([
       env.DB.prepare(`

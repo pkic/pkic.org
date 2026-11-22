@@ -37,6 +37,7 @@ const MEMBER_PERMISSIONS = {
   canWrite: false,
   canGrantAccess: false,
   canAnonymize: false,
+  canDelete: false,
   canManageMembership: false,
   canActivateIdentity: false,
 };

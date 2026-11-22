@@ -16,17 +16,17 @@ beforeEach(() => f.setup());
 
 describe("live interaction stays local to its Durable Object", () => {
   it("persists and delivers chat without a D1 call even when D1 calls would take a second", async () => {
-    const author = await f.connect({ person: "attendee" });
-    const reader = await f.connect({ person: "secondAttendee" });
-    await installLiveRoomD1Profile(f.room(), 1000);
+    const author = await f.connectChat("attendee");
+    const reader = await f.connectChat("secondAttendee");
+    await installLiveRoomD1Profile(f.chatRoom(), 1000);
     author.send({ type: "chat.send", text: "Persisted without D1" });
     const delivered = await reader.next("chat.message");
     expect(delivered.message.text).toBe("Persisted without D1");
-    const stored = await runInDurableObject(f.room(), (_room, state) =>
+    const stored = await runInDurableObject(f.chatRoom(), (_room, state) =>
       state.storage.sql.exec("SELECT body FROM room_chat").toArray(),
     );
     expect(stored).toEqual([{ body: "Persisted without D1" }]);
-    expect((await liveRoomD1Profile(f.room())).roundTrips).toBe(0);
+    expect((await liveRoomD1Profile(f.chatRoom())).roundTrips).toBe(0);
   });
 
   it("a background refresh coalesces room access reads and removes revoked authority", async () => {
@@ -46,6 +46,22 @@ describe("live interaction stays local to its Durable Object", () => {
         sql.includes("FROM json_each(?) requested JOIN sessions"),
       ),
     ).toHaveLength(1);
+  });
+
+  it("checks only the person joining, and leaves everyone else's access to the alarm", async () => {
+    const operator = await f.connect({ person: "operator" });
+    await env.DB.prepare("UPDATE user_roles SET revoked_at=? WHERE user_id=?")
+      .bind(new Date().toISOString(), f.users.operator)
+      .run();
+    const closed = new Promise<string>((resolve) =>
+      operator.socket.addEventListener("close", (event) => resolve(event.reason)),
+    );
+    let closedEarly = false;
+    void closed.then(() => (closedEarly = true));
+    await f.connect({ person: "attendee" });
+    expect(closedEarly).toBe(false);
+    await runDurableObjectAlarm(f.room());
+    expect(await closed).toBe("LIVE_SESSION_ACCESS_REQUIRED");
   });
 
   it("keeps access refresh scheduled after copy failures and retries the pending copy", async () => {
@@ -73,6 +89,7 @@ describe("live interaction stays local to its Durable Object", () => {
             db,
             access,
             refreshGraphics: () => Reflect.get(instance, "graphics").refresh(),
+            preparedQuestions: Reflect.get(instance, "preparedQuestions"),
             copyDue: () => Date.now() + 60_000,
             purge: async () => {
               throw new Error("An active room must not be purged");
@@ -116,6 +133,7 @@ describe("live interaction stays local to its Durable Object", () => {
         () => store.session(),
         () => [],
         async () => {},
+        async () => {},
       );
       await restored.run(async () => {
         expect([...currentLiveRoomCommandRead()!.participants.values()].every((result) => result.ok)).toBe(true);
@@ -139,9 +157,9 @@ describe("live interaction stays local to its Durable Object", () => {
   });
 
   it.each(["credential", "lease"] as const)("%s expiry refuses immediately without querying D1", async (expired) => {
-    const author = await f.connect({ person: "attendee" });
-    await installLiveRoomD1Profile(f.room(), 1000);
-    await runInDurableObject(f.room(), (_instance, state) => {
+    const author = await f.connectChat("attendee");
+    await installLiveRoomD1Profile(f.chatRoom(), 1000);
+    await runInDurableObject(f.chatRoom(), (_instance, state) => {
       const socket = state.getWebSockets()[0];
       const participant = socket.deserializeAttachment();
       socket.serializeAttachment({
@@ -159,17 +177,16 @@ describe("live interaction stays local to its Durable Object", () => {
     );
     author.send({ type: "chat.send", text: "Must not be persisted" });
     expect(await closed).toBe(expired === "credential" ? "AUTH_EXPIRED" : "LIVE_ROOM_ACCESS_EXPIRED");
-    expect((await liveRoomD1Profile(f.room())).roundTrips).toBe(0);
+    expect((await liveRoomD1Profile(f.chatRoom())).roundTrips).toBe(0);
     expect(
-      await runInDurableObject(f.room(), (_instance, state) =>
+      await runInDurableObject(f.chatRoom(), (_instance, state) =>
         state.storage.sql.exec("SELECT id FROM room_chat").toArray(),
       ),
     ).toEqual([]);
   });
-  it("delivers chat and saves polls while background access and graphics reads are stalled", async () => {
-    const operator = await f.connect({ person: "operator" });
-    const author = await f.connect({ person: "attendee" });
-    const reader = await f.connect({ person: "secondAttendee" });
+  it("delivers chat while background access and graphics reads are stalled", async () => {
+    const author = await f.connectChat("attendee");
+    const reader = await f.connectChat("secondAttendee");
     let release!: () => void, started!: () => void;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
@@ -178,7 +195,7 @@ describe("live interaction stays local to its Durable Object", () => {
       started = resolve;
     });
     let calls = 0;
-    await runInDurableObject(f.room(), (instance, state) => {
+    await runInDurableObject(f.chatRoom(), (instance, state) => {
       const session = Reflect.get(instance, "databaseSession");
       const original: DatabaseLike = Reflect.get(session, "sourceDb");
       session.reset();
@@ -203,24 +220,10 @@ describe("live interaction stays local to its Durable Object", () => {
       const backgroundCalls = calls;
       author.send({ type: "chat.send", text: "Delivered while the database is stalled" });
       expect((await reader.next("chat.message")).message.text).toBe("Delivered while the database is stalled");
-      operator.send({
-        type: "poll.save",
-        pollId: null,
-        draft: livePollDraftSchema.parse({
-          field: {
-            key: "stalled",
-            label: "Saved during background refresh",
-            fieldType: "select",
-            options: ["Yes", "No"],
-          },
-          showResults: true,
-        }),
-      });
-      expect((await operator.next("poll.changed")).poll.field.label).toBe("Saved during background refresh");
       expect(calls).toBe(backgroundCalls);
     } finally {
       release();
-      await runInDurableObject(f.room(), async (instance) => {
+      await runInDurableObject(f.chatRoom(), async (instance) => {
         await Reflect.get(instance, "testRefresh");
       });
     }
@@ -312,8 +315,8 @@ describe("live interaction stays local to its Durable Object", () => {
   });
 
   it("an explicit erasure fences a message already waiting for its author stamp", async () => {
-    const author = await f.connect({ person: "attendee" });
-    const reader = await f.connect({ person: "secondAttendee" });
+    const author = await f.connectChat("attendee");
+    const reader = await f.connectChat("secondAttendee");
     let release!: () => void, entered!: () => void;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
@@ -321,7 +324,7 @@ describe("live interaction stays local to its Durable Object", () => {
     const writing = new Promise<void>((resolve) => {
       entered = resolve;
     });
-    await runInDurableObject(f.room(), (instance, state) => {
+    await runInDurableObject(f.chatRoom(), (instance, state) => {
       const authors = Reflect.get(instance, "authors");
       const handle = authors.handle.bind(authors) as (userId: string) => Promise<string | null>;
       authors.handle = async (userId: string) => {
@@ -342,16 +345,16 @@ describe("live interaction stays local to its Durable Object", () => {
     });
     try {
       await writing;
-      await f.room().forgetParticipant(f.users.attendee);
+      await f.chatRoom().forgetParticipant(f.users.attendee);
     } finally {
       release();
-      await runInDurableObject(f.room(), async (instance) => {
+      await runInDurableObject(f.chatRoom(), async (instance) => {
         await Reflect.get(instance, "testPendingMessage");
       });
     }
     expect(reader.received.filter((message) => message.type === "chat.message")).toEqual([]);
     expect(
-      await runInDurableObject(f.room(), (_instance, state) =>
+      await runInDurableObject(f.chatRoom(), (_instance, state) =>
         state.storage.sql.exec("SELECT id FROM room_chat").toArray(),
       ),
     ).toEqual([]);

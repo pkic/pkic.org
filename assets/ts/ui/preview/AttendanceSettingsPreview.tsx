@@ -12,7 +12,13 @@ const response = eventDaysManagementResponseSchema.parse({
     endsAt: `2026-12-0${index + 1}T16:00:00.000Z`,
     sortOrder: index * 10,
     attendanceOptions: [
-      { value: "in_person", label: "In person", description: "At the venue", capacity: [1, 25, 50][index] },
+      {
+        value: "in_person",
+        label: "In person",
+        description: "At the venue",
+        capacity: [1, 25, 50][index],
+        waitlistAlternative: "lounge",
+      },
       { value: "virtual", label: "Virtual", description: "Live stream in the event portal" },
       { value: "on_demand", label: "On demand", description: "Recordings after each day" },
       {

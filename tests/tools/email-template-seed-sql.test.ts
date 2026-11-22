@@ -3,6 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { escapeMarkdownText } from "../../functions/_lib/email/markdown";
 import { renderEmail } from "../../functions/_lib/email/render";
+import { withSeededPartials } from "./helpers/seeded-email-partials";
 import { DEFAULT_LAYOUT_HTML, DEFAULT_TEMPLATES } from "../../scripts/seed-email-templates.mjs";
 import { buildTemplateSqlStatements } from "../../scripts/lib/email-template-seed-sql.mjs";
 
@@ -14,6 +15,7 @@ const template = {
 };
 
 const EXPECTED_BASELINE_TEMPLATE_KEYS = [
+  "account_security_notice",
   "agenda_changed",
   "agenda_session_booking",
   "agenda_session_invitation",
@@ -28,7 +30,6 @@ const EXPECTED_BASELINE_TEMPLATE_KEYS = [
   "event_proposal_verify",
   "membership-participation-warning",
   "membership-workflow-review-digest",
-  "membership_join_verify",
   "msg_attendee_inperson_check_plans",
   "msg_attendee_session_favorites",
   "msg_attendee_session_reminder",
@@ -40,10 +41,15 @@ const EXPECTED_BASELINE_TEMPLATE_KEYS = [
   "organization-identity-changed",
   "organization_identity_reinstatement",
   "partial_about_pkic",
+  "partial_budget_waitlist_notice",
   "partial_donation_request",
+  "partial_donation_tax_notice",
+  "partial_greeting",
+  "partial_link_safety_notice",
   "partial_membership_review_details",
   "partial_membership_review_summary",
   "partial_reg_details",
+  "partial_speaker_confirmation_note",
   "partial_sponsors_block",
   "presentation_upload_reminder",
   "presentation_upload_request",
@@ -58,9 +64,9 @@ const EXPECTED_BASELINE_TEMPLATE_KEYS = [
   "registration_confirm_email",
   "registration_confirmation_reminder",
   "registration_confirmed",
-  "registration_email_verify",
   "registration_manage_link",
   "registration_unauthorized",
+  "registration_unfinished_reminder",
   "registration_updated",
   "registration_waitlist_offer",
   "rsvp_downgraded",
@@ -69,8 +75,15 @@ const EXPECTED_BASELINE_TEMPLATE_KEYS = [
   "speaker_profile_reminder",
   "speaker_profile_request",
   "sponsorship-new-inquiry",
+  "ticket_changed_payment_request",
+  "ticket_payment_reminder",
+  "ticket_payment_request",
+  "user_account_found_link",
   "user_email_verification",
   "user_magic_link",
+  "user_sign_in_help",
+  "user_sign_in_unavailable",
+  "user_sign_up_link",
   "wg-chair-membership-digest",
 ] as const;
 
@@ -97,23 +110,6 @@ describe("buildTemplateSqlStatements", () => {
     }
     expect(rendered.html).not.toContain("{{");
     expect(rendered.text).not.toContain("{{");
-  });
-
-  it("renders registration verification as the shared email CTA with a usable plain-text link", async () => {
-    const template = DEFAULT_TEMPLATES.find((item) => item.key === "registration_email_verify")!;
-    const url = "https://example.test/register/#verify=synthetic-proof";
-    const rendered = await renderEmail(
-      template.content,
-      { verificationUrl: url, eventName: "Example conference" },
-      DEFAULT_LAYOUT_HTML,
-      template.contentType,
-      "https://example.test",
-    );
-    expect(template.contentType).toBe("markdown");
-    expect(rendered.html).toContain('href="' + url + '"');
-    expect(rendered.html).toContain("Verify email and continue");
-    expect(rendered.html).toContain("cta-navy");
-    expect(rendered.text).toContain(url);
   });
 
   it.each([1, 2, 51])("renders the bounded organization digest with %s pending profiles", async (pendingCount) => {
@@ -211,7 +207,7 @@ describe("buildTemplateSqlStatements", () => {
       "https://example.test",
     );
     expect(rendered.text).toContain("https://example.test/private-speaker-profile");
-    expect(rendered.text).toContain("individual presentation");
+    expect(rendered.text).toContain("yourself, or an organization you represent");
     expect(rendered.text).toContain("only your own speaker profile");
   });
   it.each([true, false])(
@@ -231,21 +227,21 @@ describe("buildTemplateSqlStatements", () => {
         "markdown",
         "https://example.test",
       );
-      expect(rendered.text).toContain("awaiting a decision");
-      expect(rendered.text).not.toContain("has been accepted");
-      expect(rendered.text.includes("confirm or decline")).toBe(requiresConfirmation);
+      expect(rendered.text).toContain("is waiting for a decision");
+      expect(rendered.text).not.toContain("is accepted for");
+      expect(rendered.text.includes("say whether you will")).toBe(requiresConfirmation);
     },
   );
   it.each([true, false])("asks for a headshot only when one is missing: %s", async (hasHeadshot) => {
     const reminder = DEFAULT_TEMPLATES.find((item) => item.key === "speaker_profile_reminder")!;
     const rendered = await renderEmail(reminder.content, { hasHeadshot }, DEFAULT_LAYOUT_HTML);
-    expect(rendered.text.includes("Please upload a headshot")).toBe(!hasHeadshot);
+    expect(rendered.text.includes("upload a headshot")).toBe(!hasHeadshot);
   });
   it.each([
-    ["accepted", "has been accepted"],
-    ["waitlisted", "on the waitlist"],
-    ["needs-work", "Updates are requested"],
-    ["submitted", "awaiting a decision"],
+    ["accepted", "is accepted for"],
+    ["waitlisted", "is on the waitlist"],
+    ["needs-work", "asked for changes"],
+    ["submitted", "is waiting for a decision"],
   ])("explains the actual proposal status: %s", async (proposalDecisionStatus, expected) => {
     const reminder = DEFAULT_TEMPLATES.find((item) => item.key === "speaker_profile_reminder")!;
     const rendered = await renderEmail(
@@ -254,7 +250,79 @@ describe("buildTemplateSqlStatements", () => {
       DEFAULT_LAYOUT_HTML,
     );
     expect(rendered.text).toContain(expected);
-    expect(rendered.text.includes("has been accepted")).toBe(proposalDecisionStatus === "accepted");
+    expect(rendered.text.includes("is accepted for")).toBe(proposalDecisionStatus === "accepted");
+  });
+  it("asks for changes on a proposal that needs work and links to it", async () => {
+    const decision = DEFAULT_TEMPLATES.find((item) => item.key === "proposal_decision")!;
+    const rendered = await renderEmail(
+      decision.content,
+      withSeededPartials({
+        firstName: "Alex",
+        finalStatus: "needs-work",
+        proposalTitle: "Forms for organizations",
+        eventName: "User conference",
+        decisionNote: "Please narrow the scope.",
+        manageUrl: "https://example.test/proposal",
+      }),
+      DEFAULT_LAYOUT_HTML,
+    );
+    expect(rendered.text).toContain("Dear Alex,");
+    expect(rendered.text).toContain("asks for changes");
+    expect(rendered.text).toContain("Please narrow the scope.");
+    expect(rendered.html).toContain('href="https://example.test/proposal"');
+    expect(rendered.text).not.toContain("wasn't selected");
+  });
+  it.each([
+    [true, true, true],
+    [true, false, false],
+    [false, true, false],
+  ])(
+    "calls a speaker profile complete only with a bio and a headshot (%s, %s)",
+    async (hasBio, hasHeadshot, complete) => {
+      const request = DEFAULT_TEMPLATES.find((item) => item.key === "speaker_profile_request")!;
+      const rendered = await renderEmail(request.content, { hasBio, hasHeadshot }, DEFAULT_LAYOUT_HTML);
+      expect(rendered.text.includes("Your profile looks complete")).toBe(complete);
+    },
+  );
+  it("shows the shared registration details and the waitlist notice in a registration update", async () => {
+    const update = DEFAULT_TEMPLATES.find((item) => item.key === "registration_updated")!;
+    const rendered = await renderEmail(
+      update.content,
+      withSeededPartials({
+        firstName: "Alex",
+        lastName: "Rivera",
+        eventName: "User conference",
+        status: "waitlisted",
+        organizationName: "Example Org",
+        dayAttendance: [
+          {
+            dayLabel: "Day 1",
+            attendanceLabel: "In person",
+            statusLabel: "Waitlisted",
+            statusNote: "waitlisted",
+          },
+        ],
+        hasUnconfirmedVenueDay: true,
+        hasWaitingVenueDay: true,
+        hasOfferedVenueDay: false,
+        hasExpiredVenueDay: false,
+        waitlistAlternatives: [{ label: "Livestream Lounge", description: "Watch together nearby", limited: true }],
+        manageUrl: "https://example.test/registration",
+      }),
+      DEFAULT_LAYOUT_HTML,
+    );
+    expect(rendered.text).toContain(
+      "We recommend Livestream Lounge instead: Watch together nearby, while space lasts. To switch, change your registration",
+    );
+    expect(rendered.text).toContain("Dear Alex,");
+    expect(rendered.text).toContain("Your registration details");
+    expect(rendered.text).toContain("Day 1: In person — waitlisted");
+    expect(rendered.text).toContain(
+      "Only days marked confirmed give you venue entry. We'll email you if a seat opens up.",
+    );
+    expect(rendered.text).toContain("limited by the event budget");
+    expect(rendered.html).toContain('href="mailto:contact@pkic.org"');
+    expect(rendered.text).not.toMatch(/\{\{/);
   });
   it("keeps the baseline layout light and separates public branding from action links", () => {
     expect(DEFAULT_LAYOUT_HTML).toContain('content="light only"');
@@ -285,12 +353,12 @@ describe("buildTemplateSqlStatements", () => {
     expect(rendered.html.split(`href="${magicLinkUrl}"`)).toHaveLength(2);
     expect(rendered.html).toContain("background:#0d1b2a");
     expect(rendered.html).not.toContain("use this sign-in link");
-    expect(rendered.text).toContain("Sign in to the portal");
+    expect(rendered.text).toContain("your link to sign in to the");
     expect(rendered.text.split(magicLinkUrl)).toHaveLength(2);
     expect(rendered.html).not.toContain("http://localhost:8788/img/logo-white.png");
   });
 
-  it.each(["registration_email_verify", "event_proposal_verify"])(
+  it.each(["event_proposal_verify"])(
     "renders the %s verification link as a button and keeps the plain-text URL on one line",
     async (key) => {
       const template = DEFAULT_TEMPLATES.find((item) => item.key === key);

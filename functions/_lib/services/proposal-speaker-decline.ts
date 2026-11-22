@@ -1,3 +1,4 @@
+import { buildEventEmailVariables } from "../email/event-email-variables";
 import { isLateSpeakerResponseAwaitingReview } from "../../../assets/shared/proposal-speaker-acceptance";
 import { prepareSpeakerResponseNotices } from "./proposal-speaker-response-notice";
 import { personDisplayName } from "../../../assets/shared/person-display";
@@ -14,7 +15,7 @@ import { prepareQueueEmailStatement } from "../email/outbox";
 import { emailPlainText } from "../email/plain-text";
 import { sha256Hex } from "../utils/crypto";
 import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
-import { buildEventEmailVariables, getEventById, type EventRecord } from "./events";
+import { getEventById, type EventRecord } from "./events";
 import { queuedCapabilityToken } from "./capability-links";
 import { proposalManagePageUrl } from "./frontend-links";
 import { getSpeakerByManageToken } from "./proposals";

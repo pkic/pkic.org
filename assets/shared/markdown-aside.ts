@@ -14,6 +14,8 @@ const NESTED_CONTAINER = new RegExp(`^(:{3,})(?:${containerPattern})\\b`);
 export const ASIDE_START = /^:{3,}aside[ \t]*(?:\r?\n|$)/m;
 
 type CodeFence = { marker: string; length: number };
+/** How a button body is checked: editor rules by default, or a renderer's own after variables are filled in. */
+export type MarkdownContainerOptions = { readButton?: (markdown: string) => unknown };
 
 /** Preserve meaningful indentation while removing empty lines at the block edges. */
 function trimBlankLines(markdown: string): string {
@@ -53,13 +55,13 @@ function validateContainerParent(block: ContentContainer, parent?: ContentContai
 }
 
 /** Validate nested blocks and enforce the permitted direct children of each layout. */
-function validateContainerChildren(block: ContentContainer): void {
+function validateContainerChildren(block: ContentContainer, options: MarkdownContainerOptions): void {
   if (block.type === "button") {
-    readMarkdownButton(block.markdown);
+    (options.readButton ?? readMarkdownButton)(block.markdown);
     return;
   }
   // Reading each child validates its descendants before the parent is returned.
-  const children = splitMarkdownContainers(block.markdown);
+  const children = splitMarkdownContainers(block.markdown, options);
   for (const child of children) if (typeof child !== "string") validateContainerParent(child, block.type);
   if (block.type === "card") {
     for (const section of ["card-header", "card-footer"])
@@ -77,7 +79,10 @@ function validateContainerChildren(block: ContentContainer): void {
 }
 
 /** Read one balanced container. Code examples never close the surrounding content block. */
-export function readMarkdownContainer(source: string): { raw: string; block: ContentContainer } | null {
+export function readMarkdownContainer(
+  source: string,
+  options: MarkdownContainerOptions = {},
+): { raw: string; block: ContentContainer } | null {
   const opening = CONTAINER_OPEN.exec(source);
   if (!opening) return null;
   const attributes: Record<string, string> = {};
@@ -106,7 +111,7 @@ export function readMarkdownContainer(source: string): { raw: string; block: Con
             ...attributes,
             markdown: trimBlankLines(source.slice(opening[0].length, offset)),
           });
-          validateContainerChildren(block);
+          validateContainerChildren(block, options);
           return { raw: source.slice(0, offset + line.length), block };
         }
       }
@@ -126,7 +131,10 @@ export function tryReadMarkdownContainer(source: string): ReturnType<typeof read
 }
 
 /** Share the same boundaries with publication without interpreting ordinary Markdown. */
-export function splitMarkdownContainers(source: string): Array<string | ContentContainer> {
+export function splitMarkdownContainers(
+  source: string,
+  options: MarkdownContainerOptions = {},
+): Array<string | ContentContainer> {
   const parts: Array<string | ContentContainer> = [];
   let code: CodeFence | null = null;
   let offset = 0;
@@ -140,7 +148,7 @@ export function splitMarkdownContainers(source: string): Array<string | ContentC
     const wasCode = code !== null;
     code = codeFence(line.trimEnd(), code);
     if (!wasCode && !code && CONTAINER_START.test(line)) {
-      const aside = readMarkdownContainer(source.slice(offset));
+      const aside = readMarkdownContainer(source.slice(offset), options);
       if (!aside) throw new Error("Close the content block with a matching colon fence.");
       if (offset > plainStart) parts.push(source.slice(plainStart, offset));
       parts.push(aside.block);

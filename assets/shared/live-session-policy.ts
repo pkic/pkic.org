@@ -3,6 +3,7 @@
  * window, the moderation transitions and the per-person limits. The Durable
  * Object, the Worker and both browser surfaces read these values from here.
  */
+import type { LiveRoomOpening } from "./schemas/live-room-opening";
 
 /**
  * Live rooms validate on admission and refresh access in the background.
@@ -29,7 +30,7 @@ export type LiveReactionId = (typeof LIVE_REACTIONS)[number]["id"];
 export const LIVE_REACTION_IDS = LIVE_REACTIONS.map((reaction) => reaction.id) as [LiveReactionId, ...LiveReactionId[]];
 
 export const LIVE_ROOM_POLICY = {
-  /** Attendees may ask, vote and react from this long before the scheduled start… */
+  /** Attendees may chat and react from this long before the scheduled start… */
   opensBeforeStartMinutes: 15,
   /** …until this long after the scheduled end, so the Q&A can run over. */
   closesAfterEndMinutes: 30,
@@ -37,6 +38,8 @@ export const LIVE_ROOM_POLICY = {
   chatPerPerson: { limit: 10, windowSeconds: 60 },
   questionMinLength: 3,
   questionMaxLength: 280,
+  /** The most of a session's abstract the session graphic shows, cut at a word. */
+  sessionAbstractMaxLength: 480,
   /** The room refuses new questions once it holds this many. */
   maxQuestionsPerRoom: 300,
   /** Question creation and unreviewed author edits share this durable write allowance. */
@@ -200,10 +203,76 @@ export function liveRoomWindow(startAt: string, endAt: string) {
   };
 }
 
-/** Whether attendees may ask, vote and react at `now`. */
-export function liveRoomOpen(now: number, startAt: string, endAt: string): boolean {
+/**
+ * Whether attendees may chat, react and answer questions at `now`: while somebody watches the room. An operator
+ * who opened or closed the room decides instead of the agenda.
+ */
+export function liveRoomOpen(now: number, startAt: string, endAt: string, opening: LiveRoomOpening = "scheduled") {
+  if (opening !== "scheduled") return opening === "open";
   const window = liveRoomWindow(startAt, endAt);
   return now >= window.opensAt && now <= window.closesAt;
+}
+
+/**
+ * Whether attendees may ask questions, upvote approved ones and answer open polls at `now`. These open as soon as
+ * the session is on the agenda: a question waits for a moderator before anyone sees it, and a poll is one an
+ * operator chose to open, so neither needs the room watched. They close with the room, or when an operator
+ * closes it.
+ */
+export function liveRoomTakesQuestions(now: number, endAt: string, opening: LiveRoomOpening = "scheduled") {
+  if (opening !== "scheduled") return opening === "open";
+  return now <= Date.parse(endAt) + LIVE_ROOM_POLICY.closesAfterEndMinutes * MINUTE;
+}
+
+/**
+ * Questions operators prepare for a session. Each comes into the open list
+ * at a random moment within the release window, already approved, anonymous
+ * and without votes, so it reads like any other question.
+ */
+export const LIVE_PREPARED_QUESTION_POLICY = {
+  /** The room refuses new prepared questions once it holds this many waiting. */
+  maxPerRoom: 50,
+  /** The default window opens this long after the scheduled start… */
+  releaseAfterStartMinutes: 5,
+  /** …and closes this long before the scheduled end. */
+  releaseBeforeEndMinutes: 15,
+} as const;
+
+/** The span, as two UTC instants, in which prepared questions come into the open list. */
+export interface LivePreparedQuestionWindow {
+  from: string;
+  until: string;
+}
+
+/**
+ * The release window a session starts with: from shortly after the start to
+ * a while before the end. A session too short for that releases across its
+ * whole scheduled span.
+ */
+export function defaultLivePreparedQuestionWindow(startAt: string, endAt: string): LivePreparedQuestionWindow {
+  const start = Date.parse(startAt);
+  const end = Date.parse(endAt);
+  const from = start + LIVE_PREPARED_QUESTION_POLICY.releaseAfterStartMinutes * MINUTE;
+  const until = end - LIVE_PREPARED_QUESTION_POLICY.releaseBeforeEndMinutes * MINUTE;
+  return until > from
+    ? { from: new Date(from).toISOString(), until: new Date(until).toISOString() }
+    : { from: new Date(start).toISOString(), until: new Date(Math.max(end, start)).toISOString() };
+}
+
+/**
+ * When a prepared question comes into the list: uniformly within the part of
+ * the window still ahead. `fraction` is a uniform random number in [0, 1);
+ * once the window has passed, the question is due at once.
+ */
+export function livePreparedQuestionReleaseAt(
+  window: LivePreparedQuestionWindow,
+  now: number,
+  fraction: number,
+): string {
+  const from = Math.max(now, Date.parse(window.from));
+  const until = Date.parse(window.until);
+  const at = until > from ? from + Math.floor(fraction * (until - from)) : from;
+  return new Date(at).toISOString();
 }
 
 export type LiveQuestionOrder = "top" | "new";

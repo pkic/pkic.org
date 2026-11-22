@@ -1,17 +1,27 @@
+import { LIVE_PARTICIPATION_REFUSAL } from "./room-participation-refusal";
+import type { LiveRoomModerationStore } from "./room-moderation-store";
+import type { LiveModerationReason } from "../../../../assets/shared/live-moderation-policy";
 import {
   LIVE_ROOM_POLICY,
   canEditOwnLiveQuestion,
   liveQuestionTransitionAllowed,
   type LiveQuestionStatus,
 } from "../../../../assets/shared/live-session-policy";
-import type { LiveRoomClientMessage, LiveRoomServerMessage } from "../../../../assets/shared/schemas/live-session-room";
+import type {
+  LiveRoomClientMessage,
+  LiveRoomServerMessage,
+  LiveRoomSession,
+} from "../../../../assets/shared/schemas/live-session-room";
+import { liveQuestionAddressees, sessionLiveCreditUserId } from "../../../../assets/shared/live-room-credits";
 import { deterministicUuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import type { LiveRoomParticipant } from "./room-admission";
 import type { LiveRoomAuthors } from "./room-authors";
 import type { LiveRoomBroadcast } from "./room-broadcast";
 import type { LiveControlOutcome, LiveRefusal, LiveRoomControls } from "./room-controls";
+import type { LiveQuestionAddressee } from "./room-question-rows";
 import type { LiveRoomStore } from "./room-store";
+import type { LiveChatQuestion } from "./location-chat-on-air";
 
 type Handled = LiveRefusal | void;
 type Actor = { userId: string; name: string };
@@ -37,8 +47,28 @@ export const LIVE_QUESTION_REFUSALS = {
   closed: { code: "LIVE_ROOM_CLOSED", message: "This session is not taking questions now." },
   missing: { code: "LIVE_QUESTION_NOT_FOUND", message: "That question is no longer available." },
   transition: { code: "LIVE_QUESTION_TRANSITION", message: "That question cannot move to this status." },
+  reason: { code: "LIVE_QUESTION_REASON_REQUIRED", message: "Choose why you remove this question." },
+  addressee: {
+    code: "LIVE_QUESTION_ADDRESSEE_NOT_FOUND",
+    message: "That person is no longer on this session. Choose someone else, or ask everyone.",
+  },
 } satisfies Record<string, LiveRefusal>;
 const REFUSALS = LIVE_QUESTION_REFUSALS;
+
+/**
+ * The person a question is for: one of the session's speakers or its
+ * moderator, read from its current credits, which every viewer holds and
+ * names them from. Null asks everyone; a key
+ * the session no longer credits is refused.
+ */
+export function resolveLiveQuestionAddressee(
+  session: LiveRoomSession,
+  creditKey: string | null,
+): LiveQuestionAddressee | null | LiveRefusal {
+  if (creditKey === null) return null;
+  if (!liveQuestionAddressees(session.credits).some((credit) => credit.key === creditKey)) return REFUSALS.addressee;
+  return { creditKey, userId: sessionLiveCreditUserId(creditKey) };
+}
 
 /**
  * The room's question use cases: ask, vote, moderate and rewrite. Each
@@ -51,6 +81,7 @@ export class LiveRoomQuestions {
     private readonly broadcast: LiveRoomBroadcast,
     private readonly controls: LiveRoomControls,
     private readonly authors: LiveRoomAuthors,
+    private readonly decisions: LiveRoomModerationStore,
     private readonly hooks: {
       /** Takes one of the person's questions from their sliding allowance, or refuses. */
       allowed: (userId: string) => boolean;
@@ -61,15 +92,35 @@ export class LiveRoomQuestions {
     },
   ) {}
 
+  /** An operator turned a chat message into a question: asked as its author wrote it, and approved. */
+  async fromChat(question: LiveChatQuestion, by: Actor, at: string): Promise<string> {
+    const id = crypto.randomUUID();
+    this.store.addQuestion({
+      id,
+      authorUserId: question.authorUserId,
+      authorName: question.authorName,
+      anonymous: false,
+      body: question.body,
+      askedAt: question.askedAt,
+      authorPhotoUrl: question.authorPhotoUrl,
+    });
+    this.store.moderate(id, "approved", by, at);
+    if (question.stamp) this.authors.recordQuestion(id, question.stamp);
+    await this.broadcast.question(id);
+    this.hooks.listed();
+    await this.hooks.changed();
+    return id;
+  }
+
   /** The existing question row is the bounded durable receipt for this actor's request. */
   async ask(
     viewer: LiveRoomParticipant,
     actor: Actor,
-    text: string,
-    anonymous: boolean,
+    input: { text: string; anonymous: boolean; addressedTo: string | null },
     operationId: string,
     open: boolean,
   ): Promise<LiveRefusal | { questionId: string }> {
+    const { text, anonymous, addressedTo } = input;
     const room = this.store.session();
     if (!room) throw new Error("LIVE_ROOM_SESSION_REQUIRED");
     const id = await deterministicUuid([
@@ -84,17 +135,22 @@ export class LiveRoomQuestions {
       if (!question) return null;
       return question.author_user_id === actor.userId &&
         question.submitted_body === text &&
-        Boolean(question.anonymous) === anonymous
+        Boolean(question.anonymous) === anonymous &&
+        question.addressed_to === addressedTo
         ? { questionId: id }
         : REFUSALS.conflict;
     };
     const existing = replay();
     if (existing) return existing;
     if (!open) return REFUSALS.closed;
+    const addressee = resolveLiveQuestionAddressee(room.session, addressedTo);
+    if (addressee && "code" in addressee) return addressee;
     const stamp = await this.authors.writing(viewer);
     // Author resolution yields: another invocation may have accepted this request.
     const accepted = replay();
     if (accepted) return accepted;
+    if (viewer.role !== "operator" && this.decisions.restriction(actor.userId, Date.now()))
+      return LIVE_PARTICIPATION_REFUSAL;
     if (this.store.questionCount() >= LIVE_ROOM_POLICY.maxQuestionsPerRoom) return REFUSALS.full;
     if (!this.hooks.allowed(actor.userId)) return REFUSALS.tooFast;
     this.store.addQuestion({
@@ -105,6 +161,7 @@ export class LiveRoomQuestions {
       body: text,
       askedAt: nowIso(),
       authorPhotoUrl: viewer.photoUrl ?? null,
+      addressee,
     });
     this.authors.recordQuestion(id, stamp);
     await this.broadcast.question(id);
@@ -192,6 +249,8 @@ export class LiveRoomQuestions {
     questionId: string,
     status: LiveQuestionStatus,
     expectedRevision: number,
+    /** Why a moderator removes it; required when `status` is hidden. */
+    reason: LiveModerationReason | null = null,
   ): Promise<Handled> {
     const question = this.store.question(questionId);
     if (!question) return REFUSALS.missing;
@@ -200,12 +259,21 @@ export class LiveRoomQuestions {
     if (question.status === status) return;
     if (!liveQuestionTransitionAllowed(viewer.role, question.status, status))
       return viewer.role === "attendee" ? REFUSALS.operatorOnly : REFUSALS.transition;
+    if (status === "hidden" && !reason) return REFUSALS.reason;
     const at = nowIso();
     this.store.moderate(questionId, status, actor, at);
+    // A new decision about a question replaces an earlier Ignore, so it goes where its status puts it.
+    this.decisions.setDone("question", questionId, false, actor.name, at);
+    if (status === "hidden" && reason) this.decisions.remove("question", questionId, reason, actor, at);
+    else this.decisions.restore(questionId);
     this.store.recordStaffAction(
       actor.userId,
       "live_session.question.moderated",
-      { questionId, status: { from: question.status, to: status } },
+      {
+        questionId,
+        status: { from: question.status, to: status },
+        ...(reason && status === "hidden" ? { reason } : {}),
+      },
       at,
     );
     await this.broadcast.question(questionId);

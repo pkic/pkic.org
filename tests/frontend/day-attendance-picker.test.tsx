@@ -204,16 +204,17 @@ describe("day attendance matrix", () => {
       addEventListener: (_type: string, listener: () => void) => listeners.add(listener),
       removeEventListener: (_type: string, listener: () => void) => listeners.delete(listener),
     }));
-    const days = Array.from({ length: 7 }, (_, index) =>
+    const days = Array.from({ length: 8 }, (_, index) =>
       day({ dayDate: `2027-09-0${index + 1}`, label: `Day ${index + 1}` }),
     );
     const picker = mount(<DayAttendancePicker days={days} focusDay="2027-09-01" />);
     expect(document.activeElement).toBe(input(picker, "2027-09-01", "in_person"));
     const focus = vi.spyOn(HTMLInputElement.prototype, "focus");
-    expect(picker.querySelector("thead .pk-attendance-matrix__date strong")?.textContent).toBe("Wednesday");
-    expect(picker.querySelector("thead .pk-attendance-matrix__date")?.textContent).toContain("2027");
+    // More than a week of columns is too narrow for full weekday names, on a wide screen too.
+    expect(picker.querySelector("thead .pk-attendance-matrix__date strong")?.textContent).toBe("Wed");
+    expect(picker.querySelector("thead .pk-attendance-matrix__date")?.textContent).toContain("Sep");
     await click(picker.querySelector<HTMLButtonElement>('[aria-label="Choose Virtual for every available day"]')!);
-    expect(readDayAttendance(picker.querySelector("form")!)).toHaveLength(7);
+    expect(readDayAttendance(picker.querySelector("form")!)).toHaveLength(8);
     await act(() => {
       phone = true;
       for (const listener of listeners) listener();
@@ -223,7 +224,7 @@ describe("day attendance matrix", () => {
     expect(picker.querySelector("tbody .pk-attendance-matrix__date strong")?.textContent).toBe("Wed");
     expect(await axeViolations(picker)).toEqual([]);
     expect(picker.querySelectorAll("th")).toHaveLength(4);
-    expect(readDayAttendance(picker.querySelector("form")!)).toHaveLength(7);
+    expect(readDayAttendance(picker.querySelector("form")!)).toHaveLength(8);
     await click(
       picker.querySelector<HTMLButtonElement>('thead [aria-label="Choose Not attending for every available day"]')!,
     );

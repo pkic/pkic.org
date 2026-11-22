@@ -1,3 +1,4 @@
+import type { EventAttendanceAccessMode } from "../../../../assets/shared/event-attendance-access";
 import type { EmailMessageType } from "../../../../assets/shared/schemas/email-templates";
 import type {
   EventEmailCampaignFilter,
@@ -62,6 +63,8 @@ export interface AttendeeDayAttendanceRow {
   attendanceType: string;
   label: string | null;
   optionLabel: string | null;
+  accessMode: EventAttendanceAccessMode;
+  waitlistAlternativeJson: string | null;
 }
 
 export interface AttendeeDayWaitlistRow {
@@ -75,6 +78,8 @@ export type AttendeeDayAttendance = {
   attendanceType: string;
   label: string | null;
   optionLabel: string | null;
+  accessMode: EventAttendanceAccessMode;
+  waitlistAlternativeJson: string | null;
 };
 
 export type AttendeeDayWaitlist = {

@@ -1,3 +1,4 @@
+import { clearAuth } from "../../assets/ts/member-flows/portal/state";
 import { useContext } from "preact/hooks";
 import { ScannerTaskNavigation } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/ScannerTaskNavigation";
 import { render } from "preact";
@@ -36,6 +37,8 @@ document.body.append(host);
 afterEach(async () => {
   await act(() => render(null, host));
   permissions.denied.clear();
+  clearAuth();
+  vi.unstubAllGlobals();
 });
 it.each([false, true])("gates the print destination at the staff scanner owner: %s", async (canPrintLabels) => {
   const basePath = "/groups/example/events/example/scanner";

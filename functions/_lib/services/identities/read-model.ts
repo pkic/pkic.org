@@ -11,6 +11,7 @@ import { buildPageInfo, type PageInfo } from "../../../../assets/shared/schemas/
 import { buildOffsetPageStatements, decodeOffsetPageResults } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
+import type { SqlSelection } from "../../db/sql-value";
 import type { DatabaseLike, D1StatementResult } from "../../types";
 import { publicUserHeadshotPath } from "../user-headshot";
 import { identityJobTitleSql } from "./affiliation-projection";
@@ -89,7 +90,13 @@ type OrganizationContactUserIds = readonly [string | null, string | null, string
 export function prepareIdentitiesList(
   db: DatabaseLike,
   query: IdentitiesListQuery,
-  scope: { organizationId?: string; userId?: string; contactUserIds?: OrganizationContactUserIds },
+  scope: {
+    organizationId?: string;
+    userId?: string;
+    /** The user a query in the same batch resolves, such as an application's applicant. */
+    userSelection?: SqlSelection;
+    contactUserIds?: OrganizationContactUserIds;
+  },
 ) {
   const conditions: string[] = [];
   const bindings: unknown[] = [];
@@ -104,6 +111,10 @@ export function prepareIdentitiesList(
   if (scope.userId) {
     conditions.push("identity.user_id = ?");
     bindings.push(scope.userId);
+  }
+  if (scope.userSelection) {
+    conditions.push(`identity.user_id = (${scope.userSelection.sql})`);
+    bindings.push(...scope.userSelection.bindings);
   }
   const search = query.q
     ? buildD1TextSearchFilter(query.q, [

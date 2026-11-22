@@ -30,10 +30,10 @@ ctaLabel: Sponsorship opportunities
 {{< /events-sidebar >}}
 
 {{< banner style="inline" >}}
-heading: These events are free because people like you give
-body: No tickets, no registration fees. Every seat is funded by voluntary donations and sponsors. Your contribution keeps the next event open to everyone.
+heading: These events happen because people like you give
+body: Voluntary donations and sponsors keep our conferences open and affordable. Your contribution helps someone who couldn't attend otherwise join the next one.
 stat: "$500"
-statLabel: keeps one seat free at our events
+statLabel: covers one attendee at our events
 links:
   - text: Donate now
     url: /donate/

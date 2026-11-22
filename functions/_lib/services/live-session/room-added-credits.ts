@@ -4,16 +4,20 @@ import {
   addedLivePersonKey,
   liveCreditAlreadyListed,
   isAddedLiveCreditKey,
+  isTypedLiveCreditKey,
 } from "../../../../assets/shared/live-room-credits";
-import { LIVE_AUX_OUTPUTS } from "../../../../assets/shared/live-room-outputs";
 import type {
   LiveAddedCreditInput,
   LiveCredit,
   LiveRoomServerMessage,
+  LiveRoomSession,
+  LiveTypedCreditInput,
 } from "../../../../assets/shared/schemas/live-session-room";
 import type { DatabaseLike } from "../../types";
 import { readLiveCandidate } from "./live-credit-identities";
+import { LIVE_CREDIT_NOT_FOUND } from "./room-composition";
 import type { LiveControlOutcome } from "./room-controls";
+import { refreshLiveCreditCopies } from "./room-credit-refresh";
 import type { LiveRoomStore } from "./room-store";
 
 type Operator = { userId: string; name: string };
@@ -21,8 +25,9 @@ type Operator = { userId: string; name: string };
 /**
  * People operators add to one session's lower thirds: one identity of
  * someone from the event's people, named and pictured as their profile has
- * them with that identity's title and organization, or a name typed in for
- * someone without an account. They live in the room's own storage for the session,
+ * them with that identity's title and organization, or a name and a line
+ * under it typed in for someone without an account, which operators can
+ * edit later. They live in the room's own storage for the session,
  * shared by every operator and never sent to attendees; Program shows one
  * only while an operator puts it on air.
  */
@@ -59,7 +64,10 @@ export class LiveRoomAddedCredits {
       moderator: false,
       photoUrl: person?.photoUrl ?? null,
       identity: person?.identity ?? null,
+      additionalIdentities: [],
       roleLabel: null,
+      // Only someone without an account carries a typed line; an identity is the one source for everyone else.
+      titleLine: input.userId ? null : input.titleLine,
     };
     const next = [...current, credit];
     this.store.saveAddedCredits(next);
@@ -70,6 +78,42 @@ export class LiveRoomAddedCredits {
       at,
     );
     return { messages: [{ type: "credits.added.changed", addedCredits: next }] };
+  }
+
+  /**
+   * Changes the name and line an operator typed for someone without an
+   * account. Every operator sees the change, and so does every output that
+   * shows their lower third now: a typo is put right while they are on air.
+   * A person from the event's people reads as their identity has them and
+   * is not edited here.
+   */
+  update(
+    operator: Operator,
+    session: LiveRoomSession,
+    creditKey: string,
+    input: LiveTypedCreditInput,
+    at: string,
+  ): LiveControlOutcome {
+    if (!isTypedLiveCreditKey(creditKey))
+      return {
+        code: "LIVE_CREDIT_NOT_EDITABLE",
+        message: "Only a person added without an account can be edited here.",
+      };
+    const current = this.store.addedCredits();
+    const credit = current.find((entry) => entry.key === creditKey);
+    if (!credit) return LIVE_CREDIT_NOT_FOUND;
+    if (credit.name === input.name && credit.titleLine === input.titleLine) return { messages: [] };
+    const next = current.map((entry) =>
+      entry.key === creditKey ? { ...entry, name: input.name, titleLine: input.titleLine } : entry,
+    );
+    this.store.saveAddedCredits(next);
+    this.store.recordStaffAction(operator.userId, "live_session.credit.updated", { creditKey }, at);
+    return {
+      messages: [
+        { type: "credits.added.changed", addedCredits: next },
+        ...refreshLiveCreditCopies(this.store, session),
+      ],
+    };
   }
 
   /**
@@ -84,7 +128,7 @@ export class LiveRoomAddedCredits {
     const outputs = this.store.outputs();
     if (
       this.store.stage().lowerThird?.key === creditKey ||
-      LIVE_AUX_OUTPUTS.some((output) => outputs[output].lowerThird?.key === creditKey)
+      Object.values(outputs).some((composition) => composition.lowerThird?.key === creditKey)
     )
       return { code: "LIVE_CREDIT_ON_AIR", message: "Take this lower third off air before removing the person." };
     const next = current.filter((credit) => credit.key !== creditKey);

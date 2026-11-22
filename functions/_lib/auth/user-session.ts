@@ -1,8 +1,12 @@
 import {
+  addedEmailSignInAllowedSql,
+  addressNotRetiredSql,
+  liveAccountSql,
   primaryEmailProofMayAuthenticateSql,
-  secondaryEmailSignInAllowedSql,
+  primaryEmailSignInAllowedSql,
   signInEmailAuthorizationEvidence,
 } from "./email-sign-in-policy";
+import { prepareFirstAddressSignInStatements } from "../services/account-security-notices";
 import { prepareMonthlyActivity, recordMonthlyActivity } from "../services/member-standing/activity";
 import { hasEventParticipation } from "./event-participation";
 /**
@@ -14,7 +18,7 @@ import { hasEventParticipation } from "./event-participation";
  * context hints used by the read-replica and membership-context adapters.
  */
 import type { DatabaseLike, Env, StatementLike } from "../types";
-import { first } from "../db/queries";
+import { all, first } from "../db/queries";
 import { AppError } from "../errors";
 import { normalizeEmail } from "../validation";
 import { nowIso } from "../utils/time";
@@ -39,6 +43,7 @@ import {
 } from "./email-auth-capabilities";
 import { prepareVerifyPrimaryEmailStatements } from "../services/email-verification";
 import { findActiveSponsorCapacitiesByUserId } from "./sponsor-capacity";
+import { acknowledgedSessionActivity } from "./user-session-activity";
 import {
   DEFAULT_USER_SESSION_IDLE_TTL_HOURS,
   sessionIdleExpiresAt,
@@ -48,7 +53,24 @@ import { getUserSessionToken, signUserSessionToken, type UserSessionTokenClaims 
 import { createEstablishedUserSessionResult, type UserSessionResult } from "./user-session-result";
 
 import { prepareUserSessionRequest } from "./user-session-request";
+import type { AccountOrganizationRequired } from "../../../assets/shared/schemas/account-organization";
+import {
+  accountOrganizationStepStatements,
+  type AccountOrganizationStepInput,
+} from "../services/identities/account-organization";
 import { USER_SESSIONS, resolveUserSessionClaims } from "./user-session-claims";
+
+/** Marks a session as made through an address: it lives only while that address still signs in. */
+export function prepareSessionEmailAuthenticationStatement(
+  db: DatabaseLike,
+  input: { sessionId: string; emailId: string | null; normalizedEmail: string; at: string },
+): StatementLike {
+  return db
+    .prepare(`INSERT INTO session_email_authentication
+      (session_id, email_id, permission_revision, normalized_email, created_at) VALUES (?, ?, 'none', ?, ?)`)
+    .bind(input.sessionId, input.emailId, input.normalizedEmail, input.at);
+}
+
 export { findActiveIdentity, resolveUserSessionClaims } from "./user-session-claims";
 
 export interface PreparedUserSession {
@@ -78,63 +100,69 @@ interface SignInIdentity {
   normalized_email: string;
   sign_in_email: string;
   normalized_sign_in_email: string;
+  /** The added address used to sign in; NULL for the primary one. */
   sign_in_email_id: string | null;
-  sign_in_permission_revision: string | null;
 }
+
+const SIGN_IN_PRIMARY_SQL = `SELECT u.id, u.email, u.normalized_email,
+    u.email AS sign_in_email, u.normalized_email AS normalized_sign_in_email, NULL AS sign_in_email_id
+  FROM users u WHERE ${liveAccountSql("u")} AND ${primaryEmailSignInAllowedSql("u")}`;
+const SIGN_IN_ADDED_SQL = `SELECT u.id, u.email, u.normalized_email,
+    ue.email AS sign_in_email, ue.normalized_email AS normalized_sign_in_email, ue.id AS sign_in_email_id
+  FROM user_emails ue JOIN users u ON u.id = ue.user_id AND ${liveAccountSql("u")}
+  WHERE ${addedEmailSignInAllowedSql("ue")}`;
 
 async function findActiveIdentityBySignInEmail(db: DatabaseLike, email: string): Promise<SignInIdentity | null> {
   return first<SignInIdentity>(
     db,
-    `SELECT u.id, u.email, u.normalized_email,
-            u.email AS sign_in_email, u.normalized_email AS normalized_sign_in_email,
-            NULL AS sign_in_email_id, NULL AS sign_in_permission_revision
-       FROM users u
-      WHERE u.normalized_email = ? AND u.active = 1 AND u.pii_redacted_at IS NULL AND u.merged_into_user_id IS NULL AND ${primaryEmailProofMayAuthenticateSql("u")}
-     UNION ALL
-     SELECT u.id, u.email, u.normalized_email,
-            ue.email AS sign_in_email, ue.normalized_email AS normalized_sign_in_email,
-            ue.id AS sign_in_email_id, permission.revision AS sign_in_permission_revision
-       FROM user_emails ue
-       JOIN user_email_sign_in_permissions permission ON permission.email_id = ue.id
-       JOIN users u ON u.id = ue.user_id AND u.active = 1 AND u.pii_redacted_at IS NULL AND u.merged_into_user_id IS NULL
-      WHERE ue.normalized_email = ? AND ${secondaryEmailSignInAllowedSql("ue")}
-      LIMIT 1`,
+    `${SIGN_IN_PRIMARY_SQL} AND u.normalized_email = ? UNION ALL ${SIGN_IN_ADDED_SQL} AND ue.normalized_email = ? LIMIT 1`,
     [normalizeEmail(email), normalizeEmail(email)],
   );
 }
 
+/**
+ * A proved address on a live account that stopped signing in when the
+ * representation its domain supported ended, so its mailbox can be told how to
+ * sign in instead. Only that mailbox ever hears of it. An address never proved
+ * is left alone: its verification email is the way forward, and no one can aim
+ * this notice at a mailbox they merely typed.
+ */
+export async function findRetiredSignInAddress(
+  db: DatabaseLike,
+  email: string,
+): Promise<{ userId: string; email: string } | null> {
+  const normalized = normalizeEmail(email);
+  return first<{ userId: string; email: string }>(
+    db,
+    `SELECT u.id AS userId, u.email FROM users u
+      WHERE u.normalized_email = ? AND ${liveAccountSql("u")} AND ${primaryEmailProofMayAuthenticateSql("u")}
+        AND NOT ${addressNotRetiredSql("u.id", "u.normalized_email")}
+     UNION ALL
+     SELECT u.id, ue.email FROM user_emails ue JOIN users u ON u.id = ue.user_id AND ${liveAccountSql("u")}
+      WHERE ue.normalized_email = ? AND ue.verified_at IS NOT NULL AND NOT ${addedEmailSignInAllowedSql("ue")}
+      LIMIT 1`,
+    [normalized, normalized],
+  );
+}
+
+/** The address a link was sent to, among those the account may still sign in with. */
 async function findCapabilitySignInIdentity(
   db: DatabaseLike,
   subjectId: string,
   signingSecret: string,
-  capability: Pick<
-    Awaited<ReturnType<typeof verifyEmailAuthCapabilityToken>>,
-    "emailFingerprint" | "authorizationRevision"
-  >,
+  capability: Pick<Awaited<ReturnType<typeof verifyEmailAuthCapabilityToken>>, "emailFingerprint">,
 ): Promise<SignInIdentity | null> {
-  const address = await first<SignInIdentity>(
+  const addresses = await all<SignInIdentity>(
     db,
-    capability.authorizationRevision
-      ? `SELECT u.id, u.email, u.normalized_email,
-          ue.email AS sign_in_email, ue.normalized_email AS normalized_sign_in_email,
-          ue.id AS sign_in_email_id, permission.revision AS sign_in_permission_revision
-         FROM user_email_sign_in_permissions permission
-         JOIN user_emails ue ON ue.id = permission.email_id
-         JOIN users u ON u.id = ue.user_id
-        WHERE permission.revision = ? AND u.id = ? AND u.active = 1
-          AND u.pii_redacted_at IS NULL AND u.merged_into_user_id IS NULL
-          AND ${secondaryEmailSignInAllowedSql("ue")} LIMIT 1`
-      : `SELECT u.id, u.email, u.normalized_email,
-          u.email AS sign_in_email, u.normalized_email AS normalized_sign_in_email,
-          NULL AS sign_in_email_id, NULL AS sign_in_permission_revision
-         FROM users u WHERE u.id = ? AND u.active = 1
-          AND u.pii_redacted_at IS NULL AND u.merged_into_user_id IS NULL AND ${primaryEmailProofMayAuthenticateSql("u")} LIMIT 1`,
-    capability.authorizationRevision ? [capability.authorizationRevision, subjectId] : [subjectId],
+    `${SIGN_IN_PRIMARY_SQL} AND u.id = ? UNION ALL ${SIGN_IN_ADDED_SQL} AND u.id = ?`,
+    [subjectId, subjectId],
   );
-  return address &&
-    (await emailAuthCapabilityMatchesEmail({ signingSecret, capability, currentEmail: address.sign_in_email }))
-    ? address
-    : null;
+  for (const address of addresses) {
+    if (await emailAuthCapabilityMatchesEmail({ signingSecret, capability, currentEmail: address.sign_in_email })) {
+      return address;
+    }
+  }
+  return null;
 }
 
 export async function resolveUserSessionContext(
@@ -192,8 +220,7 @@ export async function refreshUserSessionFromRequest(
     identityId: claims.iid,
     state: claims.state,
     passkeyAuthentication: claims.passkeyAuthentication,
-    lastActivityAt: activityAt,
-    staffLastActivityAt: session.staff ? activityAt : (claims.staffLastActivityAt ?? 0),
+    ...acknowledgedSessionActivity(claims, Boolean(session.staff), activityAt),
   });
   await recordMonthlyActivity(db, claims.sub, claims.sid, nowIso());
   return {
@@ -292,7 +319,6 @@ export async function queueUserSignInCapability(payload: {
     purpose: "user_sign_in",
     subjectId: identity.id,
     email: identity.sign_in_email,
-    ...(identity.sign_in_permission_revision ? { authorizationRevision: identity.sign_in_permission_revision } : {}),
     ttlSeconds: payload.ttlMinutes * 60,
     ipHash: payload.ipHash,
     userAgentHash: payload.userAgentHash,
@@ -304,8 +330,6 @@ export async function queueUserSignInCapability(payload: {
     authorizationEvidence: signInEmailAuthorizationEvidence({
       userId: identity.id,
       normalizedEmail: identity.normalized_sign_in_email,
-      emailId: identity.sign_in_email_id,
-      permissionRevision: identity.sign_in_permission_revision,
     }),
     capacities: [
       ...(staff ? ["staff" as const] : []),
@@ -326,8 +350,9 @@ export async function redeemUserSignInCapability(
     sessionTtlHours: number;
     ipHash?: string | null;
     userAgentHash?: string | null;
+    organization?: AccountOrganizationStepInput;
   },
-): Promise<{ session: UserSessionResult; token: string }> {
+): Promise<{ session: UserSessionResult; token: string } | { required: AccountOrganizationRequired }> {
   const capability = await verifyEmailAuthCapabilityToken({
     signingSecret: payload.signingSecret,
     purpose: "user_sign_in",
@@ -363,8 +388,16 @@ export async function redeemUserSignInCapability(
     capability,
     currentEmail: signInIdentity.sign_in_email,
   });
-  const prepared = await prepareUserSession(db, identity.id, payload.sessionTtlHours);
   const verifiedAt = nowIso();
+  const organizationStep = await accountOrganizationStepStatements(db, {
+    signingSecret: payload.signingSecret,
+    subject: { userId: identity.id },
+    email: signInIdentity.normalized_sign_in_email,
+    verifiedAt,
+    input: payload.organization,
+  });
+  if ("required" in organizationStep) return organizationStep;
+  const prepared = await prepareUserSession(db, identity.id, payload.sessionTtlHours);
   const authorizationEvidence = signInCapacityAuthorizationEvidence(
     {
       identity,
@@ -403,8 +436,6 @@ export async function redeemUserSignInCapability(
       signInEmailAuthorizationEvidence({
         userId: identity.id,
         normalizedEmail: signInIdentity.normalized_sign_in_email,
-        emailId: signInIdentity.sign_in_email_id,
-        permissionRevision: signInIdentity.sign_in_permission_revision,
       }),
     ],
     statements: [
@@ -418,32 +449,47 @@ export async function redeemUserSignInCapability(
             }),
           ]
         : []),
+      ...organizationStep.statements,
       ...prepared.statements,
+      prepareSessionEmailAuthenticationStatement(db, {
+        sessionId: prepared.sessionId,
+        emailId: signInIdentity.sign_in_email_id,
+        normalizedEmail: signInIdentity.normalized_sign_in_email,
+        at: verifiedAt,
+      }),
       ...(signInIdentity.sign_in_email_id
-        ? [
-            db
-              .prepare(`INSERT INTO session_email_authentication
-        (session_id, email_id, permission_revision, normalized_email, created_at) VALUES (?, ?, ?, ?, ?)`)
-              .bind(
-                prepared.sessionId,
-                signInIdentity.sign_in_email_id,
-                signInIdentity.sign_in_permission_revision,
-                signInIdentity.normalized_sign_in_email,
-                verifiedAt,
-              ),
-          ]
+        ? prepareFirstAddressSignInStatements(db, {
+            userId: identity.id,
+            primaryEmail: identity.email,
+            emailId: signInIdentity.sign_in_email_id,
+            email: signInIdentity.sign_in_email,
+            at: verifiedAt,
+          })
         : []),
     ],
   });
-  const session = await createEstablishedUserSessionResult(db, prepared, {
-    identity,
-    staff,
-    memberships,
-    sponsors,
-    pendingIdentityCount,
-    eventParticipation,
-    actingIdentities,
-  });
+  // An organization added at account setup is read back, with any membership it brings, and acted as.
+  const added = organizationStep.identityId;
+  const [currentMemberships, currentActingIdentities] = added
+    ? await Promise.all([
+        resolveEligibleMembershipRows(db, capability.subjectId),
+        findActingIdentitiesForUser(db, capability.subjectId),
+      ])
+    : [memberships, actingIdentities];
+  const session = await createEstablishedUserSessionResult(
+    db,
+    prepared,
+    {
+      identity,
+      staff,
+      memberships: currentMemberships,
+      sponsors,
+      pendingIdentityCount,
+      eventParticipation,
+      actingIdentities: currentActingIdentities,
+    },
+    added ?? null,
+  );
   const token = await signUserSessionToken(payload.signingSecret, {
     sub: identity.id,
     sid: prepared.sessionId,

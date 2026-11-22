@@ -3,7 +3,8 @@
  *
  * One component for both scopes the app has: the portal-wide tabs the shell
  * always renders, and an event's own tabs that participant event pages render
- * while the reader is inside an event. Only one is ever visible: an event bar
+ * while the reader is inside an event. The studio's panel tabs on a phone are
+ * an event bar too, whose tabs switch a panel in place. Only one is ever visible: an event bar
  * on the page hides the portal bar (see AppTabBar.css), so no route table has
  * to predict which pages own an event bar.
  *
@@ -26,6 +27,13 @@ export interface AppTab {
   readonly label: string;
   readonly href: string;
   readonly icon?: AppTabIcon;
+  /** Switches a view of the open page in place; the link stays for a new tab and for the address. */
+  readonly onSelect?: () => void;
+}
+
+/** A plain press of a link: one the page may handle itself instead of the browser following it. */
+export function isPlainPress(event: MouseEvent): boolean {
+  return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
 }
 
 /** The trailing tab that opens a sheet instead of a page. */
@@ -79,6 +87,15 @@ export function AppTabBar({
                 href={item.href}
                 data-app-tab={item.id}
                 aria-current={item.id === activeId ? "page" : undefined}
+                onClick={
+                  item.onSelect
+                    ? (event) => {
+                        if (!isPlainPress(event)) return;
+                        event.preventDefault();
+                        item.onSelect?.();
+                      }
+                    : undefined
+                }
               >
                 <TabContent label={item.label} icon={item.icon} />
               </a>

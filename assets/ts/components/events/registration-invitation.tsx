@@ -6,8 +6,10 @@ import { inviteResendLinkSchema } from "../../../shared/schemas/proposal-managem
 import { successResponseSchema } from "../../../shared/schemas/api-common";
 import type { EventRegistrationPolicy } from "../../../shared/schemas/event-series";
 import { parseEventFlowPath } from "../../../shared/event-flow-paths";
+import { eventSlugFromPortalRegistrationUrl } from "../../../shared/event-participation-link";
 import { ApiClientError, getJson, postJson } from "../../shared/api-client";
 import { readField } from "../../shared/form/helpers";
+import { clearRememberedInvitation } from "../../shared/query-context";
 import { clearStatus } from "../../shared/form/validation";
 import { useContractForm } from "../../hooks/useContractForm";
 import { Alert } from "../../ui/Alert";
@@ -16,6 +18,7 @@ import { Field } from "../../ui/Field";
 import { TextInput } from "../../ui/TextControl";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
 import { Spinner } from "../Spinner";
+import { splitHash, writeHashQuery } from "../../ui/url-query";
 import type { FlowBoot } from "../../event-flows/boot";
 
 type InviteState = "invalid" | "expired" | "already_processed" | "unavailable";
@@ -139,37 +142,53 @@ function InvitationRecovery({
   );
 }
 
+/** Drops a refused invitation from a link's query; true when it carried one. */
+function withoutInvitation(params: URLSearchParams): boolean {
+  const carried = params.has("invite") || params.has("id");
+  params.delete("invite");
+  params.delete("id");
+  if (["invite", "speaker_invite"].includes(params.get("source") ?? "")) params.delete("source");
+  return carried;
+}
+
 export function registrationInvitation(boot: FlowBoot) {
   let policy: EventRegistrationPolicy | undefined;
   let allowed = !boot.query.inviteToken;
   const mount = document.createElement("div");
   mount.tabIndex = -1;
   const stepper = boot.root.querySelector<HTMLElement>(".event-flow-stepper");
+  // The sign-in card stands beside the form, so it waits for the invitation too.
+  const signIn = boot.root.querySelector<HTMLElement>("[data-registration-sign-in]");
   boot.root.prepend(mount);
   function visible(show: boolean) {
     boot.form.hidden = !show;
     if (stepper) stepper.hidden = !show;
+    if (signIn) signIn.hidden = !show;
     mount.hidden = show;
   }
   visible(allowed);
   if (!allowed) render(<Spinner label="Checking invitation…" />, mount);
 
   function proceed() {
+    clearRememberedInvitation(boot.query.inviteId);
     boot.query.inviteToken = null;
     boot.query.inviteId = null;
     if (boot.query.sourceType === "invite" || boot.query.sourceType === "speaker_invite")
       boot.query.sourceType = "direct";
     const url = new URL(window.location.href);
-    url.searchParams.delete("invite");
-    url.searchParams.delete("id");
-    if (["invite", "speaker_invite"].includes(url.searchParams.get("source") ?? "")) url.searchParams.delete("source");
+    withoutInvitation(url.searchParams);
     window.history.replaceState(window.history.state, "", url);
+    // The portal carries the invitation in its hash route's query instead.
+    const hash = splitHash();
+    if (withoutInvitation(hash.params)) writeHashQuery(hash.path, hash.params);
     allowed = true;
     visible(true);
     clearStatus(boot.statusEl);
     boot.form.querySelector<HTMLElement>("[data-step].is-active input:not([type='hidden'])")?.focus();
   }
   function recover(state: InviteState) {
+    // A refused invitation is not offered again from this browser.
+    clearRememberedInvitation(boot.query.inviteId);
     allowed = false;
     visible(false);
     render(
@@ -202,7 +221,12 @@ export function registrationInvitation(boot: FlowBoot) {
         return;
       }
       const path = info.registrationUrl ? new URL(info.registrationUrl, window.location.origin) : null;
-      const eventSlug = path ? (parseEventFlowPath(path.pathname)?.eventSlug ?? path.searchParams.get("event")) : null;
+      // A public event's invitation opens its registration page; any other event's opens the portal's.
+      const eventSlug = path
+        ? (parseEventFlowPath(path.pathname)?.eventSlug ??
+          eventSlugFromPortalRegistrationUrl(path) ??
+          path.searchParams.get("event"))
+        : null;
       if (info.inviteType !== "attendee" || eventSlug !== boot.eventSlug) {
         recover("invalid");
         return;

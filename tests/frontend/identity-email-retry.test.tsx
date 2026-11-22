@@ -49,7 +49,7 @@ describe("shared identity mailbox retry", () => {
                   verifiedAt: null,
                   verificationMethod: null,
                   identityId: null,
-                  signInEnabled: false,
+                  signIn: "signs_in",
                   createdAt: "2026-10-26T00:00:00.000Z",
                 },
               ],

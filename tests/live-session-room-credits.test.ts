@@ -1,9 +1,13 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { liveSpeakerCandidatesResponseSchema } from "../assets/shared/schemas/live-session-credit";
+import {
+  liveAddedCreditInputSchema,
+  liveSpeakerCandidatesResponseSchema,
+} from "../assets/shared/schemas/live-session-credit";
 import { callApi } from "./helpers/app";
 import { insertOrganization } from "./helpers/membership";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
+import { affiliationFixture, individualAppearanceFixture } from "./helpers/agenda-appearances";
 
 const f = createLiveRoomFixture();
 
@@ -47,6 +51,71 @@ describe("people operators add to a session's lower thirds", () => {
     await remote.next("preview.changed", (m) => m.composition.lowerThird === null);
     operator.send({ type: "preview.set", composition: { creditKey: guest.key } });
     await operator.next("room.refused", (m) => m.code === "LIVE_CREDIT_NOT_FOUND");
+  });
+
+  it("keeps the line typed for someone without an account, and changes it everywhere when an operator edits them", async () => {
+    const operator = await f.connect({ person: "operator" });
+    const remote = await f.connect({ person: "secondOperator" });
+    const attendee = await f.connect({ person: "attendee" });
+    operator.send({
+      type: "credit.add",
+      person: { userId: null, identityId: null, name: "Grace Guest", titleLine: "Author, Example Press" },
+    });
+    const guest = (await remote.next("credits.added.changed", (m) => m.addedCredits.length === 1)).addedCredits[0]!;
+    expect(guest).toMatchObject({ name: "Grace Guest", identity: null, titleLine: "Author, Example Press" });
+
+    // On air and in Preview, each output keeps its own copy of the person.
+    operator.send({ type: "stage.lowerThird", creditKey: guest.key });
+    expect((await attendee.next("stage.changed")).stage.lowerThird).toMatchObject({
+      name: "Grace Guest",
+      titleLine: "Author, Example Press",
+    });
+    operator.send({ type: "preview.set", composition: { creditKey: guest.key } });
+    await operator.next("preview.changed", (m) => m.composition.lowerThird?.key === guest.key);
+
+    // Another operator puts the name right and takes the line away: every copy follows, on air too.
+    remote.send({ type: "credit.update", creditKey: guest.key, person: { name: "Grace Guest-Lee", titleLine: null } });
+    const edited = await operator.next("credits.added.changed", (m) => m.addedCredits[0]?.name === "Grace Guest-Lee");
+    expect(edited.addedCredits).toEqual([{ ...guest, name: "Grace Guest-Lee", titleLine: null }]);
+    const onAir = await attendee.next("stage.changed", (m) => m.stage.lowerThird?.name === "Grace Guest-Lee");
+    expect(onAir.stage.lowerThird).toEqual(edited.addedCredits[0]);
+    const inPreview = await operator.next("preview.changed", (m) => m.composition.lowerThird?.titleLine === null);
+    expect(inPreview.composition.lowerThird?.name).toBe("Grace Guest-Lee");
+    expect(attendee.received.some((m) => m.type === "credits.added.changed")).toBe(false);
+    const rejoined = await f.connect({ person: "secondOperator" });
+    expect((await rejoined.next("room.snapshot")).addedCredits).toEqual(edited.addedCredits);
+
+    // Someone removed in the meantime is refused, not put back.
+    operator.send({ type: "stage.lowerThird", creditKey: null });
+    await operator.next("stage.changed", (m) => m.stage.lowerThird === null);
+    operator.send({ type: "credit.remove", creditKey: guest.key });
+    await remote.next("credits.added.changed", (m) => m.addedCredits.length === 0);
+    remote.send({ type: "credit.update", creditKey: guest.key, person: { name: "Grace Again", titleLine: null } });
+    expect((await remote.next("room.refused")).code).toBe("LIVE_CREDIT_NOT_FOUND");
+  });
+
+  it("never takes a typed line or an edit for a person whose identity is the source", async () => {
+    const operator = await f.connect({ person: "operator" });
+    // The contract refuses a typed line for a person picked from the event's people.
+    const typedForAccount = liveAddedCreditInputSchema.safeParse({
+      userId: f.users.secondAttendee,
+      identityId: null,
+      name: "Bea Attendee",
+      titleLine: "Typed title",
+    });
+    expect(typedForAccount.error?.issues.map((issue) => issue.path)).toEqual([["titleLine"]]);
+    operator.send({ type: "credit.add", person: { userId: f.users.secondAttendee, identityId: null, name: "Typed" } });
+    const person = (await operator.next("credits.added.changed", (m) => m.addedCredits.length === 1)).addedCredits[0]!;
+    expect(person).toMatchObject({ name: "Bea Attendee", titleLine: null });
+    const typed = { name: "Typed over", titleLine: "Typed title" };
+    for (const creditKey of [person.key, `user:${f.users.speaker}`]) {
+      const before = operator.received.length;
+      operator.send({ type: "credit.update", creditKey, person: typed });
+      const refused = await operator.next("room.refused", () => true, { after: before });
+      expect(refused.code).toBe("LIVE_CREDIT_NOT_EDITABLE");
+    }
+    const rejoined = await f.connect({ person: "operator" });
+    expect((await rejoined.next("room.snapshot")).addedCredits).toEqual([person]);
   });
 
   it("names and pictures a person picked from the event's people, as the identity picked", async () => {
@@ -141,7 +210,7 @@ describe("searching people for a lower third", () => {
 
   it("finds each identity of the event's people for a live operator without agenda editing, and nobody else", async () => {
     await env.DB.prepare(
-      "INSERT INTO permission_grants (id,user_id,permission,context_type,context_id,created_at) VALUES (?,?,'agenda:live_moderate','event',?,?)",
+      "INSERT INTO permission_grants (id,user_id,permission,context_type,context_id,created_at) VALUES (?,?,'agenda:live_studio','event',?,?)",
     )
       .bind(crypto.randomUUID(), f.users.secondAttendee, f.eventId, new Date().toISOString())
       .run();
@@ -206,6 +275,45 @@ describe("a speaker's capacity on the lower third", () => {
     const second = await f.connect({ person: "secondOperator" });
     expect((await second.next("room.snapshot")).stage.lowerThird?.identity?.title).toBe("Chair");
     await operator.next("stage.changed", (m) => m.stage.lowerThird?.identity?.title === "Chair");
+  });
+
+  it("credits every identity an approved appearance names, primary first, for the lower third to show in turn", async () => {
+    const at = new Date().toISOString();
+    const identities: string[] = [];
+    for (const [name, title] of [
+      ["Northwind Trust", "Chair"],
+      ["Lattice Labs", "Research Lead"],
+    ] as const) {
+      const id = crypto.randomUUID();
+      await env.DB.prepare(
+        `INSERT INTO identities (id, user_id, organization_id, job_title, source, is_default, invited_at, started_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'staff', 0, ?, ?, ?, ?)`,
+      )
+        .bind(id, f.users.speaker, await insertOrganization(env.DB, name), title, at, at, at, at)
+        .run();
+      identities.push(id);
+    }
+    const row = await env.DB.prepare(
+      "SELECT payload_json FROM event_agenda_published_occurrences WHERE event_id=? AND occurrence_id=?",
+    )
+      .bind(f.eventId, f.occurrenceId)
+      .first<{ payload_json: string }>();
+    const occurrence = JSON.parse(row!.payload_json);
+    const appearance = {
+      ...individualAppearanceFixture({ userId: f.users.speaker, displayName: "Sam Speaker", approvedAt: at }),
+      affiliations: identities.map((identityId) => affiliationFixture({ identityId })),
+    };
+    occurrence.history = { ...occurrence.history, appearances: [appearance] };
+    await env.DB.prepare(
+      "UPDATE event_agenda_published_occurrences SET payload_json=? WHERE event_id=? AND occurrence_id=?",
+    )
+      .bind(JSON.stringify(occurrence), f.eventId, f.occurrenceId)
+      .run();
+    const operator = await f.connect({ person: "operator" });
+    expect((await operator.next("room.snapshot")).session.credits[0]).toMatchObject({
+      identity: { title: "Chair", organization: "Northwind Trust" },
+      additionalIdentities: [{ title: "Research Lead", organization: "Lattice Labs" }],
+    });
   });
 });
 

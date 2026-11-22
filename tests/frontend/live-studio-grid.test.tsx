@@ -24,6 +24,8 @@ function Harness() {
         reset={layout.reset}
         expanded={false}
         toggleExpanded={() => {}}
+        touring={false}
+        toggleTour={() => {}}
       />
       <StudioGrid
         workspace={layout.workspace}
@@ -249,9 +251,7 @@ describe("studio grid", () => {
         section.getAttribute("aria-label")?.startsWith("Speakers"),
       ),
     ).toBe(true);
-    void act(() =>
-      [...host!.querySelectorAll("button")].find((button) => button.textContent === "Reset layout")!.click(),
-    );
+    void act(() => host!.querySelector<HTMLButtonElement>('button[aria-label="Reset layout"]')!.click());
     expect(savedShow()).toEqual(defaultStudioLayouts().show);
   });
 

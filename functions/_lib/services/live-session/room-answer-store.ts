@@ -17,10 +17,12 @@ export interface LiveAnswerRow {
   last_decision_actor_id: string | null;
   last_decision_accepted: number | null;
   last_decision_basis_revision: number | null;
+  votes: number;
 }
 const COLUMNS = `id,question_id,author_user_id,author_name,body,author_json,created_at,revision,
   accepted_by_user_id,accepted_by_name,accepted_at,last_decision_operation_id,last_decision_actor_id,
-  last_decision_accepted,last_decision_basis_revision`;
+  last_decision_accepted,last_decision_basis_revision,
+  (SELECT COUNT(*) FROM question_answer_votes v WHERE v.answer_id=question_answers.id) AS votes`;
 
 /** Answers share the room's SQLite lifetime; no second live writer or unbounded history copy. */
 export class LiveRoomAnswerStore {
@@ -30,9 +32,11 @@ export class LiveRoomAnswerStore {
     return this.sql.rows<LiveAnswerRow>(`SELECT ${COLUMNS} FROM question_answers WHERE id=?`, id)[0] ?? null;
   }
 
+  /** A thread in reading order: the accepted answer first, then the most upvoted, then the oldest. */
   answers(questionId: string): LiveAnswerRow[] {
     return this.sql.rows<LiveAnswerRow>(
-      `SELECT ${COLUMNS} FROM question_answers WHERE question_id=? ORDER BY created_at,id LIMIT ?`,
+      `SELECT ${COLUMNS} FROM question_answers WHERE question_id=?
+       ORDER BY accepted_at IS NULL, votes DESC, created_at, id LIMIT ?`,
       questionId,
       LIVE_QUESTION_ANSWER_POLICY.maxAnswersPerQuestion,
     );
@@ -86,8 +90,49 @@ export class LiveRoomAnswerStore {
       row.author_json,
       row.created_at,
     );
+    this.changed(row.id);
   }
 
+  /** Which of these answers one person upvoted. */
+  votedBy(userId: string | null, answerIds: readonly string[]): Set<string> {
+    if (!userId || !answerIds.length) return new Set();
+    return new Set(
+      this.sql
+        .rows<{ answer_id: string }>(
+          "SELECT answer_id FROM question_answer_votes WHERE user_id=? AND answer_id IN (SELECT value FROM json_each(?))",
+          userId,
+          JSON.stringify(answerIds),
+        )
+        .map((row) => row.answer_id),
+    );
+  }
+
+  vote(answerId: string, userId: string, voted: boolean): void {
+    if (voted)
+      this.sql.exec("INSERT OR IGNORE INTO question_answer_votes(answer_id,user_id) VALUES (?,?)", answerId, userId);
+    else this.sql.exec("DELETE FROM question_answer_votes WHERE answer_id=? AND user_id=?", answerId, userId);
+    this.changed(answerId);
+  }
+
+  /** Marks an answer for the durable copy. */
+  changed(answerId: string): void {
+    this.sql.exec(
+      "INSERT INTO question_answer_changes(answer_id,change_seq) VALUES (?,?) ON CONFLICT(answer_id) DO UPDATE SET change_seq=excluded.change_seq",
+      answerId,
+      this.sql.nextChange(),
+    );
+  }
+
+  /** Answers of one person in this room, for removing their posts with a block. */
+  byAuthor(userId: string): LiveAnswerRow[] {
+    return this.sql.rows<LiveAnswerRow>(
+      `SELECT ${COLUMNS} FROM question_answers WHERE author_user_id=? LIMIT ?`,
+      userId,
+      LIVE_QUESTION_ANSWER_POLICY.maxAnswersPerRoom,
+    );
+  }
+
+  /** Accepting one answer replaces the question's earlier accepted answer. */
   accept(
     row: LiveAnswerRow,
     actor: { userId: string; name: string },
@@ -109,6 +154,20 @@ export class LiveRoomAnswerStore {
       row.id,
       row.revision,
     );
+    this.changed(row.id);
+    if (!accepted) return;
+    const replaced = this.sql.rows<{ id: string }>(
+      "SELECT id FROM question_answers WHERE question_id=? AND id<>? AND accepted_at IS NOT NULL",
+      row.question_id,
+      row.id,
+    );
+    for (const { id } of replaced) {
+      this.sql.exec(
+        "UPDATE question_answers SET revision=revision+1,accepted_by_user_id=NULL,accepted_by_name=NULL,accepted_at=NULL WHERE id=?",
+        id,
+      );
+      this.changed(id);
+    }
   }
 
   authors(): string[] {
@@ -130,6 +189,22 @@ export class LiveRoomAnswerStore {
         LIVE_QUESTION_ANSWER_POLICY.maxAnswersPerRoom,
       )
       .map((row) => row.question_id);
+    const gone = `SELECT id FROM question_answers WHERE author_user_id=? OR question_id IN (SELECT id FROM questions WHERE author_user_id=?)`;
+    const recount = this.sql
+      .rows<{ answer_id: string }>(
+        `SELECT answer_id FROM question_answer_votes WHERE user_id=? AND answer_id NOT IN (${gone})`,
+        userId,
+        userId,
+        userId,
+      )
+      .map((row) => row.answer_id);
+    this.sql.exec(
+      `DELETE FROM question_answer_votes WHERE user_id=? OR answer_id IN (${gone})`,
+      userId,
+      userId,
+      userId,
+    );
+    this.sql.exec(`DELETE FROM question_answer_changes WHERE answer_id IN (${gone})`, userId, userId);
     this.sql.exec(
       "DELETE FROM question_answers WHERE author_user_id=? OR question_id IN (SELECT id FROM questions WHERE author_user_id=?)",
       userId,
@@ -145,6 +220,16 @@ export class LiveRoomAnswerStore {
       userId,
       userId,
     );
-    return changed;
+    // The durable copy's vote counts drop the person's votes on answers that stay, and those threads re-sort.
+    const threads = new Set(changed);
+    for (const answerId of recount) {
+      this.changed(answerId);
+      const row = this.sql.rows<{ question_id: string }>(
+        "SELECT question_id FROM question_answers WHERE id=?",
+        answerId,
+      )[0];
+      if (row) threads.add(row.question_id);
+    }
+    return [...threads];
   }
 }

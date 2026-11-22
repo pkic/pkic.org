@@ -19,7 +19,7 @@ import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { insertOrganization, insertUser } from "./helpers/membership";
-import { prepareProposalProof } from "./helpers/proposal-proof";
+import { confirmedProposalAffiliation, prepareProposalProof } from "./helpers/proposal-proof";
 import { resetDb } from "./helpers/reset-db";
 
 beforeEach(resetDb);
@@ -107,7 +107,6 @@ async function ready(f: Awaited<ReturnType<typeof fixture>>) {
     f.eventId,
     true,
   );
-  expect(payload.operation).toBe("speaker_profile");
   expect(payload.context).toMatchObject({
     kind: "speaker",
     speakerId: f.speakerId,
@@ -130,6 +129,17 @@ async function state() {
   ];
   return Promise.all(tables.map((table) => queryAll(env.DB, `SELECT * FROM ${table} ORDER BY id`)));
 }
+/** The speaker confirms the organization the verified domain resolves to, as the speaker screen does. */
+function confirmed(f: Awaited<ReturnType<typeof fixture>>, jobTitle: string) {
+  return confirmedProposalAffiliation({
+    environment: env,
+    eventId: f.eventId,
+    email: "speaker@official.example",
+    userId: f.userId,
+    organizationId: f.organizationId,
+    jobTitle,
+  });
+}
 async function profile(f: Awaited<ReturnType<typeof fixture>>, continuationToken: string, db: DatabaseLike = env.DB) {
   return request(
     `/api/v1/proposals/${f.proposalId}/participation/profile`,
@@ -137,7 +147,7 @@ async function profile(f: Awaited<ReturnType<typeof fixture>>, continuationToken
       continuationToken,
       unaffiliatedAttestation: false,
       consents,
-      jobTitle: "Verified role",
+      ...(await confirmed(f, "Verified role")),
     }),
     f.session,
     db,
@@ -223,7 +233,6 @@ describe("authenticated speaker resource mailbox proof", () => {
     const role = await request(
       `${base}/identities/${result.currentRepresentation!.actingIdentityId}`,
       eventProposalProofIdentityPatchSchema.parse({
-        continuationToken: fresh.continuationToken,
         speakerProposalId: f.proposalId,
         jobTitle: "Updated own role",
       }),
@@ -257,6 +266,7 @@ describe("authenticated speaker resource mailbox proof", () => {
       consents,
       unaffiliatedAttestation: false,
       speakerManagementToken: token,
+      session: f.session,
     });
     expect(proof.speakerManagementToken).toBeTruthy();
     const response = await request(
@@ -265,7 +275,7 @@ describe("authenticated speaker resource mailbox proof", () => {
         continuationToken: proof.continuationToken,
         unaffiliatedAttestation: false,
         consents,
-        jobTitle: "Invited role",
+        ...(await confirmed(f, "Invited role")),
       }),
       undefined,
       env.DB,
@@ -291,6 +301,7 @@ describe("authenticated speaker resource mailbox proof", () => {
       consents,
       unaffiliatedAttestation: false,
       speakerManagementToken: token,
+      session: f.session,
     });
     const response = await request(
       `/api/v1/proposals/speakers/access/${proof.speakerManagementToken}/profile`,
@@ -298,7 +309,7 @@ describe("authenticated speaker resource mailbox proof", () => {
         continuationToken: proof.continuationToken,
         unaffiliatedAttestation: false,
         consents,
-        jobTitle: "Invited role",
+        ...(await confirmed(f, "Invited role")),
       }),
       "expired-or-unknown-session",
       env.DB,
@@ -337,6 +348,7 @@ describe("authenticated speaker resource mailbox proof", () => {
       consents,
       unaffiliatedAttestation: false,
       speakerManagementToken: token,
+      session: f.session,
     });
     const response = await callApi(env, `/api/v1/proposals/speakers/access/${proof.speakerManagementToken}/profile`, {
       method: "PATCH",
@@ -346,7 +358,7 @@ describe("authenticated speaker resource mailbox proof", () => {
           continuationToken: proof.continuationToken,
           unaffiliatedAttestation: false,
           consents,
-          jobTitle: "Invited role",
+          ...(await confirmed(f, "Invited role")),
         }),
       ),
     });
@@ -420,32 +432,16 @@ describe("authenticated speaker resource mailbox proof", () => {
     },
   );
 
-  it("refuses a generic proposal proof at the speaker profile and bound catalog without writes", async () => {
+  it("refuses to start a mailbox proof that names no speaker invitation or session, without writes", async () => {
     const f = await fixture();
-    const response = await request(base, { email: "speaker@official.example", consents }, f.session);
-    expect(response.status).toBe(200);
-    const row = (
-      await queryAll<{ payload_json: string }>(
-        env.DB,
-        "SELECT payload_json FROM email_outbox WHERE template_key='event_proposal_verify' ORDER BY rowid DESC LIMIT 1",
-      )
-    )[0];
-    const mail = await deliveredEmailPayload<{ verificationUrl: string }>(env.DB, env, row.payload_json);
-    const token = new URLSearchParams(new URL(mail.verificationUrl).hash.slice(1)).get("verify");
-    const verified = await request(`${base}/verify`, { token }, f.session);
-    const proof = eventProposalProofVerifyResponseSchema.parse(await verified.json());
-    if (proof.status !== "ready") throw new Error("Expected ordinary proposal proof");
     const before = await state();
-    expect((await profile(f, proof.continuationToken)).status).toBe(403);
-    expect(
-      (
-        await request(
-          `${base}/identities`,
-          { continuationToken: proof.continuationToken, speakerProposalId: f.proposalId },
-          f.session,
-        )
-      ).status,
-    ).toBe(403);
+    const response = await request(
+      base,
+      eventProposalProofStartSchema.parse({ email: "speaker@official.example", consents }),
+      f.session,
+    );
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "PROPOSAL_PROOF_CONTEXT_MISMATCH" } });
     expect(await state()).toEqual(before);
   });
 

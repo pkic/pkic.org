@@ -1,7 +1,6 @@
 /**
- * The broadcast overlay page's entry: reads the output and layout from the
- * query and the room and access from the fragment, and renders that one
- * output, read-only.
+ * The broadcast overlay page's entry: reads the output, layout, graphics,
+ * room and access from the fragment, and renders that one output, read-only.
  */
 import { render } from "preact";
 import "../../design/fonts.css";
@@ -24,6 +23,7 @@ function mount(): void {
         key={window.location.hash}
         view={address.view}
         layout={address.layout}
+        graphics={address.graphics}
         slug={address.slug}
         roomId={address.roomId}
         token={address.token}

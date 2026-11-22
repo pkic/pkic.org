@@ -13,6 +13,7 @@ import { sortByScreenIssues, type ScreenIssue } from "../../../../../../../../sh
 import { Button } from "../../../../../../../ui/Button";
 import { RowActions } from "../../../../../../../ui/RowActions";
 import type { ScreenMonitorView } from "../../screens/screen-monitor-view";
+import { newestScreenSoftware } from "../../../../../../../../shared/event-screen-software";
 import { ScreenConditionLine, ScreenShot, screenCondition } from "../../screens/ScreenMonitorCard";
 import { ScreenQualityTrend } from "../../screens/ScreenQualityTrend";
 import type { useStudioScreens } from "./useStudioScreens";
@@ -37,6 +38,8 @@ export function ScreensPanel({
   onCommand?: (type: ScreenMonitorStaffMessage["type"], screen: ScreenRecord) => void;
 }) {
   if (!screens.length) return <p class="pk-studio-screens__empty">No screens show this room.</p>;
+  // The event's screens, not only this room's, set the newest build.
+  const newestSoftware = newestScreenSoftware(monitor.live.values());
   return (
     <ul class="pk-studio-screens" aria-label="Screens">
       {sortByScreenIssues(screens, (screen) => issuesOf(screen.id)).map((screen) => {
@@ -53,7 +56,7 @@ export function ScreensPanel({
               {screen.assignment ? LIVE_SCREEN_OUTPUT_DETAILS[screen.assignment.output].label : "Not assigned"}
             </span>
             <span class="pk-studio-screens__status">
-              <ScreenConditionLine condition={condition} />
+              <ScreenConditionLine condition={condition} newestSoftware={newestSoftware} />
             </span>
             <span class="pk-studio-screens__trend">
               <ScreenQualityTrend

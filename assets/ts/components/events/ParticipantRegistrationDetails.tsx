@@ -25,6 +25,7 @@ function dayAttendanceItems(data: RegistrationManageReadResponse): DescriptionLi
     const chosen = data.dayAttendance.find((entry) => entry.dayDate === day.dayDate)?.attendanceType;
     const option = day.attendanceOptions.find((candidate) => candidate.value === chosen);
     return {
+      key: `day:${day.dayDate}`,
       term: day.label ?? day.dayDate,
       value: chosen ? (option?.label ?? attendanceTypeLabel(chosen)) : "Not attending",
     };
@@ -41,6 +42,7 @@ function answerItems(data: RegistrationManageReadResponse, form: RegistrationFor
   return buildFormAnswerRows(data.registration.custom_answers, fields)
     .filter((row) => known.has(row.key))
     .map((row) => ({
+      key: `answer:${row.key}`,
       term: row.label,
       value: row.values.filter((value) => value !== "-").join(", "),
     }));

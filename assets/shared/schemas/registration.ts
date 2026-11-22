@@ -226,9 +226,8 @@ export const inviteeSchema = z.object({
   lastName: lastNameSchema.optional(),
 });
 
+/** The registrant's names come from their signed-in account, never from the registration request. */
 export const attendeeRegistrationFieldsSchema = z.object({
-  firstName: firstNameSchema,
-  lastName: lastNameSchema,
   email: normalizedEmailSchema,
   identityId: databaseIdSchema.optional(),
   dayAttendance: z
@@ -240,12 +239,8 @@ export const attendeeRegistrationFieldsSchema = z.object({
   consents: z.array(consentItemSchema).max(20),
 });
 export type AttendeeRegistrationFields = z.infer<typeof attendeeRegistrationFieldsSchema>;
-/** Wizard steps use the same fields and attendance policy as the registration request. */
-export const registrationContactFieldsSchema = attendeeRegistrationFieldsSchema.pick({
-  firstName: true,
-  lastName: true,
-  email: true,
-});
+/** The "You" step checks the signed-in account's saved details before the person continues. */
+export const registrationContactFieldsSchema = userProfileSchema;
 /** A rendered day must be answered explicitly; Not attending is an answer but creates no attendance row. */
 export function withRequiredDayAttendanceChoices<Schema extends z.ZodType>(
   schema: Schema,
@@ -259,6 +254,23 @@ export function withRequiredDayAttendanceChoices<Schema extends z.ZodType>(
         path: ["dayAttendance"],
         message: `Choose an option for ${missing.dayLabel}. Select Not attending if you will skip this day.`,
       });
+  });
+}
+
+/** Why a work address cannot register as a personal identity; the server refuses with the same words. */
+export const WORK_EMAIL_REPRESENTATION_REQUIRED =
+  "Choose or add the organization you represent for this work email before registering.";
+
+/**
+ * A work address registers for its organization. Whether one is still missing is only known once the
+ * address's domain and the chosen identity are, so the form tells the contract through `missing`.
+ */
+export function withRequiredOrganizationRepresentation<Schema extends z.ZodType>(
+  schema: Schema,
+  missing: () => boolean,
+) {
+  return schema.superRefine((_value, context) => {
+    if (missing()) context.addIssue({ code: "custom", path: [], message: WORK_EMAIL_REPRESENTATION_REQUIRED });
   });
 }
 
@@ -290,11 +302,9 @@ export const registrationConfirmOrganizationSchema = z
 export type RegistrationConfirmOrganization = z.infer<typeof registrationConfirmOrganizationSchema>;
 
 /**
- * A public registration starts from the shared email-first step, including its
- * individual capacity. `emailProof` is the verification link the person
- * opened, which makes the registration final on submission; without it (and
- * without a signed-in session for the same address) the registration waits
- * for email confirmation.
+ * A registration names its address and how the person reached the form. Every
+ * registrant is signed in; the session proves the mailbox, so the registration
+ * is confirmed at once.
  */
 export const registrationCreateSchema = attendeeRegistrationFieldsSchema
   .extend(registrationEntrySchema.shape)
@@ -302,8 +312,6 @@ export const registrationCreateSchema = attendeeRegistrationFieldsSchema
     unaffiliatedAttestation: workEmailStepSchema.shape.unaffiliatedAttestation,
     sourceType: defaultedSourceTypeSchema,
     sourceRef: trimmedString(2, 200).optional(),
-    emailProof: registrationEmailProofTokenSchema.optional(),
-    organization: registrationConfirmOrganizationSchema.optional(),
   })
   .strict();
 
@@ -359,13 +367,10 @@ export const registrationConfirmInfoResponseSchema = z.object({
 });
 export type RegistrationConfirmInfoResponse = z.infer<typeof registrationConfirmInfoResponseSchema>;
 
+// A signed-in registration is confirmed at once; its manage link travels only by email.
 export const registrationSubmissionResponseSchema = registrationCompletionResponseBaseSchema.extend({
   registrationId: databaseIdSchema,
-  // Existing identities receive these capabilities only through their email.
-  // A newly created identity may still receive the immediate correction link.
-  manageUrl: httpCapabilityUrlSchema.nullable(),
-  manageToken: tokenSchema.nullable(),
-  organizationOutcome: registrationOrganizationOutcomeSchema.default(null),
+  status: z.literal("registered"),
 });
 export type RegistrationSubmissionResponse = z.infer<typeof registrationSubmissionResponseSchema>;
 
@@ -442,6 +447,12 @@ export const registrationManageReadResponseSchema = successResponseSchema.extend
   waitlistHandledLast: z.boolean(),
   /** The organization the registrant named that staff have not yet linked to their identity. */
   pendingOrganizationName: z.string().nullable().default(null),
+  /** The registration's ticket still waits for payment, so the registration is not complete. */
+  paymentDue: z.boolean().default(false),
+  /** That payment was made by a method that takes days and is on its way, so nothing more is asked. */
+  paymentProcessing: z.boolean().default(false),
+  /** A payment dispute suspends badge and check-in access until the organizers review it. */
+  paymentUnderReview: z.boolean().default(false),
   shareUrl: httpUrlSchema.nullable(),
   headshotUrl: httpUrlSchema.nullable(),
 });
@@ -516,5 +527,3 @@ export const inviteDeclineSchema = z
       });
     }
   });
-
-export const inviteAcceptAttendeeSchema = attendeeRegistrationFieldsSchema.strict();

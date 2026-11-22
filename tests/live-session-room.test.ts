@@ -1,9 +1,9 @@
 import { grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
-import { runDurableObjectAlarm } from "cloudflare:test";
+import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LIVE_ROOM_POLICY } from "../assets/shared/live-session-policy";
-import { LIVE_ROOM_PROTOCOL } from "../assets/shared/schemas/live-session-room";
+import { LIVE_ROOM_FAULT_CLOSE_CODE, LIVE_ROOM_PROTOCOL } from "../assets/shared/schemas/live-session-room";
 import { liveOverlayAccessResponseSchema } from "../assets/shared/schemas/live-overlay-access";
 import { signLiveOverlayToken } from "../functions/_lib/auth/live-session-overlay-token";
 import { callApi } from "./helpers/app";
@@ -63,6 +63,8 @@ describe("live session room admission", () => {
           roleLabel: null,
           photoUrl: null,
           identity: null,
+          additionalIdentities: [],
+          titleLine: null,
         },
       ]);
       client.socket.close(1000, "done");
@@ -135,6 +137,29 @@ describe("live session room admission", () => {
       code: 4404,
       reason: "LIVE_SESSION_NOT_FOUND",
     });
+  });
+
+  it("closes with a fault code and a reference when the room fails on our side, so the page does not blame the connection", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const response = await callApi({ ...env, LIVE_SESSION_ROOMS: undefined }, f.path(), {
+      headers: {
+        upgrade: "websocket",
+        origin: "https://app.test",
+        "sec-websocket-protocol": LIVE_ROOM_PROTOCOL,
+        authorization: `Bearer ${f.tokens.operator}`,
+        "cf-ray": "8f1b2c3d4e5f6a7b-AMS",
+      },
+    });
+    expect(response.status).toBe(101);
+    const socket = response.webSocket!;
+    const closed = new Promise<{ code: number; reason: string }>((resolve) =>
+      socket.addEventListener("close", (event) => resolve({ code: event.code, reason: event.reason })),
+    );
+    socket.accept();
+    expect(await closed).toEqual({ code: LIVE_ROOM_FAULT_CLOSE_CODE, reason: "8f1b2c3d4e5f6a7b-AMS" });
+    // The logged fault carries the same reference, so it can be found from what the page shows.
+    expect(String(error.mock.calls[0]?.[0])).toContain("8f1b2c3d4e5f6a7b-AMS");
+    error.mockRestore();
   });
 });
 
@@ -237,14 +262,14 @@ describe("live session questions", () => {
   it("lets a credited speaker mark a question answered but never moderate the queue", async () => {
     const { questionId } = await askApproved();
     const speaker = await f.connect({ person: "speaker" });
-    speaker.send({ type: "question.moderate", questionId, status: "hidden" });
+    speaker.send({ type: "question.moderate", questionId, status: "hidden", reason: "spam" });
     expect((await speaker.next("room.refused")).code).toBe("LIVE_QUESTION_TRANSITION");
     speaker.send({ type: "question.moderate", questionId, status: "answered" });
     expect(
       (await speaker.next("question.changed", (message) => message.question.status === "answered")).question.answeredAt,
     ).not.toBeNull();
     const attendee = await f.connect({ person: "secondAttendee" });
-    attendee.send({ type: "question.moderate", questionId, status: "hidden" });
+    attendee.send({ type: "question.moderate", questionId, status: "hidden", reason: "spam" });
     expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
   });
 
@@ -254,12 +279,40 @@ describe("live session questions", () => {
     expect((await attendee.next("room.snapshot")).questions).toHaveLength(1);
     operator.send({ type: "stage.question", questionId });
     expect((await attendee.next("stage.changed")).stage.question).toMatchObject({ id: questionId, authorName: null });
-    operator.send({ type: "question.moderate", questionId, status: "hidden" });
+    operator.send({ type: "question.moderate", questionId, status: "hidden", reason: "spam" });
     expect((await attendee.next("question.removed")).questionId).toBe(questionId);
     expect(
       (await attendee.next("stage.changed", (message) => message.stage.question === null)).stage.questionChange
         ?.operatorName,
     ).toBe("Olga Operator");
+    // The operator still holds it, with why it was hidden, and can show it to everyone again.
+    const hidden = (await operator.next("question.changed", (message) => message.question.status === "hidden"))
+      .question;
+    expect(hidden.removal?.reason).toBe("spam");
+    operator.send({ type: "question.moderate", questionId, status: "approved" });
+    const shown = await attendee.next("question.changed", (message) => message.question.status === "approved");
+    expect(shown.question.id).toBe(questionId);
+  });
+
+  it("lets an operator ignore a question without changing it for attendees, until a new decision about it", async () => {
+    const { author, operator, questionId } = await askApproved();
+    const item = { kind: "question" as const, questionId };
+    const seenByAuthor = author.received.length;
+    operator.send({ type: "moderation.done", item, done: true });
+    const ignored = await operator.next("question.changed", (message) => message.question.done !== null);
+    expect(ignored.question.status).toBe("approved");
+    // Attendees are told nothing new: the question stays as it was for them.
+    expect(
+      author.received
+        .slice(seenByAuthor)
+        .some((message) => message.type === "question.changed" && message.question.done !== null),
+    ).toBe(false);
+    // Marking it discussed is a new decision, so it is no longer ignored when it is reopened.
+    operator.send({ type: "question.moderate", questionId, status: "answered" });
+    const discussed = await operator.next("question.changed", (message) => message.question.status === "answered");
+    expect(discussed.question.done).toBeNull();
+    author.send({ type: "moderation.done", item, done: true });
+    expect((await author.next("room.refused")).code).toBe("LIVE_MODERATION_FORBIDDEN");
   });
 
   it("limits how fast one person asks", async () => {
@@ -269,10 +322,39 @@ describe("live session questions", () => {
     expect((await author.next("room.refused")).code).toBe("LIVE_ROOM_RATE_LIMITED");
   });
 
-  it("refuses attendee questions outside the session window but lets operators prepare", async () => {
+  it("takes attendee questions ahead of the session while reactions wait for it to go live", async () => {
     await f.setup({ startOffsetMinutes: 24 * 60, durationMinutes: 30 });
     const attendee = await f.connect({ person: "attendee" });
-    attendee.send({ type: "question.ask", text: "Too early?", anonymous: false });
+    attendee.send({ type: "question.ask", text: "Asked a day early", anonymous: false });
+    expect((await attendee.next("question.accepted")).questionId).toBeTruthy();
+    attendee.send({ type: "reaction.send", reaction: "applause" });
+    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_CLOSED");
+  });
+
+  it("lets operators open the virtual room ahead of its time and close it during it, until they change it", async () => {
+    await f.setup({ startOffsetMinutes: 24 * 60, durationMinutes: 30 });
+    const operator = await f.connect({ person: "operator" });
+    const attendee = await f.connect({ person: "attendee" });
+    expect((await attendee.next("room.snapshot")).opening).toBe("scheduled");
+    attendee.send({ type: "room.opening", opening: "open" });
+    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_STUDIO_REQUIRED");
+
+    operator.send({ type: "room.opening", opening: "open" });
+    expect((await attendee.next("room.opening.changed")).opening).toBe("open");
+
+    operator.send({ type: "room.opening", opening: "closed" });
+    expect((await attendee.next("room.opening.changed", (m) => m.opening === "closed")).opening).toBe("closed");
+    const after = attendee.received.length;
+    attendee.send({ type: "question.ask", text: "Still open?", anonymous: false });
+    expect((await attendee.next("room.refused", () => true, { after })).code).toBe("LIVE_ROOM_CLOSED");
+    const late = await f.connect({ person: "secondAttendee" });
+    expect((await late.next("room.snapshot")).opening).toBe("closed");
+  });
+
+  it("refuses attendee questions once the room has closed but lets operators prepare", async () => {
+    await f.setup({ startOffsetMinutes: -24 * 60, durationMinutes: 30 });
+    const attendee = await f.connect({ person: "attendee" });
+    attendee.send({ type: "question.ask", text: "Too late?", anonymous: false });
     expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_CLOSED");
     const operator = await f.connect({ person: "operator" });
     operator.send({ type: "question.ask", text: "Seed question", anonymous: false });
@@ -283,24 +365,28 @@ describe("live session questions", () => {
 describe("live session reactions", () => {
   beforeEach(() => f.setup());
 
-  it("broadcasts exact reaction totals across scheduled bursts and limits each person", async () => {
+  it("counts each person once per reaction within the window and limits each person", async () => {
     const watcher = await f.connect({ person: "secondAttendee" });
     const reactor = await f.connect({ person: "attendee" });
     reactor.send({ type: "reaction.send", reaction: "applause" });
-    expect((await watcher.next("reaction.burst")).counts).toEqual({ applause: 1 });
+    expect(await watcher.next("reaction.burst")).toMatchObject({ counts: { applause: 1 }, people: { applause: 1 } });
     reactor.send({ type: "reaction.send", reaction: "applause" });
     reactor.send({ type: "reaction.send", reaction: "love" });
+    watcher.send({ type: "reaction.send", reaction: "applause" });
     // Worker scheduling can put these messages in different broadcast windows.
-    // The delivered total must still contain every reaction exactly once.
+    // Repeat clicks keep the person in the window but add no one: totals count people.
     await vi.waitFor(
       () => {
         const totals: Record<string, number> = {};
+        let people: Record<string, number> = {};
         for (const message of watcher.received) {
           if (message.type !== "reaction.burst") continue;
           for (const [reaction, count] of Object.entries(message.counts))
             totals[reaction] = (totals[reaction] ?? 0) + count;
+          people = { ...people, ...message.people };
         }
         expect(totals).toEqual({ applause: 2, love: 1 });
+        expect(people).toEqual({ applause: 2, love: 1 });
       },
       { timeout: 3000 },
     );
@@ -325,6 +411,8 @@ describe("live session control room", () => {
       roleLabel: null,
       photoUrl: null,
       identity: null,
+      additionalIdentities: [],
+      titleLine: null,
     });
     expect(lowerThird.stage.lowerThirdChange?.operatorName).toBe("Olga Operator");
 
@@ -339,7 +427,7 @@ describe("live session control room", () => {
     expect((await first.next("room.refused")).code).toBe("LIVE_CREDIT_NOT_FOUND");
     const attendee = await f.connect({ person: "attendee" });
     attendee.send({ type: "timer.control", timerId: "session", action: "reset" });
-    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
+    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_STUDIO_REQUIRED");
   });
 
   it("issues overlays read-only access to this room only", async () => {
@@ -359,7 +447,7 @@ describe("live session control room", () => {
 
     const overlay = await f.connect({ overlay: access.token });
     const snapshot = await overlay.next("room.snapshot");
-    expect(snapshot.viewer).toEqual({ role: "overlay", name: null, organizer: false, chatRestriction: null });
+    expect(snapshot.viewer).toEqual({ role: "overlay", name: null, organizer: false, participation: null });
     expect(snapshot.questions).toEqual([]);
     overlay.send({ type: "reaction.send", reaction: "applause" });
     expect((await overlay.next("room.refused")).code).toBe("LIVE_ROOM_READ_ONLY");
@@ -437,6 +525,32 @@ describe("live session durable copy", () => {
       { status: "answered" },
     ]);
     expect(await auditActions()).toHaveLength(3);
+  });
+
+  it("copies how many attendee messages were sent and by how many people, never the messages", async () => {
+    const first = await f.connectChat("attendee");
+    const second = await f.connectChat("secondAttendee");
+    const operator = await f.connectChat("operator");
+    for (const [socket, text] of [
+      [first, "Hello"],
+      [first, "Great slides"],
+      [second, "Agreed"],
+    ] as const) {
+      socket.send({ type: "chat.send", text });
+      await socket.next("chat.message", (message) => message.message.text === text);
+    }
+    operator.send({ type: "chat.send", text: "Staff only", channel: "operator" });
+    await operator.next("chat.message", (message) => message.message.text === "Staff only");
+    expect(await runDurableObjectAlarm(f.chatRoom())).toBe(true);
+    const totals = () =>
+      queryAll(env.DB, "SELECT messages,people FROM event_session_chat_totals WHERE event_id=? AND occurrence_id=?", [
+        f.eventId,
+        f.occurrenceId,
+      ]);
+    expect(await totals()).toEqual([{ messages: 3, people: 2 }]);
+    await runInDurableObject(f.chatRoom(), (room) => room.forgetParticipant(f.users.secondAttendee));
+    await runDurableObjectAlarm(f.chatRoom());
+    expect(await totals()).toEqual([{ messages: 3, people: 1 }]);
   });
 });
 

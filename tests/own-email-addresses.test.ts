@@ -882,37 +882,32 @@ describe("a person's own email addresses", () => {
     ]);
   });
 
-  it("keeps a way to sign in when the person withdraws or removes the address they sign in with", async () => {
+  it("keeps a way to sign in when the person removes the address they sign in with", async () => {
     const { userId, token } = await signedIn("lee@gmail.com");
     const signIn = await add(token, "lee@signin.example");
     await verify(await verificationToken(signIn.email));
-    const other = await add(token, "lee@other.example");
-    await verify(await verificationToken(other.email));
-    // The primary was never proved, so the verified mailboxes keep it from unlocking the account;
-    // only the address the person allowed to sign in still can.
+    const former = await add(token, "lee@former.example");
+    await verify(await verificationToken(former.email));
+    // The primary was never proved, so the verified mailboxes keep it from unlocking the account, and the
+    // other address stopped signing in when the representation that used it ended.
     const at = nowIso();
+    const identityId = crypto.randomUUID();
     await env.DB.batch([
       env.DB.prepare("UPDATE users SET email_verified_at = NULL WHERE id = ?").bind(userId),
       env.DB.prepare(
-        "INSERT INTO user_email_sign_in_permissions (email_id, revision, enabled_at) VALUES (?, ?, ?)",
-      ).bind(signIn.id, crypto.randomUUID(), at),
+        `INSERT INTO identities (id, user_id, organization_id, source, invited_at, started_at, ended_at, created_at, updated_at)
+         VALUES (?, ?, ?, 'staff', ?, ?, ?, ?, ?)`,
+      ).bind(identityId, userId, await insertOrganization(env.DB, "Former Employer"), at, at, at, at, at),
+      env.DB.prepare("UPDATE user_emails SET identity_id = ? WHERE id = ?").bind(identityId, former.id),
     ]);
     const lastMethod = { error: { code: LAST_SIGN_IN_METHOD, message: LAST_SIGN_IN_METHOD_MESSAGE } };
-
-    const withdrawn = await call(
-      token,
-      `/${signIn.id}`,
-      "PATCH",
-      ownEmailAddressUpdateSchema.parse({ signInEnabled: false }),
-    );
-    expect(withdrawn.status).toBe(409);
-    expect(await withdrawn.json()).toMatchObject(lastMethod);
 
     const removed = await call(token, `/${signIn.id}`, "DELETE");
     expect(removed.status).toBe(409);
     expect(await removed.json()).toMatchObject(lastMethod);
-    expect(await queryAll(env.DB, "SELECT revoked_at FROM user_email_sign_in_permissions")).toEqual([
-      { revoked_at: null },
+    expect(await queryAll(env.DB, "SELECT email FROM user_emails ORDER BY email")).toEqual([
+      { email: former.email },
+      { email: signIn.email },
     ]);
 
     // A passkey is another way in, so the address may go.

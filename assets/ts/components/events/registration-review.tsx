@@ -12,13 +12,20 @@ import { formatFormAnswerValue } from "../forms/form-answers";
 
 import type { FormAnswers } from "../../../shared/schemas/form-answers";
 
-function readAttendanceReview(form: HTMLFormElement): Array<{ label: string; value: string }> {
+function readAttendanceReview(form: HTMLFormElement): DescriptionListItem[] {
   const days = readDayAttendanceChoices(form);
   if (days.length === 0) {
-    return [{ label: "Event attendance", value: attendanceTypeLabel(readField(form, "attendanceType")) }];
+    return [
+      {
+        key: "attendance:event",
+        term: "Event attendance",
+        value: attendanceTypeLabel(readField(form, "attendanceType")),
+      },
+    ];
   }
   return days.map((day) => ({
-    label: day.dayLabel,
+    key: `day:${day.dayDate}`,
+    term: day.dayLabel,
     value: day.waitlisted ? `${day.optionLabel} (${ATTENDANCE_WAITLIST_COPY.badge.toLowerCase()})` : day.optionLabel,
   }));
 }
@@ -70,7 +77,8 @@ function RegistrationReview({
 }: {
   fullName: string;
   email: string;
-  attendance: Array<{ label: string; value: string }>;
+  /** The days, then the ticket and its total when attending has a price. */
+  attendance: DescriptionListItem[];
   customFields: FormField[];
   customAnswers: FormAnswers;
   form: HTMLFormElement;
@@ -88,16 +96,13 @@ function RegistrationReview({
             : []),
         ]}
       />
-      <ReviewSection
-        title="Attendance"
-        step={2}
-        items={attendance.map((entry) => ({ term: entry.label, value: entry.value }))}
-      />
+      <ReviewSection title="Attendance" step={2} items={attendance} />
       {customFields.length > 0 && (
         <ReviewSection
           title="Profile details"
           step={3}
           items={customFields.map((field) => ({
+            key: `answer:${field.key}`,
             term: field.label,
             value: resolveCustomFieldValue(field, customAnswers),
           }))}
@@ -107,10 +112,13 @@ function RegistrationReview({
   );
 }
 
-export function updateRegistrationReview(root: HTMLElement, form: HTMLFormElement, customFieldDefs: FormField[]): void {
-  const firstName = readField(form, "firstName");
-  const lastName = readField(form, "lastName");
-  const fullName = [firstName, lastName].filter(Boolean).join(" ");
+export function updateRegistrationReview(
+  root: HTMLElement,
+  form: HTMLFormElement,
+  customFieldDefs: FormField[],
+  fullName: string,
+  ticket: readonly DescriptionListItem[] = [],
+): void {
   const email = readField(form, "email");
 
   const reviewEl = root.querySelector<HTMLElement>("[data-registration-review]");
@@ -124,7 +132,7 @@ export function updateRegistrationReview(root: HTMLElement, form: HTMLFormElemen
       <RegistrationReview
         fullName={fullName}
         email={email}
-        attendance={readAttendanceReview(form)}
+        attendance={[...readAttendanceReview(form), ...ticket]}
         customFields={visibleCustomFields(root, customFieldDefs)}
         customAnswers={readCustomFieldValues(form) as FormAnswers}
         form={form}

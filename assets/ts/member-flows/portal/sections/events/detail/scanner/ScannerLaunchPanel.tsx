@@ -1,12 +1,17 @@
 import type { ComponentChildren, ComponentProps } from "preact";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
 import { Button } from "../../../../../../ui/Button";
+import { Dialog } from "../../../../../../ui/Dialog";
+import { Alert } from "../../../../../../ui/Alert";
 import { ScannerCaptureContext } from "./ScannerCaptureContext";
 import { ScannerFeedback } from "./ScannerFeedback";
+import { scannerReadinessLabel, type ScannerReadiness } from "./ScannerConnectionStatus";
 
 /** The launch screen owns presentation; capture and uploads remain in the scanner controller. */
 export function ScannerLaunchPanel({
+  title = "Start scanning",
   connection,
+  connectionBelow = false,
   context,
   feedback,
   form,
@@ -14,25 +19,46 @@ export function ScannerLaunchPanel({
   capture,
   controls,
   pendingStart,
+  devicePreparation,
   cancelStart,
+  retryStart,
   children,
 }: {
+  title?: string;
   connection: ComponentChildren;
+  connectionBelow?: boolean;
   context?: ComponentProps<typeof ScannerCaptureContext>;
   feedback?: ComponentProps<typeof ScannerFeedback>;
   form: Pick<import("../../../../../../hooks/useContractForm").ContractForm<unknown>, "handlers">;
   busy: boolean;
   capture: () => void;
   controls: ComponentChildren;
-  pendingStart?: string;
+  pendingStart?: ScannerReadiness;
+  devicePreparation?: { ready: boolean; error: string };
   cancelStart: () => void;
+  retryStart: () => void;
   children?: ComponentChildren;
 }) {
+  const status =
+    pendingStart && devicePreparation
+      ? {
+          ...pendingStart,
+          ready: pendingStart.ready && devicePreparation.ready,
+          preparing:
+            pendingStart.preparing || (!devicePreparation.ready && !devicePreparation.error && !pendingStart.error),
+          error: devicePreparation.error || pendingStart.error,
+        }
+      : pendingStart;
   return (
     <Panel>
-      <PanelHeader title="Start scanning" />
-      <PanelBody>
-        {connection}
+      <PanelHeader title={title} />
+      <PanelBody class={connectionBelow ? "pk-stack" : undefined}>
+        {!connectionBelow && connection}
+        {devicePreparation?.error && !pendingStart && (
+          <Button type="button" variant="secondary" onClick={retryStart}>
+            Retry scanner preparation
+          </Button>
+        )}
         {context && <ScannerCaptureContext {...context} />}
         {feedback && <ScannerFeedback {...feedback} compact />}
         <form
@@ -47,17 +73,35 @@ export function ScannerLaunchPanel({
         >
           {controls}
         </form>
-        {pendingStart && (
-          <div role="status">
-            <p>{pendingStart}</p>
-            <Button type="button" variant="secondary" onClick={cancelStart}>
-              Cancel
-            </Button>
-          </div>
-        )}
-        <p class="pk-muted pk-small">Scans save on this device and upload automatically.</p>
+        {connectionBelow && connection}
         {children}
       </PanelBody>
+      <Dialog
+        open={Boolean(pendingStart)}
+        title={status?.badgeCollection ? "Prepare badge collection" : "Prepare scanner"}
+        confirmLabel="Retry preparation"
+        onConfirm={retryStart}
+        onCancel={cancelStart}
+        viewer
+        footerActions={
+          <>
+            <Button type="button" variant="ghost" onClick={cancelStart}>
+              Cancel
+            </Button>
+            {status?.error && !status.preparing && (
+              <Button type="button" onClick={retryStart}>
+                Retry preparation
+              </Button>
+            )}
+          </>
+        }
+      >
+        {status?.error && !status.preparing ? (
+          <Alert tone="warn">{status.error}</Alert>
+        ) : (
+          <p role="status">{status ? scannerReadinessLabel(status) : ""}</p>
+        )}
+      </Dialog>
     </Panel>
   );
 }

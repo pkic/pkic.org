@@ -1,4 +1,5 @@
 import { buildEventAudiencePredicate } from "../functions/_lib/services/events/visibility";
+import { readEventAudienceAccess } from "../functions/_lib/services/events/scanner-access";
 import { grantAdministrator } from "./helpers/administrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
@@ -376,6 +377,16 @@ describe("event audience viewer state", () => {
     expect(list.events[0]).toMatchObject({ slug: "public-event", viewer: null });
   });
 
+  it("links a public page only for a public event, though another event has a base path", async () => {
+    const member = await insertOrgRepresentative(env.DB, { category: "A" });
+    const memberToken = await createMemberSession(env.DB, member.userId, `viewer-page-${crypto.randomUUID()}`);
+    const eventId = await insertEvent("invited-event", "invitation_only", null, "/events/invited-event/");
+    await registerUserForEvent(eventId, member.userId);
+
+    const detail = await requestAudienceDetail("/api/v1/events/invited-event", memberToken);
+    expect(detail).toMatchObject({ slug: "invited-event", basePath: null });
+  });
+
   it("reports the caller's own registration status, attendance type, and waitlist state", async () => {
     const member = await insertOrgRepresentative(env.DB, { category: "A" });
     const memberToken = await createMemberSession(env.DB, member.userId, `viewer-registered-${crypto.randomUUID()}`);
@@ -388,6 +399,9 @@ describe("event audience viewer state", () => {
       registrationStatus: "registered",
       waitlisted: false,
       days: [],
+      paymentDue: false,
+      paymentProcessing: false,
+      paymentUnderReview: false,
       holdsWorkAddress: true,
     });
 
@@ -396,6 +410,9 @@ describe("event audience viewer state", () => {
       registrationStatus: "registered",
       waitlisted: false,
       days: [],
+      paymentDue: false,
+      paymentProcessing: false,
+      paymentUnderReview: false,
       holdsWorkAddress: true,
     });
   });
@@ -451,6 +468,9 @@ describe("event audience viewer state", () => {
       registrationStatus: "registered",
       waitlisted: true,
       days,
+      paymentDue: false,
+      paymentProcessing: false,
+      paymentUnderReview: false,
       holdsWorkAddress: true,
     });
 
@@ -534,13 +554,39 @@ describe("scoped scanner event discovery", () => {
     });
     const detail = await requestAudienceDetail("/api/v1/events/sponsor-private", token);
     expect(detail.scannerAccess).toEqual(list.events[0].scannerAccess);
-    expect(detail.sponsorLeadAccess).toBe(false);
+    expect(detail.sponsorLeadAccess).toBe(true);
     expect(JSON.stringify(detail)).not.toContain("private-contact");
     await env.DB.prepare("UPDATE sponsorships SET pipeline_stage='lapsed' WHERE id=?").bind(sponsorId).run();
     expect((await requestAudienceList("/api/v1/events", token)).events).toHaveLength(0);
     await env.DB.prepare("UPDATE sponsorships SET pipeline_stage='active' WHERE id=?").bind(sponsorId).run();
     await env.DB.prepare("UPDATE permission_grants SET revoked_at=? WHERE id=?").bind(now, id).run();
     expect((await requestAudienceList("/api/v1/events", token)).events).toEqual([]);
+  });
+  it("lets a verified sponsor mailbox contact discover only its invitation-only event", async () => {
+    const userId = await insertUser(env.DB, "contact@synthetic.test");
+    const token = await createAdminSession(env.DB, userId, "sponsor-mailbox-discovery");
+    const own = await insertEvent("mailbox-private", "invitation_only");
+    await insertEvent("other-mailbox-private", "invitation_only");
+    const sponsorId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    await env.DB.prepare(
+      "INSERT INTO sponsorships(id,sponsor_type,event_id,non_member_name,contact_email,pipeline_stage,created_at,updated_at) VALUES(?,'event',?,'Mailbox sponsor','contact@synthetic.test','active',?,?)",
+    )
+      .bind(sponsorId, own, now, now)
+      .run();
+    expect((await requestAudienceList("/api/v1/events", token)).events).toEqual([]);
+    await env.DB.prepare("UPDATE users SET email_verified_at=? WHERE id=?").bind(now, userId).run();
+    const list = await requestAudienceList("/api/v1/events", token);
+    expect(list.events.map((event) => event.slug)).toEqual(["mailbox-private"]);
+    expect(list.events[0]?.sponsorLeadAccess).toBe(true);
+    const access = await readEventAudienceAccess(
+      env.DB,
+      { userId, scannerGrants: [], admin: { identityType: "user", id: userId, email: "contact@synthetic.test" } },
+      [own],
+    );
+    expect(access.get(own)?.sponsorLeadAccess).toBe(true);
+    expect(access.get(own)?.scannerAccess?.sponsors ?? []).toEqual([]);
+    expect((await request("/api/v1/events/other-mailbox-private", token)).status).toBe(404);
   });
   it.each(["agenda:leads_view", "agenda:leads_export", "agenda:leads_capture"])(
     "discovers contacts only for an exact active view/export scope, independent of %s capture access",
@@ -563,7 +609,7 @@ describe("scoped scanner event discovery", () => {
       const grantId = await grant(userId, permission, "event_sponsor", sponsorId);
       const list = await requestAudienceList("/api/v1/events", token);
       const ownRow = list.events.find((event) => event.id === own);
-      expect(ownRow?.sponsorLeadAccess).toBe(permission !== "agenda:leads_capture");
+      expect(ownRow?.sponsorLeadAccess).toBe(true);
       expect(list.events.find((event) => event.id === other)?.sponsorLeadAccess).toBe(false);
       const detail = await requestAudienceDetail("/api/v1/events/contacts-private", token);
       expect(detail.sponsorLeadAccess).toBe(ownRow?.sponsorLeadAccess);

@@ -33,6 +33,11 @@
     gap: var(--pk-3);
   }
 
+  .pk-choice-cards[data-compact] .pk-choice-cards__grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(7rem, 100%), 1fr));
+    gap: var(--pk-2);
+  }
+
   .pk-choice-card {
     position: relative;
     display: flex;
@@ -71,7 +76,7 @@
   }
 
   /* The ticked mark follows the card's tone, so a chosen cost never reads as a gain. */
-  .pk-choice-card--cost .pk-choice-card__input.pk-check__input:checked {
+  .pk-choice-card--cost .pk-choice-card__input.pk-check__input[type="radio"]:not([role="switch"]):checked {
     border-color: var(--pk-warn-ink);
     background: var(--pk-warn-ink);
   }
@@ -98,7 +103,12 @@
     box-shadow: none;
   }
 
-  /* Chosen reads as a tick rather than a dot: this card is the one that applies. */
+  /* Chosen reads as a tick rather than a dot: this card is the one that applies, on a filled mark. */
+  .pk-choice-card__input.pk-check__input[type="radio"]:not([role="switch"]):checked {
+    border-color: var(--pk-accent-strong);
+    background: var(--pk-accent-strong);
+  }
+
   .pk-choice-card__input.pk-check__input[type="radio"]:not([role="switch"]):checked::after {
     inset: auto;
     inset-inline-start: 0.42rem;
@@ -110,6 +120,29 @@
     border-radius: 0;
     background: none;
     transform: rotate(45deg);
+  }
+
+  /* A compact card: the picture, then its title under it. */
+  .pk-choice-cards[data-compact] .pk-choice-card {
+    padding: var(--pk-2);
+    border-radius: var(--pk-radius);
+  }
+
+  /* The mark beside the title, so it never covers the picture. */
+  .pk-choice-cards[data-compact] .pk-choice-card__input.pk-check__input {
+    inset-block: auto var(--pk-2);
+    inset-inline-end: var(--pk-2);
+  }
+
+  .pk-choice-cards[data-compact] .pk-choice-card__title {
+    font-size: var(--pk-text-sm);
+  }
+
+  .pk-choice-card__picture {
+    display: block;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border-radius: calc(var(--pk-radius) - 2px);
   }
 
   .pk-choice-card__icon {

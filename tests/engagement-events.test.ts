@@ -1,8 +1,9 @@
-import { confirmWorkRegistration } from "./helpers/registration-confirmation";
+import { confirmWorkRegistration, createPendingRegistration } from "./helpers/registration-confirmation";
+import { signInRegistrant } from "./helpers/auth";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
-import { deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
+import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { callApi } from "./helpers/app";
 import { recordEngagement } from "../functions/_lib/services/engagement";
 import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
@@ -19,13 +20,17 @@ describe("engagement events", () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     await seedSessionAttendanceDays(env.DB, eventId, ["2026-12-01"], "virtual");
 
+    const { headers, identityId } = await signInRegistrant(env.DB, "jamie@pkic.org", {
+      firstName: "Jamie",
+      lastName: "Example",
+      organization: "PKI Consortium",
+    });
     const createResponse = await callApi(env, "/api/v1/events/pqc-2026/registrations", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...headers },
       body: JSON.stringify({
-        firstName: "Jamie",
-        lastName: "Example",
         email: "jamie@pkic.org",
+        identityId,
         dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
         sourceType: "direct",
         consents: [
@@ -42,21 +47,15 @@ describe("engagement events", () => {
       "SELECT action_type FROM engagement_events WHERE action_type = 'registration_created'",
     );
     expect(createdActions.length).toBe(1);
+    // The session proved the mailbox, so the signed-in registration is confirmed, and earns that point, at once.
+    expect(
+      await queryAll(env.DB, "SELECT action_type FROM engagement_events WHERE action_type = 'registration_confirmed'"),
+    ).toHaveLength(1);
 
-    const payload = (
-      await queryAll<{ payload_json: string }>(
-        env.DB,
-        "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' ORDER BY created_at DESC LIMIT 1",
-      )
-    )[0];
+    // A registration still awaiting its mailbox proof earns its confirmation point when confirmed.
+    const { confirmationToken: token } = await createPendingRegistration(env.DB, { email: "pending@pkic.org" });
 
-    const confirmationUrl = (
-      await deliveredEmailPayload<{ confirmationUrl: string }>(env.DB, env, payload.payload_json)
-    ).confirmationUrl;
-    const token = new URL(confirmationUrl).searchParams.get("token");
-    expect(token).toBeTruthy();
-
-    const confirmResponse = await confirmWorkRegistration(env, token as string);
+    const confirmResponse = await confirmWorkRegistration(env, token);
 
     expect(confirmResponse.status).toBe(200);
 
@@ -64,7 +63,7 @@ describe("engagement events", () => {
       env.DB,
       "SELECT action_type FROM engagement_events WHERE action_type = 'registration_confirmed'",
     );
-    expect(confirmedActions.length).toBe(1);
+    expect(confirmedActions.length).toBe(2);
   });
 
   it("supports community engagement without event scope", async () => {

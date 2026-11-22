@@ -1,5 +1,14 @@
 import { scannerPermission } from "../assets/shared/event-scanner-permissions";
-import { hasPermission, preparePermissionsAuthorizationGuard } from "../functions/_lib/auth/permissions";
+import {
+  computeGrantsForUser,
+  findUserPermissionRecipients,
+  hasPermission,
+  preparePermissionsAuthorizationGuard,
+} from "../functions/_lib/auth/permissions";
+import { listPermissionHolders } from "../functions/_lib/auth/permission-holders";
+import { EVENT_TEAM_ROLE_IDS } from "../assets/shared/schemas/event-team";
+import { eventDetailResponseSchema } from "../assets/shared/schemas/event-management";
+import { callApi } from "./helpers/app";
 import type { AuthAdmin } from "../functions/_lib/types";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
@@ -11,6 +20,74 @@ const fixture = createEventScannerFixture();
 const { eventId, operatorId, scanBody, scan } = fixture;
 describe("Independent scanner capabilities and badge expiry", () => {
   beforeEach(fixture.setup);
+  it("lets every event-team role scan and prepare offline data only for its own event", async () => {
+    await env.DB.prepare(
+      `UPDATE user_roles SET revoked_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+       WHERE user_id=? AND role_id='role-admin' AND revoked_at IS NULL`,
+    )
+      .bind(operatorId)
+      .run();
+    const context = { type: "event", id: eventId } as const;
+    const manifestUrl = `/api/v1/events/scan-test/offline-eligibility?${new URLSearchParams({
+      epochId: fixture.epochId,
+      deviceId: fixture.deviceId,
+    })}`;
+    const headers = { authorization: `Bearer ${fixture.token}` };
+    const globalOrganizerId = crypto.randomUUID();
+    await env.DB.prepare("INSERT INTO user_roles(id,user_id,role_id,created_at) VALUES(?,?,'role-event_organizer',?)")
+      .bind(globalOrganizerId, operatorId, new Date().toISOString())
+      .run();
+
+    expect((await callApi(env, manifestUrl, { headers })).status).toBe(403);
+    const globalDetail = await callApi(env, "/api/v1/events/scan-test", { headers });
+    expect(eventDetailResponseSchema.parse(await globalDetail.json()).event.scannerAccess).toBeUndefined();
+    expect(
+      (await listPermissionHolders(env.DB, { permission: "agenda:check", context, limit: 10 })).some(
+        (holder) => holder.id === operatorId,
+      ),
+    ).toBe(false);
+    expect((await findUserPermissionRecipients(env.DB, "agenda:check")).some((row) => row.id === operatorId)).toBe(
+      false,
+    );
+    await env.DB.prepare("UPDATE user_roles SET revoked_at=? WHERE id=?")
+      .bind(new Date().toISOString(), globalOrganizerId)
+      .run();
+    for (const roleId of Object.values(EVENT_TEAM_ROLE_IDS)) {
+      const assignmentId = crypto.randomUUID();
+      await env.DB.prepare(
+        `INSERT INTO user_roles(id,user_id,role_id,context_type,context_id,created_at)
+         VALUES(?,?,?,'event',?,?)`,
+      )
+        .bind(assignmentId, operatorId, roleId, eventId, new Date().toISOString())
+        .run();
+
+      const grants = await computeGrantsForUser(env.DB, operatorId);
+      const actor = { identityType: "user", id: operatorId, grants } as AuthAdmin;
+      for (const permission of ["agenda:check", "agenda:admit", "agenda:attendance_record"] as const) {
+        expect(hasPermission(actor, permission, context)).toBe(true);
+        expect(hasPermission(actor, permission, { type: "event", id: crypto.randomUUID() })).toBe(false);
+      }
+      expect(hasPermission(actor, "agenda:admit_exceptions", context)).toBe(false);
+      expect(
+        (await listPermissionHolders(env.DB, { permission: "agenda:check", context, limit: 10 })).some(
+          (holder) => holder.id === operatorId,
+        ),
+      ).toBe(true);
+      for (const action of ["check", "admission", "attendance"] as const)
+        expect((await scan(scanBody({ action }))).status).toBe(200);
+      expect((await callApi(env, manifestUrl, { headers })).status).toBe(200);
+      const detail = await callApi(env, "/api/v1/events/scan-test", { headers });
+      expect(detail.status).toBe(200);
+      expect(eventDetailResponseSchema.parse(await detail.json()).event.scannerAccess?.canScan).toBe(true);
+
+      await env.DB.prepare("UPDATE user_roles SET revoked_at=? WHERE id=?")
+        .bind(new Date().toISOString(), assignmentId)
+        .run();
+    }
+    await env.DB.prepare("UPDATE user_roles SET revoked_at=NULL WHERE id=?").bind(globalOrganizerId).run();
+    expect((await scan(scanBody({ action: "check" }))).status).toBe(403);
+    expect((await callApi(env, manifestUrl, { headers })).status).toBe(403);
+  });
   it("keeps delegated token restrictions authoritative for legacy grants", () => {
     const actor = {
       scopeRestricted: true,

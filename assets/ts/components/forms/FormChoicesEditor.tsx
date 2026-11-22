@@ -48,6 +48,7 @@ export function FormChoicesEditor({
                 type="button"
                 class="pk-formq__option-remove"
                 aria-label={`Remove choice ${String(at + 1)}`}
+                title={`Remove choice ${String(at + 1)}`}
                 onClick={() => {
                   update({ optionsText: options.filter((_, i) => i !== at).join("\n") });
                   onRemove?.(at);

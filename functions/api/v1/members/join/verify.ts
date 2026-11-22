@@ -2,43 +2,78 @@ import {
   memberJoinVerifyResponseSchema,
   memberJoinVerifyRouteSchema,
 } from "../../../../../assets/shared/schemas/member-join";
-import { createSessionEstablishedResponse, prepareMagicLinkVerificationHttp } from "../../../../_lib/auth/http-flow";
-import { serializeUserSessionCookie, signUserSessionToken } from "../../../../_lib/auth/user-session";
-import { sessionExpiresAtToExp } from "../../../../_lib/auth/session-engine";
-import { resolveMemberSessionTtlHours } from "../../../../_lib/auth/session-policy";
+import {
+  getUserSessionCookieToken,
+  refreshUserSessionFromRequest,
+  resolveUserSessionFromRequest,
+  serializeUserSessionCookie,
+  USER_SESSION_TOKEN_HEADER,
+} from "../../../../_lib/auth/user-session";
+import { requestDb, type AdminContext } from "../../../../_lib/db/context";
+import { refuseIneligibleWorkEmail } from "../../../../_lib/email-domains/work-email-screen";
 import { jsonPrivate } from "../../../../_lib/http";
 import { openApiRoute } from "../../../../_lib/openapi/route";
+import { enforceRateLimit } from "../../../../_lib/rate-limit";
+import { getClientIp, requireInternalSecret } from "../../../../_lib/request";
 import { verifyMemberJoin } from "../../../../_lib/services/membership/join/verify";
-import type { AdminContext } from "../../../../_lib/db/context";
+import { resolveRepresentationJoinPath } from "../../../../_lib/services/membership/join/representation-path";
+import { AppError } from "../../../../_lib/errors";
+import { normalizeEmail } from "../../../../_lib/validation";
 
 const RATE_LIMIT_NAMESPACE = "membership-join-verify:ip";
 
 export const MembersJoinVerifyPost = openApiRoute(memberJoinVerifyRouteSchema, async (c: AdminContext, data) => {
-  const http = await prepareMagicLinkVerificationHttp(c, RATE_LIMIT_NAMESPACE);
-  const result = await verifyMemberJoin(http.db, {
-    token: data.body.token,
-    organizationId: data.body.organizationId,
-    organizationName: data.body.organizationName,
-    domain: data.body.domain,
-    continueAsIndividual: data.body.continueAsIndividual,
-    signingSecret: http.secret,
-    applicationTtlSeconds: 15 * 60,
-    sessionTtlHours: resolveMemberSessionTtlHours(c.env.MEMBER_SESSION_TTL_HOURS),
+  const db = requestDb(c);
+  const session = await resolveUserSessionFromRequest(db, c.req.raw, c.env);
+  await enforceRateLimit({
+    binding: c.env.IP_RATE_LIMITER,
+    namespace: RATE_LIMIT_NAMESPACE,
+    key: getClientIp(c.req.raw),
   });
-  if (result.status !== "organization_session_ready") {
+  const email = normalizeEmail(session.identity.email);
+  const { identityId } = data.body;
+  if (identityId) {
+    // Only a representation the session holds now; the address rules were met when it was added.
+    const representation = session.actingIdentities.find((identity) => identity.id === identityId);
+    if (
+      !representation?.organizationId ||
+      data.body.unaffiliatedAttestation ||
+      data.body.organizationId ||
+      data.body.continueAsIndividual
+    )
+      throw new AppError(422, "MEMBERSHIP_CATEGORY_TYPE_MISMATCH", "Choose a representation you hold to apply as.");
+    const result = await resolveRepresentationJoinPath(db, {
+      userId: session.identity.id,
+      email,
+      organizationId: representation.organizationId,
+      signingSecret: requireInternalSecret(c.env),
+    });
+    return jsonPrivate(memberJoinVerifyResponseSchema.parse(result));
+  }
+  // The same work-email rule the sign-in card applies: a personal mailbox joins only as an individual.
+  refuseIneligibleWorkEmail({ email, unaffiliatedAttestation: data.body.unaffiliatedAttestation });
+  const result = await verifyMemberJoin(db, {
+    userId: session.identity.id,
+    email,
+    applicantKind: data.body.unaffiliatedAttestation ? "individual" : "organization",
+    organizationId: data.body.organizationId,
+    continueAsIndividual: data.body.continueAsIndividual,
+    signingSecret: requireInternalSecret(c.env),
+    applicationTtlSeconds: 15 * 60,
+  });
+  if (result.status !== "organization_identity_ready") {
     return jsonPrivate(memberJoinVerifyResponseSchema.parse(result));
   }
 
-  const body = memberJoinVerifyResponseSchema.parse({
-    status: "organization_access_ready",
-    expiresAt: result.expiresAt,
-    member: { ...result.member, sessionId: result.sessionId, expiresAt: result.expiresAt },
+  // The person now represents the member organization, so their session continues as that representation.
+  const { token } = await refreshUserSessionFromRequest(db, c.req.raw, c.env, {
+    actingIdentityId: result.identityId,
   });
-  const token = await signUserSessionToken(http.secret, {
-    sub: result.userId,
-    sid: result.sessionId,
-    exp: sessionExpiresAtToExp(result.expiresAt),
-    identityId: result.identityId,
-  });
-  return createSessionEstablishedResponse(body, serializeUserSessionCookie(token, c.req.raw));
+  const response = jsonPrivate(memberJoinVerifyResponseSchema.parse({ status: "organization_access_ready" }));
+  if (getUserSessionCookieToken(c.req.raw)) {
+    response.headers.append("Set-Cookie", serializeUserSessionCookie(token, c.req.raw));
+  } else {
+    response.headers.set(USER_SESSION_TOKEN_HEADER, token);
+  }
+  return response;
 });

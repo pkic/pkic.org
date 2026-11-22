@@ -2,8 +2,7 @@ import contentMediaPaths from "virtual:pkic-content-media";
 import { resolveContentMediaUrl } from "../../../assets/shared/content-media-url";
 import type { z } from "zod";
 import { parseJsonSafe } from "../utils/json";
-import { eventVirtualRoomRoute } from "../../../assets/shared/event-participation-link";
-import { buildEventFlowPath } from "../../../assets/shared/event-flow-paths";
+import { buildEventFlowPath, deriveEventBasePath } from "../../../assets/shared/event-flow-paths";
 import { proposalSessionTypeSchema } from "../../../assets/shared/schemas/proposal-management";
 import { AppError } from "../errors";
 import type { EventRecord } from "./event-types";
@@ -97,29 +96,6 @@ export interface EventFrontendRoutes {
   fallbackKeys: string[];
 }
 
-type EventEmailSource = Pick<EventRecord, "name" | "slug" | "base_path" | "starts_at" | "settings_json"> &
-  Partial<Pick<EventRecord, "timezone" | "ends_at">>;
-
-export interface EventEmailVariables {
-  eventName: string;
-  eventSlug: string;
-  eventTimezone: string;
-  eventStartsAt: string;
-  eventEndsAt: string;
-  eventUrl: string;
-  sponsorsImageUrl: string | null;
-  virtualRoomUrl: string;
-}
-
-export function deriveEventBasePath(event: Pick<EventRecord, "slug" | "base_path" | "starts_at">): string {
-  if (event.base_path) return event.base_path;
-  if (event.starts_at) {
-    const year = event.starts_at.substring(0, 4);
-    if (/^\d{4}$/.test(year)) return `/events/${year}/${event.slug}/`;
-  }
-  return `/events/${event.slug}/`;
-}
-
 function defaultFrontendPaths(
   event: Pick<EventRecord, "slug" | "base_path" | "starts_at">,
 ): Omit<EventFrontendRoutes, "usedFallback" | "fallbackKeys"> {
@@ -157,6 +133,16 @@ const OFFERED_REGISTRATION_MODES = new Set(["open", "invite_or_open", "public", 
  * to them; null when the event has no public page or registration is closed.
  * Every event projection links registration through this one path.
  */
+/** Only a public event has public pages; any other event is visible only after sign-in, in the portal. */
+export function eventHasPublicPages(event: Pick<EventRecord, "visibility">): boolean {
+  return event.visibility === "public";
+}
+
+/** The event's public page, when it has one to link to. */
+export function eventPublicPagePath(event: Pick<EventRecord, "base_path" | "visibility">): string | null {
+  return eventHasPublicPages(event) ? event.base_path : null;
+}
+
 export function eventRegistrationPath(
   event: Pick<EventRecord, "slug" | "base_path" | "starts_at" | "settings_json" | "registration_mode"> &
     Partial<Pick<EventRecord, "source_mode">>,
@@ -206,15 +192,6 @@ export function resolveEventFrontendRoutes(
   };
 }
 
-export function resolveSponsorsImageUrl(
-  event: Pick<EventRecord, "slug" | "base_path" | "starts_at" | "settings_json">,
-  siteBaseUrl: string,
-): string | null {
-  const settings = parseJsonSafe<{ sponsorsImageUrl?: string | null }>(event.settings_json, {});
-  if ("sponsorsImageUrl" in settings) return settings.sponsorsImageUrl?.trim() || null;
-  return `${siteBaseUrl}${deriveEventBasePath(event)}sponsors.jpg`;
-}
-
 const publishedContentMedia = new Set(contentMediaPaths);
 
 export function resolveHeroImageUrl(event: Pick<EventRecord, "settings_json">): string | null {
@@ -225,31 +202,4 @@ export function resolveHeroImageUrl(event: Pick<EventRecord, "settings_json">): 
 
 export function resolveEventVenue(event: Pick<EventRecord, "settings_json">): string | null {
   return parseJsonSafe<EventSettings>(event.settings_json, {}).venue?.trim() || null;
-}
-
-export function resolveEventVirtualUrl(
-  event: Pick<EventRecord, "slug" | "base_path" | "starts_at" | "settings_json">,
-  siteBaseUrl: string,
-): string {
-  return new URL(`/portal/#${eventVirtualRoomRoute(event.slug)}`, siteBaseUrl).href;
-}
-
-export function resolveEventUrl(
-  event: Pick<EventRecord, "slug" | "base_path" | "starts_at">,
-  siteBaseUrl: string,
-): string {
-  return `${siteBaseUrl}${deriveEventBasePath(event)}`;
-}
-
-export function buildEventEmailVariables(event: EventEmailSource, siteBaseUrl: string): EventEmailVariables {
-  return {
-    eventName: event.name,
-    eventSlug: event.slug,
-    eventTimezone: event.timezone ?? "",
-    eventStartsAt: event.starts_at ?? "",
-    eventEndsAt: event.ends_at ?? "",
-    eventUrl: resolveEventUrl(event, siteBaseUrl),
-    virtualRoomUrl: resolveEventVirtualUrl(event, siteBaseUrl),
-    sponsorsImageUrl: resolveSponsorsImageUrl(event, siteBaseUrl),
-  };
 }

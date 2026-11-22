@@ -72,16 +72,6 @@ event:
 
 terms:
   attendee:
-    - termKey: privacy-policy
-      version: v1
-      required: true
-      contentRef: /privacy-policy/
-      displayText: I have read and accept the privacy policy.
-    - termKey: code-of-conduct
-      version: v1
-      required: true
-      contentRef: /code-of-conduct/
-      displayText: I have read and agree to follow the code of conduct.
     - termKey: photo-policy
       version: v1
       required: true
@@ -89,7 +79,7 @@ terms:
     - termKey: sponsor-data-sharing
       version: v1
       required: false
-      helpText: "Our sponsors cover the venue, catering, and production costs that keep this event free. By opting in, you allow us to share your professional profile (name, organization, job title, and email) with the sponsors of this specific event for networking and follow-up purposes."
+      helpText: "Our sponsors help cover the venue, catering, and production costs. By opting in, you allow us to share your professional profile (name, organization, job title, and email) with the sponsors of this specific event for networking and follow-up purposes."
       displayText: I consent to the PKI Consortium sharing my professional profile with event sponsors and partners.
   speaker:
     - termKey: physical-presence

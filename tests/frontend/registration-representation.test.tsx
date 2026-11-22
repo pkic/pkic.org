@@ -42,6 +42,46 @@ describe("registration representation editing", () => {
     await vi.waitFor(() => expect(container.textContent).toContain("Registration updated."));
   });
 
+  it("lists only organizations for an account on a work address, as when registering", async () => {
+    const requests = installApi(readResponse({ identityId: WORK.id }), {
+      identities: [PERSONAL, WORK],
+      workEmail: true,
+    });
+    const container = await mount();
+    await click(button(container, "Edit details"));
+    await vi.waitFor(() => expect(container.querySelector('[role="combobox"]')).not.toBeNull());
+    await click(container.querySelector<HTMLElement>('[role="combobox"]'));
+    // The server lists the identities; the edit view asks it for organization ones only.
+    await vi.waitFor(() =>
+      expect(
+        requests.some(
+          ({ path, search }) =>
+            path === "/api/v1/users/current/identities" &&
+            new URLSearchParams(search).get("organizationOnly") === "true",
+        ),
+      ).toBe(true),
+    );
+  });
+
+  it("offers the personal identity on a work address the person said is personal at sign-in", async () => {
+    const requests = installApi(readResponse({ identityId: WORK.id }), {
+      identities: [PERSONAL, WORK],
+      workEmail: true,
+      personalAddress: true,
+    });
+    const container = await mount();
+    await click(button(container, "Edit details"));
+    await vi.waitFor(() => expect(container.querySelector('[role="combobox"]')).not.toBeNull());
+    await click(container.querySelector<HTMLElement>('[role="combobox"]'));
+    await vi.waitFor(() => expect(document.querySelector(`[role="option"][data-key="${PERSONAL.id}"]`)).not.toBeNull());
+    expect(
+      requests.some(
+        ({ path, search }) =>
+          path === "/api/v1/users/current/identities" && new URLSearchParams(search).get("organizationOnly") === "true",
+      ),
+    ).toBe(false);
+  });
+
   it("lets the owner replace an ended identity even when the recipient differs from the account", async () => {
     const read = readResponse({ identityId: WORK.id });
     read.user.email = "ada@analytical.example";

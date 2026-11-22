@@ -3,6 +3,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { LIVE_OVERLAY_PROTOCOL_PREFIX, liveRoomRefusalCloseCode } from "../../assets/shared/schemas/live-session-room";
+import { LIVE_KEEP_ALIVE_MS, LIVE_SILENCE_MS, watchLiveSocket } from "../../assets/ts/live-session/live-socket-retry";
 import { useLiveRoom } from "../../assets/ts/live-session/useLiveRoom";
 import { useLiveRoomProgram } from "../../assets/ts/live-session/useLiveRoomProgram";
 import { fakeLiveSockets, LIVE_OCCURRENCE, liveSnapshot } from "./helpers/live-room-socket";
@@ -172,4 +173,92 @@ it("tells a screen when the room sends what its page cannot read, as after a dep
   // The next snapshot it can read brings it back.
   await act(() => sockets.latest().deliver(liveSnapshot()));
   expect(seen?.status).toBe("live");
+});
+
+it("drops a room connection that went silent, as after a network change or sleep, and starts over", async () => {
+  const sockets = fakeLiveSockets();
+  let seen: ReturnType<typeof useLiveRoom> | undefined;
+  function Probe() {
+    seen = useLiveRoom({ slug: "pqc-2026", occurrenceId: LIVE_OCCURRENCE, createSocket: sockets.factory });
+    return null;
+  }
+  host = document.body.appendChild(document.createElement("div"));
+  await act(() => render(<Probe />, host!));
+  sockets.latest().open();
+  await act(() => sockets.latest().deliver(liveSnapshot()));
+  expect(seen?.status).toBe("live");
+
+  // It answers its pings for a while, then nothing comes back and no close arrives either.
+  for (let tick = 0; tick < 3; tick += 1) {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(LIVE_KEEP_ALIVE_MS);
+    });
+    await act(() => {
+      sockets.latest().dispatchEvent(new MessageEvent("message", { data: "pong" }));
+    });
+  }
+  expect(sockets.sockets).toHaveLength(1);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(LIVE_SILENCE_MS + LIVE_KEEP_ALIVE_MS);
+  });
+  expect(seen?.status).toBe("offline");
+  expect(seen?.state?.session.title).toBe(liveSnapshot().session.title);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1_000);
+  });
+  expect(sockets.sockets).toHaveLength(2);
+  sockets.latest().open();
+  await act(() => sockets.latest().deliver(liveSnapshot()));
+  expect(seen?.status).toBe("live");
+});
+
+it("tries again at once when the network comes back, instead of waiting out its backoff", async () => {
+  const sockets = fakeLiveSockets();
+  function Probe() {
+    useLiveRoomProgram({
+      slug: "pqc-2026",
+      roomId: "30000000-0000-4000-8000-000000000001",
+      overlayToken: "access",
+      createSocket: sockets.factory,
+      persistent: {},
+    });
+    return null;
+  }
+  host = document.body.appendChild(document.createElement("div"));
+  await act(() => render(<Probe />, host!));
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    await act(() => sockets.latest().refuse(1006, ""));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+  }
+  await act(() => sockets.latest().refuse(1006, ""));
+  const waiting = sockets.sockets.length;
+  await act(() => {
+    window.dispatchEvent(new Event("online"));
+  });
+  expect(sockets.sockets).toHaveLength(waiting + 1);
+});
+
+it("keeps a connection that answers in a background tab, whose timers run a minute late", async () => {
+  const sent: string[] = [];
+  const socket = { readyState: WebSocket.OPEN, send: (data: string) => sent.push(data) } as unknown as WebSocket;
+  let now = 0;
+  const lost = vi.fn();
+  const watch = watchLiveSocket(socket, lost, { now: () => now });
+  for (let tick = 0; tick < 5; tick += 1) {
+    // The browser fires each keep-alive a minute after the last one; the server answers at once.
+    now += 60_000;
+    await vi.advanceTimersByTimeAsync(LIVE_KEEP_ALIVE_MS);
+    watch.heard();
+  }
+  expect(sent).toHaveLength(5);
+  expect(lost).not.toHaveBeenCalled();
+  // A question that stays unanswered is still caught, at the next late tick.
+  now += 60_000;
+  await vi.advanceTimersByTimeAsync(LIVE_KEEP_ALIVE_MS);
+  now += 60_000;
+  await vi.advanceTimersByTimeAsync(LIVE_KEEP_ALIVE_MS);
+  expect(lost).toHaveBeenCalledTimes(1);
+  watch.stop();
 });

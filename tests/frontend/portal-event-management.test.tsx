@@ -64,15 +64,7 @@ describe("portal event management", () => {
 
     // Every name the form announces resolves to a real control: `controlFor`
     // throws when a label points at nothing, which is the assertion.
-    for (const label of [
-      "Event name",
-      "Slug",
-      "Event profile",
-      "Visibility",
-      "City",
-      "Country",
-      "Peer invitation limit",
-    ]) {
+    for (const label of ["Event name", "Slug", "Event profile", "Visibility", "City", "Country"]) {
       expect(controlFor(container, label).id).not.toBe("");
     }
     expect(controlFor(container, "Event name").required).toBe(true);
@@ -84,10 +76,10 @@ describe("portal event management", () => {
 
     // The guidance is wired to the control it explains, not merely placed
     // beside it.
-    const limit = controlFor(container, "Peer invitation limit");
-    const describedBy = limit.getAttribute("aria-describedby");
+    const slug = controlFor(container, "Slug");
+    const describedBy = slug.getAttribute("aria-describedby");
     expect(describedBy).toBeTruthy();
-    expect(container.querySelector(`#${describedBy}`)?.textContent).toContain("Set this to 0 to disable peer");
+    expect(container.querySelector(`#${describedBy}`)?.textContent).toContain("Used in the event's address");
   });
 
   it("blocks the create form, and says why, when the catalog offers no standalone profile", async () => {

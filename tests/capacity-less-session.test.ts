@@ -36,7 +36,10 @@ async function signIn(email: string) {
   if (!outbox) throw new Error("Expected a sign-in email for a user with no capacity");
   const delivered = await deliveredEmailPayload<{ magicLinkUrl: string }>(env.DB, env, outbox.payload_json);
   const token = new URLSearchParams(new URL(delivered.magicLinkUrl).hash.split("?", 2)[1]).get("token");
-  const verified = await call("/api/v1/auth/verify-link", { method: "POST", body: JSON.stringify({ token }) });
+  const verified = await call("/api/v1/auth/verify-link", {
+    method: "POST",
+    body: JSON.stringify({ token, organization: { personal: true } }),
+  });
   expect(verified.status).toBe(200);
   return {
     session: userAuthSessionResponseSchema.parse(await verified.json()),

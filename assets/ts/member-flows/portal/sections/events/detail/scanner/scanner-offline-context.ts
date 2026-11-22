@@ -8,6 +8,7 @@ import {
 import {
   scannerRecoveryEpochSchema,
   SCANNER_RECOVERY_EPOCH_LIMIT,
+  scannerLeadLeaseSchema,
 } from "../../../../../../../shared/schemas/event-scanner-devices";
 import { readActiveUserSession, scannerUploadSuspended } from "../../../../../../shared/pending-user-logout";
 import type { PortalSession } from "../../../../types";
@@ -16,9 +17,32 @@ import type { EligibilityManifest } from "./eligibility-manifest";
 import { SCANNER_EPOCH_STORE, openScanStorage, idbRequest, idbCompletion } from "./outbox-storage";
 import type { EventScanRequest } from "../../../../../../../shared/schemas/event-participation-scanning";
 import { portalHashPath } from "../../../../hash-route";
+import { databaseIdSchema } from "../../../../../../../shared/schemas/identifiers";
+
+const SCANNER_PREPARED_CONTEXT_LIMIT = 100;
+
+export type ScannerOfflinePreparation = Pick<
+  EligibilityManifest,
+  | "storageError"
+  | "enrollment"
+  | "operatorUserId"
+  | "occurrenceId"
+  | "roomId"
+  | "publishedRevision"
+  | "nativeEventContext"
+  | "serverNow"
+  | "expiresAt"
+> &
+  Partial<Pick<EligibilityManifest, "validUntil">>;
 
 const storedEpochSchema = scannerRecoveryEpochSchema
-  .safeExtend({ key: z.string(), collectorContext: scannerOfflineContextSchema.optional() })
+  .safeExtend({
+    key: z.string(),
+    leadLease: scannerLeadLeaseSchema.optional(),
+    leadLeaseReceivedAt: z.number().int().nonnegative().optional(),
+    collectorContext: scannerOfflineContextSchema.optional(),
+    collectorContexts: scannerOfflineContextSchema.array().max(SCANNER_PREPARED_CONTEXT_LIMIT).optional(),
+  })
   .refine(
     (epoch) =>
       epoch.key === JSON.stringify([epoch.eventId, epoch.operatorUserId, epoch.deviceId]) ||
@@ -28,8 +52,9 @@ const storedEpochSchema = scannerRecoveryEpochSchema
     "Scanner storage key must match its bounded canonical owner tuple.",
   );
 
-/** An actual failed transport permits only unverified collection, never authentication. */
+/** An unavailable online session permits only a bounded saved scanner, never portal authentication. */
 export const scannerTransportUnavailable = signal(false);
+export const scannerCaptureActive = signal(false);
 
 export async function readScannerOfflineEpoch(context: ScannerOfflineContext): Promise<ScannerEpoch> {
   await assertScannerOfflineContext(context);
@@ -51,11 +76,58 @@ export function scannerCollectorPath(hash: string): string | null {
   const path = portalHashPath(hash);
   const parsed = scannerOfflineRouteSchema.safeParse(path);
   const query = new URLSearchParams(hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "");
-  if ([...query.keys()].some((key) => key !== "scannerTab" && key !== "scanAction")) return null;
-  if (query.has("scannerTab") && !["scan", "recent", "diagnostics"].includes(query.get("scannerTab")!)) return null;
-  if (query.has("scanAction") && !["check", "attendance", "checkout", "admission"].includes(query.get("scanAction")!))
+  if ([...query.keys()].some((key) => !["scannerTab", "scanAction", "scannerPurpose", "offlineContext"].includes(key)))
     return null;
+  if (query.has("offlineContext") && !databaseIdSchema.safeParse(query.get("offlineContext")).success) return null;
+  if (query.has("scannerPurpose") && !["scan", "collection"].includes(query.get("scannerPurpose")!)) return null;
+  if (query.has("scannerTab") && !["scan", "recent", "diagnostics"].includes(query.get("scannerTab")!)) return null;
+  if (
+    query.has("scanAction") &&
+    !["check", "attendance", "checkout", "admission", "lead"].includes(query.get("scanAction")!)
+  )
+    return null;
+  if (query.get("scanAction") === "lead" && !/\/leads$|\/sponsors\/[^/]+\/scanner$/u.test(path)) return null;
   return parsed.success ? parsed.data : null;
+}
+
+function preparedContexts(epoch: { collectorContext?: unknown; collectorContexts?: unknown }): ScannerOfflineContext[] {
+  const source = Array.isArray(epoch.collectorContexts)
+    ? epoch.collectorContexts
+    : epoch.collectorContext === undefined
+      ? []
+      : [epoch.collectorContext];
+  return source.flatMap((raw) => {
+    const parsed = scannerOfflineContextSchema.safeParse(raw);
+    return parsed.success ? [parsed.data] : [];
+  });
+}
+
+function samePreparedTask(a: ScannerOfflineContext, b: ScannerOfflineContext): boolean {
+  return (
+    a.route === b.route &&
+    a.sessionId === b.sessionId &&
+    a.action === b.action &&
+    a.sponsorId === b.sponsorId &&
+    (a.purpose ?? "scan") === (b.purpose ?? "scan") &&
+    a.occurrenceId === b.occurrenceId &&
+    a.roomId === b.roomId
+  );
+}
+
+function keepPreparedDeadline(
+  next: ScannerOfflineContext,
+  previous: ScannerOfflineContext | undefined,
+): ScannerOfflineContext | null {
+  if (!previous) return next;
+  const contextId = previous.contextId ?? next.contextId;
+  if (previous.serverNow !== next.serverNow) return { ...next, contextId };
+  if (!scannerContextCurrent(previous)) return null;
+  return {
+    ...next,
+    contextId,
+    savedAt: previous.savedAt,
+    expiresAt: new Date(Math.min(Date.parse(previous.expiresAt), Date.parse(next.expiresAt))).toISOString(),
+  };
 }
 
 export function scannerContextCurrent(context: ScannerOfflineContext, now = Date.now()): boolean {
@@ -65,12 +137,92 @@ export function scannerContextCurrent(context: ScannerOfflineContext, now = Date
   );
 }
 
+function contextBelongsToEpoch(epoch: ScannerEpoch, context: ScannerOfflineContext): boolean {
+  return (
+    epoch.eventId === context.slug &&
+    epoch.operatorUserId === context.operatorUserId &&
+    epoch.deviceId === context.deviceId &&
+    epoch.epochId === context.epochId
+  );
+}
+
+function contextMatchesEpoch(epoch: ScannerEpoch, context: ScannerOfflineContext, now = Date.now()): boolean {
+  return epoch.state === "open" && contextBelongsToEpoch(epoch, context) && scannerContextCurrent(context, now);
+}
+
+function resumableContextMatchesEpoch(epoch: ScannerEpoch, context: ScannerOfflineContext, now = Date.now()): boolean {
+  return (
+    (epoch.state === "open" || epoch.state === "closing" || epoch.state === "closed") &&
+    epoch.key === JSON.stringify([epoch.eventId, epoch.operatorUserId, epoch.deviceId]) &&
+    contextBelongsToEpoch(epoch, context) &&
+    scannerContextCurrent(context, now)
+  );
+}
+
+/** A saved local lease can outlast server availability and the web sign-in session. */
+export function scannerOfflineLeaseCurrent(
+  epoch: ScannerEpoch & { collectorContext?: unknown; collectorContexts?: unknown },
+  now = Date.now(),
+): boolean {
+  return preparedContexts(epoch).some((context) => contextMatchesEpoch(epoch, context, now));
+}
+
+/** A newly received lead lease is usable before its offline context has been saved. */
+export function scannerLeadLeaseCurrent(epoch: ScannerEpoch, now = Date.now()): boolean {
+  const lease = epoch.leadLease;
+  const receivedAt = epoch.leadLeaseReceivedAt;
+  if (!lease || receivedAt === undefined) return false;
+  const duration = Date.parse(lease.expiresAt) - Date.parse(lease.serverNow);
+  return (
+    epoch.state === "open" &&
+    Number.isFinite(duration) &&
+    duration > 0 &&
+    now >= receivedAt &&
+    now < receivedAt + duration
+  );
+}
+
+/** List only current leases for the locally signed-in operator, without restoring portal access. */
+export async function listPreparedScannerContexts(): Promise<ScannerOfflineContext[]> {
+  const active = await readActiveUserSession();
+  if (!active || (await scannerUploadSuspended(active.operatorUserId, active.sessionId))) return [];
+  const db = await openScanStorage();
+  try {
+    const tx = db.transaction(SCANNER_EPOCH_STORE, "readonly");
+    const records = await idbRequest<unknown[]>(
+      tx
+        .objectStore(SCANNER_EPOCH_STORE)
+        .index("scope")
+        .getAll(
+          IDBKeyRange.bound([active.operatorUserId], [active.operatorUserId, []]),
+          SCANNER_RECOVERY_EPOCH_LIMIT + 1,
+        ),
+    );
+    await idbCompletion(tx);
+    if (records.length > SCANNER_RECOVERY_EPOCH_LIMIT) return [];
+    return records.flatMap((raw) => {
+      const parsed = storedEpochSchema.safeParse(raw);
+      if (!parsed.success) return [];
+      return preparedContexts(parsed.data).filter(
+        (context) => context.sessionId === active.sessionId && resumableContextMatchesEpoch(parsed.data, context),
+      );
+    });
+  } finally {
+    db.close();
+  }
+}
+
 export async function saveScannerOfflineContext(input: {
   slug: string;
   session: PortalSession;
   epoch: ScannerEpoch;
-  manifest: EligibilityManifest;
+  manifest: ScannerOfflinePreparation;
   action: EventScanRequest["action"];
+  sponsorId?: string;
+  purpose?: "scan" | "collection";
+  allowedActions?: readonly EventScanRequest["action"][];
+  targetLabel?: string;
+  roomLabel?: string;
   signal?: AbortSignal;
   prepareCode: (signal: AbortSignal) => Promise<boolean>;
 }): Promise<ScannerOfflineContext | null> {
@@ -78,9 +230,14 @@ export async function saveScannerOfflineContext(input: {
   const route = scannerCollectorPath(window.location.hash);
   if (
     !route ||
-    (route.startsWith("/groups/")
-      ? route.split("/")[4] !== manifest.enrollment?.eventId
-      : route !== `/events/${encodeURIComponent(input.slug)}/scanner`)
+    (input.action === "lead"
+      ? !input.sponsorId ||
+        (route !== `/events/${encodeURIComponent(input.slug)}/leads` &&
+          route !== `/events/${encodeURIComponent(input.slug)}/sponsors/${input.sponsorId}/scanner`)
+      : input.sponsorId ||
+        (route.startsWith("/groups/")
+          ? route.split("/")[4] !== manifest.enrollment?.eventId
+          : route !== `/events/${encodeURIComponent(input.slug)}/scanner`))
   )
     return null;
   if (
@@ -93,7 +250,13 @@ export async function saveScannerOfflineContext(input: {
     !manifest.enrollment ||
     manifest.enrollment.deviceId !== epoch.deviceId ||
     manifest.enrollment.epochId !== epoch.epochId ||
-    ["lead", "exception"].includes(input.action)
+    input.action === "exception" ||
+    (input.action === "lead" &&
+      (!epoch.leadLease ||
+        epoch.leadLease.sponsorId !== input.sponsorId ||
+        epoch.leadLease.eventId !== manifest.enrollment.eventId ||
+        epoch.leadLease.serverNow !== manifest.serverNow ||
+        epoch.leadLease.expiresAt !== manifest.expiresAt))
   )
     return null;
   const active = await readActiveUserSession();
@@ -103,8 +266,8 @@ export async function saveScannerOfflineContext(input: {
     (await scannerUploadSuspended(session.identity.id, session.sessionId))
   )
     return null;
-  const deadlines = [manifest.expiresAt, session.staff?.expiresAt].filter((value): value is string => Boolean(value));
-  const deadline = Math.min(...deadlines.map((value) => Date.parse(value)));
+  // Offline collection remains event-scoped and never restores portal authentication.
+  const deadline = Date.parse(manifest.expiresAt);
   if (!Number.isFinite(deadline) || !Number.isFinite(manifest.enrollment.writtenAt)) return null;
   const savedDate = new Date(manifest.enrollment.writtenAt);
   if (!Number.isFinite(savedDate.getTime()) || !Number.isFinite(new Date(deadline).getTime())) return null;
@@ -118,7 +281,17 @@ export async function saveScannerOfflineContext(input: {
     sessionId: session.sessionId,
     deviceId: epoch.deviceId,
     epochId: epoch.epochId,
+    contextId: crypto.randomUUID(),
     action: input.action,
+    ...(input.sponsorId ? { sponsorId: input.sponsorId } : {}),
+    ...(input.targetLabel ? { targetLabel: input.targetLabel } : {}),
+    ...(input.roomLabel ? { roomLabel: input.roomLabel } : {}),
+    purpose:
+      input.action === "attendance" &&
+      (input.purpose ?? new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("scannerPurpose")) ===
+        "collection"
+        ? "collection"
+        : "scan",
     occurrenceId: manifest.occurrenceId,
     roomId: manifest.roomId ?? null,
     publishedRevision: manifest.publishedRevision,
@@ -145,27 +318,54 @@ export async function saveScannerOfflineContext(input: {
       done = idbCompletion(tx);
     let committed: ScannerOfflineContext | null = null;
     const store = tx.objectStore(SCANNER_EPOCH_STORE);
-    const current = await idbRequest<(ScannerEpoch & { collectorContext?: ScannerOfflineContext }) | undefined>(
-      store.get(epoch.key),
-    );
+    const current = await idbRequest<
+      | (ScannerEpoch & { collectorContext?: ScannerOfflineContext; collectorContexts?: ScannerOfflineContext[] })
+      | undefined
+    >(store.get(epoch.key));
     if (!input.signal?.aborted && current?.epochId === epoch.epochId && current.state === "open") {
-      const previous = current.collectorContext;
-      if (previous?.serverNow === context.data.serverNow && !scannerContextCurrent(previous)) {
-        await done;
-        return null;
+      const storedContexts = preparedContexts(current).filter((item) => contextBelongsToEpoch(current, item));
+      const contexts = storedContexts.filter(
+        (item) => item.sessionId === session.sessionId && scannerContextCurrent(item),
+      );
+      const actions = [...new Set([input.action, ...(input.allowedActions ?? [])])].flatMap((action) =>
+        (
+          input.action === "lead"
+            ? action === "lead"
+            : ["check", "attendance", "checkout", "admission"].includes(action)
+        )
+          ? [action as ScannerOfflineContext["action"]]
+          : [],
+      );
+      const tasks: ScannerOfflineContext[] = actions.map((action) => ({
+        ...context.data,
+        action,
+        purpose: "scan",
+        contextId: crypto.randomUUID(),
+      }));
+      if (
+        actions.includes("attendance") &&
+        (context.data.purpose === "collection" || context.data.occurrenceId === null)
+      )
+        tasks.unshift({ ...context.data, action: "attendance", purpose: "collection", contextId: crypto.randomUUID() });
+      const savedTasks: ScannerOfflineContext[] = [];
+      for (const task of tasks) {
+        const previous = storedContexts.find((item) => samePreparedTask(item, task));
+        const saved = keepPreparedDeadline(task, previous);
+        if (!saved) {
+          await done;
+          return null;
+        }
+        savedTasks.push(saved);
       }
-      const saved =
-        previous?.serverNow === context.data.serverNow
-          ? {
-              ...context.data,
-              savedAt: previous.savedAt,
-              expiresAt: new Date(
-                Math.min(Date.parse(previous.expiresAt), Date.parse(context.data.expiresAt)),
-              ).toISOString(),
-            }
-          : context.data;
-      store.put({ ...current, collectorContext: saved });
-      committed = saved;
+      const next = contexts.filter((item) => !savedTasks.some((saved) => samePreparedTask(item, saved)));
+      next.push(...savedTasks);
+      if (next.length <= SCANNER_PREPARED_CONTEXT_LIMIT) {
+        const selected = savedTasks.find((item) => samePreparedTask(item, context.data));
+        if (selected) {
+          store.put({ ...current, collectorContext: selected, collectorContexts: next });
+          committed = selected;
+        }
+      }
     }
     await done;
     if (
@@ -182,18 +382,24 @@ export async function saveScannerOfflineContext(input: {
     const check = db.transaction(SCANNER_EPOCH_STORE, "readonly");
     const checked = idbCompletion(check);
     const [settled] = await Promise.all([
-      idbRequest<(ScannerEpoch & { collectorContext?: ScannerOfflineContext }) | undefined>(
-        check.objectStore(SCANNER_EPOCH_STORE).get(epoch.key),
-      ),
+      idbRequest<
+        | (ScannerEpoch & { collectorContext?: ScannerOfflineContext; collectorContexts?: ScannerOfflineContext[] })
+        | undefined
+      >(check.objectStore(SCANNER_EPOCH_STORE).get(epoch.key)),
       checked,
     ]);
     return !input.signal?.aborted &&
       settled?.epochId === epoch.epochId &&
       settled.state === "open" &&
-      settled.collectorContext?.sessionId === committed.sessionId &&
-      settled.collectorContext.savedAt === committed.savedAt &&
-      settled.collectorContext.serverNow === committed.serverNow &&
-      settled.collectorContext.expiresAt === committed.expiresAt &&
+      settled &&
+      preparedContexts(settled).some(
+        (item) =>
+          item.contextId === committed.contextId &&
+          item.sessionId === committed.sessionId &&
+          item.savedAt === committed.savedAt &&
+          item.serverNow === committed.serverNow &&
+          item.expiresAt === committed.expiresAt,
+      ) &&
       scannerContextCurrent(committed)
       ? committed
       : null;
@@ -209,6 +415,10 @@ export async function restoreScannerOfflineContext(route: string): Promise<Scann
   if (!active || (await scannerUploadSuspended(active.operatorUserId, active.sessionId))) return null;
   const db = await openScanStorage();
   try {
+    const query = new URLSearchParams(window.location.hash.split("?")[1] ?? "");
+    const selectedId = query.get("offlineContext");
+    const selectedAction = query.get("scanAction");
+    const selectedPurpose = query.get("scannerPurpose");
     const tx = db.transaction(SCANNER_EPOCH_STORE, "readwrite"),
       done = idbCompletion(tx);
     const store = tx.objectStore(SCANNER_EPOCH_STORE);
@@ -227,27 +437,42 @@ export async function restoreScannerOfflineContext(route: string): Promise<Scann
     const candidates = records.flatMap((raw) => {
       const parsed = storedEpochSchema.safeParse(raw);
       const epoch = parsed.success ? parsed.data : null;
-      const context = epoch?.collectorContext;
-      return context &&
-        epoch.state === "open" &&
-        epoch.epochId === context.epochId &&
-        epoch.deviceId === context.deviceId &&
-        epoch.eventId === context.slug &&
+      if (!epoch) return [];
+      return preparedContexts(epoch).flatMap((context) =>
         context.route === route &&
         context.operatorUserId === active.operatorUserId &&
         context.sessionId === active.sessionId &&
-        scannerContextCurrent(context)
-        ? [{ epoch, context }]
-        : [];
+        resumableContextMatchesEpoch(epoch, context) &&
+        (selectedId ? context.contextId === selectedId : true) &&
+        (selectedAction ? context.action === selectedAction : true) &&
+        (selectedPurpose ? (context.purpose ?? "scan") === selectedPurpose : true)
+          ? [{ epoch, context }]
+          : [],
+      );
     });
-    // Never guess between two retained devices/targets.
-    if (candidates.length !== 1) {
+    // A prepared roster can offer several tasks. The epoch records the task this scanner last used;
+    // a bare scanner URL resumes that task, while distinct devices remain ambiguous.
+    const selectedCandidates = selectedId
+      ? candidates
+      : candidates.length > 1
+        ? candidates.filter(({ epoch, context }) => epoch.collectorContext?.contextId === context.contextId)
+        : candidates;
+    if (selectedCandidates.length !== 1) {
       await done;
       return null;
     }
-    const { epoch, context } = candidates[0]!;
+    const { epoch, context } = selectedCandidates[0]!;
     const next = { ...context, lastObservedAt: new Date().toISOString() };
-    store.put({ ...epoch, collectorContext: next });
+    const contexts = preparedContexts(epoch).map((item) =>
+      item.contextId === context.contextId && samePreparedTask(item, context) ? next : item,
+    );
+    store.put({
+      ...epoch,
+      state: "open",
+      closingOperationId: null,
+      collectorContext: next,
+      collectorContexts: contexts,
+    });
     await done;
     const stillActive = await readActiveUserSession();
     return scannerTransportUnavailable.value &&
@@ -274,9 +499,12 @@ export function scannerOfflineContextMatches(expected: ScannerOfflineContext, st
     "operatorUserId",
     "deviceId",
     "epochId",
+    "contextId",
     "occurrenceId",
     "roomId",
     "action",
+    "sponsorId",
+    "purpose",
     "publishedRevision",
     "serverNow",
     "expiresAt",
@@ -285,6 +513,13 @@ export function scannerOfflineContextMatches(expected: ScannerOfflineContext, st
     fields.every((key) => current[key] === expected[key]) &&
     JSON.stringify(current.nativeEventContext) === JSON.stringify(expected.nativeEventContext)
   );
+}
+
+export function scannerOfflineEpochContextMatches(
+  expected: ScannerOfflineContext,
+  epoch: { collectorContext?: unknown; collectorContexts?: unknown },
+): boolean {
+  return preparedContexts(epoch).some((stored) => scannerOfflineContextMatches(expected, stored));
 }
 
 export async function assertScannerOfflineContext(expected: ScannerOfflineContext): Promise<void> {
@@ -318,9 +553,14 @@ export async function clearScannerOfflineContexts(
     if (records.length > SCANNER_RECOVERY_EPOCH_LIMIT) throw new Error("Scanner recovery limit exceeded");
     for (const raw of records) {
       const parsed = storedEpochSchema.safeParse(raw);
-      if (parsed.success && parsed.data.collectorContext?.sessionId === active.sessionId) {
-        const { collectorContext: _, ...epoch } = parsed.data;
-        store.put(epoch);
+      if (parsed.success) {
+        const remaining = preparedContexts(parsed.data).filter((item) => item.sessionId !== active.sessionId);
+        if (remaining.length !== preparedContexts(parsed.data).length) {
+          const { collectorContext: _, collectorContexts: __, ...epoch } = parsed.data;
+          store.put(
+            remaining.length ? { ...epoch, collectorContext: remaining.at(-1), collectorContexts: remaining } : epoch,
+          );
+        }
       }
     }
     await done;

@@ -15,6 +15,8 @@ export function GroupEventRecordSections({
   speakersActive = false,
   badges,
   badgesActive = false,
+  tickets,
+  ticketsActive = false,
   call,
   callActive = false,
 }: {
@@ -28,19 +30,24 @@ export function GroupEventRecordSections({
   speakersActive?: boolean;
   badges?: ComponentChildren;
   badgesActive?: boolean;
+  /** The tickets the event issued and their payments, for an event that has tickets to show. */
+  tickets?: ComponentChildren;
+  ticketsActive?: boolean;
   /** The call for proposals, as a section of a proposal program of its own. */
   call?: ComponentChildren;
   callActive?: boolean;
 }) {
-  const active = badgesActive
-    ? "badges"
-    : callActive
-      ? CALL_SEGMENT
-      : speakersActive
-        ? "speakers"
-        : responsesActive
-          ? EVENT_RESPONSES_SEGMENT
-          : "overview";
+  const active = ticketsActive
+    ? "tickets"
+    : badgesActive
+      ? "badges"
+      : callActive
+        ? CALL_SEGMENT
+        : speakersActive
+          ? "speakers"
+          : responsesActive
+            ? EVENT_RESPONSES_SEGMENT
+            : "overview";
   return (
     <div class="pk pk-stack">
       <Tabs
@@ -49,13 +56,16 @@ export function GroupEventRecordSections({
           { key: "overview", label: "Summary" },
           ...(speakers ? [{ key: "speakers", label: "Speakers" }] : []),
           ...(call ? [{ key: CALL_SEGMENT, label: "Call for proposals" }] : []),
+          ...(tickets ? [{ key: "tickets", label: "Tickets" }] : []),
           ...(badges ? [{ key: "badges", label: "Badges" }] : []),
           { key: EVENT_RESPONSES_SEGMENT, label: "Responses" },
         ]}
         active={active}
         hrefFor={(key) => (key === "overview" ? basePath : `${basePath}/${key}`)}
       />
-      {badgesActive ? (
+      {ticketsActive ? (
+        tickets
+      ) : badgesActive ? (
         badges
       ) : callActive ? (
         call

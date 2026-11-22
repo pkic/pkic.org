@@ -1,0 +1,10 @@
+@layer components {
+  /* The scenes under Preview: a row of small pictures that fills the panel's width and wraps, never wider than the panel. */
+  .pk-studio-scenes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(4.25rem, 1fr));
+    gap: var(--pk-2);
+    padding: 0 var(--pk-2) var(--pk-2);
+    min-inline-size: 0;
+  }
+}

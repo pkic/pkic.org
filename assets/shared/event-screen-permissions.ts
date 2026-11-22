@@ -6,12 +6,12 @@ export const SCREEN_MANAGE_PERMISSION = "agenda:screens_manage" as const satisfi
 /**
  * Who may read a screen's status: the staff who manage screens, and the room
  * operators who watch them from the studio. Steering the program stays
- * `agenda:live_moderate` alone.
+ * `agenda:live_studio` alone.
  */
-export const SCREEN_STATUS_PERMISSIONS = [
-  SCREEN_MANAGE_PERMISSION,
-  "agenda:live_moderate",
-] as const satisfies readonly [Permission, ...Permission[]];
+export const SCREEN_STATUS_PERMISSIONS = [SCREEN_MANAGE_PERMISSION, "agenda:live_studio"] as const satisfies readonly [
+  Permission,
+  ...Permission[],
+];
 
 export function canManageScreens(check: (permission: Permission) => boolean): boolean {
   return check(SCREEN_MANAGE_PERMISSION);

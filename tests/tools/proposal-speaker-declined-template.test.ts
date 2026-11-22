@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { compileSimpleTemplate } from "../../functions/_lib/email/render";
+import { compileSeededBody } from "./helpers/seeded-email-partials";
 import { DEFAULT_TEMPLATES } from "../../scripts/seed-email-templates.mjs";
 
 function seeded() {
@@ -23,12 +24,8 @@ const values = {
 
 describe("speaker declined template", () => {
   it("names the speaker, the proposal and the reason, and links to the proposal", () => {
-    const rendered = compileSimpleTemplate(
-      seeded().content,
-      { ...values, declineReason: "I am traveling that week." },
-      "markdown",
-    );
-    expect(rendered).toContain("Hello Ada,");
+    const rendered = compileSeededBody(seeded().content, { ...values, declineReason: "I am traveling that week." });
+    expect(rendered).toContain("Dear Ada,");
     expect(rendered).toContain(
       "Grace Hopper declined to speak on your proposal **Post-Quantum Migration Strategies** for **PQC 2026**.",
     );
@@ -40,7 +37,7 @@ describe("speaker declined template", () => {
   });
 
   it("leaves out the reason when none was given", () => {
-    const rendered = compileSimpleTemplate(seeded().content, { ...values, firstName: "" }, "markdown");
+    const rendered = compileSeededBody(seeded().content, { ...values, firstName: "" });
     expect(rendered).toContain("Hello,");
     expect(rendered).not.toContain("They gave this reason");
   });

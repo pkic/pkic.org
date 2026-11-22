@@ -77,18 +77,18 @@
     min-inline-size: 0;
     text-align: start;
   }
-  .pk-screen-own-run {
+  .pk-screen-status-help {
     display: grid;
     gap: var(--pk-1);
     margin: 0;
   }
-  .pk-screen-own-run dt {
+  .pk-screen-status-help dt {
     font-weight: 600;
   }
-  .pk-screen-own-run dd {
+  .pk-screen-status-help dd {
     margin: 0 0 var(--pk-2);
   }
-  .pk-screen-own-run dd:last-child {
+  .pk-screen-status-help dd:last-child {
     margin-block-end: 0;
   }
   .pk-screen-condition__text--hint {

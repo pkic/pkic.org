@@ -1,0 +1,162 @@
+import { formatNumber } from "../../shared/format-number";
+import { liveParticipationActions, type LiveModerationReason } from "../../shared/live-moderation-policy";
+import type { LiveQuestionAnswer } from "../../shared/schemas/live-session-answer";
+import type { LiveRoomRole } from "../../shared/live-session-policy";
+import type { LiveRoomClientMessage } from "../../shared/schemas/live-session-room";
+import { IconCheckmark } from "../components/icons";
+import { Button } from "../ui/Button";
+import { Menu, type MenuItem } from "../ui/Menu";
+import { LiveAuthorName } from "./LiveAuthor";
+import { LiveRemovedPost, liveRemovalNote } from "./LiveRemovedPost";
+import { liveParticipationMenuItems, liveRemoveMenuItem } from "./live-moderation-menu";
+
+/** The accept control's name and what a click does; only the asker reads "your question". */
+function acceptHint(accepted: boolean, ownQuestion: boolean) {
+  return accepted
+    ? { label: "Remove acceptance", tip: "This answer is no longer marked as the answer." }
+    : {
+        label: "Accept answer",
+        tip: `Marks this as the answer to ${ownQuestion ? "your" : "this"} question. Everyone sees it first.`,
+      };
+}
+export type LiveAnswerViewer = { role: LiveRoomRole; organizer?: boolean };
+const UPVOTE_TIP = "Moves helpful answers up. Others don't see who voted.";
+
+/** Moderator actions on one answer: remove or show it again, and the author's participation. */
+function answerMenu(
+  answer: LiveQuestionAnswer,
+  questionId: string,
+  viewer: LiveAnswerViewer,
+  send: (message: LiveRoomClientMessage) => boolean,
+  timeZone: string,
+  onError: () => void,
+): MenuItem[] {
+  // A change that cannot be sent says so, as the chat's own Hide does.
+  const hide = (hidden: boolean, reason?: LiveModerationReason) => {
+    const sent = send({
+      type: "question.answer.hide",
+      questionId,
+      answerId: answer.id,
+      hidden,
+      reason,
+      expectedRevision: answer.revision,
+    });
+    if (!sent) onError();
+  };
+  const items: MenuItem[] = [
+    answer.removal
+      ? { id: "show", label: "Show answer", tooltip: "Shows it to everyone again.", onSelect: () => hide(false) }
+      : liveRemoveMenuItem("answer", (reason) => hide(true, reason), onError),
+  ];
+  items.push(
+    ...liveParticipationMenuItems({
+      item: { kind: "answer", questionId, answerId: answer.id },
+      authorName: answer.authorName,
+      actions: liveParticipationActions(viewer, {
+        mine: answer.mine,
+        staff: answer.authorStaff,
+        restriction: answer.authorRestriction?.block ?? null,
+      }),
+      send,
+      timeZone,
+      onError,
+    }),
+  );
+  return items;
+}
+
+/** One answer: its vote toggle, text and attribution, and the accept control in its own column. */
+export function LiveQuestionAnswerRow({
+  answer,
+  questionId,
+  ownQuestion,
+  viewer,
+  canVote,
+  canAccept,
+  canModerate,
+  disabled,
+  accepting,
+  onAccept,
+  send,
+  timeZone,
+  onError,
+}: {
+  answer: LiveQuestionAnswer;
+  questionId: string;
+  /** This viewer asked the question, so accepting marks the answer to their own. */
+  ownQuestion: boolean;
+  viewer: LiveAnswerViewer;
+  canVote: boolean;
+  canAccept: boolean;
+  canModerate: boolean;
+  disabled: boolean;
+  /** Another decision is waiting for the room, so this row's accept control rests. */
+  accepting: "this" | "other" | null;
+  onAccept: () => void;
+  send: (message: LiveRoomClientMessage) => boolean;
+  timeZone: string;
+  onError: () => void;
+}) {
+  const accept = acceptHint(answer.acceptance !== null, ownQuestion);
+  const votes = `${formatNumber(answer.votes)} ${answer.votes === 1 ? "vote" : "votes"}`;
+  const voteLabel = answer.mine ? `Your answer: ${votes}` : `Upvote answer: ${votes}`;
+  return (
+    <li
+      class={`pk-live-answers__answer${answer.acceptance ? " pk-live-answers__answer--accepted" : ""}`}
+      data-removed={answer.removal ? "" : undefined}
+    >
+      <button
+        type="button"
+        class="pk-live-question__vote"
+        aria-pressed={answer.votedByMe}
+        aria-label={voteLabel}
+        title={answer.mine ? undefined : `${voteLabel}\n${UPVOTE_TIP}`}
+        disabled={disabled || !canVote || answer.mine || answer.removal !== null}
+        onClick={() =>
+          send({ type: "question.answer.vote", questionId, answerId: answer.id, voted: !answer.votedByMe })
+        }
+      >
+        <span aria-hidden="true">▲</span>
+        <span>{formatNumber(answer.votes)}</span>
+      </button>
+      <div class="pk-live-answers__body">
+        <LiveAuthorName name={answer.authorName} affiliation={answer.authorAffiliation} roles={answer.authorRoles} />
+        {answer.removal ? (
+          <LiveRemovedPost note={liveRemovalNote(answer.removal)}>
+            <p class="pk-live-answers__text">{answer.text}</p>
+          </LiveRemovedPost>
+        ) : (
+          <p class="pk-live-answers__text">{answer.text}</p>
+        )}
+        {answer.acceptance ? (
+          <p class="pk-live-answers__acceptance">
+            <strong>Accepted answer</strong> ·{" "}
+            {answer.acceptance.byName === null ? "by the question author" : `by ${answer.acceptance.byName}`}
+          </p>
+        ) : null}
+      </div>
+      <div class="pk-live-answers__tools">
+        {canAccept && !answer.removal ? (
+          <Button
+            variant="secondary"
+            icon
+            aria-pressed={answer.acceptance !== null}
+            aria-label={accepting === "this" ? `Retry: ${accept.label}` : accept.label}
+            title={`${accept.label}\n${accept.tip}`}
+            disabled={disabled || accepting === "other"}
+            onClick={onAccept}
+          >
+            <IconCheckmark />
+          </Button>
+        ) : null}
+        {canModerate ? (
+          <Menu
+            label={`Actions for answer from ${answer.authorName}`}
+            align="end"
+            items={answerMenu(answer, questionId, viewer, send, timeZone, onError)}
+          />
+        ) : null}
+      </div>
+    </li>
+  );
+}

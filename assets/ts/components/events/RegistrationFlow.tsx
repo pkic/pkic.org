@@ -1,6 +1,6 @@
 /** One registration form and question pipeline, embedded by public pages and the portal. */
 import { render } from "preact";
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 import type { EventFormsResponse } from "../../../shared/schemas/forms";
 import { isIdentityOwnedFormKey } from "../../../shared/schemas/form-answers";
@@ -8,6 +8,7 @@ import {
   registrationCreateSchema,
   registrationCreateForTermsSchema,
   registrationContactFieldsSchema,
+  withRequiredOrganizationRepresentation,
   registrationAttendanceFieldsSchema,
   withRequiredDayAttendanceChoices,
   registrationManageSchema,
@@ -18,11 +19,12 @@ import {
 import type { FlowBoot } from "../../event-flows/boot";
 import { registrationEntry } from "./registration-entry";
 import { registrationInvitation } from "./registration-invitation";
+import { markRegistrationStarted } from "./registration-start";
 import { updateRegistrationReview } from "./registration-review";
-import { clearReferralSession } from "../../shared/query-context";
-import { forgetRegistrationEmailProof } from "../useRegistrationEmailProof";
+import { clearReferralSession, clearRememberedInvitation } from "../../shared/query-context";
 import { useContractForm } from "../../hooks/useContractForm";
-import { postJson } from "../../shared/api-client";
+import { getJson, postJson } from "../../shared/api-client";
+import { currentUserRegistrationsListResponseSchema } from "../../../shared/schemas/current-user-registrations";
 import { readField } from "../../shared/form/helpers";
 import { installStepNavigation, REGISTRATION_STEP_PARAM } from "../../shared/form/step-navigation";
 import { CONTRACT_VALIDATION_ATTRIBUTE } from "../../shared/form/validation";
@@ -30,15 +32,15 @@ import { splitHash } from "../../ui/url-query";
 import { CustomFieldList, readCustomFieldValues } from "../../shared/widgets/custom-fields";
 import { readConsentValues } from "../../shared/widgets/consents";
 import { readDayAttendance, readDayAttendanceChoices } from "../../shared/widgets/day-attendance";
-import { EventFlowProgress } from "../../site/EventFlowProgress";
+import { RegistrationProgress } from "./RegistrationProgress";
 import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";
 import { Field } from "../../ui/Field";
 import { TextInput } from "../../ui/TextControl";
 import { ConsentList } from "../ConsentCard";
-import { DayAttendancePicker } from "../DayAttendancePicker";
+import { DayAttendancePicker, NOT_ATTENDING } from "../DayAttendancePicker";
+import { PricingChoiceRequiredError, useAttendancePricing } from "../attendance-pricing";
 import { RegistrationContactStep } from "../RegistrationContactStep";
-import type { ConfirmOrganizationController } from "../RegistrationConfirmOrganization";
 import { RegistrationEmailAddress } from "./RegistrationEmailAddress";
 import { RegistrationRepresentationField } from "./RegistrationRepresentationField";
 import { useFormAnswers } from "../forms/useFormAnswers";
@@ -49,11 +51,15 @@ type Create = {
   mode: "create";
   context: Omit<FlowBoot, "root" | "form" | "statusEl">;
   autoSession?: boolean;
+  /** Takes a signed-in person who already holds a registration for the event to it, instead of the steps. */
+  onAlreadyRegistered?: (registrationId: string) => void;
   submit?: (body: RegistrationInput) => Promise<RegistrationSubmissionResponse>;
   onRegistered: (
     result: RegistrationSubmissionResponse,
     body: RegistrationInput,
     form: HTMLFormElement,
+    /** The account's names, which the registration itself never carries. */
+    names: { firstName: string; lastName: string },
   ) => void | Promise<void>;
 };
 type Update = {
@@ -73,25 +79,34 @@ const PERSONAL_FIELDS = [
 export function RegistrationFlow(props: Props) {
   const { forms } = props;
   const updating = props.mode === "update";
-  const termsAvailable = forms.requiredTerms.some((term) => term.required);
+  // An event asks only its own terms, such as a photo policy; the Privacy Policy and the Code of Conduct come with the account.
+  const asksTerms = forms.requiredTerms.length > 0;
   const daysAvailable = forms.eventDays.length > 0;
-  const available = updating || (termsAvailable && daysAvailable);
-  const entry = props.mode === "create" ? registrationEntry(props.context.query) : {};
+  const available = updating || daysAvailable;
   const initial = updating ? props.data : null;
   const root = useRef<HTMLDivElement>(null);
   const status = useRef<HTMLParagraphElement>(null);
   const review = useRef<HTMLDivElement>(null);
-  const organization = useRef<ConfirmOrganizationController>({});
+  const signInSlot = useRef<HTMLDivElement>(null);
   const invitation = useRef<ReturnType<typeof registrationInvitation> | null>(null);
   const [ready, setReady] = useState(updating);
+  const [signingIn, setSigningIn] = useState(false);
   const [personalDraft, setPersonalDraft] = useState({
     firstName: initial?.user.first_name ?? "",
     lastName: initial?.user.last_name ?? "",
   });
   const [busy, setBusy] = useState(false);
+  // Set at once on submit: the busy state only reaches the form after the next render.
+  const submitting = useRef(false);
   const [error, setError] = useState("");
   const [attendance, setAttendance] = useState(initial?.dayAttendance ?? []);
+  const pricing = useAttendancePricing();
+  // Step navigation is installed once; the review reads the ticket chosen by the time it is shown.
+  const latestPricing = useRef(pricing);
+  latestPricing.current = pricing;
   const savedIdentityId = useRef(initial?.identityId ?? null);
+  /** The signed-in account's saved names: the "You" step checks them, and the review shows them; the request never carries them. */
+  const accountNames = useRef({ firstName: "", lastName: "" });
   const [identityId, setIdentityId] = useState(savedIdentityId.current);
   const fields = useMemo(
     () => forms.form?.fields.filter((field) => !isIdentityOwnedFormKey(field.key)) ?? [],
@@ -106,21 +121,20 @@ export function RegistrationFlow(props: Props) {
     if (!form) return {};
     const dayAttendance = readDayAttendance(form);
     const shared = {
-      firstName: readField(form, "firstName"),
-      lastName: readField(form, "lastName"),
       dayAttendance,
       customAnswers: forms.form ? readCustomFieldValues(form) : undefined,
     };
     if (props.mode === "update")
       return {
         ...shared,
+        firstName: readField(form, "firstName"),
+        lastName: readField(form, "lastName"),
         action: "update",
         identityChange:
           identityId && identityId !== savedIdentityId.current
             ? { identityId, expectedIdentityId: savedIdentityId.current }
             : undefined,
       };
-    const named = organization.current.read?.();
     const liveEntry = registrationEntry(props.context.query);
     return {
       ...shared,
@@ -128,32 +142,51 @@ export function RegistrationFlow(props: Props) {
       identityId: readField(form, "identityId") || undefined,
       unaffiliatedAttestation: readField(form, "unaffiliatedAttestation") === "true",
       consents: readConsentValues(form),
-      emailProof: readField(form, "emailProof") || undefined,
       ...liveEntry,
       sourceType: liveEntry.sourceType ?? "direct",
       sourceRef: liveEntry.sourceType,
-      organization: named && !("refused" in named) ? named.organization : undefined,
     };
   };
   const choices = useCallback(() => (element.current ? readDayAttendanceChoices(element.current) : []), [element]);
+  // The "You" step says when a work address still has no organization chosen.
+  const representationMissing = useCallback(
+    () => (element.current ? readField(element.current, "organizationRepresentationMissing") === "true" : false),
+    [element],
+  );
   const request = useMemo(
     () =>
-      withRequiredDayAttendanceChoices(
-        updating ? registrationManageSchema : registrationCreateForTermsSchema(forms.requiredTerms),
-        choices,
+      withRequiredOrganizationRepresentation(
+        withRequiredDayAttendanceChoices(
+          updating ? registrationManageSchema : registrationCreateForTermsSchema(forms.requiredTerms),
+          choices,
+        ),
+        representationMissing,
       ),
-    [updating, forms.requiredTerms, choices],
+    [updating, forms.requiredTerms, choices, representationMissing],
   );
   const contract = useContractForm(request, readBody, {
     fieldOf: (name, control) =>
       name === "consents" ? `consents.${control.closest<HTMLElement>("[data-term-key]")?.dataset.termKey ?? ""}` : name,
   });
-  const contactContract = useContractForm(registrationContactFieldsSchema, readBody);
+  const contactContract = useContractForm(
+    withRequiredOrganizationRepresentation(registrationContactFieldsSchema, representationMissing),
+    () => ({ ...readBody(), ...accountNames.current }),
+  );
   const attendanceContract = useContractForm(
     withRequiredDayAttendanceChoices(registrationAttendanceFieldsSchema, choices),
     readBody,
   );
   const contactReady = useCallback((value: boolean) => setReady(value), []);
+  const [, setKnownNames] = useState(accountNames.current);
+  const rememberAccountNames = useCallback((names: { firstName: string; lastName: string }) => {
+    accountNames.current = names;
+    // Render again so the contact contract reads the saved names; a complete name answers the step's alert.
+    setKnownNames(names);
+    if (names.firstName.trim() && names.lastName.trim()) setError("");
+  }, []);
+  // Continue waits while a work address has no organization; the step's alert says why.
+  const [representationPending, setRepresentationPending] = useState(false);
+  const confirmRepresentation = useRef<(() => Promise<boolean>) | null>(null);
 
   const setup = useRef({
     props,
@@ -182,7 +215,12 @@ export function RegistrationFlow(props: Props) {
             setError(checked.formMessage ?? "");
             return false;
           }
-          if (organization.current.validate?.() === false) return false;
+          // An organization confirmed on this step becomes an identity first, then the step continues.
+          const confirm = confirmRepresentation.current;
+          if (confirm) {
+            void confirm().then((confirmed) => confirmed && navigation.continueFrom(1));
+            return false;
+          }
         }
         if (step === 2) {
           const checked = attendanceContract.submit();
@@ -197,7 +235,14 @@ export function RegistrationFlow(props: Props) {
             setError(answered.formMessage ?? "");
             return false;
           }
-          updateRegistrationReview(boot.root, boot.form, fields);
+          const { firstName, lastName } = accountNames.current;
+          updateRegistrationReview(
+            boot.root,
+            boot.form,
+            fields,
+            [firstName, lastName].filter(Boolean).join(" "),
+            latestPricing.current?.reviewItems,
+          );
         }
       },
       (step) => {
@@ -218,6 +263,28 @@ export function RegistrationFlow(props: Props) {
     };
   }, [element]);
 
+  const heldLookup = useRef(props.mode === "create" ? props : null);
+  heldLookup.current = props.mode === "create" ? props : null;
+  useEffect(() => {
+    const create = heldLookup.current;
+    if (!ready || !create?.onAlreadyRegistered) return;
+    const controller = new AbortController();
+    const query = new URLSearchParams({ eventSlug: create.context.eventSlug, limit: "1" });
+    getJson(
+      `${create.context.apiBase}/users/current/registrations?${query}`,
+      currentUserRegistrationsListResponseSchema,
+      {
+        signal: controller.signal,
+      },
+    )
+      .then(({ registrations }) => {
+        const held = registrations.find((registration) => registration.status === "registered");
+        if (held) heldLookup.current?.onAlreadyRegistered?.(held.id);
+      })
+      // Without the answer the steps simply continue; submitting still refuses a second registration.
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [ready]);
   useLayoutEffect(() => {
     const first = root.current?.querySelector<HTMLElement>('[data-step="1"]');
     const next = root.current?.querySelector<HTMLButtonElement>("[data-step-next]");
@@ -236,13 +303,14 @@ export function RegistrationFlow(props: Props) {
 
   return (
     <div class="event-flow pk" ref={root} data-registration-flow={props.mode}>
-      {!updating && available && (
-        <EventFlowProgress label="Registration progress" steps={["You", "Attendance", "Profile", "Review"]} />
-      )}
+      {!updating && available && <RegistrationProgress />}
+      {/* The sign-in card has a form of its own, so it stands beside the registration form, not inside it. */}
+      <div ref={signInSlot} data-registration-sign-in />
       <form
         ref={element}
         class="pk-stack needs-validation"
         noValidate
+        hidden={signingIn}
         {...{ [CONTRACT_VALIDATION_ATTRIBUTE]: "" }}
         data-contact-ready={String(ready)}
         onInput={(event) => {
@@ -258,6 +326,10 @@ export function RegistrationFlow(props: Props) {
           questions.handlers.onInput(event);
         }}
         onChange={(event) => {
+          // A signed-in person who changes anything has started; a guest has no account to remind.
+          // The identity is the form's own field: the contact step fills it once the person is known.
+          if (props.mode === "create" && readField(event.currentTarget, "identityId"))
+            markRegistrationStarted(props.context.apiBase, props.context.eventSlug);
           syncAttendance(event);
           contract.handlers.onChange(event);
           contactContract.handlers.onChange(event);
@@ -284,24 +356,41 @@ export function RegistrationFlow(props: Props) {
         onSubmit={(event) => {
           event.preventDefault();
           void (async () => {
-            if (busy || !available || (props.mode === "create" && !invitation.current?.canSubmit())) return;
+            if (submitting.current || busy || !available) return;
+            if (props.mode === "create" && !invitation.current?.canSubmit()) return;
             setError("");
+            // The form is locked while the ticket step saves: nothing is submitted twice or changed underneath it.
+            if (pricing?.settle) {
+              submitting.current = true;
+              setBusy(true);
+              try {
+                // The ticket, code or reason chosen a moment ago is kept before the registration is made with it.
+                await pricing.settle();
+              } catch (cause) {
+                submitting.current = false;
+                setBusy(false);
+                return setError(
+                  cause instanceof PricingChoiceRequiredError
+                    ? cause.message
+                    : "Your ticket could not be saved. Check it and try again.",
+                );
+              }
+            }
+            const release = () => {
+              submitting.current = false;
+              setBusy(false);
+            };
             if (!updating) {
               const contact = contactContract.submit();
-              if (!contact.data) return setError(contact.formMessage ?? "");
-              if (organization.current.validate?.() === false) return;
+              if (!contact.data) return (release(), setError(contact.formMessage ?? ""));
             }
             const answered = currentQuestions.current.submit();
-            let checked = contract.submit();
-            if (!answered.data) return setError(answered.formMessage ?? "");
-            if (!checked.data) return setError(checked.formMessage ?? "");
+            const checked = contract.submit();
+            if (!answered.data) return (release(), setError(answered.formMessage ?? ""));
+            if (!checked.data) return (release(), setError(checked.formMessage ?? ""));
+            submitting.current = true;
             setBusy(true);
             try {
-              if (!updating && organization.current.prepare) {
-                if (!(await organization.current.prepare())) return;
-                checked = contract.submit();
-                if (!checked.data) return setError(checked.formMessage ?? "");
-              }
               if (props.mode === "update") {
                 await props.save(registrationManageSchema.parse(checked.data));
               } else {
@@ -315,8 +404,8 @@ export function RegistrationFlow(props: Props) {
                       props.context.eventPagePath ? { "x-event-base-path": props.context.eventPagePath } : undefined,
                     );
                 clearReferralSession();
-                forgetRegistrationEmailProof();
-                await props.onRegistered(result, body, element.current!);
+                clearRememberedInvitation(props.context.query.inviteId);
+                await props.onRegistered(result, body, element.current!, accountNames.current);
               }
             } catch (cause) {
               if (!invitation.current?.handleError(cause)) {
@@ -324,10 +413,12 @@ export function RegistrationFlow(props: Props) {
                 setError(contract.refuse(cause));
               }
             } finally {
+              submitting.current = false;
               setBusy(false);
             }
           })().catch(() => {
             setError("Could not save changes. Please try again.");
+            submitting.current = false;
             setBusy(false);
           });
         }}
@@ -339,21 +430,17 @@ export function RegistrationFlow(props: Props) {
               Registration opens when the event days are scheduled.
             </Alert>
           )}
-          {!updating && daysAvailable && !termsAvailable && (
-            <Alert tone="warn" title="Registration unavailable">
-              Registration is temporarily unavailable because the required event terms have not been configured.
-            </Alert>
-          )}
           <section data-step={updating ? undefined : "1"} class="event-flow-step is-active pk-stack">
             {props.mode === "create" ? (
               <div data-registration-contact>
                 {available && (
                   <RegistrationContactStep
-                    endpoint={`${props.context.apiBase}/events/${encodeURIComponent(props.context.eventSlug)}/registrations`}
-                    entry={entry}
-                    organization={organization.current}
+                    signInSlot={signInSlot}
                     onReadyChange={contactReady}
-                    autoSession={props.autoSession}
+                    onNamesChange={rememberAccountNames}
+                    onRepresentationMissingChange={setRepresentationPending}
+                    confirmRepresentation={confirmRepresentation}
+                    onSignInChange={setSigningIn}
                     presentationOf={(name) => {
                       const current = contract.of(name);
                       return current.state === "invalid" ? current : contactContract.of(name);
@@ -404,7 +491,14 @@ export function RegistrationFlow(props: Props) {
                     days={forms.eventDays}
                     {...(initial
                       ? {
-                          value: Object.fromEntries(attendance.map((day) => [day.dayDate, day.attendanceType])),
+                          // A saved registration lists only the days it attends; every other day was answered "not attending".
+                          value: Object.fromEntries(
+                            forms.eventDays.map((day) => [
+                              day.dayDate,
+                              attendance.find((saved) => saved.dayDate === day.dayDate)?.attendanceType ??
+                                NOT_ATTENDING,
+                            ]),
+                          ),
                           onChange: (dayDate: string, attendanceType: string) =>
                             setAttendance((current) => [
                               ...current.filter((day) => day.dayDate !== dayDate),
@@ -434,15 +528,24 @@ export function RegistrationFlow(props: Props) {
           </section>
           {!updating && (
             <section data-step="4" class="event-flow-step pk-stack" hidden>
-              <p class="event-flow-step-intro">Check your details, then accept the terms to register.</p>
+              <p class="event-flow-step-intro">
+                {asksTerms
+                  ? "Check your details, then accept the terms to register."
+                  : "Check your details, then register."}
+              </p>
               <div data-registration-review ref={review} />
-              <Field group label="Terms and conditions">
-                {() => (
-                  <div data-consents>
-                    <ConsentList terms={forms.requiredTerms} presentationOf={(key) => contract.of(`consents.${key}`)} />
-                  </div>
-                )}
-              </Field>
+              {asksTerms && (
+                <Field group label="Terms and conditions">
+                  {() => (
+                    <div data-consents>
+                      <ConsentList
+                        terms={forms.requiredTerms}
+                        presentationOf={(key) => contract.of(`consents.${key}`)}
+                      />
+                    </div>
+                  )}
+                </Field>
+              )}
             </section>
           )}
           {available && (
@@ -462,7 +565,7 @@ export function RegistrationFlow(props: Props) {
                     Back
                   </Button>
                   <div class="event-flow-step-forward">
-                    <Button variant="primary" data-step-next disabled={!ready || !available}>
+                    <Button variant="primary" data-step-next disabled={!ready || representationPending || !available}>
                       Continue
                     </Button>
                     <Button type="submit" variant="primary" hidden loading={busy} disabled={!available}>

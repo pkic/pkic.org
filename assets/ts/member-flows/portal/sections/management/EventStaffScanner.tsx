@@ -1,6 +1,6 @@
 import type { ScannerRole } from "../events/detail/scanner/scanner-role";
 import { scannerEntranceAction, scannerInitialAction } from "../events/detail/scanner/ScannerModeSelect";
-import { useCallback, useState } from "preact/hooks";
+import { useCallback, useRef, useState } from "preact/hooks";
 import {
   ScannerTaskNavigation,
   type ScannerTask,
@@ -31,9 +31,11 @@ export function EventStaffScanner({
   canPrintLabels?: boolean;
 }) {
   const [launch, setLaunch] = useState<ScannerTask | null>(null);
+  const launchScope = useRef<string | null>(null);
   const [gradientFrom, setGradientFrom] = useState<ScannerRole>();
   const [captureVersion, setCaptureVersion] = useState(0);
   const consumeLaunch = useCallback(() => {
+    launchScope.current = null;
     setLaunch(null);
     setGradientFrom(undefined);
   }, []);
@@ -41,6 +43,8 @@ export function EventStaffScanner({
   const actions = availableScannerActions(can);
   const canAdmitExceptions = can("agenda:admit_exceptions") && Boolean(scannerPermission(can, "agenda:admit"));
   const operator = portalSession.value?.identity.id ?? "";
+  const sessionId = portalSession.value?.sessionId;
+  const printScope = JSON.stringify([eventId, slug, operator, sessionId]);
   const printHref = canPrintLabels ? `#${basePath}/print` : undefined;
   const entryAction = scannerEntranceAction(actions);
   const entryHref = `#${basePath}${entryAction === scannerInitialAction(actions, undefined, false) ? "" : `?scanAction=${entryAction}`}`;
@@ -57,13 +61,20 @@ export function EventStaffScanner({
     const destination = tasks.find((item) => item.key === task);
     if (!destination) return;
     setGradientFrom(from);
+    launchScope.current = printScope;
     setLaunch(task);
     if (task !== "print" && section !== "print") setCaptureVersion((value) => value + 1);
     window.location.hash = destination.href;
   }
   return (
     <ScannerTaskNavigation.Provider
-      value={{ launch, gradientFrom, tasks, onLaunch: launchTask, onConsumed: consumeLaunch }}
+      value={{
+        launch: launchScope.current === printScope ? launch : null,
+        gradientFrom,
+        tasks,
+        onLaunch: launchTask,
+        onConsumed: consumeLaunch,
+      }}
     >
       <div class="pk-stack">
         {section === "print" && canPrintLabels ? (

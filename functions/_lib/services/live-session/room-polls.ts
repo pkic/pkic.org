@@ -22,6 +22,7 @@ const REFUSALS = {
   anotherOpen: { code: "LIVE_POLL_ALREADY_OPEN", message: "Close the open poll before opening another." },
   transition: { code: "LIVE_POLL_TRANSITION", message: "That poll cannot move to this status." },
   closed: { code: "LIVE_POLL_CLOSED", message: "This poll is not taking votes." },
+  answered: { code: "LIVE_POLL_ANSWERED", message: "You have already answered this poll." },
 } satisfies Record<string, LiveRefusal>;
 
 /**
@@ -142,6 +143,8 @@ export class LiveRoomPolls {
     const poll = this.polls.poll(pollId);
     if (!poll || poll.status === "draft") return REFUSALS.missing;
     if (poll.status !== "open") return REFUSALS.closed;
+    // An answer is final: nobody moves the tallies by voting again.
+    if (this.polls.answers(userId).has(pollId)) return REFUSALS.answered;
     const read = readLivePollAnswer(poll.field, answer);
     if (read.problem !== null) return { code: LIVE_POLL_ANSWER_REFUSAL, message: read.problem };
     this.polls.vote(pollId, userId, read.answer);

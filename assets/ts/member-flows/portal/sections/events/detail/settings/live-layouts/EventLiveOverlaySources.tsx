@@ -1,3 +1,4 @@
+import { liveOverlayLayoutChoices } from "../../../../../../../../shared/live-overlay-layout-presets";
 import { personalAgendaProgramResponseSchema } from "../../../../../../../../shared/schemas/event-personal-agenda";
 import { ErrorAlert } from "../../../../../../../components/ErrorAlert";
 import { Spinner } from "../../../../../../../components/Spinner";
@@ -10,11 +11,19 @@ import { Select } from "../../../../../../../ui/TextControl";
 import { LiveOverlayLinks } from "../../live/LiveOverlayLinks";
 
 /**
- * The browser sources for one layout. Source access belongs to the
- * physical room, independent of the session it has on air.
+ * A room's screens and the links that show them. Each screen sets its own
+ * scene. Source access belongs to the physical room, independent of the
+ * session it has on air.
  */
-export function EventLiveOverlaySources({ slug, layout }: { slug: string; layout: { slug: string; name: string } }) {
+export function EventLiveOverlaySources({
+  slug,
+  layouts,
+}: {
+  slug: string;
+  layouts: ReadonlyArray<{ slug: string; name: string }>;
+}) {
   const [roomQuery, setRoomQuery] = useHashQueryParam("room", "");
+  const scenes = liveOverlayLayoutChoices(layouts);
   const program = useData(
     () =>
       getJson(
@@ -52,7 +61,7 @@ export function EventLiveOverlaySources({ slug, layout }: { slug: string; layout
           </Select>
         )}
       </Field>
-      <LiveOverlayLinks key={roomId} slug={slug} roomId={roomId} layout={layout} />
+      <LiveOverlayLinks key={roomId} slug={slug} roomId={roomId} scenes={scenes} />
     </div>
   );
 }

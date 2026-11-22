@@ -1,4 +1,6 @@
 import { DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS } from "../../../assets/shared/schemas/live-stage-display-settings";
+import { DEFAULT_LIVE_SCREEN_SYNC } from "../../../assets/shared/schemas/live-screen-sync";
+import { DEFAULT_LIVE_ROOM_OPENING } from "../../../assets/shared/schemas/live-room-opening";
 import { sessionLiveTimer } from "../../../assets/shared/live-timer-policy";
 import { DEFAULT_LIVE_TICKER_CONTEXT } from "../../../assets/shared/schemas/live-session-ticker";
 import {
@@ -6,15 +8,18 @@ import {
   EMPTY_LIVE_OUTPUTS,
   liveRoomClientMessageSchema,
   liveRoomServerMessageSchema,
+  type LiveChatMessage,
+  type LiveLocationChatSnapshot,
   type LiveRoomClientMessage,
   type LiveRoomServerMessage,
   type LiveRoomSnapshot,
 } from "../../../assets/shared/schemas/live-session-room";
 import { livePollFieldSchema, type LivePoll } from "../../../assets/shared/schemas/live-session-poll";
 import { formFieldStatFromTallies } from "../../../assets/shared/form-field-statistics";
-import type { LiveSocketFactory } from "../../../assets/ts/live-session/useLiveRoom";
+import type { LiveSocketFactory } from "../../../assets/ts/live-session/useLiveSocket";
 import type { LiveRoomState } from "../../../assets/ts/live-session/live-room-state";
 import type { LiveTargets } from "../../../assets/ts/member-flows/portal/sections/events/detail/live/live-output-targets";
+import { NO_LIVE_ROOM_SOURCES } from "../../../assets/shared/schemas/live-room-sources";
 
 export const LIVE_POLL = "20000000-0000-4000-8000-000000000020";
 /** The poll's question, as the forms field contract carries it. */
@@ -116,15 +121,18 @@ export function liveSnapshot(overrides: Partial<Omit<LiveRoomSnapshot, "type">> 
           photoUrl: null,
           moderator: false,
           roleLabel: null,
+          titleLine: null,
           identity: { title: "Architect", organization: "Example" },
+          additionalIdentities: [],
         },
       ],
     },
     viewer: { role: "attendee", name: "Ada Attendee" },
     overlayMode: "direct",
-    chat: [],
     questions: [],
     polls: [],
+    preparedQuestions: [],
+    preparedQuestionWindow: null,
     stage: {
       schedule: null,
       checkIn: null,
@@ -141,6 +149,8 @@ export function liveSnapshot(overrides: Partial<Omit<LiveRoomSnapshot, "type">> 
       topQuestions: null,
       chatFeed: null,
       reactions: false,
+      reactionsGraphic: { showCount: false },
+      scene: null,
     },
     outputs: EMPTY_LIVE_OUTPUTS,
     speakerMessage: null,
@@ -153,6 +163,58 @@ export function liveSnapshot(overrides: Partial<Omit<LiveRoomSnapshot, "type">> 
     stageDisplayNext: null,
     stageDisplayNextVotes: null,
     stageDisplaySettings: DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS,
+    screenSync: DEFAULT_LIVE_SCREEN_SYNC,
+    opening: DEFAULT_LIVE_ROOM_OPENING,
+    movedOn: null,
+    sources: NO_LIVE_ROOM_SOURCES,
+    ...overrides,
+  };
+}
+
+export const LIVE_ROOM = "20000000-0000-4000-8000-000000000030";
+
+/** The location's chat for the day, with the one session `liveSnapshot` is on. */
+export function liveLocationChatSnapshot(
+  overrides: Partial<Omit<LiveLocationChatSnapshot, "type">> = {},
+): LiveLocationChatSnapshot {
+  const now = Date.now();
+  return {
+    type: "location.chat.snapshot",
+    viewer: { role: "attendee", name: "Ada Attendee" },
+    scope: {
+      eventName: "PQC Conference",
+      roomId: LIVE_ROOM,
+      day: new Date(now).toISOString().slice(0, 10),
+      timeZone: "Europe/Amsterdam",
+      sessions: [
+        {
+          occurrenceId: LIVE_OCCURRENCE,
+          title: "Post-quantum migration",
+          startAt: new Date(now - 10 * 60_000).toISOString(),
+          endAt: new Date(now + 50 * 60_000).toISOString(),
+        },
+      ],
+    },
+    opening: DEFAULT_LIVE_ROOM_OPENING,
+    chat: [],
+    ...overrides,
+  };
+}
+
+/** One attendee chat message from someone else, as the room sends it to a reader. */
+export function liveChatMessage(overrides: Partial<LiveChatMessage> = {}): LiveChatMessage {
+  return {
+    channel: "attendee",
+    id: "40000000-0000-4000-8000-000000000001",
+    text: "Welcome to the session",
+    authorName: "Sam Speaker",
+    authorPhotoUrl: null,
+    mine: false,
+    sentAt: new Date().toISOString(),
+    reactions: {},
+    myReactions: [],
+    reportedByMe: false,
+    moderation: null,
     ...overrides,
   };
 }
@@ -179,6 +241,13 @@ export function liveQuestion(overrides: Record<string, unknown> = {}) {
     moderated: null,
     originalText: null,
     rewritten: null,
+    answerCount: 0,
+    acceptedAnswer: false,
+    removal: null,
+    done: null,
+    authorRestriction: null,
+    addressedTo: null,
+    prepared: false,
     ...overrides,
   };
 }

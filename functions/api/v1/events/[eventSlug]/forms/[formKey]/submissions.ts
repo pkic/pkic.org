@@ -11,12 +11,12 @@ export const EventFormSubmissionsGet = openApiRoute(
   eventFormSubmissionsListRouteSchema,
   async (c: AdminContext, data) => {
     const { db, event } = await requireEventFormsPermission(c, data.params.eventSlug, "events:read");
-    await requireEventForm(db, event.id, data.params.formKey);
-    const result = await listFormSubmissions(db, {
-      ...data.query,
-      formKey: data.params.formKey,
-      eventSlug: event.slug,
-    });
+    const definition = await requireEventForm(db, event.id, data.params.formKey);
+    const result = await listFormSubmissions(
+      db,
+      { ...data.query, formKey: data.params.formKey, eventSlug: event.slug },
+      definition.fields,
+    );
     return json(
       formSubmissionsResponseSchema.parse({
         form: result.form,

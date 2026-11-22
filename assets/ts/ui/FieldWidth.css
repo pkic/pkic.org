@@ -1,0 +1,18 @@
+/*
+ * How wide a field's control grows, for the forms the Field component renders.
+ *
+ * A one-line control is as wide as what goes in it, not as wide as the screen:
+ * a select's arrow, or a button beside the input, stays near the label. A
+ * textarea, a group of choices and a composite picker still fill the row.
+ *
+ * This is kept out of Field.css on purpose. Field.css is in the design entry
+ * linked on every page, whose budget is for styles server-rendered markup
+ * cannot wait for; a width refinement can arrive with the component.
+ */
+
+@layer components {
+  .pk-field__control:has(> .pk-input:not(textarea), > .pk-input-group, > .pk-control-stack) {
+    /* Room for a long address or organization name. */
+    max-inline-size: 32rem;
+  }
+}

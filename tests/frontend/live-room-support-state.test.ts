@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import { LIVE_TIMER_MAX_MS } from "../../assets/shared/schemas/live-session-timer";
 import { liveRoomClientMessageSchema } from "../../assets/shared/schemas/live-session-room";
 import { applyLiveRoomMessage } from "../../assets/ts/live-session/live-room-state";
+import { applyLocationChatMessage } from "../../assets/ts/live-session/location-chat-state";
 import { LIVE_ROOM_POLICY } from "../../assets/shared/live-session-policy";
 import { LIVE_CHAT_POLICY } from "../../assets/shared/live-chat-policy";
-import { liveSnapshot } from "./helpers/live-room-socket";
+import { liveLocationChatSnapshot, liveSnapshot } from "./helpers/live-room-socket";
 
 describe("canonical live room supporting controls", () => {
   it("validates a timer to add by its kind and refuses invalid lengths", () => {
@@ -40,9 +41,9 @@ describe("canonical live room supporting controls", () => {
     expect(next.timers).toEqual(initial.timers);
   });
   it("keeps real chat history bounded and removes only the requested message", () => {
-    let state = applyLiveRoomMessage(null, liveSnapshot())!;
+    let state = applyLocationChatMessage(null, liveLocationChatSnapshot())!;
     for (let index = 0; index < LIVE_CHAT_POLICY.clientWindow + 1; index++) {
-      state = applyLiveRoomMessage(state, {
+      state = applyLocationChatMessage(state, {
         type: "chat.message",
         message: {
           channel: "attendee",
@@ -57,14 +58,14 @@ describe("canonical live room supporting controls", () => {
     expect(state.chat).toHaveLength(LIVE_CHAT_POLICY.clientWindow);
     expect(state.chat[0].text).toBe("Message 1");
     const removed = state.chat[0].id;
-    state = applyLiveRoomMessage(state, { type: "chat.removed", messageId: removed, channel: "attendee" })!;
+    state = applyLocationChatMessage(state, { type: "chat.removed", messageId: removed, channel: "attendee" })!;
     expect(state.chat.some((message) => message.id === removed)).toBe(false);
     expect(state.chat).toHaveLength(LIVE_CHAT_POLICY.clientWindow - 1);
   });
   it("keeps each chat channel independently bounded and removes only matching-channel evidence", () => {
-    let state = applyLiveRoomMessage(null, liveSnapshot())!;
+    let state = applyLocationChatMessage(null, liveLocationChatSnapshot())!;
     const publicId = crypto.randomUUID();
-    state = applyLiveRoomMessage(state, {
+    state = applyLocationChatMessage(state, {
       type: "chat.message",
       message: {
         channel: "attendee",
@@ -76,7 +77,7 @@ describe("canonical live room supporting controls", () => {
       },
     })!;
     for (let index = 0; index < LIVE_CHAT_POLICY.clientWindow + 1; index++)
-      state = applyLiveRoomMessage(state, {
+      state = applyLocationChatMessage(state, {
         type: "chat.message",
         message: {
           channel: "operator",
@@ -89,7 +90,7 @@ describe("canonical live room supporting controls", () => {
       })!;
     expect(state.chat.filter((row) => row.channel === "operator")).toHaveLength(LIVE_CHAT_POLICY.clientWindow);
     expect(state.chat.filter((row) => row.channel === "attendee")).toHaveLength(1);
-    state = applyLiveRoomMessage(state, { type: "chat.removed", messageId: publicId, channel: "operator" })!;
+    state = applyLocationChatMessage(state, { type: "chat.removed", messageId: publicId, channel: "operator" })!;
     expect(state.chat.some((row) => row.id === publicId)).toBe(true);
   });
 });

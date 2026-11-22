@@ -143,6 +143,7 @@ export async function onRequestProfilePatch(
         independentCapacity: body.independentCapacity,
         consents: body.consents,
         organizationName: body.organizationName,
+        organizationContextToken: body.organizationContextToken,
         jobTitle: body.jobTitle,
         firstName: body.firstName === undefined ? undefined : body.firstName || null,
         lastName: body.lastName === undefined ? undefined : body.lastName || null,

@@ -34,7 +34,6 @@ import { OrganizationRecordTrail, organizationRecordHref, useOrganizationRecord 
 const STATUS: Record<OrganizationDomainStatus, { label: string; tone: BadgeTone }> = {
   claimed: { label: "Claimed", tone: "ok" },
   derived: { label: "Through people", tone: "info" },
-  held: { label: "Held by an application", tone: "warn" },
 };
 
 function DomainsTable({ organization, canWrite }: { organization: OrganizationDetail; canWrite: boolean }) {

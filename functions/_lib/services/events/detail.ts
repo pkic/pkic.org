@@ -8,19 +8,23 @@ import type { AuthorizationEvidence } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
+import { readEventInvitationMessage } from "../../../../assets/shared/schemas/event-invitation-message";
 import { resolveEventSessionTypes } from "../events";
 import { eventColumns, type EventRecord } from "../event-types";
 import { EVENT_FORM_PURPOSES } from "../../../../assets/shared/schemas/forms";
 import { placedEventFormSelection } from "../forms/event-placement-read";
 import { readEventAudienceAccess } from "./scanner-access";
 import type { EventAudienceViewer } from "./visibility";
-import { eventRegistrationPath } from "../event-presentation";
+import { eventPublicPagePath, eventRegistrationPath } from "../event-presentation";
+import { eventMotifPath, eventOwnMotif } from "../../../../assets/shared/schemas/event-promotion-design";
 import { persistedUtcInstant } from "../../utils/time";
+import { decodeEventProductionPartners, eventProductionPartnersJsonSql } from "./production-partners";
 
 export interface EventDetailRow extends EventRecord {
   user_retention_days: number | null;
   series_id: string | null;
   form_links_json: string;
+  production_partners_json: string | null;
 }
 
 export function normalizeEventRegistrationPolicy(value: string): EventDetail["registrationPolicy"] {
@@ -66,6 +70,7 @@ export function prepareEventDetail(db: DatabaseLike, eventSlug: string, authorit
   );
   return db
     .prepare(`SELECT ${eventColumns("event")}, policy.user_retention_days, series.id AS series_id,
+      ${eventProductionPartnersJsonSql("event")} AS production_partners_json,
       json_object('event_registration', (SELECT CASE WHEN COUNT(*)=1 THEN MIN(key) END FROM (${formReads[0].sql})),
                   'proposal_submission', (SELECT CASE WHEN COUNT(*)=1 THEN MIN(key) END FROM (${formReads[1].sql}))) AS form_links_json
        FROM events event
@@ -106,14 +111,17 @@ export function decodeEventDetail(
     updatedAt: persistedUtcInstant(event.updated_at),
     ownerGroupId: event.owner_group_id ?? null,
     seriesId: event.series_id,
-    basePath: event.base_path,
+    basePath: eventPublicPagePath(event),
+    motifUrl: eventOwnMotif(settings) ? eventMotifPath(event.slug) : null,
     userRetentionDays: event.user_retention_days,
     venue: typeof settings.venue === "string" ? settings.venue : null,
     virtualUrl: typeof settings.virtualUrl === "string" ? settings.virtualUrl : null,
     heroImageUrl: typeof settings.heroImageUrl === "string" ? settings.heroImageUrl : null,
+    invitationMessage: readEventInvitationMessage(settings),
     sessionTypes: resolveEventSessionTypes(event.settings_json),
     links: parseLinksJson(event.links_json),
     registrationPath: eventRegistrationPath(event),
+    productionPartners: decodeEventProductionPartners(event.production_partners_json),
     settings,
     capabilities: directWriteAllowed ? capabilities : capabilities.filter((capability) => capability !== "write"),
   });

@@ -9,9 +9,17 @@ import {
   publicSessionCreditRole,
 } from "../../../../assets/shared/session-public-credits";
 import { first } from "../../db/queries";
+import { liveSessionAbstract } from "../../../../assets/shared/live-session-abstract";
+import { decodeLiveRoomOutputs, liveRoomOutputsJsonSql } from "./room-output-setup";
 import { z } from "zod";
 import { agendaDisplayRoleShiftSchema } from "../../../../assets/shared/schemas/event-agenda";
-import { LIVE_MODERATOR_ROLE_LABEL, liveSessionHosts } from "../../../../assets/shared/live-room-credits";
+import {
+  LIVE_MODERATOR_ROLE_LABEL,
+  liveSessionHosts,
+  sessionLivePersonKey,
+} from "../../../../assets/shared/live-room-credits";
+import type { SessionAffiliation } from "../../../../assets/shared/schemas/event-session-history";
+import type { LiveCreditIdentity } from "../../../../assets/shared/schemas/live-session-credit";
 import { parseJsonSafe } from "../../utils/json";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
@@ -27,6 +35,16 @@ export interface LiveRoomSessionRecord {
 
 /** The session's credits a room carries, speakers first. */
 const LIVE_ROOM_SESSION_CREDITS_MAX = 50;
+
+export type LiveRoomSessionRow = {
+  payload_json: string;
+  timezone: string;
+  event_name: string;
+  room_outputs_json: string | null;
+};
+
+/** The outputs the session's own physical room sets up, in order, read with the session. */
+const ROOM_OUTPUTS_JSON = liveRoomOutputsJsonSql("json_extract(approved.payload_json,'$.roomId')");
 
 function unavailable() {
   return new AppError(404, "LIVE_SESSION_NOT_FOUND", "This session is not on the approved agenda.");
@@ -63,7 +81,7 @@ export function prepareLiveRoomSessionRead(
 ) {
   const statement = db
     .prepare(
-      `SELECT approved.payload_json,event.timezone FROM event_agenda_state state
+      `SELECT approved.payload_json,event.timezone,event.name AS event_name,(${ROOM_OUTPUTS_JSON}) AS room_outputs_json FROM event_agenda_state state
      JOIN event_agenda_published_occurrences approved ON approved.event_id=state.event_id AND approved.revision=state.published_revision
      JOIN events event ON event.id=state.event_id
      WHERE state.event_id=? AND approved.occurrence_id=?`,
@@ -72,7 +90,7 @@ export function prepareLiveRoomSessionRead(
 
   return {
     statement,
-    async decode(row: { payload_json: string; timezone: string } | null): Promise<LiveRoomSessionRecord> {
+    async decode(row: LiveRoomSessionRow | null): Promise<LiveRoomSessionRecord> {
       if (!row) throw unavailable();
       const parsed = agendaOccurrenceSchema.safeParse(JSON.parse(row.payload_json));
       if (!parsed.success) throw unavailable();
@@ -80,38 +98,43 @@ export function prepareLiveRoomSessionRead(
       if (occurrence.kind === "break" || occurrence.placeholder || !occurrence.startAt || !occurrence.endAt)
         throw unavailable();
       const displayed = sessionDisplayCredits(occurrence);
-      // Each person appears as the identity they act as: an approved appearance names it; someone credited
-      // without one appears as the agenda's one rule resolves it (their proposal choice, else primary).
-      // Its title and organization are read now.
-      const acting = displayed.map((credit) =>
-        "userId" in credit ? (creditAffiliations(credit)[0]?.identityId ?? null) : null,
+      // Each person appears as every identity they act as: an approved appearance names them, primary
+      // first; someone credited without one appears as the agenda's one rule resolves it (their proposal
+      // choice, else primary). Titles and organizations are read now. A source credit, or an appearance as
+      // an individual, keeps the capacity its record names: there is no identity to read.
+      const affiliations = displayed.map((credit) => creditAffiliations(credit));
+      const acting = displayed.flatMap((credit, index) =>
+        "userId" in credit ? affiliations[index]!.flatMap((affiliation) => affiliation.identityId ?? []) : [],
       );
       const unnamed = displayed.flatMap((credit, index) =>
-        "userId" in credit && acting[index] === null && !creditAffiliations(credit).length ? [credit.userId] : [],
+        "userId" in credit && !affiliations[index]!.length ? [credit.userId] : [],
       );
       const read = options.people
-        ? await readLiveCreditIdentities(
-            db,
-            acting.filter((id): id is string => id !== null),
-            { occurrenceId: occurrence.id, userIds: unnamed },
-          )
+        ? await readLiveCreditIdentities(db, acting, { occurrenceId: occurrence.id, userIds: unnamed })
         : { identities: new Map(), primary: new Map<string, string>() };
+      const capacityOf = (affiliation: SessionAffiliation, person: boolean): LiveCreditIdentity | null => {
+        if (person && affiliation.identityId) return read.identities.get(affiliation.identityId) ?? null;
+        const title = affiliation.title?.trim() || null;
+        const organization = affiliation.organizationName?.trim() || null;
+        return title || organization ? { title, organization } : null;
+      };
       const credits = displayed.map((credit, index) => {
         const content = agendaSpeakerContent(occurrence, credit);
-        const identityId = acting[index] ?? ("userId" in credit ? read.primary.get(credit.userId) : undefined);
-        // A source credit, or an appearance as an individual, keeps the capacity its record names: there is no identity to read.
-        const recorded = identityId ? null : creditAffiliations(credit)[0];
+        const person = "userId" in credit;
+        const primaryId = person && !affiliations[index]!.length ? read.primary.get(credit.userId) : undefined;
+        const capacities = primaryId
+          ? [read.identities.get(primaryId) ?? null]
+          : affiliations[index]!.map((affiliation) => capacityOf(affiliation, person));
+        const [identity = null, ...rest] = capacities;
+        const additionalIdentities = rest.filter((capacity): capacity is LiveCreditIdentity => capacity !== null);
         return {
-          key: "userId" in credit ? `user:${credit.userId}` : `credit:${index}`,
+          key: person ? sessionLivePersonKey(credit.userId) : `credit:${index}`,
           name: content.name,
           moderator: publicSessionCreditRole(occurrence, credit) === "moderator",
           roleLabel: publicSessionCreditRole(occurrence, credit) === "moderator" ? LIVE_MODERATOR_ROLE_LABEL : null,
           photoUrl: content.imageSrc ?? null,
-          identity: identityId
-            ? (read.identities.get(identityId) ?? null)
-            : recorded && (recorded.title || recorded.organizationName)
-              ? { title: recorded.title?.trim() || null, organization: recorded.organizationName?.trim() || null }
-              : null,
+          identity,
+          additionalIdentities,
         };
       });
       const hosts = options.people
@@ -125,6 +148,7 @@ export function prepareLiveRoomSessionRead(
             moderator: false,
             photoUrl: null,
             identity: null,
+            additionalIdentities: [],
             roleLabel: host.roleLabel,
           }))
         : [];
@@ -133,10 +157,14 @@ export function prepareLiveRoomSessionRead(
         session: liveRoomSessionSchema.parse({
           occurrenceId: occurrence.id,
           title: occurrence.title,
+          eventName: row.event_name,
           startAt: occurrence.startAt,
           endAt: occurrence.endAt,
           timeZone: row.timezone,
+          roomId: occurrence.roomId,
           credits: [...credits, ...hosts].slice(0, LIVE_ROOM_SESSION_CREDITS_MAX),
+          abstract: liveSessionAbstract(occurrence.description),
+          roomOutputs: decodeLiveRoomOutputs(row.room_outputs_json),
         }),
         roomIds: [occurrence.roomId, ...(occurrence.additionalRoomIds ?? [])].filter((id): id is string => id !== null),
         speakerUserIds: canonicalSessionCredits(occurrence).flatMap((credit) =>
@@ -154,5 +182,5 @@ export async function readLiveRoomSession(
   options: { people?: boolean } = {},
 ) {
   const read = prepareLiveRoomSessionRead(db, eventId, occurrenceId, options);
-  return read.decode(await read.statement.first<{ payload_json: string; timezone: string }>());
+  return read.decode(await read.statement.first<LiveRoomSessionRow>());
 }

@@ -20,6 +20,7 @@ import { RoleDetail } from "../../assets/ts/member-flows/portal/sections/access-
 import { RoleList } from "../../assets/ts/member-flows/portal/sections/access-control/roles/RoleList";
 import { RolePermissions } from "../../assets/ts/member-flows/portal/sections/access-control/roles/RolePermissions";
 import type { Permission } from "../../assets/shared/schemas/permissions";
+import { PERMISSION_DOMAINS, PERMISSION_METADATA } from "../../assets/shared/permission-metadata";
 import { accessGrantCreateSchema, userRoleAssignSchema } from "../../assets/shared/schemas/access-control";
 import {
   apiError,
@@ -96,12 +97,20 @@ function stubGrantsApi(extra?: (path: string, init?: RequestInit) => Response | 
   return requests;
 }
 
-async function pickPermission(container: HTMLElement, permission: string): Promise<void> {
-  const select = controlFor(container, "Permission") as HTMLSelectElement;
-  select.value = permission;
-  await act(() => {
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+/** Ticks one permission in the matrix: its area is opened when it lists several, then its own box is ticked. */
+async function pickPermission(container: HTMLElement, permission: keyof typeof PERMISSION_METADATA): Promise<void> {
+  const meta = PERMISSION_METADATA[permission];
+  const area = PERMISSION_DOMAINS[meta.domain];
+  const access = meta.access === "read" ? "Read" : "Write";
+  const opener = container.querySelector<HTMLButtonElement>(`button[aria-label="${area} permissions"]`);
+  if (opener?.getAttribute("aria-expanded") === "false") await act(() => opener.click());
+  const box = (name: string) =>
+    [...container.querySelectorAll("label")]
+      .find((label) => label.textContent?.trim() === name)
+      ?.querySelector<HTMLInputElement>('input[type="checkbox"]');
+  const input = box(meta.label) ?? box(`${access}: ${area}`);
+  if (!input) throw new Error(`missing permission checkbox: ${permission}`);
+  await act(() => input.click());
 }
 
 function submitGrantForm(container: HTMLElement): Promise<void> {
@@ -133,8 +142,9 @@ describe("Grants on the design system", () => {
     container = mount(<Grants canGrant canRevoke grantSegment="new" onNavigate={() => {}} />);
     await settle();
 
-    // Single-control fields are labeled by a real for/id pair …
-    expect(controlFor(container, "Permission").tagName).toBe("SELECT");
+    // The permission matrix is a group named by its legend …
+    expect([...container.querySelectorAll("legend")].map((legend) => legend.textContent)).toContain("Permissions");
+    // … and single-control fields are labeled by a real for/id pair.
     const expires = controlFor(container, "Expires (optional)");
     expect(expires.getAttribute("type")).toBe("datetime-local");
 
@@ -147,7 +157,7 @@ describe("Grants on the design system", () => {
 
     // The user picker is a group; the target type has one labeled control.
     const legends = [...container.querySelectorAll("legend")].map((legend) => legend.textContent);
-    expect(legends).toEqual(["User"]);
+    expect(legends).toEqual(["User", "Permissions"]);
     expect(controlFor(container, "Target").tagName).toBe("SELECT");
   });
 
@@ -195,7 +205,7 @@ describe("Grants on the design system", () => {
   it("posts a body the shared accessGrantCreateSchema accepts, then returns to the list", async () => {
     const requests = stubGrantsApi((path, init) =>
       path === "/api/v1/permissions/grants" && init?.method === "POST"
-        ? json({ grant: { ...GRANT, userId: CANDIDATE.id, userEmail: CANDIDATE.email } })
+        ? json({ grants: [{ ...GRANT, userId: CANDIDATE.id, userEmail: CANDIDATE.email }] })
         : undefined,
     );
     // Creating a grant is a page of its own, reached under the reserved
@@ -226,18 +236,18 @@ describe("Grants on the design system", () => {
     await settle();
     await pickCandidate(container);
 
-    expect((controlFor(container, "Permission") as HTMLSelectElement).value).toBe("");
+    expect(container.querySelectorAll('input[type="checkbox"]:checked')).toHaveLength(0);
     await submitGrantForm(container);
 
-    expect(controlFor(container, "Permission").getAttribute("aria-invalid")).toBe("true");
-    expect(container.querySelectorAll('[role="alert"]')).toHaveLength(1);
+    const alerts = [...container.querySelectorAll('[role="alert"]')].map((alert) => alert.textContent);
+    expect(alerts).toEqual(["Choose at least one permission."]);
     expect(requests.some((request) => request.method === "POST")).toBe(false);
   });
 
   it("grants a privileged permission only after the reader confirms it", async () => {
     const requests = stubGrantsApi((path, init) =>
       path === "/api/v1/permissions/grants" && init?.method === "POST"
-        ? json({ grant: { ...GRANT, permission: "access:grant", userId: CANDIDATE.id, userEmail: CANDIDATE.email } })
+        ? json({ grants: [{ ...GRANT, permission: "access:grant", userId: CANDIDATE.id, userEmail: CANDIDATE.email }] })
         : undefined,
     );
     const container = mount(
@@ -262,7 +272,7 @@ describe("Grants on the design system", () => {
     await settle();
 
     const posted = requests.find((request) => request.method === "POST");
-    expect(accessGrantCreateSchema.parse(posted!.body).permission).toBe("access:grant");
+    expect(accessGrantCreateSchema.parse(posted!.body).permissions).toEqual(["access:grant"]);
   });
 });
 

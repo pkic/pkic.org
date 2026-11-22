@@ -32,7 +32,7 @@ export type LivePollResultsQuery = z.infer<typeof livePollResultsQuerySchema>;
 export const livePollResultsResponseSchema = paginatedResponseSchema("polls", livePollResultSchema);
 
 export const livePollResultsRouteSchema = {
-  ...requiresPermissions("agenda:live_moderate"),
+  ...requiresPermissions("agenda:live_studio"),
   tags: ["Events"],
   summary: "List a session's poll results from its durable copy",
   request: { params: liveRoomParamsSchema, query: livePollResultsQuerySchema },

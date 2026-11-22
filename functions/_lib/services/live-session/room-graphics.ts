@@ -15,11 +15,14 @@ import type {
   LiveCompositionInput,
   LiveStage,
 } from "../../../../assets/shared/schemas/live-session-room";
-import { LIVE_AUX_OUTPUTS } from "../../../../assets/shared/live-room-outputs";
 import type { LiveRoomControls, LiveControlOutcome } from "./room-controls";
 import type { LiveRoomOutputs } from "./room-outputs";
 import type { LiveRoomPreview } from "./room-preview";
-import { mergeLivePreview } from "../../../../assets/shared/live-room-preview";
+import { liveCompositionInput, mergeLivePreview } from "../../../../assets/shared/live-room-preview";
+import { liveOutputFixedScene, liveRoomOutputs } from "../../../../assets/shared/live-room-outputs";
+import { nowIso } from "../../utils/time";
+import { resolveLiveSceneElements } from "../../../../assets/shared/live-scene-elements";
+import { liveSceneFill, type LiveSceneFill } from "../../../../assets/shared/live-scene-fill";
 import type { ResolvedComposition } from "./room-composition";
 import type { LiveOverlayLayoutGeometry } from "../../../../assets/shared/schemas/live-overlay-layout";
 import type { DatabaseLike } from "../../types";
@@ -79,7 +82,7 @@ export class LiveRoomGraphics {
     // Background refresh still resolves its point and signing key canonically.
     if (!fresh) {
       const outputs = this.store.outputs();
-      const existing = [this.store.stage(), this.store.preview(), ...LIVE_AUX_OUTPUTS.map((output) => outputs[output])]
+      const existing = [this.store.stage(), this.store.preview(), ...Object.values(outputs)]
         .map((composition) => composition.checkIn)
         .find((graphic) => graphic && JSON.stringify(graphic.selection) === JSON.stringify(selection));
       if (existing) return { ...existing, theme, text };
@@ -125,7 +128,26 @@ export class LiveRoomGraphics {
     message: Extract<LiveRoomClientMessage, { type: "aux.set" }>,
     at: string,
   ): Promise<LiveControlOutcome> {
-    const { composition } = message;
+    // A screen its room locked to a scene keeps that scene, whatever scene a shot names.
+    const scene = liveOutputFixedScene(liveRoomOutputs(session), message.output) ?? message.composition.scene;
+    const composition = { ...message.composition, scene };
+    return this.outputs.setAux(actor, session, message.output, await this.resolve(session, composition, at), at);
+  }
+  /**
+   * Changes the scene a room screen draws, as loading a scene does on
+   * Preview: the screen keeps everything it holds, and the scene's comes-on
+   * graphics that are off there go on. A screen its room locked to a scene
+   * stays in that scene.
+   */
+  async setAuxScene(
+    actor: Actor,
+    session: LiveRoomSession,
+    message: Extract<LiveRoomClientMessage, { type: "aux.scene" }>,
+    at: string,
+  ): Promise<LiveControlOutcome> {
+    const scene = liveOutputFixedScene(liveRoomOutputs(session), message.output) ?? message.scene;
+    const held = { ...liveCompositionInput(this.store.aux(message.output)), scene };
+    const composition = { ...held, ...this.comesOn(held) };
     return this.outputs.setAux(actor, session, message.output, await this.resolve(session, composition, at), at);
   }
   async setPreview(
@@ -134,8 +156,49 @@ export class LiveRoomGraphics {
     message: Extract<LiveRoomClientMessage, { type: "preview.set" }>,
     at: string,
   ): Promise<LiveControlOutcome> {
-    const input = mergeLivePreview(this.store.preview(), message.composition);
-    return this.preview.set(actor, session, message.composition, await this.resolve(session, input, at), at);
+    const merged = mergeLivePreview(this.store.preview(), message.composition);
+    // Loading a scene switches on the graphics that come on with it, in the same one write. A layer the
+    // change itself names stays as the operator set it.
+    const loaded = "scene" in message.composition ? this.comesOn(merged) : {};
+    const patch = { ...loaded, ...message.composition };
+    return this.preview.set(actor, session, patch, await this.resolve(session, { ...merged, ...patch }, at), at);
+  }
+  /**
+   * What loading its scene switches on for a composition, on Preview or a
+   * room screen alike: the scene's comes-on graphics that are off there,
+   * filled from the room.
+   */
+  private comesOn(input: LiveCompositionInput): LiveSceneFill {
+    const scene = resolveLiveSceneElements({ overlayLayouts: this.layouts }, input.scene);
+    return liveSceneFill(scene, input, { program: this.store.stage() });
+  }
+  /**
+   * A screen draws the scene its room set up for it from the start, before
+   * anyone takes anything to it: the room loads that scene on the screen once.
+   * On a screen that follows Program that switches on what comes on with the
+   * scene; on one that shows what you take to it nothing comes on by itself.
+   * Everything the screen holds stays. After a take, only a locked screen
+   * goes back to its scene; a screen
+   * already in its scene is left alone, so a graphic an operator switched off
+   * there stays off.
+   */
+  private async loadSetUpScenes(): Promise<void> {
+    const room = this.store.session();
+    if (!room) return;
+    const at = nowIso();
+    for (const output of liveRoomOutputs(room.session)) {
+      if (output.role === "speaker" || !output.scene) continue;
+      if (!output.sceneLocked && this.store.composed(output.key)) continue;
+      const held = this.store.aux(output.key);
+      if (held.scene === output.scene) continue;
+      const input = { ...liveCompositionInput(held), scene: output.scene };
+      const fill = output.role === "follow" ? this.comesOn(input) : {};
+      const resolved: Record<string, unknown> = await this.resolve(room.session, { ...input, ...fill }, at);
+      // Only what the scene switched on changes; the store reads the whole composition again before it saves.
+      const brought = Object.fromEntries(Object.keys(fill).map((graphic) => [graphic, resolved[graphic]]));
+      const message = this.outputs.adopt(output.key, held, { ...held, ...brought, scene: output.scene });
+      if (message) await this.broadcast.all(message);
+    }
   }
   async takePreview(actor: Actor, session: LiveRoomSession, at: string): Promise<LiveControlOutcome> {
     return this.preview.take(actor, session, await this.resolve(session, this.preview.sources(), at), at);
@@ -161,6 +224,8 @@ export class LiveRoomGraphics {
       topQuestions: input.topQuestions && this.lists.topQuestions(input.topQuestions),
       chatFeed: input.chatFeed && (await this.lists.chatFeed(input.chatFeed)),
       reactions: input.reactions,
+      reactionsGraphic: input.reactionsGraphic,
+      scene: input.scene,
       ticker: await resolveLiveTicker(
         this.db,
         room.eventId,
@@ -183,6 +248,7 @@ export class LiveRoomGraphics {
   async initialize(): Promise<void> {
     if (!this.basis.ready) await this.refresh();
     else await this.refreshLocal();
+    await this.loadSetUpScenes();
   }
 
   async refresh(): Promise<void> {
@@ -228,7 +294,7 @@ export class LiveRoomGraphics {
     const stage = this.store.stage();
     const outputs = this.store.outputs();
     const preview = this.store.preview();
-    const dynamic = [stage, preview, ...LIVE_AUX_OUTPUTS.map((output) => outputs[output])];
+    const dynamic = [stage, preview, ...Object.values(outputs)];
     if (!dynamic.some((composition) => composition.ticker || composition.schedule || composition.checkIn)) return;
     const approved = this.basis.read().agenda;
     const now = Date.now();
@@ -267,9 +333,9 @@ export class LiveRoomGraphics {
       this.store.saveStage(program);
       await this.broadcast.all({ type: "stage.changed", stage: this.store.stage() });
     }
-    for (const output of LIVE_AUX_OUTPUTS) {
-      const composition = await refreshed(outputs[output]);
-      if (!composition || JSON.stringify(this.store.aux(output)) !== JSON.stringify(outputs[output])) continue;
+    for (const [output, held] of Object.entries(outputs)) {
+      const composition = await refreshed(held);
+      if (!composition || JSON.stringify(this.store.aux(output)) !== JSON.stringify(held)) continue;
       this.store.saveAux(output, composition);
       await this.broadcast.all({ type: "aux.changed", output, composition: this.store.aux(output) });
     }

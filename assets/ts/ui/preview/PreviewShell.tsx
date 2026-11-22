@@ -33,6 +33,20 @@ export interface PreviewSection {
   render: () => ComponentChildren;
 }
 
+/**
+ * The sections `?only=<id>` asks for. When none matches, the fallback shows
+ * instead, such as the note for sections whose chunk did not load.
+ */
+export function previewSectionsShown(
+  sections: readonly PreviewSection[],
+  only: string | null,
+  fallback: readonly PreviewSection[] = [],
+): readonly PreviewSection[] {
+  if (!only) return sections;
+  const matched = sections.filter((section) => section.id === only);
+  return matched.length > 0 ? matched : fallback;
+}
+
 export function PreviewShell({ sections }: { sections: readonly PreviewSection[] }) {
   const [theme, setTheme] = useState<Theme>("light");
   const [density, setDensity] = useState<Density>("comfortable");

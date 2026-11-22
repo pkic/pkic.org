@@ -137,7 +137,10 @@ export async function getManagedFormWithFields(
   return read.decode(await db.batch(read.statements));
 }
 
-/** Resolve one form through its event ownership or an unowned event placement. */
+/**
+ * Resolve one form through its event ownership, an unowned event placement, or a placement made by the group
+ * that owns the event: a portal event's forms belong to its group, and are read for the event all the same.
+ */
 export function prepareManagedEventForm(
   db: DatabaseLike,
   event: EventReadSelection,
@@ -158,13 +161,14 @@ export function prepareManagedEventForm(
             OR (? = 0 AND EXISTS (
               SELECT 1 FROM form_placements placement
                WHERE placement.form_id = form.id
-                 AND placement.owner_group_id IS NULL
                  AND placement.context_type = 'event'
                  AND placement.context_ref = ${eventId.sql}
+                 AND (placement.owner_group_id IS NULL
+                      OR placement.owner_group_id = (SELECT owner_group_id FROM events WHERE id = ${eventId.sql}))
             ))
           )
         LIMIT 1`)
-        .bind(formKey, ...eventId.bindings, options.ownedOnly ? 1 : 0, ...eventId.bindings),
+        .bind(formKey, ...eventId.bindings, options.ownedOnly ? 1 : 0, ...eventId.bindings, ...eventId.bindings),
     ],
     decode(results: D1StatementResult[]): ManagedFormWithFields {
       const loaded = aggregate.decode(results);
@@ -200,33 +204,43 @@ export function preparePlacedEventFormDefinition(db: DatabaseLike, event: EventR
   };
 }
 
+/** Each option catalog the selected forms use, read in the caller's batch; unused catalogs return no rows. */
+export function prepareFormOptionCatalogs(
+  db: DatabaseLike,
+  formIdsSql: string,
+  bindings: unknown[],
+  options: { includeArchived?: boolean; includeInactive?: boolean } = {},
+) {
+  return {
+    statements: FORM_FIELD_OPTION_SOURCES.map((source) =>
+      prepareOptionCatalog(db, source, options.includeInactive ?? false, {
+        sql: formIdsSql,
+        bindings,
+        includeArchived: options.includeArchived,
+      }),
+    ),
+    decode(results: D1StatementResult[]): OptionCatalogs {
+      return Object.fromEntries(
+        FORM_FIELD_OPTION_SOURCES.map((source, index) => [
+          source,
+          decodeOptionCatalog(batchRows<OptionCatalogRow>(results[index])),
+        ]),
+      );
+    },
+  };
+}
+
 function prepareFormDefinitionFields(
   db: DatabaseLike,
   formIdsSql: string,
   bindings: unknown[],
   options: { includeArchived?: boolean } = {},
 ) {
+  const catalogs = prepareFormOptionCatalogs(db, formIdsSql, bindings, options);
   return {
-    statements: [
-      prepareFormFields(db, formIdsSql, bindings, options.includeArchived ?? false),
-      ...FORM_FIELD_OPTION_SOURCES.map((source) =>
-        prepareOptionCatalog(db, source, false, {
-          sql: formIdsSql,
-          bindings,
-          includeArchived: options.includeArchived,
-        }),
-      ),
-    ],
+    statements: [prepareFormFields(db, formIdsSql, bindings, options.includeArchived ?? false), ...catalogs.statements],
     decode(results: D1StatementResult[]): [FormFieldRow[], OptionCatalogs] {
-      return [
-        batchRows<FormFieldRow>(results[0]),
-        Object.fromEntries(
-          FORM_FIELD_OPTION_SOURCES.map((source, index) => [
-            source,
-            decodeOptionCatalog(batchRows<OptionCatalogRow>(results[1 + index])),
-          ]),
-        ),
-      ];
+      return [batchRows<FormFieldRow>(results[0]), catalogs.decode(results.slice(1))];
     },
   };
 }

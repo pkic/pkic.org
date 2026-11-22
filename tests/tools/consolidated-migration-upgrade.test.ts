@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
 import path from "node:path";
-import { DEFAULT_LAYOUT_HTML, DEFAULT_TEMPLATES } from "../../scripts/seed-email-templates.mjs";
+import { DEFAULT_LAYOUT_HTML } from "../../scripts/seed-email-templates.mjs";
 import { renderEmail } from "../../functions/_lib/email/render";
 
 const ROOT = path.resolve(__dirname, "..", "..");
@@ -239,8 +239,6 @@ describe("consolidated pending migration upgrade", () => {
     );
     expect(reminderEmail.text).toContain("confirm or decline your participation");
     expect(reminderEmail.text).not.toContain("has been accepted");
-    const userMagicLinkBaseline = DEFAULT_TEMPLATES.find((template) => template.key === "user_magic_link");
-    expect(userMagicLinkBaseline).toBeDefined();
 
     expect(db.prepare("PRAGMA integrity_check").get()).toEqual({ integrity_check: "ok" });
     expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
@@ -278,7 +276,8 @@ describe("consolidated pending migration upgrade", () => {
       {
         template_key: "user_magic_link",
         status: "active",
-        body: userMagicLinkBaseline!.content.trimEnd(),
+        // The migration installs its own working body; the seed's --replace brings the current copy.
+        body: expect.stringContaining("{{magicLinkUrl}}"),
       },
     ]);
     expect(() =>

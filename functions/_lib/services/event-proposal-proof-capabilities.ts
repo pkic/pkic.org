@@ -11,52 +11,20 @@ import {
 import { AppError } from "../errors";
 import { sha256Hex } from "../utils/crypto";
 import type { EventTermRecord } from "./events";
-import { proposalEntryContextSchema } from "../../../assets/shared/schemas/proposal-entry";
 import { consentItemSchema } from "../../../assets/shared/schemas/registration";
 
-export const eventProposalEntryReceiptSchema = proposalEntryContextSchema
-  .omit({ inviteToken: true, inviteId: true })
-  .extend({
-    invite: z
-      .object({
-        id: databaseIdSchema,
-        secretDigest: z.string().regex(/^[a-f0-9]{64}$/),
-        expiresAt: z.number().int().positive(),
-      })
-      .strict()
-      .optional(),
+/** The speaker whose invitation or session asked for the confirmation; a proposer signs in instead. */
+export const eventProposalProofContextSchema = z
+  .object({
+    kind: z.literal("speaker"),
+    userId: databaseIdSchema,
+    speakerId: databaseIdSchema,
+    sessionId: databaseIdSchema.optional(),
+    inviteGeneration: z.number().int().nonnegative(),
+    secretDigest: z.string().regex(/^[a-f0-9]{64}$/),
+    expiresAt: z.number().int().positive(),
   })
   .strict();
-export type EventProposalEntryReceipt = z.infer<typeof eventProposalEntryReceiptSchema>;
-
-export const eventProposalProofContextSchema = z
-  .union([
-    z.object({ kind: z.literal("session"), userId: databaseIdSchema, sessionId: databaseIdSchema }).strict(),
-    z
-      .object({
-        kind: z.literal("mailbox"),
-        userId: databaseIdSchema,
-        email: normalizedEmailSchema,
-        emailId: databaseIdSchema.nullable(),
-        capabilityId: z.string().min(16).max(64),
-        termsDigest: z.string().regex(/^[a-f0-9]{64}$/),
-        expiresAt: z.number().int().positive(),
-        sessionId: databaseIdSchema.optional(),
-      })
-      .strict(),
-    z
-      .object({
-        kind: z.literal("speaker"),
-        userId: databaseIdSchema,
-        speakerId: databaseIdSchema,
-        sessionId: databaseIdSchema.optional(),
-        inviteGeneration: z.number().int().nonnegative(),
-        secretDigest: z.string().regex(/^[a-f0-9]{64}$/),
-        expiresAt: z.number().int().positive(),
-      })
-      .strict(),
-  ])
-  .nullable();
 const proofPayloadSchema = z
   .object({
     eventId: databaseIdSchema,
@@ -66,9 +34,7 @@ const proofPayloadSchema = z
     termsDigest: z.string().regex(/^[a-f0-9]{64}$/),
     /** The terms accepted before the email step, recorded once so the confirmed person is not asked again. */
     consents: z.array(consentItemSchema).max(20),
-    operation: z.enum(["proposal_submission", "speaker_profile"]),
     context: eventProposalProofContextSchema,
-    entryContext: eventProposalEntryReceiptSchema.optional(),
     /** The mailbox was proved by opening the speaker link mailed to it, not by a confirmation email. */
     basis: z.literal("invitation").optional(),
   })

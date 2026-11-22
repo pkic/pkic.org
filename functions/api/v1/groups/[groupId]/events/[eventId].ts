@@ -12,7 +12,10 @@ import { requireGroupResourceContext } from "../../group-resource-context";
 
 export const GroupEventDetailGet = openApiRoute(groupEventDetailRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
-  const { group, viewer } = await requireGroupResourceContext(db, c.req.raw, c.env, data.params.groupId);
+  // A guest of the group opens the event they are on the team of; the event read decides which one.
+  const { group, viewer } = await requireGroupResourceContext(db, c.req.raw, c.env, data.params.groupId, {
+    guests: true,
+  });
   return json(await getGroupEvent(db, viewer, group.id, data.params.eventId));
 });
 

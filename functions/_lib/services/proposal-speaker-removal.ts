@@ -1,3 +1,4 @@
+import { buildEventEmailVariables } from "../email/event-email-variables";
 import type { ParticipantAuthority } from "./participant-authority";
 import {
   isEligibleReplacementProposerStatus,
@@ -15,7 +16,7 @@ import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { newCapabilityLinkSecret, queuedCapabilityToken } from "./capability-links";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange, prepareScopedAuditLogAfterOneChange } from "./audit";
-import { buildEventEmailVariables, getEventById } from "./events";
+import { getEventById } from "./events";
 import { proposalManagePageUrl } from "./frontend-links";
 import { prepareCancelProposalEmails } from "./proposal-email-cancellation";
 import {
@@ -224,7 +225,7 @@ async function removeProposalSpeaker(
         templateKey: "proposal_manage_link_transferred",
         recipientUserId: replacement.user_id,
         recipientEmail: replacement.email,
-        subject: `You now manage proposal: ${context.proposal_title}`,
+        subject: `You now manage the proposal ${context.proposal_title}`,
         messageType: "transactional",
         capabilityLinkValues: [manageUrl],
         data: {
@@ -386,7 +387,7 @@ async function removeProposalSpeaker(
         __currentRecipient: { userId: context.speaker_user_id, email: context.speaker_email },
         firstName: emailPlainText(context.speaker_first_name ?? ""),
         proposalTitle: emailPlainText(context.proposal_title),
-        ...directEmailBodyPayload(`{{#if firstName}}Dear {{firstName}},{{else}}Dear Speaker,{{/if}}
+        ...directEmailBodyPayload(`{{#if firstName}}Dear {{firstName}},{{else}}Hello,{{/if}}
 
 You have been removed as a speaker from **{{proposalTitle}}** for **{{eventName}}**. Your previous speaker link no longer works.
 

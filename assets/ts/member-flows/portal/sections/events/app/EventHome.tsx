@@ -1,3 +1,4 @@
+import { TICKET_STANDING_COPY, ticketStanding } from "../../../../../../shared/event-ticket-standing";
 import { eventPlaceSummary } from "../../../../../../shared/event-place";
 import { JoinPrompt } from "../../JoinPrompt";
 /**
@@ -22,8 +23,9 @@ import {
 import { viewerTimeZone } from "../../../../../../shared/timezone";
 import { formatNumber } from "../../../../../../shared/format-number";
 import { usePortalHashLocation } from "../../../hash-location";
+import { portalSession } from "../../../state";
 import { formatDateRange } from "../../../ui";
-import { eventParticipantRecordPath } from "../event-participant-paths";
+import { eventParticipantRecordPath } from "../../../../../../shared/event-participant-paths";
 import { EventCard } from "./EventCard";
 import { EventHero } from "./EventHero";
 import { eventPhase, sessionPhase } from "./event-timing";
@@ -57,7 +59,7 @@ export function EventAppHero({ event }: { event: ParticipantEventDetail }) {
   const phase = eventPhase(event.startsAt, event.endsAt);
   const place = eventPlaceSummary(event);
   // An organizer opening the attendee app still needs the way to the workspace where the event is run.
-  const managementPath = eventManagementPath(event);
+  const managementPath = eventManagementPath(event, portalSession.value);
   const eventPage = event.basePath ? (
     <ButtonLink href={event.basePath} external>
       Event page
@@ -67,6 +69,7 @@ export function EventAppHero({ event }: { event: ParticipantEventDetail }) {
     <EventHero
       back={{ href: href("/events"), label: "Events" }}
       title={event.name}
+      motifUrl={event.motifUrl}
       eyebrow={event.startsAt ? formatDateRange(event.startsAt, event.endsAt, event.timezone) : undefined}
       status={phase.label ? { label: phase.label, live: phase.kind === "live" } : null}
       meta={place ? [place] : []}
@@ -153,7 +156,8 @@ function LiveNowCard({ slug, sessions }: { slug: string; sessions: readonly Agen
   );
 }
 
-function TicketCard({ event, ended }: { event: ParticipantEventDetail; ended: boolean }) {
+/** The reader's standing on the event home: register, confirm, pay, or show the ticket. */
+export function TicketCard({ event, ended }: { event: ParticipantEventDetail; ended: boolean }) {
   const standing = eventRegistrationStanding(event);
   const base = `/events/${encodeURIComponent(event.slug)}`;
   if (!standing.registered) {
@@ -171,14 +175,22 @@ function TicketCard({ event, ended }: { event: ParticipantEventDetail; ended: bo
   }
   const viewer = "viewer" in event ? event.viewer : null;
   const pending = standing.status === "pending_email_confirmation";
+  // The ticket page says what is owed and takes the payment; until then nobody is told they are registered.
+  // Until the ticket is settled nobody is told they are registered; the ticket page takes the payment.
+  const ticket = pending || !viewer ? "settled" : ticketStanding(viewer);
+  const copy = ticket === "settled" ? null : TICKET_STANDING_COPY[ticket];
   return (
-    <EventCard eyebrow="Your ticket" title={pending ? "Confirm your email address" : "You're registered"}>
+    <EventCard
+      eyebrow="Your ticket"
+      title={pending ? "Confirm your email address" : (copy?.title ?? "You're registered")}
+    >
       {pending && <p>Check your inbox to complete your registration.</p>}
+      {copy && <p>{copy.body}</p>}
       {viewer && <p class="pk-event-card__meta">{attendanceStandingParts(viewer).join(" · ")}</p>}
       {viewer && <PersonalAddressPrompt withoutWorkAddress={!viewer.holdsWorkAddress} />}
       <div class="pk-cluster">
         <ButtonLink variant="primary" href={href(base + "/ticket")}>
-          Show ticket
+          {copy?.action ?? "Show ticket"}
         </ButtonLink>
         {standing.registrationId && (
           <a href={href(eventParticipantRecordPath(event.slug, "registration", standing.registrationId))}>

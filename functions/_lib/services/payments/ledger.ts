@@ -74,6 +74,10 @@ function eventCreated(event: StripeEvent): number | null {
 
 function financialStatus(event: StripeEvent, object: StripeObject, domainOutcome: string | null): PaymentStatus | null {
   if (domainOutcome === "rejected_mismatch") return "requires_review";
+  // Part of the payment was returned: the entry stays as paid, and only a full refund marks it refunded.
+  // A refund of another payment than the one the entry records leaves it too.
+  // So does a payment that is being sent straight back: it never settled what the entry records.
+  if (["partially_refunded", "other_payment_refunded", "returned"].includes(domainOutcome ?? "")) return null;
   switch (event.type) {
     case "checkout.session.completed":
       return object.payment_status === "paid" ? "paid" : "processing";
@@ -88,7 +92,8 @@ function financialStatus(event: StripeEvent, object: StripeObject, domainOutcome
     case "charge.dispute.created":
       return "disputed";
     case "charge.dispute.closed":
-      return object.status === "won" ? "paid" : "disputed";
+      // Won, or an inquiry closed without a chargeback: the money stayed.
+      return object.status === "won" || object.status === "warning_closed" ? "paid" : "disputed";
     default:
       return null;
   }
@@ -117,6 +122,19 @@ async function domainPayment(
   purpose: PaymentPurpose,
   object: StripeObject,
 ): Promise<DomainPaymentRow | null> {
+  if (purpose === "event") {
+    return first<DomainPaymentRow>(
+      db,
+      `SELECT 'registration_ticket' AS resource_type, ticket.id AS resource_id, ticket.amount,
+       lower(ticket.currency) AS currency, ticket.status, ticket.paid_at,
+       checkout.provider_session_id AS checkout_session_id, checkout.payment_intent_id
+       FROM registration_ticket_checkouts checkout JOIN registration_tickets ticket ON ticket.id = checkout.ticket_id
+       WHERE (?1 IS NOT NULL AND checkout.provider_session_id = ?1)
+          OR (?2 IS NOT NULL AND checkout.payment_intent_id = ?2)
+       LIMIT 1`,
+      [object.id?.startsWith("cs_") ? object.id : null, object.payment_intent ?? null],
+    );
+  }
   if (purpose === "donation" && object.id) {
     return first<DomainPaymentRow>(
       db,
@@ -221,11 +239,17 @@ export async function prepareStripePaymentEvent(
   const providerStatus = financialStatus(event, object, domainOutcome);
   if (!providerStatus) return [];
   const domain = await domainPayment(db, purpose, object);
-  const nextStatus =
+  const proposedStatus =
     domainOutcome === "rejected_mismatch"
       ? "requires_review"
       : (domainFinancialStatus(domain, event.type) ?? providerStatus);
   const existing = await existingEntry(db, purpose, object, domain);
+  // A delayed Checkout event must not clear a contested or already-returned
+  // payment, including one with the same second-resolution provider timestamp.
+  const nextStatus =
+    existing && ["disputed", "refunded"].includes(existing.status) && event.type.startsWith("checkout.session.")
+      ? existing.status
+      : proposedStatus;
   const paymentId = existing?.id ?? newEntryId(purpose, object, domain);
   if (!paymentId) return [];
 
@@ -270,18 +294,30 @@ export async function prepareStripePaymentEvent(
     db
       .prepare(
         `UPDATE payment_ledger_entries SET
-           resource_type = COALESCE(resource_type, ?), resource_id = COALESCE(resource_id, ?),
+           purpose = CASE WHEN resource_id IS NULL AND ? IS NOT NULL THEN ? ELSE purpose END,
+           resource_type = CASE WHEN resource_id IS NULL AND ? IS NOT NULL THEN ? ELSE COALESCE(resource_type, ?) END,
+           resource_id = COALESCE(resource_id, ?),
            provider = 'stripe', provider_checkout_session_id = COALESCE(provider_checkout_session_id, ?),
            provider_payment_intent_id = COALESCE(provider_payment_intent_id, ?)
          WHERE id = ?`,
       )
-      .bind(resourceType, resourceId, checkoutSessionId, paymentIntentId, paymentId),
+      .bind(
+        resourceId,
+        purpose,
+        resourceId,
+        resourceType,
+        resourceType,
+        resourceId,
+        checkoutSessionId,
+        paymentIntentId,
+        paymentId,
+      ),
     db
       .prepare(
         `UPDATE payment_ledger_entries SET status = ?, amount = COALESCE(?, amount),
            currency = COALESCE(?, currency), paid_at = COALESCE(?, paid_at),
            latest_provider_event_created = ?, latest_provider_event_id = ?, updated_at = ?
-         WHERE id = ? AND (
+         WHERE id = ? AND NOT (status IN ('disputed', 'refunded') AND ? LIKE 'checkout.session.%') AND (
            latest_provider_event_created IS NULL OR latest_provider_event_created < ? OR
            (latest_provider_event_created = ? AND (
              latest_provider_event_id = ? OR status IN ('pending', 'processing') OR
@@ -298,6 +334,7 @@ export async function prepareStripePaymentEvent(
         event.id,
         now,
         paymentId,
+        event.type,
         eventOrdinal,
         eventOrdinal,
         event.id,
@@ -335,5 +372,20 @@ export async function recordStripePaymentEvent(
   domainOutcome: string | null = null,
 ): Promise<void> {
   const statements = await prepareStripePaymentEvent(db, purpose, event, domainOutcome);
-  if (statements.length) await db.batch(statements);
+  if (!statements.length) return;
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    // Another webhook may have created the same payment intent after our lookup.
+    // Rebind this event to that durable entry instead of losing its evidence.
+    if (
+      !(error instanceof Error) ||
+      !/UNIQUE constraint failed: payment_ledger_entries\.provider, payment_ledger_entries\.provider_payment_intent_id/.test(
+        error.message,
+      )
+    )
+      throw error;
+    const retry = await prepareStripePaymentEvent(db, purpose, event, domainOutcome);
+    if (retry.length) await db.batch(retry);
+  }
 }

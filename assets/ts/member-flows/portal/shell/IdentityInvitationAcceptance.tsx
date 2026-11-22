@@ -11,8 +11,8 @@ import { Alert } from "../../../ui/Alert";
 import { Button, ButtonLink } from "../../../ui/Button";
 import { portalIdentityInvitationToken } from "../hash-route";
 import { setAuthChecking } from "../state";
-import { LoginBackdrop } from "./LoginBackdrop";
-import "./Login.css";
+import { LoginBackdrop } from "../../../components/sign-in/LoginBackdrop";
+import "../../../components/sign-in/Login.css";
 
 type InvitationPreview = z.infer<typeof identityInvitationPreviewResponseSchema>;
 

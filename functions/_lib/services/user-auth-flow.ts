@@ -1,8 +1,21 @@
+import type { AccountPolicyKey } from "../../../assets/shared/account-policies";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
-import { queueUserSignInCapability } from "../auth/user-session";
+import { queueEmailAuthCapability } from "../auth/email-auth-capabilities";
+import { findRetiredSignInAddress, queueUserSignInCapability } from "../auth/user-session";
+import { normalizeEmail } from "../validation";
+import { findUserEmailOwner } from "./user-emails";
 import { prepareQueueEmailStatement } from "../email/outbox-queue";
 import type { DatabaseLike } from "../types";
 import { prepareAuditLog } from "./audit";
+import { first } from "../db/queries";
+import { buildEventAudiencePredicate } from "./events/visibility";
+import { signInPurpose } from "../../../assets/shared/sign-in-purpose";
+import { CONSORTIUM_CONTACT_EMAIL } from "../../../assets/shared/consortium-contact";
+import { eventParticipantRecordPath } from "../../../assets/shared/event-participant-paths";
+import { registrationDetailsEmailData } from "./registrations/status-notifications";
+
+export const SIGN_IN_UNAVAILABLE_TEMPLATE = "user_sign_in_unavailable";
+export const SIGN_IN_HELP_TEMPLATE = "user_sign_in_help";
 
 /**
  * The verify route a sign-in link opens. A return path rides along as `next`
@@ -22,6 +35,82 @@ export function capabilityLinkUrl(baseUrl: string, token: string): string {
   return url.toString();
 }
 
+/** Which message carries a link: the plain sign-in one, or the one that starts an account for a purpose. */
+interface LinkMessage {
+  templateKey: "user_magic_link" | "user_sign_up_link" | "user_account_found_link";
+  subject: string;
+  data: Record<string, unknown>;
+  /** Where the link lands instead of the requested return path. */
+  magicLinkBaseUrl?: string;
+  /** The event the message is about, so delivery adds the event's links and sponsors. */
+  eventId?: string;
+}
+
+const SIGN_IN_MESSAGE: LinkMessage = {
+  templateKey: "user_magic_link",
+  subject: "Your PKI Consortium sign-in link",
+  data: {},
+};
+
+/**
+ * What the person came for, read from where the link returns them, so the email says why it signs them in.
+ * An event is named only when its reader may see it: a public event for anyone, another event only for an
+ * account the portal shows it to, such as an invited person. The email repeats nothing its reader could not open.
+ */
+async function linkPurposeData(
+  db: DatabaseLike,
+  returnPath: string | undefined,
+  userId: string | null,
+): Promise<Record<string, unknown>> {
+  const purpose = signInPurpose(returnPath);
+  if (!purpose) return {};
+  if (purpose.flow === "join") return { join: true };
+  const audience = buildEventAudiencePredicate("e", { userId });
+  const event = await first<{ name: string }>(db, `SELECT e.name FROM events e WHERE e.slug = ? AND ${audience.sql}`, [
+    purpose.eventSlug,
+    ...audience.bindings,
+  ]);
+  return event ? { [purpose.flow]: true, eventName: event.name } : {};
+}
+
+/** The sign-in email, worded for what the person came for once the account it signs in to is known. */
+export function signInLinkMessage(db: DatabaseLike, returnPath: string | undefined) {
+  return async (userId: string): Promise<LinkMessage> => ({
+    ...SIGN_IN_MESSAGE,
+    data: await linkPurposeData(db, returnPath, userId),
+  });
+}
+
+/**
+ * The registration the account already holds, other than one still waiting for its email proof, for the event
+ * the person came to register for: its email then shows the registration and leads to it instead of the steps.
+ */
+async function heldRegistration(
+  db: DatabaseLike,
+  userId: string,
+  returnPath: string | undefined,
+): Promise<{
+  eventId: string;
+  path: string;
+  details: Awaited<ReturnType<typeof registrationDetailsEmailData>>;
+} | null> {
+  const purpose = signInPurpose(returnPath);
+  if (purpose?.flow !== "registration") return null;
+  const audience = buildEventAudiencePredicate("e", { userId });
+  const held = await first<{ id: string; event_id: string; source_mode: "hugo" | "portal" | "integration" | null }>(
+    db,
+    `SELECT r.id, e.id AS event_id, e.source_mode FROM registrations r JOIN events e ON e.id = r.event_id
+      WHERE e.slug = ? AND ${audience.sql} AND r.user_id = ? AND r.status = 'registered'`,
+    [purpose.eventSlug, ...audience.bindings, userId],
+  );
+  if (!held) return null;
+  return {
+    eventId: held.event_id,
+    path: eventParticipantRecordPath(purpose.eventSlug, "registration", held.id),
+    details: await registrationDetailsEmailData(db, { id: held.event_id, source_mode: held.source_mode }, held.id),
+  };
+}
+
 export async function requestUserSignInLink(
   db: DatabaseLike,
   payload: {
@@ -32,20 +121,30 @@ export async function requestUserSignInLink(
     magicLinkBaseUrl: string;
     signingSecret: string;
   },
+  /** The message, or how to word it for the account the address signs in to. */
+  message: LinkMessage | ((userId: string) => Promise<LinkMessage>) = SIGN_IN_MESSAGE,
+  /** Where a person whose address has no account starts one; a sign-in request then tells its mailbox so. */
+  startUrl?: string,
 ): Promise<{ outboxId: string | null; identityFound: boolean }> {
   const magic = await queueUserSignInCapability({ db, ...payload });
-  if (!magic) return { outboxId: null, identityFound: false };
+  if (!magic) {
+    const notice = await queueSignInUnavailableNotice(db, payload.email);
+    if (notice || !startUrl) return { outboxId: notice, identityFound: false };
+    return { outboxId: await queueSignInHelp(db, payload.email, startUrl), identityFound: false };
+  }
 
+  const worded = typeof message === "function" ? await message(magic.identity.id) : message;
   const email = prepareQueueEmailStatement(db, {
-    templateKey: "user_magic_link",
+    templateKey: worded.templateKey,
     recipientEmail: magic.recipientEmail,
     recipientUserId: magic.identity.id,
-    eventId: null,
+    eventId: worded.eventId ?? null,
     messageType: "transactional",
-    subject: "Your PKI Consortium sign-in link",
+    subject: worded.subject,
     data: {
+      ...worded.data,
       email: magic.recipientEmail,
-      magicLinkUrl: capabilityLinkUrl(payload.magicLinkBaseUrl, magic.queuedToken),
+      magicLinkUrl: capabilityLinkUrl(worded.magicLinkBaseUrl ?? payload.magicLinkBaseUrl, magic.queuedToken),
       expiresInMinutes: payload.ttlMinutes,
     },
     capabilityLinkValues: [magic.queuedToken],
@@ -65,4 +164,136 @@ export async function requestUserSignInLink(
     throw error;
   }
   return { outboxId: email.id, identityFound: true };
+}
+
+/**
+ * Starting an account. An address that already signs in gets the ordinary
+ * sign-in link; any other address gets a link that proves it and creates the
+ * account when opened. Both are the same email from the same screen, so the
+ * request never says which address has an account.
+ */
+export async function requestUserSignUpLink(
+  db: DatabaseLike,
+  payload: Parameters<typeof requestUserSignInLink>[1] & {
+    returnPath?: string;
+    personal?: boolean;
+    acceptedPolicies: Array<{ termKey: AccountPolicyKey; version: string }>;
+  },
+): Promise<{ outboxId: string | null }> {
+  // No account reads the email yet, so only a public event is named.
+  const purpose = await linkPurposeData(db, payload.returnPath, null);
+  const message: LinkMessage = { templateKey: "user_sign_up_link", subject: "Confirm your email", data: purpose };
+  // An address that already signs in is told its account was found, and its link continues the same flow.
+  const signIn = await requestUserSignInLink(db, payload, async (userId) => {
+    const found = await linkPurposeData(db, payload.returnPath, userId);
+    const registration = await heldRegistration(db, userId, payload.returnPath);
+    if (!registration)
+      return {
+        templateKey: "user_account_found_link",
+        subject: "Continue with your PKI Consortium account",
+        data: found,
+      };
+    // The email names the address that asked, which its link is tied to, in place of the registration's own.
+    return {
+      templateKey: "user_account_found_link",
+      subject: "You are already registered",
+      data: { ...found, ...registration.details, alreadyRegistered: true },
+      magicLinkBaseUrl: portalVerifyLinkBase(new URL(payload.magicLinkBaseUrl).origin, registration.path),
+      eventId: registration.eventId,
+    };
+  });
+  // A retired address was told how to sign in instead; it does not start a second account.
+  if (signIn.identityFound || signIn.outboxId) return { outboxId: signIn.outboxId };
+
+  const recipientEmail = normalizeEmail(payload.email);
+  // An address an account has already proved cannot start another one. That account does not sign in
+  // with it, so no link goes out, but the mailbox learns whom to ask instead of waiting for nothing.
+  const owner = await findUserEmailOwner(db, recipientEmail);
+  if (owner?.verified) return { outboxId: await queueSignInHelp(db, recipientEmail, null) };
+  const capability = await queueEmailAuthCapability({
+    signingSecret: payload.signingSecret,
+    purpose: "user_sign_up",
+    subjectId: "sign_up",
+    email: recipientEmail,
+    signUpEmail: recipientEmail,
+    signUpPersonal: payload.personal,
+    signUpAcceptedPolicies: payload.acceptedPolicies,
+    ttlSeconds: payload.ttlMinutes * 60,
+    ipHash: payload.ipHash,
+    userAgentHash: payload.userAgentHash,
+  });
+  const email = prepareQueueEmailStatement(db, {
+    templateKey: message.templateKey,
+    recipientEmail,
+    recipientUserId: null,
+    eventId: null,
+    messageType: "transactional",
+    subject: message.subject,
+    data: {
+      ...message.data,
+      email: recipientEmail,
+      magicLinkUrl: capabilityLinkUrl(payload.magicLinkBaseUrl, capability.queuedToken),
+      expiresInMinutes: payload.ttlMinutes,
+    },
+    capabilityLinkValues: [capability.queuedToken],
+  });
+  await db.batch([
+    email.statement,
+    prepareAuditLog(db, "system", null, "user_sign_up_link_requested", "email_outbox", email.id, {}),
+  ]);
+  return { outboxId: email.id };
+}
+
+/**
+ * A proved address that stopped signing in when its representation ended gets no link, but its mailbox
+ * learns why and how to sign in instead, so the person is not left waiting for
+ * a message that never comes. The screen says the same for every address, and
+ * nothing goes to any other mailbox, so the request reveals no account.
+ */
+/**
+ * Answers a sign-in request that sends no link: an address without an account learns where to start one
+ * (`startUrl`), and a proved address its account cannot sign in with (`startUrl` null) whom to ask. Only
+ * the named mailbox hears of it, and the screen says the same for every address.
+ */
+async function queueSignInHelp(db: DatabaseLike, email: string, startUrl: string | null): Promise<string> {
+  const recipientEmail = normalizeEmail(email);
+  const owner = startUrl ? await findUserEmailOwner(db, recipientEmail) : null;
+  const noAccount = startUrl !== null && !owner?.verified;
+  const help = prepareQueueEmailStatement(db, {
+    templateKey: SIGN_IN_HELP_TEMPLATE,
+    recipientEmail,
+    recipientUserId: null,
+    eventId: null,
+    messageType: "transactional",
+    subject: noAccount
+      ? "We couldn't find a PKI Consortium account for this address"
+      : "We couldn't send you a sign-in link",
+    data: noAccount
+      ? { noAccount: true, email: recipientEmail, startUrl }
+      : { email: recipientEmail, contactEmail: CONSORTIUM_CONTACT_EMAIL },
+  });
+  await db.batch([
+    help.statement,
+    prepareAuditLog(db, "system", null, "user_sign_in_help_sent", "email_outbox", help.id, { noAccount }),
+  ]);
+  return help.id;
+}
+
+async function queueSignInUnavailableNotice(db: DatabaseLike, email: string): Promise<string | null> {
+  const address = await findRetiredSignInAddress(db, email);
+  if (!address) return null;
+  const notice = prepareQueueEmailStatement(db, {
+    templateKey: SIGN_IN_UNAVAILABLE_TEMPLATE,
+    recipientEmail: address.email,
+    recipientUserId: address.userId,
+    eventId: null,
+    messageType: "transactional",
+    subject: "Sign in to the PKI Consortium another way",
+    data: { email: address.email },
+  });
+  await db.batch([
+    notice.statement,
+    prepareAuditLog(db, "system", null, "user_sign_in_unavailable_notified", "user", address.userId, {}),
+  ]);
+  return notice.id;
 }

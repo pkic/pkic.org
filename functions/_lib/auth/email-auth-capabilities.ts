@@ -1,3 +1,8 @@
+import {
+  ACCOUNT_POLICIES,
+  accountPolicyKeySchema,
+  type AccountPolicyKey,
+} from "../../../assets/shared/account-policies";
 import { z } from "zod";
 import { databaseIdSchema } from "../../../assets/shared/schemas/identifiers";
 import { normalizedEmailSchema } from "../../../assets/shared/schemas/api-common";
@@ -6,9 +11,11 @@ import { hmacSha256Hex, randomToken, verifyHmacSha256Hex } from "../utils/crypto
 import { AppError } from "../errors";
 import {
   isAuthorizationGuardFailure,
+  isStateGuardFailure,
   prepareAuthorizationGuard,
   type AuthorizationEvidence,
 } from "../db/authorization-guard";
+import { isConcurrentIdentityConflict } from "../services/identities/conflicts";
 import { prepareOneTimeAuditLog, type AuditScope } from "../services/audit";
 import type { DatabaseLike, StatementLike } from "../types";
 import {
@@ -37,7 +44,6 @@ const DEFAULT_MAX_RETURN_TO_LENGTH = 2048;
 const emailAuthCapabilityPayloadSchema = z
   .object({
     subjectId: z.string().min(1).max(128),
-    authorizationRevision: z.string().uuid().optional(),
     addressRequest: z
       .object({
         userId: databaseIdSchema,
@@ -45,6 +51,15 @@ const emailAuthCapabilityPayloadSchema = z
         purpose: z.literal("representation").optional(),
       })
       .strict()
+      .optional(),
+    /** The address a sign-up link proves; no user exists yet to name as the subject. */
+    signUpEmail: normalizedEmailSchema.optional(),
+    /** The sign-up's first step said this is a personal address. */
+    signUpPersonal: z.literal(true).optional(),
+    /** The account policy versions the sign-up request accepted, recorded when the account is created. */
+    signUpAcceptedPolicies: z
+      .array(z.object({ termKey: accountPolicyKeySchema, version: z.string().min(1).max(32) }).strict())
+      .max(ACCOUNT_POLICIES.length)
       .optional(),
     capabilityId: z.string().min(16).max(64),
     emailFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
@@ -75,8 +90,10 @@ export async function queueEmailAuthCapability(options: {
   purpose: EmailAuthCapabilityPurpose;
   subjectId: string;
   email: string;
-  authorizationRevision?: string;
   addressRequest?: { userId: string; email: string; purpose?: "representation" };
+  signUpEmail?: string;
+  signUpPersonal?: boolean;
+  signUpAcceptedPolicies?: Array<{ termKey: AccountPolicyKey; version: string }>;
   ttlSeconds: number;
   ipHash?: string | null;
   userAgentHash?: string | null;
@@ -87,7 +104,9 @@ export async function queueEmailAuthCapability(options: {
   const payload = emailAuthCapabilityPayloadSchema.parse({
     subjectId: options.subjectId,
     ...(options.addressRequest ? { addressRequest: options.addressRequest } : {}),
-    ...(options.authorizationRevision ? { authorizationRevision: options.authorizationRevision } : {}),
+    ...(options.signUpEmail ? { signUpEmail: options.signUpEmail } : {}),
+    ...(options.signUpPersonal ? { signUpPersonal: true } : {}),
+    ...(options.signUpAcceptedPolicies ? { signUpAcceptedPolicies: options.signUpAcceptedPolicies } : {}),
     capabilityId,
     emailFingerprint: await hmacSha256Hex(options.signingSecret, emailFingerprintInput(options.email)),
     ipHash: options.ipHash ?? null,
@@ -218,6 +237,9 @@ export async function commitEmailAuthRedemption(
       throw new AppError(404, "MAGIC_LINK_INVALID", SIGN_IN_LINK_REFUSALS.invalid);
     }
     if (isEmailAuthReplayConflict(error)) throw emailAuthReplayError();
+    // An organization chosen in account setup changed before the redemption committed.
+    if (isStateGuardFailure(error) || isConcurrentIdentityConflict(error))
+      throw new AppError(409, "ORGANIZATION_AFFILIATION_CHANGED", "Your organization changed. Confirm it again.");
     throw error;
   }
 }

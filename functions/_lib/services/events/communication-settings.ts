@@ -8,5 +8,5 @@ export function eventCommunicationSettingsSql(settingsSql: string): string {
   return `(SELECT json_group_object(setting.key,
     CASE WHEN setting.type IN ('object','array') THEN json(setting.value) ELSE setting.value END)
     FROM json_each(CASE WHEN json_valid(${settingsSql}) THEN ${settingsSql} ELSE '{}' END) setting
-    WHERE setting.key IN ('frontend','sponsorsImageUrl','venue','registration','registrationClosesAt','proposal'))`;
+    WHERE setting.key IN ('frontend','sponsorsImageUrl','venue','registration','registrationClosesAt','proposal','invitationMessage'))`;
 }

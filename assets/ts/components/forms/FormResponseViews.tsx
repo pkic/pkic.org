@@ -5,11 +5,14 @@
 
 import { Fragment } from "preact";
 import type { z } from "zod";
+import { formSubmissionsExportQuerySchema } from "../../../shared/schemas/form-management";
+import { FilterSelect } from "../FilterSelect";
+import { DownloadAction } from "../../ui/DownloadAction";
 import type { FormSubmission } from "../../../shared/schemas/form-management";
 import type { FormFieldDefinition } from "../../../shared/schemas/forms";
 import type { PageInfo } from "../../../shared/schemas/pagination";
 import { formatDateTime } from "../../shared/ui";
-import { ApiDataTable } from "../ApiDataTable";
+import { ApiDataTable, type ApiDataTableProps } from "../ApiDataTable";
 import { ErrorAlert } from "../ErrorAlert";
 import { Spinner } from "../Spinner";
 import { useData } from "../../hooks/useData";
@@ -83,14 +86,22 @@ export function FormSubmissionsTable<Response extends { submissions: FormSubmiss
   responseSchema,
   params,
   onOpen,
+  exportEndpoint,
+  load,
+  filtered = false,
 }: {
   fields: FormFieldDefinition[];
   endpoint: string;
+  exportEndpoint?: string;
+  /** The page narrowed the list outside the table, for example by a status picker. */
+  filtered?: boolean;
+  load?: ApiDataTableProps<FormSubmission, Response>["load"];
   responseSchema: z.ZodType<Response>;
   params?: Record<string, string>;
   onOpen: (submission: FormSubmission) => void;
 }) {
   const answerColumns = fields.map((field) => ({
+    key: `answer:${field.key}`,
     header: { label: field.label, className: "adm-form-answer-col" },
     cell: (submission: FormSubmission) => {
       const answer = compactAnswer(submission.answers?.[field.key], field);
@@ -101,6 +112,7 @@ export function FormSubmissionsTable<Response extends { submissions: FormSubmiss
       );
     },
     className: "adm-form-answer-col",
+    sort: { asc: `answer:${field.key}`, desc: `-answer:${field.key}` },
   }));
 
   return (
@@ -108,13 +120,72 @@ export function FormSubmissionsTable<Response extends { submissions: FormSubmiss
       urlState="form-responses"
       caption="Form responses"
       endpoint={endpoint}
+      load={load}
       responseSchema={responseSchema}
       resolve={(data) => data.submissions}
       resolvePage={(data) => data.page}
       paginate
       initialSort="-submitted_at"
       params={params}
-      empty={<EmptyState title="No responses found" body="Nothing has been submitted through this form yet." />}
+      toolbar={(actions, query, _sorting, { hidden }) => {
+        const selected = fields.find((field) => field.key === query.answerField);
+        const options = selected?.options ?? [];
+        const exportQuery = formSubmissionsExportQuerySchema.safeParse({
+          ...query,
+          columns: [
+            "submitter",
+            ...fields
+              .filter((field) => !hidden.has(`answer:${field.key}`) && (!selected || field.key === selected.key))
+              .map((field) => `answer:${field.key}`),
+            ...(!selected && !hidden.has("submitted_at") ? ["submitted_at"] : []),
+            ...(!selected && !hidden.has("status") ? ["status"] : []),
+          ].join(","),
+          ...(selected ? { field: selected.key } : {}),
+        });
+        const exportParams = new URLSearchParams(
+          exportQuery.success ? Object.entries(exportQuery.data).map(([key, value]) => [key, String(value)]) : [],
+        );
+        return (
+          <>
+            <FilterSelect
+              ariaLabel="Filter answer field"
+              value={query.answerField ?? ""}
+              options={[
+                { value: "", label: "All answer fields" },
+                ...fields
+                  .filter((field) => (field.options?.length ?? 0) > 0)
+                  .map((field) => ({ value: field.key, label: field.label })),
+              ]}
+              onChange={(value) => actions.setFilters?.({ answerField: value, answerValue: "" })}
+            />
+            {options.length > 0 && (
+              <FilterSelect
+                ariaLabel={`Filter ${selected?.label}`}
+                value={query.answerValue ?? ""}
+                options={[{ value: "", label: "All answers" }, ...options]}
+                onChange={(value) => actions.setFilter?.("answerValue", value)}
+              />
+            )}
+            {exportEndpoint && (
+              <DownloadAction
+                label={selected ? `Download ${selected.label} (CSV)` : "Download responses (CSV)"}
+                href={`${exportEndpoint}?${exportParams}`}
+                disabled={!exportQuery.success}
+              />
+            )}
+          </>
+        );
+      }}
+      empty={({ narrowed }) => (
+        <EmptyState
+          title="No responses found"
+          body={
+            narrowed || filtered
+              ? "Try changing your search or filters."
+              : "Nothing has been submitted through this form yet."
+          }
+        />
+      )}
       rowKey={(submission) => submission.id}
       columns={[
         {
@@ -137,12 +208,14 @@ export function FormSubmissionsTable<Response extends { submissions: FormSubmiss
         },
         ...answerColumns,
         {
+          key: "submitted_at",
           header: "Submitted",
           cell: (submission) => formatDateTime(submission.submittedAt),
           className: "pk-mono pk-small pk-nowrap",
           sort: { asc: "submitted_at", desc: "-submitted_at", defaultDirection: "desc" },
         },
         {
+          key: "status",
           header: "Status",
           cell: (submission) => <Badge status={submission.status} />,
           sort: { asc: "status", desc: "-status" },

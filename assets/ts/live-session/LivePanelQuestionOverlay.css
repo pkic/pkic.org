@@ -1,0 +1,23 @@
+/*
+ * The question and the panel on one board: the question holds at most four
+ * lines, centered in the space above the panel, which sits along the bottom
+ * of the board.
+ */
+@layer components {
+  .pk-live-panel .pk-live-board-question__body {
+    --question-scale: 1;
+    flex: none;
+    gap: 24px;
+    margin-block: auto;
+  }
+  /* Smaller photos than on the panel's own board, so the question above keeps its lines. */
+  .pk-live-panel .pk-live-panelists__credits[data-arrangement][data-count] {
+    --headshot: 120px;
+  }
+  .pk-live-panel .pk-live-overlay__question-text {
+    --question-lines: 4;
+  }
+  .pk-live-panel__people {
+    display: grid;
+  }
+}

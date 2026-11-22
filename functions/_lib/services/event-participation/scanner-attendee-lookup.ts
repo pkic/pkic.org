@@ -14,7 +14,7 @@ import { nowIso } from "../../utils/time";
 type LookupEnvironment = Pick<Env, "ADMIN_API_KEY" | "INTERNAL_SIGNING_SECRET">;
 const permissions = ["agenda:scan", ...scannerCapabilities] as const;
 
-/** Search, event ownership and live human authorization share one bounded replica snapshot. */
+/** Search, event ownership and live human authorization share one bounded replica snapshot. Every registration matches, with its status. */
 export async function readScannerAttendees(
   db: DatabaseLike,
   request: Request,
@@ -22,7 +22,7 @@ export async function readScannerAttendees(
   slug: string,
   query: unknown,
 ) {
-  const read = await prepareBadgeAttendees(db, { slug }, query);
+  const read = await prepareBadgeAttendees(db, { slug }, query, "all_registrations");
   return readEventAdminResource(db, request, env, slug, permissions, () => read);
 }
 

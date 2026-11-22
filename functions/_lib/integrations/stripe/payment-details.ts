@@ -34,6 +34,7 @@ interface StripeChargeExpanded {
   balance_transaction: string | StripeBalanceTransactionExpanded | null;
   failure_code: string | null;
   payment_method_details?: { type: string } | null;
+  receipt_url?: string | null;
 }
 
 interface StripePaymentIntent {
@@ -50,6 +51,8 @@ export interface StripePaymentDetails {
   settledCurrency: string | null;
   paymentMethodType: string | null;
   paymentFailed: boolean;
+  /** The provider's own receipt page for the payment, when it has one. */
+  receiptUrl?: string | null;
 }
 
 const EMPTY_DETAILS: StripePaymentDetails = {
@@ -182,6 +185,7 @@ export async function fetchStripePaymentDetails(
     netAmount: charge.balance_transaction.net ?? null,
     settledAmount: charge.balance_transaction.amount ?? null,
     settledCurrency: charge.balance_transaction.currency ?? null,
+    receiptUrl: charge.receipt_url ?? null,
     paymentMethodType,
     paymentFailed: false,
   });

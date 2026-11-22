@@ -14,6 +14,7 @@ import {
 } from "./render-limit";
 import { inlineEmailComponentStyles, resolveEmailBrandBaseUrl } from "./render-components";
 import { decodeCharacterReferences } from "../../../assets/shared/html-entities";
+import { CONSORTIUM_CONTACT_EMAIL } from "../../../assets/shared/consortium-contact";
 
 export {
   EMAIL_TEMPLATE_RENDER_MAX_CHARS,
@@ -405,10 +406,7 @@ export function compileSimpleTemplate(
  * All variables are resolved from the same data object as the parent template.
  *
  * Available partials (loaded from DB via loadEmailPartials()):
- *   {{> sponsors_block}}  — conditional sponsors image section
- *   {{> about_pkic}}      — PKI Consortium blurb paragraph
- *   {{> reg_details}}     — registration details blockquote
- *   {{> donation_request}} — voluntary donation invite
+ *   EMAIL_PARTIALS in assets/shared/email-partials.ts lists every name.
  */
 
 function wrapHtml(
@@ -442,7 +440,7 @@ function stripHtmlToText(input: string): string {
         return placeholder;
       })
       .replace(/<br\s*\/?>/gi, "\n")
-      .replace(/<\/(p|div|li|h[1-6]|blockquote|section|article|table|tr)>/gi, "\n")
+      .replace(/<\/(p|div|li|h[1-6]|blockquote|section|article|table|tr|td)>/gi, "\n")
       .replace(/<li[^>]*>/gi, "- ")
       // Inline marks sit inside a sentence, so removing them must not leave a space before the next word or period.
       .replace(/<\/?(?:strong|b|em|i|u|span|code|small)\b[^>]*>/gi, "")
@@ -469,7 +467,8 @@ export async function renderEmail(
   // Keep application links environment-specific while serving static branding
   // from a publicly reachable origin when a developer email uses localhost.
   const brandBaseUrl = resolveEmailBrandBaseUrl(baseUrl);
-  const dataWithBase = { ...data, baseUrl, brandBaseUrl };
+  // Every email can link people to the consortium; a flow with its own contact address overrides it.
+  const dataWithBase = { contactEmail: CONSORTIUM_CONTACT_EMAIL, ...data, baseUrl, brandBaseUrl };
   const htmlBody = inlineEmailComponentStyles(
     renderEmailBody(template, dataWithBase, contentType, budget, (source, values, depth, context) =>
       compileSimpleTemplateWithBudget(source, values, budget, depth, context),

@@ -28,6 +28,8 @@ export function liveCompositionInput(stage: LiveStage): LiveCompositionInput {
     topQuestions: stage.topQuestions?.config ?? null,
     chatFeed: stage.chatFeed?.config ?? null,
     reactions: stage.reactions,
+    reactionsGraphic: stage.reactionsGraphic,
+    scene: stage.scene,
   };
 }
 
