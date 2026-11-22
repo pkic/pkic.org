@@ -29,6 +29,19 @@ export type ContentCheckModel = (typeof CONTENT_CHECK_MODELS)[number];
 export const CONTENT_CHECK_OUTCOMES = ["passed", "advised", "blocked", "unchecked"] as const;
 export type ContentCheckOutcome = (typeof CONTENT_CHECK_OUTCOMES)[number];
 
+/** How reviewers and organizers read a verdict. */
+export const CONTENT_CHECK_OUTCOME_LABELS: Record<ContentCheckOutcome, string> = {
+  passed: "No concerns",
+  advised: "Concerns raised",
+  blocked: "Blocked",
+  unchecked: "Not checked",
+};
+
+/** Whether a verdict asks a reviewer to look. */
+export function contentCheckRaisesConcerns(outcome: ContentCheckOutcome): boolean {
+  return outcome === "advised" || outcome === "blocked";
+}
+
 export const CONTENT_CHECK_MAX_QUESTIONS = 32;
 
 /** Refusal codes of the proposal screening: a block, or advice the author may set aside by submitting again. */

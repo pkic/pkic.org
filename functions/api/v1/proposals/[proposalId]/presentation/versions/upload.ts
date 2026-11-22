@@ -5,6 +5,7 @@ import {
   requirePresentationBucket,
   uploadProposalPresentation,
 } from "../../../../../../_lib/services/presentation-upload";
+import { checkUploadedPresentation } from "../../../../../../_lib/services/content-checks/presentation-checks";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
 
 export async function onRequestPost(c: AdminContext): Promise<Response> {
@@ -13,10 +14,17 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 
   const proposal = await getPresentationProposalContext(requestDb(c), proposalId);
 
-  await uploadProposalPresentation(requestDb(c), requirePresentationBucket(c.env), c.req.raw, proposal, {
-    actor: { type: "admin", admin },
-    enforceDeadline: false,
-  });
+  const uploaded = await uploadProposalPresentation(
+    requestDb(c),
+    requirePresentationBucket(c.env),
+    c.req.raw,
+    proposal,
+    {
+      actor: { type: "admin", admin },
+      enforceDeadline: false,
+    },
+  );
 
+  c.executionCtx.waitUntil(checkUploadedPresentation(c.env, uploaded.versionId));
   return json({ success: true });
 }

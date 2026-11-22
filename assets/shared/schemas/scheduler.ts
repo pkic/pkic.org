@@ -31,6 +31,7 @@ export const SCHEDULED_JOB_KEYS = [
   "event_email_campaigns",
   "event_ticket_payments",
   "unfinished_registrations",
+  "presentation_checks",
   "live_session_erasures",
   "person_profile_addresses",
   "standing_chair_terms",

@@ -3,6 +3,7 @@ import { readTicketPaymentDetails } from "../event-tickets/payment-details";
 import { sendTicketPaymentReminders } from "../event-tickets/payment-emails";
 import { closeUnpayableTicketCheckouts, processTicketRefunds, reconcileTicketRefunds } from "../event-tickets/refunds";
 import { sendUnfinishedRegistrationReminders } from "../registrations/unfinished";
+import { checkPendingPresentations } from "../content-checks/presentation-checks";
 import { runScheduledEmailDelivery } from "../scheduled-email-delivery";
 import { processPendingPromotionRenders } from "../event-agenda/promotion-render-jobs";
 import { runOauthAuthorizationCompletions, earliestOauthCompletionDue } from "../oauth-authorizations/completion";
@@ -230,6 +231,12 @@ export const SCHEDULED_JOB_DEFINITIONS: readonly ScheduledJobDefinition[] = [
     leaseSeconds: DEFAULT_LEASE_SECONDS,
     requiredPermissions: ["events:write"],
     run: async ({ env }) => ({ summary: await sendUnfinishedRegistrationReminders(env.DB, resolveAppBaseUrl(env)) }),
+  },
+  {
+    key: "presentation_checks",
+    leaseSeconds: DEFAULT_LEASE_SECONDS,
+    requiredPermissions: ["events:write"],
+    run: async ({ env }) => ({ summary: await checkPendingPresentations(env) }),
   },
   {
     key: "event_email_campaigns",

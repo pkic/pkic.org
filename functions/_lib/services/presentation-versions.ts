@@ -1,4 +1,9 @@
 import { prepareStandingAwards } from "./member-standing/awards";
+import {
+  decodeContentCheckResult,
+  prepareContentCheckResultsRead,
+  type ContentCheckResultRow,
+} from "./content-checks/results";
 import { prepareSitePublicationRequest } from "./site-publication-requests";
 import { first, all } from "../db/queries";
 import { uuid } from "../utils/ids";
@@ -167,7 +172,15 @@ export async function listProposalPresentationVersions(
       throw error;
     }
   }
-  const versions = rows.map(rowToVersion);
+  const checks = rows.length
+    ? await prepareContentCheckResultsRead(
+        db,
+        "presentation",
+        rows.map((row) => row.id),
+      ).all<ContentCheckResultRow>()
+    : null;
+  const checked = new Map((checks?.results ?? []).map((row) => [row.subject_id, decodeContentCheckResult(row)]));
+  const versions = rows.map((row) => ({ ...rowToVersion(row), automaticCheck: checked.get(row.id) ?? null }));
   return { versions, page: buildPageInfo(query.limit, query.offset, total, versions.length) };
 }
 

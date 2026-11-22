@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { contentCheckResultSchema } from "./content-checks";
 import { databaseIdSchema } from "./identifiers.ts";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination.ts";
 
@@ -41,6 +42,8 @@ export const presentationVersionSchema = z.object({
   isCurrent: z.boolean(),
   deletedAt: z.string().nullable(),
   latestReview: presentationVersionReviewSchema.nullable(),
+  /** Organizers only: the automatic check of the slides; null while it has not run yet. */
+  automaticCheck: contentCheckResultSchema.nullable().optional(),
 });
 
 export const presentationVersionsResponseSchema = paginatedResponseSchema("versions", presentationVersionSchema);

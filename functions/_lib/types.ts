@@ -221,8 +221,15 @@ export interface Env {
    * a Bearer token is granted admin privileges without a DB session lookup.
    */
   ADMIN_API_KEY?: string;
-  /** Workers AI binding; the ticket classifier is its only caller. Absent in tests and local runs without it. */
-  AI?: { run(model: string, input: Record<string, unknown>): Promise<unknown> };
+  /** Workers AI binding for the ticket classifier and the automatic checks. Absent in tests and local runs without it. */
+  AI?: {
+    run(model: string, input: Record<string, unknown>): Promise<unknown>;
+    /** Workers AI's document converter; the automatic check of slides reads PDF and documents through it. */
+    toMarkdown?(
+      file: { name: string; blob: Blob },
+      options?: { conversionOptions?: { output?: { format?: "markdown" | "text" } } },
+    ): Promise<{ format: "markdown" | "text" | "error"; data?: string; error?: string }>;
+  };
   /** The decision model the ticket classifier asks. Defaults to the platform's current decision model. */
   TICKET_CLASSIFIER_MODEL?: string;
   /** Stripe secret key for creating Checkout Sessions (donation flow). */

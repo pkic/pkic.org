@@ -20,6 +20,7 @@ import {
   requirePresentationBucket,
   uploadProposalPresentation,
 } from "../../../../../../_lib/services/presentation-upload";
+import { checkUploadedPresentation } from "../../../../../../_lib/services/content-checks/presentation-checks";
 import { requireInternalSecret } from "../../../../../../_lib/request";
 import { requestDb } from "../../../../../../_lib/db/context";
 import {
@@ -90,20 +91,27 @@ export async function onRequestPut(c: any, authority?: ParticipantAuthority): Pr
   }
 
   const uploadContext = await getPresentationProposalContext(requestDb(c), proposal.id);
-  await uploadProposalPresentation(requestDb(c), requirePresentationBucket(c.env), c.req.raw, uploadContext, {
-    actor: { type: "user", userId: speaker.user_id },
-    enforceDeadline: true,
-    authority: {
-      speaker: {
-        id: speaker.id,
-        userId: speaker.user_id,
-        role: speaker.role,
-        status: speaker.status,
-        inviteGeneration: speaker.invite_generation,
+  const uploaded = await uploadProposalPresentation(
+    requestDb(c),
+    requirePresentationBucket(c.env),
+    c.req.raw,
+    uploadContext,
+    {
+      actor: { type: "user", userId: speaker.user_id },
+      enforceDeadline: true,
+      authority: {
+        speaker: {
+          id: speaker.id,
+          userId: speaker.user_id,
+          role: speaker.role,
+          status: speaker.status,
+          inviteGeneration: speaker.invite_generation,
+        },
       },
     },
-  });
+  );
 
+  c.executionCtx.waitUntil(checkUploadedPresentation(c.env, uploaded.versionId));
   return json(speakerPresentationUploadResponseSchema.parse({ success: true }));
 }
 

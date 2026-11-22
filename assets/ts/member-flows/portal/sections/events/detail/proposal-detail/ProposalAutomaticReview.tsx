@@ -3,7 +3,7 @@
  * standing. It supports the review and decides nothing: the scores follow the
  * event's rubric, and the concerns are what the author was told at submission.
  */
-import type { ContentCheckOutcome } from "../../../../../../../shared/content-checks";
+import { CONTENT_CHECK_OUTCOME_LABELS, contentCheckRaisesConcerns } from "../../../../../../../shared/content-checks";
 import type { ContentCheckResult } from "../../../../../../../shared/schemas/content-checks";
 import { formatNumber } from "../../../../../../../shared/format-number";
 import { AttentionMark } from "../../../../../../ui/AttentionList";
@@ -11,15 +11,8 @@ import { DescriptionList } from "../../../../../../ui/DescriptionList";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
 import { fmt } from "../../../../ui";
 
-const OUTCOME_LABELS: Record<ContentCheckOutcome, string> = {
-  passed: "No concerns",
-  advised: "Concerns raised",
-  blocked: "Blocked",
-  unchecked: "Not checked",
-};
-
 export function ProposalAutomaticReview({ review }: { review: ContentCheckResult }) {
-  const concerns = review.outcome === "advised" || review.outcome === "blocked";
+  const concerns = contentCheckRaisesConcerns(review.outcome);
   return (
     <Panel aria-label="Automatic review">
       <PanelHeader title="Automatic review" />
@@ -30,9 +23,9 @@ export function ProposalAutomaticReview({ review }: { review: ContentCheckResult
             {
               term: "Screening",
               value: concerns ? (
-                <AttentionMark>{OUTCOME_LABELS[review.outcome]}</AttentionMark>
+                <AttentionMark>{CONTENT_CHECK_OUTCOME_LABELS[review.outcome]}</AttentionMark>
               ) : (
-                OUTCOME_LABELS[review.outcome]
+                CONTENT_CHECK_OUTCOME_LABELS[review.outcome]
               ),
             },
             {

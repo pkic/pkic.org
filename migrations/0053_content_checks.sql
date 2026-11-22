@@ -41,3 +41,8 @@ CREATE TABLE content_check_results (
   checked_at     TEXT    NOT NULL,
   PRIMARY KEY (kind, subject_id)
 );
+
+-- Uploaded slides are checked right after upload; this pass retries any
+-- recent version still without a verdict.
+INSERT INTO scheduled_jobs (job_key, interval_seconds, next_run_at) VALUES
+  ('presentation_checks', 600, strftime('%Y-%m-%dT%H:%M:%fZ','now'));
