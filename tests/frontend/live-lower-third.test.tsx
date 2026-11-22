@@ -25,7 +25,9 @@ const credit = (key: string, name: string): LiveCredit => ({
   moderator: false,
   photoUrl: null,
   identity: { title: name, organization: "Example" },
+  additionalIdentities: [],
   roleLabel: null,
+  titleLine: null,
 });
 const SAM = credit("user:sam", "Sam Speaker");
 const PAT = credit("user:pat", "Pat Panelist");
@@ -113,6 +115,14 @@ describe("the lower third on screen", () => {
     return { draw, graphic, finish, name };
   }
 
+  it("draws the name bar alone for a speaker with no title or organization, not an empty field", () => {
+    const view = mount({ ...SAM, identity: { title: null, organization: null } } as LiveCredit);
+    expect(view.graphic()?.querySelector(".pk-live-overlay__lower-third-title-bar")).toBeNull();
+    expect(view.graphic()?.querySelector(".pk-live-overlay__title")).toBeNull();
+    void view.draw(SAM);
+    expect(view.graphic()?.querySelector(".pk-live-overlay__lower-third-title-bar")).not.toBeNull();
+  });
+
   it("shows what is on air when first drawn, and does not replay on a re-render", () => {
     const view = mount(SAM);
     expect(view.graphic()?.dataset.phase).toBe("shown");
@@ -154,6 +164,50 @@ describe("the lower third on screen", () => {
       vi.advanceTimersByTime(2000);
     });
     expect(view.graphic()).toBeNull();
+  });
+
+  it("rotates through every identity a person speaks for, and shows one identity still", () => {
+    const view = mount({
+      ...SAM,
+      identity: { title: "Chair", organization: "PKI Consortium" },
+      additionalIdentities: [
+        { title: "CEO", organization: "Example" },
+        { title: "Chair", organization: "PKI Consortium" },
+      ],
+    });
+    const title = () => document.querySelector(".pk-live-overlay__title")!;
+    const units = () => [...title().querySelectorAll(".pk-affiliation-rotation__unit")].map((unit) => unit.textContent);
+    expect(units()).toEqual(["Chair, PKI Consortium", "CEO, Example"]);
+    expect(title().querySelector(".pk-affiliation-rotation--rotate-2")).not.toBeNull();
+    void view.draw(PAT);
+    void view.finish();
+    void view.finish();
+    expect([units(), title().textContent]).toEqual([[], "Pat Panelist, Example"]);
+  });
+
+  it("draws the line an operator typed for someone without an account, and the name bar alone without one", () => {
+    const guest = { ...credit("added:guest", "Grace Guest"), identity: null };
+    const view = mount({ ...guest, titleLine: "Author, Example Press" });
+    const title = () => document.querySelector(".pk-live-overlay__title");
+    expect(title()?.textContent).toBe("Author, Example Press");
+    expect(view.graphic()!.querySelector(".pk-live-overlay__lower-third-title-bar")).not.toBeNull();
+    // An edit of the person on air redraws the same lower third with the new line.
+    void view.draw({ ...guest, titleLine: "Editor, Example Press" });
+    void view.finish();
+    void view.finish();
+    expect(title()?.textContent).toBe("Editor, Example Press");
+    void view.draw({ ...guest, key: "added:other" });
+    void view.finish();
+    void view.finish();
+    expect(title()).toBeNull();
+  });
+
+  it("underlines the name bar with the conference stripe, revealed with the bar", () => {
+    const view = mount(SAM);
+    const underline = view.graphic()!.querySelector('path[fill^="url(#"]')!;
+    const stripe = underline.getAttribute("fill")!.match(/^url\(#(.+)\)$/)![1]!;
+    expect(view.graphic()!.querySelector(`linearGradient[id="${stripe}"]`)?.querySelectorAll("stop")).toHaveLength(3);
+    expect(underline.closest("g")?.getAttribute("clip-path")).toMatch(/-name\)$/);
   });
 
   it("draws the emblem in the box its geometry gives, so the bar leaves the orange seat at any size", () => {

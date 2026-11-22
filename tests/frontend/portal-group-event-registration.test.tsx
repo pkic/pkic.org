@@ -12,15 +12,17 @@ import { GroupEventRegistrationPanel } from "../../assets/ts/member-flows/portal
 vi.mock("../../assets/ts/components/RegistrationContactStep", async () => {
   const { useEffect } = await import("preact/hooks");
   return {
-    RegistrationContactStep: ({ onReadyChange }: { onReadyChange: (ready: boolean) => void }) => {
+    RegistrationContactStep: ({
+      onReadyChange,
+      onNamesChange,
+    }: {
+      onReadyChange: (ready: boolean) => void;
+      onNamesChange?: (names: { firstName: string; lastName: string }) => void;
+    }) => {
       useEffect(() => onReadyChange(true), [onReadyChange]);
-      return (
-        <>
-          <input type="hidden" name="email" value="person@example.test" />
-          <input type="hidden" name="firstName" value="Ada" />
-          <input type="hidden" name="lastName" value="Example" />
-        </>
-      );
+      // The account's names reach the flow through the step, never as registration fields.
+      useEffect(() => onNamesChange?.({ firstName: "Ada", lastName: "Example" }), [onNamesChange]);
+      return <input type="hidden" name="email" value="person@example.test" />;
     },
   };
 });
@@ -155,8 +157,6 @@ describe("portal group event registration", () => {
             dayAttendance: [],
             dayWaitlist: [],
             shareUrl: null,
-            manageUrl: null,
-            manageToken: null,
           });
         }
         return json(config());
@@ -217,8 +217,6 @@ describe("portal group event registration", () => {
               dayAttendance: [],
               dayWaitlist: [],
               shareUrl: null,
-              manageUrl: null,
-              manageToken: null,
             })
           : json(
               config({
@@ -262,17 +260,21 @@ describe("portal group event registration", () => {
   it.each([
     ["no attendee terms", []],
     ["only optional attendee terms", [{ ...term, required: false }]],
-  ])("keeps registration unavailable with %s", async (_description, requiredTerms) => {
-    const fetchSpy = vi.fn(async () => json(config({ requiredTerms })));
-    vi.stubGlobal("fetch", fetchSpy);
+  ])(
+    "opens registration with %s: the account already carries the Privacy Policy and Code of Conduct",
+    async (_description, requiredTerms) => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => json(config({ requiredTerms }))),
+      );
 
-    const container = mount(<GroupEventRegistrationPanel groupId={GROUP_ID} event={event} />);
-    await settle();
+      const container = mount(<GroupEventRegistrationPanel groupId={GROUP_ID} event={event} />);
+      await settle();
 
-    expect(container.textContent).toContain("required event terms have not been configured");
-    expect(container.querySelector<HTMLButtonElement>("button[type='submit']")).toBeNull();
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-  });
+      expect(container.textContent).not.toContain("Registration unavailable");
+      expect(container.querySelector<HTMLButtonElement>("button[type='submit']")).not.toBeNull();
+    },
+  );
 
   it("shows a bounded API error instead of a broken registration form", async () => {
     vi.stubGlobal(

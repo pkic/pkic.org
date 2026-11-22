@@ -6,6 +6,7 @@
  * short-lived signed JWT rather than a new DB table — see consolidated migration 0035's
  * header comment for the rationale.
  */
+import { PREVIEW_HOSTNAME, previewOriginIdentity } from "../../../assets/shared/preview-domain";
 import { AppError } from "../errors";
 import type { Env } from "../types";
 
@@ -16,7 +17,7 @@ export const PASSKEY_USER_VERIFICATION_POLICY = {
 
 export type WebAuthnEnv = Pick<
   Env,
-  "WEBAUTHN_RP_ID" | "WEBAUTHN_RP_NAME" | "WEBAUTHN_ORIGIN" | "WEBAUTHN_PREVIEW_WORKER_NAME" | "INTERNAL_SIGNING_SECRET"
+  "WEBAUTHN_RP_ID" | "WEBAUTHN_RP_NAME" | "WEBAUTHN_ORIGIN" | "INTERNAL_SIGNING_SECRET"
 >;
 
 export function requireEnvVar(value: string | undefined, name: string): string {
@@ -26,26 +27,17 @@ export function requireEnvVar(value: string | undefined, name: string): string {
   return value;
 }
 
-export function expectedPasskeyOrigin(env: WebAuthnEnv, requestUrl: string): string {
+export function expectedPasskeyIdentity(env: WebAuthnEnv, requestUrl: string): { origin: string; rpId: string } {
   const configuredOrigin = requireEnvVar(env.WEBAUTHN_ORIGIN, "WEBAUTHN_ORIGIN");
-  const requestOrigin = new URL(requestUrl);
-  if (requestOrigin.origin === configuredOrigin) return configuredOrigin;
-
-  const workerName = env.WEBAUTHN_PREVIEW_WORKER_NAME;
   const rpId = requireEnvVar(env.WEBAUTHN_RP_ID, "WEBAUTHN_RP_ID");
-  const previewSuffix = workerName && `-${workerName}.${rpId}`;
-  const alias =
-    previewSuffix && requestOrigin.hostname.endsWith(previewSuffix)
-      ? requestOrigin.hostname.slice(0, -previewSuffix.length)
-      : "";
-  if (
-    requestOrigin.protocol === "https:" &&
-    requestOrigin.port === "" &&
-    alias.length > 0 &&
-    /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(alias)
-  ) {
-    return requestOrigin.origin;
-  }
+  const requestOrigin = new URL(requestUrl).origin;
+  if (requestOrigin === configuredOrigin) return { origin: configuredOrigin, rpId };
 
+  // Existing workers.dev credentials remain usable on that origin during migration.
+  // This fallback is never enabled by production's pkic.org RP configuration.
+  if (rpId === PREVIEW_HOSTNAME && previewOriginIdentity(configuredOrigin)?.rpId === PREVIEW_HOSTNAME) {
+    const preview = previewOriginIdentity(requestUrl);
+    if (preview) return preview;
+  }
   throw new AppError(400, "PASSKEY_ORIGIN_INVALID", "Passkeys are unavailable on this hostname");
 }

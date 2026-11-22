@@ -1,6 +1,7 @@
 import { updateLiveTimerGraphics } from "../../../../assets/shared/live-timer-policy";
 import { DEFAULT_LIVE_POLL_PRESENTATION } from "../../../../assets/shared/schemas/live-session-poll";
 import { EMPTY_LIVE_STAGE } from "../../../../assets/shared/schemas/live-session-room";
+import type { LiveRoomOpening } from "../../../../assets/shared/schemas/live-room-opening";
 import {
   LIVE_ROOM_POLICY,
   type LiveQuestionStatus,
@@ -40,6 +41,11 @@ export type LiveDeskCommand = Exclude<
       | "question.answers.watch"
       | "question.answer"
       | "question.answer.accept"
+      | "question.answer.vote"
+      | "question.answer.hide"
+      | "moderation.done"
+      | "participation.block"
+      | "participation.lift"
       | "question.vote"
       | "reaction.send"
       | "poll.vote"
@@ -190,6 +196,8 @@ export class LiveRoomControls {
   /**
    * Takes every graphic off Program in one write, at once: on air there is no
    * time to confirm. The room keeps what was there so any operator can undo it.
+   * Program goes back to the Default scene, so the frame is blank whatever
+   * scene it showed; an undo brings the scene back with the graphics.
    */
   clearProgram(operator: Operator, at: string): LiveControlOutcome {
     const previous = this.store.stage();
@@ -245,6 +253,9 @@ export class LiveRoomControls {
       question: null,
       questionChange: null,
       poll: null,
+      topQuestions: stage.topQuestions ? { ...stage.topQuestions, questions: [] } : null,
+      chatFeed: stage.chatFeed ? { ...stage.chatFeed, messages: [] } : null,
+      ticker: stage.ticker ? { ...stage.ticker, segments: [] } : null,
       timerGraphics: stage.timerGraphics.filter((graphic) => timers.some((timer) => timer.id === graphic.timerId)),
     });
     return { type: "stage.changed", stage: this.store.stage() };
@@ -254,6 +265,33 @@ export class LiveRoomControls {
     this.store.saveOverlayMode(mode);
     this.store.recordStaffAction(operator.userId, "live_session.overlay_mode", { mode }, at);
     return { messages: [{ type: "overlay.mode.changed", mode }] };
+  }
+
+  /** An operator opens or closes the room to attendees now, or hands it back to the agenda. */
+  opening(operator: Operator, opening: LiveRoomOpening, at: string): LiveControlOutcome {
+    this.store.saveOpening(opening);
+    this.store.recordStaffAction(operator.userId, "live_session.opening", { opening }, at);
+    return { messages: [{ type: "room.opening.changed", opening }] };
+  }
+
+  /**
+   * The studio loaded another session in this physical room, or none. Attendees still on this session follow
+   * it there, and an operator's opening goes back to the schedule, so it never outlives the session it was set on.
+   */
+  programLeft(occurrenceId: string | null): LiveRoomServerMessage[] {
+    const movedOn = { occurrenceId };
+    this.store.saveMovedOn(movedOn);
+    const messages: LiveRoomServerMessage[] = [{ type: "room.moved.changed", movedOn }];
+    if (this.store.opening() === "scheduled") return messages;
+    this.store.saveOpening("scheduled");
+    return [...messages, { type: "room.opening.changed", opening: "scheduled" }];
+  }
+
+  /** The studio loaded this session again: attendees stay on it. */
+  programEntered(): LiveRoomServerMessage[] {
+    if (!this.store.movedOn()) return [];
+    this.store.saveMovedOn(null);
+    return [{ type: "room.moved.changed", movedOn: null }];
   }
 
   /** A rewritten question already on air, on Program or any other output, shows its new text at once. */

@@ -34,6 +34,8 @@ function buildDefaultPreviewData(baseUrl: string): Record<string, unknown> {
     daysUntilDeadline: "7",
     reminderCount: "2",
     isReminder: true,
+    invitationHeadline: "You're invited to PKI Consortium Summit 2026",
+    invitationMessage: "Join the people building the post-quantum transition for two days of talks and workshops.",
   };
 }
 

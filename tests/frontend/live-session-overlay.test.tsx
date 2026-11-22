@@ -3,7 +3,7 @@ import { LIVE_SPEAKER_MESSAGE_MAX_LENGTH } from "../../assets/shared/live-room-o
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it } from "vitest";
-import { LIVE_OVERLAY_PRESET_LAYOUTS } from "../../assets/shared/live-overlay-layout-presets";
+import { LIVE_OVERLAY_STANDARD_ELEMENTS } from "../../assets/shared/live-overlay-layout-presets";
 import {
   LIVE_OVERLAY_ELEMENTS,
   type LiveOverlayElement,
@@ -13,7 +13,10 @@ import { LIVE_OVERLAY_PROTOCOL_PREFIX, LIVE_ROOM_PROTOCOL } from "../../assets/s
 import type { LiveOverlayView } from "../../assets/shared/schemas/live-session-room";
 import { defaultLiveTimerGraphic } from "../../assets/shared/schemas/live-session-timer";
 import { LiveOverlay } from "../../assets/ts/live-session/LiveOverlay";
-import { liveOverlayAddress, parseLiveOverlayAddress } from "../../assets/ts/live-session/live-overlay-address";
+import {
+  ALL_LIVE_OVERLAY_GRAPHICS,
+  type LiveOverlayGraphics,
+} from "../../assets/ts/live-session/live-overlay-graphics";
 import {
   fakeLiveSockets,
   LIVE_OCCURRENCE,
@@ -37,15 +40,18 @@ const ON_STAGE = {
     authorName: null,
     authorPhotoUrl: null,
     authorAffiliation: null,
+    addressedTo: null,
   },
   questionChange: { operatorName: "Olga Operator", at: new Date().toISOString() },
   lowerThird: {
     key: "user:speaker",
     moderator: false,
     roleLabel: null,
+    titleLine: null,
     name: "Sam Speaker",
     photoUrl: null,
     identity: { title: "Architect", organization: "Example" },
+    additionalIdentities: [],
   },
   lowerThirdChange: { operatorName: "Olga Operator", at: new Date().toISOString() },
   lowerThirdMotion: "cut" as const,
@@ -55,9 +61,11 @@ const ON_STAGE = {
   topQuestions: null,
   chatFeed: null,
   reactions: false,
+  reactionsGraphic: { showCount: false },
+  scene: null,
 };
 const SESSION_TIMER = liveSnapshot().timers[0]!;
-const FULL_FRAME = LIVE_OVERLAY_PRESET_LAYOUTS["full-frame"].elements;
+const FULL_FRAME = LIVE_OVERLAY_STANDARD_ELEMENTS;
 
 /** A saved layout that shows only the given elements, the first of them in the given box. */
 function savedLayout(
@@ -77,7 +85,17 @@ function savedLayout(
   };
 }
 
-function mountOverlay(view: LiveOverlayView, layout = "full-frame", overlayLayouts: LiveOverlayLayoutGeometry[] = []) {
+/** A saved scene that shows only the speaker's name, in the standard box. */
+const NAME_ONLY = savedLayout("name-only", ["lowerThird"], FULL_FRAME.lowerThird);
+/** A saved scene that shows every graphic in its standard box: the built-in scenes each show only some. */
+const EVERYTHING: LiveOverlayLayoutGeometry = { slug: "everything", name: "Everything", elements: FULL_FRAME };
+
+function mountOverlay(
+  view: LiveOverlayView,
+  layout = EVERYTHING.slug,
+  overlayLayouts: LiveOverlayLayoutGeometry[] = [EVERYTHING],
+  graphics: LiveOverlayGraphics = ALL_LIVE_OVERLAY_GRAPHICS,
+) {
   const live = fakeLiveSockets();
   const host = document.createElement("div");
   document.body.append(host);
@@ -87,6 +105,7 @@ function mountOverlay(view: LiveOverlayView, layout = "full-frame", overlayLayou
       <LiveOverlay
         view={view}
         layout={layout}
+        graphics={graphics}
         slug="pqc-2026"
         occurrenceId={LIVE_OCCURRENCE}
         token="signed.overlay.access"
@@ -124,14 +143,17 @@ describe("broadcast overlays", () => {
     expect(host.querySelector(".pk-live-overlay__question-text")?.textContent).toBe("What about hybrid certificates?");
     // Sized by its length, as on the stage display, inside a card of one fixed size.
     expect(host.querySelector<HTMLElement>(".pk-live-overlay__question-text")?.dataset.fit).toBe("regular");
-    expect(host.querySelector(".pk-live-overlay__question-asker")?.textContent).toBe("Audience question");
+    // Anonymous: the eyebrow says whose question it is, and no byline repeats it.
+    expect(host.querySelector(".pk-live-board__eyebrow")?.textContent).toBe("Audience question");
+    expect(host.querySelector(".pk-live-overlay__question-asker")).toBeNull();
     expect(host.textContent).not.toContain("Sam Speaker");
   });
 
-  it("shows the asker's photo, or their initials, in place of the emblem when they asked by name", () => {
+  it("shows the asker's photo, or their initials, beside their name when they asked by name", () => {
     const { host, live } = mountOverlay("program", "question-only", [savedLayout("question-only", ["question"])]);
-    expect(host.querySelector(".pk-live-overlay__asker")).toBeNull();
-    expect(host.querySelector(".pk-live-overlay__card .pk-live-overlay__emblem")).not.toBeNull();
+    expect(host.querySelector(".pk-live-board-question__asker")).toBeNull();
+    // A board carries no logo: the frame's one logo is the background's, and this scene has none.
+    expect(host.querySelector(".pk-live-board__logo")).toBeNull();
     const ask = (authorPhotoUrl: string | null) =>
       void act(() =>
         live.latest().deliver({
@@ -140,15 +162,15 @@ describe("broadcast overlays", () => {
         }),
       );
     ask(null);
-    expect(host.querySelector(".pk-live-overlay__asker .pk-avatar__initials")?.textContent).toBe("BA");
+    expect(host.querySelector(".pk-live-board-question__asker .pk-avatar__initials")?.textContent).toBe("BA");
     const photo = "/api/v1/users/u1/headshots/portrait.jpg";
     ask(photo);
-    expect(host.querySelector(".pk-live-overlay__asker img")?.getAttribute("srcset")).toContain(photo);
+    expect(host.querySelector(".pk-live-board-question__asker img")?.getAttribute("srcset")).toContain(photo);
     expect(host.querySelector(".pk-live-overlay__question-asker")?.textContent).toBe("Bea Attendee");
   });
 
   it("names a host's or moderator's role above the name, and no role for a speaker", () => {
-    const { host, live } = mountOverlay("program", "lower-third");
+    const { host, live } = mountOverlay("program", "name-only", [NAME_ONLY]);
     expect(host.querySelector(".pk-live-overlay__role")).toBeNull();
     void act(() =>
       live.latest().deliver({
@@ -161,7 +183,7 @@ describe("broadcast overlays", () => {
   });
 
   it("renders the lower third from the approved credit", () => {
-    const { host } = mountOverlay("program", "lower-third");
+    const { host } = mountOverlay("program", "name-only", [NAME_ONLY]);
     expect(host.querySelector(".pk-live-overlay__name")?.textContent).toBe("Sam Speaker");
     const title = host.querySelector(".pk-live-overlay__title")!;
     // One line: the title and organization of the identity the speaker acts as.
@@ -174,12 +196,87 @@ describe("broadcast overlays", () => {
     expect(host.querySelector(".pk-live-overlay__name")?.textContent).toBe("Sam Speaker");
     expect(host.querySelector(".pk-live-overlay__lower-third-bars")?.getAttribute("viewBox")).toBe("0 0 2500 417");
     expect(host.querySelector(".pk-live-overlay__timer")).toBeNull();
-    const scene = mountOverlay("program", "lower-third");
+    const scene = mountOverlay("program", "name-only", [NAME_ONLY]);
     expect(scene.host.querySelector(".pk-live-overlay__question-text")).toBeNull();
     expect(scene.host.querySelector(".pk-live-overlay__name")?.textContent).toBe("Sam Speaker");
     void act(() => live.latest().deliver({ type: "stage.changed", stage: { ...ON_STAGE, lowerThird: null } }));
     expect(host.querySelector(".pk-live-overlay__name")).toBeNull();
     expect(host.querySelector(".pk-live-overlay__question-text")?.textContent).toBe("What about hybrid certificates?");
+  });
+
+  it("draws only the graphics a source shows, or all but those it hides", () => {
+    const only = mountOverlay("program", EVERYTHING.slug, [EVERYTHING], {
+      show: ["question"],
+      hide: null,
+      crop: false,
+    });
+    expect(only.host.querySelector(".pk-live-overlay__question-text")).not.toBeNull();
+    expect(only.host.querySelector(".pk-live-overlay__name")).toBeNull();
+    const except = mountOverlay("program", EVERYTHING.slug, [EVERYTHING], {
+      show: null,
+      hide: ["question"],
+      crop: false,
+    });
+    expect(except.host.querySelector(".pk-live-overlay__question-text")).toBeNull();
+    expect(except.host.querySelector(".pk-live-overlay__name")?.textContent).toBe("Sam Speaker");
+    expect(except.host.querySelector(".pk-live-overlay__frame")?.hasAttribute("data-crop")).toBe(false);
+  });
+
+  it("crops the page to the one graphic left, and ignores crop while several are", () => {
+    const box = FULL_FRAME.lowerThird;
+    const cropped = mountOverlay("program", EVERYTHING.slug, [EVERYTHING], {
+      show: ["lowerThird"],
+      hide: null,
+      crop: true,
+    });
+    const frame = cropped.host.querySelector<HTMLElement>(".pk-live-overlay__frame")!;
+    expect(frame.hasAttribute("data-crop")).toBe(true);
+    expect(frame.style.getPropertyValue("--crop-w")).toBe(String(box.w));
+    expect(frame.style.getPropertyValue("--crop-y")).toBe(String(box.y));
+    expect(cropped.host.querySelector(".pk-live-overlay__name")?.textContent).toBe("Sam Speaker");
+    const several = mountOverlay("program", EVERYTHING.slug, [EVERYTHING], {
+      show: ["lowerThird", "question"],
+      hide: null,
+      crop: true,
+    });
+    expect(several.host.querySelector(".pk-live-overlay__frame")?.hasAttribute("data-crop")).toBe(false);
+  });
+
+  it("draws a scene's background whenever the scene includes it, once, and no board draws a field of its own", () => {
+    const grounds = (scope: HTMLElement) =>
+      scope.querySelectorAll('[data-overlay-element="background"] .pk-live-board--ground');
+    const logos = (scope: HTMLElement) => scope.querySelectorAll(".pk-live-board__logo");
+    // A scene without the background draws none, and the board on it brings no field or logo of its own.
+    const plain = mountOverlay("program");
+    expect(plain.host.querySelector(".pk-live-overlay__question-text")).not.toBeNull();
+    expect(grounds(plain.host)).toHaveLength(0);
+    expect(logos(plain.host)).toHaveLength(0);
+    // A scene with the background draws it under the question on air, and still once the question is off.
+    const boards = savedLayout("boards", ["background", "question", "lowerThird"], { x: 0, y: 0, w: 1, h: 1 });
+    const { host, live } = mountOverlay("program", "boards", [boards]);
+    expect(grounds(host)).toHaveLength(1);
+    expect(logos(host)).toHaveLength(1);
+    void act(() => live.latest().deliver({ type: "stage.changed", stage: { ...ON_STAGE, question: null } }));
+    expect(host.querySelector(".pk-live-overlay__question-text")).toBeNull();
+    expect(grounds(host)).toHaveLength(1);
+    // A full-frame question beside a background in a column still draws only the one background and logo.
+    const aside = savedLayout("aside", ["background", "question", "lowerThird"], { x: 0.6, y: 0, w: 0.4, h: 1 });
+    const scene = mountOverlay("program", "aside", [aside]);
+    expect(scene.host.querySelector(".pk-live-overlay__question-text")).not.toBeNull();
+    expect(grounds(scene.host)).toHaveLength(1);
+    expect(logos(scene.host)).toHaveLength(1);
+  });
+
+  it("draws a scene's QR code to this session in the event app", () => {
+    const holding = savedLayout("holding", ["lowerThird", "qrCode"]);
+    const { host } = mountOverlay("program", "holding", [holding]);
+    const code = host.querySelector('[data-overlay-element="qrCode"] svg[role="img"]');
+    expect(code?.getAttribute("aria-label")).toBe("Code to ask questions in the event app");
+    expect(host.querySelector('[data-overlay-element="qrCode"]')?.textContent).toContain(
+      "Scan to ask a question and vote",
+    );
+    // A built-in scene leaves the QR code out until an organizer adds it.
+    expect(mountOverlay("program", "default", []).host.querySelector('[data-overlay-element="qrCode"]')).toBeNull();
   });
 
   it("places each element in its layout box, follows layout changes, and draws the default for an unknown name", () => {
@@ -203,14 +300,23 @@ describe("broadcast overlays", () => {
     expect(placed("--overlay-dx")).toBe("0px");
     expect(placed("--overlay-scale")).toBe("0.5");
     expect(host.querySelector(".pk-live-overlay__question-text")?.textContent).toBe("What about hybrid certificates?");
-    const unknown = mountOverlay("program", "no-such-scene", [keynote]);
-    expect(unknown.host.querySelector(".pk-live-overlay__question-text")).not.toBeNull();
-    expect(unknown.host.querySelector(".pk-live-overlay__name")).not.toBeNull();
+    // An unknown scene, or one retired since, draws as Default: the speaker's name, no board and no background.
+    for (const scene of ["no-such-scene", "talk"]) {
+      const unknown = mountOverlay("program", scene, [keynote]);
+      expect(unknown.host.querySelector(".pk-live-overlay__name"), scene).not.toBeNull();
+      expect(unknown.host.querySelector(".pk-live-overlay__question-text"), scene).toBeNull();
+      expect(unknown.host.querySelector('[data-overlay-element="background"]'), scene).toBeNull();
+    }
   });
 
   it("draws the program timer graphic in its own format, label and warning color", () => {
     const { host, live } = mountOverlay("program");
-    const graphic = { ...defaultLiveTimerGraphic("session"), presentation: "digital" as const, label: "Time left" };
+    const graphic = {
+      ...defaultLiveTimerGraphic("session"),
+      presentation: "digital" as const,
+      showLabel: true,
+      label: "Time left",
+    };
     void act(() => {
       live.latest().deliver({ type: "timers.changed", timers: [{ ...SESSION_TIMER, heldMs: 42_000 }] });
       live.latest().deliver({
@@ -295,7 +401,7 @@ describe("broadcast overlays", () => {
   });
 
   it("clears the lower third when the operator takes it down", () => {
-    const { host, live } = mountOverlay("program", "lower-third");
+    const { host, live } = mountOverlay("program", "name-only", [NAME_ONLY]);
     void act(() => live.latest().deliver({ type: "stage.changed", stage: { ...ON_STAGE, lowerThird: null } }));
     expect(host.querySelector(".pk-live-overlay__name")).toBeNull();
   });
@@ -323,13 +429,16 @@ describe("broadcast overlays", () => {
     expect(host.querySelector(".pk-live-overlay__poll-question")).toBeNull();
   });
 
-  it("floats each reaction burst while reactions are on", () => {
+  it("floats one reaction per person who joined while reactions are on", () => {
     const reactions = mountOverlay("program");
     void act(() => reactions.live.latest().deliver({ type: "stage.changed", stage: { ...ON_STAGE, reactions: true } }));
     void act(() =>
-      reactions.live
-        .latest()
-        .deliver({ type: "reaction.burst", counts: { applause: 2, love: 1 }, at: new Date().toISOString() }),
+      reactions.live.latest().deliver({
+        type: "reaction.burst",
+        counts: { applause: 2, love: 1 },
+        people: { applause: 2, love: 1 },
+        at: new Date().toISOString(),
+      }),
     );
     expect([...reactions.host.querySelectorAll(".pk-live-overlay__reaction")].map((node) => node.textContent)).toEqual([
       "👏",
@@ -338,9 +447,22 @@ describe("broadcast overlays", () => {
     ]);
   });
 
-  it("renders each auxiliary output from its own composition, not Program's", () => {
+  it("draws the projector's own composition, which the room keeps in step with Program, whether it syncs or not", () => {
     const projector = mountOverlay("projector");
-    expect(projector.host.querySelector(".pk-live-overlay__name")).toBeNull();
+    const sync = (on: boolean) =>
+      void act(() =>
+        projector.live
+          .latest()
+          .deliver({ type: "screen.sync.changed", screenSync: { projector: on, "stage-display": true } }),
+      );
+    const questionText = () => projector.host.querySelector(".pk-live-overlay__question-text")?.textContent ?? null;
+    const hold = (composition: typeof ON_STAGE) =>
+      void act(() => projector.live.latest().deliver({ type: "aux.changed", output: "projector", composition }));
+    // The projector holds nothing yet, so nothing of Program's is drawn there by itself.
+    expect(questionText()).toBeNull();
+    // The room carries Program's question to it.
+    hold(ON_STAGE);
+    expect(questionText()).toBe("What about hybrid certificates?");
     void act(() =>
       projector.live.latest().deliver({
         type: "aux.changed",
@@ -349,8 +471,13 @@ describe("broadcast overlays", () => {
       }),
     );
     expect(projector.host.querySelector(".pk-live-overlay__name")?.textContent).toBe("Sam Speaker");
-    expect(projector.host.querySelector(".pk-live-overlay__question-text")).toBeNull();
+    expect(questionText()).toBeNull();
     expect(projector.host.querySelector(".pk-live-overlay__timer")).not.toBeNull();
+    // With sync off it stays as it is.
+    sync(false);
+    expect(projector.host.querySelector(".pk-live-overlay__name")?.textContent).toBe("Sam Speaker");
+    expect(questionText()).toBeNull();
+    // The stage preview follows the room on its own and never takes Program's graphics.
     const preview = mountOverlay("stage-preview");
     expect(preview.host.querySelector(".pk-live-overlay__name")).toBeNull();
   });
@@ -386,6 +513,8 @@ describe("broadcast overlays", () => {
     expect(host.querySelector(".pk-live-stage-display__question-text")?.textContent).toBe(
       "What about hybrid certificates?",
     );
+    // Sized by its length, as on Program: a longer question steps down so none of it is cut.
+    expect(host.querySelector<HTMLElement>(".pk-live-stage-display__question-text")?.dataset.fit).toBe("regular");
     expect(host.querySelector(".pk-live-overlay__lower-third-bars")).toBeNull();
   });
 
@@ -397,6 +526,7 @@ describe("broadcast overlays", () => {
       authorName: "Riley Chen",
       authorPhotoUrl: null,
       authorAffiliation: { organization: { name: "Example Bank" } },
+      addressedTo: null,
     };
     const shown = () => ({
       tag: host.querySelector(".pk-live-stage-display__questions .pk-live-stage-display__tag")?.textContent ?? null,
@@ -406,7 +536,7 @@ describe("broadcast overlays", () => {
     void act(() => live.latest().deliver({ type: "stage.display.next.changed", question: next, votes: 31 }));
     expect(shown()).toEqual({ tag: "On air", text: "What about hybrid certificates?", next: next.text });
     // The room sends its votes with it, since a stage display source has no question list.
-    expect(host.querySelector(".pk-live-stage-display__votes")?.textContent).toBe("31");
+    expect(host.querySelector(".pk-live-stage-display__votes")?.textContent).toBe("31 votes");
     // Taken to Program, the next question becomes the current one and is not repeated below it.
     void act(() => live.latest().deliver({ type: "stage.changed", stage: { ...ON_STAGE, question: next } }));
     expect(shown()).toEqual({ tag: "On air", text: next.text, next: null });
@@ -415,7 +545,7 @@ describe("broadcast overlays", () => {
     void act(() =>
       live.latest().deliver({ type: "stage.display.next.changed", question: { ...next, id: LIVE_QUESTION } }),
     );
-    expect(shown()).toEqual({ tag: "Next", text: null, next: "Which clients still fail a hybrid handshake?" });
+    expect(shown()).toEqual({ tag: "Next question", text: null, next: "Which clients still fail a hybrid handshake?" });
   });
 
   it("never shows Preview's question on an audience output", () => {
@@ -457,33 +587,5 @@ describe("broadcast overlays", () => {
     void act(() => live.latest().deliver({ type: "speaker.message.changed", speakerMessage: null }));
     expect(host.querySelector(".pk-live-stage-display__message")).toBeNull();
     expect(host.querySelector(".pk-live-stage-display__top")?.hasAttribute("data-covered")).toBe(false);
-  });
-
-  it("keeps the whole address in the fragment, output and layout first", () => {
-    const address = liveOverlayAddress("https://pkic.org", {
-      view: "program",
-      layout: "lower-third",
-      slug: "pqc-2026",
-      roomId: "33333333-3333-4333-8333-333333333333",
-      token: "signed.overlay.access",
-    });
-    const url = new URL(address);
-    expect(url.pathname).toBe("/live/overlay/");
-    expect(url.search).toBe("");
-    expect(url.hash).toMatch(/^#view=program&layout=lower-third&event=/);
-    expect(parseLiveOverlayAddress(url)).toEqual({
-      view: "program",
-      layout: "lower-third",
-      slug: "pqc-2026",
-      roomId: "33333333-3333-4333-8333-333333333333",
-      token: "signed.overlay.access",
-    });
-    const fallback = new URL(address.replace("layout=lower-third", "layout=Not%20a%20name"));
-    expect(parseLiveOverlayAddress(fallback)?.layout).toBe("full-frame");
-    expect(
-      new URL(liveOverlayAddress("https://pkic.org", { ...parseLiveOverlayAddress(url)!, layout: "full-frame" })).hash,
-    ).not.toContain("layout=");
-    expect(parseLiveOverlayAddress({ hash: url.hash.replace("view=program", "view=lower-third") })).toBeNull();
-    expect(parseLiveOverlayAddress({ hash: "#view=program" })).toBeNull();
   });
 });

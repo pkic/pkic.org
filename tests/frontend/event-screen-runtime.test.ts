@@ -103,19 +103,19 @@ describe("what a screen shows", () => {
     ).toMatchObject({ kind: "output", state: screenStageRunningFixture, marker: null });
   });
 
-  it("runs the agenda only on a stage display; other outputs hold their last frame", () => {
-    const projector = view({ ...assigned.screen.assignment!, output: "projector", layout: "full-frame" });
+  it("runs the agenda only on a stage display or a projector; other outputs hold their last frame", () => {
+    const program = view({ ...assigned.screen.assignment!, output: "program", layout: "talk" });
     expect(
       screenDisplay(
         situation({
           now: SCREEN_FIXTURE_NOW,
-          view: projector,
+          view: program,
           live: { connected: false, lastUpdateAt: studioEnd - 10 * MINUTE, state: screenStageRunningFixture },
         }),
       ),
     ).toMatchObject({
       kind: "output",
-      output: "projector",
+      output: "program",
       state: screenStageRunningFixture,
       marker: { kind: "offline-badge" },
     });
@@ -139,6 +139,35 @@ describe("what a screen shows", () => {
     expect(screenDisplay(situation({ live: { connected: true, lastUpdateAt: studioEnd, state: null } }))).toMatchObject(
       { kind: "idle", roomName: "Blue room", marker: null },
     );
+  });
+
+  it("runs a projector on the agenda too: the next session and its countdown for the audience", () => {
+    const projector = view({
+      eventSlug: "pqc-2026",
+      roomId: ROOM,
+      roomName: "Blue room",
+      output: "projector",
+      layout: null,
+    });
+    const offline = (now: number) =>
+      screenDisplay(
+        situation({
+          now,
+          view: projector,
+          live: { connected: false, lastUpdateAt: studioEnd - MINUTE, state: screenStageRunningFixture },
+        }),
+      );
+    const before = offline(SCREEN_FIXTURE_NOW);
+    expect(before).toMatchObject({ kind: "output", output: "projector", marker: { kind: "auto" } });
+    const next = screenAgendaFixture.sessions[1]!;
+    const shown = before.kind === "output" ? before.state.outputs.projector : null;
+    expect(shown?.schedule?.rooms[0]?.title).toBe(next.title);
+    expect(shown?.timerGraphics.map((graphic) => graphic.timerId)).toHaveLength(1);
+    // During that session the audience sees the one after it, with no countdown on the talk.
+    const during = offline(Date.parse("2026-12-01T09:40:00.000Z"));
+    const audience = during.kind === "output" ? during.state.outputs.projector : null;
+    expect(audience?.schedule?.rooms[0]?.title).toBe(screenAgendaFixture.sessions[2]!.title);
+    expect(audience?.timerGraphics).toEqual([]);
   });
 
   it("counts down to the next start, then the session to its scheduled end", () => {

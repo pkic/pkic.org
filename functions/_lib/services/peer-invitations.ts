@@ -1,3 +1,4 @@
+import { buildEventEmailVariables } from "../email/event-email-variables";
 import type { z } from "zod";
 import type {
   registrationInviteCreateSchema,
@@ -8,7 +9,7 @@ import { resolveEventInviteExpiry } from "../invite-validity";
 import { batchFirst } from "../db/pagination";
 import { AppError } from "../errors";
 import { getConfig, resolveAppBaseUrl } from "../config";
-import { buildEventEmailVariables, getEventBySlug } from "./events";
+import { getEventBySlug } from "./events";
 import { resolvePeerInvitationAuthority } from "./peer-invitation-authority";
 import { prepareInvitesByInviterCount } from "./invite-creation";
 import { bulkCreateInvites } from "./invite-bulk";
@@ -18,7 +19,10 @@ import { inviteDeclineUrl, proposalPageUrl, registrationPageUrl } from "./fronte
 import type { Env } from "../types";
 import { emailPlainText } from "../email/plain-text";
 import { REGISTRATION_ORGANIZATION_SQL } from "./registrations/selected-identity";
-import { buildEventInviteRecipientVariables } from "./event-invite-email-variables";
+import {
+  buildEventInvitationMessageVariables,
+  buildEventInviteRecipientVariables,
+} from "./event-invite-email-variables";
 
 type PeerInviteBody = z.infer<typeof registrationInviteCreateSchema>;
 
@@ -159,6 +163,7 @@ async function createPeerInvitationAttempt(
             { firstName: invite.inviteeFirstName, lastName: invite.inviteeLastName },
             inviteType === "attendee" ? "Attendee" : "Speaker",
           ),
+          ...(inviteType === "attendee" ? buildEventInvitationMessageVariables(event) : {}),
           inviterName: emailPlainText(inviterName),
           [primaryKey]: primaryUrl,
           declineUrl,

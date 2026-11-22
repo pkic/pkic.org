@@ -69,6 +69,10 @@ function stubFeeds(bodies: Record<string, unknown>, failing: readonly string[] =
       if (path === "/api/v1/events" && url.searchParams.get("phase") === "now") {
         return json(bodies["/api/v1/events?phase=now"] ?? { events: [], page: emptyPage });
       }
+      if (path === "/api/v1/events" && url.searchParams.get("invitation") === "open") {
+        if (failing.includes("/api/v1/events?invitation=open")) return new Response("", { status: 503 });
+        return json(bodies["/api/v1/events?invitation=open"] ?? { events: [], page: emptyPage });
+      }
       if (failing.includes(path)) return new Response("", { status: 503 });
       const body = bodies[path];
       if (body === undefined) throw new Error(`unexpected request: ${path}`);
@@ -166,6 +170,16 @@ describe("portal landing", () => {
     expect(container.innerHTML).not.toMatch(
       /class="[^"]*(?<![-\w])(card|card-body|list-unstyled|text-muted|d-flex)(?![-\w])/,
     );
+  });
+
+  it("puts the person's open invitations on Home, for members and people without a capacity alike", async () => {
+    for (const capacity of [{ member: true }, {}]) {
+      portalSession.value = portalSessionFixture(capacity);
+      stubFeeds(feeds({ "/api/v1/events?invitation=open": { events: [audienceEventRow()], page: onePage } }));
+      const container = mount();
+      await settle();
+      expect(container.querySelector('[aria-label="Your invitations"]')?.textContent).toContain("PQC Conference 2026");
+    }
   });
 
   it("welcomes the person back only once this device has seen them before", async () => {
@@ -333,7 +347,7 @@ describe("portal landing", () => {
     expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes("kind=standalone"))).toBe(true);
   });
 
-  it("shows a personal calendar action only when the registration has a calendar day", async () => {
+  it("lets a registered person manage the registration from the event's row, beside the calendar when it has a day", async () => {
     portalSession.value = { ...portalSessionFixture({ member: false }), eventParticipation: true };
     const row = audienceEventRow({
       participation: {
@@ -350,6 +364,15 @@ describe("portal landing", () => {
     await settle();
     const events = panelNamed(container, "Events");
     expect(events.querySelector('a[aria-label*="personal calendar"]')).toBeNull();
+    expect(
+      [...events.querySelectorAll(".blog-card-body a")].map((link) => [link.textContent, link.getAttribute("href")]),
+    ).toEqual([["Manage registration", "#/events/pqc-2026/registrations/20000000-0000-4000-8000-000000000001"]]);
+    // An event still waiting on the person's answer is its invitation card, not a row here.
+    const panelQueries = vi
+      .mocked(fetch)
+      .mock.calls.map(([input]) => new URL(String(input), location.origin))
+      .filter((url) => url.searchParams.has("phase"));
+    expect(panelQueries.map((url) => url.searchParams.get("invitation"))).toEqual(["none", "none"]);
 
     row.participation = { ...(row.participation as object), calendarAvailable: true };
     stubFeeds(feeds({ "/api/v1/events": { events: [row], page: onePage } }));

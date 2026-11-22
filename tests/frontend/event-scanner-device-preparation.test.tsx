@@ -4,7 +4,6 @@ import {
   host,
   mount,
   openManual,
-  scannerDialog,
   openDiagnostics,
   closeDiagnostics,
   submit,
@@ -15,6 +14,10 @@ import { eventScanCaptureIntentSchema } from "../../assets/shared/schemas/event-
 import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 import { formatDateTime } from "../../assets/shared/format-date";
+const button = (name: string) =>
+  Array.from(host.querySelectorAll("button")).find(
+    (control) => control.textContent?.trim() === name || control.getAttribute("aria-label") === name,
+  )!;
 describe("scanner device enrollment and manual capture boundary", () => {
   it("refreshes badge data through the diagnostics Sync now action", async () => {
     await mount(true);
@@ -57,14 +60,12 @@ describe("scanner device enrollment and manual capture boundary", () => {
     mocks.manifestPreparing = true;
     mocks.manifestReady = false;
     await mount(true, ["attendance"]);
-    const button = (name: string) =>
-      Array.from(host.querySelectorAll("button")).find((control) => control.textContent?.trim() === name)!;
     await act(async () => button("Start scanning").click());
     expect(button("Cancel")).toBeDefined();
     expect(host.querySelector(".pk-fast-scanner")).toBeNull();
     if (source === "preparation") {
       await act(async () => mocks.preparationClosed!());
-      expect(button("Cancel")).toBeUndefined();
+      expect(Array.from(host.querySelectorAll("dialog")).some((dialog) => dialog.open)).toBe(false);
     }
     await openDiagnostics();
     mocks.freeze.mockResolvedValueOnce({ state: "closed", epochId: mocks.epochId, issuedHighWater: 0 });
@@ -106,6 +107,7 @@ describe("scanner device enrollment and manual capture boundary", () => {
     ).toBe(true);
   });
   it("defaults to attendance with explicit manual entry and recovery in its dedicated tab without quota or exception controls", async () => {
+    vi.stubGlobal("navigator", Object.create(navigator, { onLine: { value: false } }));
     await mount(true, ["check", "attendance", "exception"]);
     await openDiagnostics();
     expect(host.querySelector('select[name="action"]')).toBeNull();
@@ -129,16 +131,14 @@ describe("scanner device enrollment and manual capture boundary", () => {
     await submit();
     expect(mocks.persist).toHaveBeenCalledOnce();
     expect(mocks.persist.mock.calls[0][0].action).toBe("attendance");
-    expect(host.querySelector(".pk-event-scanner--warning")?.textContent).toContain("Known badge · not registered");
+    await vi.waitFor(() =>
+      expect(host.querySelector(".pk-event-scanner--warning")?.textContent).toContain("Known badge · not registered"),
+    );
     expect(host.textContent).not.toContain("Review admission exception");
   });
   it("switches continuous scanning to Recent scans, stops the camera and retains the selected mode", async () => {
     await mount(true, ["check"]);
-    await act(async () =>
-      Array.from(host.querySelectorAll("button"))
-        .find((button) => button.textContent?.trim() === "Start scanning")!
-        .click(),
-    );
+    await act(async () => button("Start scanning").click());
     await vi.waitFor(async () => {
       await act(async () => {});
       expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Ready to check registration");
@@ -169,6 +169,12 @@ describe("scanner device enrollment and manual capture boundary", () => {
   });
   async function detectLead() {
     await mount(true, ["lead"], "99999999-9999-4999-8999-999999999999");
+    expect(button("Start scanning").disabled).toBe(true);
+    await act(async () => mocks.hardwareScan!(badgeCode));
+    expect(mocks.persist).not.toHaveBeenCalled();
+    const consent = host.querySelector<HTMLInputElement>('input[name="consentConfirmed"]')!;
+    await act(async () => consent.click());
+    expect(button("Start scanning").disabled).toBe(false);
     await act(async () =>
       Array.from(host.querySelectorAll("button"))
         .find((button) => button.textContent?.trim() === "Start scanning")!
@@ -181,31 +187,20 @@ describe("scanner device enrollment and manual capture boundary", () => {
     await act(async () => mocks.cameraScan!({ data: badgeCode }));
     await vi.waitFor(async () => {
       await act(async () => {});
-      expect(scannerDialog("Review sponsor lead").open).toBe(true);
+      expect(host.querySelector('.pk-fast-scanner__manual input[name="badgeId"]')).not.toBeNull();
     });
-    const dialog = scannerDialog("Review sponsor lead");
-    Object.defineProperty(dialog, "close", { configurable: true, value: () => dialog.removeAttribute("open") });
-    return dialog;
+    return host.querySelector<HTMLElement>(".pk-fast-scanner__manual")!;
   }
-  it("reviews a camera-detected lead in one dialog and records only explicitly confirmed attendee consent", async () => {
-    const dialog = await detectLead();
-    const consent = dialog.querySelector<HTMLInputElement>('input[name="consentConfirmed"]')!;
-    const confirm = dialog.querySelector<HTMLButtonElement>(".pk-dialog__foot .pk-btn--primary")!;
-    expect(host.querySelectorAll('input[name="consentConfirmed"]')).toHaveLength(1);
-    expect(dialog.querySelector<HTMLInputElement>('input[name="badgeId"]')!.value).toBe(badgeCode);
-    expect(consent.checked).toBe(false);
+  it("requires permission before scanning, offers badge-code-only review, and holds the result for Next", async () => {
+    const manual = await detectLead();
+    const confirm = manual.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    expect(manual.querySelector('[role="searchbox"]')).toBeNull();
+    expect(manual.querySelector<HTMLInputElement>('input[name="badgeId"]')!.value).toBe(badgeCode);
     expect(confirm.textContent).toBe("Confirm lead");
-    await act(async () => confirm.click());
-    expect(mocks.persist).not.toHaveBeenCalled();
-    expect(consent.getAttribute("aria-invalid")).toBe("true");
-    expect(dialog.textContent).toContain("Confirm the attendee agrees");
-    expect(host.textContent).not.toContain("Invalid QR code");
-    await act(async () => consent.click());
-    expect(consent.checked).toBe(true);
     await act(async () => confirm.click());
     await vi.waitFor(async () => {
       await act(async () => {});
-      expect(dialog.open).toBe(false);
+      expect(host.querySelector(".pk-fast-scanner__manual")).toBeNull();
     });
     expect(mocks.persist).toHaveBeenCalledOnce();
     const captured = eventScanCaptureIntentSchema.parse(mocks.persist.mock.calls[0][0]);
@@ -215,8 +210,24 @@ describe("scanner device enrollment and manual capture boundary", () => {
       sponsorId: "99999999-9999-4999-8999-999999999999",
       consentConfirmed: true,
     });
-    await openManual("Review sponsor lead");
-    expect(dialog.querySelector<HTMLInputElement>('input[name="consentConfirmed"]')!.checked).toBe(false);
+    await act(async () => button("Next badge").click());
+    expect(host.querySelector('input[name="consentConfirmed"]')).toBeNull();
+    expect(button("Enter badge code").disabled).toBe(false);
+    await act(async () => button("Close scanner").click());
+    expect(host.querySelector<HTMLInputElement>('input[name="consentConfirmed"]')?.checked).toBe(false);
+    expect(button("Start scanning").disabled).toBe(true);
+    expect(button("Enter badge code")).toBeUndefined();
+  });
+  it("keeps the accepted lead pledge active after canceling badge entry", async () => {
+    await mount(true, ["lead"], "99999999-9999-4999-8999-999999999999");
+    await act(async () => host.querySelector<HTMLInputElement>('input[name="consentConfirmed"]')!.click());
+    expect(button("Enter badge code")).toBeUndefined();
+    await act(async () => button("Start scanning").click());
+    await act(async () => button("Enter badge code").click());
+    expect(host.querySelector('input[name="consentConfirmed"]')).toBeNull();
+    await act(async () => button("Return to scanning").click());
+    expect(host.querySelector(".pk-fast-scanner")).not.toBeNull();
+    expect(host.querySelector(".pk-fast-scanner__manual")).toBeNull();
   });
   it("refuses an open lead review after the canonical session owner changes", async () => {
     const session = (id: string, person: string) =>
@@ -229,10 +240,7 @@ describe("scanner device enrollment and manual capture boundary", () => {
         idleExpiresAt: "2099-12-31T23:59:59.000Z",
       });
     portalSession.value = session("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "11111111-1111-4111-8111-111111111111");
-    const dialog = await detectLead();
-    const consent = dialog.querySelector<HTMLInputElement>('input[name="consentConfirmed"]')!;
-    await act(async () => consent.click());
-    expect(consent.checked).toBe(true);
+    const manual = await detectLead();
     mocks.suspended.mockResolvedValue(true);
     await act(async () => {
       portalSession.value = session("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "cccccccc-cccc-4ccc-8ccc-cccccccccccc");
@@ -240,17 +248,17 @@ describe("scanner device enrollment and manual capture boundary", () => {
     });
     await vi.waitFor(async () => {
       await act(async () => {});
-      expect(dialog.querySelector<HTMLInputElement>('input[name="badgeId"]')!.value).toBe("");
+      expect(manual.querySelector<HTMLInputElement>('input[name="badgeId"]')!.value).toBe("");
     });
     expect(mocks.suspended).toHaveBeenCalledWith(
       "11111111-1111-4111-8111-111111111111",
       "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
     );
-    expect(consent.checked).toBe(false);
+    expect(host.querySelector('input[name="consentConfirmed"]')).toBeNull();
     const guidance = host.textContent;
     await act(async () => mocks.hardwareScan!(badgeCode));
     expect(host.textContent).toBe(guidance);
-    await act(async () => dialog.querySelector<HTMLButtonElement>(".pk-dialog__foot .pk-btn--primary")!.click());
+    await act(async () => manual.querySelector<HTMLButtonElement>('button[type="submit"]')!.click());
     expect(mocks.persist).not.toHaveBeenCalled();
     expect(host.textContent).toContain("Sign in again to upload pending scans.");
   });
@@ -361,12 +369,8 @@ describe("scanner device enrollment and manual capture boundary", () => {
     }));
     await submit();
     expect(host.querySelector(".pk-event-scanner--unverified")?.textContent).toContain(message);
-    await act(async () => {
-      Array.from(host.querySelectorAll("button"))
-        .find((button) => button.textContent?.trim() === "Start scanning")!
-        .click();
-    });
-    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Scan next now"]')!.click());
+    await act(async () => button("Start scanning").click());
+    await act(() => button("Next badge").click());
     await act(async () => {
       mocks.hardwareScan!(badgeCode);
     });
@@ -394,6 +398,7 @@ describe("scanner device enrollment and manual capture boundary", () => {
     )!;
     expect(normal.textContent).toContain("Last badge refresh");
     expect(normal.textContent).toContain(formatDateTime(mocks.snapshot.serverNow));
+    expect(normal.textContent).toContain(formatDateTime(mocks.snapshot.expiresAt));
     await closeDiagnostics();
     await act(async () => {
       Array.from(host.querySelectorAll("button"))
@@ -404,7 +409,9 @@ describe("scanner device enrollment and manual capture boundary", () => {
     expect(fast.textContent).toContain("Last badge refresh");
     expect(fast.textContent).toContain(formatDateTime(mocks.snapshot.serverNow));
     expect(fast.textContent).toContain(formatDateTime(mocks.snapshot.expiresAt));
-    expect(fast.textContent).toContain("Using saved badge data");
+    const readiness = fast.querySelector('[role="status"][aria-label="Scanner status"]');
+    expect(readiness).not.toBeNull();
+    expect(readiness?.textContent).not.toContain("Badge data ready");
   });
   it.each(["eligible", "unknown"] as const)(
     "resets the cleared entry field after capturing a %s badge while retaining feedback",
@@ -491,11 +498,11 @@ describe("scanner device enrollment and manual capture boundary", () => {
       scan: eventScanCaptureIntentSchema.parse(scan),
       local: { outcome: "unknown", reason: "unknown_credential", message: "Unknown badge for this event snapshot." },
     }));
-    await act(async () => {
-      Array.from(host.querySelectorAll("button"))
-        .find((button) => button.textContent?.trim() === "Start scanning")!
-        .click();
+    await vi.waitFor(async () => {
+      await act(async () => {});
+      expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Unknown badge");
     });
+    await act(() => button("Next badge").click());
     await act(async () => {
       mocks.hardwareScan!(badgeCode);
     });
@@ -555,39 +562,36 @@ it("keeps manual entry inside fullscreen, focuses it, submits once and resumes s
   }
 });
 
-it("automatically clears malformed badge feedback after the configured pause while retaining immersive scanning", async () => {
+it("holds a malformed badge error until Next badge, then accepts another scan", async () => {
   await mount(true, ["attendance"]);
-  await act(() =>
-    [...host.querySelectorAll<HTMLButtonElement>("button")]
-      .find((button) => button.textContent?.trim() === "Start scanning")!
-      .click(),
-  );
+  await act(() => button("Start scanning").click());
   await act(() => {
     mocks.hardwareScan!("not-a-badge");
   });
   await vi.waitFor(() => expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Unknown badge"));
-  await vi.waitFor(() => expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Ready for entry"), {
-    timeout: 1800,
-  });
-  expect(host.querySelector(".pk-fast-scanner")).not.toBeNull();
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Unknown badge");
+  await act(() => mocks.hardwareScan!(badgeCode));
   expect(mocks.persist).not.toHaveBeenCalled();
+  await act(() => host.querySelector<HTMLButtonElement>(".pk-fast-scanner__actions button")!.click());
+  expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Ready for entry");
+  await act(() => mocks.hardwareScan!(badgeCode));
+  await vi.waitFor(() => expect(mocks.persist).toHaveBeenCalledOnce());
+  expect(host.querySelector(".pk-fast-scanner")).not.toBeNull();
 });
 
-it("records a failed local save and clears its finite feedback without submitting another observation", async () => {
+it("keeps a failed local save visible until Next badge", async () => {
   await mount(true, ["attendance"]);
   mocks.persist.mockRejectedValueOnce(new Error("Synthetic local storage failure"));
-  await act(() =>
-    [...host.querySelectorAll<HTMLButtonElement>("button")]
-      .find((button) => button.textContent?.trim() === "Start scanning")!
-      .click(),
-  );
+  await act(() => button("Start scanning").click());
   await act(() => {
     mocks.hardwareScan!(badgeCode);
   });
   await vi.waitFor(() => expect(host.textContent).toContain("Scan was not saved"));
-  await vi.waitFor(() => expect(host.querySelector(".pk-fast-scanner__message")?.textContent).toBe("Ready to scan"), {
-    timeout: 1800,
-  });
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  expect(host.textContent).toContain("Scan was not saved");
   expect(mocks.persist).toHaveBeenCalledOnce();
+  await act(() => host.querySelector<HTMLButtonElement>(".pk-fast-scanner__actions button")!.click());
+  expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Ready for entry");
   expect(host.querySelector(".pk-fast-scanner")).not.toBeNull();
 });

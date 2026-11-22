@@ -1,127 +1,15 @@
 // @vitest-environment jsdom
+import { fetchMock, host, mocks, mount, pendingResponse, card, refusal } from "./helpers/portal-app-harness";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import axe from "axe-core";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { serviceAvailability } from "../../assets/ts/shared/availability-state";
+import { expect, it, vi } from "vitest";
 import { clearAuth, portalSession, logoutNotice, savePortalSession } from "../../assets/ts/member-flows/portal/state";
-const mocks = vi.hoisted(() => ({
-  registerWorker: vi.fn(),
-  clearPreparation: vi.fn(),
-  recordSession: vi.fn(),
-  pendingLogout: vi.fn(),
-  activeSession: vi.fn(),
-  signOut: vi.fn(),
-  renderShell: vi.fn(),
-  supportsPasskeys: vi.fn(),
-  authenticateWithPasskey: vi.fn(),
-  sessionListeners: new Set<() => void>(),
-}));
-vi.mock("../../assets/ts/member-flows/portal/portal-worker-registration", () => ({
-  registerPortalServiceWorker: mocks.registerWorker,
-}));
-vi.mock(
-  "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-offline-context",
-  async (original) => ({
-    ...(await original<
-      typeof import("../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-offline-context")
-    >()),
-    clearScannerOfflineContexts: mocks.clearPreparation,
-  }),
-);
-vi.mock("../../assets/ts/shared/pending-user-logout", () => ({
-  recordCanonicalSession: mocks.recordSession,
-  readActiveUserSession: mocks.activeSession,
-  readPendingUserLogout: mocks.pendingLogout,
-  subscribeUserSessionState: (callback: () => void) => {
-    mocks.sessionListeners.add(callback);
-    return () => mocks.sessionListeners.delete(callback);
-  },
-  scannerUploadSuspended: async () => false,
-}));
-vi.mock("../../assets/ts/member-flows/portal/logout-session", () => ({
-  resumePendingUserLogout: async () => false,
-  signOutPortalSession: mocks.signOut,
-}));
-vi.mock("../../assets/ts/member-flows/portal/shell/PortalShell", () => ({
-  PortalShell: () => {
-    mocks.renderShell();
-    return <div>Authenticated portal content</div>;
-  },
-}));
-vi.mock("@simplewebauthn/browser", () => ({ browserSupportsWebAuthn: mocks.supportsPasskeys }));
-vi.mock("../../assets/ts/shared/passkey-authentication", () => ({
-  authenticateWithPasskey: mocks.authenticateWithPasskey,
-}));
-vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/OfflineScannerBootstrap", () => ({
-  OfflineScannerBootstrap: ({ route, onCheckSignIn }: { route: string; onCheckSignIn: () => void }) => (
-    <div data-scanner-route={route}>
-      Prepared offline scanner
-      <button onClick={onCheckSignIn}>Check sign-in again</button>
-    </div>
-  ),
-}));
-vi.mock("../../assets/ts/member-flows/portal/shell/MeetingEntryReturn", () => ({
-  MeetingEntryReturn: ({ destination }: { destination: string }) => <div data-meeting-return={destination} />,
-}));
-import { App } from "../../assets/ts/member-flows/portal/App";
 import { rememberedActingIdentityId } from "../../assets/ts/member-flows/portal/acting-identity";
 import { myActiveIdentitySwitchSchema } from "../../assets/shared/schemas/me";
 import { memoryStorage } from "./helpers/browser-storage";
 import { portalIdentityChoiceFixtures, portalProfileFixture, portalSessionFixture } from "../helpers/portal-session";
 import { userAuthVerifySchema, userAuthRequestSchema } from "../../assets/shared/schemas/user-auth";
-import { scannerTransportUnavailable } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-offline-context";
-let host: HTMLElement;
-let fetchMock: ReturnType<typeof vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>>;
-beforeEach(() => {
-  mocks.registerWorker.mockReset().mockResolvedValue(null);
-  clearAuth();
-  scannerTransportUnavailable.value = false;
-  mocks.sessionListeners.clear();
-  serviceAvailability.value = null;
-  history.replaceState({}, "", "/portal/#/");
-  vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
-  mocks.clearPreparation.mockReset().mockResolvedValue(undefined);
-  mocks.recordSession.mockReset().mockResolvedValue(true);
-  mocks.pendingLogout.mockReset().mockResolvedValue(null);
-  mocks.activeSession.mockReset().mockResolvedValue(null);
-  mocks.signOut.mockReset();
-  mocks.renderShell.mockReset();
-  mocks.supportsPasskeys.mockReset().mockReturnValue(false);
-  mocks.authenticateWithPasskey.mockReset();
-  fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>();
-  vi.stubGlobal("fetch", fetchMock);
-  host = document.createElement("div");
-  document.body.append(host);
-});
-afterEach(async () => {
-  await act(() => render(null, host));
-  host.remove();
-  clearAuth();
-  scannerTransportUnavailable.value = false;
-  serviceAvailability.value = null;
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-});
-async function mount() {
-  await act(async () => render(<App />, host));
-}
-function pendingResponse() {
-  let resolve!: (response: Response) => void;
-  const promise = new Promise<Response>((settle) => {
-    resolve = settle;
-  });
-  return { promise, resolve };
-}
-function card() {
-  const node = host.querySelector<HTMLElement>(".pk-login__card");
-  expect(node).not.toBeNull();
-  expect(host.querySelector(".pk-login__backdrop")).not.toBeNull();
-  return node!;
-}
-function refusal(status: number, message: string) {
-  return Response.json({ error: { code: "AUTH_REQUIRED", message } }, { status });
-}
 
 it("keeps the brand and disabled sign-in card while the canonical initial session check is pending", async () => {
   const pending = pendingResponse();
@@ -244,6 +132,59 @@ it("retains canonical session recording and the reviewed return route after succ
     "/api/v1/auth/session",
     "/api/v1/users/current",
   ]);
+});
+
+it("holds a work address at the organization step until it is answered, then opens the return route", async () => {
+  window.location.hash = "#/verify?token=synthetic-work-link&next=%2Fgroups%2Fsynthetic";
+  const session = portalSessionFixture({ pendingIdentityCount: 1 });
+  const verifications: unknown[] = [];
+  fetchMock.mockImplementation(async (input, init) => {
+    const path = String(input);
+    if (path === "/api/v1/auth/verify-link") {
+      const body = userAuthVerifySchema.parse(JSON.parse(String(init?.body)));
+      verifications.push(body);
+      if (!body.organization)
+        return Response.json({
+          success: true,
+          organizationRequired: {
+            personalAllowed: true,
+            affiliation: {
+              email: "ada@own-domain.test",
+              domain: "own-domain.test",
+              domains: [],
+              organization: null,
+              organizations: [],
+            },
+          },
+        });
+    }
+    return Response.json(path === "/api/v1/users/current" ? portalProfileFixture(session) : session);
+  });
+  await mount();
+  const step = await vi.waitFor(() => {
+    const region = host.querySelector<HTMLElement>('[aria-label="Add your organization"]');
+    expect(region).not.toBeNull();
+    return region!;
+  });
+  expect(step.textContent).toContain("@own-domain.test");
+  expect(portalSession.value).toBeNull();
+  expect(host.textContent).not.toContain("Authenticated portal content");
+  await act(async () => {
+    [...step.querySelectorAll("button")].find((button) => button.textContent === "Use it as a personal email")!.click();
+  });
+  // An unclaimed work domain is kept personal only once confirmed.
+  await act(async () => {
+    [...document.querySelectorAll<HTMLButtonElement>("dialog[open] button")]
+      .find((button) => button.textContent?.trim() === "Use as personal email")!
+      .click();
+  });
+  await vi.waitFor(() => expect(host.textContent).toContain("Authenticated portal content"));
+  expect(verifications).toEqual([
+    { token: "synthetic-work-link" },
+    { token: "synthetic-work-link", organization: { personal: true } },
+  ]);
+  expect(portalSession.value?.sessionId).toBe(session.sessionId);
+  expect(window.location.hash).toBe("#/groups/synthetic");
 });
 
 it("keeps the passkey offer on screen while the session a link just signed in is refreshed", async () => {

@@ -6,6 +6,7 @@ import {
   scannerDeviceSessionEnrollmentSchema,
   scannerDeviceSessionEnrollmentResponseSchema,
   scannerDeviceSessionClosingSchema,
+  scannerDeviceSessionResumptionSchema,
   scannerDeviceSessionStatusSchema,
 } from "./event-scanner-devices";
 
@@ -48,6 +49,16 @@ export const scannerDeviceClosingRouteSchema = {
   request: {
     params,
     body: { content: { "application/json": { schema: scannerDeviceSessionClosingSchema } }, required: true },
+  },
+  responses: response(scannerDeviceSessionStatusSchema),
+};
+export const scannerDeviceResumptionRouteSchema = {
+  ...access,
+  tags: ["Events"],
+  summary: "Resume an enrolled scanner session after a server-side close",
+  request: {
+    params,
+    body: { content: { "application/json": { schema: scannerDeviceSessionResumptionSchema } }, required: true },
   },
   responses: response(scannerDeviceSessionStatusSchema),
 };

@@ -8,11 +8,20 @@ export const emailDayAttendanceSchema = z.object({
   dayLabel: z.string(),
   attendanceLabel: z.string(),
   statusLabel: z.string(),
+  /** Whether an in-person day is confirmed or waitlisted; empty for a day attended online. */
+  statusNote: z.string(),
   waitlistStatus: z.string(),
   isWaitlisted: z.boolean(),
   isWaitlistOffer: z.boolean(),
 });
 export type EmailDayAttendance = z.infer<typeof emailDayAttendanceSchema>;
+/** An option the event suggests to a person waitlisted at the venue, read from its configured label and description. */
+export const emailWaitlistAlternativeSchema = z.object({
+  label: z.string(),
+  description: z.string(),
+  /** Whether the alternative has a capacity of its own, so its space can run out too. */
+  limited: z.boolean(),
+});
 
 /** Canonical item fields remain available to validation when a recipient's collection is empty. */
 export function emailTemplateCollectionFields(): ReadonlyMap<string, readonly string[]> {
@@ -20,5 +29,6 @@ export function emailTemplateCollectionFields(): ReadonlyMap<string, readonly st
     ["customAnswerRows", Object.keys(emailCustomAnswerRowSchema.shape)],
     ["dayAttendance", Object.keys(emailDayAttendanceSchema.shape)],
     ["dayWaitlist", Object.keys(emailDayWaitlistSchema.shape)],
+    ["waitlistAlternatives", Object.keys(emailWaitlistAlternativeSchema.shape)],
   ]);
 }

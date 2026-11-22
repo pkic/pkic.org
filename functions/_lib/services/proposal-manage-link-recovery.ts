@@ -1,9 +1,10 @@
+import { buildEventEmailVariables } from "../email/event-email-variables";
 import { all } from "../db/queries";
 import { emailPlainText } from "../email/plain-text";
 import { prepareBulkQueueEmailChunkStatements } from "../email/outbox";
 import type { DatabaseLike } from "../types";
 import { queuedCapabilityToken } from "./capability-links";
-import { buildEventEmailVariables, type EventRecord } from "./events";
+import { type EventRecord } from "./events";
 import { proposalManagePageUrl } from "./frontend-links";
 import { buildProposalInviteEmailContextMap, proposalInviteEmailTextVariables } from "./proposal-invite-email-context";
 import { PROPOSAL_INACTIVE_STATUS_SQL_LIST } from "./proposal-status-policy";

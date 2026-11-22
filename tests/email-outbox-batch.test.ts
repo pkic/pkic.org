@@ -1,5 +1,9 @@
 import { SCHEDULED_JOB_DEFINITIONS } from "../functions/_lib/services/scheduled-jobs/registry";
-import { processPendingPromotionRenders } from "../functions/_lib/services/event-agenda/promotion-render-jobs";
+import {
+  PROMOTION_RENDER_PASS_BUDGET_MS,
+  processPendingPromotionRenders,
+  processPromotionRenderJob,
+} from "../functions/_lib/services/event-agenda/promotion-render-jobs";
 import { prepareBadgeRenderJob } from "../functions/_lib/services/badge-render-job-statements";
 import { createReferralCode } from "../functions/_lib/services/referrals";
 import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
@@ -357,8 +361,49 @@ describe("email outbox batch processing", () => {
     expect(await job.run({ env: jobEnv, d1QueryBudget: budget })).toMatchObject({ idle: true });
   });
 
+  it("starts no render once the pass has spent its time, leaving the rest due", async () => {
+    await queueBadgeRender(eventId, "slow-one@example.test");
+    await queueBadgeRender(eventId, "slow-two@example.test");
+    const realNow = Date.now.bind(Date);
+    let elapsed = 0;
+    vi.spyOn(Date, "now").mockImplementation(() => realNow() + elapsed);
+    const render = vi.fn(async () => {
+      elapsed += PROMOTION_RENDER_PASS_BUDGET_MS;
+    });
+
+    expect(await processPendingPromotionRenders(env.DB, env, 5, render)).toEqual({ processed: 1, failed: 0 });
+    expect(render).toHaveBeenCalledOnce();
+    expect(await queryAll(env.DB, "SELECT status FROM event_promotion_renders WHERE status='queued'")).toHaveLength(1);
+  });
+
+  it("counts a render its run stopped mid-way and fails a file that keeps stopping it", async () => {
+    const { job: stopped } = await queueBadgeRender(eventId, "stopped@example.test");
+    const { job: looping } = await queueBadgeRender(eventId, "looping@example.test");
+    const interrupt = env.DB.prepare(
+      "UPDATE event_promotion_renders SET status='rendering',lease_expires_at='2000-01-01T00:00:00.000Z',attempts=? WHERE id=?",
+    );
+    await env.DB.batch([interrupt.bind(0, stopped.id), interrupt.bind(9, looping.id)]);
+    const render = vi.fn(async () => {});
+
+    expect(await processPromotionRenderJob(env.DB, env, stopped.id, undefined, render)).toBe(true);
+    expect(await processPromotionRenderJob(env.DB, env, looping.id, undefined, render)).toBe(false);
+    expect(render).toHaveBeenCalledOnce();
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT status,attempts,last_error FROM event_promotion_renders WHERE id IN (?,?) ORDER BY attempts",
+        stopped.id,
+        looping.id,
+      ),
+    ).toEqual([
+      { status: "rendered", attempts: 1, last_error: null },
+      { status: "failed", attempts: 10, last_error: "The last render stopped before it finished." },
+    ]);
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it("processes all queued emails and marks them sent", async () => {

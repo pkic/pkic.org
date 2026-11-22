@@ -1,4 +1,3 @@
-import { setOwnEmailSignInPermission } from "../functions/_lib/services/own-email-sign-in";
 import { administratorGrants } from "./helpers/administrator";
 /**
  * user-emails.test.ts
@@ -496,8 +495,6 @@ describe("secondary user emails", () => {
     )
       .bind(emailId, userId, "verified-alias@example.test", "verified-alias@example.test")
       .run();
-
-    await setOwnEmailSignInPermission(env.DB, { userId, emailId, enabled: true });
     const issued = await queueUserSignInCapability({
       db: env.DB,
       email: "verified-alias@example.test",
@@ -516,9 +513,11 @@ describe("secondary user emails", () => {
     );
     const redeemed = await redeemUserSignInCapability(env.DB, {
       token: delivered.magicLinkUrl,
+      organization: { answer: { personal: true } },
       signingSecret: env.INTERNAL_SIGNING_SECRET!,
       sessionTtlHours: 8,
     });
+    if (!("session" in redeemed)) throw new Error("The organization step was asked again");
 
     expect(redeemed.session.identity).toMatchObject({ id: userId, email: "canonical-login@example.test" });
     expect(redeemed.session.staff?.id).toBe(userId);
@@ -548,7 +547,6 @@ describe("secondary user emails", () => {
     )
       .bind(emailId, userId, "removed-alias@example.test", "removed-alias@example.test")
       .run();
-    await setOwnEmailSignInPermission(env.DB, { userId, emailId, enabled: true });
     const issued = await queueUserSignInCapability({
       db: env.DB,
       email: "removed-alias@example.test",
@@ -574,6 +572,7 @@ describe("secondary user emails", () => {
     await expect(
       redeemUserSignInCapability(env.DB, {
         token: delivered.magicLinkUrl,
+        organization: { answer: { personal: true } },
         signingSecret: env.INTERNAL_SIGNING_SECRET!,
         sessionTtlHours: 8,
       }),
@@ -599,7 +598,6 @@ describe("secondary user emails", () => {
     )
       .bind(emailId, userId, "alias-race-verified@example.test", "alias-race-verified@example.test")
       .run();
-    await setOwnEmailSignInPermission(env.DB, { userId, emailId, enabled: true });
     const issued = await queueUserSignInCapability({
       db: env.DB,
       email: "alias-race-verified@example.test",
@@ -618,6 +616,7 @@ describe("secondary user emails", () => {
     const gate = gateNextBatch(env.DB);
     const redemption = redeemUserSignInCapability(gate.db, {
       token: delivered.magicLinkUrl,
+      organization: { answer: { personal: true } },
       signingSecret: env.INTERNAL_SIGNING_SECRET!,
       sessionTtlHours: 8,
     });
@@ -647,7 +646,6 @@ describe("secondary user emails", () => {
     )
       .bind(crypto.randomUUID(), userId, staffRole.id, adminId)
       .run();
-
     const issued = await queueUserSignInCapability({
       db: env.DB,
       email: "change-before-link@example.test",
@@ -673,6 +671,7 @@ describe("secondary user emails", () => {
     await expect(
       redeemUserSignInCapability(env.DB, {
         token,
+        organization: { answer: { personal: true } },
         signingSecret: env.INTERNAL_SIGNING_SECRET!,
         sessionTtlHours: 8,
       }),

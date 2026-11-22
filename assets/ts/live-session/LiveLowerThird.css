@@ -2,11 +2,12 @@
  * The lower third's motion. Each phase is one orchestrated sequence of
  * transforms and opacity only, so it composites smoothly at broadcast frame
  * rates; the graphic's own phase animation spans the whole sequence, and its
- * end tells the lower third to move on. In: the emblem rolls in, turning about
- * its exact center as far as it travels; the white name bar then extends from
- * the orange seat, its curved end held in the seat while it is revealed to the
- * right; the grey title bar follows from under it. Out is the
- * reverse. Replacing a speaker retracts and extends the bars only.
+ * end tells the lower third to move on. In: the emblem rolls in, its seats
+ * turning about its exact center as far as it travels while the keyhole stays
+ * upright; the white name bar then extends from the orange seat, its curved
+ * end held in the seat while it is revealed to the right; the title bar
+ * follows from under it. Out is the reverse. Replacing a speaker retracts and
+ * extends the bars only.
  */
 @layer components {
   .pk-live-overlay__lower-third-graphic {
@@ -18,8 +19,7 @@
     position: relative;
   }
   /* SVG groups turn and travel in the drawing's own units, about their own boxes. */
-  .pk-live-overlay__lower-third-emblem-roll,
-  .pk-live-overlay__lower-third-title-bar {
+  .pk-live-overlay__lower-third-emblem-roll {
     transform-box: view-box;
   }
   /* The reveal grows from its left edge, at the seat. */
@@ -51,7 +51,10 @@
     animation: pk-live-lower-third-name-in var(--lt-bar) var(--pk-ease) var(--lt-bar-delay) both;
   }
   .pk-live-overlay__lower-third-graphic:is([data-phase="entering"], [data-phase="extending"])
-    :is(.pk-live-overlay__lower-third-title-bar, .pk-live-overlay__title) {
+    .pk-live-overlay__title-field {
+    animation: pk-live-lower-third-field-in var(--lt-title) var(--pk-ease) var(--lt-title-delay) both;
+  }
+  .pk-live-overlay__lower-third-graphic:is([data-phase="entering"], [data-phase="extending"]) .pk-live-overlay__title {
     animation: pk-live-lower-third-title-in var(--lt-title) var(--pk-ease) var(--lt-title-delay) both;
   }
   /* A new speaker: the bars only, from the seat, without waiting for the emblem. */
@@ -72,7 +75,10 @@
     animation: pk-live-lower-third-phase-retracting calc(var(--lt-bar-delay) + var(--lt-bar)) linear both;
   }
   .pk-live-overlay__lower-third-graphic:is([data-phase="exiting"], [data-phase="retracting"])
-    :is(.pk-live-overlay__lower-third-title-bar, .pk-live-overlay__title) {
+    .pk-live-overlay__title-field {
+    animation: pk-live-lower-third-field-out var(--lt-title) var(--pk-ease) both;
+  }
+  .pk-live-overlay__lower-third-graphic:is([data-phase="exiting"], [data-phase="retracting"]) .pk-live-overlay__title {
     animation: pk-live-lower-third-title-out var(--lt-title) var(--pk-ease) both;
   }
   .pk-live-overlay__lower-third-graphic:is([data-phase="exiting"], [data-phase="retracting"])
@@ -153,6 +159,19 @@
       transform: scaleX(0);
     }
   }
+  /* The field slides down out from under the name bar's foot, its bar clipping it there. */
+  @keyframes pk-live-lower-third-field-in {
+    from {
+      opacity: 0;
+      transform: translateY(-100%);
+    }
+  }
+  @keyframes pk-live-lower-third-field-out {
+    to {
+      opacity: 0;
+      transform: translateY(-100%);
+    }
+  }
   @keyframes pk-live-lower-third-title-in {
     from {
       opacity: 0;
@@ -164,5 +183,10 @@
       opacity: 0;
       transform: translateY(-44%);
     }
+  }
+
+  /* The title bar is about two and a half lines tall: a rolling title travels 180% to clear it. */
+  .pk-live-overlay__title .pk-live-credit-titles {
+    --pk-live-credit-titles-travel: 180%;
   }
 }

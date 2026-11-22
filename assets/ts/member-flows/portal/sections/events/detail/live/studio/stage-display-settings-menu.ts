@@ -23,6 +23,7 @@ export function stageDisplaySettingsMenu(
     {
       id: "stage-reactions",
       label: "Reactions on the stage display",
+      tooltip: "Shows the audience's reactions on the speaker's screen as they arrive.",
       checked: settings.reactions,
       multiple: true,
       keepOpen: true,
@@ -32,6 +33,7 @@ export function stageDisplaySettingsMenu(
     {
       id: "stage-end-cue",
       label: "End cue",
+      tooltip: "How long before the session ends the stage display tells the speaker, and names what is next.",
       disabled,
       children: LIVE_STAGE_NEAR_END_CHOICES.map((seconds) => ({
         id: `stage-end-cue-${seconds}`,
@@ -44,6 +46,7 @@ export function stageDisplaySettingsMenu(
     {
       id: "stage-questions",
       label: "End cue asks for questions",
+      tooltip: "On, the end cue says “Questions now”. Off, it says “Wrap up”.",
       checked: settings.endsWithQuestions,
       multiple: true,
       keepOpen: true,

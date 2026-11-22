@@ -11,7 +11,8 @@ import { AppError } from "../../errors";
 import { currentLiveRoomCommandRead } from "./room-command-read-scope";
 import { first } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
-import { liveRoomName, type LiveRoomParticipant } from "./room-admission";
+import type { LiveRoomParticipant } from "./room-admission";
+import { chatOccurrenceFilter, chatOccurrenceIds } from "./room-chat-audience";
 import { readLiveAuthorStamp } from "./room-author-stamp";
 import type { LiveRoomPeople } from "./room-people";
 import type { LiveRoomSql } from "./room-sql";
@@ -26,9 +27,8 @@ function base64url(bytes: Uint8Array): string {
     .replace(/=+$/u, "");
 }
 
-/** A message still shown: not hidden or held, and not written by someone banned from the chat. */
-const SHOWN_CHAT = `chat.id NOT IN (SELECT message_id FROM room_chat_hidden)
-  AND chat.author_user_id NOT IN (SELECT user_id FROM room_chat_restrictions WHERE restriction = 'banned')`;
+/** A message still shown: not removed or held. */
+const SHOWN_CHAT = `chat.id NOT IN (SELECT message_id FROM room_chat_hidden)`;
 
 export function parseLiveAuthorStamp(json: string | null | undefined): LiveAuthorStamp {
   if (!json) return NO_STAMP;
@@ -48,7 +48,8 @@ export class LiveRoomAuthors {
     private readonly sql: LiveRoomSql,
     readonly people: LiveRoomPeople,
     private readonly env: { DB: DatabaseLike; INTERNAL_SIGNING_SECRET?: string },
-    private readonly room: () => { eventId: string; occurrenceId: string } | null,
+    /** The room handles are keyed by, as its object is named, and its event. */
+    private readonly room: () => { eventId: string; name: string } | null,
   ) {}
 
   /** The person's handle in this room: a keyed digest of the room and the person, never their id. */
@@ -59,8 +60,7 @@ export class LiveRoomAuthors {
     const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, [
       "sign",
     ]);
-    const name = liveRoomName(room.eventId, room.occurrenceId);
-    const digest = await crypto.subtle.sign("HMAC", key, encoder.encode(`live-author:v1:${name}:${userId}`));
+    const digest = await crypto.subtle.sign("HMAC", key, encoder.encode(`live-author:v1:${room.name}:${userId}`));
     return base64url(new Uint8Array(digest).slice(0, 24));
   }
 
@@ -134,11 +134,12 @@ export class LiveRoomAuthors {
   private latestVisible(userId: string, viewer: LiveRoomParticipant) {
     const staff = viewer.role === "operator";
     const statuses = staff ? ["pending", "approved", "answered"] : PUBLIC_LIVE_QUESTION_STATUSES;
+    const audience = chatOccurrenceFilter("chat.id", chatOccurrenceIds(viewer));
     return this.sql.rows<{ name: string; author_json: string | null; at: string }>(
       `SELECT author_name AS name, author_json, at FROM (
          SELECT chat.author_name, authorship.author_json, chat.sent_at AS at
            FROM room_chat chat LEFT JOIN room_chat_authorship authorship ON authorship.message_id = chat.id
-          WHERE chat.author_user_id = ? AND ${SHOWN_CHAT}
+          WHERE chat.author_user_id = ? AND ${SHOWN_CHAT} AND ${audience.sql}
          ${
            staff
              ? `UNION ALL SELECT chat.author_name, authorship.author_json, chat.sent_at
@@ -151,7 +152,9 @@ export class LiveRoomAuthors {
           WHERE question.author_user_id = ? AND question.anonymous = 0
             AND question.status IN (SELECT value FROM json_each(?)))
        ORDER BY at DESC LIMIT 1`,
-      ...(staff ? [userId, userId] : [userId]),
+      userId,
+      ...audience.bindings,
+      ...(staff ? [userId] : []),
       userId,
       JSON.stringify(statuses),
     )[0];

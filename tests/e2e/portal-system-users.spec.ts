@@ -156,8 +156,9 @@ test("staff read registration and account changes through the shared audit table
   const context = await browser.newContext({ baseURL: new URL(page.url()).origin });
   try {
     const attendee = await context.newPage();
-    const email = `audit-${crypto.randomUUID()}@synthetic-audit.test`;
-    await registerStateAttendee(attendee, fixture, email, { staticRelease: false });
+    // A personal address: the attendee registers personally, and the history below corrects back to that identity.
+    const email = `audit-${crypto.randomUUID()}@gmail.com`;
+    await registerStateAttendee(attendee, fixture, email);
     const rosterResponse = await page.request.get(`/api/v1/events/${fixture.slug}/registrations`, {
       params: { q: email },
     });

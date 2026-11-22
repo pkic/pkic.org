@@ -131,6 +131,21 @@ export function defaultEventPromotionDesign(
   });
 }
 
+/** Where an event's own decorative artwork is served, for the event app's header. */
+export function eventMotifPath(eventSlug: string): string {
+  return `/api/v1/events/${encodeURIComponent(eventSlug)}/images/motif`;
+}
+
+/**
+ * The decorative artwork an event chose in its promotion design, or null when
+ * it uses the default. One rule for the header link and the artwork it serves.
+ */
+export function eventOwnMotif(settings: Record<string, unknown>): z.infer<typeof badgeTemplateAssetSchema> | null {
+  const design = settings.promotionDesign as { assets?: { motif?: unknown } } | undefined;
+  const motif = badgeTemplateAssetSchema.safeParse(design?.assets?.motif);
+  return motif.success && motif.data.mime === "image/svg+xml" ? motif.data : null;
+}
+
 /** One artwork fallback for exports, social previews, and email attachments. */
 export function eventPromotionDesignFromSettings(
   name: string,

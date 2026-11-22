@@ -21,7 +21,7 @@ export const EventLiveOverlayLayoutsGet = openApiRoute(
   eventLiveOverlayLayoutsGetRouteSchema,
   async (c: AdminContext, data) => {
     markResponseSensitive(c);
-    const { db, event } = await requireEventPermission(c, data.params.eventSlug, "agenda:live_moderate");
+    const { db, event } = await requireEventPermission(c, data.params.eventSlug, "agenda:live_studio");
     return jsonNoStore(await readEventLiveOverlayLayouts(db, event.id));
   },
 );
@@ -30,7 +30,7 @@ export const EventLiveOverlayLayoutPut = openApiRoute(
   eventLiveOverlayLayoutPutRouteSchema,
   async (c: AdminContext, data) => {
     markResponseSensitive(c);
-    const { db, event, actor } = await requireEventPermission(c, data.params.eventSlug, "agenda:live_moderate");
+    const { db, event, actor } = await requireEventPermission(c, data.params.eventSlug, "agenda:live_setup");
     return jsonNoStore(
       await saveEventLiveOverlayLayout(db, { event, actor, slug: data.params.layoutSlug, request: data.body }),
     );
@@ -41,7 +41,7 @@ export const EventLiveOverlayLayoutDelete = openApiRoute(
   eventLiveOverlayLayoutDeleteRouteSchema,
   async (c: AdminContext, data) => {
     markResponseSensitive(c);
-    const { db, event, actor } = await requireEventPermission(c, data.params.eventSlug, "agenda:live_moderate");
+    const { db, event, actor } = await requireEventPermission(c, data.params.eventSlug, "agenda:live_setup");
     return jsonNoStore(await deleteEventLiveOverlayLayout(db, { event, actor, slug: data.params.layoutSlug }));
   },
 );
@@ -50,7 +50,7 @@ export const EventLiveOverlayPositionsPut = openApiRoute(
   eventLiveOverlayPositionsPutRouteSchema,
   async (c: AdminContext, data) => {
     markResponseSensitive(c);
-    const { db, event, actor } = await requireEventPermission(c, data.params.eventSlug, "agenda:live_moderate");
+    const { db, event, actor } = await requireEventPermission(c, data.params.eventSlug, "agenda:live_setup");
     return jsonNoStore(await saveEventLiveOverlayPositions(db, { event, actor, request: data.body }));
   },
 );
@@ -59,7 +59,7 @@ export const EventLiveOverlayPositionsDelete = openApiRoute(
   eventLiveOverlayPositionsDeleteRouteSchema,
   async (c: AdminContext, data) => {
     markResponseSensitive(c);
-    const { db, event, actor } = await requireEventPermission(c, data.params.eventSlug, "agenda:live_moderate");
+    const { db, event, actor } = await requireEventPermission(c, data.params.eventSlug, "agenda:live_setup");
     return jsonNoStore(await resetEventLiveOverlayPositions(db, { event, actor }));
   },
 );

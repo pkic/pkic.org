@@ -1,7 +1,8 @@
+import { buildEventEmailVariables } from "../email/event-email-variables";
 import { AppError } from "../errors";
 import { renderEmail, renderSubject } from "../email/render";
 import { loadEmailRenderBundle } from "../email/partials";
-import { buildEventEmailVariables, type EventRecord } from "./events";
+import { type EventRecord } from "./events";
 import { inviteDeclineUrl, proposalPageUrl, registrationPageUrl } from "./frontend-links";
 import {
   computeEventInviteDigest,
@@ -13,7 +14,10 @@ import type { EmailContentType } from "../../../assets/shared/schemas/email-temp
 import type { DatabaseLike } from "../types";
 import { resolveEventInviteExpiry } from "../invite-validity";
 import { EVENT_INVITE_SEND_BATCH_SIZE } from "../../../assets/shared/schemas/event-invite-bulk";
-import { buildEventInviteRecipientVariables } from "./event-invite-email-variables";
+import {
+  buildEventInvitationMessageVariables,
+  buildEventInviteRecipientVariables,
+} from "./event-invite-email-variables";
 
 const PREVIEW_TTL_SECONDS = 10 * 60;
 
@@ -90,6 +94,7 @@ export async function buildEventInvitePreview(params: {
   const data = {
     ...buildEventEmailVariables(params.event, params.appBaseUrl),
     ...buildEventInviteRecipientVariables(firstInvite, params.inviteType === "attendee" ? "Attendee" : "Speaker"),
+    ...(params.inviteType === "attendee" ? buildEventInvitationMessageVariables(params.event) : {}),
     ...(params.inviteType === "attendee" ? { registrationUrl: primaryUrl } : { proposalUrl: primaryUrl }),
     declineUrl,
     inviteCount: params.invites.length,

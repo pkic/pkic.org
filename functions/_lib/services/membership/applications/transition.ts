@@ -25,7 +25,6 @@ import {
   prepareRemoveMembershipReviewSnapshots,
   prepareReopenUndeliveredReviewSteps,
 } from "../workflows/review-digest-content";
-import { prepareReleaseApplicationDomainClaim } from "../organization-domain-claims";
 import {
   ON_HOLD_SUBTYPES,
   allowedTransitions,
@@ -217,9 +216,6 @@ export function prepareApplicationStageTransition(
   }
 
   const outboxIds: string[] = [];
-  if (params.toStage === "declined" || params.toStage === "withdrawn") {
-    statements.push(prepareReleaseApplicationDomainClaim(db, application.id));
-  }
   if (email) {
     const preparedEmail = prepareQueueEmailStatement(db, email, now);
     statements.push(preparedEmail.statement);

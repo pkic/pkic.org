@@ -12,6 +12,7 @@ import {
   identityProfileUpdateSchema,
   ownIdentityProfileSchema,
 } from "../../assets/shared/schemas/own-identity-profile";
+import { JOB_TITLE_MAX_LENGTH } from "../../assets/shared/schemas/api-common";
 import { IdentityProfileEditView } from "../../assets/ts/member-flows/portal/sections/system-users/IdentityProfileEditView";
 import { RegistrationIdentityField } from "../../assets/ts/components/RegistrationIdentitySelect";
 import { portalSessionFixture } from "../helpers/portal-session";
@@ -103,8 +104,8 @@ it("saves the named identity through its own contract and returns to the profile
   expect(navigate).toHaveBeenCalledWith(`/users/${userId}/profile`);
 });
 
-it("saves other profile edits while retaining an existing 200-character job title", async () => {
-  const jobTitle = "R".repeat(200);
+it("saves other profile edits while retaining an existing job title at the length limit", async () => {
+  const jobTitle = "R".repeat(JOB_TITLE_MAX_LENGTH);
   const current = { ...identity, jobTitle };
   const writes: unknown[] = [];
   vi.stubGlobal(

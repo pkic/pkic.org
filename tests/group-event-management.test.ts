@@ -1694,6 +1694,8 @@ describe("group event management routes", () => {
   it("opens and closes an event form on a submission window, and refuses an impossible one", async () => {
     const fixture = await createFixture();
     const created = await createGroupEvent(fixture);
+    // Anonymous readers see a public event's forms; other events hide them.
+    await env.DB.prepare("UPDATE events SET visibility = 'public' WHERE id = ?").bind(created.id).run();
     const base = `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/forms/event_registration`;
 
     const createdForm = await request(fixture.ownerLeaderToken, base, {

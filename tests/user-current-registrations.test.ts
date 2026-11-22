@@ -221,13 +221,37 @@ describe("GET /api/v1/users/current/registrations", () => {
     const page = currentUserRegistrationsListResponseSchema.parse(await response.json());
     expect(page.registrations.map((r) => r.id)).toEqual([midRegistration]);
   });
+
+  it("filters to one event by its slug", async () => {
+    const { userId } = await insertIndividualMember(
+      env.DB,
+      "H7",
+      `current-registrations-slug-${crypto.randomUUID()}@example.test`,
+    );
+    const token = await createMemberSession(env.DB, userId, `current-registrations-slug-${crypto.randomUUID()}`);
+    const wanted = await insertEvent({ slug: "slug-filter-wanted" });
+    const other = await insertEvent({ slug: "slug-filter-other" });
+    const wantedRegistration = await insertRegistration(wanted, userId);
+    await insertRegistration(other, userId);
+
+    const response = await getAs(token, "/api/v1/users/current/registrations?eventSlug=slug-filter-wanted&limit=1");
+    const page = currentUserRegistrationsListResponseSchema.parse(await response.json());
+    expect(page.registrations.map((r) => r.id)).toEqual([wantedRegistration]);
+    expect(page.page.total).toBe(1);
+  });
 });
 
 describe("buildCurrentUserRegistrationsPageQuery D1 query plan", () => {
   beforeEach(resetDb);
 
-  it("produces an executable EXPLAIN QUERY PLAN", async () => {
-    const query = buildCurrentUserRegistrationsPageQuery("some-user-id", { limit: 50, offset: 0 });
+  it.each([
+    // idx_registrations_user_event_status(user_id, event_id, status) — user_id-first, the closest
+    // existing access path for this feed's WHERE r.user_id = ? filter.
+    [{}, "idx_registrations_user_event_status"],
+    // One event: the unique slug, then the unique (event_id, user_id) registration.
+    [{ eventSlug: "pqc-2026" }, "(event_id=? AND user_id=?)"],
+  ] as const)("produces an executable EXPLAIN QUERY PLAN for %o", async (filter, access) => {
+    const query = buildCurrentUserRegistrationsPageQuery("some-user-id", { limit: 50, offset: 0, ...filter });
     const { pageSql, countSql, bindings, countBindings } = buildOffsetPageSql(query);
     const [pagePlan, countPlan] = await Promise.all([
       env.DB.prepare(`EXPLAIN QUERY PLAN ${pageSql}`)
@@ -239,9 +263,6 @@ describe("buildCurrentUserRegistrationsPageQuery D1 query plan", () => {
     ]);
     expect(pagePlan.results.length).toBeGreaterThan(0);
     expect(countPlan.results.length).toBeGreaterThan(0);
-    // idx_registrations_user_event_status(user_id, event_id, status) — user_id-first, the closest
-    // existing access path for this feed's WHERE r.user_id = ? filter.
-    const planText = JSON.stringify(pagePlan.results);
-    expect(planText).toContain("idx_registrations_user_event_status");
+    expect(JSON.stringify(pagePlan.results)).toContain(access);
   });
 });

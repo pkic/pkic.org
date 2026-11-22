@@ -920,15 +920,21 @@ describe("canonical Forms resource endpoints", () => {
       ],
     });
 
+    const groupId = "20000000-0000-4000-8000-000000000003";
+    await env.DB.prepare("UPDATE groups SET active = 0 WHERE id = ?").bind(groupId).run();
+
     const getResponse = await callAdmin("/api/v1/events/pqc-2026/forms/catalog-form");
     expect(getResponse.status).toBe(200);
     const getPayload = (await getResponse.json()) as {
       fields: Array<{ key: string; optionSource?: string | null; options: unknown[] | null }>;
     };
+    // The catalog resolves with inactive choices, so older responses stay filterable.
     expect(getPayload.fields[0]).toMatchObject({
       key: "working_groups",
       optionSource: "active_working_groups",
-      options: null,
+      options: expect.arrayContaining([
+        { value: groupId, label: "Post-Quantum Cryptography Working Group", active: false },
+      ]),
     });
 
     const patchResponse = await callAdmin("/api/v1/events/pqc-2026/forms/catalog-form", {

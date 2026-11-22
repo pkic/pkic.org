@@ -1,6 +1,5 @@
 import { LIVE_PROGRAM_PROTOCOL, liveProgramParamsSchema } from "../../../assets/shared/schemas/live-room-program";
 import { AppError, isAppError } from "../errors";
-import { handleError } from "../http";
 import type { Env } from "../types";
 import { getEventBySlug } from "../services/events";
 import { readPublishedProgramRoom } from "../services/live-session/program-room";
@@ -13,7 +12,7 @@ import { offeredOverlayToken } from "../services/live-session/room-access";
 import { verifyLiveOverlayToken } from "../auth/live-session-overlay-token";
 import { getUserSessionToken, resolveUserSessionContext } from "../auth/user-session";
 import { hasPermission } from "../auth/permissions";
-import { assertLiveSocketHandshake, refusedLiveSocket } from "./live-socket-handshake";
+import { assertLiveSocketHandshake, failedLiveSocket, refusedLiveSocket } from "./live-socket-handshake";
 const PATH = /^\/api\/v1\/events\/([^/]+)\/agenda\/rooms\/([^/]+)\/live\/program\/?$/;
 export function isLiveProgramSocketPath(request: Request): boolean {
   return PATH.test(new URL(request.url).pathname) && request.headers.get("upgrade")?.toLowerCase() === "websocket";
@@ -45,7 +44,7 @@ export async function liveProgramSocketRequest(request: Request, env: Env): Prom
         if (!getUserSessionToken(request))
           throw new AppError(401, "AUTH_REQUIRED", "Sign in to operate the physical room.");
         const { session, claims } = await resolveUserSessionContext(env.DB, request, env);
-        if (!session.staff || !hasPermission(session.staff, "agenda:live_moderate", { type: "event", id: event.id }))
+        if (!session.staff || !hasPermission(session.staff, "agenda:live_studio", { type: "event", id: event.id }))
           throw new AppError(
             403,
             "LIVE_ROOM_OPERATOR_REQUIRED",
@@ -69,6 +68,6 @@ export async function liveProgramSocketRequest(request: Request, env: Env): Prom
       }),
     );
   } catch (error) {
-    return handleError(error);
+    return failedLiveSocket(request, error, LIVE_PROGRAM_PROTOCOL);
   }
 }

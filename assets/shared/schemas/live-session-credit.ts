@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { LIVE_ADDED_CREDITS_MAX } from "../live-room-credits";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
-import { publicSessionPortraitUrlSchema } from "./event-session-history";
+import { MAX_SESSION_AFFILIATIONS, publicSessionPortraitUrlSchema } from "./event-session-history";
 import { databaseIdSchema } from "./identifiers";
 import { livePersonNameSchema } from "./live-session-change";
 
@@ -9,6 +9,8 @@ import { livePersonNameSchema } from "./live-session-change";
  * The capacity a person appears in on a lower third: the job title and the
  * organization of the identity they act as, read from that identity. The
  * identity is the only source; nothing about it is typed in or copied.
+ * Someone without an account has no identity, so an operator types their
+ * line instead (`titleLine`).
  */
 export const liveCreditIdentitySchema = z
   .object({
@@ -18,17 +20,36 @@ export const liveCreditIdentitySchema = z
   .strict();
 export type LiveCreditIdentity = z.infer<typeof liveCreditIdentitySchema>;
 
+/** The key that names one person offered as a lower third in this room: a session credit, a host or an added person. */
+export const liveCreditKeySchema = z.string().min(1).max(80);
+
+/**
+ * The line under the name on a lower third, typed by an operator for someone
+ * without an account: they have no identity to read a title from.
+ */
+export const liveTypedTitleLineSchema = z.string().trim().min(1).max(200, "Keep this line under 200 characters.");
+
 /** The fields of a person offered as a lower third. */
 export const liveCreditFieldsSchema = z
   .object({
-    key: z.string().min(1).max(80),
+    key: liveCreditKeySchema,
     name: livePersonNameSchema,
     moderator: z.boolean().default(false),
     photoUrl: publicSessionPortraitUrlSchema.nullable().default(null),
     /** The identity the person acts as; null for someone who appears as themselves. */
     identity: liveCreditIdentitySchema.nullable().default(null),
+    /**
+     * Every further identity the person speaks for in this session, after `identity`: an approved
+     * appearance can name more than one. The lower third shows each in turn.
+     */
+    additionalIdentities: z
+      .array(liveCreditIdentitySchema)
+      .max(MAX_SESSION_AFFILIATIONS - 1)
+      .default([]),
     /** The role the lower third names above the person, "Moderator" or a host's duty; null for a speaker. */
     roleLabel: z.string().trim().min(1).max(80).nullable().default(null),
+    /** The typed line of someone without an account; null for everyone an identity speaks for. */
+    titleLine: liveTypedTitleLineSchema.nullable().default(null),
   })
   .strict();
 
@@ -45,23 +66,39 @@ export const liveCreditSchema = z.preprocess((value) => {
 export type LiveCredit = z.infer<typeof liveCreditFieldsSchema>;
 
 /**
- * A person an operator adds to this session's lower thirds: one identity of
- * someone at the event, or someone without an account by name alone. A
- * person found by search brings their identity's title and organization;
- * nobody types a title.
+ * What an operator types for someone without an account: their name and,
+ * if they like, the line under it. Adding such a person and editing them
+ * later send the same two fields.
  */
-export const liveAddedCreditInputSchema = z
+export const liveTypedCreditInputSchema = z
   .object({
+    name: z.string().trim().min(1, "Enter a name.").max(200, "Keep the name under 200 characters."),
+    titleLine: liveTypedTitleLineSchema.nullable().default(null),
+  })
+  .strict();
+export type LiveTypedCreditInput = z.infer<typeof liveTypedCreditInputSchema>;
+
+/**
+ * A person an operator adds to this session's lower thirds: one identity of
+ * someone at the event, or someone without an account by what the operator
+ * types. A person found by search brings their identity's title and
+ * organization; nobody types a line for them.
+ */
+export const liveAddedCreditInputSchema = liveTypedCreditInputSchema
+  .extend({
     /** The person picked from the event's people; null for a typed name. */
     userId: databaseIdSchema.nullable(),
     /** The identity they appear as; null for a typed name or someone who appears as themselves. */
     identityId: databaseIdSchema.nullable(),
-    name: z.string().trim().min(1, "Enter a name.").max(200, "Keep the name under 200 characters."),
   })
   .strict()
   .refine((value) => value.identityId === null || value.userId !== null, {
     path: ["identityId"],
     message: "Choose the person this identity belongs to.",
+  })
+  .refine((value) => value.titleLine === null || value.userId === null, {
+    path: ["titleLine"],
+    message: "Someone found at the event shows the title and organization of their identity.",
   });
 export type LiveAddedCreditInput = z.infer<typeof liveAddedCreditInputSchema>;
 

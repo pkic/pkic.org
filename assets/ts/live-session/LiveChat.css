@@ -56,6 +56,27 @@
     font-size: var(--pk-text-sm);
     line-height: 1.35;
   }
+  /* Where the session on changes: a quiet line across the feed, its title in the middle. */
+  .pk-live-chat__divider {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2);
+    margin: var(--pk-1) 0 0;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+    font-weight: 600;
+    min-inline-size: 0;
+  }
+  .pk-live-chat__divider::before,
+  .pk-live-chat__divider::after {
+    content: "";
+    flex: 1 1 var(--pk-4);
+    border-block-start: 1px solid var(--pk-line-soft);
+  }
+  .pk-live-chat__row:has(> .pk-live-chat__divider):hover {
+    background: none;
+  }
   .pk-live-chat__row .pk-avatar--sm {
     --pk-avatar-size: 1.5rem;
     margin-block-start: 0.1rem;
@@ -63,11 +84,6 @@
   .pk-live-chat__row:hover,
   .pk-live-chat__row:focus-within {
     background: var(--pk-surface-sunk);
-  }
-  .pk-live-chat__row[data-hidden] .pk-live-chat__text {
-    color: var(--pk-ink-muted);
-    text-decoration: line-through;
-    text-decoration-color: var(--pk-line-strong);
   }
   .pk-live-chat__body {
     min-inline-size: 0;
@@ -91,6 +107,57 @@
     color: var(--pk-ink-muted);
     font-size: var(--pk-text-xs);
     font-variant-numeric: tabular-nums;
+  }
+  .pk-live-chat__edited {
+    flex: none;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+  }
+  /* A reply's one line on the message it answers: quiet, cut to one line, leading there when it can. */
+  .pk-live-chat__quote {
+    display: block;
+    inline-size: 100%;
+    margin: 0 0 0.1rem;
+    padding: 0 0 0 var(--pk-2);
+    border: 0;
+    border-inline-start: 2px solid var(--pk-line);
+    background: none;
+    color: var(--pk-ink-muted);
+    font: inherit;
+    font-size: var(--pk-text-xs);
+    text-align: start;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .pk-live-chat__quote[data-removed] {
+    font-style: italic;
+  }
+  button.pk-live-chat__quote {
+    cursor: pointer;
+  }
+  button.pk-live-chat__quote:hover {
+    color: var(--pk-ink);
+    border-inline-start-color: var(--pk-accent);
+  }
+  button.pk-live-chat__quote:focus-visible {
+    outline: 2px solid var(--pk-focus);
+    outline-offset: 1px;
+  }
+  .pk-live-chat__quote-author {
+    font-weight: 600;
+  }
+  .pk-live-chat__row[data-highlighted] {
+    background: var(--pk-accent-soft);
+    transition: background var(--pk-dur-slow) var(--pk-ease);
+  }
+  .pk-live-chat__original {
+    margin-block-start: var(--pk-1);
+    font-size: var(--pk-text-xs);
+    color: var(--pk-ink-muted);
+  }
+  .pk-live-chat__original summary {
+    cursor: pointer;
   }
   .pk-live-chat__notes {
     display: flex;
@@ -194,6 +261,7 @@
     inset-block-end: 4.5rem;
     display: flex;
     justify-content: center;
+    gap: var(--pk-2);
     pointer-events: none;
   }
   .pk-live-chat__jump .pk-btn {
@@ -207,13 +275,42 @@
     flex-direction: column;
     gap: var(--pk-1);
   }
+  /*
+   * The field grows with a longer message while Send keeps one line's height at its foot, where the
+   * last line is typed. The field fills the row, so on one line it is as tall as Send, which a touch
+   * screen makes taller.
+   */
+  /* What the composer answers or edits, on one line with a way to set it aside. */
+  .pk-live-chat__composing {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-1);
+    min-inline-size: 0;
+  }
+  .pk-live-chat__composing .pk-live-chat__quote {
+    flex: 1;
+    margin: 0;
+  }
+  .pk-live-chat__composing .pk-btn {
+    flex: none;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    min-block-size: 0;
+  }
   .pk-live-chat__input {
     display: flex;
-    align-items: flex-end;
+    align-items: stretch;
+    gap: var(--pk-1);
   }
   .pk-live-chat__input .pk-field {
+    display: flex;
     flex: 1;
+    flex-direction: column;
     min-inline-size: 0;
+  }
+  .pk-live-chat__input :is(.pk-field__control, .pk-input--textarea) {
+    display: flex;
+    flex: 1 1 auto;
   }
   /* One line to start, a few as the message grows, then it scrolls. */
   .pk-live-chat__input .pk-input--textarea {
@@ -222,14 +319,61 @@
     max-block-size: 8rem;
     overflow-y: auto;
     resize: none;
-    border-start-end-radius: 0;
-    border-end-end-radius: 0;
   }
   .pk-live-chat__input > .pk-btn {
     flex: none;
+    align-self: end;
     min-block-size: 2.5rem;
-    margin-inline-start: -1px;
-    border-start-start-radius: 0;
-    border-end-start-radius: 0;
+  }
+
+  /* The pinned message: one quiet line above the feed, the whole of it on request. */
+  .pk-live-chat__pinned {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-1);
+    flex: none;
+    padding: var(--pk-1) var(--pk-1) var(--pk-1) var(--pk-2);
+    border-inline-start: 2px solid var(--pk-accent);
+    border-radius: var(--pk-radius-sm);
+    background: var(--pk-surface-sunk);
+    font-size: var(--pk-text-sm);
+    line-height: 1.35;
+  }
+  .pk-live-chat__pinned[data-open] {
+    align-items: start;
+  }
+  .pk-live-chat__pinned .pk-btn {
+    flex: none;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    min-block-size: 0;
+  }
+  .pk-live-chat__pinned-icon {
+    flex: none;
+    color: var(--pk-ink-muted);
+  }
+  .pk-live-chat__pinned[data-open] .pk-live-chat__pinned-icon {
+    margin-block-start: 0.2rem;
+  }
+  .pk-live-chat__pinned-text {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .pk-live-chat__pinned:not([data-open]) .pk-live-chat__pinned-text :is(.pk-live-chat__text, p, ul, ol, li) {
+    display: inline;
+    margin: 0;
+    padding: 0;
+    white-space: nowrap;
+  }
+  .pk-live-chat__pinned[data-open] .pk-live-chat__pinned-text {
+    max-block-size: 12rem;
+    overflow: auto;
+    white-space: normal;
+  }
+  .pk-live-chat__pinned-author {
+    font-weight: 600;
   }
 }

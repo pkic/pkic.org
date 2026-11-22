@@ -12,7 +12,7 @@ describe.skipIf(process.platform === "win32")("email template seed CLI", () => {
   it.each(["ready", "missing", "legacy-storage", "latest-empty"])("checks %s templates without writing", (state) => {
     const directory = mkdtempSync(join(tmpdir(), "pkic-template-check-"));
     const capture = join(directory, "arguments.json");
-    const key = "registration_email_verify";
+    const key = "event_proposal_verify";
     const rows =
       state === "missing"
         ? []

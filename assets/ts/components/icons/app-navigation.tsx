@@ -211,6 +211,26 @@ export function IconMessage(props: SvgProps) {
   );
 }
 
+/** Polls: three bars of different heights on a baseline. */
+export function IconPoll(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <path d="M2.5 13.5h11" />
+      <path d="M4.5 13.5V9M8 13.5V3M11.5 13.5V6.5" />
+    </StrokeIcon>
+  );
+}
+
+/** Chat: two speech bubbles, one answering the other. */
+export function IconChat(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <path d="M2.5 2.5h7.5V8H6L4 10V8H2.5z" />
+      <path d="M12 5.5h1.5v5.5H12v2l-2-2H7.5" />
+    </StrokeIcon>
+  );
+}
+
 /** Every navigation glyph by the name a tab or destination asks for. */
 export const APP_ICONS = {
   home: IconHome,
@@ -236,6 +256,8 @@ export const APP_ICONS = {
   speakers: IconPeople,
   graphics: IconLayers,
   questions: IconQuestion,
+  polls: IconPoll,
+  chat: IconChat,
   time: IconClock,
   message: IconMessage,
 } satisfies Record<string, (props: SvgProps) => JSX.Element>;

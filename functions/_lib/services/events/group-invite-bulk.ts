@@ -1,12 +1,16 @@
+import { buildEventEmailVariables } from "../../email/event-email-variables";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
 import { requireGroupEventProposalContext, prepareGroupEventProposalContextGuard } from "../proposal-group-context";
-import { getEventById, buildEventEmailVariables } from "../events";
+import { getEventById } from "../events";
 import { registrationPageUrl, proposalPageUrl, inviteDeclineUrl } from "../frontend-links";
 import { resolveEventInviteExpiry } from "../../invite-validity";
 import { requireValidEventInviteRecipientBatch, type EventInviteType } from "../event-invite-preview";
 import { buildEventInvitePreview } from "../event-invite-preview-email";
-import { buildEventInviteRecipientVariables } from "../event-invite-email-variables";
+import {
+  buildEventInvitationMessageVariables,
+  buildEventInviteRecipientVariables,
+} from "../event-invite-email-variables";
 import { bulkCreateAttendeeInvites, bulkCreateSpeakerInvites } from "../invites";
 import type { BulkInviteOutcome } from "../invite-bulk";
 import {
@@ -150,6 +154,7 @@ export async function bulkCreateGroupEventAttendeeInvites(
               { firstName: invite.inviteeFirstName, lastName: invite.inviteeLastName },
               "Attendee",
             ),
+            ...buildEventInvitationMessageVariables(event),
             registrationUrl,
             declineUrl,
           },

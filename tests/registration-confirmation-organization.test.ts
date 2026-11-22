@@ -8,46 +8,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
 import { seedMemberApplication } from "./helpers/member-applications";
-import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
+import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
-import { buildRegistrationManageView } from "../functions/_lib/services/registrations/manage-view";
-import type { RegistrationRecord } from "../functions/_lib/services/registrations/types";
 import { insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
+import { createPendingRegistration } from "./helpers/registration-confirmation";
 import {
   registrationConfirmInfoResponseSchema,
   registrationConfirmResponseSchema,
   registrationConfirmSchema,
 } from "../assets/shared/schemas/registration";
 
-const consents = [
-  { termKey: "privacy-policy", version: "v1" },
-  { termKey: "code-of-conduct", version: "v1" },
-];
-
-async function register(email: string, unaffiliatedAttestation = false): Promise<string> {
-  const response = await callApi(env, "/api/v1/events/pqc-2026/registrations", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      firstName: "New",
-      lastName: "Attendee",
-      email,
-      unaffiliatedAttestation,
-      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
-      sourceType: "direct",
-      consents,
-    }),
-  });
-  expect(response.status, await response.clone().text()).toBe(200);
-  const [mail] = await queryAll<{ payload_json: string }>(
-    env.DB,
-    "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' AND recipient_email = ?",
-    [email],
-  );
-  const payload = await deliveredEmailPayload<{ confirmationUrl: string }>(env.DB, env, mail.payload_json);
-  return new URL(payload.confirmationUrl).searchParams.get("token")!;
+/** A registration awaiting its mailbox proof; returns the confirmation capability its email carries. */
+async function register(email: string): Promise<string> {
+  const pending = await createPendingRegistration(env.DB, { email, firstName: "New", lastName: "Attendee" });
+  return pending.confirmationToken;
 }
 
 async function info(token: string) {
@@ -124,7 +100,7 @@ describe("organization named on registration confirmation", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("preserves the confirmation link and email intent when the stored event start is unsupported", async () => {
-    const token = await register("unaffiliated-attendee@gmail.com", true);
+    const token = await register("unaffiliated-attendee@gmail.com");
     const state = () =>
       queryAll(env.DB, "SELECT status,confirmed_at,confirmation_link_secret,manage_link_secret FROM registrations");
     const emails = () => queryAll(env.DB, "SELECT id FROM email_outbox ORDER BY id");
@@ -143,11 +119,14 @@ describe("organization named on registration confirmation", () => {
     expect((await confirm({ token })).status).toBe("registered");
   });
 
-  it.each([1, 200])(
-    "confirms organization names and job titles of %i characters accepted by identity creation",
-    async (length) => {
-      const name = "X".repeat(length);
-      const jobTitle = "R".repeat(length);
+  it.each([
+    [2, 2],
+    [160, 100],
+  ])(
+    "confirms a %i-character organization name and %i-character job title accepted by identity creation",
+    async (nameLength, titleLength) => {
+      const name = "X".repeat(nameLength);
+      const jobTitle = "R".repeat(titleLength);
       const email = "limits@profile-fields.example";
       const token = await register(email);
       const confirmed = await confirm({ token, organization: { name, jobTitle } });
@@ -171,10 +150,10 @@ describe("organization named on registration confirmation", () => {
       JOIN organizations organization ON organization.id=claim.organization_id WHERE claim.domain=?`,
         ["unknown-works.example"],
       ),
-    ).toEqual([]);
+    ).toEqual([{ name: "Unknown Works" }]);
   });
 
-  it("links a newly named organization to a domain already claimed by another organization", async () => {
+  it("shares a claimed domain with a newly named organization that claims it too", async () => {
     const existing = await insertOrganization(env.DB, "Existing Organization");
     const at = new Date().toISOString();
     await env.DB.prepare(`INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at)
@@ -205,7 +184,15 @@ describe("organization named on registration confirmation", () => {
       JOIN organizations organization ON organization.id=claim.organization_id WHERE claim.domain=? ORDER BY organization.name`,
         ["new-shared.example"],
       ),
-    ).toEqual([{ name: "Existing Organization" }]);
+    ).toEqual([{ name: "Existing Organization" }, { name: "New Organization" }]);
+    expect(
+      await queryAll(
+        env.DB,
+        `SELECT organization.name FROM identities identity JOIN organizations organization ON organization.id=identity.organization_id
+      WHERE identity.verified_email_domain=?`,
+        ["new-shared.example"],
+      ),
+    ).toEqual([{ name: "New Organization" }]);
   });
 
   it("refuses an organization named without a job title, before anything is linked", async () => {
@@ -220,7 +207,10 @@ describe("organization named on registration confirmation", () => {
     expect(await affiliations("person@unknown-works.example")).toEqual([]);
   });
 
-  it("confirms a reserved work domain and queues its affiliation for review", async () => {
+  it.each([
+    ["the organization it names", "Pending Confirmation Organization"],
+    ["a differently spelled organization", "Different Organization"],
+  ])("links %s while a membership application uses the domain", async (_case, organizationName) => {
     const email = "registrant@pending-confirmation.example";
     await seedMemberApplication({
       organizationDomain: "pending-confirmation.example",
@@ -231,83 +221,31 @@ describe("organization named on registration confirmation", () => {
     expect(confirmation.asksOrganization).toBe(true);
     const prepared = await verifyOrganization(confirmation.organizationProof!, {
       organizationId: null,
-      organizationName: "Pending Confirmation Organization",
+      organizationName,
       jobTitle: "Engineer",
     });
     const result = await confirm({
       token,
-      organization: {
-        name: "Pending Confirmation Organization",
-        jobTitle: "Engineer",
-        contextToken: prepared.contextToken,
-      },
+      organization: { name: organizationName, jobTitle: "Engineer", contextToken: prepared.contextToken },
     });
-    expect(result.organizationOutcome).toBe("review_required");
-    expect(await affiliations(email)).toEqual([]);
-    expect(
-      await queryAll(
-        env.DB,
-        `SELECT review.organization_name FROM affiliation_reviews review
-      JOIN registrations registration ON registration.id=review.source_id
-      JOIN users person ON person.id=registration.user_id WHERE person.normalized_email=?`,
-        [email],
-      ),
-    ).toEqual([{ organization_name: "Pending Confirmation Organization" }]);
-    const [registration] = await queryAll<RegistrationRecord>(
-      env.DB,
-      `SELECT registration.* FROM registrations registration
-      JOIN users person ON person.id=registration.user_id WHERE person.normalized_email=?`,
-      [email],
-    );
-    // The manage page names the organization awaiting review rather than showing the registrant as Personal.
-    expect(await buildRegistrationManageView(env.DB, registration, "https://app.test")).toMatchObject({
-      user: { organization_name: null },
-      pendingOrganizationName: "Pending Confirmation Organization",
-    });
+    expect(result.organizationOutcome).toBe("linked");
+    expect(await affiliations(email)).toEqual([{ name: organizationName, job_title: "Engineer" }]);
+    expect(await queryAll(env.DB, "SELECT id FROM affiliation_reviews")).toEqual([]);
   });
 
-  it("queues a differently spelled organization for review while an application uses its domain", async () => {
-    const applicationId = await seedMemberApplication({
-      organizationDomain: "pending-other.example",
-      organizationName: "Pending Organization",
-    });
-    const token = await register("person@pending-other.example");
-    const confirmed = await confirm({ token, organization: { name: "Different Organization", jobTitle: "Engineer" } });
-    expect(confirmed.organizationOutcome).toBe("review_required");
-    expect(await affiliations("person@pending-other.example")).toEqual([]);
-    expect(await queryAll(env.DB, "SELECT id FROM organizations WHERE name='Different Organization'")).toEqual([]);
-    expect(
-      await env.DB.prepare("SELECT application_id FROM organization_domain_claims WHERE domain=?")
-        .bind("pending-other.example")
-        .first("application_id"),
-    ).toBe(applicationId);
-  });
-
-  it("preserves a newly submitted title when a reserved-domain registration is subsequently approved", async () => {
-    const email = "new-review@fresh-review.example";
-    const organizationName = "Fresh Review Organization";
-    await seedMemberApplication({ organizationDomain: "fresh-review.example", organizationName });
-    const token = await register(email);
-    const prepared = await verifyOrganization((await info(token)).organizationProof!, {
-      organizationId: null,
-      organizationName,
-      jobTitle: "Research Engineer",
-    });
-    expect(
-      (
-        await confirm({
-          token,
-          organization: { name: organizationName, jobTitle: "Research Engineer", contextToken: prepared.contextToken },
-        })
-      ).organizationOutcome,
-    ).toBe("review_required");
-    // Separate organization approval establishes the domain mapping; the typed name does not grant it.
+  it("keeps the submitted job title when staff approve a registration's queued organization", async () => {
+    const email = "person@approved-review.example";
+    const organizationName = "Approved Review Corp";
     const organizationId = await insertOrganization(env.DB, organizationName);
     await seedOrganizationAggregate(env.DB, organizationId, "A");
+    const token = await register(email);
+    const confirmed = await confirm({ token, organization: { name: organizationName, jobTitle: "Research Engineer" } });
+    expect(confirmed.organizationOutcome).toBe("review_required");
+    // Separate organization approval establishes the domain mapping; the typed name does not grant it.
     await env.DB.prepare(
-      "UPDATE organization_domain_claims SET organization_id=?,application_id=NULL WHERE domain='fresh-review.example'",
+      "INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,'approved-review.example',?,strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
     )
-      .bind(organizationId)
+      .bind(crypto.randomUUID(), organizationId)
       .run();
     const adminId = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email='admin@pkic.org'"))[0].id;
     const staffToken = await createAdminSession(env.DB, adminId, crypto.randomUUID());
@@ -325,7 +263,7 @@ describe("organization named on registration confirmation", () => {
   });
 
   it("does not ask a consumer address for an organization", async () => {
-    const personal = await register("person@gmail.com", true);
+    const personal = await register("person@gmail.com");
     expect(await info(personal)).toMatchObject({ asksOrganization: false });
     expect((await info(personal)).organizationProof).toBeUndefined();
   });
@@ -482,7 +420,7 @@ describe("organization named on registration confirmation", () => {
       { organization_name: "Closed Member Corp", source_type: "registration", email_domain: "closed-member.example" },
     ]);
   });
-  it("registers a selected member on a shared domain for affiliation review without granting member access", async () => {
+  it("links a selected member on a shared domain like any other organization", async () => {
     const selected = await insertOrganization(env.DB, "Shared Member");
     await seedOrganizationAggregate(env.DB, selected);
     const other = await insertOrganization(env.DB, "Other Claimant");
@@ -510,12 +448,10 @@ describe("organization named on registration confirmation", () => {
         contextToken: prepared.contextToken,
       },
     });
-    expect(result.organizationOutcome).toBe("review_required");
+    expect(result.organizationOutcome).toBe("linked");
     expect(result.status).toBe("registered");
-    expect(await affiliations(email)).toEqual([]);
-    expect(
-      await queryAll(env.DB, "SELECT organization_name FROM affiliation_reviews WHERE source_type='registration'"),
-    ).toEqual([{ organization_name: "Shared Member" }]);
+    expect(await affiliations(email)).toEqual([{ name: "Shared Member", job_title: "Engineer" }]);
+    expect(await queryAll(env.DB, "SELECT id FROM affiliation_reviews")).toEqual([]);
   });
 
   it("queues a confirmed named organization on an owned domain when no signed chooser context was supplied", async () => {

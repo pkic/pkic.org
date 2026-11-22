@@ -1,3 +1,4 @@
+import { IconHelp, IconLayoutReset, IconPlus } from "../../../../../../../components/icons";
 import { Button } from "../../../../../../../ui/Button";
 import { buttonClasses } from "../../../../../../../ui/button-classes";
 import { StrokeIcon } from "../../../../../../../ui/MediaIcons";
@@ -14,7 +15,7 @@ import {
 } from "./studio-layout";
 import type { StudioChange } from "./useStudioLayout";
 
-/** The layout row: switch workspace, add or reset panels, and take the whole screen. */
+/** The layout row: switch workspace, add or reset panels, open the tour, and take the whole screen. */
 export function StudioToolbar({
   workspace,
   selectWorkspace,
@@ -23,6 +24,8 @@ export function StudioToolbar({
   reset,
   expanded,
   toggleExpanded,
+  touring,
+  toggleTour,
 }: {
   workspace: StudioWorkspace;
   selectWorkspace: (workspace: StudioWorkspace) => void;
@@ -31,6 +34,8 @@ export function StudioToolbar({
   reset: () => void;
   expanded: boolean;
   toggleExpanded: () => void;
+  touring: boolean;
+  toggleTour: () => void;
 }) {
   const present = new Set(panels.map((panel) => panel.type));
   return (
@@ -49,7 +54,9 @@ export function StudioToolbar({
         <Menu
           variant="plain"
           label="Add panel"
-          triggerClass={buttonClasses({}, undefined)}
+          title={"Add panel\nAdd a panel you closed, or another monitor, to this workspace."}
+          heading="Add panel"
+          triggerClass={buttonClasses({ icon: true }, undefined)}
           items={STUDIO_PANEL_TYPES.map((type) => ({
             id: type,
             label: type === "monitor" ? "Monitor (any output)" : STUDIO_PANEL_LABELS[type],
@@ -57,16 +64,35 @@ export function StudioToolbar({
             onSelect: () => change((current) => addStudioPanel(current, type, `${workspace}-${type}-${Date.now()}`)),
           }))}
         >
-          Add panel
+          <IconPlus />
         </Menu>
-        <Button variant="ghost" onClick={reset}>
-          Reset layout
+        <Button
+          icon
+          aria-label="Reset layout"
+          title={"Reset layout\nPut this workspace's panels back where they started. Nothing on air changes."}
+          onClick={reset}
+        >
+          <IconLayoutReset />
+        </Button>
+        <Button
+          icon
+          data-tour-trigger
+          aria-expanded={touring}
+          aria-label="Studio help"
+          title={"Studio help\nA short tour of how the studio works."}
+          onClick={toggleTour}
+        >
+          <IconHelp />
         </Button>
         <Button
           icon
           aria-pressed={expanded}
           aria-label={expanded ? "Exit full screen" : "Full screen"}
-          title={expanded ? "Exit full screen (Esc)" : "Full screen"}
+          title={
+            expanded
+              ? "Exit full screen\nPut the studio back in the portal page. Shortcut: Esc."
+              : "Full screen\nFill the screen with the studio. Nothing on air changes."
+          }
           onClick={toggleExpanded}
         >
           <StrokeIcon>

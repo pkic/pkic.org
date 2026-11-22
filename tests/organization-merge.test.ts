@@ -134,6 +134,32 @@ describe("merging a duplicate organization", () => {
     expect(conflicts.pendingOrganization).toBeTruthy();
   });
 
+  it("matches another organization's application by its link, never by the name it gives", async () => {
+    const own = await insertOrganization(env.DB, "Own Organization");
+    const other = await insertOrganization(env.DB, "Other Organization");
+    const applicationId = await seedMemberApplication({ organizationName: "Own Organization" });
+    await env.DB.prepare("UPDATE member_applications SET organization_id = ? WHERE id = ?")
+      .bind(other, applicationId)
+      .run();
+    const conflicts = (organizationId: string | null, organizationName: string) =>
+      readMembershipApplicationConflicts(env.DB, {
+        isIndividual: false,
+        organizationId,
+        organizationName,
+        applicantEmail: "colleague@example.test",
+        applicantUserId: null,
+      });
+    expect((await conflicts(own, "Own Organization")).pendingOrganization).toBeNull();
+    expect((await conflicts(other, "Other Organization")).pendingOrganization).toBeTruthy();
+    // A new organization's name matches the application of the organization that holds it.
+    expect((await conflicts(null, "Other Organization")).pendingOrganization).toBeTruthy();
+
+    await env.DB.prepare("UPDATE member_applications SET organization_id = NULL WHERE id = ?")
+      .bind(applicationId)
+      .run();
+    expect((await conflicts(own, "Own Organization")).pendingOrganization).toBeTruthy();
+  });
+
   it.each(["target", "source", "other"])(
     "consolidates a shared domain when the primary claim belongs to %s",
     async (primary) => {

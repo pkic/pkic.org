@@ -4,7 +4,11 @@
  * them all; the profile's address choice reads only the verified ones.
  */
 import { emailAddressDeliveryJsonSql, decodeEmailAddressDelivery } from "./email-address-delivery";
-import { secondaryEmailSignInAllowedSql } from "../auth/email-sign-in-policy";
+import {
+  addedEmailSignInAllowedSql,
+  addressNotRetiredSql,
+  primaryEmailSignInAllowedSql,
+} from "../auth/email-sign-in-policy";
 import { ownEmailAddressSchema, type OwnEmailAddress } from "../../../assets/shared/schemas/own-email-addresses";
 import type { EmailVerificationMethod } from "./email-verification";
 import { all, first } from "../db/queries";
@@ -20,7 +24,7 @@ export interface OwnAddressRow {
   verification_method: EmailVerificationMethod | null;
   identity_id: string | null;
   created_at: string;
-  sign_in_enabled: number;
+  sign_in: OwnEmailAddress["signIn"];
   used_by_json: string;
   delivery_json: string;
 }
@@ -49,17 +53,21 @@ function identityOrganizationsJsonSql(identityCondition: string): string {
 /** Every address of one person as the `addresses` table; bind the person's id twice. */
 export const OWN_ADDRESSES_SQL = `WITH addresses AS (
     SELECT NULL AS id, users.id AS user_id, email, 1 AS is_primary, email_verified_at AS verified_at,
-           email_verification_method AS verification_method, NULL AS identity_id, created_at, 1 AS sign_in_enabled,
+           email_verification_method AS verification_method, NULL AS identity_id, created_at,
+           CASE WHEN ${primaryEmailSignInAllowedSql("users")} THEN 'signs_in'
+             WHEN NOT ${addressNotRetiredSql("users.id", "users.normalized_email")} THEN 'representation_ended'
+             ELSE 'not_verified' END AS sign_in,
            ${identityOrganizationsJsonSql("identity.user_id = users.id AND identity.email_id IS NULL")} AS used_by_json, delivery_bounced_at, delivery_blocked_at, delivery_delayed_at, delivery_delivered_at
       FROM users WHERE id = ?
     UNION ALL
     SELECT id, user_id, email, 0, verified_at, verification_method, identity_id, created_at,
-      (${secondaryEmailSignInAllowedSql("user_emails")}) AS sign_in_enabled,
+      CASE WHEN ${addedEmailSignInAllowedSql("user_emails")} THEN 'signs_in'
+        WHEN user_emails.verified_at IS NULL THEN 'not_verified' ELSE 'representation_ended' END AS sign_in,
       ${addressUsedByJsonSql("user_emails")} AS used_by_json, delivery_bounced_at, delivery_blocked_at, delivery_delayed_at, delivery_delivered_at FROM user_emails WHERE user_id = ?
 
   )`;
 
-export const OWN_ADDRESS_COLUMNS = `id, email, is_primary, verified_at, verification_method, identity_id, created_at, sign_in_enabled, used_by_json,
+export const OWN_ADDRESS_COLUMNS = `id, email, is_primary, verified_at, verification_method, identity_id, created_at, sign_in, used_by_json,
    ${emailAddressDeliveryJsonSql("addresses")} AS delivery_json`;
 
 /** Decodes the organizations `addressUsedByJsonSql` projects. */
@@ -78,7 +86,7 @@ export function toAddress(row: OwnAddressRow): OwnEmailAddress {
     verificationMethod: row.verification_method,
     identityId: row.identity_id,
     createdAt: row.created_at,
-    signInEnabled: Boolean(row.sign_in_enabled),
+    signIn: row.sign_in,
   };
 }
 

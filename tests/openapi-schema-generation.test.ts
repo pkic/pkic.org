@@ -335,6 +335,7 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/organizations/{organizationId}/contacts/secondary/nomination"].put).toBeDefined();
     expect(spec.paths["/api/v1/organizations/{organizationId}/contacts/secondary/nomination"].delete).toBeDefined();
     expect(spec.paths["/api/v1/organizations/{organizationId}/sponsors/current"].get).toBeDefined();
+    expect(spec.paths["/api/v1/organizations/{organizationId}/applications/current"].get).toBeDefined();
     expect(spec.paths["/api/v1/me"]).toBeUndefined();
     expect(spec.paths["/api/v1/me/groups"]).toBeUndefined();
     expect(spec.paths["/api/v1/me/notification-preferences"]).toBeUndefined();

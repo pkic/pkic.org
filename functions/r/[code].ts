@@ -327,9 +327,12 @@ export async function onRequestGet(c: any): Promise<Response> {
       starts_at: string | null;
       source_path: string | null;
       settings_json: string;
-    }>(c.env.DB, "SELECT name, slug, base_path, starts_at, source_path, settings_json FROM events WHERE id = ?", [
-      refRow.event_id,
-    ]),
+      visibility: string;
+    }>(
+      c.env.DB,
+      "SELECT name, slug, base_path, starts_at, source_path, settings_json, visibility FROM events WHERE id = ?",
+      [refRow.event_id],
+    ),
     lookupOgPerson(c.env.DB, code),
   ]);
 

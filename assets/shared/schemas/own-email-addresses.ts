@@ -53,6 +53,14 @@ export function ownEmailInUseMessage(organizationNames: readonly string[]): stri
 }
 
 /**
+ * Whether an address signs in. Every verified address does until the
+ * representation its domain supported ends; a primary address that was never
+ * proved stops once another address on the account is verified.
+ */
+export const ownEmailSignInSchema = z.enum(["signs_in", "representation_ended", "not_verified"]);
+export type OwnEmailSignIn = z.infer<typeof ownEmailSignInSchema>;
+
+/**
  * One of the signed-in person's addresses: the profile's address shape (the
  * primary address has no id of its own; `verifiedAt` is null while the
  * address awaits verification), plus when it was added and the organizations
@@ -61,7 +69,7 @@ export function ownEmailInUseMessage(organizationNames: readonly string[]): stri
 export const ownEmailAddressSchema = verifiedEmailIdentitySchema.extend({
   delivery: emailAddressDeliverySchema.default(UNKNOWN_EMAIL_DELIVERY),
   createdAt: z.string(),
-  signInEnabled: z.boolean(),
+  signIn: ownEmailSignInSchema,
   usedBy: z.array(organizationReferenceSchema).default([]),
 });
 export type OwnEmailAddress = z.infer<typeof ownEmailAddressSchema>;
@@ -85,11 +93,8 @@ export const ownEmailVerificationRequestedResponseSchema = ownEmailVerificationS
   requestId: databaseIdSchema,
 });
 export const ownEmailAddressParamsSchema = z.object({ emailId: databaseIdSchema });
-/** Account access requires a separate, explicit choice after mailbox verification. */
-export const ownEmailAddressUpdateSchema = z.union([
-  z.object({ primary: z.literal(true) }).strict(),
-  z.object({ signInEnabled: z.boolean() }).strict(),
-]);
+/** The one change an owner makes to an address in place: making a verified one primary. */
+export const ownEmailAddressUpdateSchema = z.object({ primary: z.literal(true) }).strict();
 export type OwnEmailAddressUpdate = z.infer<typeof ownEmailAddressUpdateSchema>;
 /** The emailed link's token, sent back by the page the link opens. */
 export const ownEmailAddressVerificationSchema = magicLinkVerifySchema.extend({
@@ -196,9 +201,9 @@ export const ownEmailAddressVerificationRouteSchema = {
 export const ownEmailAddressUpdateRouteSchema = {
   tags: ["Users"],
   ...requiresSession(),
-  summary: "Update primary-address or sign-in choices for an owned address",
+  summary: "Make one of the current user's verified addresses primary",
   description:
-    "Making an address primary preserves organization identity addresses. Enabling sign-in separately grants full account access through a verified, currently authorized address.",
+    "Making an address primary preserves organization identity addresses. The address must still sign in, so a representation's ended address cannot become primary.",
   request: {
     params: ownEmailAddressParamsSchema,
     body: { required: true, content: { "application/json": { schema: ownEmailAddressUpdateSchema } } },

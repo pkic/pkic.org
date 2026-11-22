@@ -6,11 +6,11 @@
  * normal user session, and every sponsor request re-derives capacity from D1.
  */
 import type { SponsorCapacity } from "../../../assets/shared/schemas/sponsor-access";
+import { activeEventSponsorSql } from "./sponsor-organization-lead-access";
 import { all, first } from "../db/queries";
 import type { AuthorizationEvidence } from "../db/authorization-guard";
 import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
-import { normalizeEmail } from "../validation";
 import {
   assertEmailAuthCapabilityEmail,
   queueEmailAuthCapability,
@@ -27,14 +27,7 @@ export interface SponsorshipCapacityRow {
   contact_email: string;
 }
 
-export const ACTIVE_EVENT_SPONSORSHIP_SQL = `
-  s.sponsor_type = 'event'
-  AND s.pipeline_stage = 'active'
-  AND s.ended_reason IS NULL
-  AND (s.renewal_date IS NULL OR s.renewal_date > strftime('%Y-%m-%d','now'))
-  AND s.event_id IS NOT NULL
-  AND s.contact_email IS NOT NULL
-`;
+export const ACTIVE_EVENT_SPONSORSHIP_SQL = `${activeEventSponsorSql("s")} AND s.contact_email IS NOT NULL`;
 
 const USER_SPONSOR_EMAILS_CTE = `
   user_sponsor_emails(normalized_email) AS (
@@ -192,33 +185,6 @@ export function sponsorUserSignInAuthorizationEvidence(
              )`,
     bindings: [userId, normalizedSignInEmail, normalizedSignInEmail],
   };
-}
-
-export async function queueSponsorSignInCapabilityForEmail(
-  db: DatabaseLike,
-  payload: {
-    email: string;
-    eventId: string;
-    ipHash?: string | null;
-    userAgentHash?: string | null;
-    ttlMinutes: number;
-    signingSecret: string;
-  },
-): Promise<{ queuedToken: string | null; sponsorship: SponsorCapacity | null }> {
-  const email = normalizeEmail(payload.email);
-  const row = await first<SponsorshipCapacityRow>(
-    db,
-    `SELECT s.id, s.event_id, e.slug AS event_slug, e.name AS event_name, s.tier, s.contact_email
-       FROM sponsorships s
-       JOIN events e ON e.id = s.event_id
-      WHERE ${ACTIVE_EVENT_SPONSORSHIP_SQL}
-        AND (e.id = ? OR e.slug = ?)
-        AND lower(trim(s.contact_email)) = ?`,
-    [payload.eventId, payload.eventId, email],
-  );
-  if (!row) return { queuedToken: null, sponsorship: null };
-  const capability = await queueSponsorSignInCapability(row.id, row.contact_email, payload);
-  return { queuedToken: capability.queuedToken, sponsorship: toSponsorCapacity(row) };
 }
 
 /** Queue marker materialized into a signed capability only by the outbox. */

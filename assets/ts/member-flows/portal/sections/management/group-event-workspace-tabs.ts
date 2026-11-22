@@ -1,7 +1,6 @@
 /** The event workspace's tabs and the capability each one needs, in display order. */
 import { canReadScreenStatus } from "../../../../../shared/event-screen-permissions";
 import { hasEventAgendaPermission } from "../events/event-agenda-access";
-import { portalSession } from "../../state";
 import type { GroupEvent } from "../../../../../shared/schemas/group-events";
 import type { TabItem } from "../../../../components/Tabs";
 
@@ -30,22 +29,12 @@ export const EVENT_WORKSPACE_TABS: readonly EventWorkspaceTabDef[] = [
   {
     key: "live",
     label: "Studio",
-    visible: (event) => hasEventAgendaPermission(event.id, "agenda:live_moderate"),
+    visible: (event) => hasEventAgendaPermission(event.id, "agenda:live_studio"),
   },
   {
     key: "screens",
     label: "Screens",
     visible: (event) => canReadScreenStatus((permission) => hasEventAgendaPermission(event.id, permission)),
-  },
-  {
-    key: "leads",
-    label: "Sponsor leads",
-    visible: () =>
-      portalSession.value?.staff?.grants.some(
-        (grant) =>
-          grant.contextType === "event_sponsor" &&
-          ["agenda:leads_view", "agenda:leads_capture", "agenda:leads_export"].includes(grant.permission),
-      ) ?? false,
   },
   { key: "proposals", label: "Proposals", visible: (event) => event.proposalAccess?.canRead === true },
   {
@@ -68,7 +57,7 @@ export const EVENT_WORKSPACE_TABS: readonly EventWorkspaceTabDef[] = [
     visible: (event) =>
       event.capabilities.includes("manage") ||
       hasEventAgendaPermission(event.id, "agenda:write") ||
-      hasEventAgendaPermission(event.id, "agenda:live_moderate"),
+      hasEventAgendaPermission(event.id, "agenda:live_studio"),
   },
 ];
 

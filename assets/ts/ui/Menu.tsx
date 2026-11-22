@@ -33,10 +33,13 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from
 
 import { MenuLevel } from "./MenuLevel";
 import "./Menu.css";
+import { usePressOutside } from "./use-press-outside";
 
 interface MenuItemBase {
   id: string;
   label: string;
+  /** A short second line under the label: what choosing the item does, when the label alone cannot say it. */
+  description?: string;
   icon?: ComponentChildren;
   /** A command; omit for link items with `href`. */
   onSelect?: () => void;
@@ -63,6 +66,8 @@ interface MenuItemBase {
   multiple?: boolean;
   /** Draws a rule above the item: the start of a new group of choices. */
   separatorBefore?: boolean;
+  /** What the action does, in one sentence: the item's tooltip, and its description for assistive technology. */
+  tooltip?: string;
 }
 
 export type MenuItem = MenuItemBase;
@@ -158,14 +163,8 @@ export function Menu({
     window.addEventListener("scroll", scroll, true);
     return () => window.removeEventListener("scroll", scroll, true);
   }, [open, anchorPoint, close]);
-  useEffect(() => {
-    if (!open) return;
-    const outside = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) close(false);
-    };
-    document.addEventListener("pointerdown", outside, true);
-    return () => document.removeEventListener("pointerdown", outside, true);
-  }, [open, close]);
+  const closeOutside = useCallback(() => close(false), [close]);
+  usePressOutside(open, rootRef, closeOutside);
   return (
     <div class="pk-menu" ref={rootRef}>
       <button

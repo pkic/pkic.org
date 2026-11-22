@@ -5,9 +5,15 @@ import { afterEach, expect, it, vi } from "vitest";
 import { scannerOfflineContextSchema } from "../../assets/shared/schemas/event-scanner-offline-context";
 import { useScannerDevice } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/useScannerDevice";
 const mocks = vi.hoisted(() => ({ read: vi.fn(async () => ({ state: "open" })), prepare: vi.fn(), next: vi.fn() }));
-vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-offline-context", () => ({
-  readScannerOfflineEpoch: mocks.read,
-}));
+vi.mock(
+  "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-offline-context",
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import("../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-offline-context")
+    >()),
+    readScannerOfflineEpoch: mocks.read,
+  }),
+);
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-device-ledger", () => ({
   prepareScannerDevice: async () => "11111111-1111-4111-8111-111111111111",
   prepareScannerEpoch: mocks.prepare,
@@ -35,6 +41,8 @@ const host = document.createElement("div");
 afterEach(async () => {
   await act(() => render(null, host));
   mocks.read.mockClear();
+  mocks.prepare.mockReset();
+  mocks.next.mockReset();
 });
 it("keeps the prepared device ready when the offline clock checkpoint advances", async () => {
   function Scanner({ observedAt }: { observedAt: string }) {
@@ -75,4 +83,84 @@ it("reconciles a server closure and offers the next session without posting anot
   await act(async () => next.click());
   await vi.waitFor(() => expect(scanner.ready).toBe(true));
   expect(mocks.next).toHaveBeenCalledOnce();
+});
+it("retries device preparation after an initial failure", async () => {
+  mocks.prepare.mockRejectedValueOnce(new Error("Server unavailable"));
+  let scanner!: ReturnType<typeof useScannerDevice>;
+  function Scanner() {
+    scanner = useScannerDevice("synthetic", id);
+    return <output>{scanner.ready ? "ready" : scanner.error || "preparing"}</output>;
+  }
+  await act(async () => render(<Scanner />, host));
+  await vi.waitFor(() => expect(scanner.error).toContain("preparation unavailable"));
+  mocks.prepare.mockResolvedValueOnce({ epochId: id, deviceId: id, state: "open" });
+  await act(async () => scanner.retry());
+  await vi.waitFor(() => expect(scanner.ready).toBe(true));
+  expect(mocks.prepare).toHaveBeenCalledTimes(2);
+});
+
+it("keeps a sponsor scanner unready without a current lease for that sponsor", async () => {
+  const sponsorId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const otherSponsorId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  mocks.prepare.mockResolvedValueOnce({
+    epochId: id,
+    deviceId: id,
+    state: "open",
+    leadLease: { sponsorId: otherSponsorId, expiresAt: "2030-01-01T00:00:00.000Z" },
+  });
+  function Scanner() {
+    const scanner = useScannerDevice("synthetic", id, sponsorId);
+    return <output>{scanner.ready ? "ready" : "preparing"}</output>;
+  }
+  await act(async () => render(<Scanner />, host));
+  await vi.waitFor(() => expect(mocks.prepare).toHaveBeenCalledOnce());
+  expect(host.textContent).toBe("preparing");
+});
+
+it("readies a newly enrolled sponsor scanner before an offline context is saved", async () => {
+  const sponsorId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const receivedAt = Date.now();
+  const serverNow = new Date(receivedAt + 300_000).toISOString();
+  mocks.prepare.mockResolvedValueOnce({
+    epochId: id,
+    deviceId: id,
+    state: "open",
+    leadLease: {
+      eventId: id,
+      sponsorId,
+      serverNow,
+      expiresAt: new Date(Date.parse(serverNow) + 60_000).toISOString(),
+    },
+    leadLeaseReceivedAt: receivedAt,
+  });
+  function Scanner() {
+    const scanner = useScannerDevice("synthetic", id, sponsorId);
+    return <output>{scanner.ready ? "ready" : "preparing"}</output>;
+  }
+  await act(async () => render(<Scanner />, host));
+  await vi.waitFor(() => expect(host.textContent).toBe("ready"));
+});
+
+it("keeps a sponsor scanner unready after its receipt-based lease expires", async () => {
+  const sponsorId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const serverNow = new Date().toISOString();
+  mocks.prepare.mockResolvedValueOnce({
+    epochId: id,
+    deviceId: id,
+    state: "open",
+    leadLease: {
+      eventId: id,
+      sponsorId,
+      serverNow,
+      expiresAt: new Date(Date.parse(serverNow) + 60_000).toISOString(),
+    },
+    leadLeaseReceivedAt: Date.now() - 120_000,
+  });
+  function Scanner() {
+    const scanner = useScannerDevice("synthetic", id, sponsorId);
+    return <output>{scanner.ready ? "ready" : "preparing"}</output>;
+  }
+  await act(async () => render(<Scanner />, host));
+  await vi.waitFor(() => expect(mocks.prepare).toHaveBeenCalledOnce());
+  expect(host.textContent).toBe("preparing");
 });

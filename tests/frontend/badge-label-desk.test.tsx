@@ -2,6 +2,7 @@ import { createGenericBadgeTemplate } from "../../assets/shared/badge-generic-te
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { ScannerTaskNavigation } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/ScannerTaskNavigation";
 import { BadgeLabelDesk } from "../../assets/ts/member-flows/portal/sections/events/detail/badges/BadgeLabelDesk";
 import { clearAuth, savePortalSession } from "../../assets/ts/member-flows/portal/state";
 import { portalSessionFixture } from "../helpers/portal-session";
@@ -120,6 +121,63 @@ afterEach(async () => {
 });
 
 describe("badge printing desk", () => {
+  it("blocks a second camera frame immediately after an invalid ticket", async () => {
+    const fetch = vi.fn(async () => json(label));
+    vi.stubGlobal("fetch", fetch);
+    await mount();
+    await click("Start camera");
+    await act(() => {
+      capture.read!("invalid-code");
+      capture.read!("ABCDEFGHJKLMNPQR");
+    });
+    expect(host.textContent).toContain("Scan an attendee’s ticket QR code.");
+    expect(fetch).not.toHaveBeenCalled();
+    await click("Next badge");
+    await scan();
+    await settle(() => expect(fetch).toHaveBeenCalledOnce());
+  });
+  it.each([false, true])("holds a refused ticket until Next badge in %s view", async (fullscreen) => {
+    const fetch = vi.fn(async () => json({ error: "Badge unavailable" }, 403));
+    vi.stubGlobal("fetch", fetch);
+    await mount();
+    await click("Start camera");
+    if (fullscreen) await click("Enter full screen");
+    await scan();
+    await settle(() => expect(host.textContent).toContain("Could not print"));
+    expect(host.textContent).toContain("HTTP 403");
+    await scan("ZYXWVUTSRQPNMLKJ");
+    expect(fetch).toHaveBeenCalledOnce();
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    expect(host.textContent).toContain("HTTP 403");
+    expect(host.querySelector('button[aria-label="Next badge"]')?.textContent).toBe("Next");
+    await click("Next badge");
+    if (fullscreen) expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Ready to scan and print");
+    else expect(host.textContent).not.toContain("HTTP 403");
+    await scan("ZYXWVUTSRQPNMLKJ");
+    await settle(() => expect(fetch).toHaveBeenCalledTimes(2));
+  });
+  it("opens the print task camera without a transferred badge", async () => {
+    const consumed = vi.fn();
+    const fetch = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => json(label));
+    vi.stubGlobal("fetch", fetch);
+    const navigation = {
+      launch: "print" as const,
+      tasks: [{ key: "print" as const, label: "Print", href: "#/print" }],
+      onLaunch: vi.fn(),
+      onConsumed: consumed,
+    };
+    const desk = () => (
+      <ScannerTaskNavigation.Provider value={navigation}>
+        <BadgeLabelDesk slug="workshop" />
+      </ScannerTaskNavigation.Provider>
+    );
+    await act(async () => render(desk(), host));
+    await settle(() => expect(capture.starts).toBe(1));
+    expect(consumed).toHaveBeenCalledOnce();
+    expect(fetch).not.toHaveBeenCalled();
+    await act(async () => render(desk(), host));
+    expect(capture.starts).toBe(1);
+  });
   it("pauses QR capture during the tour and resumes the same camera afterward", async () => {
     const fetch = vi.fn(async () => json(label));
     vi.stubGlobal("fetch", fetch);

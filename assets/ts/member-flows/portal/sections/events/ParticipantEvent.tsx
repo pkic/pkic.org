@@ -1,6 +1,6 @@
 import { portalSession } from "../../state";
 import { lazy, Suspense } from "preact/compat";
-import { useEffect } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import {
   eventAgendaRoute,
@@ -8,7 +8,8 @@ import {
   isMyAgendaQuery,
 } from "../../../../../shared/event-participation-link";
 import type { ComponentChildren } from "preact";
-import { eventParticipantRecordPath } from "./event-participant-paths";
+import { eventParticipantRecordPath } from "../../../../../shared/event-participant-paths";
+import { eventClock } from "../../../../../shared/event-clock";
 import { useBoundaryClock } from "../../../../hooks/useBoundaryClock";
 import { useData } from "../../../../hooks/useData";
 import { getJson, ApiClientError } from "../../../../shared/api-client";
@@ -37,8 +38,12 @@ import { EventMore } from "./app/EventMore";
 import { canInviteColleagues, eventRegistrationStanding } from "./app/event-app-model";
 import { hasEventProposals, hasEventPromotionMaterials, participantEventAppSubject } from "./app/event-app-tabs";
 
+const EventNotRegistering = lazy(() =>
+  import("./app/EventNotRegistering").then((module) => ({ default: module.EventNotRegistering })),
+);
 const EventRegister = lazy(() => import("./app/EventRegister").then((module) => ({ default: module.EventRegister })));
-const MyAgenda = lazy(() => import("./detail/participation/MyAgenda").then((module) => ({ default: module.MyAgenda })));
+const loadMyAgenda = () => import("./detail/participation/MyAgenda");
+const MyAgenda = lazy(() => loadMyAgenda().then((module) => ({ default: module.MyAgenda })));
 const EventCheckIn = lazy(() => import("./app/EventCheckIn").then((module) => ({ default: module.EventCheckIn })));
 const VirtualRoom = lazy(() =>
   import("./app/virtual-room/VirtualRoom").then((module) => ({ default: module.VirtualRoom })),
@@ -49,14 +54,38 @@ const MyPromotionKits = lazy(() =>
 const MySessionManagement = lazy(() =>
   import("./detail/participation/MySessionManagement").then((module) => ({ default: module.MySessionManagement })),
 );
+const SponsorLeads = lazy(() =>
+  import("./detail/agenda/SponsorLeads").then((module) => ({ default: module.SponsorLeads })),
+);
 type EventDetail = z.infer<typeof eventDetailResponseSchema>["event"];
 type Selection = {
   kind?: "registration" | "proposal";
   resourceId?: string;
   tab?: string;
   pointToken?: string;
+  sponsorId?: string;
+  leadId?: string;
 };
 const href = usePortalHashLocation.hrefs;
+/**
+ * How long the virtual room stays connected while its attendee looks at another page of the event, so a
+ * quick look at the agenda does not make them join the room and its chat again.
+ */
+const ROOM_KEPT_AWAY_MS = 10 * 60_000;
+
+/** True while `shown`, and for `keepMs` after it stops being shown. */
+function useKeptAway(shown: boolean, keepMs: number): boolean {
+  const [kept, setKept] = useState(shown);
+  useEffect(() => {
+    if (shown) {
+      setKept(true);
+      return;
+    }
+    const release = setTimeout(() => setKept(false), keepMs);
+    return () => clearTimeout(release);
+  }, [shown, keepMs]);
+  return shown || kept;
+}
 /** The compact header's title for each participant page other than the event home. */
 const PAGE_LABELS: Record<string, string> = {
   registration: "Registration",
@@ -64,6 +93,7 @@ const PAGE_LABELS: Record<string, string> = {
   agenda: "My agenda",
   promotion: "Share & Invite",
   "lead-scanner": "Lead scanner",
+  "sponsor-leads": "Leads",
   "session-management": "My sessions",
   ticket: "Ticket",
   "check-in": "Check in",
@@ -87,6 +117,8 @@ export function ParticipantEvent({
   resourceId,
   tab,
   pointToken,
+  sponsorId,
+  leadId,
   onRegistered,
 }: Selection & { event: EventDetail; onRegistered?: () => Promise<void> }) {
   const [location, navigate] = useHashLocation();
@@ -105,6 +137,12 @@ export function ParticipantEvent({
   useEffect(() => {
     if (ticketless) navigate(base, { replace: true });
   }, [ticketless, base, navigate]);
+  // The room shows the agenda on a tab: its code is fetched while the room opens, so the tab opens at once.
+  useEffect(() => {
+    if (tab === "virtual") void loadMyAgenda();
+  }, [tab]);
+  const inRoom = tab === "virtual";
+  const roomKept = useKeptAway(inRoom, ROOM_KEPT_AWAY_MS);
   const registrationId = event.participation?.registrationId;
   const hasProposals = hasEventProposals(event);
   const active =
@@ -112,8 +150,8 @@ export function ParticipantEvent({
       ? "registration"
       : kind === "proposal" || tab === "submissions"
         ? "proposals"
-        : tab === "register"
-          ? "register"
+        : tab === "register" || tab === "not-registering"
+          ? tab
           : tab === "agenda"
             ? mine
               ? "agenda"
@@ -122,11 +160,13 @@ export function ParticipantEvent({
               ? "promotion"
               : tab === "lead-scanner"
                 ? "lead-scanner"
-                : tab === "session-management"
-                  ? "session-management"
-                  : (tab === "ticket" && !ticketless) || tab === "more" || tab === "virtual" || tab === "check-in"
-                    ? tab
-                    : "overview";
+                : tab === "leads"
+                  ? "sponsor-leads"
+                  : tab === "session-management"
+                    ? "session-management"
+                    : (tab === "ticket" && !ticketless) || tab === "more" || tab === "virtual" || tab === "check-in"
+                      ? tab
+                      : "overview";
   const tabs = [
     { id: "overview", label: "Overview", href: href(base) },
     { id: "program", label: "Agenda", href: href(eventAgendaRoute(event.slug)) },
@@ -164,14 +204,19 @@ export function ParticipantEvent({
       : []),
   ];
   const navigation = (
-    <ParticipantEventNavigation event={participantEventAppSubject(event)} activeId={active} items={tabs} />
+    <ParticipantEventNavigation
+      event={participantEventAppSubject(event)}
+      activeId={active}
+      items={tabs}
+      appBar={active !== "virtual"}
+    />
   );
   // Every page belongs to this event; the section title follows its persistent hero.
   const header = (recordTitle?: string) => (
     <>
       <EventAppHero event={event} />
       {navigation}
-      {active !== "overview" && active !== "register" && (
+      {active !== "overview" && active !== "register" && active !== "not-registering" && (
         <SectionHeading level={3} class={kind === "proposal" ? undefined : "pk-participant-event__page-title"}>
           {kind === "proposal" ? (recordTitle ?? "Proposal") : (PAGE_LABELS[active] ?? "Proposals")}
         </SectionHeading>
@@ -179,7 +224,7 @@ export function ParticipantEvent({
     </>
   );
   return (
-    <div class="pk-stack">
+    <div class="pk-stack" data-event-room={tab === "virtual" ? "" : undefined}>
       {kind !== "proposal" && header()}
       {kind === "registration" && resourceId ? (
         <ParticipantRegistration
@@ -193,6 +238,10 @@ export function ParticipantEvent({
       ) : tab === "register" ? (
         <Suspense fallback={<Spinner label="Loading registration…" />}>
           <EventRegister event={event} onRegistered={onRegistered} />
+        </Suspense>
+      ) : tab === "not-registering" ? (
+        <Suspense fallback={<Spinner />}>
+          <EventNotRegistering slug={event.slug} />
         </Suspense>
       ) : tab === "agenda" ? (
         <Suspense fallback={<Spinner />}>
@@ -229,14 +278,18 @@ export function ParticipantEvent({
         </Suspense>
       ) : tab === "lead-scanner" ? (
         <ParticipantLeadScanner eventId={event.id} slug={event.slug} scannerAccess={event.scannerAccess} />
+      ) : tab === "leads" ? (
+        "sponsorLeadAccess" in event && event.sponsorLeadAccess ? (
+          <Suspense fallback={<Spinner label="Loading sponsor leads…" />}>
+            <SponsorLeads slug={event.slug} timeZone={eventClock(event)} sponsorId={sponsorId} leadId={leadId} />
+          </Suspense>
+        ) : (
+          <Alert tone="danger">Sponsor leads are not available for your current identity.</Alert>
+        )
       ) : tab === "submissions" ? (
         <ParticipantProposals event={event} />
-      ) : tab === "virtual" ? (
-        <Suspense fallback={<Spinner />}>
-          <VirtualRoom slug={event.slug} eventName={event.name} />
-        </Suspense>
-      ) : tab === "ticket" && !ticketless ? (
-        <EventTicket event={event} />
+      ) : tab === "virtual" ? null : tab === "ticket" && !ticketless ? (
+        <EventTicket event={event} onSettled={onRegistered} />
       ) : tab === "check-in" ? (
         <Suspense fallback={<Spinner />}>
           <EventCheckIn slug={event.slug} pointToken={pointToken} />
@@ -246,6 +299,28 @@ export function ParticipantEvent({
       ) : (
         <EventHome event={event} now={now} />
       )}
+      {roomKept ? (
+        <div class="pk-participant-event__room" hidden={!inRoom}>
+          <Suspense fallback={<Spinner />}>
+            <VirtualRoom
+              slug={event.slug}
+              away={!inRoom}
+              agenda={(program) => (
+                <Suspense fallback={<Spinner />}>
+                  <MyAgenda
+                    embedded
+                    program={program}
+                    slug={event.slug}
+                    eventId={event.id}
+                    eventName={event.name}
+                    canPersonalize={eventRegistrationStanding(event).status === "registered"}
+                  />
+                </Suspense>
+              )}
+            />
+          </Suspense>
+        </div>
+      ) : null}
     </div>
   );
 }

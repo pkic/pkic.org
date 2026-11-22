@@ -76,7 +76,7 @@ export const AUTHORITY_FLOW = {
       id: "9.12",
       title: "A revoked permission stops working on the session that is already open",
       status: "unit",
-      note: "There is no window, and the design is not the one it was assumed to be. The session token proves identity — subject, session, expiry — and carries no permissions: grants are computed from D1 on the request that uses them, so revocation lands immediately on a token already in use. Covered in admin-donations. The tempting optimization is the opposite one, putting the grants in the token to save the read, and it would buy that saving with a window in which a revoked permission still works. Staff capacity separately expires after eight hours, which shortens elevation rather than delaying revocation.",
+      note: "There is no window, and the design is not the one it was assumed to be. The session token proves identity — subject, session, expiry — and carries no permissions: grants are computed from D1 on the request that uses them, so revocation lands immediately on a token already in use. Covered in admin-donations. The tempting optimization is the opposite one, putting the grants in the token to save the read, and it would buy that saving with a window in which a revoked permission still works. Staff capacity separately expires after sixteen hours, which shortens elevation rather than delaying revocation.",
     },
   ],
 };

@@ -13,7 +13,7 @@ import { resolveUserSessionContext } from "../../../../../_lib/auth/user-session
 import { requireEventPermission } from "../authorization";
 export const LiveProgramGet = openApiRoute(liveProgramReadRouteSchema, async (c: AdminContext, data) => {
   markResponseSensitive(c);
-  const { db, event } = await requireEventPermission(c, data.params.eventSlug, "agenda:live_moderate");
+  const { db, event } = await requireEventPermission(c, data.params.eventSlug, "agenda:live_studio");
   await readPublishedProgramRoom(db, event.id, data.params.roomId);
   if (!c.env.LIVE_SESSION_ROOMS) throw new AppError(503, "LIVE_ROOMS_UNAVAILABLE", "Live rooms are not available.");
   return json(
@@ -25,7 +25,7 @@ export const LiveProgramGet = openApiRoute(liveProgramReadRouteSchema, async (c:
 });
 export const LiveProgramPost = openApiRoute(liveProgramSelectRouteSchema, async (c: AdminContext, data) => {
   markResponseSensitive(c);
-  const { event, db } = await requireEventPermission(c, data.params.eventSlug, "agenda:live_moderate");
+  const { event, db } = await requireEventPermission(c, data.params.eventSlug, "agenda:live_studio");
   if (!c.env.LIVE_SESSION_ROOMS) throw new AppError(503, "LIVE_ROOMS_UNAVAILABLE", "Live rooms are not available.");
   const { claims } = await resolveUserSessionContext(db, c.req.raw, c.env);
   const result = liveProgramSelectResultSchema.parse(

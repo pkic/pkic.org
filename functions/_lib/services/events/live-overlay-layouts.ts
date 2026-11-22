@@ -17,7 +17,8 @@ import { readEventLiveOverlayLayouts } from "../live-session/overlay-layouts";
 
 /**
  * Saving and deleting an event's broadcast overlay layouts and its shared
- * element positions. A change never touches a room's on-air content:
+ * element positions, by the people who set up the live studio; every room of
+ * the event shares them. A change never touches a room's on-air content:
  * connected rooms pick it up on their next refresh and their browser sources
  * redraw.
  */
@@ -45,7 +46,7 @@ async function commit(
   const context = { type: "event", id: command.event.id };
   try {
     await db.batch([
-      preparePermissionsAuthorizationGuard(db, command.actor, [{ permission: "agenda:live_moderate", context }]),
+      preparePermissionsAuthorizationGuard(db, command.actor, [{ permission: "agenda:live_setup", context }]),
       write,
       prepareScopedAuditLogAfterOneChange(
         db,

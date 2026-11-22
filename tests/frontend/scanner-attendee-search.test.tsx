@@ -12,6 +12,7 @@ const user = {
   first_name: "Alex",
   last_name: "Example",
   organization_name: "Synthetic organization",
+  registrationStatus: "registered",
 };
 const code = "ABCDEFGHJKLMNPQR";
 function show(online: boolean) {
@@ -93,4 +94,26 @@ it("disables identity search offline and cancels a pending badge selection on di
   expect(onBadge).not.toHaveBeenCalledWith(code);
   expect(host.textContent).toContain("Offline: use a badge code");
   expect(host.querySelector("input")?.getAttribute("name")).toBe("badgeId");
+});
+it("names a pending registration instead of fetching a badge", async () => {
+  const fetch = vi.fn(async () =>
+    Response.json({
+      users: [{ ...user, registrationStatus: "pending_email_confirmation" }],
+      page: { limit: 8, offset: 0, total: 1, hasMore: false },
+    }),
+  );
+  vi.stubGlobal("fetch", fetch);
+  await show(true);
+  await input("Alex");
+  await vi.waitFor(async () => {
+    await act(async () => {});
+    expect(host.querySelector('[aria-label="Matching attendees"] button')?.textContent).toContain(
+      "Pending confirmation",
+    );
+  });
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Matching attendees"] button')!.click());
+  expect(host.textContent).toContain("Alex Example has not confirmed their registration.");
+  expect(fetch).toHaveBeenCalledTimes(1);
+  // Choosing someone clears what was typed, and no badge takes its place.
+  expect(onBadge).toHaveBeenLastCalledWith("");
 });

@@ -1,12 +1,13 @@
 import { format24HourClockInZone } from "./format-date";
-import { liveSpeakerMessageFit, type LiveSpeakerMessageFit } from "./live-room-outputs";
+import { liveQuestionAddresseeName } from "./live-room-credits";
+import { liveRoomOutputs, liveSpeakerMessageFit, type LiveSpeakerMessageFit } from "./live-room-outputs";
 import {
   liveStageDisplayQuestions,
   liveStageSpeakers,
   liveStageTitle,
   type LiveStageSpeaker,
 } from "./live-stage-display";
-import { formatLiveTimer } from "./live-timer-format";
+import { formatLiveDurationCompact, formatLiveTimer } from "./live-timer-format";
 import {
   countsUp,
   LIVE_TIMER_STALE_OVERTIME_MS,
@@ -14,6 +15,7 @@ import {
   liveTimerReading,
   liveTimerShownMs,
   liveTimerTone,
+  liveTimerTotalMs,
 } from "./live-timer-policy";
 import type { LivePoll } from "./schemas/live-session-poll";
 import type {
@@ -24,6 +26,9 @@ import type {
   LiveTimer,
   LiveTimerGraphic,
 } from "./schemas/live-session-room";
+import type { LiveScreenSync } from "./schemas/live-screen-sync";
+import { liveScreenComposition, liveScreenSyncs } from "./live-screen-sync";
+import { LIVE_SPEAKER_OUTPUT_KEY } from "./schemas/live-room-output-setup";
 import type { LiveScheduleRoom } from "./schemas/live-session-schedule";
 import type { LiveStageDisplaySettings } from "./schemas/live-stage-display-settings";
 
@@ -35,9 +40,10 @@ import type { LiveStageDisplaySettings } from "./schemas/live-stage-display-sett
  *
  * The main area follows one order, highest first: a timer at zero or over
  * takes all of it; before the session starts it counts down to the start;
- * a question or poll sits beside the timer that ends first; else up to two
+ * a question or poll sits beside the two timers that end first; else up to two
  * timers, the one ending first large. Questions, polls and timers are the
- * stage display's own when operators put any there, else Program's. The banner is the operators' message, else the near-end cue.
+ * stage display's own when operators put any there, else Program's while it
+ * syncs, by the rule every room screen follows (see live-screen-sync). The banner is the operators' message, else the near-end cue.
  */
 
 type SessionTime = Pick<LiveRoomSession, "startAt" | "endAt" | "timeZone">;
@@ -57,6 +63,12 @@ export interface LiveTimerGraphicText {
   /** An agenda session timer before its session starts: the time until it does. */
   startsInMs: number | null;
   kind: LiveTimer["kind"];
+  /** The time the graphic shows, for a timer that counts; null for a clock. */
+  shownMs: number | null;
+  /** The text at its most compact, for a timer that shares the screen with a question or a poll. */
+  compactText: string;
+  /** How much of a countdown's length has gone, 0 to 1, and 1 once over; null for a timer with no length. */
+  spentFraction: number | null;
 }
 
 /** A timer graphic's reading, the same in the overlay graphics and on the stage display. */
@@ -70,40 +82,46 @@ export function liveTimerGraphicText(
   const before = reading.startsInMs !== null;
   const name = graphic.showLabel ? (graphic.label ?? timer.name) : null;
   const counts = liveTimerCounts(timer);
+  const shownMs = counts ? liveTimerShownMs(timer, graphic, session, now) : null;
+  const clock = format24HourClockInZone(now, session.timeZone);
+  const total = counts && !countsUp(timer) ? liveTimerTotalMs(timer, session) : null;
   return {
     timerId: timer.id,
     name,
     label: before ? (name ? `${name} starts in` : "Starts in") : name,
     // A clock reads the event's time of day on the same clock as the countdowns beside it.
-    text: counts
-      ? formatLiveTimer(liveTimerShownMs(timer, graphic, session, now), graphic.format, graphic.customFormat)
-      : format24HourClockInZone(now, session.timeZone),
+    text: shownMs === null ? clock : formatLiveTimer(shownMs, graphic.format, graphic.customFormat),
+    compactText:
+      shownMs === null
+        ? clock
+        : graphic.format === "clock"
+          ? formatLiveDurationCompact(shownMs)
+          : formatLiveTimer(shownMs, graphic.format, graphic.customFormat),
     // A start coming up is no warning.
     tone: before ? undefined : liveTimerTone(timer, reading.valueMs, graphic),
     running: reading.running,
     remainingMs: counts && !countsUp(timer) ? reading.valueMs : null,
     startsInMs: reading.startsInMs,
     kind: timer.kind,
+    shownMs,
+    // Before its session starts none of it has gone.
+    spentFraction: before ? 0 : total ? Math.min(1, Math.max(0, 1 - reading.valueMs / total)) : null,
   };
 }
 
 /**
- * The countdowns the stage display shows: its own timer graphics, else, like
- * its question and poll, those on Program. A clock is left out: the top row
- * always reads the time of day.
+ * The countdowns the stage display shows of the timers on it, its own or,
+ * while it syncs, Program's. A clock is left out: the top row always reads
+ * the time of day.
  */
 export function liveStageDisplayGraphics(
-  own: Pick<LiveStage, "timerGraphics">,
-  program: Pick<LiveStage, "timerGraphics">,
+  shown: Pick<LiveStage, "timerGraphics">,
   timers: readonly LiveTimer[],
 ): LiveTimerGraphic[] {
-  const countdowns = (graphics: readonly LiveTimerGraphic[]) =>
-    graphics.filter((graphic) => {
-      const timer = timers.find((entry) => entry.id === graphic.timerId);
-      return timer !== undefined && liveTimerCounts(timer);
-    });
-  const pinned = countdowns(own.timerGraphics);
-  return pinned.length ? pinned : countdowns(program.timerGraphics);
+  return shown.timerGraphics.filter((graphic) => {
+    const timer = timers.find((entry) => entry.id === graphic.timerId);
+    return timer !== undefined && liveTimerCounts(timer);
+  });
 }
 
 export type LiveStageTimer = LiveTimerGraphicText & { size: "large" | "small" };
@@ -113,6 +131,8 @@ export type LiveStageContent =
       kind: "question";
       /** The question being answered; null when only the next one is lined up. */
       question: LiveStageQuestion | null;
+      /** Whom the question being answered is for, when its asker named someone. */
+      addressee: string | null;
       onAir: boolean;
       next: { question: LiveStageQuestion; votes: number | null } | null;
     }
@@ -121,7 +141,8 @@ export type LiveStageContent =
 export type LiveStageMain =
   | { kind: "empty" }
   | { kind: "timers"; timers: LiveStageTimer[] }
-  | { kind: "content"; timer: LiveStageTimer | null; content: LiveStageContent }
+  /** A question or a poll beside the timers that end first, at most two, each at its most compact. */
+  | { kind: "content"; timers: LiveStageTimer[]; content: LiveStageContent }
   | { kind: "overtime"; timer: LiveStageTimer }
   | { kind: "break"; timer: LiveStageTimer };
 
@@ -149,11 +170,13 @@ export interface LiveStageDisplayPlan {
 }
 
 export interface LiveStageDisplayInput {
-  session: Pick<LiveRoomSession, "title" | "startAt" | "endAt" | "timeZone" | "credits">;
+  session: Pick<LiveRoomSession, "title" | "startAt" | "endAt" | "timeZone" | "credits" | "roomOutputs">;
   /** The stage display's own composition: what operators pinned to it. */
   own: LiveStage;
   /** What is on air. */
   program: LiveStage;
+  /** Whether each room screen syncs with Program; while the stage display does, it also shows the next question. */
+  screenSync: LiveScreenSync;
   /** The question lined up in Preview. */
   next: LiveStageQuestion | null;
   /** Its votes, when this screen knows them. */
@@ -171,15 +194,36 @@ export interface LiveStageDisplayInput {
 const endsBefore = (left: LiveTimerGraphicText, right: LiveTimerGraphicText) =>
   (left.remainingMs ?? Number.POSITIVE_INFINITY) - (right.remainingMs ?? Number.POSITIVE_INFINITY);
 
+/** The stage display's composition: its own, with Program's where it syncs. */
+const stageDisplayShown = (input: LiveStageDisplayInput): LiveStage =>
+  liveScreenComposition(LIVE_SPEAKER_OUTPUT_KEY, {
+    own: input.own,
+    program: input.program,
+    sync: input.screenSync,
+    timers: input.timers,
+    outputs: liveRoomOutputs(input.session),
+  });
+
 function content(input: LiveStageDisplayInput): LiveStageContent | null {
-  const { own, program, polls } = input;
-  const { current: question, next: lined } = liveStageDisplayQuestions(own, program, input.next);
+  const { program, polls } = input;
+  const shown = stageDisplayShown(input);
+  const { current: question, next: lined } = liveStageDisplayQuestions(
+    shown,
+    liveScreenSyncs(input.screenSync, liveRoomOutputs(input.session), LIVE_SPEAKER_OUTPUT_KEY) ? input.next : null,
+  );
   const next = lined ? { question: lined, votes: input.nextVotes } : null;
-  if (question) return { kind: "question", question, onAir: program.question?.id === question.id, next };
-  const pollId = own.poll?.id ?? program.poll?.id;
+  if (question)
+    return {
+      kind: "question",
+      question,
+      addressee: liveQuestionAddresseeName(input.session.credits, question.addressedTo),
+      onAir: program.question?.id === question.id,
+      next,
+    };
+  const pollId = shown.poll?.id;
   const poll = pollId ? polls.find((entry) => entry.id === pollId) : undefined;
   if (poll) return { kind: "poll", poll, onAir: program.poll?.id === poll.id };
-  return next ? { kind: "question", question: null, onAir: false, next } : null;
+  return next ? { kind: "question", question: null, addressee: null, onAir: false, next } : null;
 }
 
 function main(input: LiveStageDisplayInput, items: readonly LiveTimerGraphicText[]): LiveStageMain {
@@ -196,7 +240,12 @@ function main(input: LiveStageDisplayInput, items: readonly LiveTimerGraphicText
     return { kind: "break", timer: { ...large(waiting), label: "Next session starts in" } };
   const ordered = [...items].sort(endsBefore);
   const shown = content(input);
-  if (shown) return { kind: "content", timer: ordered[0] ? { ...ordered[0], size: "small" } : null, content: shown };
+  if (shown)
+    return {
+      kind: "content",
+      timers: ordered.slice(0, 2).map((item) => ({ ...item, text: item.compactText, size: "small" })),
+      content: shown,
+    };
   if (!ordered.length) return { kind: "empty" };
   // At most two, each on its own side; the one that ends first is the large one.
   const pair = new Set(ordered.slice(0, 2));
@@ -224,7 +273,7 @@ function sessionAhead(input: LiveStageDisplayInput): boolean {
 }
 
 function upcoming(input: LiveStageDisplayInput): LiveScheduleRoom | undefined {
-  const schedule = input.own.schedule ?? input.program.schedule;
+  const schedule = stageDisplayShown(input).schedule;
   const rooms = schedule?.available ? schedule.rooms : [];
   // Another room's next session is never this room's; only a screen without a room takes the first.
   return input.roomId === undefined ? rooms[0] : rooms.find((room) => room.roomId === input.roomId);
@@ -237,10 +286,11 @@ export function liveStageDisplayPlan(input: LiveStageDisplayInput): LiveStageDis
   const { session, settings, now } = input;
   const left = sessionLeftMs(input);
   const nearEnd = settings.nearEndSeconds > 0 && left !== null && left > 0 && left <= settings.nearEndSeconds * 1000;
-  const items = liveStageDisplayGraphics(input.own, input.program, input.timers)
+  const items = liveStageDisplayGraphics(stageDisplayShown(input), input.timers)
     .map((graphic) => {
       const item = liveTimerGraphicText(
-        graphic,
+        // The speaker always sees which timer is which, whether the stream shows its label or not.
+        { ...graphic, showLabel: true },
         input.timers.find((timer) => timer.id === graphic.timerId)!,
         session,
         now,

@@ -10,6 +10,7 @@ import { ButtonLink } from "../../../ui/Button";
 import { usePortalHashLocation } from "../hash-location";
 import { portalSession, profile } from "../state";
 import { AffiliationOfferCard } from "./AffiliationOfferCard";
+import { EventInvitationCards } from "./EventInvitationCards";
 
 export function AccountOnlyHome() {
   const session = portalSession.value;
@@ -27,6 +28,7 @@ export function AccountOnlyHome() {
         </PanelBody>
       </Panel>
       <AffiliationOfferCard />
+      <EventInvitationCards />
       <Panel>
         <PanelHeader title="Your account">
           {ownRecord && <ButtonLink href={usePortalHashLocation.hrefs(ownRecord)}>Open my profile</ButtonLink>}

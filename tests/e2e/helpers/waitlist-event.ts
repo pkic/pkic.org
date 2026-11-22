@@ -61,8 +61,6 @@ export async function createPortalWaitlistEvent(page: Page, slug: string, dayDat
       expectedUpdatedAt: created.event.updatedAt,
       configuration: {
         attendee: [
-          { termKey: "privacy_policy", version: "1", required: true, displayText: "I agree to the privacy policy" },
-          { termKey: "code_of_conduct", version: "1", required: true, displayText: "I agree to the code of conduct" },
           { termKey: "photos_and_videos", version: "1", required: true, displayText: "I agree to photos and videos" },
         ],
         speaker: [],

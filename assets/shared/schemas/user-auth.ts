@@ -1,3 +1,4 @@
+import { ACCOUNT_POLICIES_COPY } from "../account-policies";
 import { protectsPublicAction } from "./abuse-protection";
 /** Neutral user identity authentication contracts used by every human UI. */
 import { z } from "zod";
@@ -13,6 +14,12 @@ import { publicOperation, requiresSession } from "./route-contract";
 import { sponsorCapacitySchema } from "./sponsor-access";
 import { sessionActingIdentitySchema } from "../session-acting-identity";
 import { publicStaffCapacitySchema } from "./staff-capacity";
+import { screensWorkEmailDomain, workEmailStepSchema } from "./work-email";
+import {
+  accountOrganizationAffiliationRequestSchema,
+  accountOrganizationAnswerSchema,
+  accountOrganizationRequiredSchema,
+} from "./account-organization";
 
 /**
  * A portal route a sign-in link may return to once the session exists: a path
@@ -21,13 +28,41 @@ import { publicStaffCapacitySchema } from "./staff-capacity";
  */
 export const portalReturnPathSchema = z
   .string()
-  .max(200)
+  .max(512)
   .regex(/^\/(?!\/)[A-Za-z0-9\-._~!$&'()*+,;=:@/%?]*$/, "Must be a portal path");
 
+/**
+ * Query keys that carry a capability: an invitation, a sign-in or a
+ * verification token. Read after decoding, so `%69nvite` is still `invite`.
+ */
+const capabilityQueryKey = /^(?:invite|token|verify)$|token$|secret$/i;
+
+/**
+ * Where an emailed sign-in link returns. The link is stored in the email
+ * outbox, and D1 holds no usable capability token, so the path never carries
+ * one: the page keeps an invitation token in the browser under the invitation
+ * id. Other query keys are page state, such as `id`, `ref`, a tab or a list
+ * filter, and stay.
+ */
+const signInReturnPathSchema = portalReturnPathSchema.refine((path) => {
+  const query = path.includes("?") ? path.slice(path.indexOf("?") + 1) : "";
+  return ![...new URLSearchParams(query).keys()].some((key) => capabilityQueryKey.test(key.trim()));
+}, "Leave the invitation token out of the return path");
+
 export const userAuthRequestSchema = emailRecoveryRequestSchema.extend({
-  returnPath: portalReturnPathSchema.optional(),
+  returnPath: signInReturnPathSchema.optional(),
 });
-export const userAuthVerifySchema = magicLinkVerifySchema;
+/** Opening a sign-in link; a work address with no organization answers account setup's organization step here. */
+export const userAuthVerifySchema = magicLinkVerifySchema.extend({
+  affiliation: accountOrganizationAffiliationRequestSchema.optional(),
+  organization: accountOrganizationAnswerSchema.optional(),
+});
+/** Starting an account: the shared work-email step, and where the link returns the person. */
+export const userSignUpRequestSchema = workEmailStepSchema.extend({
+  returnPath: signInReturnPathSchema.optional(),
+  /** Every account agrees to follow the Code of Conduct, and is shown the Privacy Policy, when it is started. */
+  acceptsAccountPolicies: z.literal(true, { error: ACCOUNT_POLICIES_COPY.required }),
+});
 
 export const userIdentitySchema = z.object({
   id: databaseIdSchema,
@@ -55,6 +90,11 @@ const userCapacityFields = {
 
 export const userAuthSessionResponseSchema = successResponseSchema.extend(userCapacityFields);
 export const userAuthEstablishedResponseSchema = userAuthSessionResponseSchema;
+/** A session, or the organization step that comes first; the step's answer is sent with the same link. */
+export const userAuthVerifyResponseSchema = z.union([
+  userAuthEstablishedResponseSchema,
+  accountOrganizationRequiredSchema,
+]);
 
 export const userAuthLogoutRequestSchema = z
   .object({
@@ -91,6 +131,25 @@ export const userAuthRequestRouteSchema = {
   },
 };
 
+export const userSignUpRouteSchema = {
+  ...protectsPublicAction("login_email", "email:manage"),
+  ...publicOperation(),
+  ...screensWorkEmailDomain(),
+  tags: ["Authentication"],
+  summary: "Start an account with an emailed link",
+  description:
+    "Sends a link that proves the address. An address that already signs in receives a sign-in link instead, so the response never says which.",
+  request: {
+    body: { content: { "application/json": { schema: userSignUpRequestSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Link request accepted.",
+      content: { "application/json": { schema: successResponseSchema } },
+    },
+  },
+};
+
 export const userAuthVerifyRouteSchema = {
   ...publicOperation(),
   tags: ["Authentication"],
@@ -100,8 +159,9 @@ export const userAuthVerifyRouteSchema = {
   },
   responses: {
     "200": {
-      description: "A single user session with all currently eligible capacities.",
-      content: { "application/json": { schema: userAuthEstablishedResponseSchema } },
+      description:
+        "A single user session with all currently eligible capacities, or the organization step a work address answers first.",
+      content: { "application/json": { schema: userAuthVerifyResponseSchema } },
     },
   },
 };

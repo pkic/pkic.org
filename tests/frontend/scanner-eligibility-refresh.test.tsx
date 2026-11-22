@@ -6,7 +6,13 @@ import { useEligibilityManifest } from "../../assets/ts/member-flows/portal/sect
 import type { ScannerEpoch } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-device-ledger";
 import { SCANNER_ELIGIBILITY_REFRESH_MS } from "../../assets/shared/event-offline-expiry";
 import { ScannerSyncStatus } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/ScannerPreparationStatus";
-const mocks = vi.hoisted(() => ({ prepare: vi.fn(async (..._args: unknown[]) => ({ refreshError: "" })) }));
+const mocks = vi.hoisted(() => ({
+  prepare: vi.fn(
+    async (..._args: unknown[]): Promise<{ refreshError: string; validUntil?: number; retryAfterMs?: number }> => ({
+      refreshError: "",
+    }),
+  ),
+}));
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/eligibility-manifest", () => ({
   prepareEligibilityManifest: mocks.prepare,
 }));
@@ -36,11 +42,13 @@ function Scanner({
   syncing = false,
   scannerEpoch = epoch,
   roomId = null,
+  includeBadgeNames = false,
 }: {
   collector?: boolean;
   syncing?: boolean;
   scannerEpoch?: ScannerEpoch;
   roomId?: string | null;
+  includeBadgeNames?: boolean;
 }) {
   const state = useEligibilityManifest({
     slug: "synthetic",
@@ -51,6 +59,7 @@ function Scanner({
     epoch: scannerEpoch,
     roomId,
     collector,
+    includeBadgeNames,
     onPreparationClosed: preparationClosed,
   });
   current = state;
@@ -77,27 +86,55 @@ afterEach(async () => {
   permissionChanged.mockReset();
   preparationClosed.mockReset();
   vi.useRealTimers();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   mocks.prepare.mockReset().mockResolvedValue({ refreshError: "" });
 });
-it("refreshes well before the day expires and immediately after reconnect or focus", async () => {
+it.each([0, 0.5, 0.999])(
+  "refreshes within the staggered interval and immediately after reconnect or focus (random: %s)",
+  async (random) => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(random);
+    vi.stubGlobal("navigator", { onLine: true });
+    await act(async () => render(<Scanner />, host));
+    expect(mocks.prepare).toHaveBeenCalledOnce();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SCANNER_ELIGIBILITY_REFRESH_MS - 1);
+    });
+    expect(mocks.prepare).toHaveBeenCalledOnce();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_001);
+    });
+    expect(mocks.prepare).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+    expect(mocks.prepare).toHaveBeenCalledTimes(3);
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(mocks.prepare).toHaveBeenCalledTimes(4);
+  },
+);
+it("backs off automatic roster refresh after a rate limit while retaining prepared data", async () => {
   vi.useFakeTimers();
   vi.stubGlobal("navigator", { onLine: true });
+  mocks.prepare.mockResolvedValueOnce({ refreshError: "Badge refresh failed (HTTP 429).", retryAfterMs: 300_000 });
   await act(async () => render(<Scanner />, host));
   expect(mocks.prepare).toHaveBeenCalledOnce();
+  expect(current.eligibilityManifest.current).not.toBeNull();
   await act(async () => {
-    await vi.advanceTimersByTimeAsync(SCANNER_ELIGIBILITY_REFRESH_MS);
-  });
-  expect(mocks.prepare).toHaveBeenCalledTimes(2);
-  await act(async () => {
-    window.dispatchEvent(new Event("online"));
-  });
-  expect(mocks.prepare).toHaveBeenCalledTimes(3);
-  await act(async () => {
+    await vi.advanceTimersByTimeAsync(240_000);
     window.dispatchEvent(new Event("focus"));
   });
-  expect(mocks.prepare).toHaveBeenCalledTimes(4);
+  expect(mocks.prepare).toHaveBeenCalledOnce();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(60_001);
+    window.dispatchEvent(new Event("focus"));
+  });
+  expect(mocks.prepare).toHaveBeenCalledTimes(2);
 });
+
 it("restores offline checks from storage without attempting a network refresh", async () => {
   vi.stubGlobal("navigator", { onLine: false });
   await act(async () => render(<Scanner collector />, host));
@@ -110,6 +147,7 @@ it("restores offline checks from storage without attempting a network refresh", 
     null,
     "cache",
     expect.any(Function),
+    false,
   );
   await act(async () => {
     window.dispatchEvent(new Event("focus"));
@@ -263,7 +301,7 @@ it("stops refreshing a closed session until the next epoch while allowing upload
   expect(current.manifestError).toBe(message);
   await act(async () => syncButton().click());
   await act(async () => {
-    await vi.advanceTimersByTimeAsync(SCANNER_ELIGIBILITY_REFRESH_MS);
+    await vi.advanceTimersByTimeAsync(SCANNER_ELIGIBILITY_REFRESH_MS + 30_000);
     window.dispatchEvent(new Event("online"));
     window.dispatchEvent(new Event("focus"));
     document.dispatchEvent(new Event("visibilitychange"));
@@ -297,4 +335,77 @@ it("offers closing recovery for a frozen local epoch", async () => {
   await act(async () => render(<Scanner scannerEpoch={{ ...epoch, state: "closing" }} />, host));
   expect(current.closedMessage).toMatch(/retry closing/i);
   expect(mocks.prepare).not.toHaveBeenCalled();
+});
+
+it("expires prepared badge names at their deadline without focus or refresh events", async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal("navigator", { onLine: false });
+  const deadline = Date.now() + 1000;
+  mocks.prepare.mockResolvedValueOnce({ refreshError: "", validUntil: deadline });
+  await act(async () => render(<Scanner collector includeBadgeNames />, host));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  expect(current.manifestReady).toBe(true);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(999);
+  });
+  expect(current.manifestReady).toBe(true);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1);
+  });
+  expect(current.manifestReady).toBe(false);
+  expect(current.manifestError).toMatch(/names have expired/i);
+  expect(host.textContent).toMatch(/names have expired/i);
+  expect(mocks.prepare).toHaveBeenCalledOnce();
+});
+
+it("replaces expiry timers with the scanner scope and removes them on unmount", async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal("navigator", { onLine: false });
+  const startedAt = Date.now();
+  mocks.prepare.mockResolvedValueOnce({ refreshError: "", validUntil: startedAt + 1000 });
+  mocks.prepare.mockResolvedValueOnce({ refreshError: "", validUntil: startedAt + 2000 });
+  await act(async () => render(<Scanner collector includeBadgeNames />, host));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  expect(vi.getTimerCount()).toBe(2);
+  await act(async () =>
+    render(<Scanner collector includeBadgeNames roomId="22222222-2222-4222-8222-222222222222" />, host),
+  );
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  expect(vi.getTimerCount()).toBe(2);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000);
+  });
+  expect(current.manifestReady).toBe(true);
+  expect(current.manifestError).toBe("");
+  await act(async () => render(null, host));
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it("bounds long event-window expiry timers and schedules the remaining duration", async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal("navigator", { onLine: false });
+  const startedAt = Date.now();
+  const duration = 32 * 24 * 60 * 60_000;
+  const setTimeout = vi.spyOn(window, "setTimeout");
+  mocks.prepare.mockResolvedValueOnce({ refreshError: "", validUntil: startedAt + duration });
+  await act(async () => render(<Scanner collector includeBadgeNames />, host));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  const first = setTimeout.mock.calls.find((call) => call[1] === 2_147_483_647);
+  expect(first).toBeDefined();
+  vi.setSystemTime(startedAt + 2_147_483_647);
+  await act(async () => (first![0] as () => void)());
+  expect(current.manifestReady).toBe(true);
+  const remaining = setTimeout.mock.calls.find((call) => call[1] === duration - 2_147_483_647);
+  expect(remaining).toBeDefined();
+  vi.setSystemTime(startedAt + duration);
+  await act(async () => (remaining![0] as () => void)());
+  expect(current.manifestReady).toBe(false);
 });

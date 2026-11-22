@@ -43,12 +43,7 @@ export const LIVE_GRAPHICS: ReadonlyArray<{
   applies?: (context: LiveGraphicContext) => boolean;
   Row: ComponentType<LiveGraphicContext>;
 }> = [
-  {
-    id: "panel",
-    // A line-up of every speaker only means something when there is more than one.
-    applies: ({ targets }) => targets.state.session.credits.length > 1,
-    Row: ({ targets }) => <LivePanelistControls targets={targets} />,
-  },
+  { id: "session", Row: ({ targets }) => <LivePanelistControls targets={targets} /> },
   { id: "ticker", Row: ({ targets }) => <LiveTickerControls targets={targets} /> },
   {
     id: "check-in",

@@ -74,11 +74,15 @@ afterEach(() => {
 });
 
 describe("event app tab selection", () => {
-  it("gives a registered attendee My agenda and Ticket, and keeps everything else under More", () => {
+  it("gives a registered attendee My agenda, the virtual room and Ticket, and keeps everything else under More", () => {
     const { tabs, more } = navigation(registeredParticipant);
-    expect(labels(tabs)).toEqual(["Home", "Agenda", "My agenda", "Ticket"]);
-    expect(ids(more)).toEqual(["registration", "virtual", "calendar", "promotion", "venue", "event-page"]);
-    expect(more.find((item) => item.id === "virtual")?.href).toBe("#/events/summit/virtual");
+    expect(labels(tabs)).toEqual(["Home", "My agenda", "Virtual room", "Ticket"]);
+    expect(tabs.find((tab) => tab.id === "virtual")?.href).toBe("#/events/summit/virtual");
+    // The whole agenda is one step from My agenda, and listed first under More.
+    expect(ids(more)).toEqual(["program", "registration", "calendar", "promotion", "venue", "event-page"]);
+    expect(more.find((item) => item.id === "program")?.href).toBe("#/events/summit/agenda");
+    expect(eventAppTabFor("program", tabs)).toBe("agenda");
+    expect(eventAppTabFor("virtual", tabs)).toBe("virtual");
     expect(more.find((item) => item.id === "registration")?.href).toBe(
       `#/events/summit/registrations/${participantRegistrationId}`,
     );
@@ -114,8 +118,8 @@ describe("event app tab selection", () => {
     };
     expect(labels(navigation({ ...registeredParticipant, ...running, viewer: online }).tabs)).toEqual([
       "Home",
-      "Agenda",
       "My agenda",
+      "Virtual room",
       "Ticket",
     ]);
   });
@@ -129,12 +133,23 @@ describe("event app tab selection", () => {
 
   it("puts the lead scanner on a sponsor representative's bar and moves My agenda to More", () => {
     authority([leadGrant]);
-    const { tabs, more } = navigation({ ...registeredParticipant, scannerAccess: sponsorDiscovery });
-    expect(labels(tabs)).toEqual(["Home", "Agenda", "Leads", "Ticket"]);
+    const { tabs, more } = navigation({
+      ...registeredParticipant,
+      scannerAccess: sponsorDiscovery,
+      sponsorLeadAccess: true,
+    });
+    expect(labels(tabs)).toEqual(["Home", "Agenda", "Scanner", "Ticket"]);
     expect(tabs.find((tab) => tab.id === "lead-scanner")?.href).toBe(`#/events/summit/sponsors/${sponsorId}/scanner`);
     expect(tabs.find((tab) => tab.id === "lead-scanner")?.icon).toBe("leads");
     expect(ids(more)).toContain("agenda");
     expect(ids(more)).not.toContain("lead-scanner");
+    expect(more.find((item) => item.id === "sponsor-leads")?.href).toBe("#/events/summit/leads");
+  });
+
+  it("offers sponsor lead history only when the event grants lead access", () => {
+    const { more } = navigation({ sponsorLeadAccess: true });
+    expect(more.find((item) => item.id === "sponsor-leads")?.label).toBe("Leads");
+    expect(ids(navigation().more)).not.toContain("sponsor-leads");
   });
 
   it("lets a representative of several sponsors choose the sponsor first", () => {
@@ -146,7 +161,7 @@ describe("event app tab selection", () => {
       },
     });
     // Personal agenda and calendar tools require a confirmed event registration.
-    expect(labels(tabs)).toEqual(["Home", "Agenda", "Leads"]);
+    expect(labels(tabs)).toEqual(["Home", "Agenda", "Scanner"]);
     expect(tabs.find((tab) => tab.id === "lead-scanner")?.href).toBe("#/events/summit/lead-scanner");
   });
 
@@ -171,12 +186,15 @@ describe("event app tab selection", () => {
     expect(ids(more)).not.toContain("lead-scanner");
   });
 
-  it("adds the organizer workspace only for a reader who can open the owning group", () => {
+  it("adds the organizer workspace only for a reader who can open the owning group or this event in it", () => {
     const managed = { ...participantEventFixture(), ownerGroupId: groupId };
     portalSession.value = { ...portalSessionFixture({ member: true }), eventParticipation: true };
     const workspace = eventAppNavigation(managed, portalSession.value).more.find((item) => item.id === "workspace");
     expect(workspace?.href).toBe(`#/groups/${groupId}/events/${participantEventId}`);
+    // The event's team opens it as the group's guest; a team grant on another event, or a sponsor's, does not.
     authority([badgeGrant]);
+    expect(ids(eventAppNavigation(managed, portalSession.value).more)).toContain("workspace");
+    authority([{ ...badgeGrant, contextId: "another-event" }, leadGrant]);
     expect(ids(eventAppNavigation(managed, portalSession.value).more)).not.toContain("workspace");
   });
 
@@ -221,8 +239,8 @@ describe("event app More sheet", () => {
     expect(document.getElementById(sheet.getAttribute("aria-labelledby")!)?.textContent).toBe("More");
     const tiles = [...sheet.querySelectorAll<HTMLAnchorElement>("[data-event-more]")];
     expect(tiles.map((tile) => tile.textContent)).toEqual([
+      "Agenda",
       "Registration",
-      "Virtual room",
       "Calendar and reminders",
       "Share & Invite",
       "Venue & links",
@@ -259,7 +277,7 @@ describe("event app More sheet", () => {
   it("opens on a swipe up the tab bar and closes on a swipe down its handle", async () => {
     const { more, sheet } = await renderAttendee();
     const bar = host.querySelector(".pk-app-tabbar--event")!;
-    const tab = bar.querySelector('[data-app-tab="program"]')!;
+    const tab = bar.querySelector('[data-app-tab="virtual"]')!;
     // A short or sideways movement stays a tap.
     await act(() => {
       pointer(tab, "pointerdown", 800);
@@ -310,7 +328,7 @@ describe("event app More sheet", () => {
     expect([...bar.querySelectorAll("a, button")].map((tab) => tab.textContent)).toEqual([
       "Home",
       "Agenda",
-      "Leads",
+      "Scanner",
       "Ticket",
       "More",
     ]);

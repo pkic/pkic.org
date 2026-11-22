@@ -19,8 +19,10 @@ import {
   isRepresentativeRoleId,
   type RepresentativeRoleId,
 } from "../../../../assets/shared/schemas/representative-roles";
+import { organizationContactRoleActivePredicate } from "../../auth/organization-contact-role";
 
 export { REPRESENTATIVE_ROLE_IDS, isRepresentativeRoleId };
+export { organizationContactRoleActivePredicate };
 export type { RepresentativeRoleId };
 
 /**
@@ -147,25 +149,6 @@ export function buildRevokeRepresentativeRoleStatement(
 
 interface RoleHolderRow {
   user_id: string;
-}
-
-/**
- * The canonical active-holder predicate shared by role resolution and read-model
- * projections. Keep the role, user, and representative aliases explicit because
- * callers use this in both ordinary queries and derived-table projections.
- */
-export function organizationContactRoleActivePredicate(
-  roleAlias = "ur",
-  userAlias = "u",
-  identityAlias = "identity",
-  nowPlaceholder = "?",
-): string {
-  return `${roleAlias}.revoked_at IS NULL
-       AND ${userAlias}.active = 1
-       AND ${identityAlias}.started_at IS NOT NULL
-       AND ${identityAlias}.ended_at IS NULL
-       AND ${identityAlias}.blocked_at IS NULL
-       AND (${roleAlias}.expires_at IS NULL OR datetime(${roleAlias}.expires_at) > datetime(${nowPlaceholder}))`;
 }
 
 /**

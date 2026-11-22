@@ -1,84 +1,274 @@
+/*
+ * The session's speakers on the conference board. A row sets each person as a
+ * column, photo over name over titles; a grid and a list set the photo beside
+ * the name. Sizes step down with the number of people, so two speakers sit
+ * large and a panel of six still reads from the back of the room.
+ */
 @layer components {
-  .pk-live-panelists {
-    container-type: inline-size;
-    position: absolute;
-    inset-inline-start: 120px;
-    inset-block-start: 120px;
-    inline-size: 1680px;
-    color: var(--pk-on-solid);
-    padding: var(--pk-4);
+  .pk-live-panelists__heading {
+    display: grid;
+    align-content: start;
+    justify-items: start;
+    gap: 28px;
   }
-  .pk-live-panelists__session {
-    margin: 0 0 var(--pk-6);
-    text-align: start;
-    font-size: clamp(var(--pk-agenda-type-8), 3.5cqw, calc(var(--pk-agenda-type-20) * 2.4));
-    line-height: 1.15;
+  .pk-live-board:is([data-shape="tall"], [data-shape="strip"]) .pk-live-panelists__session {
+    font-size: var(--pk-live-board-headline-type-compact);
+  }
+  /* The abstract under the title, clamped to the lines the board's shape holds. */
+  .pk-live-panelists__abstract {
+    --abstract-lines: 5;
+    display: -webkit-box;
+    flex: none;
+    max-inline-size: 64ch;
+    margin: 0;
+    overflow: hidden;
+    color: var(--pk-pqc-on-field-muted);
+    font-size: calc(var(--pk-live-question-byline-type) * 1.1);
+    font-weight: 500;
+    line-height: 1.4;
+    text-wrap: pretty;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: var(--abstract-lines);
+    line-clamp: var(--abstract-lines);
+  }
+  .pk-live-board[data-shape="tall"] .pk-live-panelists__abstract {
+    --abstract-lines: 8;
+  }
+  /* A thin strip has no room for it beside the people. */
+  .pk-live-board[data-shape="strip"] .pk-live-panelists__abstract {
+    display: none;
+  }
+  /*
+   * Centered in the board's height: title only, and in a column beside the
+   * camera, so neither leaves the bottom of the board empty. Title only sets
+   * the title large, the abstract under it with more lines.
+   */
+  :is(.pk-live-panelists--title, .pk-live-board[data-shape="tall"].pk-live-panelists) .pk-live-panelists__heading {
+    margin-block-start: auto;
+  }
+  :is(.pk-live-panelists--title, .pk-live-board[data-shape="tall"].pk-live-panelists) > :last-child {
+    margin-block-end: auto;
+  }
+  .pk-live-board:not([data-shape="strip"]).pk-live-panelists--title .pk-live-panelists__session {
+    font-size: calc(var(--pk-live-board-headline-type) * 1.4);
+  }
+  .pk-live-board:not([data-shape="strip"]).pk-live-panelists--title .pk-live-panelists__abstract {
+    --abstract-lines: 7;
+  }
+  /* A thin strip across the frame: the session beside the row of people, under the eyebrow. */
+  .pk-live-board[data-shape="strip"].pk-live-panelists {
+    display: grid;
+    grid-template-columns: minmax(0, 30%) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 28px 72px;
+  }
+  .pk-live-board[data-shape="strip"].pk-live-panelists .pk-live-board__head {
+    grid-column: 1 / -1;
+  }
+  .pk-live-board[data-shape="strip"] .pk-live-panelists__credits {
+    margin-block-start: 0;
   }
   .pk-live-panelists__credits {
+    --headshot: 168px;
+    --name-type: 42px;
+    --title-type: 28px;
+    --gap: 56px;
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--pk-6);
+    gap: 40px var(--gap);
+    margin-block-start: 24px;
+    min-block-size: 0;
   }
   .pk-live-panelists__speaker {
     display: flex;
     align-items: center;
-    gap: var(--pk-5);
+    gap: 28px;
     min-inline-size: 0;
   }
   .pk-live-panelists__headshot {
     position: relative;
-    flex-shrink: 0;
+    flex: none;
+    padding: 6px;
+    border-radius: 50%;
+    background: conic-gradient(var(--pk-pqc-green), var(--pk-pqc-blue), var(--pk-pqc-orange), var(--pk-pqc-green));
   }
   .pk-live-panelists__headshot .pk-avatar {
-    inline-size: clamp(var(--pk-4), 12cqw, calc(var(--pk-4) * 10));
-    block-size: clamp(var(--pk-4), 12cqw, calc(var(--pk-4) * 10));
-    background: color-mix(in srgb, var(--pk-on-solid) 15%, transparent);
-    color: var(--pk-on-solid);
+    --pk-avatar-size: var(--headshot);
+    inline-size: var(--headshot);
+    block-size: var(--headshot);
+    box-shadow: 0 0 0 5px var(--pk-pqc-forest);
+    background: var(--pk-pqc-blue-deep);
+    color: var(--pk-pqc-on-field);
   }
   .pk-live-panelists__headshot .pk-avatar__initials {
-    color: var(--pk-on-solid);
-    font-size: clamp(var(--pk-text-xl), 4cqw, var(--pk-text-3xl));
-  }
-  .pk-live-panelists__moderator {
-    position: absolute;
-    inset-block-end: calc(var(--pk-1) * -1);
-    inset-inline-start: 50%;
-    transform: translateX(-50%);
-    padding: 0.3cqw 0.5cqw;
-    background: var(--pk-palette-orange);
-    color: var(--pk-on-solid);
-    font-size: min(var(--pk-agenda-type-11), 0.7cqw);
-    font-weight: 800;
-    white-space: nowrap;
+    color: var(--pk-pqc-on-field);
+    font-size: calc(var(--headshot) * 0.34);
+    font-weight: 900;
   }
   .pk-live-panelists__info {
+    display: grid;
+    gap: 10px;
     min-inline-size: 0;
     overflow-wrap: anywhere;
   }
+  /* A badge across the foot of the moderator's photo, so every name stays on one line with the others. */
+  .pk-live-panelists__moderator {
+    position: absolute;
+    inset-block-end: 0;
+    inset-inline-start: 50%;
+    margin: 0;
+    padding: 0.3em 0.7em;
+    transform: translate(-50%, 35%);
+    background: var(--pk-pqc-on-field);
+    color: var(--pk-pqc-forest);
+    font-family: var(--pk-font-mono);
+    font-size: calc(var(--title-type) * 0.62);
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    line-height: 1.2;
+    text-transform: uppercase;
+    white-space: nowrap;
+    box-shadow: 0 0 0 3px var(--pk-pqc-forest);
+  }
   .pk-live-panelists__name {
+    margin: 0;
+    font-size: var(--name-type);
     font-weight: 800;
-    font-size: clamp(var(--pk-agenda-type-8), 2.4cqw, calc(var(--pk-agenda-type-20) * 1.6));
-    line-height: 1.15;
+    line-height: 1.1;
   }
+  /* Clips a title rolling to a person's next identity. */
   .pk-live-panelists__title {
-    margin-block-start: var(--pk-2);
-    font-size: clamp(var(--pk-agenda-type-8), 1.5cqw, var(--pk-agenda-type-20));
-    line-height: 1.35;
+    overflow: hidden;
+    color: var(--pk-pqc-on-field-muted);
+    font-size: var(--title-type);
+    font-weight: 500;
+    line-height: 1.3;
   }
-  .pk-live-panelists[data-layout="list"] {
-    inline-size: 640px;
+
+  /* A row: one column each at the same spacing, the moderator last and named by the badge on their photo. */
+  .pk-live-panelists__credits[data-arrangement="row"] {
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
   }
-  .pk-live-panelists[data-layout="list"] .pk-live-panelists__credits {
-    grid-template-columns: 1fr;
-  }
-  .pk-live-panelists[data-layout="panel"] .pk-live-panelists__credits {
-    display: flex;
-    justify-content: center;
-    gap: 2cqw;
-  }
-  .pk-live-panelists[data-layout="panel"] .pk-live-panelists__speaker {
-    flex: 1 1 0;
+  .pk-live-panelists__credits[data-arrangement="row"] .pk-live-panelists__speaker {
     flex-direction: column;
-    text-align: start;
+    align-items: flex-start;
+  }
+  .pk-live-panelists__credits[data-arrangement="row"][data-count="1"],
+  .pk-live-panelists__credits[data-arrangement="row"][data-count="2"] {
+    --headshot: 232px;
+    --name-type: 52px;
+    --title-type: 32px;
+    grid-auto-columns: minmax(0, 560px);
+    --gap: 96px;
+  }
+  .pk-live-panelists__credits[data-arrangement="row"][data-count="5"],
+  .pk-live-panelists__credits[data-arrangement="row"][data-count="6"] {
+    --headshot: 128px;
+    --name-type: 34px;
+    --title-type: 24px;
+    --gap: 40px;
+  }
+
+  /* A grid: two columns, three for a full panel on a wide board, the photo beside the name. */
+  .pk-live-panelists__credits[data-arrangement="grid"] {
+    --headshot: 120px;
+    --name-type: 38px;
+    --title-type: 26px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 36px 48px;
+  }
+  .pk-live-board[data-shape="wide"]
+    .pk-live-panelists__credits[data-arrangement="grid"]:is([data-count="5"], [data-count="6"]) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  /* A list: one person under the other, smaller as the list grows. */
+  .pk-live-panelists__credits[data-arrangement="rows"] {
+    --headshot: 112px;
+    --name-type: 40px;
+    --title-type: 27px;
+    gap: 28px;
+  }
+  .pk-live-panelists__credits[data-arrangement="rows"]:is([data-count="4"], [data-count="5"], [data-count="6"]) {
+    --headshot: 76px;
+    --name-type: 32px;
+    --title-type: 23px;
+    gap: 18px;
+  }
+  .pk-live-panelists__credits[data-arrangement="rows"]:is([data-count="4"], [data-count="5"], [data-count="6"])
+    .pk-live-panelists__info {
+    gap: 4px;
+  }
+  .pk-live-panelists__credits[data-arrangement="rows"]:is([data-count="5"], [data-count="6"]) {
+    --headshot: 64px;
+    --name-type: 30px;
+    --title-type: 22px;
+    gap: 12px;
+  }
+  /*
+   * A column beside the camera is tall and narrow, so its list takes the
+   * height the board has: larger photos and names, and fewer abstract lines
+   * once four or more people share the column.
+   */
+  .pk-live-board[data-shape="tall"] .pk-live-panelists__credits[data-arrangement="rows"] {
+    --headshot: 168px;
+    --name-type: 50px;
+    --title-type: 33px;
+    gap: 40px;
+    margin-block-start: 40px;
+  }
+  .pk-live-board[data-shape="tall"] .pk-live-panelists__credits[data-arrangement="rows"][data-count="4"] {
+    --headshot: 132px;
+    --name-type: 44px;
+    --title-type: 30px;
+    gap: 30px;
+  }
+  .pk-live-board[data-shape="tall"]
+    .pk-live-panelists__credits[data-arrangement="rows"]:is([data-count="5"], [data-count="6"]) {
+    --headshot: 112px;
+    --name-type: 40px;
+    --title-type: 28px;
+    gap: 22px;
+  }
+  /* Under an abstract, a full panel steps down once more so the column still holds everyone. */
+  .pk-live-board[data-shape="tall"]
+    .pk-live-panelists__abstract
+    + .pk-live-panelists__credits[data-arrangement="rows"]:is([data-count="5"], [data-count="6"]) {
+    --headshot: 96px;
+    --name-type: 38px;
+    --title-type: 26px;
+    gap: 18px;
+  }
+  .pk-live-board[data-shape="tall"] .pk-live-panelists__abstract:has(+ .pk-live-panelists__credits[data-count="4"]) {
+    --abstract-lines: 4;
+  }
+  .pk-live-board[data-shape="tall"]
+    .pk-live-panelists__abstract:has(+ .pk-live-panelists__credits:is([data-count="5"], [data-count="6"])) {
+    --abstract-lines: 3;
+  }
+  /*
+   * A photo in a list is too small to carry the badge, so the badge follows
+   * the moderator's name instead. Only one of the two ever shows.
+   */
+  .pk-live-panelists__role {
+    display: none;
+  }
+  .pk-live-panelists__credits[data-arrangement="rows"] .pk-live-panelists__headshot .pk-live-panelists__moderator {
+    display: none;
+  }
+  .pk-live-panelists__credits[data-arrangement="rows"] .pk-live-panelists__role {
+    display: inline-block;
+    margin-inline-start: 0.6em;
+    padding: 0.3em 0.7em;
+    background: var(--pk-pqc-on-field);
+    color: var(--pk-pqc-forest);
+    font-family: var(--pk-font-mono);
+    font-size: calc(var(--title-type) * 0.62);
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    line-height: 1.2;
+    text-transform: uppercase;
+    vertical-align: middle;
+    white-space: nowrap;
   }
 }

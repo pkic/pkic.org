@@ -76,7 +76,6 @@ describe("portal event management flows", () => {
     expect(Array.from(profileSelect.options).map((option) => option.value)).toEqual(["conference", "workshop"]);
     expect(create.textContent).toContain("Configured workshop profile");
     expect(create.textContent).not.toContain("D1 meeting label");
-    expect(controlFor(create, "Peer invitation limit").value).toBe("5");
 
     await typeInto(controlFor(create, "Event name"), "Architecture workshop");
     await settle();
@@ -99,7 +98,7 @@ describe("portal event management flows", () => {
     expect(onSaved).toHaveBeenCalledWith(responseEvent);
 
     const edit = mount(<GroupEventEditor groupId={GROUP_ID} event={responseEvent} onSaved={onSaved} />);
-    await typeInto(controlFor(edit, "Peer invitation limit"), "8");
+    await typeInto(controlFor(edit, "City"), "Austin");
     await settle();
     await submitForm(edit);
     await settle();
@@ -108,9 +107,8 @@ describe("portal event management flows", () => {
     expect(updated?.url.pathname).toBe(`/api/v1/groups/${GROUP_ID}/events/${responseEvent.id}/settings`);
     expect(groupEventSettingsUpdateSchema.parse(updated?.body)).toMatchObject({
       expectedUpdatedAt: responseEvent.updatedAt,
-      inviteLimitAttendee: 8,
       links: responseEvent.links,
-      city: responseEvent.city,
+      city: "Austin",
       country: responseEvent.country,
     });
   });
@@ -262,7 +260,7 @@ describe("portal event management flows", () => {
     // The panel the heading titles is the region the form lives in.
     const editor = heading!.closest("section")!;
     expect(editor.querySelector("form")).not.toBeNull();
-    expect(controlFor(editor, "Peer invitation limit").value).toBe(String(responseEvent.inviteLimitAttendee));
+    expect(controlFor(editor, "Visibility").value).toBe(responseEvent.visibility);
     // The slug is fixed once the event exists, and the control says so itself
     // rather than only looking greyed out.
     const general = mount(

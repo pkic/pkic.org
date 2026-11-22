@@ -62,6 +62,45 @@ it("shows a speaker as the identity they act as, and lines them up in Preview fr
   });
 });
 
+it("counts a speaker's further identities beside the one shown, without rolling the row", async () => {
+  const state = roomState();
+  state.session.credits = [
+    liveCreditSchema.parse({
+      key: "speaker:two",
+      name: "Sam Speaker",
+      identity: { title: "Principal architect", organization: "Example Trust" },
+      additionalIdentities: [{ title: "Co-chair", organization: "Example Working Group" }],
+    }),
+  ];
+  host = document.body.appendChild(document.createElement("div"));
+  await act(() => render(<LiveSpeakerCards targets={liveTargets(state)} />, host!));
+  const row = host.querySelector<HTMLButtonElement>('button[aria-label="Prepare Sam Speaker in Preview"]')!;
+  expect(row.querySelector(".pk-live-person__more")?.textContent).toBe("+1and 1 more identity");
+  expect(row.querySelector(".pk-affiliation-rotation")).toBeNull();
+});
+
+it("shows the first identity that names something when the primary one is empty", async () => {
+  const state = roomState();
+  state.session.credits = [
+    liveCreditSchema.parse({
+      key: "speaker:empty-primary",
+      name: "Sam Speaker",
+      identity: { title: null, organization: null },
+      additionalIdentities: [
+        { title: "Co-chair", organization: "Example Working Group" },
+        { title: "Advisor", organization: "Example Trust" },
+      ],
+    }),
+  ];
+  host = document.body.appendChild(document.createElement("div"));
+  await act(() => render(<LiveSpeakerCards targets={liveTargets(state)} />, host!));
+  const row = host.querySelector<HTMLButtonElement>('button[aria-label="Prepare Sam Speaker in Preview"]')!;
+  expect(row.querySelector(".pk-live-person__affiliation > span")?.textContent).toBe(
+    "Co-chair at Example Working Group",
+  );
+  expect(row.querySelector(".pk-live-person__more")?.textContent).toBe("+1and 1 more identity");
+});
+
 it("shows a person's card with a large portrait on focus and on a tap of their photo", async () => {
   const state = roomState();
   state.session.credits = [
@@ -111,33 +150,53 @@ it("shows a person's card with a large portrait on focus and on a tap of their p
   expect(host.querySelector('[role="dialog"]')).toBeNull();
 });
 
-it("shows each destination's state on the row edge and toggles Program and an aux output on their own", async () => {
+it("shows Program on the row edge, a screen it was put on as a dot on the menu, and toggles Program and a screen on their own", async () => {
   const state = roomState();
   const credit = state.session.credits[0]!;
   state.stage = { ...state.stage, lowerThird: credit };
+  // The projector follows Program, so the room carried the lower third to it.
+  state.outputs = { ...state.outputs, projector: { ...EMPTY_LIVE_AUX_COMPOSITION, lowerThird: credit } };
   const sendProgram = vi.fn((_message: LiveRoomClientMessage) => true);
   host = document.body.appendChild(document.createElement("div"));
   await act(() => render(<LiveSpeakerCards targets={liveTargets(state, { sendProgram })} />, host!));
-  expect(host.querySelector(".pk-live-person")!.getAttribute("data-on-air")).toBe("program");
+  const bands = host.querySelectorAll(".pk-live-person .pk-live-tally-bands > [data-tally]");
+  expect([...bands].map((band) => band.getAttribute("data-tally"))).toEqual(["program"]);
+  const menu = () => host!.querySelector<HTMLButtonElement>(`button[aria-label="${credit.name} actions"]`)!;
+  // It is on the projector while it is live, in a scene that places a lower third: a ring, as it leaves with Program's.
+  expect(menu().querySelector('.pk-live-screen-dots > [data-tally="projector"][data-following]')).not.toBeNull();
+  expect(menu().querySelector(".pk-live-screen-dots > :not([data-following])")).toBeNull();
+  expect(menu().getAttribute("title")).toBe(
+    "Room screens and actions · on Projector because it is live\nOpen to put it on a room screen or take it off, and for its other actions.",
+  );
   const program = host.querySelector<HTMLButtonElement>(`button[aria-label="Show ${credit.name} on air"]`)!;
   expect(program.getAttribute("aria-pressed")).toBe("true");
   program.click();
   expect(sendProgram).toHaveBeenLastCalledWith({ type: "stage.lowerThird", creditKey: null, motion: "animated" });
-  await act(() =>
-    host!.querySelector<HTMLButtonElement>(`button[aria-label="Send ${credit.name} to the room's screens"]`)!.click(),
-  );
+  await act(() => menu().click());
   const projector = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemcheckbox"]')].find((item) =>
     item.textContent?.includes("Projector"),
   )!;
-  expect(projector.getAttribute("aria-checked")).toBe("false");
+  expect(projector.getAttribute("aria-checked")).toBe("true");
+  // Each screen leads with its monitor's tally color; the stage display has no place for a lower third, so it is not offered.
+  expect(projector.querySelector('.pk-live-screen-dot[data-tally="projector"]')).not.toBeNull();
+  expect(
+    document.querySelector('[role="menuitemcheckbox"] .pk-live-screen-dot[data-tally="stage-display"]'),
+  ).toBeNull();
   await act(() => projector.click());
   const aux = liveRoomClientMessageSchema.parse(sendProgram.mock.calls.at(-1)![0]);
   expect(aux).toMatchObject({
     type: "aux.set",
     output: "projector",
-    composition: { creditKey: credit.key, lowerThirdMotion: "animated" },
+    composition: { creditKey: null },
   });
   expect(sendProgram.mock.calls.some(([message]) => message.type === "preview.set")).toBe(false);
+  // Off air, a lower third the projector holds is there to stay: a dot.
+  state.stage = { ...state.stage, lowerThird: null };
+  await act(() => render(<LiveSpeakerCards targets={liveTargets(state, { sendProgram })} />, host!));
+  expect(menu().querySelector('.pk-live-screen-dots > [data-tally="projector"]:not([data-following])')).not.toBeNull();
+  expect(menu().getAttribute("title")).toBe(
+    "Room screens and actions · on Projector\nOpen to put it on a room screen or take it off, and for its other actions.",
+  );
 });
 
 it("does not show Program as pressed while another session is on air, and puts the speaker on with the first press", async () => {
@@ -154,6 +213,54 @@ it("does not show Program as pressed while another session is on air, and puts t
   expect(program.getAttribute("aria-pressed")).toBe("false");
   program.click();
   expect(sendProgram).toHaveBeenCalledWith({ type: "stage.lowerThird", creditKey: credit.key, motion: "animated" });
+});
+
+it("tints the row in Program's color while on air, Preview as well or not, and Preview's only in Preview alone", async () => {
+  const state = roomState();
+  const credit = state.session.credits[0]!;
+  const band = () =>
+    [...host!.querySelectorAll(".pk-live-person .pk-live-tally-bands > [data-tally]")].map((edge) =>
+      edge.getAttribute("data-tally"),
+    );
+  const draw = () => act(() => render(<LiveSpeakerCards targets={liveTargets(state)} />, host!));
+  host = document.body.appendChild(document.createElement("div"));
+  state.preview = { ...state.preview, lowerThird: credit };
+  await draw();
+  expect(band()).toEqual(["preview"]);
+  state.stage = { ...state.stage, lowerThird: credit };
+  await draw();
+  expect(band()).toEqual(["program"]);
+});
+
+it("names every room screen a graphic was put on by its code in that screen's color", async () => {
+  const state = roomState();
+  const credit = state.session.credits[0]!;
+  host = document.body.appendChild(document.createElement("div"));
+  await act(() => render(<LiveSpeakerCards targets={liveTargets(state)} />, host!));
+  expect(host.querySelector(".pk-live-screen-tag")).toBeNull();
+  state.outputs = { ...state.outputs, projector: { ...EMPTY_LIVE_AUX_COMPOSITION, lowerThird: credit } };
+  await act(() => render(<LiveSpeakerCards targets={liveTargets(state)} />, host!));
+  const tags = [...host.querySelectorAll<HTMLElement>(".pk-live-person .pk-live-screen-tag")];
+  expect(tags.map((tag) => [tag.textContent, tag.getAttribute("data-tally")])).toEqual([["PRJ", "projector"]]);
+  expect(tags[0]!.getAttribute("title")).toMatch(/^On Projector\n/);
+});
+
+it("shows a press to Program as working at once and sends it once until the room answers", async () => {
+  const state = roomState();
+  const credit = state.session.credits[0]!;
+  const sendProgram = vi.fn((_message: LiveRoomClientMessage) => true);
+  host = document.body.appendChild(document.createElement("div"));
+  await act(() => render(<LiveSpeakerCards targets={liveTargets(state, { sendProgram })} />, host!));
+  const program = () => host!.querySelector<HTMLButtonElement>(`button[aria-label="Show ${credit.name} on air"]`)!;
+  await act(() => program().click());
+  expect(program().getAttribute("aria-busy")).toBe("true");
+  await act(() => program().click());
+  expect(sendProgram.mock.calls.filter(([message]) => message.type === "stage.lowerThird")).toHaveLength(1);
+  state.stage = { ...state.stage, lowerThird: credit };
+  await act(() => render(<LiveSpeakerCards targets={liveTargets(state, { sendProgram })} />, host!));
+  await act(async () => undefined);
+  expect(program().getAttribute("aria-busy")).toBeNull();
+  expect(program().getAttribute("aria-pressed")).toBe("true");
 });
 
 function typeInto(input: HTMLInputElement, value: string) {
@@ -190,11 +297,19 @@ it("groups the host and moderator after the speakers, each named by their role",
   });
 });
 
-it("adds someone without an account by name alone, never a typed title, and removes an added one", async () => {
+const GRACE = addedLivePersonKey("7b0c9d5e-1a2b-4c3d-8e4f-5a6b7c8d9e02", "7b0c9d5e-1a2b-4c3d-8e4f-5a6b7c8d9f03");
+
+/** The row menu's own actions for a person, by their labels. */
+async function openActions(name: string) {
+  await act(() => host!.querySelector<HTMLButtonElement>(`button[aria-label="${name} actions"]`)!.click());
+  return [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')];
+}
+
+it("adds someone without an account by name and an optional second line, and removes an added one", async () => {
   const state = roomState();
   state.addedCredits = [
     liveCreditSchema.parse({
-      key: "added:1",
+      key: GRACE,
       name: "Grace Guest",
       identity: { title: "Engineer", organization: "Lattice Labs" },
     }),
@@ -214,25 +329,99 @@ it("adds someone without an account by name alone, never a typed title, and remo
   expect(host.querySelector('[aria-label="Added for this session"]')?.textContent).toContain(
     "Engineer at Lattice Labs",
   );
-  host.querySelector<HTMLButtonElement>('button[aria-label="Remove Grace Guest"]')!.click();
+  const actions = await openActions("Grace Guest");
+  // Her details are her identity's, so there is nothing to edit here.
+  expect(actions.map((item) => item.textContent)).toEqual(["Remove from this session"]);
+  actions[0]!.click();
   expect(liveRoomClientMessageSchema.parse(sendProgram.mock.calls.at(-1)![0])).toEqual({
     type: "credit.remove",
-    creditKey: "added:1",
+    creditKey: GRACE,
   });
 
   await act(() => host!.querySelector<HTMLButtonElement>('button[aria-label="Add person"]')!.click());
   const dialog = document.querySelector("dialog")!;
-  expect(dialog.querySelector("input[name=title]")).toBeNull();
   const confirm = () =>
     [...dialog.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Add person")!.click();
   await act(() => confirm());
   expect(dialog.textContent).toContain("Enter a name.");
   await act(() => typeInto(dialog.querySelector<HTMLInputElement>("input[name=name]")!, "Pat Presenter"));
   await act(() => confirm());
+  // The second line is optional: a name alone is a person.
   expect(liveRoomClientMessageSchema.parse(sendProgram.mock.calls.at(-1)![0])).toEqual({
     type: "credit.add",
-    person: { userId: null, identityId: null, name: "Pat Presenter" },
+    person: { userId: null, identityId: null, name: "Pat Presenter", titleLine: null },
   });
+});
+
+it("takes the second line an operator types for someone without an account, through the room's contract", async () => {
+  const state = roomState();
+  const sendProgram = vi.fn((_message: LiveRoomClientMessage) => true);
+  host = document.body.appendChild(document.createElement("div"));
+  await act(() => render(<LiveAddPersonAction targets={liveTargets(state, { sendProgram })} slug="pqc-2026" />, host!));
+  await act(() => host!.querySelector<HTMLButtonElement>('button[aria-label="Add person"]')!.click());
+  const dialog = document.querySelector("dialog")!;
+  const line = dialog.querySelector<HTMLInputElement>("input[name=titleLine]")!;
+  expect(line.labels?.[0]?.textContent).toContain("Second line");
+  const confirm = () =>
+    [...dialog.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Add person")!.click();
+  await act(() => typeInto(dialog.querySelector<HTMLInputElement>("input[name=name]")!, "Pat Presenter"));
+  await act(() => typeInto(line, "x".repeat(201)));
+  await act(() => confirm());
+  expect(dialog.textContent).toContain("Keep this line under 200 characters.");
+  expect(sendProgram).not.toHaveBeenCalled();
+  await act(() => typeInto(line, "  Author, Example Press "));
+  await act(() => confirm());
+  expect(liveRoomClientMessageSchema.parse(sendProgram.mock.calls.at(-1)![0])).toEqual({
+    type: "credit.add",
+    person: { userId: null, identityId: null, name: "Pat Presenter", titleLine: "Author, Example Press" },
+  });
+});
+
+it("edits someone added without an account in a dialog opened from their menu, prefilled", async () => {
+  const state = roomState();
+  state.addedCredits = [
+    liveCreditSchema.parse({ key: "added:typed-guest", name: "Pat Presenter", titleLine: "Author, Example Press" }),
+  ];
+  const sendProgram = vi.fn((_message: LiveRoomClientMessage) => true);
+  host = document.body.appendChild(document.createElement("div"));
+  const draw = () => act(() => render(<LiveSpeakerCards targets={liveTargets(state, { sendProgram })} />, host!));
+  await draw();
+  // The row reads the typed line where an identity's title would be.
+  expect(host.querySelector('[aria-label="Added for this session"] .pk-live-person__text')?.textContent).toBe(
+    "Pat PresenterAuthor, Example Press",
+  );
+  expect(document.querySelector("dialog")).toBeNull();
+  const actions = await openActions("Pat Presenter");
+  expect(actions.map((item) => item.textContent)).toEqual(["Edit person", "Remove from this session"]);
+  await act(() => actions[0]!.click());
+  const dialog = document.querySelector("dialog")!;
+  expect(dialog.textContent).toContain("Edit person");
+  // Editing is for what was typed: there is no search for someone at the event.
+  expect(dialog.querySelector('input[placeholder="Name or organization"]')).toBeNull();
+  const name = dialog.querySelector<HTMLInputElement>("input[name=name]")!;
+  const line = dialog.querySelector<HTMLInputElement>("input[name=titleLine]")!;
+  expect([name.value, line.value]).toEqual(["Pat Presenter", "Author, Example Press"]);
+  const save = () =>
+    [...dialog.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Save changes")!.click();
+  await act(() => typeInto(name, " "));
+  await act(() => save());
+  expect(dialog.textContent).toContain("Enter a name.");
+  expect(sendProgram).not.toHaveBeenCalled();
+  await act(() => typeInto(name, "Pat Presenter-Lee"));
+  await act(() => typeInto(line, ""));
+  await act(() => save());
+  expect(liveRoomClientMessageSchema.parse(sendProgram.mock.calls.at(-1)![0])).toEqual({
+    type: "credit.update",
+    creditKey: "added:typed-guest",
+    person: { name: "Pat Presenter-Lee", titleLine: null },
+  });
+  expect(document.querySelector("dialog")).toBeNull();
+  // The room's answer redraws the row for every operator.
+  state.addedCredits = [{ ...state.addedCredits[0]!, name: "Pat Presenter-Lee", titleLine: null }];
+  await draw();
+  expect(host.querySelector('[aria-label="Added for this session"] .pk-live-person__text')?.textContent).toBe(
+    "Pat Presenter-Lee",
+  );
 });
 
 it("finds each identity of a person as its own result and adds the one picked", async () => {
@@ -306,6 +495,7 @@ it("finds each identity of a person as its own result and adds the one picked", 
       userId: "7b0c9d5e-1a2b-4c3d-8e4f-5a6b7c8d9e01",
       identityId: "7b0c9d5e-1a2b-4c3d-8e4f-5a6b7c8d9f02",
       name: "Cleo Chair",
+      titleLine: null,
     },
   });
 });
@@ -324,6 +514,8 @@ it("reads credits a room stored before identities, dropping their copied title",
     moderator: false,
     photoUrl: null,
     identity: null,
+    additionalIdentities: [],
     roleLabel: null,
+    titleLine: null,
   });
 });

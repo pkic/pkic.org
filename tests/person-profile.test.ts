@@ -20,6 +20,7 @@ import {
 } from "../assets/shared/schemas/identity-public-profile";
 import { readPublishedPeople } from "../functions/_lib/services/people/published-person";
 import { identityProfileUpdateSchema, ownIdentityProfileSchema } from "../assets/shared/schemas/own-identity-profile";
+import { JOB_TITLE_MAX_LENGTH } from "../assets/shared/schemas/api-common";
 import { issueContributorProfileAddresses } from "../functions/_lib/services/people/profile-addresses";
 import { readSitePublicationSnapshot } from "../functions/_lib/services/site-publication-snapshot";
 import { publishedPersonPages } from "../functions/_lib/services/site-session-history";
@@ -65,10 +66,10 @@ async function createStaffSession(permissions: string[]): Promise<string> {
 describe("person profile", () => {
   beforeEach(resetDb);
 
-  it("saves a 200-character organization job title through the owner's profile contract", async () => {
+  it("saves a 100-character organization job title through the owner's profile contract", async () => {
     const owner = await insertOrgRepresentative(env.DB, { email: "long-title@example.test" });
     const token = await createMemberSession(env.DB, owner.userId, "long-title-owner");
-    const jobTitle = "R".repeat(200);
+    const jobTitle = "R".repeat(JOB_TITLE_MAX_LENGTH);
     const response = await call(token, `/api/v1/users/current/identities/${owner.identityId}/profile`, {
       method: "PATCH",
       body: JSON.stringify(identityProfileUpdateSchema.parse({ jobTitle, biography: "Updated biography." })),

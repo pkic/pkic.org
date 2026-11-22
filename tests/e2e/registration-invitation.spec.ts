@@ -1,9 +1,7 @@
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { registrationCreateSchema } from "../../assets/shared/schemas/registration";
-import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
 import { continueRegistrationWithEmail, ownDomainEmail, registerInBrowser } from "./helpers/registration";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
-import { signInToPortal } from "./helpers/portal-auth";
 
 const slug = "pqc-conference-amsterdam-nl";
 const registrationPath = `/events/2026/${slug}/register/`;
@@ -13,14 +11,12 @@ test("cancelled attendees can restore registration without stale badge or invita
 }, info) => {
   const email = ownDomainEmail("cancel-restore");
   const submitted = await registerInBrowser(page, email, undefined, undefined, {
-    organization: "Synthetic Attendee Services",
+    // An organization name belongs to the domain that first claimed it, so each run names its own.
+    organization: `Synthetic Attendee Services ${Date.now()}`,
     attendanceLabel: "In-person",
   });
-  const manageLink = page.getByRole("link", { name: "Manage your registration", exact: true });
-  await expect(manageLink).toBeVisible();
-  const manageUrl = (await manageLink.getAttribute("href"))!;
-  const manageToken = new URL(manageUrl).searchParams.get("token");
-  expect(manageToken).toBeTruthy();
+  await expect(page.getByRole("heading", { name: /You're registered/ })).toBeVisible();
+  const { manageUrl, manageToken } = await submitted.manageLink();
   await page.goto(manageUrl);
   await page.getByRole("button", { name: "Cancel my registration…", exact: true }).click();
   await acceptConfirmDialog(page, "Cancel registration");
@@ -43,7 +39,7 @@ test("cancelled attendees can restore registration without stale badge or invita
   await reloaded;
   await expect(page.getByText("This registration is cancelled", { exact: true })).toBeHidden();
   await expect(page.getByRole("button", { name: "Cancel my registration…", exact: true })).toBeVisible();
-  await signInToPortal(page, email);
+  // Registering signed the attendee in, so the portal opens with that session.
   const calendarResponse = await page.request.get(
     `/api/v1/events/${slug}/registrations/${submitted.result.registrationId}/calendar.ics`,
   );
@@ -51,10 +47,10 @@ test("cancelled attendees can restore registration without stale badge or invita
   const calendar = (await calendarResponse.text()).replace(/\r?\n[ \t]/g, "");
   expect(calendar).toContain(`/portal/#/events/${slug}/registrations/${submitted.result.registrationId}`);
   expect(calendar).not.toContain("/register/manage/");
-  expect(calendar).not.toContain(manageToken!);
+  expect(calendar).not.toContain(manageToken);
   await page.goto(`/portal/#/events/${slug}/ticket`);
-  const ticket = page.frameLocator('iframe[title^="Your badge for "]');
-  await expect(ticket.getByRole("button", { name: "Enlarge check-in code", exact: true })).toBeVisible();
+  const enlargeCode = page.getByRole("button", { name: "Enlarge check-in code", exact: true });
+  await expect(enlargeCode).toBeVisible();
   for (const [width, height, device] of [
     [1280, 900, "desktop"],
     [375, 812, "phone"],
@@ -62,9 +58,20 @@ test("cancelled attendees can restore registration without stale badge or invita
     await page.setViewportSize({ width, height });
     await page.screenshot({ path: info.outputPath(`attendee-ticket-${device}.png`), fullPage: true });
   }
-  await ticket.getByRole("button", { name: "Enlarge check-in code", exact: true }).click();
-  await expect(page.getByRole("dialog", { name: "Check-in code", exact: true })).toBeVisible();
+  await enlargeCode.click();
+  const codeViewer = page.getByRole("dialog", { name: "Check-in code", exact: true });
+  await expect(codeViewer).toBeVisible();
+  await expect(codeViewer).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(codeViewer.getByText("Event Attendee", { exact: true })).toBeVisible();
+  await expect(codeViewer.getByText("Conference attendee", { exact: true })).toBeVisible();
+  await expect(codeViewer.getByText("Synthetic Attendee Services", { exact: true })).toBeVisible();
+  expect(
+    (await page.getByRole("img", { name: "Your check-in QR code", exact: true }).boundingBox())?.width,
+  ).toBeGreaterThan(320);
   await expect(page.getByRole("img", { name: "Your check-in QR code", exact: true })).toBeVisible();
+  await page.screenshot({ path: info.outputPath("attendee-ticket-code-phone.png"), animations: "disabled" });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.screenshot({ path: info.outputPath("attendee-ticket-code-desktop.png"), animations: "disabled" });
   await page.getByRole("button", { name: "Close check-in code", exact: true }).click();
 });
 
@@ -89,12 +96,16 @@ async function captureStep(page: Page, info: TestInfo, step: number, name: strin
 }
 
 test("checks invitation access before signup and preserves the review on late expiry", async ({ page }, info) => {
+  // An organization name belongs to the domain that first claimed it, so each run names its own.
+  const runId = Date.now();
+  const reviewEmail = `signup-review-${runId}@example.com`;
   await page.route("**/invites/*/info*", (route) => route.fulfill({ json: { status: "expired" } }));
   await page.goto(`${registrationPath}?invite=expired-invitation-test-token`);
   await expect(page.getByRole("heading", { name: "This invitation has expired" })).toBeVisible();
-  await expect(page.getByLabel(EMAIL_FIRST_COPY.registration.work.label)).toBeHidden();
+  const signInCard = page.locator("[data-registration-sign-in]").getByRole("region", { name: "Sign in", exact: true });
+  await expect(signInCard).toBeHidden();
   await page.getByRole("button", { name: "Continue without invitation" }).click();
-  await expect(page.getByLabel(EMAIL_FIRST_COPY.registration.work.label)).toBeVisible();
+  await expect(signInCard).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`${registrationPath}$`));
 
   await page.unroute("**/invites/*/info*");
@@ -112,16 +123,23 @@ test("checks invitation access before signup and preserves the review on late ex
       },
     }),
   );
-  await page.goto(`${registrationPath}?invite=valid-invitation-test-token`);
-  await expect(page.getByLabel(EMAIL_FIRST_COPY.registration.work.label)).toBeVisible();
+  await page.goto(`${registrationPath}?invite=valid-invitation-test-token&id=0b7e9d1c-5a4f-4c2e-9f3a-2d6b8e1c4a70`);
+  // Signed out, the sign-in card stands in for the form: nothing is asked before the person is signed in.
+  await expect(signInCard).toBeVisible();
   await expect(page.getByLabel("First name")).toHaveCount(0);
-  await captureStep(page, info, 1, "email");
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await signInCard.screenshot({ path: info.outputPath(`public-registration-sign-in-${device}.png`) });
+  }
   await page.screenshot({ path: "test-results/registration-shared-fields.png", fullPage: true });
   await continueRegistrationWithEmail(page, {
-    email: "signup-review@example.com",
+    email: reviewEmail,
     firstName: "Signup",
     lastName: "Review",
-    organization: "Signup Review Org",
+    organization: `Signup Review Org ${runId}`,
   });
   await captureStep(page, info, 2, "attendance");
   await page.getByRole("button", { name: /^Choose On[- ]demand for every available day$/ }).click();
@@ -131,8 +149,7 @@ test("checks invitation access before signup and preserves the review on late ex
   await page.getByRole("button", { name: /Continue/ }).click();
   const terms = page.locator("[data-term-key] input[required]");
   for (const term of await terms.all()) await term.check();
-  const read = page.getByRole("link", { name: /Read:/ }).first();
-  await expect(read).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: /photos and videos/i })).toBeChecked();
   await captureStep(page, info, 4, "review");
   await page.screenshot({ path: "test-results/registration-shared-consents.png", fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
@@ -144,16 +161,21 @@ test("checks invitation access before signup and preserves the review on late ex
   await page.locator("[data-step='4']").screenshot({ path: "test-results/registration-shared-consents-dark.png" });
   await page.emulateMedia({ colorScheme: "light" });
 
-  let submittedWithoutInvite = false;
+  const submissions: Array<{ inviteToken?: string | null; inviteId?: string | null }> = [];
   await page.route(`**/api/v1/events/${slug}/registrations`, (route) => {
-    const body = registrationCreateSchema.parse(route.request().postDataJSON());
-    submittedWithoutInvite = !body.inviteToken;
+    submissions.push(registrationCreateSchema.parse(route.request().postDataJSON()));
     return route.fulfill({ status: 400, json: { error: { code: "INVITE_EXPIRED", message: "Invitation expired" } } });
   });
   await page.getByRole("button", { name: "Register", exact: true }).click();
   await expect(page.getByRole("heading", { name: "This invitation has expired" })).toBeVisible();
+  // The token left the address at sign-in; this browser kept it, so the first submission still carries it.
+  expect(submissions[0]).toMatchObject({
+    inviteToken: "valid-invitation-test-token",
+    inviteId: "0b7e9d1c-5a4f-4c2e-9f3a-2d6b8e1c4a70",
+  });
   await page.getByRole("button", { name: "Continue without invitation" }).click();
-  await expect(page.locator("[data-registration-review]")).toContainText("signup-review@example.com");
+  await expect(page.locator("[data-registration-review]")).toContainText(reviewEmail);
   await page.getByRole("button", { name: "Register", exact: true }).click();
-  await expect.poll(() => submittedWithoutInvite).toBe(true);
+  await expect.poll(() => submissions.length).toBe(2);
+  expect(submissions[1]?.inviteToken).toBeFalsy();
 });

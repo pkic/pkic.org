@@ -79,7 +79,7 @@ async function createStaffOnly(page: Page, groupIds: string[], stamp: string): P
     for (const permission of ["groups:read", "groups:write"]) {
       await jsonResponse(page.request, "POST", "/api/v1/permissions/grants", {
         userId,
-        permission,
+        permissions: [permission],
         contextType: "group",
         contextId: groupId,
       });

@@ -3,6 +3,7 @@ import {
   scannerDeviceSessionEnrollmentSchema,
   scannerDeviceSessionEnrollmentResponseSchema,
   scannerDeviceSessionClosingSchema,
+  scannerDeviceSessionResumptionSchema,
   scannerDeviceSessionStatusSchema,
 } from "../../../../assets/shared/schemas/event-scanner-devices";
 import { first } from "../../db/queries";
@@ -12,6 +13,8 @@ import { AppError } from "../../errors";
 import { nowIso } from "../../utils/time";
 import { scannerCaptureOpenSql } from "./scanner-upload-receipts";
 import { guardAuthorizedDatabase } from "../../db/authorization-guard";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
+import { activeEventSponsorSql } from "../../auth/sponsor-organization-lead-access";
 
 /** Sponsor-scoped enrollment and closure retain the active sponsorship boundary in every atomic command. */
 export function guardScannerSponsorDatabase(db: DatabaseLike, eventId: string, sponsorId?: string): DatabaseLike {
@@ -19,7 +22,7 @@ export function guardScannerSponsorDatabase(db: DatabaseLike, eventId: string, s
   return guardAuthorizedDatabase(
     db,
     {
-      sql: "SELECT 1 FROM sponsorships WHERE id=? AND event_id=? AND sponsor_type='event' AND pipeline_stage='active'",
+      sql: `SELECT 1 FROM sponsorships sponsor WHERE sponsor.id=? AND sponsor.event_id=? AND ${activeEventSponsorSql("sponsor")}`,
       bindings: [sponsorId, eventId],
     },
     () => new Error("AUTHORIZATION_CONTEXT_CHANGED"),
@@ -156,6 +159,85 @@ export async function closeScannerDeviceSession(
         "SCANNER_CLOSING_CONFLICT",
         "The closing declaration does not match this scanner's issued operations.",
       );
+    throw error;
+  }
+  return scannerDeviceSessionStatus(db, eventId, operatorUserId, epochId);
+}
+
+/** Restore the original receipt chain after a server-side close, with an attributable history. */
+export async function resumeScannerDeviceSession(
+  db: DatabaseLike,
+  eventId: string,
+  operatorUserId: string,
+  epochId: string,
+  input: z.infer<typeof scannerDeviceSessionResumptionSchema>,
+) {
+  const prior = await scannerDeviceSessionStatus(db, eventId, operatorUserId, epochId);
+  if (prior.deviceId !== input.deviceId)
+    throw new AppError(409, "SCANNER_SESSION_CHANGED", "This scanner session belongs to another device.");
+  if (
+    prior.highWaterSequence === null &&
+    prior.closingOperationId === null &&
+    prior.closingDeclaredAt === null &&
+    prior.closedAt === null
+  )
+    return prior;
+  const guard = prepareScannerLifecycleGuard(db, {
+    sql: `SELECT 1 FROM event_scanner_device_sessions session WHERE session.id=? AND session.event_id=?
+      AND session.operator_user_id=? AND session.device_id=?
+      AND session.high_water_sequence IS ? AND session.closing_operation_id IS ?
+      AND session.closing_declared_at IS ? AND session.closed_at IS ? AND ${scannerCaptureOpenSql}`,
+    bindings: [
+      epochId,
+      eventId,
+      operatorUserId,
+      input.deviceId,
+      prior.highWaterSequence,
+      prior.closingOperationId,
+      prior.closingDeclaredAt,
+      prior.closedAt,
+      eventId,
+    ],
+  });
+  try {
+    await db.batch([
+      guard.statement,
+      db
+        .prepare(`UPDATE event_scanner_device_sessions
+        SET high_water_sequence=NULL,closing_operation_id=NULL,closing_declared_at=NULL,closed_at=NULL
+        WHERE id=? AND event_id=? AND operator_user_id=? AND device_id=?`)
+        .bind(epochId, eventId, operatorUserId, input.deviceId),
+      prepareAuditLogAfterOneChange(
+        db,
+        "user",
+        operatorUserId,
+        "scanner_session_resumed",
+        "event_scanner_device_session",
+        epochId,
+        {
+          previousHighWaterSequence: prior.highWaterSequence,
+          previousClosingOperationId: prior.closingOperationId,
+          previousClosingDeclaredAt: prior.closingDeclaredAt,
+          previousClosedAt: prior.closedAt,
+        },
+        nowIso(),
+        { type: "event", id: eventId },
+      ),
+      guard.cleanup,
+    ]);
+  } catch (error) {
+    if (isScannerLifecycleGuardFailure(error) || isAuditChangeGuardFailure(error)) {
+      const current = await scannerDeviceSessionStatus(db, eventId, operatorUserId, epochId);
+      if (
+        current.deviceId === input.deviceId &&
+        current.highWaterSequence === null &&
+        current.closingOperationId === null &&
+        current.closingDeclaredAt === null &&
+        current.closedAt === null
+      )
+        return current;
+      throw new AppError(409, "SCANNER_SESSION_CHANGED", "Scanner session changed during recovery. Try again.");
+    }
     throw error;
   }
   return scannerDeviceSessionStatus(db, eventId, operatorUserId, epochId);

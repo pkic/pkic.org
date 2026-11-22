@@ -99,7 +99,7 @@ export const AgendaImport = openApiRoute(contracts.agendaImportRouteSchema, asyn
 export const AgendaPeopleGet = openApiRoute(contracts.agendaPeopleRouteSchema, async (c, data) => {
   const { db, event, actor, context, permission } = await requireAnyEventPermission(c, data.params.eventSlug, [
     "agenda:write",
-    "agenda:live_moderate",
+    "agenda:live_studio",
   ]);
   const guarded = guardPermissionDatabase(
     db,
@@ -113,7 +113,7 @@ export const AgendaPeopleGet = openApiRoute(contracts.agendaPeopleRouteSchema, a
 export const AgendaPeopleIdentitiesGet = openApiRoute(contracts.agendaPeopleIdentitiesRouteSchema, async (c, data) => {
   const { db, event, actor, context, permission } = await requireAnyEventPermission(c, data.params.eventSlug, [
     "agenda:write",
-    "agenda:live_moderate",
+    "agenda:live_studio",
   ]);
   const guarded = guardPermissionDatabase(
     db,

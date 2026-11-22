@@ -7,6 +7,7 @@ import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { createEventScannerFixture } from "./helpers/event-scanner-fixture";
 import { insertUser } from "./helpers/membership";
+import { decryptBadgeCollectionName } from "../assets/shared/badge-collection-name";
 
 const fixture = createEventScannerFixture();
 beforeEach(fixture.setup);
@@ -24,6 +25,137 @@ function manifest(token = fixture.token, extra: Record<string, string> = {}, slu
 }
 
 describe("one complete D1 call for offline eligibility", () => {
+  it("gives an upcoming event a usable daily scanner and badge collection lease", async () => {
+    const startsAt = new Date(Date.now() + 13 * 24 * 60 * 60_000).toISOString();
+    const endsAt = new Date(Date.parse(startsAt) + 2 * 24 * 60 * 60_000).toISOString();
+    await env.DB.prepare("UPDATE events SET starts_at=?,ends_at=?,timezone='Europe/Amsterdam' WHERE id=?")
+      .bind(startsAt, endsAt, fixture.eventId)
+      .run();
+    await env.DB.prepare("UPDATE users SET first_name='Synthetic',last_name='Attendee' WHERE id=?")
+      .bind(fixture.userId)
+      .run();
+    for (const includeBadgeNames of [false, true]) {
+      const response = await manifest(fixture.token, includeBadgeNames ? { includeBadgeNames: "true" } : {});
+      expect(response.status).toBe(200);
+      const prepared = enrolledOfflineEligibilityResponseSchema.parse(await response.json());
+      expect(prepared.badgeNamesPrepared).toBe(includeBadgeNames ? true : undefined);
+      const leaseMs = Date.parse(prepared.expiresAt) - Date.parse(prepared.serverNow);
+      expect(leaseMs).toBeGreaterThan(0);
+      expect(leaseMs).toBeLessThanOrEqual(26 * 60 * 60_000);
+    }
+  });
+
+  it("prepares only encrypted canonical names using the existing printed badge secret", async () => {
+    const name = "Élodie 山田";
+    await env.DB.prepare("UPDATE users SET first_name=?,last_name=? WHERE id=?")
+      .bind("Élodie", "山田", fixture.userId)
+      .run();
+    const ordinary = enrolledOfflineEligibilityResponseSchema.parse(await (await manifest()).json());
+    expect(ordinary.entries[0]!.encryptedName).toBeUndefined();
+    const response = await manifest(fixture.token, { includeBadgeNames: "true" });
+    expect(response.status).toBe(200);
+    const raw = await response.text();
+    expect(raw).not.toContain(name);
+    expect(raw).not.toContain(fixture.badgeId);
+    expect(raw).not.toContain("print_credential_json");
+    const prepared = enrolledOfflineEligibilityResponseSchema.parse(JSON.parse(raw));
+    expect(prepared.badgeNamesPrepared).toBe(true);
+    const entry = prepared.entries[0]!;
+    const binding = { eventId: fixture.eventId, badgeId: entry.badgeId, credentialHash: entry.credentialHash };
+    expect(await decryptBadgeCollectionName(fixture.badgeId, binding, entry.encryptedName!)).toBe(name);
+    await expect(decryptBadgeCollectionName("AAAAAAAAAAAAAAAA", binding, entry.encryptedName!)).rejects.toThrow();
+    await expect(
+      decryptBadgeCollectionName(fixture.badgeId, { ...binding, eventId: crypto.randomUUID() }, entry.encryptedName!),
+    ).rejects.toThrow();
+  });
+
+  it("reports partial offline name coverage when a badge secret is unavailable", async () => {
+    await env.DB.prepare("UPDATE users SET first_name='Synthetic',last_name='Attendee' WHERE id=?")
+      .bind(fixture.userId)
+      .run();
+    await env.DB.prepare("UPDATE event_badge_credentials SET print_credential_json=NULL WHERE event_id=?")
+      .bind(fixture.eventId)
+      .run();
+    const partial = enrolledOfflineEligibilityResponseSchema.parse(
+      await (await manifest(fixture.token, { includeBadgeNames: "true" })).json(),
+    );
+    expect(partial).toMatchObject({ badgeNamesPrepared: false, badgeNamesUnavailable: 1 });
+    expect(partial.entries[0]!.encryptedName).toBeUndefined();
+    expect((await manifest("", { includeBadgeNames: "true" })).status).toBe(401);
+  });
+
+  it("withholds previously available encrypted names after canonical redaction", async () => {
+    await env.DB.prepare("UPDATE users SET first_name='Synthetic',last_name='Attendee' WHERE id=?")
+      .bind(fixture.userId)
+      .run();
+    const available = enrolledOfflineEligibilityResponseSchema.parse(
+      await (await manifest(fixture.token, { includeBadgeNames: "true" })).json(),
+    );
+    const entry = available.entries[0]!;
+    expect(available).toMatchObject({ badgeNamesPrepared: true, badgeNamesUnavailable: 0 });
+    expect(
+      await decryptBadgeCollectionName(
+        fixture.badgeId,
+        { eventId: fixture.eventId, badgeId: entry.badgeId, credentialHash: entry.credentialHash },
+        entry.encryptedName!,
+      ),
+    ).toBe("Synthetic Attendee");
+    await env.DB.prepare("UPDATE users SET pii_redacted_at=? WHERE id=?").bind(nowIso(), fixture.userId).run();
+    const redacted = enrolledOfflineEligibilityResponseSchema.parse(
+      await (await manifest(fixture.token, { includeBadgeNames: "true" })).json(),
+    );
+    expect(redacted).toMatchObject({ badgeNamesPrepared: false, badgeNamesUnavailable: 1 });
+    expect(redacted.entries[0]!.encryptedName).toBeUndefined();
+  });
+
+  it("keeps encrypted name refreshes unchanged until the canonical name changes", async () => {
+    await env.DB.prepare("UPDATE users SET first_name='First',last_name='Attendee' WHERE id=?")
+      .bind(fixture.userId)
+      .run();
+    const first = enrolledOfflineEligibilityResponseSchema.parse(
+      await (await manifest(fixture.token, { includeBadgeNames: "true" })).json(),
+    );
+    const refreshed = enrolledOfflineEligibilityResponseSchema.parse(
+      await (
+        await manifest(fixture.token, {
+          includeBadgeNames: "true",
+          knownDigest: first.pageDigest,
+        })
+      ).json(),
+    );
+    expect(refreshed).toMatchObject({ unchanged: true, pageDigest: first.pageDigest, entries: [] });
+    await env.DB.prepare("UPDATE users SET first_name='Corrected' WHERE id=?").bind(fixture.userId).run();
+    const changed = enrolledOfflineEligibilityResponseSchema.parse(
+      await (
+        await manifest(fixture.token, {
+          includeBadgeNames: "true",
+          knownDigest: first.pageDigest,
+        })
+      ).json(),
+    );
+    expect(changed.unchanged).toBe(false);
+    expect(changed.pageDigest).not.toBe(first.pageDigest);
+    const entry = changed.entries[0]!;
+    expect(
+      await decryptBadgeCollectionName(
+        fixture.badgeId,
+        { eventId: fixture.eventId, badgeId: entry.badgeId, credentialHash: entry.credentialHash },
+        entry.encryptedName!,
+      ),
+    ).toBe("Corrected Attendee");
+  });
+
+  it("refuses encrypted names to operators holding only lead capture permission", async () => {
+    const leadUser = await insertUser(env.DB);
+    await env.DB.prepare(
+      "INSERT INTO permission_grants(id,user_id,permission,context_type,context_id,created_at) VALUES(?,?,'agenda:leads_capture','event',?,?)",
+    )
+      .bind(crypto.randomUUID(), leadUser, fixture.eventId, nowIso())
+      .run();
+    const token = await createAdminSession(env.DB, leadUser, crypto.randomUUID());
+    expect((await manifest(token, { includeBadgeNames: "true" })).status).toBe(403);
+  });
+
   it("keeps badge evidence private to a live authorized operator's open enrolled device and event", async () => {
     const read = await manifest();
     expect(read.status).toBe(200);

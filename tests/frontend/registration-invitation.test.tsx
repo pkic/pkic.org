@@ -57,6 +57,18 @@ describe("registration invitation access", () => {
     expect(window.location.search).toBe("");
     expect(boot.form.elements.namedItem("firstName")).toHaveProperty("value", "Guest");
   });
+  it("drops a refused invitation from the portal hash query and keeps the rest of it", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(respond({ status: "expired" })));
+    const { gate } = setup();
+    window.history.replaceState(
+      {},
+      "",
+      `${window.location.pathname}${window.location.search}#/events/test/register?invite=expired-token&id=invitation-id&source=invite&step=2`,
+    );
+    await act(() => gate.check("public"));
+    await act(() => button("Continue without invitation").click());
+    expect(window.location.hash).toBe("#/events/test/register?step=2");
+  });
   it("does not offer public continuation for an invitation-only event", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(respond({ status: "invalid" })));
     const { gate } = setup();
@@ -88,6 +100,30 @@ describe("registration invitation access", () => {
     await act(() => gate.check("public"));
     expect(gate.canSubmit()).toBe(false);
     expect(document.body.textContent).toContain("This invitation link is not valid");
+  });
+  it("accepts a valid invitation whose link opens this event's registration in the portal", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          respond({ ...valid, registrationUrl: "https://app.test/portal/#/events/test/register?invite=t&id=i" }),
+        ),
+    );
+    const { gate } = setup();
+    await act(() => gate.check("invitation_only"));
+    expect(gate.canSubmit()).toBe(true);
+  });
+  it("refuses a portal invitation link for a different event", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(respond({ ...valid, registrationUrl: "https://app.test/portal/#/events/other/register" })),
+    );
+    const { gate } = setup();
+    await act(() => gate.check("invitation_only"));
+    expect(gate.canSubmit()).toBe(false);
   });
   it("keeps signup blocked on a failed lookup and allows a retry", async () => {
     const fetch = vi.fn().mockRejectedValueOnce(new TypeError("offline")).mockResolvedValueOnce(respond(valid));

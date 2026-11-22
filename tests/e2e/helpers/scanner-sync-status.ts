@@ -22,7 +22,7 @@ export async function checkScannerSyncStatus(page: Page, path: string, info: Tes
   await button.click();
   await expect.poll(() => Boolean(release)).toBe(true);
   await expect(button).toBeEnabled();
-  await expect(diagnostics.getByText("Refreshing badge data…", { exact: true })).toBeVisible();
+  await expect(button).toHaveAttribute("aria-busy", "true");
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.screenshot({ path: info.outputPath("sync-progress-desktop.png") });
   await page.setViewportSize({ width: 375, height: 844 });
@@ -37,9 +37,12 @@ export async function checkScannerSyncStatus(page: Page, path: string, info: Tes
   await page.route("**/offline-eligibility?**", (route) =>
     route.fulfill({ status: 503, contentType: "application/json", body: "{}" }),
   );
+  const refused = page.waitForResponse((result) => new URL(result.url()).pathname.endsWith("/offline-eligibility"));
   await button.click();
-  await expect(diagnostics.getByRole("alert")).toContainText("HTTP 503");
-  await expect(diagnostics.getByRole("alert")).toContainText("Using saved badge data");
+  expect((await refused).status()).toBe(503);
+  await expect(button).toHaveAttribute("aria-busy", "false");
+  await expect(diagnostics.getByText(/Badge data ready/)).toBeVisible();
+  await expect(diagnostics.getByRole("alert")).toHaveCount(0);
   await expect(button).toBeEnabled();
   await expect(page.getByRole("dialog", { name: "Continuous badge scanner", exact: true })).toHaveCount(0);
   await page.screenshot({ path: info.outputPath("sync-failure-phone.png") });

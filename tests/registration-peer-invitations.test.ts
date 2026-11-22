@@ -16,7 +16,7 @@ import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 
 async function attendee() {
-  const { eventId } = await seedEventAndAdmin(env.DB);
+  const { eventId } = await seedEventAndAdmin(env.DB, { visibility: "public" });
   const userId = await insertUser(env.DB, "inviter@example.test");
   const at = nowIso();
   await env.DB.batch([
@@ -41,7 +41,7 @@ async function attendee() {
     event,
     userId,
     sourceType: "test",
-    mailboxVerified: true,
+    verifiedIdentity: { userId },
     dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
     signingSecret: env.INTERNAL_SIGNING_SECRET!,
   });

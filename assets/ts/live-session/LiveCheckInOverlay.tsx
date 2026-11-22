@@ -2,7 +2,7 @@ import { renderOverlayTextHtml } from "../../shared/overlay-text-template";
 import type { LiveCheckInOnAir } from "../../shared/schemas/live-session-room";
 import { CheckInQrGraphic } from "../components/attendance-points/CheckInQrGraphic";
 import "./LiveGraphicTheme.css";
-import "./LiveCheckInOverlay.css";
+import "./LiveQrCard.css";
 
 /**
  * The check-in code on a broadcast or room output, at its standard broadcast
@@ -16,7 +16,7 @@ export function LiveCheckInOverlay({ checkIn }: { checkIn: LiveCheckInOnAir }) {
     ? renderOverlayTextHtml(checkIn.text.template, { checkIn: { label: checkIn.label } })
     : "";
   return (
-    <div class="pk-live-check-in" data-graphic-theme={checkIn.theme}>
+    <div class="pk-live-qr-card" data-graphic-theme={checkIn.theme}>
       <CheckInQrGraphic
         point={checkIn}
         showLabel={false}

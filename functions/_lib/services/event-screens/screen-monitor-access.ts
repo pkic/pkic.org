@@ -9,6 +9,7 @@ import { screenIdSchema } from "../../../../assets/shared/schemas/event-screens"
 import { hasPermission } from "../../auth/permissions";
 import type { UserSessionResult } from "../../auth/user-session-result";
 import type { UserSessionTokenClaims } from "../../auth/user-session-token";
+import { connectedSessionClaims } from "../../auth/user-session-activity";
 import { prepareUserSessionClaimsBatch } from "../../auth/user-session-live-data";
 import { batchRows } from "../../db/pagination";
 import type { D1StatementResult, DatabaseLike } from "../../types";
@@ -105,7 +106,7 @@ export function prepareScreenMonitorRefresh(
   const staffRead = staff.length
     ? prepareUserSessionClaimsBatch(
         db,
-        staff.map((admission) => admission.claims),
+        staff.map((admission) => connectedSessionClaims(admission.claims)),
       )
     : null;
   const screenRead = db

@@ -61,6 +61,15 @@ export async function requestPromotionRenders(
 
 type BadgeRenderer = (code: string, env: Env, origin: string) => Promise<void>;
 
+const INTERRUPTED_RENDER_ERROR = "The last render stopped before it finished.";
+
+/**
+ * A scheduled invocation is stopped once it spends its CPU allowance, which
+ * about three kit renders reach. No render starts after this much of the pass
+ * has gone, so the pass ends normally and wakes the next one for the rest.
+ */
+export const PROMOTION_RENDER_PASS_BUDGET_MS = 10_000;
+
 /**
  * Renders one queued row: a kit format or a badge. Both share the claim, the
  * retry policy, and the rule that a row re-requested while rendering (its
@@ -83,14 +92,28 @@ export async function processPromotionRenderJob(
   if (!bucket)
     throw new AppError(503, "PROMOTION_STORAGE_UNAVAILABLE", "Promotion storage is temporarily unavailable.");
   const lease = createDurableJobLease();
-  const claim = await run(
+  // A row still marked rendering after its lease means the run was stopped
+  // mid-render (for example at the CPU limit), so no catch counted the attempt.
+  // Counting it here lets a file that keeps stopping its run fail eventually.
+  const claim = await first<{ attempts: number }>(
     db,
-    "UPDATE event_promotion_renders SET status='rendering',processing_token=?,lease_expires_at=?,updated_at=? WHERE id=? AND ((status IN ('queued','retrying') AND next_attempt_at<=?) OR (status='rendering' AND lease_expires_at<=?))",
-    [lease.token, lease.expiresAt, lease.claimedAt, id, lease.claimedAt, lease.claimedAt],
+    `UPDATE event_promotion_renders SET
+      attempts=attempts+(status='rendering'),
+      last_error=CASE WHEN status='rendering' THEN ? ELSE last_error END,
+      status='rendering',processing_token=?,lease_expires_at=?,updated_at=?
+     WHERE id=? AND ((status IN ('queued','retrying') AND next_attempt_at<=?) OR (status='rendering' AND lease_expires_at<=?))
+     RETURNING attempts`,
+    [INTERRUPTED_RENDER_ERROR, lease.token, lease.expiresAt, lease.claimedAt, id, lease.claimedAt, lease.claimedAt],
   );
-  if (claim.changes !== 1) return false;
+  if (!claim) return false;
+  job.attempts = claim.attempts;
   const settle = (status: string, detail: { attempts?: number; nextAttemptAt?: string; error?: string } = {}) =>
     settlePromotionRender(db, job, lease.token, status, detail);
+  if (durableRenderRetry(job.attempts).status === "failed") {
+    await settle("failed", { error: INTERRUPTED_RENDER_ERROR });
+    logError("promotion render kept stopping before it finished", { jobId: job.id, format: job.format });
+    return false;
+  }
   try {
     if (job.format === BADGE_RENDER_FORMAT) {
       // A queued badge renders both shapes: an email can attach the square badge too.
@@ -227,7 +250,7 @@ async function removeSupersededPromotionFiles(db: DatabaseLike, bucket: R2Bucket
     [JSON.stringify(earlier.map((row) => row.id))],
   );
 }
-/** One bounded pass over due kit formats and badges, after recovering badges that waiting emails need. */
+/** One pass over due kit formats and badges, bounded by count and time, after recovering badges that waiting emails need. */
 export async function processPendingPromotionRenders(
   db: DatabaseLike,
   env: Env,
@@ -247,7 +270,9 @@ export async function processPendingPromotionRenders(
   ]);
   let processed = 0;
   let failed = 0;
+  const startedAt = Date.now();
   for (const row of batchRows<{ id: string }>(due!)) {
+    if (Date.now() - startedAt >= PROMOTION_RENDER_PASS_BUDGET_MS) break;
     if (await processPromotionRenderJob(db, env, row.id, undefined, renderBadge)) processed++;
     else failed++;
   }

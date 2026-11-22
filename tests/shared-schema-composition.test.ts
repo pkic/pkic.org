@@ -1,6 +1,9 @@
 import {
+  WORK_EMAIL_REPRESENTATION_REQUIRED,
   registrationAttendanceFieldsSchema,
+  registrationContactFieldsSchema,
   withRequiredDayAttendanceChoices,
+  withRequiredOrganizationRepresentation,
 } from "../assets/shared/schemas/registration";
 import { describe, expect, it } from "vitest";
 import {
@@ -36,9 +39,7 @@ import {
   publicKeyCredentialEnvelopeSchema,
   registrationResponseSchema,
 } from "../assets/shared/schemas/passkeys";
-import { jobTitleSchema, organizationNameSchema, successResponseSchema } from "../assets/shared/schemas/api-common";
-import { organizationIdentityJobTitleSchema } from "../assets/shared/schemas/identity-job-title";
-import { identityProfileUpdateSchema } from "../assets/shared/schemas/own-identity-profile";
+import { successResponseSchema } from "../assets/shared/schemas/api-common";
 import { meetingLocationSchema } from "../assets/shared/schemas/event-series";
 import { headshotUploadResponseSchema } from "../assets/shared/schemas/registration";
 import { memberAuthVerifyResponseSchema } from "../assets/shared/schemas/member-auth";
@@ -357,23 +358,21 @@ describe("explicit attendance choices", () => {
   });
 });
 
-it.each([1, 200])(
-  "accepts the same job-title and organization-name bounds across participation and profile contracts: %i",
-  (length) => {
-    const value = "X".repeat(length);
-    expect(jobTitleSchema.parse(value)).toBe(value);
-    expect(organizationIdentityJobTitleSchema.parse(value)).toBe(value);
-    expect(organizationNameSchema.parse(value)).toBe(value);
-    expect(identityProfileUpdateSchema.parse({ jobTitle: value }).jobTitle).toBe(value);
-  },
-);
-
-it("rejects empty required affiliations and overlong affiliation text while allowing a personal title to be cleared", () => {
-  for (const schema of [jobTitleSchema, organizationIdentityJobTitleSchema, organizationNameSchema]) {
-    expect(schema.safeParse("   ").success).toBe(false);
-    expect(schema.safeParse("X".repeat(201)).success).toBe(false);
-  }
-  expect(identityProfileUpdateSchema.parse({ jobTitle: "   " }).jobTitle).toBe("");
+describe("work address representation", () => {
+  it("refuses the whole step, in the server's words, only while the organization is missing", () => {
+    const contact = { firstName: "Ada", lastName: "Lovelace", email: "ada@example.test" };
+    const missing = withRequiredOrganizationRepresentation(registrationContactFieldsSchema, () => true).safeParse(
+      contact,
+    );
+    expect(missing.success).toBe(false);
+    if (!missing.success)
+      expect(missing.error.issues).toEqual([
+        expect.objectContaining({ path: [], message: WORK_EMAIL_REPRESENTATION_REQUIRED }),
+      ]);
+    expect(withRequiredOrganizationRepresentation(registrationContactFieldsSchema, () => false).parse(contact)).toEqual(
+      contact,
+    );
+  });
 });
 
 it.each(["", "   ", null])("round-trips a cleared meeting location through the shared contract: %j", (value) => {

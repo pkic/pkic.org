@@ -1,5 +1,5 @@
 import { splitBadgePrintSvg } from "../../../../../../shared/badge-print-svg";
-import { createPortal } from "preact/compat";
+import { createPortal, lazy, Suspense } from "preact/compat";
 import { Dialog } from "../../../../../ui/Dialog";
 import { useDialogQueryState } from "../../../../../hooks/useDialogQueryState";
 /**
@@ -17,16 +17,28 @@ import { BadgeFace } from "../../../../../components/event-badges/BadgeFace";
 import { ErrorAlert } from "../../../../../components/ErrorAlert";
 import { Spinner } from "../../../../../components/Spinner";
 import { useData } from "../../../../../hooks/useData";
-import { putJson } from "../../../../../shared/api-client";
+import { getJson, putJson } from "../../../../../shared/api-client";
+import { registrationTicketResponseSchema } from "../../../../../../shared/schemas/event-tickets";
+import { useState } from "preact/hooks";
+import { Alert } from "../../../../../ui/Alert";
+import { Button } from "../../../../../ui/Button";
+import { ExternalLink } from "../../../../../ui/ExternalLink";
 import { EmptyState } from "../../../../../ui/EmptyState";
 import { usePortalHashLocation } from "../../../hash-location";
-import { eventParticipantRecordPath } from "../event-participant-paths";
+import { eventParticipantRecordPath } from "../../../../../../shared/event-participant-paths";
 import { EventCard } from "./EventCard";
 import { eventRegistrationStanding, type ParticipantEventDetail } from "./event-app-model";
 import { attendanceStanding, type AttendanceStanding } from "../../../../../shared/viewer-attendance";
 import { formatDayList } from "../../../../../../shared/format-date";
 
-export function EventTicket({ event }: { event: ParticipantEventDetail }) {
+export function EventTicket({
+  event,
+  onSettled,
+}: {
+  event: ParticipantEventDetail;
+  /** The ticket turned out to be paid, so what the event says about the reader is read again. */
+  onSettled?: () => unknown;
+}) {
   // Only a registered reader reaches this page; the event home offers registration to everyone else.
   const standing = eventRegistrationStanding(event);
   if (!standing.registrationId)
@@ -47,10 +59,86 @@ export function EventTicket({ event }: { event: ParticipantEventDetail }) {
         <div class="pk-cluster">{details}</div>
       </EventCard>
     );
-  return <BadgeTicket event={event} details={details} />;
+  return (
+    <SettledTicket event={event} registrationId={standing.registrationId} details={details} onSettled={onSettled} />
+  );
 }
 
-function BadgeTicket({ event, details }: { event: ParticipantEventDetail; details: ComponentChildren }) {
+// Loaded only for a ticket that is not settled, so the installed event app does not carry it offline.
+const EventTicketPayment = lazy(async () => ({ default: (await import("./EventTicketPayment")).EventTicketPayment }));
+
+/** A ticket that is still to be paid, or was refunded, stands in for the badge. */
+function SettledTicket({
+  event,
+  registrationId,
+  details,
+  onSettled,
+}: {
+  event: ParticipantEventDetail;
+  registrationId: string;
+  details: ComponentChildren;
+  onSettled?: () => unknown;
+}) {
+  const ticket = useData(
+    () =>
+      getJson(
+        `/api/v1/events/${encodeURIComponent(event.slug)}/registrations/${encodeURIComponent(registrationId)}/ticket`,
+        registrationTicketResponseSchema,
+      ),
+    [event.slug, registrationId],
+  );
+  // Set when the payment arrived during this visit, so the page says so above the badge.
+  const [received, setReceived] = useState(false);
+  if (ticket.loading) return <Spinner label="Loading your ticket…" />;
+  const held = ticket.data?.ticket;
+  if (held && held.status !== "paid" && held.status !== "free")
+    return (
+      <Suspense fallback={<Spinner label="Loading your ticket…" />}>
+        <EventTicketPayment
+          slug={event.slug}
+          registrationId={registrationId}
+          ticket={held}
+          details={details}
+          onSettled={() => {
+            setReceived(true);
+            return Promise.all([ticket.reload(), onSettled?.()]);
+          }}
+        />
+      </Suspense>
+    );
+  // A ticket that could not be read still shows the badge the device holds; if that fails too, both are tried again.
+  const unread = Boolean(ticket.error) && !ticket.data;
+  // The payment provider's own receipt, once it was read for a paid ticket.
+  const settled = held?.receiptUrl ? (
+    <>
+      {details}
+      <ExternalLink href={held.receiptUrl}>Payment receipt</ExternalLink>
+    </>
+  ) : (
+    details
+  );
+  return (
+    <div class="pk-stack">
+      {received && held?.status === "paid" && (
+        <Alert tone="ok" title="Payment received">
+          <p>You're registered. We emailed your confirmation.</p>
+        </Alert>
+      )}
+      <BadgeTicket event={event} details={settled} retryTicket={unread ? ticket.reload : undefined} />
+    </div>
+  );
+}
+
+function BadgeTicket({
+  event,
+  details,
+  retryTicket,
+}: {
+  event: ParticipantEventDetail;
+  details: ComponentChildren;
+  /** Set when the ticket itself could not be read, so a failed badge is not mistaken for a missing one. */
+  retryTicket?: () => unknown;
+}) {
   const [enlarged, showCode, closeCode] = useDialogQueryState("ticket-code");
   const ticket = useData(async () => {
     const current = await putJson(
@@ -62,6 +150,10 @@ function BadgeTicket({ event, details }: { event: ParticipantEventDetail; detail
     return { ...current, badge: { ...current.badge, displayName: current.badge.displayName ?? "" } };
   }, [event.slug]);
   const qr = ticket.data ? splitBadgePrintSvg(ticket.data.badge.svg) : null;
+  const badgeName = ticket.data?.badge.displayName.trim() ?? "";
+  const badgeTitle = ticket.data?.badge.jobTitle?.trim() ?? "";
+  const badgeOrganization = ticket.data?.badge.organization?.trim() ?? "";
+  const hasBadgeIdentity = Boolean(badgeName || badgeTitle || badgeOrganization);
   const viewer = "viewer" in event ? event.viewer : null;
   const standing = viewer ? attendanceStanding(viewer) : UNDATED_SEAT;
   const use = <TicketUse standing={standing}>{details}</TicketUse>;
@@ -78,6 +170,20 @@ function BadgeTicket({ event, details }: { event: ParticipantEventDetail; detail
           title={`Your badge for ${event.name}`}
           onQrClick={showCode}
         />
+      ) : retryTicket ? (
+        <div class="pk-stack">
+          <ErrorAlert error="Your ticket could not be loaded. Check your connection and try again." />
+          <div class="pk-cluster">
+            <Button
+              onClick={() => {
+                void retryTicket();
+                void ticket.reload();
+              }}
+            >
+              Try again
+            </Button>
+          </div>
+        </div>
       ) : (
         <ErrorAlert error={ticket.error ?? "Your badge is unavailable."} />
       )}
@@ -86,6 +192,7 @@ function BadgeTicket({ event, details }: { event: ParticipantEventDetail; detail
         createPortal(
           <Dialog
             open={enlarged}
+            class="pk-ticket-code-viewer"
             title="Check-in code"
             confirmLabel="Close"
             closeLabel="Close check-in code"
@@ -94,12 +201,25 @@ function BadgeTicket({ event, details }: { event: ParticipantEventDetail; detail
             viewer
             size="wide"
           >
-            <img
-              class="pk-badge-qr-expanded"
-              src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(qr?.qr ?? ticket.data.badge.svg)}`}
-              alt="Your check-in QR code"
-            />
-            {qr && <p class="pk-center pk-mono">{qr.code}</p>}
+            <div
+              class={`pk-ticket-code-viewer__layout${hasBadgeIdentity ? " pk-ticket-code-viewer__layout--identity" : ""}`}
+            >
+              <div class="pk-ticket-code-viewer__scan">
+                <img
+                  class="pk-badge-qr-expanded"
+                  src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(qr?.qr ?? ticket.data.badge.svg)}`}
+                  alt="Your check-in QR code"
+                />
+                {qr && <p class="pk-center pk-mono">{qr.code}</p>}
+              </div>
+              {hasBadgeIdentity && (
+                <div class="pk-ticket-code-viewer__identity">
+                  {badgeName && <strong>{badgeName}</strong>}
+                  {badgeTitle && <span>{badgeTitle}</span>}
+                  {badgeOrganization && <span>{badgeOrganization}</span>}
+                </div>
+              )}
+            </div>
           </Dialog>,
           document.body,
         )}

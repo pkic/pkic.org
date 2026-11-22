@@ -1,4 +1,3 @@
-import { eventAttendanceAccessMode } from "../../../../assets/shared/event-attendance-access";
 import { attendanceOptionCapacity } from "./day-waitlist-capacity";
 import { prepareParticipationReconciliation } from "../event-participation/reconciliation";
 import { assertRegistrationRestorationAllowed } from "./restoration";
@@ -12,8 +11,15 @@ import type { DatabaseLike, StatementLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
+import { prepareRefundOnCancellation } from "../event-tickets/refund-policy";
+import { planRepriceTicketForDays } from "../event-tickets/reprice";
 import {
-  configuredAttendanceOptions,
+  assertRegistrationTicketRestorable,
+  prepareCancelRegistrationTicket,
+  prepareRestoreRegistrationTicket,
+} from "../event-tickets/registration-ticket";
+import {
+  selectedDayEmailAttendance,
   listEventDays,
   getRegistrationDayAttendance,
   prepareReplaceRegistrationDayAttendanceStatements,
@@ -93,10 +99,14 @@ export interface BuiltRegistrationUpdate {
     dayDate: string;
     attendanceType: string;
     label: string | null;
+    optionLabel: string | null;
     accessMode: import("../../../../assets/shared/event-attendance-access").EventAttendanceAccessMode;
+    waitlistAlternativeJson: string | null;
     startsAt: string | null;
     endsAt: string | null;
   }>;
+  /** What the ticket owes once this update is written; undefined when the update leaves the ticket as stored. */
+  paymentDue?: { amount: number; currency: string } | null;
   dayWaitlist?: Array<{
     dayDate: string;
     status: string;
@@ -148,6 +158,9 @@ export async function buildRegistrationUpdate(
         reasonCode: "registration_cancelled",
       }),
       prepareClearRegistrationEmailChangeStatement(db, registration.id, registration.user_id, now),
+      ...prepareCancelRegistrationTicket(db, registration.id, now),
+      // A person who cancels within the event's refund period gets a paid ticket back.
+      ...(changedBy === "self" ? prepareRefundOnCancellation(db, registration.id, now) : []),
     ];
     statements.push(...prepareParticipationReconciliation(db, registration.event_id, registration.user_id));
     const audit = prepareRegistrationUpdateAudit(db, registration, cancelled, payload);
@@ -157,6 +170,7 @@ export async function buildRegistrationUpdate(
       statements,
       notificationChanged: true,
       dayWaitlist: [],
+      paymentDue: null,
     };
   }
 
@@ -199,6 +213,9 @@ export async function buildRegistrationUpdate(
         reasonCode: "registration_cancelled",
       }),
       prepareClearRegistrationEmailChangeStatement(db, registration.id, registration.user_id, now),
+      ...prepareCancelRegistrationTicket(db, registration.id, now),
+      // A person who cancels within the event's refund period gets a paid ticket back.
+      ...(changedBy === "self" ? prepareRefundOnCancellation(db, registration.id, now) : []),
     ];
     statements.push(...prepareParticipationReconciliation(db, registration.event_id, registration.user_id));
     statements.push(...prepareParticipationReconciliation(db, registration.event_id, registration.user_id));
@@ -209,6 +226,7 @@ export async function buildRegistrationUpdate(
       statements,
       notificationChanged: true,
       dayWaitlist: [],
+      paymentDue: null,
     };
   }
 
@@ -331,18 +349,14 @@ export async function buildRegistrationUpdate(
         .filter((selection) => payload.claimDayWaitlistOffers?.includes(selection.dayDate))
         .map((selection) => selection.dayDate),
     );
-    plannedDayAttendance = payload.dayAttendance.map((selection) => {
-      const day = configuredEventDays.find((entry) => entry.day_date === selection.dayDate);
-      const option = day && configuredAttendanceOptions(day).find((entry) => entry.value === selection.attendanceType);
-      return {
-        dayDate: selection.dayDate,
-        attendanceType: selection.attendanceType,
-        label: day?.label ?? null,
-        accessMode: eventAttendanceAccessMode(option ?? { value: selection.attendanceType }),
-        startsAt: day?.starts_at ?? null,
-        endsAt: day?.ends_at ?? null,
-      };
-    });
+    plannedDayAttendance = payload.dayAttendance.map((selection) => ({
+      dayDate: selection.dayDate,
+      attendanceType: selection.attendanceType,
+      ...selectedDayEmailAttendance(
+        configuredEventDays.find((entry) => entry.day_date === selection.dayDate),
+        selection.attendanceType,
+      ),
+    }));
     plannedDayWaitlist = waitlist.activeRows.map((row) =>
       row.status === "offered" && claimedInPersonDates.has(row.dayDate)
         ? { ...row, status: "accepted", offerExpiresAt: null }
@@ -380,6 +394,26 @@ export async function buildRegistrationUpdate(
     statements.push(...prepareUserProfileStatements(db, updated.user_id, payload.profilePatch));
   }
   const notificationChanged = scalarChanged || dayAttendanceChanged || waitlistChanged || profileChanged;
+  // A restored registration holds its ticket again; without it the person could not be admitted.
+  if (isCancelled) {
+    await assertRegistrationTicketRestorable(db, registration.id);
+    statements.push(...prepareRestoreRegistrationTicket(db, registration.id, now));
+  }
+  // The ticket was priced for the days it was issued for: other days are priced again in this write.
+  let paymentDue: BuiltRegistrationUpdate["paymentDue"];
+  if (payload.dayAttendance) {
+    const repriced = await planRepriceTicketForDays(db, {
+      eventId: registration.event_id,
+      registrationId: registration.id,
+      userId: registration.user_id,
+      dayAttendance: payload.dayAttendance,
+      restoring: isCancelled,
+      byOrganizer: changedBy !== "self",
+      now,
+    });
+    statements.push(...repriced.statements);
+    paymentDue = repriced.due;
+  }
   statements.push(...prepareParticipationReconciliation(db, registration.event_id, registration.user_id));
   const audit = prepareRegistrationUpdateAudit(db, registration, updated, payload);
   if (audit && notificationChanged) statements.push(audit);
@@ -389,5 +423,6 @@ export async function buildRegistrationUpdate(
     notificationChanged,
     dayAttendance: plannedDayAttendance,
     dayWaitlist: plannedDayWaitlist,
+    paymentDue,
   };
 }

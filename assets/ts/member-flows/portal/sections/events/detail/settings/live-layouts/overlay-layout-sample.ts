@@ -1,4 +1,6 @@
 import { DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS } from "../../../../../../../../shared/schemas/live-stage-display-settings";
+import { DEFAULT_LIVE_SCREEN_SYNC } from "../../../../../../../../shared/schemas/live-screen-sync";
+import { DEFAULT_LIVE_ROOM_OPENING } from "../../../../../../../../shared/schemas/live-room-opening";
 import {
   DEFAULT_LIVE_CHAT_FEED_CONFIG,
   DEFAULT_LIVE_TOP_QUESTIONS_CONFIG,
@@ -17,6 +19,7 @@ import { DEFAULT_LIVE_SCHEDULE_CONFIG } from "../../../../../../../../shared/sch
 import { DEFAULT_LIVE_TICKER_CONTEXT } from "../../../../../../../../shared/schemas/live-session-ticker";
 import { defaultLiveTimerGraphic } from "../../../../../../../../shared/schemas/live-session-timer";
 import type { LiveRoomState } from "../../../../../../../live-session/live-room-state";
+import { NO_LIVE_ROOM_SOURCES } from "../../../../../../../../shared/schemas/live-room-sources";
 
 /**
  * A room with every graphic on air, so the layout editor's canvas shows each
@@ -38,14 +41,23 @@ const POLL_FIELD = livePollFieldSchema.parse({
   validation: { uiWidget: "radios" },
 });
 
-function credit(key: string, name: string, title: string, organization: string | null, moderator = false) {
+function credit(
+  key: string,
+  name: string,
+  title: string,
+  organization: string | null,
+  moderator = false,
+  additionalIdentities: { title: string; organization: string }[] = [],
+) {
   return {
     key,
     name,
     moderator,
     photoUrl: null,
     identity: { title, organization },
+    additionalIdentities,
     roleLabel: moderator ? LIVE_MODERATOR_ROLE_LABEL : null,
+    titleLine: null,
   };
 }
 
@@ -53,7 +65,10 @@ function credit(key: string, name: string, title: string, organization: string |
 export function sampleOverlayRoom(now: number): LiveRoomState {
   const at = (minutes: number) => new Date(now + minutes * 60_000).toISOString();
   const credits = [
-    credit("sample:speaker", "Sam Speaker", "Principal architect", "Example Trust"),
+    // Sam speaks for two identities, so the lower third shows each in turn.
+    credit("sample:speaker", "Sam Speaker", "Principal architect", "Example Trust", false, [
+      { title: "Co-chair", organization: "Example Working Group" },
+    ]),
     credit("sample:panelist", "Pat Panelist", "Head of PKI", "Example Bank"),
     credit("sample:moderator", "Morgan Moderator", "Program chair", null, true),
   ];
@@ -68,6 +83,8 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
     },
     viewer: { role: "operator", name: "Sample operator" },
     questions: [],
+    preparedQuestions: [],
+    preparedQuestionWindow: null,
     polls: [
       {
         id: POLL,
@@ -91,7 +108,6 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
     overlayMode: "switcher",
     overlayLayouts: [],
     tickerContext: DEFAULT_LIVE_TICKER_CONTEXT,
-    chat: [],
     stage: {
       question: {
         id: QUESTION,
@@ -99,6 +115,7 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
         authorName: null,
         authorPhotoUrl: null,
         authorAffiliation: null,
+        addressedTo: null,
       },
       questionChange: null,
       lowerThird: credits[0]!,
@@ -138,7 +155,12 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
         text: DEFAULT_LIVE_CHECK_IN_TEXT,
       },
       timerGraphics: [
-        { ...defaultLiveTimerGraphic(LIVE_SESSION_TIMER_ID), presentation: "digital", label: "Time left" },
+        {
+          ...defaultLiveTimerGraphic(LIVE_SESSION_TIMER_ID),
+          presentation: "digital",
+          showLabel: true,
+          label: "Time left",
+        },
       ],
       topQuestions: {
         config: DEFAULT_LIVE_TOP_QUESTIONS_CONFIG,
@@ -155,6 +177,8 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
         ],
       },
       reactions: true,
+      reactionsGraphic: { showCount: true },
+      scene: null,
     },
     outputs: EMPTY_LIVE_OUTPUTS,
     speakerMessage: { text: "Please wrap up", tone: "warning", flash: false, change: null },
@@ -167,6 +191,10 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
     stageDisplayNext: null,
     stageDisplayNextVotes: null,
     stageDisplaySettings: DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS,
+    screenSync: DEFAULT_LIVE_SCREEN_SYNC,
+    opening: DEFAULT_LIVE_ROOM_OPENING,
+    movedOn: null,
+    sources: NO_LIVE_ROOM_SOURCES,
     burst: null,
     refusal: null,
   };

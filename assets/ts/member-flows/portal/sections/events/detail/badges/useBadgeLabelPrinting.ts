@@ -52,6 +52,11 @@ export function useBadgeLabelPrinting(
   const [job, setJob] = useState<PrintJob | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const errorHeld = useRef(false);
+  function holdError(value: string) {
+    errorHeld.current = true;
+    setError(value);
+  }
   const [message, setMessage] = useState("");
   const [pdf, setPdf] = useState<Blob | null>(null);
   const endpoint = `/api/v1/events/${encodeURIComponent(slug)}/badges`;
@@ -64,6 +69,7 @@ export function useBadgeLabelPrinting(
     printed.current = null;
     setJob(null);
     setBusy(false);
+    errorHeld.current = false;
     setError("");
     setMessage("");
     return () => {
@@ -108,11 +114,12 @@ export function useBadgeLabelPrinting(
   artworkActions.current = { current, loadArtwork };
   useEffect(() => {
     let selected = true;
+    errorHeld.current = false;
     setError("");
     if (design === "event_badge" && artworkActions.current.current())
       void artworkActions.current.loadArtwork().catch((cause: unknown) => {
         if (selected && artworkActions.current.current())
-          setError(cause instanceof Error ? cause.message : "Could not load badge artwork.");
+          holdError(cause instanceof Error ? cause.message : "Could not load badge artwork.");
       });
     else artwork.current = null;
     return () => {
@@ -123,12 +130,13 @@ export function useBadgeLabelPrinting(
     return requestJson(path, schema, { method: "POST", body: JSON.stringify(body), signal: controller.signal });
   }
   async function load(target: BadgeLabelRequest | { userId: string }) {
-    if (running.current || !current()) return;
+    if (running.current || errorHeld.current || !current()) return;
     running.current = true;
     setBusy(true);
     printOwner.current.abort();
     printOwner.current = new AbortController();
     setPdf(null);
+    errorHeld.current = false;
     setError("");
     setMessage(design === "name_qr" ? "Loading label…" : "Loading badge…");
     afterPrint.current?.();
@@ -160,19 +168,19 @@ export function useBadgeLabelPrinting(
       if (current()) {
         setBusy(false);
         setMessage("");
-        setError(cause instanceof Error ? cause.message : "Could not load the print document.");
-        latestResume.current();
+        holdError(cause instanceof Error ? cause.message : "Could not load the print document.");
       }
     }
   }
   function scan(raw: string) {
+    if (errorHeld.current) return false;
     const parsed = badgeLabelRequestSchema.safeParse({
       source: "scan",
       credential: raw,
       operationId: crypto.randomUUID(),
     });
     if (!parsed.success || parsed.data.source !== "scan") {
-      if (current()) setError("Scan an attendee’s ticket QR code.");
+      if (current()) holdError("Scan an attendee’s ticket QR code.");
       return false;
     }
     if (running.current || lastScanned.current === parsed.data.credential) return false;
@@ -237,7 +245,7 @@ export function useBadgeLabelPrinting(
       running.current = false;
       if (current()) {
         setBusy(false);
-        setError(cause instanceof Error ? cause.message : "Could not open printing.");
+        holdError(cause instanceof Error ? cause.message : "Could not open printing.");
       }
     }
   }
@@ -264,6 +272,16 @@ export function useBadgeLabelPrinting(
     html,
     busy,
     error,
+    needsAdvance: Boolean(error),
+    advance: () => {
+      errorHeld.current = false;
+      setError("");
+      setJob(null);
+      setPdf(null);
+      setMessage("");
+      lastScanned.current = "";
+      latestResume.current();
+    },
     message,
     pdf,
     scan,
@@ -279,7 +297,7 @@ export function useBadgeLabelPrinting(
       running.current = false;
       if (current()) {
         setBusy(false);
-        setError(message);
+        holdError(message);
       }
     },
   };

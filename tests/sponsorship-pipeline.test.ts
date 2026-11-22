@@ -958,7 +958,7 @@ describe("Sponsorship sales pipeline", () => {
       contactNameText: "Leader Contact",
       tierText: "Leader",
       eventNameText: "PQC Conference 2026",
-      portalUrl: expect.stringContaining("/portal/#/verify?token="),
+      portalUrl: expect.stringContaining("/portal/#/verify?next=%2Fsponsors&token="),
     });
     expect(queuedPayload.portalUrl).toContain("pkcq1_");
     expect(queuedPayload.portalUrl).not.toContain("pkc1_");

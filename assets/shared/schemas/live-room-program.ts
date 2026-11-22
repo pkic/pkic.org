@@ -22,7 +22,7 @@ export const liveProgramMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("program.changed"), selection: liveProgramSelectionSchema }).strict(),
 ]);
 export const liveProgramReadRouteSchema = {
-  ...requiresPermissions("agenda:live_moderate"),
+  ...requiresPermissions("agenda:live_studio"),
   tags: ["Events"],
   summary: "Read the physical room's active broadcast session",
   request: { params: liveProgramParamsSchema },

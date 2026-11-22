@@ -32,18 +32,31 @@ export async function anonymizedLiveParticipantIds(db: DatabaseLike, userIds: re
 /** An erasure upsert re-arms a finished request: new words from the person reached the room after it ran. */
 const REQUEST_ERASURE = `INSERT INTO event_session_room_erasures(event_id,occurrence_id,user_id,requested_at,attempts)
   SELECT DISTINCT question.event_id,question.occurrence_id,question.author_user_id,?,0 FROM event_session_questions question`;
+const REQUEST_ANSWER_ERASURE = `INSERT INTO event_session_room_erasures(event_id,occurrence_id,user_id,requested_at,attempts)
+  SELECT DISTINCT answer.event_id,answer.occurrence_id,answer.author_user_id,?,0 FROM event_session_question_answers answer`;
 const REARM = `ON CONFLICT(event_id,occurrence_id,user_id) DO UPDATE SET requested_at=excluded.requested_at,
   attempts=0,last_error=NULL,completed_at=NULL`;
 
-/** The anonymization batch's share: redact the person's copied questions and ask their rooms to forget them. */
+/**
+ * The anonymization batch's share: redact the person's copied questions and
+ * answers, and the answers on their questions, and ask every room that holds
+ * any of them to forget the person.
+ */
 export function prepareLiveSessionAnonymization(db: DatabaseLike, userId: string, at: string): StatementLike[] {
   return [
     db.prepare(`${REQUEST_ERASURE} WHERE question.author_user_id=? ${REARM}`).bind(at, userId),
+    db.prepare(`${REQUEST_ANSWER_ERASURE} WHERE answer.author_user_id=? ${REARM}`).bind(at, userId),
     db
       .prepare(
         "UPDATE event_session_questions SET body='',display_text=NULL,redacted_at=? WHERE author_user_id=? AND redacted_at IS NULL",
       )
       .bind(at, userId),
+    db
+      .prepare(
+        `UPDATE event_session_question_answers SET body='',redacted_at=? WHERE redacted_at IS NULL
+         AND (author_user_id=? OR question_id IN (SELECT id FROM event_session_questions WHERE author_user_id=?))`,
+      )
+      .bind(at, userId, userId),
   ];
 }
 
@@ -70,6 +83,20 @@ export function prepareLiveRoomCopyErasureGuard(
          WHERE event_id=? AND occurrence_id=? AND redacted_at IS NULL AND author_user_id IN (${ANONYMIZED_AUTHOR})`,
       )
       .bind(at, eventId, occurrenceId),
+    db
+      .prepare(
+        `${REQUEST_ANSWER_ERASURE} WHERE answer.event_id=? AND answer.occurrence_id=? AND answer.redacted_at IS NULL
+         AND answer.author_user_id IN (${ANONYMIZED_AUTHOR}) ${REARM}`,
+      )
+      .bind(at, eventId, occurrenceId),
+    db
+      .prepare(
+        `UPDATE event_session_question_answers SET body='',redacted_at=?
+         WHERE event_id=? AND occurrence_id=? AND redacted_at IS NULL AND (author_user_id IN (${ANONYMIZED_AUTHOR})
+           OR question_id IN (SELECT id FROM event_session_questions
+             WHERE event_id=? AND occurrence_id=? AND redacted_at IS NOT NULL))`,
+      )
+      .bind(at, eventId, occurrenceId, eventId, occurrenceId),
   ];
 }
 
