@@ -97,3 +97,15 @@ export async function readContentCheckResult(
   const row = await prepareContentCheckResultsRead(db, kind, [subjectId]).first<ContentCheckResultRow>();
   return row ? decodeContentCheckResult(row) : null;
 }
+
+/** The latest verdicts for a page of items, by item; one that was never checked is absent. */
+export async function readContentCheckResults(
+  db: DatabaseLike,
+  kind: ContentCheckKind,
+  subjects: readonly { id: string }[],
+): Promise<Map<string, ContentCheckResult>> {
+  if (!subjects.length) return new Map();
+  const ids = subjects.map((subject) => subject.id);
+  const { results } = await prepareContentCheckResultsRead(db, kind, ids).all<ContentCheckResultRow>();
+  return new Map(results.map((row) => [row.subject_id, decodeContentCheckResult(row)]));
+}

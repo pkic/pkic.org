@@ -35,3 +35,31 @@ describe("expanded table detail cell", () => {
     expect(detailClasses > baseClasses || (detailClasses === baseClasses && detailElements > baseElements)).toBe(true);
   });
 });
+
+describe("empty cell on a phone card", () => {
+  it("stays hidden when the column is end-aligned, so a blank number shows no stray label", () => {
+    const rules = [...readFileSync("assets/ts/ui/DataTable.css", "utf8").matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(
+      ([, selectors, body], order) => ({
+        order,
+        body: body ?? "",
+        selectors: (selectors ?? "")
+          .replace(/\/\*[\s\S]*?\*\//g, "")
+          .split(",")
+          .map((selector) => selector.trim()),
+      }),
+    );
+    const hide = rules.find(
+      (rule) => /display:\s*none/.test(rule.body) && rule.selectors.some((s) => s.endsWith(".pk-table__cell--empty")),
+    );
+    const endAligned = rules.find(
+      (rule) =>
+        /display:\s*inline-flex/.test(rule.body) &&
+        rule.selectors.some((s) => s.endsWith(".pk-table__cell--meta.pk-end")),
+    );
+    expect(hide).toBeDefined();
+    expect(endAligned).toBeDefined();
+    const [hideClasses] = specificity(hide!.selectors.find((s) => s.endsWith(".pk-table__cell--empty"))!);
+    const [endClasses] = specificity(endAligned!.selectors.find((s) => s.endsWith(".pk-end"))!);
+    expect(hideClasses > endClasses || (hideClasses === endClasses && hide!.order > endAligned!.order)).toBe(true);
+  });
+});

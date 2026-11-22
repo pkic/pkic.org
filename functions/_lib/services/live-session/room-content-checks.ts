@@ -9,6 +9,9 @@ import { logError } from "../../logging";
 import { runContentCheck, type ContentCheckRun } from "../content-checks/model";
 import { readEffectiveContentCheck } from "../content-checks/settings";
 import { contentCheckState } from "../content-checks/state";
+import type { LiveLocationChatStore } from "./location-chat-store";
+import { liveRoomChatScope } from "./room-chat-scope";
+import type { LiveRoomStore } from "./room-store";
 
 /** How long a room keeps an event's check settings before it reads them again. */
 export const LIVE_CONTENT_CHECK_SETTINGS_TTL_MS = 2 * 60 * 1000;
@@ -28,8 +31,14 @@ export class LiveRoomContentChecks {
 
   constructor(
     private readonly env: Pick<Env, "AI"> & { DB: DatabaseLike },
-    private readonly eventId: () => string | null,
+    private readonly store: LiveRoomStore,
+    private readonly location: LiveLocationChatStore,
   ) {}
+
+  /** The event whose settings apply: the session's, or the location chat's between sessions. */
+  private eventId(): string | null {
+    return liveRoomChatScope(this.store, this.location)?.eventId ?? null;
+  }
 
   /** Whether a check may run, as far as the room knows without reading: unknown settings count as on. */
   mayRun(kind: LiveCheckKind): boolean {

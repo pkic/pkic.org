@@ -170,7 +170,7 @@ const routeRefusals = {
   "404": jsonErrorResponse("Event not found."),
   "409": jsonErrorResponse("The settings changed; reload before saving."),
 };
-const savedResponseSchema = z.object({ success: z.literal(true), revision: z.number().int() });
+export const contentCheckSavedResponseSchema = z.object({ success: z.literal(true), revision: z.number().int() });
 
 export const contentChecksListRouteSchema = {
   tags: ["Content checks"],
@@ -188,7 +188,10 @@ export const contentCheckSettingsPutRouteSchema = {
     params: contentCheckKindParamsSchema,
     body: { required: true, content: routeJson(contentCheckSettingsInputSchema) },
   },
-  responses: { "200": { description: "Saved.", content: routeJson(savedResponseSchema) }, ...routeRefusals },
+  responses: {
+    "200": { description: "Saved.", content: routeJson(contentCheckSavedResponseSchema) },
+    ...routeRefusals,
+  },
   ...staffAuth,
 };
 export const contentCheckTrialRouteSchema = {
@@ -221,7 +224,10 @@ export const eventContentCheckPutRouteSchema = {
     params: eventContentCheckKindParamsSchema,
     body: { required: true, content: routeJson(contentCheckEventAdditionsInputSchema) },
   },
-  responses: { "200": { description: "Saved.", content: routeJson(savedResponseSchema) }, ...routeRefusals },
+  responses: {
+    "200": { description: "Saved.", content: routeJson(contentCheckSavedResponseSchema) },
+    ...routeRefusals,
+  },
   ...eventOrganizerAuth,
 };
 export const eventContentCheckTrialRouteSchema = {

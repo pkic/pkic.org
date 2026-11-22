@@ -26,6 +26,11 @@ export const CONTENT_CHECK_KIND_LABELS: Record<ContentCheckKind, string> = {
 export const CONTENT_CHECK_MODELS = ["clef", "clef-flash"] as const;
 export type ContentCheckModel = (typeof CONTENT_CHECK_MODELS)[number];
 
+export const CONTENT_CHECK_MODEL_LABELS: Record<ContentCheckModel, string> = {
+  clef: "Thorough (Clef)",
+  "clef-flash": "Fast (Clef Flash)",
+};
+
 export const CONTENT_CHECK_OUTCOMES = ["passed", "advised", "blocked", "unchecked"] as const;
 export type ContentCheckOutcome = (typeof CONTENT_CHECK_OUTCOMES)[number];
 

@@ -18,6 +18,7 @@ export const NODE_UNIT_TEST_FILES = [
   "tests/badge-template-render.test.ts",
   "tests/calendar-subscription-links.test.ts",
   "tests/calendar-timezone.test.ts",
+  "tests/content-check-policy.test.ts",
   "tests/registration-calendar-invite.test.ts",
   "tests/registration-details-email.test.ts",
   "tests/csv.test.ts",

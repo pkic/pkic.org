@@ -23,7 +23,7 @@ import type { LiveQuestionAddressee } from "./room-question-rows";
 import type { LiveRoomStore } from "./room-store";
 import type { LiveChatQuestion } from "./location-chat-on-air";
 import type { LiveAutomaticCheck } from "../../../../assets/shared/schemas/live-session-moderation";
-import type { LiveRoomContentChecks } from "./room-content-checks";
+import type { ContentCheckRun } from "../content-checks/model";
 
 type Handled = LiveRefusal | void;
 type Actor = { userId: string; name: string };
@@ -84,8 +84,9 @@ export class LiveRoomQuestions {
     private readonly controls: LiveRoomControls,
     private readonly authors: LiveRoomAuthors,
     private readonly decisions: LiveRoomModerationStore,
-    private readonly checks: LiveRoomContentChecks,
     private readonly hooks: {
+      /** Runs the automatic check of a question's words; null when no check runs. */
+      checked: (text: string) => Promise<ContentCheckRun | null>;
       /** Takes one of the person's questions from their sliding allowance, or refuses. */
       allowed: (userId: string) => boolean;
       /** The durable copy is due. */
@@ -246,7 +247,7 @@ export class LiveRoomQuestions {
    * moderator in any case, so a check that cannot run lets the question in unflagged.
    */
   private async check(text: string): Promise<LiveAutomaticCheck | LiveRefusal | null> {
-    const run = await this.checks.run("audience_question", text);
+    const run = await this.hooks.checked(text);
     const outcome = run?.verdict.outcome;
     if (outcome === "blocked")
       return {

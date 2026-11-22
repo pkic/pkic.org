@@ -31,6 +31,9 @@ const RawEvidenceRetentionPolicy = lazy(() =>
     default: module.RawEvidenceRetentionPolicy,
   })),
 );
+const EventContentChecks = lazy(() =>
+  import("../content-checks/EventContentChecks").then((module) => ({ default: module.EventContentChecks })),
+);
 const EventRecordings = lazy(() =>
   import("../events/detail/settings/EventRecordings").then((module) => ({ default: module.EventRecordings })),
 );
@@ -95,6 +98,7 @@ export function GroupEventSettingsTab({
                 { key: "cfp", label: "CFP" },
                 { key: "recordings", label: "Recordings" },
                 { key: "retention", label: "Retention" },
+                { key: "automatic-checks", label: "Automatic checks" },
                 ...(event.ownerGroupId === groupId ? [{ key: "sharing", label: "Sharing" }] : []),
               ]
             : []),
@@ -156,6 +160,15 @@ export function GroupEventSettingsTab({
             canManage={canManage}
             canEditStaffing={hasEventAgendaPermission(event.id, "agenda:write")}
             canReadStaffing={hasEventAgendaPermission(event.id, "agenda:read")}
+          />
+        </Suspense>
+      ) : detailId === "automatic-checks" && canManage ? (
+        <Suspense fallback={<Spinner />}>
+          <EventContentChecks
+            slug={event.slug}
+            kind={detailTab}
+            canEdit={canManage}
+            hrefFor={(kind) => `${settingsPath}/automatic-checks/${kind}`}
           />
         </Suspense>
       ) : detailId === "recordings" && canManage ? (
