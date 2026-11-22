@@ -3,14 +3,14 @@
  * event adds to them, a trial run on sample text, and a stored verdict.
  */
 import { z } from "zod";
-import { eventSlugParamsSchema, jsonErrorResponse, trimmedString, utcInstantSchema } from "./api-common";
+import { eventSlugParamsSchema, jsonErrorResponse, trimmedString, utcInstantSchema } from "./api-common.ts";
 import {
   CONTENT_CHECK_KINDS,
   CONTENT_CHECK_MAX_QUESTIONS,
   CONTENT_CHECK_MODELS,
   CONTENT_CHECK_OUTCOMES,
   CONTENT_CHECK_QUESTION_ID_PATTERN,
-} from "../content-checks";
+} from "../content-checks.ts";
 
 export const contentCheckKindSchema = z.enum(CONTENT_CHECK_KINDS);
 export const contentCheckModelSchema = z.enum(CONTENT_CHECK_MODELS);
