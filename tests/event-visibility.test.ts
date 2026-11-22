@@ -400,6 +400,7 @@ describe("event audience viewer state", () => {
       days: [],
       paymentDue: false,
       paymentProcessing: false,
+      paymentUnderReview: false,
       holdsWorkAddress: true,
     });
 
@@ -410,6 +411,7 @@ describe("event audience viewer state", () => {
       days: [],
       paymentDue: false,
       paymentProcessing: false,
+      paymentUnderReview: false,
       holdsWorkAddress: true,
     });
   });
@@ -467,6 +469,7 @@ describe("event audience viewer state", () => {
       days,
       paymentDue: false,
       paymentProcessing: false,
+      paymentUnderReview: false,
       holdsWorkAddress: true,
     });
 
