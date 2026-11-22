@@ -69,6 +69,25 @@ export function sponsorLeadViewerPredicateSql(userExpression: string, sponsorAli
       ))`;
 }
 
+/** A separate lookup over required permissions keeps sponsor policy within D1's expression-depth limit. */
+export function sponsorLeadCapacityForRequirements(userId: string, permissions: readonly string[]) {
+  const predicates: string[] = [];
+  if (permissions.includes("agenda:leads_capture"))
+    predicates.push(
+      `(target.permission='agenda:leads_capture' AND ${sponsorOrganizationCaptureExistsSql("?", "sponsor.id")})`,
+    );
+  if (permissions.includes("agenda:leads_view") || permissions.includes("agenda:leads_export"))
+    predicates.push(`(target.permission IN ('agenda:leads_view','agenda:leads_export')
+      AND ${sponsorLeadViewerPredicateSql("?", "sponsor")})`);
+  if (!predicates.length) return null;
+  return {
+    sql: `SELECT target.permission, sponsor.id
+          FROM required target JOIN sponsorships sponsor ON sponsor.id=target.context_id
+         WHERE target.context_type='event_sponsor' AND (${predicates.join(" OR ")})`,
+    bindings: predicates.map(() => userId),
+  };
+}
+
 /** Internal SQL expressions only; callers bind user and sponsor IDs. */
 export function sponsorLeadViewerExistsSql(userExpression: string, sponsorExpression: string): string {
   return `EXISTS(SELECT 1 FROM sponsorships viewer_sponsor

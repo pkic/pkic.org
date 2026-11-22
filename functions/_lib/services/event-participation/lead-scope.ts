@@ -1,5 +1,7 @@
 import type { DatabaseLike, UserBackedAuthAdmin } from "../../types";
-import { permissionAuthorizationEvidenceForResource, tokenAllowsPermission } from "../../auth/permissions";
+import { tokenAllowsPermission } from "../../auth/permissions";
+import { activeOauthAuthorizationSql, oauthPermissionCeilingSql } from "../../auth/oauth/authorization-ceiling-query";
+import { scannerCapabilities } from "../../../../assets/shared/event-scanner-permissions";
 import { guardAuthorizedDatabase } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import type { AuthorizationEvidence } from "../../db/authorization-guard";
@@ -47,12 +49,32 @@ export function sponsorLeadReadEvidence(
   if (!tokenAllowsPermission(actor, permission)) return { sql: "0", bindings: [] };
   const sql = sponsorLeadPermissionSql(permission, sponsorExpression);
   const bindings = sponsorLeadPermissionBindings(permission, actor.id);
-  if (!actor.scopeRestricted) return { sql, bindings };
-  const delegated = permissionAuthorizationEvidenceForResource(actor, permission, {
-    type: "event_sponsor",
-    idSql: sponsorExpression,
-  });
-  return { sql: `(${sql}) AND EXISTS (${delegated.sql})`, bindings: [...bindings, ...delegated.bindings] };
+  if (!actor.oauthAuthorizationId) return { sql, bindings };
+  return {
+    sql: `(${sql}) AND EXISTS (
+      WITH active_approval AS MATERIALIZED (
+        SELECT authorization.id FROM oauth_authorizations authorization
+        JOIN sessions session ON session.id=authorization.session_id AND session.user_id=authorization.user_id
+        WHERE authorization.id=? AND authorization.user_id=? AND authorization.session_id=?
+          AND session.revoked_at IS NULL AND session.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')
+          AND ${activeOauthAuthorizationSql("authorization")}
+      ),
+      sponsor_requirement AS (
+        SELECT ? AS permission, 'event_sponsor' AS context_type, ${sponsorExpression} AS context_id,
+          ? AS scanner_legacy_compatible
+      )
+      SELECT 1 FROM active_approval approval CROSS JOIN sponsor_requirement requirement
+      WHERE ${oauthPermissionCeilingSql("approval", "requirement")}
+    )`,
+    bindings: [
+      ...bindings,
+      actor.oauthAuthorizationId,
+      actor.id,
+      actor.sessionId ?? null,
+      permission,
+      (scannerCapabilities as readonly string[]).includes(permission) ? 1 : 0,
+    ],
+  };
 }
 
 /** Recheck exact sponsor ownership atomically, including transport receipts in the same batch. */

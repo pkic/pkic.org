@@ -2,9 +2,8 @@ import { activeOauthAuthorizationSql, oauthPermissionCeilingSql } from "./oauth/
 import { scannerCapabilities } from "../../../assets/shared/event-scanner-permissions";
 import { eventTeamScannerRoleScopeSql } from "./event-team-scanner-scope";
 import {
-  sponsorLeadViewerExistsSql,
+  sponsorLeadCapacityForRequirements,
   sponsorLeadViewerPredicateSql,
-  sponsorOrganizationCaptureExistsSql,
   sponsorOrganizationCapturePredicateSql,
 } from "./sponsor-organization-lead-access";
 import { all } from "../db/queries";
@@ -391,6 +390,12 @@ function buildPermissionsAuthorizationEvidence(
       : { sql: "SELECT 1 WHERE 0", bindings: [] };
   }
 
+  const sponsorCapacity = includeSponsorLeadCapacity
+    ? sponsorLeadCapacityForRequirements(
+        actor.id,
+        unique.map(({ permission }) => permission),
+      )
+    : null;
   const delegatedCeiling = actor.oauthAuthorizationId
     ? `EXISTS(SELECT 1 FROM oauth_authorizations authorization
     WHERE authorization.id=? AND authorization.user_id=actor.id AND authorization.session_id=?
@@ -401,7 +406,7 @@ function buildPermissionsAuthorizationEvidence(
             SELECT permission, context_type, context_id,
                    permission IN (SELECT value FROM json_each(?))
               FROM (${required.sql})
-          )${memberSelection ? `, selected_actor_member(member_id) AS MATERIALIZED(${memberSelection.sql})` : ""}
+          )${memberSelection ? `, selected_actor_member(member_id) AS MATERIALIZED(${memberSelection.sql})` : ""}${sponsorCapacity ? `, sponsor_lead_capacity(permission, context_id) AS MATERIALIZED(${sponsorCapacity.sql})` : ""}
           SELECT 1
             FROM users actor
            WHERE actor.id = ? AND actor.active = 1
@@ -456,17 +461,11 @@ function buildPermissionsAuthorizationEvidence(
                        )
                   )
                   ${
-                    includeSponsorLeadCapacity && unique.some(({ permission }) => permission === "agenda:leads_capture")
-                      ? `OR (requirement.permission='agenda:leads_capture' AND requirement.context_type='event_sponsor'
-                      AND ${sponsorOrganizationCaptureExistsSql("actor.id", "requirement.context_id")})`
-                      : ""
-                  }
-                  ${
-                    includeSponsorLeadCapacity &&
-                    unique.some(({ permission }) => ["agenda:leads_view", "agenda:leads_export"].includes(permission))
-                      ? `OR (requirement.permission IN ('agenda:leads_view','agenda:leads_export')
-                      AND requirement.context_type='event_sponsor'
-                      AND ${sponsorLeadViewerExistsSql("actor.id", "requirement.context_id")})`
+                    sponsorCapacity
+                      ? `OR (requirement.context_type='event_sponsor' AND EXISTS (
+                        SELECT 1 FROM sponsor_lead_capacity capacity
+                         WHERE capacity.permission=requirement.permission AND capacity.context_id=requirement.context_id
+                      ))`
                       : ""
                   }
                   ${actor.oauthAuthorizationId ? ")" : ""}
@@ -477,6 +476,7 @@ function buildPermissionsAuthorizationEvidence(
       JSON.stringify(scannerCapabilities),
       ...required.bindings,
       ...(memberSelection?.bindings ?? []),
+      ...(sponsorCapacity?.bindings ?? []),
       actor.id,
       ...(actor.sessionId ? [actor.sessionId] : []),
       ...(actor.oauthAuthorizationId ? [actor.oauthAuthorizationId, actor.sessionId ?? null] : []),
