@@ -6,6 +6,7 @@ import { saveClassifierSettings, saveEventClassifierAdditions } from "../functio
 import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { seedEventAndAdmin } from "./helpers/context";
+import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { proposalIdentityFixture } from "./helpers/proposal-identity";
 import { resetDb } from "./helpers/reset-db";
 
@@ -90,8 +91,38 @@ describe("saving questions that must fit together", () => {
         afterRead(env.DB, "FROM event_classifier_additions", () => saveEvent(env.DB)),
       ),
     );
-    // Refused either way: the guard sees the event save as a change (409), or the later read already sees its questions (400).
-    expect([400, 409]).toContain(wideError?.status);
+    expect(wideError?.status).toBe(409);
+  });
+
+  it("counts the events over the limit in one bounded read, however many events replace a question", async () => {
+    const at = new Date().toISOString();
+    const wide = questions(CLASSIFIER_MAX_QUESTIONS, "wide");
+    // Many events replace a PKIC-wide question, one adds a new one but turns another off, and one goes over.
+    const events = [
+      ...Array.from({ length: 200 }, () => ({ questions: [wide[0]!], disabled: [] as string[] })),
+      { questions: questions(1, "event"), disabled: [wide[1]!.id] },
+      { questions: questions(1, "event"), disabled: [] },
+    ];
+    await env.DB.batch(
+      events.flatMap((event, index) => [
+        env.DB.prepare(
+          "INSERT INTO events (id, slug, name, timezone, registration_mode, settings_json, created_at, updated_at) VALUES (?, ?, 'Limit test', 'UTC', 'invite_or_open', '{}', ?, ?)",
+        ).bind(`limit-${index}`, `limit-${index}`, at, at),
+        env.DB.prepare(
+          `INSERT INTO event_classifier_additions (event_id, kind, context, questions_json, disabled_question_ids_json, revision, updated_at)
+           VALUES (?, 'chat_message', '', ?, ?, 1, ?)`,
+        ).bind(`limit-${index}`, JSON.stringify(event.questions), JSON.stringify(event.disabled), at),
+      ]),
+    );
+    const profile = profileD1Flow(env.DB, { measurePayloadBytes: true });
+    const error = await refusal(saveWide(CLASSIFIER_MAX_QUESTIONS, actor, profile.db));
+    expect(error?.status).toBe(400);
+    expect(error?.details.fieldErrors.questions?.[0]).toContain("1 event adds");
+    const additionsReads = profile
+      .summary()
+      .queries.filter((query) => query.sql.includes("event_classifier_additions"));
+    expect(additionsReads.length).toBe(1);
+    expect(additionsReads.every((query) => query.resultBytes! < 1_000)).toBe(true);
   });
 });
 

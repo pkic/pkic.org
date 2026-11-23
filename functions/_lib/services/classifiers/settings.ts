@@ -235,30 +235,24 @@ async function refuseQuestionsEventsCannotCarry(
   kind: ClassifierKind,
   questions: readonly ClassifierQuestion[],
 ): Promise<StatementLike> {
-  // A merged check never asks more than the PKIC-wide questions plus what the event adds, so only rows with enough
-  // additions can exceed the limit; the database narrows to those and the Worker decodes just them.
-  // The snapshot is read first: a write after it moves the count or revisions, so the guard below refuses the save.
+  // One set-based read, bounded to a single row: how many events would ask more than a check runs, and the count and
+  // revision sum the guard below compares, all from the same snapshot. The merge counted here is
+  // `mergedClassifierQuestions`: the PKIC-wide and event question ids together, less the ones the event turns off.
   const snapshot = await db
     .prepare(
-      "SELECT COUNT(*) AS rows_read, COALESCE(SUM(revision), 0) AS revisions FROM event_classifier_additions WHERE kind = ?",
+      `SELECT COUNT(*) AS rows_read, COALESCE(SUM(revision), 0) AS revisions,
+         COALESCE(SUM((
+           SELECT COUNT(*) FROM (
+             SELECT value AS id FROM json_each(?2)
+             UNION SELECT json_extract(added.value, '$.id') FROM json_each(additions.questions_json) AS added
+           ) AS merged
+           WHERE merged.id NOT IN (SELECT value FROM json_each(additions.disabled_question_ids_json))
+         ) > ?3), 0) AS over
+       FROM event_classifier_additions AS additions WHERE kind = ?1`,
     )
-    .bind(kind)
-    .first<{ rows_read: number; revisions: number }>();
-  const { results } = await db
-    .prepare(
-      `SELECT questions_json, disabled_question_ids_json, context FROM event_classifier_additions
-       WHERE kind = ? AND json_array_length(questions_json) > ?`,
-    )
-    .bind(kind, CLASSIFIER_MAX_QUESTIONS - questions.length)
-    .all<Pick<AdditionsRow, "questions_json" | "disabled_question_ids_json" | "context">>();
-  const over = results.filter(
-    (row) =>
-      classifierQuestionLimitRefusal(questions, {
-        context: row.context,
-        questions: decodeQuestions(row.questions_json),
-        disabledQuestionIds: decodeIds(row.disabled_question_ids_json),
-      }) !== null,
-  ).length;
+    .bind(kind, JSON.stringify(questions.map((question) => question.id)), CLASSIFIER_MAX_QUESTIONS)
+    .first<{ rows_read: number; revisions: number; over: number }>();
+  const over = snapshot?.over ?? 0;
   if (over)
     throw questionLimitError(
       "questions",
