@@ -219,6 +219,7 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
   handlers = null,
   highlighted = false,
   pinned = false,
+  removed = false,
 }: {
   message: LiveChatMessage;
   viewer: Viewer;
@@ -235,8 +236,21 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
   highlighted?: boolean;
   /** The message is pinned above the chat. */
   pinned?: boolean;
+  /** Moderation took the message after this reader saw it: only its place stays, without author or words. */
+  removed?: boolean;
 }) {
   const [actionError, setActionError] = useState(false);
+  if (removed)
+    return (
+      <li ref={measure} class="pk-live-chat__row" data-trace="">
+        {divider !== null ? (
+          <p class="pk-live-chat__divider" role="separator">
+            {divider}
+          </p>
+        ) : null}
+        <p class="pk-live-chat__trace">Message removed</p>
+      </li>
+    );
   const actions = liveChatMessageActions(message, viewer, pinned);
   const items = disabled
     ? []

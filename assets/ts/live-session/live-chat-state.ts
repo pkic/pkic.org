@@ -6,6 +6,8 @@ import type { LiveLocationChatSnapshot, LiveRoomServerMessage } from "../../shar
 export interface LiveChatAnswers {
   /** History pages the room answered per channel, so a view sees each answer, even a page that added nothing. */
   chatPages?: Partial<Record<LiveChatChannel, number>>;
+  /** Messages moderation took while this browser had them: they stay as a nameless trace until the room says more. */
+  chatRemoved?: string[];
 }
 
 type ChatState = Pick<LiveLocationChatSnapshot, "chat" | "chatEarlier" | "chatPinned" | "chatReports" | "viewer"> &
@@ -112,12 +114,53 @@ function repin<State extends ChatState>(state: State, messageId: string, now: Li
   return { ...state, chatPinned: shown ? now : null };
 }
 
+/**
+ * The chat without a message that is gone. One moderation took stays in place as a trace with nothing of its
+ * author or words, so the readers who saw it know it was taken; one deleted by its author simply goes.
+ */
+function withoutMessage(
+  state: ChatState,
+  messageId: string,
+  channel: LiveChatChannel,
+  moderated: boolean,
+): Pick<ChatState, "chat" | "chatRemoved"> {
+  const gone = (entry: LiveChatMessage) => entry.id === messageId && entry.channel === channel;
+  if (!moderated || !state.chat.some(gone))
+    return { chat: state.chat.filter((entry) => !gone(entry)), chatRemoved: state.chatRemoved };
+  return {
+    chat: state.chat.map((entry) => (gone(entry) ? liveChatTrace(entry) : entry)),
+    chatRemoved: [...new Set([...(state.chatRemoved ?? []), messageId])],
+  };
+}
+
+/** What a reader keeps of a message moderation took: its place in the chat, and nothing it said or who said it. */
+function liveChatTrace(entry: LiveChatMessage): LiveChatMessage {
+  return {
+    id: entry.id,
+    channel: entry.channel,
+    authorName: "",
+    text: "",
+    mine: false,
+    sentAt: entry.sentAt,
+    ...(entry.occurrenceId ? { occurrenceId: entry.occurrenceId } : {}),
+  };
+}
+
 /** Applies one chat message from the room to the browser's chat. */
 export function applyLiveChatMessage<State extends ChatState>(state: State, message: ChatServerMessage): State {
   switch (message.type) {
     case "chat.message":
       return repin(
-        requote(upsert(state, message.message), message.message.id, message.message),
+        requote(
+          upsert(
+            state.chatRemoved?.includes(message.message.id)
+              ? { ...state, chatRemoved: state.chatRemoved.filter((id) => id !== message.message.id) }
+              : state,
+            message.message,
+          ),
+          message.message.id,
+          message.message,
+        ),
         message.message.id,
         message.message,
       );
@@ -126,7 +169,7 @@ export function applyLiveChatMessage<State extends ChatState>(state: State, mess
         requote(
           {
             ...state,
-            chat: state.chat.filter((entry) => entry.id !== message.messageId || entry.channel !== message.channel),
+            ...withoutMessage(state, message.messageId, message.channel, message.moderated === true),
             chatReports: state.chatReports?.filter((entry) => entry.id !== message.messageId),
           },
           message.messageId,

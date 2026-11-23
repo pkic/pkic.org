@@ -449,6 +449,7 @@ export function LiveChat({
                   handlers={handlers}
                   highlighted={highlighted === message.id}
                   pinned={state.chatPinned?.id === message.id}
+                  removed={state.chatRemoved?.includes(message.id) ?? false}
                 />
               ))}
               {list.after ? (

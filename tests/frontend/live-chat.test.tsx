@@ -344,6 +344,22 @@ describe("live chat", () => {
     expect(sent(send)).toEqual([{ type: "chat.history", channel: "attendee", before: chat[0].id }]);
   });
 
+  it("shows a message moderation took as a trace without its author or words", () => {
+    const state = applyLocationChatMessage(
+      stateWith({ chat: [chatMessage({ authorName: "Grace", text: "Buy now" })] }),
+      {
+        type: "chat.removed",
+        messageId: MESSAGE,
+        channel: "attendee",
+        moderated: true,
+      },
+    )!;
+    const host = mount(<LiveChat state={state} disabled={false} send={vi.fn(() => true)} />);
+    expect(host.textContent).toContain("Message removed");
+    expect(host.textContent).not.toContain("Grace");
+    expect(host.textContent).not.toContain("Buy now");
+    expect(host.querySelector("[data-trace] button")).toBeNull();
+  });
   it("shows a blocked person why they can't post, and keeps the chat readable", () => {
     const paused = mount(
       <LiveChat
