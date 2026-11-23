@@ -35,8 +35,8 @@ const SAMPLE_QUESTIONS = [
 ];
 
 const KINDS = [
-  { kind: "chat_message", model: "clef-flash", questions: SAMPLE_QUESTIONS.slice(0, 1) },
-  { kind: "audience_question", model: "clef-flash", questions: SAMPLE_QUESTIONS.slice(0, 1) },
+  { kind: "chat_message", model: "clef", questions: SAMPLE_QUESTIONS.slice(0, 1) },
+  { kind: "audience_question", model: "clef", questions: SAMPLE_QUESTIONS.slice(0, 1) },
   { kind: "proposal", model: "clef", questions: SAMPLE_QUESTIONS },
   { kind: "presentation", model: "clef", questions: SAMPLE_QUESTIONS.slice(0, 1) },
   { kind: "organization_profile", model: "clef", questions: SAMPLE_QUESTIONS.slice(0, 1) },
