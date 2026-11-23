@@ -1,5 +1,4 @@
 import { useDialogQueryState } from "../../../../../../hooks/useDialogQueryState";
-import "./SessionPromotionKit.css";
 import { useState } from "preact/hooks";
 import { promotionKitSaveSchema } from "../../../../../../../shared/schemas/event-promotion-kit";
 import {

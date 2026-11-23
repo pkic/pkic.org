@@ -11,8 +11,10 @@ import {
   portalOfflineAssetPathSchema,
 } from "../../assets/shared/schemas/portal-offline-assets.ts";
 
-/** Bind the exact emitted public module closure to the portal shell before sealing the release. */
-export async function publishPortalOfflineInventory(output) {
+/** Bind the exact emitted public module closure to the portal shell before sealing the release.
+ * @param {readonly string[]} [deferredStyles] stylesheets the lazy sections load on demand instead of the shell
+ */
+export async function publishPortalOfflineInventory(output, deferredStyles = []) {
   const portal = resolve(output, "portal/index.html");
   const html = await readFile(portal, "utf8");
   const inventories = await Promise.all(
@@ -22,10 +24,13 @@ export async function publishPortalOfflineInventory(output) {
   );
   const dom = new JSDOM(html);
   const document = dom.window.document;
-  // Astro can eagerly link CSS from lazy routes. The actual shell owns those
-  // public styles even when its scanner module graph does not import them.
-  const stylesheets = [...document.querySelectorAll('link[rel~="stylesheet"][href]')].map((link) => {
-    const href = portalOfflineAssetPathSchema.parse(link.getAttribute("href"));
+  // The offline scanner renders inside lazy portal sections whose styles its own module graph does not
+  // import, so it keeps every portal stylesheet: those the shell links and those the sections load on demand.
+  const linked = [...document.querySelectorAll('link[rel~="stylesheet"][href]')].map((link) =>
+    link.getAttribute("href"),
+  );
+  const stylesheets = [...linked, ...deferredStyles].map((path) => {
+    const href = portalOfflineAssetPathSchema.parse(path);
     if (!href.endsWith(".css")) throw new Error(`Portal stylesheet is not CSS: ${href}`);
     return href;
   });

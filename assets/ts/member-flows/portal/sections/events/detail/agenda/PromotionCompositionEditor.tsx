@@ -1,3 +1,4 @@
+import "./SessionPromotionKit.css";
 import { PromotionSessionPicks } from "./PromotionSessionPicks";
 import { useState } from "preact/hooks";
 import {

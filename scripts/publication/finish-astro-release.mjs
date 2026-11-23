@@ -4,6 +4,7 @@ import {
   validateDocumentRedirectRules,
 } from "./collect-document-redirects.mjs";
 import { collectSessionRedirects } from "./collect-session-redirects.mjs";
+import { deferPortalRouteStyles } from "./defer-portal-route-styles.mjs";
 import { publishPortalOfflineInventory } from "./publish-portal-offline-inventory.mjs";
 import { createReleaseIntegrity } from "./release-integrity.mjs";
 import { publicationTimings } from "./publication-timings.mjs";
@@ -230,7 +231,7 @@ async function finishRelease(output, pages, timings) {
     await mkdir(resolve(output, "_published/agenda"), { recursive: true });
     await writeFile(resolve(output, PUBLICATION_DOCUMENT_ROUTES_PATH), JSON.stringify(documentRoutes));
     files.push(PUBLICATION_DOCUMENT_ROUTES_PATH);
-    files.push(await publishPortalOfflineInventory(output));
+    files.push(await publishPortalOfflineInventory(output, await deferPortalRouteStyles(output)));
     await writeFile(
       resolve(output, "publication.json"),
       JSON.stringify(
