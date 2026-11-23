@@ -31,9 +31,9 @@ Use [Google Maps](https://www.google.nl/maps/dir/de+Meervaart+Theater,+Meer+en+V
 
 ### Parking
 
-**[Parking Garage Nieuw-West](https://parking-nieuwwest.nl/) (recommended)**, a 5-minute walk from Meervaart
+**[Parking Garage Nieuw-West](https://parking-nieuwwest.nl/) (recommended)**, a short walk from Meervaart
 
-Enter at Jan Celestraat 11 (under Jumbo) or Nicolaas Anslijnstraat 276. See the [garage's access notice](https://parking-nieuwwest.nl/werkzaamheden-nicolaas-anslijnstraat-bij-parking-nieuw-west/) for temporary changes.
+For December 1–3, use the vehicle entrance at **Nicolaas Anslijnstraat 276, 1068 XA Amsterdam**, on the side of the garage closest to Meervaart. If that entrance is closed, use **Jan Celestraat 11 (under Jumbo)** to enter the same garage. The [garage operator's notice](https://parking-nieuwwest.nl/werkzaamheden-nicolaas-anslijnstraat-bij-parking-nieuw-west/) lists the Nicolaas Anslijnstraat entrance as closed through November 27.
 
 The [conference parking rate](https://meervaart.nl/en/meetings-events/about-meervaart/directions) is €12.50 per day. Pick up a discount ticket at Meervaart reception and keep it with your original parking ticket for when you exit the garage.
 
