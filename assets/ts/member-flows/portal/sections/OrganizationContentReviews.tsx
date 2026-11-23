@@ -23,7 +23,7 @@ import { Field } from "../../../ui/Field";
 import { PageHeader } from "../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { fmt, toast } from "../ui";
-import { AutomaticReview } from "./content-checks/AutomaticReview";
+import { AutomaticReview } from "./classifiers/AutomaticReview";
 import { MarkdownEditor } from "../../../components/markdown-editor/MarkdownInput";
 
 const API_BASE = "/api/v1/organizations/content-reviews";

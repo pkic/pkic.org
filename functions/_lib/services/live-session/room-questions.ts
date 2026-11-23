@@ -23,7 +23,7 @@ import type { LiveQuestionAddressee } from "./room-question-rows";
 import type { LiveRoomStore } from "./room-store";
 import type { LiveChatQuestion } from "./location-chat-on-air";
 import type { LiveAutomaticCheck } from "../../../../assets/shared/schemas/live-session-moderation";
-import type { ContentCheckRun } from "../content-checks/model";
+import type { ClassifierRun } from "../classifiers/model";
 
 type Handled = LiveRefusal | void;
 type Actor = { userId: string; name: string };
@@ -96,7 +96,7 @@ export class LiveRoomQuestions {
     private readonly decisions: LiveRoomModerationStore,
     private readonly hooks: {
       /** Runs the automatic check of a question's words; null when no check runs. */
-      checked: (text: string) => Promise<ContentCheckRun | null>;
+      checked: (text: string) => Promise<ClassifierRun | null>;
       /** Takes one of the person's questions from their sliding allowance, or refuses. */
       allowed: (userId: string) => boolean;
       /** The durable copy is due. */

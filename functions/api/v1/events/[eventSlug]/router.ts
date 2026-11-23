@@ -69,7 +69,7 @@ import {
 } from "./live-overlay-layouts";
 import { EventDaysGet, EventDaysPut } from "./days";
 import { registerTicketRoutes } from "./tickets";
-import { registerEventContentCheckRoutes } from "./content-checks";
+import { registerEventClassifierRoutes } from "./classifiers";
 import { registerUnfinishedRegistrationRoutes } from "./unfinished-registrations";
 import { EventTeamRoleCandidatesList, EventTeamRosterList, EventTeamRoleCreate, EventTeamRolesList } from "./roles";
 import { EventTeamRoleDelete } from "./roles/[roleAssignmentId]";
@@ -270,7 +270,7 @@ openapi.route("/registrations", registrations_Router);
 openapi.get("/days", EventDaysGet);
 openapi.put("/days", EventDaysPut);
 registerTicketRoutes(openapi);
-registerEventContentCheckRoutes(openapi);
+registerEventClassifierRoutes(openapi);
 openapi.post("/images/hero", EventHeroImagePost);
 openapi.get("/images/motif", EventMotifGet);
 openapi.get("/images/:file", EventHeroImageGet);

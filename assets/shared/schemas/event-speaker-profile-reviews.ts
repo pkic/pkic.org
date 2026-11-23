@@ -2,7 +2,7 @@ import { z } from "zod";
 import { agendaRevisionSchema, agendaSnapshotSchema, agendaSpeakerProfileCandidateSchema } from "./event-agenda";
 import { databaseIdSchema } from "./identifiers";
 import { utcInstantSchema } from "./api-common";
-import { contentCheckResultSchema } from "./content-checks";
+import { classifierResultSchema } from "./classifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 export const speakerProfileReviewQuerySchema = listQuerySchema(["displayName"] as const).extend({
@@ -17,7 +17,7 @@ export const speakerProfileReviewSchema = agendaSpeakerProfileCandidateSchema.ex
   available: z.boolean(),
   reviewedAt: utcInstantSchema.nullable(),
   /** The automatic check's reading of the job title and biography, or null when never checked. */
-  automaticReview: contentCheckResultSchema.nullable().default(null),
+  automaticReview: classifierResultSchema.nullable().default(null),
 });
 export type SpeakerProfileReview = z.infer<typeof speakerProfileReviewSchema>;
 export const speakerProfileReviewsResponseSchema = paginatedResponseSchema(

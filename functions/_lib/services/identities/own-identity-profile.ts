@@ -10,8 +10,8 @@ import { AppError } from "../../errors";
 import { parseLinksJson } from "../../../../assets/shared/schemas/links";
 import type { OwnIdentityProfile } from "../../../../assets/shared/schemas/own-identity-profile";
 import type { DatabaseLike, Env } from "../../types";
-import { screenProfileContent } from "../content-checks/profile-screening";
-import { prepareStoreContentCheckResult } from "../content-checks/results";
+import { screenProfileContent } from "../classifiers/profile-screening";
+import { prepareStoreClassifierResult } from "../classifiers/results";
 import type { OwnAccount } from "../../auth/member";
 import { memberSessionAuthorizationEvidence, userSessionAuthorizationEvidence } from "../../auth/identity-capacities";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
@@ -194,11 +194,11 @@ export async function updateOwnIdentityProfile(
     }),
   );
   if (edit.individualJobTitle) statements.push(edit.individualJobTitle);
-  if (verdict) statements.push(prepareStoreContentCheckResult(db, "person_profile", current.id, verdict, now));
+  if (verdict) statements.push(prepareStoreClassifierResult(db, "person_profile", current.id, verdict, now));
   // Changed text that was not checked, because both were emptied or no check ran, leaves no verdict of the old text.
   else if (textChanged)
     statements.push(
-      db.prepare("DELETE FROM content_check_results WHERE kind = 'person_profile' AND subject_id = ?").bind(current.id),
+      db.prepare("DELETE FROM classifier_results WHERE kind = 'person_profile' AND subject_id = ?").bind(current.id),
     );
   try {
     await db.batch(statements);

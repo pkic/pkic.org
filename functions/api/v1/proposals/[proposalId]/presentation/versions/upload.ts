@@ -5,7 +5,7 @@ import {
   requirePresentationBucket,
   uploadProposalPresentation,
 } from "../../../../../../_lib/services/presentation-upload";
-import { checkUploadedPresentation } from "../../../../../../_lib/services/content-checks/presentation-checks";
+import { checkUploadedPresentation } from "../../../../../../_lib/services/classifiers/presentation-checks";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
 
 export async function onRequestPost(c: AdminContext): Promise<Response> {

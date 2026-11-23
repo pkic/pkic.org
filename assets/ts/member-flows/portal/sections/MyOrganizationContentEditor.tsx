@@ -23,7 +23,7 @@ import {
   ORGANIZATION_URL_FIELD_ORDER,
   organizationPath,
 } from "../../../shared/organization-content";
-import { PROFILE_CHECK_ADVICE } from "../../../../shared/content-checks";
+import { PROFILE_CHECK_ADVICE } from "../../../../shared/classifiers";
 import { successResponseSchema } from "../../../../shared/schemas/api-common";
 import {
   organizationContentReviewCreateSchema,

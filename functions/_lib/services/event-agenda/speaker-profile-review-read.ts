@@ -8,7 +8,7 @@ import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import { all, first } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
 import { sha256Hex } from "../../utils/crypto";
-import { readContentCheckResults } from "../content-checks/results";
+import { readClassifierResults } from "../classifiers/results";
 import { publicUserHeadshotPath } from "../user-headshot";
 import { creditedIdentityIdSql } from "./credited-identity";
 import { agendaSpeakerDisplayNameSql } from "./speaker-name";
@@ -122,7 +122,7 @@ export async function listSpeakerProfileReviews(
     [...bindings, query.limit, query.offset],
   );
   const profiles = await Promise.all(rows.map(decodeSpeakerProfile));
-  const verdicts = await readContentCheckResults(
+  const verdicts = await readClassifierResults(
     db,
     "person_profile",
     profiles.flatMap((profile) => (profile.identityId ? [{ id: profile.identityId }] : [])),

@@ -191,11 +191,11 @@ function seedMemberProfiles(cfg) {
   ]);
 }
 
-function seedContentChecks(cfg) {
+function seedClassifiers(cfg) {
   if (cfg.wranglerEnv !== "local") {
-    throw new Error("Sample content-check questions may only be seeded into local D1.");
+    throw new Error("Sample classifier questions may only be seeded into local D1.");
   }
-  run("node", [script("seed-local-content-checks.mjs"), ...persistFlag(cfg)]);
+  run("node", [script("seed-local-classifiers.mjs"), ...persistFlag(cfg)]);
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
@@ -216,6 +216,6 @@ if (runAll || only.has("admin")) seedAdmin(cfg);
 if (runAll || only.has("event")) seedEvent(cfg);
 if (runAll || only.has("templates")) seedTemplates(cfg);
 if (only.has("profiles") || (runAll && env === "local")) seedMemberProfiles(cfg);
-if (only.has("checks") || (runAll && env === "local")) seedContentChecks(cfg);
+if (only.has("checks") || (runAll && env === "local")) seedClassifiers(cfg);
 
 console.log(`\n✓ Done seeding ${cfg.label}.`);

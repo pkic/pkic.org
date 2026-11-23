@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { eventIdSchema, utcInstantSchema } from "./api-common";
 import { eventSummarySchema } from "./event-read-models";
-import { contentCheckResultSchema } from "./content-checks";
+import { classifierResultSchema } from "./classifiers";
 import { activeFormSummarySchema } from "./forms";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema, sortColumnSchemaWithDefault } from "./pagination";
@@ -115,7 +115,7 @@ export const eventProposalDetailResponseSchema = z.object({
   minReviewsRequired: z.number().int().nonnegative(),
   sessionTypes: proposalSessionTypesSchema,
   /** Reviewers only: the automatic check's verdict and scores from the latest submission or edit. */
-  automaticReview: contentCheckResultSchema.nullable().default(null),
+  automaticReview: classifierResultSchema.nullable().default(null),
 });
 
 export const proposalStatsSchema = z.object({

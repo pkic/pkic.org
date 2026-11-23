@@ -22,7 +22,7 @@ import { RowActions } from "../../../../../../ui/RowActions";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import { Badge } from "../../../../../../ui/Badge";
 import { ExternalLink } from "../../../../../../ui/ExternalLink";
-import { AutomaticReview } from "../../../content-checks/AutomaticReview";
+import { AutomaticReview } from "../../../classifiers/AutomaticReview";
 
 export function speakerProfileReviewColumns(
   canReview: boolean,

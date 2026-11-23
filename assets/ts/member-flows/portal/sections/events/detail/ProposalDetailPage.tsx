@@ -31,7 +31,7 @@ import { FormAnswerTable } from "../../../../../components/forms/FormResponseVie
 import { AuditLogSection } from "./proposal-detail/AuditLogSection";
 import { PresentationVersionsTab } from "./proposal-detail/PresentationVersionsTab";
 import { ProposalStanding } from "./proposal-detail/ProposalStanding";
-import { AutomaticReview } from "../../content-checks/AutomaticReview";
+import { AutomaticReview } from "../../classifiers/AutomaticReview";
 import { ProposalReviewsTab } from "./proposal-detail/ProposalReviewsTab";
 import {
   proposalActions,

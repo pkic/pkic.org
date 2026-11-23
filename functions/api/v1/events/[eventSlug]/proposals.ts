@@ -18,7 +18,7 @@ import { eventProposalsListRouteSchema } from "../../../../../assets/shared/sche
 import { eventProposalsResponseSchema } from "../../../../../assets/shared/schemas/event-proposals";
 import { requireInternalSecret } from "../../../../_lib/request";
 import { submitProposal } from "../../../../_lib/services/proposal-submission";
-import { screenProposal } from "../../../../_lib/services/content-checks/proposal-screening";
+import { screenProposal } from "../../../../_lib/services/classifiers/proposal-screening";
 import { getProposalAccessForEvent } from "../../../../_lib/auth/proposal-access";
 import { listEventProposals } from "../../../../_lib/services/event-proposals-list";
 import type { AdminContext } from "../../../../_lib/db/context";

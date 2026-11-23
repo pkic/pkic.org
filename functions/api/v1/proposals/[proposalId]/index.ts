@@ -9,7 +9,7 @@ import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { getProposalAccessForEvent } from "../../../../_lib/auth/proposal-access";
 import { getConfig } from "../../../../_lib/config";
 import { getProposalDetailData } from "../../../../_lib/services/proposal-detail";
-import { readContentCheckResult } from "../../../../_lib/services/content-checks/results";
+import { readClassifierResult } from "../../../../_lib/services/classifiers/results";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { eventProposalDetailResponseSchema } from "../../../../../assets/shared/schemas/event-proposals";
 import { proposalDetailRouteSchema } from "../../../../../assets/shared/schemas/route-contracts";
@@ -34,7 +34,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
       form: detail.form,
       minReviewsRequired: config.minProposalReviews,
       sessionTypes: detail.sessionTypes,
-      automaticReview: access.canReview ? await readContentCheckResult(requestDb(c), "proposal", proposalId) : null,
+      automaticReview: access.canReview ? await readClassifierResult(requestDb(c), "proposal", proposalId) : null,
     }),
   );
 }

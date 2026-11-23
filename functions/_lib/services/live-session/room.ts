@@ -24,7 +24,7 @@ import type { z } from "zod";
 import type { liveProgramSelectSchema } from "../../../../assets/shared/schemas/live-room-program";
 import { LiveRoomChat, type LiveChatArchiveRow } from "./room-chat";
 import { liveChatErasable, purgeLiveRoom } from "./room-purge";
-import { LiveRoomContentChecks } from "./room-content-checks";
+import { LiveRoomClassifiers } from "./room-classifiers";
 import { LiveRoomChatActions } from "./room-chat-actions";
 import { LiveChatFeed } from "./room-chat-feed";
 import { LiveChatModerationStore } from "./room-chat-moderation";
@@ -128,7 +128,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     this.pollStore = new LivePollStore(this.sql);
     const preparedStore = new LivePreparedQuestionStore(this.sql);
     this.chat = new LiveRoomChat(this.sql);
-    const contentChecks = new LiveRoomContentChecks(this.sessionEnv, this.store, this.location);
+    const classifiers = new LiveRoomClassifiers(this.sessionEnv, this.store, this.location);
     this.decisions = new LiveRoomModerationStore(this.sql);
     this.access = new LiveRoomAccessLease(
       ctx,
@@ -196,7 +196,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       this.store,
       this.broadcast,
       this.authors,
-      contentChecks,
+      classifiers,
       {
         tickerChanged: async () => this.locationChat.onAirChanged(),
         listed: () => this.locationChat.onAirChanged(),
@@ -208,7 +208,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       },
     );
     this.questions = new LiveRoomQuestions(this.store, this.broadcast, this.controls, this.authors, this.decisions, {
-      checked: (text) => contentChecks.run("audience_question", text),
+      checked: (text) => classifiers.run("audience_question", text),
       allowed: (userId) => this.store.takeQuestionWriteAllowance(userId, nowIso()),
       changed: () => this.scheduleCopy(),
       listed: () => this.graphics.lists.due(),

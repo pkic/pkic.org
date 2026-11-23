@@ -27,8 +27,8 @@ import {
   type ReviewRow,
 } from "./model";
 import type { AuthMember, DatabaseLike, Env, StatementLike } from "../../types";
-import { screenProfileContent } from "../content-checks/profile-screening";
-import { prepareStoreContentCheckResult } from "../content-checks/results";
+import { screenProfileContent } from "../classifiers/profile-screening";
+import { prepareStoreClassifierResult } from "../classifiers/results";
 import { prepareStorageDeletion } from "../storage-deletion-outbox";
 import {
   prepareOrganizationContentReviewDigestDeliveryGuard,
@@ -167,7 +167,7 @@ export async function submitOrgContentChange(
         { organizationId: org.id, changedFields: Object.keys(changedFields) },
         now,
       ),
-      ...(verdict ? [prepareStoreContentCheckResult(db, "organization_profile", id, verdict, now)] : []),
+      ...(verdict ? [prepareStoreClassifierResult(db, "organization_profile", id, verdict, now)] : []),
     ]);
   } catch (error) {
     if (isAuthorizationGuardFailure(error)) {

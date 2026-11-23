@@ -60,8 +60,8 @@ const ScheduledJobs = lazy(() =>
 const ScheduledJobBacklog = lazy(() =>
   import("../system-operations/ScheduledJobBacklog").then((module) => ({ default: module.ScheduledJobBacklog })),
 );
-const ContentChecks = lazy(() =>
-  import("../content-checks/ContentChecks").then((module) => ({ default: module.ContentChecks })),
+const Classifiers = lazy(() =>
+  import("../classifiers/Classifiers").then((module) => ({ default: module.Classifiers })),
 );
 const AccessControl = lazy(() => import("../access-control").then((module) => ({ default: module.AccessControl })));
 
@@ -121,7 +121,7 @@ export function SettingsSection({
           }
         />
       ) : requested === "/settings/automatic-checks" ? (
-        <ContentChecks canWrite={portalHasGlobalPermission(session, "events:manage")} kind={resourceId} />
+        <Classifiers canWrite={portalHasGlobalPermission(session, "events:manage")} kind={resourceId} />
       ) : requested === "/settings/audit-log" ? (
         resourceId ? (
           <SystemAuditLogDetail id={resourceId} />

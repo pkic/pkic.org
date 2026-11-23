@@ -10,7 +10,7 @@
 import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import { useContractForm } from "../../hooks/useContractForm";
-import { PROFILE_CHECK_ADVICE } from "../../../shared/content-checks";
+import { PROFILE_CHECK_ADVICE } from "../../../shared/classifiers";
 import {
   identityProfileUpdateSchema,
   type OwnIdentityProfileUpdate,

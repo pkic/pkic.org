@@ -8,7 +8,7 @@ import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import { prepareQueueEmailStatement } from "../../email/outbox";
-import { readContentCheckResult } from "../content-checks/results";
+import { readClassifierResult } from "../classifiers/results";
 import { AppError } from "../../errors";
 import { nowIso } from "../../utils/time";
 import { parseJsonSafe } from "../../utils/json";
@@ -130,7 +130,7 @@ export async function getContentReviewDetail(db: DatabaseLike, reviewId: string)
     hasLogoChange: Boolean(row.logo_staging_r2_key),
     logoStagingR2Key: row.logo_staging_r2_key,
     currentLogoR2Key: orgRow?.logo_r2_key ?? null,
-    automaticReview: await readContentCheckResult(db, "organization_profile", reviewId),
+    automaticReview: await readClassifierResult(db, "organization_profile", reviewId),
   };
 }
 

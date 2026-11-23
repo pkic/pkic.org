@@ -20,7 +20,7 @@ import {
   requirePresentationBucket,
   uploadProposalPresentation,
 } from "../../../../../../_lib/services/presentation-upload";
-import { checkUploadedPresentation } from "../../../../../../_lib/services/content-checks/presentation-checks";
+import { checkUploadedPresentation } from "../../../../../../_lib/services/classifiers/presentation-checks";
 import { requireInternalSecret } from "../../../../../../_lib/request";
 import { requestDb } from "../../../../../../_lib/db/context";
 import {
