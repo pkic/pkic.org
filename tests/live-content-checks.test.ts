@@ -1,6 +1,7 @@
 import { runInDurableObject } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { LiveRoomServerMessage } from "../assets/shared/schemas/live-session-room";
+import { saveCheckSettings, sampleFlag } from "./helpers/content-check-settings";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
 
 const f = createLiveRoomFixture();
@@ -46,6 +47,10 @@ function holdChecks(): () => void {
 describe("automatic checks of live chat and questions", () => {
   beforeEach(async () => {
     await f.setup();
+    // Spam blocks from 90%; conduct at 75% only advises.
+    const flags = [sampleFlag("spam", "Looks like spam."), sampleFlag("conduct", "May break the code of conduct.")];
+    await saveCheckSettings("chat_message", flags);
+    await saveCheckSettings("audience_question", flags);
     model.run.mockClear();
     gate = null;
     await giveRoomsTheModel();
