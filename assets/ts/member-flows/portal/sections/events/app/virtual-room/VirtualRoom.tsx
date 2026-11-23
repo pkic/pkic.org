@@ -22,6 +22,7 @@ import { useData } from "../../../../../../hooks/useData";
 import { getJson } from "../../../../../../shared/api-client";
 import { Alert } from "../../../../../../ui/Alert";
 import { EmptyState } from "../../../../../../ui/EmptyState";
+import { ProductionPartners } from "../../../../../../site/ProductionPartners";
 import { useHashQueryParam } from "../../../../../../hooks/useHashQueryParam";
 import { useMediaQuery } from "../../../../../../hooks/useMediaQuery";
 import { useSponsorDisplay } from "../../../../../sponsors-wall-data";
@@ -30,7 +31,6 @@ import { useAgendaProgram, type AgendaProgram } from "../../detail/participation
 import { ROOM_PANELS, ROOM_WIDE_QUERY, VirtualRoomFrame, type RoomPanelId } from "./VirtualRoomFrame";
 import { VirtualRoomChat, VirtualRoomQuestions, VirtualRoomReactions, useRoomLive } from "./VirtualRoomPanels";
 import { useLocationChat } from "../../../../../../live-session/useLocationChat";
-import { VirtualRoomPartners } from "./VirtualRoomPartners";
 import { VirtualRoomSponsors } from "./VirtualRoomSponsors";
 import { sessionStartsIn, VirtualRoomInRoom, VirtualRoomNowPlaying, VirtualRoomPlayer } from "./VirtualRoomPlayer";
 import {
@@ -176,7 +176,7 @@ export function VirtualRoom({
           />
         )}
         sponsors={<VirtualRoomSponsors sponsors={sponsors.display} />}
-        partners={<VirtualRoomPartners partners={streams.data?.productionPartners ?? []} />}
+        partners={<ProductionPartners partners={streams.data?.productionPartners ?? []} />}
         questions={(askIn) => <VirtualRoomQuestions live={live} askIn={askIn} />}
         chat={<VirtualRoomChat chat={chat} zone={viewerZone} />}
         agenda={agendaView(program, roomId)}

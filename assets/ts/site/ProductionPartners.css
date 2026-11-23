@@ -1,0 +1,35 @@
+@layer components {
+  /* Production partners: one quiet line of credits, each logo smaller than any sponsor's. */
+  .pk-production-partners {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pk-1) var(--pk-4);
+    margin: 0;
+    padding: 0;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+    list-style: none;
+  }
+
+  .pk-production-partners__item {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2);
+    min-inline-size: 0;
+  }
+
+  .pk-production-partners__item a {
+    display: flex;
+    border-radius: var(--pk-radius-sm);
+  }
+
+  .pk-production-partners__item img {
+    box-sizing: content-box;
+    inline-size: auto;
+    block-size: 0.75rem;
+    padding: var(--pk-1);
+    border-radius: var(--pk-radius-sm);
+    background: var(--pk-on-solid);
+    object-fit: contain;
+  }
+}

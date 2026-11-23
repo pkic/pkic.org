@@ -421,40 +421,6 @@
     }
   }
 
-  /* Production partners: one quiet line of credits, each logo smaller than any sponsor's. */
-  .pk-virtual-room__partner-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--pk-1) var(--pk-4);
-    margin: 0;
-    padding: 0;
-    color: var(--pk-ink-muted);
-    font-size: var(--pk-text-xs);
-    list-style: none;
-  }
-
-  .pk-virtual-room__partner {
-    display: flex;
-    align-items: center;
-    gap: var(--pk-2);
-    min-inline-size: 0;
-  }
-
-  .pk-virtual-room__partner a {
-    display: flex;
-    border-radius: var(--pk-radius-sm);
-  }
-
-  .pk-virtual-room__partner img {
-    box-sizing: content-box;
-    inline-size: auto;
-    block-size: 0.75rem;
-    padding: var(--pk-1);
-    border-radius: var(--pk-radius-sm);
-    background: var(--pk-on-solid);
-    object-fit: contain;
-  }
-
   /* A desktop: the stream large on the left, questions and polls top right, the chat under them. */
   .pk-virtual-room--wide {
     display: grid;
@@ -555,7 +521,7 @@
     --pk-room-sponsor-size: 0.875rem;
   }
 
-  .pk-virtual-room--wide .pk-virtual-room__partner-list {
+  .pk-virtual-room--wide .pk-production-partners {
     justify-content: flex-end;
   }
 

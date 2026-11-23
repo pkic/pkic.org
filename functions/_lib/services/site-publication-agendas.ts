@@ -13,6 +13,7 @@ import { withAgendaSpeakerOrganizations } from "./event-agenda/speaker-organizat
 import { withSpeakerProfileSlugs } from "./people/profile-addresses";
 import { withSessionPageSlugs } from "./event-agenda/session-page-slugs";
 import { projectLiveAgendaMaterialBatch } from "./site-agenda-material-eligibility";
+import { decodeEventProductionPartners, eventProductionPartnersJsonSql } from "./events/production-partners";
 
 export interface PublishedAgendaRow {
   event_id: string;
@@ -21,10 +22,12 @@ export interface PublishedAgendaRow {
   visibility: string;
   city: string | null;
   country: CountryCode | null;
+  production_partners_json: string | null;
   snapshot_json: string;
 }
 
-const PUBLISHED_AGENDA_SQL = `SELECT e.id AS event_id,e.slug, e.base_path, e.visibility, e.city, e.country, p.snapshot_json FROM event_agenda_publications p
+const PUBLISHED_AGENDA_SQL = `SELECT e.id AS event_id,e.slug, e.base_path, e.visibility, e.city, e.country,
+       ${eventProductionPartnersJsonSql("e")} AS production_partners_json, p.snapshot_json FROM event_agenda_publications p
        JOIN event_agenda_state s ON s.event_id = p.event_id AND s.published_revision = p.revision
        JOIN events e ON e.id = p.event_id WHERE e.visibility = 'public'`;
 
@@ -71,6 +74,7 @@ export async function projectPublishedAgendas(db: DatabaseLike, rows: readonly P
             visibility: row.visibility,
             city: row.city,
             country: row.country,
+            productionPartners: decodeEventProductionPartners(row.production_partners_json),
           }),
         ),
       ),

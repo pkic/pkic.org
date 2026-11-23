@@ -4,7 +4,6 @@
  */
 import type { SponsorsDisplayResponse } from "../../../shared/schemas/public-sponsors";
 import { useState } from "preact/hooks";
-import type { EventProductionPartnerCredit } from "../../../shared/schemas/event-production-partners";
 import {
   ProductionPartnerEditor,
   type ProductionPartnerDraft,
@@ -30,19 +29,14 @@ import {
   VirtualRoomPlayer,
 } from "../../member-flows/portal/sections/events/app/virtual-room/VirtualRoomPlayer";
 import type { RoomMoment } from "../../member-flows/portal/sections/events/app/virtual-room/virtual-room-schedule";
-import { VirtualRoomPartners } from "../../member-flows/portal/sections/events/app/virtual-room/VirtualRoomPartners";
+import { ProductionPartners } from "../../site/ProductionPartners";
 import { VirtualRoomSponsors } from "../../member-flows/portal/sections/events/app/virtual-room/VirtualRoomSponsors";
 import "../../member-flows/portal/sections/events/app/EventApp.css";
 import "../../member-flows/portal/sections/events/app/virtual-room/VirtualRoom.css";
 import { AgendaExample } from "./agenda-example";
 import { STUDIO_QUESTIONS_ROOM } from "./sections-studio-questions";
 import type { PreviewSection } from "./PreviewShell";
-
-/** A wordmark on a light page, as a sponsor supplies it: wide or narrow by the length of the name. */
-const wordmark = (name: string) =>
-  `data:image/svg+xml,${encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${name.length * 22 + 20} 48"><text x="10" y="34" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#1c2530">${name}</text></svg>`,
-  )}`;
+import { PARTNERS, wordmark } from "./partner-credits";
 
 /** A consortium's spread of sponsors: one at the top, a few under it, most in the tiers below. */
 const TIERS: ReadonlyArray<[weight: number, tier: string, names: readonly string[]]> = [
@@ -75,23 +69,6 @@ const SPONSORS: SponsorsDisplayResponse = {
   })),
   page: { limit: 200, offset: 0, total: 26, hasMore: false },
 };
-
-const PARTNERS: EventProductionPartnerCredit[] = [
-  {
-    role: "Camera technology provider",
-    organizationId: "00000000-0000-4000-8000-0000000000a1",
-    name: "Northlight Cameras",
-    website: "https://northlight.example.test/",
-    logoUrl: wordmark("Northlight"),
-  },
-  {
-    role: "Captioning",
-    organizationId: "00000000-0000-4000-8000-0000000000a2",
-    name: "Clearline",
-    website: null,
-    logoUrl: null,
-  },
-];
 
 /** The partner rows as an organizer edits them, with the second row not yet filled in. */
 function PartnerEditorSpecimen() {
@@ -248,7 +225,7 @@ function RoomSpecimen({
         />
       )}
       sponsors={<VirtualRoomSponsors sponsors={SPONSORS} />}
-      partners={<VirtualRoomPartners partners={PARTNERS} />}
+      partners={<ProductionPartners partners={PARTNERS} />}
       questions={(askIn) =>
         live ? (
           <LiveAttendeeQuestions room={LIVE} occurrenceId={LIVE.state!.session.occurrenceId} askIn={askIn} />
@@ -301,7 +278,7 @@ export const virtualRoomSections: PreviewSection[] = [
     id: "virtual-room-partners",
     title: "Virtual room: production partners",
     note: "Someone who helps produce the stream is credited with what they provide, then their logo, smaller than any sponsor's. They stand apart from the sponsors and never take a turn in the sponsors' line. A partner without a logo is named in words.",
-    render: () => <VirtualRoomPartners partners={PARTNERS} />,
+    render: () => <ProductionPartners partners={PARTNERS} />,
   },
   {
     id: "production-partners-settings",

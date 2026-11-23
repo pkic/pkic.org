@@ -7,6 +7,7 @@ import { renderToStringAsync as render } from "preact-render-to-string";
 import { agendaContent } from "../../assets/shared/public-agenda-content";
 import { AgendaCalendarLinks } from "../../assets/ts/site/AgendaCalendarLinks";
 import { ContentAgenda } from "../../assets/ts/site/ContentAgenda";
+import { ProductionPartners } from "../../assets/ts/site/ProductionPartners";
 import { contractClock } from "../../assets/shared/event-clock";
 import { formatClockName } from "../../assets/shared/format-date";
 import { publishedSiteRoutes } from "../../functions/_lib/services/site-content";
@@ -30,6 +31,7 @@ export async function getStaticPaths() {
     const view = {
       route, agendaBasePath, initialDay, title: `${snapshot.eventName ?? "Event"} agenda`, clock: contractClock(snapshot),
       content: agendaContent(snapshot),
+      partners: snapshot.productionPartners ?? [],
       calendarLinks: publishedAgendaCalendarLinks(publication, snapshot),
     };
     const sessions = view.content.days.flatMap((day) => day.slots.flatMap((slot) => slot.sessions));
@@ -51,6 +53,7 @@ export async function getStaticPaths() {
 const { view, pageInputs } = Astro.props;
 const calendarHtml = await render(h(AgendaCalendarLinks, { links: view.calendarLinks }));
 const html = await render(h(ContentAgenda, { ...view.content, timeZone: view.clock, fragmentNavigation: true, agendaBasePath: view.agendaBasePath, initialDay: view.initialDay }));
+const partnersHtml = await render(h(ProductionPartners, { partners: view.partners }));
 ---
 <PublicPage title={view.title} pageInputs={pageInputs}>
   <section class="pk-section pk-container pk-container--wide" data-pagefind-body>
@@ -58,5 +61,6 @@ const html = await render(h(ContentAgenda, { ...view.content, timeZone: view.clo
   <p>Times are {formatClockName(view.clock)}.</p>
   <div set:html={calendarHtml} />
   <div set:html={html} />
+  <div set:html={partnersHtml} />
   </section>
 </PublicPage>
