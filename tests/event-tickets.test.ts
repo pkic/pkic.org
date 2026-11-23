@@ -56,7 +56,11 @@ import { releaseUnpaidTickets } from "../functions/_lib/services/event-tickets/u
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { listEventTicketCodes } from "../functions/_lib/services/event-tickets/code-list";
 import { reviewDisputedTicket } from "../functions/_lib/services/event-tickets/dispute";
-import { prepareStoreTicketDecision } from "../functions/_lib/services/event-tickets/classifier";
+import {
+  decideOrganizationTicket,
+  prepareStoreTicketDecision,
+} from "../functions/_lib/services/event-tickets/classifier";
+import { readEventTicketSnapshot } from "../functions/_lib/services/event-tickets/snapshot";
 import { issueSponsorPassCodes, saveSponsorPasses } from "../functions/_lib/services/event-tickets/sponsor-passes";
 import { getRegistrationByIdForEvent } from "../functions/_lib/services/registrations/queries";
 import { buildRegistrationUpdate } from "../functions/_lib/services/registrations/update-plan";
@@ -289,6 +293,19 @@ describe("event tickets", () => {
     });
     const third = await register(event, "three@vendor-example.test");
     expect(third.ticket).toMatchObject({ ticketName: "Vendor" });
+  });
+
+  it("asks no model and keeps no decision for a person without an organization or work address", async () => {
+    const { event } = await seedTickets();
+    const { types } = await readEventTicketSnapshot(env.DB, event);
+    const run = vi.fn(async () => ({ answers: { ticket: { probabilities: { pqcc_vendor: 0.99 } } } }));
+    const decided = await decideOrganizationTicket(env.DB, { AI: { run } } as never, types, {
+      organizationName: " ",
+      emailDomain: null,
+    });
+    expect(decided).toBeNull();
+    expect(run).not.toHaveBeenCalled();
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM ticket_classifier_decisions").first("n")).toBe(0);
   });
 
   it("keeps decisions when other tickets join or leave the classifier", async () => {

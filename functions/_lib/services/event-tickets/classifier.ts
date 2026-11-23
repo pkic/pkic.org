@@ -222,6 +222,9 @@ export async function decideOrganizationTicket(
   types: readonly TicketTypeRow[],
   subject: TicketClassifierSubject,
 ): Promise<StoredTicketDecision | null> {
+  // Nothing names an organization: no decision is kept for it and the model has nothing to judge.
+  const key = subjectKey(subject);
+  if (!key.organizationName && !key.emailDomain) return null;
   const options = classifierOptions(types);
   // An organizer's decision applies with or without a classifier, as dispute review and the counts show it; the
   // classifier's apply only to tickets it still describes.
