@@ -12,6 +12,8 @@
   .pk-tabs {
     /* No padding or margin; the nav is a transparent wrapper that anchors the More menu. */
     position: relative;
+    /* The rule under the strip. A strip that drops it sets 0px, so the More menu button still lines up. */
+    --pk-tabs-rule: 1px;
   }
 
   /* Tabs that do not fit never scroll or widen the page: they go into the More
@@ -21,7 +23,7 @@
     flex-wrap: nowrap;
     align-items: center;
     overflow-x: clip;
-    border-bottom: 1px solid var(--pk-line);
+    border-bottom: var(--pk-tabs-rule) solid var(--pk-line);
   }
 
   .pk-tabs__link--overflow {
@@ -31,7 +33,7 @@
   /* Sits over the strip's end, above its rule, where the tabs it holds would be. */
   .pk-tabs__more {
     position: absolute;
-    inset-block: 0 1px;
+    inset-block: 0 var(--pk-tabs-rule);
     inset-inline-end: 0;
     display: flex;
     align-items: stretch;

@@ -159,11 +159,14 @@
     min-inline-size: 0;
     flex: 1;
   }
+  .pk-attendance-settings__day-picker .pk-tabs {
+    --pk-tabs-rule: 0px;
+  }
   .pk-attendance-settings__day-picker .pk-tabs__list {
     gap: var(--pk-2);
-    border: 0;
   }
-  .pk-attendance-settings__day-picker .pk-tabs__link {
+  /* The day boxes; the More menu button keeps the plain tab look. */
+  .pk-attendance-settings__day-picker .pk-tabs__link:not(.pk-menu__trigger) {
     min-inline-size: 4rem;
     min-block-size: 3.5rem;
     border: 1px solid var(--pk-line);

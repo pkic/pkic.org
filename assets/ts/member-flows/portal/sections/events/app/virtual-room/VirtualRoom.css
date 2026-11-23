@@ -634,8 +634,8 @@
     border: 0;
   }
 
-  .pk-virtual-room__bar .pk-tabs__list {
-    border: 0;
+  .pk-virtual-room__bar .pk-tabs {
+    --pk-tabs-rule: 0px;
   }
 
   .pk-virtual-room__bar-end {

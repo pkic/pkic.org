@@ -30,16 +30,21 @@ export function tab(scope: Page | Locator, name: string | RegExp): Locator {
 
 /** Opens the named tab, through the strip's More menu when it did not fit. */
 export async function openTab(scope: Page | Locator, name: string | RegExp): Promise<void> {
-  const shown = tab(scope, name);
+  const page = "keyboard" in scope ? scope : scope.page();
+  // The More button carries the current tab's label, but opening it is not opening that tab.
+  const shown = scope
+    .getByRole("tab", { name })
+    .or(scope.locator("a.pk-tabs__link").filter({ hasText: name, visible: true }));
   const more = scope.locator(".pk-tabs__more button");
   // A strip may still be rendering, so the tab is looked for again until it shows up in one place or the other.
   await expect(async () => {
     if (await shown.isVisible()) return shown.click();
     for (const button of await more.all()) {
-      await button.click();
+      if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
       const item = scope.getByRole("menuitemradio", { name }).or(scope.getByRole("menuitem", { name }));
       if (await item.isVisible()) return item.click();
-      await button.press("Escape");
+      // Escape is handled inside the open menu, so it is pressed where the focus is, not on the button.
+      await page.keyboard.press("Escape");
     }
     throw new Error(`No ${String(name)} tab, in a strip or its More menu`);
   }).toPass({ timeout: 15_000 });

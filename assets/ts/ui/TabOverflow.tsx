@@ -24,7 +24,9 @@ function countFitting(list: HTMLElement, more: HTMLElement | null): number {
   if (bounds.width === 0) return tabs.length;
   const fits = (end: number) => tabs.every((tab) => tab.getBoundingClientRect().right <= end + 0.5);
   if (fits(bounds.right)) return tabs.length;
-  const end = bounds.right - (more?.offsetWidth ?? 0);
+  // The gap between tabs also separates the last tab that fits from the menu button.
+  const gap = Number.parseFloat(getComputedStyle(list).columnGap) || 0;
+  const end = bounds.right - (more?.offsetWidth ?? 0) - gap;
   const index = tabs.findIndex((tab) => tab.getBoundingClientRect().right > end + 0.5);
   return Math.max(index, 0);
 }
