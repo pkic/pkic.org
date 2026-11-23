@@ -1,4 +1,5 @@
-import { runInDurableObject } from "cloudflare:test";
+import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
+import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LIVE_CHAT_POLICY } from "../assets/shared/live-chat-policy";
 import type { LiveRoomServerMessage } from "../assets/shared/schemas/live-session-room";
@@ -299,6 +300,19 @@ describe("automatic checks of live chat and questions", () => {
     const snapshot = await f.connect({ person: "operator" });
     const questions = (await snapshot.next("room.snapshot")).questions;
     expect(questions.map((question) => question.text)).toEqual([text]);
+
+    // What the check found reaches D1 with the question, every answer included, so it outlives the room.
+    await runDurableObjectAlarm(f.room());
+    const stored = await env.DB.prepare(
+      "SELECT outcome, verdict_json FROM classifier_results WHERE kind = 'audience_question' AND subject_id = ?",
+    )
+      .bind(asked.question.id)
+      .first<{ outcome: string; verdict_json: string }>();
+    expect(stored?.outcome).toBe("advised");
+    expect(JSON.parse(stored!.verdict_json)).toMatchObject({
+      flags: [{ id: "conduct", probabilityPercent: 75 }],
+      answers: { conduct: { kind: "flag", probability: 0.75 }, spam: { kind: "flag", probability: 0.02 } },
+    });
   });
 
   it("lets chat and questions through unflagged when the model fails", async () => {

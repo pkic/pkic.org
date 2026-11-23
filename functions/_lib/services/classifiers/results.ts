@@ -1,6 +1,8 @@
 /**
- * The latest verdict for a checked proposal or upload of slides. A new check
- * of the same item replaces it; the checked text itself is never stored here.
+ * The latest verdict for a checked item: a proposal, an upload of slides, or
+ * an audience question. A new check of the same item replaces it. It keeps
+ * every answer the model gave, raised or not, so the check can be tuned; the
+ * checked text itself is never stored here.
  */
 import type { ClassifierKind } from "../../../../assets/shared/classifiers";
 import {
@@ -32,7 +34,7 @@ export function prepareStoreClassifierResult(
       kind,
       subjectId,
       verdict.outcome,
-      JSON.stringify({ flags: verdict.flags, scores: verdict.scores }),
+      JSON.stringify({ flags: verdict.flags, scores: verdict.scores, answers: run.answers }),
       verdict.scorePercent,
       run.model,
       Math.round(run.latencyMs),
