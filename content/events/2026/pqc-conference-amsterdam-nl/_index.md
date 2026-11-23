@@ -1749,6 +1749,8 @@ cards:
 
 {{< sponsors-level event-slug="pqc-conference-amsterdam-nl" sponsoring="Post-Quantum Cryptography Conference Amsterdam 2026" level="all" >}}
 
+{{< figure src="obsbot.svg" alt="OBSBOT" title="Camera Technology Provider" width="112" height="22" >}}
+
 ## Main Organizers
 
 This conference was made possible through the support of the Post-Quantum Cryptography Working Group and the following organizations:
