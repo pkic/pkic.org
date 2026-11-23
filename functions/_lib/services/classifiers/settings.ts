@@ -5,6 +5,7 @@
  */
 import {
   CLASSIFIER_KINDS,
+  CLASSIFIER_MAX_QUESTIONS,
   classifierQuestionLimitRefusal,
   defaultClassifierModel,
   effectiveClassifier,
@@ -233,12 +234,22 @@ async function refuseQuestionsEventsCannotCarry(
   kind: ClassifierKind,
   questions: readonly ClassifierQuestion[],
 ): Promise<StatementLike> {
-  const { results } = await db
+  // A merged check never asks more than the PKIC-wide questions plus what the event adds, so only rows with enough
+  // additions can exceed the limit; the database narrows to those and the Worker decodes just them.
+  // The snapshot is read first: a write after it moves the count or revisions, so the guard below refuses the save.
+  const snapshot = await db
     .prepare(
-      "SELECT questions_json, disabled_question_ids_json, context, revision FROM event_classifier_additions WHERE kind = ?",
+      "SELECT COUNT(*) AS rows_read, COALESCE(SUM(revision), 0) AS revisions FROM event_classifier_additions WHERE kind = ?",
     )
     .bind(kind)
-    .all<Pick<AdditionsRow, "questions_json" | "disabled_question_ids_json" | "context" | "revision">>();
+    .first<{ rows_read: number; revisions: number }>();
+  const { results } = await db
+    .prepare(
+      `SELECT questions_json, disabled_question_ids_json, context FROM event_classifier_additions
+       WHERE kind = ? AND json_array_length(questions_json) > ?`,
+    )
+    .bind(kind, CLASSIFIER_MAX_QUESTIONS - questions.length)
+    .all<Pick<AdditionsRow, "questions_json" | "disabled_question_ids_json" | "context">>();
   const over = results.filter(
     (row) =>
       classifierQuestionLimitRefusal(questions, {
@@ -255,7 +266,7 @@ async function refuseQuestionsEventsCannotCarry(
   return prepareStateGuard(db, {
     sql: `SELECT 1 FROM (SELECT COUNT(*) AS rows_read, COALESCE(SUM(revision), 0) AS revisions
           FROM event_classifier_additions WHERE kind = ?) WHERE rows_read = ? AND revisions = ?`,
-    bindings: [kind, results.length, results.reduce((total, row) => total + row.revision, 0)],
+    bindings: [kind, snapshot?.rows_read ?? 0, snapshot?.revisions ?? 0],
   });
 }
 

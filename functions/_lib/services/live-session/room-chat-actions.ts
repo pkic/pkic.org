@@ -24,6 +24,7 @@ import { LIVE_PARTICIPATION_REFUSAL } from "./room-participation-refusal";
 import { chatAudienceKey, seesChatOccurrence } from "./room-chat-audience";
 import type { LiveChatQuestion } from "./location-chat-on-air";
 import type { LiveRoomClassifiers } from "./room-classifiers";
+import { LIVE_CHAT_CHECK_WAIT_MS } from "./room-chat-checks";
 
 type ChatCommand = Extract<LiveRoomClientMessage, { type: `chat.${string}` }>;
 type Actor = { userId: string; name: string };
@@ -54,6 +55,11 @@ const ALLOWANCES = {
 const HELD_BY = "Held after reports";
 /** Who the room names when the automatic check holds a message. */
 const HELD_BY_CHECK = "Automatic check";
+
+/** The same words as checked: neither edited since nor edited back to them, so a check speaks for this version only. */
+function sameVersion(row: LiveChatRow | null | undefined, checked: LiveChatRow): boolean {
+  return row?.body === checked.body && row.edited_at === checked.edited_at;
+}
 
 function staff(viewer: LiveRoomParticipant): boolean {
   return viewer.role === "operator";
@@ -252,6 +258,8 @@ export class LiveRoomChatActions {
   private markChecking(row: LiveChatRow): boolean {
     if (!this.checks.mayRun("chat_message")) return false;
     this.feed.moderation.checks.pending(row.id, nowIso());
+    // The outputs stop waiting once the wait is over, whether or not the check ever answers.
+    setTimeout(() => this.hooks.onAirChanged(), LIVE_CHAT_CHECK_WAIT_MS + 1);
     return true;
   }
 
@@ -275,8 +283,8 @@ export class LiveRoomChatActions {
 
   /** The examined words passed, or could not be checked: the outputs no longer wait for them. */
   private passCheck(sent: LiveChatRow): void {
-    // An edit meanwhile has a check of its own.
-    if (this.chat.message(sent.id)?.body !== sent.body) return;
+    // An edit meanwhile has a check of its own, which owns the verdict.
+    if (!sameVersion(this.chat.message(sent.id), sent)) return;
     this.feed.moderation.checks.clear(sent.id);
     this.nudgeTicker();
   }
@@ -284,7 +292,7 @@ export class LiveRoomChatActions {
   /** Delivers the examined words again with the verdict they keep, unless they were deleted or edited since. */
   private async deliverChecked(sent: LiveChatRow): Promise<void> {
     const row = this.chat.message(sent.id);
-    if (!row || row.body !== sent.body) return;
+    if (!row || !sameVersion(row, sent)) return;
     await this.deliver([row], { removeWhenHidden: this.feed.moderation.hidden([row.id]).has(row.id) });
     this.nudgeTicker();
   }
@@ -293,17 +301,18 @@ export class LiveRoomChatActions {
     const run = await this.checks.run("chat_message", liveChatPlainText(sent.body));
     const row = this.chat.message(sent.id);
     // Deleted, or edited again meanwhile: the newer words have a check of their own.
-    if (!row || row.body !== sent.body) return;
+    if (!row || !sameVersion(row, sent)) return;
     const outcome = run?.verdict.outcome;
     if (outcome !== "advised" && outcome !== "blocked") return this.passCheck(row);
     const at = nowIso();
     this.feed.moderation.checks.record(row.id, { outcome, notes: run!.verdict.flags.map((flag) => flag.message) }, at);
     progress.recorded = true;
-    if (outcome === "blocked" && !this.feed.moderation.hidden([row.id]).has(row.id)) {
-      this.feed.moderation.hide(row.id, HELD_BY_CHECK, true, at);
-      await this.deliver([row], { removeWhenHidden: true });
-      await this.pauseAfterRepeatedBlocks(row.author_user_id, at);
-    } else await this.deliver([row], { removeWhenHidden: false, only: staff });
+    const removes = outcome === "blocked" && !this.feed.moderation.hidden([row.id]).has(row.id);
+    if (removes) this.feed.moderation.hide(row.id, HELD_BY_CHECK, true, at);
+    // Every blocked verdict counts towards a pause, whether or not the message was already hidden.
+    if (outcome === "blocked") await this.pauseAfterRepeatedBlocks(row.author_user_id, at);
+    if (removes) await this.deliver([row], { removeWhenHidden: true });
+    else await this.deliver([row], { removeWhenHidden: false, only: staff });
     this.nudgeTicker();
   }
 

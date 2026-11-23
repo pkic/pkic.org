@@ -48,18 +48,25 @@ export function ClassifierQuestionDialog({
 }) {
   const [draft, setDraft] = useState(initial);
   const [levels, setLevels] = useState(initial.kind === "score" ? initial.levels.join("\n") : "");
+  const [adviseText, setAdviseText] = useState(initial.kind === "flag" ? String(initial.adviseAtPercent) : "");
+  const [blockText, setBlockText] = useState(
+    initial.kind === "flag" && initial.blockAtPercent !== null ? String(initial.blockAtPercent) : "",
+  );
+  const [weightText, setWeightText] = useState(initial.kind === "score" ? String(initial.weight) : "");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  // The typed text stays as typed; it becomes a number only for the contract.
   const body =
     draft.kind === "score"
       ? {
           ...draft,
+          weight: Number(weightText),
           levels: levels
             .split("\n")
             .map((level) => level.trim())
             .filter(Boolean),
         }
-      : draft;
+      : { ...draft, adviseAtPercent: Number(adviseText), blockAtPercent: numberOrBlank(blockText) };
   const form = useContractForm(classifierQuestionSchema, body);
   const set = (patch: Partial<ClassifierQuestion>) => setDraft({ ...draft, ...patch } as ClassifierQuestion);
 
@@ -161,8 +168,8 @@ export function ClassifierQuestionDialog({
                       type="number"
                       min={1}
                       max={100}
-                      value={String(draft.adviseAtPercent)}
-                      onInput={(event) => set({ adviseAtPercent: Number(event.currentTarget.value) })}
+                      value={adviseText}
+                      onInput={(event) => setAdviseText(event.currentTarget.value)}
                     />
                   )}
                 </Field>
@@ -174,8 +181,8 @@ export function ClassifierQuestionDialog({
                       type="number"
                       min={1}
                       max={100}
-                      value={draft.blockAtPercent === null ? "" : String(draft.blockAtPercent)}
-                      onInput={(event) => set({ blockAtPercent: numberOrBlank(event.currentTarget.value) })}
+                      value={blockText}
+                      onInput={(event) => setBlockText(event.currentTarget.value)}
                     />
                   )}
                 </Field>
@@ -214,8 +221,8 @@ export function ClassifierQuestionDialog({
                     min={0.1}
                     max={10}
                     step={0.1}
-                    value={String(draft.weight)}
-                    onInput={(event) => set({ weight: Number(event.currentTarget.value) })}
+                    value={weightText}
+                    onInput={(event) => setWeightText(event.currentTarget.value)}
                   />
                 )}
               </Field>

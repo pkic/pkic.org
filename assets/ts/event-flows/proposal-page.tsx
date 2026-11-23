@@ -441,7 +441,8 @@ async function main(): Promise<void> {
 
   // ── Submit ────────────────────────────────────────────────────────────────
 
-  let adviceAcknowledged = false;
+  // The screened content the author last saw advice for; editing any of it asks for a fresh check.
+  let advisedContent: string | null = null;
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     void (async () => {
@@ -457,6 +458,12 @@ async function main(): Promise<void> {
         return;
       }
       await withLoadingButton(findSubmitButton(form), async () => {
+        const screenedContent = JSON.stringify([
+          readField(form, "proposalType") || "talk",
+          readField(form, "title"),
+          readField(form, "abstract"),
+          readCustomFieldValues(form),
+        ]);
         try {
           const submittedEntry = entry!;
           const isPresenting = isPresentingCheckbox?.checked ?? false;
@@ -487,7 +494,7 @@ async function main(): Promise<void> {
 
             speakers: readAdditionalSpeakers(form),
             consents: readConsentValues(form),
-            adviceAcknowledged,
+            adviceAcknowledged: advisedContent === screenedContent,
           });
 
           const result = await postJson(
@@ -502,7 +509,7 @@ async function main(): Promise<void> {
           showSuccessPanel(boot.root, form, result, firstName, eventName, eventSlug);
         } catch (error) {
           // After the automatic check's advice, submitting again sends the proposal as written.
-          if (error instanceof ApiClientError && error.code === PROPOSAL_CHECK_ADVICE) adviceAcknowledged = true;
+          if (error instanceof ApiClientError && error.code === PROPOSAL_CHECK_ADVICE) advisedContent = screenedContent;
           await handleFormInviteSubmitError({
             error,
             form,

@@ -90,7 +90,8 @@ describe("saving questions that must fit together", () => {
         afterRead(env.DB, "FROM event_classifier_additions", () => saveEvent(env.DB)),
       ),
     );
-    expect(wideError?.status).toBe(409);
+    // Refused either way: the guard sees the event save as a change (409), or the later read already sees its questions (400).
+    expect([400, 409]).toContain(wideError?.status);
   });
 });
 

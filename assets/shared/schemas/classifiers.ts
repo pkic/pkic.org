@@ -90,6 +90,9 @@ const settingsShape = {
   questions: z.array(classifierQuestionSchema),
 };
 
+/** The settings a check runs with, PKIC-wide or as one event's effective check. */
+export const classifierSettingsSchema = z.object(settingsShape);
+
 export const classifierSettingsResponseSchema = z.object({
   kind: classifierKindSchema,
   revision: z.number().int(),
@@ -115,7 +118,7 @@ export const eventClassifierResponseSchema = z.object({
     updatedAt: utcInstantSchema.nullable(),
   }),
   /** The check as it runs for this event. */
-  effective: z.object(settingsShape),
+  effective: classifierSettingsSchema,
 });
 export type EventClassifierResponse = z.infer<typeof eventClassifierResponseSchema>;
 

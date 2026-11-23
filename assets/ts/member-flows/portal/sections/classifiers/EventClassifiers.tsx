@@ -70,9 +70,15 @@ function KindAdditions({
       disabledQuestionIds: check.additions.disabledQuestionIds,
       ...patch,
     };
-    await putJson(apiPath, body, classifierSavedResponseSchema);
-    setCheck(await getJson(apiPath, eventClassifierResponseSchema));
+    const saved = await putJson(apiPath, body, classifierSavedResponseSchema);
+    // The save is done; keep its revision so the next save does not conflict, even if the reload fails.
+    setCheck((current) => ({ ...current, additions: { ...current.additions, ...patch, revision: saved.revision } }));
     toast("Check saved", "success");
+    try {
+      setCheck(await getJson(apiPath, eventClassifierResponseSchema));
+    } catch {
+      toast("The check was saved, but this view could not refresh. Reload the page to see the latest.", "error");
+    }
   }
 
   const report = (error: unknown) => toast((error as Error).message, "error");

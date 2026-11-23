@@ -11,6 +11,14 @@
  * (its topics, tracks and terms) and may add, replace or switch off questions.
  * Nothing is configured per session.
  */
+import type { z } from "zod";
+import type {
+  classifierFlagSchema,
+  classifierScoreSchema,
+  classifierSettingsSchema,
+  classifierVerdictSchema,
+  EventClassifierResponse,
+} from "./schemas/classifiers";
 
 export const CLASSIFIER_KINDS = ["chat_message", "audience_question", "proposal", "presentation"] as const;
 export type ClassifierKind = (typeof CLASSIFIER_KINDS)[number];
@@ -54,55 +62,22 @@ export const PROPOSAL_CHECK_BLOCKED = "PROPOSAL_CHECK_BLOCKED";
 export const PROPOSAL_CHECK_ADVICE = "PROPOSAL_CHECK_ADVICE";
 export const CLASSIFIER_QUESTION_ID_PATTERN = /^[a-z][a-z0-9_]{1,39}$/;
 
-export interface ClassifierFlag {
-  id: string;
-  kind: "flag";
-  /** A yes/no question; yes means something is wrong. */
-  question: string;
-  adviseAtPercent: number;
-  /** Null never blocks: the flag only advises. */
-  blockAtPercent: number | null;
-  /** What the author is told when the flag is raised. */
-  message: string;
-}
-
-export interface ClassifierScore {
-  id: string;
-  kind: "score";
-  /** What to rate, shown to reviewers as the score's name. */
-  label: string;
-  question: string;
-  /** Ordered level descriptions, lowest first. */
-  levels: string[];
-  weight: number;
-}
-
+// The shapes are the shared schemas' own; this module keeps the policy that reads them.
+export type ClassifierFlag = z.infer<typeof classifierFlagSchema>;
+export type ClassifierScore = z.infer<typeof classifierScoreSchema>;
 export type ClassifierQuestion = ClassifierFlag | ClassifierScore;
 
 /** The PKIC-wide settings for one kind of check. */
-export interface ClassifierSettings {
-  enabled: boolean;
-  model: ClassifierModel;
-  context: string;
-  questions: ClassifierQuestion[];
-}
+export type ClassifierSettings = z.infer<typeof classifierSettingsSchema>;
 
-/** What one event adds to the PKIC-wide settings. */
-export interface ClassifierEventAdditions {
-  context: string;
-  /** Added questions; one with the id of a PKIC-wide question replaces it for this event. */
-  questions: ClassifierQuestion[];
-  /** PKIC-wide questions this event does not ask. */
-  disabledQuestionIds: string[];
-}
+/** What one event adds to the PKIC-wide settings; a question with a PKIC-wide id replaces it for this event. */
+export type ClassifierEventAdditions = Pick<
+  EventClassifierResponse["additions"],
+  "context" | "questions" | "disabledQuestionIds"
+>;
 
 /** The check as it runs for one event, or PKIC-wide when there is no event. */
-export interface EffectiveClassifier {
-  enabled: boolean;
-  model: ClassifierModel;
-  context: string;
-  questions: ClassifierQuestion[];
-}
+export type EffectiveClassifier = ClassifierSettings;
 
 /** The questions an event asks: PKIC-wide ones less those it turns off, with its replacements and additions. */
 export function mergedClassifierQuestions(
@@ -178,29 +153,10 @@ export function effectiveClassifier(
 /** One model answer: the probability of yes for a flag, the level probabilities for a score. */
 export type ClassifierAnswer = { kind: "flag"; probability: number } | { kind: "score"; probabilities: number[] };
 
-export interface RaisedClassifierFlag {
-  id: string;
-  probabilityPercent: number;
-  blocking: boolean;
-  message: string;
-}
-
-export interface ClassifierScoreResult {
-  id: string;
-  label: string;
-  /** The probability-weighted level, from 0 (lowest) to 100 (highest). */
-  percent: number;
-  /** The most likely level, as described in the rubric. */
-  level: string;
-}
-
-export interface ClassifierVerdict {
-  outcome: ClassifierOutcome;
-  flags: RaisedClassifierFlag[];
-  scores: ClassifierScoreResult[];
-  /** The weighted score from 0 to 100, or null when no score was answered. */
-  scorePercent: number | null;
-}
+export type ClassifierVerdict = z.infer<typeof classifierVerdictSchema>;
+export type RaisedClassifierFlag = ClassifierVerdict["flags"][number];
+/** One score: `percent` is the probability-weighted level from 0 to 100; `level` the most likely rubric level. */
+export type ClassifierScoreResult = ClassifierVerdict["scores"][number];
 
 export const UNCHECKED_CONTENT_VERDICT: ClassifierVerdict = {
   outcome: "unchecked",
