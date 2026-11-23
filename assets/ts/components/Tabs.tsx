@@ -13,7 +13,7 @@
  * `Tabs` (links, `aria-current="page"`) or `TabList` (buttons, `role="tab"`,
  * arrow keys, `aria-controls`).
  */
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 
 import { overflowClass, TabOverflowMenu, useTabOverflow } from "../ui/TabOverflow";
 
@@ -48,7 +48,6 @@ type TabsProps = SharedTabsProps &
 
 export function Tabs({ items, active, onChange, className, idPrefix, label = "Sections", hrefFor }: TabsProps) {
   const { listRef, moreRef, fitting } = useTabOverflow(items.length);
-  const [, navigate] = useLocation();
   if (hrefFor) {
     return (
       <nav class={["pk-tabs", className].filter(Boolean).join(" ")} aria-label={label}>
@@ -73,10 +72,11 @@ export function Tabs({ items, active, onChange, className, idPrefix, label = "Se
           ))}
         </div>
         <TabOverflowMenu
-          entries={items.map((item) => ({
+          entries={items.map((item, index) => ({
             id: item.key,
             label: item.label,
-            onSelect: () => (onChange ? onChange(item.key) : navigate(hrefFor(item.key))),
+            // The tab stays in the strip, unseen; choosing it here follows that same link.
+            onSelect: () => (listRef.current?.children[index] as HTMLElement | undefined)?.click(),
           }))}
           fitting={fitting}
           activeId={active}

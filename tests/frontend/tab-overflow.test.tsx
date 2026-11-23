@@ -13,6 +13,7 @@ import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import { act } from "preact/test-utils";
 
+import { Tabs as RoutedTabs } from "../../assets/ts/components/Tabs";
 import { TabList } from "../../assets/ts/ui/TabList";
 import { Tabs } from "../../assets/ts/ui/Tabs";
 
@@ -121,6 +122,26 @@ describe("tab overflow", () => {
       "/rooms/room-3",
       "/rooms/room-4",
     ]);
+  });
+
+  it("follows a routed tab's own link when it is chosen from the menu", () => {
+    const onChange = vi.fn();
+    const items = rooms.map((room) => ({ key: room.id, label: room.label }));
+    const host = mount(
+      <RoutedTabs
+        label="Locations"
+        items={items}
+        active="room-0"
+        hrefFor={(key) => `/rooms/${key}`}
+        onChange={onChange}
+      />,
+    );
+    void act(() => moreButton(host)?.click());
+    const entries = [...host.querySelectorAll<HTMLElement>('[role="menuitemradio"]')];
+    expect(entries.map((entry) => entry.textContent)).toEqual(["Blue hall", "Room 2", "Room 8", "Room 9"]);
+
+    void act(() => entries[1]?.click());
+    expect(onChange).toHaveBeenCalledWith("room-2");
   });
 
   it("has no menu when every tab fits", () => {
