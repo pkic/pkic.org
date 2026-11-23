@@ -139,8 +139,6 @@ export interface ColumnTextFilter {
   placeholder?: string;
   /** Said under the control, e.g. where the match runs. */
   hint?: string;
-  /** Values the server offers for this column, as type-ahead suggestions. */
-  suggestions?: readonly string[];
 }
 
 /**
@@ -363,7 +361,6 @@ export function DataTable<T>({
           key={filterOpen}
           columnLabel={openFilter?.label ?? headLabel(openColumn.header)}
           value={controls.filterValue(openFilter)}
-          suggestions={openTextFilter.suggestions}
           placeholder={openTextFilter.placeholder}
           hint={openTextFilter.hint}
           schema={openTextFilter.schema}

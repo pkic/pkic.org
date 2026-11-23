@@ -17,10 +17,10 @@
  *     only sensible control.
  *
  * The query lives in the list controller, which sends it to the server. A
- * contract-validated exact filter keeps a local draft until submission.
+ * typed filter keeps a contract-validated local draft until Enter or Done.
  */
 import type { ComponentChildren } from "preact";
-import { useId, useLayoutEffect, useState } from "preact/hooks";
+import { useLayoutEffect, useState } from "preact/hooks";
 import type { z } from "zod";
 import { useContractForm } from "../hooks/useContractForm";
 import { Field } from "../ui/Field";
@@ -70,8 +70,6 @@ export interface ColumnTextFilterRowProps {
   /** The column being narrowed, named as its header reads. */
   columnLabel: string;
   value: string;
-  /** Values the server offers for this column; may be empty. */
-  suggestions?: readonly string[];
   placeholder?: string;
   /** Where the matching happens, said plainly under the control. */
   hint?: ComponentChildren;
@@ -89,11 +87,9 @@ export function ColumnTextFilterRow({
   param,
   placeholder,
   hint,
-  suggestions = [],
   onInput,
   onClose,
 }: ColumnTextFilterRowProps) {
-  const listId = useId();
   const [draft, setDraft] = useState(value);
   const form = useContractForm(schema, { [param]: draft.trim() ? draft : undefined });
   const resetValidation = form.reset;
@@ -116,21 +112,26 @@ export function ColumnTextFilterRow({
         event.preventDefault();
         const checked = form.submit();
         if (!checked.data) return;
-        onInput(checked.data[param] ?? "");
+        const nextValue = checked.data[param] ?? "";
+        if (nextValue !== value) onInput(nextValue);
         onClose();
       }}
     >
       <div class="pk-column-filter__field">
         <Field
           label={`Filter ${columnLabel}`}
-          help={hint ?? "Press Enter or Done to apply the filter."}
+          help={
+            <>
+              {hint && <>{hint} </>}
+              Press Enter or Done to apply the filter.
+            </>
+          }
           {...form.of(param)}
         >
           {(control) => (
             <TextInput
               {...control}
               name={param}
-              list={suggestions.length ? listId : undefined}
               value={draft}
               placeholder={placeholder}
               autofocus
@@ -139,13 +140,6 @@ export function ColumnTextFilterRow({
           )}
         </Field>
       </div>
-      {suggestions.length > 0 && (
-        <datalist id={listId}>
-          {suggestions.map((suggestion) => (
-            <option key={suggestion} value={suggestion} />
-          ))}
-        </datalist>
-      )}
       <Button variant="secondary" type="button" onClick={onClose}>
         Cancel
       </Button>

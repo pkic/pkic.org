@@ -138,7 +138,7 @@ export function FormSubmissionsTable<Response extends { submissions: FormSubmiss
                   text: {
                     placeholder: "Exact answer…",
                     schema: exactAnswerQuerySchema,
-                    hint: "Press Enter or Done to apply the exact answer.",
+                    hint: "Matches the exact answer.",
                   },
                 }),
           },

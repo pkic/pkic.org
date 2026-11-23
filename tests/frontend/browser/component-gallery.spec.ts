@@ -171,6 +171,9 @@ test("exact answers commit on Enter or Done and boolean filters use Yes/No", asy
   };
   await openNotes();
   const input = responses.getByRole("textbox", { name: "Filter Notes", exact: true });
+  await expect(input).toHaveAccessibleDescription(
+    /Matches the exact answer\. Press Enter or Done to apply the filter\./,
+  );
   await input.fill("x".repeat(501));
   await input.press("Enter");
   await expect(input).toHaveAttribute("aria-invalid", "true");

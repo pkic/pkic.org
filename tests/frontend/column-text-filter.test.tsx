@@ -106,10 +106,46 @@ it("restores applied values and resets validation while preserving drafts across
   expect(container.querySelector("input")!.getAttribute("aria-invalid")).not.toBe("true");
   await show("Auditor", "Updated hint");
   await submit();
-  expect(eventAttendanceRegistrationsQuerySchema.parse({ job_title: onInput.mock.calls[0][0] }).job_title).toBe(
-    "Auditor",
-  );
+  expect(onInput).not.toHaveBeenCalled();
   expect(onClose).toHaveBeenCalledOnce();
   await show("", "Updated hint");
   expect(container.querySelector("input")!.value).toBe("");
+});
+
+it.each([
+  { applied: "Engineer", draft: "Engineer" },
+  { applied: "Engineer", draft: "  Engineer  " },
+  { applied: "", draft: "   " },
+])("closes without reapplying an unchanged parsed filter: $applied / $draft", async ({ applied, draft }) => {
+  container = document.createElement("div");
+  document.body.append(container);
+  const onInput = vi.fn();
+  const onClose = vi.fn();
+  await act(() =>
+    render(
+      <ColumnTextFilterRow
+        columnLabel="Job title"
+        param="job_title"
+        value={applied}
+        schema={eventAttendanceRegistrationsQuerySchema.pick({ job_title: true })}
+        hint="Matches the attendee's job title."
+        onInput={onInput}
+        onClose={onClose}
+      />,
+      container,
+    ),
+  );
+  const input = container.querySelector("input")!;
+  const help = document.getElementById(input.getAttribute("aria-describedby")!)!;
+  expect(help.textContent).toContain("Matches the attendee's job title.");
+  expect(help.textContent).toContain("Press Enter or Done to apply the filter.");
+  await act(() => {
+    input.value = draft;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(() => {
+    container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+  expect(onInput).not.toHaveBeenCalled();
+  expect(onClose).toHaveBeenCalledOnce();
 });

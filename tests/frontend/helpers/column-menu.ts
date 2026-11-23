@@ -69,7 +69,9 @@ export function columnFilterSummary(container: ParentNode, column: string): stri
 
 export async function openExactFilter(page: HTMLElement, column: string) {
   const menu = openColumnMenu(page, column);
-  const action = menu.querySelector<HTMLButtonElement>('[role="menuitem"][data-menu-item-id$="-filter-text"]');
+  const action = [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((item) =>
+    /^(Filter this column|Edit filter)…$/.test(labelOf(item)),
+  );
   if (!action) throw new Error(`the ${column} column offers no text filter`);
   await act(() => action.click());
 }
