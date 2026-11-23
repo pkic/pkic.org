@@ -37,6 +37,11 @@ CREATE TABLE IF NOT EXISTS room_chat_replies (message_id TEXT PRIMARY KEY, paren
 CREATE TABLE IF NOT EXISTS room_chat_edits (message_id TEXT PRIMARY KEY, original_body TEXT NOT NULL, edited_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS room_chat_aired (message_id TEXT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS room_chat_pin (message_id TEXT PRIMARY KEY, by_name TEXT NOT NULL, at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS room_chat_checks (message_id TEXT PRIMARY KEY, outcome TEXT NOT NULL, notes_json TEXT NOT NULL, at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS room_chat_check_results (message_id TEXT PRIMARY KEY, outcome TEXT NOT NULL, model TEXT, raised_json TEXT NOT NULL, scores_json TEXT NOT NULL, at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS room_chat_kept (message_id TEXT PRIMARY KEY, at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS room_chat_kept_reports (message_id TEXT NOT NULL, user_id TEXT NOT NULL, reason TEXT NOT NULL, reported_at TEXT NOT NULL, PRIMARY KEY(message_id, user_id));
+CREATE INDEX IF NOT EXISTS room_chat_kept_reports_user ON room_chat_kept_reports(user_id);
 CREATE TABLE IF NOT EXISTS question_authorship (question_id TEXT PRIMARY KEY,author_json TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS room_access_erasures (user_id TEXT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS room_d1_read_state (id INTEGER PRIMARY KEY CHECK(id=1), bookmark TEXT NOT NULL);
@@ -80,6 +85,8 @@ CREATE TABLE IF NOT EXISTS question_rewrites (
   question_id TEXT PRIMARY KEY, text TEXT NOT NULL, by_user_id TEXT NOT NULL, by_name TEXT NOT NULL, at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS question_addressees (question_id TEXT PRIMARY KEY, credit_key TEXT NOT NULL, user_id TEXT);
 CREATE TABLE IF NOT EXISTS question_prepared (question_id TEXT PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS question_checks (question_id TEXT PRIMARY KEY, outcome TEXT NOT NULL, notes_json TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS question_check_results (question_id TEXT PRIMARY KEY, run_json TEXT, at TEXT NOT NULL, change_seq INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS prepared_questions (
   id TEXT PRIMARY KEY, body TEXT NOT NULL, addressed_to_credit_key TEXT, addressed_to_user_id TEXT,
   release_at TEXT NOT NULL, created_by_user_id TEXT NOT NULL, created_by_name TEXT NOT NULL,

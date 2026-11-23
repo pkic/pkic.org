@@ -30,6 +30,8 @@ import { isRegistrationTransitionConflict, registrationChangedError } from "./re
 import { isEventParticipantSourceConflict } from "./event-participant-source-revision";
 import { isProposalSpeakerRosterConflict } from "./proposal-speaker-roster-revision";
 import { formSubmissionContextChangedError, isFormSubmissionContextConflict } from "./forms";
+import type { ClassifierRun } from "./classifiers/model";
+import { prepareDeleteClassifierResult, prepareStoreClassifierResult } from "./classifiers/results";
 
 export interface ProposalRecord {
   id: string;
@@ -274,6 +276,8 @@ export async function updateProposalForVerifiedOwner(
     formRevisionGuard?: StatementLike | null;
     formPlacementId?: string | null;
     formSubmissionStatements?: StatementLike[];
+    /** The classifier of the edited proposal, run once the edit is known to apply and kept in the same batch. */
+    screen?: () => Promise<ClassifierRun | null>;
   },
 ): Promise<ProposalRecord> {
   if (payload.committeeNotes !== undefined && !isProposalCommitteeNotesEditableStatus(proposal.status))
@@ -394,6 +398,8 @@ export async function updateProposalForVerifiedOwner(
   }
   if (Object.keys(changes).length === 0) return proposal;
 
+  const screening = await payload.screen?.();
+  const changesReviewedContent = ["proposalType", "title", "abstract", "details"].some((key) => key in changes);
   const requiresDecisionRelease = resubmits;
   let updateResults;
   try {
@@ -447,6 +453,12 @@ export async function updateProposalForVerifiedOwner(
         now,
       ),
       ...(payload.formSubmissionStatements ?? []),
+      // A verdict describes the words it checked: without a new run, a change to what reviewers read drops it.
+      ...(screening
+        ? [prepareStoreClassifierResult(db, "proposal", proposal.id, screening, now)]
+        : changesReviewedContent
+          ? [prepareDeleteClassifierResult(db, "proposal", proposal.id)]
+          : []),
       db
         .prepare(
           `DELETE FROM proposal_decisions

@@ -7,6 +7,7 @@ import { liveAuthorFields } from "./live-session-author";
 import { LIVE_ROOM_POLICY } from "../live-session-policy";
 import { LIVE_CHAT_POLICY, LIVE_CHAT_REACTION_IDS } from "../live-chat-policy";
 import {
+  liveClassifierVerdictSchema,
   liveModerationReasonSchema,
   liveParticipationRestrictionSchema,
   liveRemovalSchema,
@@ -43,6 +44,8 @@ export const liveChatModerationSchema = z
     authorRestriction: liveParticipationRestrictionSchema.nullable(),
     /** What the author first sent, when they edited it since. */
     originalText: z.string().max(LIVE_ROOM_POLICY.chatMaxLength).nullable().optional(),
+    /** The classifier flagged it; absent when it passed or none ran. */
+    classifier: liveClassifierVerdictSchema.optional(),
   })
   .strict();
 export type LiveChatModeration = z.infer<typeof liveChatModerationSchema>;
@@ -167,7 +170,15 @@ const chatMessagesSchema = z.array(liveChatMessageSchema).max(LIVE_CHAT_POLICY.h
 export const liveChatServerMessageSchemas = [
   /** A new message, or a change to one this viewer already holds. */
   z.object({ type: z.literal("chat.message"), message: liveChatMessageSchema }).strict(),
-  z.object({ type: z.literal("chat.removed"), messageId: databaseIdSchema, channel: liveChatChannelSchema }).strict(),
+  /** The message is gone for this viewer; `moderated` when moderation took it, so a reader who had it keeps a trace. */
+  z
+    .object({
+      type: z.literal("chat.removed"),
+      messageId: databaseIdSchema,
+      channel: liveChatChannelSchema,
+      moderated: z.literal(true).optional(),
+    })
+    .strict(),
   /** New reaction counts; `myReactions` is null when this viewer's own reactions did not change. */
   z
     .object({

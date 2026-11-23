@@ -1,9 +1,12 @@
 import type { DatabaseLike, StatementLike } from "../../types";
+import type { ClassifierRun } from "../classifiers/model";
+import { prepareDeleteClassifierResult, prepareStoreClassifierResult } from "../classifiers/results";
 import { nowIso } from "../../utils/time";
 import { prepareScopedAuditLog } from "../audit";
 import { prepareLiveRoomCopyErasureGuard } from "./room-erasure";
 import type { LivePollCopy } from "./room-poll-store";
 import type { LiveQuestionRow } from "./room-question-rows";
+import type { LiveQuestionCheckCopyRow } from "./room-question-checks";
 import type { LiveAnswerCopyRow, LiveRoomPendingCopy } from "./room-store";
 
 function prepareQuestionCopy(db: DatabaseLike, copy: LiveRoomPendingCopy, question: LiveQuestionRow, copiedAt: string) {
@@ -42,6 +45,19 @@ function prepareQuestionCopy(db: DatabaseLike, copy: LiveRoomPendingCopy, questi
       question.addressed_to_user_id,
       copiedAt,
     );
+}
+
+/** What the check found for a question's words, beside the question; words that went unchecked drop the old result. */
+function prepareQuestionCheckCopy(db: DatabaseLike, check: LiveQuestionCheckCopyRow) {
+  return check.run_json
+    ? prepareStoreClassifierResult(
+        db,
+        "question",
+        check.question_id,
+        JSON.parse(check.run_json) as ClassifierRun,
+        check.at,
+      )
+    : prepareDeleteClassifierResult(db, "question", check.question_id);
 }
 
 /** An answer reaches D1 only while its question is there; a redacted answer keeps its redaction. */
@@ -118,7 +134,7 @@ function preparePollCopy(db: DatabaseLike, copy: LiveRoomPendingCopy, poll: Live
 
 /**
  * Writes a room's changes since its last copy to D1 as one atomic batch:
- * the changed questions, opened or closed polls with their tallies (never who
+ * the changed questions with what the check found for them, opened or closed polls with their tallies (never who
  * voted for what), reaction and chat totals (never message text), and the audit rows for the staff actions
  * taken meanwhile. Every statement is an upsert or an idempotent insert keyed
  * by the room's own sequence, so the room's alarm may retry a batch whose
@@ -128,6 +144,7 @@ export async function copyLiveRoomToD1(db: DatabaseLike, copy: LiveRoomPendingCo
   const copiedAt = nowIso();
   const statements: StatementLike[] = [
     ...copy.questions.map((question) => prepareQuestionCopy(db, copy, question, copiedAt)),
+    ...copy.questionChecks.map((check) => prepareQuestionCheckCopy(db, check)),
     ...copy.answers.map((answer) => prepareAnswerCopy(db, copy, answer, copiedAt)),
     ...copy.polls.flatMap((poll) => preparePollCopy(db, copy, poll, copiedAt)),
     ...copy.reactions.map((reaction) =>

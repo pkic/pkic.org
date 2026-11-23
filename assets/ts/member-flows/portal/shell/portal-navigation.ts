@@ -342,6 +342,12 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
         access: (session) => portalHasGlobalPermission(session, "users:read"),
       },
       {
+        path: "/settings/classifiers",
+        label: "Classifiers",
+        description: "What the model looks for in chat messages, questions, proposals and slides.",
+        access: (session) => portalHasGlobalPermission(session, "events:manage"),
+      },
+      {
         path: "/settings/audit-log",
         label: "Audit log",
         description: "What the platform has recorded about who changed what, and when.",

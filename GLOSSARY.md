@@ -33,6 +33,7 @@ One name for one thing, in code, copy, and documentation. Add a term here when y
 - **Badge data**: the scanner's downloaded event roster for local badge checks, with its original validity period.
 - **Sponsor**: an organization supporting an event at a **sponsor tier**; **sponsor leads** are the contacts it collects.
 - **Staffing**: the people assigned to run an occurrence or room.
+- **Classifier**: a model reading one kind of content, such as chat messages or proposals, against its **classifier questions**. A **flag** advises or blocks the author; a **score** rates a proposal for reviewers. Flags on **All content** run for every kind. Settings are PKIC-wide; an event adds its own context and questions, never per session. Screens, URLs, the API, and code all say classifier; authors see only the outcome.
 
 ## Live production
 

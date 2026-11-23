@@ -4,6 +4,7 @@ import {
   LIVE_PARTICIPATION_BLOCKS,
   type LiveParticipationBlock,
 } from "../live-moderation-policy";
+import { CLASSIFIER_MAX_QUESTIONS, CLASSIFIER_QUESTION_ID_PATTERN } from "../classifiers";
 import { utcInstantSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { livePersonNameSchema } from "./live-session-change";
@@ -21,6 +22,25 @@ export const liveParticipationBlockSchema = z.enum(LIVE_PARTICIPATION_BLOCKS);
  * A removed item, as its author and moderators see it. Everyone else no
  * longer receives the item. `byName` is null for the author.
  */
+/** Moderators only: the classifier advised against a message or question, or held it. */
+export const liveClassifierVerdictSchema = z
+  .object({
+    outcome: z.enum(["advised", "blocked"]),
+    /** What each raised question says about the words, as configured. */
+    notes: z.array(z.string().max(400)).max(CLASSIFIER_MAX_QUESTIONS),
+    /** The raised questions by id with the model's certainty, most certain first: why the check flagged it. */
+    flags: z
+      .array(
+        z
+          .object({ id: z.string().regex(CLASSIFIER_QUESTION_ID_PATTERN), percent: z.number().min(0).max(100) })
+          .strict(),
+      )
+      .max(CLASSIFIER_MAX_QUESTIONS)
+      .optional(),
+  })
+  .strict();
+export type LiveClassifierVerdict = z.infer<typeof liveClassifierVerdictSchema>;
+
 export const liveRemovalSchema = z
   .object({ reason: liveModerationReasonSchema, at: utcInstantSchema, byName: livePersonNameSchema.nullable() })
   .strict();

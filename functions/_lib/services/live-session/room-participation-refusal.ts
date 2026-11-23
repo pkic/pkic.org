@@ -4,7 +4,7 @@ import type { LiveRefusal } from "./room-controls";
 /** One refusal for every way a blocked person tries to post, vote or react. */
 export const LIVE_PARTICIPATION_REFUSAL = {
   code: "LIVE_PARTICIPATION_BLOCKED",
-  message: "A moderator blocked your posting. You can keep watching.",
+  message: "You can't post right now. You can keep watching.",
 } satisfies LiveRefusal;
 
 /** What a blocked person may no longer do; reading, watching and deleting their own messages stay open. */

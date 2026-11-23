@@ -96,6 +96,8 @@ export async function editProposal(
           next.updated_at,
           { type: "event", id: current.event_id },
         ),
+        // The automatic verdict was of the text before this edit.
+        db.prepare("DELETE FROM classifier_results WHERE kind = 'proposal' AND subject_id = ?").bind(current.id),
       ]),
     );
   } catch (error) {

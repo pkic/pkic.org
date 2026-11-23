@@ -363,9 +363,6 @@
       flex: 0 1 auto;
       color: var(--pk-ink-muted);
     }
-    .pk-table--records tbody td.pk-table__cell--empty {
-      display: none;
-    }
     .pk-table--records tbody td.pk-table__cell--meta.pk-end {
       display: inline-flex;
       align-items: baseline;
@@ -376,6 +373,10 @@
       order: 1;
       font-size: inherit;
       color: inherit;
+    }
+    /* After the end-aligned layout, so an empty number cell hides too. */
+    .pk-table--records tbody td.pk-table__cell--meta.pk-table__cell--empty {
+      display: none;
     }
     .pk-table--records .pk-table__col--compact,
     .pk-table--records .pk-table__col--compact .pk-table__value {

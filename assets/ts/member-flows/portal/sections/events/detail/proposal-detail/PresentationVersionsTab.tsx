@@ -5,6 +5,8 @@ import {
   sessionPresentationVersionResponseSchema,
 } from "../../../../../../../shared/schemas/session-presentation-versions";
 import { formatNumber } from "../../../../../../../shared/format-number";
+import { CLASSIFIER_OUTCOME_LABELS, classifierRaisesConcerns } from "../../../../../../../shared/classifiers";
+import { AttentionMark } from "../../../../../../ui/AttentionList";
 import { useRef, useState } from "preact/hooks";
 import { confirmAction } from "../../../../../../components/ConfirmDialog";
 import { ApiDataTable, type ApiTableActions } from "../../../../../../components/ApiDataTable";
@@ -378,6 +380,17 @@ function PresentationVersions({
             width: "fit",
           },
           {
+            header: "Classifier",
+            cell: (version) => {
+              const check = version.classifier;
+              if (!check) return <span class="pk-muted">Not checked yet</span>;
+              const label = CLASSIFIER_OUTCOME_LABELS[check.outcome];
+              if (classifierRaisesConcerns(check.outcome)) return <AttentionMark>{label}</AttentionMark>;
+              return check.outcome === "unchecked" ? <span class="pk-muted">{label}</span> : label;
+            },
+            width: "fit",
+          },
+          {
             header: "Actions",
             cell: (version) => (
               <span class="pk-cluster">
@@ -410,7 +423,8 @@ function PresentationVersions({
         rowKey={(version) => version.id}
         detailRow={(version) => {
           const note = version.latestReview?.note;
-          if (!note) return null;
+          const concerns = version.classifier?.flags ?? [];
+          if (!note && !concerns.length) return null;
           return (
             <div class="pk-stack pk-stack--snug">
               {note && (
@@ -419,6 +433,12 @@ function PresentationVersions({
                   {note}
                 </p>
               )}
+              {concerns.map((flag) => (
+                <p class="pk-small" key={flag.id}>
+                  <span class="pk-muted">Classifier: </span>
+                  {flag.message} ({formatNumber(flag.probabilityPercent)}%)
+                </p>
+              ))}
             </div>
           );
         }}

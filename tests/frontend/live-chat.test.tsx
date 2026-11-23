@@ -344,6 +344,22 @@ describe("live chat", () => {
     expect(sent(send)).toEqual([{ type: "chat.history", channel: "attendee", before: chat[0].id }]);
   });
 
+  it("shows a message moderation took as a trace without its author or words", () => {
+    const state = applyLocationChatMessage(
+      stateWith({ chat: [chatMessage({ authorName: "Grace", text: "Buy now" })] }),
+      {
+        type: "chat.removed",
+        messageId: MESSAGE,
+        channel: "attendee",
+        moderated: true,
+      },
+    )!;
+    const host = mount(<LiveChat state={state} disabled={false} send={vi.fn(() => true)} />);
+    expect(host.textContent).toContain("Message removed");
+    expect(host.textContent).not.toContain("Grace");
+    expect(host.textContent).not.toContain("Buy now");
+    expect(host.querySelector("[data-trace] button")).toBeNull();
+  });
   it("shows a blocked person why they can't post, and keeps the chat readable", () => {
     const paused = mount(
       <LiveChat
@@ -436,7 +452,7 @@ describe("live chat", () => {
   });
 });
 
-it("counts only new inactive-channel messages, lists reports and restores the selected studio view from its URL", async () => {
+it("counts only new inactive-channel messages, lists what to review and restores the selected studio view from its URL", async () => {
   window.history.replaceState(null, "", "#/events/pqc/live");
   const reported = chatMessage({
     id: "40000000-0000-4000-8000-000000000009",
@@ -459,16 +475,16 @@ it("counts only new inactive-channel messages, lists reports and restores the se
   const send = vi.fn(() => true);
   const host = mount(<LiveChatPanel studio state={initial} disabled={false} send={send} />);
   expect(host.querySelector("#studio-chat-operator")?.textContent).toBe("Operators");
-  expect(host.querySelector("#studio-chat-reports")?.textContent).toBe("Reports1");
+  expect(host.querySelector("#studio-chat-review")?.textContent).toBe("Review1");
   const updated = {
     ...initial,
     chat: [...initial.chat, { ...initial.chat[0], id: "40000000-0000-4000-8000-000000000003", text: "New cue" }],
   };
   await act(async () => draw(<LiveChatPanel studio state={updated} disabled={false} send={send} />, host));
   expect(host.querySelector("#studio-chat-operator")?.textContent).toContain("New");
-  await act(async () => host.querySelector<HTMLButtonElement>("#studio-chat-reports")!.click());
-  expect(window.location.hash).toContain("chat=reports");
-  expect(host.querySelector("#studio-chat-panel-reports")?.textContent).toContain("1 report");
+  await act(async () => host.querySelector<HTMLButtonElement>("#studio-chat-review")!.click());
+  expect(window.location.hash).toContain("chat=review");
+  expect(host.querySelector("#studio-chat-panel-review")?.textContent).toContain("1 report · Abuse");
   await act(async () => host.querySelector<HTMLButtonElement>("#studio-chat-operator")!.click());
   expect(host.querySelector("#studio-chat-operator")?.textContent).toBe("Operators");
   window.history.replaceState(null, "", "#/");

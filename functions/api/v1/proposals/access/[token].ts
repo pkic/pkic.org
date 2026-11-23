@@ -40,6 +40,7 @@ export async function onRequestPatch(
     token: data.params.token,
     signingSecret: requireInternalSecret(c.env),
     body: data.body,
+    ai: c.env.AI,
   });
   return json(proposalAccessPatchResponseSchema.parse(result));
 }

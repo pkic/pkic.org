@@ -31,6 +31,9 @@ const RawEvidenceRetentionPolicy = lazy(() =>
     default: module.RawEvidenceRetentionPolicy,
   })),
 );
+const EventClassifiers = lazy(() =>
+  import("../classifiers/EventClassifiers").then((module) => ({ default: module.EventClassifiers })),
+);
 const EventRecordings = lazy(() =>
   import("../events/detail/settings/EventRecordings").then((module) => ({ default: module.EventRecordings })),
 );
@@ -95,6 +98,7 @@ export function GroupEventSettingsTab({
                 { key: "cfp", label: "CFP" },
                 { key: "recordings", label: "Recordings" },
                 { key: "retention", label: "Retention" },
+                { key: "classifiers", label: "Classifiers" },
                 ...(event.ownerGroupId === groupId ? [{ key: "sharing", label: "Sharing" }] : []),
               ]
             : []),
@@ -156,6 +160,15 @@ export function GroupEventSettingsTab({
             canManage={canManage}
             canEditStaffing={hasEventAgendaPermission(event.id, "agenda:write")}
             canReadStaffing={hasEventAgendaPermission(event.id, "agenda:read")}
+          />
+        </Suspense>
+      ) : detailId === "classifiers" && canManage ? (
+        <Suspense fallback={<Spinner />}>
+          <EventClassifiers
+            slug={event.slug}
+            kind={detailTab}
+            canEdit={canManage}
+            hrefFor={(kind) => `${settingsPath}/classifiers/${kind}`}
           />
         </Suspense>
       ) : detailId === "recordings" && canManage ? (

@@ -112,7 +112,7 @@ describe("presentation versions tab", () => {
     const headers = [...table.querySelectorAll("thead th")].map((head) =>
       head.textContent?.replace(/[↑↓]/g, "").trim(),
     );
-    expect(headers).toEqual(["Version", "File", "Uploaded", "Size", "Review", "Actions"]);
+    expect(headers).toEqual(["Version", "File", "Uploaded", "Size", "Review", "Classifier", "Actions"]);
     const row = table.querySelector("tbody tr") as HTMLTableRowElement;
     expect(row.textContent).toContain("Version 1");
     expect(row.textContent).toContain("pqc-migration-talk.pdf");

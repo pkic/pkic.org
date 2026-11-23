@@ -47,6 +47,13 @@ export const LIVE_CHAT_POLICY = {
    * audited. Below the threshold a report only reaches the moderators.
    */
   reportHoldThreshold: 5,
+  /**
+   * An attendee whose messages the classifier blocks this many times
+   * within the window is paused, so a moderator can decide. One blocked
+   * message never pauses anyone, and a message a moderator keeps no longer
+   * counts.
+   */
+  checkPause: { blocks: 3, windowMinutes: 10 },
   /** Open reports a moderator receives at once, newest first. */
   reportQueueLimit: 100,
   /** The chat ticker shows this many of the latest messages. */
@@ -99,6 +106,8 @@ export interface LiveChatActionSubject {
   /** Held after reports and not yet reviewed. */
   held: boolean;
   reported: boolean;
+  /** The classifier advised against or blocked it, and no moderator has kept it yet. */
+  flaggedByCheck?: boolean;
   reportedByMe: boolean;
   converted: boolean;
   /** Cleared from the studio queue. */
@@ -134,8 +143,8 @@ export function liveChatEditOpen(sentAt: string, now = Date.now()): boolean {
  * | report     | others', unrestricted | no (removes instead) | no (removes instead) |
  * | delete     | own messages        | own messages          | own messages          |
  * | remove     | no                  | others' shown         | others' shown         |
- * | keep       | no                  | held or reported      | held or reported      |
- * | done       | no                  | attendee messages     | attendee messages     |
+ * | keep       | no                  | held, reported or flagged | held, reported or flagged |
+ * | done       | no                  | attendee messages     | attendee messages     | (reviewed, or back to review)
  * | convert    | no                  | attendee messages     | attendee messages     |
  * | pause      | no                  | unrestricted authors  | unrestricted authors  |
  * | block      | no                  | not blocked yet       | not blocked yet       |
@@ -170,9 +179,9 @@ export function liveChatActions(
     actions.add("report");
   if (staff) {
     if (!message.mine && (!message.hidden || message.held)) actions.add("remove");
-    if (message.hidden || message.reported) actions.add("keep");
+    if (message.hidden || message.reported || message.flaggedByCheck) actions.add("keep");
     if (message.channel === "attendee" && !message.hidden && !message.converted) actions.add("convert");
-    if (message.channel === "attendee" && !message.done) actions.add("done");
+    if (message.channel === "attendee") actions.add("done");
     if (message.channel === "attendee" && !message.hidden) actions.add(message.pinned ? "unpin" : "pin");
   }
   if (message.channel === "attendee")

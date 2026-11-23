@@ -2,7 +2,8 @@ import { deriveFormSubmissionWindowState } from "../../shared/form-submission-wi
 import { mountMarkdownField } from "../components/markdown-editor/mount-markdown-field";
 import { render, createRef } from "preact";
 import type { z } from "zod";
-import { getJson, postJson } from "../shared/api-client";
+import { ApiClientError, getJson, postJson } from "../shared/api-client";
+import { PROPOSAL_CHECK_ADVICE } from "../../shared/classifiers";
 import { clearReferralSession, clearRememberedInvitation } from "../shared/query-context";
 import { renderConsentInputs, readConsentValues, syncConsentValidation } from "../shared/widgets/consents";
 import { renderCustomFields, readCustomFieldValues } from "../shared/widgets/custom-fields";
@@ -440,6 +441,8 @@ async function main(): Promise<void> {
 
   // ── Submit ────────────────────────────────────────────────────────────────
 
+  // The screened content the author last saw advice for; editing any of it asks for a fresh check.
+  let advisedContent: string | null = null;
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     void (async () => {
@@ -455,6 +458,12 @@ async function main(): Promise<void> {
         return;
       }
       await withLoadingButton(findSubmitButton(form), async () => {
+        const screenedContent = JSON.stringify([
+          readField(form, "proposalType") || "talk",
+          readField(form, "title"),
+          readField(form, "abstract"),
+          readCustomFieldValues(form),
+        ]);
         try {
           const submittedEntry = entry!;
           const isPresenting = isPresentingCheckbox?.checked ?? false;
@@ -485,6 +494,7 @@ async function main(): Promise<void> {
 
             speakers: readAdditionalSpeakers(form),
             consents: readConsentValues(form),
+            adviceAcknowledged: advisedContent === screenedContent,
           });
 
           const result = await postJson(
@@ -498,6 +508,8 @@ async function main(): Promise<void> {
           clearRememberedInvitation(query.inviteId);
           showSuccessPanel(boot.root, form, result, firstName, eventName, eventSlug);
         } catch (error) {
+          // After the classifier's advice, submitting again sends the proposal as written.
+          if (error instanceof ApiClientError && error.code === PROPOSAL_CHECK_ADVICE) advisedContent = screenedContent;
           await handleFormInviteSubmitError({
             error,
             form,

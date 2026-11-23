@@ -23,6 +23,8 @@ import type { LiveRoomAuthors } from "./room-authors";
 import { LIVE_PARTICIPATION_REFUSAL } from "./room-participation-refusal";
 import { chatAudienceKey, seesChatOccurrence } from "./room-chat-audience";
 import type { LiveChatQuestion } from "./location-chat-on-air";
+import type { LiveRoomClassifiers } from "./room-classifiers";
+import { LIVE_CHAT_CHECK_WAIT_MS, LIVE_CHAT_HELD_BY_CHECK, liveCheckResult } from "./room-chat-checks";
 
 type ChatCommand = Extract<LiveRoomClientMessage, { type: `chat.${string}` }>;
 type Actor = { userId: string; name: string };
@@ -67,6 +69,9 @@ export class LiveRoomChatActions {
   private readonly allowances = new Map<string, number[]>();
   private readonly reactionsDue = new Map<string, Set<string>>();
   private reactionTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The check that owns each message's verdict: the latest one started, so an older check never settles newer words. */
+  private readonly checkRuns = new Map<string, number>();
+  private lastCheckRun = 0;
   private tickerTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
@@ -76,11 +81,10 @@ export class LiveRoomChatActions {
     private readonly store: LiveRoomStore,
     private readonly broadcast: LiveRoomBroadcast,
     private readonly authors: LiveRoomAuthors,
+    private readonly checks: LiveRoomClassifiers,
     private readonly hooks: {
-      /** Attendee chat changed; a chat ticker may show something else now. */
-      tickerChanged: () => Promise<void>;
-      /** Attendee chat changed; a chat list on air may show something else now. */
-      listed: () => void;
+      /** Attendee chat changed; the chat list and ticker on air may show something else now. */
+      onAirChanged: () => void;
       /** The session a message sent now is dated by, in a location's chat; null in a session's room. */
       stamp: () => string | null;
       checkWrite: (viewer: LiveRoomParticipant, occurrenceId: string | null) => Promise<LiveRefusal | null>;
@@ -95,6 +99,8 @@ export class LiveRoomChatActions {
       audited: () => Promise<void>;
       /** An attendee message changed the chat counts; their durable copy is due. */
       counted: () => Promise<void>;
+      /** The room paused someone on its own; they learn it, and moderators see it on their posts. */
+      participationChanged: (userId: string) => Promise<void>;
     },
   ) {}
 
@@ -171,6 +177,7 @@ export class LiveRoomChatActions {
       hidden: hiding !== undefined,
       held: hiding?.held ?? false,
       reported: reports > 0,
+      flaggedByCheck: this.feed.moderation.checks.flagged([row.id]).has(row.id),
       reportedByMe: Boolean(
         viewer.userId && this.feed.moderation.reportedBy([row.id], [viewer.userId]).get(viewer.userId)?.has(row.id),
       ),
@@ -219,7 +226,9 @@ export class LiveRoomChatActions {
     const row = this.chat.send(actor, text, Date.now(), channel, occurrenceId, replyTo);
     if (!row) return REFUSALS.tooFast;
     this.authors.recordMessage(row.id, stamp);
+    const run = channel === "attendee" && viewer.role !== "operator" ? this.markChecking(row) : null;
     await this.deliver([row], { removeWhenHidden: false });
+    if (run !== null) this.check(row, run);
     if (channel !== "attendee") return;
     this.nudgeTicker();
     await this.hooks.counted();
@@ -230,7 +239,108 @@ export class LiveRoomChatActions {
     if (text === row.body) return;
     if (!this.allowed("edit", actor.userId)) return REFUSALS.tooFast;
     const edited = this.chat.edit(row, text, at);
-    if (edited) await this.redeliver([edited]);
+    if (!edited) return;
+    const run = edited.channel === "attendee" ? this.markChecking(edited) : null;
+    await this.redeliver([edited]);
+    if (run !== null) this.check(edited, run);
+  }
+
+  /**
+   * Everyone reads an attendee's words at once; the classifier runs behind them. A blocked message is then
+   * taken from everyone but its author and moderators, like one held after reports, and an author blocked again
+   * and again is paused. An advised one stays in the chat, in the moderators' review queue. The on-air outputs
+   * wait for the verdict and leave out a flagged message until a moderator keeps it.
+   */
+  private markChecking(row: LiveChatRow): number | null {
+    // New words: whatever check is still running for the old ones no longer speaks for this message.
+    this.checkRuns.delete(row.id);
+    if (!this.checks.mayRun("chat")) return null;
+    const run = ++this.lastCheckRun;
+    this.checkRuns.set(row.id, run);
+    this.feed.moderation.checks.pending(row.id, nowIso());
+    // The outputs stop waiting once the wait is over, whether or not the check ever answers.
+    setTimeout(() => this.hooks.onAirChanged(), LIVE_CHAT_CHECK_WAIT_MS + 1);
+    return run;
+  }
+
+  /** Starts the check once everyone has the message, so its verdict always follows the message itself. */
+  private check(row: LiveChatRow, run: number): void {
+    const progress = { recorded: false };
+    this.ctx.waitUntil(
+      this.settleCheck(row, run, progress)
+        .catch(async (error: unknown) => {
+          console.error("Live chat check failed", error);
+          // A check that fails leaves the message in the chat and stops the outputs waiting for it. A verdict it
+          // already recorded stays for moderators; only its delivery is tried again.
+          try {
+            if (progress.recorded) await this.deliverChecked(row.id, run);
+            else this.passCheck(row.id, run);
+          } catch {
+            /* The room is going away; the outputs stop waiting for the message by themselves. */
+          }
+        })
+        .finally(() => {
+          if (this.ownsCheck(row.id, run)) this.checkRuns.delete(row.id);
+        }),
+    );
+  }
+
+  /** Whether this check still owns the message's verdict: the message was neither deleted nor edited since. */
+  private ownsCheck(messageId: string, run: number): boolean {
+    return this.checkRuns.get(messageId) === run && this.chat.message(messageId) !== null;
+  }
+
+  /** The examined words passed, or could not be checked: the outputs no longer wait for them. */
+  private passCheck(messageId: string, run: number): void {
+    if (!this.ownsCheck(messageId, run)) return;
+    this.feed.moderation.checks.clear(messageId);
+    this.nudgeTicker();
+  }
+
+  /** Delivers the examined words again with the verdict they keep, unless they were deleted or edited since. */
+  private async deliverChecked(messageId: string, run: number): Promise<void> {
+    const row = this.chat.message(messageId);
+    if (!row || !this.ownsCheck(messageId, run)) return;
+    await this.deliver([row], { removeWhenHidden: this.feed.moderation.hidden([row.id]).has(row.id) });
+    this.nudgeTicker();
+  }
+
+  private async settleCheck(sent: LiveChatRow, run: number, progress: { recorded: boolean }): Promise<void> {
+    const result = await this.checks.run("chat", liveChatPlainText(sent.body));
+    const row = this.chat.message(sent.id);
+    // Deleted, or edited again meanwhile: the newer words have a check of their own.
+    if (!row || !this.ownsCheck(row.id, run)) return;
+    const at = nowIso();
+    if (result) this.feed.moderation.checks.keepResult(row.id, liveCheckResult(result), at);
+    const outcome = result?.verdict.outcome;
+    if (outcome !== "advised" && outcome !== "blocked") return this.passCheck(row.id, run);
+    this.feed.moderation.checks.record(
+      row.id,
+      outcome,
+      result!.verdict.flags.map((flag) => flag.message),
+      at,
+    );
+    progress.recorded = true;
+    const removes = outcome === "blocked" && !this.feed.moderation.hidden([row.id]).has(row.id);
+    if (removes) this.feed.moderation.hide(row.id, LIVE_CHAT_HELD_BY_CHECK, true, at);
+    // Every blocked verdict counts towards a pause, whether or not the message was already hidden.
+    if (outcome === "blocked") await this.pauseAfterRepeatedBlocks(row.author_user_id, at);
+    if (removes) await this.deliver([row], { removeWhenHidden: true });
+    else await this.deliver([row], { removeWhenHidden: false, only: staff });
+    this.nudgeTicker();
+  }
+
+  /**
+   * Pauses an author whose messages the check keeps blocking, so a moderator decides whether they go on. A person
+   * already paused or blocked keeps that decision.
+   */
+  private async pauseAfterRepeatedBlocks(userId: string, at: string): Promise<void> {
+    const { blocks, windowMinutes } = LIVE_CHAT_POLICY.checkPause;
+    const since = new Date(Date.parse(at) - windowMinutes * 60_000).toISOString();
+    if (this.feed.moderation.checks.blockedSince(userId, since) < blocks) return;
+    if (this.feed.decisions.restriction(userId, Date.now())) return;
+    this.feed.decisions.block(userId, "paused", "conduct", { userId: "", name: LIVE_CHAT_HELD_BY_CHECK }, at);
+    await this.hooks.participationChanged(userId);
   }
 
   private react(actor: Actor, row: LiveChatRow, reaction: LiveChatReactionId, on: boolean) {
@@ -313,7 +423,7 @@ export class LiveRoomChatActions {
   ) {
     if (decision === "remove" && reason) this.removeWithReason(actor, row, reason, at);
     else {
-      this.feed.moderation.keep(row.id);
+      this.feed.moderation.keep(row.id, at);
       this.feed.decisions.restore(row.id);
     }
     this.audit(
@@ -439,7 +549,7 @@ export class LiveRoomChatActions {
           return options.removeWhenHidden &&
             liveChatChannelVisible(row.channel, viewer) &&
             seesChatOccurrence(viewer, row.occurrence_id)
-            ? { type: "chat.removed", messageId: row.id, channel: row.channel }
+            ? { type: "chat.removed", messageId: row.id, channel: row.channel, moderated: true }
             : null;
         },
         // A copy with something of the viewer's own is theirs alone; every other copy is shared by its audience.
@@ -464,10 +574,11 @@ export class LiveRoomChatActions {
   }
 
   private nudgeTicker(): void {
-    this.hooks.listed();
+    this.hooks.onAirChanged();
+    // Asked again once the ticker's refresh interval has passed, so a change in the meantime shows too.
     this.tickerTimer ??= setTimeout(() => {
       this.tickerTimer = null;
-      this.ctx.waitUntil(this.hooks.tickerChanged());
+      this.hooks.onAirChanged();
     }, LIVE_CHAT_POLICY.tickerRefreshMilliseconds);
   }
 }

@@ -171,7 +171,7 @@ export async function uploadProposalPresentation(
     enforceDeadline: boolean;
     authority?: Pick<PresentationCommitAuthority, "speaker">;
   },
-): Promise<string> {
+): Promise<{ r2Key: string; versionId: string }> {
   if (context.status !== "accepted") {
     throw new AppError(409, "PROPOSAL_NOT_ACCEPTED", "Presentations can only be uploaded for accepted proposals.");
   }
@@ -224,6 +224,7 @@ export async function uploadProposalPresentation(
   if (authorization) {
     requirePermission(authorization.actor, authorization.permission, { type: "event", id: context.event_id });
   }
+  let versionId = "";
   try {
     await withStorageUploadCompensation({
       db,
@@ -235,8 +236,8 @@ export async function uploadProposalPresentation(
       // reducing the lifetime of the prepared batch, this makes the authority
       // guard's timestamp the commit timestamp, so a deadline that expires
       // while a large upload is in flight cannot be bypassed.
-      prepareCommitStatements: () =>
-        preparePresentationVersionCreate(
+      prepareCommitStatements: () => {
+        const created = preparePresentationVersionCreate(
           db,
           context.id,
           {
@@ -249,7 +250,10 @@ export async function uploadProposalPresentation(
           { actorType: payload.actor.type, actorId: auditActorId, action: "presentation_uploaded" },
           authority,
           authorization,
-        ).statements,
+        );
+        versionId = created.id;
+        return created.statements;
+      },
     });
   } catch (error) {
     if (isAuthorizationGuardFailure(error)) {
@@ -268,7 +272,7 @@ export async function uploadProposalPresentation(
     }
     throw error;
   }
-  return r2Key;
+  return { r2Key, versionId };
 }
 
 export { getPresentationProposalContext };
