@@ -205,6 +205,30 @@ test("exact answers commit on Enter or Done and boolean filters use Yes/No", asy
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
     await page.screenshot({ path: testInfo.outputPath(`exact-answer-${width}.png`) });
   }
+  await input.fill("x".repeat(501));
+  await input.press("Enter");
+  await expect(input).toHaveAttribute("aria-invalid", "true");
+  // Another view can create history entries carrying this list's query.
+  await page.evaluate(() => {
+    const url = new URL(location.href);
+    const [path, query] = url.hash.slice(1).split("?");
+    const params = new URLSearchParams(query);
+    params.set("form-responses.f.answerValue", "Restored answer");
+    url.hash = `${path}?${params}`;
+    history.pushState(history.state, "", url);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  await expect(input).toHaveValue("Restored answer");
+  await expect(input).not.toHaveAttribute("aria-invalid", "true");
+  await input.fill("Uncommitted edit");
+  await page.goBack();
+  await expect(input).toHaveValue("Workshop");
+  await page.goForward();
+  await expect(input).toHaveValue("Restored answer");
+  await responses.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(download).toHaveAttribute("href", /answerValue=Restored(?:\+|%20)answer/);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openNotes();
   await input.fill("   ");
   await responses.getByRole("button", { name: "Done", exact: true }).click();
   await expect(responses.getByRole("button", { name: "Clear the Notes filter", exact: true })).toHaveCount(0);

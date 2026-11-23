@@ -20,7 +20,7 @@
  * contract-validated exact filter keeps a local draft until submission.
  */
 import type { ComponentChildren } from "preact";
-import { useId, useState } from "preact/hooks";
+import { useId, useLayoutEffect, useState } from "preact/hooks";
 import type { z } from "zod";
 import { useContractForm } from "../hooks/useContractForm";
 import { Field } from "../ui/Field";
@@ -96,6 +96,11 @@ export function ColumnTextFilterRow({
   const listId = useId();
   const [draft, setDraft] = useState(value);
   const form = useContractForm(schema, { [param]: draft.trim() ? draft : undefined });
+  const resetValidation = form.reset;
+  useLayoutEffect(() => {
+    setDraft(value);
+    resetValidation();
+  }, [value, resetValidation]);
   return (
     <form
       class="pk-column-filter"

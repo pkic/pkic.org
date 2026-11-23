@@ -161,6 +161,7 @@ export function MenuLevel({
       {items.map((item, index) => {
         const shared = {
           key: item.id,
+          "data-menu-item-id": item.id,
           ref: (element: HTMLButtonElement | HTMLAnchorElement | null) => {
             itemRefs.current[index] = element;
           },
