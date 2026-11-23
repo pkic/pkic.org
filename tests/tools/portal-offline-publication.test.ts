@@ -89,6 +89,17 @@ it("owns eagerly linked portal CSS outside the scanner graph without adding admi
     expect(await publishPortalOfflineInventory(directory)).toBe(path);
   });
 });
+it("keeps the stylesheets lazy sections load on demand available to the offline scanner", async () => {
+  await fixture(async (directory) => {
+    await writeFile(join(directory, "_assets/room.css"), ".pk-room{}");
+    const path = await publishPortalOfflineInventory(directory, ["/_assets/room.css"]);
+    const inventory = portalOfflineInventorySchema.parse(JSON.parse(await readFile(join(directory, path), "utf8")));
+    expect(inventory.assets).toContain("/_assets/room.css");
+    expect(await readFile(join(directory, "portal/index.html"), "utf8")).not.toContain("room.css");
+    await rm(join(directory, "_assets/room.css"));
+    await expect(publishPortalOfflineInventory(directory, ["/_assets/room.css"])).rejects.toThrow();
+  });
+});
 it("refuses a missing eager stylesheet before claiming the portal is offline-ready", async () => {
   await fixture(async (directory) => {
     const page = join(directory, "portal/index.html");

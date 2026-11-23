@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import { useEditorFocus } from "./useEditorFocus";
+import "./AgendaEditor.css";
 import { useMemo, useState } from "preact/hooks";
 import {
   agendaRoleMemberSchema,

@@ -1,4 +1,5 @@
 import { portalOfflineAssetsPlugin } from "./scripts/lib/portal-offline-assets.mjs";
+import { portalDeferredStylesPlugin } from "./scripts/lib/portal-deferred-styles.mjs";
 import { EMAIL_PREVIEW_DOCUMENT_PATH } from "./assets/shared/site-security-policy.ts";
 import { siteMarkdownProcessor } from "./site/markdown-processor.ts";
 import { PUBLICATION_SITE_ORIGIN } from "./site/publication-cache.ts";
@@ -100,7 +101,13 @@ export default defineConfig({
       ],
     },
     ssr: { external: ["@resvg/resvg-wasm"] },
-    plugins: [contentMediaPlugin(root), bylinesPlugin(root), trustListPlugin(root), portalOfflineAssetsPlugin("/")],
+    plugins: [
+      contentMediaPlugin(root),
+      bylinesPlugin(root),
+      trustListPlugin(root),
+      portalOfflineAssetsPlugin("/"),
+      portalDeferredStylesPlugin("/"),
+    ],
     build: {
       assetsInlineLimit: 0,
       minify: true,
