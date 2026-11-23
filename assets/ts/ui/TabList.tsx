@@ -16,7 +16,7 @@
  */
 
 import type { ComponentChildren } from "preact";
-import { useActiveTabVisibility } from "./useActiveTabVisibility";
+import { overflowClass, TabOverflowMenu, useTabOverflow } from "./TabOverflow";
 import { Badge } from "./Badge";
 
 import "./Tabs.css";
@@ -46,7 +46,8 @@ export interface TabListProps {
 }
 
 export function TabList({ items, activeId, onSelect, label, idPrefix, class: className }: TabListProps) {
-  const listRef = useActiveTabVisibility(activeId);
+  const { listRef, moreRef, fitting, tabs } = useTabOverflow(items.length);
+  const selectedFits = items.findIndex((item) => item.id === activeId) < fitting;
   const classes = ["pk-tabs", className].filter(Boolean).join(" ");
 
   /**
@@ -58,8 +59,12 @@ export function TabList({ items, activeId, onSelect, label, idPrefix, class: cla
     const next = items[nextIndex];
     if (!next) return;
     onSelect(next.id);
-    const tabs = listRef.current?.querySelectorAll<HTMLElement>('[role="tab"]');
-    tabs?.[nextIndex]?.focus({ preventScroll: true });
+    // A tab that did not fit is reached through the menu, which now carries its label.
+    const target =
+      nextIndex < fitting
+        ? listRef.current?.querySelectorAll<HTMLElement>('[role="tab"]')[nextIndex]
+        : moreRef.current?.querySelector<HTMLElement>("button");
+    target?.focus({ preventScroll: true });
   }
 
   function onKeyDown(event: KeyboardEvent, index: number) {
@@ -97,13 +102,14 @@ export function TabList({ items, activeId, onSelect, label, idPrefix, class: cla
               type="button"
               role="tab"
               id={idPrefix ? `${idPrefix}-${item.id}` : undefined}
-              class="pk-tabs__link"
+              class={overflowClass(index, fitting)}
               aria-selected={selected ? "true" : "false"}
               aria-controls={item.panelId}
               // Exactly one tab is in the tab order; the arrows move within.
               // Tabbing into the set lands on the selected tab, and tabbing
               // again leaves for the panel rather than the next tab.
-              tabIndex={selected ? 0 : -1}
+              // When the selected tab is in the More menu, the first tab keeps the strip reachable.
+              tabIndex={(selectedFits ? selected : index === 0) ? 0 : -1}
               onClick={() => onSelect(item.id)}
               onKeyDown={(event) => onKeyDown(event, index)}
             >
@@ -113,6 +119,18 @@ export function TabList({ items, activeId, onSelect, label, idPrefix, class: cla
           );
         })}
       </div>
+      <TabOverflowMenu
+        entries={items.map((item, index) => ({
+          id: item.id,
+          label: typeof item.label === "string" ? item.label : (tabs[index]?.text ?? ""),
+          attention: item.attention,
+          onSelect: () => onSelect(item.id),
+        }))}
+        fitting={fitting}
+        activeId={activeId}
+        moreRef={moreRef}
+        onArrowBack={() => move(fitting - 1)}
+      />
     </div>
   );
 }

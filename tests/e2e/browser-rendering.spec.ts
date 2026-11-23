@@ -11,7 +11,7 @@ import type { Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 import { expectStaffSessionLanding, signInAsE2eStaff } from "./helpers/staff-auth";
-import { tab } from "./helpers/tabs";
+import { openTab } from "./helpers/tabs";
 import { continueRegistrationWithEmail, ownDomainEmail } from "./helpers/registration";
 import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
 import { runRowAction } from "./helpers/data-table";
@@ -1343,7 +1343,7 @@ test.describe("browser workflows", () => {
       timeout: 15_000,
     });
 
-    await tab(page, /Presentation/i).click();
+    await openTab(page, /Presentation/i);
     await expect(page.getByText(/Version 1/i)).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText(/pqc-migration-talk\.pdf/i)).toBeVisible();
     await screenshot("06-admin-presentation-tab");

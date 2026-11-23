@@ -8,7 +8,7 @@ import { clientIpForIdentity, signInToPortal } from "./helpers/portal-auth";
 import { decideProposal, submitProposal } from "./helpers/proposals";
 import { eventWorkspacePath } from "./helpers/agenda-workspace";
 import { eventRegistrationAttendanceDetailResponseSchema } from "../../assets/shared/schemas/event-registration-detail";
-import { tab } from "./helpers/tabs";
+import { openTab } from "./helpers/tabs";
 
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
 
@@ -56,6 +56,8 @@ test("portal proposal detail registers accepted speakers through canonical resou
       endsAt: "2027-09-10T17:00:00.000Z",
       profileKey: "workshop",
       registrationPolicy: "no_registration",
+      // The proposer is not in the group, and a group's event is otherwise visible to its members only.
+      visibility: "public",
       links: [],
     }),
     201,
@@ -165,11 +167,11 @@ test("portal proposal detail registers accepted speakers through canonical resou
   // carries an "Audit log" tab of its own, and an unscoped lookup names both.
   // The facets are URLs, so the strip is navigation rather than a tablist.
   const proposalTabs = page.getByRole("navigation", { name: "Proposal sections" });
-  await tab(proposalTabs, "Audit log").click();
+  await openTab(proposalTabs, "Audit log");
   expect((await auditResponse).status()).toBe(200);
   await expect(page).toHaveURL(/\/audit-log$/);
   await expect(page.getByRole("heading", { name: "Audit log", exact: true })).toBeVisible();
-  await tab(proposalTabs, "Speakers").click();
+  await openTab(proposalTabs, "Speakers");
   await expect(page.getByRole("heading", { name: "Speakers", exact: true })).toBeVisible();
   const speakerPanel = page.getByRole("region", { name: "Proposal speakers" });
   await expect(speakerPanel.getByText("Portal Proposer", { exact: true })).toBeVisible();
@@ -228,7 +230,7 @@ test("portal proposal detail registers accepted speakers through canonical resou
     queued: true,
   });
 
-  await tab(proposalTabs, "Decision").click();
+  await openTab(proposalTabs, "Decision");
   await page.getByLabel("Decision", { exact: true }).selectOption("accepted");
   await expect(page.getByText("Acceptance registers all speakers", { exact: false })).toBeVisible();
   await page.getByRole("button", { name: "Preview emails", exact: true }).click();
@@ -239,7 +241,7 @@ test("portal proposal detail registers accepted speakers through canonical resou
   const acceptedRow = page.getByRole("row").filter({ hasText: "Canonical portal proposal journey" });
   await expect(acceptedRow.getByText("Accepted", { exact: true }).first()).toHaveClass(/pk-badge--ok/);
   await openRow(acceptedRow, "Open Canonical portal proposal journey");
-  await tab(page.getByRole("navigation", { name: "Proposal sections" }), "Speakers").click();
+  await openTab(page.getByRole("navigation", { name: "Proposal sections" }), "Speakers");
   await expect(page.getByRole("region", { name: "Proposal speakers" }).getByText(/(^|· )Registered$/)).toHaveCount(2);
   await page.goto(`/portal/#/groups/${GROUP_ID}/events/${event.id}/proposals`);
   await expect(page.getByRole("columnheader", { name: /^Decision/ })).toHaveCount(0);
@@ -253,7 +255,7 @@ test("portal proposal detail registers accepted speakers through canonical resou
   ).toBeVisible();
   await expect(acceptedRow).not.toContainText(proposerEmail);
   const sections = page.getByRole("navigation", { name: "Proposal sections" });
-  await tab(sections, "Speakers").click();
+  await openTab(sections, "Speakers");
   await expect(page).toHaveURL(/\/proposals\/speakers$/);
   const roster = page.getByRole("table", { name: "Proposal speakers" });
   await expect(roster).toBeVisible();

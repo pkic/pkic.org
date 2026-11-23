@@ -72,7 +72,7 @@ Each entry is the full anatomy of a control. The gallery id renders it (`pnpm ga
 
 - Use: `assets/ts/components/Tabs.tsx` in the portal (route links with `hrefFor`, or panels); `TabList` for panels inside a view; `ui/Tabs` for a link strip. Inner tab state goes in the URL through `useHashQueryParam`.
 - Shape: a horizontal strip of short labels, the active one marked; `attention` adds a danger badge for hidden problems. Never repeat a tab as a "Back" button.
-- Placement: directly above the content it switches; on phones the strip scrolls sideways to keep the active tab visible.
+- Placement: directly above the content it switches. At any width, tabs that do not fit go into a More menu at the strip's end, never a sideways scroll; when the current tab is one of them, the menu button shows its label and the current mark.
 - Keyboard: Left/Right wrap, Home/End; selection follows focus.
 
 ## Panel header (`panel-header`)

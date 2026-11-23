@@ -76,8 +76,8 @@ export function AgendaToolbar({
           variant="secondary"
           data-agenda-compact
           aria-pressed="true"
-          aria-label="Hide session descriptions"
-          title="Hide session descriptions"
+          aria-label="Show session descriptions"
+          title="Show session descriptions"
         >
           <StrokeIcon>
             <path d="m4 2 4 4 4-4M4 14l4-4 4 4" />
@@ -88,7 +88,6 @@ export function AgendaToolbar({
           variant="secondary"
           icon
           data-agenda-expand
-          aria-pressed="false"
           aria-expanded="false"
           aria-label="Expand agenda"
           title="Expand agenda"

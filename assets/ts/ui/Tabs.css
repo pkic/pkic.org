@@ -10,18 +10,59 @@
 
 @layer components {
   .pk-tabs {
-    /* No padding or margin; the nav is a transparent wrapper. */
+    /* No padding or margin; the nav is a transparent wrapper that anchors the More menu. */
+    position: relative;
+    /* The rule under the strip. A strip that drops it sets 0px, so the More menu button still lines up. */
+    --pk-tabs-rule: 1px;
   }
 
-  /* At any width the strip scrolls, never the page; the clipped last tab is the
-     cue. A scrollbar thumb under the labels read as a second active underline. */
+  /* Tabs that do not fit never scroll or widen the page: they go into the More
+     menu (TabOverflow.tsx). Clipping, not scrolling, keeps them measurable. */
   .pk-tabs__list {
     display: flex;
     flex-wrap: nowrap;
     align-items: center;
-    overflow-x: auto;
-    border-bottom: 1px solid var(--pk-line);
-    scrollbar-width: none;
+    overflow-x: clip;
+    border-bottom: var(--pk-tabs-rule) solid var(--pk-line);
+  }
+
+  .pk-tabs__link--overflow {
+    visibility: hidden;
+  }
+
+  /* Sits over the strip's end, above its rule, where the tabs it holds would be. */
+  .pk-tabs__more {
+    position: absolute;
+    inset-block: 0 var(--pk-tabs-rule);
+    inset-inline-end: 0;
+    display: flex;
+    align-items: stretch;
+  }
+
+  /* The menu button wears the tab's look, not the square icon button's. */
+  .pk-tabs__more .pk-menu__trigger.pk-tabs__link {
+    /* As tall as the tabs beside it, so its underline lines up with theirs. */
+    min-block-size: 0;
+    padding: 0.5rem var(--pk-4);
+    border-radius: 0;
+  }
+
+  .pk-tabs__more .pk-menu__trigger.pk-tabs__link--current {
+    padding-bottom: calc(0.5rem - 2px);
+  }
+
+  .pk-tabs__more .pk-menu__trigger.pk-tabs__link:hover,
+  .pk-tabs__more .pk-menu__trigger.pk-tabs__link[aria-expanded="true"] {
+    background: none;
+    color: var(--pk-ink);
+  }
+
+  .pk-tabs__chevron {
+    inline-size: 0.4em;
+    block-size: 0.4em;
+    border-inline-end: 1.5px solid currentColor;
+    border-block-end: 1.5px solid currentColor;
+    transform: translateY(-0.15em) rotate(45deg);
   }
 
   .pk-tabs__link {
@@ -47,7 +88,7 @@
     cursor: pointer;
   }
 
-  .pk-tabs__link:hover:not([aria-current], [aria-selected="true"]) {
+  .pk-tabs__link:hover:not([aria-current], [aria-selected="true"], .pk-tabs__link--current) {
     color: var(--pk-ink);
   }
 
@@ -56,12 +97,14 @@
    * two levels read as one navigation. Every section does this the same way:
    * the panel after a strip loses the stack gap when it opens with tabs.
    */
-  .pk-tabs + .pk-stack:has(> .pk-tabs:first-child, > .pk-stack:first-child > .pk-tabs:first-child) {
+  .pk-tabs + .pk-stack:has(> .pk-tabs:first-child, > .pk-stack:first-child > .pk-tabs:first-child),
+  .pk-stack > .pk-tabs + .pk-tabs {
     margin-block-start: calc(-1 * var(--pk-gap, var(--pk-4)));
   }
 
   .pk-tabs__link[aria-current="page"],
-  .pk-tabs__link[aria-selected="true"] {
+  .pk-tabs__link[aria-selected="true"],
+  .pk-tabs__link--current {
     color: var(--pk-accent-ink);
     border-bottom: 2px solid var(--pk-accent);
     padding-bottom: calc(0.5rem - 2px);

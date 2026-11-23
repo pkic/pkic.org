@@ -304,7 +304,7 @@ test("agenda list cards expand without overlap and print every day as a readable
         if (await toggle.isVisible()) await toggle.click();
         else {
           await agenda.getByRole("button", { name: "Agenda filters and actions", exact: true }).click();
-          await page.getByRole("menuitemradio", { name: /session descriptions/ }).click();
+          await page.getByRole("menuitemcheckbox", { name: "Show session descriptions" }).click();
         }
       }
       const geometry = await agenda.evaluate((root) => {

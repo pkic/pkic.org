@@ -8,7 +8,7 @@
 
 import type { ComponentChildren } from "preact";
 import "./Tabs.css";
-import { useActiveTabVisibility } from "./useActiveTabVisibility";
+import { overflowClass, TabOverflowMenu, useTabOverflow } from "./TabOverflow";
 
 export interface TabItem {
   readonly id: string;
@@ -28,17 +28,17 @@ export interface TabsProps {
 }
 
 export function Tabs({ items, activeId, label, class: className }: TabsProps) {
-  const listRef = useActiveTabVisibility(activeId);
+  const { listRef, moreRef, fitting } = useTabOverflow(items.length);
   const classes = ["pk-tabs", className].filter(Boolean).join(" ");
 
   return (
     <nav class={classes} aria-label={label}>
       <div class="pk-tabs__list" ref={listRef}>
-        {items.map((item) => (
+        {items.map((item, index) => (
           <a
             key={item.id}
             href={item.href}
-            class="pk-tabs__link"
+            class={overflowClass(index, fitting)}
             aria-current={item.id === activeId ? "page" : undefined}
             title={item.title}
           >
@@ -47,6 +47,7 @@ export function Tabs({ items, activeId, label, class: className }: TabsProps) {
           </a>
         ))}
       </div>
+      <TabOverflowMenu entries={items} fitting={fitting} activeId={activeId} moreRef={moreRef} />
     </nav>
   );
 }

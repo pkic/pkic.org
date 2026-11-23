@@ -8,8 +8,8 @@
     background: var(--pk-surface-sunk);
     border-block: 1px solid var(--pk-line-soft);
 
-    .pk-tabs__list {
-      border-bottom: 0;
+    .pk-tabs {
+      --pk-tabs-rule: 0px;
     }
   }
   .pk-profile-header__content > section + section,

@@ -25,7 +25,9 @@ export function mountAgendaToolbarMenu(root: HTMLElement): () => void {
     const items: MenuItem[] = controls.map((button, index) => ({
       id: String(index),
       label: button.title || button.getAttribute("aria-label") || button.textContent?.trim() || "Agenda action",
+      // A pressed button is an on/off setting: a checkbox in the menu, its check mark saying it is on.
       checked: button.hasAttribute("aria-pressed") ? button.getAttribute("aria-pressed") === "true" : undefined,
+      multiple: button.hasAttribute("aria-pressed"),
       disabled: button.disabled,
       onSelect: () => button.click(),
       separatorBefore: index === 1 && controls[0]!.matches("[data-agenda-clear-filters]"),

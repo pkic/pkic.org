@@ -26,7 +26,7 @@ import { acceptConfirmDialog, confirmDialog } from "./helpers/confirm-dialog";
 import { approveMemberThroughReview, uniqueSuffix } from "./helpers/membership";
 import { signInToPortal } from "./helpers/portal-auth";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
-import { expectCurrentTab, tab } from "./helpers/tabs";
+import { expectCurrentTab, openTab } from "./helpers/tabs";
 
 /** Seeded Post-Quantum Cryptography Working Group, used as a stable fixture. */
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
@@ -222,7 +222,7 @@ test.describe("Group votes: lifecycle actions, proposal moderation, and sharing"
     }, GROUP_ID);
 
     await page.goto(`/portal/#/groups/${GROUP_ID}/votes`);
-    await tab(page, "Proposals").click();
+    await openTab(page, "Proposals");
     await expectCurrentTab(page, "Proposals");
     await page.getByRole("button", { name: "Propose a vote" }).click();
     // Proposing is a page of its own: the proposals list is not underneath it.

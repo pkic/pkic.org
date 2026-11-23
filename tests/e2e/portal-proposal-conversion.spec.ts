@@ -8,7 +8,7 @@ import {
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { createMember } from "./helpers/member-provisioning";
 import { signInToPortal } from "./helpers/portal-auth";
-import { tab } from "./helpers/tabs";
+import { openTab } from "./helpers/tabs";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
@@ -41,7 +41,7 @@ for (const conversion of ["endorsement", "approval"] as const) {
       expect(joined.status()).toBe(200);
       const votesRoute = `/portal/#/groups/${GROUP_ID}/votes`;
       await participant.goto(votesRoute);
-      await tab(participant, "Proposals").click();
+      await openTab(participant, "Proposals");
       await participant.getByRole("button", { name: "Propose a vote" }).click();
       const title = `Converted proposal ${conversion} ${Date.now()}`;
       const form = participant.getByRole("form", { name: "Propose a vote" });
@@ -69,7 +69,7 @@ for (const conversion of ["endorsement", "approval"] as const) {
       } else {
         expect((await response.json()).convertedVote).toBeNull();
         await page.goto(votesRoute);
-        await tab(page, "Proposals").click();
+        await openTab(page, "Proposals");
         await expect(page.getByText("You are not participating in this group", { exact: false })).toBeVisible();
         await expect(page.getByRole("button", { name: "Propose a vote" })).toHaveCount(0);
         await page

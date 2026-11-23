@@ -45,7 +45,7 @@ import { acceptConfirmDialog, cancelConfirmDialog, confirmDialog } from "./helpe
 import { verifyMembershipJoinEmail } from "./helpers/member-join";
 import { signInToPortal } from "./helpers/portal-auth";
 import { expectStaffSessionLanding, signInAsE2eStaff } from "./helpers/staff-auth";
-import { expectCurrentTab, tab } from "./helpers/tabs";
+import { expectCurrentTab, openTab, tab } from "./helpers/tabs";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 const EVENT_SLUG = "pqc-conference-amsterdam-nl";
@@ -311,7 +311,7 @@ test.describe("Portal management browser-verification pass", () => {
     // The vote sections swap a panel already on the page, so they are the
     // WAI-ARIA tab pattern rather than plain buttons — reached through the
     // helper that knows both kinds, and asserted to actually be showing.
-    await tab(page, "Proposals").click();
+    await openTab(page, "Proposals");
     await expectCurrentTab(page, "Proposals");
 
     // Proposals open their own record page from the list.

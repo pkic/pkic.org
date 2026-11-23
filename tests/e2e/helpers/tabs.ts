@@ -16,17 +16,50 @@
 
 import { expect, type Locator, type Page } from "@playwright/test";
 
-/** The tab named `name`, of either kind, within `scope`. */
+/**
+ * The tab named `name`, of either kind, within `scope`, as the strip shows it:
+ * a tab that did not fit is in the strip's More menu, and while it is the
+ * current one the menu button carries its label.
+ */
 export function tab(scope: Page | Locator, name: string | RegExp): Locator {
-  return scope.getByRole("tab", { name }).or(scope.locator("a.pk-tabs__link").filter({ hasText: name }));
+  return scope
+    .getByRole("tab", { name })
+    .or(scope.locator("a.pk-tabs__link").filter({ hasText: name, visible: true }))
+    .or(scope.locator(".pk-tabs__more button").filter({ hasText: name }));
+}
+
+/** Opens the named tab, through the strip's More menu when it did not fit. */
+export async function openTab(scope: Page | Locator, name: string | RegExp): Promise<void> {
+  const page = "keyboard" in scope ? scope : scope.page();
+  // The More button carries the current tab's label, but opening it is not opening that tab.
+  const shown = scope
+    .getByRole("tab", { name })
+    .or(scope.locator("a.pk-tabs__link").filter({ hasText: name, visible: true }));
+  const more = scope.locator(".pk-tabs__more button");
+  // A strip may still be rendering, so the tab is looked for again until it shows up in one place or the other.
+  await expect(async () => {
+    if (await shown.isVisible()) return shown.click();
+    for (const button of await more.all()) {
+      if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
+      const item = scope.getByRole("menuitemradio", { name }).or(scope.getByRole("menuitem", { name }));
+      if (await item.isVisible()) return item.click();
+      // Escape is handled inside the open menu, so it is pressed where the focus is, not on the button.
+      await page.keyboard.press("Escape");
+    }
+    throw new Error(`No ${String(name)} tab, in a strip or its More menu`);
+  }).toPass({ timeout: 15_000 });
 }
 
 /** Asserts that the named tab is the one currently showing. */
 export async function expectCurrentTab(scope: Page | Locator, name: string | RegExp): Promise<void> {
   const located = tab(scope, name);
   await expect(located).toBeVisible();
+  // A current tab that did not fit is shown by the More button, which carries the current-tab mark.
   const current = await located.evaluate(
-    (element) => element.getAttribute("aria-selected") === "true" || element.getAttribute("aria-current") === "page",
+    (element) =>
+      element.getAttribute("aria-selected") === "true" ||
+      element.getAttribute("aria-current") === "page" ||
+      element.classList.contains("pk-tabs__link--current"),
   );
   expect(current, `expected the ${String(name)} tab to be the current one`).toBe(true);
 }

@@ -41,7 +41,10 @@ interface MenuItemBase {
   /** A short second line under the label: what choosing the item does, when the label alone cannot say it. */
   description?: string;
   icon?: ComponentChildren;
-  /** A command; omit for link items with `href`. */
+  /**
+   * A command. With `href`, a plain click runs it instead of following the link, so an in-app
+   * route keeps its own navigation; a click that opens a new tab or window still follows the link.
+   */
   onSelect?: () => void;
   /** A destination or download; rendered as an anchor in the menu. */
   href?: string;
