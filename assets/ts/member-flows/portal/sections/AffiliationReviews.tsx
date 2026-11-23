@@ -294,7 +294,7 @@ function GroupDetail({
               ...(canApprove
                 ? [
                     {
-                      header: "Actions",
+                      header: "",
                       width: "fit" as const,
                       cell: (review: AffiliationReview) => (
                         <RowActions

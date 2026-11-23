@@ -60,7 +60,7 @@ export function ClassifierQuestionTable({
                 id: "source",
                 header: "From",
                 width: "fit" as const,
-                cell: (row: ClassifierQuestionRow) => (row.off ? `${row.source ?? ""}, turned off` : row.source),
+                cell: (row: ClassifierQuestionRow) => row.source,
               },
             ]
           : []),
@@ -86,6 +86,17 @@ export function ClassifierQuestionTable({
           recordLabel: "blocks",
           cell: ({ question }) => (question.kind === "flag" ? percent(question.blockAtPercent) : undefined),
         },
+        // A list that mixes layers can turn a question off for this scope only.
+        ...(hasSource
+          ? [
+              {
+                id: "on",
+                header: "Status",
+                width: "fit" as const,
+                cell: ({ off }: ClassifierQuestionRow) => (off ? "Off" : "On"),
+              },
+            ]
+          : []),
         ...(actionsFor
           ? [
               {
