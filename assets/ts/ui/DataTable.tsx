@@ -68,6 +68,8 @@ export interface DataTableColumn<Row> {
    * is a label rather than a magnitude. Numbers a reader compares down the
    * column — counts, amounts, sizes — take `end`, so their units line up under
    * each other. The table sets `tabular-nums`, so digits line up either way.
+   * The row's actions (`headerHidden`) default to `end`, so every table ends
+   * its rows with them in the same place.
    */
   align?: "start" | "center" | "end";
   /**
@@ -237,6 +239,10 @@ function RowActionControl({ action, primary }: { action: DataTableRowAction; pri
  * The utilities layer also beats the components layer, so an aligned column
  * needs no extra specificity to hold.
  */
+function alignOf(column: DataTableColumn<never>): DataTableColumn<unknown>["align"] {
+  return column.align ?? (column.headerHidden ? "end" : undefined);
+}
+
 function alignClass(align: DataTableColumn<unknown>["align"]): string | undefined {
   if (align === "end") return "pk-end";
   if (align === "center") return "pk-center";
@@ -417,7 +423,7 @@ export function DataTable<Row>({
                   key={column.id}
                   scope="col"
                   aria-label={column.headerContent !== undefined ? column.header : undefined}
-                  class={classList(alignClass(column.align), widthClass(column.width))}
+                  class={classList(alignClass(alignOf(column)), widthClass(column.width))}
                   aria-sort={sorted ? (sort.direction === "asc" ? "ascending" : "descending") : undefined}
                 >
                   {/* The name first and on its own, then its commands. The
@@ -492,7 +498,7 @@ export function DataTable<Row>({
                       <td
                         key={column.id}
                         class={classList(
-                          alignClass(column.align),
+                          alignClass(alignOf(column)),
                           widthClass(column.width),
                           column.cellClass,
                           recordRole(column, index, value, titleIndex),

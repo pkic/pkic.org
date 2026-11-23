@@ -119,7 +119,7 @@ export function GroupMailingListSubscribers({
         },
         { header: "Because", cell: standingReason },
         {
-          header: "Actions",
+          header: "",
           width: "fit",
           cell: (subscriber) => (
             <MailingListSubscriberActions

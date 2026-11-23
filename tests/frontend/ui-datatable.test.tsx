@@ -116,6 +116,17 @@ describe("DataTable", () => {
     expect(second!.querySelectorAll("td")[2]?.textContent).toContain("—");
   });
 
+  it("ends every row with its actions at the end edge unless the column says otherwise", () => {
+    const withActions: DataTableColumn<Member>[] = [
+      ...columns,
+      { id: "actions", header: "Actions", headerHidden: true, cell: () => <button type="button">…</button> },
+    ];
+    const container = mount(<DataTable caption="Members" columns={withActions} rows={rows} rowKey={(r) => r.id} />);
+    expect(headers(container).at(-1)?.classList.contains("pk-end")).toBe(true);
+    expect(container.querySelector("tbody tr td:last-child")?.classList.contains("pk-end")).toBe(true);
+    expect(container.querySelector("tbody tr td:first-child")?.classList.contains("pk-end")).toBe(false);
+  });
+
   it("names an end-aligned value in a narrow record with its own word, or none when the value says it", () => {
     const recordColumns: DataTableColumn<Member>[] = [
       ...columns,

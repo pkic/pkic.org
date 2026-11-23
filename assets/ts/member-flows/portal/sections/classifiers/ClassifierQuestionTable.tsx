@@ -5,7 +5,6 @@
 import type { ComponentChildren } from "preact";
 import type { ClassifierQuestion } from "../../../../../shared/classifiers";
 import { DataTable } from "../../../../ui/DataTable";
-import { IconCheckmark } from "../../../../ui/MediaIcons";
 import { Menu, type MenuItem } from "../../../../ui/Menu";
 
 export interface ClassifierQuestionRow {
@@ -92,18 +91,9 @@ export function ClassifierQuestionTable({
           ? [
               {
                 id: "on",
-                header: "On",
+                header: "Status",
                 width: "fit" as const,
-                align: "center" as const,
-                cell: ({ off }: ClassifierQuestionRow) =>
-                  off ? (
-                    <span class="pk-small pk-muted">Off</span>
-                  ) : (
-                    <>
-                      <IconCheckmark aria-hidden="true" />
-                      <span class="pk-sr-only">On</span>
-                    </>
-                  ),
+                cell: ({ off }: ClassifierQuestionRow) => (off ? "Off" : "On"),
               },
             ]
           : []),

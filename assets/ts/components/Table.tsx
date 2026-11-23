@@ -307,8 +307,7 @@ export function DataTable<T>({
       headerHidden: isActions || undefined,
       cell: (row) => column.cell(row, indexOf.get(row) ?? 0),
       sortable: Boolean(column.sort),
-      align:
-        column.align ?? alignOf(headClass(column.header), column.className ?? "") ?? (isActions ? "end" : undefined),
+      align: column.align ?? alignOf(headClass(column.header), column.className ?? ""),
       recordLabel: column.recordLabel,
       width: widthFor(column, index, slackIndex),
       cellClass: utilitiesOf(column.className),
