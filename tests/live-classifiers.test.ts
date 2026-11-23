@@ -161,6 +161,23 @@ describe("automatic checks of live chat and questions", () => {
     expect((await author.next("room.refused")).code).toBe("LIVE_PARTICIPATION_BLOCKED");
   });
 
+  it("counts a blocked verdict towards a pause even when a moderator already hid the message", async () => {
+    const author = await f.connectChat("attendee");
+    const reader = await f.connectChat("secondAttendee");
+    const operator = await f.connectChat("operator");
+    const { blocks } = LIVE_CHAT_POLICY.checkPause;
+    for (let count = 1; count < blocks; count += 1) {
+      const spam = await say(author, `Buy cheap certificates, offer ${count}`, reader);
+      await reader.next("chat.removed", (update) => update.messageId === spam.id);
+    }
+    const release = holdChecks();
+    const last = await say(author, "A slow one: buy cheap certificates", reader);
+    operator.send({ type: "chat.moderate", messageId: last.id, decision: "remove", reason: "spam" });
+    await reader.next("chat.removed", (update) => update.messageId === last.id);
+    release();
+    expect((await author.next("participation.access")).restriction).toMatchObject({ block: "paused" });
+  });
+
   it("keeps an advised verdict for moderators when delivering the checked message fails once", async () => {
     const author = await f.connectChat("attendee");
     const operator = await f.connectChat("operator");
