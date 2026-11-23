@@ -198,8 +198,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       this.authors,
       classifiers,
       {
-        tickerChanged: async () => this.locationChat.onAirChanged(),
-        listed: () => this.locationChat.onAirChanged(),
+        onAirChanged: () => this.locationChat.onAirChanged(),
         stamp: () => this.location.stamp(Date.now()),
         checkWrite: (viewer, occurrenceId) => this.locationChat.checkWrite(viewer, occurrenceId),
         ask: (question, by, at, sentDuring) => this.locationChat.ask(question, by, at, sentDuring),
