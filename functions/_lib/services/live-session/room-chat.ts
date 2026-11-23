@@ -52,6 +52,7 @@ const ANNOTATIONS = [
   "room_chat_edits",
   "room_chat_aired",
   "room_chat_checks",
+  "room_chat_check_flags",
 ];
 /** Shown to attendees: not removed by a moderator or held after reports. */
 const HIDDEN = `id NOT IN (SELECT message_id FROM room_chat_hidden)`;

@@ -317,7 +317,13 @@ export class LiveRoomChatActions {
     const at = nowIso();
     this.feed.moderation.checks.record(
       row.id,
-      { outcome, notes: result!.verdict.flags.map((flag) => flag.message) },
+      {
+        outcome,
+        notes: result!.verdict.flags.map((flag) => flag.message),
+        flags: result!.verdict.flags
+          .map((flag) => ({ id: flag.id, percent: flag.probabilityPercent }))
+          .sort((a, b) => b.percent - a.percent),
+      },
       at,
     );
     progress.recorded = true;

@@ -144,7 +144,7 @@ export function liveChatEditOpen(sentAt: string, now = Date.now()): boolean {
  * | delete     | own messages        | own messages          | own messages          |
  * | remove     | no                  | others' shown         | others' shown         |
  * | keep       | no                  | held, reported or flagged | held, reported or flagged |
- * | done       | no                  | attendee messages     | attendee messages     |
+ * | done       | no                  | attendee messages     | attendee messages     | (reviewed, or back to review)
  * | convert    | no                  | attendee messages     | attendee messages     |
  * | pause      | no                  | unrestricted authors  | unrestricted authors  |
  * | block      | no                  | not blocked yet       | not blocked yet       |
@@ -181,7 +181,7 @@ export function liveChatActions(
     if (!message.mine && (!message.hidden || message.held)) actions.add("remove");
     if (message.hidden || message.reported || message.flaggedByCheck) actions.add("keep");
     if (message.channel === "attendee" && !message.hidden && !message.converted) actions.add("convert");
-    if (message.channel === "attendee" && !message.done) actions.add("done");
+    if (message.channel === "attendee") actions.add("done");
     if (message.channel === "attendee" && !message.hidden) actions.add(message.pinned ? "unpin" : "pin");
   }
   if (message.channel === "attendee")
