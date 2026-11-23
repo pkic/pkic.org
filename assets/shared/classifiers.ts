@@ -62,6 +62,12 @@ export const PROPOSAL_CHECK_BLOCKED = "PROPOSAL_CHECK_BLOCKED";
 export const PROPOSAL_CHECK_ADVICE = "PROPOSAL_CHECK_ADVICE";
 export const CLASSIFIER_QUESTION_ID_PATTERN = /^[a-z][a-z0-9_]{1,39}$/;
 
+/** A question's id as words, where a short name is enough: `personal_data` reads "Personal data". */
+export function classifierQuestionName(id: string): string {
+  const words = id.replace(/_/gu, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 // The shapes are the shared schemas' own; this module keeps the policy that reads them.
 export type ClassifierFlag = z.infer<typeof classifierFlagSchema>;
 export type ClassifierScore = z.infer<typeof classifierScoreSchema>;
@@ -110,10 +116,8 @@ export function classifierQuestionLimitRefusal(
 /** The most of an event's own description a check reads; the rest is cut at a word. */
 export const CLASSIFIER_EVENT_DESCRIPTION_MAX_CHARS = 1500;
 
-/** The model a kind starts with: the fast one for live chat, the larger one for long texts. */
-export function defaultClassifierModel(kind: ClassifierKind): ClassifierModel {
-  return kind === "chat_message" || kind === "audience_question" ? "clef-flash" : "clef";
-}
+/** The model every kind starts with; the fast one is a choice per kind once it proves as accurate. */
+export const DEFAULT_CLASSIFIER_MODEL: ClassifierModel = "clef";
 
 /** Shortens a long description at a word boundary, so the context stays bounded. */
 export function truncateClassifierEventDescription(text: string): string {

@@ -7,7 +7,7 @@ import {
   CLASSIFIER_KINDS,
   CLASSIFIER_MAX_QUESTIONS,
   classifierQuestionLimitRefusal,
-  defaultClassifierModel,
+  DEFAULT_CLASSIFIER_MODEL,
   effectiveClassifier,
   type ClassifierEventAdditions,
   type ClassifierKind,
@@ -107,12 +107,12 @@ function decodeIds(json: string): string[] {
 }
 
 /** Before staff save anything a kind is off and has nothing to ask. */
-function unsavedSettings(kind: ClassifierKind): ClassifierSettings {
-  return { enabled: false, model: defaultClassifierModel(kind), context: "", questions: [] };
+function unsavedSettings(): ClassifierSettings {
+  return { enabled: false, model: DEFAULT_CLASSIFIER_MODEL, context: "", questions: [] };
 }
 
 function settingsResponse(kind: ClassifierKind, row: SettingsRow | undefined): ClassifierSettingsResponse {
-  if (!row) return { kind, revision: 0, saved: false, updatedAt: null, ...unsavedSettings(kind) };
+  if (!row) return { kind, revision: 0, saved: false, updatedAt: null, ...unsavedSettings() };
   const model = classifierModelSchema.safeParse(row.model);
   return {
     kind,
@@ -120,7 +120,7 @@ function settingsResponse(kind: ClassifierKind, row: SettingsRow | undefined): C
     saved: true,
     updatedAt: row.updated_at,
     enabled: row.enabled === 1,
-    model: model.success ? model.data : defaultClassifierModel(kind),
+    model: model.success ? model.data : DEFAULT_CLASSIFIER_MODEL,
     context: row.context,
     questions: decodeQuestions(row.questions_json),
   };
