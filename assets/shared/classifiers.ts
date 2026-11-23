@@ -65,7 +65,14 @@ export function classifierRaisesConcerns(outcome: ClassifierOutcome): boolean {
   return outcome === "advised" || outcome === "blocked";
 }
 
+/** The most questions one check runs; the model reads no more. */
 export const CLASSIFIER_MAX_QUESTIONS = 32;
+/**
+ * Each scope has its own share of that limit, so a merged check always fits and no save needs to look beyond its own
+ * scope: the PKIC-wide questions, and what one event adds or replaces.
+ */
+export const CLASSIFIER_MAX_WIDE_QUESTIONS = 24;
+export const CLASSIFIER_MAX_EVENT_QUESTIONS = CLASSIFIER_MAX_QUESTIONS - CLASSIFIER_MAX_WIDE_QUESTIONS;
 
 /** Refusal codes of the proposal screening: a block, or advice the author may set aside by submitting again. */
 export const PROPOSAL_CHECK_BLOCKED = "PROPOSAL_CHECK_BLOCKED";
@@ -115,17 +122,6 @@ export function mergedClassifierQuestions(
   return questions;
 }
 
-/** Why an event's questions cannot be saved with the PKIC-wide ones, or null when together they fit. */
-export function classifierQuestionLimitRefusal(
-  settingsQuestions: readonly ClassifierQuestion[],
-  additions: ClassifierEventAdditions,
-): string | null {
-  const count = mergedClassifierQuestions(settingsQuestions, additions).length;
-  return count > CLASSIFIER_MAX_QUESTIONS
-    ? `With the PKIC-wide questions this event would ask ${count}; the most a check runs is ${CLASSIFIER_MAX_QUESTIONS}. Turn some PKIC-wide questions off or add fewer.`
-    : null;
-}
-
 /** The most of an event's own description a check reads; the rest is cut at a word. */
 export const CLASSIFIER_EVENT_DESCRIPTION_MAX_CHARS = 1500;
 
@@ -162,7 +158,7 @@ export function effectiveClassifier(
     enabled: settings.enabled,
     model: settings.model,
     context,
-    // Saving refuses a set above the limit, so nothing saved is dropped here.
+    // Each scope stays within its share of the limit, so the merged questions always fit.
     questions: mergedClassifierQuestions(settings.questions, additions),
   };
 }

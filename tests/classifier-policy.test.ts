@@ -1,15 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { liveChatActions } from "../assets/shared/live-chat-policy";
 import {
+  CLASSIFIER_MAX_EVENT_QUESTIONS,
   CLASSIFIER_MAX_QUESTIONS,
-  classifierQuestionLimitRefusal,
+  CLASSIFIER_MAX_WIDE_QUESTIONS,
   decideClassifier,
   effectiveClassifier,
   mergedClassifierQuestions,
   type ClassifierQuestion,
   type ClassifierSettings,
 } from "../assets/shared/classifiers";
-import { classifierFlagSchema, classifierSettingsInputSchema } from "../assets/shared/schemas/classifiers";
+import {
+  classifierEventAdditionsInputSchema,
+  classifierFlagSchema,
+  classifierSettingsInputSchema,
+} from "../assets/shared/schemas/classifiers";
 
 const spam: ClassifierQuestion = {
   id: "spam",
@@ -130,28 +135,32 @@ describe("an event's questions beside the PKIC-wide ones", () => {
   const many = (count: number, prefix: string): ClassifierQuestion[] =>
     Array.from({ length: count }, (_, index) => ({ ...spam, id: `${prefix}_${String(index).padStart(2, "0")}` }));
 
-  it("keeps every saved question and refuses a set above the limit instead of dropping the extras", () => {
-    const wide = many(CLASSIFIER_MAX_QUESTIONS, "wide");
-    const extra = { context: "", questions: [{ ...spam, id: "event_only" }], disabledQuestionIds: [] };
-    expect(classifierQuestionLimitRefusal(wide, extra)).toContain(`${CLASSIFIER_MAX_QUESTIONS + 1}`);
-    expect(mergedClassifierQuestions(wide, extra)).toHaveLength(CLASSIFIER_MAX_QUESTIONS + 1);
-    expect(effectiveClassifier({ ...settings(wide) }, extra).questions.map((question) => question.id)).toContain(
-      "event_only",
+  it("gives each scope its own share of the limit, so the largest PKIC-wide and event sets still fit together", () => {
+    const wide = many(CLASSIFIER_MAX_WIDE_QUESTIONS, "wide");
+    const added = many(CLASSIFIER_MAX_EVENT_QUESTIONS, "event");
+    const wideInput = { expectedRevision: 0, enabled: true, model: "clef", context: "" };
+    const eventInput = { expectedRevision: 0, context: "", disabledQuestionIds: [] };
+    expect(classifierSettingsInputSchema.safeParse({ ...wideInput, questions: wide }).success).toBe(true);
+    expect(classifierSettingsInputSchema.safeParse({ ...wideInput, questions: [...wide, spam] }).success).toBe(false);
+    expect(classifierEventAdditionsInputSchema.safeParse({ ...eventInput, questions: added }).success).toBe(true);
+    expect(classifierEventAdditionsInputSchema.safeParse({ ...eventInput, questions: [...added, spam] }).success).toBe(
+      false,
     );
+    const merged = mergedClassifierQuestions(wide, { context: "", questions: added, disabledQuestionIds: [] });
+    expect(merged).toHaveLength(CLASSIFIER_MAX_QUESTIONS);
   });
 
   it("counts a replacement once and a switched-off question not at all", () => {
-    const wide = many(CLASSIFIER_MAX_QUESTIONS, "wide");
-    expect(
-      classifierQuestionLimitRefusal(wide, {
-        context: "",
-        questions: [
-          { ...spam, id: "wide_00" },
-          { ...spam, id: "event_only" },
-        ],
-        disabledQuestionIds: ["wide_01"],
-      }),
-    ).toBeNull();
+    const wide = many(CLASSIFIER_MAX_WIDE_QUESTIONS, "wide");
+    const merged = mergedClassifierQuestions(wide, {
+      context: "",
+      questions: [
+        { ...spam, id: "wide_00" },
+        { ...spam, id: "event_only" },
+      ],
+      disabledQuestionIds: ["wide_01"],
+    });
+    expect(merged).toHaveLength(CLASSIFIER_MAX_WIDE_QUESTIONS);
   });
 });
 
@@ -177,6 +186,3 @@ describe("keeping a message the automatic check flagged", () => {
   });
 });
 
-function settings(questions: ClassifierQuestion[]): ClassifierSettings {
-  return { enabled: true, model: "clef-flash", context: "", questions };
-}

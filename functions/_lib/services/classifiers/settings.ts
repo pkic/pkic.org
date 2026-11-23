@@ -5,8 +5,6 @@
  */
 import {
   CLASSIFIER_KINDS,
-  CLASSIFIER_MAX_QUESTIONS,
-  classifierQuestionLimitRefusal,
   DEFAULT_CLASSIFIER_MODEL,
   effectiveClassifier,
   type ClassifierEventAdditions,
@@ -221,50 +219,6 @@ function changedError(): AppError {
   );
 }
 
-function questionLimitError(field: string, message: string): AppError {
-  return new AppError(400, "VALIDATION_ERROR", message, { formErrors: [], fieldErrors: { [field]: [message] } });
-}
-
-/**
- * A PKIC-wide change must not leave an event asking more questions than a check runs: refused, not dropped. Returns
- * a guard that refuses the save when any event's additions changed after this read; revisions only grow, so the
- * count and sum of them change with every insert or update.
- */
-async function refuseQuestionsEventsCannotCarry(
-  db: DatabaseLike,
-  kind: ClassifierKind,
-  questions: readonly ClassifierQuestion[],
-): Promise<StatementLike> {
-  // One set-based read, bounded to a single row: how many events would ask more than a check runs, and the count and
-  // revision sum the guard below compares, all from the same snapshot. The merge counted here is
-  // `mergedClassifierQuestions`: the PKIC-wide and event question ids together, less the ones the event turns off.
-  const snapshot = await db
-    .prepare(
-      `SELECT COUNT(*) AS rows_read, COALESCE(SUM(revision), 0) AS revisions,
-         COALESCE(SUM((
-           SELECT COUNT(*) FROM (
-             SELECT value AS id FROM json_each(?2)
-             UNION SELECT json_extract(added.value, '$.id') FROM json_each(additions.questions_json) AS added
-           ) AS merged
-           WHERE merged.id NOT IN (SELECT value FROM json_each(additions.disabled_question_ids_json))
-         ) > ?3), 0) AS over
-       FROM event_classifier_additions AS additions WHERE kind = ?1`,
-    )
-    .bind(kind, JSON.stringify(questions.map((question) => question.id)), CLASSIFIER_MAX_QUESTIONS)
-    .first<{ rows_read: number; revisions: number; over: number }>();
-  const over = snapshot?.over ?? 0;
-  if (over)
-    throw questionLimitError(
-      "questions",
-      `${over} ${over === 1 ? "event adds" : "events add"} questions that would no longer fit beside these. Remove some here or in ${over === 1 ? "that event" : "those events"}.`,
-    );
-  return prepareStateGuard(db, {
-    sql: `SELECT 1 FROM (SELECT COUNT(*) AS rows_read, COALESCE(SUM(revision), 0) AS revisions
-          FROM event_classifier_additions WHERE kind = ?) WHERE rows_read = ? AND revisions = ?`,
-    bindings: [kind, snapshot?.rows_read ?? 0, snapshot?.revisions ?? 0],
-  });
-}
-
 async function commit(db: DatabaseLike, statements: StatementLike[]): Promise<void> {
   try {
     await db.batch(statements);
@@ -282,10 +236,8 @@ export async function saveClassifierSettings(
   input: ClassifierSettingsInput,
 ): Promise<{ revision: number }> {
   const now = nowIso();
-  const additionsUnchanged = await refuseQuestionsEventsCannotCarry(db, kind, input.questions);
   await commit(db, [
     preparePermissionsAuthorizationGuard(db, actor, [{ permission: "events:manage" }]),
-    additionsUnchanged,
     prepareStateGuard(db, {
       sql: "SELECT 1 WHERE COALESCE((SELECT revision FROM classifier_settings WHERE kind = ?), 0) = ?",
       bindings: [kind, input.expectedRevision],
@@ -325,13 +277,11 @@ export async function saveEventClassifierAdditions(
   const wideQuestions = wide ? decodeQuestions(wide.questions_json) : [];
   const wideIds = new Set(wideQuestions.map((q) => q.id));
   const disabledQuestionIds = [...new Set(input.disabledQuestionIds)].filter((id) => wideIds.has(id));
-  const tooMany = classifierQuestionLimitRefusal(wideQuestions, { ...input, disabledQuestionIds });
-  if (tooMany) throw questionLimitError("questions", tooMany);
   await commit(db, [
     preparePermissionsAuthorizationGuard(db, actor, [
       { permission: "events:write", context: { type: "event", id: eventId } },
     ]),
-    // The limit was checked against these PKIC-wide questions; a change to them meanwhile refuses the save.
+    // Turned-off ids were matched to these PKIC-wide questions; a change to them meanwhile refuses the save.
     prepareStateGuard(db, {
       sql: "SELECT 1 WHERE COALESCE((SELECT revision FROM classifier_settings WHERE kind = ?), 0) = ?",
       bindings: [kind, wide?.revision ?? 0],
