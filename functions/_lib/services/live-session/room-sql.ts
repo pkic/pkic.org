@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS room_chat_edits (message_id TEXT PRIMARY KEY, origina
 CREATE TABLE IF NOT EXISTS room_chat_aired (message_id TEXT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS room_chat_pin (message_id TEXT PRIMARY KEY, by_name TEXT NOT NULL, at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS room_chat_checks (message_id TEXT PRIMARY KEY, outcome TEXT NOT NULL, notes_json TEXT NOT NULL, at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS room_chat_check_flags (message_id TEXT PRIMARY KEY, flags_json TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS question_authorship (question_id TEXT PRIMARY KEY,author_json TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS room_access_erasures (user_id TEXT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS room_d1_read_state (id INTEGER PRIMARY KEY CHECK(id=1), bookmark TEXT NOT NULL);

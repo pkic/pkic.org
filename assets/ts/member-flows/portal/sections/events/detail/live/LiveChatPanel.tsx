@@ -4,7 +4,7 @@ import { TabList } from "../../../../../../ui/TabList";
 import { Badge } from "../../../../../../ui/Badge";
 import { formatNumber } from "../../../../../../../shared/format-number";
 import { LIVE_CHAT_POLICY } from "../../../../../../../shared/live-chat-policy";
-import type { LiveRoomClientMessage } from "../../../../../../../shared/schemas/live-session-room";
+import type { LiveChatMessage, LiveRoomClientMessage } from "../../../../../../../shared/schemas/live-session-room";
 import type { LiveChatView } from "../../../../../../live-session/location-chat-state";
 import { LiveChat } from "../../../../../../live-session/LiveChat";
 import { LiveChatMessageRow } from "../../../../../../live-session/LiveChatMessageRow";
@@ -12,7 +12,7 @@ import { LiveAuthorProvider } from "../../../../../../live-session/LiveAuthor";
 import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
 
 type Send = (message: LiveRoomClientMessage) => boolean;
-const VIEWS = ["attendee", "operator", "reports"] as const;
+const VIEWS = ["attendee", "operator", "review"] as const;
 type View = (typeof VIEWS)[number];
 
 /** Activity stays secondary to broadcast controls and uses their existing room connection. */
@@ -40,31 +40,73 @@ export function LiveChatPanel({
   );
 }
 
-/** Reported messages waiting for a moderator, newest report first, with the same row and menu as the chat. */
-function LiveChatReports({ state, disabled, send }: { state: LiveChatView; disabled: boolean; send: Send }) {
-  const reports = state.chatReports ?? [];
-  if (!reports.length)
-    return <p class="pk-small pk-muted">No reports. Messages people report appear here for review.</p>;
+const REVIEW_FILTERS = ["all", "removed", "check", "reported"] as const;
+type ReviewFilter = (typeof REVIEW_FILTERS)[number];
+const REVIEW_LABELS: Record<ReviewFilter, string> = {
+  all: "All",
+  removed: "Removed",
+  check: "Check",
+  reported: "Reported",
+};
+
+/** Attendees no longer see it: the check removed it, or enough people reported it. */
+const removedNow = (message: LiveChatMessage) => message.moderation?.held === true;
+const REVIEW_MATCH: Record<ReviewFilter, (message: LiveChatMessage) => boolean> = {
+  all: () => true,
+  removed: removedNow,
+  check: (message) => message.moderation?.automaticCheck !== undefined,
+  reported: (message) => (message.moderation?.reports ?? 0) > 0,
+};
+
+/**
+ * Messages waiting for a moderator: the ones the check removed or flagged and the ones people reported.
+ * Removed ones lead, since their authors wait on a decision; Keep and Hide lead each row's menu.
+ */
+function LiveChatReview({ state, disabled, send }: { state: LiveChatView; disabled: boolean; send: Send }) {
+  const [filter, setFilter] = useHashQueryParam("review", "all", REVIEW_FILTERS);
+  const queue = state.chatReports ?? [];
+  if (!queue.length)
+    return <p class="pk-small pk-muted">Nothing to review. Messages the check flags or people report appear here.</p>;
+  const shown = queue.filter(REVIEW_MATCH[filter]).sort((a, b) => Number(removedNow(b)) - Number(removedNow(a)));
   return (
     <LiveAuthorProvider authors={state.authors} send={send}>
       <div class="pk-live-chat-workspace pk-live-chat-workspace--compact">
-        <div class="pk-live-chat" tabIndex={0} role="region" aria-label="Reported messages">
-          <ol class="pk-live-chat__list">
-            {reports.map((message) => (
-              <LiveChatMessageRow
-                key={message.id}
-                message={message}
-                viewer={state.viewer}
-                send={send}
-                disabled={disabled}
-                timeZone={state.scope.timeZone}
-              />
-            ))}
-          </ol>
+        <TabList
+          label="Show"
+          idPrefix="studio-review"
+          activeId={filter}
+          onSelect={(id) => setFilter(id as ReviewFilter)}
+          items={REVIEW_FILTERS.map((id) => {
+            const count = queue.filter(REVIEW_MATCH[id]).length;
+            return {
+              id,
+              panelId: "studio-review-list",
+              label: id === "all" || !count ? REVIEW_LABELS[id] : `${REVIEW_LABELS[id]} · ${formatNumber(count)}`,
+            };
+          })}
+        />
+        <div class="pk-live-chat" tabIndex={0} role="tabpanel" id="studio-review-list" aria-label="Messages to review">
+          {shown.length ? (
+            <ol class="pk-live-chat__list">
+              {shown.map((message) => (
+                <LiveChatMessageRow
+                  key={message.id}
+                  message={message}
+                  viewer={state.viewer}
+                  send={send}
+                  disabled={disabled}
+                  timeZone={state.scope.timeZone}
+                  review
+                />
+              ))}
+            </ol>
+          ) : (
+            <p class="pk-small pk-muted">Nothing here.</p>
+          )}
         </div>
-        {reports.length >= LIVE_CHAT_POLICY.reportQueueLimit ? (
+        {queue.length >= LIVE_CHAT_POLICY.reportQueueLimit ? (
           <p class="pk-small pk-muted">
-            Showing the latest {formatNumber(LIVE_CHAT_POLICY.reportQueueLimit)} reports. Review these to see more.
+            Showing the latest {formatNumber(LIVE_CHAT_POLICY.reportQueueLimit)}. Decide on these to see more.
           </p>
         ) : null}
       </div>
@@ -80,7 +122,7 @@ function LiveStudioChat({ state, disabled, send }: { state: LiveChatView; disabl
     const incoming = state.chat.filter((message) => !known.current.has(message.id));
     state.chat.forEach((message) => known.current.add(message.id));
     setUnread((current) => {
-      const next = { ...current, ...(view === "reports" ? {} : { [view]: 0 }) };
+      const next = { ...current, ...(view === "review" ? {} : { [view]: 0 }) };
       incoming.forEach((message) => {
         if (message.channel !== view) next[message.channel] += 1;
       });
@@ -88,7 +130,7 @@ function LiveStudioChat({ state, disabled, send }: { state: LiveChatView; disabl
     });
   }, [state.chat, view]);
   const reports = state.chatReports?.length ?? 0;
-  const label = (id: View) => (id === "attendee" ? "Attendees" : id === "operator" ? "Operators" : "Reports");
+  const label = (id: View) => (id === "attendee" ? "Attendees" : id === "operator" ? "Operators" : "Review");
   return (
     <div class="pk-live-desk__chat-panel">
       <TabList
@@ -102,7 +144,7 @@ function LiveStudioChat({ state, disabled, send }: { state: LiveChatView; disabl
           label: (
             <>
               {label(id)}
-              {id === "reports" ? (
+              {id === "review" ? (
                 reports > 0 ? (
                   <Badge tone="warn">{formatNumber(reports)}</Badge>
                 ) : null
@@ -122,8 +164,8 @@ function LiveStudioChat({ state, disabled, send }: { state: LiveChatView; disabl
           hidden={view !== id}
           class="pk-live-desk__chat-tabpanel"
         >
-          {id === "reports" ? (
-            <LiveChatReports state={state} disabled={disabled} send={send} />
+          {id === "review" ? (
+            <LiveChatReview state={state} disabled={disabled} send={send} />
           ) : (
             <LiveChat state={state} disabled={disabled} send={send} channel={id} visible={view === id} compact />
           )}

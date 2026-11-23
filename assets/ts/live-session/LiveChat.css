@@ -201,6 +201,11 @@
   .pk-live-chat__row:focus-within .pk-live-chat__menu {
     opacity: 1;
   }
+  /* A review row's menu holds its decision: always at full strength, never only on hover. */
+  .pk-live-chat__menu[data-review] {
+    opacity: 1;
+    align-items: center;
+  }
   @media (hover: none) {
     .pk-live-chat__menu {
       opacity: 1;

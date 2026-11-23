@@ -452,7 +452,7 @@ describe("live chat", () => {
   });
 });
 
-it("counts only new inactive-channel messages, lists reports and restores the selected studio view from its URL", async () => {
+it("counts only new inactive-channel messages, lists what to review and restores the selected studio view from its URL", async () => {
   window.history.replaceState(null, "", "#/events/pqc/live");
   const reported = chatMessage({
     id: "40000000-0000-4000-8000-000000000009",
@@ -475,16 +475,16 @@ it("counts only new inactive-channel messages, lists reports and restores the se
   const send = vi.fn(() => true);
   const host = mount(<LiveChatPanel studio state={initial} disabled={false} send={send} />);
   expect(host.querySelector("#studio-chat-operator")?.textContent).toBe("Operators");
-  expect(host.querySelector("#studio-chat-reports")?.textContent).toBe("Reports1");
+  expect(host.querySelector("#studio-chat-review")?.textContent).toBe("Review1");
   const updated = {
     ...initial,
     chat: [...initial.chat, { ...initial.chat[0], id: "40000000-0000-4000-8000-000000000003", text: "New cue" }],
   };
   await act(async () => draw(<LiveChatPanel studio state={updated} disabled={false} send={send} />, host));
   expect(host.querySelector("#studio-chat-operator")?.textContent).toContain("New");
-  await act(async () => host.querySelector<HTMLButtonElement>("#studio-chat-reports")!.click());
-  expect(window.location.hash).toContain("chat=reports");
-  expect(host.querySelector("#studio-chat-panel-reports")?.textContent).toContain("1 report");
+  await act(async () => host.querySelector<HTMLButtonElement>("#studio-chat-review")!.click());
+  expect(window.location.hash).toContain("chat=review");
+  expect(host.querySelector("#studio-chat-panel-review")?.textContent).toContain("1 report · Abuse");
   await act(async () => host.querySelector<HTMLButtonElement>("#studio-chat-operator")!.click());
   expect(host.querySelector("#studio-chat-operator")?.textContent).toBe("Operators");
   window.history.replaceState(null, "", "#/");

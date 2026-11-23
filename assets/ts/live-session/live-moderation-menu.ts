@@ -14,19 +14,19 @@ type Send = (message: LiveRoomClientMessage) => boolean;
 /** What a post is called in the menu and its dialogs. */
 export type LiveModerationNoun = "message" | "question" | "answer";
 
-/** Done: the studio's cleanup flag, never a removal. */
-export function liveDoneMenuItem(item: LiveModerationItem, done: boolean, send: Send): MenuItem {
-  return done
+/** Reviewed: a moderator looked at it and nothing more is needed; never a removal, and it can be taken back. */
+export function liveReviewedMenuItem(item: LiveModerationItem, reviewed: boolean, send: Send): MenuItem {
+  return reviewed
     ? {
-        id: "undone",
-        label: "Back to the queue",
-        tooltip: "Puts it back in the studio queue.",
+        id: "unreviewed",
+        label: "Back to review",
+        tooltip: "Takes the reviewed mark off, so it reads as not looked at yet.",
         onSelect: () => send({ type: "moderation.done", item, done: false }),
       }
     : {
-        id: "done",
-        label: "Done",
-        tooltip: "Clears it from the studio queue. Attendees still see it.",
+        id: "reviewed",
+        label: "Mark as reviewed",
+        tooltip: "Marks it as looked at, with nothing more to do. Attendees still see it.",
         onSelect: () => send({ type: "moderation.done", item, done: true }),
       };
 }
@@ -56,7 +56,7 @@ export function liveRemoveMenuItem(
   };
 }
 
-/** Pause, Block for this session…, Block for this event… and Lift block, as the shared policy grants them. */
+/** Pause user, Block user for this session…, Block user for this event… and Lift block, as the shared policy grants them. */
 export function liveParticipationMenuItems({
   item,
   authorName,
@@ -87,7 +87,7 @@ export function liveParticipationMenuItems({
   if (actions.has("pause"))
     items.push({
       id: "pause",
-      label: "Pause for 10 minutes",
+      label: "Pause user for 10 minutes",
       tooltip: `${authorName} can't post, vote or react until ${formatClockInZone(livePauseEndsAt(new Date().toISOString()), timeZone)}. They can keep watching.`,
       separatorBefore: true,
       onSelect: () =>
@@ -96,7 +96,7 @@ export function liveParticipationMenuItems({
   if (actions.has("block"))
     items.push({
       id: "block",
-      label: "Block for this session…",
+      label: "Block user for this session…",
       tooltip: `${authorName} can't post, vote or react in this session until you lift the block. They can keep watching.`,
       separatorBefore: !actions.has("pause"),
       danger: true,
@@ -110,7 +110,7 @@ export function liveParticipationMenuItems({
   if (actions.has("blockEvent"))
     items.push({
       id: "block-event",
-      label: "Block for this event…",
+      label: "Block user for this event…",
       tooltip: `${authorName} can't post, vote or react in any session of this event until an organizer lifts the block. They can keep watching.`,
       separatorBefore: !actions.has("pause") && !actions.has("block"),
       danger: true,

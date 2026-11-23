@@ -81,6 +81,7 @@ describe("automatic checks of live chat and questions", () => {
     expect(held.message.moderation?.automaticCheck).toEqual({
       outcome: "blocked",
       notes: [expect.any(String)],
+      flags: [{ id: "spam", percent: 99 }],
     });
     expect(await reader.next("chat.removed", (update) => update.messageId === spam.id)).toMatchObject({
       moderated: true,
@@ -203,7 +204,8 @@ describe("automatic checks of live chat and questions", () => {
     const fresh = await f.connectChat("operator");
     const snapshot = fresh.received[0] as Extract<LiveRoomServerMessage, { type: "location.chat.snapshot" }>;
     expect(snapshot.chatReports?.find((message) => message.id === mine.message.id)?.moderation?.automaticCheck).toEqual(
-      { outcome: "advised", notes: [expect.any(String)] },
+      // Read back from the room's store, with the question it raised.
+      { outcome: "advised", notes: [expect.any(String)], flags: [{ id: "conduct", percent: 75 }] },
     );
   });
 

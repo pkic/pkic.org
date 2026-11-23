@@ -4,7 +4,10 @@
  * Outputs wait: a message stays off air while it is checked, and when the
  * check advised or blocked it, until a moderator keeps it.
  */
-import type { LiveAutomaticCheck } from "../../../../assets/shared/schemas/live-session-moderation";
+import {
+  liveAutomaticCheckSchema,
+  type LiveAutomaticCheck,
+} from "../../../../assets/shared/schemas/live-session-moderation";
 import type { LiveRoomSql } from "./room-sql";
 
 /** A check still unanswered after this long no longer keeps its message off air; the model itself gets 4 seconds. */
@@ -30,6 +33,7 @@ export class LiveChatCheckStore {
       messageId,
       at,
     );
+    this.sql.exec("DELETE FROM room_chat_check_flags WHERE message_id = ?", messageId);
   }
 
   record(messageId: string, check: LiveAutomaticCheck, at: string): void {
@@ -41,11 +45,19 @@ export class LiveChatCheckStore {
       JSON.stringify(check.notes),
       at,
     );
+    // Which questions raised it and how certain the model was, so a moderator sees why and staff can tune.
+    this.sql.exec(
+      `INSERT INTO room_chat_check_flags(message_id, flags_json) VALUES (?, ?)
+       ON CONFLICT(message_id) DO UPDATE SET flags_json = excluded.flags_json`,
+      messageId,
+      JSON.stringify(check.flags ?? []),
+    );
   }
 
   /** Nothing holds the message back for its check any longer: it passed, or a moderator kept it. */
   clear(messageId: string): void {
     this.sql.exec("DELETE FROM room_chat_checks WHERE message_id = ?", messageId);
+    this.sql.exec("DELETE FROM room_chat_check_flags WHERE message_id = ?", messageId);
   }
 
   /** How many of one author's attendee messages the check blocked since `since`; kept ones no longer count. */
@@ -66,13 +78,29 @@ export class LiveChatCheckStore {
     if (!ids.length) return new Map();
     return new Map(
       this.sql
-        .rows<{ message_id: string; outcome: "advised" | "blocked"; notes_json: string }>(
-          `SELECT message_id, outcome, notes_json FROM room_chat_checks
+        .rows<{ message_id: string; outcome: "advised" | "blocked"; notes_json: string; flags_json: string | null }>(
+          `SELECT message_id, outcome, notes_json,
+             (SELECT flags_json FROM room_chat_check_flags WHERE room_chat_check_flags.message_id = room_chat_checks.message_id) AS flags_json
+           FROM room_chat_checks
            WHERE outcome IN ('advised', 'blocked') AND message_id IN (SELECT value FROM json_each(?))`,
           JSON.stringify(ids),
         )
-        .map((row) => [row.message_id, { outcome: row.outcome, notes: readNotes(row.notes_json) }]),
+        .map((row) => [
+          row.message_id,
+          { outcome: row.outcome, notes: readNotes(row.notes_json), flags: readFlags(row.flags_json) },
+        ]),
     );
+  }
+}
+
+/** The stored flags when they still read as the contract's; a room from an earlier release has none. */
+function readFlags(json: string | null): LiveAutomaticCheck["flags"] {
+  if (!json) return undefined;
+  try {
+    const parsed = liveAutomaticCheckSchema.shape.flags.safeParse(JSON.parse(json));
+    return parsed.success ? parsed.data : undefined;
+  } catch {
+    return undefined;
   }
 }
 
