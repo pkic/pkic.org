@@ -65,13 +65,16 @@ export function classifierRaisesConcerns(outcome: ClassifierOutcome): boolean {
   return outcome === "advised" || outcome === "blocked";
 }
 
-/** The most questions one check runs; the model reads no more. */
-export const CLASSIFIER_MAX_QUESTIONS = 32;
+/**
+ * The most questions one check runs. Clef takes 64 per call and Gemini Decision 1 takes 1,000, so 60 stays within
+ * every model we may run, with headroom on the lowest.
+ */
+export const CLASSIFIER_MAX_QUESTIONS = 60;
 /**
  * Each scope has its own share of that limit, so a merged check always fits and no save needs to look beyond its own
  * scope: the PKIC-wide questions, and what one event adds or replaces.
  */
-export const CLASSIFIER_MAX_WIDE_QUESTIONS = 24;
+export const CLASSIFIER_MAX_WIDE_QUESTIONS = 45;
 export const CLASSIFIER_MAX_EVENT_QUESTIONS = CLASSIFIER_MAX_QUESTIONS - CLASSIFIER_MAX_WIDE_QUESTIONS;
 
 /** Refusal codes of the proposal screening: a block, or advice the author may set aside by submitting again. */
