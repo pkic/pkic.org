@@ -262,7 +262,7 @@ export function ApiDataTable<T, Response = unknown>({
     currentSort: sort,
     onSort: applySort,
     filters,
-    onFilterChange: applyFilter,
+    onFilterPatch: applyFilters,
   });
   const cardMenu = tableOptionsFilters ? (
     <span class="pk-table-list__card-menu">
@@ -424,7 +424,7 @@ export function ApiDataTable<T, Response = unknown>({
               currentSort={sort}
               onSort={applySort}
               filters={filters}
-              onFilterChange={applyFilter}
+              onFilterPatch={applyFilters}
               controls={columnControls}
               tableOptionsFilters={tableOptionsFilters}
             />

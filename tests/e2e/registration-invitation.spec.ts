@@ -1,3 +1,6 @@
+import { formSubmissionsResponseSchema } from "../../assets/shared/schemas/form-management";
+import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { signInAsE2eStaff } from "./helpers/staff-auth";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { registrationCreateSchema } from "../../assets/shared/schemas/registration";
 import { continueRegistrationWithEmail, ownDomainEmail, registerInBrowser } from "./helpers/registration";
@@ -178,4 +181,56 @@ test("checks invitation access before signup and preserves the review on late ex
   await page.getByRole("button", { name: "Register", exact: true }).click();
   await expect.poll(() => submissions.length).toBe(2);
   expect(submissions[1]?.inviteToken).toBeFalsy();
+});
+
+test("staff filter registration responses through the table header and clear an empty result", async ({
+  page,
+}, info) => {
+  const email = ownDomainEmail("response-filters");
+  const registered = await registerInBrowser(page, email, undefined, undefined, {
+    organization: `Synthetic Response Filters ${crypto.randomUUID()}`,
+    attendanceLabel: "In-person",
+    onProfileReady: async (page) => {
+      await page.getByRole("checkbox", { name: "Vegan", exact: true }).check();
+    },
+  });
+  await page.context().clearCookies();
+  await signInAsE2eStaff(page, e2eAdminEmail("registration-response-filters"));
+  await page.goto("/portal/#/events/pqc-conference-amsterdam-nl/registrations/responses");
+  await page.getByRole("tab", { name: "Individual responses", exact: true }).click();
+  await expect(page.getByRole("table", { name: "Form responses", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Filter answer field", { exact: true })).toHaveCount(0);
+  const search = page.getByRole("searchbox", { name: "Search form responses", exact: true });
+  await search.fill(email);
+  await search.press("Enter");
+  const tableOptions = page.locator("thead").getByRole("button", { name: "Table options", exact: true });
+  const filter = async (answer: string) => {
+    await tableOptions.click();
+    await page.getByRole("menuitem", { name: "Filter", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Dietary restrictions", exact: true }).click();
+    const loaded = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        url.pathname.endsWith("/submissions") &&
+        url.searchParams.get("q") === email &&
+        url.searchParams.get("answerValue") === answer
+      );
+    });
+    await page.getByRole("menuitemradio", { name: answer, exact: true }).click();
+    const response = await loaded;
+    expect(response.status()).toBe(200);
+    return formSubmissionsResponseSchema.parse(await response.json());
+  };
+  const vegan = await filter("Vegan");
+  expect(vegan.submissions.map((submission) => submission.contextRef)).toContain(registered.result.registrationId);
+  await expect(page.getByRole("button", { name: "Clear the Dietary restrictions filter", exact: true })).toBeVisible();
+  await page.screenshot({ path: info.outputPath("registration-responses-filtered.png"), fullPage: true });
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Clear the Dietary restrictions filter", exact: true })).toBeVisible();
+  const empty = await filter("Halal");
+  expect(empty.page.total).toBe(0);
+  await expect(page.getByText("Try changing your search or filters.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Clear the Dietary restrictions filter", exact: true }).click();
+  await expect(page.getByRole("table", { name: "Form responses", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Clear the Dietary restrictions filter", exact: true })).toHaveCount(0);
 });
