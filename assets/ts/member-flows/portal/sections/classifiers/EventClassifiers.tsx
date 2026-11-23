@@ -119,7 +119,7 @@ function KindAdditions({
         onSave={(context) => save({ context })}
       />
       <ClassifierQuestions
-        caption={`${CLASSIFIER_KIND_LABELS[check.kind]} questions for this event`}
+        caption={`${CLASSIFIER_KIND_LABELS[check.kind]} check questions for this event`}
         rows={questionRows(check)}
         canWrite={canEdit}
         editLabel={(row) => (row.source === "PKIC-wide" ? "Change for this event" : "Change")}

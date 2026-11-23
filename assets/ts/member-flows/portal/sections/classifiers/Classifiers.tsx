@@ -82,7 +82,7 @@ function KindSettings({
     <>
       <ClassifierBasics key={settings.revision} settings={settings} canWrite={canWrite} onSave={save} />
       <ClassifierQuestions
-        caption={`${CLASSIFIER_KIND_LABELS[settings.kind]} questions`}
+        caption={`${CLASSIFIER_KIND_LABELS[settings.kind]} check questions`}
         rows={settings.questions.map((question) => ({ question }))}
         canWrite={canWrite}
         onSave={saveQuestion}
