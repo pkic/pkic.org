@@ -1,12 +1,16 @@
 /**
- * The settings of classifiers: PKIC-wide per kind of content, and what
- * one event adds. No question ships with the code: until staff save PKIC-wide
- * settings a kind is off, asks nothing and costs no model call.
+ * The settings of classifiers: PKIC-wide for all content and per kind of
+ * content, and what one event adds. No question ships with the code: until
+ * staff save PKIC-wide settings a kind is off, asks nothing and costs no model
+ * call.
  */
 import {
   CLASSIFIER_KINDS,
+  CLASSIFIER_SHARED_SCOPE,
   DEFAULT_CLASSIFIER_MODEL,
   effectiveClassifier,
+  mergedClassifierQuestions,
+  wideClassifier,
   type ClassifierEventAdditions,
   type ClassifierKind,
   type ClassifierQuestion,
@@ -18,7 +22,10 @@ import {
   classifierQuestionSchema,
   type ClassifierEventAdditionsInput,
   type ClassifierSettingsInput,
+  type ClassifierSettingsListResponse,
   type ClassifierSettingsResponse,
+  type ClassifierSharedSettingsInput,
+  type ClassifierSharedSettingsResponse,
   type EventClassifierResponse,
 } from "../../../../assets/shared/schemas/classifiers";
 import { formatEventPlace } from "../../../../assets/shared/event-place";
@@ -36,6 +43,7 @@ interface SettingsRow {
   model: string;
   context: string;
   questions_json: string;
+  disabled_question_ids_json: string;
   revision: number;
   updated_at: string;
 }
@@ -55,7 +63,10 @@ interface AdditionsRow {
   updated_at: string;
 }
 
-/** The PKIC-wide settings, what the event adds and the event itself, for one kind or all kinds: one batch, three statements. */
+/**
+ * The PKIC-wide settings with all content's, what the event adds and the event itself, for one kind or all kinds: one
+ * batch, three statements.
+ */
 export function prepareClassifierSettingsRead(
   db: DatabaseLike,
   eventId: string | null,
@@ -66,10 +77,10 @@ export function prepareClassifierSettingsRead(
   return [
     db
       .prepare(
-        `SELECT kind, enabled, model, context, questions_json, revision, updated_at
-         FROM classifier_settings WHERE kind IN (${list})`,
+        `SELECT kind, enabled, model, context, questions_json, disabled_question_ids_json, revision, updated_at
+         FROM classifier_settings WHERE kind IN (?, ${list})`,
       )
-      .bind(...kinds),
+      .bind(CLASSIFIER_SHARED_SCOPE, ...kinds),
     db
       .prepare(
         `SELECT kind, context, questions_json, disabled_question_ids_json, revision, updated_at
@@ -110,7 +121,7 @@ function unsavedSettings(): ClassifierSettings {
 }
 
 function settingsResponse(kind: ClassifierKind, row: SettingsRow | undefined): ClassifierSettingsResponse {
-  if (!row) return { kind, revision: 0, saved: false, updatedAt: null, ...unsavedSettings() };
+  if (!row) return { kind, revision: 0, saved: false, updatedAt: null, ...unsavedSettings(), disabledQuestionIds: [] };
   const model = classifierModelSchema.safeParse(row.model);
   return {
     kind,
@@ -121,10 +132,23 @@ function settingsResponse(kind: ClassifierKind, row: SettingsRow | undefined): C
     model: model.success ? model.data : DEFAULT_CLASSIFIER_MODEL,
     context: row.context,
     questions: decodeQuestions(row.questions_json),
+    disabledQuestionIds: decodeIds(row.disabled_question_ids_json),
+  };
+}
+
+function sharedResponse(row: SettingsRow | undefined): ClassifierSharedSettingsResponse {
+  if (!row) return { revision: 0, saved: false, updatedAt: null, context: "", questions: [] };
+  return {
+    revision: row.revision,
+    saved: true,
+    updatedAt: row.updated_at,
+    context: row.context,
+    questions: decodeQuestions(row.questions_json),
   };
 }
 
 export interface DecodedClassifierSettings {
+  shared: ClassifierSharedSettingsResponse;
   settings: Map<ClassifierKind, ClassifierSettingsResponse>;
   additions: Map<ClassifierKind, ClassifierEventAdditions & { revision: number; updatedAt: string | null }>;
   /** What the event record says about the event, for the model's context; empty outside an event. */
@@ -163,16 +187,22 @@ export function decodeClassifierSettings(
     );
   }
   const eventRow = results[2] ? batchRows<EventRow>(results[2])[0] : undefined;
-  return { settings, additions, eventDescription: describeEvent(eventRow) };
+  return {
+    shared: sharedResponse(settingsRows.get(CLASSIFIER_SHARED_SCOPE)),
+    settings,
+    additions,
+    eventDescription: describeEvent(eventRow),
+  };
 }
 
-function asSettings(response: ClassifierSettingsResponse): ClassifierSettings {
-  return { enabled: response.enabled, model: response.model, context: response.context, questions: response.questions };
+/** One kind's PKIC-wide check, all content included. */
+function wideCheckFrom(decoded: DecodedClassifierSettings, kind: ClassifierKind): ClassifierSettings {
+  return wideClassifier(decoded.shared, decoded.settings.get(kind)!);
 }
 
 export function effectiveCheckFrom(decoded: DecodedClassifierSettings, kind: ClassifierKind): EffectiveClassifier {
   return effectiveClassifier(
-    asSettings(decoded.settings.get(kind)!),
+    wideCheckFrom(decoded, kind),
     decoded.additions.get(kind) ?? null,
     decoded.eventDescription,
   );
@@ -188,10 +218,10 @@ export async function readEffectiveClassifier(
   return effectiveCheckFrom(decodeClassifierSettings(results, [kind]), kind);
 }
 
-export async function listClassifierSettings(db: DatabaseLike): Promise<ClassifierSettingsResponse[]> {
+export async function listClassifierSettings(db: DatabaseLike): Promise<ClassifierSettingsListResponse> {
   const results = await db.batch(prepareClassifierSettingsRead(db, null, null));
   const decoded = decodeClassifierSettings(results);
-  return CLASSIFIER_KINDS.map((kind) => decoded.settings.get(kind)!);
+  return { shared: decoded.shared, classifiers: CLASSIFIER_KINDS.map((kind) => decoded.settings.get(kind)!) };
 }
 
 export async function readEventClassifier(
@@ -204,7 +234,7 @@ export async function readEventClassifier(
   const additions = decoded.additions.get(kind)!;
   return {
     kind,
-    settings: decoded.settings.get(kind)!,
+    settings: wideCheckFrom(decoded, kind),
     additions,
     effective: effectiveCheckFrom(decoded, kind),
   };
@@ -227,6 +257,103 @@ async function commit(db: DatabaseLike, statements: StatementLike[]): Promise<vo
   }
 }
 
+/** Refuses the save when a settings row changed since its revision was read. */
+function prepareRevisionGuard(db: DatabaseLike, scope: string, revision: number): StatementLike {
+  return prepareStateGuard(db, {
+    sql: "SELECT 1 WHERE COALESCE((SELECT revision FROM classifier_settings WHERE kind = ?), 0) = ?",
+    bindings: [scope, revision],
+  });
+}
+
+interface SettingsWrite {
+  enabled: boolean;
+  model: string;
+  context: string;
+  questions: readonly ClassifierQuestion[];
+  disabledQuestionIds: readonly string[];
+}
+
+function prepareSettingsWrite(
+  db: DatabaseLike,
+  actor: UserBackedAuthAdmin,
+  scope: string,
+  write: SettingsWrite,
+): StatementLike[] {
+  return [
+    db
+      .prepare(
+        `INSERT INTO classifier_settings
+           (kind, enabled, model, context, questions_json, disabled_question_ids_json, revision, updated_by_user_id, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+         ON CONFLICT(kind) DO UPDATE SET enabled = excluded.enabled, model = excluded.model, context = excluded.context,
+           questions_json = excluded.questions_json, disabled_question_ids_json = excluded.disabled_question_ids_json,
+           revision = classifier_settings.revision + 1,
+           updated_by_user_id = excluded.updated_by_user_id, updated_at = excluded.updated_at`,
+      )
+      .bind(
+        scope,
+        write.enabled ? 1 : 0,
+        write.model,
+        write.context,
+        JSON.stringify(write.questions),
+        JSON.stringify(write.disabledQuestionIds),
+        actor.id,
+        nowIso(),
+      ),
+    prepareAuditLog(db, "user", actor.id, "classifier_settings_changed", "classifier", scope, {
+      enabled: write.enabled,
+      model: write.model,
+      questions: write.questions.map((question) => question.id),
+      disabledQuestionIds: write.disabledQuestionIds,
+    }),
+  ];
+}
+
+/** The stored questions and revision of the PKIC-wide scopes named, for a save that turns some of them off. */
+async function readScopeQuestions(
+  db: DatabaseLike,
+  scopes: readonly string[],
+): Promise<Map<string, { revision: number; questions: ClassifierQuestion[]; disabledQuestionIds: string[] }>> {
+  const rows = await db
+    .prepare(
+      `SELECT kind, questions_json, disabled_question_ids_json, revision FROM classifier_settings
+       WHERE kind IN (${scopes.map(() => "?").join(", ")})`,
+    )
+    .bind(...scopes)
+    .all<Pick<SettingsRow, "kind" | "questions_json" | "disabled_question_ids_json" | "revision">>();
+  return new Map(
+    (rows.results ?? []).map((row) => [
+      row.kind,
+      {
+        revision: row.revision,
+        questions: decodeQuestions(row.questions_json),
+        disabledQuestionIds: decodeIds(row.disabled_question_ids_json),
+      },
+    ]),
+  );
+}
+
+/** Saves what all content asks, which every kind reads first. Staff with global event management change it. */
+export async function saveClassifierSharedSettings(
+  db: DatabaseLike,
+  actor: UserBackedAuthAdmin,
+  input: ClassifierSharedSettingsInput,
+): Promise<{ revision: number }> {
+  await commit(db, [
+    preparePermissionsAuthorizationGuard(db, actor, [{ permission: "events:manage" }]),
+    prepareRevisionGuard(db, CLASSIFIER_SHARED_SCOPE, input.expectedRevision),
+    // Whether a check runs and which model it uses are each kind's own; the all-content row holds neither.
+    ...prepareSettingsWrite(db, actor, CLASSIFIER_SHARED_SCOPE, {
+      enabled: true,
+      model: DEFAULT_CLASSIFIER_MODEL,
+      context: input.context,
+      questions: input.questions,
+      disabledQuestionIds: [],
+    }),
+  ]);
+  return { revision: input.expectedRevision + 1 };
+}
+
 /** Saves the PKIC-wide settings for one kind. Staff with global event management change them. */
 export async function saveClassifierSettings(
   db: DatabaseLike,
@@ -234,27 +361,15 @@ export async function saveClassifierSettings(
   kind: ClassifierKind,
   input: ClassifierSettingsInput,
 ): Promise<{ revision: number }> {
-  const now = nowIso();
+  // Ids that name no all-content question would silently turn off one added later.
+  const shared = (await readScopeQuestions(db, [CLASSIFIER_SHARED_SCOPE])).get(CLASSIFIER_SHARED_SCOPE);
+  const sharedIds = new Set(shared?.questions.map((question) => question.id));
+  const disabledQuestionIds = [...new Set(input.disabledQuestionIds)].filter((id) => sharedIds.has(id));
   await commit(db, [
     preparePermissionsAuthorizationGuard(db, actor, [{ permission: "events:manage" }]),
-    prepareStateGuard(db, {
-      sql: "SELECT 1 WHERE COALESCE((SELECT revision FROM classifier_settings WHERE kind = ?), 0) = ?",
-      bindings: [kind, input.expectedRevision],
-    }),
-    db
-      .prepare(
-        `INSERT INTO classifier_settings (kind, enabled, model, context, questions_json, revision, updated_by_user_id, updated_at)
-         VALUES (?, ?, ?, ?, ?, 1, ?, ?)
-         ON CONFLICT(kind) DO UPDATE SET enabled = excluded.enabled, model = excluded.model, context = excluded.context,
-           questions_json = excluded.questions_json, revision = classifier_settings.revision + 1,
-           updated_by_user_id = excluded.updated_by_user_id, updated_at = excluded.updated_at`,
-      )
-      .bind(kind, input.enabled ? 1 : 0, input.model, input.context, JSON.stringify(input.questions), actor.id, now),
-    prepareAuditLog(db, "user", actor.id, "classifier_settings_changed", "classifier", kind, {
-      enabled: input.enabled,
-      model: input.model,
-      questions: input.questions.map((question) => question.id),
-    }),
+    prepareRevisionGuard(db, CLASSIFIER_SHARED_SCOPE, shared?.revision ?? 0),
+    prepareRevisionGuard(db, kind, input.expectedRevision),
+    ...prepareSettingsWrite(db, actor, kind, { ...input, disabledQuestionIds }),
   ]);
   return { revision: input.expectedRevision + 1 };
 }
@@ -268,12 +383,14 @@ export async function saveEventClassifierAdditions(
   input: ClassifierEventAdditionsInput,
 ): Promise<{ revision: number }> {
   const now = nowIso();
-  // Ids that name no PKIC-wide question would silently disable one added later.
-  const wide = await db
-    .prepare("SELECT questions_json, revision FROM classifier_settings WHERE kind = ?")
-    .bind(kind)
-    .first<{ questions_json: string; revision: number }>();
-  const wideQuestions = wide ? decodeQuestions(wide.questions_json) : [];
+  // Ids that name no PKIC-wide question, all content's or the kind's, would silently disable one added later.
+  const scopes = await readScopeQuestions(db, [CLASSIFIER_SHARED_SCOPE, kind]);
+  const shared = scopes.get(CLASSIFIER_SHARED_SCOPE);
+  const own = scopes.get(kind);
+  const wideQuestions = mergedClassifierQuestions(
+    shared?.questions ?? [],
+    own ? { context: "", questions: own.questions, disabledQuestionIds: own.disabledQuestionIds } : null,
+  );
   const wideIds = new Set(wideQuestions.map((q) => q.id));
   const disabledQuestionIds = [...new Set(input.disabledQuestionIds)].filter((id) => wideIds.has(id));
   await commit(db, [
@@ -281,10 +398,8 @@ export async function saveEventClassifierAdditions(
       { permission: "events:write", context: { type: "event", id: eventId } },
     ]),
     // Turned-off ids were matched to these PKIC-wide questions; a change to them meanwhile refuses the save.
-    prepareStateGuard(db, {
-      sql: "SELECT 1 WHERE COALESCE((SELECT revision FROM classifier_settings WHERE kind = ?), 0) = ?",
-      bindings: [kind, wide?.revision ?? 0],
-    }),
+    prepareRevisionGuard(db, CLASSIFIER_SHARED_SCOPE, shared?.revision ?? 0),
+    prepareRevisionGuard(db, kind, own?.revision ?? 0),
     prepareStateGuard(db, {
       sql: `SELECT 1 WHERE COALESCE((SELECT revision FROM event_classifier_additions WHERE event_id = ? AND kind = ?), 0) = ?`,
       bindings: [eventId, kind, input.expectedRevision],

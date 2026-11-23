@@ -7,9 +7,11 @@
  * another, and its message is what the author is told. A score rates the
  * content on an ordered rubric for reviewers; scores never stop anyone.
  *
- * The PKIC-wide settings hold the questions. An event adds its own context
- * (its topics, tracks and terms) and may add, replace or switch off questions.
- * Nothing is configured per session.
+ * The PKIC-wide settings hold the questions in layers. All content asks the
+ * flags every kind shares (conduct, spam, private details); each kind adds its
+ * own and may replace or switch off a shared one. An event then adds its own
+ * context (its topics, tracks and terms) and may add, replace or switch off
+ * questions the same way. Nothing is configured per session.
  */
 import type { z } from "zod";
 import type {
@@ -22,6 +24,10 @@ import type {
 
 export const CLASSIFIER_KINDS = ["chat", "question", "proposal", "presentation"] as const;
 export type ClassifierKind = (typeof CLASSIFIER_KINDS)[number];
+
+/** The questions and context every kind reads, stored as the settings row of this kind. */
+export const CLASSIFIER_SHARED_SCOPE = "all";
+export const CLASSIFIER_SHARED_LABEL = "All content";
 
 export const CLASSIFIER_KIND_LABELS: Record<ClassifierKind, string> = {
   chat: "Chat messages",
@@ -62,9 +68,12 @@ export function classifierRaisesConcerns(outcome: ClassifierOutcome): boolean {
 export const CLASSIFIER_MAX_QUESTIONS = 60;
 /**
  * Each scope has its own share of that limit, so a merged check always fits and no save needs to look beyond its own
- * scope: the PKIC-wide questions, and what one event adds or replaces.
+ * scope: the all-content questions, what one kind adds or replaces, and what one event adds or replaces.
  */
-export const CLASSIFIER_MAX_WIDE_QUESTIONS = 45;
+export const CLASSIFIER_MAX_SHARED_QUESTIONS = 20;
+export const CLASSIFIER_MAX_KIND_QUESTIONS = 25;
+/** The PKIC-wide questions of one kind: all content with the kind's own. */
+export const CLASSIFIER_MAX_WIDE_QUESTIONS = CLASSIFIER_MAX_SHARED_QUESTIONS + CLASSIFIER_MAX_KIND_QUESTIONS;
 export const CLASSIFIER_MAX_EVENT_QUESTIONS = CLASSIFIER_MAX_QUESTIONS - CLASSIFIER_MAX_WIDE_QUESTIONS;
 
 /** Refusal codes of the proposal screening: a block, or advice the author may set aside by submitting again. */
@@ -83,33 +92,63 @@ export type ClassifierFlag = z.infer<typeof classifierFlagSchema>;
 export type ClassifierScore = z.infer<typeof classifierScoreSchema>;
 export type ClassifierQuestion = ClassifierFlag | ClassifierScore;
 
-/** The PKIC-wide settings for one kind of check. */
+/** The settings one kind of check runs with. */
 export type ClassifierSettings = z.infer<typeof classifierSettingsSchema>;
 
-/** What one event adds to the PKIC-wide settings; a question with a PKIC-wide id replaces it for this event. */
-export type ClassifierEventAdditions = Pick<
+/**
+ * What one scope adds to the one below it: a kind to all content, an event to the kind. A question with an id from
+ * below replaces it, and a switched-off id leaves it out.
+ */
+export type ClassifierLayer = Pick<
   EventClassifierResponse["additions"],
   "context" | "questions" | "disabledQuestionIds"
 >;
+export type ClassifierEventAdditions = ClassifierLayer;
+
+/** What all content asks, before any kind adds to it. */
+export interface ClassifierSharedSettings {
+  context: string;
+  questions: ClassifierQuestion[];
+}
 
 /** The check as it runs for one event, or PKIC-wide when there is no event. */
 export type EffectiveClassifier = ClassifierSettings;
 
-/** The questions an event asks: PKIC-wide ones less those it turns off, with its replacements and additions. */
+/** The questions one layer asks: those below less the ones it turns off, with its replacements and additions. */
 export function mergedClassifierQuestions(
-  settingsQuestions: readonly ClassifierQuestion[],
-  additions: ClassifierEventAdditions | null,
+  below: readonly ClassifierQuestion[],
+  layer: ClassifierLayer | null,
 ): ClassifierQuestion[] {
-  if (!additions) return [...settingsQuestions];
-  const disabled = new Set(additions.disabledQuestionIds);
-  const replaced = new Map(additions.questions.map((question) => [question.id, question]));
-  const questions = settingsQuestions
+  if (!layer) return [...below];
+  const disabled = new Set(layer.disabledQuestionIds);
+  const replaced = new Map(layer.questions.map((question) => [question.id, question]));
+  const questions = below
     .filter((question) => !disabled.has(question.id))
     .map((question) => replaced.get(question.id) ?? question);
   const kept = new Set(questions.map((question) => question.id));
-  for (const question of additions.questions)
+  for (const question of layer.questions)
     if (!kept.has(question.id) && !disabled.has(question.id)) questions.push(question);
   return questions;
+}
+
+function joinedContext(parts: readonly string[]): string {
+  return parts
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+/** One kind's PKIC-wide check: the all-content context and questions, then the kind's own. */
+export function wideClassifier(
+  shared: ClassifierSharedSettings,
+  kind: ClassifierSettings & Pick<ClassifierLayer, "disabledQuestionIds">,
+): ClassifierSettings {
+  return {
+    enabled: kind.enabled,
+    model: kind.model,
+    context: joinedContext([shared.context, kind.context]),
+    questions: mergedClassifierQuestions(shared.questions, kind),
+  };
 }
 
 /** The most of an event's own description a check reads; the rest is cut at a word. */
@@ -137,13 +176,11 @@ export function effectiveClassifier(
   additions: ClassifierEventAdditions | null,
   eventDescription = "",
 ): EffectiveClassifier {
-  const context = [
-    settings.context.trim(),
+  const context = joinedContext([
+    settings.context,
     truncateClassifierEventDescription(eventDescription),
-    additions?.context.trim() ?? "",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+    additions?.context ?? "",
+  ]);
   return {
     enabled: settings.enabled,
     model: settings.model,

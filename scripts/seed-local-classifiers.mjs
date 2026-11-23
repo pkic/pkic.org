@@ -15,30 +15,31 @@ import { execFileSync } from "node:child_process";
 const persistAt = process.argv.indexOf("--persist-to");
 const persistArgs = persistAt === -1 ? [] : ["--persist-to", process.argv[persistAt + 1]];
 
-const SAMPLE_QUESTIONS = [
-  {
-    id: "sample_spam",
-    kind: "flag",
-    question: "Is this text spam?",
-    adviseAtPercent: 70,
-    blockAtPercent: 95,
-    message: "This looks like spam.",
-  },
-  {
-    id: "sample_clarity",
-    kind: "score",
-    label: "Clarity",
-    question: "How clear is this text?",
-    levels: ["Unclear", "Somewhat unclear", "Fair", "Clear", "Very clear"],
-    weight: 1,
-  },
-];
+const SAMPLE_FLAG = {
+  id: "sample_spam",
+  kind: "flag",
+  question: "Is this text spam?",
+  adviseAtPercent: 70,
+  blockAtPercent: 95,
+  message: "This looks like spam.",
+};
 
+const SAMPLE_SCORE = {
+  id: "sample_clarity",
+  kind: "score",
+  label: "Clarity",
+  question: "How clear is this text?",
+  levels: ["Unclear", "Somewhat unclear", "Fair", "Clear", "Very clear"],
+  weight: 1,
+};
+
+// All content (`all`) asks the flag of every kind; proposals add the score.
 const KINDS = [
-  { kind: "chat", model: "clef", questions: SAMPLE_QUESTIONS.slice(0, 1) },
-  { kind: "question", model: "clef", questions: SAMPLE_QUESTIONS.slice(0, 1) },
-  { kind: "proposal", model: "clef", questions: SAMPLE_QUESTIONS },
-  { kind: "presentation", model: "clef", questions: SAMPLE_QUESTIONS.slice(0, 1) },
+  { kind: "all", model: "clef", questions: [SAMPLE_FLAG] },
+  { kind: "chat", model: "clef", questions: [] },
+  { kind: "question", model: "clef", questions: [] },
+  { kind: "proposal", model: "clef", questions: [SAMPLE_SCORE] },
+  { kind: "presentation", model: "clef", questions: [] },
 ];
 
 const escape = (value) => `'${String(value).replaceAll("'", "''")}'`;

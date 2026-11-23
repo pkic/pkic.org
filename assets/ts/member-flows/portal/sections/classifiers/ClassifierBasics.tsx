@@ -1,7 +1,7 @@
 /**
- * Whether a PKIC-wide check runs, on which model, and the context every
- * question is read against: what PKIC is, who takes part, what counts as
- * abuse or promotion. Events add their own context below it.
+ * Whether one kind's PKIC-wide check runs, on which model, and what the kind
+ * adds to the all-content context: what this content is and the rules for it.
+ * Events add their own context after it.
  */
 import { useState } from "preact/hooks";
 import { CLASSIFIER_MODEL_LABELS, CLASSIFIER_MODELS } from "../../../../../shared/classifiers";
@@ -114,7 +114,7 @@ export function ClassifierBasics({
               <Field
                 {...form.of("context")}
                 label="Context"
-                help="What the model needs to know to answer: who PKIC is, who takes part, and the rules that apply. Events add their own."
+                help="Added after the All content context: what this kind of content is and the rules for it. Events add their own."
               >
                 {(control) => (
                   <Textarea

@@ -1,13 +1,15 @@
 /**
- * Transport contracts for classifiers: the PKIC-wide settings, what an
- * event adds to them, a trial run on sample text, and a stored verdict.
+ * Transport contracts for classifiers: the PKIC-wide settings for all content
+ * and for each kind, what an event adds to them, a trial run on sample text, and a stored verdict.
  */
 import { z } from "zod";
 import { eventSlugParamsSchema, jsonErrorResponse, trimmedString, utcInstantSchema } from "./api-common.ts";
 import {
   CLASSIFIER_KINDS,
   CLASSIFIER_MAX_EVENT_QUESTIONS,
+  CLASSIFIER_MAX_KIND_QUESTIONS,
   CLASSIFIER_MAX_QUESTIONS,
+  CLASSIFIER_MAX_SHARED_QUESTIONS,
   CLASSIFIER_MAX_WIDE_QUESTIONS,
   CLASSIFIER_MODELS,
   CLASSIFIER_OUTCOMES,
@@ -69,12 +71,23 @@ const questionsSchema = (max: number) =>
 
 const contextSchema = z.string().trim().max(8000).default("");
 
+/** What all content asks: the context and flags every kind reads before its own. */
+export const classifierSharedSettingsInputSchema = z.object({
+  expectedRevision: z.number().int().min(0),
+  context: contextSchema,
+  questions: questionsSchema(CLASSIFIER_MAX_SHARED_QUESTIONS),
+});
+export type ClassifierSharedSettingsInput = z.infer<typeof classifierSharedSettingsInputSchema>;
+
+/** One kind's own settings; a question with an all-content id replaces it for this kind. */
 export const classifierSettingsInputSchema = z.object({
   expectedRevision: z.number().int().min(0),
   enabled: z.boolean(),
   model: classifierModelSchema,
   context: contextSchema,
-  questions: questionsSchema(CLASSIFIER_MAX_WIDE_QUESTIONS),
+  questions: questionsSchema(CLASSIFIER_MAX_KIND_QUESTIONS),
+  /** The all-content questions this kind does not ask. */
+  disabledQuestionIds: z.array(questionIdSchema).max(CLASSIFIER_MAX_SHARED_QUESTIONS).default([]),
 });
 export type ClassifierSettingsInput = z.infer<typeof classifierSettingsInputSchema>;
 
@@ -96,23 +109,39 @@ const settingsShape = {
 /** The settings a check runs with, PKIC-wide or as one event's effective check. */
 export const classifierSettingsSchema = z.object(settingsShape);
 
-export const classifierSettingsResponseSchema = z.object({
-  kind: classifierKindSchema,
+const savedShape = {
   revision: z.number().int(),
-  /** False until staff save settings; the kind is then off and asks nothing. */
+  /** False until staff save these settings. */
   saved: z.boolean(),
   updatedAt: utcInstantSchema.nullable(),
+};
+
+export const classifierSharedSettingsResponseSchema = z.object({
+  ...savedShape,
+  context: z.string(),
+  questions: z.array(classifierQuestionSchema),
+});
+export type ClassifierSharedSettingsResponse = z.infer<typeof classifierSharedSettingsResponseSchema>;
+
+/** One kind's own settings, without the all-content layer; an unsaved kind is off and asks nothing of its own. */
+export const classifierSettingsResponseSchema = z.object({
+  kind: classifierKindSchema,
+  ...savedShape,
   ...settingsShape,
+  disabledQuestionIds: z.array(z.string()),
 });
 export type ClassifierSettingsResponse = z.infer<typeof classifierSettingsResponseSchema>;
 
 export const classifierSettingsListResponseSchema = z.object({
+  shared: classifierSharedSettingsResponseSchema,
   classifiers: z.array(classifierSettingsResponseSchema),
 });
+export type ClassifierSettingsListResponse = z.infer<typeof classifierSettingsListResponseSchema>;
 
 export const eventClassifierResponseSchema = z.object({
   kind: classifierKindSchema,
-  settings: classifierSettingsResponseSchema,
+  /** The PKIC-wide check the event starts from: all content with the kind's own. */
+  settings: classifierSettingsSchema,
   additions: z.object({
     revision: z.number().int(),
     context: z.string(),
@@ -182,6 +211,16 @@ export const classifiersListRouteSchema = {
   summary: "List the PKIC-wide classifiers",
   responses: {
     "200": { description: "Every classifier.", content: routeJson(classifierSettingsListResponseSchema) },
+    ...routeRefusals,
+  },
+  ...staffAuth,
+};
+export const classifierSharedSettingsPutRouteSchema = {
+  tags: ["Classifiers"],
+  summary: "Change what every PKIC-wide classifier asks",
+  request: { body: { required: true, content: routeJson(classifierSharedSettingsInputSchema) } },
+  responses: {
+    "200": { description: "Saved.", content: routeJson(classifierSavedResponseSchema) },
     ...routeRefusals,
   },
   ...staffAuth,
