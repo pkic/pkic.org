@@ -110,3 +110,12 @@
     padding-bottom: calc(0.5rem - 2px);
   }
 }
+
+/* On touch screens the More button stays as tall as the tabs beside it, so its label lines up with theirs. */
+@layer utilities {
+  @media (any-pointer: coarse) {
+    .pk-tabs__more .pk-menu__trigger.pk-tabs__link {
+      min-block-size: 0;
+    }
+  }
+}

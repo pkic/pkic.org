@@ -338,12 +338,16 @@
     --pk-room-logo-scale: 1;
   }
 
-  /* The panel under the stream: its content fills it, so the chat's composer sits at its foot. */
+  /*
+   * The panel under the stream: its content fills it, so the chat's composer sits at its foot. Its own layer keeps
+   * whatever its content raises, such as the agenda's toolbar, under the pinned stream as the page scrolls.
+   */
   .pk-virtual-room__panel {
     display: flex;
     flex-direction: column;
     gap: var(--pk-2);
     min-inline-size: 0;
+    isolation: isolate;
   }
 
   .pk-virtual-room__panel[hidden] {

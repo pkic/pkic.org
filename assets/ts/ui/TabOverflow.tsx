@@ -12,6 +12,7 @@
  * width and every measurement is a plain read of the layout.
  */
 
+import type { ComponentChildren } from "preact";
 import { useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 
 import { Badge } from "./Badge";
@@ -82,6 +83,10 @@ export interface TabOverflowEntry {
   readonly id: string;
   /** Plain text: the menu cannot carry a tab's marks. */
   readonly label: string;
+  /** The tab's small mark before its label, such as a location that is not streamed, kept in the menu. */
+  readonly icon?: ComponentChildren;
+  /** What the mark means, as the entry's tooltip. */
+  readonly title?: string;
   readonly href?: string;
   readonly onSelect?: () => void;
   /** Why a hidden tab needs the reader; carried onto the menu button so it is not lost. */
@@ -105,6 +110,8 @@ export function TabOverflowMenu({ entries, fitting, activeId, moreRef, onArrowBa
   const items: MenuItem[] = hidden.map((entry) => ({
     id: entry.id,
     label: entry.label,
+    icon: entry.icon,
+    tooltip: entry.title,
     href: entry.href,
     onSelect: entry.onSelect,
     description: entry.attention,
@@ -130,6 +137,7 @@ export function TabOverflowMenu({ entries, fitting, activeId, moreRef, onArrowBa
         variant="plain"
         triggerClass={["pk-tabs__link", current ? "pk-tabs__link--current" : null].filter(Boolean).join(" ")}
       >
+        {current?.icon}
         {current?.label ?? "More"}
         <span class="pk-tabs__chevron" aria-hidden="true" />
         {attention && <Badge tone="danger" label={attention} />}
