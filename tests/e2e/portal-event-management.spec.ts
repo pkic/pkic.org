@@ -128,7 +128,7 @@ test("a manager configures a missing website CFP form and sees the saved selecti
   );
 });
 
-test("a portal manager creates and edits a group-owned standalone event", async ({ page }) => {
+test("a portal manager creates and edits a group-owned standalone event", async ({ page, browser }, testInfo) => {
   // The journey ends with a real Astro site release, which alone takes most of the default budget.
   test.setTimeout(240_000);
   await useEmailPreviewLogoFixture(page);
@@ -495,7 +495,14 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   const unknownPage = await page.request.get(`/events/2027/${eventSlug}/unknown/`);
   expect(unknownPage.status()).toBe(404);
 
-  await page.goto(`/events/2027/${eventSlug}/register/`);
-  await expect(page.locator("[data-event-registration]")).toBeVisible();
-  await expect(page.getByLabel(EMAIL_FIRST_COPY.registration.work.label)).toBeVisible();
+  // A visitor starts with their email; the signed-in manager would start on their own details instead.
+  const visitor = await browser.newContext({ baseURL: testInfo.project.use.baseURL });
+  try {
+    const visitorPage = await visitor.newPage();
+    await visitorPage.goto(`/events/2027/${eventSlug}/register/`);
+    await expect(visitorPage.locator("[data-event-registration]")).toBeVisible();
+    await expect(visitorPage.getByLabel(EMAIL_FIRST_COPY.registration.work.label)).toBeVisible();
+  } finally {
+    await visitor.close();
+  }
 });

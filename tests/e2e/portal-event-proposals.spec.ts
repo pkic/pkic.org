@@ -56,6 +56,8 @@ test("portal proposal detail registers accepted speakers through canonical resou
       endsAt: "2027-09-10T17:00:00.000Z",
       profileKey: "workshop",
       registrationPolicy: "no_registration",
+      // The proposer is not in the group, and a group's event is otherwise visible to its members only.
+      visibility: "public",
       links: [],
     }),
     201,
