@@ -9,7 +9,9 @@ import { successResponseSchema } from "../../../../../../../../shared/schemas/ap
 import type { EventTicketsConfiguration } from "../../../../../../../../shared/schemas/event-tickets";
 import {
   eventTicketOrganizationListSchema,
+  TICKET_DECIDERS,
   type EventTicketOrganization,
+  type TicketDecider,
 } from "../../../../../../../../shared/schemas/event-ticket-organizations";
 import { ApiDataTable, type ApiTableActions } from "../../../../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../../../../components/ConfirmDialog";
@@ -21,10 +23,10 @@ import { toast } from "../../../../../ui";
 import { TicketOrganizationDialog, type TicketOrganizationStart } from "./TicketOrganizationDialog";
 import { ticketsEndpoint } from "./tickets-endpoint";
 
+const DECIDER_LABELS: Record<TicketDecider, string> = { organizer: "Organizer", classifier: "Classifier" };
 const DECIDED_BY_OPTIONS = [
   { value: "", label: "Anyone" },
-  { value: "organizer", label: "Organizer" },
-  { value: "classifier", label: "Classifier" },
+  ...TICKET_DECIDERS.map((decider) => ({ value: decider, label: DECIDER_LABELS[decider] })),
 ];
 
 function decidedBy(row: EventTicketOrganization): string {
@@ -47,6 +49,8 @@ export function TicketOrganizationsPanel({
   const table = useRef<ApiTableActions | null>(null);
   const [start, setStart] = useState<TicketOrganizationStart | null>(null);
   const tickets = configuration.types.filter((type) => type.active);
+  // The classifier chooses between tickets that describe who qualifies, so it needs two.
+  const classifierOn = tickets.filter((type) => type.classifierDescription).length >= 2;
   const nameOf = (key: string) => configuration.types.find((type) => type.key === key)?.name ?? key;
   const endpoint = `${ticketsEndpoint(slug)}/organizations`;
 
@@ -95,7 +99,7 @@ export function TicketOrganizationsPanel({
         searchPlaceholder="Search organizations or email domains…"
         initialSort="-updated"
         createAction={{
-          label: "Test an organization",
+          label: classifierOn ? "Test an organization" : "Choose an organization's ticket",
           onSelect: () => setStart({ organizationName: "", emailDomain: "" }),
         }}
         rowKey={(row) => row.id}
@@ -133,7 +137,7 @@ export function TicketOrganizationsPanel({
               <RowActions
                 subject={row.organizationName}
                 actions={[
-                  { id: "test", label: "Test again", onSelect: () => reopen(row, true) },
+                  ...(classifierOn ? [{ id: "test", label: "Test again", onSelect: () => reopen(row, true) }] : []),
                   { id: "change", label: "Change ticket…", onSelect: () => reopen(row, false) },
                   { id: "clear", label: "Clear decision", onSelect: () => void clear(row) },
                 ]}
@@ -146,10 +150,13 @@ export function TicketOrganizationsPanel({
         <TicketOrganizationDialog
           slug={slug}
           tickets={tickets}
+          classifierOn={classifierOn}
           start={start}
           onClose={() => setStart(null)}
           onSaved={async (ticketName) => {
-            setStart(null);
+            // A save that finishes after this dialog closed leaves a newer one open.
+            const opened = start;
+            setStart((current) => (current === opened ? null : current));
             await changed(`${ticketName} saved for this organization.`);
           }}
         />

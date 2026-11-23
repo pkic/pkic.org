@@ -73,7 +73,7 @@ export const eventTicketOrganizationTrialResponseSchema = z.object({
 export type EventTicketOrganizationTrialResponse = z.infer<typeof eventTicketOrganizationTrialResponseSchema>;
 
 export const eventTicketOrganizationDecisionSchema = ticketOrganizationSubjectSchema.extend({
-  ticketKey: ticketKeySchema,
+  ticketKey: z.string({ error: "Choose a ticket." }).pipe(ticketKeySchema),
 });
 export type EventTicketOrganizationDecision = z.infer<typeof eventTicketOrganizationDecisionSchema>;
 

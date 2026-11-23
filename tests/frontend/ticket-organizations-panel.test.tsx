@@ -3,6 +3,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, expect, it, vi } from "vitest";
 import type { EventTicketsConfiguration } from "../../assets/shared/schemas/event-tickets";
+import { eventTicketOrganizationTrialSchema } from "../../assets/shared/schemas/event-ticket-organizations";
 import { TicketOrganizationDialog } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/tickets/TicketOrganizationDialog";
 import { TicketOrganizationsPanel } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/tickets/TicketOrganizationsPanel";
 
@@ -94,6 +95,7 @@ it("tests an organization and offers to save the ticket the classifier gives", a
     <TicketOrganizationDialog
       slug="synthetic"
       tickets={configuration.types}
+      classifierOn
       start={{ organizationName: "Specimen Systems", emailDomain: "gmail.com", testOnOpen: true }}
       onClose={() => {}}
       onSaved={async () => {}}
@@ -101,7 +103,11 @@ it("tests an organization and offers to save the ticket the classifier gives", a
   );
   // The answer arrives and is read after a few turns of the event loop.
   for (let turn = 0; turn < 5; turn += 1) await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
-  expect(requests).toEqual([{ organizationName: "Specimen Systems", emailDomain: "gmail.com" }]);
+  expect(requests).toHaveLength(1);
+  expect(eventTicketOrganizationTrialSchema.parse(requests[0])).toEqual({
+    organizationName: "Specimen Systems",
+    emailDomain: "gmail.com",
+  });
   const dialog = host.querySelector("dialog")!;
   expect(dialog.textContent).toContain("Classifier: 58% sure");
   expect(dialog.textContent).toContain("Personal mail domain: tested on the name alone.");

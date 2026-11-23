@@ -42,6 +42,7 @@ function decidedBy(current: NonNullable<EventTicketOrganizationTrialResponse["cu
 export function TicketOrganizationDialog({
   slug,
   tickets,
+  classifierOn,
   start,
   onClose,
   onSaved,
@@ -49,6 +50,8 @@ export function TicketOrganizationDialog({
   slug: string;
   /** The tickets the event offers. */
   tickets: readonly TicketType[];
+  /** Whether enough tickets describe who qualifies for the classifier to be tested. */
+  classifierOn: boolean;
   start: TicketOrganizationStart;
   onClose: () => void;
   onSaved: (ticketName: string) => Promise<void>;
@@ -68,10 +71,18 @@ export function TicketOrganizationDialog({
   const nameOf = (key: string) => tickets.find((type) => type.key === key)?.name ?? key;
   const fallback = tickets.find((type) => type.isDefault) ?? tickets[0];
 
+  // Counts edits to the organization, so an answer for an earlier one is dropped.
+  const edits = useRef(0);
+  function edited() {
+    edits.current += 1;
+    setAnswer(null);
+  }
+
   async function runTest() {
     if (busy) return;
     const checked = test.submit();
     if (!checked.data) return setError(checked.formMessage ?? "");
+    const asked = edits.current;
     setBusy("testing");
     setError("");
     try {
@@ -80,6 +91,7 @@ export function TicketOrganizationDialog({
         checked.data,
         eventTicketOrganizationTrialResponseSchema,
       );
+      if (asked !== edits.current) return;
       setAnswer(result);
       setTicketKey(result.decidedTicketKey ?? result.current?.ticketKey ?? result.answers[0]?.ticketKey ?? "");
     } catch (cause) {
@@ -92,7 +104,11 @@ export function TicketOrganizationDialog({
   async function saveDecision() {
     if (busy) return;
     const checked = save.submit();
-    if (!checked.data) return setError(checked.formMessage ?? "");
+    if (!checked.data) {
+      // The organization fields show the test's checks, which hold the same rules.
+      test.submit();
+      return setError(checked.formMessage ?? "");
+    }
     setBusy("saving");
     setError("");
     try {
@@ -108,8 +124,8 @@ export function TicketOrganizationDialog({
   const latestTest = useRef(runTest);
   latestTest.current = runTest;
   useEffect(() => {
-    if (start.testOnOpen) void latestTest.current();
-  }, [start.testOnOpen]);
+    if (start.testOnOpen && classifierOn) void latestTest.current();
+  }, [start.testOnOpen, classifierOn]);
 
   const percentOf = (key: string) => answer?.answers.find((entry) => entry.ticketKey === key);
   const decided = answer?.decidedTicketKey ? percentOf(answer.decidedTicketKey) : undefined;
@@ -130,8 +146,14 @@ export function TicketOrganizationDialog({
   return (
     <Dialog
       open
-      title={start.organizationName ? "Check an organization's ticket" : "Test an organization"}
-      closeLabel="Close test"
+      title={
+        !classifierOn
+          ? "Choose an organization's ticket"
+          : start.organizationName
+            ? "Check an organization's ticket"
+            : "Test an organization"
+      }
+      closeLabel="Close dialog"
       confirmLabel={ticketKey ? `Save ${nameOf(ticketKey)}` : "Save ticket"}
       confirmDisabled={busy !== null}
       cancelLabel="Close"
@@ -144,7 +166,7 @@ export function TicketOrganizationDialog({
         {...handlers}
         onSubmit={(submitEvent) => {
           submitEvent.preventDefault();
-          void runTest();
+          if (classifierOn) void runTest();
         }}
       >
         <Field {...test.of("organizationName")} label="Organization" required>
@@ -155,7 +177,7 @@ export function TicketOrganizationDialog({
               value={organizationName}
               onInput={(event) => {
                 setOrganizationName(event.currentTarget.value);
-                setAnswer(null);
+                edited();
               }}
             />
           )}
@@ -173,19 +195,23 @@ export function TicketOrganizationDialog({
               placeholder="example.com"
               onInput={(event) => {
                 setEmailDomain(event.currentTarget.value);
-                setAnswer(null);
+                edited();
               }}
             />
           )}
         </Field>
-        <div class="pk-cluster">
-          <Button type="submit" variant="secondary" disabled={busy !== null}>
-            {busy === "testing" ? "Testing…" : answer ? "Test again" : "Test"}
-          </Button>
-          {answer && emailDomain.trim() && !answer.emailDomain && (
-            <span class="pk-small pk-muted">Personal mail domain: tested on the name alone.</span>
-          )}
-        </div>
+        {classifierOn ? (
+          <div class="pk-cluster">
+            <Button type="submit" variant="secondary" disabled={busy !== null}>
+              {busy === "testing" ? "Testing…" : answer ? "Test again" : "Test"}
+            </Button>
+            {answer && emailDomain.trim() && !answer.emailDomain && (
+              <span class="pk-small pk-muted">Personal mail domain: tested on the name alone.</span>
+            )}
+          </div>
+        ) : (
+          <p class="pk-small pk-muted">To test the classifier, describe who qualifies for at least two tickets.</p>
+        )}
         <Field {...save.ofGroup("ticketKey")} label="Ticket" group required>
           {() => (
             <div class="pk-stack pk-stack--tight">

@@ -192,6 +192,49 @@ describe("ticket organizations", () => {
     expect(rows.results.map((row) => row.ticket_key)).toEqual(["pqcc_vendor"]);
   });
 
+  it("keeps each event's decision when the events offer different tickets", async () => {
+    const { admin } = await seedEventAndAdmin(env.DB);
+    const events = [];
+    for (const prefix of ["first", "second"]) {
+      const event = { id: crypto.randomUUID(), timezone: "Europe/Amsterdam" };
+      await env.DB.prepare(
+        `INSERT INTO events (id, slug, name, timezone, starts_at, ends_at, source_path, capacity_in_person, registration_mode, invite_limit_attendee, settings_json, created_at, updated_at)
+         VALUES (?, ?, ?, 'Europe/Amsterdam', '2026-12-01T08:00:00.000Z', '2026-12-03T18:00:00.000Z', ?, 1, 'invite_or_open', 5, '{}', datetime('now'), datetime('now'))`,
+      )
+        .bind(event.id, `${prefix}-event`, `${prefix} event`, `content/events/${prefix}/_index.md`)
+        .run();
+      let revision = 0;
+      for (const [index, name] of ["Attendee", "Vendor"].entries())
+        revision = (
+          await saveEventTicketType(env.DB, admin, event, null, {
+            expectedRevision: revision,
+            key: `${prefix}_${name.toLowerCase()}`,
+            name,
+            descriptionMarkdown: "",
+            classifierDescription: "",
+            classifierThresholdPercent: 80,
+            freeRequiresWorkEmail: false,
+            isDefault: index === 0,
+            active: true,
+          })
+        ).revision;
+      events.push(event);
+    }
+    const [firstEvent, secondEvent] = events;
+    await decideTicketOrganization(env.DB, admin, firstEvent, {
+      organizationName: "Example Vendor",
+      ticketKey: "first_vendor",
+    });
+    await decideTicketOrganization(env.DB, admin, secondEvent, {
+      organizationName: "Example Vendor",
+      ticketKey: "second_attendee",
+    });
+    const tickets = async (event: { id: string; timezone: string }) =>
+      (await listTicketOrganizations(env.DB, event, query())).organizations.map((row) => row.ticketKey);
+    expect(await tickets(firstEvent)).toEqual(["first_vendor"]);
+    expect(await tickets(secondEvent)).toEqual(["second_attendee"]);
+  });
+
   it("clears only a decision that counts for this event's tickets", async () => {
     const { event, admin } = await seedTickets();
     await storeClassifierDecision("example vendor", "", "another_event_ticket");

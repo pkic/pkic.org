@@ -23,6 +23,7 @@ import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import { workEmailDomain } from "../../email-domains/classification";
 import { AppError } from "../../errors";
+import { sha256Hex } from "../../utils/crypto";
 import type { DatabaseLike, Env, UserBackedAuthAdmin } from "../../types";
 import { prepareAuditLog } from "../audit";
 import {
@@ -32,7 +33,6 @@ import {
   prepareStoreTicketDecision,
   readStoredTicketDecision,
   subjectKey,
-  ticketCriteriaDigest,
   type TicketClassifierSubject,
 } from "./classifier";
 import { readEventTicketSnapshot } from "./snapshot";
@@ -170,19 +170,21 @@ export async function decideTicketOrganization(
     throw new AppError(409, "TICKET_NOT_OFFERED", "This event does not offer that ticket. Reload and choose another.");
   const subject = subjectOf(input);
   const key = subjectKey(subject);
-  const criteriaDigest = await ticketCriteriaDigest(classifierOptions(types));
+  const offered = types.filter((type) => type.active === 1).map((type) => type.ticket_key);
+  // Keyed on the tickets on offer, so events with other tickets keep their own decision.
+  const criteriaDigest = await sha256Hex(`organizer:${[...offered].sort().join("\n")}`);
   await db.batch([
     preparePermissionsAuthorizationGuard(db, actor, [
       { permission: "events:write", context: { type: "event", id: event.id } },
     ]),
-    // An organizer's decision under earlier criteria would otherwise stay beside the new one.
+    // An earlier organizer's decision that counts here would otherwise stay beside the new one.
     db
       .prepare(
         `DELETE FROM ticket_classifier_decisions
           WHERE source = 'organizer' AND organization_name = ? AND email_domain = ? AND criteria_sha256 <> ?
-            AND ticket_key IN (${types.map(() => "?").join(", ")})`,
+            AND ticket_key IN (${offered.map(() => "?").join(", ")})`,
       )
-      .bind(key.organizationName, key.emailDomain, criteriaDigest, ...types.map((type) => type.ticket_key)),
+      .bind(key.organizationName, key.emailDomain, criteriaDigest, ...offered),
     prepareStoreTicketDecision(db, {
       criteriaDigest,
       subject,

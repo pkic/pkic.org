@@ -225,8 +225,8 @@ export function TicketsTab({
           />
         </PanelBody>
       </Panel>
-      {/* The classifier chooses between tickets that describe who qualifies, so it needs two. */}
-      {canWrite && data.types.filter((type) => type.active && type.classifierDescription).length >= 2 && (
+      {/* A decision chooses between tickets, so it needs two on offer. */}
+      {canWrite && data.types.filter((type) => type.active).length >= 2 && (
         <TicketOrganizationsPanel slug={slug} configuration={data} onChanged={reload} />
       )}
       <SponsorPassesPanel
