@@ -7,7 +7,7 @@ import type {
 } from "../../../assets/shared/schemas/proposal-management";
 import { parseLinksJson } from "../../../assets/shared/schemas/links";
 import type { DatabaseLike, Env } from "../types";
-import { screenProposal } from "./content-checks/proposal-screening";
+import { screenProposal } from "./classifiers/proposal-screening";
 import { parseJsonSafe, stringifyJson } from "../utils/json";
 import {
   prepareReplaceContextFormSubmission,

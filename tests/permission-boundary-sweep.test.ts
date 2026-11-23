@@ -8,7 +8,7 @@ import { ALL_PERSONAS, ALL_PERSONA_KEYS, onlyPersona } from "./personas/catalog"
 import type { Permission } from "../assets/shared/schemas/permissions";
 import { personaRequest, seedPersona, type SeededPersona } from "./personas/seed";
 import { TEST_GROUPS } from "./helpers/voting";
-import { CONTENT_CHECK_KINDS } from "../assets/shared/content-checks";
+import { CLASSIFIER_KINDS } from "../assets/shared/classifiers";
 import { seedEventAndAdmin } from "./helpers/context";
 
 /**
@@ -49,7 +49,7 @@ function fillPath(path: string): string | null {
       : name === "batchId"
         ? ABSENT_UUID
         : name === "kind"
-          ? CONTENT_CHECK_KINDS[0]
+          ? CLASSIFIER_KINDS[0]
           : /slug|key|purpose|body|token/i.test(name)
             ? ABSENT_SLUG
             : ABSENT_ID,

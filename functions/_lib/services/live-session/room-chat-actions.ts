@@ -23,7 +23,7 @@ import type { LiveRoomAuthors } from "./room-authors";
 import { LIVE_PARTICIPATION_REFUSAL } from "./room-participation-refusal";
 import { chatAudienceKey, seesChatOccurrence } from "./room-chat-audience";
 import type { LiveChatQuestion } from "./location-chat-on-air";
-import type { LiveRoomContentChecks } from "./room-content-checks";
+import type { LiveRoomClassifiers } from "./room-classifiers";
 import { LIVE_CHAT_CHECK_WAIT_MS } from "./room-chat-checks";
 
 type ChatCommand = Extract<LiveRoomClientMessage, { type: `chat.${string}` }>;
@@ -80,7 +80,7 @@ export class LiveRoomChatActions {
     private readonly store: LiveRoomStore,
     private readonly broadcast: LiveRoomBroadcast,
     private readonly authors: LiveRoomAuthors,
-    private readonly checks: LiveRoomContentChecks,
+    private readonly checks: LiveRoomClassifiers,
     private readonly hooks: {
       /** Attendee chat changed; a chat ticker may show something else now. */
       tickerChanged: () => Promise<void>;

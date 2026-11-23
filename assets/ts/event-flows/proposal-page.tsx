@@ -3,7 +3,7 @@ import { mountMarkdownField } from "../components/markdown-editor/mount-markdown
 import { render, createRef } from "preact";
 import type { z } from "zod";
 import { ApiClientError, getJson, postJson } from "../shared/api-client";
-import { PROPOSAL_CHECK_ADVICE } from "../../shared/content-checks";
+import { PROPOSAL_CHECK_ADVICE } from "../../shared/classifiers";
 import { clearReferralSession, clearRememberedInvitation } from "../shared/query-context";
 import { renderConsentInputs, readConsentValues, syncConsentValidation } from "../shared/widgets/consents";
 import { renderCustomFields, readCustomFieldValues } from "../shared/widgets/custom-fields";

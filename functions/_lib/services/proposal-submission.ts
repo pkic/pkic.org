@@ -43,8 +43,8 @@ import { proposalTermsDigest } from "./event-proposal-proof-capabilities";
 import { prepareIndependentDisclosure, requireIndependentDisclosure } from "./proposal-speaker-independent-disclosure";
 import { prepareInvitedSpeakerRepresentation } from "./proposal-invited-speaker-identity";
 import { outboxIdForOperation } from "../email/outbox-queue";
-import type { ContentCheckRun } from "./content-checks/model";
-import { prepareStoreContentCheckResult } from "./content-checks/results";
+import type { ClassifierRun } from "./classifiers/model";
+import { prepareStoreClassifierResult } from "./classifiers/results";
 
 type ProposalCreateInput = z.infer<typeof proposalCreateSchema>;
 
@@ -66,7 +66,7 @@ export interface ProposalSubmissionInput {
    * The screening of the proposal, run once the cheap refusals have passed and just before the write.
    * What it passes is kept for reviewers with the proposal itself.
    */
-  screen?: () => Promise<ContentCheckRun | null>;
+  screen?: () => Promise<ClassifierRun | null>;
 }
 
 export interface ProposalSubmissionResult {
@@ -349,7 +349,7 @@ export async function submitProposal(
   }
 
   const screening = await input.screen?.();
-  if (screening) statements.push(prepareStoreContentCheckResult(db, "proposal", created.proposal.id, screening));
+  if (screening) statements.push(prepareStoreClassifierResult(db, "proposal", created.proposal.id, screening));
 
   try {
     await db.batch(statements);

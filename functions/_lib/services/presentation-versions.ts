@@ -1,5 +1,5 @@
 import { prepareStandingAwards } from "./member-standing/awards";
-import { readContentCheckResults } from "./content-checks/results";
+import { readClassifierResults } from "./classifiers/results";
 import { prepareSitePublicationRequest } from "./site-publication-requests";
 import { first, all } from "../db/queries";
 import { uuid } from "../utils/ids";
@@ -168,7 +168,7 @@ export async function listProposalPresentationVersions(
       throw error;
     }
   }
-  const checked = await readContentCheckResults(db, "presentation", rows);
+  const checked = await readClassifierResults(db, "presentation", rows);
   const versions = rows.map((row) => ({ ...rowToVersion(row), automaticCheck: checked.get(row.id) ?? null }));
   return { versions, page: buildPageInfo(query.limit, query.offset, total, versions.length) };
 }

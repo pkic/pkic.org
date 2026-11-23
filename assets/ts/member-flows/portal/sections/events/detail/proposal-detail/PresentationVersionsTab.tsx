@@ -5,7 +5,7 @@ import {
   sessionPresentationVersionResponseSchema,
 } from "../../../../../../../shared/schemas/session-presentation-versions";
 import { formatNumber } from "../../../../../../../shared/format-number";
-import { CONTENT_CHECK_OUTCOME_LABELS, contentCheckRaisesConcerns } from "../../../../../../../shared/content-checks";
+import { CLASSIFIER_OUTCOME_LABELS, classifierRaisesConcerns } from "../../../../../../../shared/classifiers";
 import { AttentionMark } from "../../../../../../ui/AttentionList";
 import { useRef, useState } from "preact/hooks";
 import { confirmAction } from "../../../../../../components/ConfirmDialog";
@@ -384,8 +384,8 @@ function PresentationVersions({
             cell: (version) => {
               const check = version.automaticCheck;
               if (!check) return <span class="pk-muted">Not checked yet</span>;
-              const label = CONTENT_CHECK_OUTCOME_LABELS[check.outcome];
-              if (contentCheckRaisesConcerns(check.outcome)) return <AttentionMark>{label}</AttentionMark>;
+              const label = CLASSIFIER_OUTCOME_LABELS[check.outcome];
+              if (classifierRaisesConcerns(check.outcome)) return <AttentionMark>{label}</AttentionMark>;
               return check.outcome === "unchecked" ? <span class="pk-muted">{label}</span> : label;
             },
             width: "fit",

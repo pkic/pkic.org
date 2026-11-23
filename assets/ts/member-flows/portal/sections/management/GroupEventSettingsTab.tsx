@@ -31,8 +31,8 @@ const RawEvidenceRetentionPolicy = lazy(() =>
     default: module.RawEvidenceRetentionPolicy,
   })),
 );
-const EventContentChecks = lazy(() =>
-  import("../content-checks/EventContentChecks").then((module) => ({ default: module.EventContentChecks })),
+const EventClassifiers = lazy(() =>
+  import("../classifiers/EventClassifiers").then((module) => ({ default: module.EventClassifiers })),
 );
 const EventRecordings = lazy(() =>
   import("../events/detail/settings/EventRecordings").then((module) => ({ default: module.EventRecordings })),
@@ -164,7 +164,7 @@ export function GroupEventSettingsTab({
         </Suspense>
       ) : detailId === "automatic-checks" && canManage ? (
         <Suspense fallback={<Spinner />}>
-          <EventContentChecks
+          <EventClassifiers
             slug={event.slug}
             kind={detailTab}
             canEdit={canManage}
