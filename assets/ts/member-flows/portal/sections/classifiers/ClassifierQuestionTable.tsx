@@ -5,6 +5,7 @@
 import type { ComponentChildren } from "preact";
 import type { ClassifierQuestion } from "../../../../../shared/classifiers";
 import { DataTable } from "../../../../ui/DataTable";
+import { IconCheckmark } from "../../../../ui/MediaIcons";
 import { Menu, type MenuItem } from "../../../../ui/Menu";
 
 export interface ClassifierQuestionRow {
@@ -60,7 +61,7 @@ export function ClassifierQuestionTable({
                 id: "source",
                 header: "From",
                 width: "fit" as const,
-                cell: (row: ClassifierQuestionRow) => (row.off ? `${row.source ?? ""}, turned off` : row.source),
+                cell: (row: ClassifierQuestionRow) => row.source,
               },
             ]
           : []),
@@ -86,6 +87,26 @@ export function ClassifierQuestionTable({
           recordLabel: "blocks",
           cell: ({ question }) => (question.kind === "flag" ? percent(question.blockAtPercent) : undefined),
         },
+        // A list that mixes layers can turn a question off for this scope only.
+        ...(hasSource
+          ? [
+              {
+                id: "on",
+                header: "On",
+                width: "fit" as const,
+                align: "center" as const,
+                cell: ({ off }: ClassifierQuestionRow) =>
+                  off ? (
+                    <span class="pk-small pk-muted">Off</span>
+                  ) : (
+                    <>
+                      <IconCheckmark aria-hidden="true" />
+                      <span class="pk-sr-only">On</span>
+                    </>
+                  ),
+              },
+            ]
+          : []),
         ...(actionsFor
           ? [
               {

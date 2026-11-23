@@ -133,6 +133,7 @@ it("lists the All content flags on a kind's tab and turns one off for that kind 
     return found;
   });
   expect(row.textContent).toContain("All content");
+  expect(row.textContent).not.toContain("Off");
   await act(async () => row.querySelector<HTMLButtonElement>('button[aria-label="Actions for conduct"]')!.click());
   const labels = [...document.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent);
   expect(labels).toEqual(["Change for chat messages", "Turn off"]);
@@ -144,6 +145,8 @@ it("lists the All content flags on a kind's tab and turns one off for that kind 
   expect(puts.map((put) => [put.url, put.body.disabledQuestionIds])).toEqual([
     ["/api/v1/classifiers/chat", ["conduct"]],
   ]);
+  const saved = [...root.querySelectorAll("tbody tr")].find((candidate) => candidate.textContent?.includes("conduct"));
+  expect(saved?.textContent).toContain("Off");
 });
 
 it("saves an event's context through its contract, which includes the revision it was loaded at", async () => {
