@@ -185,4 +185,3 @@ describe("keeping a message the automatic check flagged", () => {
     expect(liveChatActions("participant", false, { ...message, flaggedByCheck: true }).has("keep")).toBe(false);
   });
 });
-
