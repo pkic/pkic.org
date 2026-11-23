@@ -99,7 +99,7 @@ const settingsShape = {
 export const contentCheckSettingsResponseSchema = z.object({
   kind: contentCheckKindSchema,
   revision: z.number().int(),
-  /** False while the built-in questions apply because staff have saved none. */
+  /** False until staff save settings; the kind is then off and asks nothing. */
   saved: z.boolean(),
   updatedAt: utcInstantSchema.nullable(),
   ...settingsShape,

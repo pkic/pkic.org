@@ -80,7 +80,12 @@ export function ContentCheckQuestions({
           caption={caption}
           rows={rows}
           actionsFor={canWrite ? actionsFor : undefined}
-          empty={<EmptyState title="No questions yet." />}
+          empty={
+            <EmptyState
+              title="No questions yet."
+              body={canWrite ? "Use the menu to add a flag or a score." : undefined}
+            />
+          }
         />
       </PanelBody>
       {editing && (

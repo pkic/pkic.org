@@ -4,6 +4,7 @@ import { CONTENT_CHECK_KINDS } from "../assets/shared/content-checks";
 import { readContentCheckResult } from "../functions/_lib/services/content-checks/results";
 import type { Env } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
+import { saveCheckSettings, sampleFlag } from "./helpers/content-check-settings";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import {
@@ -36,6 +37,17 @@ const model = {
   }),
 };
 const checkedEnv = { ...env, AI: model } as unknown as Env;
+
+/** Spam blocks; a biased claim or promotion only advises. Nothing is checked until settings are saved. */
+async function saveProfileCheckSettings() {
+  const flags = [
+    sampleFlag("spam", "Looks like spam."),
+    sampleFlag("biased_claims", "Describe what you do, not how you rank.", null),
+    sampleFlag("promotional", "Leave out offers and sales wording.", null),
+  ];
+  await saveCheckSettings("organization_profile", flags);
+  await saveCheckSettings("person_profile", flags);
+}
 
 function call(token: string, path: string, init: { method?: string; body?: unknown } = {}) {
   return callApi(checkedEnv, path, {
@@ -71,6 +83,7 @@ async function reviewCount(organizationId: string) {
 describe("automatic checks of member pages", () => {
   beforeEach(async () => {
     await resetDb();
+    await saveProfileCheckSettings();
     model.run.mockClear();
   });
 
@@ -158,6 +171,7 @@ describe("automatic checks of member pages", () => {
 describe("automatic checks of bios", () => {
   beforeEach(async () => {
     await resetDb();
+    await saveProfileCheckSettings();
     model.run.mockClear();
   });
 

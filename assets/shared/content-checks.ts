@@ -145,12 +145,40 @@ export function contentCheckQuestionLimitRefusal(
     : null;
 }
 
+/** The most of an event's own description a check reads; the rest is cut at a word. */
+export const CONTENT_CHECK_EVENT_DESCRIPTION_MAX_CHARS = 1500;
+
+/** The model a kind starts with: the fast one for live chat, the larger one for long texts. */
+export function defaultContentCheckModel(kind: ContentCheckKind): ContentCheckModel {
+  return kind === "chat_message" || kind === "audience_question" ? "clef-flash" : "clef";
+}
+
+/** Shortens a long description at a word boundary, so the context stays bounded. */
+export function truncateContentCheckEventDescription(text: string): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= CONTENT_CHECK_EVENT_DESCRIPTION_MAX_CHARS) return trimmed;
+  const cut = trimmed.slice(0, CONTENT_CHECK_EVENT_DESCRIPTION_MAX_CHARS);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > CONTENT_CHECK_EVENT_DESCRIPTION_MAX_CHARS / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
+}
+
+/**
+ * The check as it runs. The model reads the PKIC-wide context, then the
+ * event's own description, then what the event adds. Outside an event, or
+ * without any of them, the check runs with the PKIC-wide context alone.
+ */
 export function effectiveContentCheck(
   settings: ContentCheckSettings,
   additions: ContentCheckEventAdditions | null,
+  eventDescription = "",
 ): EffectiveContentCheck {
-  if (!additions) return { ...settings, questions: [...settings.questions] };
-  const context = [settings.context.trim(), additions.context.trim()].filter(Boolean).join("\n\n");
+  const context = [
+    settings.context.trim(),
+    truncateContentCheckEventDescription(eventDescription),
+    additions?.context.trim() ?? "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
   return {
     enabled: settings.enabled,
     model: settings.model,

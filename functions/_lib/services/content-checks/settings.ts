@@ -1,12 +1,12 @@
 /**
  * The settings of automatic checks: PKIC-wide per kind of content, and what
- * one event adds. Until staff save PKIC-wide settings the built-in questions
- * apply, so every check works from the start.
+ * one event adds. No question ships with the code: until staff save PKIC-wide
+ * settings a kind is off, asks nothing and costs no model call.
  */
-import { DEFAULT_CONTENT_CHECK_SETTINGS } from "../../../../assets/shared/content-check-defaults";
 import {
   CONTENT_CHECK_KINDS,
   contentCheckQuestionLimitRefusal,
+  defaultContentCheckModel,
   effectiveContentCheck,
   type ContentCheckEventAdditions,
   type ContentCheckKind,
@@ -23,6 +23,7 @@ import {
   type ContentCheckSettingsResponse,
   type EventContentCheckResponse,
 } from "../../../../assets/shared/schemas/content-checks";
+import { formatEventPlace } from "../../../../assets/shared/event-place";
 import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
 import { isStateGuardFailure, prepareStateGuard } from "../../db/authorization-guard";
 import { batchRows } from "../../db/pagination";
@@ -41,6 +42,12 @@ interface SettingsRow {
   updated_at: string;
 }
 
+interface EventRow {
+  name: string;
+  city: string | null;
+  country: string | null;
+}
+
 interface AdditionsRow {
   kind: string;
   context: string;
@@ -50,7 +57,7 @@ interface AdditionsRow {
   updated_at: string;
 }
 
-/** The PKIC-wide settings and what the event adds, for one kind or all kinds: one batch, two statements. */
+/** The PKIC-wide settings, what the event adds and the event itself, for one kind or all kinds: one batch, three statements. */
 export function prepareContentCheckSettingsRead(
   db: DatabaseLike,
   eventId: string | null,
@@ -71,6 +78,7 @@ export function prepareContentCheckSettingsRead(
          FROM event_content_check_additions WHERE event_id = ? AND kind IN (${list})`,
       )
       .bind(eventId ?? "", ...kinds),
+    db.prepare("SELECT name, city, country FROM events WHERE id = ?").bind(eventId ?? ""),
   ];
 }
 
@@ -98,8 +106,13 @@ function decodeIds(json: string): string[] {
   }
 }
 
+/** Before staff save anything a kind is off and has nothing to ask. */
+function unsavedSettings(kind: ContentCheckKind): ContentCheckSettings {
+  return { enabled: false, model: defaultContentCheckModel(kind), context: "", questions: [] };
+}
+
 function settingsResponse(kind: ContentCheckKind, row: SettingsRow | undefined): ContentCheckSettingsResponse {
-  if (!row) return { kind, revision: 0, saved: false, updatedAt: null, ...DEFAULT_CONTENT_CHECK_SETTINGS[kind] };
+  if (!row) return { kind, revision: 0, saved: false, updatedAt: null, ...unsavedSettings(kind) };
   const model = contentCheckModelSchema.safeParse(row.model);
   return {
     kind,
@@ -107,7 +120,7 @@ function settingsResponse(kind: ContentCheckKind, row: SettingsRow | undefined):
     saved: true,
     updatedAt: row.updated_at,
     enabled: row.enabled === 1,
-    model: model.success ? model.data : DEFAULT_CONTENT_CHECK_SETTINGS[kind].model,
+    model: model.success ? model.data : defaultContentCheckModel(kind),
     context: row.context,
     questions: decodeQuestions(row.questions_json),
   };
@@ -116,6 +129,15 @@ function settingsResponse(kind: ContentCheckKind, row: SettingsRow | undefined):
 export interface DecodedContentCheckSettings {
   settings: Map<ContentCheckKind, ContentCheckSettingsResponse>;
   additions: Map<ContentCheckKind, ContentCheckEventAdditions & { revision: number; updatedAt: string | null }>;
+  /** What the event record says about the event, for the model's context; empty outside an event. */
+  eventDescription: string;
+}
+
+/** The event's own description: its name and where it takes place, the only descriptive fields an event record holds. */
+function describeEvent(row: EventRow | undefined): string {
+  if (!row) return "";
+  const place = formatEventPlace({ city: row.city, country: row.country });
+  return `This is for the event "${row.name}"${place ? ` in ${place}` : ""}.`;
 }
 
 export function decodeContentCheckSettings(
@@ -142,7 +164,8 @@ export function decodeContentCheckSettings(
         : { revision: 0, updatedAt: null, context: "", questions: [], disabledQuestionIds: [] },
     );
   }
-  return { settings, additions };
+  const eventRow = results[2] ? batchRows<EventRow>(results[2])[0] : undefined;
+  return { settings, additions, eventDescription: describeEvent(eventRow) };
 }
 
 function asSettings(response: ContentCheckSettingsResponse): ContentCheckSettings {
@@ -153,7 +176,11 @@ export function effectiveCheckFrom(
   decoded: DecodedContentCheckSettings,
   kind: ContentCheckKind,
 ): EffectiveContentCheck {
-  return effectiveContentCheck(asSettings(decoded.settings.get(kind)!), decoded.additions.get(kind) ?? null);
+  return effectiveContentCheck(
+    asSettings(decoded.settings.get(kind)!),
+    decoded.additions.get(kind) ?? null,
+    decoded.eventDescription,
+  );
 }
 
 /** The check as it runs for an event, or PKIC-wide when there is no event. */
@@ -283,7 +310,7 @@ export async function saveEventContentCheckAdditions(
     .prepare("SELECT questions_json FROM content_check_settings WHERE kind = ?")
     .bind(kind)
     .first<{ questions_json: string }>();
-  const wideQuestions = wide ? decodeQuestions(wide.questions_json) : DEFAULT_CONTENT_CHECK_SETTINGS[kind].questions;
+  const wideQuestions = wide ? decodeQuestions(wide.questions_json) : [];
   const wideIds = new Set(wideQuestions.map((q) => q.id));
   const disabledQuestionIds = [...new Set(input.disabledQuestionIds)].filter((id) => wideIds.has(id));
   const tooMany = contentCheckQuestionLimitRefusal(wideQuestions, { ...input, disabledQuestionIds });
