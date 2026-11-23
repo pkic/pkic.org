@@ -17,6 +17,8 @@
     z-index: 10;
     top: var(--pk-viewport-shift-top, 0px);
     display: grid;
+    /* One column as wide as the screen: the location tabs scroll inside it and never widen the stream. */
+    grid-template-columns: minmax(0, 1fr);
     margin-inline: calc(-1 * var(--pk-2));
     border-block-end: 1px solid var(--pk-line);
     background: var(--pk-surface);
