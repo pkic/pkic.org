@@ -81,10 +81,8 @@ export class LiveRoomChatActions {
     private readonly authors: LiveRoomAuthors,
     private readonly checks: LiveRoomClassifiers,
     private readonly hooks: {
-      /** Attendee chat changed; a chat ticker may show something else now. */
-      tickerChanged: () => Promise<void>;
-      /** Attendee chat changed; a chat list on air may show something else now. */
-      listed: () => void;
+      /** Attendee chat changed; the chat list and ticker on air may show something else now. */
+      onAirChanged: () => void;
       /** The session a message sent now is dated by, in a location's chat; null in a session's room. */
       stamp: () => string | null;
       checkWrite: (viewer: LiveRoomParticipant, occurrenceId: string | null) => Promise<LiveRefusal | null>;
@@ -553,10 +551,11 @@ export class LiveRoomChatActions {
   }
 
   private nudgeTicker(): void {
-    this.hooks.listed();
+    this.hooks.onAirChanged();
+    // Asked again once the ticker's refresh interval has passed, so a change in the meantime shows too.
     this.tickerTimer ??= setTimeout(() => {
       this.tickerTimer = null;
-      this.ctx.waitUntil(this.hooks.tickerChanged());
+      this.hooks.onAirChanged();
     }, LIVE_CHAT_POLICY.tickerRefreshMilliseconds);
   }
 }
