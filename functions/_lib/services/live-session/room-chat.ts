@@ -2,6 +2,8 @@ import type { DatabaseLike } from "../../types";
 import { anonymizedLiveParticipantIds } from "./room-erasure";
 import { LIVE_ROOM_POLICY } from "../../../../assets/shared/live-session-policy";
 import { LIVE_CHAT_POLICY } from "../../../../assets/shared/live-chat-policy";
+import type { ClassifierModel, ClassifierOutcome } from "../../../../assets/shared/classifiers";
+import type { LiveModerationReason } from "../../../../assets/shared/live-moderation-policy";
 import type { LiveChatChannel } from "../../../../assets/shared/schemas/live-session-chat";
 import type { LiveRoomSql } from "./room-sql";
 import { chatOccurrenceFilter } from "./room-chat-audience";
@@ -34,13 +36,17 @@ export interface LiveChatArchiveRow {
   occurrence_id: string | null;
   /** When its author last edited it; the body is the edited one. */
   edited_at: string | null;
-  /** Shown to attendees, removed by a moderator, held after reports, or removed by the automatic check. */
-  status: "shown" | "hidden" | "held" | "removed_by_check";
-  /** What the automatic check decided, when it raised anything; a later keep or hide shows in the status. */
-  check_outcome: "advised" | "blocked" | null;
-  /** The questions the check raised with their certainty, as the room stores them. */
-  check_flags: string | null;
-  /** Each report's reason, as a JSON array. */
+  /** Shown to attendees, kept by a moderator, removed by one, held after reports, or removed by the automatic check. */
+  status: "shown" | "kept" | "hidden" | "held" | "removed_by_check";
+  /** What the automatic check found; null when no check ran. A moderator's keep leaves it in place. */
+  check_outcome: ClassifierOutcome | null;
+  check_model: ClassifierModel | null;
+  /** The questions that raised a concern, and every answered question, with their certainty, as JSON. */
+  check_raised: string | null;
+  check_scores: string | null;
+  /** Why a moderator removed it, while it stays removed. */
+  removal_reason: LiveModerationReason | null;
+  /** Each report's reason, including those a keep settled, as a JSON array. */
   report_reasons: string;
 }
 const TABLES: Record<LiveChatChannel, string> = { attendee: "room_chat", operator: "room_operator_chat" };
@@ -58,7 +64,9 @@ const ANNOTATIONS = [
   "room_chat_edits",
   "room_chat_aired",
   "room_chat_checks",
-  "room_chat_check_flags",
+  "room_chat_check_results",
+  "room_chat_kept",
+  "room_chat_kept_reports",
 ];
 /** Shown to attendees: not removed by a moderator or held after reports. */
 const HIDDEN = `id NOT IN (SELECT message_id FROM room_chat_hidden)`;
@@ -317,15 +325,18 @@ export class LiveRoomChat {
     return this.sql.rows<LiveChatArchiveRow>(
       `SELECT c.sent_at, c.author_name, c.body, s.occurrence_id, e.edited_at,
          CASE WHEN h.held = 1 AND h.by_name = ? THEN 'removed_by_check' WHEN h.held = 1 THEN 'held'
-           WHEN h.message_id IS NOT NULL THEN 'hidden' ELSE 'shown' END AS status,
-         CASE WHEN k.outcome IN ('advised', 'blocked') THEN k.outcome END AS check_outcome,
-         f.flags_json AS check_flags,
-         (SELECT json_group_array(r.reason) FROM room_chat_reports r WHERE r.message_id = c.id) AS report_reasons
+           WHEN h.message_id IS NOT NULL THEN 'hidden'
+           WHEN EXISTS (SELECT 1 FROM room_chat_kept WHERE message_id = c.id) THEN 'kept' ELSE 'shown' END AS status,
+         k.outcome AS check_outcome, k.model AS check_model, k.raised_json AS check_raised, k.scores_json AS check_scores,
+         CASE WHEN h.message_id IS NOT NULL THEN rm.reason END AS removal_reason,
+         (SELECT json_group_array(reason) FROM (
+            SELECT user_id, reason FROM room_chat_reports WHERE message_id = c.id
+            UNION SELECT user_id, reason FROM room_chat_kept_reports WHERE message_id = c.id)) AS report_reasons
        FROM room_chat c LEFT JOIN room_chat_hidden h ON h.message_id = c.id
        LEFT JOIN room_chat_sessions s ON s.message_id = c.id
        LEFT JOIN room_chat_edits e ON e.message_id = c.id
-       LEFT JOIN room_chat_checks k ON k.message_id = c.id
-       LEFT JOIN room_chat_check_flags f ON f.message_id = c.id
+       LEFT JOIN room_chat_check_results k ON k.message_id = c.id
+       LEFT JOIN room_removals rm ON rm.item_id = c.id
        ORDER BY c.sent_at, c.rowid`,
       LIVE_CHAT_HELD_BY_CHECK,
     );
@@ -346,7 +357,9 @@ export class LiveRoomChat {
 
   async eraseAnonymizedAuthors(db: DatabaseLike): Promise<LiveChatRemoval[]> {
     // Reporters too: a kept chat holds its reports for as long as its messages.
-    const reporters = this.sql.rows<{ id: string }>("SELECT DISTINCT user_id AS id FROM room_chat_reports");
+    const reporters = this.sql.rows<{ id: string }>(
+      "SELECT user_id AS id FROM room_chat_reports UNION SELECT user_id FROM room_chat_kept_reports",
+    );
     const people = [...new Set([...this.authors(), ...reporters.map((row) => row.id)])];
     const removed: LiveChatRemoval[] = [];
     for (const userId of await anonymizedLiveParticipantIds(db, people)) removed.push(...this.forget(userId));
@@ -359,7 +372,7 @@ export class LiveRoomChat {
       this.sql.rows<LiveChatRemoval>(`${select(channel)} WHERE author_user_id = ?`, userId),
     );
     this.remove(removed.map((row) => row.id));
-    for (const table of ["room_chat_reactions", "room_chat_reports"])
+    for (const table of ["room_chat_reactions", "room_chat_reports", "room_chat_kept_reports"])
       this.sql.exec(`DELETE FROM ${table} WHERE user_id = ?`, userId);
     for (const table of ["room_chat_limits", "room_people"])
       this.sql.exec(`DELETE FROM ${table} WHERE user_id = ?`, userId);
