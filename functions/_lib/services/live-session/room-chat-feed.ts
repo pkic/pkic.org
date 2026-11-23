@@ -92,7 +92,6 @@ export class LiveChatFeed {
     const hidden = this.moderation.hidden(ids);
     const questions = this.moderation.questions(ids);
     const checks = this.moderation.checks.flagged(ids);
-    const waiting = this.moderation.checks.waiting(ids, Date.now());
     const restrictions = this.decisions.restrictions(authors, Date.now());
     const removals = this.decisions.removals(ids);
     const done = this.decisions.done(ids);
@@ -103,19 +102,15 @@ export class LiveChatFeed {
     const parentIds = [...new Set(rows.flatMap((row) => row.reply_to ?? []))];
     const parents = new Map(this.chat.messages(parentIds).map((row) => [row.id, row]));
     const parentsHidden = this.moderation.hidden(parentIds);
-    const parentsWaiting = this.moderation.checks.waiting(parentIds, Date.now());
     /**
      * The answered message as this viewer sees it: removed once deleted, or hidden from everyone but moderators.
-     * Words still being checked are only for their author and moderators, in a reply's excerpt as well.
      */
     const quote = (row: LiveChatRow, viewer: LiveRoomParticipant): LiveChatReplyQuote | null => {
       if (!row.reply_to) return null;
       const parent = parents.get(row.reply_to);
       if (!parent || !seesChatOccurrence(viewer, parent.occurrence_id)) return null;
       const parentMine = viewer.userId !== null && parent.author_user_id === viewer.userId;
-      const shown =
-        parent.channel === row.channel &&
-        ((!parentsHidden.has(parent.id) && (!parentsWaiting.has(parent.id) || parentMine)) || staff(viewer));
+      const shown = parent.channel === row.channel && (!parentsHidden.has(parent.id) || staff(viewer));
       return {
         messageId: row.reply_to,
         authorName: shown ? parent.author_name : null,
@@ -139,8 +134,6 @@ export class LiveChatFeed {
         const doneRow = done.get(row.id);
         // The author keeps seeing a message a moderator removed, with the reason; a held one stays theirs too.
         if (hiding && !staff(viewer) && !mineRow) return null;
-        // Words still being checked are for their author and moderators until the check passes.
-        if (waiting.has(row.id) && !staff(viewer) && !mineRow) return null;
         const report = reports.get(row.id);
         const author = people.get(row.author_user_id);
         const replyTo = quote(row, viewer);

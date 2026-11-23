@@ -47,6 +47,13 @@ export const LIVE_CHAT_POLICY = {
    * audited. Below the threshold a report only reaches the moderators.
    */
   reportHoldThreshold: 5,
+  /**
+   * An attendee whose messages the automatic check blocks this many times
+   * within the window is paused, so a moderator can decide. One blocked
+   * message never pauses anyone, and a message a moderator keeps no longer
+   * counts.
+   */
+  checkPause: { blocks: 3, windowMinutes: 10 },
   /** Open reports a moderator receives at once, newest first. */
   reportQueueLimit: 100,
   /** The chat ticker shows this many of the latest messages. */

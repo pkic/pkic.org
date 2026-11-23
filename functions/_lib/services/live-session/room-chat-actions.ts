@@ -24,7 +24,6 @@ import { LIVE_PARTICIPATION_REFUSAL } from "./room-participation-refusal";
 import { chatAudienceKey, seesChatOccurrence } from "./room-chat-audience";
 import type { LiveChatQuestion } from "./location-chat-on-air";
 import type { LiveRoomClassifiers } from "./room-classifiers";
-import { LIVE_CHAT_CHECK_WAIT_MS } from "./room-chat-checks";
 
 type ChatCommand = Extract<LiveRoomClientMessage, { type: `chat.${string}` }>;
 type Actor = { userId: string; name: string };
@@ -100,6 +99,8 @@ export class LiveRoomChatActions {
       audited: () => Promise<void>;
       /** An attendee message changed the chat counts; their durable copy is due. */
       counted: () => Promise<void>;
+      /** The room paused someone on its own; they learn it, and moderators see it on their posts. */
+      participationChanged: (userId: string) => Promise<void>;
     },
   ) {}
 
@@ -225,7 +226,7 @@ export class LiveRoomChatActions {
     const row = this.chat.send(actor, text, Date.now(), channel, occurrenceId, replyTo);
     if (!row) return REFUSALS.tooFast;
     this.authors.recordMessage(row.id, stamp);
-    const checking = channel === "attendee" && viewer.role !== "operator" && this.holdForCheck(row);
+    const checking = channel === "attendee" && viewer.role !== "operator" && this.markChecking(row);
     await this.deliver([row], { removeWhenHidden: false });
     if (checking) this.check(row);
     if (channel !== "attendee") return;
@@ -239,55 +240,46 @@ export class LiveRoomChatActions {
     if (!this.allowed("edit", actor.userId)) return REFUSALS.tooFast;
     const edited = this.chat.edit(row, text, at);
     if (!edited) return;
-    const checking = edited.channel === "attendee" && this.holdForCheck(edited);
+    const checking = edited.channel === "attendee" && this.markChecking(edited);
     await this.redeliver([edited]);
     if (checking) this.check(edited);
   }
 
   /**
-   * Holds an attendee's words back until the automatic check answers: only their author and moderators read
-   * them meanwhile, and a passing check delivers them to everyone else. A blocked message is held for moderators,
-   * like one held after reports; an advised one goes to the chat, off air, in the moderators' review queue. A
-   * check that cannot run lets the message go on.
+   * Everyone reads an attendee's words at once; the automatic check runs behind them. A blocked message is then
+   * taken from everyone but its author and moderators, like one held after reports, and an author blocked again
+   * and again is paused. An advised one stays in the chat, in the moderators' review queue. The on-air outputs
+   * wait for the verdict and leave out a flagged message until a moderator keeps it.
    */
-  private holdForCheck(row: LiveChatRow): boolean {
+  private markChecking(row: LiveChatRow): boolean {
     if (!this.checks.mayRun("chat_message")) return false;
     this.feed.moderation.checks.pending(row.id, nowIso());
     return true;
   }
 
-  /** How long a check may hold a message back before everyone receives it; a later verdict still applies. */
-  private checkWaitMs = LIVE_CHAT_CHECK_WAIT_MS;
-
-  /** Starts the check once its author has the message, so its verdict always follows the message itself. */
+  /** Starts the check once everyone has the message, so its verdict always follows the message itself. */
   private check(row: LiveChatRow): void {
-    const progress = { answered: false, recorded: false };
-    // Releases only the words this check examined: an edit meanwhile has a check of its own.
-    const release = () =>
-      this.chat.message(row.id)?.body === row.body ? this.releaseFromCheck(row.id) : Promise.resolve();
-    const expiry = setTimeout(() => {
-      // A check that has not answered by now lets the words go on; a verdict that arrived stays.
-      if (!progress.answered)
-        void release().catch((error: unknown) => console.error("Live chat release failed", error));
-    }, this.checkWaitMs);
+    const progress = { recorded: false };
     this.ctx.waitUntil(
-      this.settleCheck(row, progress)
-        .catch(async (error: unknown) => {
-          console.error("Live chat check failed", error);
-          // A check that fails lets the message go on rather than keeping it from the room. A verdict it already
-          // recorded stays for moderators; only its delivery is tried again.
-          await (progress.recorded ? this.deliverChecked(row) : release()).catch(() => undefined);
-        })
-        .finally(() => clearTimeout(expiry)),
+      this.settleCheck(row, progress).catch(async (error: unknown) => {
+        console.error("Live chat check failed", error);
+        // A check that fails leaves the message in the chat and stops the outputs waiting for it. A verdict it
+        // already recorded stays for moderators; only its delivery is tried again.
+        try {
+          if (progress.recorded) await this.deliverChecked(row);
+          else this.passCheck(row);
+        } catch {
+          /* The room is going away; the outputs stop waiting for the message by themselves. */
+        }
+      }),
     );
   }
 
-  /** Nothing holds the message back for its check any longer: everyone who may see it receives it. */
-  private async releaseFromCheck(messageId: string): Promise<void> {
-    const row = this.chat.message(messageId);
-    if (!row) return;
-    this.feed.moderation.checks.clear(row.id);
-    await this.deliver([row], { removeWhenHidden: false });
+  /** The examined words passed, or could not be checked: the outputs no longer wait for them. */
+  private passCheck(sent: LiveChatRow): void {
+    // An edit meanwhile has a check of its own.
+    if (this.chat.message(sent.id)?.body !== sent.body) return;
+    this.feed.moderation.checks.clear(sent.id);
     this.nudgeTicker();
   }
 
@@ -299,22 +291,35 @@ export class LiveRoomChatActions {
     this.nudgeTicker();
   }
 
-  private async settleCheck(sent: LiveChatRow, progress: { answered: boolean; recorded: boolean }): Promise<void> {
+  private async settleCheck(sent: LiveChatRow, progress: { recorded: boolean }): Promise<void> {
     const run = await this.checks.run("chat_message", liveChatPlainText(sent.body));
-    progress.answered = true;
     const row = this.chat.message(sent.id);
     // Deleted, or edited again meanwhile: the newer words have a check of their own.
     if (!row || row.body !== sent.body) return;
     const outcome = run?.verdict.outcome;
-    if (outcome !== "advised" && outcome !== "blocked") return this.releaseFromCheck(row.id);
+    if (outcome !== "advised" && outcome !== "blocked") return this.passCheck(row);
     const at = nowIso();
     this.feed.moderation.checks.record(row.id, { outcome, notes: run!.verdict.flags.map((flag) => flag.message) }, at);
     progress.recorded = true;
     if (outcome === "blocked" && !this.feed.moderation.hidden([row.id]).has(row.id)) {
       this.feed.moderation.hide(row.id, HELD_BY_CHECK, true, at);
       await this.deliver([row], { removeWhenHidden: true });
-    } else await this.deliver([row], { removeWhenHidden: false });
+      await this.pauseAfterRepeatedBlocks(row.author_user_id, at);
+    } else await this.deliver([row], { removeWhenHidden: false, only: staff });
     this.nudgeTicker();
+  }
+
+  /**
+   * Pauses an author whose messages the check keeps blocking, so a moderator decides whether they go on. A person
+   * already paused or blocked keeps that decision.
+   */
+  private async pauseAfterRepeatedBlocks(userId: string, at: string): Promise<void> {
+    const { blocks, windowMinutes } = LIVE_CHAT_POLICY.checkPause;
+    const since = new Date(Date.parse(at) - windowMinutes * 60_000).toISOString();
+    if (this.feed.moderation.checks.blockedSince(userId, since) < blocks) return;
+    if (this.feed.decisions.restriction(userId, Date.now())) return;
+    this.feed.decisions.block(userId, "paused", "conduct", { userId: "", name: HELD_BY_CHECK }, at);
+    await this.hooks.participationChanged(userId);
   }
 
   private react(actor: Actor, row: LiveChatRow, reaction: LiveChatReactionId, on: boolean) {

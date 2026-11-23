@@ -5,7 +5,7 @@ import { LIVE_CHAT_POLICY } from "../../../../assets/shared/live-chat-policy";
 import type { LiveChatChannel } from "../../../../assets/shared/schemas/live-session-chat";
 import type { LiveRoomSql } from "./room-sql";
 import { chatOccurrenceFilter } from "./room-chat-audience";
-import { liveChatCheckHoldsBack, liveChatCheckNotWaiting } from "./room-chat-checks";
+import { liveChatCheckHoldsBack } from "./room-chat-checks";
 
 export interface LiveChatRemoval {
   id: string;
@@ -88,17 +88,16 @@ export class LiveRoomChat {
     },
   ): { rows: LiveChatRow[]; hasEarlier: boolean } {
     const audience = chatOccurrenceFilter(`${TABLES[channel]}.id`, options.occurrenceIds);
-    const checking = liveChatCheckNotWaiting(Date.now());
     const where = [
       audience.sql,
       ...(options.before ? ["(sent_at < ? OR (sent_at = ? AND rowid < ?))"] : []),
-      ...(options.shownOnly ? [`((${HIDDEN} AND ${checking.sql}) OR author_user_id = ?)`] : []),
+      ...(options.shownOnly ? [`(${HIDDEN} OR author_user_id = ?)`] : []),
     ];
     const rows = this.sql.rows<LiveChatRow>(
       `${select(channel)}${where.length ? ` WHERE ${where.join(" AND ")}` : ""} ORDER BY sent_at DESC, rowid DESC LIMIT ?`,
       ...audience.bindings,
       ...(options.before ? [options.before.sent_at, options.before.sent_at, options.before.seq] : []),
-      ...(options.shownOnly ? [...checking.bindings, options.author ?? ""] : []),
+      ...(options.shownOnly ? [options.author ?? ""] : []),
       options.limit + 1,
     );
     return { rows: rows.slice(0, options.limit).reverse(), hasEarlier: rows.length > options.limit };
