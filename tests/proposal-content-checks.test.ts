@@ -5,9 +5,10 @@ import { readContentCheckResult } from "../functions/_lib/services/content-check
 import { callApi } from "./helpers/app";
 import { withIndependentCapacity } from "./helpers/independent-capacity";
 import { proposalIdentityFixture } from "./helpers/proposal-identity";
+import { saveCheckSettings, sampleFlag, sampleScore } from "./helpers/content-check-settings";
 import { resetDb } from "./helpers/reset-db";
 
-type Questions = Record<string, { type: "noul" | "score"; criteria?: string[] }>;
+type Questions = Record<string, { type: "noul" | "score"; criteria?: string[]; instructions?: unknown }>;
 
 /** A stand-in check model: a sales pitch is blocked, a vague abstract draws advice, and every score is the top level. */
 const model = {
@@ -51,6 +52,39 @@ describe("automatic screening of proposals", () => {
   beforeEach(async () => {
     await resetDb();
     model.run.mockClear();
+    await saveCheckSettings("proposal", [
+      sampleFlag("promotional", "This reads as a sales pitch.", 92),
+      sampleFlag("thin_abstract", "The abstract does not yet say what the audience will learn.", null),
+      sampleScore("relevance"),
+    ]);
+  });
+
+  it("checks nothing and calls no model while no settings are saved", async () => {
+    await env.DB.prepare("DELETE FROM content_check_settings").run();
+    const { token, body } = await proposalIdentityFixture();
+    const response = await submit(
+      { ...body, proposal: { ...body.proposal, abstract: `${body.proposal.abstract} Buy our gateway today.` } },
+      token,
+    );
+    expect(response.status).toBe(200);
+    const { proposalId } = await response.json<{ proposalId: string }>();
+    expect(model.run).not.toHaveBeenCalled();
+    expect(await readContentCheckResult(env.DB, "proposal", proposalId)).toBeNull();
+  });
+
+  it("gives the model the event's own description beside the PKIC-wide context", async () => {
+    await saveCheckSettings("proposal", [sampleFlag("promotional", "Pitch.")], { context: "Wide rules." });
+    const { eventId, token, body } = await proposalIdentityFixture();
+    await env.DB.prepare("UPDATE events SET name = 'Harbor Summit', city = 'Rotterdam', country = 'NL' WHERE id = ?")
+      .bind(eventId)
+      .run();
+    const response = await submit(body, token);
+    expect(response.status).toBe(200);
+    const questions = (model.run.mock.calls[0]![1] as unknown as { questions: Questions }).questions;
+    const context = JSON.stringify(questions);
+    expect(context).toContain("Wide rules.");
+    expect(context).toContain("Harbor Summit");
+    expect(context).toContain("Rotterdam, Netherlands");
   });
 
   it("refuses a proposal the check blocks, with the reason on the abstract", async () => {
@@ -119,12 +153,7 @@ describe("automatic screening of proposals", () => {
         body: JSON.stringify(change),
       });
 
-    await env.DB.prepare(
-      `INSERT INTO content_check_settings (kind, enabled, model, context, questions_json, revision, updated_at)
-       VALUES ('proposal', 0, 'clef', '', '[]', 1, ?)`,
-    )
-      .bind(new Date().toISOString())
-      .run();
+    await saveCheckSettings("proposal", [], { enabled: false });
     expect((await edit({ committeeNotes: "Please schedule us early." })).status).toBe(200);
     expect(await readContentCheckResult(env.DB, "proposal", proposalId)).not.toBeNull();
 

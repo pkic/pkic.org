@@ -89,6 +89,16 @@ describe("an event's check", () => {
     expect(effectiveContentCheck(settings, null)).toEqual(settings);
   });
 
+  it("reads the PKIC-wide context, then the event description, then what the event adds, and bounds the description", () => {
+    const additions = { context: "Added.", questions: [], disabledQuestionIds: [] };
+    expect(effectiveContentCheck(settings, additions, "The event is held in a harbor.").context).toBe(
+      "PKIC-wide rules.\n\nThe event is held in a harbor.\n\nAdded.",
+    );
+    const bounded = effectiveContentCheck(settings, null, "word ".repeat(1000)).context;
+    expect(bounded.length).toBeLessThan("PKIC-wide rules.\n\n".length + 1600);
+    expect(bounded.endsWith("…")).toBe(true);
+  });
+
   it("adds context, replaces and turns off questions, and appends its own", () => {
     const stricter = { ...offTopic, blockAtPercent: 95, question: "Is this off this event's topics?" };
     const effective = effectiveContentCheck(settings, {

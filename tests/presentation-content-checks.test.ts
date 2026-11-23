@@ -9,6 +9,7 @@ import {
 import { extractPresentationText } from "../functions/_lib/services/content-checks/presentation-text";
 import { readContentCheckResult } from "../functions/_lib/services/content-checks/results";
 import { proposalIdentityFixture, submitIdentityProposal } from "./helpers/proposal-identity";
+import { saveCheckSettings, sampleFlag } from "./helpers/content-check-settings";
 import { resetDb } from "./helpers/reset-db";
 
 function slideXml(...paragraphs: string[]) {
@@ -76,6 +77,7 @@ describe("automatic check of uploaded slides", () => {
   beforeEach(async () => {
     await resetDb();
     model.run.mockClear();
+    await saveCheckSettings("presentation", [sampleFlag("promotional", "These slides read as marketing.", null)]);
   });
 
   it("reads PowerPoint slides in order, one paragraph per line", async () => {
