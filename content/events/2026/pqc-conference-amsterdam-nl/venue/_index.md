@@ -41,7 +41,9 @@ The [conference parking rate](https://meervaart.nl/en/meetings-events/about-meer
 
 Osdorpplein 249, 1068 SW Amsterdam. [P1 lists](https://www.p1.nl/parkeerplaats/q-park-osdorpplein/) the first hour as free, then €2.00 per 30 minutes or part thereof.
 
-A designated disabled parking space is available directly in front of the main entrance (not reservable; free with a disabled parking card).
+**Accessible parking at Meervaart**
+
+A designated space directly outside Meervaart’s main entrance is free with a disabled parking permit and cannot be reserved.
 
 ## Hotels nearby
 
