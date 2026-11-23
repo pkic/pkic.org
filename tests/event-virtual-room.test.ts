@@ -13,6 +13,8 @@ import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 import { previewAgenda } from "../functions/_lib/services/event-agenda/preview";
 import { projectPublishedAgendas, readPublishedAgendaPage } from "../functions/_lib/services/site-publication-agendas";
+import { publishedMediaReferences } from "../functions/_lib/services/site-publication-media";
+import { readSitePublicationSnapshot } from "../functions/_lib/services/site-publication-snapshot";
 
 const base = "/api/v1/events/pqc-2026/agenda";
 const usual = "jfKfPfyJRdk";
@@ -257,6 +259,8 @@ describe("virtual room access", () => {
     expect((await previewAgenda(env.DB, f.eventId, "pqc-2026", "approved")).productionPartners).toEqual(
       published?.publicAgenda.productionPartners,
     );
+    // Their logos are staged into the static site with the published agenda.
+    expect(publishedMediaReferences(await readSitePublicationSnapshot(env.DB, []))).toContain(credits[0]!.logoUrl);
     // An emptied list removes the setting.
     expect((await settings([])).status).toBe(200);
     expect(

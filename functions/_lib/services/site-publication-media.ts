@@ -37,6 +37,7 @@ export function publishedMediaReferences(snapshot: SitePublicationSnapshot): str
         add(credit.photoUrl);
     }
     for (const organization of Object.values(agenda.speakerOrganizations ?? {})) add(organization.logoUrl);
+    for (const partner of agenda.productionPartners ?? []) add(partner.logoUrl);
   }
   for (const entry of snapshot.memberWall) add(entry.logoUrl);
   for (const person of Object.values(snapshot.people ?? {}))
