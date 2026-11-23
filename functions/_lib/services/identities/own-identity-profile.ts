@@ -9,7 +9,9 @@ import { nowIso } from "../../utils/time";
 import { AppError } from "../../errors";
 import { parseLinksJson } from "../../../../assets/shared/schemas/links";
 import type { OwnIdentityProfile } from "../../../../assets/shared/schemas/own-identity-profile";
-import type { DatabaseLike } from "../../types";
+import type { DatabaseLike, Env } from "../../types";
+import { screenProfileContent } from "../classifiers/profile-screening";
+import { prepareStoreClassifierResult } from "../classifiers/results";
 import type { OwnAccount } from "../../auth/member";
 import { memberSessionAuthorizationEvidence, userSessionAuthorizationEvidence } from "../../auth/identity-capacities";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
@@ -28,6 +30,8 @@ export interface OwnIdentityProfileUpdateInput {
   biography?: string;
   links?: string[];
   showOnOrgProfile?: boolean;
+  /** The owner saw the classifier's advice and saves as written; only a block still refuses. */
+  adviceAcknowledged?: boolean;
 }
 
 interface EditableIdentityRow extends EditableIdentityProfile {
@@ -95,6 +99,7 @@ export async function updateOwnIdentityProfile(
   account: OwnAccount,
   identityId: string,
   input: OwnIdentityProfileUpdateInput,
+  screening: { ai: Env["AI"] } = { ai: undefined },
 ): Promise<void> {
   const now = nowIso();
   const current = await first<EditableIdentityRow>(
@@ -131,6 +136,20 @@ export async function updateOwnIdentityProfile(
     now,
   );
   const names = nameChanges(current, input);
+
+  // The job title and biography are read only when they change; the text is checked before anything is written.
+  const jobTitle = input.jobTitle ?? (isOrganizationIdentity ? current.job_title : current.individual_job_title) ?? "";
+  const biography = input.biography ?? current.biography ?? "";
+  const textChanged = "biography" in edit.changes || "jobTitle" in edit.changes;
+  const verdict =
+    textChanged && (jobTitle || biography.trim())
+      ? await screenProfileContent({ AI: screening.ai }, db, {
+          kind: "person",
+          subject: { title: jobTitle, text: biography },
+          adviceAcknowledged: input.adviceAcknowledged === true,
+          field: "biography",
+        })
+      : null;
 
   const statements = [
     prepareAuthorizationGuard(
@@ -175,6 +194,12 @@ export async function updateOwnIdentityProfile(
     }),
   );
   if (edit.individualJobTitle) statements.push(edit.individualJobTitle);
+  if (verdict) statements.push(prepareStoreClassifierResult(db, "person", current.id, verdict, now));
+  // Changed text that was not checked, because both were emptied or no check ran, leaves no verdict of the old text.
+  else if (textChanged)
+    statements.push(
+      db.prepare("DELETE FROM classifier_results WHERE kind = 'person' AND subject_id = ?").bind(current.id),
+    );
   try {
     await db.batch(statements);
   } catch (error) {

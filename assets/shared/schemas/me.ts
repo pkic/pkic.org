@@ -8,7 +8,7 @@ import { firstNameSchema, lastNameSchema, preferredNameSchema, successResponseSc
 import { httpOrSameOriginUrlSchema } from "./urls";
 import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
-import { identityProfileUpdateSchema } from "./own-identity-profile";
+import { ownIdentityProfileUpdateSchema } from "./own-identity-profile";
 import { applicationStageSchema } from "./member-applications";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { requiresSession } from "./route-contract";
@@ -104,7 +104,7 @@ export const myActiveIdentitySwitchRouteSchema = {
 };
 
 /** The person's names and the acting identity's profile, edited together. */
-export const myProfileUpdateSchema = identityProfileUpdateSchema.extend({
+export const myProfileUpdateSchema = ownIdentityProfileUpdateSchema.extend({
   firstName: firstNameSchema.optional(),
   lastName: lastNameSchema.optional(),
   preferredName: preferredNameSchema.nullable().optional(),
@@ -123,6 +123,10 @@ export const myProfileUpdateRouteSchema = {
   },
   responses: {
     "200": { description: "Updated profile.", content: { "application/json": { schema: myProfileSchema } } },
+    "422": {
+      description:
+        "The classifier blocks the job title or biography, or advises on it: save again with adviceAcknowledged to keep it as written.",
+    },
   },
 };
 

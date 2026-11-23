@@ -42,7 +42,7 @@ export function LiveParticipationAlert({
         tone="warn"
         title={`You're paused until ${restriction.until ? formatClockInZone(restriction.until, timeZone) : "later"}.`}
       >
-        A moderator paused your posting for {LIVE_PARTICIPATION_POLICY.pauseMinutes} minutes. {conduct}
+        Your posting is paused for {LIVE_PARTICIPATION_POLICY.pauseMinutes} minutes. {conduct}
       </Alert>
     );
   if (restriction.block === "session")

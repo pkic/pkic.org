@@ -30,7 +30,7 @@ const CHOICES: Record<KeepDays, { label: string; hint: string }> = {
   7: { label: "1 week", hint: "The chat goes with the rest of the session's live room." },
   90: {
     label: "90 days",
-    hint: "Only the attendee chat stays, so organizers can download it. Polls, questions, and the operator chat still go after a week.",
+    hint: "Only the attendee chat stays, with its reports and the classifier's scores, so organizers can download it. Polls, questions, and the operator chat still go after a week.",
   },
 };
 

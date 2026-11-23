@@ -162,6 +162,15 @@ export const ACCOUNT_DELETION_REMOVED_TABLES: readonly AccountDeletionRemovedTab
     links: [child("proposal_id", "session_proposals")],
   }),
   part({ table: "proposal_speakers", kind: "proposal", links: [child("proposal_id", "session_proposals")] }),
+  // Classifier verdicts name their subject without a foreign key: a removed proposal's, and an identity's bio.
+  part({
+    table: "classifier_results",
+    kind: "proposal",
+    links: [
+      { column: "subject_id", from: "session_proposals", foreignKey: false, where: (a) => `${a}.kind = 'proposal'` },
+      { column: "subject_id", from: "identities", foreignKey: false, where: (a) => `${a}.kind = 'person'` },
+    ],
+  }),
   part({
     table: "proposal_speaker_independent_disclosures",
     kind: "proposal",
@@ -350,11 +359,13 @@ export const ACCOUNT_DELETION_BLOCKING_RULES: readonly AccountDeletionBlockingRu
   authored("agenda_session_invitations", "invited_by"),
   authored("application_communications", "actor_user_id"),
   authored("application_concerns", "submitted_by_user_id"),
+  authored("classifier_settings", "updated_by_user_id"),
   authored("event_agenda_appearance_override_decisions", "reviewed_by"),
   authored("event_agenda_appearance_override_requests", "requested_by"),
   authored("event_agenda_import_provenance", "imported_by"),
   authored("event_agenda_publications", "created_by"),
   authored("event_agenda_room_outputs", "updated_by_user_id"),
+  authored("event_classifier_additions", "updated_by_user_id"),
   authored("event_agenda_room_streams", "updated_by"),
   authored("event_agenda_session_history", "updated_by"),
   authored("event_attendance_corrections", "actor_user_id"),

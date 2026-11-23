@@ -119,7 +119,7 @@ export async function reviewDisputedTicket(
       "TICKET_ALREADY_PAID",
       "This ticket is paid. Refund it first, then the person can register again.",
     );
-  const decided = await readStoredTicketDecision(db, digest, subject);
+  const decided = await readStoredTicketDecision(db, snapshot.types, subject);
   const type = decided && snapshot.types.find((candidate) => candidate.ticket_key === decided.ticketKey);
   if (!type) throw new AppError(409, "TICKET_DECISION_MISSING", "There is no decided ticket to move this person to.");
   const dayAttendance = await all<{ dayDate: string; attendanceType: string }>(

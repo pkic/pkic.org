@@ -91,6 +91,7 @@ export class LiveChatFeed {
     const reportedBy = this.moderation.reportedBy(ids, viewers);
     const hidden = this.moderation.hidden(ids);
     const questions = this.moderation.questions(ids);
+    const checks = this.moderation.checks.flagged(ids);
     const restrictions = this.decisions.restrictions(authors, Date.now());
     const removals = this.decisions.removals(ids);
     const done = this.decisions.done(ids);
@@ -101,17 +102,20 @@ export class LiveChatFeed {
     const parentIds = [...new Set(rows.flatMap((row) => row.reply_to ?? []))];
     const parents = new Map(this.chat.messages(parentIds).map((row) => [row.id, row]));
     const parentsHidden = this.moderation.hidden(parentIds);
-    /** The answered message as this viewer sees it: removed once deleted, or hidden from everyone but moderators. */
+    /**
+     * The answered message as this viewer sees it: removed once deleted, or hidden from everyone but moderators.
+     */
     const quote = (row: LiveChatRow, viewer: LiveRoomParticipant): LiveChatReplyQuote | null => {
       if (!row.reply_to) return null;
       const parent = parents.get(row.reply_to);
       if (!parent || !seesChatOccurrence(viewer, parent.occurrence_id)) return null;
+      const parentMine = viewer.userId !== null && parent.author_user_id === viewer.userId;
       const shown = parent.channel === row.channel && (!parentsHidden.has(parent.id) || staff(viewer));
       return {
         messageId: row.reply_to,
         authorName: shown ? parent.author_name : null,
         excerpt: shown ? liveChatReplyExcerpt(parent.body) : null,
-        mine: shown && viewer.userId !== null && parent.author_user_id === viewer.userId,
+        mine: shown && parentMine,
       };
     };
     return {
@@ -170,6 +174,7 @@ export class LiveChatFeed {
                   occurrenceRestrictions?.get(row.occurrence_id)?.[row.author_user_id] ??
                   null,
                 ...(original !== undefined ? { originalText: original } : {}),
+                ...(checks.has(row.id) ? { classifier: checks.get(row.id) } : {}),
               }
             : null,
         };

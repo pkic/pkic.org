@@ -10,7 +10,7 @@ import {
   type LiveChatAction,
   type LiveChatReactionId,
 } from "../../shared/live-chat-policy";
-import type { LiveChatMessage } from "../../shared/schemas/live-session-chat";
+import type { LiveChatMessage, LiveChatModeration } from "../../shared/schemas/live-session-chat";
 import type { LiveRoomClientMessage, LiveRoomSnapshot } from "../../shared/schemas/live-session-room";
 import { confirmAction } from "../components/ConfirmDialog";
 import { Avatar } from "../ui/Avatar";
@@ -20,9 +20,14 @@ import { IconReactionAdd } from "../ui/MediaIcons";
 import { LiveChatQuote } from "./LiveChatQuote";
 import { Menu, type MenuItem } from "../ui/Menu";
 import { ReactionPicker } from "./ReactionPicker";
-import { LIVE_MODERATION_REASONS } from "../../shared/live-moderation-policy";
-import { liveParticipationBlockLabel } from "../../shared/schemas/live-session-moderation";
-import { liveDoneMenuItem, liveParticipationMenuItems, liveRemoveMenuItem } from "./live-moderation-menu";
+import {
+  LIVE_MODERATION_REASONS,
+  liveModerationReasonLabel,
+  type LiveModerationReason,
+} from "../../shared/live-moderation-policy";
+import { classifierQuestionName } from "../../shared/classifiers";
+import { liveParticipationBlockLabel, type LiveClassifierVerdict } from "../../shared/schemas/live-session-moderation";
+import { liveParticipationMenuItems, liveRemoveMenuItem, liveReviewedMenuItem } from "./live-moderation-menu";
 import { LiveRemovedPost, liveRemovalNote } from "./LiveRemovedPost";
 
 type Viewer = LiveRoomSnapshot["viewer"];
@@ -49,6 +54,7 @@ export function liveChatMessageActions(message: LiveChatMessage, viewer: Viewer,
     hidden: moderation?.hidden != null,
     held: moderation?.held ?? false,
     reported: (moderation?.reports ?? 0) > 0,
+    flaggedByCheck: moderation?.classifier != null,
     reportedByMe: message.reportedByMe ?? false,
     converted: moderation?.questionId != null,
     done: moderation?.done != null,
@@ -62,7 +68,8 @@ export function liveChatMessageActions(message: LiveChatMessage, viewer: Viewer,
 
 function keepLabel(message: LiveChatMessage): string {
   if (message.moderation?.held) return "Keep message";
-  return message.moderation?.hidden ? "Show message" : "Dismiss reports";
+  if (message.moderation?.hidden) return "Show message";
+  return (message.moderation?.reports ?? 0) > 0 ? "Dismiss reports" : "Keep message";
 }
 
 /** The message's menu: the other actions the policy grants, each sent as the room's own command. */
@@ -93,7 +100,7 @@ function menuItems(
         onSelect: () => send({ type: "chat.report", messageId, reason: reason.id }),
       })),
     });
-  if (actions.has("done")) items.push(liveDoneMenuItem(item, false, send));
+  if (actions.has("done")) items.push(liveReviewedMenuItem(item, message.moderation?.done != null, send));
   if (actions.has("convert"))
     items.push({
       id: "convert",
@@ -159,23 +166,58 @@ function menuItems(
 /** What replaces a removed or hidden message's words for the people who still see it. */
 function removedNote(message: LiveChatMessage): string | null {
   if (message.removal) return liveRemovalNote(message.removal);
+  if (message.moderation?.held && message.moderation.classifier?.outcome === "blocked") return "Held for review.";
   if (message.moderation?.hidden) return `Hidden by ${message.moderation.hidden.operatorName}.`;
   return null;
+}
+
+/** The menu items that settle a message under review. */
+const decides = (item: MenuItem) => item.id === "keep" || item.id === "remove";
+/** In a review queue keeping or hiding a message is the review, so the separate reviewed mark stays out. */
+const marksReviewed = (item: MenuItem) => item.id === "reviewed" || item.id === "unreviewed";
+
+/** Why the check flagged it, most certain question first: "Conduct 94%". */
+function checkReason(check: LiveClassifierVerdict): string | null {
+  const top = check.flags?.[0];
+  return top ? `${classifierQuestionName(top.id)} ${formatNumber(Math.round(top.percent))}%` : null;
+}
+
+/** Every raised question with its certainty, then what each tells the author: the tooltip behind the reason. */
+function checkDetail(check: LiveClassifierVerdict): string {
+  return [
+    ...(check.flags ?? []).map(
+      (flag) => `${classifierQuestionName(flag.id)}: ${formatNumber(Math.round(flag.percent))}%`,
+    ),
+    ...check.notes,
+  ].join("\n");
+}
+
+/** The most given report reason, as the reporters chose it. */
+function topReportReason(moderation: LiveChatModeration): string | null {
+  const [reason] = Object.entries(moderation.reportReasons).sort(([, a], [, b]) => (b ?? 0) - (a ?? 0))[0] ?? [];
+  return reason ? liveModerationReasonLabel(reason as LiveModerationReason) : null;
 }
 
 /** Moderators only: what the room knows about the message, in words. */
 function ModerationNote({ message }: { message: LiveChatMessage }) {
   const moderation = message.moderation;
   if (!moderation) return null;
-  const notes: Array<{ text: string; tone: "warn" | "muted" }> = [];
-  if (moderation.held) notes.push({ text: "Held after reports", tone: "warn" });
-  if (moderation.reports > 0)
+  const notes: Array<{ text: string; tone: "warn" | "muted"; title?: string }> = [];
+  const check = moderation.classifier;
+  if (check)
     notes.push({
-      text: `${formatNumber(moderation.reports)} ${moderation.reports === 1 ? "report" : "reports"}`,
+      text: [check.outcome === "blocked" ? "Removed by classifier" : "Flagged by classifier", checkReason(check)]
+        .filter(Boolean)
+        .join(" · "),
       tone: "warn",
+      title: checkDetail(check),
     });
+  const reports = `${formatNumber(moderation.reports)} ${moderation.reports === 1 ? "report" : "reports"}`;
+  if (moderation.held && check?.outcome !== "blocked") notes.push({ text: `Removed · ${reports}`, tone: "warn" });
+  else if (moderation.reports > 0)
+    notes.push({ text: [reports, topReportReason(moderation)].filter(Boolean).join(" · "), tone: "warn" });
   if (moderation.questionId) notes.push({ text: "Asked as a question", tone: "muted" });
-  if (moderation.done) notes.push({ text: "Done", tone: "muted" });
+  if (moderation.done) notes.push({ text: "Reviewed", tone: "muted" });
   if (moderation.authorRestriction)
     notes.push({
       text: `Author ${liveParticipationBlockLabel(moderation.authorRestriction.block).toLowerCase()}`,
@@ -184,7 +226,7 @@ function ModerationNote({ message }: { message: LiveChatMessage }) {
   return notes.length ? (
     <span class="pk-live-chat__notes">
       {notes.map((note) => (
-        <span key={note.text} class="pk-live-chat__note" data-tone={note.tone}>
+        <span key={note.text} class="pk-live-chat__note" data-tone={note.tone} title={note.title}>
           {note.text}
         </span>
       ))}
@@ -208,6 +250,8 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
   handlers = null,
   highlighted = false,
   pinned = false,
+  removed = false,
+  review = false,
 }: {
   message: LiveChatMessage;
   viewer: Viewer;
@@ -224,10 +268,25 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
   highlighted?: boolean;
   /** The message is pinned above the chat. */
   pinned?: boolean;
+  /** Moderation took the message after this reader saw it: only its place stays, without author or words. */
+  removed?: boolean;
+  /** A review queue: the words stay readable, the reason has its own line and the menu opens on Keep and Hide. */
+  review?: boolean;
 }) {
   const [actionError, setActionError] = useState(false);
+  if (removed)
+    return (
+      <li ref={measure} class="pk-live-chat__row" data-trace="">
+        {divider !== null ? (
+          <p class="pk-live-chat__divider" role="separator">
+            {divider}
+          </p>
+        ) : null}
+        <p class="pk-live-chat__trace">Message removed</p>
+      </li>
+    );
   const actions = liveChatMessageActions(message, viewer, pinned);
-  const items = disabled
+  const all = disabled
     ? []
     : menuItems(
         message,
@@ -238,7 +297,16 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
         () => setActionError(false),
         handlers,
       );
-  const canReact = !disabled && actions.has("react");
+  // In a review queue the decisions lead the menu: Keep and Hide first, then pause and the rest.
+  const items = review
+    ? [
+        ...all.filter(decides),
+        ...all
+          .filter((item) => !decides(item) && !marksReviewed(item))
+          .map((item, index) => (index ? item : { ...item, separatorBefore: true })),
+      ]
+    : all;
+  const canReact = !disabled && !review && actions.has("react");
   const reactions = LIVE_CHAT_REACTIONS.filter((reaction) => (message.reactions?.[reaction.id] ?? 0) > 0);
   const time = formatClockInZone(message.sentAt, timeZone);
   return (
@@ -273,10 +341,11 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
               Edited
             </span>
           ) : null}
-          <ModerationNote message={message} />
+          {review ? null : <ModerationNote message={message} />}
         </div>
+        {review ? <ModerationNote message={message} /> : null}
         {message.replyTo ? <LiveChatQuote quote={message.replyTo} onJump={handlers?.jump} /> : null}
-        {removedNote(message) ? (
+        {removedNote(message) && !review ? (
           <LiveRemovedPost note={removedNote(message)!}>
             <Markdown markdown={message.text} profile="chat" className="pk-live-chat__text" />
           </LiveRemovedPost>
@@ -313,7 +382,7 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
         ) : null}
       </div>
       {items.length || canReact ? (
-        <span class="pk-live-chat__menu">
+        <span class="pk-live-chat__menu" data-review={review ? "" : undefined}>
           {canReact ? (
             <ReactionPicker
               label={`React to message from ${message.authorName} at ${time}`}

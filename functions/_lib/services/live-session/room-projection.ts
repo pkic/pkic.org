@@ -94,7 +94,17 @@ export function projectLiveQuestion(
     addressedTo: row.addressed_to,
     // Nobody but moderators can tell a prepared question from an asked one.
     prepared: operator && row.prepared === 1,
+    ...(operator && row.check_outcome ? { classifier: { outcome: row.check_outcome, notes: checkNotes(row) } } : {}),
   };
+}
+
+function checkNotes(row: LiveQuestionRow): string[] {
+  try {
+    const parsed: unknown = JSON.parse(row.check_notes_json ?? "[]");
+    return Array.isArray(parsed) ? parsed.filter((note): note is string => typeof note === "string") : [];
+  } catch {
+    return [];
+  }
 }
 
 function authorRestriction(row: LiveQuestionRow): LiveParticipationRestriction | null {

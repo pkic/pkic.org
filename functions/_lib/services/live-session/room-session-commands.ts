@@ -82,7 +82,13 @@ export class LiveSessionCommands {
       case "question.answer.accept":
       case "question.answer.vote":
       case "question.answer.hide":
-        return this.questionCommands.handle(viewer, actor, message, socket, asking);
+        return this.questionCommands.handle(
+          viewer,
+          actor,
+          message,
+          socket,
+          () => operator || liveRoomTakesQuestions(Date.now(), session.endAt, this.store.opening()),
+        );
       case "question.vote":
         return asking ? this.questions.vote(actor.userId, message.questionId, message.voted) : REFUSALS.questionsClosed;
       case "reaction.send":

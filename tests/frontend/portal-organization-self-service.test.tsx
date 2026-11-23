@@ -295,7 +295,10 @@ describe("portal organization self-service", () => {
 
     // The request is checked against the canonical contract rather than
     // against a literal copy of what the component just sent.
-    expect(organizationContentReviewCreateSchema.parse(submissions[0])).toEqual({ slogan: "Trust, made routine" });
+    expect(organizationContentReviewCreateSchema.parse(submissions[0])).toEqual({
+      slogan: "Trust, made routine",
+      adviceAcknowledged: false,
+    });
 
     const alert = container.querySelector('[role="alert"]');
     expect(alert?.textContent).toContain("You don't have access to this");

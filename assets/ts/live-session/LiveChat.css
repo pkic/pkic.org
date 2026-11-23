@@ -133,6 +133,22 @@
   .pk-live-chat__quote[data-removed] {
     font-style: italic;
   }
+  /* Where moderation took a message this reader saw: one quiet line in the words' column, nobody named. */
+  /* A message moderation took: a row of its own, as tall as a byline, so it never reads as part of the one above. */
+  .pk-live-chat__trace {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    min-block-size: var(--pk-avatar-size);
+    margin: var(--pk-1) 0 0;
+    padding-inline-start: calc(var(--pk-avatar-size) + var(--pk-2));
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+    font-style: italic;
+  }
+  .pk-live-chat__row[data-trace]:hover {
+    background: none;
+  }
   button.pk-live-chat__quote {
     cursor: pointer;
   }
@@ -184,6 +200,11 @@
   .pk-live-chat__row:hover .pk-live-chat__menu,
   .pk-live-chat__row:focus-within .pk-live-chat__menu {
     opacity: 1;
+  }
+  /* A review row's menu holds its decision: always at full strength, never only on hover. */
+  .pk-live-chat__menu[data-review] {
+    opacity: 1;
+    align-items: center;
   }
   @media (hover: none) {
     .pk-live-chat__menu {

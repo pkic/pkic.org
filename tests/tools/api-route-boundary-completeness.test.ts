@@ -13,6 +13,7 @@ const APPROVED_API_ROOTS = new Set([
   "audit-log",
   "auth",
   "calendar",
+  "classifiers",
   "donations",
   "email",
   "events",

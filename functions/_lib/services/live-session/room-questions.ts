@@ -22,6 +22,8 @@ import type { LiveControlOutcome, LiveRefusal, LiveRoomControls } from "./room-c
 import type { LiveQuestionAddressee } from "./room-question-rows";
 import type { LiveRoomStore } from "./room-store";
 import type { LiveChatQuestion } from "./location-chat-on-air";
+import type { LiveClassifierVerdict } from "../../../../assets/shared/schemas/live-session-moderation";
+import type { ClassifierRun } from "../classifiers/model";
 
 type Handled = LiveRefusal | void;
 type Actor = { userId: string; name: string };
@@ -55,6 +57,16 @@ export const LIVE_QUESTION_REFUSALS = {
 } satisfies Record<string, LiveRefusal>;
 const REFUSALS = LIVE_QUESTION_REFUSALS;
 
+/** Whether the author may still change the words of their own question, as it stands now. */
+function editableByAuthor(question: NonNullable<ReturnType<LiveRoomStore["question"]>>): boolean {
+  return canEditOwnLiveQuestion({
+    mine: true,
+    status: question.status,
+    reviewed: question.moderated_at !== null || question.rewrite_text !== null,
+    withdrawn: false,
+  });
+}
+
 /**
  * The person a question is for: one of the session's speakers or its
  * moderator, read from its current credits, which every viewer holds and
@@ -75,6 +87,13 @@ export function resolveLiveQuestionAddressee(
  * changes the room's storage synchronously, audits staff decisions, and
  * tells every viewer what they may now see.
  */
+/** A question's check: the flag moderators see, and the whole run kept for tuning; neither when none ran. */
+interface QuestionCheck {
+  flag: LiveClassifierVerdict | null;
+  run: ClassifierRun | null;
+}
+const NOT_CHECKED: QuestionCheck = { flag: null, run: null };
+
 export class LiveRoomQuestions {
   constructor(
     private readonly store: LiveRoomStore,
@@ -83,6 +102,8 @@ export class LiveRoomQuestions {
     private readonly authors: LiveRoomAuthors,
     private readonly decisions: LiveRoomModerationStore,
     private readonly hooks: {
+      /** Runs the classifier of a question's words; null when no check runs. */
+      checked: (text: string) => Promise<ClassifierRun | null>;
       /** Takes one of the person's questions from their sliding allowance, or refuses. */
       allowed: (userId: string) => boolean;
       /** The durable copy is due. */
@@ -118,7 +139,7 @@ export class LiveRoomQuestions {
     actor: Actor,
     input: { text: string; anonymous: boolean; addressedTo: string | null },
     operationId: string,
-    open: boolean,
+    open: () => boolean,
   ): Promise<LiveRefusal | { questionId: string }> {
     const { text, anonymous, addressedTo } = input;
     const room = this.store.session();
@@ -142,7 +163,7 @@ export class LiveRoomQuestions {
     };
     const existing = replay();
     if (existing) return existing;
-    if (!open) return REFUSALS.closed;
+    if (!open()) return REFUSALS.closed;
     const addressee = resolveLiveQuestionAddressee(room.session, addressedTo);
     if (addressee && "code" in addressee) return addressee;
     const stamp = await this.authors.writing(viewer);
@@ -153,6 +174,13 @@ export class LiveRoomQuestions {
       return LIVE_PARTICIPATION_REFUSAL;
     if (this.store.questionCount() >= LIVE_ROOM_POLICY.maxQuestionsPerRoom) return REFUSALS.full;
     if (!this.hooks.allowed(actor.userId)) return REFUSALS.tooFast;
+    const check = viewer.role === "operator" ? NOT_CHECKED : await this.check(text);
+    if ("code" in check) return check;
+    // The check yields: another invocation may have accepted this request meanwhile.
+    const checked = replay();
+    if (checked) return checked;
+    if (!open()) return REFUSALS.closed;
+    if (this.store.questionCount() >= LIVE_ROOM_POLICY.maxQuestionsPerRoom) return REFUSALS.full;
     this.store.addQuestion({
       id,
       authorUserId: actor.userId,
@@ -163,6 +191,8 @@ export class LiveRoomQuestions {
       authorPhotoUrl: viewer.photoUrl ?? null,
       addressee,
     });
+    if (check.flag) this.store.questionChecks.flag(id, check.flag);
+    if (check.run) this.store.questionChecks.record(id, check.run, nowIso());
     this.authors.recordQuestion(id, stamp);
     await this.broadcast.question(id);
     this.hooks.listed();
@@ -173,7 +203,7 @@ export class LiveRoomQuestions {
   async changeAuthorQuestion(
     actor: Actor,
     input: Extract<LiveRoomClientMessage, { type: "question.edit" | "question.withdraw" }>,
-    open: boolean,
+    open: () => boolean,
   ): Promise<LiveRefusal | { questionId: string; revision: number }> {
     const question = this.store.question(input.questionId);
     if (!question) return REFUSALS.missing;
@@ -189,17 +219,18 @@ export class LiveRoomQuestions {
     if (question.author_revision !== input.expectedRevision) return REFUSALS.changed;
     if (question.author_withdrawn) return REFUSALS.withdrawn;
     if (input.type === "question.edit") {
-      if (!open) return REFUSALS.closed;
-      if (
-        !canEditOwnLiveQuestion({
-          mine: true,
-          status: question.status,
-          reviewed: question.moderated_at !== null || question.rewrite_text !== null,
-          withdrawn: false,
-        })
-      )
-        return REFUSALS.notEditable;
+      if (!open()) return REFUSALS.closed;
+      if (!editableByAuthor(question)) return REFUSALS.notEditable;
       if (!this.hooks.allowed(actor.userId)) return REFUSALS.tooFast;
+    }
+    const check = input.type === "question.edit" ? await this.check(input.text) : NOT_CHECKED;
+    if ("code" in check) return check;
+    if (input.type === "question.edit" && !open()) return REFUSALS.closed;
+    if (input.type === "question.edit") {
+      // The check yields: a moderator may have approved the question meanwhile.
+      const current = this.store.question(question.id);
+      if (current?.author_revision !== question.author_revision) return REFUSALS.changed;
+      if (!editableByAuthor(current)) return REFUSALS.notEditable;
     }
     const at = nowIso();
     const revision = question.author_revision + 1;
@@ -213,6 +244,10 @@ export class LiveRoomQuestions {
       basis_revision: input.expectedRevision,
       changed_at: at,
     });
+    if (input.type === "question.edit") {
+      this.store.questionChecks.flag(question.id, check.flag);
+      this.store.questionChecks.record(question.id, check.run, at);
+    }
     await this.broadcast.question(question.id);
     this.hooks.listed();
     const withdrawalActor = question.anonymous === 1 ? { ...actor, name: "Anonymous" } : actor;
@@ -221,6 +256,23 @@ export class LiveRoomQuestions {
         await this.broadcast.all(message);
     await this.hooks.changed();
     return { questionId: question.id, revision };
+  }
+
+  /**
+   * The classifier of a question's words before it is taken: a blocked question is refused with what the
+   * check's settings tell its author; an advised one is taken and flagged for moderators. Questions wait for a
+   * moderator in any case, so a check that cannot run lets the question in unflagged.
+   */
+  private async check(text: string): Promise<QuestionCheck | LiveRefusal> {
+    const run = await this.hooks.checked(text);
+    const outcome = run?.verdict.outcome;
+    if (outcome === "blocked")
+      return {
+        code: "LIVE_QUESTION_REFUSED_BY_CHECK",
+        message: run!.verdict.flags.find((flag) => flag.blocking)?.message ?? "This question cannot be asked here.",
+      };
+    const flag = outcome === "advised" ? { outcome, notes: run!.verdict.flags.map((item) => item.message) } : null;
+    return { flag, run };
   }
 
   async vote(userId: string, questionId: string, voted: boolean): Promise<Handled> {

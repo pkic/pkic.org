@@ -16,6 +16,7 @@ import { FormSection } from "../../../../../../../ui/FormSection";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../../ui/Panel";
 import { Select, TextInput, Textarea } from "../../../../../../../ui/TextControl";
 import { EVENT_TICKET_STARTERS } from "../../../../../../../../shared/event-ticket-starters";
+import { DEFAULT_CLASSIFIER_THRESHOLD } from "../../../../../../../../shared/event-tickets";
 import { ticketsEndpoint } from "./tickets-endpoint";
 
 export function TicketTypeEditor({
@@ -38,7 +39,9 @@ export function TicketTypeEditor({
   const [key, setKey] = useState(type?.key ?? "");
   const [description, setDescription] = useState(type?.descriptionMarkdown ?? "");
   const [classifier, setClassifier] = useState(type?.classifierDescription ?? "");
-  const [threshold, setThreshold] = useState(String(type?.classifierThresholdPercent ?? 85));
+  const [threshold, setThreshold] = useState(
+    String(type?.classifierThresholdPercent ?? Math.round(DEFAULT_CLASSIFIER_THRESHOLD * 100)),
+  );
   const [isDefault, setIsDefault] = useState(type?.isDefault ?? firstTicket);
   const [workEmail, setWorkEmail] = useState(type?.freeRequiresWorkEmail ?? false);
   const [active, setActive] = useState(type?.active ?? true);

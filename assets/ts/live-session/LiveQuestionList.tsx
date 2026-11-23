@@ -186,6 +186,11 @@ export function LiveQuestionList({
                 />
                 {addressee(question) ? <span>For {addressee(question)}</span> : null}
                 {question.prepared ? <span>Prepared</span> : null}
+                {question.classifier ? (
+                  <Badge tone="danger" description={question.classifier.notes.join(" ")}>
+                    Flagged by classifier
+                  </Badge>
+                ) : null}
                 {question.anonymous && question.authorName ? <span>Anonymous to attendees</span> : null}
                 {question.withdrawn ? (
                   <span>Withdrawn</span>

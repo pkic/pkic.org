@@ -93,4 +93,37 @@ describe("canonical live room supporting controls", () => {
     state = applyLocationChatMessage(state, { type: "chat.removed", messageId: publicId, channel: "operator" })!;
     expect(state.chat.some((row) => row.id === publicId)).toBe(true);
   });
+  it("keeps a nameless trace of a message moderation took, and gives it back when the room does", () => {
+    const id = crypto.randomUUID();
+    const message = {
+      channel: "attendee" as const,
+      id,
+      text: "Buy now at example.test",
+      authorName: "Synthetic attendee",
+      mine: false,
+      sentAt: new Date().toISOString(),
+    };
+    let state = applyLocationChatMessage(null, liveLocationChatSnapshot())!;
+    state = applyLocationChatMessage(state, { type: "chat.message", message })!;
+    state = applyLocationChatMessage(state, {
+      type: "chat.removed",
+      messageId: id,
+      channel: "attendee",
+      moderated: true,
+    })!;
+    expect(state.chatRemoved).toEqual([id]);
+    expect(state.chat.find((row) => row.id === id)).toMatchObject({ authorName: "", text: "", mine: false });
+    state = applyLocationChatMessage(state, { type: "chat.message", message })!;
+    expect(state.chatRemoved).toEqual([]);
+    expect(state.chat.find((row) => row.id === id)).toMatchObject({ text: message.text });
+    state = applyLocationChatMessage(state, { type: "chat.removed", messageId: id, channel: "attendee" })!;
+    expect(state.chat.some((row) => row.id === id)).toBe(false);
+    state = applyLocationChatMessage(state, {
+      type: "chat.removed",
+      messageId: id,
+      channel: "attendee",
+      moderated: true,
+    })!;
+    expect(state.chatRemoved).toEqual([]);
+  });
 });

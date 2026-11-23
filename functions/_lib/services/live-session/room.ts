@@ -24,6 +24,7 @@ import type { z } from "zod";
 import type { liveProgramSelectSchema } from "../../../../assets/shared/schemas/live-room-program";
 import { LiveRoomChat, type LiveChatArchiveRow } from "./room-chat";
 import { liveChatErasable, purgeLiveRoom } from "./room-purge";
+import { LiveRoomClassifiers } from "./room-classifiers";
 import { LiveRoomChatActions } from "./room-chat-actions";
 import { LiveChatFeed } from "./room-chat-feed";
 import { LiveChatModerationStore } from "./room-chat-moderation";
@@ -71,6 +72,8 @@ const REFUSALS = {
   readOnly: { code: "LIVE_ROOM_READ_ONLY", message: "This connection can only watch the room." },
   invalid: { code: "LIVE_ROOM_INVALID_MESSAGE", message: "The room could not read that request." },
 } satisfies Record<string, LiveRefusal>;
+
+const copyDue = (): number => Date.now() + LIVE_ROOM_POLICY.durableCopyDelaySeconds * 1000;
 
 /** Who the room names when it clears something on a person's erasure rather than an operator's action. */
 const ERASURE = { userId: "", name: "Privacy erasure" };
@@ -125,6 +128,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     this.pollStore = new LivePollStore(this.sql);
     const preparedStore = new LivePreparedQuestionStore(this.sql);
     this.chat = new LiveRoomChat(this.sql);
+    const classifiers = new LiveRoomClassifiers(this.sessionEnv, this.store, this.location);
     this.decisions = new LiveRoomModerationStore(this.sql);
     this.access = new LiveRoomAccessLease(
       ctx,
@@ -192,17 +196,19 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       this.store,
       this.broadcast,
       this.authors,
+      classifiers,
       {
-        tickerChanged: async () => this.locationChat.onAirChanged(),
-        listed: () => this.locationChat.onAirChanged(),
+        onAirChanged: () => this.locationChat.onAirChanged(),
         stamp: () => this.location.stamp(Date.now()),
         checkWrite: (viewer, occurrenceId) => this.locationChat.checkWrite(viewer, occurrenceId),
         ask: (question, by, at, sentDuring) => this.locationChat.ask(question, by, at, sentDuring),
         audited: () => this.scheduleCopy(),
         counted: () => this.scheduleCopy(),
+        participationChanged: (userId) => this.participation.changed(userId),
       },
     );
     this.questions = new LiveRoomQuestions(this.store, this.broadcast, this.controls, this.authors, this.decisions, {
+      checked: (text) => classifiers.run("question", text),
       allowed: (userId) => this.store.takeQuestionWriteAllowance(userId, nowIso()),
       changed: () => this.scheduleCopy(),
       listed: () => this.graphics.lists.due(),
@@ -462,7 +468,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       access: this.access,
       refreshGraphics: () => this.graphics.refresh(),
       preparedQuestions: this.preparedQuestions,
-      copyDue: () => this.copyDue(),
+      copyDue,
       purge: () => this.purge(),
     });
   }
@@ -505,7 +511,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     for (const questionId of recounted) await this.broadcast.question(questionId);
     for (const pollId of polls) await this.broadcast.poll(pollId);
     if (removed.length || recounted.length || chat.length) this.graphics.lists.due();
-    if (this.store.hasPendingCopy() || this.location.pendingCopy()) await this.scheduleAlarm(this.copyDue(), true);
+    if (this.store.hasPendingCopy() || this.location.pendingCopy()) await this.scheduleAlarm(copyDue(), true);
   }
 
   /** The attendee chat the room still holds, oldest first, for the event's chat download; anonymized people's posts leave it first. */
@@ -525,10 +531,6 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     return true;
   }
 
-  private copyDue(): number {
-    return Date.now() + LIVE_ROOM_POLICY.durableCopyDelaySeconds * 1000;
-  }
-
   /** Sets the alarm to `at` unless one is already due sooner (or, when not `sooner`, already set at all). */
   private async scheduleAlarm(at: number, sooner: boolean): Promise<void> {
     const current = await this.ctx.storage.getAlarm();
@@ -536,7 +538,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
   }
 
   private async scheduleCopy(): Promise<void> {
-    await this.scheduleAlarm(this.copyDue(), true);
+    await this.scheduleAlarm(copyDue(), true);
   }
 
   /** The session is a week over: erase the room, or all but the chat its event keeps longer. */

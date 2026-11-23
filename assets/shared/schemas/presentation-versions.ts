@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { classifierResultSchema } from "./classifiers.ts";
 import { databaseIdSchema } from "./identifiers.ts";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination.ts";
 
@@ -41,6 +42,8 @@ export const presentationVersionSchema = z.object({
   isCurrent: z.boolean(),
   deletedAt: z.string().nullable(),
   latestReview: presentationVersionReviewSchema.nullable(),
+  /** Organizers only: the classifier of the slides; null while it has not run yet. */
+  classifier: classifierResultSchema.nullable().optional(),
 });
 
 export const presentationVersionsResponseSchema = paginatedResponseSchema("versions", presentationVersionSchema);

@@ -8,6 +8,7 @@ import { ALL_PERSONAS, ALL_PERSONA_KEYS, onlyPersona } from "./personas/catalog"
 import type { Permission } from "../assets/shared/schemas/permissions";
 import { personaRequest, seedPersona, type SeededPersona } from "./personas/seed";
 import { TEST_GROUPS } from "./helpers/voting";
+import { CLASSIFIER_KINDS } from "../assets/shared/classifiers";
 import { seedEventAndAdmin } from "./helpers/context";
 
 /**
@@ -47,9 +48,11 @@ function fillPath(path: string): string | null {
       ? ABSENT_DOMAIN
       : name === "batchId"
         ? ABSENT_UUID
-        : /slug|key|purpose|body|token/i.test(name)
-          ? ABSENT_SLUG
-          : ABSENT_ID,
+        : name === "kind"
+          ? CLASSIFIER_KINDS[0]
+          : /slug|key|purpose|body|token/i.test(name)
+            ? ABSENT_SLUG
+            : ABSENT_ID,
   );
   return filled.includes("{") ? null : filled;
 }
@@ -167,6 +170,53 @@ describe("declared permissions are enforced", () => {
         }
       }
       expect(refused).toEqual([]);
+    },
+    ROUTE_SWEEP_TIMEOUT_MS,
+  );
+
+  it(
+    "guards the event classifier routes on a real event, not just an absent one",
+    async () => {
+      // The generic sweep calls these with an absent slug, so the event lookup answers 404 before the permission
+      // guard runs. Here the event exists, so a 403 can only come from the guard.
+      const base = `/api/v1/events/pqc-2026/classifiers/${CLASSIFIER_KINDS[0]}`;
+      const additions = JSON.stringify({ expectedRevision: 0, context: "", questions: [], disabledQuestionIds: [] });
+      const trial = JSON.stringify({
+        text: "Sample text.",
+        model: "clef-flash",
+        context: "",
+        questions: [
+          {
+            id: "spam",
+            kind: "flag",
+            question: "Is it spam?",
+            adviseAtPercent: 50,
+            blockAtPercent: null,
+            message: "No.",
+          },
+        ],
+      });
+      const requests: [string, () => RequestInit, string][] = [
+        ["GET", () => ({}), base],
+        ["PUT", () => ({ method: "PUT", body: additions }), base],
+        ["POST", () => ({ method: "POST", body: trial }), `${base}/trials`],
+      ];
+      const reader = await seedPersona(env.DB, onlyPersona("events:read"), {
+        groupId: TEST_GROUPS.pqc,
+        eventId: sweepEventId,
+      });
+      const refused: string[] = [];
+      for (const [method, init, path] of requests) {
+        const outsiderStatus = (await call(personaRequest(outsider, path, init()))).status;
+        if (outsiderStatus !== 403) refused.push(`${method} ${path} outsider -> ${outsiderStatus}`);
+        const anonymousStatus = (await call(personaRequest(anonymous, path, init()))).status;
+        if (anonymousStatus !== 401) refused.push(`${method} ${path} anonymous -> ${anonymousStatus}`);
+      }
+      expect(refused).toEqual([]);
+      // Reading needs events:read; changing and trying need events:write, which the reader lacks.
+      expect((await call(personaRequest(reader, base))).status).toBe(200);
+      for (const [, init, path] of requests.slice(1))
+        expect((await call(personaRequest(reader, path, init()))).status).toBe(403);
     },
     ROUTE_SWEEP_TIMEOUT_MS,
   );

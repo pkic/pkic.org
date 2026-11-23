@@ -45,7 +45,10 @@ export const organizationMemberProfileGetRouteSchema = {
   },
 };
 
-export const organizationContentReviewCreateSchema = organizationEditableContentSchema;
+export const organizationContentReviewCreateSchema = organizationEditableContentSchema.extend({
+  /** The contact saw the classifier's advice and submits as written; only a block still refuses. */
+  adviceAcknowledged: z.boolean().default(false),
+});
 export const organizationContentReviewCreateResponseSchema = z.object({ review: organizationContentReviewSchema });
 export const organizationContentReviewCreateRouteSchema = {
   tags: ["Organizations"],
@@ -65,7 +68,10 @@ export const organizationContentReviewCreateRouteSchema = {
     "403": { description: "An organization contact is required." },
     "404": { description: "The organization is not bound to the active membership." },
     "409": { description: "A submission is already pending or authorization changed." },
-    "422": { description: "No editable fields were submitted." },
+    "422": {
+      description:
+        "No editable fields were submitted, or the classifier blocks the text or advises on it: the contact submits again with adviceAcknowledged to send it as written.",
+    },
   },
 };
 
