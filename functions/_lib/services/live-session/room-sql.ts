@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS question_rewrites (
 CREATE TABLE IF NOT EXISTS question_addressees (question_id TEXT PRIMARY KEY, credit_key TEXT NOT NULL, user_id TEXT);
 CREATE TABLE IF NOT EXISTS question_prepared (question_id TEXT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS question_checks (question_id TEXT PRIMARY KEY, outcome TEXT NOT NULL, notes_json TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS question_check_results (question_id TEXT PRIMARY KEY, run_json TEXT, at TEXT NOT NULL, change_seq INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS prepared_questions (
   id TEXT PRIMARY KEY, body TEXT NOT NULL, addressed_to_credit_key TEXT, addressed_to_user_id TEXT,
   release_at TEXT NOT NULL, created_by_user_id TEXT NOT NULL, created_by_name TEXT NOT NULL,

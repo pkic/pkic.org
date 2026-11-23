@@ -52,7 +52,7 @@ import {
   type LiveQuestionAuthorChangeRow,
   type LiveQuestionRow,
 } from "./room-question-rows";
-import type { LiveAutomaticCheck } from "../../../../assets/shared/schemas/live-session-moderation";
+import { LiveQuestionCheckStore, type LiveQuestionCheckCopyRow } from "./room-question-checks";
 
 export interface LiveStaffActionRow {
   seq: number;
@@ -71,6 +71,8 @@ export interface LiveRoomPendingCopy {
   polls: LivePollCopy[];
   reactions: Array<{ reaction: string; total: number }>;
   answers: LiveAnswerCopyRow[];
+  /** What the check found for each question's current words; a null run means the new words went unchecked. */
+  questionChecks: LiveQuestionCheckCopyRow[];
   staffActions: LiveStaffActionRow[];
 }
 
@@ -93,7 +95,11 @@ const EMPTY_QUEUE: LiveQueue = { question: [], "lower-third": [], poll: [], chan
 
 /** The room's session, questions, reactions, controls and the bookkeeping of its durable copy. */
 export class LiveRoomStore {
-  constructor(private readonly sql: LiveRoomSql) {}
+  readonly questionChecks: LiveQuestionCheckStore;
+
+  constructor(private readonly sql: LiveRoomSql) {
+    this.questionChecks = new LiveQuestionCheckStore(sql);
+  }
 
   d1ReadBookmark(): string | null {
     return (
@@ -263,21 +269,6 @@ export class LiveRoomStore {
     );
   }
 
-  /** The automatic check's flag on a question's current words; null clears it. */
-  flagQuestion(questionId: string, check: LiveAutomaticCheck | null): void {
-    if (!check) {
-      this.sql.exec("DELETE FROM question_checks WHERE question_id = ?", questionId);
-      return;
-    }
-    this.sql.exec(
-      `INSERT INTO question_checks(question_id, outcome, notes_json) VALUES (?, ?, ?)
-       ON CONFLICT(question_id) DO UPDATE SET outcome = excluded.outcome, notes_json = excluded.notes_json`,
-      questionId,
-      check.outcome,
-      JSON.stringify(check.notes),
-    );
-  }
-
   moderate(questionId: string, status: LiveQuestionStatus, by: { userId: string; name: string }, at: string): void {
     this.sql.exec(
       `UPDATE questions SET status = ?, answered_at = CASE WHEN ? = 'answered' THEN ? ELSE NULL END,
@@ -344,10 +335,11 @@ export class LiveRoomStore {
       "DELETE FROM question_prepared WHERE question_id IN (SELECT id FROM questions WHERE author_user_id=?)",
       userId,
     );
-    this.sql.exec(
-      "DELETE FROM question_checks WHERE question_id IN (SELECT id FROM questions WHERE author_user_id=?)",
-      userId,
-    );
+    for (const table of ["question_checks", "question_check_results"])
+      this.sql.exec(
+        `DELETE FROM ${table} WHERE question_id IN (SELECT id FROM questions WHERE author_user_id=?)`,
+        userId,
+      );
     this.sql.exec("DELETE FROM question_write_times WHERE user_id=?", userId);
     this.sql.exec("DELETE FROM questions WHERE author_user_id = ?", userId);
     for (const id of recounted) this.recountQuestion(id);
@@ -581,6 +573,7 @@ export class LiveRoomStore {
          WHERE change.change_seq > ? ORDER BY change.change_seq`,
         copiedSeq,
       ),
+      questionChecks: this.questionChecks.copyable(copiedSeq),
       staffActions,
     };
   }
