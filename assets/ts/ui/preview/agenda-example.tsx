@@ -1,6 +1,9 @@
 import { ContentAgenda } from "../../site/ContentAgenda";
+import { ProductionPartners } from "../../site/ProductionPartners";
 import { eventParticipationLink } from "../../../shared/event-participation-link";
 import type { ContentAgendaDay } from "../../../shared/site-agenda";
+import type { EventProductionPartnerCredit } from "../../../shared/schemas/event-production-partners";
+import { PARTNERS } from "./partner-credits";
 import type { PreviewSection } from "./PreviewShell";
 
 const agendaDays: ContentAgendaDay[] = ["2025-12-01", "2025-12-02"].map((date, index) => ({
@@ -79,15 +82,26 @@ const agendaDays: ContentAgendaDay[] = ["2025-12-01", "2025-12-02"].map((date, i
   ],
 }));
 
-export function AgendaExample({ compact = false, focusLocation }: { compact?: boolean; focusLocation?: string }) {
+export function AgendaExample({
+  compact = false,
+  focusLocation,
+  partners,
+}: {
+  compact?: boolean;
+  focusLocation?: string;
+  partners?: readonly EventProductionPartnerCredit[];
+}) {
   return (
-    <ContentAgenda
-      days={agendaDays}
-      speakers={[]}
-      timeZone="Europe/Amsterdam"
-      compact={compact}
-      focusLocation={focusLocation}
-    />
+    <>
+      <ContentAgenda
+        days={agendaDays}
+        speakers={[]}
+        timeZone="Europe/Amsterdam"
+        compact={compact}
+        focusLocation={focusLocation}
+      />
+      {partners && <ProductionPartners partners={partners} />}
+    </>
   );
 }
 
@@ -141,7 +155,8 @@ export const agendaSections: PreviewSection[] = [
   {
     id: "agenda",
     title: "Agenda",
-    render: () => <AgendaExample />,
+    note: "A public agenda page credits the event's production partners under the agenda, as the virtual room does under its stream.",
+    render: () => <AgendaExample partners={PARTNERS} />,
   },
   {
     id: "agenda-mine",

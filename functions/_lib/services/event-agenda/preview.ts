@@ -12,6 +12,7 @@ import { publicAgendaProjection } from "./public-projection";
 import { withSpeakerProfileSlugs } from "../people/profile-addresses";
 import { withSessionPageSlugs } from "./session-page-slugs";
 import { withAgendaSpeakerOrganizations } from "./speaker-organizations";
+import { decodeEventProductionPartners, eventProductionPartnersJsonSql } from "../events/production-partners";
 
 /**
  * Read-only: public rendering never activates or approves the draft being reviewed.
@@ -29,7 +30,13 @@ export async function previewAgenda(
     visibility: string;
     city: string | null;
     country: CountryCode | null;
-  }>(db, "SELECT base_path,visibility,city,country FROM events WHERE id=?", [eventId]);
+    production_partners_json: string | null;
+  }>(
+    db,
+    `SELECT base_path,visibility,city,country,${eventProductionPartnersJsonSql("events")} AS production_partners_json
+       FROM events WHERE id=?`,
+    [eventId],
+  );
   let snapshot: AgendaSnapshot;
   if (revision === "approved") {
     const frozen = await first<{ snapshot_json: string }>(
@@ -61,6 +68,7 @@ export async function previewAgenda(
             visibility: event?.visibility ?? "invitation_only",
             city: event?.city ?? null,
             country: event?.country ?? null,
+            productionPartners: decodeEventProductionPartners(event?.production_partners_json),
           },
           privateOccurrenceIds,
         ),

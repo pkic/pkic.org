@@ -10,6 +10,7 @@ import { applyApprovedAgenda } from "./site-approved-agenda";
 import { normalizeLinks } from "../../../assets/shared/schemas/links";
 import { renderToStringAsync as render } from "preact-render-to-string";
 import { ContentAgenda } from "../../../assets/ts/site/ContentAgenda";
+import { ProductionPartners } from "../../../assets/ts/site/ProductionPartners";
 import type { ContentComponentContext } from "./site-components";
 import { conferenceLocation } from "./site-conference-location";
 import { publishedConferenceProgram } from "./site-conference-program";
@@ -48,6 +49,7 @@ export async function renderContentAgenda(
           {...context.agendaRoute}
           fragmentNavigation
         />
+        <ProductionPartners partners={approved.productionPartners ?? []} />
       </>,
     );
   }

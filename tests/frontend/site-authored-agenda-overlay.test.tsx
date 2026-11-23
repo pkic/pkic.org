@@ -4,8 +4,17 @@ import { renderContentAgenda } from "../../functions/_lib/services/site-agenda";
 import { approvedAgendaSnapshot, approvedAgendaPublication } from "../fixtures/approved-agenda";
 
 describe("original authored event-root agenda overlay", () => {
-  it("renders the approved canonical cards and retained anchors without rendering ownership evidence", async () => {
+  it("renders the approved canonical cards, retained anchors and partner credits without ownership evidence", async () => {
     const agenda = structuredClone(approvedAgendaSnapshot);
+    agenda.productionPartners = [
+      {
+        role: "Camera Technology Provider",
+        organizationId: "northlight",
+        name: "Northlight",
+        website: "https://northlight.example.test/",
+        logoUrl: "/api/v1/members/northlight/logo?v=1",
+      },
+    ];
     agenda.occurrences[0]!.publicAnchor = "approved-native-anchor";
     agenda.occurrences[0]!.history!.legacyFragments.push({
       anchor: "original-authored-anchor",
@@ -55,6 +64,11 @@ describe("original authored event-root agenda overlay", () => {
     expect(host.querySelectorAll(".pk-content-agenda")).toHaveLength(1);
     expect(host.querySelector('[id="approved-native-anchor"]')).not.toBeNull();
     expect(host.querySelector('[id="original-authored-anchor"]')).not.toBeNull();
+    // The event's production partners are credited under the agenda, as in the virtual room.
+    const partner = host.querySelector('.pk-content-agenda + section[aria-label="Production partners"] li');
+    expect(partner?.firstElementChild?.textContent).toBe("Camera Technology Provider");
+    expect(partner?.querySelector("img")?.getAttribute("alt")).toBe("Northlight");
+    expect(partner?.querySelector("a")?.getAttribute("href")).toBe("https://northlight.example.test/");
     expect(html).not.toContain("content/events/");
     expect(html).not.toContain("a".repeat(64));
   });

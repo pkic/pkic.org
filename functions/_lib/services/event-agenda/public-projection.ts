@@ -10,6 +10,7 @@ import { eventPublishesPages } from "../../../../assets/shared/public-agenda-pag
 import { eventClockCity } from "../../../../assets/shared/event-clock";
 import type { EventVisibility } from "../../../../assets/shared/schemas/event-series";
 import type { EventPlace } from "../../../../assets/shared/event-place";
+import type { EventProductionPartnerCredit } from "../../../../assets/shared/schemas/event-production-partners";
 
 /**
  * Exact document projection shared by authenticated previews and static publication extraction.
@@ -18,7 +19,11 @@ import type { EventPlace } from "../../../../assets/shared/event-place";
  */
 export function publicAgendaProjection(
   approved: AgendaSnapshot,
-  event: { basePath: string | null; visibility: EventVisibility | string } & EventPlace,
+  event: {
+    basePath: string | null;
+    visibility: EventVisibility | string;
+    productionPartners?: readonly EventProductionPartnerCredit[];
+  } & EventPlace,
   privateOccurrenceIds: ReadonlySet<string> = new Set(),
 ): AgendaSnapshot {
   const basePath = event.basePath;
@@ -37,6 +42,8 @@ export function publicAgendaProjection(
     // Live like the pages: the clock is named by the city the event is in now.
     clockCity: eventClockCity(event.city),
     eventPlace: { city: eventClockCity(event.city), country: event.country },
+    // Live like the place: the partners the event credits now, with their organizations' current branding.
+    productionPartners: [...(event.productionPartners ?? [])],
     // Draft proposal selections are removed below, so only approved appearances keep an organization.
     speakerOrganizations: retainedSpeakerOrganizations(approved.speakerOrganizations, occurrences),
     // A location's virtual-room link is as private as a session's own; sessions expose only its availability.

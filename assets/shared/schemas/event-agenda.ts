@@ -24,6 +24,7 @@ import { linksSchema } from "./links";
 import { publicPageSlugSchema } from "./public-page-slug";
 import { clockCitySchema } from "../event-clock";
 import { eventPlaceSchema } from "../event-place";
+import { eventProductionPartnerCreditsSchema } from "./event-production-partners";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { proposalTypeSchema } from "./proposal-management";
 
@@ -282,6 +283,8 @@ export const agendaSnapshotSchema = z.object({
   publishedRevision: z.number().int().nullable(),
   rooms: z.array(agendaRoomSchema),
   occurrences: z.array(agendaOccurrenceSchema),
+  /** The owning event's production partners, projected live from the event and its organizations, never authored. */
+  productionPartners: eventProductionPartnerCreditsSchema.optional(),
   /** Keyed by credited organization ID; projected from live organization records, never frozen in a credit. */
   speakerOrganizations: z.record(id, agendaSpeakerOrganizationSchema).optional(),
   /**

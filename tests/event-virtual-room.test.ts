@@ -11,6 +11,8 @@ import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
+import { previewAgenda } from "../functions/_lib/services/event-agenda/preview";
+import { projectPublishedAgendas, readPublishedAgendaPage } from "../functions/_lib/services/site-publication-agendas";
 
 const base = "/api/v1/events/pqc-2026/agenda";
 const usual = "jfKfPfyJRdk";
@@ -248,6 +250,13 @@ describe("virtual room access", () => {
     await env.DB.prepare("UPDATE organizations SET name='Northlight' WHERE id=?").bind(camera).run();
     const renamed = await f.call(`${base}/streams`, f.staffToken);
     expect(virtualRoomResponseSchema.parse(await renamed.json()).productionPartners[0]?.name).toBe("Northlight");
+    // The public agenda credits them the same way, read live with the published agenda.
+    await env.DB.prepare("UPDATE events SET visibility='public' WHERE id=?").bind(f.eventId).run();
+    const [published] = await projectPublishedAgendas(env.DB, await readPublishedAgendaPage(env.DB, ""));
+    expect(published?.publicAgenda.productionPartners).toEqual([{ ...credits[0], name: "Northlight" }, credits[1]]);
+    expect((await previewAgenda(env.DB, f.eventId, "pqc-2026", "approved")).productionPartners).toEqual(
+      published?.publicAgenda.productionPartners,
+    );
     // An emptied list removes the setting.
     expect((await settings([])).status).toBe(200);
     expect(
