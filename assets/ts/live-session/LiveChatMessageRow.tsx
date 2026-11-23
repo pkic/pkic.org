@@ -26,7 +26,7 @@ import {
   type LiveModerationReason,
 } from "../../shared/live-moderation-policy";
 import { classifierQuestionName } from "../../shared/classifiers";
-import { liveParticipationBlockLabel, type LiveAutomaticCheck } from "../../shared/schemas/live-session-moderation";
+import { liveParticipationBlockLabel, type LiveClassifierVerdict } from "../../shared/schemas/live-session-moderation";
 import { liveParticipationMenuItems, liveRemoveMenuItem, liveReviewedMenuItem } from "./live-moderation-menu";
 import { LiveRemovedPost, liveRemovalNote } from "./LiveRemovedPost";
 
@@ -54,7 +54,7 @@ export function liveChatMessageActions(message: LiveChatMessage, viewer: Viewer,
     hidden: moderation?.hidden != null,
     held: moderation?.held ?? false,
     reported: (moderation?.reports ?? 0) > 0,
-    flaggedByCheck: moderation?.automaticCheck != null,
+    flaggedByCheck: moderation?.classifier != null,
     reportedByMe: message.reportedByMe ?? false,
     converted: moderation?.questionId != null,
     done: moderation?.done != null,
@@ -166,8 +166,7 @@ function menuItems(
 /** What replaces a removed or hidden message's words for the people who still see it. */
 function removedNote(message: LiveChatMessage): string | null {
   if (message.removal) return liveRemovalNote(message.removal);
-  if (message.moderation?.held && message.moderation.automaticCheck?.outcome === "blocked")
-    return "Held by the automatic check.";
+  if (message.moderation?.held && message.moderation.classifier?.outcome === "blocked") return "Held for review.";
   if (message.moderation?.hidden) return `Hidden by ${message.moderation.hidden.operatorName}.`;
   return null;
 }
@@ -178,13 +177,13 @@ const decides = (item: MenuItem) => item.id === "keep" || item.id === "remove";
 const marksReviewed = (item: MenuItem) => item.id === "reviewed" || item.id === "unreviewed";
 
 /** Why the check flagged it, most certain question first: "Conduct 94%". */
-function checkReason(check: LiveAutomaticCheck): string | null {
+function checkReason(check: LiveClassifierVerdict): string | null {
   const top = check.flags?.[0];
   return top ? `${classifierQuestionName(top.id)} ${formatNumber(Math.round(top.percent))}%` : null;
 }
 
 /** Every raised question with its certainty, then what each tells the author: the tooltip behind the reason. */
-function checkDetail(check: LiveAutomaticCheck): string {
+function checkDetail(check: LiveClassifierVerdict): string {
   return [
     ...(check.flags ?? []).map(
       (flag) => `${classifierQuestionName(flag.id)}: ${formatNumber(Math.round(flag.percent))}%`,
@@ -204,10 +203,10 @@ function ModerationNote({ message }: { message: LiveChatMessage }) {
   const moderation = message.moderation;
   if (!moderation) return null;
   const notes: Array<{ text: string; tone: "warn" | "muted"; title?: string }> = [];
-  const check = moderation.automaticCheck;
+  const check = moderation.classifier;
   if (check)
     notes.push({
-      text: [check.outcome === "blocked" ? "Removed by check" : "Flagged by check", checkReason(check)]
+      text: [check.outcome === "blocked" ? "Removed by classifier" : "Flagged by classifier", checkReason(check)]
         .filter(Boolean)
         .join(" · "),
       tone: "warn",

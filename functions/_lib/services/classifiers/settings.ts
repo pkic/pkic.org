@@ -1,5 +1,5 @@
 /**
- * The settings of automatic checks: PKIC-wide per kind of content, and what
+ * The settings of classifiers: PKIC-wide per kind of content, and what
  * one event adds. No question ships with the code: until staff save PKIC-wide
  * settings a kind is off, asks nothing and costs no model call.
  */

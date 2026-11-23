@@ -67,10 +67,10 @@ export function ClassifierBasics({
   return (
     <form noValidate {...form.handlers} onSubmit={(event) => void save(event)} autocomplete="off">
       <Panel>
-        <PanelHeader title="Check">
+        <PanelHeader title="Classifier">
           {canWrite && (
             <EditActions
-              label="Check actions"
+              label="Classifier actions"
               editing={editing}
               saving={saving}
               onEdit={() => {
@@ -92,7 +92,7 @@ export function ClassifierBasics({
                 checked={draft.enabled}
                 disabled={saving}
                 onChange={(event) => setDraft({ ...draft, enabled: event.currentTarget.checked })}
-                label="Check new content automatically"
+                label="Classify new content automatically"
               />
               <Field {...form.of("model")} label="Model">
                 {(control) => (

@@ -1,5 +1,5 @@
 /**
- * An event's automatic checks: the PKIC-wide questions it starts from, which
+ * An event's classifiers: the PKIC-wide questions it starts from, which
  * it may turn off or replace, its own questions, and the context it adds,
  * such as its topics, tracks and terms. The test bench runs the check as it
  * runs for this event.
@@ -73,11 +73,11 @@ function KindAdditions({
     const saved = await putJson(apiPath, body, classifierSavedResponseSchema);
     // The save is done; keep its revision so the next save does not conflict, even if the reload fails.
     setCheck((current) => ({ ...current, additions: { ...current.additions, ...patch, revision: saved.revision } }));
-    toast("Check saved", "success");
+    toast("Classifier saved", "success");
     try {
       setCheck(await getJson(apiPath, eventClassifierResponseSchema));
     } catch {
-      toast("The check was saved, but this view could not refresh. Reload the page to see the latest.", "error");
+      toast("The classifier was saved, but this view could not refresh. Reload the page to see the latest.", "error");
     }
   }
 
@@ -110,7 +110,7 @@ function KindAdditions({
   return (
     <>
       {!check.settings.enabled && (
-        <Alert tone="info">This check is off PKIC-wide, so it does not run for this event either.</Alert>
+        <Alert tone="info">This classifier is off PKIC-wide, so it does not run for this event either.</Alert>
       )}
       <EventClassifierContext
         key={check.additions.revision}
@@ -119,7 +119,7 @@ function KindAdditions({
         onSave={(context) => save({ context })}
       />
       <ClassifierQuestions
-        caption={`${CLASSIFIER_KIND_LABELS[check.kind]} check questions for this event`}
+        caption={`${CLASSIFIER_KIND_LABELS[check.kind]} classifier questions for this event`}
         rows={questionRows(check)}
         canWrite={canEdit}
         editLabel={(row) => (row.source === "PKIC-wide" ? "Change for this event" : "Change")}
@@ -146,7 +146,7 @@ export function EventClassifiers({
   canEdit: boolean;
   hrefFor: (kind: ClassifierKind) => string;
 }) {
-  const kind = isKind(requested) ? requested : "chat_message";
+  const kind = isKind(requested) ? requested : "chat";
   const apiPath = `/api/v1/events/${encodeURIComponent(slug)}/classifiers/${kind}`;
   const state = useData(() => getJson(apiPath, eventClassifierResponseSchema), [apiPath]);
   return (
@@ -158,7 +158,7 @@ export function EventClassifiers({
         hrefFor={(key) => hrefFor(key as ClassifierKind)}
       />
       {state.loading && !state.data ? (
-        <Spinner label="Loading the check…" />
+        <Spinner label="Loading the classifier…" />
       ) : state.error ? (
         <ErrorAlert error={state.error} />
       ) : state.data ? (

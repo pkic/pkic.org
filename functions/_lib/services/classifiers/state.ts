@@ -28,9 +28,9 @@ function boundedAnswers(answers: Record<string, string> | undefined): Record<str
 
 export function classifierState(kind: ClassifierKind, subject: ClassifierSubject): Record<string, unknown> {
   switch (kind) {
-    case "chat_message":
+    case "chat":
       return { chat_message: subject.text };
-    case "audience_question":
+    case "question":
       return { question_for_the_speakers: subject.text };
     case "proposal":
       return {

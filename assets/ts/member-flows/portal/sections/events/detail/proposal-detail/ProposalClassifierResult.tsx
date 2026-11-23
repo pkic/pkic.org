@@ -1,5 +1,5 @@
 /**
- * The automatic check's reading of a proposal, beside the committee's own
+ * The classifier's reading of a proposal, beside the committee's own
  * standing. It supports the review and decides nothing: the scores follow the
  * event's rubric, and the concerns are what the author was told at submission.
  */
@@ -11,7 +11,7 @@ import { DescriptionList } from "../../../../../../ui/DescriptionList";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
 import { fmt } from "../../../../ui";
 
-export function ProposalAutomaticReview({ review }: { review: ClassifierResult }) {
+export function ProposalClassifierResult({ review }: { review: ClassifierResult }) {
   const concerns = classifierRaisesConcerns(review.outcome);
   return (
     <Panel aria-label="Automatic review">

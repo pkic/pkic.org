@@ -36,9 +36,9 @@ export interface LiveChatArchiveRow {
   occurrence_id: string | null;
   /** When its author last edited it; the body is the edited one. */
   edited_at: string | null;
-  /** Shown to attendees, kept by a moderator, removed by one, held after reports, or removed by the automatic check. */
+  /** Shown to attendees, kept by a moderator, removed by one, held after reports, or removed by the classifier. */
   status: "shown" | "kept" | "hidden" | "held" | "removed_by_check";
-  /** What the automatic check found; null when no check ran. A moderator's keep leaves it in place. */
+  /** What the classifier found; null when no check ran. A moderator's keep leaves it in place. */
   check_outcome: ClassifierOutcome | null;
   check_model: ClassifierModel | null;
   /** The questions that raised a concern, and every answered question, with their certainty, as JSON. */
@@ -318,7 +318,7 @@ export class LiveRoomChat {
   }
 
   /**
-   * Every attendee message the room still holds, oldest first, with how moderation and the automatic check
+   * Every attendee message the room still holds, oldest first, with how moderation and the classifier
    * left it: the words with the check's scores and the reports let an organizer tune the check afterwards.
    */
   archive(): LiveChatArchiveRow[] {

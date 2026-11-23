@@ -98,7 +98,7 @@ export function GroupEventSettingsTab({
                 { key: "cfp", label: "CFP" },
                 { key: "recordings", label: "Recordings" },
                 { key: "retention", label: "Retention" },
-                { key: "automatic-checks", label: "Automatic checks" },
+                { key: "classifiers", label: "Classifiers" },
                 ...(event.ownerGroupId === groupId ? [{ key: "sharing", label: "Sharing" }] : []),
               ]
             : []),
@@ -162,13 +162,13 @@ export function GroupEventSettingsTab({
             canReadStaffing={hasEventAgendaPermission(event.id, "agenda:read")}
           />
         </Suspense>
-      ) : detailId === "automatic-checks" && canManage ? (
+      ) : detailId === "classifiers" && canManage ? (
         <Suspense fallback={<Spinner />}>
           <EventClassifiers
             slug={event.slug}
             kind={detailTab}
             canEdit={canManage}
-            hrefFor={(kind) => `${settingsPath}/automatic-checks/${kind}`}
+            hrefFor={(kind) => `${settingsPath}/classifiers/${kind}`}
           />
         </Suspense>
       ) : detailId === "recordings" && canManage ? (

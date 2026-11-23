@@ -35,7 +35,7 @@ const STATUS_LABELS: Record<LiveChatArchiveRow["status"], string> = {
   kept: "Kept by a moderator",
   hidden: "Hidden by a moderator",
   held: "Held after reports",
-  removed_by_check: "Removed by the check",
+  removed_by_check: "Removed by the classifier",
 };
 
 /** Questions with the model's certainty, most certain first: "Solicitation: 96%; Spam: 72%". */
@@ -120,7 +120,7 @@ async function audit(
  * day, room and time in UTC, with the session it was sent during. A room keeps
  * its day's chat a week after its last session unless the event keeps it
  * longer, so a download is empty once that passed. Each row carries what the
- * automatic check found with every score and its model, how moderators
+ * classifier found with every score and its model, how moderators
  * decided, and what people reported, so the check can be tuned on the words
  * it judged. An empty Check means no check ran; "Not checked" means the model
  * gave no answer.
@@ -144,10 +144,10 @@ export async function exportEventChat(
     "Message",
     "Status",
     "Removal reason",
-    "Check",
-    "Check model",
+    "Classifier",
+    "Classifier model",
     "Concerns",
-    "Check scores",
+    "Classifier scores",
     "Reports",
     "Report reasons",
   ]);

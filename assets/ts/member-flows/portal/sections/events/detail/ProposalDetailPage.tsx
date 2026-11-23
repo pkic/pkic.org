@@ -31,7 +31,7 @@ import { FormAnswerTable } from "../../../../../components/forms/FormResponseVie
 import { AuditLogSection } from "./proposal-detail/AuditLogSection";
 import { PresentationVersionsTab } from "./proposal-detail/PresentationVersionsTab";
 import { ProposalStanding } from "./proposal-detail/ProposalStanding";
-import { ProposalAutomaticReview } from "./proposal-detail/ProposalAutomaticReview";
+import { ProposalClassifierResult } from "./proposal-detail/ProposalClassifierResult";
 import { ProposalReviewsTab } from "./proposal-detail/ProposalReviewsTab";
 import {
   proposalActions,
@@ -158,7 +158,7 @@ export function ProposalDetailPage({
   if (error && !data) return <ErrorAlert error={error} />;
   if (!data) return null;
 
-  const { proposal, access, form, minReviewsRequired, sessionTypes, automaticReview } = data;
+  const { proposal, access, form, minReviewsRequired, sessionTypes, classifierResult } = data;
   const proposer = [proposal.proposer_first_name, proposal.proposer_last_name].filter(Boolean).join(" ") || "Proposer";
   const proposalRequiresPresentation =
     sessionTypes.find((t) => t.label.toLowerCase() === proposal.proposal_type.toLowerCase())?.requiresPresentation ??
@@ -569,7 +569,7 @@ export function ProposalDetailPage({
             averageScore={reviewSummary.averageScore}
             recommendationCounts={recommendationCounts}
           />
-          {automaticReview && <ProposalAutomaticReview review={automaticReview} />}
+          {classifierResult && <ProposalClassifierResult review={classifierResult} />}
           {access.canReview && (
             <ProposalInternalCommentsPanel
               commentDraft={commentDraft}

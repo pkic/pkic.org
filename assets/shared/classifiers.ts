@@ -1,5 +1,5 @@
 /**
- * Automatic checks: a model reads what someone wrote or uploaded and answers
+ * Classifiers: a model reads what someone wrote or uploaded and answers
  * the questions configured for that kind of content.
  *
  * A check has two kinds of question. A flag asks whether something is wrong
@@ -20,12 +20,12 @@ import type {
   EventClassifierResponse,
 } from "./schemas/classifiers";
 
-export const CLASSIFIER_KINDS = ["chat_message", "audience_question", "proposal", "presentation"] as const;
+export const CLASSIFIER_KINDS = ["chat", "question", "proposal", "presentation"] as const;
 export type ClassifierKind = (typeof CLASSIFIER_KINDS)[number];
 
 export const CLASSIFIER_KIND_LABELS: Record<ClassifierKind, string> = {
-  chat_message: "Chat messages",
-  audience_question: "Questions",
+  chat: "Chat messages",
+  question: "Questions",
   proposal: "Proposals",
   presentation: "Slides",
 };

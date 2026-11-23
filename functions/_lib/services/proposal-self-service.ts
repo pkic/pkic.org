@@ -106,7 +106,7 @@ export async function saveProposalAccessChanges(
     token: ParticipantAuthority;
     signingSecret: string;
     body: ProposalAccessInput;
-    /** The model for the automatic check; without it an edit goes on unchecked. */
+    /** The model for the classifier; without it an edit goes on unchecked. */
     ai?: Env["AI"];
   },
 ): Promise<ProposalAccessPatchResponse> {

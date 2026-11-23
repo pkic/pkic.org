@@ -169,7 +169,7 @@ export async function listProposalPresentationVersions(
     }
   }
   const checked = await readClassifierResults(db, "presentation", rows);
-  const versions = rows.map((row) => ({ ...rowToVersion(row), automaticCheck: checked.get(row.id) ?? null }));
+  const versions = rows.map((row) => ({ ...rowToVersion(row), classifier: checked.get(row.id) ?? null }));
   return { versions, page: buildPageInfo(query.limit, query.offset, total, versions.length) };
 }
 

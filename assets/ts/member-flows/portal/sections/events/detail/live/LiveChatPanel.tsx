@@ -40,12 +40,12 @@ export function LiveChatPanel({
   );
 }
 
-const REVIEW_FILTERS = ["all", "removed", "check", "reported"] as const;
+const REVIEW_FILTERS = ["all", "removed", "classifier", "reported"] as const;
 type ReviewFilter = (typeof REVIEW_FILTERS)[number];
 const REVIEW_LABELS: Record<ReviewFilter, string> = {
   all: "All",
   removed: "Removed",
-  check: "Check",
+  classifier: "Classifier",
   reported: "Reported",
 };
 
@@ -54,7 +54,7 @@ const removedNow = (message: LiveChatMessage) => message.moderation?.held === tr
 const REVIEW_MATCH: Record<ReviewFilter, (message: LiveChatMessage) => boolean> = {
   all: () => true,
   removed: removedNow,
-  check: (message) => message.moderation?.automaticCheck !== undefined,
+  classifier: (message) => message.moderation?.classifier !== undefined,
   reported: (message) => (message.moderation?.reports ?? 0) > 0,
 };
 
@@ -66,7 +66,9 @@ function LiveChatReview({ state, disabled, send }: { state: LiveChatView; disabl
   const [filter, setFilter] = useHashQueryParam("review", "all", REVIEW_FILTERS);
   const queue = state.chatReports ?? [];
   if (!queue.length)
-    return <p class="pk-small pk-muted">Nothing to review. Messages the check flags or people report appear here.</p>;
+    return (
+      <p class="pk-small pk-muted">Nothing to review. Messages the classifier flags or people report appear here.</p>
+    );
   const shown = queue.filter(REVIEW_MATCH[filter]).sort((a, b) => Number(removedNow(b)) - Number(removedNow(a)));
   return (
     <LiveAuthorProvider authors={state.authors} send={send}>

@@ -132,7 +132,7 @@ export const proposalCreateSchema = boundedJsonObject(
       .max(MAX_PROPOSAL_ADDITIONAL_SPEAKERS)
       .default([]),
     consents: z.array(consentItemSchema).max(20),
-    /** The author read the automatic check's advice and submits the proposal as written. */
+    /** The author read the classifier's advice and submits the proposal as written. */
     adviceAcknowledged: z.boolean().default(false),
   },
   40_000,

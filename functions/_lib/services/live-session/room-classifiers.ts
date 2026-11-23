@@ -1,5 +1,5 @@
 /**
- * Automatic checks of what attendees write in a live room. The event's check
+ * Classifiers of what attendees write in a live room. The event's check
  * settings are read once and kept for a short while, so a chat message or a
  * question costs the model call alone, never a database read of its own.
  */
@@ -18,7 +18,7 @@ export const LIVE_CLASSIFIER_SETTINGS_TTL_MS = 2 * 60 * 1000;
 /** A live check that takes longer is given up: the message goes on unchecked rather than waiting. */
 const LIVE_CLASSIFIER_TIMEOUT_MS = 4000;
 
-type LiveCheckKind = Extract<ClassifierKind, "chat_message" | "audience_question">;
+type LiveCheckKind = Extract<ClassifierKind, "chat" | "question">;
 
 interface CachedCheck {
   eventId: string;

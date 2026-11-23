@@ -52,12 +52,12 @@ function prepareQuestionCheckCopy(db: DatabaseLike, check: LiveQuestionCheckCopy
   return check.run_json
     ? prepareStoreClassifierResult(
         db,
-        "audience_question",
+        "question",
         check.question_id,
         JSON.parse(check.run_json) as ClassifierRun,
         check.at,
       )
-    : prepareDeleteClassifierResult(db, "audience_question", check.question_id);
+    : prepareDeleteClassifierResult(db, "question", check.question_id);
 }
 
 /** An answer reaches D1 only while its question is there; a redacted answer keeps its redaction. */

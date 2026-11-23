@@ -15,7 +15,7 @@ import { runClassifierTrial } from "../../../_lib/services/classifiers/trial";
 
 const ClassifiersList = openApiRoute(classifiersListRouteSchema, async (c: AdminContext) => {
   const { db } = await requireStaffPermission(c, "events:manage");
-  return json(classifierSettingsListResponseSchema.parse({ checks: await listClassifierSettings(db) }));
+  return json(classifierSettingsListResponseSchema.parse({ classifiers: await listClassifierSettings(db) }));
 });
 
 const ClassifierSettingsPut = openApiRoute(classifierSettingsPutRouteSchema, async (c: AdminContext, data) => {

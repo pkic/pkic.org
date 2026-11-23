@@ -1,5 +1,5 @@
 /**
- * The words on uploaded slides, for the automatic check. PowerPoint files are
+ * The words on uploaded slides, for the classifier. PowerPoint files are
  * read here, slide by slide; PDF and documents go through Workers AI's
  * converter. Anything else, or a file too large to read, has no text and
  * stays unchecked.

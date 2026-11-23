@@ -48,33 +48,33 @@ it("starts a revisited kind from what was saved, with its new revision", async (
         puts.push({ url: String(input), body: JSON.parse(String(init.body)) });
         return Response.json({ success: true, revision: puts.length });
       }
-      return Response.json({ checks: [settings("chat_message"), settings("audience_question")] });
+      return Response.json({ classifiers: [settings("chat"), settings("question")] });
     }),
   );
   root = document.createElement("div");
   document.body.append(root);
   const show = (kind: string) => act(async () => render(<Classifiers canWrite kind={kind} />, root));
 
-  await show("chat_message");
+  await show("chat");
   await vi.waitFor(async () => {
     await settle();
-    expect(root.querySelector('button[aria-label="Check actions"]')).not.toBeNull();
+    expect(root.querySelector('button[aria-label="Classifier actions"]')).not.toBeNull();
   });
-  await submitEdit("Check actions");
+  await submitEdit("Classifier actions");
   expect(puts.map((put) => put.body.expectedRevision)).toEqual([0]);
 
-  await show("audience_question");
+  await show("question");
   await settle();
-  await show("chat_message");
+  await show("chat");
   await settle();
-  await submitEdit("Check actions");
+  await submitEdit("Classifier actions");
   expect(puts.map((put) => put.body.expectedRevision)).toEqual([0, 1]);
 });
 
 it("saves an event's context through its contract, which includes the revision it was loaded at", async () => {
   const check: EventClassifierResponse = {
-    kind: "chat_message",
-    settings: settings("chat_message"),
+    kind: "chat",
+    settings: settings("chat"),
     additions: {
       revision: 3,
       context: "Post-quantum migration.",

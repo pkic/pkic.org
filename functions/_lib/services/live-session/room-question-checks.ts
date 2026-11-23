@@ -1,8 +1,8 @@
 /**
- * The automatic check of each question's current words, kept in the room: the flag moderators see, and the whole
+ * The classifier of each question's current words, kept in the room: the flag moderators see, and the whole
  * run, which reaches D1 with the question so the check can be tuned after the room is gone.
  */
-import type { LiveAutomaticCheck } from "../../../../assets/shared/schemas/live-session-moderation";
+import type { LiveClassifierVerdict } from "../../../../assets/shared/schemas/live-session-moderation";
 import type { ClassifierRun } from "../classifiers/model";
 import type { LiveRoomSql } from "./room-sql";
 
@@ -17,7 +17,7 @@ export class LiveQuestionCheckStore {
   constructor(private readonly sql: LiveRoomSql) {}
 
   /** The check's flag on a question's current words; null clears it. */
-  flag(questionId: string, check: LiveAutomaticCheck | null): void {
+  flag(questionId: string, check: LiveClassifierVerdict | null): void {
     if (!check) {
       this.sql.exec("DELETE FROM question_checks WHERE question_id = ?", questionId);
       return;

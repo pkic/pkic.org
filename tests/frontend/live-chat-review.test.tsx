@@ -32,8 +32,8 @@ const REMOVED = liveChatMessage({
   text: "Visit booth 12 for 20% off",
   moderation: moderation({
     held: true,
-    hidden: { operatorName: "Automatic check", at: new Date().toISOString() },
-    automaticCheck: {
+    hidden: { operatorName: "Classifier", at: new Date().toISOString() },
+    classifier: {
       outcome: "blocked",
       notes: ["Sales pitches aren't allowed in the chat."],
       flags: [
@@ -82,7 +82,7 @@ describe("the studio chat's Review tab", () => {
       expect.stringContaining("Visit booth 12 for 20% off"),
       expect.stringContaining("Check out my channel"),
     ]);
-    expect(rows[0]!.textContent).toContain("Removed by check · Solicitation 96%");
+    expect(rows[0]!.textContent).toContain("Removed by classifier · Solicitation 96%");
     expect(rows[0]!.querySelector<HTMLElement>(".pk-live-chat__note[title]")?.title).toContain("Spam: 72%");
     expect(rows[1]!.textContent).toContain("2 reports · Spam");
     await openMenu(rows[0]!);

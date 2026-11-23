@@ -1,5 +1,5 @@
 /**
- * Transport contracts for automatic checks: the PKIC-wide settings, what an
+ * Transport contracts for classifiers: the PKIC-wide settings, what an
  * event adds to them, a trial run on sample text, and a stored verdict.
  */
 import { z } from "zod";
@@ -107,7 +107,7 @@ export const classifierSettingsResponseSchema = z.object({
 export type ClassifierSettingsResponse = z.infer<typeof classifierSettingsResponseSchema>;
 
 export const classifierSettingsListResponseSchema = z.object({
-  checks: z.array(classifierSettingsResponseSchema),
+  classifiers: z.array(classifierSettingsResponseSchema),
 });
 
 export const eventClassifierResponseSchema = z.object({
@@ -137,7 +137,7 @@ export type ClassifierVerdictPayload = z.infer<typeof classifierVerdictSchema>;
 
 /** A trial: the check run on sample text with settings that need not be saved. */
 export const classifierTrialInputSchema = z.object({
-  text: trimmedString(1, 20000, "Enter text to check."),
+  text: trimmedString(1, 20000, "Enter a sample."),
   title: z.string().trim().max(300).default(""),
   model: classifierModelSchema,
   context: contextSchema,
@@ -169,7 +169,7 @@ const staffAuth = { "x-pkic-auth": { required: true, scopes: ["events:manage"] }
 const eventReaderAuth = { "x-pkic-auth": { required: true, scopes: ["events:read"] } } as const;
 const eventOrganizerAuth = { "x-pkic-auth": { required: true, scopes: ["events:write"] } } as const;
 const routeRefusals = {
-  "400": jsonErrorResponse("Invalid check settings."),
+  "400": jsonErrorResponse("Invalid classifier settings."),
   "401": jsonErrorResponse("An authenticated user session is required."),
   "403": jsonErrorResponse("The required permission is missing."),
   "404": jsonErrorResponse("Event not found."),
@@ -179,16 +179,16 @@ export const classifierSavedResponseSchema = z.object({ success: z.literal(true)
 
 export const classifiersListRouteSchema = {
   tags: ["Classifiers"],
-  summary: "List the PKIC-wide automatic checks",
+  summary: "List the PKIC-wide classifiers",
   responses: {
-    "200": { description: "Every check.", content: routeJson(classifierSettingsListResponseSchema) },
+    "200": { description: "Every classifier.", content: routeJson(classifierSettingsListResponseSchema) },
     ...routeRefusals,
   },
   ...staffAuth,
 };
 export const classifierSettingsPutRouteSchema = {
   tags: ["Classifiers"],
-  summary: "Change a PKIC-wide automatic check",
+  summary: "Change a PKIC-wide classifier",
   request: {
     params: classifierKindParamsSchema,
     body: { required: true, content: routeJson(classifierSettingsInputSchema) },
@@ -201,7 +201,7 @@ export const classifierSettingsPutRouteSchema = {
 };
 export const classifierTrialRouteSchema = {
   tags: ["Classifiers"],
-  summary: "Try an automatic check on sample text",
+  summary: "Try a classifier on a sample",
   request: {
     params: classifierKindParamsSchema,
     body: { required: true, content: routeJson(classifierTrialInputSchema) },
@@ -214,17 +214,17 @@ export const classifierTrialRouteSchema = {
 };
 export const eventClassifierGetRouteSchema = {
   tags: ["Classifiers"],
-  summary: "Get an automatic check as it runs for an event",
+  summary: "Get a classifier as it runs for an event",
   request: { params: eventClassifierKindParamsSchema },
   responses: {
-    "200": { description: "The check.", content: routeJson(eventClassifierResponseSchema) },
+    "200": { description: "The classifier.", content: routeJson(eventClassifierResponseSchema) },
     ...routeRefusals,
   },
   ...eventReaderAuth,
 };
 export const eventClassifierPutRouteSchema = {
   tags: ["Classifiers"],
-  summary: "Change what an event adds to an automatic check",
+  summary: "Change what an event adds to a classifier",
   request: {
     params: eventClassifierKindParamsSchema,
     body: { required: true, content: routeJson(classifierEventAdditionsInputSchema) },
@@ -237,7 +237,7 @@ export const eventClassifierPutRouteSchema = {
 };
 export const eventClassifierTrialRouteSchema = {
   tags: ["Classifiers"],
-  summary: "Try an event's automatic check on sample text",
+  summary: "Try an event's classifier on a sample",
   request: {
     params: eventClassifierKindParamsSchema,
     body: { required: true, content: routeJson(classifierTrialInputSchema) },

@@ -174,7 +174,7 @@ export class LiveChatFeed {
                   occurrenceRestrictions?.get(row.occurrence_id)?.[row.author_user_id] ??
                   null,
                 ...(original !== undefined ? { originalText: original } : {}),
-                ...(checks.has(row.id) ? { automaticCheck: checks.get(row.id) } : {}),
+                ...(checks.has(row.id) ? { classifier: checks.get(row.id) } : {}),
               }
             : null,
         };

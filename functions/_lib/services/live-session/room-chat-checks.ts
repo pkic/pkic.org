@@ -1,21 +1,21 @@
 /**
- * The automatic check's verdict on each attendee message, kept beside the
+ * The classifier's verdict on each attendee message, kept beside the
  * chat. Attendees read a message at once and lose it if the check blocks it.
  * Outputs wait: a message stays off air while it is checked, and when the
  * check advised or blocked it, until a moderator keeps it.
  */
 import { classifierPercent, type ClassifierModel, type ClassifierOutcome } from "../../../../assets/shared/classifiers";
 import {
-  liveAutomaticCheckSchema,
-  type LiveAutomaticCheck,
+  liveClassifierVerdictSchema,
+  type LiveClassifierVerdict,
 } from "../../../../assets/shared/schemas/live-session-moderation";
 import type { ClassifierRun } from "../classifiers/model";
 import type { LiveRoomSql } from "./room-sql";
 
 /** A check still unanswered after this long no longer keeps its message off air; the model itself gets 4 seconds. */
 export const LIVE_CHAT_CHECK_WAIT_MS = 5_000;
-/** Who the room names when the automatic check holds a message. */
-export const LIVE_CHAT_HELD_BY_CHECK = "Automatic check";
+/** Who the room names when the classifier holds a message. */
+export const LIVE_CHAT_HELD_BY_CHECK = "Classifier";
 
 /** Messages the on-air outputs leave out for their check: flagged, or still being checked. */
 export function liveChatCheckHoldsBack(now: number): { sql: string; bindings: string[] } {
@@ -26,7 +26,7 @@ export function liveChatCheckHoldsBack(now: number): { sql: string; bindings: st
   };
 }
 
-type LiveCheckScore = NonNullable<LiveAutomaticCheck["flags"]>[number];
+type LiveCheckScore = NonNullable<LiveClassifierVerdict["flags"]>[number];
 
 /** What one check found, kept for tuning whatever moderators decide later. */
 export interface LiveCheckResult {
@@ -88,7 +88,7 @@ export class LiveChatCheckStore {
   }
 
   /** The check advised against the message or blocked it: it stays off air until a moderator keeps it. */
-  record(messageId: string, outcome: LiveAutomaticCheck["outcome"], notes: string[], at: string): void {
+  record(messageId: string, outcome: LiveClassifierVerdict["outcome"], notes: string[], at: string): void {
     this.sql.exec(
       `INSERT INTO room_chat_checks(message_id, outcome, notes_json, at) VALUES (?, ?, ?, ?)
        ON CONFLICT(message_id) DO UPDATE SET outcome = excluded.outcome, notes_json = excluded.notes_json, at = excluded.at`,
@@ -118,7 +118,7 @@ export class LiveChatCheckStore {
   }
 
   /** The flagged messages among `ids`, as moderators see them. */
-  flagged(ids: readonly string[]): Map<string, LiveAutomaticCheck> {
+  flagged(ids: readonly string[]): Map<string, LiveClassifierVerdict> {
     if (!ids.length) return new Map();
     return new Map(
       this.sql
@@ -138,10 +138,10 @@ export class LiveChatCheckStore {
 }
 
 /** The stored flags when they still read as the contract's; a room from an earlier release has none. */
-export function readLiveCheckFlags(json: string | null): LiveAutomaticCheck["flags"] {
+export function readLiveCheckFlags(json: string | null): LiveClassifierVerdict["flags"] {
   if (!json) return undefined;
   try {
-    const parsed = liveAutomaticCheckSchema.shape.flags.safeParse(JSON.parse(json));
+    const parsed = liveClassifierVerdictSchema.shape.flags.safeParse(JSON.parse(json));
     return parsed.success ? parsed.data : undefined;
   } catch {
     return undefined;

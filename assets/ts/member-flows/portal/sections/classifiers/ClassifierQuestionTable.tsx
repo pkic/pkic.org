@@ -1,5 +1,5 @@
 /**
- * The questions of an automatic check, one row each: what it asks, whether it
+ * The questions of a classifier, one row each: what it asks, whether it
  * is a flag or a score, and from what certainty a flag advises or blocks.
  */
 import type { ComponentChildren } from "preact";

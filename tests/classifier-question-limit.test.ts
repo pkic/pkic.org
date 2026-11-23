@@ -38,19 +38,19 @@ describe("saving questions that must fit together", () => {
     const profile = profileD1Flow(env.DB);
     await saveWide(CLASSIFIER_MAX_WIDE_QUESTIONS, admin, profile.db);
     expect(profile.summary().queries.some((query) => query.sql.includes("event_classifier_additions"))).toBe(false);
-    await saveEventClassifierAdditions(env.DB, admin, eventId, "chat_message", {
+    await saveEventClassifierAdditions(env.DB, admin, eventId, "chat", {
       expectedRevision: 0,
       context: "",
       questions: questions(CLASSIFIER_MAX_EVENT_QUESTIONS, "event"),
       disabledQuestionIds: [],
     });
-    const check = await readEffectiveClassifier(env.DB, eventId, "chat_message");
+    const check = await readEffectiveClassifier(env.DB, eventId, "chat");
     expect(check.questions).toHaveLength(CLASSIFIER_MAX_QUESTIONS);
   });
 });
 
 function saveWide(count: number, by: UserBackedAuthAdmin = actor, db: DatabaseLike = env.DB) {
-  return saveClassifierSettings(db, by, "chat_message", {
+  return saveClassifierSettings(db, by, "chat", {
     expectedRevision: 0,
     enabled: true,
     model: "clef-flash",

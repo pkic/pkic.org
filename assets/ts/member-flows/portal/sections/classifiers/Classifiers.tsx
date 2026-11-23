@@ -1,5 +1,5 @@
 /**
- * Automatic checks, PKIC-wide: for each kind of content, whether it is
+ * Classifiers, PKIC-wide: for each kind of content, whether it is
  * checked, the context the model reads, the questions it answers, and a test
  * bench. Every event starts from these and adds its own.
  */
@@ -58,7 +58,7 @@ function KindSettings({
     const next = { ...settings, ...body, revision: saved.revision, saved: true };
     setSettings(next);
     onSaved(next);
-    toast("Check saved", "success");
+    toast("Classifier saved", "success");
   }
 
   async function saveQuestion(question: ClassifierQuestion, replacing: string | null) {
@@ -82,7 +82,7 @@ function KindSettings({
     <>
       <ClassifierBasics key={settings.revision} settings={settings} canWrite={canWrite} onSave={save} />
       <ClassifierQuestions
-        caption={`${CLASSIFIER_KIND_LABELS[settings.kind]} check questions`}
+        caption={`${CLASSIFIER_KIND_LABELS[settings.kind]} classifier questions`}
         rows={settings.questions.map((question) => ({ question }))}
         canWrite={canWrite}
         onSave={saveQuestion}
@@ -97,25 +97,25 @@ function KindSettings({
 
 export function Classifiers({ canWrite, kind: requested }: { canWrite: boolean; kind?: string }) {
   const state = useData(() => getJson(CLASSIFIERS_API, classifierSettingsListResponseSchema), []);
-  const kind = isKind(requested) ? requested : "chat_message";
+  const kind = isKind(requested) ? requested : "chat";
   // What was saved here, so a tab left and revisited starts from the saved settings and their revision.
   const [saved, setSaved] = useState<Partial<Record<ClassifierKind, ClassifierSettingsResponse>>>({});
-  const settings = saved[kind] ?? state.data?.checks.find((check) => check.kind === kind);
+  const settings = saved[kind] ?? state.data?.classifiers.find((check) => check.kind === kind);
 
   return (
     <div class="pk pk-stack">
       <PageHeader
-        title="Automatic checks"
+        title="Classifiers"
         description="A model reads chat messages, questions, proposals and slides, and advises or blocks what breaks the rules. Events add their own context and questions."
       />
       <Tabs
         label="Kinds of content"
         items={CLASSIFIER_KINDS.map((key) => ({ key, label: CLASSIFIER_KIND_LABELS[key] }))}
         active={kind}
-        hrefFor={(key) => `/settings/automatic-checks/${key}`}
+        hrefFor={(key) => `/settings/classifiers/${key}`}
       />
       {state.loading && !state.data ? (
-        <Spinner label="Loading the checks…" />
+        <Spinner label="Loading the classifiers…" />
       ) : state.error ? (
         <ErrorAlert error={state.error} />
       ) : settings ? (

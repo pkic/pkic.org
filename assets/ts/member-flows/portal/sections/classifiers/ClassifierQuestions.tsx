@@ -1,5 +1,5 @@
 /**
- * The questions panel of an automatic check: the list, adding a flag or a
+ * The questions panel of a classifier: the list, adding a flag or a
  * score from the panel's menu, and changing or removing one from its row.
  */
 import { useState } from "preact/hooks";
@@ -17,7 +17,7 @@ interface Editing {
 }
 
 export function ClassifierQuestions({
-  title = "Check questions",
+  title = "Classifier questions",
   caption,
   rows,
   canWrite,
@@ -58,7 +58,7 @@ export function ClassifierQuestions({
       <PanelHeader title={title}>
         {canWrite && (
           <Menu
-            label="Check question actions"
+            label="Classifier question actions"
             align="end"
             items={[
               {
@@ -82,7 +82,7 @@ export function ClassifierQuestions({
           actionsFor={canWrite ? actionsFor : undefined}
           empty={
             <EmptyState
-              title="No check questions yet."
+              title="No classifier questions yet."
               body={canWrite ? "Use the menu to add a flag or a score." : undefined}
             />
           }

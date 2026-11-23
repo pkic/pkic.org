@@ -164,7 +164,7 @@ describe("an event's questions beside the PKIC-wide ones", () => {
   });
 });
 
-describe("keeping a message the automatic check flagged", () => {
+describe("keeping a message the classifier flagged", () => {
   it("offers a moderator keep for a flagged message nobody reported, and no one else", () => {
     const message = {
       channel: "attendee" as const,

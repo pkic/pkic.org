@@ -1,5 +1,5 @@
 /**
- * The test bench of an automatic check: paste a sample, run the saved
+ * The test bench of a classifier: paste a sample, run the saved
  * questions on it, and read what the model answered to each one, raised or
  * not, so thresholds can be tuned before real content meets them.
  */
@@ -32,8 +32,8 @@ import { Textarea, TextInput } from "../../../../ui/TextControl";
 const TITLED_KINDS: ReadonlySet<ClassifierKind> = new Set(["proposal", "presentation"]);
 
 const SAMPLE_LABELS: Record<ClassifierKind, string> = {
-  chat_message: "Chat message",
-  audience_question: "Question",
+  chat: "Chat message",
+  question: "Question",
   proposal: "Abstract",
   presentation: "Slide text",
 };
@@ -89,10 +89,10 @@ export function ClassifierTrial({
   }
 
   return (
-    <Panel aria-label="Try the check">
-      <PanelHeader title="Try the check" />
+    <Panel aria-label="Try the classifier">
+      <PanelHeader title="Try the classifier" />
       <PanelBody class="pk-stack">
-        <p class="pk-small">Runs the saved check questions on a sample. Nothing is stored.</p>
+        <p class="pk-small">Runs the saved classifier questions on a sample. Nothing is stored.</p>
         <form class="pk-stack" noValidate {...form.handlers} onSubmit={(event) => void run(event)}>
           {titled && (
             <Field {...form.of("title")} label="Title">
@@ -119,13 +119,13 @@ export function ClassifierTrial({
           </Field>
           <div class="pk-cluster">
             <Button type="submit" variant="primary" loading={running} disabled={running}>
-              Run check
+              Run classifier
             </Button>
           </div>
           <ErrorAlert error={error} />
         </form>
         {trial?.verdict.outcome === "unchecked" && (
-          <Alert tone="warn">The model did not answer, so nothing was checked. Try again in a moment.</Alert>
+          <Alert tone="warn">The model did not answer. Try again in a moment.</Alert>
         )}
         {trial && trial.verdict.outcome !== "unchecked" && (
           <DescriptionList

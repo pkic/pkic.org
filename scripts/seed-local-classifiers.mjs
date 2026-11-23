@@ -1,5 +1,5 @@
 /**
- * Seeds neutral sample questions for the automatic checks in the LOCAL D1, so a
+ * Seeds neutral sample questions for the classifiers in the LOCAL D1, so a
  * developer can try a check. The questions carry no policy: the real ones are
  * written by staff in the portal and never ship with the code.
  *
@@ -35,8 +35,8 @@ const SAMPLE_QUESTIONS = [
 ];
 
 const KINDS = [
-  { kind: "chat_message", model: "clef", questions: SAMPLE_QUESTIONS.slice(0, 1) },
-  { kind: "audience_question", model: "clef", questions: SAMPLE_QUESTIONS.slice(0, 1) },
+  { kind: "chat", model: "clef", questions: SAMPLE_QUESTIONS.slice(0, 1) },
+  { kind: "question", model: "clef", questions: SAMPLE_QUESTIONS.slice(0, 1) },
   { kind: "proposal", model: "clef", questions: SAMPLE_QUESTIONS },
   { kind: "presentation", model: "clef", questions: SAMPLE_QUESTIONS.slice(0, 1) },
 ];

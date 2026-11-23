@@ -48,7 +48,7 @@ export const LIVE_CHAT_POLICY = {
    */
   reportHoldThreshold: 5,
   /**
-   * An attendee whose messages the automatic check blocks this many times
+   * An attendee whose messages the classifier blocks this many times
    * within the window is paused, so a moderator can decide. One blocked
    * message never pauses anyone, and a message a moderator keeps no longer
    * counts.
@@ -106,7 +106,7 @@ export interface LiveChatActionSubject {
   /** Held after reports and not yet reviewed. */
   held: boolean;
   reported: boolean;
-  /** The automatic check advised against or blocked it, and no moderator has kept it yet. */
+  /** The classifier advised against or blocked it, and no moderator has kept it yet. */
   flaggedByCheck?: boolean;
   reportedByMe: boolean;
   converted: boolean;

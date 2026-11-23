@@ -19,7 +19,7 @@ function database() {
           {
             results: [
               {
-                kind: "chat_message",
+                kind: "chat",
                 enabled,
                 model: "clef-flash",
                 context: "",
@@ -52,14 +52,14 @@ describe("a room's cached check settings", () => {
     const checks = new LiveRoomClassifiers({ AI: {}, DB: db } as never, store as never, {} as never);
 
     const start = 1_000_000;
-    expect(checks.mayRun("chat_message", start)).toBe(true);
-    await checks.run("chat_message", "hello", start);
-    expect(checks.mayRun("chat_message", start + 1000)).toBe(false);
+    expect(checks.mayRun("chat", start)).toBe(true);
+    await checks.run("chat", "hello", start);
+    expect(checks.mayRun("chat", start + 1000)).toBe(false);
 
     const later = start + LIVE_CLASSIFIER_SETTINGS_TTL_MS + 1;
-    expect(checks.mayRun("chat_message", later)).toBe(true);
-    await checks.run("chat_message", "hello", later);
+    expect(checks.mayRun("chat", later)).toBe(true);
+    await checks.run("chat", "hello", later);
     expect(reads).toHaveBeenCalledTimes(2);
-    expect(checks.mayRun("chat_message", later + 1000)).toBe(true);
+    expect(checks.mayRun("chat", later + 1000)).toBe(true);
   });
 });

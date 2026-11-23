@@ -342,9 +342,9 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
         access: (session) => portalHasGlobalPermission(session, "users:read"),
       },
       {
-        path: "/settings/automatic-checks",
-        label: "Automatic checks",
-        description: "What the model checks in chat messages, questions, proposals and slides.",
+        path: "/settings/classifiers",
+        label: "Classifiers",
+        description: "What the model looks for in chat messages, questions, proposals and slides.",
         access: (session) => portalHasGlobalPermission(session, "events:manage"),
       },
       {
