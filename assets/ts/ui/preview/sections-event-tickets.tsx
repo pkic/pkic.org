@@ -4,6 +4,7 @@
  */
 import type { PreviewSection } from "./PreviewShell";
 import { TicketAwaitingPayment, TicketPaymentUnderReview, TicketUnpaidStanding } from "./sections-event-ticket-payment";
+import { TicketOrganizationsPreview } from "./TicketClassifierPreview";
 import { TicketSalesPreview } from "./TicketSalesPreview";
 import { DayAttendancePicker } from "../../components/DayAttendancePicker";
 import { TicketCard, TicketChoice } from "../../components/events/tickets/TicketCard";
@@ -584,4 +585,9 @@ export const eventTicketSections: PreviewSection[] = [
   { id: "ticket-step-free", title: "Registration: free event", render: () => <AttendanceWithFreeTicket /> },
   { id: "ticket-settings", title: "Event settings: tickets", render: () => <TicketSettings /> },
   { id: "ticket-prices-edit", title: "Event settings: edit prices", render: () => <TicketPricesEdit /> },
+  {
+    id: "ticket-classifier",
+    title: "Event settings: ticket per organization",
+    render: () => <TicketOrganizationsPreview />,
+  },
 ];

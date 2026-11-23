@@ -28,6 +28,7 @@ import { usePortalHashLocation } from "../../../../../hash-location";
 import { SponsorPassesEditor } from "./SponsorPassesEditor";
 import { SponsorPassesPanel } from "./SponsorPassesPanel";
 import { TicketCodesPanel } from "./TicketCodesPanel";
+import { TicketOrganizationsPanel } from "./TicketOrganizationsPanel";
 import { TicketPaymentPanel } from "./TicketPaymentPanel";
 import { TicketPricesEditor } from "./TicketPricesEditor";
 import { TicketStepTextsPanel } from "./TicketStepTextsPanel";
@@ -224,6 +225,10 @@ export function TicketsTab({
           />
         </PanelBody>
       </Panel>
+      {/* A decision chooses between tickets, so it needs two on offer. */}
+      {canWrite && data.types.filter((type) => type.active).length >= 2 && (
+        <TicketOrganizationsPanel slug={slug} configuration={data} onChanged={reload} />
+      )}
       <SponsorPassesPanel
         slug={slug}
         configuration={data}
