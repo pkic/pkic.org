@@ -7,7 +7,7 @@ import { prepareSyntheticMembershipReview } from "./helpers/member-provisioning"
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
-import { tab } from "./helpers/tabs";
+import { openTab } from "./helpers/tabs";
 import { capturedEmailCount, waitForCapturedEmail } from "./helpers/sendgrid";
 import {
   openApplicationDetail,
@@ -147,7 +147,7 @@ test("staff email the applicant and record an internal note through the Communic
   await openApplicationDetail(page, email, "submitted");
 
   // Correspondence is a facet of the record, reached by its tab (#109).
-  await tab(page, "Communications").click();
+  await openTab(page, "Communications");
   const card = page.getByRole("region", { name: "Communications and notes" });
   await expect(card).toBeVisible();
   await expect(card.getByText("Nothing has been emailed or noted on this application yet.")).toBeVisible();

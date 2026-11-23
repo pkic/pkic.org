@@ -13,9 +13,9 @@
  * `Tabs` (links, `aria-current="page"`) or `TabList` (buttons, `role="tab"`,
  * arrow keys, `aria-controls`).
  */
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 
-import { useActiveTabVisibility } from "../ui/useActiveTabVisibility";
+import { overflowClass, TabOverflowMenu, useTabOverflow } from "../ui/TabOverflow";
 
 import { TabList } from "../ui/TabList";
 // The navigating variant is rendered here rather than by `ui/Tabs` because it
@@ -47,16 +47,17 @@ type TabsProps = SharedTabsProps &
   );
 
 export function Tabs({ items, active, onChange, className, idPrefix, label = "Sections", hrefFor }: TabsProps) {
-  const listRef = useActiveTabVisibility(active);
+  const { listRef, moreRef, fitting } = useTabOverflow(items.length);
+  const [, navigate] = useLocation();
   if (hrefFor) {
     return (
       <nav class={["pk-tabs", className].filter(Boolean).join(" ")} aria-label={label}>
         <div class="pk-tabs__list" ref={listRef}>
-          {items.map((item) => (
+          {items.map((item, index) => (
             <Link
               key={item.key}
               href={hrefFor(item.key)}
-              class="pk-tabs__link"
+              class={overflowClass(index, fitting)}
               aria-current={item.key === active ? "page" : undefined}
               onClick={(event: MouseEvent) => {
                 // Plain routed tabs let Link navigate. Editors may supply
@@ -71,6 +72,16 @@ export function Tabs({ items, active, onChange, className, idPrefix, label = "Se
             </Link>
           ))}
         </div>
+        <TabOverflowMenu
+          entries={items.map((item) => ({
+            id: item.key,
+            label: item.label,
+            onSelect: () => (onChange ? onChange(item.key) : navigate(hrefFor(item.key))),
+          }))}
+          fitting={fitting}
+          activeId={active}
+          moreRef={moreRef}
+        />
       </nav>
     );
   }

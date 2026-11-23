@@ -20,7 +20,7 @@ import { openRow } from "./helpers/data-table";
 import { signInToPortal } from "./helpers/portal-auth";
 import { publishE2eSite } from "./helpers/site-publication";
 import { expectStyledEmailPreview, useEmailPreviewLogoFixture } from "./helpers/email-preview";
-import { tab } from "./helpers/tabs";
+import { openTab } from "./helpers/tabs";
 
 test.use({ timezoneId: "Europe/Amsterdam" });
 
@@ -188,7 +188,7 @@ test("a portal manager creates and edits a group-owned standalone event", async 
 
   await page.screenshot({ path: test.info().outputPath("event-attached-surface.png"), fullPage: true });
 
-  await tab(detail, "Communications").click();
+  await openTab(detail, "Communications");
   await expect(detail.getByLabel("Audience", { exact: true })).toHaveCount(0);
   await detail.getByRole("link", { name: "New message" }).click();
   await expect(page).toHaveURL(/\/communications\/new$/);
@@ -259,16 +259,16 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await expect(communications.getByText("1 recipients", { exact: true })).toBeVisible();
   const preview = communications.getByTitle("Rendered campaign email preview", { exact: true });
   await expectStyledEmailPreview(preview);
-  await tab(communications, "Text").click();
+  await openTab(communications, "Text");
   await expect(preview).toHaveCount(0);
-  await tab(communications, "HTML").click();
+  await openTab(communications, "HTML");
   await expectStyledEmailPreview(preview);
   await preview.scrollIntoViewIfNeeded();
   await communications.screenshot({ path: test.info().outputPath("campaign-email-preview.png") });
 
-  await tab(detail, "Settings").click();
-  await tab(detail, /^Registration$/).click();
-  await tab(detail, /^Terms$/).click();
+  await openTab(detail, "Settings");
+  await openTab(detail, /^Registration$/);
+  await openTab(detail, /^Terms$/);
   let registrationSetup = page.getByRole("region", { name: `Configure ${eventName} registration` });
   await expect(registrationSetup.getByLabel("Agreement text")).toHaveCount(0);
   await registrationSetup.getByRole("button", { name: "Event terms actions" }).click();
@@ -285,7 +285,7 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await registrationSetup.getByRole("button", { name: "Save terms" }).click();
   expect((await termsSaved).status()).toBe(200);
 
-  await tab(detail, /^Policy$/).click();
+  await openTab(detail, /^Policy$/);
   const policySection = registrationSetup.getByRole("region", { name: "Registration policy and questions" });
   await policySection.getByRole("button", { name: "Registration policy actions" }).click();
   await page.getByRole("menuitem", { name: "Edit settings", exact: true }).click();
@@ -370,7 +370,7 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await expect(submissionWindow.getByLabel("Opens", { exact: true })).toHaveValue("2027-06-10T09:00");
   await submissionWindow.getByRole("button", { name: "Cancel", exact: true }).click();
 
-  await tab(detail, /^Attendance days$/).click();
+  await openTab(detail, /^Attendance days$/);
   registrationSetup = page.getByRole("region", { name: `Configure ${eventName} registration` });
   await registrationSetup.getByRole("button", { name: "Attendance days actions" }).click();
   await page.getByRole("menuitem", { name: "Edit attendance days", exact: true }).click();
@@ -395,17 +395,17 @@ test("a portal manager creates and edits a group-owned standalone event", async 
 
   // The event's facts are edited where they are read: Edit is the details
   // panel's own command, and the panel becomes the form.
-  await tab(detail, /^Visibility and access$/).click();
+  await openTab(detail, /^Visibility and access$/);
   await page.getByRole("button", { name: "Event actions" }).click();
   await page.getByRole("menuitem", { name: "Edit event", exact: true }).click();
   const editor = page.getByRole("region", { name: "Edit event" });
   await editor.getByRole("button", { name: "Save event" }).click();
-  await tab(detail, /^Location$/).click();
+  await openTab(detail, /^Location$/);
   await page.getByRole("button", { name: "Event settings actions" }).click();
   await page.getByRole("menuitem", { name: "Edit settings", exact: true }).click();
   await page.getByLabel("City", { exact: true }).fill("Rotterdam");
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
-  await tab(detail, "Overview").click();
+  await openTab(detail, "Overview");
   await expect(detail.getByText("Rotterdam, Netherlands", { exact: true })).toBeVisible();
 
   // The peer invitation limit is set beside the invitation wording, in its own panel.

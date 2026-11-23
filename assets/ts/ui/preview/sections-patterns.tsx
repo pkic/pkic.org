@@ -4,6 +4,7 @@ import { guidedTourSection } from "./GuidedTourPreview";
 import { imageCarouselSection } from "./image-carousel";
 import { badgeOutputProgressSection } from "./badge-output-progress";
 import { TooltipPreview } from "./TooltipPreview";
+import { TabsSpecimen } from "./TabsSpecimen";
 import { proposalSections } from "./sections-proposals";
 import { ServerSelectPreview } from "./ServerSelectPreview";
 import { RegistrationFieldsPreview } from "./RegistrationFieldsPreview";
@@ -31,7 +32,6 @@ import { useState } from "preact/hooks";
 import "../Content.css";
 import "../../components/member-wall.css";
 import "../../components/site-footer.css";
-import { useHashQueryParam } from "../../hooks/useHashQueryParam";
 
 import { LIVE_CHAT_REACTIONS } from "../../../shared/live-chat-policy";
 import { IconPlus } from "../../components/icons";
@@ -54,7 +54,6 @@ import { PositionTimeline } from "../PositionTimeline";
 import { RowActions } from "../RowActions";
 import { SegmentedBar } from "../SegmentedBar";
 import { RowList, RowListItem } from "../RowList";
-import { TabList } from "../TabList";
 import { TextInput } from "../TextControl";
 import { Toast } from "../Toast";
 import { Toolbar } from "../Toolbar";
@@ -151,7 +150,7 @@ function PersonCardSpecimen() {
 function ReactionPickerSpecimen() {
   const [pressed, setPressed] = useState<string[]>(["applause"]);
   return (
-    <div class="pk-preview__shelf" data-gallery-open>
+    <div class="pk-preview__shelf">
       <span>Great point about certificate lifetimes.</span>
       <ReactionPicker
         label="Add a reaction"
@@ -162,26 +161,6 @@ function ReactionPickerSpecimen() {
         🙂
       </ReactionPicker>
     </div>
-  );
-}
-
-function TabsSpecimen() {
-  const [active, setActive] = useHashQueryParam<string>("gallerySessionSection", "overview", [
-    "overview",
-    "speakers",
-    "questions",
-  ] as const);
-  return (
-    <TabList
-      label="Session sections"
-      activeId={active}
-      onSelect={setActive}
-      items={[
-        { id: "overview", label: "Overview" },
-        { id: "speakers", label: "Speakers" },
-        { id: "questions", label: "Questions", attention: "2 unanswered" },
-      ]}
-    />
   );
 }
 
@@ -381,7 +360,7 @@ export const patternSections: PreviewSection[] = [
     title: "Menu",
     note: "Ellipsis trigger; the list opens below, flipping above only without room. At a row or panel end it aligns to the trigger's end.",
     render: () => (
-      <div class="pk-preview__shelf" data-gallery-open>
+      <div class="pk-preview__shelf">
         <Menu label="Actions for Amsterdam 2026" items={recordActions} />
       </div>
     ),
@@ -406,7 +385,7 @@ export const patternSections: PreviewSection[] = [
   {
     id: "tabs",
     title: "Tabs",
-    note: "Panels within one view. Arrow keys move and select; the strip scrolls sideways on phones.",
+    note: "Panels within one view. Arrow keys move and select. Tabs that do not fit go into a More menu at the end of the strip, which shows the current tab when it is one of them.",
     render: () => <TabsSpecimen />,
   },
   {
