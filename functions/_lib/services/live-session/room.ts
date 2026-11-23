@@ -205,6 +205,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
         ask: (question, by, at, sentDuring) => this.locationChat.ask(question, by, at, sentDuring),
         audited: () => this.scheduleCopy(),
         counted: () => this.scheduleCopy(),
+        participationChanged: (userId) => this.participation.changed(userId),
       },
     );
     this.questions = new LiveRoomQuestions(this.store, this.broadcast, this.controls, this.authors, this.decisions, {

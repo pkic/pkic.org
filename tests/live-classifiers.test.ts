@@ -1,6 +1,8 @@
 import { runInDurableObject } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { LIVE_CHAT_POLICY } from "../assets/shared/live-chat-policy";
 import type { LiveRoomServerMessage } from "../assets/shared/schemas/live-session-room";
+import type { LiveRoomOnScreenLists } from "../functions/_lib/services/live-session/room-on-screen-lists";
 import { saveCheckSettings, sampleFlag } from "./helpers/classifier-settings";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
 
@@ -37,6 +39,15 @@ async function say(author: Client, text: string, reader: Client) {
   return (await reader.next("chat.message", (message) => message.message.text === text)).message;
 }
 
+/** The ids the session room's on-air chat list shows now, with no delay of its own. */
+async function onAir(): Promise<string[]> {
+  const feed = await runInDurableObject(f.room(), (instance) => {
+    const graphics = Reflect.get(instance as object, "graphics") as object;
+    return (Reflect.get(graphics, "lists") as LiveRoomOnScreenLists).chatFeed({ count: 6, delaySeconds: 0 });
+  });
+  return feed.messages.map((message) => message.id);
+}
+
 /** Makes the next "slow" checks wait; the returned function lets them finish. */
 function holdChecks(): () => void {
   let release = () => {};
@@ -56,22 +67,22 @@ describe("automatic checks of live chat and questions", () => {
     await giveRoomsTheModel();
   });
 
-  it("holds chat the check blocks and flags chat it advises against for moderators", async () => {
+  it("removes chat the check blocks from attendees and flags chat it advises against for moderators", async () => {
     const author = await f.connectChat("attendee");
     const reader = await f.connectChat("secondAttendee");
     const operator = await f.connectChat("operator");
 
-    author.send({ type: "chat.send", text: "Buy cheap certificates at example.test" });
-    const held = await operator.next("chat.message", (update) => update.message.moderation?.held === true);
-    const spam = held.message;
+    // Attendees read the message at once; the check takes it away when it blocks it.
+    const spam = await say(author, "Buy cheap certificates at example.test", reader);
+    const held = await operator.next(
+      "chat.message",
+      (update) => update.message.id === spam.id && update.message.moderation?.held === true,
+    );
     expect(held.message.moderation?.automaticCheck).toEqual({
       outcome: "blocked",
       notes: [expect.any(String)],
     });
     await reader.next("chat.removed", (update) => update.messageId === spam.id);
-    expect(reader.received.some((update) => update.type === "chat.message" && update.message.id === spam.id)).toBe(
-      false,
-    );
 
     const rude = await say(author, "The organizers are idiots", reader);
     const flagged = await operator.next(
@@ -101,63 +112,56 @@ describe("automatic checks of live chat and questions", () => {
     expect(model.run).toHaveBeenCalledTimes(2);
   });
 
-  it("keeps chat from other attendees until the check passes, then delivers it", async () => {
+  it("delivers chat to attendees at once and keeps it off air until the check passes", async () => {
+    const author = await f.connectChat("attendee");
+    const reader = await f.connectChat("secondAttendee");
+    // The session's room reads the location's chat for its graphics.
+    await f.connect({ person: "operator" });
+    const release = holdChecks();
+    const text = "A slow but friendly question about renewals";
+    const sent = await say(author, text, reader);
+    await vi.waitFor(() => expect(model.run).toHaveBeenCalled());
+    expect(await onAir()).not.toContain(sent.id);
+    release();
+    await vi.waitFor(async () => expect(await onAir()).toContain(sent.id));
+  });
+
+  it("keeps a flagged message off air, and puts it on once a moderator keeps it", async () => {
     const author = await f.connectChat("attendee");
     const reader = await f.connectChat("secondAttendee");
     const operator = await f.connectChat("operator");
-    const release = holdChecks();
-    const text = "A slow but friendly question about renewals";
-    author.send({ type: "chat.send", text });
-    const mine = await author.next("chat.message", (update) => update.message.text === text);
-    await operator.next("chat.message", (update) => update.message.text === text);
-    await vi.waitFor(() => expect(model.run).toHaveBeenCalled());
-    expect(reader.received.some((update) => update.type === "chat.message" && update.message.text === text)).toBe(
-      false,
+    await f.connect({ person: "operator" });
+    const fine = await say(author, "Renewals take a week", reader);
+    const rude = await say(author, "The organizers are idiots", reader);
+    await operator.next(
+      "chat.message",
+      (update) => update.message.id === rude.id && update.message.moderation?.automaticCheck !== undefined,
     );
-    const joining = await f.connectChat("secondAttendee");
-    const waiting = (joining.received[0] as Extract<LiveRoomServerMessage, { type: "location.chat.snapshot" }>).chat;
-    expect(waiting.map((message) => message.id)).not.toContain(mine.message.id);
-    release();
-    const delivered = await reader.next("chat.message", (update) => update.message.id === mine.message.id);
-    expect(delivered.message.text).toBe(text);
+    await vi.waitFor(async () => expect(await onAir()).toEqual([fine.id]));
+    operator.send({ type: "chat.moderate", messageId: rude.id, decision: "keep" });
+    await vi.waitFor(async () => expect(await onAir()).toEqual([fine.id, rude.id]));
   });
 
-  it("delivers a message whose check does not answer in time, and still removes it when the check blocks it", async () => {
+  it("pauses an attendee after repeated blocked messages, and never after one", async () => {
     const author = await f.connectChat("attendee");
     const reader = await f.connectChat("secondAttendee");
-    // The room waits briefly here, so the test need not sit out the real wait limit.
-    await runInDurableObject(f.chatRoom(), (instance) => {
-      Reflect.set(Reflect.get(instance as object, "chatActions") as object, "checkWaitMs", 50);
-    });
-    const release = holdChecks();
-    const text = "A slow offer of cheap certificates";
-    author.send({ type: "chat.send", text });
-    const late = await reader.next("chat.message", (update) => update.message.text === text);
-    release();
-    await reader.next("chat.removed", (update) => update.messageId === late.message.id);
-  });
-
-  it("keeps an edit that is still being checked out of the replies other attendees read", async () => {
-    const author = await f.connectChat("attendee");
-    const reader = await f.connectChat("secondAttendee");
-    const parent = await say(author, "Renewals take a week", reader);
-    reader.send({ type: "chat.send", text: "Thanks", replyTo: parent.id });
-    const reply = await author.next("chat.message", (update) => update.message.text === "Thanks");
-    const release = holdChecks();
-    const edited = "A slow edit with unchecked words";
-    author.send({ type: "chat.edit", messageId: parent.id, text: edited });
-    await author.next("chat.message", (update) => update.message.id === parent.id && update.message.text === edited);
-    await vi.waitFor(() => expect(model.run).toHaveBeenCalledTimes(3));
-    const joining = await f.connectChat("secondAttendee");
-    const seen = (joining.received[0] as Extract<LiveRoomServerMessage, { type: "location.chat.snapshot" }>).chat;
-    const quoted = seen.find((message) => message.id === reply.message.id)?.replyTo;
-    expect(quoted).toMatchObject({ messageId: parent.id, excerpt: null });
-    release();
+    const operator = await f.connectChat("operator");
+    const { blocks } = LIVE_CHAT_POLICY.checkPause;
+    for (let count = 1; count <= blocks; count += 1) {
+      const spam = await say(author, `Buy cheap certificates, offer ${count}`, reader);
+      await reader.next("chat.removed", (update) => update.messageId === spam.id);
+      if (count < blocks) expect(author.received.some((update) => update.type === "participation.access")).toBe(false);
+    }
+    const access = await author.next("participation.access");
+    expect(access.restriction).toMatchObject({ block: "paused", until: expect.any(String) });
+    await operator.next("chat.message", (update) => update.message.moderation?.authorRestriction?.block === "paused");
+    author.send({ type: "chat.send", text: "Am I still here?" });
+    expect((await author.next("room.refused")).code).toBe("LIVE_PARTICIPATION_BLOCKED");
   });
 
   it("keeps an advised verdict for moderators when delivering the checked message fails once", async () => {
     const author = await f.connectChat("attendee");
-    const reader = await f.connectChat("secondAttendee");
+    const operator = await f.connectChat("operator");
     const release = holdChecks();
     const text = "A slow remark: the organizers are idiots";
     author.send({ type: "chat.send", text });
@@ -173,7 +177,10 @@ describe("automatic checks of live chat and questions", () => {
       });
     });
     release();
-    await reader.next("chat.message", (update) => update.message.id === mine.message.id);
+    await operator.next(
+      "chat.message",
+      (update) => update.message.id === mine.message.id && update.message.moderation?.automaticCheck !== undefined,
+    );
     const fresh = await f.connectChat("operator");
     const snapshot = fresh.received[0] as Extract<LiveRoomServerMessage, { type: "location.chat.snapshot" }>;
     expect(snapshot.chatReports?.find((message) => message.id === mine.message.id)?.moderation?.automaticCheck).toEqual(
