@@ -124,6 +124,23 @@ describe("tab overflow", () => {
     ]);
   });
 
+  it("keeps a tab's mark and its meaning in the menu", () => {
+    const items = rooms.map((room) =>
+      room.id === "room-2"
+        ? { ...room, href: `/rooms/${room.id}`, icon: <svg class="not-streamed" />, title: "Not streamed" }
+        : { ...room, href: `/rooms/${room.id}` },
+    );
+    const host = mount(<Tabs label="Locations" items={items} activeId="room-2" />);
+    // The current tab is in the menu, so the More button wears its mark too.
+    expect(moreButton(host)?.querySelector(".not-streamed")).not.toBeNull();
+    void act(() => moreButton(host)?.click());
+    const entry = host.querySelector<HTMLAnchorElement>('.pk-menu a[href="/rooms/room-2"]');
+    expect(entry?.querySelector(".pk-menu__item-icon .not-streamed")).not.toBeNull();
+    expect(entry?.getAttribute("title")).toBe("Not streamed");
+    // Only the tab that has the mark shows it.
+    expect(host.querySelectorAll(".pk-menu__item-icon")).toHaveLength(1);
+  });
+
   it("follows a routed tab's own link when it is chosen from the menu", () => {
     const onChange = vi.fn();
     const items = rooms.map((room) => ({ key: room.id, label: room.label }));
