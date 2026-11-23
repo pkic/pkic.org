@@ -7,6 +7,9 @@ import type { ClassifierKind } from "../../../../assets/shared/classifiers";
 export interface ClassifierSubject {
   text: string;
   title?: string;
+  /** A member page's slogan and short description, read beside its long page in `text`. */
+  slogan?: string;
+  description?: string;
   /** The proposal's format, such as a talk or a panel. */
   format?: string;
   /** Answers to an event's own proposal questions, by question key. */
@@ -41,6 +44,15 @@ export function classifierState(kind: ClassifierKind, subject: ClassifierSubject
       };
     case "presentation":
       return { title: subject.title ?? "", slides: subject.text };
+    case "organization":
+      return {
+        organization_name: subject.title ?? "",
+        ...(subject.slogan ? { slogan: subject.slogan } : {}),
+        ...(subject.description ? { description: subject.description } : {}),
+        ...(subject.text ? { page: subject.text } : {}),
+      };
+    case "person":
+      return { job_title: subject.title ?? "", biography: subject.text };
   }
 }
 

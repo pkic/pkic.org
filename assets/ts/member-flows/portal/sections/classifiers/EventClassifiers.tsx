@@ -5,7 +5,11 @@
  * runs for this event.
  */
 import { useState } from "preact/hooks";
-import { CLASSIFIER_KIND_LABELS, CLASSIFIER_KINDS, type ClassifierKind } from "../../../../../shared/classifiers";
+import {
+  CLASSIFIER_KIND_LABELS,
+  EVENT_CLASSIFIER_KINDS,
+  type EventClassifierKind,
+} from "../../../../../shared/classifiers";
 import {
   classifierEventAdditionsInputSchema,
   classifierSavedResponseSchema,
@@ -24,8 +28,8 @@ import { ClassifierContext } from "./ClassifierContext";
 import { ClassifierTrial } from "./ClassifierTrial";
 import { LayeredClassifierQuestions } from "./LayeredClassifierQuestions";
 
-function isKind(value: string | undefined): value is ClassifierKind {
-  return CLASSIFIER_KINDS.includes(value as ClassifierKind);
+function isKind(value: string | undefined): value is EventClassifierKind {
+  return EVENT_CLASSIFIER_KINDS.includes(value as EventClassifierKind);
 }
 
 function KindAdditions({
@@ -96,7 +100,7 @@ export function EventClassifiers({
   slug: string;
   kind?: string;
   canEdit: boolean;
-  hrefFor: (kind: ClassifierKind) => string;
+  hrefFor: (kind: EventClassifierKind) => string;
 }) {
   const kind = isKind(requested) ? requested : "chat";
   const apiPath = `/api/v1/events/${encodeURIComponent(slug)}/classifiers/${kind}`;
@@ -105,9 +109,9 @@ export function EventClassifiers({
     <div class="pk pk-stack">
       <Tabs
         label="Kinds of content"
-        items={CLASSIFIER_KINDS.map((key) => ({ key, label: CLASSIFIER_KIND_LABELS[key] }))}
+        items={EVENT_CLASSIFIER_KINDS.map((key) => ({ key, label: CLASSIFIER_KIND_LABELS[key] }))}
         active={kind}
-        hrefFor={(key) => hrefFor(key as ClassifierKind)}
+        hrefFor={(key) => hrefFor(key as EventClassifierKind)}
       />
       {state.loading && !state.data ? (
         <Spinner label="Loading the classifier…" />

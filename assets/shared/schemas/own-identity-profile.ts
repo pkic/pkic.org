@@ -18,6 +18,15 @@ export const identityProfileUpdateSchema = z.object({
 });
 export type IdentityProfileUpdate = z.infer<typeof identityProfileUpdateSchema>;
 
+/**
+ * The owner's edit also answers the classifier of the job title and biography: after the check's advice,
+ * saving again with `adviceAcknowledged` keeps the text as written. Staff edits are not checked and do not take it.
+ */
+export const ownIdentityProfileUpdateSchema = identityProfileUpdateSchema.extend({
+  adviceAcknowledged: z.boolean().optional(),
+});
+export type OwnIdentityProfileUpdate = z.infer<typeof ownIdentityProfileUpdateSchema>;
+
 export const ownIdentityProfileSchema = z.object({
   identityId: databaseIdSchema,
   organizationId: databaseIdSchema.nullable(),
@@ -52,7 +61,7 @@ export const ownIdentityProfileUpdateRouteSchema = {
     "Edits any active identity the caller holds without changing the identity the session acts as. Every edit is audited with the previous values, because records that name the identity show the edited values.",
   request: {
     params: ownIdentityProfileParamsSchema,
-    body: { content: { "application/json": { schema: identityProfileUpdateSchema } }, required: true },
+    body: { content: { "application/json": { schema: ownIdentityProfileUpdateSchema } }, required: true },
   },
   responses: {
     "200": {
@@ -60,6 +69,10 @@ export const ownIdentityProfileUpdateRouteSchema = {
       content: { "application/json": { schema: ownIdentityProfileSchema } },
     },
     "404": { description: "The caller holds no active identity with this ID." },
+    "422": {
+      description:
+        "The classifier blocks the job title or biography, or advises on it: save again with adviceAcknowledged to keep it as written.",
+    },
     "409": { description: "The identity or the acting session changed before the edit was saved." },
   },
 };

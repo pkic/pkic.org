@@ -184,7 +184,7 @@ export function Classifiers({ canWrite, kind: requested }: { canWrite: boolean; 
     <div class="pk pk-stack">
       <PageHeader
         title="Classifiers"
-        description="A model reads chat messages, questions, proposals and slides, and advises or blocks what breaks the rules. All content holds the rules every kind shares; events add their own context and questions."
+        description="A model reads chat messages, questions, proposals, slides, member pages and personal profiles, and advises or blocks what breaks the rules. All content holds the rules every kind shares; events add their own context and questions."
       />
       <Tabs
         label="Kinds of content"

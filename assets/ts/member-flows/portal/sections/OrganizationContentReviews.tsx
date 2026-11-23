@@ -23,6 +23,7 @@ import { Field } from "../../../ui/Field";
 import { PageHeader } from "../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { fmt, toast } from "../ui";
+import { ClassifierResultPanel } from "./classifiers/ClassifierResultPanel";
 import { MarkdownEditor } from "../../../components/markdown-editor/MarkdownInput";
 
 const API_BASE = "/api/v1/organizations/content-reviews";
@@ -123,83 +124,86 @@ function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: ()
   if (!detail) return error ? <ErrorAlert error={error} /> : null;
 
   return (
-    // The panel names itself after the organization under review, so a page
-    // holding a queue and one open submission offers two distinguishable
-    // regions rather than an unnamed box below a table.
-    <Panel aria-label={detail.organizationName}>
-      <PanelHeader title={detail.organizationName} />
-      {/* The body is the note's ancestor, so it reports to the one contract. */}
-      <PanelBody class="pk-stack pk-stack--snug" {...form.handlers}>
-        <p class="pk-muted pk-small">
-          Submitted by {detail.submitterName} ({detail.submitterEmail}) on {fmt(detail.submittedAt)}
-        </p>
-        {error && <ErrorAlert error={error} />}
-        {detail.hasLogoChange && <p>Includes a proposed logo change.</p>}
-      </PanelBody>
-      <DataTable
-        caption={`Proposed changes for ${detail.organizationName}`}
-        columns={[
-          {
-            header: "Field",
-            cell: (entry) => ORGANIZATION_CONTENT_FIELD_LABELS[entry.field] ?? entry.field,
-            width: "fit",
-          },
-          // One column shows the change in place — removed words struck,
-          // inserted ones marked — instead of two fixed columns of prose
-          // to compare by eye (#97). The first column is fit-width, so
-          // this one claims the slack explicitly.
-          {
-            header: "Change",
-            cell: (entry) => (
-              <TextDiff
-                before={formatDiffValue(entry.current)}
-                after={formatDiffValue(entry.proposed)}
-                label={`Change to ${ORGANIZATION_CONTENT_FIELD_LABELS[entry.field] ?? entry.field}`}
-              />
-            ),
-            width: "primary",
-          },
-        ]}
-        data={detail.diff}
-        rowKey={(entry) => entry.field}
-        empty="No field changes (logo only)."
-      />
-      <PanelBody class="pk-stack pk-stack--snug" {...form.handlers}>
-        {detail.status === "pending" ? (
-          <>
-            <Field
-              label="Reviewer note"
-              help="Required to reject. Sent to the organization with the decision."
-              {...form.of("reviewerNote")}
-            >
-              {(control) => (
-                <MarkdownEditor
-                  variant="compact"
-                  {...control}
-                  name="reviewerNote"
-                  label="Reviewer note"
-                  initialValue={reviewerNote}
-                  onChange={setReviewerNote}
+    <div class="pk-stack">
+      {/* The panel names itself after the organization under review, so a page
+        holding a queue and one open submission offers two distinguishable
+        regions rather than an unnamed box below a table. */}
+      <Panel aria-label={detail.organizationName}>
+        <PanelHeader title={detail.organizationName} />
+        {/* The body is the note's ancestor, so it reports to the one contract. */}
+        <PanelBody class="pk-stack pk-stack--snug" {...form.handlers}>
+          <p class="pk-muted pk-small">
+            Submitted by {detail.submitterName} ({detail.submitterEmail}) on {fmt(detail.submittedAt)}
+          </p>
+          {error && <ErrorAlert error={error} />}
+          {detail.hasLogoChange && <p>Includes a proposed logo change.</p>}
+        </PanelBody>
+        <DataTable
+          caption={`Proposed changes for ${detail.organizationName}`}
+          columns={[
+            {
+              header: "Field",
+              cell: (entry) => ORGANIZATION_CONTENT_FIELD_LABELS[entry.field] ?? entry.field,
+              width: "fit",
+            },
+            // One column shows the change in place — removed words struck,
+            // inserted ones marked — instead of two fixed columns of prose
+            // to compare by eye (#97). The first column is fit-width, so
+            // this one claims the slack explicitly.
+            {
+              header: "Change",
+              cell: (entry) => (
+                <TextDiff
+                  before={formatDiffValue(entry.current)}
+                  after={formatDiffValue(entry.proposed)}
+                  label={`Change to ${ORGANIZATION_CONTENT_FIELD_LABELS[entry.field] ?? entry.field}`}
                 />
-              )}
-            </Field>
+              ),
+              width: "primary",
+            },
+          ]}
+          data={detail.diff}
+          rowKey={(entry) => entry.field}
+          empty="No field changes (logo only)."
+        />
+        <PanelBody class="pk-stack pk-stack--snug" {...form.handlers}>
+          {detail.status === "pending" ? (
+            <>
+              <Field
+                label="Reviewer note"
+                help="Required to reject. Sent to the organization with the decision."
+                {...form.of("reviewerNote")}
+              >
+                {(control) => (
+                  <MarkdownEditor
+                    variant="compact"
+                    {...control}
+                    name="reviewerNote"
+                    label="Reviewer note"
+                    initialValue={reviewerNote}
+                    onChange={setReviewerNote}
+                  />
+                )}
+              </Field>
+              <div class="pk-cluster">
+                <Button variant="primary" loading={busy} onClick={() => void decide("approve")}>
+                  Approve
+                </Button>
+                <Button variant="danger-quiet" loading={busy} onClick={() => void decide("reject")}>
+                  Reject
+                </Button>
+              </div>
+            </>
+          ) : (
             <div class="pk-cluster">
-              <Button variant="primary" loading={busy} onClick={() => void decide("approve")}>
-                Approve
-              </Button>
-              <Button variant="danger-quiet" loading={busy} onClick={() => void decide("reject")}>
-                Reject
-              </Button>
+              <Badge status={detail.status} />
+              {detail.reviewerNote && <span class="pk-muted pk-small">{detail.reviewerNote}</span>}
             </div>
-          </>
-        ) : (
-          <div class="pk-cluster">
-            <Badge status={detail.status} />
-            {detail.reviewerNote && <span class="pk-muted pk-small">{detail.reviewerNote}</span>}
-          </div>
-        )}
-      </PanelBody>
-    </Panel>
+          )}
+        </PanelBody>
+      </Panel>
+      {detail.classifierResult && <ClassifierResultPanel review={detail.classifierResult} />}
+    </div>
   );
 }
 function RoutedContentReview({ reviewId }: { reviewId: string }) {

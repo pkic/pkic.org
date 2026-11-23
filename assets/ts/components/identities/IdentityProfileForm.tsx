@@ -10,7 +10,12 @@
 import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import { useContractForm } from "../../hooks/useContractForm";
-import { identityProfileUpdateSchema, type IdentityProfileUpdate } from "../../../shared/schemas/own-identity-profile";
+import { PROFILE_CHECK_ADVICE } from "../../../shared/classifiers";
+import {
+  identityProfileUpdateSchema,
+  type OwnIdentityProfileUpdate,
+} from "../../../shared/schemas/own-identity-profile";
+import { ApiClientError } from "../../shared/api-client";
 import { withOrganizationJobTitle } from "../../../shared/schemas/identity-job-title";
 import { friendlyErrorMessage } from "../ErrorAlert";
 import { Alert } from "../../ui/Alert";
@@ -31,6 +36,11 @@ export interface EditableIdentity {
   links: readonly string[];
 }
 
+/** The text the classifier reads: the job title and the biography. */
+function checkedTextOf(body: { jobTitle?: string; biography?: string }): string {
+  return JSON.stringify([body.jobTitle ?? null, body.biography ?? null]);
+}
+
 export function IdentityProfileForm({
   identity,
   editor,
@@ -44,7 +54,7 @@ export function IdentityProfileForm({
   editor: "owner" | "staff";
   purpose?: "profile" | "speaker";
   /** Stores the checked edit on the identity's resource. */
-  save: (body: IdentityProfileUpdate) => Promise<unknown>;
+  save: (body: OwnIdentityProfileUpdate) => Promise<unknown>;
   onSaved: () => void;
   /** The way back without saving: a link to the page it came from, or a button that closes it. */
   cancel: ComponentChildren;
@@ -52,6 +62,9 @@ export function IdentityProfileForm({
   const [draft, setDraft] = useState<IdentityProfileDraft>(() => identityProfileDraft(identity));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The checked text the classifier advised on: saving that same text again keeps it as written, and any
+  // edit of it asks again.
+  const [advisedText, setAdvisedText] = useState<string | null>(null);
   // Checked by the contract the route parses, live and on submit.
   const form = useContractForm(
     withOrganizationJobTitle(identityProfileUpdateSchema, {
@@ -71,9 +84,12 @@ export function IdentityProfileForm({
     }
     setSaving(true);
     try {
-      await save(checked.data);
+      const checkedText = checkedTextOf(checked.data);
+      await save(advisedText === checkedText ? { ...checked.data, adviceAcknowledged: true } : checked.data);
       onSaved();
     } catch (cause) {
+      if (cause instanceof ApiClientError && cause.code === PROFILE_CHECK_ADVICE)
+        setAdvisedText(checkedTextOf(checked.data));
       setError(form.refuse(cause));
     } finally {
       setSaving(false);

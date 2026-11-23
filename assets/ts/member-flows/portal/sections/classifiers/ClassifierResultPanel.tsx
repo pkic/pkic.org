@@ -1,17 +1,17 @@
 /**
- * The classifier's reading of a proposal, beside the committee's own
- * standing. It supports the review and decides nothing: the scores follow the
- * event's rubric, and the concerns are what the author was told at submission.
+ * The classifier's stored reading of a proposal, member page or bio, beside
+ * the review it supports. It decides nothing: the concerns are what the author
+ * was told when they saved, and any scores follow the classifier's rubric.
  */
-import { CLASSIFIER_OUTCOME_LABELS, classifierRaisesConcerns } from "../../../../../../../shared/classifiers";
-import type { ClassifierResult } from "../../../../../../../shared/schemas/classifiers";
-import { formatNumber } from "../../../../../../../shared/format-number";
-import { AttentionMark } from "../../../../../../ui/AttentionList";
-import { DescriptionList } from "../../../../../../ui/DescriptionList";
-import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
-import { fmt } from "../../../../ui";
+import { CLASSIFIER_OUTCOME_LABELS, classifierRaisesConcerns } from "../../../../../shared/classifiers";
+import type { ClassifierResult } from "../../../../../shared/schemas/classifiers";
+import { formatNumber } from "../../../../../shared/format-number";
+import { AttentionMark } from "../../../../ui/AttentionList";
+import { DescriptionList } from "../../../../ui/DescriptionList";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { fmt } from "../../ui";
 
-export function ProposalClassifierResult({ review }: { review: ClassifierResult }) {
+export function ClassifierResultPanel({ review }: { review: ClassifierResult }) {
   const concerns = classifierRaisesConcerns(review.outcome);
   return (
     <Panel aria-label="Automatic review">

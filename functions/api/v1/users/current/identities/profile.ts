@@ -34,6 +34,7 @@ export const CurrentUserIdentityProfilePatch = openApiRoute(
       account,
       data.params.identityId,
       data.body,
+      { ai: c.env.AI },
     );
     return jsonPrivate(
       ownIdentityProfileSchema.parse(await readOwnIdentityProfile(db, account.userId, data.params.identityId)),

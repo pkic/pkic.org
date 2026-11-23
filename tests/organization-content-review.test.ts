@@ -29,9 +29,9 @@ import {
 } from "../assets/shared/schemas/organization-content-reviews";
 import {
   organizationContentReviewCreateResponseSchema,
-  organizationContentReviewCreateSchema,
   organizationContentReviewsListResponseSchema as organizationSelfServiceReviewsListResponseSchema,
 } from "../assets/shared/schemas/organization-self-service";
+import { organizationEditableContentSchema } from "../assets/shared/schemas/organization-profile";
 import { queueOrganizationContentReviewDigests } from "../functions/_lib/services/organization-content";
 import {
   insertUser,
@@ -245,7 +245,7 @@ describe("Organization content moderation", () => {
       const { organizationId, userId } = await seedOrgWithContact("history@example.test", "F");
       const token = await createMemberSession(env.DB, userId, "review-history-token");
       const path = organizationContentReviewsPath(organizationId);
-      const submitted = organizationContentReviewCreateSchema.parse({
+      const submitted = organizationEditableContentSchema.parse({
         description: "Description sent for review",
         slogan: null,
         links: ["https://example.test/submitted"],

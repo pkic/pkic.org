@@ -17,7 +17,7 @@ import { AppError } from "../errors";
 import { getMemberApplicationById } from "./membership/applications/queries";
 import { ownApplicationFilter } from "./membership/applications/ownership";
 import { resolveRepresentativeRoleHolders } from "./membership/representative-roles";
-import type { AuthMember, DatabaseLike, EligibleIdentity } from "../types";
+import type { AuthMember, DatabaseLike, EligibleIdentity, Env } from "../types";
 import type { OwnAccount } from "../auth/member";
 import { resolveEligibleMembershipRows, toEligibleIdentity } from "../auth/identity-capacities";
 import type { MyApplicationsListQuery } from "../../../assets/shared/schemas/me";
@@ -289,12 +289,14 @@ export async function updateMyProfile(
   db: DatabaseLike,
   member: AuthMember,
   input: MyProfileUpdateInput,
+  screening: { ai: Env["AI"] } = { ai: undefined },
 ): Promise<MyProfile> {
   await updateOwnIdentityProfile(
     db,
     { userId: member.userId, sessionId: member.sessionId ?? "", member },
     member.identityId,
     input,
+    screening,
   );
   return getMyProfile(db, member);
 }

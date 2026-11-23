@@ -14,14 +14,17 @@ import {
   CLASSIFIER_MODELS,
   CLASSIFIER_OUTCOMES,
   CLASSIFIER_QUESTION_ID_PATTERN,
+  EVENT_CLASSIFIER_KINDS,
 } from "../classifiers.ts";
 
 export const classifierKindSchema = z.enum(CLASSIFIER_KINDS);
+/** The kinds an event may add to; a member page or bio check is PKIC-wide only. */
+export const eventClassifierKindSchema = z.enum(EVENT_CLASSIFIER_KINDS);
 export const classifierModelSchema = z.enum(CLASSIFIER_MODELS);
 export const classifierOutcomeSchema = z.enum(CLASSIFIER_OUTCOMES);
 
 export const classifierKindParamsSchema = z.object({ kind: classifierKindSchema });
-export const eventClassifierKindParamsSchema = eventSlugParamsSchema.extend({ kind: classifierKindSchema });
+export const eventClassifierKindParamsSchema = eventSlugParamsSchema.extend({ kind: eventClassifierKindSchema });
 
 const questionIdSchema = z
   .string()
@@ -139,7 +142,7 @@ export const classifierSettingsListResponseSchema = z.object({
 export type ClassifierSettingsListResponse = z.infer<typeof classifierSettingsListResponseSchema>;
 
 export const eventClassifierResponseSchema = z.object({
-  kind: classifierKindSchema,
+  kind: eventClassifierKindSchema,
   /** The PKIC-wide check the event starts from: all content with the kind's own. */
   settings: classifierSettingsSchema,
   additions: z.object({

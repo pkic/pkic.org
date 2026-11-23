@@ -13,6 +13,7 @@ import {
   wideClassifier,
   type ClassifierEventAdditions,
   type ClassifierKind,
+  type EventClassifierKind,
   type ClassifierQuestion,
   type ClassifierSettings,
   type EffectiveClassifier,
@@ -227,7 +228,7 @@ export async function listClassifierSettings(db: DatabaseLike): Promise<Classifi
 export async function readEventClassifier(
   db: DatabaseLike,
   eventId: string,
-  kind: ClassifierKind,
+  kind: EventClassifierKind,
 ): Promise<EventClassifierResponse> {
   const results = await db.batch(prepareClassifierSettingsRead(db, eventId, kind));
   const decoded = decodeClassifierSettings(results, [kind]);
@@ -379,7 +380,7 @@ export async function saveEventClassifierAdditions(
   db: DatabaseLike,
   actor: UserBackedAuthAdmin,
   eventId: string,
-  kind: ClassifierKind,
+  kind: EventClassifierKind,
   input: ClassifierEventAdditionsInput,
 ): Promise<{ revision: number }> {
   const now = nowIso();

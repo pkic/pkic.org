@@ -22,7 +22,15 @@ import type {
   EventClassifierResponse,
 } from "./schemas/classifiers";
 
-export const CLASSIFIER_KINDS = ["chat", "question", "proposal", "presentation"] as const;
+/** Kinds an event may add to: its own content. The profile kinds below belong to PKIC alone. */
+export const EVENT_CLASSIFIER_KINDS = ["chat", "question", "proposal", "presentation"] as const;
+export type EventClassifierKind = (typeof EVENT_CLASSIFIER_KINDS)[number];
+
+/** Kinds that read what members write about themselves; PKIC-wide, never per event. */
+export const PROFILE_CLASSIFIER_KINDS = ["organization", "person"] as const;
+export type ProfileClassifierKind = (typeof PROFILE_CLASSIFIER_KINDS)[number];
+
+export const CLASSIFIER_KINDS = [...EVENT_CLASSIFIER_KINDS, ...PROFILE_CLASSIFIER_KINDS] as const;
 export type ClassifierKind = (typeof CLASSIFIER_KINDS)[number];
 
 /** The questions and context every kind reads, stored as the settings row of this kind. */
@@ -34,6 +42,8 @@ export const CLASSIFIER_KIND_LABELS: Record<ClassifierKind, string> = {
   question: "Questions",
   proposal: "Proposals",
   presentation: "Slides",
+  organization: "Member pages",
+  person: "Personal profiles",
 };
 
 /** The model behind every check; the faster one suits chat, the larger one long texts. */
@@ -79,6 +89,9 @@ export const CLASSIFIER_MAX_EVENT_QUESTIONS = CLASSIFIER_MAX_QUESTIONS - CLASSIF
 /** Refusal codes of the proposal screening: a block, or advice the author may set aside by submitting again. */
 export const PROPOSAL_CHECK_BLOCKED = "PROPOSAL_CHECK_BLOCKED";
 export const PROPOSAL_CHECK_ADVICE = "PROPOSAL_CHECK_ADVICE";
+/** Refusal codes of the member page and bio checks, with the same advise-first meaning as the proposal's. */
+export const PROFILE_CHECK_BLOCKED = "PROFILE_CHECK_BLOCKED";
+export const PROFILE_CHECK_ADVICE = "PROFILE_CHECK_ADVICE";
 export const CLASSIFIER_QUESTION_ID_PATTERN = /^[a-z][a-z0-9_]{1,39}$/;
 
 /** A question's id as words, where a short name is enough: `personal_data` reads "Personal data". */

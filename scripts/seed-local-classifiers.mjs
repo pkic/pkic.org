@@ -40,6 +40,8 @@ const KINDS = [
   { kind: "question", model: "clef", questions: [] },
   { kind: "proposal", model: "clef", questions: [SAMPLE_SCORE] },
   { kind: "presentation", model: "clef", questions: [] },
+  { kind: "organization", model: "clef", questions: [] },
+  { kind: "person", model: "clef", questions: [] },
 ];
 
 const escape = (value) => `'${String(value).replaceAll("'", "''")}'`;

@@ -31,7 +31,7 @@ import { FormAnswerTable } from "../../../../../components/forms/FormResponseVie
 import { AuditLogSection } from "./proposal-detail/AuditLogSection";
 import { PresentationVersionsTab } from "./proposal-detail/PresentationVersionsTab";
 import { ProposalStanding } from "./proposal-detail/ProposalStanding";
-import { ProposalClassifierResult } from "./proposal-detail/ProposalClassifierResult";
+import { ClassifierResultPanel } from "../../classifiers/ClassifierResultPanel";
 import { ProposalReviewsTab } from "./proposal-detail/ProposalReviewsTab";
 import {
   proposalActions,
@@ -569,7 +569,7 @@ export function ProposalDetailPage({
             averageScore={reviewSummary.averageScore}
             recommendationCounts={recommendationCounts}
           />
-          {classifierResult && <ProposalClassifierResult review={classifierResult} />}
+          {classifierResult && <ClassifierResultPanel review={classifierResult} />}
           {access.canReview && (
             <ProposalInternalCommentsPanel
               commentDraft={commentDraft}
