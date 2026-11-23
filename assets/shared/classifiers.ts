@@ -181,7 +181,8 @@ export const UNCHECKED_CONTENT_VERDICT: ClassifierVerdict = {
   scorePercent: null,
 };
 
-function percent(value: number): number {
+/** A model probability as a percentage with one decimal, the way every verdict states it. */
+export function classifierPercent(value: number): number {
   return Math.round(Math.min(1, Math.max(0, value)) * 1000) / 10;
 }
 
@@ -198,7 +199,7 @@ export function decideClassifier(
     const answer = answers[question.id];
     if (!answer || answer.kind !== question.kind) continue;
     if (question.kind === "flag" && answer.kind === "flag") {
-      const probabilityPercent = percent(answer.probability);
+      const probabilityPercent = classifierPercent(answer.probability);
       if (probabilityPercent < question.adviseAtPercent && !blocks(question, probabilityPercent)) continue;
       flags.push({
         id: question.id,
@@ -213,7 +214,7 @@ export function decideClassifier(
       if (!(total > 0) || levels < 2) continue;
       const expected = probabilities.reduce((sum, value, index) => sum + (value / total) * index, 0);
       const likeliest = probabilities.reduce((best, value, index) => (value > probabilities[best]! ? index : best), 0);
-      const scorePercent = percent(expected / (levels - 1));
+      const scorePercent = classifierPercent(expected / (levels - 1));
       scores.push({
         id: question.id,
         label: question.label,

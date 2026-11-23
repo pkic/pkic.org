@@ -4,10 +4,12 @@
  * Outputs wait: a message stays off air while it is checked, and when the
  * check advised or blocked it, until a moderator keeps it.
  */
+import { classifierPercent, type ClassifierModel, type ClassifierOutcome } from "../../../../assets/shared/classifiers";
 import {
   liveAutomaticCheckSchema,
   type LiveAutomaticCheck,
 } from "../../../../assets/shared/schemas/live-session-moderation";
+import type { ClassifierRun } from "../classifiers/model";
 import type { LiveRoomSql } from "./room-sql";
 
 /** A check still unanswered after this long no longer keeps its message off air; the model itself gets 4 seconds. */
@@ -24,6 +26,34 @@ export function liveChatCheckHoldsBack(now: number): { sql: string; bindings: st
   };
 }
 
+type LiveCheckScore = NonNullable<LiveAutomaticCheck["flags"]>[number];
+
+/** What one check found, kept for tuning whatever moderators decide later. */
+export interface LiveCheckResult {
+  outcome: ClassifierOutcome;
+  model: ClassifierModel | null;
+  /** The questions that advised or blocked, most certain first. */
+  raised: LiveCheckScore[];
+  /** Every question the model answered, raised or not, most certain first. */
+  scores: LiveCheckScore[];
+}
+
+const byCertainty = (a: LiveCheckScore, b: LiveCheckScore) => b.percent - a.percent;
+
+export function liveCheckResult(run: ClassifierRun): LiveCheckResult {
+  return {
+    outcome: run.verdict.outcome,
+    model: run.model,
+    raised: run.verdict.flags.map((flag) => ({ id: flag.id, percent: flag.probabilityPercent })).sort(byCertainty),
+    scores: [
+      ...Object.entries(run.answers).flatMap(([id, answer]) =>
+        answer.kind === "flag" ? [{ id, percent: classifierPercent(answer.probability) }] : [],
+      ),
+      ...run.verdict.scores.map((score) => ({ id: score.id, percent: score.percent })),
+    ].sort(byCertainty),
+  };
+}
+
 export class LiveChatCheckStore {
   constructor(private readonly sql: LiveRoomSql) {}
 
@@ -35,31 +65,43 @@ export class LiveChatCheckStore {
       messageId,
       at,
     );
-    this.sql.exec("DELETE FROM room_chat_check_flags WHERE message_id = ?", messageId);
+    // New words: what the check found for the old ones no longer stands.
+    this.sql.exec("DELETE FROM room_chat_check_results WHERE message_id = ?", messageId);
   }
 
-  record(messageId: string, check: LiveAutomaticCheck, at: string): void {
+  /**
+   * Keeps what the check found, whether it passed, raised a concern, or got no answer: every score with the model,
+   * so the check can be tuned on these words later. A moderator's keep leaves it in place.
+   */
+  keepResult(messageId: string, result: LiveCheckResult, at: string): void {
+    this.sql.exec(
+      `INSERT INTO room_chat_check_results(message_id, outcome, model, raised_json, scores_json, at) VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(message_id) DO UPDATE SET outcome = excluded.outcome, model = excluded.model,
+         raised_json = excluded.raised_json, scores_json = excluded.scores_json, at = excluded.at`,
+      messageId,
+      result.outcome,
+      result.model,
+      JSON.stringify(result.raised),
+      JSON.stringify(result.scores),
+      at,
+    );
+  }
+
+  /** The check advised against the message or blocked it: it stays off air until a moderator keeps it. */
+  record(messageId: string, outcome: LiveAutomaticCheck["outcome"], notes: string[], at: string): void {
     this.sql.exec(
       `INSERT INTO room_chat_checks(message_id, outcome, notes_json, at) VALUES (?, ?, ?, ?)
        ON CONFLICT(message_id) DO UPDATE SET outcome = excluded.outcome, notes_json = excluded.notes_json, at = excluded.at`,
       messageId,
-      check.outcome,
-      JSON.stringify(check.notes),
+      outcome,
+      JSON.stringify(notes),
       at,
-    );
-    // Which questions raised it and how certain the model was, so a moderator sees why and staff can tune.
-    this.sql.exec(
-      `INSERT INTO room_chat_check_flags(message_id, flags_json) VALUES (?, ?)
-       ON CONFLICT(message_id) DO UPDATE SET flags_json = excluded.flags_json`,
-      messageId,
-      JSON.stringify(check.flags ?? []),
     );
   }
 
   /** Nothing holds the message back for its check any longer: it passed, or a moderator kept it. */
   clear(messageId: string): void {
     this.sql.exec("DELETE FROM room_chat_checks WHERE message_id = ?", messageId);
-    this.sql.exec("DELETE FROM room_chat_check_flags WHERE message_id = ?", messageId);
   }
 
   /** How many of one author's attendee messages the check blocked since `since`; kept ones no longer count. */
@@ -82,7 +124,7 @@ export class LiveChatCheckStore {
       this.sql
         .rows<{ message_id: string; outcome: "advised" | "blocked"; notes_json: string; flags_json: string | null }>(
           `SELECT message_id, outcome, notes_json,
-             (SELECT flags_json FROM room_chat_check_flags WHERE room_chat_check_flags.message_id = room_chat_checks.message_id) AS flags_json
+             (SELECT raised_json FROM room_chat_check_results r WHERE r.message_id = room_chat_checks.message_id) AS flags_json
            FROM room_chat_checks
            WHERE outcome IN ('advised', 'blocked') AND message_id IN (SELECT value FROM json_each(?))`,
           JSON.stringify(ids),

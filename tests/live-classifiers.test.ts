@@ -48,6 +48,24 @@ async function onAir(): Promise<string[]> {
   return feed.messages.map((message) => message.id);
 }
 
+/** What the location's room recorded about one message's check, for tuning. */
+async function checkResult(messageId: string) {
+  const row = await runInDurableObject(f.chatRoom(), (_room, state) =>
+    state.storage.sql
+      .exec<{ outcome: string; model: string | null; raised_json: string; scores_json: string }>(
+        "SELECT outcome, model, raised_json, scores_json FROM room_chat_check_results WHERE message_id = ?",
+        messageId,
+      )
+      .toArray(),
+  );
+  return row.map((result) => ({
+    outcome: result.outcome,
+    model: result.model,
+    raised: JSON.parse(result.raised_json) as unknown,
+    scores: JSON.parse(result.scores_json) as unknown,
+  }))[0];
+}
+
 /** Makes the next "slow" checks wait; the returned function lets them finish. */
 function holdChecks(): () => void {
   let release = () => {};
@@ -127,6 +145,16 @@ describe("automatic checks of live chat and questions", () => {
     expect(await onAir()).not.toContain(sent.id);
     release();
     await vi.waitFor(async () => expect(await onAir()).toContain(sent.id));
+    // A passed check stays on record with every answer, so what the check missed can be found later.
+    expect(await checkResult(sent.id)).toEqual({
+      outcome: "passed",
+      model: expect.any(String),
+      raised: [],
+      scores: [
+        { id: "spam", percent: 2 },
+        { id: "conduct", percent: 2 },
+      ],
+    });
   });
 
   it("keeps a flagged message off air, and puts it on once a moderator keeps it", async () => {
@@ -221,6 +249,8 @@ describe("automatic checks of live chat and questions", () => {
       (update) => update.message.id === rude.id && update.message.moderation?.automaticCheck === undefined,
     );
     expect(kept.message.moderation?.reports).toBe(0);
+    // The keep settles the verdict for the chat, but what the check found stays on record.
+    expect(await checkResult(rude.id)).toMatchObject({ outcome: "advised", raised: [{ id: "conduct", percent: 75 }] });
   });
 
   it("refuses an edit of a question a moderator approved while it was being checked", async () => {

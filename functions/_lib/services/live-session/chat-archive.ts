@@ -3,7 +3,11 @@ import {
   LIVE_CHAT_ARCHIVE_MAX_CHATS,
   type LiveChatEraseResponse,
 } from "../../../../assets/shared/schemas/event-live-chat-archive";
-import { classifierQuestionName } from "../../../../assets/shared/classifiers";
+import {
+  CLASSIFIER_MODEL_LABELS,
+  CLASSIFIER_OUTCOME_LABELS,
+  classifierQuestionName,
+} from "../../../../assets/shared/classifiers";
 import {
   LIVE_MODERATION_REASON_IDS,
   liveModerationReasonLabel,
@@ -28,17 +32,13 @@ interface LocationChat {
 
 const STATUS_LABELS: Record<LiveChatArchiveRow["status"], string> = {
   shown: "Shown",
+  kept: "Kept by a moderator",
   hidden: "Hidden by a moderator",
   held: "Held after reports",
   removed_by_check: "Removed by the check",
 };
 
-const CHECK_LABELS: Record<NonNullable<LiveChatArchiveRow["check_outcome"]>, string> = {
-  advised: "Flagged",
-  blocked: "Removed",
-};
-
-/** The questions the check raised, most certain first: "Solicitation: 96%; Spam: 72%". */
+/** Questions with the model's certainty, most certain first: "Solicitation: 96%; Spam: 72%". */
 function checkScores(json: string | null): string {
   return (readLiveCheckFlags(json) ?? [])
     .map((flag) => `${classifierQuestionName(flag.id)}: ${flag.percent}%`)
@@ -120,8 +120,10 @@ async function audit(
  * day, room and time in UTC, with the session it was sent during. A room keeps
  * its day's chat a week after its last session unless the event keeps it
  * longer, so a download is empty once that passed. Each row carries what the
- * automatic check decided with its scores and what people reported, so the
- * check can be tuned on the words it judged.
+ * automatic check found with every score and its model, how moderators
+ * decided, and what people reported, so the check can be tuned on the words
+ * it judged. An empty Check means no check ran; "Not checked" means the model
+ * gave no answer.
  */
 export async function exportEventChat(
   db: DatabaseLike,
@@ -141,7 +143,10 @@ export async function exportEventChat(
     "Author",
     "Message",
     "Status",
+    "Removal reason",
     "Check",
+    "Check model",
+    "Concerns",
     "Check scores",
     "Reports",
     "Report reasons",
@@ -161,8 +166,11 @@ export async function exportEventChat(
         message.author_name,
         message.body,
         STATUS_LABELS[message.status],
-        message.check_outcome ? CHECK_LABELS[message.check_outcome] : "",
-        checkScores(message.check_flags),
+        message.removal_reason ? liveModerationReasonLabel(message.removal_reason) : "",
+        message.check_outcome ? CLASSIFIER_OUTCOME_LABELS[message.check_outcome] : "",
+        message.check_model ? CLASSIFIER_MODEL_LABELS[message.check_model] : "",
+        checkScores(message.check_raised),
+        checkScores(message.check_scores),
         reports.length ? String(reports.length) : "",
         reportReasons(reports).join("; "),
       ]);

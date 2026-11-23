@@ -24,7 +24,7 @@ import { LIVE_PARTICIPATION_REFUSAL } from "./room-participation-refusal";
 import { chatAudienceKey, seesChatOccurrence } from "./room-chat-audience";
 import type { LiveChatQuestion } from "./location-chat-on-air";
 import type { LiveRoomClassifiers } from "./room-classifiers";
-import { LIVE_CHAT_CHECK_WAIT_MS, LIVE_CHAT_HELD_BY_CHECK } from "./room-chat-checks";
+import { LIVE_CHAT_CHECK_WAIT_MS, LIVE_CHAT_HELD_BY_CHECK, liveCheckResult } from "./room-chat-checks";
 
 type ChatCommand = Extract<LiveRoomClientMessage, { type: `chat.${string}` }>;
 type Actor = { userId: string; name: string };
@@ -310,18 +310,14 @@ export class LiveRoomChatActions {
     const row = this.chat.message(sent.id);
     // Deleted, or edited again meanwhile: the newer words have a check of their own.
     if (!row || !this.ownsCheck(row.id, run)) return;
+    const at = nowIso();
+    if (result) this.feed.moderation.checks.keepResult(row.id, liveCheckResult(result), at);
     const outcome = result?.verdict.outcome;
     if (outcome !== "advised" && outcome !== "blocked") return this.passCheck(row.id, run);
-    const at = nowIso();
     this.feed.moderation.checks.record(
       row.id,
-      {
-        outcome,
-        notes: result!.verdict.flags.map((flag) => flag.message),
-        flags: result!.verdict.flags
-          .map((flag) => ({ id: flag.id, percent: flag.probabilityPercent }))
-          .sort((a, b) => b.percent - a.percent),
-      },
+      outcome,
+      result!.verdict.flags.map((flag) => flag.message),
       at,
     );
     progress.recorded = true;
@@ -427,7 +423,7 @@ export class LiveRoomChatActions {
   ) {
     if (decision === "remove" && reason) this.removeWithReason(actor, row, reason, at);
     else {
-      this.feed.moderation.keep(row.id);
+      this.feed.moderation.keep(row.id, at);
       this.feed.decisions.restore(row.id);
     }
     this.audit(

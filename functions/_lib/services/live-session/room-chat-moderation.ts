@@ -73,8 +73,21 @@ export class LiveChatModerationStore {
     this.sql.exec("DELETE FROM room_chat_pin");
   }
 
-  /** Keeps a message: shown again, its reports reviewed and cleared. */
-  keep(messageId: string): void {
+  /**
+   * A moderator kept the message: it shows again and its reports and check verdict are settled. The keep and the
+   * reports it settled stay on record, so a chat kept for tuning shows what the check and the reporters got wrong.
+   */
+  keep(messageId: string, at: string): void {
+    this.sql.exec(
+      `INSERT OR IGNORE INTO room_chat_kept_reports(message_id, user_id, reason, reported_at)
+       SELECT message_id, user_id, reason, reported_at FROM room_chat_reports WHERE message_id = ?`,
+      messageId,
+    );
+    this.sql.exec(
+      "INSERT INTO room_chat_kept(message_id, at) VALUES (?, ?) ON CONFLICT(message_id) DO UPDATE SET at = excluded.at",
+      messageId,
+      at,
+    );
     this.sql.exec("DELETE FROM room_chat_hidden WHERE message_id = ?", messageId);
     this.sql.exec("DELETE FROM room_chat_reports WHERE message_id = ?", messageId);
     this.checks.clear(messageId);
