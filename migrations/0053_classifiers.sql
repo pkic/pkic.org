@@ -1,6 +1,6 @@
 -- Automatic checks: the PKIC-wide settings for each kind of content, what an
--- event adds to them, and the latest verdict for a proposal or uploaded slides.
--- Chat messages and questions keep their verdicts in the live room's own storage.
+-- event adds to them, and the latest verdict for a proposal, an audience question
+-- or uploaded slides. Chat messages keep their verdicts in the live room's own storage.
 -- `kind` and `outcome` are validated by the shared domain schema, not here.
 
 CREATE TABLE classifier_settings (
@@ -28,7 +28,7 @@ CREATE TABLE event_classifier_additions (
   PRIMARY KEY (event_id, kind)
 );
 
--- One verdict per checked item: a proposal, or one uploaded version of slides.
+-- One verdict per checked item: a proposal, an audience question, or one uploaded version of slides.
 -- It holds the raised flags and scores only, never the checked text.
 CREATE TABLE classifier_results (
   kind           TEXT    NOT NULL,
