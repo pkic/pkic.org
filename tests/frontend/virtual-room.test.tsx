@@ -307,8 +307,8 @@ describe("virtual room", () => {
     expect(host.textContent).toContain("The organizers ended this chat.");
   });
 
-  it("shows a session the studio loaded days early as up next, not live", async () => {
-    loadedInHall = KEYNOTE;
+  it("shows a session the studio loaded days early as up next, not live, after the ones before it", async () => {
+    loadedInHall = PANEL;
     vi.setSystemTime(new Date("2027-01-12T09:30:00.000Z"));
     onDesktop();
     await open();

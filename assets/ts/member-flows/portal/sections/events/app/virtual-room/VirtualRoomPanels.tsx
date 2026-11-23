@@ -89,7 +89,12 @@ export function useRoomLive(
   const shown =
     onStudio && studio && studio.id !== moment.current?.id
       ? early
-        ? { current: moment.current, upcoming: [studio, ...others(studio).filter((next) => next !== moment.current)] }
+        ? {
+            current: moment.current,
+            upcoming: [studio, ...others(studio).filter((next) => next !== moment.current)].sort((a, b) =>
+              a.startAt.localeCompare(b.startAt),
+            ),
+          }
         : { current: studio, upcoming: others(studio) }
       : moment;
   return {

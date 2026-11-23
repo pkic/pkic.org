@@ -115,7 +115,8 @@ export function sessionStartsIn(startAt: string, now: number, zone: ClockZone): 
 /** The wait for the next session, read again every half minute without redrawing the room around it. */
 function StartsIn({ startAt, format }: { startAt: string; format: (startAt: string, now: number) => string | null }) {
   const text = format(startAt, useMinuteClock());
-  return text ? <> · {text}</> : null;
+  // Out of the live region: a wait that changes every minute must not be read out every minute.
+  return text ? <span aria-hidden="true"> · {text}</span> : null;
 }
 
 /**
