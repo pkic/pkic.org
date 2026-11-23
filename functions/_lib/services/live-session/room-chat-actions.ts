@@ -526,7 +526,7 @@ export class LiveRoomChatActions {
           return options.removeWhenHidden &&
             liveChatChannelVisible(row.channel, viewer) &&
             seesChatOccurrence(viewer, row.occurrence_id)
-            ? { type: "chat.removed", messageId: row.id, channel: row.channel }
+            ? { type: "chat.removed", messageId: row.id, channel: row.channel, moderated: true }
             : null;
         },
         // A copy with something of the viewer's own is theirs alone; every other copy is shared by its audience.

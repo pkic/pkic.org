@@ -82,7 +82,9 @@ describe("automatic checks of live chat and questions", () => {
       outcome: "blocked",
       notes: [expect.any(String)],
     });
-    await reader.next("chat.removed", (update) => update.messageId === spam.id);
+    expect(await reader.next("chat.removed", (update) => update.messageId === spam.id)).toMatchObject({
+      moderated: true,
+    });
 
     const rude = await say(author, "The organizers are idiots", reader);
     const flagged = await operator.next(

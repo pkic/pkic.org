@@ -162,8 +162,11 @@ const CHAT: LiveLocationChatConnection = {
     chat: [
       said(1, "Riley Sample", "Good morning, everyone.", false, 5),
       said(2, "Jordan Lee", "Is the **hybrid** profile in the draft already?"),
+      // A message moderation took after this attendee saw it: its place stays, its author and words do not.
+      said(4, "", ""),
       said(3, "Alex Example", "Yes, section 4 covers it.", true),
     ],
+    chatRemoved: [said(4, "", "").id],
     refusal: null,
   },
   status: "live",

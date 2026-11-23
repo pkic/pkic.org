@@ -170,7 +170,15 @@ const chatMessagesSchema = z.array(liveChatMessageSchema).max(LIVE_CHAT_POLICY.h
 export const liveChatServerMessageSchemas = [
   /** A new message, or a change to one this viewer already holds. */
   z.object({ type: z.literal("chat.message"), message: liveChatMessageSchema }).strict(),
-  z.object({ type: z.literal("chat.removed"), messageId: databaseIdSchema, channel: liveChatChannelSchema }).strict(),
+  /** The message is gone for this viewer; `moderated` when moderation took it, so a reader who had it keeps a trace. */
+  z
+    .object({
+      type: z.literal("chat.removed"),
+      messageId: databaseIdSchema,
+      channel: liveChatChannelSchema,
+      moderated: z.literal(true).optional(),
+    })
+    .strict(),
   /** New reaction counts; `myReactions` is null when this viewer's own reactions did not change. */
   z
     .object({
