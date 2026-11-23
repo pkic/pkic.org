@@ -46,7 +46,7 @@ export const organizationMemberProfileGetRouteSchema = {
 };
 
 export const organizationContentReviewCreateSchema = organizationEditableContentSchema.extend({
-  /** The contact saw the automatic check's advice and submits as written; only a block still refuses. */
+  /** The contact saw the classifier's advice and submits as written; only a block still refuses. */
   adviceAcknowledged: z.boolean().default(false),
 });
 export const organizationContentReviewCreateResponseSchema = z.object({ review: organizationContentReviewSchema });
@@ -70,7 +70,7 @@ export const organizationContentReviewCreateRouteSchema = {
     "409": { description: "A submission is already pending or authorization changed." },
     "422": {
       description:
-        "No editable fields were submitted, or the automatic check blocks the text or advises on it: the contact submits again with adviceAcknowledged to send it as written.",
+        "No editable fields were submitted, or the classifier blocks the text or advises on it: the contact submits again with adviceAcknowledged to send it as written.",
     },
   },
 };

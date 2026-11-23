@@ -114,8 +114,8 @@ export const eventProposalDetailResponseSchema = z.object({
   form: activeFormSummarySchema.nullable(),
   minReviewsRequired: z.number().int().nonnegative(),
   sessionTypes: proposalSessionTypesSchema,
-  /** Reviewers only: the automatic check's verdict and scores from the latest submission or edit. */
-  automaticReview: classifierResultSchema.nullable().default(null),
+  /** Reviewers only: the classifier's verdict and scores from the latest submission or edit. */
+  classifierResult: classifierResultSchema.nullable().default(null),
 });
 
 export const proposalStatsSchema = z.object({

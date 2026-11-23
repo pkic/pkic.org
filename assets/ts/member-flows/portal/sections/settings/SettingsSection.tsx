@@ -120,7 +120,7 @@ export function SettingsSection({
             portalHasGlobalPermission(session, "identities:activate")
           }
         />
-      ) : requested === "/settings/automatic-checks" ? (
+      ) : requested === "/settings/classifiers" ? (
         <Classifiers canWrite={portalHasGlobalPermission(session, "events:manage")} kind={resourceId} />
       ) : requested === "/settings/audit-log" ? (
         resourceId ? (
@@ -168,7 +168,7 @@ export function SettingsSection({
   // The same navigation entry supplies the sidebar, index, and page trail.
   // Access control owns a deeper trail for its tabs and records; addressable
   // detail pages provide their record-specific leaf after loading it.
-  if ((resourceId && page !== "membership-categories" && page !== "automatic-checks") || page === "access-control")
+  if ((resourceId && page !== "membership-categories" && page !== "classifiers") || page === "access-control")
     return content;
   return (
     <div class="pk pk-stack pk-stack--snug">

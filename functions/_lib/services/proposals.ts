@@ -276,7 +276,7 @@ export async function updateProposalForVerifiedOwner(
     formRevisionGuard?: StatementLike | null;
     formPlacementId?: string | null;
     formSubmissionStatements?: StatementLike[];
-    /** The automatic check of the edited proposal, run once the edit is known to apply and kept in the same batch. */
+    /** The classifier of the edited proposal, run once the edit is known to apply and kept in the same batch. */
     screen?: () => Promise<ClassifierRun | null>;
   },
 ): Promise<ProposalRecord> {

@@ -74,13 +74,13 @@ function holdChecks(): () => void {
   return release;
 }
 
-describe("automatic checks of live chat and questions", () => {
+describe("classifiers of live chat and questions", () => {
   beforeEach(async () => {
     await f.setup();
     // Spam blocks from 90%; conduct at 75% only advises.
     const flags = [sampleFlag("spam", "Looks like spam."), sampleFlag("conduct", "May break the code of conduct.")];
-    await saveCheckSettings("chat_message", flags);
-    await saveCheckSettings("audience_question", flags);
+    await saveCheckSettings("chat", flags);
+    await saveCheckSettings("question", flags);
     model.run.mockClear();
     gate = null;
     await giveRoomsTheModel();
@@ -97,7 +97,7 @@ describe("automatic checks of live chat and questions", () => {
       "chat.message",
       (update) => update.message.id === spam.id && update.message.moderation?.held === true,
     );
-    expect(held.message.moderation?.automaticCheck).toEqual({
+    expect(held.message.moderation?.classifier).toEqual({
       outcome: "blocked",
       notes: [expect.any(String)],
       flags: [{ id: "spam", percent: 99 }],
@@ -109,12 +109,12 @@ describe("automatic checks of live chat and questions", () => {
     const rude = await say(author, "The organizers are idiots", reader);
     const flagged = await operator.next(
       "chat.message",
-      (update) => update.message.id === rude.id && update.message.moderation?.automaticCheck !== undefined,
+      (update) => update.message.id === rude.id && update.message.moderation?.classifier !== undefined,
     );
     expect(flagged.message.moderation).toMatchObject({
       held: false,
       hidden: null,
-      automaticCheck: { outcome: "advised" },
+      classifier: { outcome: "advised" },
     });
     const fresh = await f.connectChat("operator");
     const snapshot = fresh.received[0] as Extract<LiveRoomServerMessage, { type: "location.chat.snapshot" }>;
@@ -128,7 +128,7 @@ describe("automatic checks of live chat and questions", () => {
     operator.send({ type: "chat.moderate", messageId: rude.id, decision: "keep" });
     const kept = await operator.next(
       "chat.message",
-      (update) => update.message.id === rude.id && update.message.moderation?.automaticCheck === undefined,
+      (update) => update.message.id === rude.id && update.message.moderation?.classifier === undefined,
     );
     expect(kept.message.moderation?.reports).toBe(0);
     expect(model.run).toHaveBeenCalledTimes(2);
@@ -167,7 +167,7 @@ describe("automatic checks of live chat and questions", () => {
     const rude = await say(author, "The organizers are idiots", reader);
     await operator.next(
       "chat.message",
-      (update) => update.message.id === rude.id && update.message.moderation?.automaticCheck !== undefined,
+      (update) => update.message.id === rude.id && update.message.moderation?.classifier !== undefined,
     );
     await vi.waitFor(async () => expect(await onAir()).toEqual([fine.id]));
     operator.send({ type: "chat.moderate", messageId: rude.id, decision: "keep" });
@@ -228,11 +228,11 @@ describe("automatic checks of live chat and questions", () => {
     release();
     await operator.next(
       "chat.message",
-      (update) => update.message.id === mine.message.id && update.message.moderation?.automaticCheck !== undefined,
+      (update) => update.message.id === mine.message.id && update.message.moderation?.classifier !== undefined,
     );
     const fresh = await f.connectChat("operator");
     const snapshot = fresh.received[0] as Extract<LiveRoomServerMessage, { type: "location.chat.snapshot" }>;
-    expect(snapshot.chatReports?.find((message) => message.id === mine.message.id)?.moderation?.automaticCheck).toEqual(
+    expect(snapshot.chatReports?.find((message) => message.id === mine.message.id)?.moderation?.classifier).toEqual(
       // Read back from the room's store, with the question it raised.
       { outcome: "advised", notes: [expect.any(String)], flags: [{ id: "conduct", percent: 75 }] },
     );
@@ -243,11 +243,11 @@ describe("automatic checks of live chat and questions", () => {
     const reader = await f.connectChat("secondAttendee");
     const operator = await f.connectChat("operator");
     const rude = await say(author, "The organizers are idiots", reader);
-    await operator.next("chat.message", (update) => update.message.moderation?.automaticCheck !== undefined);
+    await operator.next("chat.message", (update) => update.message.moderation?.classifier !== undefined);
     operator.send({ type: "chat.moderate", messageId: rude.id, decision: "keep" });
     const kept = await operator.next(
       "chat.message",
-      (update) => update.message.id === rude.id && update.message.moderation?.automaticCheck === undefined,
+      (update) => update.message.id === rude.id && update.message.moderation?.classifier === undefined,
     );
     expect(kept.message.moderation?.reports).toBe(0);
     // The keep settles the verdict for the chat, but what the check found stays on record.
@@ -293,9 +293,9 @@ describe("automatic checks of live chat and questions", () => {
     const text = "Why are the organizers such idiots about timing?";
     author.send({ type: "question.ask", text, anonymous: false });
     const asked = await operator.next("question.changed", (message) => message.question.text === text);
-    expect(asked.question).toMatchObject({ status: "pending", automaticCheck: { outcome: "advised" } });
+    expect(asked.question).toMatchObject({ status: "pending", classifier: { outcome: "advised" } });
     const mine = await author.next("question.changed", (message) => message.question.text === text);
-    expect(mine.question.automaticCheck).toBeUndefined();
+    expect(mine.question.classifier).toBeUndefined();
 
     const snapshot = await f.connect({ person: "operator" });
     const questions = (await snapshot.next("room.snapshot")).questions;
@@ -304,7 +304,7 @@ describe("automatic checks of live chat and questions", () => {
     // What the check found reaches D1 with the question, every answer included, so it outlives the room.
     await runDurableObjectAlarm(f.room());
     const stored = await env.DB.prepare(
-      "SELECT outcome, verdict_json FROM classifier_results WHERE kind = 'audience_question' AND subject_id = ?",
+      "SELECT outcome, verdict_json FROM classifier_results WHERE kind = 'question' AND subject_id = ?",
     )
       .bind(asked.question.id)
       .first<{ outcome: string; verdict_json: string }>();
@@ -325,7 +325,7 @@ describe("automatic checks of live chat and questions", () => {
     const fresh = await f.connectChat("operator");
     const snapshot = fresh.received[0] as Extract<LiveRoomServerMessage, { type: "location.chat.snapshot" }>;
     expect(snapshot.chatReports).toEqual([]);
-    expect(snapshot.chat.find((entry) => entry.id === message.id)?.moderation?.automaticCheck).toBeUndefined();
+    expect(snapshot.chat.find((entry) => entry.id === message.id)?.moderation?.classifier).toBeUndefined();
     expect(operator.received.some((update) => update.type === "chat.removed")).toBe(false);
   });
 });

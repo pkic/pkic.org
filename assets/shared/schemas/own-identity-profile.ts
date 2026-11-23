@@ -19,7 +19,7 @@ export const identityProfileUpdateSchema = z.object({
 export type IdentityProfileUpdate = z.infer<typeof identityProfileUpdateSchema>;
 
 /**
- * The owner's edit also answers the automatic check of the job title and biography: after the check's advice,
+ * The owner's edit also answers the classifier of the job title and biography: after the check's advice,
  * saving again with `adviceAcknowledged` keeps the text as written. Staff edits are not checked and do not take it.
  */
 export const ownIdentityProfileUpdateSchema = identityProfileUpdateSchema.extend({
@@ -71,7 +71,7 @@ export const ownIdentityProfileUpdateRouteSchema = {
     "404": { description: "The caller holds no active identity with this ID." },
     "422": {
       description:
-        "The automatic check blocks the job title or biography, or advises on it: save again with adviceAcknowledged to keep it as written.",
+        "The classifier blocks the job title or biography, or advises on it: save again with adviceAcknowledged to keep it as written.",
     },
     "409": { description: "The identity or the acting session changed before the edit was saved." },
   },

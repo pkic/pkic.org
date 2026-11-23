@@ -124,13 +124,13 @@ export async function listSpeakerProfileReviews(
   const profiles = await Promise.all(rows.map(decodeSpeakerProfile));
   const verdicts = await readClassifierResults(
     db,
-    "person_profile",
+    "person",
     profiles.flatMap((profile) => (profile.identityId ? [{ id: profile.identityId }] : [])),
   );
   return {
     profiles: profiles.map((profile) => ({
       ...profile,
-      automaticReview: profile.identityId ? (verdicts.get(profile.identityId) ?? null) : null,
+      classifierResult: profile.identityId ? (verdicts.get(profile.identityId) ?? null) : null,
     })),
     page: buildPageInfo(query.limit, query.offset, count?.total ?? 0, rows.length),
   };

@@ -19,7 +19,7 @@ export function liveChatAwaitsReview(message: LiveChatMessage): boolean {
   const moderation = message.moderation;
   return (
     moderation != null &&
-    (moderation.reports > 0 || moderation.automaticCheck !== undefined) &&
+    (moderation.reports > 0 || moderation.classifier !== undefined) &&
     (moderation.hidden === null || moderation.held)
   );
 }

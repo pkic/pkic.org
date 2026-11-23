@@ -133,7 +133,7 @@ export async function submitOrgContentChange(
   const verdict =
     slogan || description || page
       ? await screenProfileContent({ AI: screening.ai }, db, {
-          kind: "organization_profile",
+          kind: "organization",
           subject: { title: org.name, slogan, description, text: page },
           adviceAcknowledged: screening.adviceAcknowledged,
           field,
@@ -167,7 +167,7 @@ export async function submitOrgContentChange(
         { organizationId: org.id, changedFields: Object.keys(changedFields) },
         now,
       ),
-      ...(verdict ? [prepareStoreClassifierResult(db, "organization_profile", id, verdict, now)] : []),
+      ...(verdict ? [prepareStoreClassifierResult(db, "organization", id, verdict, now)] : []),
     ]);
   } catch (error) {
     if (isAuthorizationGuardFailure(error)) {

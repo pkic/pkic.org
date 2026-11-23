@@ -22,8 +22,8 @@ export const liveParticipationBlockSchema = z.enum(LIVE_PARTICIPATION_BLOCKS);
  * A removed item, as its author and moderators see it. Everyone else no
  * longer receives the item. `byName` is null for the author.
  */
-/** Moderators only: the automatic check advised against a message or question, or held it. */
-export const liveAutomaticCheckSchema = z
+/** Moderators only: the classifier advised against a message or question, or held it. */
+export const liveClassifierVerdictSchema = z
   .object({
     outcome: z.enum(["advised", "blocked"]),
     /** What each raised question says about the words, as configured. */
@@ -39,7 +39,7 @@ export const liveAutomaticCheckSchema = z
       .optional(),
   })
   .strict();
-export type LiveAutomaticCheck = z.infer<typeof liveAutomaticCheckSchema>;
+export type LiveClassifierVerdict = z.infer<typeof liveClassifierVerdictSchema>;
 
 export const liveRemovalSchema = z
   .object({ reason: liveModerationReasonSchema, at: utcInstantSchema, byName: livePersonNameSchema.nullable() })

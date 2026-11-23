@@ -1,6 +1,6 @@
--- Automatic checks: the PKIC-wide settings for each kind of content, what an
--- event adds to them, and the latest verdict for a proposal, an audience question
--- or uploaded slides. Chat messages keep their verdicts in the live room's own storage.
+-- Classifiers: the PKIC-wide settings for each kind of content and for all
+-- content (the row whose kind is `all`), what an event adds to them, and the
+-- latest verdict for a proposal, a question or uploaded slides. Chat messages keep their verdicts in the live room's own storage.
 -- `kind` and `outcome` are validated by the shared domain schema, not here.
 
 CREATE TABLE classifier_settings (
@@ -10,6 +10,8 @@ CREATE TABLE classifier_settings (
   context             TEXT    NOT NULL,
   -- The flag and score questions, as the shared question schema describes them.
   questions_json      TEXT    NOT NULL,
+  -- The all-content questions one kind switches off; empty on the `all` row itself.
+  disabled_question_ids_json TEXT NOT NULL DEFAULT '[]',
   revision            INTEGER NOT NULL,
   updated_by_user_id  TEXT REFERENCES users(id),
   updated_at          TEXT    NOT NULL

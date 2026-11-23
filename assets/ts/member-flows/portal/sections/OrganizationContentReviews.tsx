@@ -23,7 +23,7 @@ import { Field } from "../../../ui/Field";
 import { PageHeader } from "../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { fmt, toast } from "../ui";
-import { AutomaticReview } from "./classifiers/AutomaticReview";
+import { ClassifierResultPanel } from "./classifiers/ClassifierResultPanel";
 import { MarkdownEditor } from "../../../components/markdown-editor/MarkdownInput";
 
 const API_BASE = "/api/v1/organizations/content-reviews";
@@ -202,7 +202,7 @@ function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: ()
           )}
         </PanelBody>
       </Panel>
-      {detail.automaticReview && <AutomaticReview review={detail.automaticReview} />}
+      {detail.classifierResult && <ClassifierResultPanel review={detail.classifierResult} />}
     </div>
   );
 }

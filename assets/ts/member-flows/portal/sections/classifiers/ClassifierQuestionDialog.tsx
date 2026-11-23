@@ -1,5 +1,5 @@
 /**
- * One question of an automatic check, added or changed in a dialog: a flag
+ * One question of a classifier, added or changed in a dialog: a flag
  * that advises or blocks with a message to the author, or a score that rates
  * the content for reviewers on levels from lowest to highest.
  */

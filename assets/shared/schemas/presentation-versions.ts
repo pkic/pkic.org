@@ -42,8 +42,8 @@ export const presentationVersionSchema = z.object({
   isCurrent: z.boolean(),
   deletedAt: z.string().nullable(),
   latestReview: presentationVersionReviewSchema.nullable(),
-  /** Organizers only: the automatic check of the slides; null while it has not run yet. */
-  automaticCheck: classifierResultSchema.nullable().optional(),
+  /** Organizers only: the classifier of the slides; null while it has not run yet. */
+  classifier: classifierResultSchema.nullable().optional(),
 });
 
 export const presentationVersionsResponseSchema = paginatedResponseSchema("versions", presentationVersionSchema);

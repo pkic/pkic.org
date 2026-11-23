@@ -221,10 +221,10 @@ export interface Env {
    * a Bearer token is granted admin privileges without a DB session lookup.
    */
   ADMIN_API_KEY?: string;
-  /** Workers AI binding for the ticket classifier and the automatic checks. Absent in tests and local runs without it. */
+  /** Workers AI binding for the ticket classifier and the classifiers. Absent in tests and local runs without it. */
   AI?: {
     run(model: string, input: Record<string, unknown>): Promise<unknown>;
-    /** Workers AI's document converter; the automatic check of slides reads PDF and documents through it. */
+    /** Workers AI's document converter; the classifier of slides reads PDF and documents through it. */
     toMarkdown?(
       file: { name: string; blob: Blob },
       options?: { conversionOptions?: { output?: { format?: "markdown" | "text" } } },

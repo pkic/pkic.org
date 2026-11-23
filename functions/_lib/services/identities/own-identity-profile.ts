@@ -30,7 +30,7 @@ export interface OwnIdentityProfileUpdateInput {
   biography?: string;
   links?: string[];
   showOnOrgProfile?: boolean;
-  /** The owner saw the automatic check's advice and saves as written; only a block still refuses. */
+  /** The owner saw the classifier's advice and saves as written; only a block still refuses. */
   adviceAcknowledged?: boolean;
 }
 
@@ -144,7 +144,7 @@ export async function updateOwnIdentityProfile(
   const verdict =
     textChanged && (jobTitle || biography.trim())
       ? await screenProfileContent({ AI: screening.ai }, db, {
-          kind: "person_profile",
+          kind: "person",
           subject: { title: jobTitle, text: biography },
           adviceAcknowledged: input.adviceAcknowledged === true,
           field: "biography",
@@ -194,11 +194,11 @@ export async function updateOwnIdentityProfile(
     }),
   );
   if (edit.individualJobTitle) statements.push(edit.individualJobTitle);
-  if (verdict) statements.push(prepareStoreClassifierResult(db, "person_profile", current.id, verdict, now));
+  if (verdict) statements.push(prepareStoreClassifierResult(db, "person", current.id, verdict, now));
   // Changed text that was not checked, because both were emptied or no check ran, leaves no verdict of the old text.
   else if (textChanged)
     statements.push(
-      db.prepare("DELETE FROM classifier_results WHERE kind = 'person_profile' AND subject_id = ?").bind(current.id),
+      db.prepare("DELETE FROM classifier_results WHERE kind = 'person' AND subject_id = ?").bind(current.id),
     );
   try {
     await db.batch(statements);

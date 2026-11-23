@@ -77,8 +77,8 @@ export const organizationContentReviewDetailSchema = organizationContentReviewSu
   diff: z.array(organizationContentReviewDiffEntrySchema),
   logoStagingR2Key: z.string().nullable(),
   currentLogoR2Key: z.string().nullable(),
-  /** The automatic check's reading of the proposed text, or null when it was never checked. */
-  automaticReview: classifierResultSchema.nullable().default(null),
+  /** The classifier's reading of the proposed text, or null when it was never checked. */
+  classifierResult: classifierResultSchema.nullable().default(null),
 });
 export const organizationContentReviewDetailResponseSchema = z.object({
   review: organizationContentReviewDetailSchema,

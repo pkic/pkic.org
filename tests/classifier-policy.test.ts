@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 import { liveChatActions } from "../assets/shared/live-chat-policy";
 import {
   CLASSIFIER_MAX_EVENT_QUESTIONS,
+  CLASSIFIER_MAX_KIND_QUESTIONS,
   CLASSIFIER_MAX_QUESTIONS,
+  CLASSIFIER_MAX_SHARED_QUESTIONS,
   CLASSIFIER_MAX_WIDE_QUESTIONS,
   decideClassifier,
   effectiveClassifier,
   mergedClassifierQuestions,
+  wideClassifier,
   type ClassifierQuestion,
   type ClassifierSettings,
 } from "../assets/shared/classifiers";
@@ -14,6 +17,7 @@ import {
   classifierEventAdditionsInputSchema,
   classifierFlagSchema,
   classifierSettingsInputSchema,
+  classifierSharedSettingsInputSchema,
 } from "../assets/shared/schemas/classifiers";
 
 const spam: ClassifierQuestion = {
@@ -117,6 +121,21 @@ describe("an event's check", () => {
   });
 });
 
+describe("a kind's PKIC-wide check", () => {
+  it("reads the all-content context and questions first, then the kind's, which can replace or turn one off", () => {
+    const shared = { context: "PKIC rules.", questions: [spam, offTopic] };
+    const looser = { ...spam, blockAtPercent: null };
+    const wide = wideClassifier(shared, {
+      enabled: true,
+      model: "clef",
+      context: "Chat rules.",
+      questions: [looser],
+      disabledQuestionIds: ["off_topic"],
+    });
+    expect(wide).toEqual({ enabled: true, model: "clef", context: "PKIC rules.\n\nChat rules.", questions: [looser] });
+  });
+});
+
 describe("check settings contract", () => {
   it("refuses a block level below the advise level and duplicate ids", () => {
     expect(classifierFlagSchema.safeParse({ ...spam, blockAtPercent: 40 }).success).toBe(false);
@@ -135,17 +154,25 @@ describe("an event's questions beside the PKIC-wide ones", () => {
   const many = (count: number, prefix: string): ClassifierQuestion[] =>
     Array.from({ length: count }, (_, index) => ({ ...spam, id: `${prefix}_${String(index).padStart(2, "0")}` }));
 
-  it("gives each scope its own share of the limit, so the largest PKIC-wide and event sets still fit together", () => {
-    const wide = many(CLASSIFIER_MAX_WIDE_QUESTIONS, "wide");
+  it("gives each scope its own share of the limit, so the largest all-content, kind and event sets still fit together", () => {
+    const shared = many(CLASSIFIER_MAX_SHARED_QUESTIONS, "shared");
+    const own = many(CLASSIFIER_MAX_KIND_QUESTIONS, "kind");
     const added = many(CLASSIFIER_MAX_EVENT_QUESTIONS, "event");
-    const wideInput = { expectedRevision: 0, enabled: true, model: "clef", context: "" };
+    const sharedInput = { expectedRevision: 0, context: "" };
+    const kindInput = { expectedRevision: 0, enabled: true, model: "clef", context: "" };
     const eventInput = { expectedRevision: 0, context: "", disabledQuestionIds: [] };
-    expect(classifierSettingsInputSchema.safeParse({ ...wideInput, questions: wide }).success).toBe(true);
-    expect(classifierSettingsInputSchema.safeParse({ ...wideInput, questions: [...wide, spam] }).success).toBe(false);
+    expect(classifierSharedSettingsInputSchema.safeParse({ ...sharedInput, questions: shared }).success).toBe(true);
+    expect(
+      classifierSharedSettingsInputSchema.safeParse({ ...sharedInput, questions: [...shared, spam] }).success,
+    ).toBe(false);
+    expect(classifierSettingsInputSchema.safeParse({ ...kindInput, questions: own }).success).toBe(true);
+    expect(classifierSettingsInputSchema.safeParse({ ...kindInput, questions: [...own, spam] }).success).toBe(false);
     expect(classifierEventAdditionsInputSchema.safeParse({ ...eventInput, questions: added }).success).toBe(true);
     expect(classifierEventAdditionsInputSchema.safeParse({ ...eventInput, questions: [...added, spam] }).success).toBe(
       false,
     );
+    const wide = mergedClassifierQuestions(shared, { context: "", questions: own, disabledQuestionIds: [] });
+    expect(wide).toHaveLength(CLASSIFIER_MAX_WIDE_QUESTIONS);
     const merged = mergedClassifierQuestions(wide, { context: "", questions: added, disabledQuestionIds: [] });
     expect(merged).toHaveLength(CLASSIFIER_MAX_QUESTIONS);
   });
@@ -164,7 +191,7 @@ describe("an event's questions beside the PKIC-wide ones", () => {
   });
 });
 
-describe("keeping a message the automatic check flagged", () => {
+describe("keeping a message the classifier flagged", () => {
   it("offers a moderator keep for a flagged message nobody reported, and no one else", () => {
     const message = {
       channel: "attendee" as const,

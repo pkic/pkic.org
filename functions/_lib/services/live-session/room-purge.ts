@@ -5,7 +5,7 @@ import { parseJsonSafe } from "../../utils/json";
 
 /**
  * What a room keeps after its week when its event keeps the chat longer: the
- * attendee chat with what the automatic check found, how moderators decided,
+ * attendee chat with what the classifier found, how moderators decided,
  * its reports and edits, the chat counts, and what the room needs to know its
  * session and its copy. Operator chat, questions,
  * polls, ballots and controls go with the week as before.

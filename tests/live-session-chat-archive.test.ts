@@ -197,7 +197,7 @@ describe("live chat retention", () => {
 
     const lines = (await (await request("GET")).text()).split("\r\n");
     expect(lines[0]).toBe(
-      "Room,Day,Session,Sent (UTC),Edited (UTC),Author,Message,Status,Removal reason,Check,Check model,Concerns,Check scores,Reports,Report reasons",
+      "Room,Day,Session,Sent (UTC),Edited (UTC),Author,Message,Status,Removal reason,Classifier,Classifier model,Concerns,Classifier scores,Reports,Report reasons",
     );
     expect(lines[1]).toMatch(
       /,"Hello, everyone",Kept by a moderator,,Concerns raised,Thorough \(Clef\),Conduct: 75%,Conduct: 75%; Spam: 4%,3,Spam: 2; Abuse or harassment: 1$/,
@@ -233,7 +233,7 @@ describe("event chat download and erasure", () => {
     expect(download.headers.get("content-disposition")).toContain("live-chat.csv");
     const lines = (await download.text()).split("\r\n");
     expect(lines[0]).toBe(
-      "Room,Day,Session,Sent (UTC),Edited (UTC),Author,Message,Status,Removal reason,Check,Check model,Concerns,Check scores,Reports,Report reasons",
+      "Room,Day,Session,Sent (UTC),Edited (UTC),Author,Message,Status,Removal reason,Classifier,Classifier model,Concerns,Classifier scores,Reports,Report reasons",
     );
     // Each message is dated by the session on when it was sent; neither was edited.
     const dated = lines.slice(1).map((line) => {

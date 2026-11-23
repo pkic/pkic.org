@@ -34,7 +34,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
       form: detail.form,
       minReviewsRequired: config.minProposalReviews,
       sessionTypes: detail.sessionTypes,
-      automaticReview: access.canReview ? await readClassifierResult(requestDb(c), "proposal", proposalId) : null,
+      classifierResult: access.canReview ? await readClassifierResult(requestDb(c), "proposal", proposalId) : null,
     }),
   );
 }

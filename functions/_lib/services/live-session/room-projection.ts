@@ -94,9 +94,7 @@ export function projectLiveQuestion(
     addressedTo: row.addressed_to,
     // Nobody but moderators can tell a prepared question from an asked one.
     prepared: operator && row.prepared === 1,
-    ...(operator && row.check_outcome
-      ? { automaticCheck: { outcome: row.check_outcome, notes: checkNotes(row) } }
-      : {}),
+    ...(operator && row.check_outcome ? { classifier: { outcome: row.check_outcome, notes: checkNotes(row) } } : {}),
   };
 }
 

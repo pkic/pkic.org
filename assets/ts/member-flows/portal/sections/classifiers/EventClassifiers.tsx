@@ -1,5 +1,5 @@
 /**
- * An event's automatic checks: the PKIC-wide questions it starts from, which
+ * An event's classifiers: the PKIC-wide questions it starts from, which
  * it may turn off or replace, its own questions, and the context it adds,
  * such as its topics, tracks and terms. The test bench runs the check as it
  * runs for this event.
@@ -9,15 +9,14 @@ import {
   CLASSIFIER_KIND_LABELS,
   EVENT_CLASSIFIER_KINDS,
   type EventClassifierKind,
-  type ClassifierQuestion,
 } from "../../../../../shared/classifiers";
 import {
+  classifierEventAdditionsInputSchema,
   classifierSavedResponseSchema,
   eventClassifierResponseSchema,
   type ClassifierEventAdditionsInput,
   type EventClassifierResponse,
 } from "../../../../../shared/schemas/classifiers";
-import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { Tabs } from "../../../../components/Tabs";
@@ -25,29 +24,12 @@ import { useData } from "../../../../hooks/useData";
 import { getJson, putJson } from "../../../../shared/api-client";
 import { Alert } from "../../../../ui/Alert";
 import { toast } from "../../ui";
-import { ClassifierQuestions } from "./ClassifierQuestions";
-import type { ClassifierQuestionRow } from "./ClassifierQuestionTable";
+import { ClassifierContext } from "./ClassifierContext";
 import { ClassifierTrial } from "./ClassifierTrial";
-import { EventClassifierContext } from "./EventClassifierContext";
+import { LayeredClassifierQuestions } from "./LayeredClassifierQuestions";
 
 function isKind(value: string | undefined): value is EventClassifierKind {
   return EVENT_CLASSIFIER_KINDS.includes(value as EventClassifierKind);
-}
-
-/** Every question in one list: PKIC-wide ones first, each marked off or replaced, then the event's own. */
-function questionRows(check: EventClassifierResponse): ClassifierQuestionRow[] {
-  const disabled = new Set(check.additions.disabledQuestionIds);
-  const own = new Map(check.additions.questions.map((question) => [question.id, question]));
-  const rows: ClassifierQuestionRow[] = check.settings.questions.map((question) => {
-    const replacement = own.get(question.id);
-    return replacement
-      ? { question: replacement, source: "This event", off: disabled.has(question.id) }
-      : { question, source: "PKIC-wide", off: disabled.has(question.id) };
-  });
-  const shared = new Set(check.settings.questions.map((question) => question.id));
-  for (const question of check.additions.questions)
-    if (!shared.has(question.id)) rows.push({ question, source: "This event", off: disabled.has(question.id) });
-  return rows;
 }
 
 function KindAdditions({
@@ -60,7 +42,6 @@ function KindAdditions({
   canEdit: boolean;
 }) {
   const [check, setCheck] = useState(initial);
-  const shared = new Set(check.settings.questions.map((question) => question.id));
 
   async function save(patch: Partial<Omit<ClassifierEventAdditionsInput, "expectedRevision">>) {
     const body: ClassifierEventAdditionsInput = {
@@ -73,62 +54,37 @@ function KindAdditions({
     const saved = await putJson(apiPath, body, classifierSavedResponseSchema);
     // The save is done; keep its revision so the next save does not conflict, even if the reload fails.
     setCheck((current) => ({ ...current, additions: { ...current.additions, ...patch, revision: saved.revision } }));
-    toast("Check saved", "success");
+    toast("Classifier saved", "success");
     try {
       setCheck(await getJson(apiPath, eventClassifierResponseSchema));
     } catch {
-      toast("The check was saved, but this view could not refresh. Reload the page to see the latest.", "error");
+      toast("The classifier was saved, but this view could not refresh. Reload the page to see the latest.", "error");
     }
-  }
-
-  const report = (error: unknown) => toast((error as Error).message, "error");
-
-  async function saveQuestion(question: ClassifierQuestion, replacing: string | null) {
-    const others = check.additions.questions.filter((candidate) => candidate.id !== (replacing ?? question.id));
-    await save({ questions: [...others, question] });
-  }
-
-  async function removeQuestion(question: ClassifierQuestion) {
-    const restores = shared.has(question.id);
-    const confirmed = await confirmAction({
-      title: restores ? `Use the PKIC-wide ${question.id}?` : `Remove ${question.id}?`,
-      body: restores ? "The event's version goes, and the PKIC-wide question applies again." : undefined,
-      confirmLabel: restores ? "Use PKIC-wide" : "Remove question",
-      tone: "danger",
-    });
-    if (confirmed)
-      await save({ questions: check.additions.questions.filter((candidate) => candidate.id !== question.id) });
-  }
-
-  function toggle(row: ClassifierQuestionRow) {
-    const disabled = new Set(check.additions.disabledQuestionIds);
-    if (row.off) disabled.delete(row.question.id);
-    else disabled.add(row.question.id);
-    void save({ disabledQuestionIds: [...disabled] }).catch(report);
   }
 
   return (
     <>
       {!check.settings.enabled && (
-        <Alert tone="info">This check is off PKIC-wide, so it does not run for this event either.</Alert>
+        <Alert tone="info">This classifier is off PKIC-wide, so it does not run for this event either.</Alert>
       )}
-      <EventClassifierContext
+      <ClassifierContext
         key={check.additions.revision}
-        check={check}
+        schema={classifierEventAdditionsInputSchema}
+        bodyFor={(context) => ({ expectedRevision: check.additions.revision, ...check.additions, context })}
+        context={check.additions.context}
+        term="This event"
+        help="Added after the PKIC-wide context: the event's topics and tracks, its audience, and this year's terms."
+        below={{ term: "PKIC-wide", context: check.settings.context }}
         canEdit={canEdit}
         onSave={(context) => save({ context })}
       />
-      <ClassifierQuestions
-        caption={`${CLASSIFIER_KIND_LABELS[check.kind]} check questions for this event`}
-        rows={questionRows(check)}
+      <LayeredClassifierQuestions
+        caption={`${CLASSIFIER_KIND_LABELS[check.kind]} classifier questions for this event`}
+        below={check.settings.questions}
+        layer={check.additions}
+        names={{ below: "PKIC-wide", layer: "This event", changeFor: "this event" }}
         canWrite={canEdit}
-        editLabel={(row) => (row.source === "PKIC-wide" ? "Change for this event" : "Change")}
-        removeLabel={(row) =>
-          row.source === "PKIC-wide" ? null : shared.has(row.question.id) ? "Use the PKIC-wide version" : "Remove"
-        }
-        extraActions={(row) => [{ id: "toggle", label: row.off ? "Turn on" : "Turn off", onSelect: () => toggle(row) }]}
-        onSave={saveQuestion}
-        onRemove={(question) => void removeQuestion(question).catch(report)}
+        onSave={save}
       />
       <ClassifierTrial kind={check.kind} check={check.effective} trialUrl={`${apiPath}/trials`} />
     </>
@@ -146,7 +102,7 @@ export function EventClassifiers({
   canEdit: boolean;
   hrefFor: (kind: EventClassifierKind) => string;
 }) {
-  const kind = isKind(requested) ? requested : "chat_message";
+  const kind = isKind(requested) ? requested : "chat";
   const apiPath = `/api/v1/events/${encodeURIComponent(slug)}/classifiers/${kind}`;
   const state = useData(() => getJson(apiPath, eventClassifierResponseSchema), [apiPath]);
   return (
@@ -158,7 +114,7 @@ export function EventClassifiers({
         hrefFor={(key) => hrefFor(key as EventClassifierKind)}
       />
       {state.loading && !state.data ? (
-        <Spinner label="Loading the check…" />
+        <Spinner label="Loading the classifier…" />
       ) : state.error ? (
         <ErrorAlert error={state.error} />
       ) : state.data ? (

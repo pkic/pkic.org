@@ -1,13 +1,15 @@
 /**
- * Transport contracts for automatic checks: the PKIC-wide settings, what an
- * event adds to them, a trial run on sample text, and a stored verdict.
+ * Transport contracts for classifiers: the PKIC-wide settings for all content
+ * and for each kind, what an event adds to them, a trial run on sample text, and a stored verdict.
  */
 import { z } from "zod";
 import { eventSlugParamsSchema, jsonErrorResponse, trimmedString, utcInstantSchema } from "./api-common.ts";
 import {
   CLASSIFIER_KINDS,
   CLASSIFIER_MAX_EVENT_QUESTIONS,
+  CLASSIFIER_MAX_KIND_QUESTIONS,
   CLASSIFIER_MAX_QUESTIONS,
+  CLASSIFIER_MAX_SHARED_QUESTIONS,
   CLASSIFIER_MAX_WIDE_QUESTIONS,
   CLASSIFIER_MODELS,
   CLASSIFIER_OUTCOMES,
@@ -72,12 +74,23 @@ const questionsSchema = (max: number) =>
 
 const contextSchema = z.string().trim().max(8000).default("");
 
+/** What all content asks: the context and flags every kind reads before its own. */
+export const classifierSharedSettingsInputSchema = z.object({
+  expectedRevision: z.number().int().min(0),
+  context: contextSchema,
+  questions: questionsSchema(CLASSIFIER_MAX_SHARED_QUESTIONS),
+});
+export type ClassifierSharedSettingsInput = z.infer<typeof classifierSharedSettingsInputSchema>;
+
+/** One kind's own settings; a question with an all-content id replaces it for this kind. */
 export const classifierSettingsInputSchema = z.object({
   expectedRevision: z.number().int().min(0),
   enabled: z.boolean(),
   model: classifierModelSchema,
   context: contextSchema,
-  questions: questionsSchema(CLASSIFIER_MAX_WIDE_QUESTIONS),
+  questions: questionsSchema(CLASSIFIER_MAX_KIND_QUESTIONS),
+  /** The all-content questions this kind does not ask. */
+  disabledQuestionIds: z.array(questionIdSchema).max(CLASSIFIER_MAX_SHARED_QUESTIONS).default([]),
 });
 export type ClassifierSettingsInput = z.infer<typeof classifierSettingsInputSchema>;
 
@@ -99,23 +112,39 @@ const settingsShape = {
 /** The settings a check runs with, PKIC-wide or as one event's effective check. */
 export const classifierSettingsSchema = z.object(settingsShape);
 
-export const classifierSettingsResponseSchema = z.object({
-  kind: classifierKindSchema,
+const savedShape = {
   revision: z.number().int(),
-  /** False until staff save settings; the kind is then off and asks nothing. */
+  /** False until staff save these settings. */
   saved: z.boolean(),
   updatedAt: utcInstantSchema.nullable(),
+};
+
+export const classifierSharedSettingsResponseSchema = z.object({
+  ...savedShape,
+  context: z.string(),
+  questions: z.array(classifierQuestionSchema),
+});
+export type ClassifierSharedSettingsResponse = z.infer<typeof classifierSharedSettingsResponseSchema>;
+
+/** One kind's own settings, without the all-content layer; an unsaved kind is off and asks nothing of its own. */
+export const classifierSettingsResponseSchema = z.object({
+  kind: classifierKindSchema,
+  ...savedShape,
   ...settingsShape,
+  disabledQuestionIds: z.array(z.string()),
 });
 export type ClassifierSettingsResponse = z.infer<typeof classifierSettingsResponseSchema>;
 
 export const classifierSettingsListResponseSchema = z.object({
-  checks: z.array(classifierSettingsResponseSchema),
+  shared: classifierSharedSettingsResponseSchema,
+  classifiers: z.array(classifierSettingsResponseSchema),
 });
+export type ClassifierSettingsListResponse = z.infer<typeof classifierSettingsListResponseSchema>;
 
 export const eventClassifierResponseSchema = z.object({
   kind: eventClassifierKindSchema,
-  settings: classifierSettingsResponseSchema,
+  /** The PKIC-wide check the event starts from: all content with the kind's own. */
+  settings: classifierSettingsSchema,
   additions: z.object({
     revision: z.number().int(),
     context: z.string(),
@@ -140,7 +169,7 @@ export type ClassifierVerdictPayload = z.infer<typeof classifierVerdictSchema>;
 
 /** A trial: the check run on sample text with settings that need not be saved. */
 export const classifierTrialInputSchema = z.object({
-  text: trimmedString(1, 20000, "Enter text to check."),
+  text: trimmedString(1, 20000, "Enter a sample."),
   title: z.string().trim().max(300).default(""),
   model: classifierModelSchema,
   context: contextSchema,
@@ -172,7 +201,7 @@ const staffAuth = { "x-pkic-auth": { required: true, scopes: ["events:manage"] }
 const eventReaderAuth = { "x-pkic-auth": { required: true, scopes: ["events:read"] } } as const;
 const eventOrganizerAuth = { "x-pkic-auth": { required: true, scopes: ["events:write"] } } as const;
 const routeRefusals = {
-  "400": jsonErrorResponse("Invalid check settings."),
+  "400": jsonErrorResponse("Invalid classifier settings."),
   "401": jsonErrorResponse("An authenticated user session is required."),
   "403": jsonErrorResponse("The required permission is missing."),
   "404": jsonErrorResponse("Event not found."),
@@ -182,16 +211,26 @@ export const classifierSavedResponseSchema = z.object({ success: z.literal(true)
 
 export const classifiersListRouteSchema = {
   tags: ["Classifiers"],
-  summary: "List the PKIC-wide automatic checks",
+  summary: "List the PKIC-wide classifiers",
   responses: {
-    "200": { description: "Every check.", content: routeJson(classifierSettingsListResponseSchema) },
+    "200": { description: "Every classifier.", content: routeJson(classifierSettingsListResponseSchema) },
+    ...routeRefusals,
+  },
+  ...staffAuth,
+};
+export const classifierSharedSettingsPutRouteSchema = {
+  tags: ["Classifiers"],
+  summary: "Change what every PKIC-wide classifier asks",
+  request: { body: { required: true, content: routeJson(classifierSharedSettingsInputSchema) } },
+  responses: {
+    "200": { description: "Saved.", content: routeJson(classifierSavedResponseSchema) },
     ...routeRefusals,
   },
   ...staffAuth,
 };
 export const classifierSettingsPutRouteSchema = {
   tags: ["Classifiers"],
-  summary: "Change a PKIC-wide automatic check",
+  summary: "Change a PKIC-wide classifier",
   request: {
     params: classifierKindParamsSchema,
     body: { required: true, content: routeJson(classifierSettingsInputSchema) },
@@ -204,7 +243,7 @@ export const classifierSettingsPutRouteSchema = {
 };
 export const classifierTrialRouteSchema = {
   tags: ["Classifiers"],
-  summary: "Try an automatic check on sample text",
+  summary: "Try a classifier on a sample",
   request: {
     params: classifierKindParamsSchema,
     body: { required: true, content: routeJson(classifierTrialInputSchema) },
@@ -217,17 +256,17 @@ export const classifierTrialRouteSchema = {
 };
 export const eventClassifierGetRouteSchema = {
   tags: ["Classifiers"],
-  summary: "Get an automatic check as it runs for an event",
+  summary: "Get a classifier as it runs for an event",
   request: { params: eventClassifierKindParamsSchema },
   responses: {
-    "200": { description: "The check.", content: routeJson(eventClassifierResponseSchema) },
+    "200": { description: "The classifier.", content: routeJson(eventClassifierResponseSchema) },
     ...routeRefusals,
   },
   ...eventReaderAuth,
 };
 export const eventClassifierPutRouteSchema = {
   tags: ["Classifiers"],
-  summary: "Change what an event adds to an automatic check",
+  summary: "Change what an event adds to a classifier",
   request: {
     params: eventClassifierKindParamsSchema,
     body: { required: true, content: routeJson(classifierEventAdditionsInputSchema) },
@@ -240,7 +279,7 @@ export const eventClassifierPutRouteSchema = {
 };
 export const eventClassifierTrialRouteSchema = {
   tags: ["Classifiers"],
-  summary: "Try an event's automatic check on sample text",
+  summary: "Try an event's classifier on a sample",
   request: {
     params: eventClassifierKindParamsSchema,
     body: { required: true, content: routeJson(classifierTrialInputSchema) },

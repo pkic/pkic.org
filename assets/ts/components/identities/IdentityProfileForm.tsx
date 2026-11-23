@@ -36,7 +36,7 @@ export interface EditableIdentity {
   links: readonly string[];
 }
 
-/** The text the automatic check reads: the job title and the biography. */
+/** The text the classifier reads: the job title and the biography. */
 function checkedTextOf(body: { jobTitle?: string; biography?: string }): string {
   return JSON.stringify([body.jobTitle ?? null, body.biography ?? null]);
 }
@@ -62,7 +62,7 @@ export function IdentityProfileForm({
   const [draft, setDraft] = useState<IdentityProfileDraft>(() => identityProfileDraft(identity));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // The checked text the automatic check advised on: saving that same text again keeps it as written, and any
+  // The checked text the classifier advised on: saving that same text again keeps it as written, and any
   // edit of it asks again.
   const [advisedText, setAdvisedText] = useState<string | null>(null);
   // Checked by the contract the route parses, live and on submit.

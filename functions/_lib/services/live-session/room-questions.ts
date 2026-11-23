@@ -22,7 +22,7 @@ import type { LiveControlOutcome, LiveRefusal, LiveRoomControls } from "./room-c
 import type { LiveQuestionAddressee } from "./room-question-rows";
 import type { LiveRoomStore } from "./room-store";
 import type { LiveChatQuestion } from "./location-chat-on-air";
-import type { LiveAutomaticCheck } from "../../../../assets/shared/schemas/live-session-moderation";
+import type { LiveClassifierVerdict } from "../../../../assets/shared/schemas/live-session-moderation";
 import type { ClassifierRun } from "../classifiers/model";
 
 type Handled = LiveRefusal | void;
@@ -89,7 +89,7 @@ export function resolveLiveQuestionAddressee(
  */
 /** A question's check: the flag moderators see, and the whole run kept for tuning; neither when none ran. */
 interface QuestionCheck {
-  flag: LiveAutomaticCheck | null;
+  flag: LiveClassifierVerdict | null;
   run: ClassifierRun | null;
 }
 const NOT_CHECKED: QuestionCheck = { flag: null, run: null };
@@ -102,7 +102,7 @@ export class LiveRoomQuestions {
     private readonly authors: LiveRoomAuthors,
     private readonly decisions: LiveRoomModerationStore,
     private readonly hooks: {
-      /** Runs the automatic check of a question's words; null when no check runs. */
+      /** Runs the classifier of a question's words; null when no check runs. */
       checked: (text: string) => Promise<ClassifierRun | null>;
       /** Takes one of the person's questions from their sliding allowance, or refuses. */
       allowed: (userId: string) => boolean;
@@ -259,7 +259,7 @@ export class LiveRoomQuestions {
   }
 
   /**
-   * The automatic check of a question's words before it is taken: a blocked question is refused with what the
+   * The classifier of a question's words before it is taken: a blocked question is refused with what the
    * check's settings tell its author; an advised one is taken and flagged for moderators. Questions wait for a
    * moderator in any case, so a check that cannot run lets the question in unflagged.
    */

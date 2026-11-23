@@ -1,5 +1,5 @@
 /**
- * The test bench of an automatic check: paste a sample, run the saved
+ * The test bench of a classifier: paste a sample, run the saved
  * questions on it, and read what the model answered to each one, raised or
  * not, so thresholds can be tuned before real content meets them.
  */
@@ -29,15 +29,15 @@ import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { Textarea, TextInput } from "../../../../ui/TextControl";
 
 /** Proposals, slides and bios are read with a title; chat and questions have none. */
-const TITLED_KINDS: ReadonlySet<ClassifierKind> = new Set(["proposal", "presentation", "person_profile"]);
+const TITLED_KINDS: ReadonlySet<ClassifierKind> = new Set(["proposal", "presentation", "person"]);
 
 const SAMPLE_LABELS: Record<ClassifierKind, string> = {
-  chat_message: "Chat message",
-  audience_question: "Question",
+  chat: "Chat message",
+  question: "Question",
   proposal: "Abstract",
   presentation: "Slide text",
-  organization_profile: "Member page",
-  person_profile: "Biography",
+  organization: "Member page",
+  person: "Biography",
 };
 
 function answerResult(check: EffectiveClassifier, id: string, percent: number, trial: ClassifierTrialResponse) {
@@ -91,13 +91,13 @@ export function ClassifierTrial({
   }
 
   return (
-    <Panel aria-label="Try the check">
-      <PanelHeader title="Try the check" />
+    <Panel aria-label="Try the classifier">
+      <PanelHeader title="Try the classifier" />
       <PanelBody class="pk-stack">
-        <p class="pk-small">Runs the saved check questions on a sample. Nothing is stored.</p>
+        <p class="pk-small">Runs the saved classifier questions on a sample. Nothing is stored.</p>
         <form class="pk-stack" noValidate {...form.handlers} onSubmit={(event) => void run(event)}>
           {titled && (
-            <Field {...form.of("title")} label={kind === "person_profile" ? "Job title" : "Title"}>
+            <Field {...form.of("title")} label={kind === "person" ? "Job title" : "Title"}>
               {(control) => (
                 <TextInput
                   {...control}
@@ -121,13 +121,13 @@ export function ClassifierTrial({
           </Field>
           <div class="pk-cluster">
             <Button type="submit" variant="primary" loading={running} disabled={running}>
-              Run check
+              Run classifier
             </Button>
           </div>
           <ErrorAlert error={error} />
         </form>
         {trial?.verdict.outcome === "unchecked" && (
-          <Alert tone="warn">The model did not answer, so nothing was checked. Try again in a moment.</Alert>
+          <Alert tone="warn">The model did not answer. Try again in a moment.</Alert>
         )}
         {trial && trial.verdict.outcome !== "unchecked" && (
           <DescriptionList

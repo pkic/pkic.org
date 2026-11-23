@@ -30,7 +30,7 @@ import {
   organizationContentReviewCreateResponseSchema,
 } from "../../../../shared/schemas/organization-self-service";
 
-/** The text the automatic check reads: the slogan, the description and the long page. */
+/** The text the classifier reads: the slogan, the description and the long page. */
 function checkedTextOf(body: { slogan?: string | null; description?: string | null; contentMarkdown?: string | null }) {
   return JSON.stringify([body.slogan ?? null, body.description ?? null, body.contentMarkdown ?? null]);
 }
@@ -147,7 +147,7 @@ function ContentEditForm({
   const [links, setLinks] = useState<string[]>(draft.links);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // The checked text the automatic check advised on: submitting that same text again sends it as written, and any
+  // The checked text the classifier advised on: submitting that same text again sends it as written, and any
   // edit of it asks again.
   const [advisedText, setAdvisedText] = useState<string | null>(null);
 

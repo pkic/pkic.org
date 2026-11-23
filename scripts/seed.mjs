@@ -10,7 +10,7 @@
  *   node scripts/seed.mjs --production             # remote production env
  *
  * Optional flags:
- *   --only admin|event|templates|profiles|checks   run only one component (can repeat)
+ *   --only admin|event|templates|profiles|classifiers   run only one component (can repeat)
  *   --skip-migrations              skip D1 migration apply step
  *   --persist-to <directory>       local only: seed an isolated local state directory
  */
@@ -216,6 +216,6 @@ if (runAll || only.has("admin")) seedAdmin(cfg);
 if (runAll || only.has("event")) seedEvent(cfg);
 if (runAll || only.has("templates")) seedTemplates(cfg);
 if (only.has("profiles") || (runAll && env === "local")) seedMemberProfiles(cfg);
-if (only.has("checks") || (runAll && env === "local")) seedClassifiers(cfg);
+if (only.has("classifiers") || (runAll && env === "local")) seedClassifiers(cfg);
 
 console.log(`\n✓ Done seeding ${cfg.label}.`);

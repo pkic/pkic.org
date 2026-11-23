@@ -39,15 +39,15 @@ const message = (
 const QUEUE: LiveChatMessage[] = [
   message(1, "Sam Sample", "Visit booth 12 for 20% off our HSM appliances", 14, {
     held: true,
-    hidden: { operatorName: "Automatic check", at: at(14) },
-    automaticCheck: {
+    hidden: { operatorName: "Classifier", at: at(14) },
+    classifier: {
       outcome: "blocked",
       notes: ["Sales pitches aren't allowed in the chat."],
       flags: [{ id: "solicitation", percent: 96 }],
     },
   }),
   message(2, "Riley Example", "That migration plan is naive. Nobody rotates roots in six months.", 12, {
-    automaticCheck: {
+    classifier: {
       outcome: "advised",
       notes: ["Keep it respectful."],
       flags: [{ id: "conduct", percent: 71 }],
@@ -59,8 +59,8 @@ const QUEUE: LiveChatMessage[] = [
   }),
   message(4, "Casey Test", "lol the demo gods were not kind today", 6, {
     held: true,
-    hidden: { operatorName: "Automatic check", at: at(6) },
-    automaticCheck: {
+    hidden: { operatorName: "Classifier", at: at(6) },
+    classifier: {
       outcome: "blocked",
       notes: ["Keep it respectful."],
       flags: [{ id: "conduct", percent: 91 }],
@@ -99,7 +99,7 @@ export const studioChatReviewSections: PreviewSection[] = [
   {
     id: "studio-chat-review",
     title: "Studio chat: review",
-    note: "What the check removed or flagged and what people reported, in one queue. Removed messages lead, since their authors are waiting on a decision. Each row shows the words and, on its own line, why it is here; the tag's tooltip has every score. The menu opens on Keep and Hide, then pause and block.",
+    note: "What the classifier removed or flagged and what people reported, in one queue. Removed messages lead, since their authors are waiting on a decision. Each row shows the words and, on its own line, why it is here; the tag's tooltip has every score. The menu opens on Keep and Hide, then pause and block.",
     render: () => <ReviewSpecimen />,
   },
 ];

@@ -20,8 +20,8 @@ import { classifierState, type ClassifierSubject } from "./state";
 const PROFILE_SCREENING_TIMEOUT_MS = 8000;
 
 const NOUNS: Record<ProfileClassifierKind, string> = {
-  organization_profile: "page",
-  person_profile: "bio",
+  organization: "page",
+  person: "bio",
 };
 
 export interface ProfileScreeningInput {

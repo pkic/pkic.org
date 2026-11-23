@@ -246,7 +246,7 @@ export class LiveRoomChatActions {
   }
 
   /**
-   * Everyone reads an attendee's words at once; the automatic check runs behind them. A blocked message is then
+   * Everyone reads an attendee's words at once; the classifier runs behind them. A blocked message is then
    * taken from everyone but its author and moderators, like one held after reports, and an author blocked again
    * and again is paused. An advised one stays in the chat, in the moderators' review queue. The on-air outputs
    * wait for the verdict and leave out a flagged message until a moderator keeps it.
@@ -254,7 +254,7 @@ export class LiveRoomChatActions {
   private markChecking(row: LiveChatRow): number | null {
     // New words: whatever check is still running for the old ones no longer speaks for this message.
     this.checkRuns.delete(row.id);
-    if (!this.checks.mayRun("chat_message")) return null;
+    if (!this.checks.mayRun("chat")) return null;
     const run = ++this.lastCheckRun;
     this.checkRuns.set(row.id, run);
     this.feed.moderation.checks.pending(row.id, nowIso());
@@ -306,7 +306,7 @@ export class LiveRoomChatActions {
   }
 
   private async settleCheck(sent: LiveChatRow, run: number, progress: { recorded: boolean }): Promise<void> {
-    const result = await this.checks.run("chat_message", liveChatPlainText(sent.body));
+    const result = await this.checks.run("chat", liveChatPlainText(sent.body));
     const row = this.chat.message(sent.id);
     // Deleted, or edited again meanwhile: the newer words have a check of their own.
     if (!row || !this.ownsCheck(row.id, run)) return;

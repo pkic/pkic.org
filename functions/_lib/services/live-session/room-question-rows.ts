@@ -57,7 +57,7 @@ export interface LiveQuestionRow {
   done_by_name: string | null;
   author_block: LiveParticipationBlock | null;
   author_block_until: string | null;
-  /** The automatic check's flag, when it raised one: `advised` and its notes as JSON. */
+  /** The classifier's flag, when it raised one: `advised` and its notes as JSON. */
   check_outcome: "advised" | "blocked" | null;
   check_notes_json: string | null;
 }

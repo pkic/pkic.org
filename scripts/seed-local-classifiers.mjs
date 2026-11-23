@@ -1,5 +1,5 @@
 /**
- * Seeds neutral sample questions for the automatic checks in the LOCAL D1, so a
+ * Seeds neutral sample questions for the classifiers in the LOCAL D1, so a
  * developer can try a check. The questions carry no policy: the real ones are
  * written by staff in the portal and never ship with the code.
  *
@@ -15,32 +15,33 @@ import { execFileSync } from "node:child_process";
 const persistAt = process.argv.indexOf("--persist-to");
 const persistArgs = persistAt === -1 ? [] : ["--persist-to", process.argv[persistAt + 1]];
 
-const SAMPLE_QUESTIONS = [
-  {
-    id: "sample_spam",
-    kind: "flag",
-    question: "Is this text spam?",
-    adviseAtPercent: 70,
-    blockAtPercent: 95,
-    message: "This looks like spam.",
-  },
-  {
-    id: "sample_clarity",
-    kind: "score",
-    label: "Clarity",
-    question: "How clear is this text?",
-    levels: ["Unclear", "Somewhat unclear", "Fair", "Clear", "Very clear"],
-    weight: 1,
-  },
-];
+const SAMPLE_FLAG = {
+  id: "sample_spam",
+  kind: "flag",
+  question: "Is this text spam?",
+  adviseAtPercent: 70,
+  blockAtPercent: 95,
+  message: "This looks like spam.",
+};
 
+const SAMPLE_SCORE = {
+  id: "sample_clarity",
+  kind: "score",
+  label: "Clarity",
+  question: "How clear is this text?",
+  levels: ["Unclear", "Somewhat unclear", "Fair", "Clear", "Very clear"],
+  weight: 1,
+};
+
+// All content (`all`) asks the flag of every kind; proposals add the score.
 const KINDS = [
-  { kind: "chat_message", model: "clef", questions: SAMPLE_QUESTIONS.slice(0, 1) },
-  { kind: "audience_question", model: "clef", questions: SAMPLE_QUESTIONS.slice(0, 1) },
-  { kind: "proposal", model: "clef", questions: SAMPLE_QUESTIONS },
-  { kind: "presentation", model: "clef", questions: SAMPLE_QUESTIONS.slice(0, 1) },
-  { kind: "organization_profile", model: "clef", questions: SAMPLE_QUESTIONS.slice(0, 1) },
-  { kind: "person_profile", model: "clef", questions: SAMPLE_QUESTIONS.slice(0, 1) },
+  { kind: "all", model: "clef", questions: [SAMPLE_FLAG] },
+  { kind: "chat", model: "clef", questions: [] },
+  { kind: "question", model: "clef", questions: [] },
+  { kind: "proposal", model: "clef", questions: [SAMPLE_SCORE] },
+  { kind: "presentation", model: "clef", questions: [] },
+  { kind: "organization", model: "clef", questions: [] },
+  { kind: "person", model: "clef", questions: [] },
 ];
 
 const escape = (value) => `'${String(value).replaceAll("'", "''")}'`;

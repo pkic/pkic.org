@@ -31,9 +31,9 @@ function boundedAnswers(answers: Record<string, string> | undefined): Record<str
 
 export function classifierState(kind: ClassifierKind, subject: ClassifierSubject): Record<string, unknown> {
   switch (kind) {
-    case "chat_message":
+    case "chat":
       return { chat_message: subject.text };
-    case "audience_question":
+    case "question":
       return { question_for_the_speakers: subject.text };
     case "proposal":
       return {
@@ -44,14 +44,14 @@ export function classifierState(kind: ClassifierKind, subject: ClassifierSubject
       };
     case "presentation":
       return { title: subject.title ?? "", slides: subject.text };
-    case "organization_profile":
+    case "organization":
       return {
         organization_name: subject.title ?? "",
         ...(subject.slogan ? { slogan: subject.slogan } : {}),
         ...(subject.description ? { description: subject.description } : {}),
         ...(subject.text ? { page: subject.text } : {}),
       };
-    case "person_profile":
+    case "person":
       return { job_title: subject.title ?? "", biography: subject.text };
   }
 }

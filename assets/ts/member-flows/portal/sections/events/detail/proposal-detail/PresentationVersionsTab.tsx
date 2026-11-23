@@ -380,9 +380,9 @@ function PresentationVersions({
             width: "fit",
           },
           {
-            header: "Automatic check",
+            header: "Classifier",
             cell: (version) => {
-              const check = version.automaticCheck;
+              const check = version.classifier;
               if (!check) return <span class="pk-muted">Not checked yet</span>;
               const label = CLASSIFIER_OUTCOME_LABELS[check.outcome];
               if (classifierRaisesConcerns(check.outcome)) return <AttentionMark>{label}</AttentionMark>;
@@ -423,7 +423,7 @@ function PresentationVersions({
         rowKey={(version) => version.id}
         detailRow={(version) => {
           const note = version.latestReview?.note;
-          const concerns = version.automaticCheck?.flags ?? [];
+          const concerns = version.classifier?.flags ?? [];
           if (!note && !concerns.length) return null;
           return (
             <div class="pk-stack pk-stack--snug">
@@ -435,7 +435,7 @@ function PresentationVersions({
               )}
               {concerns.map((flag) => (
                 <p class="pk-small" key={flag.id}>
-                  <span class="pk-muted">Automatic check: </span>
+                  <span class="pk-muted">Classifier: </span>
                   {flag.message} ({formatNumber(flag.probabilityPercent)}%)
                 </p>
               ))}

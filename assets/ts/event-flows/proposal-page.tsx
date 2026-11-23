@@ -508,7 +508,7 @@ async function main(): Promise<void> {
           clearRememberedInvitation(query.inviteId);
           showSuccessPanel(boot.root, form, result, firstName, eventName, eventSlug);
         } catch (error) {
-          // After the automatic check's advice, submitting again sends the proposal as written.
+          // After the classifier's advice, submitting again sends the proposal as written.
           if (error instanceof ApiClientError && error.code === PROPOSAL_CHECK_ADVICE) advisedContent = screenedContent;
           await handleFormInviteSubmitError({
             error,

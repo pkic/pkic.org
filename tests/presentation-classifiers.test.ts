@@ -73,7 +73,7 @@ async function uploadedVersion(fileName: string, bytes: ArrayBuffer, proposalId?
   return versionId;
 }
 
-describe("automatic check of uploaded slides", () => {
+describe("classifier of uploaded slides", () => {
   beforeEach(async () => {
     await resetDb();
     model.run.mockClear();

@@ -45,8 +45,8 @@ async function saveProfileCheckSettings() {
     sampleFlag("biased_claims", "Describe what you do, not how you rank.", null),
     sampleFlag("promotional", "Leave out offers and sales wording.", null),
   ];
-  await saveCheckSettings("organization_profile", flags);
-  await saveCheckSettings("person_profile", flags);
+  await saveCheckSettings("organization", flags);
+  await saveCheckSettings("person", flags);
 }
 
 function call(token: string, path: string, init: { method?: string; body?: unknown } = {}) {
@@ -80,7 +80,7 @@ async function reviewCount(organizationId: string) {
   )[0]!.n;
 }
 
-describe("automatic checks of member pages", () => {
+describe("classifiers of member pages", () => {
   beforeEach(async () => {
     await resetDb();
     await saveProfileCheckSettings();
@@ -116,7 +116,7 @@ describe("automatic checks of member pages", () => {
     });
     expect(submitted.status, await submitted.clone().text()).toBe(200);
     const { review } = await submitted.json<{ review: { id: string } }>();
-    const stored = await readClassifierResult(env.DB, "organization_profile", review.id);
+    const stored = await readClassifierResult(env.DB, "organization", review.id);
     expect(stored?.outcome).toBe("advised");
     expect(stored?.flags.map((flag) => flag.id)).toEqual(["biased_claims"]);
 
@@ -125,7 +125,7 @@ describe("automatic checks of member pages", () => {
     const detail = await call(adminToken, `/api/v1/organizations/content-reviews/${review.id}`);
     expect(detail.status, await detail.clone().text()).toBe(200);
     expect(
-      (await detail.json<{ review: { automaticReview: { outcome: string } } }>()).review.automaticReview.outcome,
+      (await detail.json<{ review: { classifierResult: { outcome: string } } }>()).review.classifierResult.outcome,
     ).toBe("advised");
   });
 
@@ -138,7 +138,7 @@ describe("automatic checks of member pages", () => {
     });
     expect(response.status).toBe(200);
     const { review } = await response.json<{ review: { id: string } }>();
-    expect(await readClassifierResult(env.DB, "organization_profile", review.id)).toMatchObject({
+    expect(await readClassifierResult(env.DB, "organization", review.id)).toMatchObject({
       outcome: "unchecked",
     });
   });
@@ -168,7 +168,7 @@ describe("automatic checks of member pages", () => {
   });
 });
 
-describe("automatic checks of bios", () => {
+describe("classifiers of bios", () => {
   beforeEach(async () => {
     await resetDb();
     await saveProfileCheckSettings();
@@ -191,7 +191,7 @@ describe("automatic checks of bios", () => {
     const refusal = await response.json<Refusal>();
     expect(refusal.error.code).toBe("PROFILE_CHECK_BLOCKED");
     expect(refusal.error.details.fieldErrors.biography?.[0]).toContain("spam");
-    expect(await readClassifierResult(env.DB, "person_profile", identityId)).toBeNull();
+    expect(await readClassifierResult(env.DB, "person", identityId)).toBeNull();
   });
 
   it("advises first, then saves as written and keeps the verdict", async () => {
@@ -203,7 +203,7 @@ describe("automatic checks of bios", () => {
 
     const saved = await call(token, path, { method: "PATCH", body: { ...body, adviceAcknowledged: true } });
     expect(saved.status, await saved.clone().text()).toBe(200);
-    expect(await readClassifierResult(env.DB, "person_profile", identityId)).toMatchObject({ outcome: "advised" });
+    expect(await readClassifierResult(env.DB, "person", identityId)).toMatchObject({ outcome: "advised" });
   });
 
   it("saves unchecked when the model fails, and the current-user edit is checked too", async () => {
@@ -214,7 +214,7 @@ describe("automatic checks of bios", () => {
       body: { jobTitle: "Engineer", biography: "An engineer." },
     });
     expect(saved.status).toBe(200);
-    expect(await readClassifierResult(env.DB, "person_profile", identityId)).toMatchObject({ outcome: "unchecked" });
+    expect(await readClassifierResult(env.DB, "person", identityId)).toMatchObject({ outcome: "unchecked" });
 
     const blocked = await call(token, "/api/v1/users/current", {
       method: "PATCH",
@@ -228,7 +228,7 @@ describe("automatic checks of bios", () => {
     const { token, path, identityId } = await owner();
     const body = { jobTitle: "Engineer", biography: "An engineer." };
     expect((await call(token, path, { method: "PATCH", body })).status).toBe(200);
-    expect(await readClassifierResult(env.DB, "person_profile", identityId)).toMatchObject({ outcome: "passed" });
+    expect(await readClassifierResult(env.DB, "person", identityId)).toMatchObject({ outcome: "passed" });
     // No model binding: the new text is saved unchecked, and the old verdict no longer describes it.
     const unchecked = await callApi(env, path, {
       method: "PATCH",
@@ -236,7 +236,7 @@ describe("automatic checks of bios", () => {
       body: JSON.stringify({ ...body, biography: "A different bio." }),
     });
     expect(unchecked.status).toBe(200);
-    expect(await readClassifierResult(env.DB, "person_profile", identityId)).toBeNull();
+    expect(await readClassifierResult(env.DB, "person", identityId)).toBeNull();
   });
 
   it("makes no model call when the bio and title do not change", async () => {
@@ -257,16 +257,15 @@ describe("automatic checks of bios", () => {
 describe("profile checks stay PKIC-wide", () => {
   beforeEach(resetDb);
 
-  it("lists the member page and bio checks, and refuses them as event additions", async () => {
+  it("lists the member page and personal profile classifiers, and refuses them as event additions", async () => {
     const { admin } = await seedEventAndAdmin(env.DB);
     const adminToken = await createAdminSession(env.DB, admin.id, "admin-wide-checks");
     const list = await call(adminToken, "/api/v1/classifiers");
     expect(list.status).toBe(200);
-    expect((await list.json<{ checks: { kind: string }[] }>()).checks.map((check) => check.kind)).toEqual([
-      ...CLASSIFIER_KINDS,
-    ]);
+    const listed = await list.json<{ classifiers: { kind: string }[] }>();
+    expect(listed.classifiers.map((check) => check.kind)).toEqual([...CLASSIFIER_KINDS]);
 
-    for (const kind of ["organization_profile", "person_profile"]) {
+    for (const kind of ["organization", "person"]) {
       const read = await call(adminToken, `/api/v1/events/pqc-2026/classifiers/${kind}`);
       expect(read.status).toBe(400);
       const write = await call(adminToken, `/api/v1/events/pqc-2026/classifiers/${kind}`, {

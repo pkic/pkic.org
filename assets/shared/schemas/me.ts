@@ -125,7 +125,7 @@ export const myProfileUpdateRouteSchema = {
     "200": { description: "Updated profile.", content: { "application/json": { schema: myProfileSchema } } },
     "422": {
       description:
-        "The automatic check blocks the job title or biography, or advises on it: save again with adviceAcknowledged to keep it as written.",
+        "The classifier blocks the job title or biography, or advises on it: save again with adviceAcknowledged to keep it as written.",
     },
   },
 };

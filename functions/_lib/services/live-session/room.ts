@@ -208,7 +208,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       },
     );
     this.questions = new LiveRoomQuestions(this.store, this.broadcast, this.controls, this.authors, this.decisions, {
-      checked: (text) => classifiers.run("audience_question", text),
+      checked: (text) => classifiers.run("question", text),
       allowed: (userId) => this.store.takeQuestionWriteAllowance(userId, nowIso()),
       changed: () => this.scheduleCopy(),
       listed: () => this.graphics.lists.due(),

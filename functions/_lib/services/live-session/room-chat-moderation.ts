@@ -13,7 +13,7 @@ export interface LiveChatReports {
   reasons: Partial<Record<LiveModerationReason, number>>;
 }
 
-/** A message reported or flagged by the automatic check and not yet reviewed: shown, or held. */
+/** A message reported or flagged by the classifier and not yet reviewed: shown, or held. */
 const OPEN_REPORT = `(message_id NOT IN (SELECT message_id FROM room_chat_hidden) OR message_id IN (SELECT message_id FROM room_chat_hidden WHERE held = 1))`;
 
 function idList(ids: readonly string[]): string {
@@ -26,7 +26,7 @@ function idList(ids: readonly string[]): string {
  * reasons and blocks are the shared moderation store's.
  */
 export class LiveChatModerationStore {
-  /** The automatic check's verdicts, which a moderator's keep clears with the reports. */
+  /** The classifier's verdicts, which a moderator's keep clears with the reports. */
   readonly checks: LiveChatCheckStore;
 
   constructor(private readonly sql: LiveRoomSql) {

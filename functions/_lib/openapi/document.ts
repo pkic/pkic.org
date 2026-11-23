@@ -111,7 +111,7 @@ export const OPENAPI_TAGS: readonly { name: string; description: string }[] = [
   { name: "Retention", description: "Data retention policy and redaction." },
   {
     name: "Classifiers",
-    description: "Classifiers behind automatic checks: PKIC-wide settings per kind, event additions, and trial runs.",
+    description: "Classifiers: PKIC-wide settings per kind, event additions, and trial runs.",
   },
   { name: "Analytics", description: "Platform and event analytics." },
   { name: "Statistics", description: "Aggregate counts and reporting figures." },

@@ -16,8 +16,8 @@ export const speakerProfileReviewSchema = agendaSpeakerProfileCandidateSchema.ex
   sessionCount: z.number().int().positive(),
   available: z.boolean(),
   reviewedAt: utcInstantSchema.nullable(),
-  /** The automatic check's reading of the job title and biography, or null when never checked. */
-  automaticReview: classifierResultSchema.nullable().default(null),
+  /** The classifier's reading of the job title and biography, or null when never checked. */
+  classifierResult: classifierResultSchema.nullable().default(null),
 });
 export type SpeakerProfileReview = z.infer<typeof speakerProfileReviewSchema>;
 export const speakerProfileReviewsResponseSchema = paginatedResponseSchema(

@@ -1,5 +1,5 @@
 /**
- * The automatic check of uploaded slides. It runs right after an upload and
+ * The classifier of uploaded slides. It runs right after an upload and
  * never holds the upload up; a scheduled pass is the one retry owner and
  * picks up every recent version still without a verdict, such as one whose
  * check failed or whose Worker stopped before it finished.

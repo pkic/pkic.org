@@ -130,7 +130,7 @@ export async function getContentReviewDetail(db: DatabaseLike, reviewId: string)
     hasLogoChange: Boolean(row.logo_staging_r2_key),
     logoStagingR2Key: row.logo_staging_r2_key,
     currentLogoR2Key: orgRow?.logo_r2_key ?? null,
-    automaticReview: await readClassifierResult(db, "organization_profile", reviewId),
+    classifierResult: await readClassifierResult(db, "organization", reviewId),
   };
 }
 
