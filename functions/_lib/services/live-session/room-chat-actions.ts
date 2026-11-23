@@ -261,20 +261,22 @@ export class LiveRoomChatActions {
 
   /** Starts the check once its author has the message, so its verdict always follows the message itself. */
   private check(row: LiveChatRow): void {
-    let answered = false;
+    const progress = { answered: false, recorded: false };
     // Releases only the words this check examined: an edit meanwhile has a check of its own.
     const release = () =>
       this.chat.message(row.id)?.body === row.body ? this.releaseFromCheck(row.id) : Promise.resolve();
     const expiry = setTimeout(() => {
       // A check that has not answered by now lets the words go on; a verdict that arrived stays.
-      if (!answered) void release().catch((error: unknown) => console.error("Live chat release failed", error));
+      if (!progress.answered)
+        void release().catch((error: unknown) => console.error("Live chat release failed", error));
     }, this.checkWaitMs);
     this.ctx.waitUntil(
-      this.settleCheck(row, () => (answered = true))
+      this.settleCheck(row, progress)
         .catch(async (error: unknown) => {
           console.error("Live chat check failed", error);
-          // A check that fails lets the message go on rather than keeping it from the room.
-          await release().catch(() => undefined);
+          // A check that fails lets the message go on rather than keeping it from the room. A verdict it already
+          // recorded stays for moderators; only its delivery is tried again.
+          await (progress.recorded ? this.deliverChecked(row) : release()).catch(() => undefined);
         })
         .finally(() => clearTimeout(expiry)),
     );
@@ -289,9 +291,17 @@ export class LiveRoomChatActions {
     this.nudgeTicker();
   }
 
-  private async settleCheck(sent: LiveChatRow, answered: () => void): Promise<void> {
+  /** Delivers the examined words again with the verdict they keep, unless they were deleted or edited since. */
+  private async deliverChecked(sent: LiveChatRow): Promise<void> {
+    const row = this.chat.message(sent.id);
+    if (!row || row.body !== sent.body) return;
+    await this.deliver([row], { removeWhenHidden: this.feed.moderation.hidden([row.id]).has(row.id) });
+    this.nudgeTicker();
+  }
+
+  private async settleCheck(sent: LiveChatRow, progress: { answered: boolean; recorded: boolean }): Promise<void> {
     const run = await this.checks.run("chat_message", liveChatPlainText(sent.body));
-    answered();
+    progress.answered = true;
     const row = this.chat.message(sent.id);
     // Deleted, or edited again meanwhile: the newer words have a check of their own.
     if (!row || row.body !== sent.body) return;
@@ -299,6 +309,7 @@ export class LiveRoomChatActions {
     if (outcome !== "advised" && outcome !== "blocked") return this.releaseFromCheck(row.id);
     const at = nowIso();
     this.feed.moderation.checks.record(row.id, { outcome, notes: run!.verdict.flags.map((flag) => flag.message) }, at);
+    progress.recorded = true;
     if (outcome === "blocked" && !this.feed.moderation.hidden([row.id]).has(row.id)) {
       this.feed.moderation.hide(row.id, HELD_BY_CHECK, true, at);
       await this.deliver([row], { removeWhenHidden: true });
