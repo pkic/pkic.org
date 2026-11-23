@@ -155,6 +155,32 @@ describe("automatic checks of live chat and questions", () => {
     release();
   });
 
+  it("keeps an advised verdict for moderators when delivering the checked message fails once", async () => {
+    const author = await f.connectChat("attendee");
+    const reader = await f.connectChat("secondAttendee");
+    const release = holdChecks();
+    const text = "A slow remark: the organizers are idiots";
+    author.send({ type: "chat.send", text });
+    const mine = await author.next("chat.message", (update) => update.message.text === text);
+    await runInDurableObject(f.chatRoom(), (instance) => {
+      const actions = Reflect.get(instance as object, "chatActions") as object;
+      const deliver = Reflect.get(actions, "deliver") as (...args: unknown[]) => Promise<void>;
+      let failed = false;
+      Reflect.set(actions, "deliver", function (this: unknown, ...args: unknown[]) {
+        if (failed) return deliver.apply(this, args);
+        failed = true;
+        return Promise.reject(new Error("delivery failed"));
+      });
+    });
+    release();
+    await reader.next("chat.message", (update) => update.message.id === mine.message.id);
+    const fresh = await f.connectChat("operator");
+    const snapshot = fresh.received[0] as Extract<LiveRoomServerMessage, { type: "location.chat.snapshot" }>;
+    expect(snapshot.chatReports?.find((message) => message.id === mine.message.id)?.moderation?.automaticCheck).toEqual(
+      { outcome: "advised", notes: [expect.any(String)] },
+    );
+  });
+
   it("lets a moderator keep a message the check only advised against", async () => {
     const author = await f.connectChat("attendee");
     const reader = await f.connectChat("secondAttendee");

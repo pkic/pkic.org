@@ -226,18 +226,22 @@ function questionLimitError(field: string, message: string): AppError {
   return new AppError(400, "VALIDATION_ERROR", message, { formErrors: [], fieldErrors: { [field]: [message] } });
 }
 
-/** A PKIC-wide change must not leave an event asking more questions than a check runs: refused, not dropped. */
+/**
+ * A PKIC-wide change must not leave an event asking more questions than a check runs: refused, not dropped. Returns
+ * a guard that refuses the save when any event's additions changed after this read; revisions only grow, so the
+ * count and sum of them change with every insert or update.
+ */
 async function refuseQuestionsEventsCannotCarry(
   db: DatabaseLike,
   kind: ContentCheckKind,
   questions: readonly ContentCheckQuestion[],
-): Promise<void> {
+): Promise<StatementLike> {
   const { results } = await db
     .prepare(
-      "SELECT questions_json, disabled_question_ids_json, context FROM event_content_check_additions WHERE kind = ?",
+      "SELECT questions_json, disabled_question_ids_json, context, revision FROM event_content_check_additions WHERE kind = ?",
     )
     .bind(kind)
-    .all<Pick<AdditionsRow, "questions_json" | "disabled_question_ids_json" | "context">>();
+    .all<Pick<AdditionsRow, "questions_json" | "disabled_question_ids_json" | "context" | "revision">>();
   const over = results.filter(
     (row) =>
       contentCheckQuestionLimitRefusal(questions, {
@@ -251,6 +255,11 @@ async function refuseQuestionsEventsCannotCarry(
       "questions",
       `${over} ${over === 1 ? "event adds" : "events add"} questions that would no longer fit beside these. Remove some here or in ${over === 1 ? "that event" : "those events"}.`,
     );
+  return prepareStateGuard(db, {
+    sql: `SELECT 1 FROM (SELECT COUNT(*) AS rows_read, COALESCE(SUM(revision), 0) AS revisions
+          FROM event_content_check_additions WHERE kind = ?) WHERE rows_read = ? AND revisions = ?`,
+    bindings: [kind, results.length, results.reduce((total, row) => total + row.revision, 0)],
+  });
 }
 
 async function commit(db: DatabaseLike, statements: StatementLike[]): Promise<void> {
@@ -270,9 +279,10 @@ export async function saveContentCheckSettings(
   input: ContentCheckSettingsInput,
 ): Promise<{ revision: number }> {
   const now = nowIso();
-  await refuseQuestionsEventsCannotCarry(db, kind, input.questions);
+  const additionsUnchanged = await refuseQuestionsEventsCannotCarry(db, kind, input.questions);
   await commit(db, [
     preparePermissionsAuthorizationGuard(db, actor, [{ permission: "events:manage" }]),
+    additionsUnchanged,
     prepareStateGuard(db, {
       sql: "SELECT 1 WHERE COALESCE((SELECT revision FROM content_check_settings WHERE kind = ?), 0) = ?",
       bindings: [kind, input.expectedRevision],
@@ -306,9 +316,9 @@ export async function saveEventContentCheckAdditions(
   const now = nowIso();
   // Ids that name no PKIC-wide question would silently disable one added later.
   const wide = await db
-    .prepare("SELECT questions_json FROM content_check_settings WHERE kind = ?")
+    .prepare("SELECT questions_json, revision FROM content_check_settings WHERE kind = ?")
     .bind(kind)
-    .first<{ questions_json: string }>();
+    .first<{ questions_json: string; revision: number }>();
   const wideQuestions = wide ? decodeQuestions(wide.questions_json) : [];
   const wideIds = new Set(wideQuestions.map((q) => q.id));
   const disabledQuestionIds = [...new Set(input.disabledQuestionIds)].filter((id) => wideIds.has(id));
@@ -318,6 +328,11 @@ export async function saveEventContentCheckAdditions(
     preparePermissionsAuthorizationGuard(db, actor, [
       { permission: "events:write", context: { type: "event", id: eventId } },
     ]),
+    // The limit was checked against these PKIC-wide questions; a change to them meanwhile refuses the save.
+    prepareStateGuard(db, {
+      sql: "SELECT 1 WHERE COALESCE((SELECT revision FROM content_check_settings WHERE kind = ?), 0) = ?",
+      bindings: [kind, wide?.revision ?? 0],
+    }),
     prepareStateGuard(db, {
       sql: `SELECT 1 WHERE COALESCE((SELECT revision FROM event_content_check_additions WHERE event_id = ? AND kind = ?), 0) = ?`,
       bindings: [eventId, kind, input.expectedRevision],

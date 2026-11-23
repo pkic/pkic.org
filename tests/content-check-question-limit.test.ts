@@ -7,6 +7,8 @@ import {
   saveEventContentCheckAdditions,
 } from "../functions/_lib/services/content-checks/settings";
 import type { UserBackedAuthAdmin } from "../functions/_lib/types";
+import type { DatabaseLike } from "../functions/_lib/types";
+import { seedEventAndAdmin } from "./helpers/context";
 import { proposalIdentityFixture } from "./helpers/proposal-identity";
 import { resetDb } from "./helpers/reset-db";
 
@@ -66,10 +68,68 @@ describe("saving questions that must fit together", () => {
     expect(error?.status).toBe(400);
     expect(error?.details.fieldErrors.questions?.[0]).toContain("1 event");
   });
+
+  it("refuses either save when the other scope changed after the limit was checked", async () => {
+    const { eventId, admin } = await seedEventAndAdmin(env.DB);
+    const saveEvent = (db: DatabaseLike) =>
+      saveEventContentCheckAdditions(db, admin, eventId, "chat_message", {
+        expectedRevision: 0,
+        context: "",
+        questions: questions(1, "event"),
+        disabledQuestionIds: [],
+      });
+    // The PKIC-wide save lands between the event save's read and its write.
+    const eventError = await refusal(
+      saveEvent(afterRead(env.DB, "FROM content_check_settings", () => saveWide(CONTENT_CHECK_MAX_QUESTIONS, admin))),
+    );
+    expect(eventError?.status).toBe(409);
+
+    // And the other way round: an event save lands while a PKIC-wide save checks the limit.
+    await env.DB.prepare("DELETE FROM content_check_settings").run();
+    const wideError = await refusal(
+      saveWide(
+        CONTENT_CHECK_MAX_QUESTIONS,
+        admin,
+        afterRead(env.DB, "FROM event_content_check_additions", () => saveEvent(env.DB)),
+      ),
+    );
+    expect(wideError?.status).toBe(409);
+  });
 });
 
-function saveWide(count: number) {
-  return saveContentCheckSettings(env.DB, actor, "chat_message", {
+/** The database as a save sees it, with another write landing right after the first read of the given table. */
+function afterRead(db: DatabaseLike, table: string, write: () => Promise<unknown>): DatabaseLike {
+  let pending = true;
+  const interleave = async <T>(read: () => Promise<T>) => {
+    const result = await read();
+    if (pending) {
+      pending = false;
+      await write();
+    }
+    return result;
+  };
+  return new Proxy(db, {
+    get(target, property, receiver) {
+      if (property !== "prepare") return Reflect.get(target, property, receiver);
+      return (sql: string) => {
+        const statement = target.prepare(sql);
+        if (!sql.includes(table) || !sql.trimStart().startsWith("SELECT")) return statement;
+        return {
+          bind: (...values: unknown[]) => {
+            const bound = statement.bind(...values);
+            return {
+              first: <T>() => interleave(() => bound.first<T>()),
+              all: <T>() => interleave(() => bound.all<T>()),
+            };
+          },
+        };
+      };
+    },
+  }) as DatabaseLike;
+}
+
+function saveWide(count: number, by: UserBackedAuthAdmin = actor, db: DatabaseLike = env.DB) {
+  return saveContentCheckSettings(db, by, "chat_message", {
     expectedRevision: 0,
     enabled: true,
     model: "clef-flash",
