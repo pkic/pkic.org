@@ -2,104 +2,39 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { agendaSnapshotSchema } from "../../assets/shared/schemas/event-agenda";
-import { virtualRoomResponseSchema } from "../../assets/shared/schemas/event-live-stream";
-import { personalAgendaProgramResponseSchema } from "../../assets/shared/schemas/event-personal-agenda";
-import { sponsorsDisplayResponseSchema } from "../../assets/shared/schemas/public-sponsors";
 import { VirtualRoom } from "../../assets/ts/member-flows/portal/sections/events/app/virtual-room/VirtualRoom";
 import { chooseLocation } from "../../assets/ts/member-flows/portal/sections/events/app/virtual-room/virtual-room-schedule";
 import { HeadingOutline } from "../../assets/ts/ui/HeadingOutline";
-import { FakeLiveSocket, liveLocationChatSnapshot, liveSnapshot } from "./helpers/live-room-socket";
+import {
+  HALL,
+  STUDIO,
+  BREAKOUT,
+  ROUNDTABLE,
+  KEYNOTE,
+  PANEL,
+  WORKSHOP,
+  HALL_STREAM,
+  STUDIO_STREAM,
+  occurrence,
+  program,
+  streams,
+  sponsors,
+  onDesktop,
+  fakeRoomSockets,
+} from "./virtual-room-fixture";
 
 const hashLocation = vi.hoisted(() => ({ current: "/events/summit/virtual", navigate: vi.fn() }));
 vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => [hashLocation.current, hashLocation.navigate],
 }));
 
-const HALL = "a0000000-0000-4000-8000-000000000001";
-const STUDIO = "a0000000-0000-4000-8000-000000000002";
-const KEYNOTE = "b0000000-0000-4000-8000-000000000001";
-const PANEL = "b0000000-0000-4000-8000-000000000002";
-const WORKSHOP = "b0000000-0000-4000-8000-000000000003";
-const HALL_STREAM = "jfKfPfyJRdk";
-const STUDIO_STREAM = "o-1sSF_xP5Q";
-
-function occurrence(id: string, title: string, roomId: string, startAt: string, endAt: string, speaker: string) {
-  return {
-    id,
-    title,
-    roomId,
-    startAt,
-    endAt,
-    description: "",
-    speakers: [{ userId: `${id}-speaker`, displayName: speaker }],
-  };
-}
-
-const program = personalAgendaProgramResponseSchema.parse({
-  agenda: agendaSnapshotSchema.parse({
-    eventSlug: "summit",
-    timeZone: "UTC",
-    revision: 4,
-    publishedRevision: 4,
-    rooms: [
-      { id: HALL, name: "Main hall", capacity: null },
-      { id: STUDIO, name: "Studio", capacity: null },
-    ],
-    occurrences: [
-      occurrence(KEYNOTE, "Opening keynote", HALL, "2027-01-20T09:00:00.000Z", "2027-01-20T10:00:00.000Z", "Ada"),
-      occurrence(PANEL, "Migration panel", HALL, "2027-01-20T10:00:00.000Z", "2027-01-20T11:00:00.000Z", "Grace"),
-      occurrence(WORKSHOP, "Hands-on lab", STUDIO, "2027-01-20T09:00:00.000Z", "2027-01-20T11:00:00.000Z", "Linus"),
-    ],
-    shifts: [],
-    roleMembers: [],
-    assignments: [],
-  }),
-  marks: [],
-});
-const streams = virtualRoomResponseSchema.parse({
-  timeZone: "UTC",
-  locations: [
-    { id: HALL, name: "Main hall", stream: { provider: "youtube", videoId: HALL_STREAM }, days: [] },
-    { id: STUDIO, name: "Studio", stream: { provider: "youtube", videoId: STUDIO_STREAM }, days: [] },
-  ],
-  productionPartners: [
-    {
-      role: "Camera Technology Provider",
-      organizationId: "30000000-0000-4000-8000-000000000001",
-      name: "Northlight",
-      website: "https://northlight.example.test/",
-      logoUrl: "/api/v1/members/30000000-0000-4000-8000-000000000001/logo?v=1",
-    },
-  ],
-});
-const sponsors = sponsorsDisplayResponseSchema.parse({
-  groups: [
-    {
-      weight: 5,
-      tierName: "Gold",
-      sponsors: [
-        {
-          id: "c0000000-0000-4000-8000-000000000001",
-          name: "Example Trust",
-          website: "https://trust.example.test/",
-          logoUrl: "/assets/sponsor.svg",
-          tier: null,
-          eventTier: "Gold",
-          effectiveTier: "Gold",
-          weight: 5,
-        },
-      ],
-    },
-  ],
-  page: { limit: 200, offset: 0, total: 1, hasMore: false },
-});
-
 let host: HTMLDivElement;
 let streamStatus = 200;
 let waiting = false;
 /** The session the studio has loaded in the main hall. */
 let loadedInHall: string | null = null;
+/** A third location, held in the room only: it has a session and a recording plan, and no stream. */
+let roomOnly = false;
 
 /** The browser's own zone, an hour ahead of the agenda's, whatever zone the machine running the tests is in. */
 const VIEWER_ZONE = "Europe/Amsterdam";
@@ -117,6 +52,9 @@ beforeEach(() => {
   streamStatus = 200;
   waiting = false;
   loadedInHall = null;
+  roomOnly = false;
+  // The room's tour opens by itself on a device's first visit; these tests start on a later one.
+  localStorage.setItem("virtual-room-tour-seen", "yes");
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
@@ -147,7 +85,29 @@ beforeEach(() => {
                   rooms: program.agenda!.rooms.map((room) => ({ ...room, equipment: ["live_streaming"] })),
                 },
               }
-            : program,
+            : roomOnly
+              ? {
+                  ...program,
+                  agenda: {
+                    ...program.agenda,
+                    rooms: [
+                      ...program.agenda!.rooms,
+                      { id: BREAKOUT, name: "Breakout", capacity: null, equipment: ["recording"] },
+                    ],
+                    occurrences: [
+                      ...program.agenda!.occurrences,
+                      occurrence(
+                        ROUNDTABLE,
+                        "Roundtable",
+                        BREAKOUT,
+                        "2027-01-20T09:00:00.000Z",
+                        "2027-01-20T10:00:00.000Z",
+                        "Hedy",
+                      ),
+                    ],
+                  },
+                }
+              : program,
         );
       if (path.endsWith("/sponsors/display")) return Response.json(sponsors);
       throw new Error(`Unexpected request: ${path}`);
@@ -185,76 +145,6 @@ async function open(away = false) {
 }
 
 /** A desktop's width; without it the room lays itself out for a phone, as jsdom has no screen. */
-function onDesktop() {
-  vi.stubGlobal("matchMedia", (media: string) => ({
-    matches: true,
-    media,
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
-  }));
-}
-
-/** The rooms the virtual room connects to, and a way to answer as the latest one would. */
-function fakeRoomSockets() {
-  const sockets: FakeLiveSocket[] = [];
-  vi.stubGlobal(
-    "WebSocket",
-    class extends FakeLiveSocket {
-      static OPEN = 1;
-      constructor(url: string, protocols: string[]) {
-        super(url, protocols);
-        sockets.push(this);
-      }
-    },
-  );
-  // A session's room and the location's chat speak on sockets of their own.
-  const rooms = () => sockets.filter((socket) => socket.url.includes("/occurrences/"));
-  const chats = () => sockets.filter((socket) => socket.url.endsWith("/live/chat"));
-  const roomOn = () => new URL(rooms().at(-1)!.url).pathname.split("/").at(-2);
-  const answer = async (opening: "scheduled" | "open" | "closed") => {
-    const id = roomOn()!;
-    const session = program.agenda!.occurrences.find((item) => item.id === id)!;
-    await act(async () => {
-      rooms().at(-1)!.open();
-      rooms()
-        .at(-1)!
-        .deliver(
-          liveSnapshot({
-            opening,
-            session: { ...liveSnapshot().session, occurrenceId: id, startAt: session.startAt!, endAt: session.endAt! },
-          }),
-        );
-    });
-  };
-  /** The main hall's chat answers for its day: the keynote, then the panel. */
-  const answerChat = async (opening: "scheduled" | "open" | "closed") => {
-    const sessions = program.agenda!.occurrences.filter((item) => item.roomId === HALL);
-    await act(async () => {
-      chats().at(-1)!.open();
-      chats()
-        .at(-1)!
-        .deliver(
-          liveLocationChatSnapshot({
-            opening,
-            scope: {
-              eventName: "Summit",
-              roomId: HALL,
-              day: "2027-01-20",
-              timeZone: "UTC",
-              sessions: sessions.map((item) => ({
-                occurrenceId: item.id,
-                title: item.title,
-                startAt: item.startAt!,
-                endAt: item.endAt!,
-              })),
-            },
-          }),
-        );
-    });
-  };
-  return { sockets, rooms, chats, roomOn, answer, answerChat };
-}
-
 const player = () => host.querySelector<HTMLIFrameElement>("iframe");
 const nowPlaying = () => host.querySelector('[aria-label="Now in this room"]')?.textContent ?? "";
 const tabs = () => [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
@@ -267,7 +157,6 @@ describe("virtual room", () => {
       new RegExp(`^https://www\\.youtube-nocookie\\.com/embed/${HALL_STREAM}\\?`),
     );
     expect(nowPlaying()).toContain("Opening keynote");
-    expect(nowPlaying()).toContain("Ada");
     // A dot marks the running session; its people sit as portraits at the end of the time line.
     expect(host.querySelector(".pk-virtual-room__live-dot")).not.toBeNull();
     expect(nowPlaying()).toContain("Live now");
@@ -338,9 +227,9 @@ describe("virtual room", () => {
       (title) => title.textContent,
     );
     expect(panels).toEqual(["Questions and polls", "Chat"]);
-    // Asking is in the questions' header, where it never scrolls away.
+    // Asking sits at the foot of the questions, where the chat keeps its message field.
     const ask = [...host.querySelectorAll("button")].find((button) => button.textContent === "Ask a question");
-    expect(ask?.closest(".pk-panel__header")?.textContent).toContain("Questions and polls");
+    expect(ask?.closest(".pk-virtual-room__ask")).not.toBeNull();
     // The event's own agenda sits under the stream, handed the program the room read.
     const main = host.querySelector(".pk-virtual-room__main")!;
     expect(main.textContent).toContain("The event’s whole agenda, 3 sessions");
@@ -418,6 +307,27 @@ describe("virtual room", () => {
     expect(host.textContent).toContain("The organizers ended this chat.");
   });
 
+  it("shows a session the studio loaded days early as up next, not live", async () => {
+    loadedInHall = KEYNOTE;
+    vi.setSystemTime(new Date("2027-01-12T09:30:00.000Z"));
+    onDesktop();
+    await open();
+    expect(nowPlaying()).toContain("Up next");
+    expect(nowPlaying()).toContain("Opening keynote");
+    expect(nowPlaying()).not.toContain("Live now");
+    expect(host.querySelector(".pk-virtual-room__live-dot")).toBeNull();
+    // Another day already shows its date: no countdown.
+    expect(nowPlaying()).not.toContain(" min");
+  });
+
+  it("counts down to the next session later the same day", async () => {
+    vi.setSystemTime(new Date("2027-01-20T08:48:00.000Z"));
+    onDesktop();
+    await open();
+    expect(nowPlaying()).toContain("Up next");
+    expect(nowPlaying()).toContain("in 12 min");
+  });
+
   it("moves on at the scheduled end when the studio has nothing loaded, and says when", async () => {
     const { answer } = fakeRoomSockets();
     vi.setSystemTime(new Date("2027-01-20T09:52:00.000Z"));
@@ -446,29 +356,68 @@ describe("virtual room", () => {
   });
 
   it("switches location through its own address and opens on the session that brought the reader", async () => {
+    const locationLinks = () =>
+      [...host.querySelectorAll<HTMLAnchorElement>('nav[aria-label="Locations"] a')].map((link) => [
+        link.textContent,
+        link.getAttribute("href"),
+      ]);
+    const expected = [
+      ["Main hall", `#/events/summit/virtual?room=${HALL}`],
+      ["Studio", `#/events/summit/virtual?room=${STUDIO}`],
+    ];
+    // A phone and a desktop switch location through the same tabs.
     await open();
-    // A phone picks the location on the running session's line.
-    const picker = host.querySelector<HTMLSelectElement>('select[aria-label="Location"]')!;
-    expect([...picker.options].map((option) => option.textContent)).toEqual(["Main hall", "Studio"]);
-    picker.value = STUDIO;
-    await act(async () => {
-      picker.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    expect(hashLocation.navigate).toHaveBeenCalledWith(`/events/summit/virtual?room=${STUDIO}`);
+    expect(locationLinks()).toEqual(expected);
     render(null, host);
     onDesktop();
     await open();
-    const locations = [...host.querySelectorAll<HTMLAnchorElement>('nav[aria-label="Locations"] a')];
-    expect(locations.map((link) => [link.textContent, link.getAttribute("href")])).toEqual([
-      ["Main hall", `#/events/summit/virtual?room=${HALL}`],
-      ["Studio", `#/events/summit/virtual?room=${STUDIO}`],
-    ]);
+    expect(locationLinks()).toEqual(expected);
     render(null, host);
     hashLocation.current = `/events/summit/virtual?session=${WORKSHOP}`;
     await open();
     expect(player()?.getAttribute("src")).toContain(STUDIO_STREAM);
     expect(nowPlaying()).toContain("Hands-on lab");
     expect(chooseLocation(streams.locations, program.agenda, { room: "unknown", session: null })).toBe(HALL);
+  });
+
+  it("opens its tour by itself on the first visit only, and again from the help button", async () => {
+    localStorage.removeItem("virtual-room-tour-seen");
+    onDesktop();
+    // While the attendee is elsewhere in the event, the hidden room waits with its tour.
+    await open(true);
+    expect(document.querySelector(".pk-guided-tour")).toBeNull();
+    await open();
+    expect(document.querySelector(".pk-guided-tour")?.textContent).toContain("Choose a location");
+    expect(localStorage.getItem("virtual-room-tour-seen")).toBe("yes");
+    render(null, host);
+    await open();
+    expect(document.querySelector(".pk-guided-tour")).toBeNull();
+    const help = host.querySelector<HTMLButtonElement>('button[aria-label="Room tour"]')!;
+    await act(async () => help.click());
+    expect(document.querySelector(".pk-guided-tour")?.textContent).toContain("Choose a location");
+    await act(async () => help.click());
+    expect(document.querySelector(".pk-guided-tour")).toBeNull();
+  });
+
+  it("offers questions and chat in a location that is not streamed, with its plan and no player", async () => {
+    roomOnly = true;
+    onDesktop();
+    await open();
+    const locations = [...host.querySelectorAll<HTMLAnchorElement>('nav[aria-label="Locations"] a')];
+    expect(locations.map((link) => link.textContent)).toEqual(["Main hall", "Studio", "Breakout"]);
+    expect(locations[2]!.getAttribute("title")).toBe("Breakout\nNot streamed: questions and chat only.");
+    expect(locations[0]!.getAttribute("title")).toBeNull();
+    render(null, host);
+    hashLocation.current = `/events/summit/virtual?session=${ROUNDTABLE}`;
+    await open();
+    expect(player()).toBeNull();
+    expect(host.textContent).toContain("Breakout · Not streamed · Recording planned");
+    expect(host.textContent).toContain("Ask questions and chat here during its sessions");
+    expect(nowPlaying()).toContain("Roundtable");
+    const panels = [...host.querySelectorAll(".pk-virtual-room__side .pk-panel__title")].map(
+      (title) => title.textContent,
+    );
+    expect(panels).toEqual(["Questions and polls", "Chat"]);
   });
 
   it("stays connected while the attendee is elsewhere in the event, and comes back where they left", async () => {

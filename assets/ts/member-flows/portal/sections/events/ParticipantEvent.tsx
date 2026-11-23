@@ -305,10 +305,12 @@ export function ParticipantEvent({
             <VirtualRoom
               slug={event.slug}
               away={!inRoom}
-              agenda={(program) => (
+              motifUrl={event.motifUrl}
+              agenda={(program, locationId) => (
                 <Suspense fallback={<Spinner />}>
                   <MyAgenda
                     embedded
+                    focusLocation={locationId ?? undefined}
                     program={program}
                     slug={event.slug}
                     eventId={event.id}

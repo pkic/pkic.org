@@ -72,6 +72,16 @@ export function IconVirtual(props: SvgProps) {
   );
 }
 
+/** A video camera struck through: a location that is not streamed. */
+export function IconVirtualOff(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <rect x="1.5" y="4" width="9" height="8" rx="1.5" />
+      <path d="m10.5 7 4-2v6l-4-2M1 1.5l14 13" />
+    </StrokeIcon>
+  );
+}
+
 /** A location pin with a camera: watching a stream at a venue. */
 export function IconVideoLocation(props: SvgProps) {
   return (

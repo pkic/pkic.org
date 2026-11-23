@@ -19,6 +19,7 @@ import { AgendaSpeaker, AgendaSpeakerProfileParts } from "./AgendaSpeaker";
 import { AgendaSessionStar } from "./AgendaParticipationControls";
 import { AgendaSpeakerDialogsContext, agendaSpeakerDialogs } from "./AgendaSpeakerProfile";
 import { DeferredImages } from "./SiteImage";
+import { useAgendaFilterRefresh } from "./use-agenda-filter-refresh";
 import { AgendaToolbar } from "./AgendaToolbar";
 import { agendaRows } from "./agenda-layout";
 import { agendaFragmentRegistry } from "./agenda-fragments";
@@ -48,6 +49,7 @@ export function ContentAgenda({
   agendaBasePath,
   initialDay,
   compact = false,
+  focusLocation,
 }: {
   agendaBasePath?: string;
   initialDay?: string;
@@ -57,6 +59,8 @@ export function ContentAgenda({
   timeZone: ClockZone;
   /** Beside something else, as under the virtual room's stream: always a list, today's finished sessions folded. */
   compact?: boolean;
+  /** Beside one location, as under the virtual room's stream: opens on its sessions; Clear filters shows all. */
+  focusLocation?: string;
   /** Only public pages own the URL fragment; portal views use their hash router. */
   fragmentNavigation?: boolean;
   legacySpeakerFragments?: readonly ContentAgendaSpeakerFragment[];
@@ -120,13 +124,7 @@ export function ContentAgenda({
       dispose?.();
     };
   }, [days, timeZone, editor]);
-  useEffect(() => {
-    // Marks change in place, so an active My agenda filter must re-evaluate the cards.
-    if (!personal) return;
-    void import("./agenda-filters").then(({ refreshAgendaFilters }) => {
-      if (root.current) refreshAgendaFilters(root.current);
-    });
-  });
+  useAgendaFilterRefresh(root, { focusLocation, personal: Boolean(personal) });
   // A refreshed program can move the session to another slot or room, which remounts its dialog.
   // Only such a move reopens it; an unchanged refresh must not reopen a dialog the reader closed.
   const openPlacement = openOccurrence
@@ -192,7 +190,9 @@ export function ContentAgenda({
         data-agenda-today-focus={editor || openOccurrence ? undefined : ""}
         data-agenda-mine-only={!editor && personal?.mineOnly ? "" : undefined}
         data-agenda-view={!editor && (personal?.mineOnly || compact) ? "list" : undefined}
+        data-agenda-view-follows-locations={!editor && compact && !personal?.mineOnly ? "" : undefined}
         data-agenda-compact={!editor && compact ? "" : undefined}
+        data-agenda-focus-location={editor ? undefined : focusLocation}
       >
         <h2 class="pk-sr-only">Event agenda</h2>
         {!editor && (

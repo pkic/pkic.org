@@ -39,6 +39,18 @@ export interface EventHeroProps {
   motifUrl?: string | null;
 }
 
+/** The houses motif of a hero: the event's own artwork replaces the default through a custom property the stylesheet reads. */
+export function useEventHeroMotif(motifUrl: string | null) {
+  const motifRef = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const motif = motifRef.current;
+    if (!motif) return;
+    if (motifUrl) motif.style.setProperty("--pk-event-hero-motif", `url(${JSON.stringify(motifUrl)})`);
+    else motif.style.removeProperty("--pk-event-hero-motif");
+  }, [motifUrl]);
+  return motifRef;
+}
+
 export function EventHero({
   title,
   eyebrow,
@@ -51,14 +63,7 @@ export function EventHero({
 }: EventHeroProps) {
   const headingId = useId();
   const Heading = useTitleHeading();
-  const motifRef = useRef<HTMLSpanElement>(null);
-  // The event's own artwork replaces the default motif through a custom property the stylesheet reads.
-  useLayoutEffect(() => {
-    const motif = motifRef.current;
-    if (!motif) return;
-    if (motifUrl) motif.style.setProperty("--pk-event-hero-motif", `url(${JSON.stringify(motifUrl)})`);
-    else motif.style.removeProperty("--pk-event-hero-motif");
-  }, [motifUrl]);
+  const motifRef = useEventHeroMotif(motifUrl);
   return (
     <header class={`pk-event-hero${compact ? " pk-event-hero--compact" : ""}`} aria-labelledby={headingId}>
       <div class="pk-event-hero__field">

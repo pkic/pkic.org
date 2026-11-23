@@ -81,14 +81,16 @@ export function useRoomLive(
         : session === moment.current
           ? Date.parse(session.endAt)
           : Infinity;
+  // A session loaded in the studio before its room opens is the next one, not the running one: no live dot days early.
+  const early =
+    opening === "scheduled" && studio !== null && now < liveRoomWindow(studio.startAt, studio.endAt).opensAt;
+  const others = (studio: RoomSession) =>
+    [moment.current, ...moment.upcoming].filter((next): next is RoomSession => next !== null && next.id !== studio.id);
   const shown =
     onStudio && studio && studio.id !== moment.current?.id
-      ? {
-          current: studio,
-          upcoming: [moment.current, ...moment.upcoming].filter(
-            (next): next is RoomSession => next !== null && next.id !== studio.id,
-          ),
-        }
+      ? early
+        ? { current: moment.current, upcoming: [studio, ...others(studio).filter((next) => next !== moment.current)] }
+        : { current: studio, upcoming: others(studio) }
       : moment;
   return {
     session,

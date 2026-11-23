@@ -7,12 +7,15 @@
  * one panel shows beneath them, and a bottom bar switches between questions, chat and the event's agenda.
  */
 import type { ComponentChildren } from "preact";
-import { useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
+import { IconHelp } from "../../../../../../components/icons";
+import { Button } from "../../../../../../ui/Button";
+import { IconVirtualOff, StrokeIcon } from "../../../../../../ui/MediaIcons";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
 import { TabList } from "../../../../../../ui/TabList";
 import { Tabs } from "../../../../../../ui/Tabs";
-import { Select } from "../../../../../../ui/TextControl";
 import { AppTabBar } from "../../../../shell/AppTabBar";
+import { useRoomTour, VirtualRoomTour } from "./VirtualRoomTour";
 
 export const ROOM_PANELS = ["questions", "chat", "agenda"] as const;
 export type RoomPanelId = (typeof ROOM_PANELS)[number];
@@ -27,6 +30,8 @@ export interface RoomLocationChoice {
   id: string;
   name: string;
   href: string;
+  /** False for a location held in the room only, which its tab marks. */
+  streamed?: boolean;
 }
 
 export interface VirtualRoomFrameProps {
@@ -35,10 +40,11 @@ export interface VirtualRoomFrameProps {
   notice?: ComponentChildren;
   locations: readonly RoomLocationChoice[];
   locationId: string;
-  onLocation: (id: string) => void;
   player: ComponentChildren;
-  /** The running session's line, given the location picker where the line carries it. */
-  now: (location: ComponentChildren) => ComponentChildren;
+  /** False for a location held in the room only: its banner scrolls away instead of docking beside the questions. */
+  streamed?: boolean;
+  /** The running session's line, given the room tour's button where the line carries it. */
+  now: (tour: ComponentChildren) => ComponentChildren;
   sponsors: ComponentChildren;
   partners: ComponentChildren;
   /** The questions, given the place in their panel's header for the Ask a question button where there is one. */
@@ -50,10 +56,48 @@ export interface VirtualRoomFrameProps {
   panel: RoomPanelId;
   panelHref: (panel: RoomPanelId) => string;
   onPanel: (panel: RoomPanelId) => void;
+  /** The room is in view: on a device's first visit its tour opens by itself. */
+  tourOnFirstVisit?: boolean;
 }
 
 export function VirtualRoomFrame(props: VirtualRoomFrameProps) {
   return props.wide ? <WideRoom {...props} /> : <NarrowRoom {...props} />;
+}
+
+/** The help button that opens the room's tour, and closes it again. */
+function TourButton({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  return (
+    <Button
+      icon
+      variant="ghost"
+      aria-label="Room tour"
+      aria-expanded={open}
+      title={"Room tour\nA short tour of the virtual room."}
+      data-tour-trigger
+      data-room-tour="help"
+      onClick={onToggle}
+    >
+      <IconHelp />
+    </Button>
+  );
+}
+
+/** The locations as tabs, a tab each, with the room's own controls at the end of the same line. */
+function LocationBar({
+  locations,
+  locationId,
+  children,
+}: {
+  locations: readonly RoomLocationChoice[];
+  locationId: string;
+  children: ComponentChildren;
+}) {
+  return (
+    <div class="pk-virtual-room__bar">
+      {locations.length > 1 ? <Tabs label="Locations" activeId={locationId} items={locations.map(asTab)} /> : <span />}
+      <div class="pk-virtual-room__bar-end">{children}</div>
+    </div>
+  );
 }
 
 function WideRoom({
@@ -61,49 +105,140 @@ function WideRoom({
   locations,
   locationId,
   player,
+  streamed = true,
   now,
   sponsors,
   partners,
   questions,
   chat,
   agenda,
+  tourOnFirstVisit = false,
 }: VirtualRoomFrameProps) {
-  // The Ask a question button sits in the questions' header, where it never scrolls away.
+  const tour = useRoomTour(tourOnFirstVisit);
+  // The Ask a question control sits at the foot of the questions, where the chat keeps its message field.
   const [askIn, setAskIn] = useState<HTMLElement | null>(null);
+  const room = useRef<HTMLDivElement>(null);
+  const screen = useRef<HTMLDivElement>(null);
+  const side = useRef<HTMLDivElement>(null);
+  const full = useRoomWindow();
+  const docked = useDockedStream(screen, side, streamed && !full.active);
   return (
-    <div class="pk-virtual-room pk-virtual-room--wide">
+    <div
+      ref={room}
+      class={`pk-virtual-room pk-virtual-room--wide${docked ? " pk-virtual-room--docked" : ""}${full.active ? " pk-virtual-room--full" : ""}`}
+    >
       {notice}
-      {locations.length > 1 && <Tabs label="Locations" activeId={locationId} items={locations.map(asTab)} />}
+      <LocationBar locations={locations} locationId={locationId}>
+        <TourButton open={tour.open} onToggle={tour.toggle} />
+        <Button
+          icon
+          variant="ghost"
+          data-room-tour="full"
+          aria-pressed={full.active}
+          aria-label={full.active ? "Exit full screen" : "Full screen"}
+          title={
+            full.active
+              ? "Exit full screen\nShow the portal around the room again. Shortcut: Esc."
+              : "Full screen\nFill the window with the stream, the questions and the chat."
+          }
+          onClick={full.toggle}
+        >
+          <StrokeIcon>
+            <path
+              d={full.active ? "M6 1v5H1M10 1v5h5M6 15v-5H1M10 15v-5h5" : "M6 1H1v5M10 1h5v5M6 15H1v-5M10 15h5v-5"}
+            />
+          </StrokeIcon>
+        </Button>
+      </LocationBar>
       <div class="pk-virtual-room__main">
         <div class="pk-virtual-room__stage">
-          {player}
+          <div ref={screen} class="pk-virtual-room__screen">
+            {player}
+          </div>
           {now(null)}
           {sponsors}
         </div>
-        {agenda}
-        {partners}
+        {full.active ? null : agenda}
+        {full.active ? null : partners}
       </div>
-      <div class="pk-virtual-room__side">
+      <div ref={side} class="pk-virtual-room__side">
         <Panel class="pk-virtual-room__panel" aria-label="Questions and polls">
-          <PanelHeader title="Questions and polls">
-            <span ref={setAskIn} />
-          </PanelHeader>
+          <PanelHeader title="Questions and polls" />
           <PanelBody>{questions(askIn)}</PanelBody>
+          <div ref={setAskIn} class="pk-virtual-room__ask" />
         </Panel>
         <Panel class="pk-virtual-room__panel" aria-labelledby={CHAT_TITLE}>
           <PanelHeader id={CHAT_TITLE} title="Chat" />
           <PanelBody>{chat}</PanelBody>
         </Panel>
       </div>
+      {tour.open && <VirtualRoomTour scope={room} wide onClose={tour.close} />}
     </div>
   );
+}
+
+/**
+ * Full screen drawn in the page, as the studio's is: the room covers the portal's navigation and takes the
+ * whole window. Escape puts the portal back.
+ */
+function useRoomWindow() {
+  const [active, setActive] = useState(false);
+  useEffect(() => {
+    if (!active) return;
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented || document.querySelector("dialog[open]")) return;
+      setActive(false);
+    };
+    document.addEventListener("keydown", escape);
+    return () => document.removeEventListener("keydown", escape);
+  }, [active]);
+  return { active, toggle: () => setActive(!active) };
+}
+
+/**
+ * Once the stream scrolls out of view, it docks above the questions, where it keeps playing. The player is
+ * never moved in the page, so the stream does not reload: it is drawn in the side column's place instead.
+ */
+function useDockedStream(
+  screen: { current: HTMLElement | null },
+  side: { current: HTMLElement | null },
+  enabled: boolean,
+) {
+  const [docked, setDocked] = useState(false);
+  useEffect(() => {
+    const target = screen.current;
+    if (!enabled || !target) return setDocked(false);
+    const observer = new IntersectionObserver(
+      ([entry]) => setDocked(Boolean(entry && entry.intersectionRatio < 0.35)),
+      {
+        threshold: [0, 0.35, 1],
+      },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [screen, enabled]);
+  useEffect(() => {
+    const target = screen.current;
+    const column = side.current;
+    if (!target || !column) return;
+    const place = () => {
+      const box = column.getBoundingClientRect();
+      const holder = column.parentElement ?? target;
+      holder.style.setProperty("--pk-room-dock-left", `${box.left}px`);
+      holder.style.setProperty("--pk-room-dock-width", `${box.width}px`);
+      if (!docked) holder.style.setProperty("--pk-room-screen-height", `${target.getBoundingClientRect().height}px`);
+    };
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [screen, side, docked]);
+  return docked;
 }
 
 function NarrowRoom({
   notice,
   locations,
   locationId,
-  onLocation,
   player,
   now,
   sponsors,
@@ -115,32 +250,30 @@ function NarrowRoom({
   panel,
   panelHref,
   onPanel,
+  tourOnFirstVisit = false,
 }: VirtualRoomFrameProps) {
+  const tour = useRoomTour(tourOnFirstVisit);
+  const room = useRef<HTMLDivElement>(null);
   const tab = `virtual-room-tab-${panel}`;
   // Once opened, the agenda stays in the page behind the other panels, so coming back to it is instant.
   const [agendaOpened, setAgendaOpened] = useState(panel === "agenda");
+  // On a phone the Ask a question control sits at the panel's foot, where the chat keeps its message field.
+  const [askFoot, setAskFoot] = useState<HTMLElement | null>(null);
   if (panel === "agenda" && !agendaOpened) setAgendaOpened(true);
-  const picker =
-    locations.length > 1 ? (
-      <Select
-        class="pk-virtual-room__location"
-        aria-label="Location"
-        value={locationId}
-        onChange={(event) => onLocation(event.currentTarget.value)}
-      >
-        {locations.map((location) => (
-          <option key={location.id} value={location.id}>
-            {location.name}
-          </option>
-        ))}
-      </Select>
-    ) : null;
+  // Each location is a tab above the stream, as on a desktop; with one location the line under it opens the tour.
+  const tourButton = <TourButton open={tour.open} onToggle={tour.toggle} />;
+  const located = locations.length > 1;
   return (
-    <div class="pk-virtual-room">
+    <div ref={room} class="pk-virtual-room">
       {notice}
       <div class="pk-virtual-room__stage">
+        {located && (
+          <LocationBar locations={locations} locationId={locationId}>
+            {tourButton}
+          </LocationBar>
+        )}
         {player}
-        {now(picker)}
+        {now(located ? null : tourButton)}
         {sponsors}
       </div>
       {/* Between a phone and a desktop the page has no bottom bar, so the panels keep their own tabs. */}
@@ -154,9 +287,10 @@ function NarrowRoom({
       />
       {panel !== "agenda" && (
         <div id={`virtual-room-${panel}`} class="pk-virtual-room__panel" role="tabpanel" aria-labelledby={tab}>
-          {panel === "questions" ? questions(null) : chat}
+          {panel === "questions" ? questions(askFoot) : chat}
         </div>
       )}
+      <div ref={setAskFoot} class="pk-virtual-room__ask" hidden={panel !== "questions"} />
       {agendaOpened && (
         <div
           id="virtual-room-agenda"
@@ -184,10 +318,19 @@ function NarrowRoom({
           { id: "event", label: "Event", icon: "home" as const, href: eventHref },
         ]}
       />
+      {tour.open && <VirtualRoomTour scope={room} wide={false} onClose={tour.close} />}
     </div>
   );
 }
 
 function asTab(location: RoomLocationChoice) {
-  return { id: location.id, label: location.name, href: location.href };
+  return location.streamed === false
+    ? {
+        id: location.id,
+        label: location.name,
+        href: location.href,
+        icon: <IconVirtualOff />,
+        title: `${location.name}\nNot streamed: questions and chat only.`,
+      }
+    : { id: location.id, label: location.name, href: location.href };
 }

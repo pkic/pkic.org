@@ -8,6 +8,26 @@ function locationInputs(group: HTMLElement | undefined): HTMLInputElement[] {
   return [...(group?.querySelectorAll<HTMLInputElement>("input[data-agenda-location]") ?? [])];
 }
 
+/** Each day's locations before the reader chooses: all of them, or only the one the agenda opened beside. */
+function defaultLocations(root: HTMLElement): Map<HTMLInputElement, boolean> {
+  const focus = root.dataset.agendaFocusLocation;
+  const defaults = new Map<HTMLInputElement, boolean>();
+  for (const group of root.querySelectorAll<HTMLElement>("[data-agenda-location-day]")) {
+    const inputs = locationInputs(group);
+    const focused = Boolean(focus) && inputs.some((input) => input.dataset.agendaLocation === focus);
+    for (const input of inputs) defaults.set(input, !focused || input.dataset.agendaLocation === focus);
+  }
+  return defaults;
+}
+
+export function showDefaultLocations(root: HTMLElement): void {
+  for (const [input, checked] of defaultLocations(root)) input.checked = checked;
+}
+
+export function showsDefaultLocations(root: HTMLElement): boolean {
+  return [...defaultLocations(root)].every(([input, checked]) => input.checked === checked);
+}
+
 function filterLocationChoices(group: HTMLElement): void {
   const query =
     group.querySelector<HTMLInputElement>("[data-agenda-location-search]")?.value.trim().toLocaleLowerCase() ?? "";
@@ -61,6 +81,24 @@ function markOwnAgendaSlots(panel: HTMLElement | null, mine: boolean): void {
       shownUntil = Math.max(start, ...ends);
     }
   }
+}
+
+const PHONE_AGENDA_QUERY = "(max-width: 47.499rem)";
+
+/** Shows the agenda as a grid of locations side by side or as one list, and presses the matching view button. */
+export function showAgendaView(root: HTMLElement, view: "grid" | "list"): void {
+  root.dataset.agendaView = view;
+  for (const button of root.querySelectorAll<HTMLButtonElement>("[data-agenda-view]"))
+    button.setAttribute("aria-pressed", String(button.dataset.agendaView === view));
+}
+
+/**
+ * An agenda shown beside something else, such as the virtual room, lists the sessions of one location and
+ * sets several side by side, so it follows the locations chosen until the reader picks a view themselves.
+ */
+function followShownLocations(root: HTMLElement, shown: number): void {
+  if (!root.hasAttribute("data-agenda-view-follows-locations")) return;
+  showAgendaView(root, shown > 1 && !window.matchMedia(PHONE_AGENDA_QUERY).matches ? "grid" : "list");
 }
 
 /** Location ownership is explicit because its toolbar sits outside the day panel. Returns the active filter count. */
@@ -117,8 +155,12 @@ export function refreshAgendaFilters(root: HTMLElement): number {
     entry.hidden = Boolean(query && !(credit?.textContent ?? "").toLocaleLowerCase().includes(query));
   }
   if (active) filterAgendaLocationColumns(active, selected);
+  followShownLocations(root, selected.size);
   const clear = root.querySelector<HTMLButtonElement>("[data-agenda-clear-filters]");
-  if (clear) clear.hidden = !query && !format && !track && !mineToggled && selected.size === rooms.length;
+  const filtered = Boolean(query || format || track || mineToggled || selected.size !== rooms.length);
+  if (clear) clear.hidden = !filtered;
+  // The folded toolbar's filter button shows that some sessions are hidden.
+  root.toggleAttribute("data-agenda-filtered", filtered);
   // My agenda is its own toolbar control, so only the folded row's filters count here.
   const activeFilters = [query, format, track, selected.size !== rooms.length].filter(Boolean).length;
   const count = root.querySelector<HTMLElement>("[data-agenda-filters-count]");
@@ -171,11 +213,11 @@ export function initializeAgendaFilters(root: HTMLElement): () => void {
   );
   window.addEventListener("afterprint", restoreScreen, { signal: events.signal });
   const views = [...root.querySelectorAll<HTMLButtonElement>("[data-agenda-view]")];
-  if (views.length) {
-    root.dataset.agendaView ??= window.matchMedia("(max-width: 47.499rem)").matches ? "list" : "grid";
-    for (const button of views)
-      button.setAttribute("aria-pressed", String(button.dataset.agendaView === root.dataset.agendaView));
-  }
+  if (views.length)
+    showAgendaView(
+      root,
+      root.dataset.agendaView === "list" || window.matchMedia(PHONE_AGENDA_QUERY).matches ? "list" : "grid",
+    );
   const disposeToolbarMenu = mountAgendaToolbarMenu(root);
   const filtersToggle = root.querySelector<HTMLButtonElement>("[data-agenda-filters-toggle]");
   const filterPopup = root.querySelector<HTMLElement>(".pk-content-agenda__filter-controls");
@@ -253,9 +295,8 @@ export function initializeAgendaFilters(root: HTMLElement): () => void {
       if (event.target.closest("[data-agenda-print]")) window.print();
       const view = event.target.closest<HTMLButtonElement>("button[data-agenda-view]");
       if (view) {
-        root.dataset.agendaView = view.dataset.agendaView;
-        for (const button of root.querySelectorAll<HTMLButtonElement>("[data-agenda-view]"))
-          button.setAttribute("aria-pressed", String(button === view));
+        root.removeAttribute("data-agenda-view-follows-locations");
+        showAgendaView(root, view.dataset.agendaView === "list" ? "list" : "grid");
       }
     },
     { signal: events.signal },

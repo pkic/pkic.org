@@ -6,6 +6,7 @@
  * which imply scripted panel switching and keyboard arrow semantics.
  */
 
+import type { ComponentChildren } from "preact";
 import "./Tabs.css";
 import { useActiveTabVisibility } from "./useActiveTabVisibility";
 
@@ -13,6 +14,10 @@ export interface TabItem {
   readonly id: string;
   readonly label: string;
   readonly href: string;
+  /** A small mark before the label for a tab that differs from the rest, such as a location that is not streamed. */
+  readonly icon?: ComponentChildren;
+  /** What the mark means, as the tab's tooltip. */
+  readonly title?: string;
 }
 
 export interface TabsProps {
@@ -35,7 +40,9 @@ export function Tabs({ items, activeId, label, class: className }: TabsProps) {
             href={item.href}
             class="pk-tabs__link"
             aria-current={item.id === activeId ? "page" : undefined}
+            title={item.title}
           >
+            {item.icon}
             {item.label}
           </a>
         ))}
