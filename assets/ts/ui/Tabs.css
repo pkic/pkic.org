@@ -97,7 +97,8 @@
    * two levels read as one navigation. Every section does this the same way:
    * the panel after a strip loses the stack gap when it opens with tabs.
    */
-  .pk-tabs + .pk-stack:has(> .pk-tabs:first-child, > .pk-stack:first-child > .pk-tabs:first-child) {
+  .pk-tabs + .pk-stack:has(> .pk-tabs:first-child, > .pk-stack:first-child > .pk-tabs:first-child),
+  .pk-stack > .pk-tabs + .pk-tabs {
     margin-block-start: calc(-1 * var(--pk-gap, var(--pk-4)));
   }
 
