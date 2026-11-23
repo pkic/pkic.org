@@ -68,6 +68,7 @@ import {
   EventLiveOverlayPositionsPut,
 } from "./live-overlay-layouts";
 import { EventDaysGet, EventDaysPut } from "./days";
+import { registerTicketOrganizationRoutes } from "./ticket-organizations";
 import { registerTicketRoutes } from "./tickets";
 import { registerEventClassifierRoutes } from "./classifiers";
 import { registerUnfinishedRegistrationRoutes } from "./unfinished-registrations";
@@ -270,6 +271,7 @@ openapi.route("/registrations", registrations_Router);
 openapi.get("/days", EventDaysGet);
 openapi.put("/days", EventDaysPut);
 registerTicketRoutes(openapi);
+registerTicketOrganizationRoutes(openapi);
 registerEventClassifierRoutes(openapi);
 openapi.post("/images/hero", EventHeroImagePost);
 openapi.get("/images/motif", EventMotifGet);

@@ -4,7 +4,7 @@
  */
 import type { PreviewSection } from "./PreviewShell";
 import { TicketAwaitingPayment, TicketPaymentUnderReview, TicketUnpaidStanding } from "./sections-event-ticket-payment";
-import { TicketOrganizationsPreview, TicketOrganizationTestSpecimen } from "./TicketClassifierPreview";
+import { TicketOrganizationsPreview } from "./TicketClassifierPreview";
 import { TicketSalesPreview } from "./TicketSalesPreview";
 import { DayAttendancePicker } from "../../components/DayAttendancePicker";
 import { TicketCard, TicketChoice } from "../../components/events/tickets/TicketCard";
@@ -587,12 +587,7 @@ export const eventTicketSections: PreviewSection[] = [
   { id: "ticket-prices-edit", title: "Event settings: edit prices", render: () => <TicketPricesEdit /> },
   {
     id: "ticket-classifier",
-    title: "Event settings: ticket classifier",
+    title: "Event settings: ticket per organization",
     render: () => <TicketOrganizationsPreview />,
-  },
-  {
-    id: "ticket-classifier-test",
-    title: "Event settings: test an organization",
-    render: () => <TicketOrganizationTestSpecimen />,
   },
 ];

@@ -57,7 +57,7 @@ export async function ticketCriteriaDigest(options: readonly TicketClassifierOpt
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-function subjectKey(subject: TicketClassifierSubject) {
+export function subjectKey(subject: TicketClassifierSubject) {
   return {
     organizationName: normalizeTicketOrganizationName(subject.organizationName),
     emailDomain: (subject.emailDomain ?? "").trim().toLowerCase(),
@@ -69,7 +69,7 @@ function subjectKey(subject: TicketClassifierSubject) {
  * it still chooses between. They are found by ticket key, not by the question they answered, so adding or clearing
  * another ticket's description keeps them. An organizer's decision comes first, then the latest.
  */
-function decisionsInScope(types: readonly TicketTypeRow[]) {
+export function decisionsInScope(types: readonly TicketTypeRow[]) {
   const offered = types.filter((type) => type.active === 1).map((type) => type.ticket_key);
   const asked = classifierOptions(types).map((option) => option.key);
   const list = (keys: readonly string[]) => (keys.length ? keys.map(() => "?").join(", ") : "NULL");
