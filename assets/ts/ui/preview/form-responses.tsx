@@ -20,10 +20,22 @@ const field = formFieldDefinitionSchema.parse({
   archivedAt: null,
 });
 
+const fields = [
+  field,
+  ...(
+    [
+      ["notes", "Notes", "text"],
+      ["consent", "Consent", "boolean"],
+    ] as const
+  ).map(([key, label, fieldType]) =>
+    formFieldDefinitionSchema.parse({ ...field, key, label, fieldType, options: null }),
+  ),
+];
+
 function FormResponsesPreview() {
   return (
     <FormSubmissionsTable
-      fields={[field]}
+      fields={fields}
       endpoint="/preview/responses"
       exportEndpoint="/preview/exports"
       responseSchema={formSubmissionsResponseSchema}
@@ -46,7 +58,7 @@ function FormResponsesPreview() {
               contextType: "registration",
               contextRef: "one",
               submitter: { id: "ada", firstName: "Ada", lastName: "Example", email: null, organization: null },
-              answers: { dietary_restrictions: ["vegan", "nut_allergy"] },
+              answers: { dietary_restrictions: ["vegan", "nut_allergy"], notes: "Workshop", consent: true },
             },
             {
               id: "two",
@@ -55,7 +67,7 @@ function FormResponsesPreview() {
               contextType: "registration",
               contextRef: "two",
               submitter: { id: "sam", firstName: "Sam", lastName: "Example", email: null, organization: null },
-              answers: { dietary_restrictions: ["vegan"] },
+              answers: { dietary_restrictions: ["vegan"], notes: "Panel", consent: false },
             },
           ],
         })

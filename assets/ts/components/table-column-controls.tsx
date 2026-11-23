@@ -20,6 +20,10 @@ export function columnFilters<T>(column: Column<T>): readonly ColumnFilter[] {
   return column.filters ?? (column.filter ? [column.filter] : []);
 }
 
+export function columnFilterKey(filter: ColumnFilter): string {
+  return filter.key ?? filter.param;
+}
+
 export function headLabel(head: HeadCell): string {
   return typeof head === "string" ? head : head.label;
 }
@@ -35,20 +39,24 @@ export interface ColumnControlsOptions {
   onSort?: (nextSort: string) => void;
   /** The column filters in force, by query parameter. */
   filters?: Record<string, string>;
-  /** Called with the parameter and its new value ("" opens the column back up). */
-  onFilterChange?: (param: string, value: string) => void;
+  /** Applies a scoped choice and its companion parameters in one query update. */
+  onFilterPatch?: (changes: Readonly<Record<string, string>>) => void;
 }
 
 export interface ColumnControls<T> {
+  /** Whether this controller can apply filter changes. */
+  canFilter: boolean;
   /** Keys (see `columnKey`) of the columns the reader has hidden for this visit. */
   hidden: ReadonlySet<string>;
-  /** The query parameter of the column whose typed filter is open, if any. */
+  /** The control key of the column whose typed filter is open, if any. */
   filterOpen: string | null;
   setFilterOpen: (next: string | null | ((current: string | null) => string | null)) => void;
   /** The column that takes a wide screen's slack. */
   slackIndex: number;
   menuFor: (column: Column<T>, index: number) => MenuItem[];
   filterSummaryFor: (column: Column<T>) => string | undefined;
+  filterValue: (filter: ColumnFilter) => string;
+  applyFilter: (filter: ColumnFilter, value: string) => void;
   /** The menu at the end of the head that brings hidden columns back. */
   columnsMenu: MenuItem[];
   /** Every narrowing in force, as removable chips above the rows. */
@@ -64,14 +72,14 @@ export interface ColumnControls<T> {
 /** The sort, filter and column-visibility state of one list. */
 export function useColumnControls<T>(
   columns: readonly Column<T>[],
-  { currentSort, onSort, filters = {}, onFilterChange }: ColumnControlsOptions,
+  { currentSort, onSort, filters = {}, onFilterPatch }: ColumnControlsOptions,
 ): ColumnControls<T> {
   // Hidden columns are the reader's choice for this visit; they are keyed by
   // `columnKey` so the choice survives a re-render that rebuilds the column list.
   const [hidden, setHidden] = useState<ReadonlySet<string>>(
     () => new Set(columns.filter((column) => column.defaultHidden).map(columnKey)),
   );
-  // Which column's typed filter is open, by query parameter. One at a time:
+  // Which column's typed filter is open, by control key. One at a time:
   // the row appears above the rows it narrows, and two of them would push the
   // table further from the control acting on it.
   const [filterOpen, setFilterOpen] = useState<string | null>(null);
@@ -111,7 +119,7 @@ export function useColumnControls<T>(
     return columnFilters(column).flatMap((filter) =>
       filterGroupItems(
         filter,
-        `${id}-${filter.param}`,
+        `${id}-${columnFilterKey(filter)}`,
         filter.label
           ? optionsLabel.startsWith("Filter by")
             ? `Filter by ${filter.label}`
@@ -122,8 +130,8 @@ export function useColumnControls<T>(
   }
 
   function filterGroupItems(columnFilter: ColumnFilter, id: string, optionsLabel: string): MenuItem[] {
-    if (!onFilterChange) return [];
-    const current = filters[columnFilter.param] ?? "";
+    if (!onFilterPatch) return [];
+    const current = filterValue(columnFilter);
     const items: MenuItem[] = [];
     if (columnFilter.options) {
       items.push({
@@ -141,11 +149,11 @@ export function useColumnControls<T>(
             multiple: columnFilter.multiple && Boolean(option.value),
             keepOpen: columnFilter.multiple,
             onSelect: () => {
-              if (!columnFilter.multiple || !option.value) return onFilterChange(columnFilter.param, option.value);
+              if (!columnFilter.multiple || !option.value) return applyChoice(columnFilter, option.value);
               const selected = new Set(current.split(",").filter(Boolean));
               if (selected.has(option.value)) selected.delete(option.value);
               else selected.add(option.value);
-              onFilterChange(columnFilter.param, [...selected].sort().join(","));
+              applyChoice(columnFilter, [...selected].sort().join(","));
             },
           })),
           ...(columnFilter.match?.options.map((option, index) => ({
@@ -154,7 +162,7 @@ export function useColumnControls<T>(
             checked: (filters[columnFilter.match!.param] ?? "") === option.value,
             separatorBefore: index === 0,
             keepOpen: true,
-            onSelect: () => onFilterChange(columnFilter.match!.param, option.value),
+            onSelect: () => onFilterPatch({ [columnFilter.match!.param]: option.value }),
           })) ?? []),
           ...(columnFilter.optionNavigation ?? []),
         ],
@@ -167,15 +175,15 @@ export function useColumnControls<T>(
       items.push({
         id: `${id}-filter-text`,
         label: current ? "Edit filter…" : "Filter this column…",
-        onSelect: () => setFilterOpen(columnFilter.param),
+        onSelect: () => setFilterOpen(columnFilterKey(columnFilter)),
       });
       if (current) {
         items.push({
           id: `${id}-filter-clear`,
           label: "Clear filter",
           onSelect: () => {
-            onFilterChange(columnFilter.param, "");
-            setFilterOpen((open) => (open === columnFilter.param ? null : open));
+            applyChoice(columnFilter, "");
+            setFilterOpen((open) => (open === columnFilterKey(columnFilter) ? null : open));
           },
         });
       }
@@ -207,8 +215,27 @@ export function useColumnControls<T>(
     return items;
   }
 
+  function filterValue(columnFilter: ColumnFilter): string {
+    if (!scopeMatches(columnFilter)) return "";
+    return filters[columnFilter.param] ?? "";
+  }
+
+  function scopeMatches(columnFilter: ColumnFilter): boolean {
+    return Object.entries(columnFilter.scope ?? {}).every(([param, value]) => filters[param] === value);
+  }
+
+  function applyChoice(columnFilter: ColumnFilter, value: string) {
+    if (!columnFilter.scope) return onFilterPatch?.({ [columnFilter.param]: value });
+    // Clearing an inactive field must not clear another field's answer choice.
+    if (!value && !scopeMatches(columnFilter)) return;
+    onFilterPatch?.({
+      ...Object.fromEntries(Object.entries(columnFilter.scope).map(([param, scope]) => [param, value ? scope : ""])),
+      [columnFilter.param]: value,
+    });
+  }
+
   function summaryForFilter(columnFilter: ColumnFilter): string | undefined {
-    const current = filters[columnFilter.param];
+    const current = filterValue(columnFilter);
     if (!current) return undefined;
     // A typed value is its own summary; an enum value reads by its label, so
     // "role=observer" is stated as the word the reader chose.
@@ -251,19 +278,19 @@ export function useColumnControls<T>(
   });
 
   const chips: AppliedFilterChip[] = [];
-  if (onFilterChange) {
+  if (onFilterPatch) {
     for (const column of columns) {
       for (const columnFilter of columnFilters(column)) {
         const summary = summaryForFilter(columnFilter);
         if (!columnFilter || summary === undefined) continue;
         const label = columnFilter.label ?? headLabel(column.header);
         chips.push({
-          id: `filter-${columnFilter.param}`,
+          id: `filter-${columnFilterKey(columnFilter)}`,
           label: `${label}: ${summary}`,
           clearLabel: `Clear the ${label} filter`,
           onClear: () => {
-            onFilterChange(columnFilter.param, "");
-            setFilterOpen((open) => (open === columnFilter.param ? null : open));
+            applyChoice(columnFilter, "");
+            setFilterOpen((open) => (open === columnFilterKey(columnFilter) ? null : open));
           },
         });
       }
@@ -287,7 +314,7 @@ export function useColumnControls<T>(
     .map((column, index) => ({ column, index }))
     .flatMap(({ column, index }) => {
       const name = headLabel(column.header);
-      const narrowed = columnFilters(column).some((filter) => Boolean(filters[filter.param]));
+      const narrowed = columnFilters(column).some((filter) => Boolean(filterValue(filter)));
       return filterItems(column, `card-${String(index)}`, `Filter by ${name}`).map((item) =>
         item.id.endsWith("-filter-text")
           ? { ...item, label: narrowed ? `Edit the ${name} filter…` : `Filter by ${name}…` }
@@ -312,12 +339,15 @@ export function useColumnControls<T>(
           : null;
 
   return {
+    canFilter: Boolean(onFilterPatch),
     hidden,
     filterOpen,
     setFilterOpen,
     slackIndex,
     menuFor,
     filterSummaryFor,
+    filterValue,
+    applyFilter: applyChoice,
     columnsMenu,
     chips,
     cardMenuItems,
