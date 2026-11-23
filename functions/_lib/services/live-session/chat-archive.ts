@@ -3,6 +3,12 @@ import {
   LIVE_CHAT_ARCHIVE_MAX_CHATS,
   type LiveChatEraseResponse,
 } from "../../../../assets/shared/schemas/event-live-chat-archive";
+import { classifierQuestionName } from "../../../../assets/shared/classifiers";
+import {
+  LIVE_MODERATION_REASON_IDS,
+  liveModerationReasonLabel,
+  type LiveModerationReason,
+} from "../../../../assets/shared/live-moderation-policy";
 import { instantToCalendarDate } from "../../../../assets/shared/timezone";
 import { boundedCsvWriter } from "../../csv";
 import { AppError } from "../../errors";
@@ -11,6 +17,7 @@ import { nowIso } from "../../utils/time";
 import { prepareScopedAuditLog } from "../audit";
 import type { LiveChatArchiveRow } from "./room-chat";
 import { readPublishedLiveAgenda } from "./approved-agenda";
+import { readLiveCheckFlags } from "./room-chat-checks";
 import { liveLocationChatName } from "./room-admission";
 
 interface LocationChat {
@@ -23,7 +30,31 @@ const STATUS_LABELS: Record<LiveChatArchiveRow["status"], string> = {
   shown: "Shown",
   hidden: "Hidden by a moderator",
   held: "Held after reports",
+  removed_by_check: "Removed by the check",
 };
+
+const CHECK_LABELS: Record<NonNullable<LiveChatArchiveRow["check_outcome"]>, string> = {
+  advised: "Flagged",
+  blocked: "Removed",
+};
+
+/** The questions the check raised, most certain first: "Solicitation: 96%; Spam: 72%". */
+function checkScores(json: string | null): string {
+  return (readLiveCheckFlags(json) ?? [])
+    .map((flag) => `${classifierQuestionName(flag.id)}: ${flag.percent}%`)
+    .join("; ");
+}
+
+/** The reasons reporters gave, most given first: "Spam: 2; Abuse: 1". */
+function reportReasons(reasons: unknown[]): string[] {
+  const counts = new Map<LiveModerationReason, number>();
+  for (const reason of reasons)
+    if (LIVE_MODERATION_REASON_IDS.includes(reason as LiveModerationReason))
+      counts.set(reason as LiveModerationReason, (counts.get(reason as LiveModerationReason) ?? 0) + 1);
+  return [...counts]
+    .sort(([, a], [, b]) => b - a)
+    .map(([reason, count]) => `${liveModerationReasonLabel(reason)}: ${count}`);
+}
 
 /** What the download names a message sent between sessions. */
 const BETWEEN_SESSIONS = "Between sessions";
@@ -88,7 +119,9 @@ async function audit(
  * Every attendee message the event's rooms still hold, one CSV row each, by
  * day, room and time in UTC, with the session it was sent during. A room keeps
  * its day's chat a week after its last session unless the event keeps it
- * longer, so a download is empty once that passed.
+ * longer, so a download is empty once that passed. Each row carries what the
+ * automatic check decided with its scores and what people reported, so the
+ * check can be tuned on the words it judged.
  */
 export async function exportEventChat(
   db: DatabaseLike,
@@ -99,10 +132,26 @@ export async function exportEventChat(
   const namespace = rooms(env);
   // Refuses the row that would outgrow the download, so a huge event never fills the Worker's memory first.
   const csv = boundedCsvWriter(LIVE_CHAT_ARCHIVE_MAX_BYTES);
-  csv.push(["Room", "Day", "Session", "Sent (UTC)", "Edited (UTC)", "Author", "Message", "Status"]);
+  csv.push([
+    "Room",
+    "Day",
+    "Session",
+    "Sent (UTC)",
+    "Edited (UTC)",
+    "Author",
+    "Message",
+    "Status",
+    "Check",
+    "Check scores",
+    "Reports",
+    "Report reasons",
+  ]);
   const { chats, titles } = await locationChats(db, eventId);
   for (const chat of chats) {
-    for (const message of await namespace.getByName(liveLocationChatName(eventId, chat.roomId, chat.day)).chatArchive())
+    for (const message of await namespace
+      .getByName(liveLocationChatName(eventId, chat.roomId, chat.day))
+      .chatArchive()) {
+      const reports = JSON.parse(message.report_reasons) as unknown[];
       csv.push([
         chat.roomName,
         chat.day,
@@ -112,7 +161,12 @@ export async function exportEventChat(
         message.author_name,
         message.body,
         STATUS_LABELS[message.status],
+        message.check_outcome ? CHECK_LABELS[message.check_outcome] : "",
+        checkScores(message.check_flags),
+        reports.length ? String(reports.length) : "",
+        reportReasons(reports).join("; "),
       ]);
+    }
   }
   await audit(db, actor, eventId, "live_session.chat.exported", { messages: csv.rows });
   return csv.toString();

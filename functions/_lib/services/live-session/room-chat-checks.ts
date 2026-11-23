@@ -12,6 +12,8 @@ import type { LiveRoomSql } from "./room-sql";
 
 /** A check still unanswered after this long no longer keeps its message off air; the model itself gets 4 seconds. */
 export const LIVE_CHAT_CHECK_WAIT_MS = 5_000;
+/** Who the room names when the automatic check holds a message. */
+export const LIVE_CHAT_HELD_BY_CHECK = "Automatic check";
 
 /** Messages the on-air outputs leave out for their check: flagged, or still being checked. */
 export function liveChatCheckHoldsBack(now: number): { sql: string; bindings: string[] } {
@@ -87,14 +89,14 @@ export class LiveChatCheckStore {
         )
         .map((row) => [
           row.message_id,
-          { outcome: row.outcome, notes: readNotes(row.notes_json), flags: readFlags(row.flags_json) },
+          { outcome: row.outcome, notes: readNotes(row.notes_json), flags: readLiveCheckFlags(row.flags_json) },
         ]),
     );
   }
 }
 
 /** The stored flags when they still read as the contract's; a room from an earlier release has none. */
-function readFlags(json: string | null): LiveAutomaticCheck["flags"] {
+export function readLiveCheckFlags(json: string | null): LiveAutomaticCheck["flags"] {
   if (!json) return undefined;
   try {
     const parsed = liveAutomaticCheckSchema.shape.flags.safeParse(JSON.parse(json));
