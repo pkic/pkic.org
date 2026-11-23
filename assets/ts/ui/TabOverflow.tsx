@@ -12,7 +12,7 @@
  * width and every measurement is a plain read of the layout.
  */
 
-import { useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 
 import { Badge } from "./Badge";
 import { Menu, type MenuItem } from "./Menu";
@@ -31,15 +31,40 @@ function countFitting(list: HTMLElement, more: HTMLElement | null): number {
   return Math.max(index, 0);
 }
 
-/** Measures how many tabs fit; the strip renders the rest invisibly and lists them in its menu. */
+/** A tab label with marks reads as its text in the menu; the attention badge travels separately. */
+function textOf(tab: Element): string {
+  const copy = tab.cloneNode(true) as Element;
+  for (const badge of copy.querySelectorAll(".pk-badge")) badge.remove();
+  return copy.textContent?.trim() ?? "";
+}
+
+/** What the menu repeats of a rendered tab: its plain text and, for a link, where it leads. */
+export interface RenderedTab {
+  readonly text: string;
+  readonly href: string | null;
+}
+
+function readTabs(list: HTMLElement): string {
+  const tabs = [...list.children].filter((child) => child.classList.contains("pk-tabs__link"));
+  return JSON.stringify(tabs.map((tab): RenderedTab => ({ text: textOf(tab), href: tab.getAttribute("href") })));
+}
+
+/**
+ * Measures how many tabs fit; the strip renders the rest invisibly and lists them in its menu.
+ * It also reads each tab as rendered, after the render, so the menu never repeats a previous label or link.
+ */
 export function useTabOverflow(itemCount: number) {
   const listRef = useRef<HTMLDivElement>(null);
   const moreRef = useRef<HTMLDivElement>(null);
   const [fitting, setFitting] = useState(itemCount);
+  const [rendered, setRendered] = useState("[]");
   useLayoutEffect(() => {
     const list = listRef.current;
     if (!list) return;
-    const measure = () => setFitting(countFitting(list, moreRef.current));
+    const measure = () => {
+      setFitting(countFitting(list, moreRef.current));
+      setRendered(readTabs(list));
+    };
     measure();
     if (typeof ResizeObserver === "undefined") return;
     // The strip resizes with the page; a tab resizes when its label or the font changes.
@@ -49,7 +74,8 @@ export function useTabOverflow(itemCount: number) {
     if (moreRef.current) observer.observe(moreRef.current);
     return () => observer.disconnect();
   });
-  return { listRef, moreRef, fitting: Math.min(fitting, itemCount) };
+  const tabs = useMemo(() => JSON.parse(rendered) as RenderedTab[], [rendered]);
+  return { listRef, moreRef, fitting: Math.min(fitting, itemCount), tabs };
 }
 
 export interface TabOverflowEntry {

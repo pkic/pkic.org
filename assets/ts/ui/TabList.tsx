@@ -46,7 +46,7 @@ export interface TabListProps {
 }
 
 export function TabList({ items, activeId, onSelect, label, idPrefix, class: className }: TabListProps) {
-  const { listRef, moreRef, fitting } = useTabOverflow(items.length);
+  const { listRef, moreRef, fitting, tabs } = useTabOverflow(items.length);
   const selectedFits = items.findIndex((item) => item.id === activeId) < fitting;
   const classes = ["pk-tabs", className].filter(Boolean).join(" ");
 
@@ -122,7 +122,7 @@ export function TabList({ items, activeId, onSelect, label, idPrefix, class: cla
       <TabOverflowMenu
         entries={items.map((item, index) => ({
           id: item.id,
-          label: typeof item.label === "string" ? item.label : textOf(listRef.current?.children[index]),
+          label: typeof item.label === "string" ? item.label : (tabs[index]?.text ?? ""),
           attention: item.attention,
           onSelect: () => onSelect(item.id),
         }))}
@@ -133,12 +133,4 @@ export function TabList({ items, activeId, onSelect, label, idPrefix, class: cla
       />
     </div>
   );
-}
-
-/** A tab label with marks reads as its text in the menu; the attention badge travels separately. */
-function textOf(tab: Element | undefined): string {
-  if (!tab) return "";
-  const copy = tab.cloneNode(true) as Element;
-  for (const badge of copy.querySelectorAll(".pk-badge")) badge.remove();
-  return copy.textContent?.trim() ?? "";
 }

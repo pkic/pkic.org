@@ -54,8 +54,12 @@ export async function openTab(scope: Page | Locator, name: string | RegExp): Pro
 export async function expectCurrentTab(scope: Page | Locator, name: string | RegExp): Promise<void> {
   const located = tab(scope, name);
   await expect(located).toBeVisible();
+  // A current tab that did not fit is shown by the More button, which carries the current-tab mark.
   const current = await located.evaluate(
-    (element) => element.getAttribute("aria-selected") === "true" || element.getAttribute("aria-current") === "page",
+    (element) =>
+      element.getAttribute("aria-selected") === "true" ||
+      element.getAttribute("aria-current") === "page" ||
+      element.classList.contains("pk-tabs__link--current"),
   );
   expect(current, `expected the ${String(name)} tab to be the current one`).toBe(true);
 }

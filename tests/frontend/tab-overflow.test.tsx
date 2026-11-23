@@ -137,11 +137,31 @@ describe("tab overflow", () => {
       />,
     );
     void act(() => moreButton(host)?.click());
-    const entries = [...host.querySelectorAll<HTMLElement>('[role="menuitemradio"]')];
+    const entries = [...host.querySelectorAll<HTMLAnchorElement>('a[role="menuitemradio"]')];
     expect(entries.map((entry) => entry.textContent)).toEqual(["Blue hall", "Room 2", "Room 8", "Room 9"]);
+    // A real link, so it also opens in a new tab.
+    expect(entries[1]?.getAttribute("href")).toBe("/rooms/room-2");
 
-    void act(() => entries[1]?.click());
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+    void act(() => {
+      entries[1]?.dispatchEvent(click);
+    });
+    expect(click.defaultPrevented).toBe(true);
     expect(onChange).toHaveBeenCalledWith("room-2");
+  });
+
+  it("names a tab with marks by its current text, after its items change", () => {
+    const marked = (order: number[]) =>
+      order.map((index) => ({ id: rooms[index]!.id, label: <strong>{rooms[index]!.label}</strong> }));
+    const host = mount(
+      <TabList label="Locations" items={marked([0, 1, 2, 3, 4])} activeId="room-0" onSelect={() => {}} />,
+    );
+    void act(() =>
+      render(<TabList label="Locations" items={marked([0, 4, 3, 2, 1])} activeId="room-0" onSelect={() => {}} />, host),
+    );
+    void act(() => moreButton(host)?.click());
+    const entries = [...host.querySelectorAll<HTMLElement>('[role="menuitemradio"]')];
+    expect(entries.map((entry) => entry.textContent)).toEqual(["Room 9", "Room 8", "Room 2", "Blue hall"]);
   });
 
   it("has no menu when every tab fits", () => {

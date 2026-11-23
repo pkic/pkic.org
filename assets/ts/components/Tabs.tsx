@@ -47,7 +47,7 @@ type TabsProps = SharedTabsProps &
   );
 
 export function Tabs({ items, active, onChange, className, idPrefix, label = "Sections", hrefFor }: TabsProps) {
-  const { listRef, moreRef, fitting } = useTabOverflow(items.length);
+  const { listRef, moreRef, fitting, tabs } = useTabOverflow(items.length);
   if (hrefFor) {
     return (
       <nav class={["pk-tabs", className].filter(Boolean).join(" ")} aria-label={label}>
@@ -75,6 +75,8 @@ export function Tabs({ items, active, onChange, className, idPrefix, label = "Se
           entries={items.map((item, index) => ({
             id: item.key,
             label: item.label,
+            // The link as the router wrote it, so it also opens in a new tab from the menu.
+            href: tabs[index]?.href ?? undefined,
             // The tab stays in the strip, unseen; choosing it here follows that same link.
             onSelect: () => (listRef.current?.children[index] as HTMLElement | undefined)?.click(),
           }))}

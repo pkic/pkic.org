@@ -208,7 +208,19 @@ export function MenuLevel({
           </>
         );
         return item.href && !item.disabled ? (
-          <a {...shared} href={item.href} onClick={() => close(false)}>
+          <a
+            {...shared}
+            href={item.href}
+            onClick={(event: MouseEvent) => {
+              const plain = event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+              if (item.onSelect && plain) {
+                event.preventDefault();
+                select(item, index);
+                return;
+              }
+              close(false);
+            }}
+          >
             {content}
           </a>
         ) : (
