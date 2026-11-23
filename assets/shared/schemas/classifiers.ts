@@ -6,7 +6,9 @@ import { z } from "zod";
 import { eventSlugParamsSchema, jsonErrorResponse, trimmedString, utcInstantSchema } from "./api-common.ts";
 import {
   CLASSIFIER_KINDS,
+  CLASSIFIER_MAX_EVENT_QUESTIONS,
   CLASSIFIER_MAX_QUESTIONS,
+  CLASSIFIER_MAX_WIDE_QUESTIONS,
   CLASSIFIER_MODELS,
   CLASSIFIER_OUTCOMES,
   CLASSIFIER_QUESTION_ID_PATTERN,
@@ -57,12 +59,13 @@ export const classifierScoreSchema = z.object({
 
 export const classifierQuestionSchema = z.discriminatedUnion("kind", [classifierFlagSchema, classifierScoreSchema]);
 
-const questionsSchema = z
-  .array(classifierQuestionSchema)
-  .max(CLASSIFIER_MAX_QUESTIONS, `Ask at most ${CLASSIFIER_MAX_QUESTIONS} questions.`)
-  .refine((questions) => new Set(questions.map((question) => question.id)).size === questions.length, {
-    message: "Give each question its own id.",
-  });
+const questionsSchema = (max: number) =>
+  z
+    .array(classifierQuestionSchema)
+    .max(max, `Ask at most ${max} questions.`)
+    .refine((questions) => new Set(questions.map((question) => question.id)).size === questions.length, {
+      message: "Give each question its own id.",
+    });
 
 const contextSchema = z.string().trim().max(8000).default("");
 
@@ -71,15 +74,15 @@ export const classifierSettingsInputSchema = z.object({
   enabled: z.boolean(),
   model: classifierModelSchema,
   context: contextSchema,
-  questions: questionsSchema,
+  questions: questionsSchema(CLASSIFIER_MAX_WIDE_QUESTIONS),
 });
 export type ClassifierSettingsInput = z.infer<typeof classifierSettingsInputSchema>;
 
 export const classifierEventAdditionsInputSchema = z.object({
   expectedRevision: z.number().int().min(0),
   context: contextSchema,
-  questions: questionsSchema,
-  disabledQuestionIds: z.array(questionIdSchema).max(CLASSIFIER_MAX_QUESTIONS).default([]),
+  questions: questionsSchema(CLASSIFIER_MAX_EVENT_QUESTIONS),
+  disabledQuestionIds: z.array(questionIdSchema).max(CLASSIFIER_MAX_WIDE_QUESTIONS).default([]),
 });
 export type ClassifierEventAdditionsInput = z.infer<typeof classifierEventAdditionsInputSchema>;
 
@@ -138,7 +141,9 @@ export const classifierTrialInputSchema = z.object({
   title: z.string().trim().max(300).default(""),
   model: classifierModelSchema,
   context: contextSchema,
-  questions: questionsSchema.refine((questions) => questions.length > 0, { message: "Add a question." }),
+  questions: questionsSchema(CLASSIFIER_MAX_QUESTIONS).refine((questions) => questions.length > 0, {
+    message: "Add a question.",
+  }),
 });
 export type ClassifierTrialInput = z.infer<typeof classifierTrialInputSchema>;
 
