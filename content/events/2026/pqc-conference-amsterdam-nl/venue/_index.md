@@ -31,13 +31,15 @@ Use [Google Maps](https://www.google.nl/maps/dir/de+Meervaart+Theater,+Meer+en+V
 
 ### Parking
 
-**Q-Park Osdorpplein** — 1-minute walk from the venue  
-Osdorpplein 249, 1068 SW Amsterdam  
-The first hour is free; €2.00 per 30 minutes thereafter.
+**[Parking Garage Nieuw-West](https://parking-nieuwwest.nl/) (recommended)**, a 5-minute walk from Meervaart
 
-**Parking Garage Nieuw-West** — 5-minute walk from the venue (subject to availability)  
-Jan Celestraat 11, Amsterdam (entrance under Jumbo Osdorpplein)  
-Conference attendees can use this garage at a reduced day rate of €12.50.
+Enter at Jan Celestraat 11 (under Jumbo) or Nicolaas Anslijnstraat 276. See the [garage's access notice](https://parking-nieuwwest.nl/werkzaamheden-nicolaas-anslijnstraat-bij-parking-nieuw-west/) for temporary changes.
+
+The [conference parking rate](https://meervaart.nl/en/meetings-events/about-meervaart/directions) is €12.50 per day. Pick up a discount ticket at Meervaart reception and keep it with your original parking ticket for when you exit the garage.
+
+**[Q-Park Osdorpplein](https://www.q-park.nl/en-gb/parking/amsterdam/osdorpplein/)**, a 1-minute walk from Meervaart
+
+Osdorpplein 249, 1068 SW Amsterdam. [P1 lists](https://www.p1.nl/parkeerplaats/q-park-osdorpplein/) the first hour as free, then €2.00 per 30 minutes or part thereof.
 
 A designated disabled parking space is available directly in front of the main entrance (not reservable; free with a disabled parking card).
 
