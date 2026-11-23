@@ -17,7 +17,7 @@ interface Editing {
 }
 
 export function ClassifierQuestions({
-  title = "Questions",
+  title = "Check questions",
   caption,
   rows,
   canWrite,
@@ -58,7 +58,7 @@ export function ClassifierQuestions({
       <PanelHeader title={title}>
         {canWrite && (
           <Menu
-            label="Question actions"
+            label="Check question actions"
             align="end"
             items={[
               {
@@ -75,14 +75,14 @@ export function ClassifierQuestions({
           />
         )}
       </PanelHeader>
-      <PanelBody>
+      <PanelBody flush>
         <ClassifierQuestionTable
           caption={caption}
           rows={rows}
           actionsFor={canWrite ? actionsFor : undefined}
           empty={
             <EmptyState
-              title="No questions yet."
+              title="No check questions yet."
               body={canWrite ? "Use the menu to add a flag or a score." : undefined}
             />
           }
