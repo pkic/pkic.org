@@ -25,7 +25,7 @@ export type RegistrationTicketStatus = (typeof REGISTRATION_TICKET_STATUSES)[num
 export const TICKET_ASSIGNMENT_SOURCES = ["code", "organizer", "classifier", "chosen", "default", "disputed"] as const;
 export type TicketAssignmentSource = (typeof TICKET_ASSIGNMENT_SOURCES)[number];
 
-export const DEFAULT_CLASSIFIER_THRESHOLD = 0.85;
+export const DEFAULT_CLASSIFIER_THRESHOLD = 0.75;
 export const DEFAULT_PAYMENT_REMINDER_INTERVAL_DAYS = 3;
 export const DEFAULT_PAYMENT_REMINDER_PERIOD_DAYS = 14;
 /** How long a place is kept after its payment failed, unless the event says otherwise. */
@@ -193,16 +193,13 @@ export interface TicketClassifierOption {
 }
 
 /**
- * The identity of a set of classifier options. A stored decision holds for
- * another event only when that event asks the same question: the same ticket
- * keys with the same descriptions.
+ * The identity of a set of classifier options: the ticket keys it chooses
+ * between. Descriptions, thresholds and the model's instructions are tuning,
+ * so changing them keeps every stored decision; another event that offers the
+ * same ticket keys reuses them too.
  */
 export function ticketClassifierCriteria(options: readonly TicketClassifierOption[]): string {
-  return JSON.stringify(
-    [...options]
-      .sort((a, b) => a.key.localeCompare(b.key))
-      .map((option) => [option.key, option.description.trim().replace(/\s+/g, " ")]),
-  );
+  return JSON.stringify(options.map((option) => option.key).sort((a, b) => a.localeCompare(b)));
 }
 
 /** The ticket a classifier's answer decides, or null when it is not certain enough for that ticket. */
