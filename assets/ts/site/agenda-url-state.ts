@@ -35,6 +35,8 @@ export function initializeAgendaUrlState(
   const defaults = new Map(controls.map(({ key, input }) => [key, input?.value ?? ""]));
   const defaultDay = tabs.find((button) => button.getAttribute("aria-selected") === "true")?.dataset.agendaTab;
   const defaultView = root.dataset.agendaView;
+  // Beside the virtual room's stream the view follows the shown locations until the reader picks one.
+  const viewFollowsLocations = root.hasAttribute("data-agenda-view-follows-locations");
   const defaultCompact = root.classList.contains("is-compact");
   let restoring = false,
     disposed = false;
@@ -100,9 +102,11 @@ export function initializeAgendaUrlState(
       if (input) changes[key] = key === "agendaZone" && input.value === "venue" ? null : input.value;
     changes.agendaDay =
       tabs.find((button) => button.getAttribute("aria-selected") === "true")?.dataset.agendaTab ?? null;
-    // A view that follows the chosen locations is restored from them, so only the reader's own choice is kept.
+    // A view that follows the chosen locations is restored from them, so only the reader's own choice is kept,
+    // even one that matches the default, which would otherwise follow the locations again.
     changes.agendaView =
-      root.hasAttribute("data-agenda-view-follows-locations") || root.dataset.agendaView === defaultView
+      root.hasAttribute("data-agenda-view-follows-locations") ||
+      (!viewFollowsLocations && root.dataset.agendaView === defaultView)
         ? null
         : (root.dataset.agendaView ?? null);
     changes.agendaMine =
@@ -156,8 +160,10 @@ export function initializeAgendaUrlState(
     );
     if (tab && !fragmentOnly) selectTab(tab);
     const chosenView = query.get("agendaView");
-    if (chosenView === "grid" || chosenView === "list") root.removeAttribute("data-agenda-view-follows-locations");
-    const view = chosenView ?? (root.hasAttribute("data-agenda-view-follows-locations") ? null : defaultView);
+    const chosen = chosenView === "grid" || chosenView === "list" ? chosenView : null;
+    // Without the reader's own view, an agenda that follows its locations does so again once they are restored.
+    root.toggleAttribute("data-agenda-view-follows-locations", viewFollowsLocations && !chosen);
+    const view = chosen ?? (viewFollowsLocations ? null : defaultView);
     if (view === "grid" || view === "list") showAgendaView(root, view);
     for (const { key, input } of controls) {
       if (!input) continue;

@@ -59,7 +59,9 @@ export function useRoomLive(
   const scheduled = moment.current ?? moment.upcoming[0] ?? null;
   const [kept, keep] = useState(false);
   const studioCloses = studio ? liveRoomWindow(studio.startAt, studio.endAt).closesAt : -Infinity;
-  const session = studio && (now <= studioCloses || kept) ? studio : scheduled;
+  // A session the studio loaded before its room opens waits behind the one running now; the questions follow it.
+  const studioEarly = studio !== null && !kept && now < liveRoomWindow(studio.startAt, studio.endAt).opensAt;
+  const session = studio && (now <= studioCloses || kept) && !(studioEarly && moment.current) ? studio : scheduled;
   const connection = useLiveRoom({ slug, occurrenceId: session?.id ?? "", enabled: Boolean(session) });
   // What the previous session's room last said is not this session's: until this one answers, there is none.
   const state = connection.state?.session.occurrenceId === session?.id ? connection.state : null;

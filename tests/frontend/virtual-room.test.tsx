@@ -229,7 +229,8 @@ describe("virtual room", () => {
     expect(panels).toEqual(["Questions and polls", "Chat"]);
     // Asking sits at the foot of the questions, where the chat keeps its message field.
     const ask = [...host.querySelectorAll("button")].find((button) => button.textContent === "Ask a question");
-    expect(ask?.closest(".pk-virtual-room__ask")).not.toBeNull();
+    expect(ask).toBeDefined();
+    expect(ask!.closest(".pk-virtual-room__ask")).not.toBeNull();
     // The event's own agenda sits under the stream, handed the program the room read.
     const main = host.querySelector(".pk-virtual-room__main")!;
     expect(main.textContent).toContain("The event’s whole agenda, 3 sessions");
@@ -318,6 +319,18 @@ describe("virtual room", () => {
     expect(host.querySelector(".pk-virtual-room__live-dot")).toBeNull();
     // Another day already shows its date: no countdown.
     expect(nowPlaying()).not.toContain(" min");
+  });
+
+  it("keeps the room on the running session while the studio has the next one loaded early", async () => {
+    const { roomOn } = fakeRoomSockets();
+    loadedInHall = PANEL;
+    vi.setSystemTime(new Date("2027-01-20T09:30:00.000Z"));
+    onDesktop();
+    await open();
+    expect(nowPlaying()).toContain("Opening keynote");
+    expect(nowPlaying()).toContain("Live now");
+    // The questions belong to the session on screen, not to the one waiting in the studio.
+    expect(roomOn()).toBe(KEYNOTE);
   });
 
   it("counts down to the next session later the same day", async () => {
