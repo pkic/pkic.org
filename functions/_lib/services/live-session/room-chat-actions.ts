@@ -24,7 +24,7 @@ import { LIVE_PARTICIPATION_REFUSAL } from "./room-participation-refusal";
 import { chatAudienceKey, seesChatOccurrence } from "./room-chat-audience";
 import type { LiveChatQuestion } from "./location-chat-on-air";
 import type { LiveRoomClassifiers } from "./room-classifiers";
-import { LIVE_CHAT_CHECK_WAIT_MS } from "./room-chat-checks";
+import { LIVE_CHAT_CHECK_WAIT_MS, LIVE_CHAT_HELD_BY_CHECK } from "./room-chat-checks";
 
 type ChatCommand = Extract<LiveRoomClientMessage, { type: `chat.${string}` }>;
 type Actor = { userId: string; name: string };
@@ -53,8 +53,6 @@ const ALLOWANCES = {
 
 /** Who the room names when it holds a message after reports rather than on a moderator's decision. */
 const HELD_BY = "Held after reports";
-/** Who the room names when the automatic check holds a message. */
-const HELD_BY_CHECK = "Automatic check";
 
 function staff(viewer: LiveRoomParticipant): boolean {
   return viewer.role === "operator";
@@ -328,7 +326,7 @@ export class LiveRoomChatActions {
     );
     progress.recorded = true;
     const removes = outcome === "blocked" && !this.feed.moderation.hidden([row.id]).has(row.id);
-    if (removes) this.feed.moderation.hide(row.id, HELD_BY_CHECK, true, at);
+    if (removes) this.feed.moderation.hide(row.id, LIVE_CHAT_HELD_BY_CHECK, true, at);
     // Every blocked verdict counts towards a pause, whether or not the message was already hidden.
     if (outcome === "blocked") await this.pauseAfterRepeatedBlocks(row.author_user_id, at);
     if (removes) await this.deliver([row], { removeWhenHidden: true });
@@ -345,7 +343,7 @@ export class LiveRoomChatActions {
     const since = new Date(Date.parse(at) - windowMinutes * 60_000).toISOString();
     if (this.feed.moderation.checks.blockedSince(userId, since) < blocks) return;
     if (this.feed.decisions.restriction(userId, Date.now())) return;
-    this.feed.decisions.block(userId, "paused", "conduct", { userId: "", name: HELD_BY_CHECK }, at);
+    this.feed.decisions.block(userId, "paused", "conduct", { userId: "", name: LIVE_CHAT_HELD_BY_CHECK }, at);
     await this.hooks.participationChanged(userId);
   }
 

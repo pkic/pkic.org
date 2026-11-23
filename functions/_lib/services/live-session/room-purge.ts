@@ -5,8 +5,9 @@ import { parseJsonSafe } from "../../utils/json";
 
 /**
  * What a room keeps after its week when its event keeps the chat longer: the
- * attendee chat with how moderation left it, the chat counts, and what the
- * room needs to know its session and its copy. Operator chat, questions,
+ * attendee chat with how moderation and the automatic check left it, its
+ * reports and edits, the chat counts, and what the room needs to know its
+ * session and its copy. Operator chat, questions,
  * polls, ballots and controls go with the week as before.
  */
 const LIVE_CHAT_KEPT_TABLES = [
@@ -14,6 +15,10 @@ const LIVE_CHAT_KEPT_TABLES = [
   "copy_state",
   "room_chat",
   "room_chat_hidden",
+  "room_chat_edits",
+  "room_chat_checks",
+  "room_chat_check_flags",
+  "room_chat_reports",
   "room_chat_sessions",
   "room_chat_session_totals",
   "room_chat_session_senders",

@@ -151,6 +151,58 @@ describe("live chat retention", () => {
     expect(await rowCount("room_chat")).toBe(0);
   });
 
+  it("keeps what the check decided and what people reported, so a kept chat can tune the check", async () => {
+    await chatInRoom();
+    // The check's verdicts and reports as the room records them: it flags the first and removes the second.
+    await runInDurableObject(f.chatRoom(), (_room, state) => {
+      const sql = state.storage.sql;
+      const id = (text: string) => sql.exec<{ id: string }>("SELECT id FROM room_chat WHERE body = ?", text).one().id;
+      const [hello, spam] = [id("Hello, everyone"), id("Buy cheap tokens")];
+      const at = new Date().toISOString();
+      sql.exec(
+        "INSERT INTO room_chat_checks VALUES (?, 'advised', '[]', ?), (?, 'blocked', '[]', ?)",
+        hello,
+        at,
+        spam,
+        at,
+      );
+      sql.exec(
+        "INSERT INTO room_chat_check_flags VALUES (?, ?), (?, ?)",
+        hello,
+        JSON.stringify([{ id: "conduct", percent: 75 }]),
+        spam,
+        JSON.stringify([
+          { id: "solicitation", percent: 96 },
+          { id: "spam", percent: 72 },
+        ]),
+      );
+      sql.exec("UPDATE room_chat_hidden SET held = 1, by_name = 'Automatic check' WHERE message_id = ?", spam);
+      for (const [user, reason] of [
+        [f.users.secondAttendee, "abuse"],
+        ["reporter-2", "spam"],
+        ["reporter-3", "spam"],
+      ])
+        sql.exec("INSERT INTO room_chat_reports VALUES (?, ?, ?, ?)", hello, user, reason, at);
+    });
+    await keepChatFor(90);
+    await sessionEnded(8);
+    await runDurableObjectAlarm(f.chatRoom());
+
+    const lines = (await (await request("GET")).text()).split("\r\n");
+    expect(lines[0]).toBe(
+      "Room,Day,Session,Sent (UTC),Edited (UTC),Author,Message,Status,Check,Check scores,Reports,Report reasons",
+    );
+    expect(lines[1]).toMatch(/,"Hello, everyone",Shown,Flagged,Conduct: 75%,3,Spam: 2; Abuse or harassment: 1$/);
+    expect(lines[2]).toMatch(/,Buy cheap tokens,Removed by the check,Removed,Solicitation: 96%; Spam: 72%,,$/);
+
+    // A reporter who is anonymized later takes their report along.
+    await env.DB.prepare("UPDATE users SET active=0, pii_redacted_at=? WHERE id=?")
+      .bind(new Date().toISOString(), f.users.secondAttendee)
+      .run();
+    await runInDurableObject(f.chatRoom(), (room) => room.chatArchive());
+    expect(await rowCount("room_chat_reports")).toBe(2);
+  });
+
   it("goes entirely once the 90 days are over", async () => {
     await chatInRoom();
     await keepChatFor(90);
@@ -169,15 +221,17 @@ describe("event chat download and erasure", () => {
     expect(download.status, await download.clone().text()).toBe(200);
     expect(download.headers.get("content-disposition")).toContain("live-chat.csv");
     const lines = (await download.text()).split("\r\n");
-    expect(lines[0]).toBe("Room,Day,Session,Sent (UTC),Edited (UTC),Author,Message,Status");
+    expect(lines[0]).toBe(
+      "Room,Day,Session,Sent (UTC),Edited (UTC),Author,Message,Status,Check,Check scores,Reports,Report reasons",
+    );
     // Each message is dated by the session on when it was sent; neither was edited.
     const dated = lines.slice(1).map((line) => {
       const [room, , session, , edited, ...rest] = line.split(",");
       return [room, session, edited, ...rest].join(",");
     });
     expect(dated).toEqual([
-      'Physical room,Post-quantum migration,,Ada Attendee,"Hello, everyone",Shown',
-      "Physical room,Post-quantum migration,,Ada Attendee,Buy cheap tokens,Hidden by a moderator",
+      'Physical room,Post-quantum migration,,Ada Attendee,"Hello, everyone",Shown,,,,',
+      "Physical room,Post-quantum migration,,Ada Attendee,Buy cheap tokens,Hidden by a moderator,,,,",
     ]);
     expect(lines.join("\n")).not.toContain("Staff only");
 
