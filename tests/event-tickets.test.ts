@@ -56,6 +56,11 @@ import { releaseUnpaidTickets } from "../functions/_lib/services/event-tickets/u
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { listEventTicketCodes } from "../functions/_lib/services/event-tickets/code-list";
 import { reviewDisputedTicket } from "../functions/_lib/services/event-tickets/dispute";
+import {
+  decideOrganizationTicket,
+  prepareStoreTicketDecision,
+} from "../functions/_lib/services/event-tickets/classifier";
+import { readEventTicketSnapshot } from "../functions/_lib/services/event-tickets/snapshot";
 import { issueSponsorPassCodes, saveSponsorPasses } from "../functions/_lib/services/event-tickets/sponsor-passes";
 import { getRegistrationByIdForEvent } from "../functions/_lib/services/registrations/queries";
 import { buildRegistrationUpdate } from "../functions/_lib/services/registrations/update-plan";
@@ -261,7 +266,7 @@ describe("event tickets", () => {
   });
 
   it("decides the ticket once per organization and reuses the stored decision", async () => {
-    const { event } = await seedTickets();
+    const { event, admin } = await seedTickets();
     const first = await register(
       event,
       "one@vendor-example.test",
@@ -271,6 +276,111 @@ describe("event tickets", () => {
     // No classifier this time: the stored decision for the organization and domain still applies.
     const second = await register(event, "two@vendor-example.test");
     expect(second.ticket).toMatchObject({ ticketName: "Vendor" });
+
+    // Tuning the question keeps the decision: a new description and a stricter threshold ask nothing again.
+    const configuration = await readEventTicketsConfiguration(env.DB, event);
+    const vendor = configuration.types.find((type) => type.key === "pqcc_vendor")!;
+    await saveEventTicketType(env.DB, admin, event, vendor.id, {
+      expectedRevision: configuration.revision,
+      key: vendor.key,
+      name: vendor.name,
+      descriptionMarkdown: vendor.descriptionMarkdown,
+      classifierDescription: "Sells, licenses or integrates cryptography for other organizations.",
+      classifierThresholdPercent: 99,
+      isDefault: vendor.isDefault,
+      freeRequiresWorkEmail: vendor.freeRequiresWorkEmail,
+      active: vendor.active,
+    });
+    const third = await register(event, "three@vendor-example.test");
+    expect(third.ticket).toMatchObject({ ticketName: "Vendor" });
+  });
+
+  it("asks no model and keeps no decision for a person without an organization or work address", async () => {
+    const { event } = await seedTickets();
+    const { types } = await readEventTicketSnapshot(env.DB, event);
+    const run = vi.fn(async () => ({ answers: { ticket: { probabilities: { pqcc_vendor: 0.99 } } } }));
+    const decided = await decideOrganizationTicket(env.DB, { AI: { run } } as never, types, {
+      organizationName: " ",
+      emailDomain: null,
+    });
+    expect(decided).toBeNull();
+    expect(run).not.toHaveBeenCalled();
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM ticket_classifier_decisions").first("n")).toBe(0);
+  });
+
+  it("keeps decisions when other tickets join or leave the classifier", async () => {
+    const { event, admin } = await seedTickets();
+    await register(event, "one@vendor-example.test", classifier({ pqcc_vendor: 0.97, pqcc_attendee: 0.03 }));
+    // Decisions for another organization from earlier questions: an organizer's, which counts, and an older answer.
+    const subject = { organizationName: "Example Organization", emailDomain: "kept-example.test" };
+    await env.DB.batch([
+      prepareStoreTicketDecision(env.DB, {
+        criteriaDigest: "an-earlier-question",
+        subject,
+        ticketKey: "pqcc_attendee",
+        source: "classifier",
+        confidence: 0.8,
+        model: "synthetic",
+      }),
+      prepareStoreTicketDecision(env.DB, {
+        criteriaDigest: "another-earlier-question",
+        subject,
+        ticketKey: "pqcc_vendor",
+        source: "organizer",
+        confidence: null,
+        model: null,
+      }),
+    ]);
+    const configuration = await readEventTicketsConfiguration(env.DB, event);
+    await saveEventTicketType(env.DB, admin, event, null, {
+      expectedRevision: configuration.revision,
+      key: "pqcc_academic",
+      name: "Academic",
+      descriptionMarkdown: "",
+      classifierDescription: "A university or research institute.",
+      classifierThresholdPercent: 75,
+      isDefault: false,
+      freeRequiresWorkEmail: false,
+      active: true,
+    });
+    // No classifier: both decisions are still found among the new set of tickets.
+    expect((await register(event, "two@vendor-example.test")).ticket).toMatchObject({ ticketName: "Vendor" });
+    expect((await register(event, "two@kept-example.test")).ticket).toMatchObject({ ticketName: "Vendor" });
+    const counts = (await readEventTicketsConfiguration(env.DB, event)).types.map((type) => [
+      type.key,
+      type.presetOrganizations,
+    ]);
+    expect(Object.fromEntries(counts)).toEqual({ pqcc_attendee: 0, pqcc_vendor: 2, pqcc_academic: 0 });
+
+    // Only the vendor ticket keeps a description: its decisions still apply, though the model is no longer asked.
+    const clearDescription = async (key: string) => {
+      const current = await readEventTicketsConfiguration(env.DB, event);
+      const type = current.types.find((candidate) => candidate.key === key)!;
+      await saveEventTicketType(env.DB, admin, event, type.id, {
+        expectedRevision: current.revision,
+        key: type.key,
+        name: type.name,
+        descriptionMarkdown: type.descriptionMarkdown,
+        classifierDescription: "",
+        classifierThresholdPercent: type.classifierThresholdPercent,
+        isDefault: type.isDefault,
+        freeRequiresWorkEmail: type.freeRequiresWorkEmail,
+        active: type.active,
+      });
+    };
+    await clearDescription("pqcc_attendee");
+    await clearDescription("pqcc_academic");
+    expect((await register(event, "three@vendor-example.test")).ticket).toMatchObject({ ticketName: "Vendor" });
+
+    // No ticket keeps a description: the classifier's decisions stop, an organizer's still applies everywhere.
+    await clearDescription("pqcc_vendor");
+    expect((await register(event, "four@vendor-example.test")).ticket).toMatchObject({ ticketName: "Attendee" });
+    expect((await register(event, "three@kept-example.test")).ticket).toMatchObject({ ticketName: "Vendor" });
+    const remaining = (await readEventTicketsConfiguration(env.DB, event)).types.map((type) => [
+      type.key,
+      type.presetOrganizations,
+    ]);
+    expect(Object.fromEntries(remaining)).toEqual({ pqcc_attendee: 0, pqcc_vendor: 1, pqcc_academic: 0 });
   });
 
   it("lets the person choose when the classifier is unsure and falls back to the default when it fails", async () => {
