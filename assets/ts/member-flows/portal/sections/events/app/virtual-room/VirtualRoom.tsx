@@ -1,8 +1,4 @@
-import {
-  agendaMediaCapabilities,
-  agendaOccurrenceMedia,
-  ONLINE_JOIN_LEAD_MS,
-} from "../../../../../../../shared/event-agenda-media";
+import { ONLINE_JOIN_LEAD_MS } from "../../../../../../../shared/event-agenda-media";
 /**
  * The event app's virtual room: one location's live stream with the running session and the event's
  * sponsors, the session's questions, polls and chat, and what is on next. `VirtualRoomFrame` lays it out for
@@ -36,12 +32,13 @@ import { VirtualRoomChat, VirtualRoomQuestions, VirtualRoomReactions, useRoomLiv
 import { useLocationChat } from "../../../../../../live-session/useLocationChat";
 import { VirtualRoomPartners } from "./VirtualRoomPartners";
 import { VirtualRoomSponsors } from "./VirtualRoomSponsors";
-import { VirtualRoomNowPlaying, VirtualRoomPlayer } from "./VirtualRoomPlayer";
+import { sessionStartsIn, VirtualRoomInRoom, VirtualRoomNowPlaying, VirtualRoomPlayer } from "./VirtualRoomPlayer";
 import {
   chooseLocation,
   locationSessions,
   nextRoomBoundary,
   requestedSessionNotice,
+  roomLocations,
   roomMoment,
 } from "./virtual-room-schedule";
 import "../EventApp.css";
@@ -56,9 +53,12 @@ function useVirtualRoomData(slug: string) {
 export function VirtualRoom({
   slug,
   away = false,
+  motifUrl = null,
   agenda: agendaView,
 }: {
   slug: string;
+  /** The event's own artwork, along the foot of a location held in the room only, as in the event's header. */
+  motifUrl?: string | null;
   /**
    * The attendee is on another page of the event: the room stays connected, so coming back shows it at once,
    * with no stream playing and the address it had when they left.
@@ -66,11 +66,11 @@ export function VirtualRoom({
   away?: boolean;
   /**
    * The event's own agenda, under the stream on a desktop and on a phone's Agenda tab. It takes the program
-   * the room has read already, so showing it asks the server for nothing.
+   * the room has read already, so showing it asks the server for nothing. It opens on the location in view.
    */
-  agenda: (program: AgendaProgram) => ComponentChildren;
+  agenda: (program: AgendaProgram, locationId: string | null) => ComponentChildren;
 }) {
-  const [current, navigate] = useHashLocation();
+  const [current] = useHashLocation();
   const shown = useRef(current);
   if (!away) shown.current = current;
   const location = shown.current;
@@ -81,21 +81,7 @@ export function VirtualRoom({
   const { streams, program } = useVirtualRoomData(slug);
   const sponsors = useSponsorDisplay("/api/v1", { eventSlug: slug });
   const agenda = program.data?.agenda ?? null;
-  const locations = useMemo(() => {
-    const configured = streams.data?.locations ?? [];
-    if (!agenda) return configured;
-    const waiting = agenda.rooms
-      .filter(
-        (room) =>
-          !configured.some((item) => item.id === room.id) &&
-          (agendaMediaCapabilities(room.equipment).liveStreaming ||
-            agenda.occurrences.some(
-              (session) => session.roomId === room.id && agendaOccurrenceMedia(agenda.rooms, session).liveStreaming,
-            )),
-      )
-      .map((room) => ({ id: room.id, name: room.name, stream: null, days: [], loadedOccurrenceId: null }));
-    return [...configured, ...waiting];
-  }, [streams.data, agenda]);
+  const locations = useMemo(() => roomLocations(streams.data?.locations ?? [], agenda), [streams.data, agenda]);
   const roomId = chooseLocation(locations, agenda, {
     room: query.get("room") ?? lastRoom.current,
     session: query.get("session"),
@@ -163,37 +149,42 @@ export function VirtualRoom({
           id: candidate.id,
           name: candidate.name,
           href: href(eventVirtualRoomRoute(slug, { room: candidate.id })),
+          streamed: candidate.streamed,
         }))}
         locationId={room.id}
-        onLocation={(id) => navigate(eventVirtualRoomRoute(slug, { room: id }))}
         player={
-          away ? null : (
+          away ? null : room.streamed ? (
             <VirtualRoomPlayer
               stream={waiting ? null : stream}
               locationName={room.name}
               startsAt={waiting ? startsAt : undefined}
             />
+          ) : (
+            <VirtualRoomInRoom locationName={room.name} recordingPlanned={room.recordingPlanned} motifUrl={motifUrl} />
           )
         }
-        now={(picker) => (
+        streamed={room.streamed}
+        now={(tour) => (
           <VirtualRoomNowPlaying
             slug={slug}
             moment={moment}
             formatTime={formatTime}
             organizations={agenda?.speakerOrganizations}
-            location={picker}
+            tour={tour}
             reactions={onAir ? <VirtualRoomReactions live={live} compact={!wide} /> : null}
+            startsIn={(startAt, at) => sessionStartsIn(startAt, at, viewerZone)}
           />
         )}
         sponsors={<VirtualRoomSponsors sponsors={sponsors.display} />}
         partners={<VirtualRoomPartners partners={streams.data?.productionPartners ?? []} />}
         questions={(askIn) => <VirtualRoomQuestions live={live} askIn={askIn} />}
         chat={<VirtualRoomChat chat={chat} zone={viewerZone} />}
-        agenda={agendaView(program)}
+        agenda={agendaView(program, roomId)}
         eventHref={href(`/events/${encodeURIComponent(slug)}`)}
         panel={panel}
         panelHref={(id) => href(panelRoute(location, id, defaultPanel))}
         onPanel={setPanel}
+        tourOnFirstVisit={!away}
       />
     </>
   );

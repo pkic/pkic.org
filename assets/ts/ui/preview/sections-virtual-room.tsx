@@ -25,6 +25,7 @@ import type { LiveLocationChatConnection } from "../../live-session/useLocationC
 import { LiveAttendeeQuestions, LiveQuestionsClosed } from "../../live-session/SessionQuestions";
 import type { LiveRoomConnection } from "../../live-session/useLiveRoom";
 import {
+  VirtualRoomInRoom,
   VirtualRoomNowPlaying,
   VirtualRoomPlayer,
 } from "../../member-flows/portal/sections/events/app/virtual-room/VirtualRoomPlayer";
@@ -77,7 +78,7 @@ const SPONSORS: SponsorsDisplayResponse = {
 
 const PARTNERS: EventProductionPartnerCredit[] = [
   {
-    role: "Camera Technology Provider",
+    role: "Camera technology provider",
     organizationId: "00000000-0000-4000-8000-0000000000a1",
     name: "Northlight Cameras",
     website: "https://northlight.example.test/",
@@ -118,23 +119,39 @@ function PartnerEditorSpecimen() {
   );
 }
 
-const session = (id: string, title: string, startAt: string, endAt: string, speaker: string) => ({
+const session = (id: string, title: string, startAt: string, endAt: string, ...speakers: string[]) => ({
   id: `d0000000-0000-4000-8000-00000000000${id}`,
   title,
   startAt,
   endAt,
-  speakers: [{ userId: `e0000000-0000-4000-8000-00000000000${id}`, displayName: speaker }],
+  speakers: speakers.map((displayName, index) => ({
+    userId: `e0000000-0000-4000-8000-0000000000${id}${index}`,
+    displayName,
+  })),
 });
 // Between sessions, so the questions and the chat show how they wait and nothing connects to a room.
 const MOMENT = {
   current: null,
   upcoming: [
-    session("1", "Planning the post-quantum migration", "2027-01-20T09:00:00.000Z", "2027-01-20T09:45:00.000Z", "Ada"),
+    session(
+      "1",
+      "Planning the post-quantum migration",
+      "2027-01-20T09:00:00.000Z",
+      "2027-01-20T09:45:00.000Z",
+      "Ada Lovelace",
+      "Grace Hopper",
+      "Linus Torvalds",
+    ),
     session("2", "Hybrid certificates in practice", "2027-01-20T10:00:00.000Z", "2027-01-20T10:45:00.000Z", "Grace"),
     session("3", "Inventory before you migrate", "2027-01-20T11:00:00.000Z", "2027-01-20T11:30:00.000Z", "Linus"),
   ],
 } as RoomMoment;
-const LOCATIONS = ["Main hall", "Studio"].map((name, index) => ({ id: `room-${index}`, name, href: "#" }));
+const LOCATIONS = ["Main hall", "Studio", "Room 2"].map((name, index) => ({
+  id: `room-${index}`,
+  name,
+  href: "#",
+  streamed: index < 2,
+}));
 const formatTime = () => "10:00 – 10:45";
 
 const ON = STUDIO_QUESTIONS_ROOM.session;
@@ -195,24 +212,39 @@ const LIVE: LiveRoomConnection = {
 };
 
 /** The whole room, before its session's room opens or during the session, opened on one of a phone's panels. */
-function RoomSpecimen({ opensOn, live = false }: { opensOn: RoomPanelId; live?: boolean }) {
+function RoomSpecimen({
+  opensOn,
+  live = false,
+  inRoom = false,
+}: {
+  opensOn: RoomPanelId;
+  live?: boolean;
+  inRoom?: boolean;
+}) {
   const wide = useMediaQuery(ROOM_WIDE_QUERY);
   const [panel, setPanel] = useState(opensOn);
-  const [locationId, setLocationId] = useState(LOCATIONS[0]!.id);
+  const locationId = LOCATIONS[inRoom ? 2 : 0]!.id;
   return (
     <VirtualRoomFrame
       wide={wide}
       locations={LOCATIONS}
       locationId={locationId}
-      onLocation={setLocationId}
-      player={<VirtualRoomPlayer stream={null} locationName="Main hall" />}
-      now={(picker) => (
+      player={
+        inRoom ? (
+          <VirtualRoomInRoom locationName="Room 2" recordingPlanned={false} motifUrl={null} />
+        ) : (
+          <VirtualRoomPlayer stream={null} locationName="Main hall" />
+        )
+      }
+      streamed={!inRoom}
+      now={(tour) => (
         <VirtualRoomNowPlaying
           slug="preview"
           moment={MOMENT}
           formatTime={formatTime}
-          location={picker}
-          reactions={<LiveReactionBar send={() => true} refusal={null} />}
+          tour={tour}
+          reactions={inRoom ? null : <LiveReactionBar send={() => true} refusal={null} compact={!wide} />}
+          startsIn={() => "in 12 min"}
         />
       )}
       sponsors={<VirtualRoomSponsors sponsors={SPONSORS} />}
@@ -225,7 +257,7 @@ function RoomSpecimen({ opensOn, live = false }: { opensOn: RoomPanelId; live?: 
         )
       }
       chat={live ? <LiveAttendeeChat chat={CHAT} compact /> : <LiveChatClosed />}
-      agenda={<AgendaExample compact />}
+      agenda={<AgendaExample compact focusLocation="main" />}
       eventHref="#"
       panel={panel}
       panelHref={() => "#"}
@@ -246,6 +278,12 @@ export const virtualRoomSections: PreviewSection[] = [
     title: "Virtual room: during a session",
     note: "Ask a question is always in view, in the questions' header on a desktop and at the top of the panel on a phone, and opens the form over the list. The chat is a window: the messages scroll and the field stays at its foot.",
     render: () => <RoomSpecimen opensOn="questions" live />,
+  },
+  {
+    id: "virtual-room-in-room",
+    title: "Virtual room: a location that is not streamed",
+    note: "Every location with sessions has a tab, so questions and chat reach each one. A location without a stream is marked on its tab with a struck-through camera, and the event header's field stands where the stream would, with the event's own motif. It says Not streamed, and Recording planned only when the agenda plans it; it never promises more. It does not dock beside the questions, and it has no reactions.",
+    render: () => <RoomSpecimen opensOn="questions" live inRoom />,
   },
   {
     id: "virtual-room-agenda",

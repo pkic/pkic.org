@@ -1,6 +1,6 @@
 import { agendaStickyTop } from "./agenda-sticky-top";
 import { splitHash, subscribeUrlQuery, writeUrlQuery } from "../ui/url-query";
-import { refreshAgendaFilters } from "./agenda-filters";
+import { refreshAgendaFilters, showAgendaView, showDefaultLocations, showsDefaultLocations } from "./agenda-filters";
 
 const sessionKey = (card: HTMLElement) => card.dataset.agendaOccurrence ?? card.dataset.agendaSessionDialog;
 const fragmentFields = ["session", "agendaSpeaker", "agendaPosition", "agendaRoom"] as const;
@@ -35,6 +35,8 @@ export function initializeAgendaUrlState(
   const defaults = new Map(controls.map(({ key, input }) => [key, input?.value ?? ""]));
   const defaultDay = tabs.find((button) => button.getAttribute("aria-selected") === "true")?.dataset.agendaTab;
   const defaultView = root.dataset.agendaView;
+  // Beside the virtual room's stream the view follows the shown locations until the reader picks one.
+  const viewFollowsLocations = root.hasAttribute("data-agenda-view-follows-locations");
   const defaultCompact = root.classList.contains("is-compact");
   let restoring = false,
     disposed = false;
@@ -100,7 +102,13 @@ export function initializeAgendaUrlState(
       if (input) changes[key] = key === "agendaZone" && input.value === "venue" ? null : input.value;
     changes.agendaDay =
       tabs.find((button) => button.getAttribute("aria-selected") === "true")?.dataset.agendaTab ?? null;
-    changes.agendaView = root.dataset.agendaView === defaultView ? null : (root.dataset.agendaView ?? null);
+    // A view that follows the chosen locations is restored from them, so only the reader's own choice is kept,
+    // even one that matches the default, which would otherwise follow the locations again.
+    changes.agendaView =
+      root.hasAttribute("data-agenda-view-follows-locations") ||
+      (!viewFollowsLocations && root.dataset.agendaView === defaultView)
+        ? null
+        : (root.dataset.agendaView ?? null);
     changes.agendaMine =
       root.querySelector("[data-agenda-mine-filter]")?.getAttribute("aria-pressed") === "true" ? "1" : null;
     if (
@@ -119,7 +127,12 @@ export function initializeAgendaUrlState(
           .filter((input) => input.checked)
           .map((input) => input.dataset.agendaLocation!);
     }
-    changes.agendaRooms = Object.keys(rooms).length ? JSON.stringify(rooms) : null;
+    // Beside one location the default already hides the others, so any other choice is kept, all of them too.
+    changes.agendaRooms = (
+      root.dataset.agendaFocusLocation ? !showsDefaultLocations(root) : Object.keys(rooms).length > 0
+    )
+      ? JSON.stringify(rooms)
+      : null;
     const speaker = root.querySelector<HTMLDialogElement>("dialog[data-agenda-speaker-key][open]");
     changes.agendaSpeaker = speaker?.dataset.agendaSpeakerKey ?? null;
     const session = [...root.querySelectorAll<HTMLElement>("[data-agenda-session-dialog]")].find(
@@ -146,12 +159,12 @@ export function initializeAgendaUrlState(
         ((naturalPaths ? agendaRoute(currentPath())?.[2] : null) ?? query.get("agendaDay") ?? defaultDay),
     );
     if (tab && !fragmentOnly) selectTab(tab);
-    const view = query.get("agendaView") ?? defaultView;
-    if (view === "grid" || view === "list") {
-      root.dataset.agendaView = view;
-      for (const button of root.querySelectorAll<HTMLElement>("[data-agenda-view]"))
-        button.setAttribute("aria-pressed", String(button.dataset.agendaView === view));
-    }
+    const chosenView = query.get("agendaView");
+    const chosen = chosenView === "grid" || chosenView === "list" ? chosenView : null;
+    // Without the reader's own view, an agenda that follows its locations does so again once they are restored.
+    root.toggleAttribute("data-agenda-view-follows-locations", viewFollowsLocations && !chosen);
+    const view = chosen ?? (viewFollowsLocations ? null : defaultView);
+    if (view === "grid" || view === "list") showAgendaView(root, view);
     for (const { key, input } of controls) {
       if (!input) continue;
       const value = query.get(key) ?? defaults.get(key) ?? "";
@@ -170,14 +183,16 @@ export function initializeAgendaUrlState(
     } catch {
       roomChoices = {};
     }
-    for (const day of root.querySelectorAll<HTMLElement>("[data-agenda-location-day]")) {
-      const selected =
-        roomChoices && typeof roomChoices === "object"
-          ? Reflect.get(roomChoices, day.dataset.agendaLocationDay!)
-          : undefined;
-      for (const input of day.querySelectorAll<HTMLInputElement>("[data-agenda-location]"))
-        input.checked = !Array.isArray(selected) || selected.includes(input.dataset.agendaLocation);
-    }
+    if (!query.has("agendaRooms")) showDefaultLocations(root);
+    else
+      for (const day of root.querySelectorAll<HTMLElement>("[data-agenda-location-day]")) {
+        const selected =
+          roomChoices && typeof roomChoices === "object"
+            ? Reflect.get(roomChoices, day.dataset.agendaLocationDay!)
+            : undefined;
+        for (const input of day.querySelectorAll<HTMLInputElement>("[data-agenda-location]"))
+          input.checked = !Array.isArray(selected) || selected.includes(input.dataset.agendaLocation);
+      }
     root
       .querySelector("[data-agenda-mine-filter]")
       ?.setAttribute("aria-pressed", String(query.get("agendaMine") === "1"));

@@ -79,8 +79,16 @@ const agendaDays: ContentAgendaDay[] = ["2025-12-01", "2025-12-02"].map((date, i
   ],
 }));
 
-export function AgendaExample({ compact = false }: { compact?: boolean }) {
-  return <ContentAgenda days={agendaDays} speakers={[]} timeZone="Europe/Amsterdam" compact={compact} />;
+export function AgendaExample({ compact = false, focusLocation }: { compact?: boolean; focusLocation?: string }) {
+  return (
+    <ContentAgenda
+      days={agendaDays}
+      speakers={[]}
+      timeZone="Europe/Amsterdam"
+      compact={compact}
+      focusLocation={focusLocation}
+    />
+  );
 }
 
 /** The reader's own sessions on a day with one more, hours later: what lies between them is cut from the list. */

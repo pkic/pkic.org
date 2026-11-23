@@ -52,6 +52,7 @@ export function MyAgenda({
   mine = false,
   canPersonalize = false,
   embedded = false,
+  focusLocation,
   program,
 }: {
   slug: string;
@@ -64,6 +65,8 @@ export function MyAgenda({
    * session and no calendar view from it, and offers no link that would leave that page.
    */
   embedded?: boolean;
+  /** Opens on this location's sessions, as beside its stream; clearing the filters shows every location. */
+  focusLocation?: string;
   /** The published program, where the page showing the agenda has loaded it already. */
   program?: AgendaProgram;
 }) {
@@ -99,6 +102,7 @@ export function MyAgenda({
       canPersonalize={canPersonalize}
       calendarHref={embedded ? null : usePortalHashLocation.hrefs(destination({ view: "calendar" }))}
       compact={embedded}
+      focusLocation={focusLocation}
       onFocusClosed={() => {
         const current = splitHash();
         const next = new URLSearchParams(current.params);
@@ -119,6 +123,7 @@ interface PersonalAgendaProps {
   calendarHref: string | null;
   /** Shown beside something else: the agenda as a list, with today's finished sessions folded away. */
   compact?: boolean;
+  focusLocation?: string;
   onFocusClosed: () => void;
 }
 
@@ -137,6 +142,7 @@ function PersonalAgenda({
   canPersonalize,
   calendarHref,
   compact = false,
+  focusLocation,
   onFocusClosed,
 }: PersonalAgendaProps & { program: AgendaProgram }) {
   const snapshot = program.data?.agenda;
@@ -323,6 +329,7 @@ function PersonalAgenda({
           personal={canPersonalize ? personal : undefined}
           openOccurrence={focus ?? revised ?? undefined}
           compact={compact}
+          focusLocation={focusLocation}
         />
       ) : (
         <Panel>

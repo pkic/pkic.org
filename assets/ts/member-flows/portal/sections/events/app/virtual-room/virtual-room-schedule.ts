@@ -3,8 +3,13 @@
  * the session running there now, the ones that follow, and the next instant at which that answer changes.
  * The browser clock is compared with agenda times; nothing polls the server.
  */
-import { ONLINE_JOIN_LEAD_MS } from "../../../../../../../shared/event-agenda-media";
+import {
+  agendaMediaCapabilities,
+  agendaOccurrenceMedia,
+  ONLINE_JOIN_LEAD_MS,
+} from "../../../../../../../shared/event-agenda-media";
 import type { AgendaOccurrence, AgendaSnapshot } from "../../../../../../../shared/schemas/event-agenda";
+import type { VirtualRoomLocation } from "../../../../../../../shared/schemas/event-live-stream";
 import { dateTimeLocalToIso, instantToCalendarDate } from "../../../../../../../shared/timezone";
 
 export type RoomSession = AgendaOccurrence & { startAt: string; endAt: string };
@@ -21,6 +26,55 @@ export function locationSessions(agenda: Pick<AgendaSnapshot, "occurrences">, ro
         (occurrence.roomId === roomId || Boolean(occurrence.additionalRoomIds?.includes(roomId))),
     )
     .sort((a, b) => a.startAt.localeCompare(b.startAt) || a.id.localeCompare(b.id));
+}
+
+/** A location the room offers, with what its organizers plan for it. */
+export type RoomLocation = VirtualRoomLocation & {
+  /** False for a location held in the room only: no stream is configured or planned for it. */
+  streamed: boolean;
+  /** Its sessions are planned to be recorded. A plan, as the agenda shows it, never a promise. */
+  recordingPlanned: boolean;
+};
+
+/**
+ * Every location of the published agenda that holds sessions, so questions and chat reach each of them:
+ * streamed locations first, those with a stream configured ahead of those only planned, then the
+ * locations held in the room only. A stream configured for a location makes it streamed whatever was planned.
+ */
+export function roomLocations(
+  configured: readonly VirtualRoomLocation[],
+  agenda: Pick<AgendaSnapshot, "rooms" | "occurrences"> | null,
+): RoomLocation[] {
+  const planned = (roomId: string) => {
+    const room = agenda?.rooms.find((candidate) => candidate.id === roomId);
+    const media = agendaMediaCapabilities(room?.equipment);
+    for (const session of agenda?.occurrences ?? []) {
+      if (session.roomId !== roomId) continue;
+      const plan = agendaOccurrenceMedia(agenda!.rooms, session);
+      media.recording ||= plan.recording;
+      media.liveStreaming ||= plan.liveStreaming;
+    }
+    return media;
+  };
+  const streamed = configured.map((location) => ({
+    ...location,
+    streamed: true,
+    recordingPlanned: planned(location.id).recording,
+  }));
+  const others = (agenda?.rooms ?? [])
+    .filter((room) => !configured.some((location) => location.id === room.id))
+    .map((room) => ({ room, media: planned(room.id) }))
+    .filter(({ room, media }) => media.liveStreaming || locationSessions(agenda!, room.id).length > 0)
+    .map(({ room, media }) => ({
+      id: room.id,
+      name: room.name,
+      stream: null,
+      days: [],
+      loadedOccurrenceId: null,
+      streamed: media.liveStreaming,
+      recordingPlanned: media.recording,
+    }));
+  return [...streamed, ...others.filter((room) => room.streamed), ...others.filter((room) => !room.streamed)];
 }
 
 export interface RoomMoment {
@@ -59,7 +113,7 @@ export function nextRoomBoundary(sessions: readonly RoomSession[], now: number, 
   return next;
 }
 
-/** Follow a linked session's current rooms; otherwise use the requested location or first streamed one. */
+/** Follow a linked session's current rooms; otherwise use the requested location or the first one. */
 export function chooseLocation(
   locations: ReadonlyArray<{ id: string }>,
   agenda: Pick<AgendaSnapshot, "occurrences"> | null,

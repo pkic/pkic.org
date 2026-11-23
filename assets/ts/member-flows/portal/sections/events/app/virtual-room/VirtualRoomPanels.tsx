@@ -59,7 +59,9 @@ export function useRoomLive(
   const scheduled = moment.current ?? moment.upcoming[0] ?? null;
   const [kept, keep] = useState(false);
   const studioCloses = studio ? liveRoomWindow(studio.startAt, studio.endAt).closesAt : -Infinity;
-  const session = studio && (now <= studioCloses || kept) ? studio : scheduled;
+  // A session the studio loaded before its room opens waits behind the one running now; the questions follow it.
+  const studioEarly = studio !== null && !kept && now < liveRoomWindow(studio.startAt, studio.endAt).opensAt;
+  const session = studio && (now <= studioCloses || kept) && !(studioEarly && moment.current) ? studio : scheduled;
   const connection = useLiveRoom({ slug, occurrenceId: session?.id ?? "", enabled: Boolean(session) });
   // What the previous session's room last said is not this session's: until this one answers, there is none.
   const state = connection.state?.session.occurrenceId === session?.id ? connection.state : null;
@@ -81,14 +83,21 @@ export function useRoomLive(
         : session === moment.current
           ? Date.parse(session.endAt)
           : Infinity;
+  // A session loaded in the studio before its room opens is the next one, not the running one: no live dot days early.
+  const early =
+    opening === "scheduled" && studio !== null && now < liveRoomWindow(studio.startAt, studio.endAt).opensAt;
+  const others = (studio: RoomSession) =>
+    [moment.current, ...moment.upcoming].filter((next): next is RoomSession => next !== null && next.id !== studio.id);
   const shown =
     onStudio && studio && studio.id !== moment.current?.id
-      ? {
-          current: studio,
-          upcoming: [moment.current, ...moment.upcoming].filter(
-            (next): next is RoomSession => next !== null && next.id !== studio.id,
-          ),
-        }
+      ? early
+        ? {
+            current: moment.current,
+            upcoming: [studio, ...others(studio).filter((next) => next !== moment.current)].sort((a, b) =>
+              a.startAt.localeCompare(b.startAt),
+            ),
+          }
+        : { current: studio, upcoming: others(studio) }
       : moment;
   return {
     session,

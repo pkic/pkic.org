@@ -86,4 +86,26 @@
       display: none;
     }
   }
+  /*
+   * While a filter hides sessions, the folded toolbar's filter button looks pressed, with a dot in its corner,
+   * so a reader sees at once that the agenda is narrowed. Its menu then opens with Clear filters.
+   */
+  .pk-content-agenda[data-agenda-filtered] [data-agenda-secondary-menu] .pk-menu__trigger {
+    position: relative;
+    overflow: visible;
+    border-color: var(--pk-accent);
+    background: var(--pk-accent-soft);
+    color: var(--pk-accent-ink);
+  }
+  .pk-content-agenda[data-agenda-filtered] [data-agenda-secondary-menu] .pk-menu__trigger::after {
+    position: absolute;
+    inset-block-start: -0.1875rem;
+    inset-inline-end: -0.1875rem;
+    inline-size: 0.5625rem;
+    block-size: 0.5625rem;
+    border-radius: 50%;
+    background: var(--pk-accent);
+    box-shadow: 0 0 0 2px var(--pk-surface);
+    content: "";
+  }
 }

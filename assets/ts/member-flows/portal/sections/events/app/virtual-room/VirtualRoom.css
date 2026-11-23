@@ -58,10 +58,9 @@
   }
 
   /*
-   * The running session under the stream. Where the viewer picks a location, the picker and the reactions
-   * share the first line and the session has the next one whole: its time and its people, then the title
-   * in full. With one location the title and the reactions share a line. Speakers are left to the wider
-   * layout and the session's details.
+   * The running session under the stream. On a phone its time and its people keep the whole first line, and
+   * the title shares the next with the reactions. Speakers are left to the wider layout and the session's
+   * details.
    */
   .pk-virtual-room__now {
     display: flex;
@@ -69,12 +68,6 @@
     align-items: center;
     gap: var(--pk-1) var(--pk-2);
     padding: var(--pk-1) var(--pk-2) var(--pk-2);
-  }
-
-  .pk-virtual-room__location {
-    flex: none;
-    inline-size: auto;
-    max-inline-size: 9rem;
   }
 
   .pk-virtual-room__now-text {
@@ -85,34 +78,25 @@
     min-inline-size: 0;
   }
 
-  .pk-virtual-room__now:has(.pk-virtual-room__location) .pk-virtual-room__now-text {
-    order: 1;
-    flex-basis: 100%;
-  }
-
   .pk-virtual-room__now-text p {
     margin: 0;
   }
 
-  /*
-   * One location on a phone: the line opens up, so the time and the people keep the whole first line and the
-   * reactions sit beside the title, at its foot.
-   */
   .pk-virtual-room:not(.pk-virtual-room--wide)
-    .pk-virtual-room__now:not(:has(.pk-virtual-room__location))
+    .pk-virtual-room__now
     .pk-virtual-room__now-text {
     display: contents;
   }
 
   .pk-virtual-room:not(.pk-virtual-room--wide)
-    .pk-virtual-room__now:not(:has(.pk-virtual-room__location))
+    .pk-virtual-room__now
     :is(.pk-virtual-room__when, .pk-event-card__meta) {
     flex-basis: 100%;
   }
 
   .pk-virtual-room:not(.pk-virtual-room--wide)
-    .pk-virtual-room__now:not(:has(.pk-virtual-room__location))
-    .pk-virtual-room__title {
+    .pk-virtual-room__now
+    .pk-virtual-room__headline {
     flex: 1 1 8rem;
     min-inline-size: 0;
   }
@@ -407,8 +391,10 @@
   .pk-virtual-room--wide {
     display: grid;
     align-items: start;
+    --pk-room-stream-width: calc((100dvh - var(--pkic-navbar-height, 0px) - 15rem) * 16 / 9);
+
     gap: var(--pk-4);
-    grid-template-columns: minmax(0, 1fr) minmax(20rem, 24rem);
+    grid-template-columns: minmax(0, var(--pk-room-stream-width)) minmax(20rem, 32rem);
   }
 
   .pk-virtual-room--wide > :not(.pk-virtual-room__main, .pk-virtual-room__side) {
@@ -469,9 +455,14 @@
 
   .pk-virtual-room--wide .pk-virtual-room__sponsors {
     block-size: 3.75rem;
-    padding-inline: var(--pk-4);
-    border: 1px solid var(--pk-line-soft);
-    border-radius: var(--pk-radius);
+    padding-inline: 0;
+    border: 0;
+    background: none;
+  }
+
+  .pk-virtual-room--wide .pk-virtual-room__sponsor-list--pinned {
+    padding-inline-end: var(--pk-6);
+    border: 0;
   }
 
   .pk-virtual-room--wide .pk-virtual-room__sponsor-list[data-rank="0"] {
@@ -531,5 +522,216 @@
     min-block-size: 0;
     padding: var(--pk-2);
     overflow-y: auto;
+  }
+
+  /* The session's people as small portraits before its title; their cards name them. */
+  .pk-virtual-room__headline {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2);
+    min-inline-size: 0;
+  }
+
+  .pk-virtual-room__headline .pk-virtual-room__faces {
+    flex: none;
+    margin: 0;
+  }
+
+  .pk-virtual-room--wide .pk-virtual-room__headline .pk-virtual-room__face .pk-avatar {
+    --pk-avatar-size: 1.75rem;
+  }
+
+  .pk-virtual-room--wide .pk-virtual-room__now-text {
+    gap: var(--pk-1);
+  }
+
+  .pk-virtual-room__main .pk-content-agenda {
+    margin-block-start: 0;
+  }
+
+  /* The locations, then the room's own controls at the end of the same line. */
+  .pk-virtual-room__bar {
+    display: flex;
+    align-items: end;
+    gap: var(--pk-3);
+    border-block-end: 1px solid var(--pk-line);
+  }
+
+  .pk-virtual-room__bar > .pk-tabs {
+    flex: 1;
+    min-inline-size: 0;
+    margin: 0;
+    border: 0;
+  }
+
+  .pk-virtual-room__bar .pk-tabs__list {
+    border: 0;
+  }
+
+  .pk-virtual-room__bar-end {
+    display: flex;
+    flex: none;
+    gap: var(--pk-1);
+    margin-inline-start: auto;
+    padding-block-end: var(--pk-1);
+  }
+
+  /* Once the stream scrolls away, it docks above the questions without being moved in the page. */
+  .pk-virtual-room--docked .pk-virtual-room__screen {
+    block-size: var(--pk-room-screen-height);
+  }
+
+  .pk-virtual-room--docked .pk-virtual-room__screen > .pk-virtual-room__player {
+    position: fixed;
+    z-index: 20;
+    top: calc(var(--pkic-navbar-height, 0px) + var(--pk-3));
+    left: var(--pk-room-dock-left);
+    inline-size: var(--pk-room-dock-width);
+    box-shadow: var(--pk-shadow-2);
+  }
+
+  .pk-virtual-room--docked :is(.pk-virtual-room__player--idle, .pk-virtual-room__player .pk-embed) {
+    max-block-size: none;
+  }
+
+  .pk-virtual-room--docked .pk-virtual-room__side {
+    box-sizing: border-box;
+    padding-block-start: calc(var(--pk-room-dock-width) * 9 / 16 + var(--pk-3));
+  }
+
+  /* Full screen holds the stream, the session, the sponsors, the questions and the chat. */
+  .pk-virtual-room--full {
+    --pk-room-stream-width: calc((100dvh - 14rem) * 16 / 9);
+
+    position: fixed;
+    z-index: 100;
+    inset: 0;
+    overflow: hidden;
+    padding: var(--pk-3);
+    background: var(--pk-page-surface);
+    grid-template-columns: minmax(0, var(--pk-room-stream-width)) minmax(24rem, 1fr);
+  }
+
+  .pk-virtual-room--full > :not(.pk-virtual-room__main, .pk-virtual-room__side, .pk-virtual-room__bar) {
+    display: none;
+  }
+
+  .pk-virtual-room--full :is(.pk-virtual-room__player--idle, .pk-virtual-room__player .pk-embed) {
+    max-block-size: calc(100dvh - 14rem);
+  }
+
+  .pk-virtual-room--full .pk-virtual-room__side {
+    top: 0;
+    block-size: calc(100dvh - 5rem);
+  }
+
+  /* A dark page: the sponsors' line takes the page's color and every logo is drawn white, as the agenda's are. */
+  :root[data-theme="dark"] .pk-virtual-room__sponsors {
+    background: var(--pk-surface);
+  }
+
+  :root[data-theme="dark"] .pk-virtual-room--wide .pk-virtual-room__sponsors {
+    background: none;
+  }
+
+  :root[data-theme="dark"] .pk-virtual-room__sponsor img {
+    filter: brightness(0) invert(1);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .pk-virtual-room__sponsors {
+      background: var(--pk-surface);
+    }
+
+    :root:not([data-theme="light"]) .pk-virtual-room--wide .pk-virtual-room__sponsors {
+      background: none;
+    }
+
+    :root:not([data-theme="light"]) .pk-virtual-room__sponsor img {
+      filter: brightness(0) invert(1);
+    }
+  }
+
+  /* A phone's Ask a question control, at the panel's foot and drawn like the chat's message field. */
+  .pk-virtual-room__ask {
+    flex: none;
+    margin-inline: calc(-1 * var(--pk-2));
+    padding: var(--pk-2);
+    border-block-start: 1px solid var(--pk-line-soft);
+    background: var(--pk-surface);
+  }
+
+  .pk-virtual-room--wide .pk-virtual-room__ask {
+    margin: 0;
+  }
+
+  .pk-virtual-room__ask[hidden],
+  .pk-virtual-room__ask:empty {
+    display: none;
+  }
+
+  .pk-virtual-room__ask .pk-btn {
+    justify-content: flex-start;
+    inline-size: 100%;
+    border: 1px solid var(--pk-line);
+    background: var(--pk-surface);
+    color: var(--pk-ink-muted);
+    font-weight: 400;
+  }
+
+  /*
+   * A location held in the room only. The event app's own header field (EventHero.css) stands where the
+   * stream would: the kit's gradient, dots and mark, with the event's motif along the foot.
+   */
+  .pk-virtual-room .pk-event-hero.pk-virtual-room__in-room {
+    margin: 0;
+    padding: 0;
+  }
+
+  .pk-virtual-room:not(.pk-virtual-room--wide) .pk-event-hero.pk-virtual-room__in-room {
+    border-radius: 0;
+  }
+
+  .pk-virtual-room__in-room .pk-event-hero__field {
+    gap: var(--pk-1);
+    padding: var(--pk-5) var(--pk-5) var(--pk-8);
+  }
+
+  .pk-virtual-room__in-room .pk-event-hero__houses {
+    block-size: 2.5rem;
+  }
+
+  .pk-virtual-room__in-room .pk-event-hero__eyebrow {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2);
+  }
+
+  .pk-virtual-room__in-room-title {
+    margin: 0;
+    color: var(--pk-pqc-on-field);
+    font-size: var(--pk-text-lg);
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  @media (max-width: 63.99rem) {
+    .pk-virtual-room__in-room .pk-event-hero__field {
+      padding: var(--pk-4) var(--pk-4) var(--pk-6);
+    }
+
+    .pk-virtual-room__in-room .pk-event-hero__houses {
+      block-size: 1.75rem;
+    }
+
+    .pk-virtual-room__in-room-title {
+      font-size: var(--pk-text-md);
+    }
+  }
+
+  /* On a phone the locations sit above the stream, edge to edge with it. */
+  .pk-virtual-room:not(.pk-virtual-room--wide) .pk-virtual-room__bar {
+    padding-inline: var(--pk-2);
+    background: var(--pk-surface);
   }
 }

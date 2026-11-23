@@ -19,10 +19,12 @@ function mount(
   url: string,
   profileMarkup = '<dialog data-agenda-speaker-key="person-123"></dialog>',
   basePath?: string,
+  followsLocations = false,
 ) {
   history.replaceState(null, "", url);
   const root = document.createElement("section");
   root.dataset.agendaView = "grid";
+  root.toggleAttribute("data-agenda-view-follows-locations", followsLocations);
   if (basePath) root.dataset.agendaBasePath = basePath;
   root.innerHTML = `<button data-agenda-tab="one" aria-selected="true">One</button><button data-agenda-tab="speakers">Speakers</button>
     <input data-agenda-search><select data-agenda-format-filter><option value="">All</option><option value="panel">Panel</option></select>
@@ -44,7 +46,10 @@ function mount(
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
     if (target.hasAttribute("data-agenda-tab")) select(target as HTMLButtonElement);
-    if (target.hasAttribute("data-agenda-view")) root.dataset.agendaView = target.dataset.agendaView;
+    if (target.hasAttribute("data-agenda-view")) {
+      root.removeAttribute("data-agenda-view-follows-locations");
+      root.dataset.agendaView = target.dataset.agendaView;
+    }
     if (target.hasAttribute("data-agenda-compact")) root.classList.toggle("is-compact");
   });
   root.querySelectorAll("dialog").forEach((dialog) => {
@@ -226,4 +231,23 @@ it("keeps embedded revision preview routes while retaining their selected agenda
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(location.hash.split("?")[0]).toBe("#/groups/group/events/event/agenda/revisions/preview");
   expect(new URLSearchParams(location.hash.split("?")[1]).get("agendaDay")).toBe("speakers");
+});
+
+it("keeps a view the reader picked beside the virtual room, and follows the locations again without one", async () => {
+  vi.stubGlobal("matchMedia", () => ({ matches: false }));
+  const { root } = mount("/agenda/?agendaDay=one", undefined, undefined, true);
+  await frame();
+  // One location shown: the agenda lists it, as a choice of its own, not the reader's.
+  root.querySelector<HTMLInputElement>('[data-agenda-location="blue"]')!.checked = false;
+  refreshAgendaFilters(root);
+  expect(root.dataset.agendaView).toBe("list");
+  root.querySelector<HTMLButtonElement>('[data-agenda-view="grid"]')!.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  // Grid is also the default, yet the reader chose it, so a refresh must not list the location again.
+  expect(new URL(location.href).searchParams.get("agendaView")).toBe("grid");
+  history.replaceState(null, "", "/agenda/?agendaDay=one&agendaRooms=%7B%22one%22%3A%5B%22red%22%5D%7D");
+  window.dispatchEvent(new PopStateEvent("popstate"));
+  await frame();
+  expect(root.hasAttribute("data-agenda-view-follows-locations")).toBe(true);
+  expect(root.dataset.agendaView).toBe("list");
 });
