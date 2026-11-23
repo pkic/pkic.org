@@ -13,20 +13,15 @@
     /* No padding or margin; the nav is a transparent wrapper. */
   }
 
+  /* At any width the strip scrolls, never the page; the clipped last tab is the
+     cue. A scrollbar thumb under the labels read as a second active underline. */
   .pk-tabs__list {
     display: flex;
+    flex-wrap: nowrap;
     align-items: center;
+    overflow-x: auto;
     border-bottom: 1px solid var(--pk-line);
-  }
-
-  @media (max-width: 48rem) {
-    /* The strip scrolls, never the page; the clipped last tab is the cue. A
-       scrollbar thumb under the labels read as a second active underline. */
-    .pk-tabs__list {
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      scrollbar-width: none;
-    }
+    scrollbar-width: none;
   }
 
   .pk-tabs__link {

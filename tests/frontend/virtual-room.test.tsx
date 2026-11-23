@@ -166,7 +166,7 @@ describe("virtual room", () => {
     expect(title?.getAttribute("href")).toBe(`#/events/summit/agenda?session=${KEYNOTE}`);
   });
 
-  it("shows one panel at a time on a phone, with the stream and the sponsors always above it", async () => {
+  it("shows one panel at a time on a phone, with the stream and the sponsors above it", async () => {
     await open();
     expect(tabs().map((item) => item.textContent)).toEqual(["Questions", "Chat", "Agenda"]);
     // A session is running in the fixture, so the room opens on its questions.
@@ -180,6 +180,9 @@ describe("virtual room", () => {
     // The player comes before the panel, so a phone shows it first and keeps it above.
     const order = [...host.querySelectorAll('iframe, [role="tabpanel"]')].map((node) => node.tagName);
     expect(order).toEqual(["IFRAME", "DIV"]);
+    // Only the stream stays in view: the sponsors scroll away under it, so a small phone keeps room for the panel.
+    expect(host.querySelector(".pk-virtual-room__stage iframe")).not.toBeNull();
+    expect(logo?.closest(".pk-virtual-room__stage")).toBeNull();
     // A session is running in the fixture, so the panel joins its live questions rather than waiting.
     const panel = host.querySelector('[role="tabpanel"]');
     expect(panel?.getAttribute("aria-labelledby")).toBe("virtual-room-tab-questions");

@@ -3,8 +3,9 @@
  *
  * On a desktop the stream is large on the left with the running session, the sponsors, the event's agenda
  * and the production partners under it; questions and polls sit top right with the chat under them, both
- * always open. On a phone it works like an app: the stream, the running session and the sponsors stay at the top,
- * one panel shows beneath them, and a bottom bar switches between questions, chat and the event's agenda.
+ * always open. On a phone it works like an app: the stream stays at the top, the locations, the running
+ * session and the sponsors scroll away under it, one panel fills the screen beneath it, and a bottom bar
+ * switches between questions, chat and the event's agenda.
  */
 import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
@@ -266,13 +267,14 @@ function NarrowRoom({
   return (
     <div ref={room} class="pk-virtual-room">
       {notice}
-      <div class="pk-virtual-room__stage">
-        {located && (
-          <LocationBar locations={locations} locationId={locationId}>
-            {tourButton}
-          </LocationBar>
-        )}
-        {player}
+      {located && (
+        <LocationBar locations={locations} locationId={locationId}>
+          {tourButton}
+        </LocationBar>
+      )}
+      {/* Only the stream stays in view: the locations, the running session and the sponsors scroll away. */}
+      <div class="pk-virtual-room__stage">{player}</div>
+      <div class="pk-virtual-room__lines">
         {now(located ? null : tourButton)}
         {sponsors}
       </div>
@@ -285,24 +287,26 @@ function NarrowRoom({
         activeId={panel}
         onSelect={(id) => onPanel(id as RoomPanelId)}
       />
-      {panel !== "agenda" && (
-        <div id={`virtual-room-${panel}`} class="pk-virtual-room__panel" role="tabpanel" aria-labelledby={tab}>
-          {panel === "questions" ? questions(askFoot) : chat}
-        </div>
-      )}
-      <div ref={setAskFoot} class="pk-virtual-room__ask" hidden={panel !== "questions"} />
-      {agendaOpened && (
-        <div
-          id="virtual-room-agenda"
-          class="pk-virtual-room__panel"
-          role="tabpanel"
-          aria-labelledby="virtual-room-tab-agenda"
-          hidden={panel !== "agenda"}
-        >
-          {agenda}
-          {partners}
-        </div>
-      )}
+      <div class="pk-virtual-room__deck" data-panel={panel}>
+        {panel !== "agenda" && (
+          <div id={`virtual-room-${panel}`} class="pk-virtual-room__panel" role="tabpanel" aria-labelledby={tab}>
+            {panel === "questions" ? questions(askFoot) : chat}
+          </div>
+        )}
+        <div ref={setAskFoot} class="pk-virtual-room__ask" hidden={panel !== "questions"} />
+        {agendaOpened && (
+          <div
+            id="virtual-room-agenda"
+            class="pk-virtual-room__panel"
+            role="tabpanel"
+            aria-labelledby="virtual-room-tab-agenda"
+            hidden={panel !== "agenda"}
+          >
+            {agenda}
+            {partners}
+          </div>
+        )}
+      </div>
       <AppTabBar
         scope="event"
         label="Virtual room"
