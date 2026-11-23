@@ -336,7 +336,7 @@ describe("event tickets", () => {
     expect(Object.fromEntries(counts)).toEqual({ pqcc_attendee: 0, pqcc_vendor: 2, pqcc_academic: 0 });
 
     // Only the vendor ticket keeps a description: its decisions still apply, though the model is no longer asked.
-    for (const key of ["pqcc_attendee", "pqcc_academic"]) {
+    const clearDescription = async (key: string) => {
       const current = await readEventTicketsConfiguration(env.DB, event);
       const type = current.types.find((candidate) => candidate.key === key)!;
       await saveEventTicketType(env.DB, admin, event, type.id, {
@@ -350,8 +350,20 @@ describe("event tickets", () => {
         freeRequiresWorkEmail: type.freeRequiresWorkEmail,
         active: type.active,
       });
-    }
+    };
+    await clearDescription("pqcc_attendee");
+    await clearDescription("pqcc_academic");
     expect((await register(event, "three@vendor-example.test")).ticket).toMatchObject({ ticketName: "Vendor" });
+
+    // No ticket keeps a description: the classifier's decisions stop, an organizer's still applies everywhere.
+    await clearDescription("pqcc_vendor");
+    expect((await register(event, "four@vendor-example.test")).ticket).toMatchObject({ ticketName: "Attendee" });
+    expect((await register(event, "three@kept-example.test")).ticket).toMatchObject({ ticketName: "Vendor" });
+    const remaining = (await readEventTicketsConfiguration(env.DB, event)).types.map((type) => [
+      type.key,
+      type.presetOrganizations,
+    ]);
+    expect(Object.fromEntries(remaining)).toEqual({ pqcc_attendee: 0, pqcc_vendor: 1, pqcc_academic: 0 });
   });
 
   it("lets the person choose when the classifier is unsure and falls back to the default when it fails", async () => {

@@ -223,8 +223,8 @@ export async function decideOrganizationTicket(
   subject: TicketClassifierSubject,
 ): Promise<StoredTicketDecision | null> {
   const options = classifierOptions(types);
-  // An event without a classifier reads no decisions. One that still describes a ticket keeps those made for it.
-  if (!options.length) return null;
+  // An organizer's decision applies with or without a classifier, as dispute review and the counts show it; the
+  // classifier's apply only to tickets it still describes.
   const stored = await readStoredTicketDecision(db, types, subject);
   if (stored) return stored;
   if (options.length < 2) return null;
