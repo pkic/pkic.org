@@ -109,7 +109,7 @@ function toOrgSummary(row: OrgSummaryRow) {
 }
 
 /** Current domain connections of one organization or of all of them, without inferring a corporate hierarchy. Trusted SQL expressions only. */
-function organizationConnectionDomainsSql(organizationIdSql?: string) {
+export function organizationConnectionDomainsSql(organizationIdSql?: string) {
   const organization = (column: string) =>
     organizationIdSql ? `${column}=${organizationIdSql}` : `${column} IS NOT NULL`;
   return `SELECT organization_id,domain FROM organization_domain_claims WHERE ${organization("organization_id")}

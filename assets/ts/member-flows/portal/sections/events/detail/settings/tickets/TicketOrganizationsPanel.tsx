@@ -30,6 +30,7 @@ const DECIDED_BY_OPTIONS = [
 ];
 
 function decidedBy(row: EventTicketOrganization): string {
+  if (!row.decidedBy) return "";
   return row.decidedBy === "organizer" ? "Organizer" : `Classifier, ${String(row.confidencePercent ?? 0)}% sure`;
 }
 
@@ -64,6 +65,7 @@ export function TicketOrganizationsPanel({
   }
 
   async function clear(row: EventTicketOrganization) {
+    if (!row.id) return;
     const confirmed = await confirmAction({
       title: `Clear the decision for ${row.organizationName}?`,
       body: "The next person who registers from this organization gets the classifier's answer again. Other events that offer this ticket share the decision.",
@@ -83,7 +85,7 @@ export function TicketOrganizationsPanel({
     setStart({
       organizationName: row.organizationName,
       emailDomain: row.emailDomain,
-      ticketKey: row.ticketKey,
+      ticketKey: row.ticketKey ?? undefined,
       testOnOpen,
     });
   return (
@@ -106,7 +108,7 @@ export function TicketOrganizationsPanel({
           label: classifierOn ? "Test an organization" : "Choose an organization's ticket",
           onSelect: () => setStart({ organizationName: "", emailDomain: "" }),
         }}
-        rowKey={(row) => row.id}
+        rowKey={(row) => row.id ?? row.organizationId ?? row.organizationName}
         empty={
           <EmptyState
             title={ticketKey ? "No organization gets this ticket yet" : "No organizations decided yet"}
@@ -131,7 +133,7 @@ export function TicketOrganizationsPanel({
                 {
                   header: "Ticket",
                   width: "fit" as const,
-                  cell: (row: EventTicketOrganization) => nameOf(row.ticketKey),
+                  cell: (row: EventTicketOrganization) => (row.ticketKey ? nameOf(row.ticketKey) : ""),
                 },
               ]),
           {

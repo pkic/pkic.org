@@ -19,6 +19,7 @@ const UPDATED = "2026-11-20T09:30:00.000Z";
 const ORGANIZATIONS: EventTicketOrganization[] = [
   {
     id: "b4f0c1de-0000-4000-8000-000000000001",
+    organizationId: null,
     organizationName: "example bank",
     emailDomain: "examplebank.test",
     ticketKey: "attendee",
@@ -28,6 +29,7 @@ const ORGANIZATIONS: EventTicketOrganization[] = [
   },
   {
     id: "b4f0c1de-0000-4000-8000-000000000002",
+    organizationId: null,
     organizationName: "sample security",
     emailDomain: "samplesecurity.test",
     ticketKey: "vendor",
@@ -37,6 +39,7 @@ const ORGANIZATIONS: EventTicketOrganization[] = [
   },
   {
     id: "b4f0c1de-0000-4000-8000-000000000003",
+    organizationId: null,
     organizationName: "placeholder university",
     emailDomain: "",
     ticketKey: "attendee",

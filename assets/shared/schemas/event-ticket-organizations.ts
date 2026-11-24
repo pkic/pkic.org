@@ -26,24 +26,35 @@ export const TICKET_DECIDERS = ["organizer", "classifier"] as const;
 export const ticketDeciderSchema = z.enum(TICKET_DECIDERS);
 export type TicketDecider = z.infer<typeof ticketDeciderSchema>;
 
+/** Which organizations the list is about: those with a decision, or every organization in the portal. */
+export const TICKET_ORGANIZATION_SCOPES = ["decided", "portal"] as const;
+export const ticketOrganizationScopeSchema = z.enum(TICKET_ORGANIZATION_SCOPES);
+export type TicketOrganizationScope = z.infer<typeof ticketOrganizationScopeSchema>;
+
 export const eventTicketOrganizationSchema = z.object({
-  /** The decision that counts for this organization. */
-  id: databaseIdSchema,
-  /** As decisions are keyed: trimmed, single-spaced and in lower case. */
+  /** The decision that counts for this organization; null for a portal organization nothing has decided. */
+  id: databaseIdSchema.nullable(),
+  /** The portal organization behind the row; null for a decision no portal organization is matched to. */
+  organizationId: databaseIdSchema.nullable(),
+  /** A decision's name is keyed: trimmed, single-spaced and in lower case. A portal organization keeps its own. */
   organizationName: z.string(),
-  /** Empty when the decision was made without a work address. */
+  /** Empty when there is no work address or domain. */
   emailDomain: z.string(),
-  ticketKey: ticketKeySchema,
-  decidedBy: ticketDeciderSchema,
-  /** How sure the classifier was; null for an organizer's decision. */
+  ticketKey: ticketKeySchema.nullable(),
+  decidedBy: ticketDeciderSchema.nullable(),
+  /** How sure the classifier was; null for an organizer's decision or no decision. */
   confidencePercent: z.number().int().min(0).max(100).nullable(),
-  updatedAt: utcInstantSchema,
+  updatedAt: utcInstantSchema.nullable(),
 });
 export type EventTicketOrganization = z.infer<typeof eventTicketOrganizationSchema>;
 
 export const eventTicketOrganizationListQuerySchema = listQuerySchema(["organization", "updated"] as const, {
   maxLimit: 100,
-}).extend({ decidedBy: ticketDeciderSchema.optional(), ticketKey: ticketKeySchema.optional() });
+}).extend({
+  among: ticketOrganizationScopeSchema.default("decided"),
+  decidedBy: ticketDeciderSchema.optional(),
+  ticketKey: ticketKeySchema.optional(),
+});
 export type EventTicketOrganizationListQuery = z.infer<typeof eventTicketOrganizationListQuerySchema>;
 export const eventTicketOrganizationListSchema = paginatedResponseSchema(
   "organizations",
@@ -66,26 +77,40 @@ export const eventTicketClassifierDraftSchema = eventTicketTypeInputSchema
   .extend({ ticketTypeId: databaseIdSchema.nullable() });
 export type EventTicketClassifierDraft = z.infer<typeof eventTicketClassifierDraftSchema>;
 
-export const eventTicketOrganizationTrialSchema = ticketOrganizationSubjectSchema.extend({
+export const TICKET_TRIAL_MAX_ORGANIZATIONS = 25;
+export const eventTicketOrganizationTrialSchema = z.object({
+  organizations: z.array(ticketOrganizationSubjectSchema).min(1).max(TICKET_TRIAL_MAX_ORGANIZATIONS),
   draft: eventTicketClassifierDraftSchema.optional(),
 });
 export type EventTicketOrganizationTrial = z.infer<typeof eventTicketOrganizationTrialSchema>;
 
-export const eventTicketOrganizationTrialResponseSchema = z.object({
+export const eventTicketOrganizationTrialResultSchema = z.object({
+  /** The name as it was given. */
+  organizationName: z.string(),
   /** The domain the classifier was given; null when none was given or it is a personal mail domain. */
   emailDomain: z.string().nullable(),
-  /** Every described ticket, most likely first. */
-  answers: z.array(
-    z.object({
-      ticketKey: ticketKeySchema,
-      percent: z.number().int().min(0).max(100),
-      thresholdPercent: z.number().int().min(0).max(100),
-    }),
-  ),
-  /** The ticket this answer would decide; null when no ticket reaches its threshold. */
+  /** Every described ticket, most likely first; null when the classifier did not answer. */
+  answers: z
+    .array(
+      z.object({
+        ticketKey: ticketKeySchema,
+        percent: z.number().int().min(0).max(100),
+        thresholdPercent: z.number().int().min(0).max(100),
+      }),
+    )
+    .nullable(),
+  /** The ticket this answer would decide; null when no ticket reaches its threshold or there is no answer. */
   decidedTicketKey: ticketKeySchema.nullable(),
   /** The decision that already counts for this organization, which a test never replaces. */
   current: eventTicketOrganizationSchema.pick({ ticketKey: true, decidedBy: true, confidencePercent: true }).nullable(),
+  /** Set when the classifier did not answer for this organization. */
+  error: z.literal("unavailable").nullable(),
+});
+export type EventTicketOrganizationTrialResult = z.infer<typeof eventTicketOrganizationTrialResultSchema>;
+
+export const eventTicketOrganizationTrialResponseSchema = z.object({
+  /** In the order the organizations were given. */
+  results: z.array(eventTicketOrganizationTrialResultSchema),
 });
 export type EventTicketOrganizationTrialResponse = z.infer<typeof eventTicketOrganizationTrialResponseSchema>;
 
@@ -93,6 +118,13 @@ export const eventTicketOrganizationDecisionSchema = ticketOrganizationSubjectSc
   ticketKey: z.string({ error: "Choose a ticket." }).pipe(ticketKeySchema),
 });
 export type EventTicketOrganizationDecision = z.infer<typeof eventTicketOrganizationDecisionSchema>;
+
+export const TICKET_DECISIONS_MAX = 100;
+/** Decisions saved together: all or none. */
+export const eventTicketOrganizationDecisionsSchema = z.object({
+  decisions: z.array(eventTicketOrganizationDecisionSchema).min(1).max(TICKET_DECISIONS_MAX),
+});
+export type EventTicketOrganizationDecisions = z.infer<typeof eventTicketOrganizationDecisionsSchema>;
 
 export const eventTicketOrganizationDecisionParamsSchema = eventSlugParamsSchema.extend({
   decisionId: databaseIdSchema,
@@ -110,7 +142,7 @@ export const eventTicketOrganizationsGetRouteSchema = {
 };
 export const eventTicketOrganizationTrialRouteSchema = {
   tags: ["Events"],
-  summary: "Test which ticket the classifier gives an organization",
+  summary: "Test which ticket the classifier gives each organization",
   request: {
     params: eventSlugParamsSchema,
     body: { required: true, content: ticketRouteJson(eventTicketOrganizationTrialSchema) },
@@ -128,13 +160,13 @@ export const eventTicketOrganizationTrialRouteSchema = {
 };
 export const eventTicketOrganizationDecisionPostRouteSchema = {
   tags: ["Events"],
-  summary: "Decide an organization's ticket",
+  summary: "Decide the ticket of one or more organizations",
   request: {
     params: eventSlugParamsSchema,
-    body: { required: true, content: ticketRouteJson(eventTicketOrganizationDecisionSchema) },
+    body: { required: true, content: ticketRouteJson(eventTicketOrganizationDecisionsSchema) },
   },
   responses: {
-    "200": { description: "Ticket decided.", content: ticketRouteJson(successResponseSchema) },
+    "200": { description: "Tickets decided.", content: ticketRouteJson(successResponseSchema) },
     ...ticketRouteRefusals,
   },
   ...ticketOrganizerAuth,

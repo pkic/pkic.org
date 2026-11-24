@@ -1,7 +1,8 @@
 /**
  * The ticket each organization gets, as organizers see and steer it: the
- * decisions that count for an event's tickets, a test of the classifier that
- * stores nothing, an organizer's own decision, and clearing a decision so the
+ * decisions that count for an event's tickets (or every portal organization with
+ * its decision), a test of the classifier that stores nothing, organizers' own
+ * decisions, and clearing a decision so the
  * classifier asks again at the next registration.
  *
  * Decisions are shared: another event that offers the same ticket finds the
@@ -10,10 +11,11 @@
 import {
   eventTicketOrganizationListSchema,
   type EventTicketClassifierDraft,
-  type EventTicketOrganizationDecision,
+  type EventTicketOrganizationDecisions,
   type EventTicketOrganizationListQuery,
   type EventTicketOrganizationTrial,
   type EventTicketOrganizationTrialResponse,
+  type EventTicketOrganizationTrialResult,
 } from "../../../../assets/shared/schemas/event-ticket-organizations";
 import { decideClassifiedTicket } from "../../../../assets/shared/event-tickets";
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
@@ -25,8 +27,9 @@ import { resolveMappedOrderBy } from "../../db/sort";
 import { workEmailDomain } from "../../email-domains/classification";
 import { AppError } from "../../errors";
 import { sha256Hex } from "../../utils/crypto";
-import type { DatabaseLike, Env, UserBackedAuthAdmin } from "../../types";
+import type { DatabaseLike, Env, StatementLike, UserBackedAuthAdmin } from "../../types";
 import { prepareAuditLog } from "../audit";
+import { organizationConnectionDomainsSql } from "../organization-management/read-model";
 import {
   askTicketClassifier,
   classifierOptions,
@@ -41,13 +44,14 @@ import { readEventTicketSnapshot, type TicketTypeRow } from "./snapshot";
 type TicketEvent = { id: string; timezone: string };
 
 interface DecisionRow {
-  id: string;
+  id: string | null;
+  organization_id: string | null;
   organization_name: string;
   email_domain: string;
-  ticket_key: string;
-  source: string;
+  ticket_key: string | null;
+  source: string | null;
   confidence: number | null;
-  updated_at: string;
+  updated_at: string | null;
 }
 
 function percent(value: number): number {
@@ -69,47 +73,99 @@ async function readTypes(db: DatabaseLike, event: TicketEvent) {
   return (await readEventTicketSnapshot(db, event)).types;
 }
 
-/** One row per organization: the decision that counts for it, as registration finds it. */
+/** The decision that counts for each name and domain, as registration finds it. */
+function countedDecisionsSql(scope: ReturnType<typeof decisionsInScope>): string {
+  return `counted AS (
+        SELECT id, organization_name, email_domain, ticket_key, source, confidence, updated_at,
+          ROW_NUMBER() OVER (PARTITION BY organization_name, email_domain ORDER BY ${scope.precedence}) AS rank
+        FROM ticket_classifier_decisions WHERE ${scope.where})`;
+}
+
+/**
+ * One row per portal organization: its name and one domain (the claimed one first, else a verified identity's),
+ * with the decision that counts for that name and domain. Decisions are keyed on the lower-cased, trimmed name;
+ * whitespace inside a name and non-ASCII case are not folded by SQL.
+ */
+function portalOrganizationsSql(search: string | null, domainSearch: string | null): string {
+  return `portal AS (
+        SELECT o.id, o.name, LOWER(TRIM(o.name)) AS decision_name,
+          LOWER(COALESCE(
+            (SELECT MIN(claim.domain) FROM organization_domain_claims claim WHERE claim.organization_id = o.id),
+            (SELECT MIN(connection.domain) FROM (${organizationConnectionDomainsSql("o.id")}) connection),
+            '')) AS domain
+        FROM organizations o
+        WHERE o.merged_into_organization_id IS NULL${
+          search && domainSearch
+            ? ` AND (${search} OR EXISTS (SELECT 1 FROM (${organizationConnectionDomainsSql("o.id")}) d WHERE ${domainSearch}))`
+            : ""
+        })`;
+}
+
+/** One row per organization: the decision that counts for it, or every portal organization with its decision if any. */
 export async function listTicketOrganizations(
   db: DatabaseLike,
   event: TicketEvent,
   query: EventTicketOrganizationListQuery,
 ) {
   const scope = decisionsInScope(await readTypes(db, event));
-  const search = query.q ? buildD1TextSearchFilter(query.q, ["organization_name", "email_domain"]) : null;
-  const decidedBy =
+  const portal = query.among === "portal";
+  const decidedFilter = [
     query.decidedBy === "organizer"
-      ? " AND source = 'organizer'"
+      ? "source = 'organizer'"
       : query.decidedBy === "classifier"
-        ? " AND source <> 'organizer'"
-        : "";
+        ? "source <> 'organizer'"
+        : "",
+    query.ticketKey ? "ticket_key = ?" : "",
+  ].filter(Boolean);
+  const filterBindings = query.ticketKey ? [query.ticketKey] : [];
+  const orderMap = { organization: "organization_name", updated: "updated_at" };
+  const orderBy = resolveMappedOrderBy(
+    query.sort,
+    orderMap,
+    "updated_at DESC",
+    portal ? "organization_id ASC" : "id ASC",
+  );
+  const source = portal
+    ? (() => {
+        const name = query.q ? buildD1TextSearchFilter(query.q, ["o.name"]) : null;
+        const domain = query.q ? buildD1TextSearchFilter(query.q, ["d.domain"]) : null;
+        // Only an organization with a decision can be filtered by who decided it or which ticket it got.
+        const where = [...(decidedFilter.length ? ["d.id IS NOT NULL"] : []), ...decidedFilter.map((f) => `d.${f}`)];
+        return {
+          withSql: `WITH ${countedDecisionsSql(scope)}, ${portalOrganizationsSql(name?.sql ?? null, domain?.sql ?? null)}`,
+          selectSql: `SELECT d.id AS id, p.id AS organization_id, p.name AS organization_name, p.domain AS email_domain,
+            d.ticket_key AS ticket_key, d.source AS source, d.confidence AS confidence, d.updated_at AS updated_at`,
+          fromSql: `FROM portal p LEFT JOIN counted d
+              ON d.rank = 1 AND d.organization_name = p.decision_name AND d.email_domain = p.domain
+            WHERE 1 = 1${where.map((f) => ` AND ${f}`).join("")}`,
+          bindings: [...scope.bindings, ...(name?.bindings ?? []), ...(domain?.bindings ?? []), ...filterBindings],
+        };
+      })()
+    : (() => {
+        const search = query.q ? buildD1TextSearchFilter(query.q, ["organization_name", "email_domain"]) : null;
+        return {
+          withSql: `WITH ${countedDecisionsSql(scope)}`,
+          selectSql:
+            "SELECT id, NULL AS organization_id, organization_name, email_domain, ticket_key, source, confidence, updated_at",
+          fromSql: `FROM counted WHERE rank = 1${decidedFilter.map((f) => ` AND ${f}`).join("")}${search ? ` AND (${search.sql})` : ""}`,
+          bindings: [...scope.bindings, ...filterBindings, ...(search?.bindings ?? [])],
+        };
+      })();
   const { rows, total } = await queryPage<DecisionRow>(db, {
-    source: {
-      withSql: `WITH counted AS (
-        SELECT id, organization_name, email_domain, ticket_key, source, confidence, updated_at,
-          ROW_NUMBER() OVER (PARTITION BY organization_name, email_domain ORDER BY ${scope.precedence}) AS rank
-        FROM ticket_classifier_decisions WHERE ${scope.where})`,
-      selectSql: "SELECT id, organization_name, email_domain, ticket_key, source, confidence, updated_at",
-      fromSql: `FROM counted WHERE rank = 1${decidedBy}${query.ticketKey ? " AND ticket_key = ?" : ""}${search ? ` AND (${search.sql})` : ""}`,
-      bindings: [...scope.bindings, ...(query.ticketKey ? [query.ticketKey] : []), ...(search?.bindings ?? [])],
-    },
-    orderBy: resolveMappedOrderBy(
-      query.sort,
-      { organization: "organization_name", updated: "updated_at" },
-      "updated_at DESC",
-      "id ASC",
-    ),
+    source,
+    orderBy,
     limit: query.limit,
     offset: query.offset,
   });
   return eventTicketOrganizationListSchema.parse({
     organizations: rows.map((row) => ({
       id: row.id,
+      organizationId: row.organization_id,
       organizationName: row.organization_name,
       emailDomain: row.email_domain,
       ticketKey: row.ticket_key,
-      decidedBy: row.source === "organizer" ? "organizer" : "classifier",
-      confidencePercent: certainty(row.source, row.confidence),
+      decidedBy: row.source === null ? null : row.source === "organizer" ? "organizer" : "classifier",
+      confidencePercent: row.source === null ? null : certainty(row.source, row.confidence),
       updatedAt: row.updated_at,
     })),
     page: buildPageInfo(query.limit, query.offset, total, rows.length),
@@ -140,8 +196,26 @@ function withDraft(types: readonly TicketTypeRow[], draft: EventTicketClassifier
   return [...others, edited];
 }
 
-/** Asks the classifier as registration would, and stores nothing. */
-export async function testTicketOrganization(
+/** How many organizations the classifier is asked about at once. */
+const TRIAL_CONCURRENCY = 5;
+
+/** Runs the work for every item, a few at a time, and returns the results in the items' order. */
+async function mapConcurrently<T, R>(items: readonly T[], limit: number, work: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (next < items.length) {
+        const index = next++;
+        results[index] = await work(items[index]!);
+      }
+    }),
+  );
+  return results;
+}
+
+/** Asks the classifier as registration would for each organization, and stores nothing. */
+export async function testTicketOrganizations(
   db: DatabaseLike,
   env: Pick<Env, "AI" | "TICKET_CLASSIFIER_MODEL">,
   event: TicketEvent,
@@ -156,54 +230,68 @@ export async function testTicketOrganization(
       "TICKET_CLASSIFIER_OFF",
       "Describe who qualifies for at least two tickets before testing the classifier.",
     );
-  const subject = subjectOf(input);
-  const [asked, current] = await Promise.all([
-    askTicketClassifier(env, options, subject),
-    // The decision that counts now, under the saved tickets.
-    readStoredTicketDecision(db, saved, subject),
-  ]);
-  if (!asked) throw new AppError(503, "TICKET_CLASSIFIER_UNAVAILABLE", "The classifier did not answer. Try again.");
-  const decided = decideClassifiedTicket(options, asked.probabilities);
-  const answers = options
-    .map((option) => ({
-      ticketKey: option.key,
-      percent: percent(asked.probabilities[option.key] ?? 0),
-      thresholdPercent: percent(option.threshold),
-    }))
-    .sort((a, b) => b.percent - a.percent);
-  return {
-    emailDomain: subject.emailDomain,
-    answers,
-    decidedTicketKey: decided?.key ?? null,
-    current: current
-      ? {
-          ticketKey: current.ticketKey,
-          decidedBy: current.source,
-          confidencePercent: certainty(current.source, current.confidence),
-        }
-      : null,
-  };
+  const results = await mapConcurrently(
+    input.organizations,
+    TRIAL_CONCURRENCY,
+    async (organization): Promise<EventTicketOrganizationTrialResult> => {
+      const subject = subjectOf(organization);
+      const [asked, current] = await Promise.all([
+        askTicketClassifier(env, options, subject),
+        // The decision that counts now, under the saved tickets.
+        readStoredTicketDecision(db, saved, subject),
+      ]);
+      const currentDecision = current
+        ? {
+            ticketKey: current.ticketKey,
+            decidedBy: current.source,
+            confidencePercent: certainty(current.source, current.confidence),
+          }
+        : null;
+      if (!asked)
+        return {
+          organizationName: organization.organizationName,
+          emailDomain: subject.emailDomain,
+          answers: null,
+          decidedTicketKey: null,
+          current: currentDecision,
+          error: "unavailable",
+        };
+      const decided = decideClassifiedTicket(options, asked.probabilities);
+      return {
+        organizationName: organization.organizationName,
+        emailDomain: subject.emailDomain,
+        answers: options
+          .map((option) => ({
+            ticketKey: option.key,
+            percent: percent(asked.probabilities[option.key] ?? 0),
+            thresholdPercent: percent(option.threshold),
+          }))
+          .sort((a, b) => b.percent - a.percent),
+        decidedTicketKey: decided?.key ?? null,
+        current: currentDecision,
+        error: null,
+      };
+    },
+  );
+  if (results.every((result) => result.error))
+    throw new AppError(503, "TICKET_CLASSIFIER_UNAVAILABLE", "The classifier did not answer. Try again.");
+  return { results };
 }
 
-/** An organizer's decision, which the classifier never replaces. */
-export async function decideTicketOrganization(
+/** The statements that save one organizer's decision, which the classifier never replaces. */
+async function prepareTicketOrganizationDecision(
   db: DatabaseLike,
   actor: UserBackedAuthAdmin,
   event: TicketEvent,
-  input: EventTicketOrganizationDecision,
-): Promise<void> {
-  const types = await readTypes(db, event);
-  if (!types.some((type) => type.active === 1 && type.ticket_key === input.ticketKey))
-    throw new AppError(409, "TICKET_NOT_OFFERED", "This event does not offer that ticket. Reload and choose another.");
+  types: readonly TicketTypeRow[],
+  input: EventTicketOrganizationDecisions["decisions"][number],
+): Promise<StatementLike[]> {
   const subject = subjectOf(input);
   const key = subjectKey(subject);
   const offered = types.filter((type) => type.active === 1).map((type) => type.ticket_key);
   // Keyed on the tickets on offer, so events with other tickets keep their own decision.
   const criteriaDigest = await sha256Hex(`organizer:${[...offered].sort().join("\n")}`);
-  await db.batch([
-    preparePermissionsAuthorizationGuard(db, actor, [
-      { permission: "events:write", context: { type: "event", id: event.id } },
-    ]),
+  return [
     // An earlier organizer's decision that counts here would otherwise stay beside the new one.
     db
       .prepare(
@@ -226,6 +314,28 @@ export async function decideTicketOrganization(
       emailDomain: key.emailDomain,
       ticketKey: input.ticketKey,
     }),
+  ];
+}
+
+/** Organizers' decisions, saved together behind one permission guard: all of them or none. */
+export async function decideTicketOrganizations(
+  db: DatabaseLike,
+  actor: UserBackedAuthAdmin,
+  event: TicketEvent,
+  input: EventTicketOrganizationDecisions,
+): Promise<void> {
+  const types = await readTypes(db, event);
+  const offered = new Set(types.filter((type) => type.active === 1).map((type) => type.ticket_key));
+  if (input.decisions.some((decision) => !offered.has(decision.ticketKey)))
+    throw new AppError(409, "TICKET_NOT_OFFERED", "This event does not offer that ticket. Reload and choose another.");
+  const statements = await Promise.all(
+    input.decisions.map((decision) => prepareTicketOrganizationDecision(db, actor, event, types, decision)),
+  );
+  await db.batch([
+    preparePermissionsAuthorizationGuard(db, actor, [
+      { permission: "events:write", context: { type: "event", id: event.id } },
+    ]),
+    ...statements.flat(),
   ]);
 }
 

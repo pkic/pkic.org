@@ -40,6 +40,7 @@ it("lists each organization's ticket and who decided it", async () => {
           organizations: [
             {
               id: "b4f0c1de-0000-4000-8000-000000000001",
+              organizationId: null,
               organizationName: "example bank",
               emailDomain: "examplebank.test",
               ticketKey: "attendee",
@@ -49,6 +50,7 @@ it("lists each organization's ticket and who decided it", async () => {
             },
             {
               id: "b4f0c1de-0000-4000-8000-000000000002",
+              organizationId: null,
               organizationName: "sample security",
               emailDomain: "",
               ticketKey: "vendor",
@@ -79,13 +81,19 @@ it("tests an organization and offers to save the ticket the classifier gives", a
       requests.push(JSON.parse(String(init.body)));
       return new Response(
         JSON.stringify({
-          emailDomain: null,
-          answers: [
-            { ticketKey: "vendor", percent: 58, thresholdPercent: 75 },
-            { ticketKey: "attendee", percent: 42, thresholdPercent: 75 },
+          results: [
+            {
+              organizationName: "Specimen Systems",
+              emailDomain: null,
+              answers: [
+                { ticketKey: "vendor", percent: 58, thresholdPercent: 75 },
+                { ticketKey: "attendee", percent: 42, thresholdPercent: 75 },
+              ],
+              decidedTicketKey: null,
+              current: null,
+              error: null,
+            },
           ],
-          decidedTicketKey: null,
-          current: null,
         }),
         { status: 200, headers: { "content-type": "application/json" } },
       );
@@ -105,8 +113,7 @@ it("tests an organization and offers to save the ticket the classifier gives", a
   for (let turn = 0; turn < 5; turn += 1) await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
   expect(requests).toHaveLength(1);
   expect(eventTicketOrganizationTrialSchema.parse(requests[0])).toEqual({
-    organizationName: "Specimen Systems",
-    emailDomain: "gmail.com",
+    organizations: [{ organizationName: "Specimen Systems", emailDomain: "gmail.com" }],
   });
   const dialog = host.querySelector("dialog")!;
   expect(dialog.textContent).toContain("Classifier: 58% sure");

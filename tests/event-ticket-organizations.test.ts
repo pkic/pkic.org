@@ -12,9 +12,9 @@ import { saveEventTicketType } from "../functions/_lib/services/event-tickets/co
 import { prepareStoreTicketDecision } from "../functions/_lib/services/event-tickets/classifier";
 import {
   clearTicketOrganizationDecision,
-  decideTicketOrganization,
+  decideTicketOrganizations,
   listTicketOrganizations,
-  testTicketOrganization,
+  testTicketOrganizations,
 } from "../functions/_lib/services/event-tickets/organization-decisions";
 import type { Env } from "../functions/_lib/types";
 
@@ -69,26 +69,31 @@ describe("ticket organizations", () => {
     const run = vi.fn(async () => ({
       answers: { ticket: { probabilities: { pqcc_vendor: 0.6, pqcc_attendee: 0.4 } } },
     }));
-    const trial = await testTicketOrganization(env.DB, { AI: { run } } as never, event, {
-      organizationName: "Example Vendor",
-      emailDomain: "gmail.com",
+    const trial = await testTicketOrganizations(env.DB, { AI: { run } } as never, event, {
+      organizations: [{ organizationName: "Example Vendor", emailDomain: "gmail.com" }],
     });
     // A personal mail domain is not given to the classifier, as at registration.
-    expect(trial).toEqual({
-      emailDomain: null,
-      answers: [
-        { ticketKey: "pqcc_vendor", percent: 60, thresholdPercent: 80 },
-        { ticketKey: "pqcc_attendee", percent: 40, thresholdPercent: 80 },
-      ],
-      decidedTicketKey: null,
-      current: null,
-    });
+    expect(trial.results).toEqual([
+      {
+        organizationName: "Example Vendor",
+        emailDomain: null,
+        answers: [
+          { ticketKey: "pqcc_vendor", percent: 60, thresholdPercent: 80 },
+          { ticketKey: "pqcc_attendee", percent: 40, thresholdPercent: 80 },
+        ],
+        decidedTicketKey: null,
+        current: null,
+        error: null,
+      },
+    ]);
     expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM ticket_classifier_decisions").first("n")).toBe(0);
 
     await storeClassifierDecision("example vendor", "", "pqcc_vendor");
-    const again = await testTicketOrganization(env.DB, classifier({ pqcc_vendor: 0.9 }), event, {
-      organizationName: "  Example   VENDOR ",
-    });
+    const [again] = (
+      await testTicketOrganizations(env.DB, classifier({ pqcc_vendor: 0.9 }), event, {
+        organizations: [{ organizationName: "  Example   VENDOR " }],
+      })
+    ).results;
     expect(again.decidedTicketKey).toBe("pqcc_vendor");
     expect(again.current).toEqual({ ticketKey: "pqcc_vendor", decidedBy: "classifier", confidencePercent: 91 });
   });
@@ -101,34 +106,38 @@ describe("ticket organizations", () => {
     const run = vi.fn(async (_model: string, _input: unknown) => ({
       answers: { ticket: { probabilities: { pqcc_vendor: 0.7, pqcc_attendee: 0.3 } } },
     }));
-    const trial = await testTicketOrganization(env.DB, { AI: { run } } as never, event, {
-      organizationName: "Example Vendor",
-      draft: {
-        ticketTypeId: vendor!.id,
-        key: "pqcc_vendor",
-        classifierDescription: "Builds cryptographic products for sale.",
-        classifierThresholdPercent: 60,
-        active: true,
-      },
-    });
+    const [trial] = (
+      await testTicketOrganizations(env.DB, { AI: { run } } as never, event, {
+        organizations: [{ organizationName: "Example Vendor" }],
+        draft: {
+          ticketTypeId: vendor!.id,
+          key: "pqcc_vendor",
+          classifierDescription: "Builds cryptographic products for sale.",
+          classifierThresholdPercent: 60,
+          active: true,
+        },
+      })
+    ).results;
     // The drafted threshold decides, and the drafted text is what the model reads.
     expect(trial.decidedTicketKey).toBe("pqcc_vendor");
-    expect(trial.answers[0]).toEqual({ ticketKey: "pqcc_vendor", percent: 70, thresholdPercent: 60 });
+    expect(trial.answers?.[0]).toEqual({ ticketKey: "pqcc_vendor", percent: 70, thresholdPercent: 60 });
     expect(JSON.stringify(run.mock.calls[0]?.[1])).toContain("Builds cryptographic products for sale.");
     expect(JSON.stringify(run.mock.calls[0]?.[1])).not.toContain("Sells cryptography.");
 
     // A ticket not added yet is asked about beside the saved ones.
-    const added = await testTicketOrganization(env.DB, classifier({ pqcc_student: 0.95 }), event, {
-      organizationName: "Example University",
-      draft: {
-        ticketTypeId: null,
-        key: "pqcc_student",
-        classifierDescription: "A university or school.",
-        classifierThresholdPercent: 80,
-        active: true,
-      },
-    });
-    expect(added.answers.map((answer) => answer.ticketKey).sort()).toEqual([
+    const [added] = (
+      await testTicketOrganizations(env.DB, classifier({ pqcc_student: 0.95 }), event, {
+        organizations: [{ organizationName: "Example University" }],
+        draft: {
+          ticketTypeId: null,
+          key: "pqcc_student",
+          classifierDescription: "A university or school.",
+          classifierThresholdPercent: 80,
+          active: true,
+        },
+      })
+    ).results;
+    expect(added.answers?.map((answer) => answer.ticketKey).sort()).toEqual([
       "pqcc_attendee",
       "pqcc_student",
       "pqcc_vendor",
@@ -140,7 +149,7 @@ describe("ticket organizations", () => {
   it("refuses a test when the classifier does not answer", async () => {
     const { event } = await seedTickets();
     await expect(
-      testTicketOrganization(env.DB, {}, event, { organizationName: "Example Vendor" }),
+      testTicketOrganizations(env.DB, {}, event, { organizations: [{ organizationName: "Example Vendor" }] }),
     ).rejects.toMatchObject({ status: 503 });
   });
 
@@ -148,10 +157,8 @@ describe("ticket organizations", () => {
     const { event, admin } = await seedTickets();
     await storeClassifierDecision("example vendor", "vendor-example.test", "pqcc_attendee");
     await storeClassifierDecision("example university", "", "pqcc_attendee");
-    await decideTicketOrganization(env.DB, admin, event, {
-      organizationName: "Example Vendor",
-      emailDomain: "Vendor-Example.test",
-      ticketKey: "pqcc_vendor",
+    await decideTicketOrganizations(env.DB, admin, event, {
+      decisions: [{ organizationName: "Example Vendor", emailDomain: "Vendor-Example.test", ticketKey: "pqcc_vendor" }],
     });
 
     const all = await listTicketOrganizations(env.DB, event, query({ sort: "organization" }));
@@ -192,24 +199,25 @@ describe("ticket organizations", () => {
   it("refuses a decision for a ticket the event does not offer", async () => {
     const { event, admin } = await seedTickets();
     await expect(
-      decideTicketOrganization(env.DB, admin, event, { organizationName: "Example Vendor", ticketKey: "pqcc_speaker" }),
+      decideTicketOrganizations(env.DB, admin, event, {
+        decisions: [{ organizationName: "Example Vendor", ticketKey: "pqcc_speaker" }],
+      }),
     ).rejects.toMatchObject({ status: 409 });
   });
 
   it("clears every decision that counts for an organization", async () => {
     const { event, admin } = await seedTickets();
     await storeClassifierDecision("example vendor", "", "pqcc_attendee");
-    await decideTicketOrganization(env.DB, admin, event, {
-      organizationName: "Example Vendor",
-      ticketKey: "pqcc_vendor",
+    await decideTicketOrganizations(env.DB, admin, event, {
+      decisions: [{ organizationName: "Example Vendor", ticketKey: "pqcc_vendor" }],
     });
     await storeClassifierDecision("example university", "", "pqcc_attendee");
     const [vendor] = (await listTicketOrganizations(env.DB, event, query({ decidedBy: "organizer" }))).organizations;
 
-    await clearTicketOrganizationDecision(env.DB, admin, event, vendor.id);
+    await clearTicketOrganizationDecision(env.DB, admin, event, vendor.id!);
     const left = await listTicketOrganizations(env.DB, event, query());
     expect(left.organizations.map((row) => row.organizationName)).toEqual(["example university"]);
-    await expect(clearTicketOrganizationDecision(env.DB, admin, event, vendor.id)).rejects.toMatchObject({
+    await expect(clearTicketOrganizationDecision(env.DB, admin, event, vendor.id!)).rejects.toMatchObject({
       status: 404,
     });
   });
@@ -226,9 +234,8 @@ describe("ticket organizations", () => {
         model: null,
       }),
     ]);
-    await decideTicketOrganization(env.DB, admin, event, {
-      organizationName: "Example Vendor",
-      ticketKey: "pqcc_vendor",
+    await decideTicketOrganizations(env.DB, admin, event, {
+      decisions: [{ organizationName: "Example Vendor", ticketKey: "pqcc_vendor" }],
     });
     const rows = await env.DB.prepare(
       "SELECT ticket_key FROM ticket_classifier_decisions WHERE organization_name = 'example vendor' AND source = 'organizer'",
@@ -265,13 +272,11 @@ describe("ticket organizations", () => {
       events.push(event);
     }
     const [firstEvent, secondEvent] = events;
-    await decideTicketOrganization(env.DB, admin, firstEvent, {
-      organizationName: "Example Vendor",
-      ticketKey: "first_vendor",
+    await decideTicketOrganizations(env.DB, admin, firstEvent, {
+      decisions: [{ organizationName: "Example Vendor", ticketKey: "first_vendor" }],
     });
-    await decideTicketOrganization(env.DB, admin, secondEvent, {
-      organizationName: "Example Vendor",
-      ticketKey: "second_attendee",
+    await decideTicketOrganizations(env.DB, admin, secondEvent, {
+      decisions: [{ organizationName: "Example Vendor", ticketKey: "second_attendee" }],
     });
     const tickets = async (event: { id: string; timezone: string }) =>
       (await listTicketOrganizations(env.DB, event, query())).organizations.map((row) => row.ticketKey);
@@ -308,7 +313,7 @@ describe("ticket organizations", () => {
         {
           method: "POST",
           headers,
-          body: JSON.stringify({ organizationName: "Example Vendor", ticketKey: "pqcc_attendee" }),
+          body: JSON.stringify({ decisions: [{ organizationName: "Example Vendor", ticketKey: "pqcc_attendee" }] }),
         },
       ],
     ] as const)
@@ -332,8 +337,108 @@ describe("ticket organizations", () => {
     const decided = await callApi(env, `${path}/decisions`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ organizationName: "Example Vendor", ticketKey: "pqcc_vendor" }),
+      body: JSON.stringify({ decisions: [{ organizationName: "Example Vendor", ticketKey: "pqcc_vendor" }] }),
     });
     expect(decided.status).toBe(200);
+  });
+
+  it("lists the portal's organizations with the decision that counts for each", async () => {
+    const { event, admin } = await seedTickets();
+    const now = "2026-11-01T00:00:00.000Z";
+    for (const [id, name, domain] of [
+      ["a0000000000000000000000000000001", "Alpha Secure", "alpha-secure.test"],
+      ["b0000000000000000000000000000002", "Beta Systems", "beta-systems.test"],
+    ])
+      await env.DB.batch([
+        env.DB.prepare(
+          "INSERT INTO organizations (id, name, normalized_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+        ).bind(id, name, name.toLowerCase(), now, now),
+        env.DB.prepare(
+          "INSERT INTO organization_domain_claims (id, domain, organization_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+        ).bind(`claim-${id}`, domain, id, now, now),
+      ]);
+    await decideTicketOrganizations(env.DB, admin, event, {
+      decisions: [{ organizationName: "Alpha Secure", emailDomain: "alpha-secure.test", ticketKey: "pqcc_vendor" }],
+    });
+    // A decision for the same name under another domain does not count for the portal organization.
+    await storeClassifierDecision("beta systems", "elsewhere.test", "pqcc_attendee");
+
+    const all = await listTicketOrganizations(env.DB, event, query({ among: "portal", sort: "organization" }));
+    expect(all.page.total).toBe(2);
+    expect(
+      all.organizations.map((row) => [
+        row.organizationId,
+        row.organizationName,
+        row.emailDomain,
+        row.ticketKey,
+        row.decidedBy,
+      ]),
+    ).toEqual([
+      ["a0000000000000000000000000000001", "Alpha Secure", "alpha-secure.test", "pqcc_vendor", "organizer"],
+      ["b0000000000000000000000000000002", "Beta Systems", "beta-systems.test", null, null],
+    ]);
+    expect(all.organizations[0]?.id).not.toBeNull();
+    expect(all.organizations[1]?.id).toBeNull();
+
+    const byDomain = await listTicketOrganizations(env.DB, event, query({ among: "portal", q: "beta-systems.test" }));
+    expect(byDomain.organizations.map((row) => row.organizationName)).toEqual(["Beta Systems"]);
+    const byName = await listTicketOrganizations(env.DB, event, query({ among: "portal", q: "alpha" }));
+    expect(byName.organizations.map((row) => row.organizationName)).toEqual(["Alpha Secure"]);
+    const decided = await listTicketOrganizations(env.DB, event, query({ among: "portal", decidedBy: "organizer" }));
+    expect(decided.organizations.map((row) => row.organizationName)).toEqual(["Alpha Secure"]);
+    const paged = await listTicketOrganizations(
+      env.DB,
+      event,
+      query({ among: "portal", sort: "organization", limit: 1, offset: 1 }),
+    );
+    expect(paged.page.total).toBe(2);
+    expect(paged.organizations.map((row) => row.organizationName)).toEqual(["Beta Systems"]);
+  });
+
+  it("tests several organizations and reports the one the classifier did not answer for", async () => {
+    const { event } = await seedTickets();
+    const run = vi.fn(async (_model: string, input: unknown) => {
+      if (JSON.stringify(input).includes("Flaky Co")) throw new Error("model down");
+      return { answers: { ticket: { probabilities: { pqcc_vendor: 0.9, pqcc_attendee: 0.1 } } } };
+    });
+    const { results } = await testTicketOrganizations(env.DB, { AI: { run } } as never, event, {
+      organizations: [{ organizationName: "Flaky Co" }, { organizationName: "Steady Co" }],
+    });
+    expect(results.map((result) => [result.organizationName, result.error, result.decidedTicketKey])).toEqual([
+      ["Flaky Co", "unavailable", null],
+      ["Steady Co", null, "pqcc_vendor"],
+    ]);
+    expect(results[0]?.answers).toBeNull();
+    await expect(
+      testTicketOrganizations(env.DB, {}, event, {
+        organizations: [{ organizationName: "A Co" }, { organizationName: "B Co" }],
+      }),
+    ).rejects.toMatchObject({ status: 503 });
+  });
+
+  it("saves several decisions together and refuses all of them when one ticket is not offered", async () => {
+    const { event, admin } = await seedTickets();
+    await decideTicketOrganizations(env.DB, admin, event, {
+      decisions: [
+        { organizationName: "First Co", ticketKey: "pqcc_vendor" },
+        { organizationName: "Second Co", ticketKey: "pqcc_attendee" },
+      ],
+    });
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM ticket_classifier_decisions").first("n")).toBe(2);
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'ticket_organization_decided'").first(
+        "n",
+      ),
+    ).toBe(2);
+
+    await expect(
+      decideTicketOrganizations(env.DB, admin, event, {
+        decisions: [
+          { organizationName: "Third Co", ticketKey: "pqcc_vendor" },
+          { organizationName: "Fourth Co", ticketKey: "pqcc_speaker" },
+        ],
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM ticket_classifier_decisions").first("n")).toBe(2);
   });
 });

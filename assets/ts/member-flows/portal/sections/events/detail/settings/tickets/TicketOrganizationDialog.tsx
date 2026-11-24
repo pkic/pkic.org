@@ -11,9 +11,11 @@ import type { EventTicketsConfiguration } from "../../../../../../../../shared/s
 import {
   eventTicketOrganizationDecisionSchema,
   eventTicketOrganizationTrialResponseSchema,
-  eventTicketOrganizationTrialSchema,
+  ticketOrganizationSubjectSchema,
   type EventTicketClassifierDraft,
-  type EventTicketOrganizationTrialResponse,
+  type EventTicketOrganizationDecisions,
+  type EventTicketOrganizationTrial,
+  type EventTicketOrganizationTrialResult,
 } from "../../../../../../../../shared/schemas/event-ticket-organizations";
 import { useContractForm } from "../../../../../../../hooks/useContractForm";
 import { Alert } from "../../../../../../../ui/Alert";
@@ -36,7 +38,7 @@ export interface TicketOrganizationStart {
   testOnOpen?: boolean;
 }
 
-function decidedBy(current: NonNullable<EventTicketOrganizationTrialResponse["current"]>): string {
+function decidedBy(current: NonNullable<EventTicketOrganizationTrialResult["current"]>): string {
   return current.decidedBy === "organizer"
     ? "by an organizer"
     : `by the classifier, ${String(current.confidencePercent ?? 0)}% sure`;
@@ -65,11 +67,11 @@ export function TicketOrganizationDialog({
   const [organizationName, setOrganizationName] = useState(start.organizationName);
   const [emailDomain, setEmailDomain] = useState(start.emailDomain);
   const [ticketKey, setTicketKey] = useState(start.ticketKey ?? "");
-  const [answer, setAnswer] = useState<EventTicketOrganizationTrialResponse | null>(null);
+  const [answer, setAnswer] = useState<EventTicketOrganizationTrialResult | null>(null);
   const [busy, setBusy] = useState<"testing" | "saving" | null>(null);
   const [error, setError] = useState("");
   const subject = { organizationName, emailDomain: emailDomain.trim() || undefined };
-  const test = useContractForm(eventTicketOrganizationTrialSchema, { ...subject, draft: draft?.input });
+  const test = useContractForm(ticketOrganizationSubjectSchema, subject);
   const save = useContractForm(eventTicketOrganizationDecisionSchema, {
     ...subject,
     ticketKey: ticketKey || undefined,
@@ -93,12 +95,15 @@ export function TicketOrganizationDialog({
     setBusy("testing");
     setError("");
     try {
-      const result = await postJson(
+      const body: EventTicketOrganizationTrial = { organizations: [checked.data], draft: draft?.input };
+      const { results } = await postJson(
         `${ticketsEndpoint(slug)}/organizations/trials`,
-        checked.data,
+        body,
         eventTicketOrganizationTrialResponseSchema,
       );
-      if (asked !== edits.current) return;
+      const result = results[0];
+      if (asked !== edits.current || !result) return;
+      if (!result.answers) return setError("The classifier did not answer. Try again.");
       setAnswer(result);
       setTicketKey(result.decidedTicketKey ?? result.current?.ticketKey ?? result.answers[0]?.ticketKey ?? "");
     } catch (cause) {
@@ -119,7 +124,8 @@ export function TicketOrganizationDialog({
     setBusy("saving");
     setError("");
     try {
-      await postJson(`${ticketsEndpoint(slug)}/organizations/decisions`, checked.data, successResponseSchema);
+      const body: EventTicketOrganizationDecisions = { decisions: [checked.data] };
+      await postJson(`${ticketsEndpoint(slug)}/organizations/decisions`, body, successResponseSchema);
       await onSaved(nameOf(checked.data.ticketKey));
     } catch (cause) {
       setError(save.refuse(cause));
@@ -134,7 +140,7 @@ export function TicketOrganizationDialog({
     if (start.testOnOpen && classifierOn) void latestTest.current();
   }, [start.testOnOpen, classifierOn]);
 
-  const percentOf = (key: string) => answer?.answers.find((entry) => entry.ticketKey === key);
+  const percentOf = (key: string) => answer?.answers?.find((entry) => entry.ticketKey === key);
   const decided = answer?.decidedTicketKey ? percentOf(answer.decidedTicketKey) : undefined;
   const handlers = {
     onInput: (event: Event) => {
@@ -227,7 +233,7 @@ export function TicketOrganizationDialog({
           answer && (
             <DescriptionList
               density="compact"
-              items={answer.answers.map((entry) => ({
+              items={(answer.answers ?? []).map((entry) => ({
                 key: entry.ticketKey,
                 term: nameOf(entry.ticketKey),
                 value: `${String(entry.percent)}% sure, ${String(entry.thresholdPercent)}% needed`,
