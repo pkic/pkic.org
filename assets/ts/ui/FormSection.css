@@ -105,7 +105,8 @@
    * Prose takes the row too. A biography or a description is read across a
    * measure, and a textarea in a half-width track is a column of five words.
    */
-  .pk-form-section__fields > .pk-field:has(textarea) {
+  .pk-form-section__fields > .pk-field:has(textarea),
+  .pk-form-section__fields > .pk-field:has(.pk-markdown-editor) {
     grid-column: 1 / -1;
   }
 }

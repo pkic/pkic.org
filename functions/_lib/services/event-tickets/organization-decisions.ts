@@ -9,6 +9,7 @@
  */
 import {
   eventTicketOrganizationListSchema,
+  type EventTicketClassifierDraft,
   type EventTicketOrganizationDecision,
   type EventTicketOrganizationListQuery,
   type EventTicketOrganizationTrial,
@@ -35,7 +36,7 @@ import {
   subjectKey,
   type TicketClassifierSubject,
 } from "./classifier";
-import { readEventTicketSnapshot } from "./snapshot";
+import { readEventTicketSnapshot, type TicketTypeRow } from "./snapshot";
 
 type TicketEvent = { id: string; timezone: string };
 
@@ -89,8 +90,8 @@ export async function listTicketOrganizations(
           ROW_NUMBER() OVER (PARTITION BY organization_name, email_domain ORDER BY ${scope.precedence}) AS rank
         FROM ticket_classifier_decisions WHERE ${scope.where})`,
       selectSql: "SELECT id, organization_name, email_domain, ticket_key, source, confidence, updated_at",
-      fromSql: `FROM counted WHERE rank = 1${decidedBy}${search ? ` AND (${search.sql})` : ""}`,
-      bindings: [...scope.bindings, ...(search?.bindings ?? [])],
+      fromSql: `FROM counted WHERE rank = 1${decidedBy}${query.ticketKey ? " AND ticket_key = ?" : ""}${search ? ` AND (${search.sql})` : ""}`,
+      bindings: [...scope.bindings, ...(query.ticketKey ? [query.ticketKey] : []), ...(search?.bindings ?? [])],
     },
     orderBy: resolveMappedOrderBy(
       query.sort,
@@ -115,6 +116,30 @@ export async function listTicketOrganizations(
   });
 }
 
+/** The event's tickets with an unsaved edit in place of the saved ticket, or beside them for a new one. */
+function withDraft(types: readonly TicketTypeRow[], draft: EventTicketClassifierDraft): TicketTypeRow[] {
+  const saved = draft.ticketTypeId === null ? undefined : types.find((type) => type.id === draft.ticketTypeId);
+  if (draft.ticketTypeId !== null && !saved)
+    throw new AppError(409, "EVENT_TICKETS_CHANGED", "This ticket is no longer available. Reload and try again.");
+  const edited: TicketTypeRow = {
+    id: "draft",
+    event_id: "",
+    name: "",
+    description_markdown: "",
+    is_default: 0,
+    free_requires_work_email: 0,
+    sort_order: types.length,
+    ...saved,
+    ticket_key: draft.key,
+    classifier_description: draft.classifierDescription,
+    classifier_threshold: draft.classifierThresholdPercent / 100,
+    active: draft.active ? 1 : 0,
+  };
+  // Another ticket with the drafted key would be asked about twice.
+  const others = types.filter((type) => type.id !== saved?.id && type.ticket_key !== draft.key);
+  return [...others, edited];
+}
+
 /** Asks the classifier as registration would, and stores nothing. */
 export async function testTicketOrganization(
   db: DatabaseLike,
@@ -122,7 +147,8 @@ export async function testTicketOrganization(
   event: TicketEvent,
   input: EventTicketOrganizationTrial,
 ): Promise<EventTicketOrganizationTrialResponse> {
-  const types = await readTypes(db, event);
+  const saved = await readTypes(db, event);
+  const types = input.draft ? withDraft(saved, input.draft) : saved;
   const options = classifierOptions(types);
   if (options.length < 2)
     throw new AppError(
@@ -133,7 +159,8 @@ export async function testTicketOrganization(
   const subject = subjectOf(input);
   const [asked, current] = await Promise.all([
     askTicketClassifier(env, options, subject),
-    readStoredTicketDecision(db, types, subject),
+    // The decision that counts now, under the saved tickets.
+    readStoredTicketDecision(db, saved, subject),
   ]);
   if (!asked) throw new AppError(503, "TICKET_CLASSIFIER_UNAVAILABLE", "The classifier did not answer. Try again.");
   const decided = decideClassifiedTicket(options, asked.probabilities);

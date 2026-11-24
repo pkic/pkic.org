@@ -1,4 +1,7 @@
-/** Add or change one ticket: its name, what people read about it, and who gets it. */
+/**
+ * Add or change one ticket: its name, what people read about it, and who gets
+ * it. "Who gets this ticket" can be tested as it is typed, before it is saved.
+ */
 import { useState } from "preact/hooks";
 import { postJson, putJson } from "../../../../../../../shared/api-client";
 import {
@@ -17,21 +20,22 @@ import { Panel, PanelBody, PanelHeader } from "../../../../../../../ui/Panel";
 import { Select, TextInput, Textarea } from "../../../../../../../ui/TextControl";
 import { EVENT_TICKET_STARTERS } from "../../../../../../../../shared/event-ticket-starters";
 import { DEFAULT_CLASSIFIER_THRESHOLD } from "../../../../../../../../shared/event-tickets";
+import { TicketOrganizationDialog } from "./TicketOrganizationDialog";
 import { ticketsEndpoint } from "./tickets-endpoint";
 
 export function TicketTypeEditor({
   slug,
   revision,
   type,
-  firstTicket,
+  tickets,
   onSaved,
   onCancel,
 }: {
   slug: string;
   revision: number;
   type?: EventTicketType;
-  /** The first ticket of an event is its default. */
-  firstTicket: boolean;
+  /** The event's tickets, which a test of this one is asked beside. */
+  tickets: readonly EventTicketType[];
   onSaved: () => Promise<void>;
   onCancel: () => void;
 }) {
@@ -42,12 +46,19 @@ export function TicketTypeEditor({
   const [threshold, setThreshold] = useState(
     String(type?.classifierThresholdPercent ?? Math.round(DEFAULT_CLASSIFIER_THRESHOLD * 100)),
   );
-  const [isDefault, setIsDefault] = useState(type?.isDefault ?? firstTicket);
+  const [isDefault, setIsDefault] = useState(type?.isDefault ?? tickets.length === 0);
   const [workEmail, setWorkEmail] = useState(type?.freeRequiresWorkEmail ?? false);
   const [active, setActive] = useState(type?.active ?? true);
   const [starterRevision, setStarterRevision] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [testing, setTesting] = useState(false);
+  // The first ticket of an event is its default.
+  const firstTicket = tickets.length === 0;
+  const others = tickets.filter((ticket) => ticket.id !== type?.id && ticket.active);
+  // The classifier chooses between described tickets, this one as it is now among them.
+  const classifierOn =
+    others.filter((ticket) => ticket.classifierDescription).length + (active && classifier.trim() ? 1 : 0) >= 2;
   const form = useContractForm(eventTicketTypeInputSchema, {
     expectedRevision: revision,
     key,
@@ -93,9 +104,9 @@ export function TicketTypeEditor({
     }
   }
   return (
-    <Panel aria-label={type ? `Edit ${type.name}` : "Add ticket"}>
+    <Panel aria-label={type ? `Edit ticket: ${type.name}` : "Add ticket"}>
       <form noValidate {...form.handlers} onSubmit={(submitEvent) => void save(submitEvent)}>
-        <PanelHeader title={type ? `Edit ${type.name}` : "Add ticket"}>
+        <PanelHeader title={type ? `Edit ticket: ${type.name}` : "Add ticket"}>
           <Button type="button" disabled={saving} onClick={onCancel}>
             Cancel
           </Button>
@@ -140,7 +151,6 @@ export function TicketTypeEditor({
                   {...control}
                   name="descriptionMarkdown"
                   label="Description"
-                  variant="compact"
                   initialValue={description}
                   onChange={setDescription}
                 />
@@ -154,13 +164,20 @@ export function TicketTypeEditor({
               help="Each organization is matched once against the descriptions of this event's tickets. Describe the organization, not the person: what it sells, runs or does, and the edge cases. Leave empty for a ticket that is only given with a code."
             >
               {(control) => (
-                <Textarea
-                  {...control}
-                  name="classifierDescription"
-                  rows={6}
-                  value={classifier}
-                  onInput={(event) => setClassifier(event.currentTarget.value)}
-                />
+                <div class="pk-stack pk-stack--tight">
+                  <Textarea
+                    {...control}
+                    name="classifierDescription"
+                    rows={6}
+                    value={classifier}
+                    onInput={(event) => setClassifier(event.currentTarget.value)}
+                  />
+                  <div>
+                    <Button type="button" variant="secondary" onClick={() => setTesting(true)}>
+                      Test an organization
+                    </Button>
+                  </div>
+                </div>
               )}
             </Field>
             <Field
@@ -223,6 +240,25 @@ export function TicketTypeEditor({
           {error && <Alert tone="danger">{error}</Alert>}
         </PanelBody>
       </form>
+      {testing && (
+        <TicketOrganizationDialog
+          slug={slug}
+          tickets={others}
+          classifierOn={classifierOn}
+          start={{ organizationName: "", emailDomain: "" }}
+          draft={{
+            name,
+            input: {
+              ticketTypeId: type?.id ?? null,
+              key,
+              classifierDescription: classifier,
+              classifierThresholdPercent: Number(threshold),
+              active,
+            },
+          }}
+          onClose={() => setTesting(false)}
+        />
+      )}
     </Panel>
   );
 }

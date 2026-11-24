@@ -2,8 +2,8 @@
  * Settings → Registration → Tickets, Codes and Payments: what registering
  * costs and who gets which ticket; the codes and sponsor passes that change
  * that; and how payment is chased. Each is its own tab over one configuration.
- * Editing prices, one ticket or the sponsor passes opens its own page under
- * its tab.
+ * Prices, one ticket and the sponsor passes each open their own page under
+ * their tab; a ticket opens to read first, with its editor below it.
  */
 import { useRef } from "preact/hooks";
 import { getJson } from "../../../../../../../shared/api-client";
@@ -35,11 +35,14 @@ import { TicketPaymentPanel } from "./TicketPaymentPanel";
 import { TicketPricesEditor } from "./TicketPricesEditor";
 import { TicketStepTextsPanel } from "./TicketStepTextsPanel";
 import { TicketTypeEditor } from "./TicketTypeEditor";
+import { TicketTypeView } from "./TicketTypeView";
 import { sortedPeriods, ticketPriceGrid } from "./ticket-price-grid";
 import { ticketsEndpoint } from "./tickets-endpoint";
 
 /** The segment below the tab where sponsor passes are edited. */
 const SPONSOR_PASSES_SEGMENT = "sponsor-passes";
+/** The segment below a ticket's page where it is edited. */
+const EDIT_SEGMENT = "edit";
 
 type TicketType = EventTicketsConfiguration["types"][number];
 
@@ -58,6 +61,7 @@ export function TicketsTab({
   canWrite,
   section = "tickets",
   detail,
+  segment,
   basePath,
 }: {
   slug: string;
@@ -67,6 +71,8 @@ export function TicketsTab({
   basePath?: string;
   /** The segment below the tab: `prices`, `new` or a ticket's id under Tickets; `sponsor-passes` under Codes. */
   detail?: string;
+  /** The page below that segment: `edit` under a ticket. */
+  segment?: string;
 }) {
   const [, navigate] = usePortalHashLocation();
   const codes = useRef<ApiTableActions | null>(null);
@@ -103,19 +109,40 @@ export function TicketsTab({
     return <TicketPaymentPanel slug={slug} configuration={data} canWrite={canWrite} onSaved={reload} />;
   if (canWrite && detail === "prices")
     return <TicketPricesEditor slug={slug} configuration={data} onSaved={done} onCancel={() => navigate(base)} />;
-  if (canWrite && detail) {
-    const type = data.types.find((candidate) => candidate.id === detail);
-    if (detail === "new" || type)
-      return (
-        <TicketTypeEditor
-          slug={slug}
-          revision={data.revision}
-          type={type}
-          firstTicket={data.types.length === 0}
-          onSaved={done}
-          onCancel={() => navigate(base)}
-        />
-      );
+  if (canWrite && detail === "new")
+    return (
+      <TicketTypeEditor
+        slug={slug}
+        revision={data.revision}
+        tickets={data.types}
+        onSaved={done}
+        onCancel={() => navigate(base)}
+      />
+    );
+  const type = detail ? data.types.find((candidate) => candidate.id === detail) : undefined;
+  if (type) {
+    const page = `${base}/${type.id}`;
+    return canWrite && segment === EDIT_SEGMENT ? (
+      <TicketTypeEditor
+        slug={slug}
+        revision={data.revision}
+        type={type}
+        tickets={data.types}
+        onSaved={async () => {
+          await reload();
+          navigate(page);
+        }}
+        onCancel={() => navigate(page)}
+      />
+    ) : (
+      <TicketTypeView
+        slug={slug}
+        configuration={data}
+        type={type}
+        editHref={canWrite ? usePortalHashLocation.hrefs(`${page}/${EDIT_SEGMENT}`) : undefined}
+        onChanged={reload}
+      />
+    );
   }
   const { currency } = data.settings;
   const grid = ticketPriceGrid(data);
@@ -204,11 +231,10 @@ export function TicketsTab({
             caption="Tickets"
             rows={data.types}
             rowKey={(row) => row.id}
-            rowAction={
-              canWrite
-                ? (row) => ({ label: `Edit ${row.name}`, href: usePortalHashLocation.hrefs(`${base}/${row.id}`) })
-                : undefined
-            }
+            rowAction={(row) => ({
+              label: `Open the ${row.name} ticket`,
+              href: usePortalHashLocation.hrefs(`${base}/${row.id}`),
+            })}
             columns={[
               {
                 id: "name",

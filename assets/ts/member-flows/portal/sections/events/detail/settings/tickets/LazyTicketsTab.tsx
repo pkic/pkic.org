@@ -13,6 +13,7 @@ export function LazyTicketsTab(props: {
   canWrite: boolean;
   section?: TicketSettingsSection;
   detail?: string;
+  segment?: string;
   basePath?: string;
 }) {
   return (

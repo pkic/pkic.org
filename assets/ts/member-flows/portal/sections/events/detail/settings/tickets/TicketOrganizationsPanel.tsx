@@ -38,9 +38,12 @@ export function TicketOrganizationsPanel({
   configuration,
   onChanged,
   loadOrganizations,
+  ticketKey,
 }: {
   slug: string;
   configuration: EventTicketsConfiguration;
+  /** Lists only the organizations that get this ticket, on the ticket's own page. */
+  ticketKey?: string;
   /** Told after a decision is saved or cleared, so the tickets' counts follow. */
   onChanged: () => Promise<void>;
   /** Replaces the request for the organizations, where there is no server to ask. */
@@ -89,6 +92,7 @@ export function TicketOrganizationsPanel({
       <ApiDataTable
         urlState="ticket-organizations"
         endpoint={endpoint}
+        params={ticketKey ? { ticketKey } : undefined}
         responseSchema={eventTicketOrganizationListSchema}
         resolve={(value) => value.organizations}
         resolvePage={(value) => value.page}
@@ -105,7 +109,7 @@ export function TicketOrganizationsPanel({
         rowKey={(row) => row.id}
         empty={
           <EmptyState
-            title="No organizations decided yet"
+            title={ticketKey ? "No organization gets this ticket yet" : "No organizations decided yet"}
             body="When someone registers, the classifier decides their organization's ticket if it is sure enough. Test an organization to see what it gives."
           />
         }
@@ -121,7 +125,15 @@ export function TicketOrganizationsPanel({
               </>
             ),
           },
-          { header: "Ticket", width: "fit", cell: (row) => nameOf(row.ticketKey) },
+          ...(ticketKey
+            ? []
+            : [
+                {
+                  header: "Ticket",
+                  width: "fit" as const,
+                  cell: (row: EventTicketOrganization) => nameOf(row.ticketKey),
+                },
+              ]),
           {
             header: "Decided by",
             width: "fit",

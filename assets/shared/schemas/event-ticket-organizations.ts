@@ -13,7 +13,13 @@ import {
 } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
-import { ticketKeySchema, ticketOrganizerAuth, ticketRouteJson, ticketRouteRefusals } from "./event-tickets";
+import {
+  eventTicketTypeInputSchema,
+  ticketKeySchema,
+  ticketOrganizerAuth,
+  ticketRouteJson,
+  ticketRouteRefusals,
+} from "./event-tickets";
 
 /** Who decided an organization's ticket: an organizer, or the classifier when it was sure enough. */
 export const TICKET_DECIDERS = ["organizer", "classifier"] as const;
@@ -37,7 +43,7 @@ export type EventTicketOrganization = z.infer<typeof eventTicketOrganizationSche
 
 export const eventTicketOrganizationListQuerySchema = listQuerySchema(["organization", "updated"] as const, {
   maxLimit: 100,
-}).extend({ decidedBy: ticketDeciderSchema.optional() });
+}).extend({ decidedBy: ticketDeciderSchema.optional(), ticketKey: ticketKeySchema.optional() });
 export type EventTicketOrganizationListQuery = z.infer<typeof eventTicketOrganizationListQuerySchema>;
 export const eventTicketOrganizationListSchema = paginatedResponseSchema(
   "organizations",
@@ -51,7 +57,18 @@ export const ticketOrganizationSubjectSchema = z.object({
   emailDomain: z.string().trim().max(253).optional(),
 });
 
-export const eventTicketOrganizationTrialSchema = ticketOrganizationSubjectSchema;
+/**
+ * A ticket's "who gets this ticket" as an organizer is still editing it. The test reads it in place of the saved
+ * ticket with the same id, or beside the saved tickets when the ticket is not added yet.
+ */
+export const eventTicketClassifierDraftSchema = eventTicketTypeInputSchema
+  .pick({ key: true, classifierDescription: true, classifierThresholdPercent: true, active: true })
+  .extend({ ticketTypeId: databaseIdSchema.nullable() });
+export type EventTicketClassifierDraft = z.infer<typeof eventTicketClassifierDraftSchema>;
+
+export const eventTicketOrganizationTrialSchema = ticketOrganizationSubjectSchema.extend({
+  draft: eventTicketClassifierDraftSchema.optional(),
+});
 export type EventTicketOrganizationTrial = z.infer<typeof eventTicketOrganizationTrialSchema>;
 
 export const eventTicketOrganizationTrialResponseSchema = z.object({

@@ -255,6 +255,7 @@ export function GroupEventSettingsTab({
           canWrite={canManage}
           section={detailId}
           detail={detailTab}
+          segment={detailSegment}
           basePath={`${settingsPath}/${detailId}`}
         />
       ) : detailId === "sponsors" && canManage ? (

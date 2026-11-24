@@ -1,7 +1,8 @@
 /**
  * Tests the classifier on one organization, as registration would ask it,
  * and saves the right ticket as an organizer's decision. A test stores
- * nothing; only Save does.
+ * nothing; only Save does. From the ticket editor it tests the ticket's
+ * unsaved "who gets this ticket" and saves nothing.
  */
 import { useEffect, useRef, useState } from "preact/hooks";
 import { postJson } from "../../../../../../../shared/api-client";
@@ -11,12 +12,14 @@ import {
   eventTicketOrganizationDecisionSchema,
   eventTicketOrganizationTrialResponseSchema,
   eventTicketOrganizationTrialSchema,
+  type EventTicketClassifierDraft,
   type EventTicketOrganizationTrialResponse,
 } from "../../../../../../../../shared/schemas/event-ticket-organizations";
 import { useContractForm } from "../../../../../../../hooks/useContractForm";
 import { Alert } from "../../../../../../../ui/Alert";
 import { Button } from "../../../../../../../ui/Button";
 import { Radio } from "../../../../../../../ui/Checkbox";
+import { DescriptionList } from "../../../../../../../ui/DescriptionList";
 import { Dialog } from "../../../../../../../ui/Dialog";
 import { Field } from "../../../../../../../ui/Field";
 import { TextInput } from "../../../../../../../ui/TextControl";
@@ -44,6 +47,7 @@ export function TicketOrganizationDialog({
   tickets,
   classifierOn,
   start,
+  draft,
   onClose,
   onSaved,
 }: {
@@ -53,8 +57,10 @@ export function TicketOrganizationDialog({
   /** Whether enough tickets describe who qualifies for the classifier to be tested. */
   classifierOn: boolean;
   start: TicketOrganizationStart;
+  /** A ticket as it is being edited: the test reads it in place of the saved one, and nothing is saved. */
+  draft?: { input: EventTicketClassifierDraft; name: string };
   onClose: () => void;
-  onSaved: (ticketName: string) => Promise<void>;
+  onSaved?: (ticketName: string) => Promise<void>;
 }) {
   const [organizationName, setOrganizationName] = useState(start.organizationName);
   const [emailDomain, setEmailDomain] = useState(start.emailDomain);
@@ -63,12 +69,13 @@ export function TicketOrganizationDialog({
   const [busy, setBusy] = useState<"testing" | "saving" | null>(null);
   const [error, setError] = useState("");
   const subject = { organizationName, emailDomain: emailDomain.trim() || undefined };
-  const test = useContractForm(eventTicketOrganizationTrialSchema, subject);
+  const test = useContractForm(eventTicketOrganizationTrialSchema, { ...subject, draft: draft?.input });
   const save = useContractForm(eventTicketOrganizationDecisionSchema, {
     ...subject,
     ticketKey: ticketKey || undefined,
   });
-  const nameOf = (key: string) => tickets.find((type) => type.key === key)?.name ?? key;
+  const nameOf = (key: string) =>
+    draft && key === draft.input.key ? draft.name : (tickets.find((type) => type.key === key)?.name ?? key);
   const fallback = tickets.find((type) => type.isDefault) ?? tickets[0];
 
   // Counts edits to the organization, so an answer for an earlier one is dropped.
@@ -102,7 +109,7 @@ export function TicketOrganizationDialog({
   }
 
   async function saveDecision() {
-    if (busy) return;
+    if (busy || !onSaved) return;
     const checked = save.submit();
     if (!checked.data) {
       // The organization fields show the test's checks, which hold the same rules.
@@ -143,21 +150,25 @@ export function TicketOrganizationDialog({
       save.handlers.onFocusOut(event);
     },
   };
+  const noneDecides = `No ticket reaches its threshold. ${draft ? "People" : "Unless you save one, people"} from this organization choose a ticket or get ${fallback?.name ?? "the default ticket"}.`;
   return (
     <Dialog
       open
       title={
-        !classifierOn
-          ? "Choose an organization's ticket"
-          : start.organizationName
-            ? "Check an organization's ticket"
-            : "Test an organization"
+        draft
+          ? `Test the ${draft.name || "new"} ticket`
+          : !classifierOn
+            ? "Choose an organization's ticket"
+            : start.organizationName
+              ? "Check an organization's ticket"
+              : "Test an organization"
       }
       closeLabel="Close dialog"
-      confirmLabel={ticketKey ? `Save ${nameOf(ticketKey)}` : "Save ticket"}
-      confirmDisabled={busy !== null}
-      cancelLabel="Close"
-      onConfirm={() => void saveDecision()}
+      description={draft ? "Tests the description as you have it now. Nothing is saved." : undefined}
+      confirmLabel={draft ? "Close" : ticketKey ? `Save ${nameOf(ticketKey)}` : "Save ticket"}
+      confirmDisabled={!draft && busy !== null}
+      cancelLabel={draft ? null : "Close"}
+      onConfirm={() => (draft ? onClose() : void saveDecision())}
       onCancel={onClose}
     >
       <form
@@ -212,32 +223,45 @@ export function TicketOrganizationDialog({
         ) : (
           <p class="pk-small pk-muted">To test the classifier, describe who qualifies for at least two tickets.</p>
         )}
-        <Field {...save.ofGroup("ticketKey")} label="Ticket" group required>
-          {() => (
-            <div class="pk-stack pk-stack--tight">
-              {tickets.map((type) => {
-                const entry = percentOf(type.key);
-                return (
-                  <Radio
-                    key={type.key}
-                    name="ticketKey"
-                    value={type.key}
-                    checked={ticketKey === type.key}
-                    label={type.name}
-                    hint={entry ? `Classifier: ${String(entry.percent)}% sure` : undefined}
-                    onChange={() => setTicketKey(type.key)}
-                  />
-                );
-              })}
-            </div>
-          )}
-        </Field>
+        {draft ? (
+          answer && (
+            <DescriptionList
+              density="compact"
+              items={answer.answers.map((entry) => ({
+                key: entry.ticketKey,
+                term: nameOf(entry.ticketKey),
+                value: `${String(entry.percent)}% sure, ${String(entry.thresholdPercent)}% needed`,
+              }))}
+            />
+          )
+        ) : (
+          <Field {...save.ofGroup("ticketKey")} label="Ticket" group required>
+            {() => (
+              <div class="pk-stack pk-stack--tight">
+                {tickets.map((type) => {
+                  const entry = percentOf(type.key);
+                  return (
+                    <Radio
+                      key={type.key}
+                      name="ticketKey"
+                      value={type.key}
+                      checked={ticketKey === type.key}
+                      label={type.name}
+                      hint={entry ? `Classifier: ${String(entry.percent)}% sure` : undefined}
+                      onChange={() => setTicketKey(type.key)}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </Field>
+        )}
         {answer && (
           <p class="pk-small pk-muted">
             {answer.current && `Now ${nameOf(answer.current.ticketKey)}, decided ${decidedBy(answer.current)}. `}
             {decided && answer.decidedTicketKey
               ? `The classifier gives ${nameOf(answer.decidedTicketKey)}: ${String(decided.percent)}% sure, and ${String(decided.thresholdPercent)}% is enough.`
-              : `No ticket reaches its threshold. Unless you save one, people from this organization choose a ticket or get ${fallback?.name ?? "the default ticket"}.`}
+              : noneDecides}
           </p>
         )}
         {error && <Alert tone="danger">{error}</Alert>}

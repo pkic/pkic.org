@@ -93,6 +93,50 @@ describe("ticket organizations", () => {
     expect(again.current).toEqual({ ticketKey: "pqcc_vendor", decidedBy: "classifier", confidencePercent: 91 });
   });
 
+  it("tests a ticket's unsaved description in place of the saved one", async () => {
+    const { event } = await seedTickets();
+    const vendor = await env.DB.prepare("SELECT id FROM event_ticket_types WHERE ticket_key = 'pqcc_vendor'").first<{
+      id: string;
+    }>();
+    const run = vi.fn(async (_model: string, _input: unknown) => ({
+      answers: { ticket: { probabilities: { pqcc_vendor: 0.7, pqcc_attendee: 0.3 } } },
+    }));
+    const trial = await testTicketOrganization(env.DB, { AI: { run } } as never, event, {
+      organizationName: "Example Vendor",
+      draft: {
+        ticketTypeId: vendor!.id,
+        key: "pqcc_vendor",
+        classifierDescription: "Builds cryptographic products for sale.",
+        classifierThresholdPercent: 60,
+        active: true,
+      },
+    });
+    // The drafted threshold decides, and the drafted text is what the model reads.
+    expect(trial.decidedTicketKey).toBe("pqcc_vendor");
+    expect(trial.answers[0]).toEqual({ ticketKey: "pqcc_vendor", percent: 70, thresholdPercent: 60 });
+    expect(JSON.stringify(run.mock.calls[0]?.[1])).toContain("Builds cryptographic products for sale.");
+    expect(JSON.stringify(run.mock.calls[0]?.[1])).not.toContain("Sells cryptography.");
+
+    // A ticket not added yet is asked about beside the saved ones.
+    const added = await testTicketOrganization(env.DB, classifier({ pqcc_student: 0.95 }), event, {
+      organizationName: "Example University",
+      draft: {
+        ticketTypeId: null,
+        key: "pqcc_student",
+        classifierDescription: "A university or school.",
+        classifierThresholdPercent: 80,
+        active: true,
+      },
+    });
+    expect(added.answers.map((answer) => answer.ticketKey).sort()).toEqual([
+      "pqcc_attendee",
+      "pqcc_student",
+      "pqcc_vendor",
+    ]);
+    expect(added.decidedTicketKey).toBe("pqcc_student");
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM event_ticket_types").first("n")).toBe(2);
+  });
+
   it("refuses a test when the classifier does not answer", async () => {
     const { event } = await seedTickets();
     await expect(
