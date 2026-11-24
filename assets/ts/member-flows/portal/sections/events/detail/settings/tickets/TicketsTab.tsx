@@ -31,6 +31,7 @@ import { SponsorPassesEditor } from "./SponsorPassesEditor";
 import { SponsorPassesPanel } from "./SponsorPassesPanel";
 import { TicketCodesPanel } from "./TicketCodesPanel";
 import { TicketOrganizationsPanel } from "./TicketOrganizationsPanel";
+import { TicketOrganizationsWorkbench } from "./TicketOrganizationsWorkbench";
 import { TicketPaymentPanel } from "./TicketPaymentPanel";
 import { TicketPricesEditor } from "./TicketPricesEditor";
 import { TicketStepTextsPanel } from "./TicketStepTextsPanel";
@@ -43,6 +44,8 @@ import { ticketsEndpoint } from "./tickets-endpoint";
 const SPONSOR_PASSES_SEGMENT = "sponsor-passes";
 /** The segment below a ticket's page where it is edited. */
 const EDIT_SEGMENT = "edit";
+/** The segment below the tab where every portal organization's ticket is tested and decided. */
+export const ORGANIZATIONS_SEGMENT = "organizations";
 
 type TicketType = EventTicketsConfiguration["types"][number];
 
@@ -109,6 +112,8 @@ export function TicketsTab({
     return <TicketPaymentPanel slug={slug} configuration={data} canWrite={canWrite} onSaved={reload} />;
   if (canWrite && detail === "prices")
     return <TicketPricesEditor slug={slug} configuration={data} onSaved={done} onCancel={() => navigate(base)} />;
+  if (canWrite && detail === ORGANIZATIONS_SEGMENT && data.types.filter((type) => type.active).length >= 2)
+    return <TicketOrganizationsWorkbench slug={slug} configuration={data} onChanged={reload} />;
   if (canWrite && detail === "new")
     return (
       <TicketTypeEditor
@@ -278,7 +283,12 @@ export function TicketsTab({
       </Panel>
       {/* A decision chooses between tickets, so it needs two on offer. */}
       {canWrite && data.types.filter((type) => type.active).length >= 2 && (
-        <TicketOrganizationsPanel slug={slug} configuration={data} onChanged={reload} />
+        <TicketOrganizationsPanel
+          slug={slug}
+          configuration={data}
+          onChanged={reload}
+          workbenchHref={usePortalHashLocation.hrefs(`${base}/${ORGANIZATIONS_SEGMENT}`)}
+        />
       )}
       <TicketStepTextsPanel slug={slug} configuration={data} canWrite={canWrite} onSaved={reload} />
     </div>

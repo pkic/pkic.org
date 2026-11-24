@@ -16,6 +16,7 @@ import {
 import { ApiDataTable, type ApiTableActions } from "../../../../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../../../../components/ConfirmDialog";
 import type { CollectionLoader } from "../../../../../../../hooks/useServerCollection";
+import { ButtonLink } from "../../../../../../../ui/Button";
 import { EmptyState } from "../../../../../../../ui/EmptyState";
 import { Panel, PanelHeader } from "../../../../../../../ui/Panel";
 import { RowActions } from "../../../../../../../ui/RowActions";
@@ -40,11 +41,14 @@ export function TicketOrganizationsPanel({
   onChanged,
   loadOrganizations,
   ticketKey,
+  workbenchHref,
 }: {
   slug: string;
   configuration: EventTicketsConfiguration;
   /** Lists only the organizations that get this ticket, on the ticket's own page. */
   ticketKey?: string;
+  /** The page that lists every portal organization, to test and decide many at once. */
+  workbenchHref?: string;
   /** Told after a decision is saved or cleared, so the tickets' counts follow. */
   onChanged: () => Promise<void>;
   /** Replaces the request for the organizations, where there is no server to ask. */
@@ -90,7 +94,9 @@ export function TicketOrganizationsPanel({
     });
   return (
     <Panel aria-label="Organizations">
-      <PanelHeader title="Organizations" />
+      <PanelHeader title="Organizations">
+        {workbenchHref && <ButtonLink href={workbenchHref}>Find organizations</ButtonLink>}
+      </PanelHeader>
       <ApiDataTable
         urlState="ticket-organizations"
         endpoint={endpoint}
