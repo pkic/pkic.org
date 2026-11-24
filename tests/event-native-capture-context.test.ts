@@ -1,5 +1,5 @@
 import { withScannedInput } from "./helpers/scanned-input";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import { eventSeriesResponseSchema } from "../assets/shared/schemas/event-series";
 import { nativeEventCaptureContextSchema } from "../assets/shared/schemas/event-attendance-capture";
@@ -166,23 +166,30 @@ describe("Native meeting event-wide captured calendar context", () => {
     const [operator] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email='admin@pkic.org'");
     operatorId = operator.id;
     token = await createAdminSession(env.DB, operatorId, crypto.randomUUID());
-    const created = await request(`/api/v1/groups/${groupId}/meetings/series`, {
-      eventName: "Native capture meeting",
-      eventSlug: "native-capture",
-      profileKey: "meeting",
-      policy: {
-        registrationPolicy: "optional",
-        memberEligibility: "owner_group",
-        guestPolicy: "occurrence_invitation",
-      },
-      startsAt: observedAt,
-      recurrenceRule: "FREQ=DAILY;COUNT=2",
-      timezone: nativeEventContext.timeZone,
-      durationMinutes: 45,
-      providerType: null,
-    });
-    expect(created.status, await created.clone().text()).toBe(201);
-    eventId = eventSeriesResponseSchema.parse(await created.json()).series.eventId;
+    // Create the series while both occurrences are inside the rolling calendar window.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(observedAt));
+    try {
+      const created = await request(`/api/v1/groups/${groupId}/meetings/series`, {
+        eventName: "Native capture meeting",
+        eventSlug: "native-capture",
+        profileKey: "meeting",
+        policy: {
+          registrationPolicy: "optional",
+          memberEligibility: "owner_group",
+          guestPolicy: "occurrence_invitation",
+        },
+        startsAt: observedAt,
+        recurrenceRule: "FREQ=DAILY;COUNT=2",
+        timezone: nativeEventContext.timeZone,
+        durationMinutes: 45,
+        providerType: null,
+      });
+      expect(created.status, await created.clone().text()).toBe(201);
+      eventId = eventSeriesResponseSchema.parse(await created.json()).series.eventId;
+    } finally {
+      vi.useRealTimers();
+    }
     userId = await insertUser(env.DB, "native-attendee@example.test");
     registrationId = crypto.randomUUID();
     await env.DB.prepare(
