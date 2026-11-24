@@ -35,6 +35,20 @@ async function call(token: string, path: string, init: RequestInit = {}): Promis
   return callApi(env, request(token, path, init));
 }
 
+function cookieRequest(token: string, path: string, init: RequestInit = {}): Request {
+  const headers = new Headers(init.headers);
+  headers.set("cookie", `pkic_session=${token}`);
+  return new Request(`https://app.test${path}`, { ...init, headers });
+}
+
+const crossOriginBrowserCases: Array<[string, Headers]> = [
+  [
+    "a same-site preview Origin",
+    new Headers({ origin: "https://malicious.preview.pkic.org", "sec-fetch-site": "same-site" }),
+  ],
+  ["same-site Fetch Metadata without Origin", new Headers({ "sec-fetch-site": "same-site" })],
+];
+
 async function insertUser(email: string): Promise<string> {
   const id = crypto.randomUUID();
   await env.DB.prepare(
@@ -991,6 +1005,47 @@ describe("roles (Built-in and custom roles)", () => {
       body: JSON.stringify({ roleId: "role-admin" }),
     });
     expect(allowed.status).toBe(201);
+  });
+
+  it.each(crossOriginBrowserCases)(
+    "refuses cookie-authenticated role assignment from %s",
+    async (_label, browserHeaders) => {
+      const headers = new Headers(browserHeaders);
+      headers.set("content-type", "text/plain");
+      const response = await callApi(
+        env,
+        cookieRequest(adminToken, `/api/v1/users/${staffUserId}/roles`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ roleId: "role-admin" }),
+        }),
+      );
+
+      expect(response.status).toBe(403);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM user_roles WHERE user_id = ? AND role_id = 'role-admin'", [staffUserId]),
+      ).toHaveLength(0);
+    },
+  );
+
+  it("preserves same-origin cookie-authenticated role assignment", async () => {
+    const response = await callApi(
+      env,
+      cookieRequest(adminToken, `/api/v1/users/${staffUserId}/roles`, {
+        method: "POST",
+        headers: {
+          origin: "https://app.test",
+          "sec-fetch-site": "same-origin",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ roleId: "role-admin" }),
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM user_roles WHERE user_id = ? AND role_id = 'role-admin'", [staffUserId]),
+    ).toHaveLength(1);
   });
 
   it("rolls back role creation when the actor loses a required permission before commit", async () => {

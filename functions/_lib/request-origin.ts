@@ -2,8 +2,9 @@ import { AppError } from "./errors";
 import { logError } from "./logging";
 
 /**
- * Rejects cross-site browser mutations. This is shared by public checkout
- * routes so origin policy cannot drift between payment products.
+ * Rejects cross-origin browser mutations. This is shared by authenticated API,
+ * public checkout, OAuth consent, and WebSocket boundaries so origin policy
+ * cannot drift between browser entry points.
  */
 export function assertSameOriginRequest(request: Request, expectedOrigin: string, operation: string): void {
   const secFetchSite = request.headers.get("sec-fetch-site");
