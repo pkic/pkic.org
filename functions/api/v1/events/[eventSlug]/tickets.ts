@@ -219,6 +219,7 @@ const RegistrationTicketReviewPost = openApiRoute(
     const { actor, db, event } = await requireEventPermission(c, data.params.eventSlug, "events:write");
     await reviewDisputedTicket(
       db,
+      c.env,
       actor,
       event,
       data.params.registrationId,

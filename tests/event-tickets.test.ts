@@ -17,7 +17,7 @@ import {
   eventTicketCodeListQuerySchema,
   eventTicketSponsorListQuerySchema,
 } from "../assets/shared/schemas/event-ticket-codes";
-import { seedEventAndAdmin } from "./helpers/context";
+import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createScheduledRegistration } from "./helpers/scheduled-registration";
 import { findOrCreateUser } from "../functions/_lib/services/users";
 import {
@@ -66,6 +66,7 @@ import {
   decideOrganizationTicket,
   prepareStoreTicketDecision,
 } from "../functions/_lib/services/event-tickets/classifier";
+import { decideTicketOrganizations } from "../functions/_lib/services/event-tickets/organization-decisions";
 import { readEventTicketSnapshot } from "../functions/_lib/services/event-tickets/snapshot";
 import { issueSponsorPassCodes, saveSponsorPasses } from "../functions/_lib/services/event-tickets/sponsor-passes";
 import { getRegistrationByIdForEvent } from "../functions/_lib/services/registrations/queries";
@@ -329,6 +330,29 @@ describe("event tickets", () => {
     expect(third.ticket).toMatchObject({ ticketName: "Vendor" });
   });
 
+  it("stores no classifier answer once an organizer decided while the model answered", async () => {
+    const { event, admin } = await seedTickets();
+    const organizationId = await organizationFor("raced-example.test");
+    const { types } = await readEventTicketSnapshot(env.DB, event);
+    const run = async () => {
+      await decideTicketOrganizations(env.DB, admin, event, {
+        decisions: [{ organizationId, ticketKey: "pqcc_attendee" }],
+      });
+      return { answers: { ticket: { probabilities: { pqcc_vendor: 0.97, pqcc_attendee: 0.03 } } } };
+    };
+    const decided = await decideOrganizationTicket(env.DB, { AI: { run } } as never, types, {
+      organizationId,
+      organizationName: "Raced Example",
+      domains: ["raced-example.test"],
+    });
+    expect(decided).toMatchObject({ ticketKey: "pqcc_attendee", source: "organizer" });
+    expect(
+      await queryAll(env.DB, "SELECT ticket_key, source FROM ticket_organization_decisions WHERE organization_id = ?", [
+        organizationId,
+      ]),
+    ).toEqual([{ ticket_key: "pqcc_attendee", source: "organizer" }]);
+  });
+
   it("asks no model and keeps no decision for a person without an organization or work address", async () => {
     const { event } = await seedTickets();
     const { types } = await readEventTicketSnapshot(env.DB, event);
@@ -480,6 +504,7 @@ describe("event tickets", () => {
       await expect(
         reviewDisputedTicket(
           replanned,
+          env,
           admin as UserBackedAuthAdmin,
           event,
           registration.id,
@@ -499,6 +524,7 @@ describe("event tickets", () => {
     });
     await reviewDisputedTicket(
       env.DB,
+      env,
       admin as UserBackedAuthAdmin,
       event,
       registration.id,
@@ -511,6 +537,47 @@ describe("event tickets", () => {
       amount: 39500,
       disputed: false,
     });
+  });
+
+  it("moves a person registered for no organization to the ticket their work domain is given", async () => {
+    const { event, admin } = await seedTickets();
+    const decided = classifier({ pqcc_vendor: 0.99, pqcc_attendee: 0.01 });
+    const email = "alone@vendor-example.test";
+    const user = await findOrCreateUser(env.DB, { email, firstName: "A", lastName: "B" });
+    await quoteEventTicket(
+      env.DB,
+      decided,
+      event,
+      { userId: user.id, email },
+      { dayAttendance: inPerson, ticketKey: "pqcc_attendee", disputeReason: "We only buy.", save: true },
+    );
+    const { registration } = await createScheduledRegistration(env.DB, {
+      event: { id: event.id },
+      userId: user.id,
+      sourceType: "direct",
+      verifiedIdentity: { userId: user.id },
+    });
+    const ticket = await planRegistrationTicket(env.DB, decided, {
+      event,
+      registrationId: registration.id,
+      userId: user.id,
+      email,
+      identityId: null,
+      dayAttendance: inPerson,
+    });
+    await env.DB.batch(ticket!.statements);
+    expect(await readRegistrationTicket(env.DB, { eventId: event.id, registrationId: registration.id })).toMatchObject({
+      disputed: true,
+      ticketKey: "pqcc_attendee",
+    });
+
+    await reviewDisputedTicket(env.DB, decided, admin, event, registration.id, "move", "https://example.test");
+    expect(await readRegistrationTicket(env.DB, { eventId: event.id, registrationId: registration.id })).toMatchObject({
+      ticketKey: "pqcc_vendor",
+      disputed: false,
+    });
+    // Nothing is stored for a person without an organization.
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM ticket_organization_decisions").first("n")).toBe(0);
   });
 
   it("counts a code's uses with the registration and refuses the one after the last", async () => {
@@ -750,7 +817,7 @@ describe("event tickets", () => {
       .bind(ticketId)
       .run();
     await expect(
-      reviewDisputedTicket(env.DB, admin, event, registration.id, "move", "https://example.test"),
+      reviewDisputedTicket(env.DB, env, admin, event, registration.id, "move", "https://example.test"),
     ).rejects.toMatchObject({ code: "TICKET_PAYMENT_UNDER_REVIEW" });
     expect(await paidEvent(ticketId, "cs_test_ticket", 19500, "evt_repeat_paid_after_dispute")).toMatchObject({
       outcome: "already_paid",
@@ -2461,6 +2528,7 @@ describe("event tickets", () => {
     });
     await reviewDisputedTicket(
       env.DB,
+      env,
       admin as UserBackedAuthAdmin,
       event,
       registration.id,

@@ -9,12 +9,12 @@ import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
 import { isStateGuardFailure, prepareStateGuard } from "../../db/authorization-guard";
 import { all, first } from "../../db/queries";
 import { AppError } from "../../errors";
-import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../../types";
+import type { DatabaseLike, Env, StatementLike, UserBackedAuthAdmin } from "../../types";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
 import { ticketReminderSchedule } from "../../../../assets/shared/event-tickets";
 import { priceTicket, readTicketPerson, ticketSubject } from "./assignment";
-import { prepareOrganizerTicketDecision, readStoredTicketDecision } from "./classifier";
+import { decideOrganizationTicket, prepareOrganizerTicketDecision } from "./classifier";
 import { prepareTicketPaymentEmail } from "./payment-emails";
 import { readRefundPolicy } from "./refund-policy";
 import { readEventTicketSnapshot } from "./snapshot";
@@ -35,6 +35,7 @@ interface DisputedTicketRow {
 
 export async function reviewDisputedTicket(
   db: DatabaseLike,
+  env: Pick<Env, "AI" | "TICKET_CLASSIFIER_MODEL">,
   actor: UserBackedAuthAdmin,
   event: { id: string; timezone: string },
   registrationId: string,
@@ -111,7 +112,9 @@ export async function reviewDisputedTicket(
       "TICKET_ALREADY_PAID",
       "This ticket is paid. Refund it first, then the person can register again.",
     );
-  const decided = await readStoredTicketDecision(db, snapshot.types, subject);
+  // An organization's stored decision; a person with no organization is judged by their work domain again, as at
+  // registration.
+  const decided = await decideOrganizationTicket(db, env, snapshot.types, subject);
   const type = decided && snapshot.types.find((candidate) => candidate.ticket_key === decided.ticketKey);
   if (!type) throw new AppError(409, "TICKET_DECISION_MISSING", "There is no decided ticket to move this person to.");
   const dayAttendance = await all<{ dayDate: string; attendanceType: string }>(

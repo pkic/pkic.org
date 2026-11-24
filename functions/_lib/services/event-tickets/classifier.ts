@@ -55,10 +55,13 @@ export function classifierOptions(types: readonly TicketTypeRow[]): TicketClassi
     }));
 }
 
-/** Every domain a portal organization is recognized by: its claimed domains and its people's verified ones. */
-export function organizationDomainsSql(organizationIdSql: string): string {
+/**
+ * The domains a portal organization is recognized by: its claimed domains and its people's verified ones. The model
+ * is given the first few; a list shows them all.
+ */
+export function organizationDomainsSql(organizationIdSql: string, limit: number | null = MAX_SUBJECT_DOMAINS): string {
   return `(SELECT group_concat(domain, ' ') FROM (SELECT DISTINCT LOWER(known.domain) AS domain
-      FROM (${organizationConnectionDomainsSql(organizationIdSql)}) known ORDER BY 1 LIMIT ${String(MAX_SUBJECT_DOMAINS)}))`;
+      FROM (${organizationConnectionDomainsSql(organizationIdSql)}) known ORDER BY 1${limit === null ? "" : ` LIMIT ${String(limit)}`}))`;
 }
 
 export function splitDomains(domains: string | null): string[] {
@@ -173,6 +176,29 @@ export function prepareStoreTicketDecision(
 }
 
 /**
+ * The classifier's answer, stored only while nothing has decided among these tickets and the organization is still
+ * in the portal. An organizer may decide, or the organization merge, while the model answers.
+ */
+function prepareClassifierTicketDecision(
+  db: DatabaseLike,
+  types: readonly TicketTypeRow[],
+  input: { organizationId: string; ticketKey: string; confidence: number; model: string },
+): StatementLike {
+  const scope = decisionsInScope(types);
+  const now = nowIso();
+  return db
+    .prepare(
+      `INSERT INTO ticket_organization_decisions
+         (id, organization_id, ticket_key, confidence, source, model, decided_by_user_id, created_at, updated_at)
+       SELECT ?, o.id, ?, ?, 'classifier', ?, NULL, ?, ? FROM organizations o
+       WHERE o.id = ? AND o.merged_into_organization_id IS NULL
+         AND NOT EXISTS (SELECT 1 FROM ticket_organization_decisions WHERE organization_id = o.id AND ${scope.where})
+       ON CONFLICT DO NOTHING`,
+    )
+    .bind(uuid(), input.ticketKey, input.confidence, input.model, now, now, input.organizationId, ...scope.bindings);
+}
+
+/**
  * An organizer's decision for an organization among the tickets on offer. It replaces every decision that counted
  * for those tickets, so the organizer's choice is the only one left there.
  */
@@ -270,14 +296,13 @@ export async function decideOrganizationTicket(
   const answer = { ticketKey: decided.key, source: "classifier" as const, confidence: decided.confidence };
   if (!subject.organizationId) return answer;
   await db.batch([
-    prepareStoreTicketDecision(db, {
+    prepareClassifierTicketDecision(db, types, {
       organizationId: subject.organizationId,
       ticketKey: decided.key,
-      source: "classifier",
       confidence: decided.confidence,
       model: asked.model,
     }),
   ]);
-  // An organizer may have decided while the answer was pending; their decision survived the write and is the one that counts.
+  // An organizer may have decided while the answer was pending; then nothing was written and their decision counts.
   return (await readStoredTicketDecision(db, types, subject)) ?? answer;
 }

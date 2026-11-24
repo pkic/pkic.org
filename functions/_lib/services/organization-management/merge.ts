@@ -389,15 +389,19 @@ export async function mergeOrganizations(
       WHERE organization_id=? AND EXISTS (SELECT 1 FROM ticket_organization_decisions kept
         WHERE kept.ticket_key=ticket_organization_decisions.ticket_key AND kept.organization_id=?)`)
       .bind(source.id, target.id),
+    // A decision keeps its own date, so a merge does not make an older organizer's choice the latest.
     authorizedDb
-      .prepare("UPDATE ticket_organization_decisions SET organization_id = ?, updated_at = ? WHERE organization_id = ?")
-      .bind(target.id, at, source.id),
-    // Codes keep working either way; a pass code moves unless the kept organization has its own for that event.
+      .prepare("UPDATE ticket_organization_decisions SET organization_id = ? WHERE organization_id = ?")
+      .bind(target.id, source.id),
+    // Every code moves and keeps working. Where the kept organization has its own pass code of that kind for the
+    // event, the moved one stays a plain code of that organization: its uses still count, its passes are not added.
     authorizedDb
-      .prepare(`UPDATE event_ticket_codes SET organization_id = ?, updated_at = ?
-      WHERE organization_id = ? AND (pass_kind IS NULL OR NOT EXISTS (SELECT 1 FROM event_ticket_codes kept
-        WHERE kept.organization_id = ? AND kept.event_id = event_ticket_codes.event_id AND kept.pass_kind = event_ticket_codes.pass_kind))`)
-      .bind(target.id, at, source.id, target.id),
+      .prepare(`UPDATE event_ticket_codes SET organization_id = ?, updated_at = ?,
+        pass_kind = CASE WHEN pass_kind IS NOT NULL AND EXISTS (SELECT 1 FROM event_ticket_codes kept
+          WHERE kept.organization_id = ? AND kept.event_id = event_ticket_codes.event_id AND kept.pass_kind = event_ticket_codes.pass_kind)
+          THEN NULL ELSE pass_kind END
+      WHERE organization_id = ?`)
+      .bind(target.id, at, target.id, source.id),
     authorizedDb
       .prepare(
         `INSERT INTO affiliation_offer_dismissals (id, user_id, organization_id, created_at)

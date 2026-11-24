@@ -22,6 +22,7 @@ import {
 import { decideClassifiedTicket } from "../../../../assets/shared/event-tickets";
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
+import { isStateGuardFailure, prepareStateGuard } from "../../db/authorization-guard";
 import { queryPage } from "../../db/pagination";
 import { first } from "../../db/queries";
 import { buildD1TextSearchFilter } from "../../db/search";
@@ -107,7 +108,7 @@ export async function listTicketOrganizations(
           ROW_NUMBER() OVER (PARTITION BY organization_id ORDER BY ${scope.precedence}) AS rank
         FROM ticket_organization_decisions WHERE ${scope.where})`,
       selectSql: `SELECT d.id AS id, o.id AS organization_id, o.name AS organization_name,
-        ${organizationDomainsSql("o.id")} AS domains,
+        ${organizationDomainsSql("o.id", null)} AS domains,
         d.ticket_key AS ticket_key, d.source AS source, d.confidence AS confidence, d.updated_at AS updated_at`,
       fromSql: `FROM organizations o ${portal ? "LEFT JOIN" : "JOIN"} counted d ON d.organization_id = o.id AND d.rank = 1
         WHERE ${where.join(" AND ")}`,
@@ -289,29 +290,50 @@ export async function decideTicketOrganizations(
   event: TicketEvent,
   input: EventTicketOrganizationDecisions,
 ): Promise<void> {
-  const types = await readTypes(db, event);
+  const snapshot = await readEventTicketSnapshot(db, event);
+  const types = snapshot.types;
   const offered = new Set(types.filter((type) => type.active === 1).map((type) => type.ticket_key));
   if (input.decisions.some((decision) => !offered.has(decision.ticketKey)))
     throw new AppError(409, "TICKET_NOT_OFFERED", "This event does not offer that ticket. Reload and choose another.");
-  const found = await readOrganizationSubjects(
-    db,
-    input.decisions.map((decision) => decision.organizationId),
-  );
-  if (input.decisions.some((decision) => !found.has(decision.organizationId)))
+  const organizationIds = [...new Set(input.decisions.map((decision) => decision.organizationId))];
+  const found = await readOrganizationSubjects(db, organizationIds);
+  if (organizationIds.some((id) => !found.has(id)))
     throw new AppError(
       404,
       "TICKET_ORGANIZATION_NOT_FOUND",
       "An organization is no longer in the portal. Reload the list and try again.",
     );
-  const statements = input.decisions.map((decision) =>
-    prepareTicketOrganizationDecision(db, actor, event, types, decision),
-  );
-  await db.batch([
+  await commitDecisionChange(db, [
     preparePermissionsAuthorizationGuard(db, actor, [
       { permission: "events:write", context: { type: "event", id: event.id } },
     ]),
-    ...statements.flat(),
+    // The tickets and organizations as they were checked: a ticket renamed or an organization merged meanwhile
+    // writes nothing.
+    prepareStateGuard(db, {
+      sql: "SELECT 1 WHERE COALESCE((SELECT revision FROM event_ticket_settings WHERE event_id = ?), 0) = ?",
+      bindings: [event.id, snapshot.settings?.revision ?? 0],
+    }),
+    prepareStateGuard(db, {
+      sql: `SELECT 1 WHERE (SELECT COUNT(*) FROM organizations
+              WHERE id IN (SELECT value FROM json_each(?)) AND merged_into_organization_id IS NULL) = ?`,
+      bindings: [JSON.stringify(organizationIds), organizationIds.length],
+    }),
+    ...input.decisions.flatMap((decision) => prepareTicketOrganizationDecision(db, actor, event, types, decision)),
   ]);
+}
+
+async function commitDecisionChange(db: DatabaseLike, statements: StatementLike[]): Promise<void> {
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    if (isStateGuardFailure(error))
+      throw new AppError(
+        409,
+        "TICKET_DECISIONS_CHANGED",
+        "The tickets or organizations changed meanwhile. Reload and try again.",
+      );
+    throw error;
+  }
 }
 
 /** Clears every decision that counts for the organization, so the next registration asks the classifier again. */
@@ -322,16 +344,21 @@ export async function clearTicketOrganizationDecision(
   decisionId: string,
 ): Promise<void> {
   const scope = decisionsInScope(await readTypes(db, event));
-  const row = await first<{ organization_id: string }>(
+  const row = await first<{ organization_id: string; updated_at: string }>(
     db,
-    `SELECT organization_id FROM ticket_organization_decisions WHERE id = ? AND ${scope.where}`,
+    `SELECT organization_id, updated_at FROM ticket_organization_decisions WHERE id = ? AND ${scope.where}`,
     [decisionId, ...scope.bindings],
   );
   if (!row) throw new AppError(404, "TICKET_DECISION_NOT_FOUND", "This event has no such decision. Reload the list.");
-  await db.batch([
+  await commitDecisionChange(db, [
     preparePermissionsAuthorizationGuard(db, actor, [
       { permission: "events:write", context: { type: "event", id: event.id } },
     ]),
+    // The decision as it was read: one replaced or moved by a merge meanwhile clears nothing.
+    prepareStateGuard(db, {
+      sql: "SELECT 1 FROM ticket_organization_decisions WHERE id = ? AND organization_id = ? AND updated_at = ?",
+      bindings: [decisionId, row.organization_id, row.updated_at],
+    }),
     db
       .prepare(`DELETE FROM ticket_organization_decisions WHERE organization_id = ? AND ${scope.where}`)
       .bind(row.organization_id, ...scope.bindings),

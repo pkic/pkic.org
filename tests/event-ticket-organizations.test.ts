@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
+import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { callApi } from "./helpers/app";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { seedEventAndAdmin } from "./helpers/context";
@@ -275,16 +276,21 @@ describe("ticket organizations", () => {
     const { event, admin } = await seedTickets();
     const vendor = await organization("Example Vendor");
     const university = await organization("Example University");
-    await storeClassifierDecision(vendor, "pqcc_attendee");
     await decideTicketOrganizations(env.DB, admin, event, {
       decisions: [{ organizationId: vendor, ticketKey: "pqcc_vendor" }],
     });
+    await storeClassifierDecision(vendor, "pqcc_attendee");
     await storeClassifierDecision(university, "pqcc_attendee");
+    const countFor = (organizationId: string) =>
+      env.DB.prepare("SELECT COUNT(*) AS n FROM ticket_organization_decisions WHERE organization_id = ?")
+        .bind(organizationId)
+        .first("n");
+    expect(await countFor(vendor)).toBe(2);
     const [listed] = (await listTicketOrganizations(env.DB, event, query({ decidedBy: "organizer" }))).organizations;
 
     await clearTicketOrganizationDecision(env.DB, admin, event, listed.id!);
-    const left = await listTicketOrganizations(env.DB, event, query());
-    expect(left.organizations.map((row) => row.organizationName)).toEqual(["Example University"]);
+    expect(await countFor(vendor)).toBe(0);
+    expect(await countFor(university)).toBe(1);
     await expect(clearTicketOrganizationDecision(env.DB, admin, event, listed.id!)).rejects.toMatchObject({
       status: 404,
     });
@@ -413,6 +419,65 @@ describe("ticket organizations", () => {
       body: JSON.stringify({ decisions: [{ organizationId: vendor, ticketKey: "pqcc_vendor" }] }),
     });
     expect(decided.status).toBe(200);
+    const before = await decisionCount();
+    const empty = await callApi(env, `${path}/decisions`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ decisions: [] }),
+    });
+    expect(empty.status).toBe(400);
+    expect(await decisionCount()).toBe(before);
+  });
+
+  it("saves nothing when the tickets or the organizations changed after they were checked", async () => {
+    const { event, admin } = await seedTickets();
+    const vendor = await organization("Example Vendor");
+    await organization("Example Vendor Group");
+    const writing = (sql: string) => sql.startsWith("DELETE FROM ticket_organization_decisions");
+    const changing = (sql: string) =>
+      mutateBeforeMatchingQuery(env.DB, writing, () => env.DB.prepare(sql).bind(vendor).run());
+    for (const sql of [
+      "UPDATE event_ticket_settings SET revision = revision + 1 WHERE ? IS NOT NULL",
+      `UPDATE organizations SET merged_into_organization_id = (SELECT id FROM organizations WHERE id <> ?1 LIMIT 1)
+        WHERE id = ?1`,
+    ])
+      await expect(
+        decideTicketOrganizations(changing(sql), admin, event, {
+          decisions: [{ organizationId: vendor, ticketKey: "pqcc_vendor" }],
+        }),
+      ).rejects.toMatchObject({ status: 409, code: "TICKET_DECISIONS_CHANGED" });
+    expect(await decisionCount()).toBe(0);
+  });
+
+  it("clears nothing when the decision was replaced after it was read", async () => {
+    const { event, admin } = await seedTickets();
+    const vendor = await organization("Example Vendor");
+    await decideTicketOrganizations(env.DB, admin, event, {
+      decisions: [{ organizationId: vendor, ticketKey: "pqcc_vendor" }],
+    });
+    const [listed] = (await listTicketOrganizations(env.DB, event, query())).organizations;
+    const replacing = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.startsWith("DELETE FROM ticket_organization_decisions"),
+      () =>
+        decideTicketOrganizations(env.DB, admin, event, {
+          decisions: [{ organizationId: vendor, ticketKey: "pqcc_attendee" }],
+        }),
+    );
+    await expect(clearTicketOrganizationDecision(replacing, admin, event, listed.id!)).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(await env.DB.prepare("SELECT ticket_key FROM ticket_organization_decisions").first("ticket_key")).toBe(
+      "pqcc_attendee",
+    );
+  });
+
+  it("lists every domain an organization is recognized by, though the classifier is given ten", async () => {
+    const { event } = await seedTickets();
+    const domains = Array.from({ length: 11 }, (_, index) => `d${String(index).padStart(2, "0")}.example.test`);
+    await organization("Many Domains", domains);
+    const listed = await listTicketOrganizations(env.DB, event, query({ among: "portal", q: "d10.example.test" }));
+    expect(listed.organizations.map((row) => row.domains)).toEqual([domains]);
   });
 
   it("lists the portal's organizations with the decision that counts for each", async () => {
