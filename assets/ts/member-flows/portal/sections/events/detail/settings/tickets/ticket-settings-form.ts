@@ -22,7 +22,8 @@ export function useTicketSettingsForm<Contract extends TicketSettingsContract>(
   contract: Contract,
   /** The revision of the saved settings; the draft keeps the one it was copied from. */
   revision: number,
-  fields: Omit<Parameters<typeof useContractForm<(typeof TICKET_SETTINGS_CONTRACTS)[Contract]>>[1], "expectedRevision">,
+  /** The draft as the panel holds it; the contract checks it, so it may still be invalid. */
+  fields: Record<string, unknown>,
   onSaved: () => Promise<void>,
   /** Puts the panel's own fields back to the saved values. */
   resetFields: () => void,

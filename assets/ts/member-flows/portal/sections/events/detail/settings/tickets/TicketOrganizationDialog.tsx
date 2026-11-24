@@ -264,7 +264,8 @@ export function TicketOrganizationDialog({
         )}
         {answer && (
           <p class="pk-small pk-muted">
-            {answer.current && `Now ${nameOf(answer.current.ticketKey)}, decided ${decidedBy(answer.current)}. `}
+            {answer.current?.ticketKey &&
+              `Now ${nameOf(answer.current.ticketKey)}, decided ${decidedBy(answer.current)}. `}
             {decided && answer.decidedTicketKey
               ? `The classifier gives ${nameOf(answer.decidedTicketKey)}: ${String(decided.percent)}% sure, and ${String(decided.thresholdPercent)}% is enough.`
               : noneDecides}

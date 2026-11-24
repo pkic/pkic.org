@@ -153,7 +153,7 @@ export function GroupEventSettingsTab({
             { key: "invitation", label: "Invitation" },
             { key: "terms", label: "Terms" },
             { key: "attendance-days", label: "Attendance days" },
-            { key: "sponsors", label: "Sponsor tiers" },
+            { key: "sponsors", label: "Sponsors" },
           ]}
           active={detailId ?? "registration"}
           hrefFor={(key) => `${settingsPath}/${key}`}
@@ -261,6 +261,7 @@ export function GroupEventSettingsTab({
       ) : detailId === "sponsors" && canManage ? (
         <LazySponsorTiersTab
           slug={event.slug}
+          eventId={event.id}
           canWrite={canManage}
           endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(event.id)}/sponsors/tiers`}
         />
