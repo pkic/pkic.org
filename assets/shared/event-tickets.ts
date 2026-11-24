@@ -220,10 +220,6 @@ export function decideClassifiedTicket(
 }
 
 /** One form for an organization name wherever a decision is keyed by it. */
-export function normalizeTicketOrganizationName(name: string | null | undefined): string {
-  return (name ?? "").normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
-}
-
 export const TICKET_STATUS_LABELS: Record<RegistrationTicketStatus, string> = {
   free: "Free",
   pending_payment: "Awaiting payment",

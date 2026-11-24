@@ -18,7 +18,14 @@ import { first } from "../../db/queries";
 import { workEmailDomain } from "../../email-domains/classification";
 import { AppError } from "../../errors";
 import type { DatabaseLike, Env } from "../../types";
-import { classifierOptions, decideOrganizationTicket, type StoredTicketDecision } from "./classifier";
+import {
+  classifierOptions,
+  decideOrganizationTicket,
+  organizationDomainsSql,
+  splitDomains,
+  type StoredTicketDecision,
+  type TicketClassifierSubject,
+} from "./classifier";
 import type { EventTicketSnapshot, TicketTypeRow } from "./snapshot";
 
 export interface TicketCodeRow {
@@ -35,7 +42,23 @@ export interface TicketCodeRow {
 export interface TicketPerson {
   userId: string;
   email: string;
+  /** The portal organization the person registers for; null when they register for none. */
+  organizationId: string | null;
   organizationName: string | null;
+  /** Every domain that organization is recognized by. */
+  organizationDomains: readonly string[];
+}
+
+/** What the classifier is asked about for a person: their organization, or their own work domain without one. */
+export function ticketSubject(person: TicketPerson): TicketClassifierSubject {
+  if (person.organizationId)
+    return {
+      organizationId: person.organizationId,
+      organizationName: person.organizationName,
+      domains: person.organizationDomains,
+    };
+  const domain = workEmailDomain(person.email);
+  return { organizationId: null, organizationName: null, domains: domain ? [domain] : [] };
 }
 
 export interface TicketRequest {
@@ -75,9 +98,16 @@ export async function readTicketPerson(
   db: DatabaseLike,
   input: { userId: string; accountEmail: string; identityId?: string | null },
 ): Promise<TicketPerson> {
-  const row = await first<{ organization_name: string | null; email: string | null }>(
+  const row = await first<{
+    organization_id: string | null;
+    organization_name: string | null;
+    organization_domains: string | null;
+    email: string | null;
+  }>(
     db,
-    `SELECT organization.name AS organization_name,
+    `SELECT organization.id AS organization_id, organization.name AS organization_name,
+            CASE WHEN organization.id IS NULL THEN NULL ELSE ${organizationDomainsSql("organization.id")} END
+              AS organization_domains,
             (SELECT address.email FROM user_emails address
              WHERE address.id = identity.email_id AND address.verified_at IS NOT NULL) AS email
      FROM identities identity LEFT JOIN organizations organization ON organization.id = identity.organization_id
@@ -89,7 +119,9 @@ export async function readTicketPerson(
   return {
     userId: input.userId,
     email: row?.email ?? input.accountEmail,
+    organizationId: row?.organization_id ?? null,
     organizationName: row?.organization_name ?? null,
+    organizationDomains: splitDomains(row?.organization_domains ?? null),
   };
 }
 
@@ -141,10 +173,7 @@ export async function resolveTicket(
     if (!type) throw new AppError(422, "TICKET_CODE_INVALID", "This code is not valid for this event.");
     return { type, source: "code", code, decision: null, disputeReason: null };
   }
-  const decision = await decideOrganizationTicket(db, env, active, {
-    organizationName: person.organizationName,
-    emailDomain: workEmailDomain(person.email),
-  });
+  const decision = await decideOrganizationTicket(db, env, active, ticketSubject(person));
   const selectable = selectableTicketTypes(active);
   const requested = request.ticketKey
     ? selectable.find((candidate) => candidate.ticket_key === request.ticketKey)

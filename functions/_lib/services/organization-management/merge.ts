@@ -383,6 +383,21 @@ export async function mergeOrganizations(
     authorizedDb
       .prepare("UPDATE sponsors SET organization_id = ?, updated_at = ? WHERE organization_id = ?")
       .bind(target.id, at, source.id),
+    // The kept organization's own ticket decision wins over the merged one's for the same question.
+    authorizedDb
+      .prepare(`DELETE FROM ticket_organization_decisions
+      WHERE organization_id=? AND EXISTS (SELECT 1 FROM ticket_organization_decisions kept
+        WHERE kept.criteria_sha256=ticket_organization_decisions.criteria_sha256 AND kept.organization_id=?)`)
+      .bind(source.id, target.id),
+    authorizedDb
+      .prepare("UPDATE ticket_organization_decisions SET organization_id = ?, updated_at = ? WHERE organization_id = ?")
+      .bind(target.id, at, source.id),
+    // Codes keep working either way; a pass code moves unless the kept organization has its own for that event.
+    authorizedDb
+      .prepare(`UPDATE event_ticket_codes SET organization_id = ?, updated_at = ?
+      WHERE organization_id = ? AND (pass_kind IS NULL OR NOT EXISTS (SELECT 1 FROM event_ticket_codes kept
+        WHERE kept.organization_id = ? AND kept.event_id = event_ticket_codes.event_id AND kept.pass_kind = event_ticket_codes.pass_kind))`)
+      .bind(target.id, at, source.id, target.id),
     authorizedDb
       .prepare(
         `INSERT INTO affiliation_offer_dismissals (id, user_id, organization_id, created_at)

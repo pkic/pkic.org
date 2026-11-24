@@ -245,7 +245,7 @@ export function TicketTypeEditor({
           slug={slug}
           tickets={others}
           classifierOn={classifierOn}
-          start={{ organizationName: "", emailDomain: "" }}
+          start={{ organizationName: "", domains: [] }}
           draft={{
             name,
             input: {

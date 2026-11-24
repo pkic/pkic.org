@@ -432,6 +432,30 @@ describe("merging a duplicate organization", () => {
     ).toMatchObject({ organizationId: ibm });
   });
 
+  it("moves ticket decisions to the organization that stays, keeping its own for the same question", async () => {
+    const kept = await insertOrganization(env.DB, "Example Vendor");
+    const duplicate = await insertOrganization(env.DB, "Example Vendor Group");
+    const decide = (id: string, organizationId: string, criteria: string, ticketKey: string) =>
+      env.DB.prepare(
+        `INSERT INTO ticket_organization_decisions (id, organization_id, criteria_sha256, ticket_key, source, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'organizer', ?, ?)`,
+      ).bind(id, organizationId, criteria, ticketKey, nowIso(), nowIso());
+    await env.DB.batch([
+      decide("kept-shared", kept, "shared-question", "vendor"),
+      decide("duplicate-shared", duplicate, "shared-question", "attendee"),
+      decide("duplicate-only", duplicate, "other-question", "vendor"),
+    ]);
+
+    const response = await merge(kept, organizationMergeCreateSchema.parse({ sourceOrganizationId: duplicate }));
+    expect(response.status, await response.clone().text()).toBe(201);
+    expect(
+      await queryAll(env.DB, "SELECT id, organization_id, ticket_key FROM ticket_organization_decisions ORDER BY id"),
+    ).toEqual([
+      { id: "duplicate-only", organization_id: kept, ticket_key: "vendor" },
+      { id: "kept-shared", organization_id: kept, ticket_key: "vendor" },
+    ]);
+  });
+
   it("refuses to move a membership: merge the other way, or confirm the source's membership ends", async () => {
     const member = await insertOrganization(env.DB, "Member Org");
     await seedOrganizationAggregate(env.DB, member, "A");

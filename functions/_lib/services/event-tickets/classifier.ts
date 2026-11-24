@@ -6,21 +6,22 @@
  * kind of ticket needs a description and no code. The model behind it is one
  * configuration value; nothing else in the application names it.
  *
- * A decision is made once for an organization name and email domain and
- * found again by the ticket key it chose. Tuning a description, a threshold or
+ * A decision is made once for a portal organization, from its name and every
+ * domain it is recognized by, and found again by the ticket key it chose. Tuning a description, a threshold or
  * the instructions keeps it, adding or removing another ticket keeps it, and
  * another event that offers the same ticket reuses it. An organizer's decision
- * is never replaced.
+ * is never replaced. A person who registers for no organization is asked
+ * about by their work domain each time, and nothing is stored for them.
  */
 import {
   decideClassifiedTicket,
-  normalizeTicketOrganizationName,
   ticketClassifierCriteria,
   type TicketClassifierOption,
 } from "../../../../assets/shared/event-tickets";
-import { first } from "../../db/queries";
+import { all, first } from "../../db/queries";
 import type { DatabaseLike, Env, StatementLike } from "../../types";
 import { logError } from "../../logging";
+import { organizationConnectionDomainsSql } from "../organization-management/read-model";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import type { TicketTypeRow } from "./snapshot";
@@ -29,9 +30,15 @@ import type { TicketTypeRow } from "./snapshot";
 const DEFAULT_CLASSIFIER_MODEL = "@cf/cloudflare/clef";
 const CLASSIFIER_TIMEOUT_MS = 4000;
 
+/** The most domains the model is given for one organization. */
+const MAX_SUBJECT_DOMAINS = 10;
+
 export interface TicketClassifierSubject {
+  /** The portal organization the decision is stored for; null for a person registering for no organization. */
+  organizationId: string | null;
   organizationName: string | null;
-  emailDomain: string | null;
+  /** The organization's recognized domains, or the person's own work domain when there is no organization. */
+  domains: readonly string[];
 }
 
 export interface StoredTicketDecision {
@@ -57,11 +64,34 @@ export async function ticketCriteriaDigest(options: readonly TicketClassifierOpt
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export function subjectKey(subject: TicketClassifierSubject) {
-  return {
-    organizationName: normalizeTicketOrganizationName(subject.organizationName),
-    emailDomain: (subject.emailDomain ?? "").trim().toLowerCase(),
-  };
+/** Every domain a portal organization is recognized by: its claimed domains and its people's verified ones. */
+export function organizationDomainsSql(organizationIdSql: string): string {
+  return `(SELECT group_concat(domain, ' ') FROM (SELECT DISTINCT LOWER(known.domain) AS domain
+      FROM (${organizationConnectionDomainsSql(organizationIdSql)}) known ORDER BY 1 LIMIT ${String(MAX_SUBJECT_DOMAINS)}))`;
+}
+
+export function splitDomains(domains: string | null): string[] {
+  return domains ? domains.split(" ").filter(Boolean) : [];
+}
+
+/** The portal organizations as the classifier is asked about them, in the order of the ids; missing ones are left out. */
+export async function readOrganizationSubjects(
+  db: DatabaseLike,
+  organizationIds: readonly string[],
+): Promise<Map<string, TicketClassifierSubject>> {
+  if (!organizationIds.length) return new Map();
+  const rows = await all<{ id: string; name: string; domains: string | null }>(
+    db,
+    `SELECT o.id, o.name, ${organizationDomainsSql("o.id")} AS domains
+     FROM organizations o WHERE o.id IN (SELECT value FROM json_each(?)) AND o.merged_into_organization_id IS NULL`,
+    [JSON.stringify(organizationIds)],
+  );
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      { organizationId: row.id, organizationName: row.name, domains: splitDomains(row.domains) },
+    ]),
+  );
 }
 
 /**
@@ -85,15 +115,14 @@ export async function readStoredTicketDecision(
   types: readonly TicketTypeRow[],
   subject: TicketClassifierSubject,
 ): Promise<StoredTicketDecision | null> {
-  const key = subjectKey(subject);
-  if (!key.organizationName && !key.emailDomain) return null;
+  if (!subject.organizationId) return null;
   const scope = decisionsInScope(types);
   const row = await first<{ ticket_key: string; source: string; confidence: number | null }>(
     db,
-    `SELECT ticket_key, source, confidence FROM ticket_classifier_decisions
-     WHERE organization_name = ? AND email_domain = ? AND ${scope.where}
+    `SELECT ticket_key, source, confidence FROM ticket_organization_decisions
+     WHERE organization_id = ? AND ${scope.where}
      ORDER BY ${scope.precedence} LIMIT 1`,
-    [key.organizationName, key.emailDomain, ...scope.bindings],
+    [subject.organizationId, ...scope.bindings],
   );
   return row
     ? {
@@ -110,8 +139,8 @@ export function prepareDecidedOrganizationCounts(db: DatabaseLike, types: readon
   return db
     .prepare(
       `SELECT ticket_key, COUNT(*) AS total FROM (
-         SELECT ticket_key, ROW_NUMBER() OVER (PARTITION BY organization_name, email_domain ORDER BY ${scope.precedence}) AS rank
-         FROM ticket_classifier_decisions WHERE ${scope.where}
+         SELECT ticket_key, ROW_NUMBER() OVER (PARTITION BY organization_id ORDER BY ${scope.precedence}) AS rank
+         FROM ticket_organization_decisions WHERE ${scope.where}
        ) WHERE rank = 1 GROUP BY ticket_key`,
     )
     .bind(...scope.bindings);
@@ -122,7 +151,7 @@ export function prepareStoreTicketDecision(
   db: DatabaseLike,
   input: {
     criteriaDigest: string;
-    subject: TicketClassifierSubject;
+    organizationId: string;
     ticketKey: string;
     source: "classifier" | "organizer";
     confidence: number | null;
@@ -130,23 +159,21 @@ export function prepareStoreTicketDecision(
     decidedByUserId?: string | null;
   },
 ): StatementLike {
-  const key = subjectKey(input.subject);
   const now = nowIso();
   return db
     .prepare(
-      `INSERT INTO ticket_classifier_decisions
-         (id, organization_name, email_domain, criteria_sha256, ticket_key, confidence, source, model,
+      `INSERT INTO ticket_organization_decisions
+         (id, organization_id, criteria_sha256, ticket_key, confidence, source, model,
           decided_by_user_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(criteria_sha256, organization_name, email_domain) DO UPDATE SET
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(criteria_sha256, organization_id) DO UPDATE SET
          ticket_key = excluded.ticket_key, confidence = excluded.confidence, source = excluded.source,
          model = excluded.model, decided_by_user_id = excluded.decided_by_user_id, updated_at = excluded.updated_at
-       WHERE excluded.source = 'organizer' OR ticket_classifier_decisions.source <> 'organizer'`,
+       WHERE excluded.source = 'organizer' OR ticket_organization_decisions.source <> 'organizer'`,
     )
     .bind(
       uuid(),
-      key.organizationName,
-      key.emailDomain,
+      input.organizationId,
       input.criteriaDigest,
       input.ticketKey,
       input.confidence,
@@ -180,7 +207,7 @@ export async function askTicketClassifier(
         model: model.split("/").pop(),
         state: {
           organization: subject.organizationName ?? "",
-          email_domain: subject.emailDomain ?? "",
+          domains: subject.domains.join(", "),
         },
         questions: {
           ticket: {
@@ -222,9 +249,8 @@ export async function decideOrganizationTicket(
   types: readonly TicketTypeRow[],
   subject: TicketClassifierSubject,
 ): Promise<StoredTicketDecision | null> {
-  // Nothing names an organization: no decision is kept for it and the model has nothing to judge.
-  const key = subjectKey(subject);
-  if (!key.organizationName && !key.emailDomain) return null;
+  // Nothing names an organization or a work domain: the model has nothing to judge.
+  if (!subject.organizationName && !subject.domains.length) return null;
   const options = classifierOptions(types);
   // An organizer's decision applies with or without a classifier, as dispute review and the counts show it; the
   // classifier's apply only to tickets it still describes.
@@ -235,10 +261,12 @@ export async function decideOrganizationTicket(
   if (!asked) return null;
   const decided = decideClassifiedTicket(options, asked.probabilities);
   if (!decided) return null;
+  const answer = { ticketKey: decided.key, source: "classifier" as const, confidence: decided.confidence };
+  if (!subject.organizationId) return answer;
   await db.batch([
     prepareStoreTicketDecision(db, {
       criteriaDigest: await ticketCriteriaDigest(options),
-      subject,
+      organizationId: subject.organizationId,
       ticketKey: decided.key,
       source: "classifier",
       confidence: decided.confidence,
@@ -246,11 +274,5 @@ export async function decideOrganizationTicket(
     }),
   ]);
   // An organizer may have decided while the answer was pending; their decision survived the write and is the one that counts.
-  return (
-    (await readStoredTicketDecision(db, types, subject)) ?? {
-      ticketKey: decided.key,
-      source: "classifier",
-      confidence: decided.confidence,
-    }
-  );
+  return (await readStoredTicketDecision(db, types, subject)) ?? answer;
 }

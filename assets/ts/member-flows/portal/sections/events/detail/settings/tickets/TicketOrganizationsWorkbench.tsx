@@ -31,8 +31,7 @@ import { ticketsEndpoint } from "./tickets-endpoint";
 type Row = EventTicketOrganization;
 type EventTicketOrganizationList = z.infer<typeof eventTicketOrganizationListSchema>;
 
-/** A portal organization is keyed by its id; every row in this list has one. */
-const keyOf = (row: Row) => row.organizationId ?? row.organizationName;
+const keyOf = (row: Row) => row.organizationId;
 
 function chunks<T>(items: readonly T[], size: number): T[][] {
   const result: T[][] = [];
@@ -87,10 +86,7 @@ export function TicketOrganizationsWorkbench({
         const response = await postJson(
           `${endpoint}/trials`,
           {
-            organizations: batch.map((row) => ({
-              organizationName: row.organizationName,
-              emailDomain: row.emailDomain || undefined,
-            })),
+            organizations: batch.map((row) => ({ organizationId: row.organizationId })),
           },
           eventTicketOrganizationTrialResponseSchema,
         );
@@ -113,9 +109,7 @@ export function TicketOrganizationsWorkbench({
     if (busy) return;
     const decisions = rows.flatMap((row) => {
       const ticketKey = results.get(keyOf(row))?.decidedTicketKey;
-      return ticketKey && ticketKey !== row.ticketKey
-        ? [{ organizationName: row.organizationName, emailDomain: row.emailDomain || undefined, ticketKey }]
-        : [];
+      return ticketKey && ticketKey !== row.ticketKey ? [{ organizationId: row.organizationId, ticketKey }] : [];
     });
     if (decisions.length === 0) return toast("No test answer to save. Test the organizations first.", "error");
     setBusy("saving");
@@ -140,6 +134,7 @@ export function TicketOrganizationsWorkbench({
   function testAnswer(row: Row) {
     const result = results.get(keyOf(row));
     if (!result) return "";
+    if (result.error === "not_found") return <span class="pk-muted">No longer in the portal</span>;
     if (result.error || !result.answers) return <span class="pk-muted">No answer. Test again.</span>;
     const top = result.answers[0];
     if (result.decidedTicketKey) {
@@ -220,7 +215,7 @@ export function TicketOrganizationsWorkbench({
             cell: (row) => (
               <>
                 <strong>{row.organizationName}</strong>
-                {row.emailDomain && <div class="pk-small pk-muted">{row.emailDomain}</div>}
+                {row.domains.length > 0 && <div class="pk-small pk-muted">{row.domains.join(", ")}</div>}
               </>
             ),
           },
@@ -270,8 +265,9 @@ export function TicketOrganizationsWorkbench({
                       label: "Choose ticket…",
                       onSelect: () =>
                         setStart({
+                          organizationId: row.organizationId,
                           organizationName: row.organizationName,
-                          emailDomain: row.emailDomain,
+                          domains: row.domains,
                           ticketKey: row.ticketKey ?? undefined,
                         }),
                     },

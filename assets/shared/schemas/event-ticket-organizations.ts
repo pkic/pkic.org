@@ -32,14 +32,12 @@ export const ticketOrganizationScopeSchema = z.enum(TICKET_ORGANIZATION_SCOPES);
 export type TicketOrganizationScope = z.infer<typeof ticketOrganizationScopeSchema>;
 
 export const eventTicketOrganizationSchema = z.object({
-  /** The decision that counts for this organization; null for a portal organization nothing has decided. */
+  /** The decision that counts for this organization; null when nothing has decided it. */
   id: databaseIdSchema.nullable(),
-  /** The portal organization behind the row; null for a decision no portal organization is matched to. */
-  organizationId: databaseIdSchema.nullable(),
-  /** A decision's name is keyed: trimmed, single-spaced and in lower case. A portal organization keeps its own. */
+  organizationId: databaseIdSchema,
   organizationName: z.string(),
-  /** Empty when there is no work address or domain. */
-  emailDomain: z.string(),
+  /** Every domain the organization is recognized by; the classifier reads them all. */
+  domains: z.array(z.string()),
   ticketKey: ticketKeySchema.nullable(),
   decidedBy: ticketDeciderSchema.nullable(),
   /** How sure the classifier was; null for an organizer's decision or no decision. */
@@ -61,12 +59,26 @@ export const eventTicketOrganizationListSchema = paginatedResponseSchema(
   eventTicketOrganizationSchema,
 );
 
-/** The organization a test or a decision is about, as a person registering would give it. */
-export const ticketOrganizationSubjectSchema = z.object({
+export const TICKET_SUBJECT_MAX_DOMAINS = 10;
+
+/** A portal organization, tested by its own name and domains. */
+export const ticketPortalOrganizationSubjectSchema = z.object({ organizationId: databaseIdSchema });
+
+/** An organization as an organizer types it, to see how the classifier treats it. It is tested, never saved. */
+export const ticketTypedOrganizationSubjectSchema = z.object({
   organizationName: trimmedString(2, 200, "Enter the organization's name."),
-  /** A work address's domain. A personal mail domain is ignored, as it is at registration. */
-  emailDomain: z.string().trim().max(253).optional(),
+  /** Work domains. A personal mail domain is ignored, as it is at registration. */
+  domains: z
+    .array(z.string().trim().min(1).max(253))
+    .max(TICKET_SUBJECT_MAX_DOMAINS, `Enter up to ${String(TICKET_SUBJECT_MAX_DOMAINS)} domains.`)
+    .default([]),
 });
+
+export const ticketOrganizationSubjectSchema = z.union([
+  ticketPortalOrganizationSubjectSchema,
+  ticketTypedOrganizationSubjectSchema,
+]);
+export type TicketOrganizationSubject = z.infer<typeof ticketOrganizationSubjectSchema>;
 
 /**
  * A ticket's "who gets this ticket" as an organizer is still editing it. The test reads it in place of the saved
@@ -85,10 +97,11 @@ export const eventTicketOrganizationTrialSchema = z.object({
 export type EventTicketOrganizationTrial = z.infer<typeof eventTicketOrganizationTrialSchema>;
 
 export const eventTicketOrganizationTrialResultSchema = z.object({
-  /** The name as it was given. */
+  /** The portal organization tested; null for a typed one. */
+  organizationId: databaseIdSchema.nullable(),
   organizationName: z.string(),
-  /** The domain the classifier was given; null when none was given or it is a personal mail domain. */
-  emailDomain: z.string().nullable(),
+  /** The domains the classifier was given: personal mail domains are left out. */
+  domains: z.array(z.string()),
   /** Every described ticket, most likely first; null when the classifier did not answer. */
   answers: z
     .array(
@@ -103,8 +116,8 @@ export const eventTicketOrganizationTrialResultSchema = z.object({
   decidedTicketKey: ticketKeySchema.nullable(),
   /** The decision that already counts for this organization, which a test never replaces. */
   current: eventTicketOrganizationSchema.pick({ ticketKey: true, decidedBy: true, confidencePercent: true }).nullable(),
-  /** Set when the classifier did not answer for this organization. */
-  error: z.literal("unavailable").nullable(),
+  /** Set when the classifier did not answer for this organization, or the organization is no longer in the portal. */
+  error: z.enum(["unavailable", "not_found"]).nullable(),
 });
 export type EventTicketOrganizationTrialResult = z.infer<typeof eventTicketOrganizationTrialResultSchema>;
 
@@ -114,7 +127,7 @@ export const eventTicketOrganizationTrialResponseSchema = z.object({
 });
 export type EventTicketOrganizationTrialResponse = z.infer<typeof eventTicketOrganizationTrialResponseSchema>;
 
-export const eventTicketOrganizationDecisionSchema = ticketOrganizationSubjectSchema.extend({
+export const eventTicketOrganizationDecisionSchema = ticketPortalOrganizationSubjectSchema.extend({
   ticketKey: z.string({ error: "Choose a ticket." }).pipe(ticketKeySchema),
 });
 export type EventTicketOrganizationDecision = z.infer<typeof eventTicketOrganizationDecisionSchema>;

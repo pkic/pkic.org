@@ -87,8 +87,9 @@ export function TicketOrganizationsPanel({
 
   const reopen = (row: EventTicketOrganization, testOnOpen: boolean) =>
     setStart({
+      organizationId: row.organizationId,
       organizationName: row.organizationName,
-      emailDomain: row.emailDomain,
+      domains: row.domains,
       ticketKey: row.ticketKey ?? undefined,
       testOnOpen,
     });
@@ -110,11 +111,12 @@ export function TicketOrganizationsPanel({
         paginate
         searchPlaceholder="Search organizations or email domains…"
         initialSort="-updated"
-        createAction={{
-          label: classifierOn ? "Test an organization" : "Choose an organization's ticket",
-          onSelect: () => setStart({ organizationName: "", emailDomain: "" }),
-        }}
-        rowKey={(row) => row.id ?? row.organizationId ?? row.organizationName}
+        createAction={
+          classifierOn
+            ? { label: "Test an organization", onSelect: () => setStart({ organizationName: "", domains: [] }) }
+            : undefined
+        }
+        rowKey={(row) => row.organizationId}
         empty={
           <EmptyState
             title={ticketKey ? "No organization gets this ticket yet" : "No organizations decided yet"}
@@ -129,7 +131,7 @@ export function TicketOrganizationsPanel({
             cell: (row) => (
               <>
                 <strong>{row.organizationName}</strong>
-                {row.emailDomain && <div class="pk-small pk-muted">{row.emailDomain}</div>}
+                {row.domains.length > 0 && <div class="pk-small pk-muted">{row.domains.join(", ")}</div>}
               </>
             ),
           },

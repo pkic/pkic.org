@@ -8,13 +8,12 @@ import { TICKET_PAY_BY_ON_CHANGE_SQL } from "./pay-by";
 import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
 import { isStateGuardFailure, prepareStateGuard } from "../../db/authorization-guard";
 import { all, first } from "../../db/queries";
-import { workEmailDomain } from "../../email-domains/classification";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../../types";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
 import { ticketReminderSchedule } from "../../../../assets/shared/event-tickets";
-import { priceTicket, readTicketPerson } from "./assignment";
+import { priceTicket, readTicketPerson, ticketSubject } from "./assignment";
 import {
   classifierOptions,
   prepareStoreTicketDecision,
@@ -70,7 +69,7 @@ export async function reviewDisputedTicket(
     accountEmail: row.email,
     identityId: row.identity_id,
   });
-  const subject = { organizationName: person.organizationName, emailDomain: workEmailDomain(person.email) };
+  const subject = ticketSubject(person);
   const now = nowIso();
   const statements: StatementLike[] = [
     preparePermissionsAuthorizationGuard(db, actor, [
@@ -94,15 +93,20 @@ export async function reviewDisputedTicket(
           "UPDATE registration_tickets SET dispute_resolved_at = ?, revision = revision + 1, updated_at = ? WHERE id = ? AND dispute_resolved_at IS NULL",
         )
         .bind(now, now, row.id),
-      prepareStoreTicketDecision(db, {
-        criteriaDigest: digest,
-        subject,
-        ticketKey: row.ticket_key,
-        source: "organizer",
-        confidence: null,
-        model: null,
-        decidedByUserId: actor.id,
-      }),
+      // Kept for the organization, the choice decides its ticket from now on; a person with none is settled alone.
+      ...(subject.organizationId
+        ? [
+            prepareStoreTicketDecision(db, {
+              criteriaDigest: digest,
+              organizationId: subject.organizationId,
+              ticketKey: row.ticket_key,
+              source: "organizer",
+              confidence: null,
+              model: null,
+              decidedByUserId: actor.id,
+            }),
+          ]
+        : []),
     );
     await settle(db, statements);
     return;

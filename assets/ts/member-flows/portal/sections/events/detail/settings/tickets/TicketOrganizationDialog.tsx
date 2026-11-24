@@ -1,21 +1,26 @@
 /**
- * Tests the classifier on one organization, as registration would ask it,
- * and saves the right ticket as an organizer's decision. A test stores
+ * Tests the classifier on one organization, as registration would ask it.
+ * A portal organization is tested by its own name and domains, and the right
+ * ticket can be saved as an organizer's decision. A typed organization shows
+ * how the classifier treats a name and is never saved. A test stores
  * nothing; only Save does. From the ticket editor it tests the ticket's
- * unsaved "who gets this ticket" and saves nothing.
+ * unsaved "who gets this ticket".
  */
 import { useEffect, useRef, useState } from "preact/hooks";
+import type { z } from "zod";
 import { postJson } from "../../../../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../../../../shared/schemas/api-common";
 import type { EventTicketsConfiguration } from "../../../../../../../../shared/schemas/event-tickets";
 import {
   eventTicketOrganizationDecisionSchema,
   eventTicketOrganizationTrialResponseSchema,
-  ticketOrganizationSubjectSchema,
+  ticketPortalOrganizationSubjectSchema,
+  ticketTypedOrganizationSubjectSchema,
   type EventTicketClassifierDraft,
   type EventTicketOrganizationDecisions,
   type EventTicketOrganizationTrial,
   type EventTicketOrganizationTrialResult,
+  type TicketOrganizationSubject,
 } from "../../../../../../../../shared/schemas/event-ticket-organizations";
 import { useContractForm } from "../../../../../../../hooks/useContractForm";
 import { Alert } from "../../../../../../../ui/Alert";
@@ -29,10 +34,12 @@ import { ticketsEndpoint } from "./tickets-endpoint";
 
 type TicketType = EventTicketsConfiguration["types"][number];
 
-/** What the dialog opens with: empty for a new test, or a listed organization. */
+/** What the dialog opens with: a portal organization, or an empty name to type. */
 export interface TicketOrganizationStart {
+  /** Set for a portal organization, whose name and domains are its own and whose ticket can be saved. */
+  organizationId?: string;
   organizationName: string;
-  emailDomain: string;
+  domains: readonly string[];
   ticketKey?: string;
   /** Asks the classifier as soon as it opens. */
   testOnOpen?: boolean;
@@ -64,18 +71,28 @@ export function TicketOrganizationDialog({
   onClose: () => void;
   onSaved?: (ticketName: string) => Promise<void>;
 }) {
+  const portal = start.organizationId !== undefined;
   const [organizationName, setOrganizationName] = useState(start.organizationName);
-  const [emailDomain, setEmailDomain] = useState(start.emailDomain);
+  const [domains, setDomains] = useState(start.domains.join(", "));
   const [ticketKey, setTicketKey] = useState(start.ticketKey ?? "");
   const [answer, setAnswer] = useState<EventTicketOrganizationTrialResult | null>(null);
   const [busy, setBusy] = useState<"testing" | "saving" | null>(null);
   const [error, setError] = useState("");
-  const subject = { organizationName, emailDomain: emailDomain.trim() || undefined };
-  const test = useContractForm(ticketOrganizationSubjectSchema, subject);
+  const typedDomains = domains.split(/[\s,]+/).filter(Boolean);
+  // The dialog keeps the kind of organization it opened with, so the same schema checks it on every render.
+  const subjectSchema: z.ZodType<TicketOrganizationSubject> = portal
+    ? ticketPortalOrganizationSubjectSchema
+    : ticketTypedOrganizationSubjectSchema;
+  const test = useContractForm(
+    subjectSchema,
+    portal ? { organizationId: start.organizationId } : { organizationName, domains: typedDomains },
+  );
   const save = useContractForm(eventTicketOrganizationDecisionSchema, {
-    ...subject,
+    organizationId: start.organizationId,
     ticketKey: ticketKey || undefined,
   });
+  // Only a portal organization's ticket is saved, and never from the ticket editor.
+  const saves = portal && !draft && onSaved !== undefined;
   const nameOf = (key: string) =>
     draft && key === draft.input.key ? draft.name : (tickets.find((type) => type.key === key)?.name ?? key);
   const fallback = tickets.find((type) => type.isDefault) ?? tickets[0];
@@ -95,7 +112,10 @@ export function TicketOrganizationDialog({
     setBusy("testing");
     setError("");
     try {
-      const body: EventTicketOrganizationTrial = { organizations: [checked.data], draft: draft?.input };
+      const body: EventTicketOrganizationTrial = {
+        organizations: [checked.data],
+        draft: draft?.input,
+      };
       const { results } = await postJson(
         `${ticketsEndpoint(slug)}/organizations/trials`,
         body,
@@ -103,6 +123,8 @@ export function TicketOrganizationDialog({
       );
       const result = results[0];
       if (asked !== edits.current || !result) return;
+      if (result.error === "not_found")
+        return setError("This organization is no longer in the portal. Reload the list.");
       if (!result.answers) return setError("The classifier did not answer. Try again.");
       setAnswer(result);
       setTicketKey(result.decidedTicketKey ?? result.current?.ticketKey ?? result.answers[0]?.ticketKey ?? "");
@@ -114,13 +136,9 @@ export function TicketOrganizationDialog({
   }
 
   async function saveDecision() {
-    if (busy || !onSaved) return;
+    if (busy || !onSaved || !saves) return;
     const checked = save.submit();
-    if (!checked.data) {
-      // The organization fields show the test's checks, which hold the same rules.
-      test.submit();
-      return setError(checked.formMessage ?? "");
-    }
+    if (!checked.data) return setError(checked.formMessage ?? "");
     setBusy("saving");
     setError("");
     try {
@@ -156,25 +174,32 @@ export function TicketOrganizationDialog({
       save.handlers.onFocusOut(event);
     },
   };
-  const noneDecides = `No ticket reaches its threshold. ${draft ? "People" : "Unless you save one, people"} from this organization choose a ticket or get ${fallback?.name ?? "the default ticket"}.`;
+  const noneDecides = `No ticket reaches its threshold. ${saves ? "Unless you save one, people" : "People"} from this organization choose a ticket or get ${fallback?.name ?? "the default ticket"}.`;
+  const leftOut = !portal && answer !== null && typedDomains.length > answer.domains.length;
   return (
     <Dialog
       open
       title={
         draft
           ? `Test the ${draft.name || "new"} ticket`
-          : !classifierOn
-            ? "Choose an organization's ticket"
-            : start.organizationName
+          : !portal
+            ? "Test an organization"
+            : classifierOn
               ? "Check an organization's ticket"
-              : "Test an organization"
+              : "Choose an organization's ticket"
       }
       closeLabel="Close dialog"
-      description={draft ? "Tests the description as you have it now. Nothing is saved." : undefined}
-      confirmLabel={draft ? "Close" : ticketKey ? `Save ${nameOf(ticketKey)}` : "Save ticket"}
-      confirmDisabled={!draft && busy !== null}
-      cancelLabel={draft ? null : "Close"}
-      onConfirm={() => (draft ? onClose() : void saveDecision())}
+      description={
+        draft
+          ? "Tests the description as you have it now. Nothing is saved."
+          : portal
+            ? undefined
+            : "Shows how the classifier treats a name. To save a ticket, find the organization in the portal."
+      }
+      confirmLabel={!saves ? "Close" : ticketKey ? `Save ${nameOf(ticketKey)}` : "Save ticket"}
+      confirmDisabled={saves && busy !== null}
+      cancelLabel={saves ? "Close" : null}
+      onConfirm={() => (saves ? void saveDecision() : onClose())}
       onCancel={onClose}
     >
       <form
@@ -186,50 +211,60 @@ export function TicketOrganizationDialog({
           if (classifierOn) void runTest();
         }}
       >
-        <Field {...test.of("organizationName")} label="Organization" required>
-          {(control) => (
-            <TextInput
-              {...control}
-              name="organizationName"
-              value={organizationName}
-              onInput={(event) => {
-                setOrganizationName(event.currentTarget.value);
-                edited();
-              }}
-            />
-          )}
-        </Field>
-        <Field
-          {...test.of("emailDomain")}
-          label="Email domain"
-          help="Optional. Personal mail domains are ignored, as at registration."
-        >
-          {(control) => (
-            <TextInput
-              {...control}
-              name="emailDomain"
-              value={emailDomain}
-              placeholder="example.com"
-              onInput={(event) => {
-                setEmailDomain(event.currentTarget.value);
-                edited();
-              }}
-            />
-          )}
-        </Field>
+        {portal ? (
+          <DescriptionList
+            density="compact"
+            items={[
+              { term: "Organization", value: start.organizationName },
+              { term: "Domains", value: start.domains.join(", ") || "None recognized" },
+            ]}
+          />
+        ) : (
+          <>
+            <Field {...test.of("organizationName")} label="Organization" required>
+              {(control) => (
+                <TextInput
+                  {...control}
+                  name="organizationName"
+                  value={organizationName}
+                  onInput={(event) => {
+                    setOrganizationName(event.currentTarget.value);
+                    edited();
+                  }}
+                />
+              )}
+            </Field>
+            <Field
+              {...test.of("domains")}
+              label="Domains"
+              help="Optional. Separate several with commas. Personal mail domains are ignored, as at registration."
+            >
+              {(control) => (
+                <TextInput
+                  {...control}
+                  name="domains"
+                  value={domains}
+                  placeholder="example.com"
+                  onInput={(event) => {
+                    setDomains(event.currentTarget.value);
+                    edited();
+                  }}
+                />
+              )}
+            </Field>
+          </>
+        )}
         {classifierOn ? (
           <div class="pk-cluster">
             <Button type="submit" variant="secondary" disabled={busy !== null}>
               {busy === "testing" ? "Testing…" : answer ? "Test again" : "Test"}
             </Button>
-            {answer && emailDomain.trim() && !answer.emailDomain && (
-              <span class="pk-small pk-muted">Personal mail domain: tested on the name alone.</span>
-            )}
+            {leftOut && <span class="pk-small pk-muted">Personal mail domains were left out of the test.</span>}
           </div>
         ) : (
           <p class="pk-small pk-muted">To test the classifier, describe who qualifies for at least two tickets.</p>
         )}
-        {draft ? (
+        {!saves ? (
           answer && (
             <DescriptionList
               density="compact"

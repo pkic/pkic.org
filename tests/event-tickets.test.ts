@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
 import { insertOrganization, insertUser } from "./helpers/membership";
 import { nowIso } from "../functions/_lib/utils/time";
+import { workEmailDomain } from "../functions/_lib/email-domains/classification";
 import { ticketRefundNote } from "../assets/shared/event-ticket-display";
 import { callApi } from "./helpers/app";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
@@ -139,8 +140,37 @@ async function seedTickets() {
   return { event, admin, attendee, vendor };
 }
 
+/** The portal organization that claims a domain, created on first use. */
+async function organizationFor(domain: string): Promise<string> {
+  const claimed = await env.DB.prepare("SELECT organization_id FROM organization_domain_claims WHERE domain = ?")
+    .bind(domain)
+    .first<{ organization_id: string }>();
+  if (claimed) return claimed.organization_id;
+  const organizationId = await insertOrganization(env.DB, `Organization at ${domain}`);
+  const at = nowIso();
+  await env.DB.prepare(
+    "INSERT INTO organization_domain_claims (id, domain, organization_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+  )
+    .bind(crypto.randomUUID(), domain, organizationId, at, at)
+    .run();
+  return organizationId;
+}
+
+/** Registers a person, on behalf of the organization that claims their domain unless it is a personal mail domain. */
 async function register(event: { id: string; timezone: string }, email: string, classifierEnv: Pick<Env, "AI"> = {}) {
   const user = await findOrCreateUser(env.DB, { email, firstName: "Synthetic", lastName: "Person" });
+  const domain = workEmailDomain(email);
+  let identityId: string | null = null;
+  if (domain) {
+    identityId = crypto.randomUUID();
+    const at = nowIso();
+    await env.DB.prepare(
+      `INSERT INTO identities (id, user_id, organization_id, source, invited_at, started_at, created_at, updated_at)
+       VALUES (?, ?, ?, 'verified_domain', ?, ?, ?, ?)`,
+    )
+      .bind(identityId, user.id, await organizationFor(domain), at, at, at, at)
+      .run();
+  }
   const { registration } = await createScheduledRegistration(env.DB, {
     event: { id: event.id },
     userId: user.id,
@@ -152,8 +182,7 @@ async function register(event: { id: string; timezone: string }, email: string, 
     registrationId: registration.id,
     userId: user.id,
     email,
-    identityId: null,
-    organizationName: "Example Organization",
+    identityId,
     dayAttendance: inPerson,
   });
   if (ticket) await env.DB.batch(ticket.statements);
@@ -305,23 +334,24 @@ describe("event tickets", () => {
     const { types } = await readEventTicketSnapshot(env.DB, event);
     const run = vi.fn(async () => ({ answers: { ticket: { probabilities: { pqcc_vendor: 0.99 } } } }));
     const decided = await decideOrganizationTicket(env.DB, { AI: { run } } as never, types, {
-      organizationName: " ",
-      emailDomain: null,
+      organizationId: null,
+      organizationName: null,
+      domains: [],
     });
     expect(decided).toBeNull();
     expect(run).not.toHaveBeenCalled();
-    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM ticket_classifier_decisions").first("n")).toBe(0);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM ticket_organization_decisions").first("n")).toBe(0);
   });
 
   it("keeps decisions when other tickets join or leave the classifier", async () => {
     const { event, admin } = await seedTickets();
     await register(event, "one@vendor-example.test", classifier({ pqcc_vendor: 0.97, pqcc_attendee: 0.03 }));
     // Decisions for another organization from earlier questions: an organizer's, which counts, and an older answer.
-    const subject = { organizationName: "Example Organization", emailDomain: "kept-example.test" };
+    const organizationId = await organizationFor("kept-example.test");
     await env.DB.batch([
       prepareStoreTicketDecision(env.DB, {
         criteriaDigest: "an-earlier-question",
-        subject,
+        organizationId,
         ticketKey: "pqcc_attendee",
         source: "classifier",
         confidence: 0.8,
@@ -329,7 +359,7 @@ describe("event tickets", () => {
       }),
       prepareStoreTicketDecision(env.DB, {
         criteriaDigest: "another-earlier-question",
-        subject,
+        organizationId,
         ticketKey: "pqcc_vendor",
         source: "organizer",
         confidence: null,
@@ -462,7 +492,7 @@ describe("event tickets", () => {
     expect(
       await env.DB.prepare(
         `SELECT (SELECT COUNT(*) FROM audit_log WHERE action = 'registration_ticket_dispute_settled') AS audits,
-                (SELECT COUNT(*) FROM ticket_classifier_decisions WHERE source = 'organizer') AS decisions`,
+                (SELECT COUNT(*) FROM ticket_organization_decisions WHERE source = 'organizer') AS decisions`,
       ).first(),
     ).toEqual({ audits: 0, decisions: 0 });
     expect(await readRegistrationTicket(env.DB, { eventId: event.id, registrationId: registration.id })).toMatchObject({
@@ -560,7 +590,6 @@ describe("event tickets", () => {
           userId: person.id,
           email,
           identityId: null,
-          organizationName: "Example Organization",
           dayAttendance: inPerson,
         },
       ))!;
@@ -1533,7 +1562,6 @@ describe("event tickets", () => {
           userId: user.id,
           email: user.email,
           identityId: null,
-          organizationName: "Example Organization",
           dayAttendance: inPerson,
         },
       ),
@@ -1680,7 +1708,6 @@ describe("event tickets", () => {
           userId: user.id,
           email,
           identityId: null,
-          organizationName: "Example Organization",
           dayAttendance: virtual,
         },
       );
@@ -1991,7 +2018,6 @@ describe("event tickets", () => {
         userId: user.id,
         email: user.email,
         identityId: null,
-        organizationName: "Example Organization",
         dayAttendance: [{ dayDate: DAY, attendanceType: "virtual" }],
       },
     );

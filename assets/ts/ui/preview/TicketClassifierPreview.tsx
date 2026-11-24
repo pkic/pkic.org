@@ -19,9 +19,9 @@ const UPDATED = "2026-11-20T09:30:00.000Z";
 const ORGANIZATIONS: EventTicketOrganization[] = [
   {
     id: "b4f0c1de-0000-4000-8000-000000000001",
-    organizationId: null,
-    organizationName: "example bank",
-    emailDomain: "examplebank.test",
+    organizationId: "c1a5517e-0000-4000-8000-000000000001",
+    organizationName: "Example Bank",
+    domains: ["examplebank.test", "examplebank-group.test"],
     ticketKey: "attendee",
     decidedBy: "classifier",
     confidencePercent: 94,
@@ -29,9 +29,9 @@ const ORGANIZATIONS: EventTicketOrganization[] = [
   },
   {
     id: "b4f0c1de-0000-4000-8000-000000000002",
-    organizationId: null,
-    organizationName: "sample security",
-    emailDomain: "samplesecurity.test",
+    organizationId: "c1a5517e-0000-4000-8000-000000000002",
+    organizationName: "Sample Security",
+    domains: ["samplesecurity.test"],
     ticketKey: "vendor",
     decidedBy: "organizer",
     confidencePercent: null,
@@ -39,9 +39,9 @@ const ORGANIZATIONS: EventTicketOrganization[] = [
   },
   {
     id: "b4f0c1de-0000-4000-8000-000000000003",
-    organizationId: null,
-    organizationName: "placeholder university",
-    emailDomain: "",
+    organizationId: "c1a5517e-0000-4000-8000-000000000003",
+    organizationName: "Placeholder University",
+    domains: [],
     ticketKey: "attendee",
     decidedBy: "classifier",
     confidencePercent: 88,

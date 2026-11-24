@@ -189,7 +189,6 @@ export async function submitEventRegistration(
     userId: user.id,
     email: user.email,
     identityId: registration.registration_identity_id ?? null,
-    organizationName: affiliation.organizationName,
     dayAttendance: prepared.dayAttendance.map((day) => ({ dayDate: day.dayDate, attendanceType: day.attendanceType })),
   });
   const awaitingPayment = ticket?.status === "pending_payment";

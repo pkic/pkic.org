@@ -20,11 +20,14 @@ const configuration = {
   ],
 } as unknown as EventTicketsConfiguration;
 
-const organization = (id: string, name: string, domain: string) => ({
+const BANK = "b4f0c1de-0000-4000-8000-000000000001";
+const SECURITY = "b4f0c1de-0000-4000-8000-000000000002";
+
+const organization = (id: string, name: string, domains: string[]) => ({
   id: null,
   organizationId: id,
   organizationName: name,
-  emailDomain: domain,
+  domains,
   ticketKey: null,
   decidedBy: null,
   confidencePercent: null,
@@ -45,8 +48,9 @@ it("tests the checked organizations together and saves only the answers that dec
         ? {
             results: [
               {
+                organizationId: BANK,
                 organizationName: "Example Bank",
-                emailDomain: "examplebank.test",
+                domains: ["examplebank.test", "examplebank-group.test"],
                 answers: [
                   { ticketKey: "attendee", percent: 91, thresholdPercent: 75 },
                   { ticketKey: "vendor", percent: 9, thresholdPercent: 75 },
@@ -56,8 +60,9 @@ it("tests the checked organizations together and saves only the answers that dec
                 error: null,
               },
               {
+                organizationId: SECURITY,
                 organizationName: "Sample Security",
-                emailDomain: null,
+                domains: [],
                 answers: [
                   { ticketKey: "vendor", percent: 60, thresholdPercent: 75 },
                   { ticketKey: "attendee", percent: 40, thresholdPercent: 75 },
@@ -84,8 +89,8 @@ it("tests the checked organizations together and saves only the answers that dec
           expect(url).toContain("among=portal");
           return response.parse({
             organizations: [
-              organization("b4f0c1de-0000-4000-8000-000000000001", "Example Bank", "examplebank.test"),
-              organization("b4f0c1de-0000-4000-8000-000000000002", "Sample Security", ""),
+              organization(BANK, "Example Bank", ["examplebank.test", "examplebank-group.test"]),
+              organization(SECURITY, "Sample Security", []),
             ],
             page: { limit: 25, offset: 0, total: 2, hasMore: false },
           });
@@ -96,6 +101,7 @@ it("tests the checked organizations together and saves only the answers that dec
   );
   await settle();
   expect(host.textContent).toContain("Not decided");
+  expect(host.textContent).toContain("examplebank.test, examplebank-group.test");
   const box = host.querySelector<HTMLInputElement>('input[aria-label="Select all rows"]')!;
   await act(() => box.click());
   const button = (label: string) =>
@@ -103,10 +109,7 @@ it("tests the checked organizations together and saves only the answers that dec
   await act(() => button("Test selected").click());
   await settle();
   expect(requests[0]!.body).toEqual({
-    organizations: [
-      { organizationName: "Example Bank", emailDomain: "examplebank.test" },
-      { organizationName: "Sample Security" },
-    ],
+    organizations: [{ organizationId: BANK }, { organizationId: SECURITY }],
   });
   expect(host.textContent).toContain("Attendee, 91% sure");
   expect(host.textContent).toContain("Not sure enough: Vendor, 60%");
@@ -114,6 +117,6 @@ it("tests the checked organizations together and saves only the answers that dec
   await settle();
   expect(requests[1]!.url).toContain("/organizations/decisions");
   expect(requests[1]!.body).toEqual({
-    decisions: [{ organizationName: "Example Bank", emailDomain: "examplebank.test", ticketKey: "attendee" }],
+    decisions: [{ organizationId: BANK, ticketKey: "attendee" }],
   });
 });
