@@ -348,6 +348,8 @@ describe("ticket organizations", () => {
     for (const [id, name, domain] of [
       ["a0000000000000000000000000000001", "Alpha Secure", "alpha-secure.test"],
       ["b0000000000000000000000000000002", "Beta Systems", "beta-systems.test"],
+      // Saved as typed: a double space and capitals, which registration folds away.
+      ["c0000000000000000000000000000003", "Gamma  LABS", "gamma.test"],
     ])
       await env.DB.batch([
         env.DB.prepare(
@@ -358,13 +360,16 @@ describe("ticket organizations", () => {
         ).bind(`claim-${id}`, domain, id, now, now),
       ]);
     await decideTicketOrganizations(env.DB, admin, event, {
-      decisions: [{ organizationName: "Alpha Secure", emailDomain: "alpha-secure.test", ticketKey: "pqcc_vendor" }],
+      decisions: [
+        { organizationName: "Alpha Secure", emailDomain: "alpha-secure.test", ticketKey: "pqcc_vendor" },
+        { organizationName: "Gamma Labs", emailDomain: "gamma.test", ticketKey: "pqcc_attendee" },
+      ],
     });
     // A decision for the same name under another domain does not count for the portal organization.
     await storeClassifierDecision("beta systems", "elsewhere.test", "pqcc_attendee");
 
     const all = await listTicketOrganizations(env.DB, event, query({ among: "portal", sort: "organization" }));
-    expect(all.page.total).toBe(2);
+    expect(all.page.total).toBe(3);
     expect(
       all.organizations.map((row) => [
         row.organizationId,
@@ -376,6 +381,7 @@ describe("ticket organizations", () => {
     ).toEqual([
       ["a0000000000000000000000000000001", "Alpha Secure", "alpha-secure.test", "pqcc_vendor", "organizer"],
       ["b0000000000000000000000000000002", "Beta Systems", "beta-systems.test", null, null],
+      ["c0000000000000000000000000000003", "Gamma  LABS", "gamma.test", "pqcc_attendee", "organizer"],
     ]);
     expect(all.organizations[0]?.id).not.toBeNull();
     expect(all.organizations[1]?.id).toBeNull();
@@ -384,14 +390,16 @@ describe("ticket organizations", () => {
     expect(byDomain.organizations.map((row) => row.organizationName)).toEqual(["Beta Systems"]);
     const byName = await listTicketOrganizations(env.DB, event, query({ among: "portal", q: "alpha" }));
     expect(byName.organizations.map((row) => row.organizationName)).toEqual(["Alpha Secure"]);
-    const decided = await listTicketOrganizations(env.DB, event, query({ among: "portal", decidedBy: "organizer" }));
-    expect(decided.organizations.map((row) => row.organizationName)).toEqual(["Alpha Secure"]);
+    // Who decided and which ticket filter only the decided list, where the page holds decisions.
+    await expect(
+      listTicketOrganizations(env.DB, event, query({ among: "portal", decidedBy: "organizer" })),
+    ).rejects.toMatchObject({ status: 400 });
     const paged = await listTicketOrganizations(
       env.DB,
       event,
       query({ among: "portal", sort: "organization", limit: 1, offset: 1 }),
     );
-    expect(paged.page.total).toBe(2);
+    expect(paged.page.total).toBe(3);
     expect(paged.organizations.map((row) => row.organizationName)).toEqual(["Beta Systems"]);
   });
 

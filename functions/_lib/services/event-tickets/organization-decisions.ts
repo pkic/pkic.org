@@ -21,7 +21,7 @@ import { decideClassifiedTicket } from "../../../../assets/shared/event-tickets"
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
 import { queryPage } from "../../db/pagination";
-import { first } from "../../db/queries";
+import { all, first } from "../../db/queries";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import { workEmailDomain } from "../../email-domains/classification";
@@ -74,21 +74,17 @@ async function readTypes(db: DatabaseLike, event: TicketEvent) {
 }
 
 /** The decision that counts for each name and domain, as registration finds it. */
-function countedDecisionsSql(scope: ReturnType<typeof decisionsInScope>): string {
+function countedDecisionsSql(scope: ReturnType<typeof decisionsInScope>, only?: string): string {
   return `counted AS (
         SELECT id, organization_name, email_domain, ticket_key, source, confidence, updated_at,
           ROW_NUMBER() OVER (PARTITION BY organization_name, email_domain ORDER BY ${scope.precedence}) AS rank
-        FROM ticket_classifier_decisions WHERE ${scope.where})`;
+        FROM ticket_classifier_decisions WHERE ${scope.where}${only ? ` AND ${only}` : ""})`;
 }
 
-/**
- * One row per portal organization: its name and one domain (the claimed one first, else a verified identity's),
- * with the decision that counts for that name and domain. Decisions are keyed on the lower-cased, trimmed name;
- * whitespace inside a name and non-ASCII case are not folded by SQL.
- */
+/** One row per portal organization that is not merged away: its name and one domain, the claimed one first. */
 function portalOrganizationsSql(search: string | null, domainSearch: string | null): string {
   return `portal AS (
-        SELECT o.id, o.name, LOWER(TRIM(o.name)) AS decision_name,
+        SELECT o.id, o.name,
           LOWER(COALESCE(
             (SELECT MIN(claim.domain) FROM organization_domain_claims claim WHERE claim.organization_id = o.id),
             (SELECT MIN(connection.domain) FROM (${organizationConnectionDomainsSql("o.id")}) connection),
@@ -101,6 +97,19 @@ function portalOrganizationsSql(search: string | null, domainSearch: string | nu
         })`;
 }
 
+function toListedOrganization(row: DecisionRow) {
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    organizationName: row.organization_name,
+    emailDomain: row.email_domain,
+    ticketKey: row.ticket_key,
+    decidedBy: row.source === null ? null : row.source === "organizer" ? "organizer" : "classifier",
+    confidencePercent: row.source === null ? null : certainty(row.source, row.confidence),
+    updatedAt: row.updated_at,
+  };
+}
+
 /** One row per organization: the decision that counts for it, or every portal organization with its decision if any. */
 export async function listTicketOrganizations(
   db: DatabaseLike,
@@ -108,8 +117,8 @@ export async function listTicketOrganizations(
   query: EventTicketOrganizationListQuery,
 ) {
   const scope = decisionsInScope(await readTypes(db, event));
-  const portal = query.among === "portal";
-  const decidedFilter = [
+  if (query.among === "portal") return listPortalOrganizations(db, scope, query);
+  const filters = [
     query.decidedBy === "organizer"
       ? "source = 'organizer'"
       : query.decidedBy === "classifier"
@@ -117,57 +126,89 @@ export async function listTicketOrganizations(
         : "",
     query.ticketKey ? "ticket_key = ?" : "",
   ].filter(Boolean);
-  const filterBindings = query.ticketKey ? [query.ticketKey] : [];
-  const orderMap = { organization: "organization_name", updated: "updated_at" };
-  const orderBy = resolveMappedOrderBy(
-    query.sort,
-    orderMap,
-    "updated_at DESC",
-    portal ? "organization_id ASC" : "id ASC",
-  );
-  const source = portal
-    ? (() => {
-        const name = query.q ? buildD1TextSearchFilter(query.q, ["o.name"]) : null;
-        const domain = query.q ? buildD1TextSearchFilter(query.q, ["d.domain"]) : null;
-        // Only an organization with a decision can be filtered by who decided it or which ticket it got.
-        const where = [...(decidedFilter.length ? ["d.id IS NOT NULL"] : []), ...decidedFilter.map((f) => `d.${f}`)];
-        return {
-          withSql: `WITH ${countedDecisionsSql(scope)}, ${portalOrganizationsSql(name?.sql ?? null, domain?.sql ?? null)}`,
-          selectSql: `SELECT d.id AS id, p.id AS organization_id, p.name AS organization_name, p.domain AS email_domain,
-            d.ticket_key AS ticket_key, d.source AS source, d.confidence AS confidence, d.updated_at AS updated_at`,
-          fromSql: `FROM portal p LEFT JOIN counted d
-              ON d.rank = 1 AND d.organization_name = p.decision_name AND d.email_domain = p.domain
-            WHERE 1 = 1${where.map((f) => ` AND ${f}`).join("")}`,
-          bindings: [...scope.bindings, ...(name?.bindings ?? []), ...(domain?.bindings ?? []), ...filterBindings],
-        };
-      })()
-    : (() => {
-        const search = query.q ? buildD1TextSearchFilter(query.q, ["organization_name", "email_domain"]) : null;
-        return {
-          withSql: `WITH ${countedDecisionsSql(scope)}`,
-          selectSql:
-            "SELECT id, NULL AS organization_id, organization_name, email_domain, ticket_key, source, confidence, updated_at",
-          fromSql: `FROM counted WHERE rank = 1${decidedFilter.map((f) => ` AND ${f}`).join("")}${search ? ` AND (${search.sql})` : ""}`,
-          bindings: [...scope.bindings, ...filterBindings, ...(search?.bindings ?? [])],
-        };
-      })();
+  const search = query.q ? buildD1TextSearchFilter(query.q, ["organization_name", "email_domain"]) : null;
   const { rows, total } = await queryPage<DecisionRow>(db, {
-    source,
-    orderBy,
+    source: {
+      withSql: `WITH ${countedDecisionsSql(scope)}`,
+      selectSql:
+        "SELECT id, NULL AS organization_id, organization_name, email_domain, ticket_key, source, confidence, updated_at",
+      fromSql: `FROM counted WHERE rank = 1${filters.map((filter) => ` AND ${filter}`).join("")}${search ? ` AND (${search.sql})` : ""}`,
+      bindings: [...scope.bindings, ...(query.ticketKey ? [query.ticketKey] : []), ...(search?.bindings ?? [])],
+    },
+    orderBy: resolveMappedOrderBy(
+      query.sort,
+      { organization: "organization_name", updated: "updated_at" },
+      "updated_at DESC",
+      "id ASC",
+    ),
     limit: query.limit,
     offset: query.offset,
   });
   return eventTicketOrganizationListSchema.parse({
-    organizations: rows.map((row) => ({
-      id: row.id,
-      organizationId: row.organization_id,
-      organizationName: row.organization_name,
-      emailDomain: row.email_domain,
-      ticketKey: row.ticket_key,
-      decidedBy: row.source === null ? null : row.source === "organizer" ? "organizer" : "classifier",
-      confidencePercent: row.source === null ? null : certainty(row.source, row.confidence),
-      updatedAt: row.updated_at,
-    })),
+    organizations: rows.map(toListedOrganization),
+    page: buildPageInfo(query.limit, query.offset, total, rows.length),
+  });
+}
+
+/**
+ * A page of portal organizations, then the decision that counts for each. The decision is found by the key
+ * registration uses, which folds case and inner spaces as SQL cannot, so it is computed here for the page.
+ */
+async function listPortalOrganizations(
+  db: DatabaseLike,
+  scope: ReturnType<typeof decisionsInScope>,
+  query: EventTicketOrganizationListQuery,
+) {
+  if (query.decidedBy || query.ticketKey)
+    throw new AppError(
+      400,
+      "TICKET_ORGANIZATION_FILTER_UNSUPPORTED",
+      "Filter by who decided or by ticket only among decided organizations.",
+    );
+  const name = query.q ? buildD1TextSearchFilter(query.q, ["o.name"]) : null;
+  const domain = query.q ? buildD1TextSearchFilter(query.q, ["d.domain"]) : null;
+  const { rows, total } = await queryPage<{ organization_id: string; organization_name: string; email_domain: string }>(
+    db,
+    {
+      source: {
+        withSql: `WITH ${portalOrganizationsSql(name?.sql ?? null, domain?.sql ?? null)}`,
+        selectSql: "SELECT id AS organization_id, name AS organization_name, domain AS email_domain",
+        fromSql: "FROM portal",
+        bindings: [...(name?.bindings ?? []), ...(domain?.bindings ?? [])],
+      },
+      orderBy: resolveMappedOrderBy(query.sort, { organization: "name" }, "name ASC", "id ASC"),
+      limit: query.limit,
+      offset: query.offset,
+    },
+  );
+  const keyOf = (organizationName: string, emailDomain: string) => {
+    const key = subjectKey(subjectOf({ organizationName, emailDomain }));
+    return `${key.organizationName}\n${key.emailDomain}`;
+  };
+  const keys = [...new Set(rows.map((row) => keyOf(row.organization_name, row.email_domain)))];
+  const decisions = keys.length
+    ? await all<Omit<DecisionRow, "organization_id">>(
+        db,
+        `WITH ${countedDecisionsSql(scope, "(organization_name, email_domain) IN (SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]') FROM json_each(?))")}
+         SELECT id, organization_name, email_domain, ticket_key, source, confidence, updated_at FROM counted WHERE rank = 1`,
+        [...scope.bindings, JSON.stringify(keys.map((key) => key.split("\n")))],
+      )
+    : [];
+  const byKey = new Map(decisions.map((row) => [`${row.organization_name}\n${row.email_domain}`, row]));
+  return eventTicketOrganizationListSchema.parse({
+    organizations: rows.map((row) => {
+      const decision = byKey.get(keyOf(row.organization_name, row.email_domain));
+      return toListedOrganization({
+        id: decision?.id ?? null,
+        organization_id: row.organization_id,
+        organization_name: row.organization_name,
+        email_domain: row.email_domain,
+        ticket_key: decision?.ticket_key ?? null,
+        source: decision?.source ?? null,
+        confidence: decision?.confidence ?? null,
+        updated_at: decision?.updated_at ?? null,
+      });
+    }),
     page: buildPageInfo(query.limit, query.offset, total, rows.length),
   });
 }
