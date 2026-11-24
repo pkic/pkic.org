@@ -80,7 +80,7 @@ export const CODE_COLUMNS = `id, ticket_type_id, label, code, amount, percent_of
      WHERE sponsor.id = event_ticket_codes.sponsorship_id)) AS sponsor_name,
   (SELECT COUNT(*) FROM registration_tickets issued WHERE issued.code_id = event_ticket_codes.id) AS registrations,
   (SELECT COALESCE(SUM(issued.paid_amount - issued.refunded_amount), 0) FROM registration_tickets issued
-   WHERE issued.code_id = event_ticket_codes.id AND issued.status = 'paid') AS revenue`;
+   WHERE issued.code_id = event_ticket_codes.id AND issued.status IN ('paid', 'refunded')) AS revenue`;
 
 export function decodeCode(row: CodeRow): EventTicketCode {
   return {
@@ -472,14 +472,23 @@ export async function createEventTicketCode(
   const amount = input.discount === "amount" ? (input.amount ?? 0) : null;
   const percentOff = input.discount === "percent" ? (input.percentOff ?? null) : null;
   const sponsorId = input.sponsorId ?? null;
-  const results = await db.batch([
-    preparePermissionsAuthorizationGuard(db, actor, [
-      { permission: "events:write", context: { type: "event", id: event.id } },
-    ]),
-    // A code for a sponsor is only made when that sponsor still sponsors the event.
-    db
-      .prepare(
-        `WITH ${eventSponsorsCte("?11")}
+  const unavailable = () =>
+    new AppError(
+      409,
+      "EVENT_TICKETS_CHANGED",
+      sponsorId
+        ? "This ticket or sponsor is no longer available. Reload and try again."
+        : "This ticket is no longer available. Reload and try again.",
+    );
+  const results = await db
+    .batch([
+      preparePermissionsAuthorizationGuard(db, actor, [
+        { permission: "events:write", context: { type: "event", id: event.id } },
+      ]),
+      // A code for a sponsor is only made when that sponsor still sponsors the event.
+      db
+        .prepare(
+          `WITH ${eventSponsorsCte("?11")}
          INSERT INTO event_ticket_codes
            (id, event_id, ticket_type_id, label, code, amount, percent_off, max_uses, organization_id, sponsorship_id,
             created_by_user_id, created_at, updated_at)
@@ -489,36 +498,34 @@ export async function createEventTicketCode(
          WHERE type.id = ?10 AND type.event_id = ?11 AND type.active = 1
            AND (?9 IS NULL OR sponsor.sponsor_id IS NOT NULL)
          LIMIT 1`,
-      )
-      .bind(
-        id,
-        input.label,
-        code,
-        amount,
-        percentOff,
-        input.maxUses,
-        actor.id,
-        now,
+        )
+        .bind(
+          id,
+          input.label,
+          code,
+          amount,
+          percentOff,
+          input.maxUses,
+          actor.id,
+          now,
+          sponsorId,
+          input.ticketTypeId,
+          event.id,
+        ),
+      // The audit entry is written only with the code: the ticket or sponsor may have gone since the form was read.
+      prepareStateGuard(db, { sql: "SELECT 1 FROM event_ticket_codes WHERE id = ?", bindings: [id] }),
+      prepareAuditLog(db, "user", actor.id, "event_ticket_code_created", "event", event.id, {
+        codeId: id,
+        maxUses: input.maxUses,
         sponsorId,
-        input.ticketTypeId,
-        event.id,
-      ),
-    prepareAuditLog(db, "user", actor.id, "event_ticket_code_created", "event", event.id, {
-      codeId: id,
-      maxUses: input.maxUses,
-      sponsorId,
-    }),
-    db.prepare(`SELECT ${CODE_COLUMNS} FROM event_ticket_codes WHERE id = ?`).bind(id),
-  ]);
-  const row = batchFirst<CodeRow>(results[3]);
-  if (!row)
-    throw new AppError(
-      409,
-      "EVENT_TICKETS_CHANGED",
-      sponsorId
-        ? "This ticket or sponsor is no longer available. Reload and try again."
-        : "This ticket is no longer available. Reload and try again.",
-    );
+      }),
+      db.prepare(`SELECT ${CODE_COLUMNS} FROM event_ticket_codes WHERE id = ?`).bind(id),
+    ])
+    .catch((cause: unknown) => {
+      throw isStateGuardFailure(cause) ? unavailable() : cause;
+    });
+  const row = batchFirst<CodeRow>(results[4]);
+  if (!row) throw unavailable();
   return decodeCode(row);
 }
 

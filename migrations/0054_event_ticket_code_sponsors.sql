@@ -3,9 +3,20 @@
 -- one event, so a sponsor's pass codes are unique per event and kind.
 ALTER TABLE event_ticket_codes ADD COLUMN organization_id TEXT REFERENCES organizations(id);
 
+-- One pass code of each kind per organization and event takes the organization: the
+-- earliest. A later one, from a second sponsorship of the same organization, keeps
+-- only its sponsorship and stays valid, so the unique index below always holds.
 UPDATE event_ticket_codes
 SET organization_id = (SELECT sponsor.organization_id FROM sponsorships sponsor WHERE sponsor.id = event_ticket_codes.sponsorship_id)
-WHERE sponsorship_id IS NOT NULL;
+WHERE sponsorship_id IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM event_ticket_codes earlier
+    JOIN sponsorships mine ON mine.id = event_ticket_codes.sponsorship_id
+    JOIN sponsorships theirs ON theirs.id = earlier.sponsorship_id
+    WHERE event_ticket_codes.pass_kind IS NOT NULL AND earlier.pass_kind = event_ticket_codes.pass_kind
+      AND earlier.event_id = event_ticket_codes.event_id AND theirs.organization_id = mine.organization_id
+      AND (earlier.created_at < event_ticket_codes.created_at
+           OR (earlier.created_at = event_ticket_codes.created_at AND earlier.id < event_ticket_codes.id)));
 
 DROP INDEX uq_event_ticket_codes_sponsor_pass;
 

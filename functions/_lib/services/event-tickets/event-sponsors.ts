@@ -25,12 +25,18 @@ export function eventSponsorsCte(eventParam: string): string {
     FROM sponsorships sponsor LEFT JOIN organizations organization ON organization.id = sponsor.organization_id
     WHERE sponsor.event_id = ${eventParam} AND sponsor.sponsor_type = 'event'
       AND sponsor.pipeline_stage = 'active' AND sponsor.tier IS NOT NULL
+      -- An organization with two such sponsorships counts once, by the first.
+      AND NOT EXISTS (SELECT 1 FROM sponsorships earlier WHERE earlier.event_id = sponsor.event_id
+                        AND earlier.sponsor_type = 'event' AND earlier.pipeline_stage = 'active'
+                        AND earlier.tier IS NOT NULL AND earlier.organization_id = sponsor.organization_id
+                        AND earlier.id < sponsor.id)
     UNION ALL
     SELECT organization.id, organization.id, NULL, organization.name, organization.sponsor_tier, 'consortium'
     FROM organizations organization
     WHERE organization.sponsor_tier IS NOT NULL
       AND NOT EXISTS (SELECT 1 FROM sponsorships own WHERE own.event_id = ${eventParam} AND own.sponsor_type = 'event'
-                        AND own.pipeline_stage = 'active' AND own.organization_id = organization.id)
+                        AND own.pipeline_stage = 'active' AND own.tier IS NOT NULL
+                        AND own.organization_id = organization.id)
     UNION ALL
     SELECT sponsor.id, NULL, sponsor.id, COALESCE(sponsor.non_member_name, 'Sponsor'), sponsor.tier, 'consortium'
     FROM sponsorships sponsor

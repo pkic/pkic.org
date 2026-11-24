@@ -56,6 +56,8 @@ export function TicketOrganizationsWorkbench({
   const [shown, setShown] = useState<EventTicketOrganizationList | null>(null);
   // The rows behind the checked boxes, kept while the reader pages through the list.
   const checkedRows = useRef(new Map<string, Row>());
+  // The search, filters and sort the checked rows were picked under; paging through them keeps the selection.
+  const scope = useRef<string | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [results, setResults] = useState<ReadonlyMap<string, EventTicketOrganizationTrialResult>>(new Map());
   const [busy, setBusy] = useState<"testing" | "saving" | null>(null);
@@ -66,6 +68,20 @@ export function TicketOrganizationsWorkbench({
   const nameOf = (key: string) => configuration.types.find((type) => type.key === key)?.name ?? key;
   const endpoint = `${ticketsEndpoint(slug)}/organizations`;
   const overCap = selected.size > TICKET_DECISIONS_MAX;
+
+  function shownRows(list: EventTicketOrganizationList) {
+    // A reload after a save brings each checked organization's current ticket.
+    for (const row of list.organizations)
+      if (checkedRows.current.has(keyOf(row))) checkedRows.current.set(keyOf(row), row);
+    setShown(list);
+  }
+
+  function queryChanged(query: Readonly<Record<string, string>>) {
+    const { offset: _offset, limit: _limit, ...rest } = query;
+    const next = JSON.stringify(rest);
+    if (scope.current !== null && scope.current !== next) select(new Set());
+    scope.current = next;
+  }
 
   function select(next: ReadonlySet<string>) {
     for (const row of shown?.organizations ?? []) {
@@ -163,8 +179,8 @@ export function TicketOrganizationsWorkbench({
         resolve={(value) => value.organizations}
         resolvePage={(value) => value.page}
         load={loadOrganizations}
-        onData={setShown}
-        onQueryChange={() => select(new Set())}
+        onData={shownRows}
+        onQueryChange={queryChanged}
         actionsRef={table}
         caption="Organizations in the portal"
         paginate

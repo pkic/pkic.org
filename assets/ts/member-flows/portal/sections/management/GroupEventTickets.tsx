@@ -18,7 +18,7 @@ import {
   type IssuedTicketPaymentState,
   type IssuedTicketsSummary,
 } from "../../../../../shared/schemas/event-issued-tickets";
-import { registrationTicketSyncResponseSchema } from "../../../../../shared/schemas/event-tickets";
+import { registrationTicketSyncResponseSchema } from "../../../../../shared/schemas/registration-tickets";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { TicketRefundDialog, ticketRefundable } from "../../../../components/events/tickets/TicketRefundDialog";
 import type { Column } from "../../../../components/Table";

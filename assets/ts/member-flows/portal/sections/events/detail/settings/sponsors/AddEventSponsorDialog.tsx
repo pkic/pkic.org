@@ -64,11 +64,14 @@ export function AddEventSponsorDialog({
       open
       title="Add event sponsor"
       closeLabel="Close dialog"
-      description="For a sponsor of this event only. PKIC contacts the sponsor about payment."
+      description="For a sponsor of this event only. The sponsorship team contacts the sponsor about payment."
       confirmLabel="Add sponsor"
       confirmDisabled={saving}
       onConfirm={() => void add()}
-      onCancel={onClose}
+      onCancel={() => {
+        // A pending request finishes in this dialog, so its result never lands in a dialog opened after it.
+        if (!saving) onClose();
+      }}
     >
       <form
         noValidate

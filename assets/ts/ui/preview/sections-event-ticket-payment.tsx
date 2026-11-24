@@ -1,5 +1,5 @@
 /** Gallery specimen: the registrant's ticket page while the ticket awaits payment. */
-import { registrationTicketSchema } from "../../../shared/schemas/event-tickets";
+import { registrationTicketSchema } from "../../../shared/schemas/registration-tickets";
 import { TicketCard } from "../../member-flows/portal/sections/events/app/EventHome";
 import type { ParticipantEventDetail } from "../../member-flows/portal/sections/events/app/event-app-model";
 import { EventRegister } from "../../member-flows/portal/sections/events/app/EventRegister";

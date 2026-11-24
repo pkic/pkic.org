@@ -8,7 +8,7 @@ import {
   registrationTicketCheckoutResponseSchema,
   registrationTicketSyncResponseSchema,
   type RegistrationTicket,
-} from "../../../../../../shared/schemas/event-tickets";
+} from "../../../../../../shared/schemas/registration-tickets";
 import { TICKET_STANDING_COPY } from "../../../../../../shared/event-ticket-standing";
 import { formatDateTime } from "../../../../../../shared/format-date";
 import { formatTicketMoney, ticketRefundNote } from "../../../../../../shared/event-ticket-display";

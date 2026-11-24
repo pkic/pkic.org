@@ -2,7 +2,7 @@
  * The ticket a registration holds: issued in the registration's own batch,
  * with the price fixed at that moment and a code's use counted with it.
  */
-import type { RegistrationTicket } from "../../../../assets/shared/schemas/event-tickets";
+import type { RegistrationTicket } from "../../../../assets/shared/schemas/registration-tickets";
 import {
   ticketReminderSchedule,
   type RegistrationTicketStatus,

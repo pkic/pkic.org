@@ -243,7 +243,7 @@ export function TicketTypeEditor({
       {testing && (
         <TicketOrganizationDialog
           slug={slug}
-          tickets={others}
+          tickets={tickets.filter((ticket) => ticket.active || ticket.id === type?.id)}
           classifierOn={classifierOn}
           start={{ organizationName: "", domains: [] }}
           draft={{
@@ -252,7 +252,8 @@ export function TicketTypeEditor({
               ticketTypeId: type?.id ?? null,
               key,
               classifierDescription: classifier,
-              classifierThresholdPercent: Number(threshold),
+              classifierThresholdPercent:
+                threshold.trim() === "" ? Math.round(DEFAULT_CLASSIFIER_THRESHOLD * 100) : Number(threshold),
               active,
             },
           }}

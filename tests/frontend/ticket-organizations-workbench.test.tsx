@@ -2,6 +2,10 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, expect, it, vi } from "vitest";
+import {
+  eventTicketOrganizationDecisionsSchema,
+  eventTicketOrganizationTrialSchema,
+} from "../../assets/shared/schemas/event-ticket-organizations";
 import type { EventTicketsConfiguration } from "../../assets/shared/schemas/event-tickets";
 import { TicketOrganizationsWorkbench } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/tickets/TicketOrganizationsWorkbench";
 
@@ -108,7 +112,7 @@ it("tests the checked organizations together and saves only the answers that dec
     [...host.querySelectorAll("button")].find((candidate) => candidate.textContent === label)!;
   await act(() => button("Test selected").click());
   await settle();
-  expect(requests[0]!.body).toEqual({
+  expect(eventTicketOrganizationTrialSchema.parse(requests[0]!.body)).toEqual({
     organizations: [{ organizationId: BANK }, { organizationId: SECURITY }],
   });
   expect(host.textContent).toContain("Attendee, 91% sure");
@@ -116,7 +120,7 @@ it("tests the checked organizations together and saves only the answers that dec
   await act(() => button("Save test answers").click());
   await settle();
   expect(requests[1]!.url).toContain("/organizations/decisions");
-  expect(requests[1]!.body).toEqual({
+  expect(eventTicketOrganizationDecisionsSchema.parse(requests[1]!.body)).toEqual({
     decisions: [{ organizationId: BANK, ticketKey: "attendee" }],
   });
 });

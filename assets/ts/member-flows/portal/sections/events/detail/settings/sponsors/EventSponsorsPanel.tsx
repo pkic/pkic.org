@@ -46,7 +46,7 @@ export function EventSponsorsPanel({
         empty={
           <EmptyState
             title="No event sponsors yet"
-            body="Add a sponsor that supports this event only. Consortium sponsors support every event and are managed by PKIC."
+            body="Add a sponsor that supports this event only. Consortium sponsors support every event and are managed by the sponsorship team."
           />
         }
         columns={[

@@ -133,10 +133,17 @@ export async function issueSponsorPassCodes(
         statements.push(
           db
             .prepare(
-              `INSERT OR IGNORE INTO event_ticket_codes
+              // A code issued meanwhile keeps the larger number of passes, by either sponsor index.
+              `INSERT INTO event_ticket_codes
                  (id, event_id, ticket_type_id, label, code, amount, max_uses, organization_id, sponsorship_id,
                   pass_kind, created_by_user_id, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)`,
+               VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(event_id, organization_id, pass_kind)
+                 WHERE organization_id IS NOT NULL AND pass_kind IS NOT NULL
+               DO UPDATE SET max_uses = MAX(max_uses, excluded.max_uses), updated_at = excluded.updated_at
+               ON CONFLICT(event_id, sponsorship_id, pass_kind)
+                 WHERE organization_id IS NULL AND sponsorship_id IS NOT NULL AND pass_kind IS NOT NULL
+               DO UPDATE SET max_uses = MAX(max_uses, excluded.max_uses), updated_at = excluded.updated_at`,
             )
             .bind(
               uuid(),

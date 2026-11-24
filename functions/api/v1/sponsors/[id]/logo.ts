@@ -92,6 +92,7 @@ export const SponsorsIdLogoPut = openApiRoute(sponsorshipLogoPutRouteSchema, asy
   const result = await replaceSponsorshipLogo(
     authorizedSponsorshipMutationDb(db, staff, access),
     staff,
+    access,
     bucket,
     id,
     await readValidatedUploadedSvgLogo(c.req.raw),
@@ -109,7 +110,12 @@ export const SponsorsIdLogoPut = openApiRoute(sponsorshipLogoPutRouteSchema, asy
 export const SponsorsIdLogoDelete = openApiRoute(sponsorshipLogoDeleteRouteSchema, async (c: AdminContext, data) => {
   const { db, actor: staff } = await requireSponsorshipActor(c);
   const { access } = await loadAuthorizedSponsorship(db, staff, data.params.id, "write");
-  const result = await removeSponsorshipLogo(authorizedSponsorshipMutationDb(db, staff, access), staff, data.params.id);
+  const result = await removeSponsorshipLogo(
+    authorizedSponsorshipMutationDb(db, staff, access),
+    staff,
+    access,
+    data.params.id,
+  );
   c.executionCtx.waitUntil(deleteStoredImageInBackground(db, c.env, result.previousKey, "assets"));
   return json(successResponseSchema.parse({ success: true }));
 });

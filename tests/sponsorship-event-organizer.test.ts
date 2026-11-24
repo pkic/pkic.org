@@ -14,7 +14,7 @@ import { insertUser } from "./helpers/membership";
 async function call(token: string, path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set("authorization", `Bearer ${token}`);
-  if (init.body && !headers.has("content-type")) headers.set("content-type", "application/json");
+  if (typeof init.body === "string" && !headers.has("content-type")) headers.set("content-type", "application/json");
   return app.fetch(
     new Request(`https://app.test${path}`, { ...init, headers }),
     env as any,
@@ -102,6 +102,32 @@ describe("Event organizers and event sponsors", () => {
     const rows = ((await listed.json()) as { sponsorships: { id: string }[] }).sponsorships;
     expect(rows.map((row) => row.id)).toEqual([id]);
     expect(rows.map((row) => row.id)).not.toContain(other);
+  });
+
+  it("uploads and removes the logo of an event sponsor for their own event", async () => {
+    const created = await call(
+      chair,
+      "/api/v1/sponsors",
+      json({ sponsorType: "event", eventId: eventA, nonMemberName: "Synthetic Sponsor", tier: "Leader" }),
+    );
+    const id = ((await created.json()) as { sponsorship: { id: string } }).sponsorship.id;
+    const body = new FormData();
+    body.append(
+      "file",
+      new File(
+        [
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="60" height="60" fill="#175"/></svg>',
+        ],
+        "logo.svg",
+        {
+          type: "image/svg+xml",
+        },
+      ),
+    );
+    const uploaded = await call(chair, `/api/v1/sponsors/${id}/logo`, { method: "PUT", body });
+    expect(uploaded.status, await uploaded.clone().text()).toBe(200);
+    const removed = await call(chair, `/api/v1/sponsors/${id}/logo`, { method: "DELETE" });
+    expect(removed.status, await removed.clone().text()).toBe(200);
   });
 
   it("refuses an organizer another event, the unfiltered list, and an unfiltered consortium list", async () => {

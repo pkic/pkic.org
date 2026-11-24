@@ -5,7 +5,7 @@
  */
 import { useState } from "preact/hooks";
 import { successResponseSchema } from "../../../../shared/schemas/api-common";
-import { registrationTicketRefundSchema } from "../../../../shared/schemas/event-tickets";
+import { registrationTicketRefundSchema } from "../../../../shared/schemas/registration-tickets";
 import { formatTicketMoney } from "../../../../shared/event-ticket-display";
 import { useContractForm } from "../../../hooks/useContractForm";
 import { postJson } from "../../../shared/api-client";

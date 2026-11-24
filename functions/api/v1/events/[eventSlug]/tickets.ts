@@ -9,12 +9,14 @@ import {
   eventTicketTypeCreateRouteSchema,
   eventTicketTypeUpdateRouteSchema,
   eventTicketsGetRouteSchema,
+} from "../../../../../assets/shared/schemas/event-tickets";
+import {
   registrationTicketCheckoutRouteSchema,
   registrationTicketGetRouteSchema,
   registrationTicketRefundRouteSchema,
   registrationTicketReviewRouteSchema,
   registrationTicketSyncRouteSchema,
-} from "../../../../../assets/shared/schemas/event-tickets";
+} from "../../../../../assets/shared/schemas/registration-tickets";
 import {
   eventTicketCodeCreateRouteSchema,
   eventTicketCodesGetRouteSchema,

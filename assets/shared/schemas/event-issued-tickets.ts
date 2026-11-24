@@ -5,7 +5,7 @@
  */
 import { z } from "zod";
 import { eventSlugParamsSchema, jsonErrorResponse } from "./api-common";
-import { registrationTicketSchema } from "./event-tickets";
+import { registrationTicketSchema } from "./registration-tickets";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { stripeCurrencySchema } from "./stripe";

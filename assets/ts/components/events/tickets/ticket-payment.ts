@@ -2,7 +2,7 @@
 import {
   registrationTicketCheckoutResponseSchema,
   registrationTicketResponseSchema,
-} from "../../../../shared/schemas/event-tickets";
+} from "../../../../shared/schemas/registration-tickets";
 import { getJson, postJson } from "../../../shared/api-client";
 
 /**

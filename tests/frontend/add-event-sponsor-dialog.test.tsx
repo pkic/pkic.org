@@ -2,6 +2,7 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, expect, it, vi } from "vitest";
+import { sponsorshipCreateSchema } from "../../assets/shared/schemas/sponsorship-management";
 import { AddEventSponsorDialog } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/sponsors/AddEventSponsorDialog";
 
 let host: HTMLDivElement;
@@ -41,10 +42,10 @@ it("adds a sponsor of this event only, under the event", async () => {
   const add = [...host.querySelectorAll("button")].find((button) => button.textContent === "Add sponsor")!;
   await act(() => add.click());
   for (let turn = 0; turn < 5; turn += 1) await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
-  expect(requests).toEqual([
-    {
-      url: "/api/v1/sponsors",
-      body: expect.objectContaining({ sponsorType: "event", eventId: EVENT_ID, nonMemberName: "Specimen Labs" }),
-    },
-  ]);
+  expect(requests.map((request) => request.url)).toEqual(["/api/v1/sponsors"]);
+  expect(sponsorshipCreateSchema.parse(requests[0]!.body)).toMatchObject({
+    sponsorType: "event",
+    eventId: EVENT_ID,
+    nonMemberName: "Specimen Labs",
+  });
 });

@@ -61,7 +61,8 @@ export interface DataTableColumn<Row> {
   headerIcon?: ComponentChildren;
   /**
    * What the column counts or means, on hover, focus and tap of its name. The
-   * name then opens the hint instead of sorting; the column's menu still sorts.
+   * name then opens the hint instead of sorting; the column's menu sorts, or a
+   * sort button beside the name when the column has no menu.
    */
   headerHint?: string;
   /** Omit to render nothing for this column. */
@@ -414,7 +415,23 @@ export function DataTable<Row>({
                   <Tooltip label={`About ${column.header}`} content={column.headerHint}>
                     <span class="pk-table__hint">{label}</span>
                   </Tooltip>
-                  {arrow}
+                  {column.sortable && onSort && !column.menu?.length ? (
+                    // Without a column menu, the name opens the hint and this is where the column sorts.
+                    <button
+                      type="button"
+                      class="pk-table__sort"
+                      aria-label={`Sort by ${column.header}`}
+                      onClick={() => onSort(column.id, nextDirection(sort, column.id))}
+                    >
+                      {arrow || (
+                        <span class="pk-table__arrow" aria-hidden="true">
+                          ↕
+                        </span>
+                      )}
+                    </button>
+                  ) : (
+                    arrow
+                  )}
                 </span>
               ) : column.sortable && onSort ? (
                 <button

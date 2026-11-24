@@ -8,11 +8,11 @@ import { ticketRefundNote } from "../assets/shared/event-ticket-display";
 import { callApi } from "./helpers/app";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { hmacSha256Hex } from "../functions/_lib/utils/crypto";
+import { eventTicketSettingsUpdateSchema } from "../assets/shared/schemas/event-tickets";
 import {
-  eventTicketSettingsUpdateSchema,
   registrationTicketCheckoutResponseSchema,
   registrationTicketResponseSchema,
-} from "../assets/shared/schemas/event-tickets";
+} from "../assets/shared/schemas/registration-tickets";
 import {
   eventTicketCodeListQuerySchema,
   eventTicketSponsorListQuerySchema,
@@ -2097,6 +2097,11 @@ describe("event tickets", () => {
          VALUES (?, 'consortium', 'Outside Sponsor', 'Gold', 'active', ?, ?),
                 (?, 'consortium', 'Lapsed Sponsor', 'Gold', 'lapsed', ?, ?)`,
       ).bind(outsideId, now, now, lapsedId, now, now),
+      // An event sponsorship without a tier yet leaves the organization's consortium tier in force.
+      env.DB.prepare(
+        `INSERT INTO sponsorships (id, sponsor_type, organization_id, event_id, pipeline_stage, created_at, updated_at)
+         VALUES (?, 'event', ?, ?, 'active', ?, ?)`,
+      ).bind(crypto.randomUUID(), organizationId, event.id, now, now),
     ]);
     await saveSponsorPasses(env.DB, admin, event, {
       expectedRevision: (await readEventTicketsConfiguration(env.DB, event)).revision,
@@ -2138,6 +2143,10 @@ describe("event tickets", () => {
     await expect(
       createEventTicketCode(env.DB, admin, event, { ...discount, sponsorId: lapsedId }),
     ).rejects.toMatchObject({ code: "EVENT_TICKETS_CHANGED" });
+    // The refused code leaves no audit entry behind.
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'event_ticket_code_created'").first("n"),
+    ).toBe(1);
     const outside = await createEventTicketCode(env.DB, admin, event, { ...discount, sponsorId: outsideId });
     expect(outside.sponsor).toEqual({ id: outsideId, name: "Outside Sponsor" });
     const ofMember = await listEventTicketCodes(
