@@ -472,6 +472,25 @@ describe("ticket organizations", () => {
     );
   });
 
+  it("clears nothing when the tickets changed after they were read", async () => {
+    const { event, admin } = await seedTickets();
+    const vendor = await organization("Example Vendor");
+    await decideTicketOrganizations(env.DB, admin, event, {
+      decisions: [{ organizationId: vendor, ticketKey: "pqcc_vendor" }],
+    });
+    const [listed] = (await listTicketOrganizations(env.DB, event, query())).organizations;
+    const renaming = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.startsWith("DELETE FROM ticket_organization_decisions"),
+      () => env.DB.prepare("UPDATE event_ticket_settings SET revision = revision + 1").run(),
+    );
+    await expect(clearTicketOrganizationDecision(renaming, admin, event, listed.id!)).rejects.toMatchObject({
+      status: 409,
+      code: "TICKET_DECISIONS_CHANGED",
+    });
+    expect(await decisionCount()).toBe(1);
+  });
+
   it("lists every domain an organization is recognized by, though the classifier is given ten", async () => {
     const { event } = await seedTickets();
     const domains = Array.from({ length: 11 }, (_, index) => `d${String(index).padStart(2, "0")}.example.test`);

@@ -309,10 +309,7 @@ export async function decideTicketOrganizations(
     ]),
     // The tickets and organizations as they were checked: a ticket renamed or an organization merged meanwhile
     // writes nothing.
-    prepareStateGuard(db, {
-      sql: "SELECT 1 WHERE COALESCE((SELECT revision FROM event_ticket_settings WHERE event_id = ?), 0) = ?",
-      bindings: [event.id, snapshot.settings?.revision ?? 0],
-    }),
+    prepareTicketSettingsGuard(db, event, snapshot),
     prepareStateGuard(db, {
       sql: `SELECT 1 WHERE (SELECT COUNT(*) FROM organizations
               WHERE id IN (SELECT value FROM json_each(?)) AND merged_into_organization_id IS NULL) = ?`,
@@ -320,6 +317,18 @@ export async function decideTicketOrganizations(
     }),
     ...input.decisions.flatMap((decision) => prepareTicketOrganizationDecision(db, actor, event, types, decision)),
   ]);
+}
+
+/** Aborts the batch when the event's tickets changed after the snapshot was read. */
+function prepareTicketSettingsGuard(
+  db: DatabaseLike,
+  event: TicketEvent,
+  snapshot: Awaited<ReturnType<typeof readEventTicketSnapshot>>,
+): StatementLike {
+  return prepareStateGuard(db, {
+    sql: "SELECT 1 WHERE COALESCE((SELECT revision FROM event_ticket_settings WHERE event_id = ?), 0) = ?",
+    bindings: [event.id, snapshot.settings?.revision ?? 0],
+  });
 }
 
 async function commitDecisionChange(db: DatabaseLike, statements: StatementLike[]): Promise<void> {
@@ -343,7 +352,8 @@ export async function clearTicketOrganizationDecision(
   event: TicketEvent,
   decisionId: string,
 ): Promise<void> {
-  const scope = decisionsInScope(await readTypes(db, event));
+  const snapshot = await readEventTicketSnapshot(db, event);
+  const scope = decisionsInScope(snapshot.types);
   const row = await first<{ organization_id: string; updated_at: string }>(
     db,
     `SELECT organization_id, updated_at FROM ticket_organization_decisions WHERE id = ? AND ${scope.where}`,
@@ -354,7 +364,9 @@ export async function clearTicketOrganizationDecision(
     preparePermissionsAuthorizationGuard(db, actor, [
       { permission: "events:write", context: { type: "event", id: event.id } },
     ]),
-    // The decision as it was read: one replaced or moved by a merge meanwhile clears nothing.
+    // The tickets and the decision as they were read: a ticket renamed, or the decision replaced or moved by a
+    // merge meanwhile, clears nothing.
+    prepareTicketSettingsGuard(db, event, snapshot),
     prepareStateGuard(db, {
       sql: "SELECT 1 FROM ticket_organization_decisions WHERE id = ? AND organization_id = ? AND updated_at = ?",
       bindings: [decisionId, row.organization_id, row.updated_at],
