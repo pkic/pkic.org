@@ -1,7 +1,4 @@
-import {
-  hasAuthenticatedSessionCookie,
-  hasAuthenticationCredential,
-} from "../../_lib/auth/session-cookies";
+import { hasAuthenticatedSessionCookie, hasAuthenticationCredential } from "../../_lib/auth/session-cookies";
 import { assertSameOriginRequest } from "../../_lib/request-origin";
 import { SANDBOXED_IMAGE_CONTENT_SECURITY_POLICY } from "../../_lib/services/image-response";
 
