@@ -192,16 +192,6 @@ export interface TicketClassifierOption {
   threshold: number;
 }
 
-/**
- * The identity of a set of classifier options: the ticket keys it chooses
- * between. Descriptions, thresholds and the model's instructions are tuning,
- * so changing them keeps every stored decision; another event that offers the
- * same ticket keys reuses them too.
- */
-export function ticketClassifierCriteria(options: readonly TicketClassifierOption[]): string {
-  return JSON.stringify(options.map((option) => option.key).sort((a, b) => a.localeCompare(b)));
-}
-
 /** The ticket a classifier's answer decides, or null when it is not certain enough for that ticket. */
 export function decideClassifiedTicket(
   options: readonly TicketClassifierOption[],

@@ -432,18 +432,18 @@ describe("merging a duplicate organization", () => {
     ).toMatchObject({ organizationId: ibm });
   });
 
-  it("moves ticket decisions to the organization that stays, keeping its own for the same question", async () => {
+  it("moves ticket decisions to the organization that stays, keeping its own for the same ticket", async () => {
     const kept = await insertOrganization(env.DB, "Example Vendor");
     const duplicate = await insertOrganization(env.DB, "Example Vendor Group");
-    const decide = (id: string, organizationId: string, criteria: string, ticketKey: string) =>
+    const decide = (id: string, organizationId: string, ticketKey: string, source: string) =>
       env.DB.prepare(
-        `INSERT INTO ticket_organization_decisions (id, organization_id, criteria_sha256, ticket_key, source, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 'organizer', ?, ?)`,
-      ).bind(id, organizationId, criteria, ticketKey, nowIso(), nowIso());
+        `INSERT INTO ticket_organization_decisions (id, organization_id, ticket_key, source, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      ).bind(id, organizationId, ticketKey, source, nowIso(), nowIso());
     await env.DB.batch([
-      decide("kept-shared", kept, "shared-question", "vendor"),
-      decide("duplicate-shared", duplicate, "shared-question", "attendee"),
-      decide("duplicate-only", duplicate, "other-question", "vendor"),
+      decide("kept-vendor", kept, "vendor", "organizer"),
+      decide("duplicate-vendor", duplicate, "vendor", "classifier"),
+      decide("duplicate-attendee", duplicate, "attendee", "organizer"),
     ]);
 
     const response = await merge(kept, organizationMergeCreateSchema.parse({ sourceOrganizationId: duplicate }));
@@ -451,8 +451,8 @@ describe("merging a duplicate organization", () => {
     expect(
       await queryAll(env.DB, "SELECT id, organization_id, ticket_key FROM ticket_organization_decisions ORDER BY id"),
     ).toEqual([
-      { id: "duplicate-only", organization_id: kept, ticket_key: "vendor" },
-      { id: "kept-shared", organization_id: kept, ticket_key: "vendor" },
+      { id: "duplicate-attendee", organization_id: kept, ticket_key: "attendee" },
+      { id: "kept-vendor", organization_id: kept, ticket_key: "vendor" },
     ]);
   });
 

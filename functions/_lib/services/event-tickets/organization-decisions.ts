@@ -28,7 +28,6 @@ import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import { workEmailDomain } from "../../email-domains/classification";
 import { AppError } from "../../errors";
-import { sha256Hex } from "../../utils/crypto";
 import type { DatabaseLike, Env, StatementLike, UserBackedAuthAdmin } from "../../types";
 import { prepareAuditLog } from "../audit";
 import { organizationConnectionDomainsSql } from "../organization-management/read-model";
@@ -37,7 +36,7 @@ import {
   classifierOptions,
   decisionsInScope,
   organizationDomainsSql,
-  prepareStoreTicketDecision,
+  prepareOrganizerTicketDecision,
   readOrganizationSubjects,
   readStoredTicketDecision,
   splitDomains,
@@ -267,34 +266,15 @@ export async function testTicketOrganizations(
 }
 
 /** The statements that save one organizer's decision, which the classifier never replaces. */
-async function prepareTicketOrganizationDecision(
+function prepareTicketOrganizationDecision(
   db: DatabaseLike,
   actor: UserBackedAuthAdmin,
   event: TicketEvent,
   types: readonly TicketTypeRow[],
   input: EventTicketOrganizationDecisions["decisions"][number],
-): Promise<StatementLike[]> {
-  const offered = types.filter((type) => type.active === 1).map((type) => type.ticket_key);
-  // Keyed on the tickets on offer, so events with other tickets keep their own decision.
-  const criteriaDigest = await sha256Hex(`organizer:${[...offered].sort().join("\n")}`);
+): StatementLike[] {
   return [
-    // An earlier organizer's decision that counts here would otherwise stay beside the new one.
-    db
-      .prepare(
-        `DELETE FROM ticket_organization_decisions
-          WHERE source = 'organizer' AND organization_id = ? AND criteria_sha256 <> ?
-            AND ticket_key IN (${offered.map(() => "?").join(", ")})`,
-      )
-      .bind(input.organizationId, criteriaDigest, ...offered),
-    prepareStoreTicketDecision(db, {
-      criteriaDigest,
-      organizationId: input.organizationId,
-      ticketKey: input.ticketKey,
-      source: "organizer",
-      confidence: null,
-      model: null,
-      decidedByUserId: actor.id,
-    }),
+    ...prepareOrganizerTicketDecision(db, types, { ...input, decidedByUserId: actor.id }),
     prepareAuditLog(db, "user", actor.id, "ticket_organization_decided", "event", event.id, {
       organizationId: input.organizationId,
       ticketKey: input.ticketKey,
@@ -323,8 +303,8 @@ export async function decideTicketOrganizations(
       "TICKET_ORGANIZATION_NOT_FOUND",
       "An organization is no longer in the portal. Reload the list and try again.",
     );
-  const statements = await Promise.all(
-    input.decisions.map((decision) => prepareTicketOrganizationDecision(db, actor, event, types, decision)),
+  const statements = input.decisions.map((decision) =>
+    prepareTicketOrganizationDecision(db, actor, event, types, decision),
   );
   await db.batch([
     preparePermissionsAuthorizationGuard(db, actor, [

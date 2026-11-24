@@ -5,7 +5,6 @@ import {
   decideClassifiedTicket,
   nextTicketPricePeriod,
   quoteTicket,
-  ticketClassifierCriteria,
   type TicketPriceRule,
 } from "../assets/shared/event-tickets";
 import { eventTicketPricesReplaceSchema } from "../assets/shared/schemas/event-tickets";
@@ -133,17 +132,6 @@ describe("ticket classifier decisions", () => {
     expect(decideClassifiedTicket(options, { pqcc_vendor: 0.89, pqcc_attendee: 0.11 })).toBeNull();
     expect(decideClassifiedTicket(options, { pqcc_vendor: 0.1, pqcc_attendee: 0.9 })?.key).toBe("pqcc_attendee");
     expect(decideClassifiedTicket(options, {})).toBeNull();
-  });
-
-  it("identifies a question by its ticket keys alone, so tuning a description or threshold keeps decisions", () => {
-    const same = [
-      { key: "pqcc_vendor", description: "Sells, licenses or integrates cryptography for others.", threshold: 0.5 },
-      { key: "pqcc_attendee", description: "Only uses cryptography for itself.", threshold: 0.99 },
-    ];
-    expect(ticketClassifierCriteria(same)).toBe(ticketClassifierCriteria(options));
-    expect(ticketClassifierCriteria([{ ...options[0], key: "pki_attendee" }, options[1]])).not.toBe(
-      ticketClassifierCriteria(options),
-    );
   });
 });
 

@@ -383,11 +383,11 @@ export async function mergeOrganizations(
     authorizedDb
       .prepare("UPDATE sponsors SET organization_id = ?, updated_at = ? WHERE organization_id = ?")
       .bind(target.id, at, source.id),
-    // The kept organization's own ticket decision wins over the merged one's for the same question.
+    // The kept organization's own decision for a ticket wins over the merged one's.
     authorizedDb
       .prepare(`DELETE FROM ticket_organization_decisions
       WHERE organization_id=? AND EXISTS (SELECT 1 FROM ticket_organization_decisions kept
-        WHERE kept.criteria_sha256=ticket_organization_decisions.criteria_sha256 AND kept.organization_id=?)`)
+        WHERE kept.ticket_key=ticket_organization_decisions.ticket_key AND kept.organization_id=?)`)
       .bind(source.id, target.id),
     authorizedDb
       .prepare("UPDATE ticket_organization_decisions SET organization_id = ?, updated_at = ? WHERE organization_id = ?")

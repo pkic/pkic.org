@@ -42,9 +42,9 @@ DROP TABLE ticket_classifier_decisions;
 CREATE TABLE ticket_organization_decisions (
   id                  TEXT NOT NULL PRIMARY KEY,
   organization_id     TEXT NOT NULL REFERENCES organizations(id),
-  -- The canonical question (ticket keys and their descriptions), so another
-  -- event that asks the same question reuses the answer.
-  criteria_sha256     TEXT NOT NULL,
+  -- The ticket the organization gets at every event that offers this key.
+  -- Tuning the ticket's description keeps the decision; created_at and the
+  -- audit log tell which description it was made under.
   ticket_key          TEXT NOT NULL,
   confidence          REAL,
   -- 'classifier' or 'organizer'. An organizer's decision is never replaced by a classifier's.
@@ -54,8 +54,5 @@ CREATE TABLE ticket_organization_decisions (
   decided_by_user_id  TEXT REFERENCES users(id),
   created_at          TEXT NOT NULL,
   updated_at          TEXT NOT NULL,
-  UNIQUE (criteria_sha256, organization_id)
+  UNIQUE (organization_id, ticket_key)
 );
-
-CREATE INDEX idx_ticket_organization_decisions_organization
-  ON ticket_organization_decisions(organization_id, ticket_key);

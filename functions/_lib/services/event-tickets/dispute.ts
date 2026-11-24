@@ -14,12 +14,7 @@ import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
 import { ticketReminderSchedule } from "../../../../assets/shared/event-tickets";
 import { priceTicket, readTicketPerson, ticketSubject } from "./assignment";
-import {
-  classifierOptions,
-  prepareStoreTicketDecision,
-  readStoredTicketDecision,
-  ticketCriteriaDigest,
-} from "./classifier";
+import { prepareOrganizerTicketDecision, readStoredTicketDecision } from "./classifier";
 import { prepareTicketPaymentEmail } from "./payment-emails";
 import { readRefundPolicy } from "./refund-policy";
 import { readEventTicketSnapshot } from "./snapshot";
@@ -62,7 +57,6 @@ export async function reviewDisputedTicket(
   if (!row || !row.dispute_reason || row.dispute_resolved_at)
     throw new AppError(409, "TICKET_NOT_DISPUTED", "This ticket has no open dispute.");
   const snapshot = await readEventTicketSnapshot(db, event);
-  const digest = await ticketCriteriaDigest(classifierOptions(snapshot.types));
   // The same person the ticket was offered and priced for: the identity registered as, and its verified address.
   const person = await readTicketPerson(db, {
     userId: row.user_id,
@@ -95,17 +89,11 @@ export async function reviewDisputedTicket(
         .bind(now, now, row.id),
       // Kept for the organization, the choice decides its ticket from now on; a person with none is settled alone.
       ...(subject.organizationId
-        ? [
-            prepareStoreTicketDecision(db, {
-              criteriaDigest: digest,
-              organizationId: subject.organizationId,
-              ticketKey: row.ticket_key,
-              source: "organizer",
-              confidence: null,
-              model: null,
-              decidedByUserId: actor.id,
-            }),
-          ]
+        ? prepareOrganizerTicketDecision(db, snapshot.types, {
+            organizationId: subject.organizationId,
+            ticketKey: row.ticket_key,
+            decidedByUserId: actor.id,
+          })
         : []),
     );
     await settle(db, statements);

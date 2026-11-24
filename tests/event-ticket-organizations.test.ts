@@ -66,7 +66,6 @@ async function organization(name: string, domains: readonly string[] = []): Prom
 async function storeClassifierDecision(organizationId: string, ticketKey: string) {
   await env.DB.batch([
     prepareStoreTicketDecision(env.DB, {
-      criteriaDigest: "an-earlier-question",
       organizationId,
       ticketKey,
       source: "classifier",
@@ -291,12 +290,11 @@ describe("ticket organizations", () => {
     });
   });
 
-  it("replaces an organizer's decision made under earlier criteria", async () => {
+  it("replaces the organization's earlier decision among these tickets", async () => {
     const { event, admin } = await seedTickets();
     const vendor = await organization("Example Vendor");
     await env.DB.batch([
       prepareStoreTicketDecision(env.DB, {
-        criteriaDigest: "an-earlier-question",
         organizationId: vendor,
         ticketKey: "pqcc_attendee",
         source: "organizer",

@@ -343,14 +343,13 @@ describe("event tickets", () => {
     expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM ticket_organization_decisions").first("n")).toBe(0);
   });
 
-  it("keeps decisions when other tickets join or leave the classifier", async () => {
+  it("keeps decisions when ticket descriptions are added or cleared", async () => {
     const { event, admin } = await seedTickets();
     await register(event, "one@vendor-example.test", classifier({ pqcc_vendor: 0.97, pqcc_attendee: 0.03 }));
-    // Decisions for another organization from earlier questions: an organizer's, which counts, and an older answer.
+    // Another organization has two decisions among these tickets: the organizer's counts over the classifier's.
     const organizationId = await organizationFor("kept-example.test");
     await env.DB.batch([
       prepareStoreTicketDecision(env.DB, {
-        criteriaDigest: "an-earlier-question",
         organizationId,
         ticketKey: "pqcc_attendee",
         source: "classifier",
@@ -358,7 +357,6 @@ describe("event tickets", () => {
         model: "synthetic",
       }),
       prepareStoreTicketDecision(env.DB, {
-        criteriaDigest: "another-earlier-question",
         organizationId,
         ticketKey: "pqcc_vendor",
         source: "organizer",
@@ -407,15 +405,15 @@ describe("event tickets", () => {
     await clearDescription("pqcc_academic");
     expect((await register(event, "three@vendor-example.test")).ticket).toMatchObject({ ticketName: "Vendor" });
 
-    // No ticket keeps a description: the classifier's decisions stop, an organizer's still applies everywhere.
+    // No ticket keeps a description: a decision made stays made, the classifier's as well as an organizer's.
     await clearDescription("pqcc_vendor");
-    expect((await register(event, "four@vendor-example.test")).ticket).toMatchObject({ ticketName: "Attendee" });
+    expect((await register(event, "four@vendor-example.test")).ticket).toMatchObject({ ticketName: "Vendor" });
     expect((await register(event, "three@kept-example.test")).ticket).toMatchObject({ ticketName: "Vendor" });
     const remaining = (await readEventTicketsConfiguration(env.DB, event)).types.map((type) => [
       type.key,
       type.presetOrganizations,
     ]);
-    expect(Object.fromEntries(remaining)).toEqual({ pqcc_attendee: 0, pqcc_vendor: 1, pqcc_academic: 0 });
+    expect(Object.fromEntries(remaining)).toEqual({ pqcc_attendee: 0, pqcc_vendor: 2, pqcc_academic: 0 });
   });
 
   it("lets the person choose when the classifier is unsure and falls back to the default when it fails", async () => {

@@ -7,17 +7,14 @@
  * configuration value; nothing else in the application names it.
  *
  * A decision is made once for a portal organization, from its name and every
- * domain it is recognized by, and found again by the ticket key it chose. Tuning a description, a threshold or
- * the instructions keeps it, adding or removing another ticket keeps it, and
- * another event that offers the same ticket reuses it. An organizer's decision
+ * domain it is recognized by, and found again by the ticket key it chose: one
+ * key is one way of judging, such as who is a vendor for the conference.
+ * Tuning a description, a threshold or the instructions keeps the decision,
+ * and every later event that offers the same ticket key reuses it. An organizer's decision
  * is never replaced. A person who registers for no organization is asked
  * about by their work domain each time, and nothing is stored for them.
  */
-import {
-  decideClassifiedTicket,
-  ticketClassifierCriteria,
-  type TicketClassifierOption,
-} from "../../../../assets/shared/event-tickets";
+import { decideClassifiedTicket, type TicketClassifierOption } from "../../../../assets/shared/event-tickets";
 import { all, first } from "../../db/queries";
 import type { DatabaseLike, Env, StatementLike } from "../../types";
 import { logError } from "../../logging";
@@ -58,12 +55,6 @@ export function classifierOptions(types: readonly TicketTypeRow[]): TicketClassi
     }));
 }
 
-export async function ticketCriteriaDigest(options: readonly TicketClassifierOption[]): Promise<string> {
-  const bytes = new TextEncoder().encode(ticketClassifierCriteria(options));
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
 /** Every domain a portal organization is recognized by: its claimed domains and its people's verified ones. */
 export function organizationDomainsSql(organizationIdSql: string): string {
   return `(SELECT group_concat(domain, ' ') FROM (SELECT DISTINCT LOWER(known.domain) AS domain
@@ -95,18 +86,17 @@ export async function readOrganizationSubjects(
 }
 
 /**
- * The decisions that still count for these tickets: an organizer's for any active ticket, the classifier's for one
- * it still chooses between. They are found by ticket key, not by the question they answered, so adding or clearing
- * another ticket's description keeps them. An organizer's decision comes first, then the latest.
+ * The decisions that count for these tickets: any for a ticket the event offers, whoever made it and whether or not
+ * the ticket is still described. A decision made stays made. An organizer's comes first, the latest of them; then
+ * the classifier's first answer, so a later answer for other tickets does not move the organization.
  */
 export function decisionsInScope(types: readonly TicketTypeRow[]) {
   const offered = types.filter((type) => type.active === 1).map((type) => type.ticket_key);
-  const asked = classifierOptions(types).map((option) => option.key);
-  const list = (keys: readonly string[]) => (keys.length ? keys.map(() => "?").join(", ") : "NULL");
   return {
-    where: `((source = 'organizer' AND ticket_key IN (${list(offered)})) OR (source <> 'organizer' AND ticket_key IN (${list(asked)})))`,
-    precedence: "CASE source WHEN 'organizer' THEN 0 ELSE 1 END, updated_at DESC, id",
-    bindings: [...offered, ...asked],
+    where: `ticket_key IN (${offered.length ? offered.map(() => "?").join(", ") : "NULL"})`,
+    precedence:
+      "CASE source WHEN 'organizer' THEN 0 ELSE 1 END, CASE source WHEN 'organizer' THEN updated_at END DESC, created_at, id",
+    bindings: offered,
   };
 }
 
@@ -150,7 +140,6 @@ export function prepareDecidedOrganizationCounts(db: DatabaseLike, types: readon
 export function prepareStoreTicketDecision(
   db: DatabaseLike,
   input: {
-    criteriaDigest: string;
     organizationId: string;
     ticketKey: string;
     source: "classifier" | "organizer";
@@ -163,18 +152,16 @@ export function prepareStoreTicketDecision(
   return db
     .prepare(
       `INSERT INTO ticket_organization_decisions
-         (id, organization_id, criteria_sha256, ticket_key, confidence, source, model,
-          decided_by_user_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(criteria_sha256, organization_id) DO UPDATE SET
-         ticket_key = excluded.ticket_key, confidence = excluded.confidence, source = excluded.source,
-         model = excluded.model, decided_by_user_id = excluded.decided_by_user_id, updated_at = excluded.updated_at
+         (id, organization_id, ticket_key, confidence, source, model, decided_by_user_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(organization_id, ticket_key) DO UPDATE SET
+         confidence = excluded.confidence, source = excluded.source, model = excluded.model,
+         decided_by_user_id = excluded.decided_by_user_id, updated_at = excluded.updated_at
        WHERE excluded.source = 'organizer' OR ticket_organization_decisions.source <> 'organizer'`,
     )
     .bind(
       uuid(),
       input.organizationId,
-      input.criteriaDigest,
       input.ticketKey,
       input.confidence,
       input.source,
@@ -183,6 +170,26 @@ export function prepareStoreTicketDecision(
       now,
       now,
     );
+}
+
+/**
+ * An organizer's decision for an organization among the tickets on offer. It replaces every decision that counted
+ * for those tickets, so the organizer's choice is the only one left there.
+ */
+export function prepareOrganizerTicketDecision(
+  db: DatabaseLike,
+  types: readonly TicketTypeRow[],
+  input: { organizationId: string; ticketKey: string; decidedByUserId: string },
+): StatementLike[] {
+  const scope = decisionsInScope(types);
+  return [
+    db
+      .prepare(
+        `DELETE FROM ticket_organization_decisions WHERE organization_id = ? AND ticket_key <> ? AND ${scope.where}`,
+      )
+      .bind(input.organizationId, input.ticketKey, ...scope.bindings),
+    prepareStoreTicketDecision(db, { ...input, source: "organizer", confidence: null, model: null }),
+  ];
 }
 
 interface ClassifierAnswer {
@@ -252,8 +259,7 @@ export async function decideOrganizationTicket(
   // Nothing names an organization or a work domain: the model has nothing to judge.
   if (!subject.organizationName && !subject.domains.length) return null;
   const options = classifierOptions(types);
-  // An organizer's decision applies with or without a classifier, as dispute review and the counts show it; the
-  // classifier's apply only to tickets it still describes.
+  // A stored decision applies with or without a classifier, as dispute review and the counts show it.
   const stored = await readStoredTicketDecision(db, types, subject);
   if (stored) return stored;
   if (options.length < 2) return null;
@@ -265,7 +271,6 @@ export async function decideOrganizationTicket(
   if (!subject.organizationId) return answer;
   await db.batch([
     prepareStoreTicketDecision(db, {
-      criteriaDigest: await ticketCriteriaDigest(options),
       organizationId: subject.organizationId,
       ticketKey: decided.key,
       source: "classifier",
