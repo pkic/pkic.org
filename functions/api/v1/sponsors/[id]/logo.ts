@@ -16,11 +16,12 @@ import { logoUploadResponseSchema } from "../../../../../assets/shared/schemas/i
 import { successResponseSchema } from "../../../../../assets/shared/schemas/api-common";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { json } from "../../../../_lib/http";
-import { requireStaffPermission } from "../../../../_lib/auth/staff-permissions";
 import type { AdminContext } from "../../../../_lib/db/context";
 import {
   authorizedSponsorshipMutationDb,
+  loadAuthorizedSponsorship,
   removeSponsorshipLogo,
+  requireSponsorshipActor,
   replaceSponsorshipLogo,
 } from "../../../../_lib/services/sponsorship";
 import { deleteStoredImageInBackground } from "../../../../_lib/services/stored-image-pointer";
@@ -48,7 +49,10 @@ export async function onRequestGet(c: any): Promise<Response> {
   if (!logo) {
     throw new AppError(404, "LOGO_NOT_FOUND", "No logo on file for this sponsor");
   }
-  if (!logo.listed) await requireStaffPermission(c, "sponsorships:read");
+  if (!logo.listed) {
+    const { db, actor } = await requireSponsorshipActor(c);
+    await loadAuthorizedSponsorship(db, actor, id, "read");
+  }
   assertImageVersion(logo.key, version);
   const cacheControl = !logo.listed
     ? PRIVATE_IMAGE_CACHE_CONTROL
@@ -80,12 +84,13 @@ export async function onRequestGet(c: any): Promise<Response> {
 export const SponsorsIdLogoGet = openApiRoute(sponsorLogoRouteSchema, (c: any) => onRequestGet(c));
 
 export const SponsorsIdLogoPut = openApiRoute(sponsorshipLogoPutRouteSchema, async (c: AdminContext, data) => {
-  const { db, staff } = await requireStaffPermission(c, "sponsorships:write");
+  const { db, actor: staff } = await requireSponsorshipActor(c);
+  const id = data.params.id;
+  const { access } = await loadAuthorizedSponsorship(db, staff, id, "write");
   const bucket = c.env.ASSETS_BUCKET;
   if (!bucket) throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "File uploads are not configured");
-  const id = data.params.id;
   const result = await replaceSponsorshipLogo(
-    authorizedSponsorshipMutationDb(db, staff),
+    authorizedSponsorshipMutationDb(db, staff, access),
     staff,
     bucket,
     id,
@@ -102,8 +107,9 @@ export const SponsorsIdLogoPut = openApiRoute(sponsorshipLogoPutRouteSchema, asy
 });
 
 export const SponsorsIdLogoDelete = openApiRoute(sponsorshipLogoDeleteRouteSchema, async (c: AdminContext, data) => {
-  const { db, staff } = await requireStaffPermission(c, "sponsorships:write");
-  const result = await removeSponsorshipLogo(authorizedSponsorshipMutationDb(db, staff), staff, data.params.id);
+  const { db, actor: staff } = await requireSponsorshipActor(c);
+  const { access } = await loadAuthorizedSponsorship(db, staff, data.params.id, "write");
+  const result = await removeSponsorshipLogo(authorizedSponsorshipMutationDb(db, staff, access), staff, data.params.id);
   c.executionCtx.waitUntil(deleteStoredImageInBackground(db, c.env, result.previousKey, "assets"));
   return json(successResponseSchema.parse({ success: true }));
 });
