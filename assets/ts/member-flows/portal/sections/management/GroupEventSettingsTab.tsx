@@ -57,6 +57,18 @@ const EventTeamSettings = lazy(() =>
   import("../events/detail/settings/EventTeamSettings").then((module) => ({ default: module.EventTeamSettings })),
 );
 
+/** The registration settings below the Registration tab, besides its own policy page. */
+const REGISTRATION_SECTIONS: readonly string[] = [
+  "access",
+  "tickets",
+  "codes",
+  "payments",
+  "invitation",
+  "terms",
+  "attendance-days",
+  "sponsors",
+];
+
 function isStandaloneEvent(event: Pick<GroupEvent, "seriesId" | "profileKey">): boolean {
   return event.seriesId === null && event.profileKey !== "meeting" && event.profileKey !== "board_meeting";
 }
@@ -111,7 +123,7 @@ export function GroupEventSettingsTab({
         active={
           detailId === "scheduling" && canManage
             ? "session-types"
-            : ["access", "tickets", "invitation", "terms", "attendance-days", "sponsors"].includes(detailId ?? "")
+            : REGISTRATION_SECTIONS.includes(detailId ?? "")
               ? "registration"
               : (detailId ??
                 (canManage ? "general" : hasEventAgendaPermission(event.id, "agenda:live_studio") ? "live" : "team"))
@@ -129,25 +141,24 @@ export function GroupEventSettingsTab({
           hrefFor={(key) => `${settingsPath}/${key}`}
         />
       )}
-      {canManage &&
-        ["registration", "access", "tickets", "invitation", "terms", "attendance-days", "sponsors"].includes(
-          detailId ?? "",
-        ) && (
-          <Tabs
-            label="Registration settings"
-            items={[
-              { key: "registration", label: "Policy" },
-              { key: "access", label: "Visibility and access" },
-              { key: "tickets", label: "Tickets" },
-              { key: "invitation", label: "Invitation" },
-              { key: "terms", label: "Terms" },
-              { key: "attendance-days", label: "Attendance days" },
-              { key: "sponsors", label: "Sponsor tiers" },
-            ]}
-            active={detailId ?? "registration"}
-            hrefFor={(key) => `${settingsPath}/${key}`}
-          />
-        )}
+      {canManage && (detailId === "registration" || REGISTRATION_SECTIONS.includes(detailId ?? "")) && (
+        <Tabs
+          label="Registration settings"
+          items={[
+            { key: "registration", label: "Policy" },
+            { key: "access", label: "Visibility and access" },
+            { key: "tickets", label: "Tickets" },
+            { key: "codes", label: "Codes" },
+            { key: "payments", label: "Payments" },
+            { key: "invitation", label: "Invitation" },
+            { key: "terms", label: "Terms" },
+            { key: "attendance-days", label: "Attendance days" },
+            { key: "sponsors", label: "Sponsor tiers" },
+          ]}
+          active={detailId ?? "registration"}
+          hrefFor={(key) => `${settingsPath}/${key}`}
+        />
+      )}
       {(detailId === "team" && (canManage || hasEventAgendaPermission(event.id, "agenda:read"))) ||
       (!canManage && !detailId && !hasEventAgendaPermission(event.id, "agenda:live_studio")) ? (
         <Suspense fallback={<Spinner label="Loading team…" />}>
@@ -237,12 +248,14 @@ export function GroupEventSettingsTab({
             <RawEvidenceRetentionPolicy event={event} />
           </div>
         </Suspense>
-      ) : detailId === "tickets" && canManage ? (
+      ) : (detailId === "tickets" || detailId === "codes" || detailId === "payments") && canManage ? (
         <LazyTicketsTab
+          key={detailId}
           slug={event.slug}
           canWrite={canManage}
+          section={detailId}
           detail={detailTab}
-          basePath={`${settingsPath}/tickets`}
+          basePath={`${settingsPath}/${detailId}`}
         />
       ) : detailId === "sponsors" && canManage ? (
         <LazySponsorTiersTab

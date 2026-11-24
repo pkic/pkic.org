@@ -1,4 +1,5 @@
 import {
+  eventTicketGuidancePutRouteSchema,
   eventTicketOfferRouteSchema,
   eventTicketPricesPutRouteSchema,
   eventTicketQuoteRouteSchema,
@@ -34,6 +35,7 @@ import {
   replaceEventTicketPrices,
   saveEventTicketType,
   updateEventTicketCode,
+  updateEventTicketGuidance,
   updateEventTicketSettings,
 } from "../../../../_lib/services/event-tickets/configuration";
 import { reviewDisputedTicket } from "../../../../_lib/services/event-tickets/dispute";
@@ -89,6 +91,11 @@ const EventTicketPricesPut = openApiRoute(eventTicketPricesPutRouteSchema, async
 const EventTicketSettingsPut = openApiRoute(eventTicketSettingsPutRouteSchema, async (c: AdminContext, data) => {
   const { actor, db, event } = await requireEventPermission(c, data.params.eventSlug, "events:write");
   return json({ success: true, ...(await updateEventTicketSettings(db, actor, event, data.body)) });
+});
+
+const EventTicketGuidancePut = openApiRoute(eventTicketGuidancePutRouteSchema, async (c: AdminContext, data) => {
+  const { actor, db, event } = await requireEventPermission(c, data.params.eventSlug, "events:write");
+  return json({ success: true, ...(await updateEventTicketGuidance(db, actor, event, data.body)) });
 });
 
 const EventTicketCodesGet = openApiRoute(eventTicketCodesGetRouteSchema, async (c: AdminContext, data) => {
@@ -262,6 +269,7 @@ export function registerTicketRoutes(openapi: TicketRouter): void {
   openapi.post("/tickets/quote", EventTicketQuotePost);
   openapi.put("/tickets/prices", EventTicketPricesPut);
   openapi.put("/tickets/settings", EventTicketSettingsPut);
+  openapi.put("/tickets/guidance", EventTicketGuidancePut);
   openapi.post("/tickets/types", EventTicketTypePost);
   openapi.put("/tickets/types/:ticketTypeId", EventTicketTypePut);
   openapi.get("/tickets/issued", IssuedTicketsGet);

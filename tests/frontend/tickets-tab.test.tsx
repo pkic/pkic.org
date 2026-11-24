@@ -54,20 +54,25 @@ function configuration(underReviewCount: number): EventTicketsConfiguration {
   } as unknown as EventTicketsConfiguration;
 }
 
-async function renderTab(canWrite: boolean, underReviewCount = 0) {
+async function renderTab(canWrite: boolean, underReviewCount = 0, section?: "tickets" | "codes" | "payments") {
   state.configuration = configuration(underReviewCount);
   host = document.createElement("div");
   document.body.append(host);
-  await act(() => render(<TicketsTab slug="synthetic" canWrite={canWrite} />, host));
+  await act(() => render(<TicketsTab slug="synthetic" canWrite={canWrite} section={section} />, host));
 }
 
-it("shows codes only to an organizer who can change them", async () => {
-  await renderTab(false);
+it("shows codes on their own tab, only to an organizer who can change them", async () => {
+  await renderTab(true);
   expect(host.querySelector('[aria-label="Codes"]')).toBeNull();
   await act(() => render(null, host));
   host.remove();
 
-  await renderTab(true);
+  await renderTab(false, 0, "codes");
+  expect(host.querySelector('[aria-label="Codes"]')).toBeNull();
+  await act(() => render(null, host));
+  host.remove();
+
+  await renderTab(true, 0, "codes");
   expect(host.querySelector('[aria-label="Codes"]')).not.toBeNull();
 });
 

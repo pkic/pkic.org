@@ -58,6 +58,7 @@ export function TicketPaymentPanel({
   const [refundFee, setRefundFee] = useState(refundFeeOf);
   const { form, editing, saving, error, save, edit, cancel } = useTicketSettingsForm(
     slug,
+    "settings",
     configuration.revision,
     {
       currency: currency.trim().toLowerCase(),
@@ -163,7 +164,7 @@ export function TicketPaymentPanel({
               <Field
                 {...form.of("unpaidHoldDays")}
                 label="Keep an unpaid place for (days)"
-                help="After this many days without payment the registration is cancelled and the person is told. A payment that is being processed keeps the place. Leave empty to keep unpaid places until someone cancels."
+                help="After this many days without payment the registration is canceled and the person is told. A payment that is being processed keeps the place. Leave empty to keep unpaid places until someone cancels."
               >
                 {(control) => (
                   <TextInput
@@ -179,7 +180,7 @@ export function TicketPaymentPanel({
               <Field
                 {...form.of("paymentRetryDays")}
                 label="After a failed payment, keep the place for (days)"
-                help="The person is told the payment failed and can pay again. After this many days the registration is cancelled."
+                help="The person is told the payment failed and can pay again. After this many days the registration is canceled."
                 required
               >
                 {(control) => (
@@ -273,8 +274,8 @@ export function TicketPaymentPanel({
               <Checkbox
                 name="sendInvoice"
                 checked={sendInvoice}
-                label="Send an invoice for each paid ticket"
-                hint="The payment provider emails an invoice with the registration's reference, besides its receipt. It may charge a fee for each invoice."
+                label="Send an invoice for each paid ticket bought for an organization"
+                hint="The payment provider emails an invoice with the registration's reference, besides its receipt. People who register as individuals get a receipt only. The provider may charge a fee for each invoice."
                 onChange={(event) => setSendInvoice(event.currentTarget.checked)}
               />
             </>
@@ -289,7 +290,10 @@ export function TicketPaymentPanel({
                       ? "None"
                       : `Every ${days(saved.reminderIntervalDays)}, for ${days(saved.reminderPeriodDays)}`,
                 },
-                { term: "Invoices", value: saved.sendInvoice ? "Sent for each paid ticket" : "Receipt only" },
+                {
+                  term: "Invoices",
+                  value: saved.sendInvoice ? "Sent for tickets bought for an organization" : "Receipt only",
+                },
                 { term: "Refunds", value: refundSummary(saved) },
                 {
                   term: "Transfers",
@@ -302,11 +306,11 @@ export function TicketPaymentPanel({
                   value:
                     saved.unpaidHoldDays === null
                       ? "Kept until the person or an organizer cancels the registration"
-                      : `Kept for ${days(saved.unpaidHoldDays)}, then the registration is cancelled`,
+                      : `Kept for ${days(saved.unpaidHoldDays)}, then the registration is canceled`,
                 },
                 {
                   term: "After a failed payment",
-                  value: `Kept for ${days(saved.paymentRetryDays)} to pay again, then the registration is cancelled`,
+                  value: `Kept for ${days(saved.paymentRetryDays)} to pay again, then the registration is canceled`,
                 },
               ]}
             />

@@ -139,7 +139,7 @@ export const eventTicketSettingsSchema = z.object({
   currency: stripeCurrencySchema,
   reminderIntervalDays: z.number().int().min(1, "Enter 1 or more.").max(30, "Enter 30 or less."),
   reminderPeriodDays: z.number().int().min(0, "Enter 0 or more.").max(365, "Enter 365 or less."),
-  /** How many days an unpaid place is kept before its registration is cancelled; null keeps it until someone cancels. */
+  /** How many days an unpaid place is kept before its registration is canceled; null keeps it until someone cancels. */
   unpaidHoldDays: z.number().int().min(1, "Enter 1 or more.").max(365, "Enter 365 or less.").nullable().default(null),
   /** How many days a place is kept after its payment failed, so the person can pay again. */
   /** Whether a ticket may go to another person. It says so to ticket holders; organizers arrange the transfer. */
@@ -169,9 +169,9 @@ export const eventTicketSettingsSchema = z.object({
 const stepTextSchema = z.string().trim().max(400, "Use 400 characters or fewer.");
 /** What registrants read above the tickets and above the days; empty shows nothing. */
 export const eventTicketStepTextsSchema = z.object({ ticketIntro: stepTextSchema, attendanceIntro: stepTextSchema });
-/** A text left out of an update keeps its saved value. */
+export const eventTicketGuidanceUpdateSchema = eventTicketStepTextsSchema.extend({ expectedRevision: revisionSchema });
+export type EventTicketGuidanceUpdate = z.infer<typeof eventTicketGuidanceUpdateSchema>;
 export const eventTicketSettingsUpdateSchema = eventTicketSettingsSchema
-  .extend(eventTicketStepTextsSchema.partial().shape)
   .extend({ expectedRevision: revisionSchema })
   .superRefine((value, context) => {
     if (value.refundFee > 0 && value.refundDaysBeforeEvent === null)
@@ -465,6 +465,19 @@ export const eventTicketPricesPutRouteSchema = {
   },
   responses: {
     "200": { description: "Prices replaced.", content: ticketRouteJson(eventTicketsChangeResponseSchema) },
+    ...ticketRouteRefusals,
+  },
+  ...ticketOrganizerAuth,
+};
+export const eventTicketGuidancePutRouteSchema = {
+  tags: ["Events"],
+  summary: "Change what registrants read above the tickets and the days",
+  request: {
+    params: eventSlugParamsSchema,
+    body: { required: true, content: ticketRouteJson(eventTicketGuidanceUpdateSchema) },
+  },
+  responses: {
+    "200": { description: "Guidance changed.", content: ticketRouteJson(eventTicketsChangeResponseSchema) },
     ...ticketRouteRefusals,
   },
   ...ticketOrganizerAuth,

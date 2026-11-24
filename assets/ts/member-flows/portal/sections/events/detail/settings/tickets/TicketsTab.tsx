@@ -1,7 +1,9 @@
 /**
- * Settings → Registration → Tickets: what registering costs, who gets which
- * ticket, the codes that change that, and how payment is chased. Editing
- * prices or one ticket opens its own page under this tab.
+ * Settings → Registration → Tickets, Codes and Payments: what registering
+ * costs and who gets which ticket; the codes and sponsor passes that change
+ * that; and how payment is chased. Each is its own tab over one configuration.
+ * Editing prices, one ticket or the sponsor passes opens its own page under
+ * its tab.
  */
 import { useRef } from "preact/hooks";
 import { getJson } from "../../../../../../../shared/api-client";
@@ -41,6 +43,9 @@ const SPONSOR_PASSES_SEGMENT = "sponsor-passes";
 
 type TicketType = EventTicketsConfiguration["types"][number];
 
+/** The registration settings tabs this configuration fills. */
+export type TicketSettingsSection = "tickets" | "codes" | "payments";
+
 function givenTo(type: TicketType): string {
   if (type.presetOrganizations > 0)
     return `${formatNumber(type.presetOrganizations)} ${type.presetOrganizations === 1 ? "organization" : "organizations"} decided`;
@@ -51,19 +56,21 @@ function givenTo(type: TicketType): string {
 export function TicketsTab({
   slug,
   canWrite,
+  section = "tickets",
   detail,
   basePath,
 }: {
   slug: string;
   canWrite: boolean;
+  section?: TicketSettingsSection;
   /** The tab's own route, when it is not the event's own settings: a group's event workspace. */
   basePath?: string;
-  /** The segment below the tab: `prices`, `sponsor-passes`, `new`, or a ticket's id. */
+  /** The segment below the tab: `prices`, `new` or a ticket's id under Tickets; `sponsor-passes` under Codes. */
   detail?: string;
 }) {
   const [, navigate] = usePortalHashLocation();
   const codes = useRef<ApiTableActions | null>(null);
-  const base = basePath ?? `/events/${slug}/settings/tickets`;
+  const base = basePath ?? `/events/${slug}/settings/${section}`;
   const { data, loading, error, reload } = useData(
     () => getJson(ticketsEndpoint(slug), eventTicketsConfigurationSchema),
     [slug],
@@ -74,10 +81,28 @@ export function TicketsTab({
     await reload();
     navigate(base);
   };
+  if (section === "codes")
+    return canWrite && detail === SPONSOR_PASSES_SEGMENT ? (
+      <SponsorPassesEditor slug={slug} configuration={data} onSaved={done} onCancel={() => navigate(base)} />
+    ) : (
+      <div class="pk-stack">
+        <SponsorPassesPanel
+          slug={slug}
+          configuration={data}
+          canWrite={canWrite}
+          editHref={usePortalHashLocation.hrefs(`${base}/${SPONSOR_PASSES_SEGMENT}`)}
+          onChanged={async () => {
+            await reload();
+            await codes.current?.reload();
+          }}
+        />
+        {canWrite && <TicketCodesPanel slug={slug} configuration={data} canWrite={canWrite} table={codes} />}
+      </div>
+    );
+  if (section === "payments")
+    return <TicketPaymentPanel slug={slug} configuration={data} canWrite={canWrite} onSaved={reload} />;
   if (canWrite && detail === "prices")
     return <TicketPricesEditor slug={slug} configuration={data} onSaved={done} onCancel={() => navigate(base)} />;
-  if (canWrite && detail === SPONSOR_PASSES_SEGMENT)
-    return <SponsorPassesEditor slug={slug} configuration={data} onSaved={done} onCancel={() => navigate(base)} />;
   if (canWrite && detail) {
     const type = data.types.find((candidate) => candidate.id === detail);
     if (detail === "new" || type)
@@ -229,19 +254,7 @@ export function TicketsTab({
       {canWrite && data.types.filter((type) => type.active).length >= 2 && (
         <TicketOrganizationsPanel slug={slug} configuration={data} onChanged={reload} />
       )}
-      <SponsorPassesPanel
-        slug={slug}
-        configuration={data}
-        canWrite={canWrite}
-        editHref={usePortalHashLocation.hrefs(`${base}/${SPONSOR_PASSES_SEGMENT}`)}
-        onChanged={async () => {
-          await reload();
-          await codes.current?.reload();
-        }}
-      />
-      {canWrite && <TicketCodesPanel slug={slug} configuration={data} canWrite={canWrite} table={codes} />}
       <TicketStepTextsPanel slug={slug} configuration={data} canWrite={canWrite} onSaved={reload} />
-      <TicketPaymentPanel slug={slug} configuration={data} canWrite={canWrite} onSaved={reload} />
     </div>
   );
 }

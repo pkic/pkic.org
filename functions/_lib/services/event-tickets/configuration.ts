@@ -11,6 +11,7 @@ import {
 } from "../../../../assets/shared/event-tickets";
 import type {
   EventTicketPricesReplaceInput,
+  EventTicketGuidanceUpdate,
   EventTicketSettingsUpdate,
   EventTicketTypeInput,
   EventTicketsConfiguration,
@@ -404,7 +405,7 @@ export async function updateEventTicketSettings(
     db
       .prepare(
         `UPDATE event_ticket_settings SET currency = ?, reminder_interval_days = ?, reminder_period_days = ?, unpaid_hold_days = ?, payment_retry_days = ?, tickets_transferable = ?, send_invoice = ?,
-           refund_days_before_event = ?, refund_fee = ?, ticket_intro = COALESCE(?, ticket_intro), attendance_intro = COALESCE(?, attendance_intro)
+           refund_days_before_event = ?, refund_fee = ?
          WHERE event_id = ?`,
       )
       .bind(
@@ -417,8 +418,6 @@ export async function updateEventTicketSettings(
         input.sendInvoice ? 1 : 0,
         input.refundDaysBeforeEvent,
         input.refundFee,
-        input.ticketIntro ?? null,
-        input.attendanceIntro ?? null,
         event.id,
       ),
     prepareAuditLog(db, "user", actor.id, "event_ticket_settings_changed", "event", event.id, {
@@ -431,6 +430,24 @@ export async function updateEventTicketSettings(
       refundDaysBeforeEvent: input.refundDaysBeforeEvent,
       refundFee: input.refundFee,
     }),
+  ]);
+  return { revision: input.expectedRevision + 1 };
+}
+
+/** What registrants read above the tickets and above the days; empty shows nothing. */
+export async function updateEventTicketGuidance(
+  db: DatabaseLike,
+  actor: UserBackedAuthAdmin,
+  event: EventRef,
+  input: EventTicketGuidanceUpdate,
+): Promise<{ revision: number }> {
+  const now = nowIso();
+  await commitConfigurationChange(db, [
+    ...prepareConfigurationChange(db, actor, event.id, input.expectedRevision, now),
+    db
+      .prepare("UPDATE event_ticket_settings SET ticket_intro = ?, attendance_intro = ? WHERE event_id = ?")
+      .bind(input.ticketIntro, input.attendanceIntro, event.id),
+    prepareAuditLog(db, "user", actor.id, "event_ticket_guidance_changed", "event", event.id, {}),
   ]);
   return { revision: input.expectedRevision + 1 };
 }

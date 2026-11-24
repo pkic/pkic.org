@@ -25,18 +25,9 @@ export function TicketStepTextsPanel({
   const [attendanceIntro, setAttendanceIntro] = useState(saved.attendanceIntro);
   const { form, editing, saving, error, save, edit, cancel } = useTicketSettingsForm(
     slug,
+    "guidance",
     configuration.revision,
-    {
-      currency: saved.currency,
-      reminderIntervalDays: saved.reminderIntervalDays,
-      reminderPeriodDays: saved.reminderPeriodDays,
-      unpaidHoldDays: saved.unpaidHoldDays,
-      sendInvoice: saved.sendInvoice,
-      refundDaysBeforeEvent: saved.refundDaysBeforeEvent,
-      refundFee: saved.refundFee,
-      ticketIntro,
-      attendanceIntro,
-    },
+    { ticketIntro, attendanceIntro },
     onSaved,
     () => {
       setTicketIntro(saved.ticketIntro);

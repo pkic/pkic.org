@@ -25,6 +25,7 @@ import {
   replaceEventTicketPrices,
   saveEventTicketType,
   updateEventTicketCode,
+  updateEventTicketGuidance,
   updateEventTicketSettings,
 } from "../functions/_lib/services/event-tickets/configuration";
 import { quoteEventTicket, readEventTicketOffer } from "../functions/_lib/services/event-tickets/offer";
@@ -2120,6 +2121,30 @@ describe("event tickets", () => {
     );
     expect(ofMember.page.total).toBe(3);
     expect(ofMember.codes.every((code) => code.sponsor?.id === organizationId)).toBe(true);
+  });
+
+  it("changes the registrants' guidance on its own, leaving the payment settings as they were", async () => {
+    const { event, admin } = await seedTickets();
+    const before = await readEventTicketsConfiguration(env.DB, event);
+    await updateEventTicketGuidance(env.DB, admin, event, {
+      expectedRevision: before.revision,
+      ticketIntro: "Choose based on your organization.",
+      attendanceIntro: "",
+    });
+    const after = await readEventTicketsConfiguration(env.DB, event);
+    expect(after.settings).toEqual({
+      ...before.settings,
+      ticketIntro: "Choose based on your organization.",
+      attendanceIntro: "",
+    });
+    // A draft copied before that change is refused instead of overwriting it.
+    await expect(
+      updateEventTicketGuidance(env.DB, admin, event, {
+        expectedRevision: before.revision,
+        ticketIntro: "",
+        attendanceIntro: "",
+      }),
+    ).rejects.toBeTruthy();
   });
 
   it("does not disclose bearer ticket codes to an event reader", async () => {
