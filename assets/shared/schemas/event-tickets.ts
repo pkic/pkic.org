@@ -12,6 +12,7 @@ import {
   utcInstantSchema,
 } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
+import { sponsorTypeSchema } from "./sponsorship-management";
 import { stripeCurrencySchema } from "./stripe";
 import {
   DEFAULT_CLASSIFIER_THRESHOLD,
@@ -194,6 +195,8 @@ export const eventTicketSponsorPassesSchema = z.object({
     .array(
       z.object({
         tierName: trimmedString(1, 80),
+        /** Whether the catalog lists the tier for consortium or for event sponsors; null for a tier it does not list. */
+        sponsorType: sponsorTypeSchema.nullable().default(null),
         staffPasses: passCountSchema,
         customerPasses: passCountSchema,
         /** Active sponsors of this tier, and how many of them have their codes. */

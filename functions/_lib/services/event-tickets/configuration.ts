@@ -28,6 +28,7 @@ import { prepareAuditLog } from "../audit";
 import { prepareEventDays, type EventDayRecord } from "../event-days";
 import { prepareDecidedOrganizationCounts } from "./classifier";
 import { normalizeTicketCode } from "./assignment";
+import { eventSponsorsCte } from "./event-sponsors";
 import {
   decodeEventTicketSnapshot,
   EVENT_TICKET_SNAPSHOT_STATEMENTS,
@@ -63,9 +64,22 @@ export interface CodeRow {
   max_uses: number;
   used_count: number;
   revoked_at: string | null;
+  sponsor_id: string | null;
+  sponsor_name: string | null;
+  registrations: number;
+  revenue: number;
 }
 
-export const CODE_COLUMNS = "id, ticket_type_id, label, code, amount, percent_off, max_uses, used_count, revoked_at";
+/** A code's own columns, its sponsor, and the tickets issued with it; selected from `event_ticket_codes` unaliased. */
+export const CODE_COLUMNS = `id, ticket_type_id, label, code, amount, percent_off, max_uses, used_count, revoked_at,
+  COALESCE(organization_id, sponsorship_id) AS sponsor_id,
+  COALESCE((SELECT name FROM organizations WHERE id = event_ticket_codes.organization_id),
+    (SELECT COALESCE(owner.name, sponsor.non_member_name, 'Sponsor') FROM sponsorships sponsor
+       LEFT JOIN organizations owner ON owner.id = sponsor.organization_id
+     WHERE sponsor.id = event_ticket_codes.sponsorship_id)) AS sponsor_name,
+  (SELECT COUNT(*) FROM registration_tickets issued WHERE issued.code_id = event_ticket_codes.id) AS registrations,
+  (SELECT COALESCE(SUM(issued.paid_amount - issued.refunded_amount), 0) FROM registration_tickets issued
+   WHERE issued.code_id = event_ticket_codes.id AND issued.status = 'paid') AS revenue`;
 
 export function decodeCode(row: CodeRow): EventTicketCode {
   return {
@@ -78,6 +92,9 @@ export function decodeCode(row: CodeRow): EventTicketCode {
     maxUses: row.max_uses,
     usedCount: row.used_count,
     revokedAt: row.revoked_at,
+    sponsor: row.sponsor_id ? { id: row.sponsor_id, name: row.sponsor_name ?? "Sponsor" } : null,
+    registrations: row.registrations,
+    revenue: row.revenue,
   };
 }
 
@@ -437,19 +454,27 @@ export async function createEventTicketCode(
   const code = normalizeTicketCode(generateTicketCode());
   const amount = input.discount === "amount" ? (input.amount ?? 0) : null;
   const percentOff = input.discount === "percent" ? (input.percentOff ?? null) : null;
+  const sponsorId = input.sponsorId ?? null;
   const results = await db.batch([
     preparePermissionsAuthorizationGuard(db, actor, [
       { permission: "events:write", context: { type: "event", id: event.id } },
     ]),
+    // A code for a sponsor is only made when that sponsor still sponsors the event.
     db
       .prepare(
-        `INSERT INTO event_ticket_codes
-           (id, event_id, ticket_type_id, label, code, amount, percent_off, max_uses, created_by_user_id, created_at, updated_at)
-         SELECT ?, ?, id, ?, ?, ?, ?, ?, ?, ?, ? FROM event_ticket_types WHERE id = ? AND event_id = ? AND active = 1`,
+        `WITH ${eventSponsorsCte("?11")}
+         INSERT INTO event_ticket_codes
+           (id, event_id, ticket_type_id, label, code, amount, percent_off, max_uses, organization_id, sponsorship_id,
+            created_by_user_id, created_at, updated_at)
+         SELECT ?1, ?11, type.id, ?2, ?3, ?4, ?5, ?6, sponsor.organization_id,
+                CASE WHEN sponsor.organization_id IS NULL THEN sponsor.sponsorship_id END, ?7, ?8, ?8
+         FROM event_ticket_types type LEFT JOIN event_sponsors sponsor ON sponsor.sponsor_id = ?9
+         WHERE type.id = ?10 AND type.event_id = ?11 AND type.active = 1
+           AND (?9 IS NULL OR sponsor.sponsor_id IS NOT NULL)
+         LIMIT 1`,
       )
       .bind(
         id,
-        event.id,
         input.label,
         code,
         amount,
@@ -457,19 +482,26 @@ export async function createEventTicketCode(
         input.maxUses,
         actor.id,
         now,
-        now,
+        sponsorId,
         input.ticketTypeId,
         event.id,
       ),
     prepareAuditLog(db, "user", actor.id, "event_ticket_code_created", "event", event.id, {
       codeId: id,
       maxUses: input.maxUses,
+      sponsorId,
     }),
     db.prepare(`SELECT ${CODE_COLUMNS} FROM event_ticket_codes WHERE id = ?`).bind(id),
   ]);
   const row = batchFirst<CodeRow>(results[3]);
   if (!row)
-    throw new AppError(409, "EVENT_TICKETS_CHANGED", "This ticket is no longer available. Reload and try again.");
+    throw new AppError(
+      409,
+      "EVENT_TICKETS_CHANGED",
+      sponsorId
+        ? "This ticket or sponsor is no longer available. Reload and try again."
+        : "This ticket is no longer available. Reload and try again.",
+    );
   return decodeCode(row);
 }
 

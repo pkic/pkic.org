@@ -2,7 +2,8 @@
  * Codes: a code gives its holder one ticket at a set price for a limited
  * number of uses. Creating one is a quick action, so it is a dialog.
  */
-import { useState, type MutableRef } from "preact/hooks";
+import { useMemo, useState, type MutableRef } from "preact/hooks";
+import type { z } from "zod";
 import { patchJson, postJson } from "../../../../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../../../../shared/schemas/api-common";
 import { type EventTicketsConfiguration } from "../../../../../../../../shared/schemas/event-tickets";
@@ -10,11 +11,15 @@ import {
   eventTicketCodeCreateResponseSchema,
   eventTicketCodeCreateSchema,
   eventTicketCodeListSchema,
+  eventTicketSponsorListSchema,
   type EventTicketCode,
+  type EventTicketSponsor,
 } from "../../../../../../../../shared/schemas/event-ticket-codes";
 import { formatTicketAmount, parseTicketAmount } from "../../../../../../../../shared/event-ticket-display";
 import { formatNumber } from "../../../../../../../../shared/format-number";
 import { ApiDataTable, type ApiTableActions } from "../../../../../../../components/ApiDataTable";
+import { ServerSearchSelect } from "../../../../../../../components/ServerSearchSelect";
+import type { ServerCatalog } from "../../../../../../../shared/server-catalog";
 import { confirmAction } from "../../../../../../../components/ConfirmDialog";
 import { useContractForm } from "../../../../../../../hooks/useContractForm";
 import type { CollectionLoader } from "../../../../../../../hooks/useServerCollection";
@@ -34,6 +39,19 @@ import { ticketsEndpoint } from "./tickets-endpoint";
 /** Shown in groups of four so it can be read aloud; typed with or without the dashes. */
 export function displayTicketCode(code: string): string {
   return code.replace(/(.{4})(?=.)/g, "$1-");
+}
+
+/** The sponsors a code can be made for: the event's own and the consortium's current sponsors. */
+function sponsorCatalog(slug: string): ServerCatalog<EventTicketSponsor, z.infer<typeof eventTicketSponsorListSchema>> {
+  return {
+    endpoint: `${ticketsEndpoint(slug)}/sponsors`,
+    responseSchema: eventTicketSponsorListSchema,
+    resolveItems: (response) => response.sponsors,
+    resolvePage: (response) => response.page,
+    itemKey: (sponsor) => sponsor.id,
+    itemLabel: (sponsor) => `${sponsor.name} · ${sponsor.tier}`,
+    sort: "name",
+  };
 }
 
 function codePrice(code: EventTicketCode, currency: string): string {
@@ -64,6 +82,8 @@ export function TicketCodesPanel({
   const [amount, setAmount] = useState("0");
   const [percent, setPercent] = useState("");
   const [maxUses, setMaxUses] = useState("");
+  const [sponsor, setSponsor] = useState<EventTicketSponsor | null>(null);
+  const sponsors = useMemo(() => sponsorCatalog(slug), [slug]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const form = useContractForm(eventTicketCodeCreateSchema, {
@@ -73,6 +93,7 @@ export function TicketCodesPanel({
     amount: discount === "amount" ? (parseTicketAmount(amount, currency) ?? undefined) : undefined,
     percentOff: discount === "percent" && percent.trim() !== "" ? Number(percent) : undefined,
     maxUses: maxUses.trim() === "" ? undefined : Number(maxUses),
+    sponsorId: sponsor?.id,
   });
   const notify = toast;
   function close() {
@@ -83,6 +104,7 @@ export function TicketCodesPanel({
     setAmount("0");
     setPercent("");
     setMaxUses("");
+    setSponsor(null);
     setDiscount("amount");
     setError("");
     form.reset();
@@ -160,6 +182,11 @@ export function TicketCodesPanel({
             ),
           },
           { header: "Ticket", width: "fit", cell: (row) => ticketName(row.ticketTypeId) },
+          {
+            header: "Sponsor",
+            headerHint: "The sponsor the code was made for. What the code brings in counts for that sponsor.",
+            cell: (row) => row.sponsor?.name ?? <span class="pk-muted">None</span>,
+          },
           { header: "Price", width: "fit", align: "end", recordLabel: null, cell: (row) => codePrice(row, currency) },
           {
             header: "Used",
@@ -168,6 +195,15 @@ export function TicketCodesPanel({
             recordLabel: "used",
             sort: { asc: "used", desc: "-used" },
             cell: (row) => `${formatNumber(row.usedCount)} of ${formatNumber(row.maxUses)}`,
+          },
+          {
+            header: "Brought in",
+            headerHint: "What the paid tickets issued with this code came to, after refunds.",
+            width: "fit",
+            align: "end",
+            recordLabel: "brought in",
+            sort: { asc: "revenue", desc: "-revenue" },
+            cell: (row) => formatTicketAmount(row.revenue, currency),
           },
           {
             // No header: the table names the actions column itself.
@@ -241,6 +277,28 @@ export function TicketCodesPanel({
             void create();
           }}
         >
+          <Field
+            {...form.of("sponsorId")}
+            label="Sponsor"
+            help="Optional. Links the code to a sponsor so you can see what it brings in."
+          >
+            {(control) => (
+              <ServerSearchSelect
+                {...control}
+                name="sponsorId"
+                catalog={sponsors}
+                searchLabel="Sponsor"
+                placeholder="No sponsor"
+                value={sponsor?.id ?? null}
+                selectedLabel={sponsor ? sponsors.itemLabel(sponsor) : undefined}
+                onChange={(chosen) => {
+                  setSponsor(chosen);
+                  // The sponsor's name is the likeliest answer to who the code is for.
+                  if (chosen && label.trim() === "") setLabel(chosen.name);
+                }}
+              />
+            )}
+          </Field>
           <Field
             {...form.of("label")}
             label="Who it is for"

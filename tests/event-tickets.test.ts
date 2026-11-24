@@ -12,7 +12,10 @@ import {
   registrationTicketCheckoutResponseSchema,
   registrationTicketResponseSchema,
 } from "../assets/shared/schemas/event-tickets";
-import { eventTicketCodeListQuerySchema } from "../assets/shared/schemas/event-ticket-codes";
+import {
+  eventTicketCodeListQuerySchema,
+  eventTicketSponsorListQuerySchema,
+} from "../assets/shared/schemas/event-ticket-codes";
 import { seedEventAndAdmin } from "./helpers/context";
 import { createScheduledRegistration } from "./helpers/scheduled-registration";
 import { findOrCreateUser } from "../functions/_lib/services/users";
@@ -55,6 +58,7 @@ import { issuedTicketsQuerySchema } from "../assets/shared/schemas/event-issued-
 import { releaseUnpaidTickets } from "../functions/_lib/services/event-tickets/unpaid-release";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { listEventTicketCodes } from "../functions/_lib/services/event-tickets/code-list";
+import { listEventTicketSponsors } from "../functions/_lib/services/event-tickets/event-sponsors";
 import { reviewDisputedTicket } from "../functions/_lib/services/event-tickets/dispute";
 import {
   decideOrganizationTicket,
@@ -2005,10 +2009,10 @@ describe("event tickets", () => {
     const now = new Date().toISOString();
     await env.DB.prepare(
       `INSERT INTO sponsorships (id, sponsor_type, non_member_name, event_id, tier, pipeline_stage, created_at, updated_at)
-       VALUES ('sponsor-1', 'event', 'Example Sponsor', ?, 'Gold', 'active', ?, ?),
-              ('sponsor-2', 'event', 'Pending Sponsor', ?, 'Gold', 'payment_pending', ?, ?)`,
+       VALUES (?, 'event', 'Example Sponsor', ?, 'Gold', 'active', ?, ?),
+              (?, 'event', 'Pending Sponsor', ?, 'Gold', 'payment_pending', ?, ?)`,
     )
-      .bind(event.id, now, now, event.id, now, now)
+      .bind(crypto.randomUUID(), event.id, now, now, crypto.randomUUID(), event.id, now, now)
       .run();
     await expect(issueSponsorPassCodes(env.DB, admin, event)).rejects.toMatchObject({
       code: "SPONSOR_PASSES_UNAVAILABLE",
@@ -2018,7 +2022,9 @@ describe("event tickets", () => {
         expectedRevision: (await readEventTicketsConfiguration(env.DB, event)).revision,
         staffTicketTypeId: vendor.id,
         customerTicketTypeId: attendee.id,
-        tiers: [{ tierName: "Gold", staffPasses, customerPasses, sponsors: 0, sponsorsWithCodes: 0 }],
+        tiers: [
+          { tierName: "Gold", sponsorType: null, staffPasses, customerPasses, sponsors: 0, sponsorsWithCodes: 0 },
+        ],
       });
     await save(4, 8);
     expect(await issueSponsorPassCodes(env.DB, admin, event)).toEqual({ created: 2, raised: 0 });
@@ -2039,9 +2045,81 @@ describe("event tickets", () => {
       ["Example Sponsor: customers", 12, 0],
       ["Example Sponsor: staff", 4, 0],
     ]);
-    expect(configuration.sponsorPasses.tiers).toEqual([
-      { tierName: "Gold", staffPasses: 2, customerPasses: 4, sponsors: 1, sponsorsWithCodes: 1 },
+    expect(configuration.sponsorPasses.tiers.find((tier) => tier.tierName === "Gold")).toEqual({
+      tierName: "Gold",
+      sponsorType: "consortium",
+      staffPasses: 2,
+      customerPasses: 4,
+      sponsors: 1,
+      sponsorsWithCodes: 1,
+    });
+  });
+
+  it("gives the consortium's current sponsors their codes for each event, besides the event's own", async () => {
+    const { event, admin, attendee, vendor } = await seedTickets();
+    const now = new Date().toISOString();
+    const organizationId = crypto.randomUUID();
+    const outsideId = crypto.randomUUID();
+    const lapsedId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO organizations (id, name, normalized_name, sponsor_tier, created_at, updated_at) VALUES (?, 'Member Sponsor', 'member sponsor', 'Gold', ?, ?)",
+      ).bind(organizationId, now, now),
+      env.DB.prepare(
+        `INSERT INTO sponsorships (id, sponsor_type, non_member_name, tier, pipeline_stage, created_at, updated_at)
+         VALUES (?, 'consortium', 'Outside Sponsor', 'Gold', 'active', ?, ?),
+                (?, 'consortium', 'Lapsed Sponsor', 'Gold', 'lapsed', ?, ?)`,
+      ).bind(outsideId, now, now, lapsedId, now, now),
     ]);
+    await saveSponsorPasses(env.DB, admin, event, {
+      expectedRevision: (await readEventTicketsConfiguration(env.DB, event)).revision,
+      staffTicketTypeId: vendor.id,
+      customerTicketTypeId: attendee.id,
+      tiers: [
+        { tierName: "Gold", sponsorType: null, staffPasses: 2, customerPasses: 3, sponsors: 0, sponsorsWithCodes: 0 },
+      ],
+    });
+    expect(await issueSponsorPassCodes(env.DB, admin, event)).toEqual({ created: 4, raised: 0 });
+    expect(await issueSponsorPassCodes(env.DB, admin, event)).toEqual({ created: 0, raised: 0 });
+    const gold = (await readEventTicketsConfiguration(env.DB, event)).sponsorPasses.tiers.find(
+      (tier) => tier.tierName === "Gold",
+    );
+    expect(gold).toMatchObject({ sponsors: 2, sponsorsWithCodes: 2 });
+    const member = await env.DB.prepare(
+      "SELECT COUNT(*) AS total FROM event_ticket_codes WHERE event_id = ? AND organization_id = ? AND sponsorship_id IS NULL",
+    )
+      .bind(event.id, organizationId)
+      .first<{ total: number }>();
+    expect(member?.total).toBe(2);
+
+    // A code made for a sponsor counts for that sponsor; a lapsed sponsor gets none.
+    const sponsors = await listEventTicketSponsors(env.DB, event.id, eventTicketSponsorListQuerySchema.parse({}));
+    expect(sponsors.sponsors.map((sponsor) => sponsor.name)).toEqual(["Member Sponsor", "Outside Sponsor"]);
+    const discount = {
+      ticketTypeId: attendee.id,
+      label: "Member Sponsor: partners",
+      discount: "percent" as const,
+      percentOff: 50,
+      maxUses: 20,
+    };
+    const sponsored = await createEventTicketCode(env.DB, admin, event, { ...discount, sponsorId: organizationId });
+    expect(sponsored).toMatchObject({
+      sponsor: { id: organizationId, name: "Member Sponsor" },
+      registrations: 0,
+      revenue: 0,
+    });
+    await expect(
+      createEventTicketCode(env.DB, admin, event, { ...discount, sponsorId: lapsedId }),
+    ).rejects.toMatchObject({ code: "EVENT_TICKETS_CHANGED" });
+    const outside = await createEventTicketCode(env.DB, admin, event, { ...discount, sponsorId: outsideId });
+    expect(outside.sponsor).toEqual({ id: outsideId, name: "Outside Sponsor" });
+    const ofMember = await listEventTicketCodes(
+      env.DB,
+      event.id,
+      eventTicketCodeListQuerySchema.parse({ sponsorId: organizationId, sort: "-revenue" }),
+    );
+    expect(ofMember.page.total).toBe(3);
+    expect(ofMember.codes.every((code) => code.sponsor?.id === organizationId)).toBe(true);
   });
 
   it("does not disclose bearer ticket codes to an event reader", async () => {
