@@ -359,7 +359,28 @@ describe("admin event general settings", () => {
     expect(container.textContent).toContain("Community");
     expect(container.textContent).toContain("No attendee data access");
     expect(container.textContent).not.toContain("+ Add tier");
-    expect(container.textContent).not.toContain("Sponsor tier actions");
+    expect(container.querySelector('button[aria-label="Event sponsor actions"]')).toBeNull();
+  });
+
+  it("edits the sponsor tiers from the event sponsors panel", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) =>
+        String(input).startsWith("/api/v1/sponsors")
+          ? json({ sponsorships: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } })
+          : json({ tiers: [], consortiumTiers: [{ tier: "Titanium", capturesLeads: false }] }),
+      ),
+    );
+
+    const container = mount(<SponsorTiersTab slug="portal-workshop" eventId="event-1" canWrite />);
+    await settle();
+    await settle();
+    const header = container.querySelector(".pk-panel__header")!;
+    expect(header.textContent).toContain("Event sponsors");
+    expect(header.querySelector('button[aria-label="Event sponsor actions"]')).not.toBeNull();
+
+    await beginRecordEdit(container, "Event sponsor actions", "Edit sponsor tiers");
+    expect(container.querySelector('input[name="consortiumLeadTiers"][value="Titanium"]')).not.toBeNull();
   });
 
   it("saves the consortium tiers that scan leads with the attendee-data tiers", async () => {
@@ -388,7 +409,7 @@ describe("admin event general settings", () => {
     await settle();
     expect(container.textContent).toContain("Consortium lead scanningNo consortium tiers");
 
-    await beginRecordEdit(container, "Sponsor tier actions");
+    await beginRecordEdit(container, "Event sponsor actions", "Edit sponsor tiers");
     const titanium = [...container.querySelectorAll<HTMLInputElement>('input[name="consortiumLeadTiers"]')].find(
       (input) => input.value === "Titanium",
     )!;
@@ -424,7 +445,7 @@ describe("admin event general settings", () => {
     await settle();
     await settle();
 
-    await beginRecordEdit(container, "Sponsor tier actions");
+    await beginRecordEdit(container, "Event sponsor actions", "Edit sponsor tiers");
     // Each draft row's removal names the row it removes.
     expect([...container.querySelectorAll("button")].map((button) => button.textContent)).toContain("Remove tier 1");
     const save = [...container.querySelectorAll("button")].find(

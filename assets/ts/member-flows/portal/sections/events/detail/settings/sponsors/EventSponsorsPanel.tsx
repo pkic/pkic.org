@@ -3,6 +3,7 @@
  * sponsors support every event and are managed by PKIC; this list holds the
  * one-time sponsors organizers add for their event.
  */
+import type { ComponentChildren } from "preact";
 import { useRef, useState } from "preact/hooks";
 import { sponsorshipsListResponseSchema } from "../../../../../../../../shared/schemas/sponsorship-management";
 import { ApiDataTable, type ApiTableActions } from "../../../../../../../components/ApiDataTable";
@@ -17,9 +18,15 @@ export function EventSponsorsPanel({
   eventId,
   canWrite,
   loadSponsors,
+  menu,
+  children,
 }: {
   eventId: string;
   canWrite: boolean;
+  /** The panel's ellipsis menu, for actions on the event's sponsor settings as a whole. */
+  menu?: ComponentChildren;
+  /** Content below the sponsor list, such as the event's sponsor tier settings. */
+  children?: ComponentChildren;
   /** Replaces the request for the sponsors, where there is no server to ask. */
   loadSponsors?: CollectionLoader;
 }) {
@@ -27,7 +34,7 @@ export function EventSponsorsPanel({
   const [adding, setAdding] = useState(false);
   return (
     <Panel aria-label="Event sponsors">
-      <PanelHeader title="Event sponsors" />
+      <PanelHeader title="Event sponsors" menu={menu} />
       <ApiDataTable
         urlState="event-sponsors"
         endpoint="/api/v1/sponsors"
@@ -72,6 +79,7 @@ export function EventSponsorsPanel({
           },
         ]}
       />
+      {children}
       {adding && (
         <AddEventSponsorDialog
           eventId={eventId}
