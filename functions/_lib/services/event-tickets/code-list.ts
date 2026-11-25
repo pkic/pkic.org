@@ -15,15 +15,26 @@ export async function listEventTicketCodes(db: DatabaseLike, eventId: string, qu
   // A code is found by who it is for, or by the code itself however it was typed.
   const search = query.q ? buildD1TextSearchFilter(query.q, ["label"]) : null;
   const typed = query.q ? normalizeTicketCode(query.q) : "";
+  const sponsor = query.sponsorId ? " AND COALESCE(organization_id, sponsorship_id) = ?" : "";
   const { rows, total } = await queryPage<CodeRow>(db, {
     source: {
       selectSql: `SELECT ${CODE_COLUMNS}`,
-      fromSql: `FROM event_ticket_codes WHERE event_id = ?${search ? ` AND ((${search.sql}) OR code = ?)` : ""}`,
-      bindings: [eventId, ...(search ? [...search.bindings, typed] : [])],
+      fromSql: `FROM event_ticket_codes WHERE event_id = ?${sponsor}${search ? ` AND ((${search.sql}) OR code = ?)` : ""}`,
+      bindings: [
+        eventId,
+        ...(query.sponsorId ? [query.sponsorId] : []),
+        ...(search ? [...search.bindings, typed] : []),
+      ],
     },
     orderBy: resolveMappedOrderBy(
       query.sort,
-      { label: "label COLLATE NOCASE", used: "used_count", created: "created_at" },
+      {
+        label: "label COLLATE NOCASE",
+        used: "used_count",
+        created: "created_at",
+        registrations: "registrations",
+        revenue: "revenue",
+      },
       "created_at DESC",
       "id ASC",
     ),

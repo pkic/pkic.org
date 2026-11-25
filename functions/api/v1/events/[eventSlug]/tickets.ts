@@ -1,4 +1,5 @@
 import {
+  eventTicketGuidancePutRouteSchema,
   eventTicketOfferRouteSchema,
   eventTicketPricesPutRouteSchema,
   eventTicketQuoteRouteSchema,
@@ -8,16 +9,19 @@ import {
   eventTicketTypeCreateRouteSchema,
   eventTicketTypeUpdateRouteSchema,
   eventTicketsGetRouteSchema,
+} from "../../../../../assets/shared/schemas/event-tickets";
+import {
   registrationTicketCheckoutRouteSchema,
   registrationTicketGetRouteSchema,
   registrationTicketRefundRouteSchema,
   registrationTicketReviewRouteSchema,
   registrationTicketSyncRouteSchema,
-} from "../../../../../assets/shared/schemas/event-tickets";
+} from "../../../../../assets/shared/schemas/registration-tickets";
 import {
   eventTicketCodeCreateRouteSchema,
   eventTicketCodesGetRouteSchema,
   eventTicketCodeUpdateRouteSchema,
+  eventTicketSponsorsGetRouteSchema,
 } from "../../../../../assets/shared/schemas/event-ticket-codes";
 import { hasPermission } from "../../../../_lib/auth/permissions";
 import { getUserSessionToken, requireIdentityFromRequest } from "../../../../_lib/auth/user-session";
@@ -33,6 +37,7 @@ import {
   replaceEventTicketPrices,
   saveEventTicketType,
   updateEventTicketCode,
+  updateEventTicketGuidance,
   updateEventTicketSettings,
 } from "../../../../_lib/services/event-tickets/configuration";
 import { reviewDisputedTicket } from "../../../../_lib/services/event-tickets/dispute";
@@ -44,6 +49,7 @@ import {
 import { openTicketCheckout } from "../../../../_lib/services/event-tickets/payment";
 import { issueSponsorPassCodes, saveSponsorPasses } from "../../../../_lib/services/event-tickets/sponsor-passes";
 import { listEventTicketCodes } from "../../../../_lib/services/event-tickets/code-list";
+import { listEventTicketSponsors } from "../../../../_lib/services/event-tickets/event-sponsors";
 import {
   listIssuedTickets,
   updateIssuedTicketsFromProvider,
@@ -89,9 +95,19 @@ const EventTicketSettingsPut = openApiRoute(eventTicketSettingsPutRouteSchema, a
   return json({ success: true, ...(await updateEventTicketSettings(db, actor, event, data.body)) });
 });
 
+const EventTicketGuidancePut = openApiRoute(eventTicketGuidancePutRouteSchema, async (c: AdminContext, data) => {
+  const { actor, db, event } = await requireEventPermission(c, data.params.eventSlug, "events:write");
+  return json({ success: true, ...(await updateEventTicketGuidance(db, actor, event, data.body)) });
+});
+
 const EventTicketCodesGet = openApiRoute(eventTicketCodesGetRouteSchema, async (c: AdminContext, data) => {
   const { db, event } = await requireEventPermission(c, data.params.eventSlug, "events:write");
   return json(await listEventTicketCodes(db, event.id, data.query));
+});
+
+const EventTicketSponsorsGet = openApiRoute(eventTicketSponsorsGetRouteSchema, async (c: AdminContext, data) => {
+  const { db, event } = await requireEventPermission(c, data.params.eventSlug, "events:write");
+  return json(await listEventTicketSponsors(db, event.id, data.query));
 });
 
 const EventTicketCodePost = openApiRoute(eventTicketCodeCreateRouteSchema, async (c: AdminContext, data) => {
@@ -203,6 +219,7 @@ const RegistrationTicketReviewPost = openApiRoute(
     const { actor, db, event } = await requireEventPermission(c, data.params.eventSlug, "events:write");
     await reviewDisputedTicket(
       db,
+      c.env,
       actor,
       event,
       data.params.registrationId,
@@ -255,12 +272,14 @@ export function registerTicketRoutes(openapi: TicketRouter): void {
   openapi.post("/tickets/quote", EventTicketQuotePost);
   openapi.put("/tickets/prices", EventTicketPricesPut);
   openapi.put("/tickets/settings", EventTicketSettingsPut);
+  openapi.put("/tickets/guidance", EventTicketGuidancePut);
   openapi.post("/tickets/types", EventTicketTypePost);
   openapi.put("/tickets/types/:ticketTypeId", EventTicketTypePut);
   openapi.get("/tickets/issued", IssuedTicketsGet);
   openapi.post("/tickets/issued/updates", IssuedTicketsUpdatePost);
   openapi.get("/tickets/codes", EventTicketCodesGet);
   openapi.post("/tickets/codes", EventTicketCodePost);
+  openapi.get("/tickets/sponsors", EventTicketSponsorsGet);
   openapi.put("/tickets/sponsors/passes", EventTicketSponsorPassesPut);
   openapi.post("/tickets/sponsors/codes", EventTicketSponsorCodesPost);
   openapi.patch("/tickets/codes/:codeId", EventTicketCodePatch);

@@ -2,18 +2,28 @@
 import { useState } from "preact/hooks";
 import { putJson } from "../../../../../../../shared/api-client";
 import {
+  eventTicketGuidanceUpdateSchema,
   eventTicketSettingsUpdateSchema,
   eventTicketsChangeResponseSchema,
-  type EventTicketSettingsUpdate,
 } from "../../../../../../../../shared/schemas/event-tickets";
 import { useContractForm } from "../../../../../../../hooks/useContractForm";
 import { ticketsEndpoint } from "./tickets-endpoint";
 
-export function useTicketSettingsForm(
+/** The settings a panel saves: payment settings, or what registrants read. */
+const TICKET_SETTINGS_CONTRACTS = {
+  settings: eventTicketSettingsUpdateSchema,
+  guidance: eventTicketGuidanceUpdateSchema,
+} as const;
+type TicketSettingsContract = keyof typeof TICKET_SETTINGS_CONTRACTS;
+
+export function useTicketSettingsForm<Contract extends TicketSettingsContract>(
   slug: string,
+  /** Which settings the panel saves, and where. */
+  contract: Contract,
   /** The revision of the saved settings; the draft keeps the one it was copied from. */
   revision: number,
-  fields: Omit<Parameters<typeof useContractForm<typeof eventTicketSettingsUpdateSchema>>[1], "expectedRevision">,
+  /** The draft as the panel holds it; the contract checks it, so it may still be invalid. */
+  fields: Record<string, unknown>,
   onSaved: () => Promise<void>,
   /** Puts the panel's own fields back to the saved values. */
   resetFields: () => void,
@@ -23,7 +33,7 @@ export function useTicketSettingsForm(
   const [error, setError] = useState("");
   // A save of a draft copied before someone else's change is refused instead of overwriting that change.
   const [draftRevision, setDraftRevision] = useState(revision);
-  const form = useContractForm(eventTicketSettingsUpdateSchema, { ...fields, expectedRevision: draftRevision });
+  const form = useContractForm(TICKET_SETTINGS_CONTRACTS[contract], { ...fields, expectedRevision: draftRevision });
   function reset() {
     setDraftRevision(revision);
     resetFields();
@@ -38,8 +48,7 @@ export function useTicketSettingsForm(
     setSaving(true);
     setError("");
     try {
-      const data: EventTicketSettingsUpdate = checked.data;
-      await putJson(`${ticketsEndpoint(slug)}/settings`, data, eventTicketsChangeResponseSchema);
+      await putJson(`${ticketsEndpoint(slug)}/${contract}`, checked.data, eventTicketsChangeResponseSchema);
       await onSaved();
       setEditing(false);
     } catch (cause) {

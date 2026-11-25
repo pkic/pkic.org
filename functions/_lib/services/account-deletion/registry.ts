@@ -397,7 +397,7 @@ export const ACCOUNT_DELETION_BLOCKING_RULES: readonly AccountDeletionBlockingRu
   authored("event_scan_attempts", "operator_user_id"),
   authored("event_scanner_device_sessions", "operator_user_id"),
   authored("event_ticket_codes", "created_by_user_id"),
-  authored("ticket_classifier_decisions", "decided_by_user_id"),
+  authored("ticket_organization_decisions", "decided_by_user_id"),
   authored("registration_ticket_refunds", "requested_by_user_id"),
   authored("event_session_polls", "closed_by"),
   authored("event_session_polls", "created_by"),

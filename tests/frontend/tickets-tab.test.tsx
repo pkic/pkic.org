@@ -23,6 +23,11 @@ vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/settings/tic
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/settings/tickets/TicketPaymentPanel", () => ({
   TicketPaymentPanel: () => null,
 }));
+vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/settings/tickets/TicketTypeEditor", () => ({
+  TicketTypeEditor: ({ type }: { type?: { name: string } }) => (
+    <section aria-label={`Edit ticket: ${type?.name ?? ""}`} />
+  ),
+}));
 
 let host: HTMLDivElement;
 
@@ -38,7 +43,22 @@ function configuration(underReviewCount: number): EventTicketsConfiguration {
     settings: { currency: "usd" },
     currentPeriodId: null,
     types: [
-      { id: "attendee", key: "attendee", name: "Attendee", active: true, isDefault: true, presetOrganizations: 0 },
+      {
+        id: "attendee",
+        key: "attendee",
+        name: "Attendee",
+        descriptionMarkdown: "",
+        classifierDescription: "",
+        classifierThresholdPercent: 75,
+        active: true,
+        isDefault: true,
+        freeRequiresWorkEmail: false,
+        presetOrganizations: 0,
+        registered: 0,
+        paid: 0,
+        awaitingPayment: 0,
+        underReview: 0,
+      },
     ],
     periods: [],
     prices: [],
@@ -54,20 +74,36 @@ function configuration(underReviewCount: number): EventTicketsConfiguration {
   } as unknown as EventTicketsConfiguration;
 }
 
-async function renderTab(canWrite: boolean, underReviewCount = 0) {
+async function renderTab(
+  canWrite: boolean,
+  underReviewCount = 0,
+  section?: "tickets" | "codes" | "payments",
+  detail?: string,
+  segment?: string,
+) {
   state.configuration = configuration(underReviewCount);
   host = document.createElement("div");
   document.body.append(host);
-  await act(() => render(<TicketsTab slug="synthetic" canWrite={canWrite} />, host));
+  await act(() =>
+    render(
+      <TicketsTab slug="synthetic" canWrite={canWrite} section={section} detail={detail} segment={segment} />,
+      host,
+    ),
+  );
 }
 
-it("shows codes only to an organizer who can change them", async () => {
-  await renderTab(false);
+it("shows codes on their own tab, only to an organizer who can change them", async () => {
+  await renderTab(true);
   expect(host.querySelector('[aria-label="Codes"]')).toBeNull();
   await act(() => render(null, host));
   host.remove();
 
-  await renderTab(true);
+  await renderTab(false, 0, "codes");
+  expect(host.querySelector('[aria-label="Codes"]')).toBeNull();
+  await act(() => render(null, host));
+  host.remove();
+
+  await renderTab(true, 0, "codes");
   expect(host.querySelector('[aria-label="Codes"]')).not.toBeNull();
 });
 
@@ -79,4 +115,22 @@ it("shows payments under review only when there are some", async () => {
 
   await renderTab(true, 1);
   expect(host.textContent).toContain("Payment under review");
+});
+
+it("opens a ticket to read first, with its editor one page below", async () => {
+  await renderTab(true, 0, "tickets", "attendee");
+  expect(host.querySelector('[aria-label="Attendee ticket"]')).not.toBeNull();
+  expect(host.querySelector<HTMLAnchorElement>("a[href$='/tickets/attendee/edit']")?.textContent).toBe("Edit ticket");
+  await act(() => render(null, host));
+  host.remove();
+
+  await renderTab(true, 0, "tickets", "attendee", "edit");
+  expect(host.querySelector('[aria-label="Edit ticket: Attendee"]')).not.toBeNull();
+  await act(() => render(null, host));
+  host.remove();
+
+  // Someone who cannot change tickets reads the ticket, and the editor stays closed.
+  await renderTab(false, 0, "tickets", "attendee", "edit");
+  expect(host.querySelector('[aria-label="Attendee ticket"]')).not.toBeNull();
+  expect(host.querySelector("a[href$='/edit']")).toBeNull();
 });

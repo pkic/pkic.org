@@ -17,7 +17,7 @@ import {
 import { addDuplicateStringIssues } from "./refinements";
 import { httpOrSameOriginUrlSchema, httpUrlSchema } from "./urls";
 import { logoUploadResponseSchema } from "./images";
-import { requiresPermissions } from "./route-contract";
+import { requiresAnyPermissions, requiresPermissions } from "./route-contract";
 
 export const SPONSOR_TYPES = ["consortium", "event"] as const;
 export const sponsorTypeSchema = z.enum(SPONSOR_TYPES);
@@ -120,6 +120,8 @@ export const sponsorshipsListQuerySchema = listQuerySchema(SPONSORSHIP_SORT_COLU
   type: sponsorTypeSchema.optional(),
   stage: sponsorshipPipelineStageSchema.optional(),
   tier: trimmedString(1, 100).optional(),
+  /** One event's sponsorships; an event's organizers may list only with this filter. */
+  eventId: eventIdSchema.optional(),
   // Company-scoped filters — decomposed from a company list row's `key`,
   // used to fetch one company's sponsorships for the detail panel instead
   // of the full list.
@@ -232,7 +234,7 @@ export const sponsorshipCreateSchema = z
   });
 
 export const sponsorshipCreateRouteSchema = {
-  ...requiresPermissions("sponsorships:write"),
+  ...requiresAnyPermissions(["sponsorships:write"], ["events:write"]),
   tags: ["Sponsorships"],
   summary: "Create a sponsorship record (staff-initiated)",
   description:
@@ -251,7 +253,7 @@ export const sponsorshipCreateRouteSchema = {
 // ── Get ──────────────────────────────────────────────────────────────────
 
 export const sponsorshipGetRouteSchema = {
-  ...requiresPermissions("sponsorships:read"),
+  ...requiresAnyPermissions(["sponsorships:read"], ["events:write"]),
   tags: ["Sponsorships"],
   summary: "Get a sponsorship's detail",
   request: { params: sponsorshipIdParamsSchema },
@@ -267,7 +269,7 @@ export const sponsorshipGetRouteSchema = {
 // ── Logo (non-member sponsors only) ─────────────────────────────────────
 
 export const sponsorshipLogoPutRouteSchema = {
-  ...requiresPermissions("sponsorships:write"),
+  ...requiresAnyPermissions(["sponsorships:write"], ["events:write"]),
   tags: ["Sponsorships"],
   summary: "Upload or replace a non-member sponsor's logo",
   description:
@@ -292,7 +294,7 @@ export const sponsorshipLogoPutRouteSchema = {
 };
 
 export const sponsorshipLogoDeleteRouteSchema = {
-  ...requiresPermissions("sponsorships:write"),
+  ...requiresAnyPermissions(["sponsorships:write"], ["events:write"]),
   tags: ["Sponsorships"],
   summary: "Remove a non-member sponsor's logo",
   request: { params: sponsorshipIdParamsSchema },
@@ -310,7 +312,7 @@ export const sponsorshipLogoDeleteRouteSchema = {
 export const sponsorshipUpdateSchema = sponsorshipEditableFieldsSchema;
 
 export const sponsorshipUpdateRouteSchema = {
-  ...requiresPermissions("sponsorships:write"),
+  ...requiresAnyPermissions(["sponsorships:write"], ["events:write"]),
   tags: ["Sponsorships"],
   summary: "Update a sponsorship's fields",
   description:
@@ -356,7 +358,7 @@ export const sponsorshipStageUpdateSchema = z
   });
 
 export const sponsorshipStageUpdateRouteSchema = {
-  ...requiresPermissions("sponsorships:write"),
+  ...requiresAnyPermissions(["sponsorships:write"], ["events:write"]),
   tags: ["Sponsorships"],
   summary: "Advance a sponsorship's pipeline stage",
   description:

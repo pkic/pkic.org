@@ -432,6 +432,69 @@ describe("merging a duplicate organization", () => {
     ).toMatchObject({ organizationId: ibm });
   });
 
+  it("moves ticket decisions to the organization that stays, keeping its own for the same ticket", async () => {
+    const kept = await insertOrganization(env.DB, "Example Vendor");
+    const duplicate = await insertOrganization(env.DB, "Example Vendor Group");
+    const decidedAt = "2026-01-05T10:00:00.000Z";
+    const decide = (id: string, organizationId: string, ticketKey: string, source: string) =>
+      env.DB.prepare(
+        `INSERT INTO ticket_organization_decisions (id, organization_id, ticket_key, source, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      ).bind(id, organizationId, ticketKey, source, decidedAt, decidedAt);
+    await env.DB.batch([
+      decide("kept-vendor", kept, "vendor", "organizer"),
+      decide("duplicate-vendor", duplicate, "vendor", "classifier"),
+      decide("duplicate-attendee", duplicate, "attendee", "organizer"),
+    ]);
+
+    const response = await merge(kept, organizationMergeCreateSchema.parse({ sourceOrganizationId: duplicate }));
+    expect(response.status, await response.clone().text()).toBe(201);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id, organization_id, ticket_key, updated_at FROM ticket_organization_decisions ORDER BY id",
+      ),
+    ).toEqual([
+      // A moved decision keeps its date, so it does not become the latest organizer's choice.
+      { id: "duplicate-attendee", organization_id: kept, ticket_key: "attendee", updated_at: decidedAt },
+      { id: "kept-vendor", organization_id: kept, ticket_key: "vendor", updated_at: decidedAt },
+    ]);
+  });
+
+  it("moves every ticket code, keeping one pass code of each kind for the organization that stays", async () => {
+    const kept = await insertOrganization(env.DB, "Example Sponsor");
+    const duplicate = await insertOrganization(env.DB, "Example Sponsor Group");
+    const [{ id: eventId }] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM events WHERE slug='pqc-2026'");
+    const at = nowIso();
+    const typeId = crypto.randomUUID();
+    const code = (id: string, organizationId: string, passKind: string | null) =>
+      env.DB.prepare(
+        `INSERT INTO event_ticket_codes (id, event_id, ticket_type_id, label, code, max_uses, organization_id, pass_kind, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 4, ?, ?, ?, ?)`,
+      ).bind(id, eventId, typeId, id, id.toUpperCase().replaceAll("-", ""), organizationId, passKind, at, at);
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO event_ticket_types (id, event_id, ticket_key, name, created_at, updated_at) VALUES (?, ?, 'sponsor_staff', 'Sponsor staff', ?, ?)",
+      ).bind(typeId, eventId, at, at),
+      code("kept-staff", kept, "staff"),
+      code("duplicate-staff", duplicate, "staff"),
+      code("duplicate-customers", duplicate, "customers"),
+      code("duplicate-plain", duplicate, null),
+    ]);
+
+    const response = await merge(kept, organizationMergeCreateSchema.parse({ sourceOrganizationId: duplicate }));
+    expect(response.status, await response.clone().text()).toBe(201);
+    expect(await queryAll(env.DB, "SELECT id, organization_id, pass_kind FROM event_ticket_codes ORDER BY id")).toEqual(
+      [
+        { id: "duplicate-customers", organization_id: kept, pass_kind: "customers" },
+        { id: "duplicate-plain", organization_id: kept, pass_kind: null },
+        // The kept organization has its own staff pass code: the moved one stays valid as a plain code.
+        { id: "duplicate-staff", organization_id: kept, pass_kind: null },
+        { id: "kept-staff", organization_id: kept, pass_kind: "staff" },
+      ],
+    );
+  });
+
   it("refuses to move a membership: merge the other way, or confirm the source's membership ends", async () => {
     const member = await insertOrganization(env.DB, "Member Org");
     await seedOrganizationAggregate(env.DB, member, "A");

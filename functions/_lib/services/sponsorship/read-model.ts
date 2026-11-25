@@ -51,7 +51,9 @@ const SPONSORSHIP_SELECT = `
 `;
 
 type SponsorshipWhereFilters = Pick<SponsorshipsListQuery, "type" | "stage" | "tier" | "q"> &
-  Partial<Pick<SponsorshipsListQuery, "organizationId" | "nonMemberName" | "contactName" | "sponsorshipId">>;
+  Partial<
+    Pick<SponsorshipsListQuery, "eventId" | "organizationId" | "nonMemberName" | "contactName" | "sponsorshipId">
+  >;
 
 function buildSponsorshipsWhere(filters: SponsorshipWhereFilters): { where: string; values: unknown[] } {
   const conditions: string[] = [];
@@ -67,6 +69,10 @@ function buildSponsorshipsWhere(filters: SponsorshipWhereFilters): { where: stri
   if (filters.tier) {
     conditions.push("sp.tier = ?");
     values.push(filters.tier);
+  }
+  if (filters.eventId) {
+    conditions.push("sp.event_id = ?");
+    values.push(filters.eventId);
   }
   if (filters.organizationId) {
     conditions.push("sp.organization_id = ?");

@@ -6,7 +6,7 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { registrationTicketSchema } from "../../assets/shared/schemas/event-tickets";
+import { registrationTicketSchema } from "../../assets/shared/schemas/registration-tickets";
 import { EventTicket } from "../../assets/ts/member-flows/portal/sections/events/app/EventTicket";
 import { participantEventFixture, registeredParticipant } from "../helpers/participant-event";
 import { EventTicketPayment } from "../../assets/ts/member-flows/portal/sections/events/app/EventTicketPayment";

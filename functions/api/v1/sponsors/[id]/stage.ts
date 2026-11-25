@@ -11,20 +11,22 @@ import { processOutboxByIdBackground } from "../../../../_lib/email/outbox";
 import {
   advanceSponsorshipStage,
   authorizedSponsorshipMutationDb,
+  loadAuthorizedSponsorship,
+  requireSponsorshipActor,
   toApiSponsorship,
 } from "../../../../_lib/services/sponsorship";
 import { sponsorshipStageUpdateRouteSchema } from "../../../../../assets/shared/schemas/sponsorship-management";
 import type { AdminContext } from "../../../../_lib/db/context";
 import { requireInternalSecret } from "../../../../_lib/request";
-import { requireStaffPermission } from "../../../../_lib/auth/staff-permissions";
 
 export const SponsorStageUpdate = openApiRoute(sponsorshipStageUpdateRouteSchema, async (c: AdminContext, data) => {
-  const { db, staff } = await requireStaffPermission(c, "sponsorships:write");
+  const { db, actor: staff } = await requireSponsorshipActor(c);
 
   const body = data.body;
   const id = data.params.id;
+  const { access } = await loadAuthorizedSponsorship(db, staff, id, "write");
   const config = getConfig(c.env, c.req.raw);
-  const result = await advanceSponsorshipStage(authorizedSponsorshipMutationDb(db, staff), {
+  const result = await advanceSponsorshipStage(authorizedSponsorshipMutationDb(db, staff, access), {
     id,
     toStage: body.toStage,
     actor: staff,

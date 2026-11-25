@@ -3,17 +3,21 @@ import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
 import { insertOrganization, insertUser } from "./helpers/membership";
 import { nowIso } from "../functions/_lib/utils/time";
+import { workEmailDomain } from "../functions/_lib/email-domains/classification";
 import { ticketRefundNote } from "../assets/shared/event-ticket-display";
 import { callApi } from "./helpers/app";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { hmacSha256Hex } from "../functions/_lib/utils/crypto";
+import { eventTicketSettingsUpdateSchema } from "../assets/shared/schemas/event-tickets";
 import {
-  eventTicketSettingsUpdateSchema,
   registrationTicketCheckoutResponseSchema,
   registrationTicketResponseSchema,
-} from "../assets/shared/schemas/event-tickets";
-import { eventTicketCodeListQuerySchema } from "../assets/shared/schemas/event-ticket-codes";
-import { seedEventAndAdmin } from "./helpers/context";
+} from "../assets/shared/schemas/registration-tickets";
+import {
+  eventTicketCodeListQuerySchema,
+  eventTicketSponsorListQuerySchema,
+} from "../assets/shared/schemas/event-ticket-codes";
+import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createScheduledRegistration } from "./helpers/scheduled-registration";
 import { findOrCreateUser } from "../functions/_lib/services/users";
 import {
@@ -22,6 +26,7 @@ import {
   replaceEventTicketPrices,
   saveEventTicketType,
   updateEventTicketCode,
+  updateEventTicketGuidance,
   updateEventTicketSettings,
 } from "../functions/_lib/services/event-tickets/configuration";
 import { quoteEventTicket, readEventTicketOffer } from "../functions/_lib/services/event-tickets/offer";
@@ -55,11 +60,13 @@ import { issuedTicketsQuerySchema } from "../assets/shared/schemas/event-issued-
 import { releaseUnpaidTickets } from "../functions/_lib/services/event-tickets/unpaid-release";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { listEventTicketCodes } from "../functions/_lib/services/event-tickets/code-list";
+import { listEventTicketSponsors } from "../functions/_lib/services/event-tickets/event-sponsors";
 import { reviewDisputedTicket } from "../functions/_lib/services/event-tickets/dispute";
 import {
   decideOrganizationTicket,
   prepareStoreTicketDecision,
 } from "../functions/_lib/services/event-tickets/classifier";
+import { decideTicketOrganizations } from "../functions/_lib/services/event-tickets/organization-decisions";
 import { readEventTicketSnapshot } from "../functions/_lib/services/event-tickets/snapshot";
 import { issueSponsorPassCodes, saveSponsorPasses } from "../functions/_lib/services/event-tickets/sponsor-passes";
 import { getRegistrationByIdForEvent } from "../functions/_lib/services/registrations/queries";
@@ -134,8 +141,37 @@ async function seedTickets() {
   return { event, admin, attendee, vendor };
 }
 
+/** The portal organization that claims a domain, created on first use. */
+async function organizationFor(domain: string): Promise<string> {
+  const claimed = await env.DB.prepare("SELECT organization_id FROM organization_domain_claims WHERE domain = ?")
+    .bind(domain)
+    .first<{ organization_id: string }>();
+  if (claimed) return claimed.organization_id;
+  const organizationId = await insertOrganization(env.DB, `Organization at ${domain}`);
+  const at = nowIso();
+  await env.DB.prepare(
+    "INSERT INTO organization_domain_claims (id, domain, organization_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+  )
+    .bind(crypto.randomUUID(), domain, organizationId, at, at)
+    .run();
+  return organizationId;
+}
+
+/** Registers a person, on behalf of the organization that claims their domain unless it is a personal mail domain. */
 async function register(event: { id: string; timezone: string }, email: string, classifierEnv: Pick<Env, "AI"> = {}) {
   const user = await findOrCreateUser(env.DB, { email, firstName: "Synthetic", lastName: "Person" });
+  const domain = workEmailDomain(email);
+  let identityId: string | null = null;
+  if (domain) {
+    identityId = crypto.randomUUID();
+    const at = nowIso();
+    await env.DB.prepare(
+      `INSERT INTO identities (id, user_id, organization_id, source, invited_at, started_at, created_at, updated_at)
+       VALUES (?, ?, ?, 'verified_domain', ?, ?, ?, ?)`,
+    )
+      .bind(identityId, user.id, await organizationFor(domain), at, at, at, at)
+      .run();
+  }
   const { registration } = await createScheduledRegistration(env.DB, {
     event: { id: event.id },
     userId: user.id,
@@ -147,8 +183,7 @@ async function register(event: { id: string; timezone: string }, email: string, 
     registrationId: registration.id,
     userId: user.id,
     email,
-    identityId: null,
-    organizationName: "Example Organization",
+    identityId,
     dayAttendance: inPerson,
   });
   if (ticket) await env.DB.batch(ticket.statements);
@@ -295,36 +330,58 @@ describe("event tickets", () => {
     expect(third.ticket).toMatchObject({ ticketName: "Vendor" });
   });
 
+  it("stores no classifier answer once an organizer decided while the model answered", async () => {
+    const { event, admin } = await seedTickets();
+    const organizationId = await organizationFor("raced-example.test");
+    const { types } = await readEventTicketSnapshot(env.DB, event);
+    const run = async () => {
+      await decideTicketOrganizations(env.DB, admin, event, {
+        decisions: [{ organizationId, ticketKey: "pqcc_attendee" }],
+      });
+      return { answers: { ticket: { probabilities: { pqcc_vendor: 0.97, pqcc_attendee: 0.03 } } } };
+    };
+    const decided = await decideOrganizationTicket(env.DB, { AI: { run } } as never, types, {
+      organizationId,
+      organizationName: "Raced Example",
+      domains: ["raced-example.test"],
+    });
+    expect(decided).toMatchObject({ ticketKey: "pqcc_attendee", source: "organizer" });
+    expect(
+      await queryAll(env.DB, "SELECT ticket_key, source FROM ticket_organization_decisions WHERE organization_id = ?", [
+        organizationId,
+      ]),
+    ).toEqual([{ ticket_key: "pqcc_attendee", source: "organizer" }]);
+  });
+
   it("asks no model and keeps no decision for a person without an organization or work address", async () => {
     const { event } = await seedTickets();
     const { types } = await readEventTicketSnapshot(env.DB, event);
     const run = vi.fn(async () => ({ answers: { ticket: { probabilities: { pqcc_vendor: 0.99 } } } }));
     const decided = await decideOrganizationTicket(env.DB, { AI: { run } } as never, types, {
-      organizationName: " ",
-      emailDomain: null,
+      organizationId: null,
+      organizationName: null,
+      domains: [],
     });
     expect(decided).toBeNull();
     expect(run).not.toHaveBeenCalled();
-    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM ticket_classifier_decisions").first("n")).toBe(0);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM ticket_organization_decisions").first("n")).toBe(0);
   });
 
-  it("keeps decisions when other tickets join or leave the classifier", async () => {
+  it("keeps decisions when ticket descriptions are added or cleared", async () => {
     const { event, admin } = await seedTickets();
     await register(event, "one@vendor-example.test", classifier({ pqcc_vendor: 0.97, pqcc_attendee: 0.03 }));
-    // Decisions for another organization from earlier questions: an organizer's, which counts, and an older answer.
-    const subject = { organizationName: "Example Organization", emailDomain: "kept-example.test" };
+    // Another organization has two decisions among these tickets: the organizer's counts over the classifier's.
+    const organizationId = await organizationFor("kept-example.test");
     await env.DB.batch([
       prepareStoreTicketDecision(env.DB, {
-        criteriaDigest: "an-earlier-question",
-        subject,
+        organizationId,
         ticketKey: "pqcc_attendee",
         source: "classifier",
         confidence: 0.8,
         model: "synthetic",
       }),
       prepareStoreTicketDecision(env.DB, {
-        criteriaDigest: "another-earlier-question",
-        subject,
+        organizationId,
         ticketKey: "pqcc_vendor",
         source: "organizer",
         confidence: null,
@@ -372,15 +429,15 @@ describe("event tickets", () => {
     await clearDescription("pqcc_academic");
     expect((await register(event, "three@vendor-example.test")).ticket).toMatchObject({ ticketName: "Vendor" });
 
-    // No ticket keeps a description: the classifier's decisions stop, an organizer's still applies everywhere.
+    // No ticket keeps a description: a decision made stays made, the classifier's as well as an organizer's.
     await clearDescription("pqcc_vendor");
-    expect((await register(event, "four@vendor-example.test")).ticket).toMatchObject({ ticketName: "Attendee" });
+    expect((await register(event, "four@vendor-example.test")).ticket).toMatchObject({ ticketName: "Vendor" });
     expect((await register(event, "three@kept-example.test")).ticket).toMatchObject({ ticketName: "Vendor" });
     const remaining = (await readEventTicketsConfiguration(env.DB, event)).types.map((type) => [
       type.key,
       type.presetOrganizations,
     ]);
-    expect(Object.fromEntries(remaining)).toEqual({ pqcc_attendee: 0, pqcc_vendor: 1, pqcc_academic: 0 });
+    expect(Object.fromEntries(remaining)).toEqual({ pqcc_attendee: 0, pqcc_vendor: 2, pqcc_academic: 0 });
   });
 
   it("lets the person choose when the classifier is unsure and falls back to the default when it fails", async () => {
@@ -447,6 +504,7 @@ describe("event tickets", () => {
       await expect(
         reviewDisputedTicket(
           replanned,
+          env,
           admin as UserBackedAuthAdmin,
           event,
           registration.id,
@@ -457,7 +515,7 @@ describe("event tickets", () => {
     expect(
       await env.DB.prepare(
         `SELECT (SELECT COUNT(*) FROM audit_log WHERE action = 'registration_ticket_dispute_settled') AS audits,
-                (SELECT COUNT(*) FROM ticket_classifier_decisions WHERE source = 'organizer') AS decisions`,
+                (SELECT COUNT(*) FROM ticket_organization_decisions WHERE source = 'organizer') AS decisions`,
       ).first(),
     ).toEqual({ audits: 0, decisions: 0 });
     expect(await readRegistrationTicket(env.DB, { eventId: event.id, registrationId: registration.id })).toMatchObject({
@@ -466,6 +524,7 @@ describe("event tickets", () => {
     });
     await reviewDisputedTicket(
       env.DB,
+      env,
       admin as UserBackedAuthAdmin,
       event,
       registration.id,
@@ -478,6 +537,47 @@ describe("event tickets", () => {
       amount: 39500,
       disputed: false,
     });
+  });
+
+  it("moves a person registered for no organization to the ticket their work domain is given", async () => {
+    const { event, admin } = await seedTickets();
+    const decided = classifier({ pqcc_vendor: 0.99, pqcc_attendee: 0.01 });
+    const email = "alone@vendor-example.test";
+    const user = await findOrCreateUser(env.DB, { email, firstName: "A", lastName: "B" });
+    await quoteEventTicket(
+      env.DB,
+      decided,
+      event,
+      { userId: user.id, email },
+      { dayAttendance: inPerson, ticketKey: "pqcc_attendee", disputeReason: "We only buy.", save: true },
+    );
+    const { registration } = await createScheduledRegistration(env.DB, {
+      event: { id: event.id },
+      userId: user.id,
+      sourceType: "direct",
+      verifiedIdentity: { userId: user.id },
+    });
+    const ticket = await planRegistrationTicket(env.DB, decided, {
+      event,
+      registrationId: registration.id,
+      userId: user.id,
+      email,
+      identityId: null,
+      dayAttendance: inPerson,
+    });
+    await env.DB.batch(ticket!.statements);
+    expect(await readRegistrationTicket(env.DB, { eventId: event.id, registrationId: registration.id })).toMatchObject({
+      disputed: true,
+      ticketKey: "pqcc_attendee",
+    });
+
+    await reviewDisputedTicket(env.DB, decided, admin, event, registration.id, "move", "https://example.test");
+    expect(await readRegistrationTicket(env.DB, { eventId: event.id, registrationId: registration.id })).toMatchObject({
+      ticketKey: "pqcc_vendor",
+      disputed: false,
+    });
+    // Nothing is stored for a person without an organization.
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM ticket_organization_decisions").first("n")).toBe(0);
   });
 
   it("counts a code's uses with the registration and refuses the one after the last", async () => {
@@ -555,7 +655,6 @@ describe("event tickets", () => {
           userId: person.id,
           email,
           identityId: null,
-          organizationName: "Example Organization",
           dayAttendance: inPerson,
         },
       ))!;
@@ -718,7 +817,7 @@ describe("event tickets", () => {
       .bind(ticketId)
       .run();
     await expect(
-      reviewDisputedTicket(env.DB, admin, event, registration.id, "move", "https://example.test"),
+      reviewDisputedTicket(env.DB, env, admin, event, registration.id, "move", "https://example.test"),
     ).rejects.toMatchObject({ code: "TICKET_PAYMENT_UNDER_REVIEW" });
     expect(await paidEvent(ticketId, "cs_test_ticket", 19500, "evt_repeat_paid_after_dispute")).toMatchObject({
       outcome: "already_paid",
@@ -1528,7 +1627,6 @@ describe("event tickets", () => {
           userId: user.id,
           email: user.email,
           identityId: null,
-          organizationName: "Example Organization",
           dayAttendance: inPerson,
         },
       ),
@@ -1675,7 +1773,6 @@ describe("event tickets", () => {
           userId: user.id,
           email,
           identityId: null,
-          organizationName: "Example Organization",
           dayAttendance: virtual,
         },
       );
@@ -1986,7 +2083,6 @@ describe("event tickets", () => {
         userId: user.id,
         email: user.email,
         identityId: null,
-        organizationName: "Example Organization",
         dayAttendance: [{ dayDate: DAY, attendanceType: "virtual" }],
       },
     );
@@ -2005,10 +2101,10 @@ describe("event tickets", () => {
     const now = new Date().toISOString();
     await env.DB.prepare(
       `INSERT INTO sponsorships (id, sponsor_type, non_member_name, event_id, tier, pipeline_stage, created_at, updated_at)
-       VALUES ('sponsor-1', 'event', 'Example Sponsor', ?, 'Gold', 'active', ?, ?),
-              ('sponsor-2', 'event', 'Pending Sponsor', ?, 'Gold', 'payment_pending', ?, ?)`,
+       VALUES (?, 'event', 'Example Sponsor', ?, 'Gold', 'active', ?, ?),
+              (?, 'event', 'Pending Sponsor', ?, 'Gold', 'payment_pending', ?, ?)`,
     )
-      .bind(event.id, now, now, event.id, now, now)
+      .bind(crypto.randomUUID(), event.id, now, now, crypto.randomUUID(), event.id, now, now)
       .run();
     await expect(issueSponsorPassCodes(env.DB, admin, event)).rejects.toMatchObject({
       code: "SPONSOR_PASSES_UNAVAILABLE",
@@ -2018,7 +2114,9 @@ describe("event tickets", () => {
         expectedRevision: (await readEventTicketsConfiguration(env.DB, event)).revision,
         staffTicketTypeId: vendor.id,
         customerTicketTypeId: attendee.id,
-        tiers: [{ tierName: "Gold", staffPasses, customerPasses, sponsors: 0, sponsorsWithCodes: 0 }],
+        tiers: [
+          { tierName: "Gold", sponsorType: null, staffPasses, customerPasses, sponsors: 0, sponsorsWithCodes: 0 },
+        ],
       });
     await save(4, 8);
     expect(await issueSponsorPassCodes(env.DB, admin, event)).toEqual({ created: 2, raised: 0 });
@@ -2039,9 +2137,114 @@ describe("event tickets", () => {
       ["Example Sponsor: customers", 12, 0],
       ["Example Sponsor: staff", 4, 0],
     ]);
-    expect(configuration.sponsorPasses.tiers).toEqual([
-      { tierName: "Gold", staffPasses: 2, customerPasses: 4, sponsors: 1, sponsorsWithCodes: 1 },
+    expect(configuration.sponsorPasses.tiers.find((tier) => tier.tierName === "Gold")).toEqual({
+      tierName: "Gold",
+      sponsorType: "consortium",
+      staffPasses: 2,
+      customerPasses: 4,
+      sponsors: 1,
+      sponsorsWithCodes: 1,
+    });
+  });
+
+  it("gives the consortium's current sponsors their codes for each event, besides the event's own", async () => {
+    const { event, admin, attendee, vendor } = await seedTickets();
+    const now = new Date().toISOString();
+    const organizationId = crypto.randomUUID();
+    const outsideId = crypto.randomUUID();
+    const lapsedId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO organizations (id, name, normalized_name, sponsor_tier, created_at, updated_at) VALUES (?, 'Member Sponsor', 'member sponsor', 'Gold', ?, ?)",
+      ).bind(organizationId, now, now),
+      env.DB.prepare(
+        `INSERT INTO sponsorships (id, sponsor_type, non_member_name, tier, pipeline_stage, created_at, updated_at)
+         VALUES (?, 'consortium', 'Outside Sponsor', 'Gold', 'active', ?, ?),
+                (?, 'consortium', 'Lapsed Sponsor', 'Gold', 'lapsed', ?, ?)`,
+      ).bind(outsideId, now, now, lapsedId, now, now),
+      // An event sponsorship without a tier yet leaves the organization's consortium tier in force.
+      env.DB.prepare(
+        `INSERT INTO sponsorships (id, sponsor_type, organization_id, event_id, pipeline_stage, created_at, updated_at)
+         VALUES (?, 'event', ?, ?, 'active', ?, ?)`,
+      ).bind(crypto.randomUUID(), organizationId, event.id, now, now),
     ]);
+    await saveSponsorPasses(env.DB, admin, event, {
+      expectedRevision: (await readEventTicketsConfiguration(env.DB, event)).revision,
+      staffTicketTypeId: vendor.id,
+      customerTicketTypeId: attendee.id,
+      tiers: [
+        { tierName: "Gold", sponsorType: null, staffPasses: 2, customerPasses: 3, sponsors: 0, sponsorsWithCodes: 0 },
+      ],
+    });
+    expect(await issueSponsorPassCodes(env.DB, admin, event)).toEqual({ created: 4, raised: 0 });
+    expect(await issueSponsorPassCodes(env.DB, admin, event)).toEqual({ created: 0, raised: 0 });
+    const gold = (await readEventTicketsConfiguration(env.DB, event)).sponsorPasses.tiers.find(
+      (tier) => tier.tierName === "Gold",
+    );
+    expect(gold).toMatchObject({ sponsors: 2, sponsorsWithCodes: 2 });
+    const member = await env.DB.prepare(
+      "SELECT COUNT(*) AS total FROM event_ticket_codes WHERE event_id = ? AND organization_id = ? AND sponsorship_id IS NULL",
+    )
+      .bind(event.id, organizationId)
+      .first<{ total: number }>();
+    expect(member?.total).toBe(2);
+
+    // A code made for a sponsor counts for that sponsor; a lapsed sponsor gets none.
+    const sponsors = await listEventTicketSponsors(env.DB, event.id, eventTicketSponsorListQuerySchema.parse({}));
+    expect(sponsors.sponsors.map((sponsor) => sponsor.name)).toEqual(["Member Sponsor", "Outside Sponsor"]);
+    const discount = {
+      ticketTypeId: attendee.id,
+      label: "Member Sponsor: partners",
+      discount: "percent" as const,
+      percentOff: 50,
+      maxUses: 20,
+    };
+    const sponsored = await createEventTicketCode(env.DB, admin, event, { ...discount, sponsorId: organizationId });
+    expect(sponsored).toMatchObject({
+      sponsor: { id: organizationId, name: "Member Sponsor" },
+      registrations: 0,
+      revenue: 0,
+    });
+    await expect(
+      createEventTicketCode(env.DB, admin, event, { ...discount, sponsorId: lapsedId }),
+    ).rejects.toMatchObject({ code: "EVENT_TICKETS_CHANGED" });
+    // The refused code leaves no audit entry behind.
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'event_ticket_code_created'").first("n"),
+    ).toBe(1);
+    const outside = await createEventTicketCode(env.DB, admin, event, { ...discount, sponsorId: outsideId });
+    expect(outside.sponsor).toEqual({ id: outsideId, name: "Outside Sponsor" });
+    const ofMember = await listEventTicketCodes(
+      env.DB,
+      event.id,
+      eventTicketCodeListQuerySchema.parse({ sponsorId: organizationId, sort: "-revenue" }),
+    );
+    expect(ofMember.page.total).toBe(3);
+    expect(ofMember.codes.every((code) => code.sponsor?.id === organizationId)).toBe(true);
+  });
+
+  it("changes the registrants' guidance on its own, leaving the payment settings as they were", async () => {
+    const { event, admin } = await seedTickets();
+    const before = await readEventTicketsConfiguration(env.DB, event);
+    await updateEventTicketGuidance(env.DB, admin, event, {
+      expectedRevision: before.revision,
+      ticketIntro: "Choose based on your organization.",
+      attendanceIntro: "",
+    });
+    const after = await readEventTicketsConfiguration(env.DB, event);
+    expect(after.settings).toEqual({
+      ...before.settings,
+      ticketIntro: "Choose based on your organization.",
+      attendanceIntro: "",
+    });
+    // A draft copied before that change is refused instead of overwriting it.
+    await expect(
+      updateEventTicketGuidance(env.DB, admin, event, {
+        expectedRevision: before.revision,
+        ticketIntro: "",
+        attendanceIntro: "",
+      }),
+    ).rejects.toBeTruthy();
   });
 
   it("does not disclose bearer ticket codes to an event reader", async () => {
@@ -2325,6 +2528,7 @@ describe("event tickets", () => {
     });
     await reviewDisputedTicket(
       env.DB,
+      env,
       admin as UserBackedAuthAdmin,
       event,
       registration.id,

@@ -17,6 +17,8 @@ import { ticketsEndpoint } from "./tickets-endpoint";
 
 type Tier = EventTicketsConfiguration["sponsorPasses"]["tiers"][number];
 
+const SPONSOR_KIND = { consortium: "Consortium", event: "Event" } as const;
+
 export function SponsorPassesPanel({
   slug,
   configuration,
@@ -76,10 +78,22 @@ export function SponsorPassesPanel({
           rows={saved.tiers}
           rowKey={(row) => row.tierName}
           columns={[
-            { id: "tier", header: "Tier", cell: (row) => <strong>{row.tierName}</strong> },
+            {
+              id: "tier",
+              header: "Tier",
+              headerHint:
+                "Consortium tiers are the PKI Consortium's sponsors, who sponsor every event. Event tiers are this event's own sponsors.",
+              cell: (row) => (
+                <>
+                  <strong>{row.tierName}</strong>
+                  {row.sponsorType && <div class="pk-small pk-muted">{SPONSOR_KIND[row.sponsorType]}</div>}
+                </>
+              ),
+            },
             {
               id: "staff",
               header: "Staff passes",
+              headerHint: "Free tickets for each sponsor's own people. One code per sponsor, used this many times.",
               width: "fit",
               align: "end",
               cell: (row) => formatNumber(row.staffPasses),
@@ -87,6 +101,8 @@ export function SponsorPassesPanel({
             {
               id: "customers",
               header: "Customer invitations",
+              headerHint:
+                "Free tickets each sponsor can give its customers. One code per sponsor, used this many times.",
               width: "fit",
               align: "end",
               cell: (row) => formatNumber(row.customerPasses),
@@ -94,6 +110,7 @@ export function SponsorPassesPanel({
             {
               id: "sponsors",
               header: "Sponsors",
+              headerHint: "Active sponsors in this tier, the consortium's and the event's own.",
               width: "fit",
               align: "end",
               cell: (row) => formatNumber(row.sponsors),
@@ -101,6 +118,7 @@ export function SponsorPassesPanel({
             {
               id: "codes",
               header: "With codes",
+              headerHint: "Sponsors in this tier who already have their pass codes for this event.",
               width: "fit",
               align: "end",
               cell: (row) => formatNumber(row.sponsorsWithCodes),

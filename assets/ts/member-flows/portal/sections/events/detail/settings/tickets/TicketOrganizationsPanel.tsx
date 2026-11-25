@@ -16,6 +16,7 @@ import {
 import { ApiDataTable, type ApiTableActions } from "../../../../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../../../../components/ConfirmDialog";
 import type { CollectionLoader } from "../../../../../../../hooks/useServerCollection";
+import { ButtonLink } from "../../../../../../../ui/Button";
 import { EmptyState } from "../../../../../../../ui/EmptyState";
 import { Panel, PanelHeader } from "../../../../../../../ui/Panel";
 import { RowActions } from "../../../../../../../ui/RowActions";
@@ -30,6 +31,7 @@ const DECIDED_BY_OPTIONS = [
 ];
 
 function decidedBy(row: EventTicketOrganization): string {
+  if (!row.decidedBy) return "";
   return row.decidedBy === "organizer" ? "Organizer" : `Classifier, ${String(row.confidencePercent ?? 0)}% sure`;
 }
 
@@ -38,9 +40,15 @@ export function TicketOrganizationsPanel({
   configuration,
   onChanged,
   loadOrganizations,
+  ticketKey,
+  workbenchHref,
 }: {
   slug: string;
   configuration: EventTicketsConfiguration;
+  /** Lists only the organizations that get this ticket, on the ticket's own page. */
+  ticketKey?: string;
+  /** The page that lists every portal organization, to test and decide many at once. */
+  workbenchHref?: string;
   /** Told after a decision is saved or cleared, so the tickets' counts follow. */
   onChanged: () => Promise<void>;
   /** Replaces the request for the organizations, where there is no server to ask. */
@@ -61,6 +69,7 @@ export function TicketOrganizationsPanel({
   }
 
   async function clear(row: EventTicketOrganization) {
+    if (!row.id) return;
     const confirmed = await confirmAction({
       title: `Clear the decision for ${row.organizationName}?`,
       body: "The next person who registers from this organization gets the classifier's answer again. Other events that offer this ticket share the decision.",
@@ -78,17 +87,21 @@ export function TicketOrganizationsPanel({
 
   const reopen = (row: EventTicketOrganization, testOnOpen: boolean) =>
     setStart({
+      organizationId: row.organizationId,
       organizationName: row.organizationName,
-      emailDomain: row.emailDomain,
-      ticketKey: row.ticketKey,
+      domains: row.domains,
+      ticketKey: row.ticketKey ?? undefined,
       testOnOpen,
     });
   return (
     <Panel aria-label="Organizations">
-      <PanelHeader title="Organizations" />
+      <PanelHeader title="Organizations">
+        {workbenchHref && <ButtonLink href={workbenchHref}>Find organizations</ButtonLink>}
+      </PanelHeader>
       <ApiDataTable
         urlState="ticket-organizations"
         endpoint={endpoint}
+        params={ticketKey ? { ticketKey } : undefined}
         responseSchema={eventTicketOrganizationListSchema}
         resolve={(value) => value.organizations}
         resolvePage={(value) => value.page}
@@ -98,14 +111,15 @@ export function TicketOrganizationsPanel({
         paginate
         searchPlaceholder="Search organizations or email domains…"
         initialSort="-updated"
-        createAction={{
-          label: classifierOn ? "Test an organization" : "Choose an organization's ticket",
-          onSelect: () => setStart({ organizationName: "", emailDomain: "" }),
-        }}
-        rowKey={(row) => row.id}
+        createAction={
+          classifierOn
+            ? { label: "Test an organization", onSelect: () => setStart({ organizationName: "", domains: [] }) }
+            : undefined
+        }
+        rowKey={(row) => row.organizationId}
         empty={
           <EmptyState
-            title="No organizations decided yet"
+            title={ticketKey ? "No organization gets this ticket yet" : "No organizations decided yet"}
             body="When someone registers, the classifier decides their organization's ticket if it is sure enough. Test an organization to see what it gives."
           />
         }
@@ -117,11 +131,19 @@ export function TicketOrganizationsPanel({
             cell: (row) => (
               <>
                 <strong>{row.organizationName}</strong>
-                {row.emailDomain && <div class="pk-small pk-muted">{row.emailDomain}</div>}
+                {row.domains.length > 0 && <div class="pk-small pk-muted">{row.domains.join(", ")}</div>}
               </>
             ),
           },
-          { header: "Ticket", width: "fit", cell: (row) => nameOf(row.ticketKey) },
+          ...(ticketKey
+            ? []
+            : [
+                {
+                  header: "Ticket",
+                  width: "fit" as const,
+                  cell: (row: EventTicketOrganization) => (row.ticketKey ? nameOf(row.ticketKey) : ""),
+                },
+              ]),
           {
             header: "Decided by",
             width: "fit",

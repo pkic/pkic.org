@@ -5,13 +5,16 @@
  * mirrors GET /api/v1/members's cache-control convention so the public
  * sponsor wall/strip/level pages can be cheap to hit repeatedly.
  */
-import { requireStaffPermission } from "../../../_lib/auth/staff-permissions";
+import { hasPermission, requirePermission } from "../../../_lib/auth/permissions";
 import type { AdminContext } from "../../../_lib/db/context";
 import { json } from "../../../_lib/http";
 import { listPublicSponsorDisplay, listPublicSponsors } from "../../../_lib/services/public-sponsors";
 import {
   authorizedSponsorshipMutationDb,
   createSponsorship,
+  requireSponsorshipActor,
+  requireStaffToAssignSponsorship,
+  resolveSponsorshipAccess,
   getSponsorship,
   listSponsorships,
   toApiSponsorship,
@@ -30,8 +33,18 @@ import { openApiRoute } from "../../../_lib/openapi/route";
 
 export const SponsorsGet = openApiRoute(sponsorsCollectionRouteSchema, async (c: AdminContext, data) => {
   if (data.query.visibility === "all") {
-    const { db } = await requireStaffPermission(c, "sponsorships:read");
-    const { sponsorships, total } = await listSponsorships(db, data.query);
+    const { db, actor } = await requireSponsorshipActor(c);
+    const organizerEventId = hasPermission(actor, "sponsorships:read") ? null : (data.query.eventId ?? null);
+    if (organizerEventId) {
+      // An organizer lists one event's one-time sponsors, nothing else.
+      requirePermission(actor, "events:write", { type: "event", id: organizerEventId });
+    } else {
+      requirePermission(actor, "sponsorships:read");
+    }
+    const { sponsorships, total } = await listSponsorships(
+      db,
+      organizerEventId ? { ...data.query, type: "event" } : data.query,
+    );
     return json(
       sponsorsCollectionResponseSchema.parse({
         sponsorships: sponsorships.map(toApiSponsorship),
@@ -46,9 +59,14 @@ export const SponsorsGet = openApiRoute(sponsorsCollectionRouteSchema, async (c:
 });
 
 export const SponsorsCreate = openApiRoute(sponsorshipCreateRouteSchema, async (c: AdminContext, data) => {
-  const { db, staff } = await requireStaffPermission(c, "sponsorships:write");
-  const authorizedDb = authorizedSponsorshipMutationDb(db, staff);
+  const { db, actor: staff } = await requireSponsorshipActor(c);
   const body = data.body;
+  const access = resolveSponsorshipAccess(staff, "write", {
+    sponsorType: body.sponsorType,
+    eventId: body.eventId ?? null,
+  });
+  requireStaffToAssignSponsorship(access, body.assignedToUserId);
+  const authorizedDb = authorizedSponsorshipMutationDb(db, staff, access);
   const { id } = await createSponsorship(authorizedDb, staff, {
     sponsorType: body.sponsorType,
     organizationId: body.organizationId ?? null,

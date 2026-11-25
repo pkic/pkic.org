@@ -25,6 +25,7 @@ export const sponsorsCollectionQuerySchema = listQuerySchema(SPONSOR_SORT_COLUMN
   type: sponsorshipsListQuerySchema.shape.type,
   stage: sponsorshipsListQuerySchema.shape.stage,
   tier: sponsorshipsListQuerySchema.shape.tier,
+  eventId: sponsorshipsListQuerySchema.shape.eventId,
   organizationId: sponsorshipsListQuerySchema.shape.organizationId,
   nonMemberName: sponsorshipsListQuerySchema.shape.nonMemberName,
   contactName: sponsorshipsListQuerySchema.shape.contactName,
@@ -41,14 +42,14 @@ export const sponsorsCollectionRouteSchema = {
   tags: ["Sponsors"],
   summary: "List sponsors visible to the caller",
   description:
-    "The default public representation returns active sponsors only. visibility=all requires sponsorships:read and returns the staff pipeline projection; filtering, sorting, and pagination stay in D1 for both representations.",
+    "The default public representation returns active sponsors only. visibility=all requires sponsorships:read, or events:write on the event named by eventId (then limited to that event's event sponsorships), and returns the staff pipeline projection; filtering, sorting, and pagination stay in D1 for both representations.",
   request: { query: sponsorsCollectionQuerySchema },
   responses: {
     "200": {
       description: "Sponsors visible in the requested representation.",
       content: { "application/json": { schema: sponsorsCollectionResponseSchema } },
     },
-    "403": { description: "visibility=all requires sponsorships:read." },
+    "403": { description: "visibility=all requires sponsorships:read or events:write on the filtered event." },
   },
 };
 

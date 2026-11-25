@@ -2,7 +2,7 @@
  * The ticket a registration holds: issued in the registration's own batch,
  * with the price fixed at that moment and a code's use counted with it.
  */
-import type { RegistrationTicket } from "../../../../assets/shared/schemas/event-tickets";
+import type { RegistrationTicket } from "../../../../assets/shared/schemas/registration-tickets";
 import {
   ticketReminderSchedule,
   type RegistrationTicketStatus,
@@ -65,7 +65,6 @@ export async function planRegistrationTicket(
     userId: string;
     email: string;
     identityId: string | null;
-    organizationName?: string | null;
     dayAttendance: ReadonlyArray<{ dayDate: string; attendanceType: string }>;
     /** Records where the confirmation email is held until a paid ticket settles. */
     heldEmailId?: string | null;
@@ -142,12 +141,11 @@ export async function planRegistrationTicket(
         }
       : null);
   // The ticket is priced for the identity the registration is made as, as the quote was.
-  const identityPerson = await readTicketPerson(db, {
+  const person = await readTicketPerson(db, {
     userId: input.userId,
     accountEmail: input.email,
     identityId: input.identityId,
   });
-  const person = { ...identityPerson, organizationName: input.organizationName ?? identityPerson.organizationName };
   const resolved = await resolveTicket(db, env, input.event, snapshot, person, {
     ticketKey: kept?.code_id ? null : kept?.ticket_key,
     codeId: kept?.code_id,

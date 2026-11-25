@@ -13,6 +13,7 @@
 
 import { Fragment, isValidElement, type ComponentChildren } from "preact";
 import { Menu, type MenuItem } from "./Menu";
+import { Tooltip } from "./Tooltip";
 import { type ToneProps, toneClasses } from "./tone";
 
 // The skin is shared with the Markdown table render hook and ships in the
@@ -58,6 +59,12 @@ export interface DataTableColumn<Row> {
   headerContent?: ComponentChildren;
   /** Optional visible symbol with the unchanged text name retained for assistive technology. */
   headerIcon?: ComponentChildren;
+  /**
+   * What the column counts or means, on hover, focus and tap of its name. The
+   * name then opens the hint instead of sorting; the column's menu sorts, or a
+   * sort button beside the name when the column has no menu.
+   */
+  headerHint?: string;
   /** Omit to render nothing for this column. */
   cell: (row: Row) => ComponentChildren;
   sortable?: boolean;
@@ -398,26 +405,53 @@ export function DataTable<Row>({
                   </span>
                 </>
               );
-              const name =
-                column.sortable && onSort ? (
-                  <button
-                    type="button"
-                    class="pk-table__sort"
-                    onClick={() => onSort(column.id, nextDirection(sort, column.id))}
-                  >
-                    {label}
-                    {/* Only the direction in force is drawn: the column's `…`
+              const arrow = sorted && (
+                <span class="pk-table__arrow" aria-hidden="true">
+                  {sort.direction === "asc" ? "↑" : "↓"}
+                </span>
+              );
+              const name = column.headerHint ? (
+                <span class="pk-table__hinted">
+                  <Tooltip label={`About ${column.header}`} content={column.headerHint}>
+                    <span class="pk-table__hint">{label}</span>
+                  </Tooltip>
+                  {column.sortable && onSort && !column.menu?.length ? (
+                    // Without a column menu, the name opens the hint and this is where the column sorts.
+                    <button
+                      type="button"
+                      class="pk-table__sort"
+                      aria-label={`Sort by ${column.header}`}
+                      onClick={() => onSort(column.id, nextDirection(sort, column.id))}
+                    >
+                      {arrow || (
+                        <span class="pk-table__arrow" aria-hidden="true">
+                          ↕
+                        </span>
+                      )}
+                    </button>
+                  ) : (
+                    arrow
+                  )}
+                </span>
+              ) : column.sortable && onSort ? (
+                <button
+                  type="button"
+                  class="pk-table__sort"
+                  onClick={() => onSort(column.id, nextDirection(sort, column.id))}
+                >
+                  {label}
+                  {/* Only the direction in force is drawn: the column's `…`
                         menu is where sorting is offered, so an idle ↕ beside
                         it would be a second control saying the same thing. */}
-                    {sorted && (
-                      <span class="pk-table__arrow" aria-hidden="true">
-                        {sort.direction === "asc" ? "↑" : "↓"}
-                      </span>
-                    )}
-                  </button>
-                ) : (
-                  label
-                );
+                  {sorted && (
+                    <span class="pk-table__arrow" aria-hidden="true">
+                      {sort.direction === "asc" ? "↑" : "↓"}
+                    </span>
+                  )}
+                </button>
+              ) : (
+                label
+              );
               return (
                 <th
                   key={column.id}

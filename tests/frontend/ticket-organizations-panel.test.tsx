@@ -40,8 +40,9 @@ it("lists each organization's ticket and who decided it", async () => {
           organizations: [
             {
               id: "b4f0c1de-0000-4000-8000-000000000001",
-              organizationName: "example bank",
-              emailDomain: "examplebank.test",
+              organizationId: "c1a5517e-0000-4000-8000-000000000001",
+              organizationName: "Example Bank",
+              domains: ["examplebank.test", "examplebank-group.test"],
               ticketKey: "attendee",
               decidedBy: "classifier",
               confidencePercent: 94,
@@ -49,8 +50,9 @@ it("lists each organization's ticket and who decided it", async () => {
             },
             {
               id: "b4f0c1de-0000-4000-8000-000000000002",
-              organizationName: "sample security",
-              emailDomain: "",
+              organizationId: "c1a5517e-0000-4000-8000-000000000002",
+              organizationName: "Sample Security",
+              domains: [],
               ticketKey: "vendor",
               decidedBy: "organizer",
               confidencePercent: null,
@@ -64,55 +66,89 @@ it("lists each organization's ticket and who decided it", async () => {
   );
   await act(async () => {});
   const text = host.textContent ?? "";
-  expect(text).toContain("example bank");
-  expect(text).toContain("examplebank.test");
+  expect(text).toContain("Example Bank");
+  expect(text).toContain("examplebank.test, examplebank-group.test");
   expect(text).toContain("Classifier, 94% sure");
   expect(text).toContain("Organizer");
   expect(text).toContain("Vendor");
 });
 
-it("tests an organization and offers to save the ticket the classifier gives", async () => {
-  const requests: unknown[] = [];
+function answering(requests: unknown[], result: Record<string, unknown>) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (_url: string, init: RequestInit) => {
       requests.push(JSON.parse(String(init.body)));
       return new Response(
         JSON.stringify({
-          emailDomain: null,
-          answers: [
-            { ticketKey: "vendor", percent: 58, thresholdPercent: 75 },
-            { ticketKey: "attendee", percent: 42, thresholdPercent: 75 },
+          results: [
+            {
+              answers: [
+                { ticketKey: "vendor", percent: 58, thresholdPercent: 75 },
+                { ticketKey: "attendee", percent: 42, thresholdPercent: 75 },
+              ],
+              decidedTicketKey: null,
+              current: null,
+              error: null,
+              ...result,
+            },
           ],
-          decidedTicketKey: null,
-          current: null,
         }),
         { status: 200, headers: { "content-type": "application/json" } },
       );
     }),
   );
+}
+
+// The answer arrives and is read after a few turns of the event loop.
+async function settle() {
+  for (let turn = 0; turn < 5; turn += 1) await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+}
+
+it("tests a portal organization by its own domains and offers to save the likeliest ticket", async () => {
+  const requests: unknown[] = [];
+  const organizationId = "c1a5517e-0000-4000-8000-000000000003";
+  answering(requests, { organizationId, organizationName: "Specimen Systems", domains: ["specimen.test"] });
   await mount(
     <TicketOrganizationDialog
       slug="synthetic"
       tickets={configuration.types}
       classifierOn
-      start={{ organizationName: "Specimen Systems", emailDomain: "gmail.com", testOnOpen: true }}
+      start={{ organizationId, organizationName: "Specimen Systems", domains: ["specimen.test"], testOnOpen: true }}
       onClose={() => {}}
       onSaved={async () => {}}
     />,
   );
-  // The answer arrives and is read after a few turns of the event loop.
-  for (let turn = 0; turn < 5; turn += 1) await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  await settle();
   expect(requests).toHaveLength(1);
-  expect(eventTicketOrganizationTrialSchema.parse(requests[0])).toEqual({
-    organizationName: "Specimen Systems",
-    emailDomain: "gmail.com",
-  });
+  expect(eventTicketOrganizationTrialSchema.parse(requests[0])).toEqual({ organizations: [{ organizationId }] });
   const dialog = host.querySelector("dialog")!;
+  expect(dialog.textContent).toContain("specimen.test");
+  expect(dialog.querySelector('input[name="organizationName"]')).toBeNull();
   expect(dialog.textContent).toContain("Classifier: 58% sure");
-  expect(dialog.textContent).toContain("Personal mail domain: tested on the name alone.");
   expect(dialog.textContent).toContain("No ticket reaches its threshold.");
-  // The likeliest ticket is picked, ready to save.
   expect(dialog.querySelector<HTMLInputElement>('input[name="ticketKey"][value="vendor"]')!.checked).toBe(true);
   expect(dialog.textContent).toContain("Save Vendor");
+});
+
+it("tests a typed organization without offering to save it", async () => {
+  const requests: unknown[] = [];
+  answering(requests, { organizationId: null, organizationName: "Specimen Systems", domains: [] });
+  await mount(
+    <TicketOrganizationDialog
+      slug="synthetic"
+      tickets={configuration.types}
+      classifierOn
+      start={{ organizationName: "Specimen Systems", domains: ["gmail.com"], testOnOpen: true }}
+      onClose={() => {}}
+      onSaved={async () => {}}
+    />,
+  );
+  await settle();
+  expect(eventTicketOrganizationTrialSchema.parse(requests[0])).toEqual({
+    organizations: [{ organizationName: "Specimen Systems", domains: ["gmail.com"] }],
+  });
+  const dialog = host.querySelector("dialog")!;
+  expect(dialog.textContent).toContain("Personal mail domains were left out of the test.");
+  expect(dialog.querySelector('input[name="ticketKey"]')).toBeNull();
+  expect(dialog.textContent).not.toContain("Save Vendor");
 });

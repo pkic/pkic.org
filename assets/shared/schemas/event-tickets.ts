@@ -1,6 +1,7 @@
 /**
  * Transport contracts for event tickets: the organizer's configuration, the
- * offer and quote a registrant sees, and the ticket a registration holds.
+ * offer and quote a registrant sees. The ticket a registration holds is in
+ * `registration-tickets.ts`.
  * Amounts are integers in the currency's smallest unit.
  */
 import { z } from "zod";
@@ -12,6 +13,7 @@ import {
   utcInstantSchema,
 } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
+import { sponsorTypeSchema } from "./sponsorship-management";
 import { stripeCurrencySchema } from "./stripe";
 import {
   DEFAULT_CLASSIFIER_THRESHOLD,
@@ -32,7 +34,7 @@ const calendarDateSchema = z
 /** One price, as an organizer enters it. */
 export const ticketAmountSchema = z.number().int("Enter a whole amount.").min(0, "Enter 0 or more.").max(100_000_00);
 /** What prices add up to over the days of an event: a line, a total, or what a ticket costs. */
-const totalAmountSchema = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
+export const totalAmountSchema = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const revisionSchema = z.number().int().min(0);
 
 export const ticketKeySchema = z
@@ -138,7 +140,7 @@ export const eventTicketSettingsSchema = z.object({
   currency: stripeCurrencySchema,
   reminderIntervalDays: z.number().int().min(1, "Enter 1 or more.").max(30, "Enter 30 or less."),
   reminderPeriodDays: z.number().int().min(0, "Enter 0 or more.").max(365, "Enter 365 or less."),
-  /** How many days an unpaid place is kept before its registration is cancelled; null keeps it until someone cancels. */
+  /** How many days an unpaid place is kept before its registration is canceled; null keeps it until someone cancels. */
   unpaidHoldDays: z.number().int().min(1, "Enter 1 or more.").max(365, "Enter 365 or less.").nullable().default(null),
   /** How many days a place is kept after its payment failed, so the person can pay again. */
   /** Whether a ticket may go to another person. It says so to ticket holders; organizers arrange the transfer. */
@@ -168,9 +170,9 @@ export const eventTicketSettingsSchema = z.object({
 const stepTextSchema = z.string().trim().max(400, "Use 400 characters or fewer.");
 /** What registrants read above the tickets and above the days; empty shows nothing. */
 export const eventTicketStepTextsSchema = z.object({ ticketIntro: stepTextSchema, attendanceIntro: stepTextSchema });
-/** A text left out of an update keeps its saved value. */
+export const eventTicketGuidanceUpdateSchema = eventTicketStepTextsSchema.extend({ expectedRevision: revisionSchema });
+export type EventTicketGuidanceUpdate = z.infer<typeof eventTicketGuidanceUpdateSchema>;
 export const eventTicketSettingsUpdateSchema = eventTicketSettingsSchema
-  .extend(eventTicketStepTextsSchema.partial().shape)
   .extend({ expectedRevision: revisionSchema })
   .superRefine((value, context) => {
     if (value.refundFee > 0 && value.refundDaysBeforeEvent === null)
@@ -194,6 +196,8 @@ export const eventTicketSponsorPassesSchema = z.object({
     .array(
       z.object({
         tierName: trimmedString(1, 80),
+        /** Whether the catalog lists the tier for consortium or for event sponsors; null for a tier it does not list. */
+        sponsorType: sponsorTypeSchema.nullable().default(null),
         staffPasses: passCountSchema,
         customerPasses: passCountSchema,
         /** Active sponsors of this tier, and how many of them have their codes. */
@@ -349,66 +353,10 @@ export const eventTicketQuoteSchema = z.object({
 });
 export type EventTicketQuote = z.infer<typeof eventTicketQuoteSchema>;
 
-// ── The ticket on a registration ────────────────────────────────────────────
-
-export const registrationTicketSchema = z.object({
-  id: databaseIdSchema,
-  ticketKey: ticketKeySchema,
-  ticketName: z.string(),
-  source: ticketAssignmentSourceSchema,
-  status: registrationTicketStatusSchema,
-  /** A total over the days attended, so it follows the quote's total, not one price. */
-  amount: totalAmountSchema,
-  currency: stripeCurrencySchema,
-  codeLabel: z.string().nullable(),
-  paidAt: utcInstantSchema.nullable(),
-  disputed: z.boolean(),
-  /** Why the person holds another ticket than the one decided for their organization, while that is open. */
-  disputeReason: z.string().nullable(),
-  /** A refund that the payment provider has neither confirmed nor refused yet, or whose failure is still being checked. */
-  refundPending: z.boolean(),
-  /** The latest refund for this ticket did not go through. */
-  refundFailed: z.boolean(),
-  /** The payment was made by a method that takes days and has not arrived yet; nothing is asked meanwhile. */
-  paymentProcessing: z.boolean().default(false),
-  /** The payment provider's reference for the payment, once paid. */
-  paymentReference: z.string().nullable(),
-  /** How it was paid and what arrived after the provider's costs, once read from the provider. */
-  paymentMethod: z.string().nullable().default(null),
-  netAmount: z.number().int().nullable().default(null),
-  receiptUrl: z.url().nullable().default(null),
-  /** Until when an unpaid ticket keeps its place; null when it has no deadline or nothing to pay. */
-  payBy: utcInstantSchema.nullable().default(null),
-  /** Until when this ticket is refunded on cancellation or a move to cheaper days; null when it never is. */
-  refundableUntil: utcInstantSchema.nullable().default(null),
-  /** The administration fee kept from such a refund. */
-  refundFee: ticketAmountSchema.default(0),
-  /** The event lets a ticket go to another person; organizers arrange it. */
-  transferable: z.boolean().default(false),
-  refundedAmount: totalAmountSchema,
-  /** What was paid for the ticket; more than `amount` after a move to days that cost less. */
-  paidAmount: totalAmountSchema.default(0),
-});
-export type RegistrationTicket = z.infer<typeof registrationTicketSchema>;
-
-export const registrationTicketResponseSchema = z.object({ ticket: registrationTicketSchema.nullable() });
-export const registrationTicketCheckoutResponseSchema = z.object({ checkoutUrl: z.url() });
-
-export const registrationTicketRefundSchema = z.object({
-  reason: trimmedString(3, 500, "Say why the ticket is refunded."),
-});
-/** Whether reading the payment provider changed what the ticket says. */
-export const registrationTicketSyncResponseSchema = z.object({ success: z.literal(true), changed: z.boolean() });
-export const registrationTicketReviewSchema = z.object({
-  /** Keep the ticket the person chose, or move them to the ticket decided for their organization. */
-  decision: z.enum(["keep", "move"]),
-});
-
-const registrationParams = eventSlugParamsSchema.extend({ registrationId: databaseIdSchema });
 export const ticketRouteJson = <Schema extends z.ZodType>(schema: Schema) => ({ "application/json": { schema } });
 export const ticketOrganizerAuth = { "x-pkic-auth": { required: true, scopes: ["events:write"] } } as const;
 export const ticketReaderAuth = { "x-pkic-auth": { required: true, scopes: ["events:read"] } } as const;
-const member = { "x-pkic-auth": { required: true } } as const;
+export const ticketMemberAuth = { "x-pkic-auth": { required: true } } as const;
 export const ticketRouteRefusals = {
   "400": jsonErrorResponse("Invalid ticket request."),
   "401": jsonErrorResponse("An authenticated user session is required."),
@@ -462,6 +410,19 @@ export const eventTicketPricesPutRouteSchema = {
   },
   responses: {
     "200": { description: "Prices replaced.", content: ticketRouteJson(eventTicketsChangeResponseSchema) },
+    ...ticketRouteRefusals,
+  },
+  ...ticketOrganizerAuth,
+};
+export const eventTicketGuidancePutRouteSchema = {
+  tags: ["Events"],
+  summary: "Change what registrants read above the tickets and the days",
+  request: {
+    params: eventSlugParamsSchema,
+    body: { required: true, content: ticketRouteJson(eventTicketGuidanceUpdateSchema) },
+  },
+  responses: {
+    "200": { description: "Guidance changed.", content: ticketRouteJson(eventTicketsChangeResponseSchema) },
     ...ticketRouteRefusals,
   },
   ...ticketOrganizerAuth,
@@ -523,62 +484,5 @@ export const eventTicketQuoteRouteSchema = {
     "200": { description: "The price.", content: ticketRouteJson(eventTicketQuoteSchema) },
     ...ticketRouteRefusals,
   },
-  ...member,
-};
-export const registrationTicketGetRouteSchema = {
-  tags: ["Events"],
-  summary: "Get a registration's ticket",
-  request: { params: registrationParams },
-  responses: {
-    "200": { description: "The ticket.", content: ticketRouteJson(registrationTicketResponseSchema) },
-    ...ticketRouteRefusals,
-  },
-  ...member,
-};
-export const registrationTicketCheckoutRouteSchema = {
-  tags: ["Events"],
-  summary: "Open payment for a registration's ticket",
-  request: { params: registrationParams },
-  responses: {
-    "200": { description: "Where to pay.", content: ticketRouteJson(registrationTicketCheckoutResponseSchema) },
-    ...ticketRouteRefusals,
-  },
-  ...member,
-};
-export const registrationTicketRefundRouteSchema = {
-  tags: ["Events"],
-  summary: "Refund a registration's ticket",
-  request: {
-    params: registrationParams,
-    body: { required: true, content: ticketRouteJson(registrationTicketRefundSchema) },
-  },
-  responses: {
-    "200": { description: "Refund requested.", content: ticketRouteJson(successResponseSchema) },
-    ...ticketRouteRefusals,
-  },
-  ...ticketOrganizerAuth,
-};
-export const registrationTicketSyncRouteSchema = {
-  tags: ["Events"],
-  summary: "Bring a registration's ticket in line with the payment provider",
-  request: { params: registrationParams },
-  responses: {
-    "200": { description: "The ticket was checked.", content: ticketRouteJson(registrationTicketSyncResponseSchema) },
-    ...ticketRouteRefusals,
-  },
-  // The registrant asks whether their own payment arrived; an organizer of the event brings the whole ticket in line.
-  ...member,
-};
-export const registrationTicketReviewRouteSchema = {
-  tags: ["Events"],
-  summary: "Settle a disputed ticket",
-  request: {
-    params: registrationParams,
-    body: { required: true, content: ticketRouteJson(registrationTicketReviewSchema) },
-  },
-  responses: {
-    "200": { description: "Dispute settled.", content: ticketRouteJson(successResponseSchema) },
-    ...ticketRouteRefusals,
-  },
-  ...ticketOrganizerAuth,
+  ...ticketMemberAuth,
 };

@@ -8,6 +8,7 @@ import {
   type StoredImagePointerRow,
 } from "../stored-image-pointer";
 import { publicNonMemberSponsorPredicate } from "../public-sponsors";
+import type { SponsorshipAccessBasis } from "./authorization";
 import { prepareSitePublicationRequest } from "../site-publication-requests";
 
 function sponsorshipLogoPublication(db: DatabaseLike) {
@@ -53,14 +54,20 @@ function assertNonMemberSponsorship(row: StoredImagePointerRow): void {
   }
 }
 
+/** Staff need the sponsorship write grant; an event organizer was authorized for this event's sponsorship already. */
+function requireLogoWrite(actor: AuthAdmin, access: SponsorshipAccessBasis): void {
+  if (access.basis === "staff") requirePermission(actor, "sponsorships:write");
+}
+
 export async function replaceSponsorshipLogo(
   db: DatabaseLike,
   actor: AuthAdmin,
+  access: SponsorshipAccessBasis,
   bucket: R2Bucket,
   id: string,
   image: { buffer: ArrayBuffer; contentType: string },
 ) {
-  requirePermission(actor, "sponsorships:write");
+  requireLogoWrite(actor, access);
   return replaceStoredImagePointer({
     db,
     bucket,
@@ -74,8 +81,13 @@ export async function replaceSponsorshipLogo(
   });
 }
 
-export async function removeSponsorshipLogo(db: DatabaseLike, actor: AuthAdmin, id: string) {
-  requirePermission(actor, "sponsorships:write");
+export async function removeSponsorshipLogo(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  access: SponsorshipAccessBasis,
+  id: string,
+) {
+  requireLogoWrite(actor, access);
   return removeStoredImagePointer({
     db,
     bucketName: "assets",

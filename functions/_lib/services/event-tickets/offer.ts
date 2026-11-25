@@ -19,6 +19,7 @@ import {
   resolveTicket,
   selectableTicketTypes,
   ticketQuoteResponse,
+  ticketSubject,
   type TicketPerson,
 } from "./assignment";
 import { decideOrganizationTicket } from "./classifier";
@@ -93,10 +94,7 @@ export async function readEventTicketOffer(
   if (!eventSellsTickets(snapshot)) return guestTicketOffer(event);
   const person = await ticketPerson(db, identity, identityId);
   const active = snapshot.types.filter((type) => type.active === 1);
-  const decision = await decideOrganizationTicket(db, env, active, {
-    organizationName: person.organizationName,
-    emailDomain: workEmailDomain(person.email),
-  });
+  const decision = await decideOrganizationTicket(db, env, active, ticketSubject(person));
   const selectable = selectableTicketTypes(active);
   const currentId = snapshot.current?.id ?? null;
   const nextId = snapshot.next?.id ?? null;
@@ -111,7 +109,7 @@ export async function readEventTicketOffer(
     currentPeriodStartsOn: snapshot.current?.startsOn ?? null,
     nextPeriodStartsOn: snapshot.next?.startsOn ?? null,
     // An individual registration gets the receipt alone; invoices go to organizations.
-    sendInvoice: snapshot.settings!.send_invoice === 1 && person.organizationName !== null,
+    sendInvoice: snapshot.settings!.send_invoice === 1 && person.organizationId !== null,
     ...(await readRefundPolicy(db, event.id)),
     ticketIntro: snapshot.settings!.ticket_intro ?? "",
     attendanceIntro: snapshot.settings!.attendance_intro ?? "",

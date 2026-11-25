@@ -32,7 +32,13 @@ const nativeEventContext = nativeEventCaptureContextSchema.parse({
   profileKey: "meeting",
   timeZone: "Europe/Amsterdam",
 });
-const observedAt = "2026-10-24T23:30:00.000Z";
+// Half an hour before UTC midnight a few days ago: already the next calendar day in Amsterdam. Kept recent, as a
+// series keeps only its last 30 days of occurrences.
+const observedAt = new Date(
+  Math.floor(Date.now() / 86_400_000) * 86_400_000 - 3 * 86_400_000 - 30 * 60_000,
+).toISOString();
+const utcDay = observedAt.slice(0, 10);
+const localDay = instantToCalendarDate(observedAt, "Europe/Amsterdam");
 let eventId: string;
 let token: string;
 let operatorId: string;
@@ -128,7 +134,7 @@ async function originalCaptureAttempt(operationId: string) {
   ).toEqual([
     {
       outcome: "unverified",
-      capture_day_date: "2026-10-25",
+      capture_day_date: localDay,
       capture_time_zone: "Europe/Amsterdam",
       capture_publication_revision: null,
       capture_context_source: "native_event_manifest",
@@ -137,13 +143,13 @@ async function originalCaptureAttempt(operationId: string) {
 }
 
 async function unverifiedAttendanceReport() {
-  const response = await request("/api/v1/events/native-capture/attendance/summary?dayDate=2026-10-25");
+  const response = await request(`/api/v1/events/native-capture/attendance/summary?dayDate=${localDay}`);
   expect(response.status).toBe(200);
   const report = attendanceSummarySchema.parse(await response.json());
   expect(report.attempts).toMatchObject({ recognized: 1, successful: 0, unsuccessful: 1, unverified: 1 });
   expect(report.observed).toMatchObject({ originalObservations: 1, offlineAuthorizedObservations: 0 });
   expect(report.evidence.clockVerification).toBe("unverified");
-  const attempts = await request("/api/v1/events/native-capture/attendance/attempts?dayDate=2026-10-25");
+  const attempts = await request(`/api/v1/events/native-capture/attendance/attempts?dayDate=${localDay}`);
   expect(attempts.status).toBe(200);
   expect(attendanceAttemptsResponseSchema.parse(await attempts.json()).attempts[0]).toMatchObject({
     outcome: "unverified",
@@ -151,7 +157,7 @@ async function unverifiedAttendanceReport() {
     clockVerification: "unverified",
     captureContext: {
       state: "captured",
-      dayDate: "2026-10-25",
+      dayDate: localDay,
       timeZone: "Europe/Amsterdam",
       publicationRevision: null,
       source: "native_event_manifest",
@@ -260,7 +266,7 @@ describe("Native meeting event-wide captured calendar context", () => {
         ),
       ).toEqual([
         {
-          capture_day_date: "2026-10-25",
+          capture_day_date: localDay,
           capture_time_zone: "Europe/Amsterdam",
           capture_publication_revision: null,
           capture_context_source: "native_event_manifest",
@@ -312,7 +318,7 @@ describe("Native meeting event-wide captured calendar context", () => {
     const replay = await request("/api/v1/events/native-capture/scans", body);
     expect(replay.status).toBe(200);
     expect(await replay.json()).toEqual(receipt);
-    const summaryResponse = await request("/api/v1/events/native-capture/attendance/summary?dayDate=2026-10-25");
+    const summaryResponse = await request(`/api/v1/events/native-capture/attendance/summary?dayDate=${localDay}`);
     expect(summaryResponse.status).toBe(200);
     const report = attendanceSummarySchema.parse(await summaryResponse.json());
     expect(report.observed).toMatchObject({
@@ -322,16 +328,16 @@ describe("Native meeting event-wide captured calendar context", () => {
       offlineAuthorizedObservations: 0,
     });
     expect(report.classification).toMatchObject({ missingObservations: 0, missingAttempts: 0, capturedTimeZones: 1 });
-    const attempts = await request("/api/v1/events/native-capture/attendance/attempts?dayDate=2026-10-25");
+    const attempts = await request(`/api/v1/events/native-capture/attendance/attempts?dayDate=${localDay}`);
     expect(attempts.status).toBe(200);
     expect(attendanceAttemptsResponseSchema.parse(await attempts.json()).attempts[0].captureContext).toEqual({
       state: "captured",
-      dayDate: "2026-10-25",
+      dayDate: localDay,
       timeZone: "Europe/Amsterdam",
       publicationRevision: null,
       source: "native_event_manifest",
     });
-    const wrongDay = await request("/api/v1/events/native-capture/attendance/summary?dayDate=2026-10-24");
+    const wrongDay = await request(`/api/v1/events/native-capture/attendance/summary?dayDate=${utcDay}`);
     expect(attendanceSummarySchema.parse(await wrongDay.json()).observed.uniquePeople).toBe(0);
     const changed = await request("/api/v1/events/native-capture/scans", {
       ...body,

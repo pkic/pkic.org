@@ -11,7 +11,7 @@ import {
   registrationTicketResponseSchema,
   registrationTicketSyncResponseSchema,
   type RegistrationTicket,
-} from "../../../../../../../shared/schemas/event-tickets";
+} from "../../../../../../../shared/schemas/registration-tickets";
 import { TICKET_STATUS_LABELS, type TicketAssignmentSource } from "../../../../../../../shared/event-tickets";
 import { formatTicketAmount, formatTicketMoney } from "../../../../../../../shared/event-ticket-display";
 import { confirmAction } from "../../../../../../components/ConfirmDialog";

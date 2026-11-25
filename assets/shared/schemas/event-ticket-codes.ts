@@ -7,6 +7,7 @@ import { eventSlugParamsSchema, successResponseSchema, trimmedString, utcInstant
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { ticketAmountSchema, ticketOrganizerAuth, ticketRouteJson, ticketRouteRefusals } from "./event-tickets";
+import { sponsorTypeSchema } from "./sponsorship-management";
 
 export const eventTicketCodeSchema = z.object({
   id: databaseIdSchema,
@@ -18,13 +19,20 @@ export const eventTicketCodeSchema = z.object({
   maxUses: z.number().int(),
   usedCount: z.number().int(),
   revokedAt: utcInstantSchema.nullable(),
+  /** The sponsor the code was made for: what it brings in counts for that sponsor. */
+  sponsor: z.object({ id: databaseIdSchema, name: z.string() }).nullable(),
+  /** Tickets issued with the code, whatever became of them. */
+  registrations: z.number().int(),
+  /** What the code's paid tickets brought in, after refunds, in cents. */
+  revenue: z.number().int(),
 });
 export type EventTicketCode = z.infer<typeof eventTicketCodeSchema>;
 
 /** Codes are a collection of their own: an event can hold more than one screen of them. */
-export const eventTicketCodeListQuerySchema = listQuerySchema(["label", "used", "created"] as const, {
-  maxLimit: 100,
-});
+export const eventTicketCodeListQuerySchema = listQuerySchema(
+  ["label", "used", "created", "registrations", "revenue"] as const,
+  { maxLimit: 100 },
+).extend({ sponsorId: databaseIdSchema.optional() });
 export type EventTicketCodeListQuery = z.infer<typeof eventTicketCodeListQuerySchema>;
 export const eventTicketCodeListSchema = paginatedResponseSchema("codes", eventTicketCodeSchema);
 
@@ -36,6 +44,8 @@ export const eventTicketCodeCreateSchema = z
     amount: ticketAmountSchema.optional(),
     percentOff: z.number().int().min(1, "Enter 1 or more.").max(100, "Enter 100 or less.").optional(),
     maxUses: z.number().int().min(1, "Enter 1 or more.").max(10_000, "Enter 10,000 or less."),
+    /** One of the event's sponsors; omit for a code that belongs to no sponsor. */
+    sponsorId: databaseIdSchema.optional(),
   })
   .superRefine((value, context) => {
     if (value.discount === "amount" && value.amount === undefined)
@@ -90,6 +100,29 @@ export const eventTicketCodeUpdateRouteSchema = {
   },
   responses: {
     "200": { description: "Code changed.", content: ticketRouteJson(successResponseSchema) },
+    ...ticketRouteRefusals,
+  },
+  ...ticketOrganizerAuth,
+};
+
+/** A sponsor of the event a code can be made for: its own event sponsors and the consortium's current sponsors. */
+export const eventTicketSponsorSchema = z.object({
+  /** The member organization, or the sponsorship when no member organization is behind it. */
+  id: databaseIdSchema,
+  name: z.string(),
+  tier: z.string(),
+  sponsorType: sponsorTypeSchema,
+});
+export type EventTicketSponsor = z.infer<typeof eventTicketSponsorSchema>;
+export const eventTicketSponsorListQuerySchema = listQuerySchema(["name"] as const, { maxLimit: 100 });
+export const eventTicketSponsorListSchema = paginatedResponseSchema("sponsors", eventTicketSponsorSchema);
+
+export const eventTicketSponsorsGetRouteSchema = {
+  tags: ["Events"],
+  summary: "List the sponsors a ticket code can be made for",
+  request: { params: eventSlugParamsSchema, query: eventTicketSponsorListQuerySchema },
+  responses: {
+    "200": { description: "A page of sponsors.", content: ticketRouteJson(eventTicketSponsorListSchema) },
     ...ticketRouteRefusals,
   },
   ...ticketOrganizerAuth,

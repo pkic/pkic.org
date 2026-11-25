@@ -18,7 +18,7 @@ import { ErrorAlert } from "../../../../../components/ErrorAlert";
 import { Spinner } from "../../../../../components/Spinner";
 import { useData } from "../../../../../hooks/useData";
 import { getJson, putJson } from "../../../../../shared/api-client";
-import { registrationTicketResponseSchema } from "../../../../../../shared/schemas/event-tickets";
+import { registrationTicketResponseSchema } from "../../../../../../shared/schemas/registration-tickets";
 import { useState } from "preact/hooks";
 import { Alert } from "../../../../../ui/Alert";
 import { Button } from "../../../../../ui/Button";

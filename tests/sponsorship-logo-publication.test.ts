@@ -194,7 +194,7 @@ describe("publication of non-member sponsorship logos", () => {
     const raced = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare("UPDATE sponsorships SET pipeline_stage='lapsed' WHERE id=?").bind(f.id).run(),
     );
-    await replaceSponsorshipLogo(raced, actor, env.ASSETS_BUCKET!, f.id, {
+    await replaceSponsorshipLogo(raced, actor, { basis: "staff" }, env.ASSETS_BUCKET!, f.id, {
       buffer: new TextEncoder().encode(SVG).buffer,
       contentType: "image/svg+xml",
     });

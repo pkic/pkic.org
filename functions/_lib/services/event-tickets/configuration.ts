@@ -11,6 +11,7 @@ import {
 } from "../../../../assets/shared/event-tickets";
 import type {
   EventTicketPricesReplaceInput,
+  EventTicketGuidanceUpdate,
   EventTicketSettingsUpdate,
   EventTicketTypeInput,
   EventTicketsConfiguration,
@@ -28,6 +29,7 @@ import { prepareAuditLog } from "../audit";
 import { prepareEventDays, type EventDayRecord } from "../event-days";
 import { prepareDecidedOrganizationCounts } from "./classifier";
 import { normalizeTicketCode } from "./assignment";
+import { eventSponsorsCte } from "./event-sponsors";
 import {
   decodeEventTicketSnapshot,
   EVENT_TICKET_SNAPSHOT_STATEMENTS,
@@ -63,9 +65,22 @@ export interface CodeRow {
   max_uses: number;
   used_count: number;
   revoked_at: string | null;
+  sponsor_id: string | null;
+  sponsor_name: string | null;
+  registrations: number;
+  revenue: number;
 }
 
-export const CODE_COLUMNS = "id, ticket_type_id, label, code, amount, percent_off, max_uses, used_count, revoked_at";
+/** A code's own columns, its sponsor, and the tickets issued with it; selected from `event_ticket_codes` unaliased. */
+export const CODE_COLUMNS = `id, ticket_type_id, label, code, amount, percent_off, max_uses, used_count, revoked_at,
+  COALESCE(organization_id, sponsorship_id) AS sponsor_id,
+  COALESCE((SELECT name FROM organizations WHERE id = event_ticket_codes.organization_id),
+    (SELECT COALESCE(owner.name, sponsor.non_member_name, 'Sponsor') FROM sponsorships sponsor
+       LEFT JOIN organizations owner ON owner.id = sponsor.organization_id
+     WHERE sponsor.id = event_ticket_codes.sponsorship_id)) AS sponsor_name,
+  (SELECT COUNT(*) FROM registration_tickets issued WHERE issued.code_id = event_ticket_codes.id) AS registrations,
+  (SELECT COALESCE(SUM(issued.paid_amount - issued.refunded_amount), 0) FROM registration_tickets issued
+   WHERE issued.code_id = event_ticket_codes.id AND issued.status IN ('paid', 'refunded')) AS revenue`;
 
 export function decodeCode(row: CodeRow): EventTicketCode {
   return {
@@ -78,6 +93,9 @@ export function decodeCode(row: CodeRow): EventTicketCode {
     maxUses: row.max_uses,
     usedCount: row.used_count,
     revokedAt: row.revoked_at,
+    sponsor: row.sponsor_id ? { id: row.sponsor_id, name: row.sponsor_name ?? "Sponsor" } : null,
+    registrations: row.registrations,
+    revenue: row.revenue,
   };
 }
 
@@ -387,7 +405,7 @@ export async function updateEventTicketSettings(
     db
       .prepare(
         `UPDATE event_ticket_settings SET currency = ?, reminder_interval_days = ?, reminder_period_days = ?, unpaid_hold_days = ?, payment_retry_days = ?, tickets_transferable = ?, send_invoice = ?,
-           refund_days_before_event = ?, refund_fee = ?, ticket_intro = COALESCE(?, ticket_intro), attendance_intro = COALESCE(?, attendance_intro)
+           refund_days_before_event = ?, refund_fee = ?
          WHERE event_id = ?`,
       )
       .bind(
@@ -400,8 +418,6 @@ export async function updateEventTicketSettings(
         input.sendInvoice ? 1 : 0,
         input.refundDaysBeforeEvent,
         input.refundFee,
-        input.ticketIntro ?? null,
-        input.attendanceIntro ?? null,
         event.id,
       ),
     prepareAuditLog(db, "user", actor.id, "event_ticket_settings_changed", "event", event.id, {
@@ -414,6 +430,24 @@ export async function updateEventTicketSettings(
       refundDaysBeforeEvent: input.refundDaysBeforeEvent,
       refundFee: input.refundFee,
     }),
+  ]);
+  return { revision: input.expectedRevision + 1 };
+}
+
+/** What registrants read above the tickets and above the days; empty shows nothing. */
+export async function updateEventTicketGuidance(
+  db: DatabaseLike,
+  actor: UserBackedAuthAdmin,
+  event: EventRef,
+  input: EventTicketGuidanceUpdate,
+): Promise<{ revision: number }> {
+  const now = nowIso();
+  await commitConfigurationChange(db, [
+    ...prepareConfigurationChange(db, actor, event.id, input.expectedRevision, now),
+    db
+      .prepare("UPDATE event_ticket_settings SET ticket_intro = ?, attendance_intro = ? WHERE event_id = ?")
+      .bind(input.ticketIntro, input.attendanceIntro, event.id),
+    prepareAuditLog(db, "user", actor.id, "event_ticket_guidance_changed", "event", event.id, {}),
   ]);
   return { revision: input.expectedRevision + 1 };
 }
@@ -437,39 +471,61 @@ export async function createEventTicketCode(
   const code = normalizeTicketCode(generateTicketCode());
   const amount = input.discount === "amount" ? (input.amount ?? 0) : null;
   const percentOff = input.discount === "percent" ? (input.percentOff ?? null) : null;
-  const results = await db.batch([
-    preparePermissionsAuthorizationGuard(db, actor, [
-      { permission: "events:write", context: { type: "event", id: event.id } },
-    ]),
-    db
-      .prepare(
-        `INSERT INTO event_ticket_codes
-           (id, event_id, ticket_type_id, label, code, amount, percent_off, max_uses, created_by_user_id, created_at, updated_at)
-         SELECT ?, ?, id, ?, ?, ?, ?, ?, ?, ?, ? FROM event_ticket_types WHERE id = ? AND event_id = ? AND active = 1`,
-      )
-      .bind(
-        id,
-        event.id,
-        input.label,
-        code,
-        amount,
-        percentOff,
-        input.maxUses,
-        actor.id,
-        now,
-        now,
-        input.ticketTypeId,
-        event.id,
-      ),
-    prepareAuditLog(db, "user", actor.id, "event_ticket_code_created", "event", event.id, {
-      codeId: id,
-      maxUses: input.maxUses,
-    }),
-    db.prepare(`SELECT ${CODE_COLUMNS} FROM event_ticket_codes WHERE id = ?`).bind(id),
-  ]);
-  const row = batchFirst<CodeRow>(results[3]);
-  if (!row)
-    throw new AppError(409, "EVENT_TICKETS_CHANGED", "This ticket is no longer available. Reload and try again.");
+  const sponsorId = input.sponsorId ?? null;
+  const unavailable = () =>
+    new AppError(
+      409,
+      "EVENT_TICKETS_CHANGED",
+      sponsorId
+        ? "This ticket or sponsor is no longer available. Reload and try again."
+        : "This ticket is no longer available. Reload and try again.",
+    );
+  const results = await db
+    .batch([
+      preparePermissionsAuthorizationGuard(db, actor, [
+        { permission: "events:write", context: { type: "event", id: event.id } },
+      ]),
+      // A code for a sponsor is only made when that sponsor still sponsors the event.
+      db
+        .prepare(
+          `WITH ${eventSponsorsCte("?11")}
+         INSERT INTO event_ticket_codes
+           (id, event_id, ticket_type_id, label, code, amount, percent_off, max_uses, organization_id, sponsorship_id,
+            created_by_user_id, created_at, updated_at)
+         SELECT ?1, ?11, type.id, ?2, ?3, ?4, ?5, ?6, sponsor.organization_id,
+                CASE WHEN sponsor.organization_id IS NULL THEN sponsor.sponsorship_id END, ?7, ?8, ?8
+         FROM event_ticket_types type LEFT JOIN event_sponsors sponsor ON sponsor.sponsor_id = ?9
+         WHERE type.id = ?10 AND type.event_id = ?11 AND type.active = 1
+           AND (?9 IS NULL OR sponsor.sponsor_id IS NOT NULL)
+         LIMIT 1`,
+        )
+        .bind(
+          id,
+          input.label,
+          code,
+          amount,
+          percentOff,
+          input.maxUses,
+          actor.id,
+          now,
+          sponsorId,
+          input.ticketTypeId,
+          event.id,
+        ),
+      // The audit entry is written only with the code: the ticket or sponsor may have gone since the form was read.
+      prepareStateGuard(db, { sql: "SELECT 1 FROM event_ticket_codes WHERE id = ?", bindings: [id] }),
+      prepareAuditLog(db, "user", actor.id, "event_ticket_code_created", "event", event.id, {
+        codeId: id,
+        maxUses: input.maxUses,
+        sponsorId,
+      }),
+      db.prepare(`SELECT ${CODE_COLUMNS} FROM event_ticket_codes WHERE id = ?`).bind(id),
+    ])
+    .catch((cause: unknown) => {
+      throw isStateGuardFailure(cause) ? unavailable() : cause;
+    });
+  const row = batchFirst<CodeRow>(results[4]);
+  if (!row) throw unavailable();
   return decodeCode(row);
 }
 

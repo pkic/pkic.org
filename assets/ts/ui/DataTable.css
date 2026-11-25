@@ -604,6 +604,24 @@
     font-size: 0.85em;
   }
 
+  /* A name with a hint opens it, as a stat card's label does; same 24px floor as sorting. */
+  .pk-table__hinted {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    min-height: 1.5rem;
+    white-space: nowrap;
+  }
+
+  .pk-table__hint {
+    text-decoration: underline dotted;
+    text-underline-offset: 0.2em;
+  }
+
+  .pk-table th[aria-sort] .pk-table__hinted {
+    color: var(--pk-ink);
+  }
+
   /*
    * A head cell is the column's name with its commands beside it. The trigger
    * is quiet until the cell is hovered or the column is narrowed, so a table

@@ -1,7 +1,9 @@
 /**
- * Settings → Registration → Tickets: what registering costs, who gets which
- * ticket, the codes that change that, and how payment is chased. Editing
- * prices or one ticket opens its own page under this tab.
+ * Settings → Registration → Tickets, Codes and Payments: what registering
+ * costs and who gets which ticket; the codes and sponsor passes that change
+ * that; and how payment is chased. Each is its own tab over one configuration.
+ * Prices, one ticket and the sponsor passes each open their own page under
+ * their tab; a ticket opens to read first, with its editor below it.
  */
 import { useRef } from "preact/hooks";
 import { getJson } from "../../../../../../../shared/api-client";
@@ -29,17 +31,26 @@ import { SponsorPassesEditor } from "./SponsorPassesEditor";
 import { SponsorPassesPanel } from "./SponsorPassesPanel";
 import { TicketCodesPanel } from "./TicketCodesPanel";
 import { TicketOrganizationsPanel } from "./TicketOrganizationsPanel";
+import { TicketOrganizationsWorkbench } from "./TicketOrganizationsWorkbench";
 import { TicketPaymentPanel } from "./TicketPaymentPanel";
 import { TicketPricesEditor } from "./TicketPricesEditor";
 import { TicketStepTextsPanel } from "./TicketStepTextsPanel";
 import { TicketTypeEditor } from "./TicketTypeEditor";
+import { TicketTypeView } from "./TicketTypeView";
 import { sortedPeriods, ticketPriceGrid } from "./ticket-price-grid";
 import { ticketsEndpoint } from "./tickets-endpoint";
 
 /** The segment below the tab where sponsor passes are edited. */
 const SPONSOR_PASSES_SEGMENT = "sponsor-passes";
+/** The segment below a ticket's page where it is edited. */
+const EDIT_SEGMENT = "edit";
+/** The segment below the tab where every portal organization's ticket is tested and decided. */
+export const ORGANIZATIONS_SEGMENT = "organizations";
 
 type TicketType = EventTicketsConfiguration["types"][number];
+
+/** The registration settings tabs this configuration fills. */
+export type TicketSettingsSection = "tickets" | "codes" | "payments";
 
 function givenTo(type: TicketType): string {
   if (type.presetOrganizations > 0)
@@ -51,19 +62,24 @@ function givenTo(type: TicketType): string {
 export function TicketsTab({
   slug,
   canWrite,
+  section = "tickets",
   detail,
+  segment,
   basePath,
 }: {
   slug: string;
   canWrite: boolean;
+  section?: TicketSettingsSection;
   /** The tab's own route, when it is not the event's own settings: a group's event workspace. */
   basePath?: string;
-  /** The segment below the tab: `prices`, `sponsor-passes`, `new`, or a ticket's id. */
+  /** The segment below the tab: `prices`, `new` or a ticket's id under Tickets; `sponsor-passes` under Codes. */
   detail?: string;
+  /** The page below that segment: `edit` under a ticket. */
+  segment?: string;
 }) {
   const [, navigate] = usePortalHashLocation();
   const codes = useRef<ApiTableActions | null>(null);
-  const base = basePath ?? `/events/${slug}/settings/tickets`;
+  const base = basePath ?? `/events/${slug}/settings/${section}`;
   const { data, loading, error, reload } = useData(
     () => getJson(ticketsEndpoint(slug), eventTicketsConfigurationSchema),
     [slug],
@@ -74,23 +90,64 @@ export function TicketsTab({
     await reload();
     navigate(base);
   };
+  if (section === "codes")
+    return canWrite && detail === SPONSOR_PASSES_SEGMENT ? (
+      <SponsorPassesEditor slug={slug} configuration={data} onSaved={done} onCancel={() => navigate(base)} />
+    ) : (
+      <div class="pk-stack">
+        <SponsorPassesPanel
+          slug={slug}
+          configuration={data}
+          canWrite={canWrite}
+          editHref={usePortalHashLocation.hrefs(`${base}/${SPONSOR_PASSES_SEGMENT}`)}
+          onChanged={async () => {
+            await reload();
+            await codes.current?.reload();
+          }}
+        />
+        {canWrite && <TicketCodesPanel slug={slug} configuration={data} canWrite={canWrite} table={codes} />}
+      </div>
+    );
+  if (section === "payments")
+    return <TicketPaymentPanel slug={slug} configuration={data} canWrite={canWrite} onSaved={reload} />;
   if (canWrite && detail === "prices")
     return <TicketPricesEditor slug={slug} configuration={data} onSaved={done} onCancel={() => navigate(base)} />;
-  if (canWrite && detail === SPONSOR_PASSES_SEGMENT)
-    return <SponsorPassesEditor slug={slug} configuration={data} onSaved={done} onCancel={() => navigate(base)} />;
-  if (canWrite && detail) {
-    const type = data.types.find((candidate) => candidate.id === detail);
-    if (detail === "new" || type)
-      return (
-        <TicketTypeEditor
-          slug={slug}
-          revision={data.revision}
-          type={type}
-          firstTicket={data.types.length === 0}
-          onSaved={done}
-          onCancel={() => navigate(base)}
-        />
-      );
+  if (canWrite && detail === ORGANIZATIONS_SEGMENT && data.types.filter((type) => type.active).length >= 2)
+    return <TicketOrganizationsWorkbench slug={slug} configuration={data} onChanged={reload} />;
+  if (canWrite && detail === "new")
+    return (
+      <TicketTypeEditor
+        slug={slug}
+        revision={data.revision}
+        tickets={data.types}
+        onSaved={done}
+        onCancel={() => navigate(base)}
+      />
+    );
+  const type = detail ? data.types.find((candidate) => candidate.id === detail) : undefined;
+  if (type) {
+    const page = `${base}/${type.id}`;
+    return canWrite && segment === EDIT_SEGMENT ? (
+      <TicketTypeEditor
+        slug={slug}
+        revision={data.revision}
+        type={type}
+        tickets={data.types}
+        onSaved={async () => {
+          await reload();
+          navigate(page);
+        }}
+        onCancel={() => navigate(page)}
+      />
+    ) : (
+      <TicketTypeView
+        slug={slug}
+        configuration={data}
+        type={type}
+        editHref={canWrite ? usePortalHashLocation.hrefs(`${page}/${EDIT_SEGMENT}`) : undefined}
+        onChanged={reload}
+      />
+    );
   }
   const { currency } = data.settings;
   const grid = ticketPriceGrid(data);
@@ -179,11 +236,10 @@ export function TicketsTab({
             caption="Tickets"
             rows={data.types}
             rowKey={(row) => row.id}
-            rowAction={
-              canWrite
-                ? (row) => ({ label: `Edit ${row.name}`, href: usePortalHashLocation.hrefs(`${base}/${row.id}`) })
-                : undefined
-            }
+            rowAction={(row) => ({
+              label: `Open the ${row.name} ticket`,
+              href: usePortalHashLocation.hrefs(`${base}/${row.id}`),
+            })}
             columns={[
               {
                 id: "name",
@@ -227,21 +283,14 @@ export function TicketsTab({
       </Panel>
       {/* A decision chooses between tickets, so it needs two on offer. */}
       {canWrite && data.types.filter((type) => type.active).length >= 2 && (
-        <TicketOrganizationsPanel slug={slug} configuration={data} onChanged={reload} />
+        <TicketOrganizationsPanel
+          slug={slug}
+          configuration={data}
+          onChanged={reload}
+          workbenchHref={usePortalHashLocation.hrefs(`${base}/${ORGANIZATIONS_SEGMENT}`)}
+        />
       )}
-      <SponsorPassesPanel
-        slug={slug}
-        configuration={data}
-        canWrite={canWrite}
-        editHref={usePortalHashLocation.hrefs(`${base}/${SPONSOR_PASSES_SEGMENT}`)}
-        onChanged={async () => {
-          await reload();
-          await codes.current?.reload();
-        }}
-      />
-      {canWrite && <TicketCodesPanel slug={slug} configuration={data} canWrite={canWrite} table={codes} />}
       <TicketStepTextsPanel slug={slug} configuration={data} canWrite={canWrite} onSaved={reload} />
-      <TicketPaymentPanel slug={slug} configuration={data} canWrite={canWrite} onSaved={reload} />
     </div>
   );
 }

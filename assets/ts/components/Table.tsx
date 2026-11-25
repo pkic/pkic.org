@@ -62,6 +62,8 @@ export interface Column<T> {
   key?: string;
   /** Compact symbol; the text header still names menus and assistive technology. */
   headerIcon?: ComponentChildren;
+  /** What the column counts or means, shown from its name. */
+  headerHint?: string;
   cell: (row: T, index: number) => ComponentChildren;
   className?: string;
   sort?: ColumnSort;
@@ -310,6 +312,7 @@ export function DataTable<T>({
       id: `column-${String(index)}`,
       header: isActions ? ACTIONS_COLUMN_LABEL : label,
       headerIcon: column.headerIcon,
+      headerHint: column.headerHint,
       headerHidden: isActions || undefined,
       cell: (row) => column.cell(row, indexOf.get(row) ?? 0),
       sortable: Boolean(column.sort),

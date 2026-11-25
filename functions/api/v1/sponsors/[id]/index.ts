@@ -8,10 +8,11 @@
  */
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { json } from "../../../../_lib/http";
-import { AppError } from "../../../../_lib/errors";
 import {
   authorizedSponsorshipMutationDb,
-  getSponsorship,
+  loadAuthorizedSponsorship,
+  requireSponsorshipActor,
+  requireStaffToAssignSponsorship,
   toApiSponsorship,
   updateSponsorship,
 } from "../../../../_lib/services/sponsorship";
@@ -20,24 +21,21 @@ import {
   sponsorshipUpdateRouteSchema,
 } from "../../../../../assets/shared/schemas/sponsorship-management";
 import type { AdminContext } from "../../../../_lib/db/context";
-import { requireStaffPermission } from "../../../../_lib/auth/staff-permissions";
 
 export const SponsorGet = openApiRoute(sponsorshipGetRouteSchema, async (c: AdminContext, data) => {
-  const { db } = await requireStaffPermission(c, "sponsorships:read");
-
-  const sponsorship = await getSponsorship(db, data.params.id);
-  if (!sponsorship) {
-    throw new AppError(404, "SPONSORSHIP_NOT_FOUND", "Sponsorship not found");
-  }
+  const { db, actor } = await requireSponsorshipActor(c);
+  const { sponsorship } = await loadAuthorizedSponsorship(db, actor, data.params.id, "read");
   return json({ sponsorship: toApiSponsorship(sponsorship) });
 });
 
 export const SponsorUpdate = openApiRoute(sponsorshipUpdateRouteSchema, async (c: AdminContext, data) => {
-  const { db, staff } = await requireStaffPermission(c, "sponsorships:write");
+  const { db, actor: staff } = await requireSponsorshipActor(c);
 
   const body = data.body;
   const id = data.params.id;
-  const sponsorship = await updateSponsorship(authorizedSponsorshipMutationDb(db, staff), staff.id, id, body);
+  const { access } = await loadAuthorizedSponsorship(db, staff, id, "write");
+  requireStaffToAssignSponsorship(access, body.assignedToUserId);
+  const sponsorship = await updateSponsorship(authorizedSponsorshipMutationDb(db, staff, access), staff.id, id, body);
 
   return json({ sponsorship: toApiSponsorship(sponsorship) });
 });
