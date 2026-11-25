@@ -168,7 +168,9 @@ export function GroupEventSettingsTab({
             personId={detailSegment}
             teamPath={`${settingsPath}/team`}
             timeZone={event.timezone}
-            canManage={canManage}
+            // Granting event roles needs the event's own events:manage, as the team API checks;
+            // an Organizer holds it for this event without managing the owning group.
+            canManage={hasEventAgendaPermission(event.id, "events:manage")}
             canEditStaffing={hasEventAgendaPermission(event.id, "agenda:write")}
             canReadStaffing={hasEventAgendaPermission(event.id, "agenda:read")}
           />

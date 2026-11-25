@@ -102,7 +102,22 @@ export function EventTeamSettings({
         label: `Open ${personDisplayName(person, null)}`,
         href: usePortalHashLocation.hrefs(`${teamPath}/${encodeURIComponent(person.userId)}`),
       })}
-      empty={<EmptyState title="No team members yet" body="Add people to configure their event duties or access." />}
+      empty={
+        canManage ? (
+          <EmptyState title="No team members yet" body="Add people to configure their event duties or access." />
+        ) : (
+          // Without events:manage the roster lists scheduling duties only, so an empty
+          // list says nothing about who else is on the team.
+          <EmptyState
+            title="No scheduling duties yet"
+            body={
+              canEditStaffing
+                ? "Add people to give them scheduling duties."
+                : "People with scheduling duties appear here."
+            }
+          />
+        )
+      }
     />
   );
 }

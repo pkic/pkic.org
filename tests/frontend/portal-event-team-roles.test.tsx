@@ -109,6 +109,12 @@ describe("one event team roster", () => {
     expect(container.textContent).toContain("No team members yet");
     expect(container.querySelector('[role="alert"]')).toBeNull();
   });
+  it("tells a duties-only reader the empty list covers scheduling duties, not the team", async () => {
+    setup([]);
+    await mount({ canManage: false, canReadStaffing: true });
+    expect(container.textContent).toContain("No scheduling duties yet");
+    expect(container.textContent).not.toMatch(/No team members|Add people/);
+  });
   it("opens a person read-only and hides scheduling actions without that permission", async () => {
     setup();
     await mount({ section: USER_ID });
