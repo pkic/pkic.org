@@ -691,6 +691,23 @@ describe("roles (Built-in and custom roles)", () => {
     expect([...(deputy?.permissions ?? [])].sort()).toEqual([...(lead?.permissions ?? [])].sort());
   });
 
+  it("leaves roles granted elsewhere out of the assignable list before paging", async () => {
+    const all = (await (await call(adminToken, "/api/v1/roles?limit=100")).json()) as {
+      roles: Array<{ id: string }>;
+      page: { total: number };
+    };
+    const assignable = (await (await call(adminToken, "/api/v1/roles?assignable=true&limit=100")).json()) as {
+      roles: Array<{ id: string }>;
+      page: { total: number };
+    };
+    const elsewhere = ["role-group_lead", "role-group_deputy_lead", "role-event_volunteer", "role-event_organizer"];
+    expect(all.roles.map((role) => role.id)).toEqual(expect.arrayContaining(elsewhere));
+    expect(assignable.roles.some((role) => elsewhere.includes(role.id))).toBe(false);
+    // The total counts only what the form can show.
+    expect(assignable.page.total).toBe(assignable.roles.length);
+    expect(assignable.page.total).toBeLessThan(all.page.total);
+  });
+
   it.each(["role-group_lead", "role-group_deputy_lead"])(
     "requires the group leadership resource to assign %s with an explicit Member capacity",
     async (roleId) => {
@@ -707,6 +724,21 @@ describe("roles (Built-in and custom roles)", () => {
       ).toHaveLength(0);
     },
   );
+
+  it.each([
+    ["role-event_organizer", null],
+    ["role-event_volunteer", "event"],
+  ] as const)("refuses to grant the event team role %s outside the event's team", async (roleId, contextType) => {
+    const response = await call(adminToken, `/api/v1/users/${staffUserId}/roles`, {
+      method: "POST",
+      body: JSON.stringify(contextType ? { roleId, contextType, contextId: crypto.randomUUID() } : { roleId }),
+    });
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({ error: { code: "EVENT_TEAM_ROLE_REQUIRES_EVENT_TEAM" } });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM user_roles WHERE user_id = ? AND role_id = ?", [staffUserId, roleId]),
+    ).toHaveLength(0);
+  });
 
   it("does not seed legacy forum or working-group-specific leadership roles", async () => {
     const response = await call(adminToken, "/api/v1/roles");

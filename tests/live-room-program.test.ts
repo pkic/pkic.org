@@ -14,6 +14,7 @@ import { liveProgramName } from "../functions/_lib/services/live-session/room-pr
 import { getAgenda } from "../functions/_lib/services/event-agenda/read";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
 import { callApi } from "./helpers/app";
+import { createAdminSession } from "./helpers/auth";
 const f = createLiveRoomFixture();
 const headers = (token = f.tokens.operator) => ({
   authorization: `Bearer ${token}`,
@@ -248,6 +249,32 @@ describe("stable physical room broadcast sources", () => {
         .occurrenceId,
     ).toBeNull();
   });
+  it("lets a moderator follow the room's program but leaves choosing its session to the studio", async () => {
+    const now = new Date().toISOString();
+    await env.DB.prepare("UPDATE user_roles SET revoked_at=? WHERE user_id=?").bind(now, f.users.secondOperator).run();
+    await env.DB.prepare(
+      `INSERT INTO permission_grants (id, user_id, permission, context_type, context_id, granted_by_user_id, created_at)
+       VALUES (?, ?, 'agenda:live_moderate', 'event', ?, ?, ?)`,
+    )
+      .bind(crypto.randomUUID(), f.users.secondOperator, f.eventId, f.users.operator, now)
+      .run();
+    const moderator = await createAdminSession(env.DB, f.users.secondOperator, crypto.randomUUID());
+    const opened = await callApi(env, f.programPath("/program"), {
+      headers: {
+        upgrade: "websocket",
+        origin: "https://app.test",
+        authorization: `Bearer ${moderator}`,
+        "sec-websocket-protocol": LIVE_PROGRAM_PROTOCOL,
+      },
+    });
+    expect(opened.status).toBe(101);
+    opened.webSocket!.accept();
+    opened.webSocket!.close();
+    const refused = await select(f.occurrenceId, 0, moderator);
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({ error: { code: "PERMISSION_REQUIRED" } });
+  });
+
   it("checks publication within thirty seconds and clears an unpublished physical-room source", async () => {
     expect((await select(f.occurrenceId, 0)).status).toBe(200);
     const source = await programSocket(await token());

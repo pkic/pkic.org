@@ -29,13 +29,21 @@ import { DEFAULT_LIVE_SCREEN_SYNC } from "../../../../assets/shared/schemas/live
 
 const EMPTY_QUEUE = { question: [], "lower-third": [], poll: [], change: null };
 
+/**
+ * Every operator sees the whole desk, a moderator as much as the studio: Preview, the queues, the room's
+ * outputs. Only the studio changes what is on air; the commands enforce that, not what an operator sees.
+ */
+function seesDesk(viewer: LiveRoomParticipant): boolean {
+  return viewer.role === "operator";
+}
+
 /** Attendees see Program on their own screens; the room's other outputs are for the stage and its crew. */
 function seesRoomOutputs(viewer: LiveRoomParticipant): boolean {
-  return viewer.studio === true || viewer.role === "overlay" || viewer.role === "speaker";
+  return seesDesk(viewer) || viewer.role === "overlay" || viewer.role === "speaker";
 }
 
 function seesSpeakerMessage(viewer: LiveRoomParticipant): boolean {
-  return viewer.role === "speaker" || viewer.role === "overlay" || viewer.studio === true;
+  return viewer.role === "speaker" || viewer.role === "overlay" || seesDesk(viewer);
 }
 
 function roomOutputMessage(message: LiveRoomServerMessage): boolean {
@@ -79,7 +87,7 @@ export class LiveRoomBroadcast {
     const answers = viewer.userId ? this.polls.answers(viewer.userId) : new Map<string, CustomAnswerValue>();
     const stage = this.store.stage();
     const operator = viewer.role === "operator";
-    const studio = viewer.studio === true;
+    const desk = seesDesk(viewer);
     return serializeLiveRoomMessage({
       type: "room.snapshot",
       overlayLayouts: this.overlayLayouts(),
@@ -97,18 +105,18 @@ export class LiveRoomBroadcast {
         .flatMap(
           (poll) => projectLivePoll(poll, viewer, answers.get(poll.id) ?? null, this.store.pollOnAir(poll.id)) ?? [],
         ),
-      preparedQuestions: studio ? this.prepared.list().map(projectLivePreparedQuestion) : [],
-      preparedQuestionWindow: studio ? this.prepared.window(session) : null,
+      preparedQuestions: desk ? this.prepared.list().map(projectLivePreparedQuestion) : [],
+      preparedQuestionWindow: desk ? this.prepared.window(session) : null,
       overlayMode: this.store.overlayMode(),
       stage,
       outputs: seesRoomOutputs(viewer) ? this.store.outputs() : EMPTY_LIVE_OUTPUTS,
       speakerMessage: seesSpeakerMessage(viewer) ? this.store.speakerMessage() : null,
-      preview: studio ? this.store.preview() : EMPTY_LIVE_AUX_COMPOSITION,
+      preview: desk ? this.store.preview() : EMPTY_LIVE_AUX_COMPOSITION,
       timers: this.store.timers(),
       reactionTotals: this.store.reactionTotals(),
-      queue: studio ? this.store.queue() : EMPTY_QUEUE,
+      queue: desk ? this.store.queue() : EMPTY_QUEUE,
       operators: operator ? this.operators(undefined, eligible) : [],
-      addedCredits: studio ? this.store.addedCredits() : [],
+      addedCredits: desk ? this.store.addedCredits() : [],
       stageDisplayNext: seesStageDisplayNext(viewer) ? this.store.preview().question : null,
       stageDisplayNextVotes: seesStageDisplayNext(viewer) ? this.nextVotes() : null,
       stageDisplaySettings: seesRoomOutputs(viewer)
@@ -117,7 +125,7 @@ export class LiveRoomBroadcast {
       screenSync: seesRoomOutputs(viewer) ? this.store.screenSync() : DEFAULT_LIVE_SCREEN_SYNC,
       opening: this.store.opening(),
       movedOn: this.store.movedOn(),
-      sources: studio ? this.sources() : NO_LIVE_ROOM_SOURCES,
+      sources: desk ? this.sources() : NO_LIVE_ROOM_SOURCES,
     });
   }
 
@@ -242,8 +250,8 @@ export class LiveRoomBroadcast {
   async sourcesChanged(leaving?: WebSocket): Promise<void> {
     const sources = this.sources(leaving);
     await this.send(
-      (viewer) => (viewer.studio ? { type: "sources.changed", sources } : null),
-      (viewer) => String(viewer.studio === true),
+      (viewer) => (seesDesk(viewer) ? { type: "sources.changed", sources } : null),
+      (viewer) => String(seesDesk(viewer)),
     );
   }
 
@@ -260,7 +268,7 @@ export class LiveRoomBroadcast {
    * prepared-question and added-people changes reach operators only, and the room's other outputs never reach attendees.
    */
   async all(message: LiveRoomServerMessage): Promise<void> {
-    const studioOnly =
+    const deskOnly =
       message.type === "queue.changed" ||
       message.type === "preview.changed" ||
       message.type === "credits.added.changed" ||
@@ -270,12 +278,12 @@ export class LiveRoomBroadcast {
     const roomOutput = roomOutputMessage(message);
     await this.send(
       (viewer) =>
-        (studioOnly && !viewer.studio) ||
+        (deskOnly && !seesDesk(viewer)) ||
         (speakerOnly && !seesSpeakerMessage(viewer)) ||
         (roomOutput && !seesRoomOutputs(viewer))
           ? null
           : message,
-      studioOnly || speakerOnly || roomOutput ? null : (viewer) => viewer.role,
+      deskOnly || speakerOnly || roomOutput ? null : (viewer) => viewer.role,
     );
     // Preview's question also reaches the stage display, as the speaker's next one; operators read it from Preview.
     if (message.type === "preview.changed") await this.stageDisplayNext();

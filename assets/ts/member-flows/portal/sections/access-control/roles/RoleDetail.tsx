@@ -16,6 +16,7 @@ import { successResponseSchema } from "../../../../../../shared/schemas/api-comm
 import { fmt, fmtDate, toast } from "../../../ui";
 import {
   SYSTEM_ROLE_IDS,
+  isEventTeamRole,
   roleAssignmentsListResponseSchema,
   roleResponseEnvelopeSchema,
   type Role,
@@ -37,6 +38,7 @@ export function RoleDetail({ roleId, canGrant, canRevoke }: { roleId: string; ca
   const [editing, setEditing] = useState(false);
   const assignmentsRef = useRef<ApiTableActions | null>(null);
   const capacityBoundLeadership = roleId === SYSTEM_ROLE_IDS.groupLead || roleId === SYSTEM_ROLE_IDS.groupDeputyLead;
+  const eventTeamRole = isEventTeamRole(roleId);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -134,6 +136,10 @@ export function RoleDetail({ roleId, canGrant, canRevoke }: { roleId: string; ca
                 <Alert tone="info">
                   Assign this role from the selected group&apos;s Leadership section, where the person&apos;s active
                   Member capacity is selected explicitly.
+                </Alert>
+              ) : canGrant && eventTeamRole ? (
+                <Alert tone="info">
+                  Assign this role from the event&apos;s Team settings. It then applies to that event only.
                 </Alert>
               ) : canGrant ? (
                 <RoleAssignForm role={role} onAssigned={() => void assignmentsRef.current?.reload()} />

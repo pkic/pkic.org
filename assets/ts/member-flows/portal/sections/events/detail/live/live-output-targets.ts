@@ -45,11 +45,19 @@ export interface LiveTargets {
   /** Whether this session is the one its physical room has on air. */
   programActive: boolean;
   disabled: boolean;
+  /**
+   * False for a moderator without the studio: they work questions and polls beside it but never put
+   * anything on an output, so every Preview, Program and screen control reads as off.
+   */
+  canProduce?: boolean;
   /** Sends a command to the room, which first makes this session the room's program when it changes what is on air. */
   sendProgram: Send;
   /** Sends several commands in order as one change; without it each goes out on its own. */
   sendPrograms?: (messages: readonly LiveRoomClientMessage[]) => boolean;
 }
+
+/** Whether this operator may change what an output shows now. */
+export const liveOutputsDisabled = (targets: LiveTargets): boolean => targets.disabled || targets.canProduce === false;
 
 /** Sends commands in order as one change, so a broadcast in progress cannot refuse the later ones. */
 export const sendLivePrograms = (targets: LiveTargets, messages: readonly LiveRoomClientMessage[]): boolean =>

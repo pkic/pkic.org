@@ -5,7 +5,7 @@ import { formSubmissionStatSchema } from "./form-management";
 import { livePollFieldSchema, livePollStatusSchema } from "./live-session-poll";
 import { liveRoomParamsSchema } from "./live-session-room";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
-import { authErrors, ok, requiresPermissions } from "./route-contract";
+import { authErrors, ok, requiresAnyPermissions } from "./route-contract";
 
 /**
  * A session's polls as reporting reads them from the durable copy: each
@@ -32,7 +32,7 @@ export type LivePollResultsQuery = z.infer<typeof livePollResultsQuerySchema>;
 export const livePollResultsResponseSchema = paginatedResponseSchema("polls", livePollResultSchema);
 
 export const livePollResultsRouteSchema = {
-  ...requiresPermissions("agenda:live_studio"),
+  ...requiresAnyPermissions(["agenda:live_studio"], ["agenda:live_moderate"]),
   tags: ["Events"],
   summary: "List a session's poll results from its durable copy",
   request: { params: liveRoomParamsSchema, query: livePollResultsQuerySchema },

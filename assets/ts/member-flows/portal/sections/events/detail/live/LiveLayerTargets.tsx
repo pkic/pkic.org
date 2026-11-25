@@ -2,7 +2,13 @@ import { LiveScreenTags, liveScreens } from "./LiveRowMenu";
 import { LiveTallyBands } from "./LiveTallyBands";
 import { OutputTargetControl } from "./OutputTargetControl";
 import { useLiveTogglePending } from "./live-toggle-pending";
-import { liveLayerTargets, sendLayerToggle, type LiveLayer, type LiveTargets } from "./live-output-targets";
+import {
+  liveLayerTargets,
+  liveOutputsDisabled,
+  sendLayerToggle,
+  type LiveLayer,
+  type LiveTargets,
+} from "./live-output-targets";
 import { livePresenceItem, useLivePresence } from "./presence/live-presence";
 import { LivePresenceTag } from "./presence/LivePresenceTag";
 
@@ -47,7 +53,8 @@ export function LiveLayerTargets({
         program={where.program}
         previewUnseen={where.previewUnseen}
         programUnseen={where.programUnseen}
-        disabled={targets.disabled || disabled}
+        disabled={liveOutputsDisabled(targets) || disabled}
+        studioOnly={targets.canProduce === false}
         pending={toggle.pending}
         onToggle={(destination) => toggle.press(destination, () => sendLayerToggle(targets, layer, destination))}
       />

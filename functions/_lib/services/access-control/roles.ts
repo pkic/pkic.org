@@ -1,4 +1,5 @@
 import {
+  ROLES_GRANTED_ELSEWHERE,
   ROLES_SORT_COLUMNS,
   roleResponseSchema,
   type Role,
@@ -67,11 +68,16 @@ export async function listRoles(
   query: RolesListQuery,
 ): Promise<{ roles: Role[]; page: PageInfo }> {
   requireAccessControlRead(actor);
-  const { q, sort, limit, offset } = query;
+  const { q, sort, limit, offset, assignable } = query;
   const orderBy = resolveOrderBy(sort, ROLES_SORT_COLUMNS, "ORDER BY name ASC", "id ASC");
   const search = q ? buildD1TextSearchFilter(q, ["name", "description"]) : null;
-  const where = search ? `WHERE ${search.sql}` : "";
-  const bindings = search?.bindings ?? [];
+  // Left out before paging, so a page and its total count only roles the form can grant.
+  const conditions = [
+    ...(search ? [search.sql] : []),
+    ...(assignable ? [`r.id NOT IN (${ROLES_GRANTED_ELSEWHERE.map(() => "?").join(", ")})`] : []),
+  ];
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const bindings = [...(search?.bindings ?? []), ...(assignable ? ROLES_GRANTED_ELSEWHERE : [])];
   const { rows, total } = await queryPage<RoleRow>(db, {
     sql: `SELECT ${ROLE_SELECT_COLUMNS} FROM roles r ${where}`,
     bindings,

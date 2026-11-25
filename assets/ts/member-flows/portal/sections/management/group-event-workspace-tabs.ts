@@ -29,7 +29,10 @@ export const EVENT_WORKSPACE_TABS: readonly EventWorkspaceTabDef[] = [
   {
     key: "live",
     label: "Studio",
-    visible: (event) => hasEventAgendaPermission(event.id, "agenda:live_studio"),
+    // Moderators open it too: they see the whole desk, and only the studio changes what is on air.
+    visible: (event) =>
+      hasEventAgendaPermission(event.id, "agenda:live_studio") ||
+      hasEventAgendaPermission(event.id, "agenda:live_moderate"),
   },
   {
     key: "screens",

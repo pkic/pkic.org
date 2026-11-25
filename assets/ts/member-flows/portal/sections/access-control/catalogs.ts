@@ -1,6 +1,5 @@
 import type { z } from "zod";
 import {
-  SYSTEM_ROLE_IDS,
   permissionTargetsListResponseSchema,
   rolesListResponseSchema,
   type PermissionTarget,
@@ -11,11 +10,10 @@ import type { ServerCatalog } from "../../../../shared/server-catalog";
 /** Bounded, schema-validated catalogs used by the global access-control forms. */
 export const roleCatalog: ServerCatalog<Role, z.infer<typeof rolesListResponseSchema>> = {
   endpoint: "/api/v1/roles",
+  // The server leaves out roles granted elsewhere, before it pages them.
+  params: { assignable: "true" },
   responseSchema: rolesListResponseSchema,
-  resolveItems: (response) =>
-    response.roles.filter(
-      (role) => role.id !== SYSTEM_ROLE_IDS.groupLead && role.id !== SYSTEM_ROLE_IDS.groupDeputyLead,
-    ),
+  resolveItems: (response) => response.roles,
   resolvePage: (response) => response.page,
   itemKey: (item) => item.id,
   itemLabel: (item) => item.name,

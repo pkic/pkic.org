@@ -11,7 +11,7 @@ import {
 import { offeredOverlayToken } from "../services/live-session/room-access";
 import { verifyLiveOverlayToken } from "../auth/live-session-overlay-token";
 import { getUserSessionToken, resolveUserSessionContext } from "../auth/user-session";
-import { hasPermission } from "../auth/permissions";
+import { followsLiveProgram } from "../services/live-session/room-program";
 import { assertLiveSocketHandshake, failedLiveSocket, refusedLiveSocket } from "./live-socket-handshake";
 const PATH = /^\/api\/v1\/events\/([^/]+)\/agenda\/rooms\/([^/]+)\/live\/program\/?$/;
 export function isLiveProgramSocketPath(request: Request): boolean {
@@ -44,7 +44,7 @@ export async function liveProgramSocketRequest(request: Request, env: Env): Prom
         if (!getUserSessionToken(request))
           throw new AppError(401, "AUTH_REQUIRED", "Sign in to operate the physical room.");
         const { session, claims } = await resolveUserSessionContext(env.DB, request, env);
-        if (!session.staff || !hasPermission(session.staff, "agenda:live_studio", { type: "event", id: event.id }))
+        if (!followsLiveProgram(session.staff, event.id))
           throw new AppError(
             403,
             "LIVE_ROOM_OPERATOR_REQUIRED",

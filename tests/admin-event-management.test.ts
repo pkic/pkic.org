@@ -19,7 +19,7 @@ import { eventRegistrationsListResponseSchema } from "../assets/shared/schemas/e
 import { eventManagementDetailResponseSchema, eventsListQuerySchema } from "../assets/shared/schemas/event-management";
 import { eventImportResponseSchema } from "../assets/shared/schemas/event-imports";
 import { buildEventRegistrationsPageQuery } from "../functions/_lib/services/registrations/event-registrations";
-import { grantEventTeamRole, revokeEventTeamRole } from "../functions/_lib/services/events/team";
+import { grantEventTeamRoles, revokeEventTeamRole } from "../functions/_lib/services/events/team";
 import { createUserBackedAuthAdmin } from "../functions/_lib/auth/admin-identity";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { insertUser } from "./helpers/membership";
@@ -612,23 +612,25 @@ describe("admin event management endpoints", () => {
       method: "POST",
       body: JSON.stringify({
         userId: organizerId,
-        role: "organizer",
+        roles: ["organizer"],
       }),
     });
 
     expect(roleResponse.status).toBe(201);
-    const rolePayload = (await roleResponse.json()) as {
-      role: { id: string; userEmail: string; role: string };
+    const {
+      roles: [granted],
+    } = (await roleResponse.json()) as {
+      roles: Array<{ id: string; userEmail: string; role: string }>;
     };
-    expect(rolePayload.role.userEmail).toBe("organizer@example.test");
-    expect(rolePayload.role.role).toBe("organizer");
+    expect(granted!.userEmail).toBe("organizer@example.test");
+    expect(granted!.role).toBe("organizer");
     expect(
       await queryAll<{ normalized_email: string }>(
         env.DB,
         `SELECT u.normalized_email
            FROM user_roles ur JOIN users u ON u.id = ur.user_id
           WHERE ur.id = ?`,
-        rolePayload.role.id,
+        granted!.id,
       ),
     ).toEqual([{ normalized_email: "organizer@example.test" }]);
 
@@ -636,11 +638,44 @@ describe("admin event management endpoints", () => {
       method: "POST",
       body: JSON.stringify({
         userId: organizerId,
-        role: "organizer",
+        roles: ["organizer"],
       }),
     });
 
     expect(duplicateRoleResponse.status).toBe(409);
+    expect(await duplicateRoleResponse.json()).toMatchObject({
+      error: { code: "DUPLICATE", message: "This person already has this event role: Organizer" },
+    });
+
+    // Several jobs are granted together, as one change.
+    const volunteerId = await insertUser(env.DB, "volunteer@example.test");
+    const together = await callAdmin("/api/v1/events/pqc-2026/roles", {
+      method: "POST",
+      body: JSON.stringify({ userId: volunteerId, roles: ["volunteer", "studio_operator"] }),
+    });
+    expect(together.status).toBe(201);
+    expect(((await together.json()) as { roles: Array<{ role: string }> }).roles.map((row) => row.role)).toEqual([
+      "volunteer",
+      "studio_operator",
+    ]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT role_id FROM user_roles WHERE user_id = ? AND context_type = 'event' ORDER BY role_id",
+        [volunteerId],
+      ),
+    ).toEqual([{ role_id: "role-event_studio_operator" }, { role_id: "role-event_volunteer" }]);
+    // A request that repeats a held role is refused whole, not partly granted.
+    const repeated = await callAdmin("/api/v1/events/pqc-2026/roles", {
+      method: "POST",
+      body: JSON.stringify({ userId: volunteerId, roles: ["moderator", "volunteer"] }),
+    });
+    expect(repeated.status).toBe(409);
+    expect(
+      await queryAll(env.DB, "SELECT role_id FROM user_roles WHERE user_id = ? AND role_id = 'role-event_moderator'", [
+        volunteerId,
+      ]),
+    ).toHaveLength(0);
 
     const roleListResponse = await callAdmin("/api/v1/events/pqc-2026/roles");
     expect(roleListResponse.status).toBe(200);
@@ -662,7 +697,7 @@ describe("admin event management endpoints", () => {
     ] as const) {
       const res = await callAdmin("/api/v1/events/pqc-2026/roles", {
         method: "POST",
-        body: JSON.stringify({ userId: await insertUser(env.DB, email), role }),
+        body: JSON.stringify({ userId: await insertUser(env.DB, email), roles: [role] }),
       });
       expect(res.status).toBe(201);
     }
@@ -698,7 +733,7 @@ describe("admin event management endpoints", () => {
     const apiKeyOrganizerId = await insertUser(env.DB, "api-key-organizer@example.test");
     const response = await callAdmin("/api/v1/events/pqc-2026/roles", {
       method: "POST",
-      body: JSON.stringify({ userId: apiKeyOrganizerId, role: "organizer" }),
+      body: JSON.stringify({ userId: apiKeyOrganizerId, roles: ["organizer"] }),
     });
 
     expect(response.status).toBe(403);
@@ -717,7 +752,7 @@ describe("admin event management endpoints", () => {
     const unknownId = crypto.randomUUID();
     const response = await callAdmin("/api/v1/events/pqc-2026/roles", {
       method: "POST",
-      body: JSON.stringify({ userId: unknownId, role: "organizer" }),
+      body: JSON.stringify({ userId: unknownId, roles: ["organizer"] }),
     });
     expect(response.status).toBe(404);
     expect(await queryAll(env.DB, "SELECT id FROM users WHERE id = ?", [unknownId])).toHaveLength(0);
@@ -744,11 +779,13 @@ describe("admin event management endpoints", () => {
       method: "POST",
       body: JSON.stringify({
         userId: await insertUser(env.DB, "scoped-team-member@example.test"),
-        role: "moderator",
+        roles: ["moderator"],
       }),
     });
     expect(assigned.status).toBe(201);
-    const assignment = (await assigned.json()) as { role: { id: string } };
+    const {
+      roles: [assignment],
+    } = (await assigned.json()) as { roles: Array<{ id: string }> };
     expect((await callAdmin("/api/v1/events/pqc-2026/roles")).status).toBe(200);
 
     await env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?")
@@ -758,14 +795,14 @@ describe("admin event management endpoints", () => {
     expect((await callAdmin("/api/v1/events/pqc-2026/roles")).status).toBe(403);
     expect(
       (
-        await callAdmin(`/api/v1/events/pqc-2026/roles/${assignment.role.id}`, {
+        await callAdmin(`/api/v1/events/pqc-2026/roles/${assignment!.id}`, {
           method: "DELETE",
         })
       ).status,
     ).toBe(403);
     expect(
       await queryAll<{ revoked_at: string | null }>(env.DB, "SELECT revoked_at FROM user_roles WHERE id = ?", [
-        assignment.role.id,
+        assignment!.id,
       ]),
     ).toEqual([{ revoked_at: null }]);
   });
@@ -830,6 +867,33 @@ describe("admin event management endpoints", () => {
     ).toBe(403);
   });
 
+  it("grants none of the requested roles when one is granted concurrently before commit", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { actor } = await createScopedEventManager(eventId);
+    const targetId = await insertUser(env.DB, `event-team-roles-race-${crypto.randomUUID()}@example.test`);
+    // Another organizer grants Volunteer between the held-role check and the write.
+    const racedDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare(
+        `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, created_at)
+         VALUES (?, ?, 'role-event_volunteer', 'event', ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+      )
+        .bind(crypto.randomUUID(), targetId, eventId)
+        .run(),
+    );
+
+    await expect(
+      grantEventTeamRoles(racedDb, actor, "pqc-2026", { userId: targetId, roles: ["moderator", "volunteer"] }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(
+      await queryAll(env.DB, "SELECT role_id FROM user_roles WHERE user_id = ? AND context_type = 'event'", [targetId]),
+    ).toEqual([{ role_id: "role-event_volunteer" }]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'event_team_role_assigned' AND entity_id = ?", [
+        eventId,
+      ]),
+    ).toHaveLength(0);
+  });
+
   it("rolls back an event-team grant when the scoped manager loses authority before commit", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { actor, roleAssignmentId } = await createScopedEventManager(eventId);
@@ -840,7 +904,7 @@ describe("admin event management endpoints", () => {
     );
 
     await expect(
-      grantEventTeamRole(racedDb, actor, "pqc-2026", { userId: targetId, role: "organizer" }),
+      grantEventTeamRoles(racedDb, actor, "pqc-2026", { userId: targetId, roles: ["organizer"] }),
     ).rejects.toMatchObject({ status: 409, code: "ACCESS_CONTROL_AUTHORIZATION_CHANGED" });
     expect(
       await queryAll(
@@ -863,9 +927,9 @@ describe("admin event management endpoints", () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { actor } = await createScopedEventManager(eventId);
     const targetEmail = `event-team-target-race-${crypto.randomUUID()}@example.test`;
-    const created = await grantEventTeamRole(env.DB, actor, "pqc-2026", {
+    const [created] = await grantEventTeamRoles(env.DB, actor, "pqc-2026", {
       userId: await insertUser(env.DB, targetEmail),
-      role: "organizer",
+      roles: ["organizer"],
     });
     const racedDb = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?").bind(created.id).run(),
@@ -890,9 +954,9 @@ describe("admin event management endpoints", () => {
   it("rolls back an event-team revoke when the scoped manager loses authority before commit", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { actor, roleAssignmentId } = await createScopedEventManager(eventId);
-    const created = await grantEventTeamRole(env.DB, actor, "pqc-2026", {
+    const [created] = await grantEventTeamRoles(env.DB, actor, "pqc-2026", {
       userId: await insertUser(env.DB, `event-team-revoke-race-${crypto.randomUUID()}@example.test`),
-      role: "organizer",
+      roles: ["organizer"],
     });
     const racedDb = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?").bind(roleAssignmentId).run(),

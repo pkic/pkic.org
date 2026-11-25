@@ -8,7 +8,7 @@ import {
   eventTeamRosterResponseSchema,
 } from "../../assets/shared/schemas/event-team";
 import { EventTeamSettings } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/EventTeamSettings";
-import { chooseOption, controlFor } from "./helpers/labeled-control";
+import { controlFor } from "./helpers/labeled-control";
 const navigate = vi.fn();
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", navigate] }));
 const USER_ID = "10000000-0000-4000-8000-000000000002";
@@ -37,19 +37,21 @@ function setup(people: unknown[] = [person]) {
       const data =
         init.method === "POST"
           ? eventTeamRoleCreateResponseSchema.parse({
-              role: {
-                id: ROLE_ID,
-                userId: USER_ID,
-                userEmail: "ada@example.test",
-                userFirstName: "Ada",
-                userLastName: "Lovelace",
-                headshotUrl: null,
-                role: "organizer",
-                grantedByUserId: null,
-                granterEmail: null,
-                createdAt: "2026-10-12T12:00:00.000Z",
-                expiresAt: null,
-              },
+              roles: [
+                {
+                  id: ROLE_ID,
+                  userId: USER_ID,
+                  userEmail: "ada@example.test",
+                  userFirstName: "Ada",
+                  userLastName: "Lovelace",
+                  headshotUrl: null,
+                  role: "organizer",
+                  grantedByUserId: null,
+                  granterEmail: null,
+                  createdAt: "2026-10-12T12:00:00.000Z",
+                  expiresAt: null,
+                },
+              ],
             })
           : eventTeamRosterResponseSchema.parse({
               people,
@@ -107,6 +109,12 @@ describe("one event team roster", () => {
     expect(container.textContent).toContain("No team members yet");
     expect(container.querySelector('[role="alert"]')).toBeNull();
   });
+  it("tells a duties-only reader the empty list covers scheduling duties, not the team", async () => {
+    setup([]);
+    await mount({ canManage: false, canReadStaffing: true });
+    expect(container.textContent).toContain("No scheduling duties yet");
+    expect(container.textContent).not.toMatch(/No team members|Add people/);
+  });
   it("opens a person read-only and hides scheduling actions without that permission", async () => {
     setup();
     await mount({ section: USER_ID });
@@ -126,20 +134,31 @@ describe("one event team roster", () => {
   it("grants access explicitly to the selected person with the canonical contract", async () => {
     setup();
     await mount({ section: USER_ID, personId: "access" });
-    const role = controlFor<HTMLSelectElement>(container, "Role");
-    expect(role.required).toBe(true);
-    expect(role.value).toBe("");
-    expect(role.labels?.[0]?.textContent).toContain("(required)");
+    const box = (label: string) =>
+      [...container.querySelectorAll<HTMLInputElement>('input[name="roles"]')].find((input) =>
+        input.labels?.[0]?.textContent?.includes(label),
+      )!;
+    // The role the person already holds is shown ticked and cannot be granted twice.
+    expect(box("Moderator").checked).toBe(true);
+    expect(box("Moderator").disabled).toBe(true);
+    expect(box("Volunteer").checked).toBe(false);
+    expect(container.textContent).toContain("Checks people in, prints badges, and moderates live rooms.");
     // No role is chosen for the reader: submitting first is refused and sends nothing.
     await submitForm();
-    expect(controlFor(container, "Role").getAttribute("aria-invalid")).toBe("true");
+    expect(container.textContent).toContain("Choose at least one role.");
     expect(requests.some((request) => request.method === "POST")).toBe(false);
 
-    await chooseOption(controlFor(container, "Role"), "volunteer");
+    await act(async () => {
+      box("Volunteer").click();
+      box("Studio operator").click();
+    });
     await submitForm();
     const request = requests.find((request) => request.method === "POST");
     expect(request).toBeDefined();
-    expect(eventTeamRoleCreateSchema.parse(request!.body)).toMatchObject({ userId: USER_ID, role: "volunteer" });
+    expect(eventTeamRoleCreateSchema.parse(request!.body)).toMatchObject({
+      userId: USER_ID,
+      roles: ["volunteer", "studio_operator"],
+    });
     expect(request!.url).toContain("/roles");
   });
   it("adds a new person through event access when the reader may grant it, even with staffing rights", async () => {

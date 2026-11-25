@@ -99,7 +99,13 @@ export function LiveSessionDesk({
   approvedAgenda,
   agendaNotice = null,
   eventPath,
+  canProduce = true,
 }: {
+  /**
+   * Whether this operator runs the studio. A moderator without it sees the whole desk and works questions,
+   * polls, the message to the speaker and the chat, while every control that changes what is on air is off.
+   */
+  canProduce?: boolean;
   /** The event's own page, which the phone studio links back to. */
   eventPath?: string;
   /** How the session stands against the agenda, or why the desk could not act, for the session bar. */
@@ -195,7 +201,7 @@ export function LiveSessionDesk({
     if (target === "program") return void sendProgram({ type: "preview.take" });
     sendProgram(liveScreenTake(target, current.preview));
   };
-  useTakeShortcut(() => take("program"), live && !broadcasting);
+  useTakeShortcut(() => take("program"), canProduce && live && !broadcasting);
   if (!state)
     return room.admissionRefusal ? (
       <Alert tone="danger">{liveRoomOpenFailure(room.admissionRefusal, "operator")}</Alert>
@@ -210,13 +216,16 @@ export function LiveSessionDesk({
   const shownId = state.session.occurrenceId;
   const switching = shownId !== occurrenceId;
   const programActive = activeOccurrenceId === shownId;
-  const disabled = !live || broadcasting || switching;
-  const targets: LiveTargets = { state, programActive, disabled, sendProgram, sendPrograms };
+  // Moderation pauses with the room; production also stays off for an operator who does not run the studio.
+  const moderationDisabled = !live || broadcasting || switching;
+  const disabled = moderationDisabled || !canProduce;
+  const targets: LiveTargets = { state, programActive, disabled, canProduce, sendProgram, sendPrograms };
+  const moderation: LiveTargets = { ...targets, disabled: moderationDisabled };
   // Loaded or not, an operator decides here whether attendees take part in this session's virtual room.
   const status = (
     <>
       {sessionStatus}
-      <RoomOpeningMenu opening={state.opening} disabled={!live || switching} send={sendProgram} />
+      <RoomOpeningMenu opening={state.opening} disabled={!canProduce || !live || switching} send={sendProgram} />
     </>
   );
   const agenda = approvedAgenda ?? null;
@@ -357,27 +366,27 @@ export function LiveSessionDesk({
       case "questions":
         return {
           title,
-          actions: <LiveQuestionsHeader targets={targets} send={sendProgram} />,
+          actions: <LiveQuestionsHeader targets={moderation} send={sendProgram} />,
           menu: [
             {
               id: "release-times",
               label: "Release times",
               tooltip: "When each prepared question comes in.",
-              disabled,
+              disabled: moderationDisabled,
               onSelect: () => setReleaseTimes(true),
             },
           ],
           body: (
             <>
               <LiveQuestionsPanel
-                targets={targets}
+                targets={moderation}
                 clock={clock ?? state.session.timeZone}
                 send={sendProgram}
                 answers={{ connected: live, result: room.answerResult }}
               />
               {releaseTimes ? (
                 <LivePreparedQuestionTimes
-                  targets={targets}
+                  targets={moderation}
                   clock={clock ?? state.session.timeZone}
                   send={sendProgram}
                   onClose={() => setReleaseTimes(false)}
@@ -407,13 +416,13 @@ export function LiveSessionDesk({
         return {
           title,
           menu: stageDisplaySettingsMenu(state.stageDisplaySettings, sendProgram, disabled),
-          body: <SpeakerMessagePanel message={state.speakerMessage} send={sendProgram} disabled={disabled} />,
+          body: <SpeakerMessagePanel message={state.speakerMessage} send={sendProgram} disabled={moderationDisabled} />,
         };
       case "polls":
         return {
           title,
-          actions: <LivePollsCreateAction disabled={disabled} send={sendProgram} />,
-          body: <LivePollsPanel targets={targets} send={sendProgram} />,
+          actions: <LivePollsCreateAction disabled={moderationDisabled} send={sendProgram} />,
+          body: <LivePollsPanel targets={moderation} send={sendProgram} />,
         };
       case "chat":
         return {
@@ -488,7 +497,14 @@ export function LiveSessionDesk({
             onScene={switcher.previewScene}
             notice={notice}
             eventPath={eventPath}
-            home={<StudioPhoneHome key={shownId} targets={targets} send={sendProgram} />}
+            home={
+              <StudioPhoneHome
+                key={shownId}
+                targets={targets}
+                messageDisabled={moderationDisabled}
+                send={sendProgram}
+              />
+            }
             panel={(type) => render(phonePanels.panel(type))}
           />
         ) : null}

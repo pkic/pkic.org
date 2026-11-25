@@ -26,6 +26,7 @@ import {
   liveLayerElement,
   liveLayerShown,
   liveLayerTargets,
+  liveOutputsDisabled,
   sendLayerToggle,
   type LiveLayer,
   type LiveTargets,
@@ -185,7 +186,7 @@ export function liveScreenItems(targets: LiveTargets, layer: LiveLayer): MenuIte
       checked: put,
       multiple: true,
       keepOpen: true,
-      disabled: targets.disabled,
+      disabled: liveOutputsDisabled(targets),
       onSelect: () => sendLayerToggle(targets, layer, output),
     };
   });
