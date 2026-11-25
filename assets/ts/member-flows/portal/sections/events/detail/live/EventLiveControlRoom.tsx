@@ -37,9 +37,12 @@ export function SelectedSessionDesk({
   agendaSession,
   onBrowse,
   eventPath,
+  canProduce = true,
 }: {
   /** The event's own page, which the phone studio links back to. */
   eventPath?: string;
+  /** Whether this operator runs the studio, or only moderates beside it. */
+  canProduce?: boolean;
   slug: string;
   occurrenceId: string;
   roomId: string;
@@ -72,6 +75,7 @@ export function SelectedSessionDesk({
   const broadcast = async (_message: LiveRoomClientMessage, send: () => boolean): Promise<boolean> => {
     setFailure(null);
     try {
+      if (!active && !canProduce) throw new Error("The studio has not loaded this session yet.");
       if (!active) await program.select(occurrenceId);
       if (!send()) throw new Error("The session is reconnecting. Try again when it is connected.");
       return true;
@@ -105,6 +109,10 @@ export function SelectedSessionDesk({
           <span role="status">
             {active ? (
               <span class="pk-studio-header__active">Loaded</span>
+            ) : !canProduce ? (
+              <span title={"Not loaded\nThe studio loads a session into the room. You can moderate it meanwhile."}>
+                Not loaded
+              </span>
             ) : (
               <Button
                 disabled={program.status !== "live"}
@@ -135,6 +143,7 @@ export function SelectedSessionDesk({
         broadcast={broadcast}
         activeOccurrenceId={activeId}
         eventPath={eventPath}
+        canProduce={canProduce}
       />
     </div>
   );
@@ -152,7 +161,10 @@ export function EventLiveControlRoom({
   sessionPath,
   eventPath,
   renderSession,
+  canProduce = true,
 }: {
+  /** Whether this operator runs the studio, or only moderates beside it. */
+  canProduce?: boolean;
   slug: string;
   /** The URL-addressed session, if one is selected. */
   occurrenceId?: string;
@@ -367,6 +379,7 @@ export function EventLiveControlRoom({
           agendaSession={agendaNow}
           onBrowse={(id) => choose(id)}
           eventPath={eventPath}
+          canProduce={canProduce}
         />
       ) : null}
     </div>

@@ -16,7 +16,7 @@ import { resolveUserSessionClaimsBatch } from "../../auth/user-session-live-data
 import type { UserSessionTokenClaims } from "../../auth/user-session-token";
 import { hasPermission } from "../../auth/permissions";
 import { AppError } from "../../errors";
-import type { Env } from "../../types";
+import type { AuthAdmin, Env } from "../../types";
 import {
   LIVE_PROGRAM_LIFECYCLE_INTERVAL_MS,
   liveProgramPointerPurgeAt,
@@ -28,6 +28,19 @@ import { readLiveRoomSession } from "./room-session";
 import { liveRoomName, type LiveRoomParticipant } from "./room-admission";
 import { tellLiveLocationChats } from "./location-chat-loaded";
 import { closeLiveRoomSocket } from "./room-socket-close";
+
+/**
+ * Who follows a physical room's program: the studio, and moderators who work the desk beside it.
+ * Choosing the room's active session stays with the studio.
+ */
+export function followsLiveProgram(staff: AuthAdmin | undefined, eventId: string): boolean {
+  const scope = { type: "event", id: eventId } as const;
+  return (
+    staff !== undefined &&
+    (hasPermission(staff, "agenda:live_studio", scope) || hasPermission(staff, "agenda:live_moderate", scope))
+  );
+}
+
 export const LIVE_PROGRAM_ADMISSION_HEADER = "x-pkic-live-program-admission";
 export const LIVE_PROGRAM_SOCKET_TAG = "program";
 export const liveProgramAdmissionSchema = z
@@ -248,11 +261,7 @@ export class LiveRoomProgram {
       let allowed = admission.expiresAt > Date.now() / 1000;
       if (admission.sessionClaims) {
         const result = results[index++];
-        allowed =
-          allowed &&
-          result.ok &&
-          result.session.staff !== undefined &&
-          hasPermission(result.session.staff, "agenda:live_studio", { type: "event", id: admission.eventId });
+        allowed = allowed && result.ok && followsLiveProgram(result.session.staff, admission.eventId);
       }
       if (!allowed) {
         try {

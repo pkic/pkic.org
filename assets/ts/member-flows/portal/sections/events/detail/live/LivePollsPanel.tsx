@@ -26,7 +26,7 @@ import { LivePollDialog, livePollWritten } from "./LivePollDialog";
 import { LivePollEditor } from "./LivePollEditor";
 import { LivePollStatusBadge } from "./LivePollStatusBadge";
 import { StudioItemRow } from "./studio/StudioItemRow";
-import type { LiveTargets } from "./live-output-targets";
+import { liveOutputsDisabled, type LiveTargets } from "./live-output-targets";
 import { takeLiveStage } from "./live-stage-preview";
 import "./LivePollsPanel.css";
 
@@ -201,7 +201,7 @@ export function LivePollsPanel({ targets, send }: { targets: LiveTargets; send: 
           onPresentation={(next) => {
             setChosen((all) => ({ ...all, [current.id]: next }));
             // A poll on Program changes its chart on air at once.
-            if (state.stage.poll?.id === current.id)
+            if (state.stage.poll?.id === current.id && !liveOutputsDisabled(targets))
               send({ ...takeLiveStage(state.stage), pollId: current.id, pollPresentation: next });
           }}
           onClose={() => setOpen(null)}

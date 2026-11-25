@@ -3,13 +3,15 @@ import { useState } from "preact/hooks";
 import { UserPicker, type PickedUser } from "../../../../../components/UserPicker";
 import { Alert } from "../../../../../ui/Alert";
 import { Button, ButtonLink } from "../../../../../ui/Button";
+import { Checkbox } from "../../../../../ui/Checkbox";
 import { Field } from "../../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../../ui/Panel";
-import { Select, TextInput } from "../../../../../ui/TextControl";
+import { TextInput } from "../../../../../ui/TextControl";
 import { usePortalHashLocation } from "../../../hash-location";
 import { useContractForm } from "../../../../../hooks/useContractForm";
 import { postJson } from "../../../../../shared/api-client";
 import {
+  EVENT_TEAM_ROLE_DETAILS,
   EVENT_TEAM_ROLES,
   eventTeamCandidateQuerySchema,
   eventTeamRoleCreateResponseSchema,
@@ -27,12 +29,10 @@ function eventExpiry(value: string, timeZone: string): string {
   }
 }
 
-export const ROLE_LABELS: Record<EventTeamRole, string> = {
-  organizer: "Organizer",
-  program_committee: "Program Committee",
-  moderator: "Moderator",
-  volunteer: "Volunteer",
-};
+/** A role's name, as every team screen shows it. */
+export function roleLabel(role: EventTeamRole): string {
+  return EVENT_TEAM_ROLE_DETAILS[role].label;
+}
 
 /**
  * Adding a team member: a page of its own under the roster, never a form
@@ -45,16 +45,19 @@ export function AddTeamMemberPage({
   teamPath,
   timeZone,
   person,
+  heldRoles = [],
 }: {
   slug: string;
   teamPath: string;
   timeZone: string;
   person?: PickedUser;
+  /** Roles the person already has on this event: shown ticked, not granted again. */
+  heldRoles?: readonly EventTeamRole[];
 }) {
   const [, navigate] = usePortalHashLocation();
   const [picked, setPicked] = useState<PickedUser | null>(person ?? null);
   // No role until one is chosen: organizer would be full event management by default.
-  const [role, setRole] = useState<EventTeamRole | "">("");
+  const [roles, setRoles] = useState<EventTeamRole[]>([]);
   const [expiresAt, setExpiresAt] = useState("");
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState("");
@@ -62,7 +65,8 @@ export function AddTeamMemberPage({
   // the draft as it is built and is the only thing that may refuse it.
   const form = useContractForm(eventTeamRoleCreateSchema, {
     userId: picked?.id ?? "",
-    role,
+    // In the catalog's order, whatever order they were ticked in.
+    roles: EVENT_TEAM_ROLES.filter((option) => roles.includes(option)),
     ...(expiresAt ? { expiresAt: eventExpiry(expiresAt, timeZone) } : {}),
   });
 
@@ -78,7 +82,7 @@ export function AddTeamMemberPage({
       setBusy: setAdding,
       request: () =>
         postJson(`/api/v1/events/${encodeURIComponent(slug)}/roles`, checked.data, eventTeamRoleCreateResponseSchema),
-      successMessage: "Event access granted",
+      successMessage: roles.length > 1 ? "Event roles granted" : "Event role granted",
       // Back to the roster, which fetches on its own when it mounts.
       afterSuccess: () => navigate(teamPath),
       onError: setError,
@@ -118,21 +122,33 @@ export function AddTeamMemberPage({
                 />
               )}
             </Field>
-            <Field label="Role" required {...form.of("role")}>
+            <Field label="Roles" group required {...form.of("roles")}>
               {(control) => (
-                <Select
-                  {...control}
-                  name="role"
-                  value={role}
-                  onChange={(e) => setRole(e.currentTarget.value as EventTeamRole | "")}
-                >
-                  <option value="">Select role…</option>
-                  {EVENT_TEAM_ROLES.map((option) => (
-                    <option key={option} value={option}>
-                      {ROLE_LABELS[option]}
-                    </option>
-                  ))}
-                </Select>
+                <div class="pk-stack pk-stack--snug">
+                  {EVENT_TEAM_ROLES.map((option) => {
+                    const held = heldRoles.includes(option);
+                    return (
+                      <Checkbox
+                        key={option}
+                        name="roles"
+                        // The group's refusal reaches every box; its id and required mark stay on the group.
+                        aria-invalid={control["aria-invalid"]}
+                        aria-describedby={control["aria-describedby"]}
+                        value={option}
+                        checked={held || roles.includes(option)}
+                        disabled={held}
+                        onChange={(event) => {
+                          const checked = event.currentTarget.checked;
+                          setRoles((current) =>
+                            checked ? [...current, option] : current.filter((role) => role !== option),
+                          );
+                        }}
+                        label={roleLabel(option)}
+                        hint={held ? "Already has this role" : EVENT_TEAM_ROLE_DETAILS[option].description}
+                      />
+                    );
+                  })}
+                </div>
               )}
             </Field>
             <Field
@@ -154,7 +170,7 @@ export function AddTeamMemberPage({
           {error && <Alert tone="danger">{error}</Alert>}
           <div class="pk-cluster">
             <Button type="submit" variant="primary" loading={adding} disabled={adding}>
-              {adding ? "Adding…" : "Grant event access"}
+              {adding ? "Granting…" : "Grant event access"}
             </Button>
             <ButtonLink href={usePortalHashLocation.hrefs(teamPath)} variant="ghost">
               Cancel

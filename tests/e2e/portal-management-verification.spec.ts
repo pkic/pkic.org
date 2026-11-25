@@ -634,16 +634,16 @@ test.describe("Portal management browser-verification pass", () => {
       .getByRole("group", { name: "Matching users" })
       .getByRole("button", { name: /Casey Team/ })
       .click();
-    const role = page.getByRole("combobox", { name: "Role", exact: true });
-    await expect(role).toHaveValue("");
+    const roles = page.getByRole("group", { name: /^Roles/ });
+    await expect(roles.getByRole("checkbox", { checked: true })).toHaveCount(0);
     await page.getByRole("button", { name: "Grant event access", exact: true }).click();
-    await expect(role).toHaveAttribute("aria-invalid", "true");
+    await expect(page.getByText("Choose at least one role.")).toBeVisible();
     for (const width of [1280, 375]) {
       await page.setViewportSize({ width, height: 900 });
       await page.screenshot({ path: test.info().outputPath(`event-role-required-${width}.png`) });
     }
     await page.setViewportSize({ width: 1280, height: 900 });
-    await role.selectOption("program_committee");
+    await roles.getByRole("checkbox", { name: /^Program Committee/ }).check();
     const assigned = page.waitForResponse(
       (response) =>
         response.url().endsWith(`/api/v1/events/${EVENT_SLUG}/roles`) && response.request().method() === "POST",
@@ -653,7 +653,7 @@ test.describe("Portal management browser-verification pass", () => {
     expect(assignment.status()).toBe(201);
     expect(eventTeamRoleCreateSchema.parse(assignment.request().postDataJSON())).toMatchObject({
       userId,
-      role: "program_committee",
+      roles: ["program_committee"],
     });
 
     await page.goto(`/portal/#/events/${EVENT_SLUG}/settings/team`);

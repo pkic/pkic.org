@@ -171,12 +171,12 @@ describe("admin event configuration OpenAPI boundaries", () => {
 
     const role = await call(token, "/api/v1/events/pqc-2026/roles", {
       method: "POST",
-      body: JSON.stringify({ userId: await insertUser(env.DB, "contract-role@example.test"), role: "organizer" }),
+      body: JSON.stringify({ userId: await insertUser(env.DB, "contract-role@example.test"), roles: ["organizer"] }),
     });
     expect(role.status).toBe(201);
-    const roleBody = (await role.json()) as { role: { id: string } };
+    const roleBody = (await role.json()) as { roles: Array<{ id: string }> };
 
-    const revoked = await call(token, `/api/v1/events/pqc-2026/roles/${roleBody.role.id}`, {
+    const revoked = await call(token, `/api/v1/events/pqc-2026/roles/${roleBody.roles[0]!.id}`, {
       method: "DELETE",
     });
     expect(revoked.status).toBe(200);

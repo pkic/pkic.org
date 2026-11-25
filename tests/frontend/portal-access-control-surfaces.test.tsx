@@ -332,6 +332,23 @@ describe("RoleDetail on the design system", () => {
     expect([...container.querySelectorAll("button")].some((button) => button.textContent === "Edit")).toBe(false);
   });
 
+  it("sends an event team role to the event's Team settings instead of assigning it here", async () => {
+    const eventRole = { ...ROLE, id: "role-event_volunteer", name: "event_volunteer", isSystemRole: true };
+    stubRoleApi(eventRole);
+    const container = mount(<RoleDetail roleId={eventRole.id} canGrant canRevoke />);
+    await settle();
+    await settle();
+
+    // The guidance is an alert that names where the role is assigned, not a fixed sentence.
+    const note = [...container.querySelectorAll('[role="alert"], [role="status"], .pk-alert')].find((el) =>
+      /Team settings/.test(el.textContent ?? ""),
+    );
+    expect(note).toBeDefined();
+    expect(container.querySelector('form[aria-label^="Assign"]')).toBeNull();
+    // Who holds it stays visible, so a grant made without an event can still be revoked.
+    expect(container.querySelector("caption")?.textContent).toBe(`${eventRole.name} assignees`);
+  });
+
   it("shows why a role could not be loaded and renders no empty panels behind it", async () => {
     stubRoleApi(ROLE, apiError("NOT_FOUND", "Role not found", 404));
     const container = mount(<RoleDetail roleId={ROLE.id} canGrant canRevoke />);

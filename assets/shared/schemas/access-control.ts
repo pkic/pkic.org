@@ -3,7 +3,8 @@
  * ("access grants"), roles, and user_roles (role assignment).
  */
 import { z } from "zod";
-import { eventIdSchema, trimmedString, utcInstantSchema } from "./api-common";
+import { booleanQueryFlagSchema, eventIdSchema, trimmedString, utcInstantSchema } from "./api-common";
+import { EVENT_TEAM_ROLE_IDS } from "./event-team";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { permissionSchema } from "./permissions";
@@ -17,6 +18,22 @@ export const SYSTEM_ROLE_IDS = {
   groupLead: "role-group_lead",
   groupDeputyLead: "role-group_deputy_lead",
 } as const;
+
+/**
+ * Roles granted elsewhere, never from the global access-control forms: group
+ * leadership from the group's Leadership section, and event team roles from
+ * the event's Team settings, so each one belongs to one group or event.
+ */
+export const ROLES_GRANTED_ELSEWHERE: readonly string[] = [
+  SYSTEM_ROLE_IDS.groupLead,
+  SYSTEM_ROLE_IDS.groupDeputyLead,
+  ...Object.values(EVENT_TEAM_ROLE_IDS),
+];
+
+/** An event team role: granted for one event from that event's Team settings. */
+export function isEventTeamRole(roleId: string): boolean {
+  return (Object.values(EVENT_TEAM_ROLE_IDS) as string[]).includes(roleId);
+}
 
 export const accessGrantIdParamsSchema = z.object({ id: databaseIdSchema });
 // Role ids are NOT always UUIDs — custom roles get a real uuid() (see
@@ -198,7 +215,10 @@ export const rolesCreateRouteSchema = {
 /** Allowlisted sort columns for the System role catalog. */
 export const ROLES_SORT_COLUMNS = ["name", "description"] as const;
 
-export const rolesListQuerySchema = listQuerySchema(ROLES_SORT_COLUMNS);
+export const rolesListQuerySchema = listQuerySchema(ROLES_SORT_COLUMNS).extend({
+  /** Only roles the global assignment form may grant; role management lists them all. */
+  assignable: booleanQueryFlagSchema.default(false),
+});
 export type RolesListQuery = z.infer<typeof rolesListQuerySchema>;
 export const rolesListResponseSchema = paginatedResponseSchema("roles", roleResponseSchema);
 

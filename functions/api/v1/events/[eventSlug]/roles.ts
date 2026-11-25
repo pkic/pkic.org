@@ -18,7 +18,7 @@ import { listEventTeamRoleCandidates } from "../../../../_lib/services/events/te
 import type { AdminContext } from "../../../../_lib/db/context";
 import { json } from "../../../../_lib/http";
 import { openApiRoute } from "../../../../_lib/openapi/route";
-import { grantEventTeamRole, listEventTeam } from "../../../../_lib/services/events/team";
+import { grantEventTeamRoles, listEventTeam } from "../../../../_lib/services/events/team";
 import { requireEventPermission } from "./authorization";
 
 export const EventTeamRolesList = openApiRoute(eventTeamRolesListRouteSchema, async (c: AdminContext, data) => {
@@ -37,8 +37,8 @@ export const EventTeamRoleCreate = openApiRoute(
   eventTeamRoleCreateRouteSchema,
   async (c: AdminContext, data: ValidatedData<typeof eventTeamRoleCreateRouteSchema>) => {
     const { actor, db } = await requireEventPermission(c, data.params.eventSlug, "events:manage");
-    const role = await grantEventTeamRole(db, actor, data.params.eventSlug, data.body);
-    return json(eventTeamRoleCreateResponseSchema.parse({ role }), 201);
+    const roles = await grantEventTeamRoles(db, actor, data.params.eventSlug, data.body);
+    return json(eventTeamRoleCreateResponseSchema.parse({ roles }), 201);
   },
 );
 

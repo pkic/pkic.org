@@ -61,6 +61,11 @@ export function outputTargetHint(
   return OUTPUT_TARGET_HINTS[destination][on ? "on" : "off"];
 }
 
+/** A moderator's hint: where the graphic is, and who changes that. */
+function studioOnlyHint(hint: string): string {
+  return `${hint.split("\n")[0]}\nOnly the studio changes what Preview and Program show.`;
+}
+
 /** The color slot of the first other operator on a button, which draws a ring in their color. */
 function presenceOn(presence: readonly OutputTargetPresence[], target: LivePresenceTarget): number | undefined {
   return presence.find((mark) => mark.target === target)?.color;
@@ -89,8 +94,11 @@ export function OutputTargetControl({
   integrated = false,
   presenceItem,
   presence = [],
+  studioOnly = false,
   onToggle,
 }: {
+  /** For a moderator: the buttons say where the graphic is, and that only the studio moves it. */
+  studioOnly?: boolean;
   /** What the graphic is, for the controls' names: "Sam Speaker", "timer". */
   subject: string;
   preview: boolean;
@@ -123,7 +131,7 @@ export function OutputTargetControl({
         data-presence-color={presenceOn(presence, "preview")}
         aria-label={`Show ${subject} in preview`}
         data-unseen={preview && previewUnseen ? "" : undefined}
-        title={outputTargetHint("preview", preview, previewUnseen)}
+        title={(studioOnly ? studioOnlyHint : String)(outputTargetHint("preview", preview, previewUnseen))}
         aria-pressed={preview}
         disabled={disabled}
         loading={pending("preview")}
@@ -137,7 +145,7 @@ export function OutputTargetControl({
         data-presence-color={presenceOn(presence, "program")}
         aria-label={`Show ${subject} on air`}
         data-unseen={program && programUnseen ? "" : undefined}
-        title={outputTargetHint("program", program, programUnseen)}
+        title={(studioOnly ? studioOnlyHint : String)(outputTargetHint("program", program, programUnseen))}
         aria-pressed={program}
         disabled={disabled}
         loading={pending("program")}

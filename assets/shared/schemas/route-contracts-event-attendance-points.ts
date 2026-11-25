@@ -35,7 +35,7 @@ const commandBody = {
 } as const;
 
 export const attendancePointsRouteSchema = {
-  ...requiresAnyPermissions(["agenda:attendance_read"], ["agenda:live_studio"]),
+  ...requiresAnyPermissions(["agenda:attendance_read"], ["agenda:live_studio"], ["agenda:live_moderate"]),
   tags: ["Events"],
   summary: "List the event's check-in codes",
   description:

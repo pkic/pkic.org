@@ -295,9 +295,9 @@ describe("attendee self check-in", () => {
     expect(await studioCode({ kind: "room", roomId: ids.room })).not.toBe(listed.token);
   });
 
-  it("lists the codes to a volunteer running the studio, who still sees no attendance", async () => {
+  it("lists the codes to a studio operator, who still sees no attendance", async () => {
     await env.DB.prepare(
-      "INSERT INTO user_roles (id,user_id,role_id,context_type,context_id,created_at) VALUES (?,?,'role-event_volunteer','event',?,?)",
+      "INSERT INTO user_roles (id,user_id,role_id,context_type,context_id,created_at) VALUES (?,?,'role-event_studio_operator','event',?,?)",
     )
       .bind(crypto.randomUUID(), ids.waiting, ids.event, new Date().toISOString())
       .run();

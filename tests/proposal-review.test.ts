@@ -272,9 +272,9 @@ describe("proposal review and finalize", () => {
     const [review] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM proposal_reviews WHERE proposal_id = ?", [
       proposalId,
     ]);
-    // A real event moderator: reviews proposals for this event, and still may
-    // not edit somebody else's review.
-    const moderator = await seedPersona(env.DB, "eventModerator", { eventId });
+    // A program committee member reviews proposals for this event, and still
+    // may not edit somebody else's review.
+    const moderator = await seedPersona(env.DB, "programCommittee", { eventId });
     const moderatorToken = moderator.token!;
 
     const response = await callProposalReview(moderatorToken, proposalId, `/${review.id}`, {

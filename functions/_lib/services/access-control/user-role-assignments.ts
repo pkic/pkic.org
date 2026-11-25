@@ -11,6 +11,7 @@ import {
   type UserRoleAssignInput,
   type UserRoleUpdateExpiryInput,
 } from "../../../../assets/shared/schemas/access-control";
+import { EVENT_TEAM_ROLE_IDS } from "../../../../assets/shared/schemas/event-team";
 import { buildPageInfo, type PageInfo } from "../../../../assets/shared/schemas/pagination";
 import { AppError } from "../../errors";
 import { hasPermission, requirePermission } from "../../auth/permissions";
@@ -234,6 +235,12 @@ export async function assignUserRole(
       "GROUP_LEADERSHIP_REQUIRES_MEMBER_CAPACITY",
       "Assign group leadership through the group's Leadership resource with an explicit Member capacity",
     );
+  }
+
+  // An event team role belongs to one event and is granted from that event's
+  // team. Granted here without an event, it would act on every event.
+  if ((Object.values(EVENT_TEAM_ROLE_IDS) as string[]).includes(input.roleId)) {
+    throw new AppError(422, "EVENT_TEAM_ROLE_REQUIRES_EVENT_TEAM", "Grant event roles from the event's Team settings");
   }
 
   const contextType = input.contextType ?? null;

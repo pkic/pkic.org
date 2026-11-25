@@ -2,6 +2,7 @@ import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LIVE_CHAT_POLICY } from "../assets/shared/live-chat-policy";
+import { livePollDraftSchema } from "../assets/shared/schemas/live-session-poll";
 import type { LiveRoomServerMessage } from "../assets/shared/schemas/live-session-room";
 import { LiveRoomChat } from "../functions/_lib/services/live-session/room-chat";
 import type { LiveRoomChatActions } from "../functions/_lib/services/live-session/room-chat-actions";
@@ -337,7 +338,7 @@ describe("live chat reactions, reports and moderation", () => {
     expect(stage.ticker?.segments[0].markdown).not.toContain("spam");
   });
 
-  it("lets a moderator who does not run the studio moderate the chat but not change what is on air", async () => {
+  it("lets a moderator who does not run the studio moderate and see the desk but not change what is on air", async () => {
     const author = await f.connectChat("attendee");
     const message = await say(author, "Pin me");
     await demoteSecondOperator();
@@ -346,21 +347,30 @@ describe("live chat reactions, reports and moderation", () => {
     expect((await author.next("chat.pinned")).message?.id).toBe(message.id);
 
     const desk = await f.connect({ person: "secondOperator" });
-    desk.send({ type: "timer.control", timerId: "session", action: "pause" });
-    expect((await desk.next("room.refused")).code).toBe("LIVE_ROOM_STUDIO_REQUIRED");
+    await desk.next("room.snapshot");
+    // Production stays with the studio: timers, Preview, Program.
+    for (const control of [
+      { type: "timer.control", timerId: "session", action: "pause" },
+      { type: "preview.set", composition: { creditKey: `user:${f.users.speaker}` } },
+      { type: "program.clear" },
+    ] as const) {
+      desk.send(control);
+      expect((await desk.next("room.refused")).code).toBe("LIVE_ROOM_STUDIO_REQUIRED");
+    }
+
+    // Moderation runs beside it: the message to the speaker and the polls.
+    desk.send({ type: "speaker.message", text: "Please wrap up", tone: "warning", flash: false });
+    expect((await desk.next("speaker.message.changed")).speakerMessage?.text).toBe("Please wrap up");
+    const field = { key: "answer", label: "Ready for the break?", fieldType: "select", options: ["Yes", "No"] };
+    desk.send({ type: "poll.save", pollId: null, draft: livePollDraftSchema.parse({ field, showResults: true }) });
+    expect((await desk.next("poll.changed")).poll.field.label).toBe("Ready for the break?");
+
+    // The moderator sees what the studio lines up.
     const studio = await f.connect({ person: "operator" });
     studio.send({ type: "preview.set", composition: { creditKey: `user:${f.users.speaker}` } });
-    await studio.next("preview.changed");
-    studio.send({ type: "speaker.message", text: "Please wrap up", tone: "warning", flash: false });
-    await studio.next("speaker.message.changed");
+    await desk.next("preview.changed");
     const { preview, speakerMessage } = await (await f.connect({ person: "secondOperator" })).next("room.snapshot");
-    expect(preview.lowerThird).toBeNull();
-    expect(speakerMessage).toBeNull();
-
-    studio.send({ type: "timer.control", timerId: "session", action: "pause" });
-    await desk.next("timers.changed");
-    expect(
-      desk.received.some((entry) => entry.type === "preview.changed" || entry.type === "speaker.message.changed"),
-    ).toBe(false);
+    expect(preview.lowerThird).not.toBeNull();
+    expect(speakerMessage?.text).toBe("Please wrap up");
   });
 });

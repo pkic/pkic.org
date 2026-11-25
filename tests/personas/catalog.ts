@@ -27,6 +27,7 @@ export type RoleId =
   | "role-program_committee"
   | "role-event_moderator"
   | "role-event_volunteer"
+  | "role-event_studio_operator"
   | "role-member"
   | "role-interested_parties"
   | "role-primary_contact"
@@ -209,7 +210,7 @@ export const PERSONAS = {
 
   eventModerator: persona({
     key: "eventModerator",
-    description: "Event-scoped proposal review without the power to finalize",
+    description: "Moderates chat, questions, and polls in one event's live rooms",
     membershipCategory: null,
     organizationCount: 0,
     roles: [{ roleId: "role-event_moderator", context: "event" }],
@@ -219,10 +220,20 @@ export const PERSONAS = {
 
   eventVolunteer: persona({
     key: "eventVolunteer",
-    description: "An event helper with no permissions, kept to prove that",
+    description: "Checks people in, prints badges, and moderates live rooms at one event",
     membershipCategory: null,
     organizationCount: 0,
     roles: [{ roleId: "role-event_volunteer", context: "event" }],
+    grants: [],
+    mayVote: false,
+  }),
+
+  eventStudioOperator: persona({
+    key: "eventStudioOperator",
+    description: "Runs the studio of a room at one event",
+    membershipCategory: null,
+    organizationCount: 0,
+    roles: [{ roleId: "role-event_studio_operator", context: "event" }],
     grants: [],
     mayVote: false,
   }),

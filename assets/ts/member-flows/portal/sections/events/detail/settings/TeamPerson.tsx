@@ -15,7 +15,7 @@ import { formatNumber } from "../../../../../../../shared/format-number";
 import { fmt } from "../../../../ui";
 import { performAction } from "../../../../actions";
 import { usePortalHashLocation } from "../../../../hash-location";
-import { AddTeamMemberPage, ROLE_LABELS } from "../Team";
+import { AddTeamMemberPage, roleLabel } from "../Team";
 import { TeamStaffingEditor } from "./TeamStaffingEditor";
 
 export function TeamPerson({
@@ -64,6 +64,7 @@ export function TeamPerson({
         teamPath={`${teamPath}/${userId}`}
         timeZone={timeZone}
         person={{ id: userId, firstName: row.firstName ?? undefined, lastName: row.lastName ?? undefined, email: "" }}
+        heldRoles={row.accessRoles.map((role) => role.role)}
       />
     ) : (
       <ErrorAlert error="Granting event access is not available to your current identity." />
@@ -109,10 +110,10 @@ export function TeamPerson({
                   },
                   ...row.accessRoles.map((role) => ({
                     id: role.id,
-                    label: `Revoke ${ROLE_LABELS[role.role]} access`,
+                    label: `Revoke ${roleLabel(role.role)} access`,
                     danger: true,
                     disabled: busy,
-                    onSelect: () => void revoke(role.id, ROLE_LABELS[role.role]),
+                    onSelect: () => void revoke(role.id, roleLabel(role.role)),
                   })),
                 ]}
               />
@@ -123,7 +124,7 @@ export function TeamPerson({
               items={
                 row.accessRoles.length
                   ? row.accessRoles.map((role) => ({
-                      term: ROLE_LABELS[role.role],
+                      term: roleLabel(role.role),
                       value: role.expiresAt ? `Expires ${fmt(role.expiresAt)}` : "No expiry",
                     }))
                   : [{ term: "Access", value: "No event access granted" }]

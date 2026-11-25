@@ -11,6 +11,22 @@ import type { LiveRoomQuestions } from "./room-questions";
 import type { LiveRoomStore } from "./room-store";
 
 type Actor = { userId: string; name: string };
+
+/**
+ * The desk controls a moderator runs beside the studio: polls, prepared questions, rewording a question and
+ * the message to the speaker. They change what the room may show, never what is on air.
+ */
+const MODERATION_CONTROLS = new Set<LiveRoomClientMessage["type"]>([
+  "poll.save",
+  "poll.delete",
+  "poll.status",
+  "question.rewrite",
+  "question.prepare",
+  "question.prepared.delete",
+  "question.prepared.release",
+  "question.prepared.window",
+  "speaker.message",
+]);
 type Handled = LiveRefusal | void;
 
 const REFUSALS = {
@@ -102,8 +118,10 @@ export class LiveSessionCommands {
         this.presence.update(actor, message);
         return;
     }
-    // The control desk changes what is on air and on the room's screens: the studio's, not every moderator's.
-    return viewer.studio ? this.inTurn(() => this.operate(actor, session, message)) : REFUSALS.studioOnly;
+    // The rest of the desk changes what is on air and on the room's screens: the studio's, not every moderator's.
+    return viewer.studio || (operator && MODERATION_CONTROLS.has(message.type))
+      ? this.inTurn(() => this.operate(actor, session, message))
+      : REFUSALS.studioOnly;
   }
 
   /**

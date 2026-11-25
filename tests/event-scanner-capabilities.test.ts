@@ -20,7 +20,7 @@ const fixture = createEventScannerFixture();
 const { eventId, operatorId, scanBody, scan } = fixture;
 describe("Independent scanner capabilities and badge expiry", () => {
   beforeEach(fixture.setup);
-  it("lets every event-team role scan and prepare offline data only for its own event", async () => {
+  it("lets the check-in roles scan and prepare offline data only for their own event", async () => {
     await env.DB.prepare(
       `UPDATE user_roles SET revoked_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
        WHERE user_id=? AND role_id='role-admin' AND revoked_at IS NULL`,
@@ -52,7 +52,31 @@ describe("Independent scanner capabilities and badge expiry", () => {
     await env.DB.prepare("UPDATE user_roles SET revoked_at=? WHERE id=?")
       .bind(new Date().toISOString(), globalOrganizerId)
       .run();
-    for (const roleId of Object.values(EVENT_TEAM_ROLE_IDS)) {
+    // Reviewers, live-room and studio roles do not work the check-in desk.
+    for (const roleId of [
+      EVENT_TEAM_ROLE_IDS.program_committee,
+      EVENT_TEAM_ROLE_IDS.moderator,
+      EVENT_TEAM_ROLE_IDS.studio_operator,
+    ]) {
+      const assignmentId = crypto.randomUUID();
+      await env.DB.prepare(
+        `INSERT INTO user_roles(id,user_id,role_id,context_type,context_id,created_at)
+         VALUES(?,?,?,'event',?,?)`,
+      )
+        .bind(assignmentId, operatorId, roleId, eventId, new Date().toISOString())
+        .run();
+      const actor = {
+        identityType: "user",
+        id: operatorId,
+        grants: await computeGrantsForUser(env.DB, operatorId),
+      } as AuthAdmin;
+      expect(hasPermission(actor, "agenda:check", context)).toBe(false);
+      expect((await scan(scanBody({ action: "check" }))).status).toBe(403);
+      await env.DB.prepare("UPDATE user_roles SET revoked_at=? WHERE id=?")
+        .bind(new Date().toISOString(), assignmentId)
+        .run();
+    }
+    for (const roleId of [EVENT_TEAM_ROLE_IDS.organizer, EVENT_TEAM_ROLE_IDS.volunteer]) {
       const assignmentId = crypto.randomUUID();
       await env.DB.prepare(
         `INSERT INTO user_roles(id,user_id,role_id,context_type,context_id,created_at)
