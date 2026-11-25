@@ -148,11 +148,12 @@ const INSTITUTIONS = [
   "Municipality of {place}", "{place} Hospital Group", "{place} Polytechnic",
 ];
 
+/** Invented places, so no seeded institution shares a name with a real one. */
 const PLACES = [
-  "Amsterdam", "Utrecht", "Leuven", "Zürich", "Göteborg", "Tromsø", "Łódź", "Brno", "Kraków", "Bologna", "Porto",
-  "Sevilla", "Montréal", "Québec", "São Paulo", "Medellín", "Bogotá", "Nairobi", "Lagos", "Accra", "Kigali", "Pune",
-  "Bengaluru", "Hyderabad", "Kyōto", "Sendai", "Daejeon", "Taipei", "Đà Nẵng", "Tallinn", "Rīga", "Vilnius",
-  "Reykjavík", "Aarhus", "Tampere", "Graz", "Linz", "Košice", "Cluj-Napoca", "Thessaloniki", "İzmir", "Haifa",
+  "Northmere", "Valdoria", "Eskerholm", "Brightwater", "Kaldvik", "Santa Lucerna", "Montvallon", "Oakhaven",
+  "Ravensburgh", "Sølvberg", "Łąkowo", "Česká Lhota Nová", "Villanueva del Mar", "Porto Celeste", "Ashgrove",
+  "Port Ellery", "Mirabel-sur-Loue", "Kirkwall Downs", "Hollandse Veen", "Ny Lyngby", "Ilmatar", "Tähtikylä",
+  "Nakamachi", "Seorin", "Lakeshire", "Amberly", "São Teodoro", "Neu-Ellingen", "Zlatograd", "Westerkoog",
 ];
 
 /**

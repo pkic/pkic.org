@@ -123,7 +123,11 @@ function readEventContext(options) {
   (SELECT json_group_array(occurrence.id) FROM event_agenda_occurrences occurrence WHERE occurrence.event_id = event.id AND occurrence.visibility <> 'private') AS visibleOccurrenceIds
 FROM (SELECT 1) LEFT JOIN events event ON event.slug = ${sqlString(options.event)}`,
   );
-  const shared = { adminUserId: row.adminUserId, roles: new Set(JSON.parse(row.roles)) };
+  const shared = {
+    adminUserId: row.adminUserId,
+    roles: new Set(JSON.parse(row.roles)),
+    existingOrganizations: readRows(options.target, options.persistTo, "SELECT id, normalized_name AS name FROM organizations"),
+  };
   if (!row.eventId) {
     if (!options.createEvent) throw new Error(`No event ${options.event} on the ${options.target} database.`);
     const event = newEvent({ slug: options.event, name: options.name, start: options.start, dayCount: options.dayCount, timeZone: options.timeZone });

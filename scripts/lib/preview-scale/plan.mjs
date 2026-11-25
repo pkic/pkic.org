@@ -15,7 +15,14 @@ import { sessionHistoryMetadata } from "./statements.mjs";
  */
 export function buildPreviewScalePlan({ attendees, speakers, context, roster, skipHeadshots = false }) {
   const seed = 20261201;
-  const population = buildPopulation({ attendees, speakers, seed, eventId: context.eventId, days: context.days });
+  const population = buildPopulation({
+    attendees,
+    speakers,
+    seed,
+    eventId: context.eventId,
+    days: context.days,
+    existingOrganizations: context.existingOrganizations,
+  });
   if (skipHeadshots) for (const speaker of population.speakers) speaker.hasHeadshot = false;
   const rooms = resolveRooms(context.eventId, context.rooms ?? []);
   const sessions = buildAgenda({

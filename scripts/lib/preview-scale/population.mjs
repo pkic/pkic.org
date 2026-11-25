@@ -75,13 +75,19 @@ function inventPeople(seed, prefix, count, organizations) {
  * People and organizations are shared by every seeded event; registrations,
  * attendance and badges are keyed by the event, so several events can be seeded
  * on one database.
- * @param {{ attendees: number, speakers: number, seed: number, eventId: string, days: Array<{id:string,date:string}> }} options
+ * Names an unrelated organization on the database already holds are skipped,
+ * since organization names are unique.
+ * @param {{ attendees: number, speakers: number, seed: number, eventId: string, days: Array<{id:string,date:string}>, existingOrganizations?: Array<{id:string,name:string}> }} options
  */
-export function buildPopulation({ attendees, speakers, seed, eventId, days }) {
+export function buildPopulation({ attendees, speakers, seed, eventId, days, existingOrganizations = [] }) {
   const organizationStream = seededStream(seed, "organizations");
-  const takenNames = new Set();
-  const organizations = Array.from({ length: PRODUCTION_SHAPE.organizations }, (_, index) => ({
-    id: previewScaleId(`organization:${index + 1}`),
+  const ids = Array.from({ length: PRODUCTION_SHAPE.organizations }, (_, index) => previewScaleId(`organization:${index + 1}`));
+  const seededIds = new Set(ids);
+  const takenNames = new Set(
+    existingOrganizations.filter((organization) => !seededIds.has(organization.id)).map((organization) => organization.name.toLowerCase()),
+  );
+  const organizations = ids.map((id) => ({
+    id,
     name: inventOrganization(organizationStream, takenNames),
     createdAt: seededInstant(organizationStream),
   }));

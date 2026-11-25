@@ -139,6 +139,21 @@ describe("generated content", () => {
   });
 });
 
+describe("organization names", () => {
+  it("skips a name an unrelated organization already holds", () => {
+    const taken = plan().population.organizations[0].name;
+    const built = buildPreviewScalePlan({
+      attendees: 300,
+      speakers: 40,
+      context: { ...context, existingOrganizations: [{ id: "real-organization", name: taken.toLowerCase() }] },
+      roster,
+    });
+    expect(built.population.organizations.map((organization: { name: string }) => organization.name)).not.toContain(
+      taken,
+    );
+  });
+});
+
 describe("applied to the migrated schema", () => {
   function migratedDatabase() {
     const db = new DatabaseSync(":memory:");
