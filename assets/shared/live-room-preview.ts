@@ -2,6 +2,7 @@ import { DEFAULT_LIVE_CHECK_IN_TEXT } from "./schemas/live-session-graphic-setti
 import { DEFAULT_LIVE_POLL_PRESENTATION } from "./schemas/live-session-poll";
 import { LIVE_GRAPHIC_THEME_DEFAULTS } from "./live-graphic-theme";
 import type { LiveCompositionInput, LivePreviewPatch, LiveStage } from "./schemas/live-session-room";
+import { liveTickerConfigOf } from "./schemas/live-session-ticker";
 
 /**
  * Preview (PVW) is one composition per room, shared by every operator, like
@@ -13,7 +14,7 @@ import type { LiveCompositionInput, LivePreviewPatch, LiveStage } from "./schema
 /** The sources a composition names; the room resolves their content again from the approved agenda. */
 export function liveCompositionInput(stage: LiveStage): LiveCompositionInput {
   return {
-    ticker: stage.ticker ? { style: stage.ticker.style, messages: stage.ticker.messages } : null,
+    ticker: stage.ticker ? liveTickerConfigOf(stage.ticker) : null,
     panelists: stage.panelists,
     schedule: stage.schedule?.config ?? null,
     checkIn: stage.checkIn?.selection ?? null,

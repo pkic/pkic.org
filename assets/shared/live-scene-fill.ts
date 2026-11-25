@@ -7,7 +7,7 @@ import {
 import { DEFAULT_LIVE_CHAT_FEED_CONFIG, DEFAULT_LIVE_TOP_QUESTIONS_CONFIG } from "./schemas/live-session-on-screen";
 import type { LiveCompositionInput, LivePanelists, LiveStage } from "./schemas/live-session-room";
 import { DEFAULT_LIVE_SCHEDULE_CONFIG } from "./schemas/live-session-schedule";
-import { DEFAULT_LIVE_TICKER_CONFIG } from "./schemas/live-session-ticker";
+import { DEFAULT_LIVE_TICKER_CONFIG, liveTickerConfigOf } from "./schemas/live-session-ticker";
 
 /**
  * What loading a scene switches on. A scene says, per graphic that fills
@@ -41,9 +41,7 @@ const FILLS: Record<
     input.ticker
       ? null
       : {
-          ticker: program.ticker
-            ? { style: program.ticker.style, messages: program.ticker.messages }
-            : DEFAULT_LIVE_TICKER_CONFIG,
+          ticker: program.ticker ? liveTickerConfigOf(program.ticker) : DEFAULT_LIVE_TICKER_CONFIG,
         },
   // Up next lists every room, as the studio's own switch puts it on.
   schedule: (input, { program }) =>

@@ -15,6 +15,7 @@ import {
 } from "../../shared/schemas/live-overlay-layout";
 import { EMPTY_LIVE_STAGE, type LiveStage } from "../../shared/schemas/live-session-stage";
 import type { LiveRoomState } from "./live-room-state";
+import { liveTickerConfigOf } from "../../shared/schemas/live-session-ticker";
 
 /**
  * A scene's thumbnail draws what Preview shows once the scene is loaded
@@ -78,8 +79,7 @@ function ticker(
   now: number,
 ): LiveStage["ticker"] {
   const filled = held(room).find(
-    (composition) =>
-      composition.ticker && same({ style: composition.ticker.style, messages: composition.ticker.messages }, config),
+    (composition) => composition.ticker && same(liveTickerConfigOf(composition.ticker), config),
   );
   if (filled) return filled.ticker;
   const { session, tickerContext } = room.preview;

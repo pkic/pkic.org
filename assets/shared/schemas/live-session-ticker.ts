@@ -16,9 +16,21 @@ export const liveTickerMessageSchema = z
     const message = validateOverlayTextTemplate(value.template);
     if (message) ctx.addIssue({ code: "custom", path: ["template"], message });
   });
+/** How fast the ticker scrolls: an operator's choice, read the same on every output. */
+export const LIVE_TICKER_SPEEDS = ["slow", "normal", "fast"] as const;
+export type LiveTickerSpeed = (typeof LIVE_TICKER_SPEEDS)[number];
+/**
+ * How far each speed moves the ticker in a second, in pixels of the 1920 × 1080
+ * frame, whatever the length of its messages. Normal is slow enough to read a
+ * message through once as it crosses the frame.
+ */
+export const LIVE_TICKER_PIXELS_PER_SECOND: Record<LiveTickerSpeed, number> = { slow: 60, normal: 90, fast: 130 };
+
 export const liveTickerConfigSchema = z
   .object({
     style: z.enum(["gradient", "accent", "neutral"]),
+    // A ticker saved before the speed existed scrolls at the normal speed.
+    speed: z.enum(LIVE_TICKER_SPEEDS).default("normal"),
     messages: z.array(liveTickerMessageSchema).min(1).max(LIVE_TICKER_MESSAGES_MAX),
   })
   .strict()
@@ -27,6 +39,10 @@ export const liveTickerConfigSchema = z
       ctx.addIssue({ code: "custom", path: ["messages"], message: "Choose each message once." });
   });
 export type LiveTickerConfig = z.infer<typeof liveTickerConfigSchema>;
+/** The settings of a resolved ticker, without the content the room resolved for them. */
+export function liveTickerConfigOf(ticker: LiveTickerConfig): LiveTickerConfig {
+  return { style: ticker.style, speed: ticker.speed, messages: ticker.messages };
+}
 export const liveTickerSegmentSchema = z
   .object({
     id: liveTickerMessageSchema.shape.id,
@@ -67,6 +83,7 @@ export type LiveTickerContext = z.infer<typeof liveTickerContextSchema>;
 export const DEFAULT_LIVE_TICKER_CONTEXT: LiveTickerContext = { timeZone: "UTC", sponsorGroups: [] };
 export const DEFAULT_LIVE_TICKER_CONFIG: LiveTickerConfig = {
   style: "gradient",
+  speed: "normal",
   messages: [
     { id: "greeting", prefix: "Welcome", template: "{{greeting}}", condition: "always" },
     {
@@ -106,5 +123,10 @@ export function readStoredLiveTicker(value: unknown): unknown {
   } else if (previous.source === "questions") {
     template = "Have a question? Submit it in the event app.";
   } else return null;
-  return { style: "gradient", messages: [{ id: "retained", prefix, template, condition: "always" }], segments: [] };
+  return {
+    style: "gradient",
+    speed: "normal",
+    messages: [{ id: "retained", prefix, template, condition: "always" }],
+    segments: [],
+  };
 }

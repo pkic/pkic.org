@@ -4,6 +4,8 @@ import {
   liveTickerMessageSchema,
   DEFAULT_LIVE_TICKER_CONFIG,
   LIVE_TICKER_MESSAGES_MAX,
+  LIVE_TICKER_SPEEDS,
+  liveTickerConfigOf,
   type LiveTickerConfig,
   type LiveTickerContext,
 } from "../../../../../../../shared/schemas/live-session-ticker";
@@ -33,6 +35,11 @@ const STYLE_LABELS: Record<LiveTickerConfig["style"], string> = {
   gradient: "Brand gradient",
   accent: "Accent",
   neutral: "Neutral",
+};
+const SPEED_LABELS: Record<LiveTickerConfig["speed"], string> = {
+  slow: "Slow",
+  normal: "Normal",
+  fast: "Fast",
 };
 
 /** The selected message's fields: its fixed label, its words with the agenda's placeholders, and when it shows. */
@@ -145,7 +152,7 @@ export function LiveTickerControls({ targets }: { targets: LiveTargets }) {
   // The row follows the ticker an output shows; saving its messages changes it there.
   const { settings: config, save } = useLiveGraphicSettings<LiveTickerConfig>(
     targets,
-    shown ? { style: shown.style, messages: shown.messages } : null,
+    shown ? liveTickerConfigOf(shown) : null,
     DEFAULT_LIVE_TICKER_CONFIG,
     (settings) => ({ kind: "ticker", config: settings }),
   );
@@ -214,6 +221,24 @@ export function LiveTickerControls({ targets }: { targets: LiveTargets }) {
                   {liveTickerConfigSchema.shape.style.options.map((style) => (
                     <option key={style} value={style}>
                       {STYLE_LABELS[style]}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            <Field label="Speed" help="How fast the messages scroll across the frame." {...form.of("speed")}>
+              {(control) => (
+                <Select
+                  {...control}
+                  value={draft.speed}
+                  onChange={(event) => {
+                    const parsed = liveTickerConfigSchema.shape.speed.unwrap().safeParse(event.currentTarget.value);
+                    if (parsed.success) edit((value) => ({ ...value, speed: parsed.data }));
+                  }}
+                >
+                  {LIVE_TICKER_SPEEDS.map((speed) => (
+                    <option key={speed} value={speed}>
+                      {SPEED_LABELS[speed]}
                     </option>
                   ))}
                 </Select>

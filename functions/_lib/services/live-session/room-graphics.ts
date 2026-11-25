@@ -34,6 +34,7 @@ import { resolveLiveCheckIn } from "../event-attendance-points/live-check-in";
 import type { AttendancePointSelection } from "../../../../assets/shared/attendance-points";
 import type { LiveGraphicTheme } from "../../../../assets/shared/live-graphic-theme";
 import type { LiveRoomOnScreenLists } from "./room-on-screen-lists";
+import { liveTickerConfigOf } from "../../../../assets/shared/schemas/live-session-ticker";
 
 /** A check-in code the room cannot show: its day, room or session is gone, or codes are unavailable. */
 const CHECK_IN_UNAVAILABLE = {
@@ -304,7 +305,7 @@ export class LiveRoomGraphics {
         this.db,
         room.eventId,
         room.session.occurrenceId,
-        composition.ticker ? { style: composition.ticker.style, messages: composition.ticker.messages } : null,
+        composition.ticker ? liveTickerConfigOf(composition.ticker) : null,
         now,
         this.tickerContext,
         approved,
