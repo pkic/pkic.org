@@ -4,20 +4,22 @@ import { previewScaleId } from "../seed-ids.mjs";
  * One test account per team member per event role, addressed with a plus tag
  * on the member's own mailbox (`first.last+volunteer@pkic.org`), so each sign-in
  * link reaches them and each account holds exactly one role. Roles are granted
- * on the seeded event only, never site-wide.
+ * on the seeded event only, never site-wide. The role's label follows the
+ * person's name ("Paul van Brouwershaven (Organizer)"), so the header, the
+ * profile and every list say which test account is signed in.
  *
  * The roster is read at run time (team accounts on the source database plus
  * any addresses passed with --person); no address is stored in the repository.
  */
 export const PERSONA_ROLES = [
-  { tag: "organizer", roleId: "role-event_organizer", jobTitle: "Event Organizer" },
-  { tag: "committee", roleId: "role-program_committee", jobTitle: "Program Committee Member" },
-  { tag: "moderator", roleId: "role-event_moderator", jobTitle: "Session Moderator" },
-  { tag: "volunteer", roleId: "role-event_volunteer", jobTitle: "Event Volunteer" },
-  { tag: "studio", roleId: "role-event_studio_operator", jobTitle: "Studio Operator" },
-  { tag: "attendee", roleId: null, jobTitle: "Attendee", registers: true },
+  { tag: "organizer", label: "Organizer", roleId: "role-event_organizer", jobTitle: "Event Organizer" },
+  { tag: "committee", label: "Committee", roleId: "role-program_committee", jobTitle: "Program Committee Member" },
+  { tag: "moderator", label: "Moderator", roleId: "role-event_moderator", jobTitle: "Session Moderator" },
+  { tag: "volunteer", label: "Volunteer", roleId: "role-event_volunteer", jobTitle: "Event Volunteer" },
+  { tag: "studio", label: "Studio", roleId: "role-event_studio_operator", jobTitle: "Studio Operator" },
+  { tag: "attendee", label: "Attendee", roleId: null, jobTitle: "Attendee", registers: true },
   // Represents a seeded sponsor: an identity at its organization and the sponsorship's contact address.
-  { tag: "sponsor", roleId: null, jobTitle: "Partnerships Manager", sponsor: true },
+  { tag: "sponsor", label: "Sponsor", roleId: null, jobTitle: "Partnerships Manager", sponsor: true },
 ];
 
 /**
@@ -40,7 +42,11 @@ WHERE person.active = 1 AND person.merged_into_user_id IS NULL AND person.pii_re
       AND organization.normalized_name IN ${TEAM_ORGANIZATION_NAMES_SQL}))
 ORDER BY person.normalized_email`;
 
-/** The same person can hold a team address and a company address; keep the team one. */
+/**
+ * The same person can hold a team address and a company address; keep the team
+ * one. Where the records spell the name differently, keep the spelling with
+ * the most words ("van Brouwershaven", not "Vanbrouwershaven").
+ */
 export function dedupeRoster(people) {
   const byName = new Map();
   for (const person of people) {
@@ -49,10 +55,16 @@ export function dedupeRoster(people) {
     // "van Brouwershaven" and "Vanbrouwershaven" are one person.
     const name = `${person.firstName}${person.lastName}`.toLowerCase().replace(/[^\p{L}]/gu, "");
     const current = byName.get(name);
-    if (!current || (!current.email.endsWith("@pkic.org") && email.endsWith("@pkic.org")))
-      byName.set(name, { ...person, email });
+    const keepAddress = current && !(!current.email.endsWith("@pkic.org") && email.endsWith("@pkic.org"));
+    const kept = keepAddress ? current : { ...person, email };
+    const other = keepAddress ? person : current;
+    byName.set(name, other && wordCount(other) > wordCount(kept) ? { ...kept, firstName: other.firstName, lastName: other.lastName } : kept);
   }
   return [...byName.values()].sort((left, right) => left.email.localeCompare(right.email));
+}
+
+function wordCount(person) {
+  return `${person.firstName} ${person.lastName}`.trim().split(/\s+/).length;
 }
 
 export function personaEmail(baseEmail, tag) {
@@ -78,7 +90,7 @@ export function buildPersonas(roster, eventId, sponsorships = []) {
         sponsorship: role.sponsor ? sponsorships[index % sponsorships.length] : null,
         organizationIdentityId: previewScaleId(`persona:${email}:organization`),
         firstName: person.firstName,
-        lastName: person.lastName,
+        lastName: `${person.lastName} (${role.label})`,
         userId: previewScaleId(`persona:${email}`),
         identityId: previewScaleId(`persona:${email}:individual`),
         roleAssignmentId: previewScaleId(`${eventId}:persona:${email}:role`),

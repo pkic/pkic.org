@@ -231,6 +231,8 @@ function summarize(plan, context, options) {
     `${plan.sessions.length} agenda items, ${plan.population.speakers.length} speakers, ${plan.saved.length} saved sessions, ${plan.sponsorships.length} sponsorships`,
     `${hidden} existing public agenda items become private${reused.length ? `; reuses rooms ${reused.join(", ")}` : ""}`,
     `${plan.personas.length} persona accounts${plan.skippedRoles.length ? `; roles not on this database: ${plan.skippedRoles.join(", ")}` : ""}`,
+    `${plan.leads.consenting.length} attendees share their profile with sponsors; ${plan.leads.captured.length} leads per sponsor account`,
+    ...(plan.leads.scannable.length ? [`Badge codes a sponsor account can still scan: ${plan.leads.scannable.join(" ")}`] : []),
   ].join("\n");
 }
 

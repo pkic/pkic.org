@@ -2,6 +2,7 @@ import { sqlString, NOW } from "../sql.mjs";
 import { individualIdentityFallbackSql } from "../individual-identity-sql.mjs";
 import { insertStatements, rawSql } from "./sql.mjs";
 import { TEAM_ORGANIZATION_NAMES_SQL } from "./personas.mjs";
+import { sponsorLeadStatements } from "./leads.mjs";
 
 /**
  * A fixed approval instant after every seeded profile change (the population's
@@ -224,7 +225,8 @@ function personaStatements(context, personas) {
     const statements = [
       `INSERT INTO users (id, email, normalized_email, first_name, last_name, active, email_verified_at, email_verification_method, created_at, updated_at)
 VALUES (${sqlString(persona.userId)}, ${email}, ${email}, ${sqlString(persona.firstName)}, ${sqlString(persona.lastName)}, 1, ${NOW}, 'magic_link', ${NOW}, ${NOW})
-ON CONFLICT(normalized_email) DO NOTHING;`,
+ON CONFLICT(normalized_email) DO UPDATE SET first_name = excluded.first_name, last_name = excluded.last_name, updated_at = excluded.updated_at
+WHERE users.first_name IS NOT excluded.first_name OR users.last_name IS NOT excluded.last_name;`,
       organizationIdentitySql(persona, userIdSql),
       individualIdentityFallbackSql(userIdSql, "staff").trim(),
       // An earlier run gave the account a personal identity; with two, every sign-in asks which to act as.
@@ -278,5 +280,6 @@ export function seedStatements(context, plan) {
     ...savedSessionStatements(context, plan.saved),
     ...sponsorshipStatements(context, plan.sponsorships),
     ...personaStatements(context, plan.personas),
+    ...sponsorLeadStatements(context, plan.leads),
   ];
 }

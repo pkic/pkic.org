@@ -1,5 +1,6 @@
 import { sessionHistoryMetadataSchema } from "../../../assets/shared/schemas/event-session-history.ts";
 import { buildAgenda, resolveRooms } from "./agenda.mjs";
+import { buildSponsorLeads } from "./leads.mjs";
 import { buildPersonas } from "./personas.mjs";
 import { buildPopulation, buildSavedSessions, buildSponsorships } from "./population.mjs";
 import { seededStream } from "./random.mjs";
@@ -47,6 +48,7 @@ export function buildPreviewScalePlan({ attendees, speakers, context, roster, sk
     saved: buildSavedSessions({ registrations: population.registrations, sessions, seed, timeZone: context.timeZone }),
     sponsorships,
     personas,
+    leads: buildSponsorLeads({ eventId: context.eventId, registrations: population.registrations, personas, seed }),
     skippedRoles,
   };
 }

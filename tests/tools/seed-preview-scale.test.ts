@@ -9,6 +9,7 @@ import { seedStatements } from "../../scripts/lib/preview-scale/statements.mjs";
 import { seededBadgeCredential } from "../../scripts/lib/preview-scale/population.mjs";
 import { eventOwnerStatements, newEvent, newEventStatements } from "../../scripts/lib/preview-scale/event.mjs";
 import { badgeCredentialSchema } from "../../assets/shared/schemas/badge-credential";
+import { sponsorConsentSql } from "../../functions/_lib/services/event-participation/sponsor-consent";
 import { verifyAuthenticationResponse } from "@simplewebauthn/server";
 import { isoBase64URL } from "@simplewebauthn/server/helpers";
 import { mkdtempSync } from "node:fs";
@@ -96,7 +97,7 @@ describe("persona roster", () => {
       ]),
     ).toEqual([
       { firstName: "Ada", lastName: "Lovelace", email: "ada@pkic.org" },
-      { firstName: "Jan", lastName: "Vandijk", email: "jan.vandijk@pkic.org" },
+      { firstName: "Jan", lastName: "van Dijk", email: "jan.vandijk@pkic.org" },
     ]);
   });
 
@@ -109,6 +110,7 @@ describe("persona roster", () => {
     expect(buildPersonas(roster, "event-1", sponsorships).map((persona: { email: string }) => persona.email)).toEqual(
       PERSONA_ROLES.map((role) => `test.member+${role.tag}@example.org`),
     );
+    expect(buildPersonas(roster, "event-1", sponsorships)[0].lastName).toBe("Member (Organizer)");
   });
 
   it("leaves out the sponsor account when the event has no sponsorships", () => {
@@ -319,6 +321,23 @@ INSERT INTO identities (id, user_id, source, show_on_organization_profile, invit
           WHERE person.normalized_email LIKE '%+%' AND held.organization_id IS NULL AND held.ended_at IS NULL`,
       ),
     ).toBe(0);
+    expect(
+      count(
+        db,
+        "SELECT COUNT(*) AS count FROM users WHERE normalized_email = 'test.member+moderator@example.org' AND last_name = 'Member (Moderator)'",
+      ),
+    ).toBe(1);
+    expect(fewer.leads.captured.length).toBeGreaterThan(0);
+    expect(fewer.leads.scannable).toEqual(expect.arrayContaining([expect.stringMatching(/^\S+$/)]));
+    expect(
+      count(
+        db,
+        `SELECT COUNT(*) AS count FROM event_sponsor_leads lead
+          JOIN registrations reg ON reg.event_id = lead.event_id AND reg.user_id = lead.user_id AND reg.status = 'registered'
+          JOIN users operator ON operator.id = lead.operator_user_id AND operator.normalized_email = 'test.member+sponsor@example.org'
+          WHERE ${sponsorConsentSql("reg")}`,
+      ),
+    ).toBe(fewer.leads.captured.length);
     const store = await ensurePasskeys(
       join(mkdtempSync(join(tmpdir(), "pkic-passkeys-")), "passkeys.json"),
       fewer.personas.map((persona: { email: string }) => persona.email),

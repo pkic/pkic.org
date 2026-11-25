@@ -42,6 +42,11 @@ export function badgeCredentialHash(credential) {
   return createHash("sha256").update(credential).digest("hex");
 }
 
+function badgeFor(eventId, personKey) {
+  const code = seededBadgeCredential(`${eventId}:${personKey}`);
+  return { id: previewScaleId(`${eventId}:badge:${personKey}`), code, credentialHash: badgeCredentialHash(code) };
+}
+
 /**
  * Each person draws from a stream of their own, so their name, organization,
  * registration and badge never depend on how many others are seeded.
@@ -121,7 +126,7 @@ export function buildPopulation({ attendees, speakers, seed, eventId, days, exis
       })),
       badge:
         random() < PRODUCTION_SHAPE.badgeShare
-          ? { id: previewScaleId(`${eventId}:badge:${person.key}`), credentialHash: badgeCredentialHash(seededBadgeCredential(`${eventId}:${person.key}`)) }
+          ? badgeFor(eventId, person.key)
           : null,
     };
   });
