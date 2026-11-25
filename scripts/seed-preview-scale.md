@@ -8,7 +8,7 @@
 - A three-day agenda: 8 rooms, about 140 sessions and breaks, and 120 speakers with approved profiles and initials headshots. Titles run from two words to about 250 characters; abstracts and biographies come from a small hand-written pool and are sometimes empty. A room the event already has under the same name is reused.
 - 12 event sponsorships.
 - Test accounts: one per team member per role, at `first.last+<role>@pkic.org`. The roles are `organizer`, `committee`, `moderator`, `volunteer` and `studio`. Each role is granted on the seeded event only, never site-wide. `attendee` holds a registration. `sponsor` is the contact for one of the sponsorships and works at that sponsor.
-- Every test account already works at PKI Consortium (the sponsor account at its sponsor) and has a job title, so the first sign-in asks nothing.
+- Every test account already works at PKI Consortium (the sponsor account at its sponsor) and has a job title, so signing in asks nothing.
 - The event's earlier agenda becomes private. It is kept, not deleted.
 - Several events can be seeded on one database. They share the invented people, organizations and test accounts; registrations, badges, agenda and roles belong to each event.
 
@@ -38,7 +38,8 @@ The first fills the existing event; the second creates and fills the new one.
 Options:
 
 - `--event <slug>`: the event to fill (default `pqc-conference-amsterdam-nl`).
-- `--create-event --name <name> --start <YYYY-MM-DD>`: create the event first when no event has that slug. `--days <n>` (default 3) and `--timezone <IANA zone>` (default `Europe/Amsterdam`) shape it. The new event is invitation-only, so it stays off the public event list. Running it again reuses the event.
+- `--group <slug>`: the group that owns a new event, or an existing one that has no owner (default `pqc`). The team reaches the event workspace through it.
+- `--create-event --name <name> --start <YYYY-MM-DD>`: create the event first when no event has that slug. `--days <n>` (default 3) and `--timezone <IANA zone>` (default `Europe/Amsterdam`) shape it. The new event is an invitation-only conference, so it stays off the public event list. Running it again reuses the event.
 - `--attendees <n>` and `--speakers <n>`: change the volume.
 - `--person <email>`: add a team member who has no account yet. Repeat it for each person.
 - `--roster target|production|none`: where to find the team. `target`, the default, reads accounts on the database being seeded. `production` reads them from production and copies only their names and addresses into preview. Use it only with the owner's approval.

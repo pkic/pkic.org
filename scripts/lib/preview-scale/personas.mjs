@@ -46,7 +46,8 @@ export function dedupeRoster(people) {
   for (const person of people) {
     const email = person.email.trim().toLowerCase();
     if (!/^[^@\s+]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error(`Not a plain mailbox address: ${person.email}`);
-    const name = `${person.firstName} ${person.lastName}`.trim().toLowerCase();
+    // "van Brouwershaven" and "Vanbrouwershaven" are one person.
+    const name = `${person.firstName}${person.lastName}`.toLowerCase().replace(/[^\p{L}]/gu, "");
     const current = byName.get(name);
     if (!current || (!current.email.endsWith("@pkic.org") && email.endsWith("@pkic.org")))
       byName.set(name, { ...person, email });

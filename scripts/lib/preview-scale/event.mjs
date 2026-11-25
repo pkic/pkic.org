@@ -53,11 +53,22 @@ export function newEventStatements(event) {
     )
     .join(",\n");
   return [
-    `INSERT INTO events (id, slug, name, timezone, starts_at, ends_at, created_at, updated_at)
-VALUES (${[event.eventId, event.slug, event.name, event.timeZone, event.startsAt, event.eventEndsAt].map(sqlString).join(", ")}, ${NOW}, ${NOW})
+    `INSERT INTO events (id, slug, name, timezone, starts_at, ends_at, profile_key, created_at, updated_at)
+VALUES (${[event.eventId, event.slug, event.name, event.timeZone, event.startsAt, event.eventEndsAt, "conference"].map(sqlString).join(", ")}, ${NOW}, ${NOW})
 ON CONFLICT DO NOTHING;`,
     `INSERT INTO event_days (id, event_id, day_date, label, starts_at, ends_at, sort_order, created_at, updated_at) VALUES
 ${days}
 ON CONFLICT DO NOTHING;`,
+  ];
+}
+
+/**
+ * Gives an event without an owning group one, so its team reaches the event
+ * workspace (agenda, scanner, studio, settings) under that group.
+ */
+export function eventOwnerStatements(eventId, groupSlug) {
+  return [
+    `UPDATE events SET owner_group_id = (SELECT id FROM groups WHERE slug = ${sqlString(groupSlug)}), updated_at = ${NOW}
+WHERE id = ${sqlString(eventId)} AND owner_group_id IS NULL AND EXISTS (SELECT 1 FROM groups WHERE slug = ${sqlString(groupSlug)});`,
   ];
 }

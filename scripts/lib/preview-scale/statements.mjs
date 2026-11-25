@@ -227,6 +227,11 @@ VALUES (${sqlString(persona.userId)}, ${email}, ${email}, ${sqlString(persona.fi
 ON CONFLICT(normalized_email) DO NOTHING;`,
       organizationIdentitySql(persona, userIdSql),
       individualIdentityFallbackSql(userIdSql, "staff").trim(),
+      // An earlier run gave the account a personal identity; with two, every sign-in asks which to act as.
+      `UPDATE identities SET ended_at = ${NOW}, updated_at = ${NOW}
+WHERE user_id = ${userIdSql} AND organization_id IS NULL AND source = 'staff' AND ended_at IS NULL
+  AND EXISTS (SELECT 1 FROM identities held WHERE held.user_id = identities.user_id AND held.organization_id IS NOT NULL
+    AND held.started_at IS NOT NULL AND held.ended_at IS NULL AND held.blocked_at IS NULL);`,
     ];
     if (persona.sponsorship)
       statements.push(`UPDATE sponsorships SET contact_email = ${email}, updated_at = ${NOW}

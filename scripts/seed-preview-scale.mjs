@@ -5,7 +5,7 @@
  * database, and it writes there only with --apply.
  *
  * Usage: pnpm seed:preview-scale [--preview [--apply]] [--persist-to <dir>]
- *   [--event <slug>] [--create-event --name <name> --start <YYYY-MM-DD> [--days <n>] [--timezone <IANA>]]
+ *   [--event <slug>] [--group <slug>] [--create-event --name <name> --start <YYYY-MM-DD> [--days <n>] [--timezone <IANA>]]
  *   [--attendees <n>] [--speakers <n>] [--person <email>]...
  *   [--roster target|production|none] [--sql-out <file>] [--skip-headshots] [--passkeys <file outside the repo>]
  *   [--publish [--base <preview or local URL>]]
@@ -23,12 +23,12 @@ const { buildPreviewScalePlan } = await import("./lib/preview-scale/plan.mjs");
 const { seedStatements, headshotKey } = await import("./lib/preview-scale/statements.mjs");
 const { initialsHeadshot } = await import("./lib/preview-scale/headshots.mjs");
 const { TEAM_ROSTER_SQL, dedupeRoster } = await import("./lib/preview-scale/personas.mjs");
-const { newEvent, newEventStatements } = await import("./lib/preview-scale/event.mjs");
+const { eventOwnerStatements, newEvent, newEventStatements } = await import("./lib/preview-scale/event.mjs");
 const { assertOutsideRepository, ensurePasskeys, passkeyStatements, publishAgenda, signInWithPasskey, testOrigin } = await import("./lib/preview-scale/passkeys.mjs");
 
 const PREVIEW_HEADSHOT_BUCKET = "pkic-speaker-uploads-preview";
 const USAGE =
-  "Usage: pnpm seed:preview-scale [--preview [--apply]] [--persist-to <dir>] [--event <slug>] [--create-event --name <name> --start <YYYY-MM-DD> [--days <n>] [--timezone <IANA>]] [--attendees <n>] [--speakers <n>] [--person <email>]... [--roster target|production|none] [--sql-out <file>] [--skip-headshots] [--passkeys <file>] [--publish [--base <url>]]";
+  "Usage: pnpm seed:preview-scale [--preview [--apply]] [--persist-to <dir>] [--event <slug>] [--group <slug>] [--create-event --name <name> --start <YYYY-MM-DD> [--days <n>] [--timezone <IANA>]] [--attendees <n>] [--speakers <n>] [--person <email>]... [--roster target|production|none] [--sql-out <file>] [--skip-headshots] [--passkeys <file>] [--publish [--base <url>]]";
 
 function parseArgs(argv) {
   const options = {
@@ -36,6 +36,7 @@ function parseArgs(argv) {
     apply: false,
     persistTo: null,
     event: "pqc-conference-amsterdam-nl",
+    group: "pqc",
     attendees: 6000,
     speakers: 120,
     people: [],
@@ -74,6 +75,7 @@ function parseArgs(argv) {
     index += 1;
     if (arg === "--persist-to") options.persistTo = value;
     else if (arg === "--event") options.event = value;
+    else if (arg === "--group") options.group = value;
     else if (arg === "--attendees") options.attendees = count(value);
     else if (arg === "--speakers") options.speakers = count(value);
     else if (arg === "--person") options.people.push(value);
@@ -127,7 +129,7 @@ function readEventContext(options) {
   const [row] = readRows(
     options.target,
     options.persistTo,
-    `SELECT event.id AS eventId, event.timezone AS timeZone, event.ends_at AS eventEndsAt,
+    `SELECT event.id AS eventId, event.owner_group_id AS ownerGroupId, event.timezone AS timeZone, event.ends_at AS eventEndsAt,
   COALESCE(json_extract(event.settings_json, '$.agenda.roomOrder'), '[]') AS roomOrder,
   (SELECT json_group_array(json_object('id', day.id, 'date', day.day_date)) FROM event_days day WHERE day.event_id = event.id) AS days,
   (SELECT id FROM users WHERE normalized_email = 'admin@pkic.org') AS adminUserId,
@@ -144,7 +146,12 @@ FROM (SELECT 1) LEFT JOIN events event ON event.slug = ${sqlString(options.event
   if (!row.eventId) {
     if (!options.createEvent) throw new Error(`No event ${options.event} on the ${options.target} database.`);
     const event = newEvent({ slug: options.event, name: options.name, start: options.start, dayCount: options.dayCount, timeZone: options.timeZone });
-    return { ...event, ...shared, create: newEventStatements(event) };
+    return {
+      ...event,
+      ...shared,
+      newEvent: true,
+      create: [...newEventStatements(event), ...eventOwnerStatements(event.eventId, options.group)],
+    };
   }
   const days = JSON.parse(row.days).sort((left, right) => left.date.localeCompare(right.date));
   if (days.length === 0) throw new Error(`${options.event} has no event days.`);
@@ -153,7 +160,7 @@ FROM (SELECT 1) LEFT JOIN events event ON event.slug = ${sqlString(options.event
     roomOrder: JSON.parse(row.roomOrder),
     days,
     ...shared,
-    create: [],
+    create: row.ownerGroupId ? [] : eventOwnerStatements(row.eventId, options.group),
     rooms: JSON.parse(row.rooms),
     visibleOccurrenceIds: JSON.parse(row.visibleOccurrenceIds),
   };
@@ -219,7 +226,7 @@ function summarize(plan, context, options) {
   const reused = plan.rooms.filter((room) => room.existing).map((room) => room.name);
   const registered = plan.population.registrations.filter((registration) => registration.status === "registered");
   return [
-    `${context.create.length ? "New event" : "Event"} ${options.event} (${context.days.length} days from ${context.days[0].date}, ${context.timeZone})`,
+    `${context.newEvent ? "New event" : "Event"} ${options.event} (${context.days.length} days from ${context.days[0].date}, ${context.timeZone})`,
     `${plan.population.attendees.length} attendees, ${registered.length} registered, ${registered.filter((registration) => registration.badge).length} badges`,
     `${plan.sessions.length} agenda items, ${plan.population.speakers.length} speakers, ${plan.saved.length} saved sessions, ${plan.sponsorships.length} sponsorships`,
     `${hidden} existing public agenda items become private${reused.length ? `; reuses rooms ${reused.join(", ")}` : ""}`,

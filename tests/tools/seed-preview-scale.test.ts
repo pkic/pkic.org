@@ -7,7 +7,7 @@ import { buildPersonas, dedupeRoster, PERSONA_ROLES } from "../../scripts/lib/pr
 import { insertStatements, MAX_STATEMENT_BYTES } from "../../scripts/lib/preview-scale/sql.mjs";
 import { seedStatements } from "../../scripts/lib/preview-scale/statements.mjs";
 import { seededBadgeCredential } from "../../scripts/lib/preview-scale/population.mjs";
-import { newEvent, newEventStatements } from "../../scripts/lib/preview-scale/event.mjs";
+import { eventOwnerStatements, newEvent, newEventStatements } from "../../scripts/lib/preview-scale/event.mjs";
 import { badgeCredentialSchema } from "../../assets/shared/schemas/badge-credential";
 import { verifyAuthenticationResponse } from "@simplewebauthn/server";
 import { isoBase64URL } from "@simplewebauthn/server/helpers";
@@ -91,8 +91,13 @@ describe("persona roster", () => {
       dedupeRoster([
         { firstName: "Ada", lastName: "Lovelace", email: "ada@company.example" },
         { firstName: "Ada", lastName: "Lovelace", email: "Ada@pkic.org" },
+        { firstName: "Jan", lastName: "van Dijk", email: "jan@company.example" },
+        { firstName: "Jan", lastName: "Vandijk", email: "jan.vandijk@pkic.org" },
       ]),
-    ).toEqual([{ firstName: "Ada", lastName: "Lovelace", email: "ada@pkic.org" }]);
+    ).toEqual([
+      { firstName: "Ada", lastName: "Lovelace", email: "ada@pkic.org" },
+      { firstName: "Jan", lastName: "Vandijk", email: "jan.vandijk@pkic.org" },
+    ]);
   });
 
   it("refuses an address that already carries a plus tag", () => {
@@ -252,6 +257,11 @@ INSERT INTO organizations (id, name, normalized_name, created_at, updated_at)
   it("converges when run again with another speaker count", async () => {
     const db = migratedDatabase();
     const schemaContext = { ...context, rooms: [{ id: "existing-room", name: "Room 1" }] };
+    // A test account an earlier run left with only a personal identity.
+    db.exec(`INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+  VALUES ('earlier', 'test.member+moderator@example.org', 'test.member+moderator@example.org', 'Test', 'Member', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+INSERT INTO identities (id, user_id, source, show_on_organization_profile, invited_at, started_at, created_at, updated_at)
+  VALUES ('earlier-individual', 'earlier', 'staff', 0, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');`);
     apply(
       db,
       seedStatements(
@@ -302,6 +312,13 @@ INSERT INTO organizations (id, name, normalized_name, created_at, updated_at)
           WHERE sponsorship.contact_email = 'test.member+sponsor@example.org'`,
       ),
     ).toBe(1);
+    expect(
+      count(
+        db,
+        `SELECT COUNT(*) AS count FROM identities held JOIN users person ON person.id = held.user_id
+          WHERE person.normalized_email LIKE '%+%' AND held.organization_id IS NULL AND held.ended_at IS NULL`,
+      ),
+    ).toBe(0);
     const store = await ensurePasskeys(
       join(mkdtempSync(join(tmpdir(), "pkic-passkeys-")), "passkeys.json"),
       fewer.personas.map((persona: { email: string }) => persona.email),
@@ -325,7 +342,19 @@ INSERT INTO organizations (id, name, normalized_name, created_at, updated_at)
     const second = { ...event, roles: context.roles, actorUserId: "admin-1" };
     const secondPlan = buildPreviewScalePlan({ attendees: 300, speakers: 40, context: second, roster });
     for (let run = 0; run < 2; run += 1)
-      apply(db, [...newEventStatements(event), ...seedStatements(second, secondPlan)]);
+      apply(db, [
+        ...newEventStatements(event),
+        ...eventOwnerStatements(event.eventId, "pqc"),
+        ...seedStatements(second, secondPlan),
+      ]);
+    // The team reaches the workspace through the owning group.
+    expect(
+      count(
+        db,
+        `SELECT COUNT(*) AS count FROM events event JOIN groups owner ON owner.id = event.owner_group_id
+          WHERE event.id = '${event.eventId}' AND owner.slug = 'pqc' AND event.profile_key = 'conference'`,
+      ),
+    ).toBe(1);
     expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
     expect(count(db, "SELECT COUNT(*) AS count FROM event_days WHERE event_id = '" + event.eventId + "'")).toBe(2);
     expect(count(db, "SELECT COUNT(DISTINCT event_id) AS count FROM registrations")).toBe(2);
