@@ -114,7 +114,7 @@ describe("sponsor capacity in the canonical portal session", () => {
     adminToken = await createAdminSession(env.DB, admin.id, `sponsor-admin-${crypto.randomUUID()}`);
     const tiers = await callAs(adminToken, "/api/v1/events/pqc-2026/sponsors/tiers", {
       method: "PUT",
-      body: JSON.stringify({ tiers: [{ tierName: "Leader", hasAttendeeDataAccess: true }] }),
+      body: JSON.stringify({ tiers: [{ tierName: "Leader", hasAttendeeDataAccess: true }], consortiumLeadTiers: [] }),
     });
     expect(tiers.status).toBe(200);
   });

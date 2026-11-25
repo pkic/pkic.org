@@ -17,7 +17,10 @@ import { AppError } from "../../errors";
 import { assertEventContactAccess, eventContactAccessSql } from "./evidence-retention";
 import { sponsorConsentSql } from "./sponsor-consent";
 import { sponsorLeadReadEvidence } from "./lead-scope";
-import { activeEventSponsorSql, sponsorLeadViewerPredicateSql } from "../../auth/sponsor-organization-lead-access";
+import {
+  activeLeadSponsorOfEventSql,
+  sponsorLeadViewerPredicateSql,
+} from "../../auth/sponsor-organization-lead-access";
 import { activeSponsorLeadOriginSql } from "./sponsor-lead-active";
 import { requireTokenPermission, tokenAllowsPermission } from "../../auth/permissions";
 import type { UserBackedAuthAdmin } from "../../types";
@@ -39,7 +42,8 @@ async function resolveSponsorLeadReadScope(
   const row = await first<{ scope: LeadReadScope | null }>(
     db,
     `SELECT CASE WHEN (${all.sql}) THEN 'all' WHEN (${mine.sql}) THEN 'mine' END AS scope
-     FROM sponsorships sponsor WHERE sponsor.id=? AND sponsor.event_id=? AND ${activeEventSponsorSql("sponsor")}`,
+     FROM events scoped_event JOIN sponsorships sponsor ON sponsor.id=?
+     WHERE scoped_event.id=? AND ${activeLeadSponsorOfEventSql("sponsor", "scoped_event.id")}`,
     [...all.bindings, ...mine.bindings, sponsorId, eventId],
   );
   if (!row) throw new AppError(404, "LEAD_SPONSOR_NOT_FOUND", "Active sponsorship not found in this event.");
@@ -80,13 +84,14 @@ export async function listSponsorLeads(
         ${registrationJobTitleSql("reg")} AS title,
         ${capturedAt} AS capturedAt,
         COALESCE((SELECT sponsor_org.name FROM organizations sponsor_org WHERE sponsor_org.id=sponsor.organization_id),sponsor.non_member_name,sponsor.contact_name,'Unspecified sponsor') AS sponsorName,
-        TRIM(COALESCE(capturer.first_name,'') || ' ' || COALESCE(capturer.last_name,'')) AS operatorName`,
+        TRIM(COALESCE(capturer.first_name,'') || ' ' || COALESCE(capturer.last_name,'')) AS operatorName,
+        lead.note AS note`,
       fromSql: `FROM event_sponsor_leads lead ${ownCaptures} JOIN users u ON u.id=lead.user_id
         JOIN users capturer ON capturer.id=${capturerId}
         JOIN registrations reg ON reg.event_id=lead.event_id AND reg.user_id=lead.user_id
-        JOIN sponsorships sponsor ON sponsor.id=lead.sponsor_id AND sponsor.event_id=lead.event_id
+        JOIN sponsorships sponsor ON sponsor.id=lead.sponsor_id
         WHERE lead.event_id=? AND lead.sponsor_id=? AND reg.status='registered' AND u.active=1
-        AND ${activeEventSponsorSql("sponsor")}
+        AND ${activeLeadSponsorOfEventSql("sponsor", "lead.event_id")}
         AND ${sponsorConsentSql("reg")} AND (${scope}) AND ${eventContactAccessSql("lead.event_id")}
         ${leadId ? "AND lead.id=?" : ""} ${search ? `AND ${search.sql}` : ""}`,
       bindings: [
@@ -154,8 +159,10 @@ export async function listLeadSponsors(
       selectSql: `SELECT sponsor.id,${name} AS name,
         (${expressions[0]}) AS canView,(${expressions[1]}) AS canCapture,(${expressions[2]}) AS canExport,
         (${canRemoveAll}) AS canRemoveAll`,
-      fromSql: `FROM sponsorships sponsor LEFT JOIN organizations org ON org.id=sponsor.organization_id
-        WHERE sponsor.event_id=? AND ${activeEventSponsorSql("sponsor")}
+      fromSql: `FROM events scoped_event
+        JOIN sponsorships sponsor ON ${activeLeadSponsorOfEventSql("sponsor", "scoped_event.id")}
+        LEFT JOIN organizations org ON org.id=sponsor.organization_id
+        WHERE scoped_event.id=?
         ${query.sponsorId ? "AND sponsor.id=?" : ""}
         AND (${expressions.map((expression) => `(${expression})`).join(" OR ")}) ${search ? `AND ${search.sql}` : ""}`,
       bindings: [
@@ -208,9 +215,9 @@ export async function listSponsorLeadCaptures(
     JOIN event_sponsor_leads lead ON lead.event_id=attempt.event_id AND lead.sponsor_id=attempt.sponsor_id AND lead.user_id=attempt.user_id
     JOIN users attendee ON attendee.id=lead.user_id JOIN users operator ON operator.id=attempt.operator_user_id
     JOIN registrations reg ON reg.event_id=lead.event_id AND reg.user_id=lead.user_id
-    JOIN sponsorships sponsor ON sponsor.id=lead.sponsor_id AND sponsor.event_id=lead.event_id
+    JOIN sponsorships sponsor ON sponsor.id=lead.sponsor_id
     WHERE lead.id=? AND lead.event_id=? AND lead.sponsor_id=? AND reg.status='registered' AND attendee.active=1
-    AND ${activeEventSponsorSql("sponsor")} AND ${sponsorConsentSql("reg")}
+    AND ${activeLeadSponsorOfEventSql("sponsor", "lead.event_id")} AND ${sponsorConsentSql("reg")}
     AND (${scope}) AND ${eventContactAccessSql("lead.event_id")}
     AND attempt.action='lead' AND attempt.outcome='eligible' ${ownOnly}`;
   const sourceBindings = [

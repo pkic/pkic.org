@@ -74,6 +74,7 @@ export function FastScannerView({
   onNextBadge,
   leadConsentConfirmed = false,
   leadConfirmation,
+  leadNote,
 }: {
   collection?: ComponentProps<typeof ScannerCollectionAttendee> & { waiting: boolean; onNext: () => void };
   needsAdvance?: boolean;
@@ -81,6 +82,8 @@ export function FastScannerView({
   onNextBadge?: () => void;
   leadConsentConfirmed?: boolean;
   leadConfirmation?: LeadConfirmation | null;
+  /** The note action for the confirmed lead, kept outside the live status so it is not re-announced. */
+  leadNote?: ComponentChildren;
   helpOnStart?: boolean;
   onTourSound?: (sound: ScannerSound) => void;
   presentation?: "embedded" | "fullscreen";
@@ -295,6 +298,7 @@ export function FastScannerView({
             {!visibleStatus && context && !collection && <p class="pk-fast-scanner__context">{context}</p>}
           </div>
         )}
+        {!manualEntry && !recentScans && leadConfirmation && result?.outcome === "eligible" && !helpOpen && leadNote}
         {cameraError && !needsAdvance && !helpOpen && (
           <p class="pk-fast-scanner__message" role="status">
             {cameraError}

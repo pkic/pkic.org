@@ -9,9 +9,15 @@ import { registrationJobTitleSql, registrationOrganizationSql } from "../registr
 import { eventContactAccessSql } from "./evidence-retention";
 import { sponsorConsentSql } from "./sponsor-consent";
 import { sponsorLeadPermissionBindings, sponsorLeadPermissionSql } from "./lead-scope";
-import { activeEventSponsorSql } from "../../auth/sponsor-organization-lead-access";
+import { activeLeadSponsorOfEventSql } from "../../auth/sponsor-organization-lead-access";
 
-type LeadConfirmationRow = { name: string | null; title: string | null; organization: string | null };
+type LeadConfirmationRow = {
+  leadId: string;
+  name: string | null;
+  title: string | null;
+  organization: string | null;
+  note: string | null;
+};
 
 /** Resolves only a successful capture by this operator; no attendee or badge lookup accepts a search term. */
 function prepareSponsorLeadConfirmation(
@@ -22,19 +28,20 @@ function prepareSponsorLeadConfirmation(
   operationId: string,
 ) {
   return db
-    .prepare(`SELECT NULLIF(TRIM(COALESCE(person.first_name,'') || ' ' || COALESCE(person.last_name,'')),'') AS name,
+    .prepare(`SELECT lead.id AS leadId,lead.note AS note,
+      NULLIF(TRIM(COALESCE(person.first_name,'') || ' ' || COALESCE(person.last_name,'')),'') AS name,
       NULLIF(TRIM(${registrationJobTitleSql("reg")}), '') AS title,
       NULLIF(TRIM(${registrationOrganizationSql("reg")}), '') AS organization
     FROM event_scan_attempts attempt
     JOIN events event ON event.id=attempt.event_id AND event.slug=?
     JOIN event_sponsor_leads lead ON lead.event_id=attempt.event_id AND lead.sponsor_id=attempt.sponsor_id AND lead.user_id=attempt.user_id
-    JOIN sponsorships sponsor ON sponsor.id=attempt.sponsor_id AND sponsor.event_id=attempt.event_id
+    JOIN sponsorships sponsor ON sponsor.id=attempt.sponsor_id
     JOIN registrations reg ON reg.event_id=attempt.event_id AND reg.user_id=attempt.user_id
     JOIN users person ON person.id=attempt.user_id
     WHERE attempt.sponsor_id=? AND attempt.operator_user_id=? AND attempt.operation_id=?
       AND attempt.action='lead' AND attempt.outcome='eligible' AND reg.status='registered'
       AND person.active=1 AND person.pii_redacted_at IS NULL AND person.merged_into_user_id IS NULL
-      AND ${activeEventSponsorSql("sponsor")}
+      AND ${activeLeadSponsorOfEventSql("sponsor", "attempt.event_id")}
       AND ${sponsorConsentSql("reg")} AND ${eventContactAccessSql("attempt.event_id")}
       AND (${sponsorLeadPermissionSql("agenda:leads_capture", "sponsor.id")})`)
     .bind(

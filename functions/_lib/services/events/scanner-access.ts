@@ -1,7 +1,7 @@
 import type { DatabaseLike } from "../../types";
 import { anyPermissionAuthorizationEvidenceForResource, tokenAllowsPermission } from "../../auth/permissions";
 import {
-  activeEventSponsorSql,
+  activeLeadSponsorOfEventSql,
   sponsorLeadViewerExistsSql,
   sponsorOrganizationCaptureExistsSql,
 } from "../../auth/sponsor-organization-lead-access";
@@ -84,19 +84,23 @@ export function prepareEventAudienceSponsors(
       ? sponsorLeadViewerExistsSql("?", "s.id")
       : null;
   const liveCapacitySql = `${organizationCapture ? ` OR ${organizationCapture}` : ""}${designatedContact ? ` OR ${designatedContact}` : ""}`;
-  const filter = eventReadSelectionSql("s.event_id", selection);
+  const filter = eventReadSelectionSql("audience_event.id", selection);
   const withSql = filter.withSql
-    ? `WITH ${filter.withSql}, authorized_event_sponsors AS MATERIALIZED (SELECT s.id FROM sponsorships s WHERE ${activeEventSponsorSql("s")} AND (EXISTS(${authority.sql})${liveCapacitySql})) `
+    ? `WITH ${filter.withSql}, authorized_event_sponsors AS MATERIALIZED (SELECT s.id FROM sponsorships s WHERE s.pipeline_stage='active' AND (EXISTS(${authority.sql})${liveCapacitySql})) `
     : "";
   const authoritySql = filter.withSql
     ? "s.id IN (SELECT id FROM authorized_event_sponsors)"
     : `(EXISTS(${authority.sql})${liveCapacitySql})`;
-  const activeFilter = filter.withSql ? "" : ` AND ${activeEventSponsorSql("s")}`;
+  // Consortium sponsorships have no event of their own, so each event supplies the row's event. The join
+  // carries the full sponsorship policy; the authority CTE only narrows by stage to stay within D1's depth limit.
+  const eventSource = filter.idsSql ? `(${filter.idsSql}) audience_event` : "events audience_event";
+  const eventFilter = filter.idsSql ? "" : `${filter.sql} AND `;
   return db
-    .prepare(`${withSql}SELECT s.id,s.event_id,COALESCE(o.name,s.non_member_name,'Sponsor') AS name
-    FROM sponsorships s LEFT JOIN organizations o ON o.id=s.organization_id
-    WHERE ${filter.sql}${activeFilter} AND ${authoritySql}
-    ORDER BY s.event_id,name,s.id`)
+    .prepare(`${withSql}SELECT s.id,audience_event.id AS event_id,COALESCE(o.name,s.non_member_name,'Sponsor') AS name
+    FROM ${eventSource} JOIN sponsorships s ON ${activeLeadSponsorOfEventSql("s", "audience_event.id")}
+    LEFT JOIN organizations o ON o.id=s.organization_id
+    WHERE ${eventFilter}${authoritySql}
+    ORDER BY audience_event.id,name,s.id`)
     .bind(
       ...filter.bindings,
       ...authority.bindings,

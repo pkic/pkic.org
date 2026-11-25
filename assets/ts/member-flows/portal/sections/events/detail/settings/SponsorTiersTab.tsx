@@ -24,23 +24,26 @@ export function SponsorTiersTab({
   canWrite: boolean;
   endpoint?: string;
 }) {
-  const resource = useEditorResource(
-    async () => (await getJson(endpoint, eventSponsorTiersResponseSchema)).tiers,
-    [endpoint],
-    [],
-  );
-  const { value: tiers, setValue: setTiers, loading, error, reload } = resource;
+  const resource = useEditorResource(async () => await getJson(endpoint, eventSponsorTiersResponseSchema), [endpoint], {
+    tiers: [],
+    consortiumTiers: [],
+  });
+  const { value: settings, setValue: setSettings, loading, error, reload } = resource;
+  const { tiers, consortiumTiers } = settings;
+  const setTiers = (update: (current: typeof tiers) => typeof tiers) =>
+    setSettings((current) => ({ ...current, tiers: update(current.tiers) }));
   const [editing, setEditing] = useState(false);
-  const [savedTiers, setSavedTiers] = useState(tiers);
+  const [savedSettings, setSavedSettings] = useState(settings);
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState("");
   const [saved, setSaved] = useState(false);
-  const form = useContractForm(eventSponsorTiersReplaceSchema, { tiers });
+  const consortiumLeadTiers = consortiumTiers.filter((tier) => tier.capturesLeads).map((tier) => tier.tier);
+  const form = useContractForm(eventSponsorTiersReplaceSchema, { tiers, consortiumLeadTiers });
   useEffect(() => {
-    if (!editing && !loading) setSavedTiers(tiers);
-  }, [tiers, editing, loading]);
+    if (!editing && !loading) setSavedSettings(settings);
+  }, [settings, editing, loading]);
   function reset() {
-    setTiers(savedTiers);
+    setSettings(savedSettings);
     form.reset();
     setFailure("");
     setSaved(false);
@@ -77,7 +80,7 @@ export function SponsorTiersTab({
       <SettingsEditor
         loading={loading}
         error={error}
-        description="Choose which sponsor tiers can access attendee data for this event."
+        description="Choose which sponsor tiers can access attendee data, and which consortium tiers can scan leads at this event."
         actions={
           canWrite ? (
             <EditActions
@@ -153,18 +156,64 @@ export function SponsorTiersTab({
                   + Add tier
                 </Button>
               </div>
+              {consortiumTiers.length > 0 && (
+                <Field
+                  {...form.of("consortiumLeadTiers")}
+                  label="Consortium lead scanning"
+                  help="PKI Consortium sponsors in the selected tiers can scan badges to collect leads at this event."
+                  group
+                >
+                  {(control) => (
+                    <div class="pk-cluster" aria-describedby={control["aria-describedby"]}>
+                      {consortiumTiers.map((tier) => (
+                        <Checkbox
+                          key={tier.tier}
+                          name="consortiumLeadTiers"
+                          value={tier.tier}
+                          checked={tier.capturesLeads}
+                          disabled={saving}
+                          label={tier.tier}
+                          onChange={(event) => {
+                            const capturesLeads = event.currentTarget.checked;
+                            setSettings((current) => ({
+                              ...current,
+                              consortiumTiers: current.consortiumTiers.map((item) =>
+                                item.tier === tier.tier ? { ...item, capturesLeads } : item,
+                              ),
+                            }));
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </Field>
+              )}
             </>
-          ) : tiers.length ? (
-            <DescriptionList
-              items={tiers.map((tier) => ({
-                term: tier.tierName,
-                value: tier.hasAttendeeDataAccess ? "Attendee data access enabled" : "No attendee data access",
-              }))}
-            />
           ) : (
-            <p class="pk-muted">
-              No sponsor tiers have been configured. Attendee data access is disabled for every tier.
-            </p>
+            <>
+              {tiers.length ? (
+                <DescriptionList
+                  items={tiers.map((tier) => ({
+                    term: tier.tierName,
+                    value: tier.hasAttendeeDataAccess ? "Attendee data access enabled" : "No attendee data access",
+                  }))}
+                />
+              ) : (
+                <p class="pk-muted">
+                  No sponsor tiers have been configured. Attendee data access is disabled for every tier.
+                </p>
+              )}
+              {consortiumTiers.length > 0 && (
+                <DescriptionList
+                  items={[
+                    {
+                      term: "Consortium lead scanning",
+                      value: consortiumLeadTiers.length ? consortiumLeadTiers.join(", ") : "No consortium tiers",
+                    },
+                  ]}
+                />
+              )}
+            </>
           )}
         </div>
       </SettingsEditor>

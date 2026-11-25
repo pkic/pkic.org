@@ -14,7 +14,7 @@ import { nowIso } from "../../utils/time";
 import { scannerCaptureOpenSql } from "./scanner-upload-receipts";
 import { guardAuthorizedDatabase } from "../../db/authorization-guard";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
-import { activeEventSponsorSql } from "../../auth/sponsor-organization-lead-access";
+import { LEAD_SPONSOR_OF_EVENT_SQL } from "../../auth/sponsor-organization-lead-access";
 
 /** Sponsor-scoped enrollment and closure retain the active sponsorship boundary in every atomic command. */
 export function guardScannerSponsorDatabase(db: DatabaseLike, eventId: string, sponsorId?: string): DatabaseLike {
@@ -22,7 +22,7 @@ export function guardScannerSponsorDatabase(db: DatabaseLike, eventId: string, s
   return guardAuthorizedDatabase(
     db,
     {
-      sql: `SELECT 1 FROM sponsorships sponsor WHERE sponsor.id=? AND sponsor.event_id=? AND ${activeEventSponsorSql("sponsor")}`,
+      sql: LEAD_SPONSOR_OF_EVENT_SQL,
       bindings: [sponsorId, eventId],
     },
     () => new Error("AUTHORIZATION_CONTEXT_CHANGED"),

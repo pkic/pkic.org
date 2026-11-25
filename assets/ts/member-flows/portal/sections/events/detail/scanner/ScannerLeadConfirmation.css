@@ -9,3 +9,12 @@
     font-size: var(--pk-text-lg);
   }
 }
+
+@layer components {
+  /* The note action sits under the confirmed lead, centered like the confirmation above it. */
+  .pk-scanner-lead-note {
+    display: flex;
+    justify-content: center;
+    margin-block-end: var(--pk-2);
+  }
+}

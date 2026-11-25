@@ -13,7 +13,7 @@ export const GroupEventSponsorTiersGet = openApiRoute(
   groupEventSponsorTiersGetRouteSchema,
   async (c: AdminContext, data) => {
     const { db, event } = await requireManagedGroupEventContext(c, data.params.groupId, data.params.eventId);
-    return json(eventSponsorTiersResponseSchema.parse({ tiers: await listEventSponsorTiers(db, event.id) }));
+    return json(eventSponsorTiersResponseSchema.parse(await listEventSponsorTiers(db, event.id)));
   },
 );
 
@@ -21,7 +21,8 @@ export const GroupEventSponsorTiersPut = openApiRoute(
   groupEventSponsorTiersPutRouteSchema,
   async (c: AdminContext, data) => {
     const { actor, db, event } = await requireManagedGroupEventContext(c, data.params.groupId, data.params.eventId);
-    await replaceEventSponsorTiers(db, actor.id, event.id, data.body.tiers);
-    return json(eventSponsorTiersResponseSchema.parse({ tiers: await listEventSponsorTiers(db, event.id) }));
+    return json(
+      eventSponsorTiersResponseSchema.parse(await replaceEventSponsorTiers(db, actor.id, event.id, data.body)),
+    );
   },
 );

@@ -345,7 +345,9 @@ describe("admin event general settings", () => {
   it("keeps sponsor-tier actions hidden from an event reader", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => json({ tiers: [{ tierName: "Community", hasAttendeeDataAccess: false }] })),
+      vi.fn(async () =>
+        json({ tiers: [{ tierName: "Community", hasAttendeeDataAccess: false }], consortiumTiers: [] }),
+      ),
     );
 
     const container = mount(<SponsorTiersTab slug="portal-workshop" canWrite={false} />);
@@ -359,6 +361,50 @@ describe("admin event general settings", () => {
     expect(container.textContent).not.toContain("Sponsor tier actions");
   });
 
+  it("saves the consortium tiers that scan leads with the attendee-data tiers", async () => {
+    const puts: unknown[] = [];
+    let consortiumTiers = [
+      { tier: "Diamond", capturesLeads: false },
+      { tier: "Titanium", capturesLeads: false },
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PUT") {
+          const body = JSON.parse(String(init.body)) as { consortiumLeadTiers: string[] };
+          puts.push(body);
+          consortiumTiers = consortiumTiers.map((item) => ({
+            ...item,
+            capturesLeads: body.consortiumLeadTiers.includes(item.tier),
+          }));
+        }
+        return json({ tiers: [], consortiumTiers });
+      }),
+    );
+
+    const container = mount(<SponsorTiersTab slug="portal-workshop" canWrite />);
+    await settle();
+    await settle();
+    expect(container.textContent).toContain("Consortium lead scanningNo consortium tiers");
+
+    await beginRecordEdit(container, "Sponsor tier actions");
+    const titanium = [...container.querySelectorAll<HTMLInputElement>('input[name="consortiumLeadTiers"]')].find(
+      (input) => input.value === "Titanium",
+    )!;
+    await act(async () => titanium.click());
+    const save = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Save sponsor tiers",
+    )!;
+    await act(async () => {
+      save.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await settle();
+
+    expect(puts).toEqual([{ tiers: [], consortiumLeadTiers: ["Titanium"] }]);
+    expect(container.textContent).toContain("Consortium lead scanningTitanium");
+  });
+
   it("reports a refused sponsor-tier save as a failure, not as a mild caution", async () => {
     vi.stubGlobal(
       "fetch",
@@ -369,7 +415,7 @@ describe("admin event general settings", () => {
             headers: { "content-type": "application/json" },
           });
         }
-        return json({ tiers: [{ tierName: "Community", hasAttendeeDataAccess: false }] });
+        return json({ tiers: [{ tierName: "Community", hasAttendeeDataAccess: false }], consortiumTiers: [] });
       }),
     );
 

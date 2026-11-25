@@ -1,3 +1,4 @@
+import { useState } from "preact/hooks";
 import { type ClockZone } from "../../../../../../../shared/event-clock";
 import { sponsorLeadDetailSchema } from "../../../../../../../shared/schemas/event-sponsor-lead-list";
 import { getJson } from "../../../../../../shared/api-client";
@@ -6,10 +7,12 @@ import { useLiveBrowserSession } from "../../../../../../hooks/useLiveBrowserSes
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import { Spinner } from "../../../../../../components/Spinner";
 import { Breadcrumb } from "../../../../../../ui/Breadcrumb";
+import { Button } from "../../../../../../ui/Button";
 import { DescriptionList } from "../../../../../../ui/DescriptionList";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
 import { usePortalHashLocation } from "../../../../hash-location";
 import { SponsorLeadCaptures } from "./SponsorLeadCaptures";
+import { SponsorLeadNoteDialog } from "./SponsorLeadNoteDialog";
 
 export function SponsorLeadDetail({
   slug,
@@ -40,9 +43,12 @@ function LiveSponsorLeadDetail({
 }) {
   const endpoint = `/api/v1/events/${encodeURIComponent(slug)}/sponsors/${encodeURIComponent(sponsorId)}/leads/${encodeURIComponent(leadId)}`;
   const result = useData(() => getJson(endpoint, sponsorLeadDetailSchema), [endpoint]);
+  const [editingNote, setEditingNote] = useState(false);
+  const [savedNote, setSavedNote] = useState<{ note: string | null } | null>(null);
   if (result.loading) return <Spinner label="Loading lead…" />;
   if (!result.data) return <ErrorAlert error={result.error ?? "This lead is unavailable."} />;
   const { lead, sponsorName } = result.data;
+  const note = savedNote ? savedNote.note : lead.note;
   return (
     <div class="pk-stack">
       <Breadcrumb
@@ -64,6 +70,26 @@ function LiveSponsorLeadDetail({
           />
         </PanelBody>
       </Panel>
+      <Panel>
+        <PanelHeader title="Note">
+          <Button onClick={() => setEditingNote(true)}>{note ? "Edit note" : "Add note"}</Button>
+        </PanelHeader>
+        <PanelBody>{note ? <p class="pk-prose-block">{note}</p> : <p class="pk-muted">No note yet.</p>}</PanelBody>
+      </Panel>
+      {editingNote && (
+        <SponsorLeadNoteDialog
+          slug={slug}
+          sponsorId={sponsorId}
+          leadId={lead.id}
+          name={lead.name}
+          note={note}
+          onClose={() => setEditingNote(false)}
+          onSaved={(saved) => {
+            setSavedNote({ note: saved });
+            setEditingNote(false);
+          }}
+        />
+      )}
       <Panel>
         <PanelHeader title="Capture history" />
         <PanelBody flush>

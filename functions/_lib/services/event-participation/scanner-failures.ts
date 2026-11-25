@@ -2,6 +2,7 @@ import type { ScannerFailureRequest } from "../../../../assets/shared/schemas/ev
 import type { DatabaseLike } from "../../types";
 import { hashBadgeCredential } from "./badge-hash";
 import { nowIso } from "../../utils/time";
+import { LEAD_SPONSOR_OF_EVENT_SQL } from "../../auth/sponsor-organization-lead-access";
 
 /** A local refusal never enters admission, attendance, checkout or sponsor lead business services. */
 export async function recordScannerFailure(
@@ -15,7 +16,7 @@ export async function recordScannerFailure(
     db
       .prepare(
         `INSERT INTO event_scan_attempts(id,event_id,occurrence_id,room_id,sponsor_id,operator_user_id,device_id,operation_id,request_hash,outcome,reason,action,observed_at,created_at)
-    SELECT ?,?,(SELECT id FROM event_agenda_occurrences WHERE id=? AND event_id=?),(SELECT id FROM event_agenda_rooms WHERE id=? AND event_id=?),(SELECT id FROM sponsorships WHERE id=? AND event_id=?),?,?,?,?,?,?,?,?,?
+    SELECT ?,?,(SELECT id FROM event_agenda_occurrences WHERE id=? AND event_id=?),(SELECT id FROM event_agenda_rooms WHERE id=? AND event_id=?),(${LEAD_SPONSOR_OF_EVENT_SQL}),?,?,?,?,?,?,?,?,?
     ON CONFLICT(operation_id) DO NOTHING`,
       )
       .bind(

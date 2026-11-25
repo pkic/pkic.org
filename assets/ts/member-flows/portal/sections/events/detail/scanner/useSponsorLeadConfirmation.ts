@@ -55,5 +55,12 @@ export function useSponsorLeadConfirmation({
       }
     })();
   }
-  return { confirmation, showReceipt, clearConfirmation: () => setConfirmation(null) };
+  return {
+    confirmation,
+    showReceipt,
+    clearConfirmation: () => setConfirmation(null),
+    /** A note saved for the lead on screen updates its confirmation, so the next edit starts from it. */
+    updateConfirmationNote: (leadId: string, note: string | null) =>
+      setConfirmation((current) => (current?.leadId === leadId ? { ...current, note } : current)),
+  };
 }

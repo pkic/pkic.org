@@ -923,7 +923,7 @@ describe("Sponsorship sales pipeline", () => {
   it("advancing an event sponsorship to active at a qualifying tier queues sponsor workspace access", async () => {
     await call(adminToken, `/api/v1/events/pqc-2026/sponsors/tiers`, {
       method: "PUT",
-      body: JSON.stringify({ tiers: [{ tierName: "Leader", hasAttendeeDataAccess: true }] }),
+      body: JSON.stringify({ tiers: [{ tierName: "Leader", hasAttendeeDataAccess: true }], consortiumLeadTiers: [] }),
     });
 
     const createResponse = await call(adminToken, "/api/v1/sponsors", {
@@ -1001,7 +1001,7 @@ describe("Sponsorship sales pipeline", () => {
   it("rolls back a stage transition, portal token, and notification when its audit insert fails", async () => {
     await call(adminToken, `/api/v1/events/pqc-2026/sponsors/tiers`, {
       method: "PUT",
-      body: JSON.stringify({ tiers: [{ tierName: "Rollback", hasAttendeeDataAccess: true }] }),
+      body: JSON.stringify({ tiers: [{ tierName: "Rollback", hasAttendeeDataAccess: true }], consortiumLeadTiers: [] }),
     });
     const createResponse = await call(adminToken, "/api/v1/sponsors", {
       method: "POST",
@@ -1105,6 +1105,7 @@ describe("Sponsorship sales pipeline", () => {
           { tierName: "Leader", hasAttendeeDataAccess: true },
           { tierName: "Inspirator", hasAttendeeDataAccess: false },
         ],
+        consortiumLeadTiers: [],
       }),
     });
     expect(putResponse.status).toBe(200);
