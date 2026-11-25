@@ -17,7 +17,7 @@ import {
   type LiveOverlayGraphics,
 } from "./live-overlay-graphics";
 import { LiveOverlayLayer, useLiveSceneMove } from "./LiveOverlayLayer";
-import { BOARDS, meets, stackedPanelBox, timerReserve, within } from "./live-overlay-fields";
+import { BOARDS, meets, NO_TIMER_RESERVE, stackedPanelBox, timerReserve, within } from "./live-overlay-fields";
 import { LivePanelistsOverlay } from "./LivePanelistsOverlay";
 import { LivePanelQuestionOverlay } from "./LivePanelQuestionOverlay";
 import { LivePollOverlay } from "./LivePollOverlay";
@@ -495,7 +495,7 @@ export function LiveOverlayPresentation({
                   moving={moving}
                   on={!stack || !isLiveProgramLayer(element) || liveOverlayDrawn(state.stage, element)}
                   dimmed={focus !== null && focus !== element && !(joined && focus === "question")}
-                  timerReserve={BOARDS.has(element) ? timerReserve(box, timerBoxes) : 0}
+                  timerReserve={BOARDS.has(element) ? timerReserve(box, timerBoxes) : NO_TIMER_RESERVE}
                   onGround={element === "schedule" && ground !== null && within(box, ground)}
                   placement={box}
                 >

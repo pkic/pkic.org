@@ -43,11 +43,27 @@ export const BOARDS: ReadonlySet<LiveOverlayElement> = new Set([
 ]);
 
 /**
- * How much of a board's width, from its end, the timers on its logo corner
- * (the right two fifths of its top fifth) take: the board keeps that column
- * clear, so no line of it runs under a timer. Zero when none sits there.
+ * Where a board makes room for the timers on its logo corner (the right two
+ * fifths of its top fifth), in fractions of the board. A board with room
+ * beside them keeps their column clear (`inline`, of its width from its end),
+ * so its logo steps aside next to them. One too narrow for that, such as a
+ * column beside the camera, starts its top row under them instead (`block`,
+ * of its height from its top) and keeps its full width below, so no line is
+ * squeezed into what is left beside a timer. Both zero when none sits there.
  */
-export function timerReserve(board: LiveOverlayElementPlacement, timers: readonly LiveOverlayElementPlacement[]) {
+export type LiveOverlayTimerReserve = { inline: number; block: number };
+
+export const NO_TIMER_RESERVE: LiveOverlayTimerReserve = { inline: 0, block: 0 };
+
+/** The widest share of a board the timers may take beside its logo; past it the board's top row goes under them. */
+const BESIDE_TIMERS = 0.25;
+/** The most of a board's height its top row moves down for timers. */
+const UNDER_TIMERS = 0.4;
+
+export function timerReserve(
+  board: LiveOverlayElementPlacement,
+  timers: readonly LiveOverlayElementPlacement[],
+): LiveOverlayTimerReserve {
   const corner = { x: board.x + board.w * 0.6, y: board.y, w: board.w * 0.4, h: board.h * 0.2 };
   const end = board.x + board.w;
   const covering = timers.filter(
@@ -57,8 +73,11 @@ export function timerReserve(board: LiveOverlayElementPlacement, timers: readonl
       timer.y < corner.y + corner.h &&
       timer.y + timer.h > corner.y,
   );
-  if (!covering.length || board.w <= 0) return 0;
-  return Math.min(0.4, Math.max(...covering.map((timer) => (end - timer.x) / board.w)));
+  if (!covering.length || board.w <= 0 || board.h <= 0) return NO_TIMER_RESERVE;
+  const inline = Math.max(...covering.map((timer) => (end - timer.x) / board.w));
+  if (inline <= BESIDE_TIMERS) return { inline, block: 0 };
+  const block = Math.max(...covering.map((timer) => (timer.y + timer.h - board.y) / board.h));
+  return { inline: 0, block: Math.min(UNDER_TIMERS, block) };
 }
 
 /**

@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { liveOverlayLayerTransform, type OverlayRect } from "../../shared/live-overlay-geometry";
 import { LIVE_OVERLAY_FRAME } from "../../shared/schemas/live-overlay-layout";
 import type { LiveOverlayElement, LiveOverlayElementPlacement } from "../../shared/schemas/live-overlay-layout";
+import { NO_TIMER_RESERVE, type LiveOverlayTimerReserve } from "./live-overlay-fields";
 
 const FULL_FRAME: OverlayRect = { x: 0, y: 0, width: LIVE_OVERLAY_FRAME.width, height: LIVE_OVERLAY_FRAME.height };
 
@@ -45,7 +46,7 @@ export function LiveOverlayLayer({
   moving = false,
   on = true,
   dimmed = false,
-  timerReserve = 0,
+  timerReserve = NO_TIMER_RESERVE,
   onGround = false,
   children,
 }: {
@@ -59,10 +60,10 @@ export function LiveOverlayLayer({
   /** Drawn faintly, behind the element the layout editor has selected. */
   dimmed?: boolean;
   /**
-   * The share of a board's or the background's width, from its end, that timers on its top-right corner take:
-   * the background's logo steps aside, and a board keeps that column clear. Zero when no timer sits there.
+   * The room a board or the background makes for timers on its top-right corner: their column kept clear,
+   * the logo beside them, or its top row under them. None when no timer sits there.
    */
-  timerReserve?: number;
+  timerReserve?: LiveOverlayTimerReserve;
   /** Up next inside the scene's background: it reads on the background, without a plate of its own. */
   onGround?: boolean;
   placement: LiveOverlayElementPlacement;
@@ -121,10 +122,11 @@ export function LiveOverlayLayer({
       ["--overlay-dx", `${transform.dx}px`],
       ["--overlay-dy", `${transform.dy}px`],
       ["--overlay-scale", String(transform.scale)],
-      ["--overlay-timer-reserve", String(timerReserve)],
+      ["--overlay-timer-reserve", String(timerReserve.inline)],
+      ["--overlay-timer-drop", String(timerReserve.block)],
     ])
       node.style.setProperty(name, value);
-  }, [transform.dx, transform.dy, transform.scale, timerReserve]);
+  }, [transform.dx, transform.dy, transform.scale, timerReserve.inline, timerReserve.block]);
   // So does the stack order: the document's order never changes, the stylesheet stacks the layers.
   useLayoutEffect(() => {
     layer.current?.style.setProperty("--overlay-order", String(order));
@@ -135,7 +137,7 @@ export function LiveOverlayLayer({
       class="pk-live-overlay__layer"
       data-overlay-element={element}
       data-dimmed={dimmed ? "" : undefined}
-      data-logo-covered={timerReserve > 0 ? "" : undefined}
+      data-logo-covered={timerReserve.block > 0 ? "below" : timerReserve.inline > 0 ? "beside" : undefined}
       data-on-ground={onGround ? "" : undefined}
     >
       <div

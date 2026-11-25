@@ -14,7 +14,7 @@ import {
   type LiveRoomClientMessage,
 } from "../../assets/shared/schemas/live-session-room";
 import { LiveOverlayPresentation } from "../../assets/ts/live-session/LiveOverlayPresentation";
-import { stackedPanelBox } from "../../assets/ts/live-session/live-overlay-fields";
+import { stackedPanelBox, timerReserve } from "../../assets/ts/live-session/live-overlay-fields";
 import { applyLiveRoomMessage, type LiveRoomState } from "../../assets/ts/live-session/live-room-state";
 import {
   LiveReactionsControls,
@@ -265,6 +265,50 @@ describe("timers over a board", () => {
     await draw({ ...shown, stage: { ...shown.stage, timerGraphics: [] } });
     expect(board().hasAttribute("data-logo-covered")).toBe(false);
     expect(reserve()).toBe(0);
+  });
+
+  it("starts a column board's top row under a timer with its own placement, and keeps its full width", async () => {
+    const [first] = stageClockState.stage.timerGraphics;
+    const question = {
+      id: "q-1",
+      text: "How long should a certificate issued for a conference be valid?",
+      authorName: null,
+      authorPhotoUrl: null,
+      authorAffiliation: null,
+      addressedTo: null,
+    };
+    const topRight = {
+      ...stageClockState,
+      stage: { ...stageClockState.stage, question, timerGraphics: [{ ...first!, placement: "top-right" as const }] },
+    };
+    await draw(topRight, LIVE_OVERLAY_PRESET_LAYOUTS.questions.elements);
+    for (const element of ["background", "question"]) {
+      const layer = host!.querySelector<HTMLElement>(`[data-overlay-element="${element}"]`)!;
+      const surface = layer.querySelector<HTMLElement>(".pk-live-overlay__surface")!;
+      // The logo and the eyebrow go under the timer, which ends 174 px down the 1080 px column, on the title-safe line.
+      expect(layer.dataset.logoCovered, element).toBe("below");
+      expect(Number(surface.style.getPropertyValue("--overlay-timer-drop")), element).toBeCloseTo(174 / 1080, 3);
+      // No column is kept clear beside the timer, so the question keeps the column's full width.
+      expect(Number(surface.style.getPropertyValue("--overlay-timer-reserve")), element).toBe(0);
+    }
+    // The same timer over a full-frame board leaves room beside it: the logo steps aside instead.
+    await draw({ ...topRight, stage: { ...topRight.stage, question: null, topQuestions: questions } });
+    expect(board().dataset.logoCovered).toBe("beside");
+    // On the title-safe line the timer starts 432 px from the frame's end.
+    expect(reserve()).toBeCloseTo(432 / 1920, 3);
+  });
+
+  it("reserves room beside a timer on a wide board and under it on a narrow one", () => {
+    const frame = { ...LIVE_OVERLAY_STANDARD_ELEMENTS.question };
+    const column = { ...LIVE_OVERLAY_PRESET_LAYOUTS.questions.elements.question };
+    const timer = { ...LIVE_OVERLAY_STANDARD_ELEMENTS.timer };
+    expect(timerReserve(frame, [timer])).toEqual({ inline: expect.closeTo(0.2, 3), block: 0 });
+    expect(timerReserve(column, [timer])).toEqual({ inline: 0, block: expect.closeTo(168 / 1080, 3) });
+    // A timer away from the corner, such as the column layout's own timer over the camera, needs no room.
+    expect(timerReserve(column, [LIVE_OVERLAY_PRESET_LAYOUTS.questions.elements.timer])).toEqual({
+      inline: 0,
+      block: 0,
+    });
   });
 
   it("sets digits on a plate over the camera and bare on the scene's background, so no card sits on a card", async () => {
