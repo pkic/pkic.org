@@ -36,7 +36,8 @@ export function buildPreviewScalePlan({ attendees, speakers, context, roster, sk
   const speakersById = new Map(population.speakers.map((speaker) => [speaker.userId, speaker]));
   for (const session of sessions)
     if (session.speakerUserIds.length > 0) sessionHistoryMetadataSchema.parse(sessionHistoryMetadata(session, speakersById));
-  const allPersonas = buildPersonas(roster, context.eventId);
+  const sponsorships = buildSponsorships(population.organizations, context.eventId);
+  const allPersonas = buildPersonas(roster, context.eventId, sponsorships);
   const personas = allPersonas.filter((persona) => !persona.roleId || context.roles.has(persona.roleId));
   const skippedRoles = [...new Set(allPersonas.filter((persona) => !personas.includes(persona)).map((persona) => persona.roleId))];
   return {
@@ -44,7 +45,7 @@ export function buildPreviewScalePlan({ attendees, speakers, context, roster, sk
     sessions,
     rooms,
     saved: buildSavedSessions({ registrations: population.registrations, sessions, seed, timeZone: context.timeZone }),
-    sponsorships: buildSponsorships(population.organizations, context.eventId),
+    sponsorships,
     personas,
     skippedRoles,
   };

@@ -9,6 +9,17 @@ import { seedStatements } from "../../scripts/lib/preview-scale/statements.mjs";
 import { seededBadgeCredential } from "../../scripts/lib/preview-scale/population.mjs";
 import { newEvent, newEventStatements } from "../../scripts/lib/preview-scale/event.mjs";
 import { badgeCredentialSchema } from "../../assets/shared/schemas/badge-credential";
+import { verifyAuthenticationResponse } from "@simplewebauthn/server";
+import { isoBase64URL } from "@simplewebauthn/server/helpers";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import {
+  assertOutsideRepository,
+  ensurePasskeys,
+  passkeyAssertion,
+  passkeyStatements,
+  testOrigin,
+} from "../../scripts/lib/preview-scale/passkeys.mjs";
 
 const context = {
   eventId: "event-1",
@@ -89,9 +100,40 @@ describe("persona roster", () => {
   });
 
   it("creates one plus-addressed account per role", () => {
-    expect(buildPersonas(roster, "event-1").map((persona: { email: string }) => persona.email)).toEqual(
+    const sponsorships = [{ id: "sponsorship-1", organizationId: "organization-1" }];
+    expect(buildPersonas(roster, "event-1", sponsorships).map((persona: { email: string }) => persona.email)).toEqual(
       PERSONA_ROLES.map((role) => `test.member+${role.tag}@example.org`),
     );
+  });
+
+  it("leaves out the sponsor account when the event has no sponsorships", () => {
+    expect(buildPersonas(roster, "event-1").map((persona: { tag: string }) => persona.tag)).not.toContain("sponsor");
+  });
+});
+
+describe("test passkeys", () => {
+  it("signs an assertion the Worker's verifier accepts", async () => {
+    const file = join(mkdtempSync(join(tmpdir(), "pkic-passkeys-")), "passkeys.json");
+    const credential = ensurePasskeys(file, ["a+organizer@pkic.org"]).credentials["a+organizer@pkic.org"];
+    const challenge = isoBase64URL.fromUTF8String("challenge-1");
+    const origin = "https://stable.preview.pkic.org";
+    const verification = await verifyAuthenticationResponse({
+      response: passkeyAssertion(credential, { challenge, origin, rpId: "preview.pkic.org" }),
+      expectedChallenge: challenge,
+      expectedOrigin: origin,
+      expectedRPID: "preview.pkic.org",
+      credential: { id: credential.credentialId, publicKey: isoBase64URL.toBuffer(credential.publicKey), counter: 0 },
+      requireUserVerification: true,
+    });
+    expect(verification.verified).toBe(true);
+    expect(ensurePasskeys(file, ["a+organizer@pkic.org"]).credentials["a+organizer@pkic.org"]).toEqual(credential);
+  });
+
+  it("refuses production and a key file inside the repository", () => {
+    expect(() => testOrigin("https://pkic.org")).toThrow();
+    expect(testOrigin("https://stable.preview.pkic.org/portal/")).toBe("https://stable.preview.pkic.org");
+    expect(() => assertOutsideRepository(resolve("scripts/passkeys.json"), resolve("."))).toThrow();
+    expect(() => assertOutsideRepository(join(tmpdir(), "passkeys.json"), resolve("."))).not.toThrow();
   });
 });
 
@@ -188,7 +230,9 @@ INSERT INTO events (id, slug, name, timezone, created_at, updated_at)
 INSERT INTO event_days (id, event_id, day_date, created_at, updated_at) VALUES
   ('day-1', 'event-1', '2026-12-01', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z'),
   ('day-2', 'event-1', '2026-12-02', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
-INSERT INTO event_agenda_rooms (id, event_id, name, capacity) VALUES ('existing-room', 'event-1', 'Room 1', 50);`);
+INSERT INTO event_agenda_rooms (id, event_id, name, capacity) VALUES ('existing-room', 'event-1', 'Room 1', 50);
+INSERT INTO organizations (id, name, normalized_name, created_at, updated_at)
+  VALUES ('pkic', 'PKI Consortium, Inc.', 'pki consortium, inc.', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');`);
     return db;
   }
 
@@ -238,7 +282,31 @@ INSERT INTO event_agenda_rooms (id, event_id, name, capacity) VALUES ('existing-
     expect(count(db, "SELECT COUNT(*) AS count FROM event_agenda_rooms WHERE name = 'Room 1'")).toBe(1);
     expect(count(db, "SELECT COUNT(*) AS count FROM user_roles WHERE context_type = 'event'")).toBe(
       fewer.personas.filter((persona: { roleId: string | null }) => persona.roleId).length,
+    ); // Every test account signs in without the organization step, and the sponsor one leads its sponsorship.
+    expect(
+      count(
+        db,
+        `SELECT COUNT(*) AS count FROM users person WHERE person.normalized_email LIKE '%+%' AND NOT EXISTS (
+          SELECT 1 FROM identities held WHERE held.user_id = person.id AND held.organization_id IS NOT NULL
+            AND held.is_default = 1 AND held.job_title IS NOT NULL AND held.ended_at IS NULL)`,
+      ),
+    ).toBe(0);
+    expect(
+      count(
+        db,
+        `SELECT COUNT(*) AS count FROM sponsorships sponsorship JOIN identities held
+          ON held.organization_id = sponsorship.organization_id AND held.ended_at IS NULL
+          JOIN users person ON person.id = held.user_id AND person.normalized_email = sponsorship.contact_email
+          WHERE sponsorship.contact_email = 'test.member+sponsor@example.org'`,
+      ),
+    ).toBe(1);
+    const store = ensurePasskeys(
+      join(mkdtempSync(join(tmpdir(), "pkic-passkeys-")), "passkeys.json"),
+      fewer.personas.map((persona: { email: string }) => persona.email),
     );
+    apply(db, passkeyStatements(store, fewer.personas));
+    apply(db, passkeyStatements(store, fewer.personas));
+    expect(count(db, "SELECT COUNT(*) AS count FROM passkey_credentials")).toBe(fewer.personas.length);
   });
 
   it("seeds a second, newly created event beside the first", () => {
@@ -250,7 +318,7 @@ INSERT INTO event_agenda_rooms (id, event_id, name, capacity) VALUES ('existing-
       name: "Second event",
       start: "2027-03-02",
       dayCount: 2,
-      timeZone: "America/Toronto",
+      timeZone: "America/New_York",
     });
     const second = { ...event, roles: context.roles, actorUserId: "admin-1" };
     const secondPlan = buildPreviewScalePlan({ attendees: 300, speakers: 40, context: second, roster });
@@ -261,7 +329,7 @@ INSERT INTO event_agenda_rooms (id, event_id, name, capacity) VALUES ('existing-
     expect(count(db, "SELECT COUNT(DISTINCT event_id) AS count FROM registrations")).toBe(2);
     expect(count(db, "SELECT COUNT(*) AS count FROM registrations WHERE event_id = '" + event.eventId + "'")).toBe(
       secondPlan.population.registrations.length +
-        secondPlan.personas.filter((persona: { roleId: string | null }) => !persona.roleId).length,
+        secondPlan.personas.filter((persona: { registers: boolean }) => persona.registers).length,
     );
     expect(
       count(db, "SELECT COUNT(*) AS count FROM event_agenda_occurrences WHERE event_id = '" + event.eventId + "'"),

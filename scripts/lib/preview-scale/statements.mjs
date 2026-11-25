@@ -1,6 +1,7 @@
 import { sqlString, NOW } from "../sql.mjs";
 import { individualIdentityFallbackSql } from "../individual-identity-sql.mjs";
 import { insertStatements, rawSql } from "./sql.mjs";
+import { TEAM_ORGANIZATION_NAMES_SQL } from "./personas.mjs";
 
 /**
  * A fixed approval instant after every seeded profile change (the population's
@@ -196,6 +197,25 @@ function sponsorshipStatements(context, sponsorships) {
   );
 }
 
+/**
+ * The persona's organization identity, so the first sign-in asks nothing: staff
+ * personas at PKI Consortium, the sponsor persona at its sponsor. It becomes the
+ * default unless the account already marks one.
+ */
+function organizationIdentitySql(persona, userIdSql) {
+  const organizationSql = persona.sponsorship
+    ? `SELECT ${sqlString(persona.sponsorship.organizationId)} AS id`
+    : `SELECT id FROM organizations WHERE normalized_name IN ${TEAM_ORGANIZATION_NAMES_SQL} ORDER BY created_at, id LIMIT 1`;
+  return `INSERT INTO identities (id, user_id, organization_id, job_title, source, show_on_organization_profile, is_default, invited_at, started_at, created_at, updated_at)
+SELECT ${sqlString(persona.organizationIdentityId)}, person.id, organization.id, ${sqlString(persona.jobTitle)}, ${sqlString(persona.sponsorship ? "organization_contact" : "staff")}, 0,
+  NOT EXISTS (SELECT 1 FROM identities marked WHERE marked.user_id = person.id AND marked.is_default = 1), ${NOW}, ${NOW}, ${NOW}, ${NOW}
+FROM users person, (${organizationSql}) organization
+WHERE person.id = ${userIdSql} AND NOT EXISTS (
+  SELECT 1 FROM identities held WHERE held.user_id = person.id AND held.organization_id = organization.id
+    AND held.started_at IS NOT NULL AND held.ended_at IS NULL AND held.blocked_at IS NULL)
+ON CONFLICT DO NOTHING;`;
+}
+
 /** Persona accounts resolve by address, so an account that already exists is reused. */
 function personaStatements(context, personas) {
   return personas.flatMap((persona) => {
@@ -205,8 +225,12 @@ function personaStatements(context, personas) {
       `INSERT INTO users (id, email, normalized_email, first_name, last_name, active, email_verified_at, email_verification_method, created_at, updated_at)
 VALUES (${sqlString(persona.userId)}, ${email}, ${email}, ${sqlString(persona.firstName)}, ${sqlString(persona.lastName)}, 1, ${NOW}, 'magic_link', ${NOW}, ${NOW})
 ON CONFLICT(normalized_email) DO NOTHING;`,
+      organizationIdentitySql(persona, userIdSql),
       individualIdentityFallbackSql(userIdSql, "staff").trim(),
     ];
+    if (persona.sponsorship)
+      statements.push(`UPDATE sponsorships SET contact_email = ${email}, updated_at = ${NOW}
+WHERE id = ${sqlString(persona.sponsorship.id)} AND contact_email IS NOT ${email};`);
     if (persona.roleId)
       statements.push(`INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
 SELECT ${sqlString(persona.roleAssignmentId)}, person.id, role.id, 'event', ${sqlString(context.eventId)}, role.single_holder_per_context, ${NOW}
@@ -215,7 +239,7 @@ WHERE person.normalized_email = ${email} AND NOT EXISTS (
   SELECT 1 FROM user_roles held WHERE held.user_id = person.id AND held.role_id = role.id
     AND held.context_type = 'event' AND held.context_id = ${sqlString(context.eventId)} AND held.revoked_at IS NULL)
 ON CONFLICT DO NOTHING;`);
-    else
+    if (persona.registers)
       statements.push(
         `INSERT INTO registrations (id, event_id, user_id, status, source_type, manage_link_secret, confirmed_at, created_at, updated_at)
 SELECT ${sqlString(persona.registrationId)}, ${sqlString(context.eventId)}, person.id, 'registered', 'preview_scale_seed', lower(hex(randomblob(32))), ${NOW}, ${NOW}, ${NOW}

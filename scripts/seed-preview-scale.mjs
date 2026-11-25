@@ -7,7 +7,8 @@
  * Usage: pnpm seed:preview-scale [--preview [--apply]] [--persist-to <dir>]
  *   [--event <slug>] [--create-event --name <name> --start <YYYY-MM-DD> [--days <n>] [--timezone <IANA>]]
  *   [--attendees <n>] [--speakers <n>] [--person <email>]...
- *   [--roster target|production|none] [--sql-out <file>] [--skip-headshots]
+ *   [--roster target|production|none] [--sql-out <file>] [--skip-headshots] [--passkeys <file outside the repo>]
+ *   [--publish [--base <preview or local URL>]]
  */
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -23,10 +24,11 @@ const { seedStatements, headshotKey } = await import("./lib/preview-scale/statem
 const { initialsHeadshot } = await import("./lib/preview-scale/headshots.mjs");
 const { TEAM_ROSTER_SQL, dedupeRoster } = await import("./lib/preview-scale/personas.mjs");
 const { newEvent, newEventStatements } = await import("./lib/preview-scale/event.mjs");
+const { assertOutsideRepository, ensurePasskeys, passkeyStatements, publishAgenda, signInWithPasskey, testOrigin } = await import("./lib/preview-scale/passkeys.mjs");
 
 const PREVIEW_HEADSHOT_BUCKET = "pkic-speaker-uploads-preview";
 const USAGE =
-  "Usage: pnpm seed:preview-scale [--preview [--apply]] [--persist-to <dir>] [--event <slug>] [--create-event --name <name> --start <YYYY-MM-DD> [--days <n>] [--timezone <IANA>]] [--attendees <n>] [--speakers <n>] [--person <email>]... [--roster target|production|none] [--sql-out <file>] [--skip-headshots]";
+  "Usage: pnpm seed:preview-scale [--preview [--apply]] [--persist-to <dir>] [--event <slug>] [--create-event --name <name> --start <YYYY-MM-DD> [--days <n>] [--timezone <IANA>]] [--attendees <n>] [--speakers <n>] [--person <email>]... [--roster target|production|none] [--sql-out <file>] [--skip-headshots] [--passkeys <file>] [--publish [--base <url>]]";
 
 function parseArgs(argv) {
   const options = {
@@ -45,6 +47,9 @@ function parseArgs(argv) {
     start: null,
     dayCount: 3,
     timeZone: "Europe/Amsterdam",
+    passkeys: null,
+    publish: false,
+    base: null,
   };
   const count = (value) => {
     const number = Number(value);
@@ -58,6 +63,7 @@ function parseArgs(argv) {
       "--apply": ["apply", true],
       "--skip-headshots": ["skipHeadshots", true],
       "--create-event": ["createEvent", true],
+      "--publish": ["publish", true],
     }[arg];
     if (flag) {
       options[flag[0]] = flag[1];
@@ -76,6 +82,8 @@ function parseArgs(argv) {
     else if (arg === "--days" && /^[1-7]$/.test(value)) options.dayCount = Number(value);
     else if (arg === "--timezone") options.timeZone = value;
     else if (arg === "--sql-out") options.sqlOut = value;
+    else if (arg === "--passkeys") options.passkeys = value;
+    else if (arg === "--base") options.base = value;
     else if (arg === "--roster" && ["target", "production", "none"].includes(value)) options.roster = value;
     else throw new Error(USAGE);
   }
@@ -83,6 +91,11 @@ function parseArgs(argv) {
     throw new Error("--create-event needs --name and --start.");
   if (options.target === "preview" && options.persistTo)
     throw new Error("--persist-to applies to the local database only.");
+  if (options.passkeys) assertOutsideRepository(options.passkeys, path.join(import.meta.dirname, ".."));
+  if (options.publish && !options.passkeys) throw new Error("--publish signs in as the organizer and needs --passkeys.");
+  options.base = testOrigin(
+    options.base ?? (options.target === "preview" ? "https://stable.preview.pkic.org" : "http://localhost:8788"),
+  );
   return options;
 }
 
@@ -185,6 +198,21 @@ async function uploadHeadshots(speakers, target, persistTo) {
   }
 }
 
+/** Publishes through the real endpoint as the first organizer persona, so every publication check runs. */
+async function publish(options, plan) {
+  const organizer = plan.personas.find((persona) => persona.tag === "organizer");
+  if (!organizer) throw new Error("--publish needs an organizer persona; add one with --person.");
+  const [state] = readRows(
+    options.target,
+    options.persistTo,
+    `SELECT state.revision FROM event_agenda_state state JOIN events event ON event.id = state.event_id WHERE event.slug = ${sqlString(options.event)}`,
+  );
+  const credential = ensurePasskeys(options.passkeys, []).credentials[organizer.email];
+  const cookie = await signInWithPasskey(credential, options.base);
+  await publishAgenda({ origin: options.base, cookie, eventSlug: options.event, revision: state.revision });
+  console.log(`Published the agenda at revision ${state.revision} as ${organizer.email} through ${options.base}.`);
+}
+
 function summarize(plan, context, options) {
   const seeded = new Set(plan.sessions.map((session) => session.id));
   const hidden = context.visibleOccurrenceIds.filter((id) => !seeded.has(id)).length;
@@ -203,9 +231,13 @@ try {
   const options = parseArgs(process.argv.slice(2));
   const context = readEventContext(options);
   const plan = buildPreviewScalePlan({ ...options, context, roster: readRoster(options) });
+  const passkeys = options.passkeys
+    ? passkeyStatements(ensurePasskeys(options.passkeys, plan.personas.map((persona) => persona.email)), plan.personas)
+    : [];
   const statements = [
     ...context.create,
     ...seedStatements({ ...context, actorUserId: context.adminUserId ?? plan.population.speakers[0].userId }, plan),
+    ...passkeys,
   ];
   const scratch = options.sqlOut ? null : fs.mkdtempSync(path.join(tmpdir(), "pkic-preview-scale-"));
   const sqlPath = options.sqlOut ?? path.join(scratch, "seed.sql");
@@ -220,6 +252,7 @@ try {
     wrangler(["d1", "execute", ...databaseArgs(options.target, options.persistTo), "--file", sqlPath, "--yes"]);
     if (!options.skipHeadshots) await uploadHeadshots(plan.population.speakers, options.target, options.persistTo);
     console.log(`Seeded ${options.event} on the ${options.target} database.`);
+    if (options.publish) await publish(options, plan);
   }
   if (scratch) fs.rmSync(scratch, { recursive: true, force: true });
 } catch (error) {

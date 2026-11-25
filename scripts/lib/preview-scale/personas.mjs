@@ -10,13 +10,21 @@ import { previewScaleId } from "../seed-ids.mjs";
  * any addresses passed with --person); no address is stored in the repository.
  */
 export const PERSONA_ROLES = [
-  { tag: "organizer", roleId: "role-event_organizer" },
-  { tag: "committee", roleId: "role-program_committee" },
-  { tag: "moderator", roleId: "role-event_moderator" },
-  { tag: "volunteer", roleId: "role-event_volunteer" },
-  { tag: "studio", roleId: "role-event_studio_operator" },
-  { tag: "attendee", roleId: null },
+  { tag: "organizer", roleId: "role-event_organizer", jobTitle: "Event Organizer" },
+  { tag: "committee", roleId: "role-program_committee", jobTitle: "Program Committee Member" },
+  { tag: "moderator", roleId: "role-event_moderator", jobTitle: "Session Moderator" },
+  { tag: "volunteer", roleId: "role-event_volunteer", jobTitle: "Event Volunteer" },
+  { tag: "studio", roleId: "role-event_studio_operator", jobTitle: "Studio Operator" },
+  { tag: "attendee", roleId: null, jobTitle: "Attendee", registers: true },
+  // Represents a seeded sponsor: an identity at its organization and the sponsorship's contact address.
+  { tag: "sponsor", roleId: null, jobTitle: "Partnerships Manager", sponsor: true },
 ];
+
+/**
+ * Staff personas speak for this organization. The seed finds it by name (its
+ * domain is shared with other organizations) and skips the identity when absent.
+ */
+export const TEAM_ORGANIZATION_NAMES_SQL = "('pki consortium', 'pki consortium, inc.')";
 
 /**
  * Team accounts: an active personal @pkic.org address without a plus tag, or a
@@ -29,7 +37,7 @@ WHERE person.active = 1 AND person.merged_into_user_id IS NULL AND person.pii_re
   AND (person.normalized_email LIKE '%@pkic.org' OR EXISTS (
     SELECT 1 FROM identities held JOIN organizations organization ON organization.id = held.organization_id
     WHERE held.user_id = person.id AND held.started_at IS NOT NULL AND held.ended_at IS NULL
-      AND organization.normalized_name = 'pki consortium'))
+      AND organization.normalized_name IN ${TEAM_ORGANIZATION_NAMES_SQL}))
 ORDER BY person.normalized_email`;
 
 /** The same person can hold a team address and a company address; keep the team one. */
@@ -51,16 +59,23 @@ export function personaEmail(baseEmail, tag) {
   return `${local}+${tag}@${domain}`;
 }
 
-/** Every persona account for the roster, with stable ids keyed by address. */
-/** Persona accounts are shared by every event; their role and registration belong to `eventId`. */
-export function buildPersonas(roster, eventId) {
-  return roster.flatMap((person) =>
-    PERSONA_ROLES.map((role) => {
+/**
+ * Every persona account for the roster, with stable ids keyed by address.
+ * Accounts are shared by every event; their role, registration and sponsorship
+ * belong to `eventId`. Each team member represents a different sponsorship.
+ */
+export function buildPersonas(roster, eventId, sponsorships = []) {
+  return roster.flatMap((person, index) =>
+    PERSONA_ROLES.filter((role) => !role.sponsor || sponsorships.length > 0).map((role) => {
       const email = personaEmail(person.email, role.tag);
       return {
         email,
         tag: role.tag,
         roleId: role.roleId,
+        jobTitle: role.jobTitle,
+        registers: role.registers === true,
+        sponsorship: role.sponsor ? sponsorships[index % sponsorships.length] : null,
+        organizationIdentityId: previewScaleId(`persona:${email}:organization`),
         firstName: person.firstName,
         lastName: person.lastName,
         userId: previewScaleId(`persona:${email}`),
