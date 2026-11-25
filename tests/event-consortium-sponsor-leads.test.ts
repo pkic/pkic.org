@@ -240,6 +240,10 @@ describe("consortium sponsor lead boundaries", () => {
     await env.DB.prepare("UPDATE events SET visibility='invitation_only' WHERE id=?").bind(eventId).run();
     const detail = await call("/pqc-2026", viewer);
     expect(detail.status, await detail.clone().text()).toBe(200);
+    // The portal opens the leads from this flag, so it outlasts capture.
+    const closed = eventAudienceDetailSchema.parse(((await detail.json()) as { event: unknown }).event);
+    expect(closed.sponsorLeadAccess).toBe(true);
+    expect(closed.scannerAccess?.sponsors ?? []).toEqual([]);
     const leads = await call(`/pqc-2026/sponsors/${consortiumId}/leads`, viewer);
     expect(leads.status, await leads.clone().text()).toBe(200);
     expect(sponsorLeadListSchema.parse(await leads.json()).leads).toHaveLength(1);

@@ -20,6 +20,8 @@ export interface EventAudienceSponsorRow {
   id: string;
   event_id: string;
   name: string;
+  /** The sponsorship still captures at this event; a read-only row keeps its leads reachable. */
+  can_capture: number;
 }
 
 export function decodeEventAudienceAccess(
@@ -52,7 +54,7 @@ export function decodeEventAudienceAccess(
   }
   for (const sponsor of sponsors) {
     const value: EventAudienceAccess = access.get(sponsor.event_id) ?? { sponsorLeadAccess: false };
-    if (captureIds.has(sponsor.id)) {
+    if (sponsor.can_capture && captureIds.has(sponsor.id)) {
       value.scannerAccess ??= { canScan: false, sponsors: [] };
       value.scannerAccess.sponsors.push({ id: sponsor.id, name: sponsor.name });
     }
@@ -93,15 +95,17 @@ export function prepareEventAudienceSponsors(
     authorized_event_sponsors AS MATERIALIZED (SELECT s.id FROM viewer_lead_sponsors candidate
       CROSS JOIN sponsorships s ON s.id=candidate.id
       WHERE s.pipeline_stage='active' AND (EXISTS(${authority.sql})${liveCapacitySql})) `;
-  // Consortium sponsorships have no event of their own, so each event supplies the row's event. The join
-  // carries the full sponsorship policy; the authority CTE only narrows by stage to stay within D1's depth limit.
+  // Consortium sponsorships have no event of their own, so each event supplies the row's event. The join keeps
+  // every sponsorship that holds leads there, and `can_capture` says which may still scan; the join carries the
+  // full sponsorship policy; the authority CTE only narrows by stage to stay within D1's depth limit.
   // CROSS JOIN keeps the few authorized sponsorships as the outer loop, so no other sponsorship is read.
   const eventSource = filter.idsSql ? `(${filter.idsSql}) audience_event` : "events audience_event";
   const eventFilter = filter.idsSql ? "" : `${filter.sql} AND `;
   return db
-    .prepare(`${withSql}SELECT s.id,audience_event.id AS event_id,COALESCE(o.name,s.non_member_name,'Sponsor') AS name
+    .prepare(`${withSql}SELECT s.id,audience_event.id AS event_id,COALESCE(o.name,s.non_member_name,'Sponsor') AS name,
+      (${activeLeadSponsorOfEventSql("s", "audience_event.id")}) AS can_capture
     FROM authorized_event_sponsors authorized CROSS JOIN sponsorships s ON s.id=authorized.id
-    CROSS JOIN ${eventSource} ON ${activeLeadSponsorOfEventSql("s", "audience_event.id")}
+    CROSS JOIN ${eventSource} ON ${activeLeadSponsorOfEventSql("s", "audience_event.id", "read")}
     LEFT JOIN organizations o ON o.id=s.organization_id
     WHERE ${eventFilter}1
     ORDER BY audience_event.id,name,s.id`)
