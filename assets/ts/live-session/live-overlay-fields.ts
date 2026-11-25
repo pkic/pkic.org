@@ -27,12 +27,8 @@ export function meets(one: LiveOverlayElementPlacement, other: LiveOverlayElemen
   return one.x < other.x + other.w && one.x + one.w > other.x && one.y < other.y + other.h && one.y + one.h > other.y;
 }
 
-/**
- * The background, the boards and the cards: each keeps the timers' column
- * clear in its top-right corner, where the background carries the logo.
- */
+/** The boards and the cards: each keeps its lines clear of the timers on its top-right corner. */
 export const BOARDS: ReadonlySet<LiveOverlayElement> = new Set([
-  "background",
   "question",
   "poll",
   "panelists",
@@ -43,27 +39,27 @@ export const BOARDS: ReadonlySet<LiveOverlayElement> = new Set([
 ]);
 
 /**
- * Where a board makes room for the timers on its logo corner (the right two
- * fifths of its top fifth), in fractions of the board. A board with room
- * beside them keeps their column clear (`inline`, of its width from its end),
- * so its logo steps aside next to them. One too narrow for that, such as a
- * column beside the camera, starts its top row under them instead (`block`,
- * of its height from its top) and keeps its full width below, so no line is
- * squeezed into what is left beside a timer. Both zero when none sits there.
+ * How a board keeps its lines clear of the timers on its top-right corner
+ * (the right two fifths of its top fifth), in fractions of the board. A wide
+ * board keeps their column clear (`inline`, of its width from its end). One
+ * too narrow for that, such as a column beside the camera, starts its top
+ * row under them instead (`block`, of its height from its top) and keeps its
+ * full width below, so no line is squeezed into what is left beside a timer
+ * and no word breaks. Both zero when none sits there.
  */
-export type LiveOverlayTimerReserve = { inline: number; block: number };
+export type LiveOverlayTimerClearance = { inline: number; block: number };
 
-export const NO_TIMER_RESERVE: LiveOverlayTimerReserve = { inline: 0, block: 0 };
+export const NO_TIMER_CLEARANCE: LiveOverlayTimerClearance = { inline: 0, block: 0 };
 
-/** The widest share of a board the timers may take beside its logo; past it the board's top row goes under them. */
+/** The widest share of a board the timers' column may take; past it the board's top row goes under them. */
 const BESIDE_TIMERS = 0.25;
 /** The most of a board's height its top row moves down for timers. */
 const UNDER_TIMERS = 0.4;
 
-export function timerReserve(
+export function timerClearance(
   board: LiveOverlayElementPlacement,
   timers: readonly LiveOverlayElementPlacement[],
-): LiveOverlayTimerReserve {
+): LiveOverlayTimerClearance {
   const corner = { x: board.x + board.w * 0.6, y: board.y, w: board.w * 0.4, h: board.h * 0.2 };
   const end = board.x + board.w;
   const covering = timers.filter(
@@ -73,7 +69,7 @@ export function timerReserve(
       timer.y < corner.y + corner.h &&
       timer.y + timer.h > corner.y,
   );
-  if (!covering.length || board.w <= 0 || board.h <= 0) return NO_TIMER_RESERVE;
+  if (!covering.length || board.w <= 0 || board.h <= 0) return NO_TIMER_CLEARANCE;
   const inline = Math.max(...covering.map((timer) => (end - timer.x) / board.w));
   if (inline <= BESIDE_TIMERS) return { inline, block: 0 };
   const block = Math.max(...covering.map((timer) => (timer.y + timer.h - board.y) / board.h));

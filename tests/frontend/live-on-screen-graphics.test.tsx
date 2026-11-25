@@ -14,7 +14,7 @@ import {
   type LiveRoomClientMessage,
 } from "../../assets/shared/schemas/live-session-room";
 import { LiveOverlayPresentation } from "../../assets/ts/live-session/LiveOverlayPresentation";
-import { stackedPanelBox, timerReserve } from "../../assets/ts/live-session/live-overlay-fields";
+import { stackedPanelBox, timerClearance } from "../../assets/ts/live-session/live-overlay-fields";
 import { applyLiveRoomMessage, type LiveRoomState } from "../../assets/ts/live-session/live-room-state";
 import {
   LiveReactionsControls,
@@ -246,9 +246,7 @@ describe("timers over a board", () => {
   const board = () => host!.querySelector<HTMLElement>('[data-overlay-element="topQuestions"]')!;
   const reserve = () =>
     Number(
-      board()
-        .querySelector<HTMLElement>(".pk-live-overlay__surface")!
-        .style.getPropertyValue("--overlay-timer-reserve"),
+      board().querySelector<HTMLElement>(".pk-live-overlay__surface")!.style.getPropertyValue("--overlay-timer-inline"),
     );
 
   async function draw(state: LiveRoomState, elements = LIVE_OVERLAY_STANDARD_ELEMENTS) {
@@ -259,11 +257,11 @@ describe("timers over a board", () => {
   it("keeps the timers' column clear on a full-frame board, and the whole board without them", async () => {
     const shown = { ...stageClockState, stage: { ...stageClockState.stage, topQuestions: questions } };
     await draw(shown);
-    expect(board().hasAttribute("data-logo-covered")).toBe(true);
+    expect(board().hasAttribute("data-timer-clearance")).toBe(true);
     // The timer's box starts at 1536 of the 1920 frame: the board keeps its last fifth clear.
     expect(reserve()).toBeCloseTo(0.2, 2);
     await draw({ ...shown, stage: { ...shown.stage, timerGraphics: [] } });
-    expect(board().hasAttribute("data-logo-covered")).toBe(false);
+    expect(board().hasAttribute("data-timer-clearance")).toBe(false);
     expect(reserve()).toBe(0);
   });
 
@@ -282,18 +280,20 @@ describe("timers over a board", () => {
       stage: { ...stageClockState.stage, question, timerGraphics: [{ ...first!, placement: "top-right" as const }] },
     };
     await draw(topRight, LIVE_OVERLAY_PRESET_LAYOUTS.questions.elements);
-    for (const element of ["background", "question"]) {
-      const layer = host!.querySelector<HTMLElement>(`[data-overlay-element="${element}"]`)!;
-      const surface = layer.querySelector<HTMLElement>(".pk-live-overlay__surface")!;
-      // The logo and the eyebrow go under the timer, which ends 174 px down the 1080 px column, on the title-safe line.
-      expect(layer.dataset.logoCovered, element).toBe("below");
-      expect(Number(surface.style.getPropertyValue("--overlay-timer-drop")), element).toBeCloseTo(174 / 1080, 3);
-      // No column is kept clear beside the timer, so the question keeps the column's full width.
-      expect(Number(surface.style.getPropertyValue("--overlay-timer-reserve")), element).toBe(0);
-    }
-    // The same timer over a full-frame board leaves room beside it: the logo steps aside instead.
+    const layer = host!.querySelector<HTMLElement>('[data-overlay-element="question"]')!;
+    const surface = layer.querySelector<HTMLElement>(".pk-live-overlay__surface")!;
+    // The eyebrow goes under the timer, which ends 174 px down the 1080 px column, on the title-safe line.
+    expect(layer.dataset.timerClearance).toBe("below");
+    expect(Number(surface.style.getPropertyValue("--overlay-timer-block"))).toBeCloseTo(174 / 1080, 3);
+    // No column is kept clear beside the timer, so the question keeps the column's full width.
+    expect(Number(surface.style.getPropertyValue("--overlay-timer-inline"))).toBe(0);
+    // The background has nothing to keep clear of it.
+    expect(host!.querySelector('[data-overlay-element="background"]')!.hasAttribute("data-timer-clearance")).toBe(
+      false,
+    );
+    // The same timer over a full-frame board leaves room beside it: the board keeps the timer's column clear.
     await draw({ ...topRight, stage: { ...topRight.stage, question: null, topQuestions: questions } });
-    expect(board().dataset.logoCovered).toBe("beside");
+    expect(board().dataset.timerClearance).toBe("beside");
     // On the title-safe line the timer starts 432 px from the frame's end.
     expect(reserve()).toBeCloseTo(432 / 1920, 3);
   });
@@ -302,10 +302,10 @@ describe("timers over a board", () => {
     const frame = { ...LIVE_OVERLAY_STANDARD_ELEMENTS.question };
     const column = { ...LIVE_OVERLAY_PRESET_LAYOUTS.questions.elements.question };
     const timer = { ...LIVE_OVERLAY_STANDARD_ELEMENTS.timer };
-    expect(timerReserve(frame, [timer])).toEqual({ inline: expect.closeTo(0.2, 3), block: 0 });
-    expect(timerReserve(column, [timer])).toEqual({ inline: 0, block: expect.closeTo(168 / 1080, 3) });
+    expect(timerClearance(frame, [timer])).toEqual({ inline: expect.closeTo(0.2, 3), block: 0 });
+    expect(timerClearance(column, [timer])).toEqual({ inline: 0, block: expect.closeTo(168 / 1080, 3) });
     // A timer away from the corner, such as the column layout's own timer over the camera, needs no room.
-    expect(timerReserve(column, [LIVE_OVERLAY_PRESET_LAYOUTS.questions.elements.timer])).toEqual({
+    expect(timerClearance(column, [LIVE_OVERLAY_PRESET_LAYOUTS.questions.elements.timer])).toEqual({
       inline: 0,
       block: 0,
     });
@@ -322,10 +322,6 @@ describe("timers over a board", () => {
     const background = { ...LIVE_OVERLAY_STANDARD_ELEMENTS.background, visible: true };
     await draw(shown, { ...LIVE_OVERLAY_STANDARD_ELEMENTS, background });
     expect(plate().hasAttribute("data-on-board")).toBe(true);
-    // The background's logo steps aside for the timer on its corner.
-    const ground = host!.querySelector<HTMLElement>('[data-overlay-element="background"]')!;
-    expect(ground.hasAttribute("data-logo-covered")).toBe(true);
-    expect(ground.querySelectorAll(".pk-live-board__logo")).toHaveLength(1);
   });
 
   it("draws a timer bare or as a tab from the frame's top edge, the next timer under the tab's plate", async () => {

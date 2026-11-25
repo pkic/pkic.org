@@ -51,7 +51,7 @@ function useBoardGeometry(box: Pick<OverlayRect, "width" | "height">) {
 
 /**
  * A board: an eyebrow that names what it shows, then the graphic, in white
- * type. It draws no field, mark or logo of its own: those are the scene's
+ * type. It draws no field or mark of its own: those are the scene's
  * background (`LiveBoardGround`), drawn once per frame, and a board inside
  * the background's box reads on it. It takes its box's shape, so the same
  * board fills the projector, a band of the stream or a column beside the
@@ -87,9 +87,10 @@ export function LiveBoard({
 }
 
 /**
- * The scene's background: the conference field, its dots, the mark and the
- * white logo. A scene that includes it shows it whenever the scene is on,
- * once, so the boards on it read as one composition with one logo.
+ * The scene's background: the conference field, its dots and the mark. A
+ * scene that includes it shows it whenever the scene is on, once, so the
+ * boards on it read as one composition. It carries no logo: branding is
+ * the production's, placed per scene there.
  */
 export function LiveBoardGround({ box }: { box: Pick<OverlayRect, "width" | "height"> }) {
   const { shape, geometry } = useBoardGeometry(box);
@@ -101,10 +102,6 @@ export function LiveBoardGround({ box }: { box: Pick<OverlayRect, "width" | "hei
       data-numeric-css-properties={geometry}
     >
       <PkicMark class="pk-live-board__watermark" />
-      <div class="pk-live-board__head">
-        <span class="pk-live-board__eyebrow" />
-        <img class="pk-live-board__logo" src="/img/logo.svg" width="1256" height="324" alt="" />
-      </div>
     </div>
   );
 }

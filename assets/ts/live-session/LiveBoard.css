@@ -1,20 +1,20 @@
 /*
  * A board: white type with no field of its own. The scene's background
- * (`--ground`) is the conference field, with its dots, soft light, a faint
- * mark and the logo, drawn once per frame; a board inside it reads on it.
+ * (`--ground`) is the conference field, with its dots, soft light and a
+ * faint mark, drawn once per frame; a board inside it reads on it. It
+ * carries no logo: branding is the production's, placed per scene there.
  * Both are drawn at their own size in pixels of the 1080p frame and their
  * layout box scales them whole. Everything that must be read sits from the
  * top down, so a seated panel in front of the projector covers only the
  * bottom of it. The margins are set in pixels of the frame, whatever the
  * scale: 64 from the top and bottom and 96 from the sides, inside the
- * broadcast graphics-safe area. The graphic keeps a clear band under the
- * logo's row, the same on every board.
+ * broadcast graphics-safe area. The graphic starts under the eyebrow's
+ * row, the same on every board.
  */
 @layer components {
   .pk-live-board {
-    --board-logo-block: 72px;
-    /* The logo's width at that height, from its 1256 x 324 artwork. */
-    --board-logo-inline: calc(var(--board-logo-block) * 1256 / 324);
+    /* The eyebrow's row: the same height on every board, so the graphic under it starts at one line. */
+    --board-head-block: 72px;
     position: absolute;
     inset-block-start: 0;
     inset-inline-start: 0;
@@ -56,18 +56,13 @@
     color: var(--pk-pqc-on-field);
     opacity: 0.06;
   }
-  /* A board keeps the logo's corner of its top row clear, so its eyebrow never runs under the background's logo. */
   .pk-live-board__head {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 32px;
-    min-block-size: var(--board-logo-block);
+    min-block-size: var(--board-head-block);
     margin-block-end: 28px;
-    padding-inline-end: calc(var(--board-logo-inline) + 32px);
-  }
-  .pk-live-board--ground .pk-live-board__head {
-    padding-inline-end: 0;
   }
   .pk-live-board__eyebrow {
     margin: 0;
@@ -78,12 +73,6 @@
     letter-spacing: 0.12em;
     line-height: 1.2;
     text-transform: uppercase;
-  }
-  /* The full logo in white in the background's corner, as on the event's banners. */
-  .pk-live-board__logo {
-    flex: none;
-    inline-size: auto;
-    block-size: var(--board-logo-block);
   }
   /* The event stripe under a board's headline, as under the lower third's name. */
   .pk-live-board__stripe {

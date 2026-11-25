@@ -137,7 +137,7 @@ export const studioTimerSections: PreviewSection[] = [
   {
     id: "program-timer-question-column",
     title: "Program: a timer over the Q&A column",
-    note: "A timer in its own top-right corner over the column beside the camera: the logo and the eyebrow start under it, and the question keeps the column's full width.",
+    note: "A timer in its own top-right corner over the column beside the camera: the eyebrow starts under it, and the question keeps the column's full width.",
     render: () => <ProgramTimers state={questionColumnTimer} layout="questions" />,
   },
   {
