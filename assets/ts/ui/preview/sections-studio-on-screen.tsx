@@ -345,7 +345,7 @@ function Graphics() {
               sendProgram: () => true,
             }}
             slug="pqc-conference-2026"
-            approvedAgenda={null}
+            approvedAgenda={SCENE_SOURCES.agenda}
             occurrenceId={ROOM.session.occurrenceId}
             roomId={SCREEN_FIXTURE.roomId}
             now={SCREEN_FIXTURE_NOW}
