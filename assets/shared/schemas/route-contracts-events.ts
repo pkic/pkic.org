@@ -188,14 +188,14 @@ export const eventTeamRoleCandidatesRouteSchema = {
 
 export const eventTeamRoleCreateRouteSchema = {
   tags: ["Events"],
-  summary: "Assign an event team role",
+  summary: "Assign event team roles",
   request: {
     params: eventSlugParamsSchema,
     body: { required: true, content: { "application/json": { schema: eventTeamRoleCreateSchema } } },
   },
   responses: {
     "201": {
-      description: "Event team role assigned.",
+      description: "Event team roles assigned.",
       content: { "application/json": { schema: eventTeamRoleCreateResponseSchema } },
     },
     "400": jsonErrorResponse("Invalid event team role payload."),

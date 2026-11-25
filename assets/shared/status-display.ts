@@ -60,6 +60,7 @@ const STATUS_TONE = {
   program_committee: "accent",
   moderator: "warn",
   volunteer: "neutral",
+  studio_operator: "neutral",
   // user roles
   admin: "danger",
   user: "neutral",

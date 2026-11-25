@@ -766,16 +766,26 @@ describe("proposal subtree access gate (full router stack)", () => {
     return id;
   }
 
-  async function assignEventModerator(userId: string, eventId: string, grantedBy: string): Promise<void> {
-    // Kept as an assignment rather than a persona because the caller already
-    // holds a user it created for other reasons; the role itself is the same
-    // one `eventModerator` plays.
-    await env.DB.prepare(
-      `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, granted_by_user_id, created_at)
-       VALUES (?, ?, 'role-event_moderator', 'event', ?, ?, datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), userId, eventId, grantedBy)
-      .run();
+  // Proposal scoring without the power to decide: no built-in event role is
+  // shaped like this, so a custom role stands in for one an admin might make.
+  async function assignProposalScorer(userId: string, eventId: string, grantedBy: string): Promise<void> {
+    const roleId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO roles (id, name, description, is_system_role, created_at, updated_at)
+         VALUES (?, ?, NULL, 0, datetime('now'), datetime('now'))`,
+      ).bind(roleId, `proposal_scorer_${roleId}`),
+      ...["proposals:read", "proposals:score"].map((permission) =>
+        env.DB.prepare(
+          `INSERT INTO role_permissions (id, role_id, permission, created_at)
+           VALUES (?, ?, ?, datetime('now'))`,
+        ).bind(crypto.randomUUID(), roleId, permission),
+      ),
+      env.DB.prepare(
+        `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, granted_by_user_id, created_at)
+         VALUES (?, ?, ?, 'event', ?, ?, datetime('now'))`,
+      ).bind(crypto.randomUUID(), userId, roleId, eventId, grantedBy),
+    ]);
   }
 
   async function assignProposalReadOnlyRole(userId: string, eventId: string, grantedBy: string): Promise<void> {
@@ -873,7 +883,7 @@ describe("proposal subtree access gate (full router stack)", () => {
     expect(response.status).toBe(404);
   });
 
-  it("audit-log: an event moderator with proposals:score can view private review audit details", async () => {
+  it("audit-log: a reviewer with proposals:score can view private review audit details", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
     await env.DB.prepare(
@@ -890,7 +900,7 @@ describe("proposal subtree access gate (full router stack)", () => {
       )
       .run();
     const staffId = await insertStaffUser("moderator@wf.test");
-    await assignEventModerator(staffId, eventId, adminUserId);
+    await assignProposalScorer(staffId, eventId, adminUserId);
     const staffToken = await createAdminSession(env.DB, staffId, "moderator-token");
 
     const response = await callAppGet(`/api/v1/proposals/${proposalId}/audit-log`, staffToken);
@@ -909,7 +919,7 @@ describe("proposal subtree access gate (full router stack)", () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
     const moderatorId = await insertStaffUser("moderator-decision@wf.test");
-    await assignEventModerator(moderatorId, eventId, adminUserId);
+    await assignProposalScorer(moderatorId, eventId, adminUserId);
     const moderatorToken = await createAdminSession(env.DB, moderatorId, "moderator-decision-token");
 
     for (const endpoint of ["finalize-preview", "finalize"]) {
@@ -923,12 +933,12 @@ describe("proposal subtree access gate (full router stack)", () => {
     ).resolves.toHaveLength(0);
   });
 
-  it("audit-log: a moderator scoped to a different event cannot view this event's proposal audit log", async () => {
+  it("audit-log: a reviewer scoped to a different event cannot view this event's proposal audit log", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
     const { eventId: otherEventId } = await insertOtherEvent();
     const staffId = await insertStaffUser("other-event-moderator@wf.test");
-    await assignEventModerator(staffId, otherEventId, adminUserId);
+    await assignProposalScorer(staffId, otherEventId, adminUserId);
     const staffToken = await createAdminSession(env.DB, staffId, "other-event-moderator-token");
 
     const response = await callAppGet(`/api/v1/proposals/${proposalId}/audit-log`, staffToken);

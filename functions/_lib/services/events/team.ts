@@ -1,4 +1,5 @@
 import {
+  EVENT_TEAM_ROLE_DETAILS,
   EVENT_TEAM_ROLE_IDS,
   EVENT_TEAM_SORT_COLUMNS,
   type EventTeamListQuery,
@@ -115,15 +116,14 @@ export async function listEventTeam(
   return { roles, page: buildPageInfo(limit, offset, total, roles.length) };
 }
 
-export async function grantEventTeamRole(
+export async function grantEventTeamRoles(
   db: DatabaseLike,
   actor: UserBackedAuthAdmin,
   eventSlug: string,
   input: EventTeamRoleCreate,
-): Promise<EventTeamRoleAssignment> {
+): Promise<EventTeamRoleAssignment[]> {
   const event = await getEventBySlug(db, eventSlug);
   requirePermission(actor, "events:manage", { type: "event", id: event.id });
-  const roleId = EVENT_TEAM_ROLE_IDS[input.role];
   // The person must already exist: a team member is linked, never created.
   const person = await first<{
     id: string;
@@ -131,32 +131,42 @@ export async function grantEventTeamRole(
     first_name: string | null;
     last_name: string | null;
     headshot_r2_key: string | null;
+    held_role_ids: string;
   }>(
     db,
-    `SELECT id, normalized_email, first_name, last_name, headshot_r2_key
+    `SELECT id, normalized_email, first_name, last_name, headshot_r2_key,
+            (SELECT json_group_array(held.role_id) FROM user_roles held
+              WHERE held.user_id = users.id AND held.context_type = 'event' AND held.context_id = ?
+                AND held.revoked_at IS NULL) AS held_role_ids
        FROM users
       WHERE id = ? AND active = 1 AND merged_into_user_id IS NULL AND pii_redacted_at IS NULL`,
-    [input.userId],
+    [event.id, input.userId],
   );
   if (!person) throw new AppError(404, "USER_NOT_FOUND", "No active user has this id");
+  const held = new Set(JSON.parse(person.held_role_ids) as string[]);
+  const alreadyHeld = input.roles.filter((role) => held.has(EVENT_TEAM_ROLE_IDS[role]));
+  if (alreadyHeld.length > 0) {
+    const names = alreadyHeld.map((role) => EVENT_TEAM_ROLE_DETAILS[role].label).join(", ");
+    throw new AppError(409, "DUPLICATE", `This person already has this event role: ${names}`);
+  }
   const userId = person.id;
   const normalizedEmail = person.normalized_email;
-  const id = uuid();
   const now = nowIso();
   const expiresAt = input.expiresAt ?? null;
+  const grants = input.roles.map((role) => ({ id: uuid(), role }));
   try {
     await commitAccessControlMutation(
       db,
       actor,
       [{ permission: "events:manage", context: { type: "event", id: event.id } }],
-      [
+      grants.flatMap(({ id, role }) => [
         db
           .prepare(
             `INSERT INTO user_roles
              (id, user_id, role_id, context_type, context_id, granted_by_user_id, expires_at, created_at)
            VALUES (?, ?, ?, 'event', ?, ?, ?, ?)`,
           )
-          .bind(id, userId, roleId, event.id, adminDatabaseUserId(actor), expiresAt, now),
+          .bind(id, userId, EVENT_TEAM_ROLE_IDS[role], event.id, adminDatabaseUserId(actor), expiresAt, now),
         prepareAuditLogAfterOneChange(
           db,
           "admin",
@@ -164,30 +174,31 @@ export async function grantEventTeamRole(
           "event_team_role_assigned",
           "event",
           event.id,
-          { userId, email: normalizedEmail, role: input.role, expiresAt },
+          { userId, email: normalizedEmail, role, expiresAt },
           now,
         ),
-      ],
+      ]),
     );
   } catch (error) {
+    // A grant made at the same moment by someone else.
     if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {
-      throw new AppError(409, "DUPLICATE", "This role assignment already exists");
+      throw new AppError(409, "DUPLICATE", "This person already has one of these event roles");
     }
     throw error;
   }
-  return {
+  return grants.map(({ id, role }) => ({
     id,
     userEmail: normalizedEmail,
     userId,
     userFirstName: person.first_name,
     userLastName: person.last_name,
     headshotUrl: publicUserHeadshotPath(userId, person.headshot_r2_key),
-    role: input.role,
+    role,
     grantedByUserId: adminDatabaseUserId(actor),
     expiresAt,
     createdAt: now,
     granterEmail: actor.email,
-  };
+  }));
 }
 
 export async function revokeEventTeamRole(

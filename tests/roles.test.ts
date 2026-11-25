@@ -708,6 +708,21 @@ describe("roles (Built-in and custom roles)", () => {
     },
   );
 
+  it.each([
+    ["role-event_organizer", null],
+    ["role-event_volunteer", "event"],
+  ] as const)("refuses to grant the event team role %s outside the event's team", async (roleId, contextType) => {
+    const response = await call(adminToken, `/api/v1/users/${staffUserId}/roles`, {
+      method: "POST",
+      body: JSON.stringify(contextType ? { roleId, contextType, contextId: crypto.randomUUID() } : { roleId }),
+    });
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({ error: { code: "EVENT_TEAM_ROLE_REQUIRES_EVENT_TEAM" } });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM user_roles WHERE user_id = ? AND role_id = ?", [staffUserId, roleId]),
+    ).toHaveLength(0);
+  });
+
   it("does not seed legacy forum or working-group-specific leadership roles", async () => {
     const response = await call(adminToken, "/api/v1/roles");
     const body = (await response.json()) as {

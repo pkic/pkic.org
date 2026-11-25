@@ -15,8 +15,8 @@ export interface ProposalAccess {
  *
  * Backed by `user_roles`/`permission_grants` via
  * `hasPermission`, not the dropped `event_permissions` table (see migration
- * 0035). `proposals:score` (program_committee, event_moderator)
- * grants review; `proposals:manage` (event_organizer, program_committee)
+ * 0035). `proposals:score` (program_committee) grants
+ * review; `proposals:manage` (event_organizer, program_committee)
  * grants finalize. These are separate capabilities: custom roles must
  * explicitly receive `proposals:score` to author reviews. Seeded roles retain
  * both permissions, matching the old REVIEW_PERMISSIONS/FINALIZE_PERMISSIONS

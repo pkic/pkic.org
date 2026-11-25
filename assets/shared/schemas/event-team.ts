@@ -5,9 +5,28 @@ import { databaseIdSchema } from "./identifiers";
 import { userCatalogListQuerySchema } from "./user-catalog";
 import { paginatedResponseSchema, searchableListQuerySchema, sortColumnSchema } from "./pagination";
 
-export const EVENT_TEAM_ROLES = ["organizer", "program_committee", "moderator", "volunteer"] as const;
+export const EVENT_TEAM_ROLES = [
+  "organizer",
+  "program_committee",
+  "moderator",
+  "volunteer",
+  "studio_operator",
+] as const;
 export const eventTeamRoleSchema = z.enum(EVENT_TEAM_ROLES, { error: "Choose an event role." });
 export type EventTeamRole = z.infer<typeof eventTeamRoleSchema>;
+
+/**
+ * Each event team role covers one job; someone who does several jobs holds
+ * several roles. The name and the line saying what the role can do are the
+ * same wherever a role is granted or shown.
+ */
+export const EVENT_TEAM_ROLE_DETAILS: Record<EventTeamRole, { label: string; description: string }> = {
+  organizer: { label: "Organizer", description: "Manages everything for this event." },
+  program_committee: { label: "Program Committee", description: "Reviews proposals and builds the agenda." },
+  moderator: { label: "Moderator", description: "Moderates chat, questions, and polls in the live rooms." },
+  volunteer: { label: "Volunteer", description: "Checks people in, prints badges, and moderates live rooms." },
+  studio_operator: { label: "Studio operator", description: "Runs the studio of a room." },
+};
 
 export const eventTeamCandidateQuerySchema = userCatalogListQuerySchema.extend({
   q: userCatalogListQuerySchema.shape.q.pipe(normalizedEmailSchema),
@@ -20,6 +39,7 @@ export const EVENT_TEAM_ROLE_IDS = {
   program_committee: "role-program_committee",
   moderator: "role-event_moderator",
   volunteer: "role-event_volunteer",
+  studio_operator: "role-event_studio_operator",
 } as const satisfies Record<EventTeamRole, string>;
 export type EventTeamRoleId = (typeof EVENT_TEAM_ROLE_IDS)[EventTeamRole];
 
@@ -56,13 +76,17 @@ export const eventTeamRolesResponseSchema = paginatedResponseSchema("roles", eve
  */
 export const eventTeamRoleCreateSchema = z.object({
   userId: databaseIdSchema,
-  role: eventTeamRoleSchema,
+  /** Every role the person gets on the event, granted together. */
+  roles: z
+    .array(eventTeamRoleSchema)
+    .min(1, "Choose at least one role.")
+    .refine((roles) => new Set(roles).size === roles.length, "Choose each role once."),
   expiresAt: utcInstantSchema.nullable().optional(),
 });
 export type EventTeamRoleCreate = z.infer<typeof eventTeamRoleCreateSchema>;
 
 export const eventTeamRoleCreateResponseSchema = z.object({
-  role: eventTeamRoleAssignmentSchema,
+  roles: z.array(eventTeamRoleAssignmentSchema),
 });
 
 /** One person per event roster; access grants remain separate from scheduling duties. */

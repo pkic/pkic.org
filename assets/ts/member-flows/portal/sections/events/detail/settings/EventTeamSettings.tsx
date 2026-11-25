@@ -5,7 +5,7 @@ import { PersonCell } from "../../../../../../ui/PersonCell";
 import { EmptyState } from "../../../../../../ui/EmptyState";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import { eventTeamRosterResponseSchema, type EventTeamPerson } from "../../../../../../../shared/schemas/event-team";
-import { ROLE_LABELS, AddTeamMemberPage } from "../Team";
+import { roleLabel, AddTeamMemberPage } from "../Team";
 import { TeamPerson } from "./TeamPerson";
 import { TeamStaffingEditor } from "./TeamStaffingEditor";
 
@@ -84,7 +84,7 @@ export function EventTeamSettings({
               {
                 header: "Event access",
                 cell: (person: EventTeamPerson) =>
-                  person.accessRoles.map((role) => ROLE_LABELS[role.role]).join(", ") || "No event access",
+                  person.accessRoles.map((role) => roleLabel(role.role)).join(", ") || "No event access",
               },
             ]
           : []),

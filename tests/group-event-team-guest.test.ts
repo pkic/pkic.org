@@ -6,7 +6,7 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { groupLabelSchema, type GROUP_VISIBILITIES } from "../assets/shared/schemas/groups";
 import { createGroup } from "../functions/_lib/services/groups";
-import { grantEventTeamRole } from "../functions/_lib/services/events/team";
+import { grantEventTeamRoles } from "../functions/_lib/services/events/team";
 import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { grantAdministrator } from "./helpers/administrator";
 import { callApi } from "./helpers/app";
@@ -61,7 +61,10 @@ async function fixture(visibility: (typeof GROUP_VISIBILITIES)[number]) {
   const event = await createEvent(administrator, group.id, "team-event");
   const otherEvent = await createEvent(administrator, group.id, "other-event");
   const volunteer = await person("guest-volunteer");
-  const assignment = await grantEventTeamRole(env.DB, actor, event.slug, { userId: volunteer.id, role: "volunteer" });
+  const [assignment] = await grantEventTeamRoles(env.DB, actor, event.slug, {
+    userId: volunteer.id,
+    roles: ["volunteer"],
+  });
   return { group, event, otherEvent, volunteer, assignment, outsider: await person("guest-outsider") };
 }
 
