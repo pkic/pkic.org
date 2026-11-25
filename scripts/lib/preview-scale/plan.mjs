@@ -43,7 +43,7 @@ export function buildPreviewScalePlan({ attendees, speakers, context, roster, sk
     population,
     sessions,
     rooms,
-    saved: buildSavedSessions({ registrations: population.registrations, sessions, seed }),
+    saved: buildSavedSessions({ registrations: population.registrations, sessions, seed, timeZone: context.timeZone }),
     sponsorships: buildSponsorships(population.organizations, context.eventId),
     personas,
     skippedRoles,

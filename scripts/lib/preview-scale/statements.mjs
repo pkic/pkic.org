@@ -60,6 +60,8 @@ function peopleStatements(people) {
       "users",
       ["id", "email", "normalized_email", "first_name", "last_name", "active", "headshot_r2_key", "headshot_updated_at", "email_verified_at", "email_verification_method", "created_at", "updated_at"],
       users,
+      // The seed owns its users' headshots, so a re-run with or without uploads keeps them in step.
+      "ON CONFLICT(id) DO UPDATE SET headshot_r2_key = excluded.headshot_r2_key, headshot_updated_at = excluded.headshot_updated_at",
     ),
     ...insertStatements(
       "identities",
@@ -137,6 +139,7 @@ function agendaStatements(context, sessions, rooms, speakers) {
   const speakersById = new Map(speakers.map((speaker) => [speaker.userId, speaker]));
   const seededIds = sessions.map((session) => sqlString(session.id)).join(", ");
   const roomIds = rooms.map((room) => room.id);
+  const unstaffed = sessions.filter((session) => session.speakerUserIds.length === 0).map((session) => sqlString(session.id));
   const roomOrder = [...roomIds, ...context.roomOrder.filter((id) => !roomIds.includes(id))];
   return [
     ...insertStatements(
@@ -153,6 +156,8 @@ function agendaStatements(context, sessions, rooms, speakers) {
   visibility = excluded.visibility`,
     ),
     `DELETE FROM event_agenda_occurrence_speakers WHERE occurrence_id IN (${seededIds});`,
+    // A seeded session left without speakers keeps no appearances from an earlier run.
+    ...(unstaffed.length ? [`DELETE FROM event_agenda_session_history WHERE occurrence_id IN (${unstaffed.join(", ")});`] : []),
     ...insertStatements(
       "event_agenda_occurrence_speakers",
       ["occurrence_id", "user_id", "role", "attendance_mode"],

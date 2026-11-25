@@ -25,11 +25,14 @@ To fill a fresh event instead of an existing one, which leaves the existing agen
 pnpm seed:preview-scale --preview --event scale-test-event --create-event --name "Scale test event" --start 2027-03-02
 ```
 
-Then apply it. Every preview branch shares this database, so the owner must agree first:
+Then apply the same command with `--apply`. Every preview branch shares this database, so the owner must agree first:
 
 ```sh
 pnpm seed:preview-scale --preview --apply
+pnpm seed:preview-scale --preview --apply --event scale-test-event --create-event --name "Scale test event" --start 2027-03-02
 ```
+
+The first fills the existing event; the second creates and fills the new one.
 
 Options:
 

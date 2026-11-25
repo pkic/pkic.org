@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { instantToCalendarDate } from "../../../assets/shared/timezone.ts";
 import { BADGE_CREDENTIAL_ALPHABET, BADGE_CREDENTIAL_LENGTH } from "../../../assets/shared/schemas/badge-credential.ts";
 import { previewScaleId } from "../seed-ids.mjs";
 import { inventJobTitle, inventOrganization, inventPerson, pick, seededStream, weighted } from "./random.mjs";
@@ -127,8 +128,8 @@ export function buildPopulation({ attendees, speakers, seed, eventId, days, exis
   return { organizations, speakers: speakerPeople, attendees: attendeePeople, registrations };
 }
 
-/** Saved sessions: about one per registration, in person when the attendee is there that day. */
-export function buildSavedSessions({ registrations, sessions, seed }) {
+/** Saved sessions: about one per registration, in person when the attendee is there that day (the event's own calendar day). */
+export function buildSavedSessions({ registrations, sessions, seed, timeZone }) {
   const bookable = sessions.filter((session) => session.kind !== "break");
   const saved = [];
   for (const registration of registrations) {
@@ -138,7 +139,7 @@ export function buildSavedSessions({ registrations, sessions, seed }) {
     const chosen = new Set();
     for (let index = 0; index < count; index += 1) chosen.add(pick(random, bookable));
     for (const session of chosen) {
-      const dayDate = session.startAt.slice(0, 10);
+      const dayDate = instantToCalendarDate(session.startAt, timeZone);
       const attendance = registration.days.find((day) => day.dayDate === dayDate);
       saved.push({
         id: previewScaleId(`saved:${registration.id}:${session.id}`),

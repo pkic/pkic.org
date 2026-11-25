@@ -36,6 +36,8 @@ export function insertStatements(table, columns, rows, conflict = "ON CONFLICT D
   for (const row of rows) {
     if (row.length !== columns.length) throw new Error(`${table}: expected ${columns.length} values, got ${row.length}`);
     const tuple = `(${row.map(literal).join(", ")})`;
+    if (bytes(head) + bytes(tuple) + bytes(tail) > MAX_STATEMENT_BYTES)
+      throw new Error(`${table}: one row is ${bytes(tuple)} bytes, too large for a ${MAX_STATEMENT_BYTES}-byte statement`);
     if (batch.length > 0 && size + bytes(tuple) + 2 > MAX_STATEMENT_BYTES) {
       statements.push(head + batch.join(",\n") + tail);
       batch = [];

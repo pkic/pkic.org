@@ -96,6 +96,10 @@ describe("persona roster", () => {
 });
 
 describe("insertStatements", () => {
+  it("refuses a row too large for one statement", () => {
+    expect(() => insertStatements("example", ["id"], [["x".repeat(100_001)]])).toThrow(/too large/);
+  });
+
   it("splits rows across statements below the limit", () => {
     const rows = Array.from({ length: 2000 }, (_, index) => [`id-${index}`, "x".repeat(200)]);
     const statements = insertStatements("example", ["id", "value"], rows);
@@ -136,6 +140,20 @@ describe("generated content", () => {
     );
     expect(new Set(organizations).size).toBe(organizations.length);
     for (const name of organizations) expect(name).not.toMatch(/ \d+$/);
+  });
+});
+
+describe("saved sessions", () => {
+  it("date a saved session by the event's own calendar day", () => {
+    const tokyo = { ...context, timeZone: "Asia/Tokyo" };
+    const built = buildPreviewScalePlan({ attendees: 300, speakers: 40, context: tokyo, roster });
+    const morning = built.sessions.find(
+      (session: { startAt: string }) => session.startAt === "2026-12-01T23:00:00.000Z",
+    );
+    expect(morning).toBeDefined();
+    const rows = built.saved.filter((saved: { occurrenceId: string }) => saved.occurrenceId === morning.id);
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) expect(row.dayDate).toBe("2026-12-02");
   });
 });
 
@@ -192,13 +210,25 @@ INSERT INTO event_agenda_rooms (id, event_id, name, capacity) VALUES ('existing-
       db,
       seedStatements(
         schemaContext,
-        buildPreviewScalePlan({ attendees: 300, speakers: 40, context: schemaContext, roster }),
+        buildPreviewScalePlan({ attendees: 300, speakers: 40, context: schemaContext, roster, skipHeadshots: true }),
       ),
     );
-    const fewer = buildPreviewScalePlan({ attendees: 300, speakers: 25, context: schemaContext, roster });
+    const fewer = buildPreviewScalePlan({ attendees: 300, speakers: 8, context: schemaContext, roster });
+    expect(
+      fewer.sessions.some(
+        (session: { kind: string; speakerUserIds: string[] }) =>
+          session.kind === "session" && session.speakerUserIds.length === 0,
+      ),
+    ).toBe(true);
     apply(db, seedStatements(schemaContext, fewer));
     apply(db, seedStatements(schemaContext, fewer));
     expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    expect(count(db, "SELECT COUNT(*) AS count FROM users WHERE headshot_r2_key IS NOT NULL")).toBe(
+      fewer.population.speakers.filter((speaker: { hasHeadshot: boolean }) => speaker.hasHeadshot).length,
+    );
+    expect(count(db, "SELECT COUNT(*) AS count FROM event_agenda_session_history")).toBe(
+      fewer.sessions.filter((session: { speakerUserIds: string[] }) => session.speakerUserIds.length > 0).length,
+    );
     expect(count(db, "SELECT COUNT(*) AS count FROM event_agenda_occurrence_speakers")).toBe(
       fewer.sessions.reduce(
         (total: number, session: { speakerUserIds: string[] }) => total + session.speakerUserIds.length,
