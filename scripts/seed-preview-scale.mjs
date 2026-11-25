@@ -5,7 +5,8 @@
  * database, and it writes there only with --apply.
  *
  * Usage: pnpm seed:preview-scale [--preview [--apply]] [--persist-to <dir>]
- *   [--event <slug>] [--attendees <n>] [--speakers <n>] [--person <email>]...
+ *   [--event <slug>] [--create-event --name <name> --start <YYYY-MM-DD> [--days <n>] [--timezone <IANA>]]
+ *   [--attendees <n>] [--speakers <n>] [--person <email>]...
  *   [--roster target|production|none] [--sql-out <file>] [--skip-headshots]
  */
 import { execFileSync } from "node:child_process";
@@ -21,10 +22,11 @@ const { buildPreviewScalePlan } = await import("./lib/preview-scale/plan.mjs");
 const { seedStatements, headshotKey } = await import("./lib/preview-scale/statements.mjs");
 const { initialsHeadshot } = await import("./lib/preview-scale/headshots.mjs");
 const { TEAM_ROSTER_SQL, dedupeRoster } = await import("./lib/preview-scale/personas.mjs");
+const { newEvent, newEventStatements } = await import("./lib/preview-scale/event.mjs");
 
 const PREVIEW_HEADSHOT_BUCKET = "pkic-speaker-uploads-preview";
 const USAGE =
-  "Usage: pnpm seed:preview-scale [--preview [--apply]] [--persist-to <dir>] [--event <slug>] [--attendees <n>] [--speakers <n>] [--person <email>]... [--roster target|production|none] [--sql-out <file>] [--skip-headshots]";
+  "Usage: pnpm seed:preview-scale [--preview [--apply]] [--persist-to <dir>] [--event <slug>] [--create-event --name <name> --start <YYYY-MM-DD> [--days <n>] [--timezone <IANA>]] [--attendees <n>] [--speakers <n>] [--person <email>]... [--roster target|production|none] [--sql-out <file>] [--skip-headshots]";
 
 function parseArgs(argv) {
   const options = {
@@ -38,6 +40,11 @@ function parseArgs(argv) {
     roster: "target",
     sqlOut: null,
     skipHeadshots: false,
+    createEvent: false,
+    name: null,
+    start: null,
+    dayCount: 3,
+    timeZone: "Europe/Amsterdam",
   };
   const count = (value) => {
     const number = Number(value);
@@ -50,6 +57,7 @@ function parseArgs(argv) {
       "--preview": ["target", "preview"],
       "--apply": ["apply", true],
       "--skip-headshots": ["skipHeadshots", true],
+      "--create-event": ["createEvent", true],
     }[arg];
     if (flag) {
       options[flag[0]] = flag[1];
@@ -63,10 +71,16 @@ function parseArgs(argv) {
     else if (arg === "--attendees") options.attendees = count(value);
     else if (arg === "--speakers") options.speakers = count(value);
     else if (arg === "--person") options.people.push(value);
+    else if (arg === "--name") options.name = value;
+    else if (arg === "--start") options.start = value;
+    else if (arg === "--days" && /^[1-7]$/.test(value)) options.dayCount = Number(value);
+    else if (arg === "--timezone") options.timeZone = value;
     else if (arg === "--sql-out") options.sqlOut = value;
     else if (arg === "--roster" && ["target", "production", "none"].includes(value)) options.roster = value;
     else throw new Error(USAGE);
   }
+  if (options.createEvent && (!options.name || !options.start))
+    throw new Error("--create-event needs --name and --start.");
   if (options.target === "preview" && options.persistTo)
     throw new Error("--persist-to applies to the local database only.");
   return options;
@@ -107,16 +121,22 @@ function readEventContext(options) {
   (SELECT json_group_array(id) FROM roles WHERE id LIKE 'role-event_%' OR id = 'role-program_committee') AS roles,
   (SELECT json_group_array(json_object('id', room.id, 'name', room.name)) FROM event_agenda_rooms room WHERE room.event_id = event.id) AS rooms,
   (SELECT json_group_array(occurrence.id) FROM event_agenda_occurrences occurrence WHERE occurrence.event_id = event.id AND occurrence.visibility <> 'private') AS visibleOccurrenceIds
-FROM events event WHERE event.slug = ${sqlString(options.event)}`,
+FROM (SELECT 1) LEFT JOIN events event ON event.slug = ${sqlString(options.event)}`,
   );
-  if (!row) throw new Error(`No event ${options.event} on the ${options.target} database.`);
+  const shared = { adminUserId: row.adminUserId, roles: new Set(JSON.parse(row.roles)) };
+  if (!row.eventId) {
+    if (!options.createEvent) throw new Error(`No event ${options.event} on the ${options.target} database.`);
+    const event = newEvent({ slug: options.event, name: options.name, start: options.start, dayCount: options.dayCount, timeZone: options.timeZone });
+    return { ...event, ...shared, create: newEventStatements(event) };
+  }
   const days = JSON.parse(row.days).sort((left, right) => left.date.localeCompare(right.date));
   if (days.length === 0) throw new Error(`${options.event} has no event days.`);
   return {
     ...row,
     roomOrder: JSON.parse(row.roomOrder),
     days,
-    roles: new Set(JSON.parse(row.roles)),
+    ...shared,
+    create: [],
     rooms: JSON.parse(row.rooms),
     visibleOccurrenceIds: JSON.parse(row.visibleOccurrenceIds),
   };
@@ -161,13 +181,13 @@ async function uploadHeadshots(speakers, target, persistTo) {
   }
 }
 
-function summarize(plan, context) {
+function summarize(plan, context, options) {
   const seeded = new Set(plan.sessions.map((session) => session.id));
   const hidden = context.visibleOccurrenceIds.filter((id) => !seeded.has(id)).length;
   const reused = plan.rooms.filter((room) => room.existing).map((room) => room.name);
   const registered = plan.population.registrations.filter((registration) => registration.status === "registered");
   return [
-    `Event ${context.eventId} (${context.days.length} days, ${context.timeZone})`,
+    `${context.create.length ? "New event" : "Event"} ${options.event} (${context.days.length} days from ${context.days[0].date}, ${context.timeZone})`,
     `${plan.population.attendees.length} attendees, ${registered.length} registered, ${registered.filter((registration) => registration.badge).length} badges`,
     `${plan.sessions.length} agenda items, ${plan.population.speakers.length} speakers, ${plan.saved.length} saved sessions, ${plan.sponsorships.length} sponsorships`,
     `${hidden} existing public agenda items become private${reused.length ? `; reuses rooms ${reused.join(", ")}` : ""}`,
@@ -179,14 +199,14 @@ try {
   const options = parseArgs(process.argv.slice(2));
   const context = readEventContext(options);
   const plan = buildPreviewScalePlan({ ...options, context, roster: readRoster(options) });
-  const statements = seedStatements(
-    { ...context, actorUserId: context.adminUserId ?? plan.population.speakers[0].userId },
-    plan,
-  );
+  const statements = [
+    ...context.create,
+    ...seedStatements({ ...context, actorUserId: context.adminUserId ?? plan.population.speakers[0].userId }, plan),
+  ];
   const scratch = options.sqlOut ? null : fs.mkdtempSync(path.join(tmpdir(), "pkic-preview-scale-"));
   const sqlPath = options.sqlOut ?? path.join(scratch, "seed.sql");
   fs.writeFileSync(sqlPath, `${statements.join("\n")}\n`);
-  console.log(summarize(plan, context));
+  console.log(summarize(plan, context, options));
   console.log(`${statements.length} statements${options.sqlOut ? ` written to ${sqlPath}` : ""}`);
   if (options.target === "preview" && !options.apply) {
     console.log(

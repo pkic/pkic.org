@@ -15,20 +15,21 @@ import { sessionHistoryMetadata } from "./statements.mjs";
  */
 export function buildPreviewScalePlan({ attendees, speakers, context, roster, skipHeadshots = false }) {
   const seed = 20261201;
-  const population = buildPopulation({ attendees, speakers, seed, days: context.days });
+  const population = buildPopulation({ attendees, speakers, seed, eventId: context.eventId, days: context.days });
   if (skipHeadshots) for (const speaker of population.speakers) speaker.hasHeadshot = false;
-  const rooms = resolveRooms(context.rooms ?? []);
+  const rooms = resolveRooms(context.eventId, context.rooms ?? []);
   const sessions = buildAgenda({
+    eventId: context.eventId,
     days: context.days.map((day) => day.date),
     timeZone: context.timeZone,
     rooms,
     speakers: population.speakers,
-    random: seededStream(seed, "agenda"),
+    random: seededStream(seed, `${context.eventId}:agenda`),
   });
   const speakersById = new Map(population.speakers.map((speaker) => [speaker.userId, speaker]));
   for (const session of sessions)
     if (session.speakerUserIds.length > 0) sessionHistoryMetadataSchema.parse(sessionHistoryMetadata(session, speakersById));
-  const allPersonas = buildPersonas(roster);
+  const allPersonas = buildPersonas(roster, context.eventId);
   const personas = allPersonas.filter((persona) => !persona.roleId || context.roles.has(persona.roleId));
   const skippedRoles = [...new Set(allPersonas.filter((persona) => !personas.includes(persona)).map((persona) => persona.roleId))];
   return {
@@ -36,7 +37,7 @@ export function buildPreviewScalePlan({ attendees, speakers, context, roster, sk
     sessions,
     rooms,
     saved: buildSavedSessions({ registrations: population.registrations, sessions, seed }),
-    sponsorships: buildSponsorships(population.organizations),
+    sponsorships: buildSponsorships(population.organizations, context.eventId),
     personas,
     skippedRoles,
   };

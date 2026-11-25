@@ -72,9 +72,12 @@ function inventPeople(seed, prefix, count, organizations) {
 /**
  * The synthetic people and their event records, as plain rows.
  * The organization list has a fixed size, so it is the same at any volume.
- * @param {{ attendees: number, speakers: number, seed: number, days: Array<{id:string,date:string}> }} options
+ * People and organizations are shared by every seeded event; registrations,
+ * attendance and badges are keyed by the event, so several events can be seeded
+ * on one database.
+ * @param {{ attendees: number, speakers: number, seed: number, eventId: string, days: Array<{id:string,date:string}> }} options
  */
-export function buildPopulation({ attendees, speakers, seed, days }) {
+export function buildPopulation({ attendees, speakers, seed, eventId, days }) {
   const organizationStream = seededStream(seed, "organizations");
   const takenNames = new Set();
   const organizations = Array.from({ length: PRODUCTION_SHAPE.organizations }, (_, index) => ({
@@ -89,11 +92,12 @@ export function buildPopulation({ attendees, speakers, seed, days }) {
   }));
   const attendeeStreams = inventPeople(seed, "attendee", attendees, organizations);
   const attendeePeople = attendeeStreams.map(({ random: _stream, ...person }) => person);
-  const registrations = attendeeStreams.map(({ random, ...person }) => {
+  const registrations = attendeePeople.map((person) => {
+    const random = seededStream(seed, `${eventId}:${person.key}`);
     const cancelled = random() < PRODUCTION_SHAPE.cancelledShare;
     const registeredAt = person.createdAt;
     return {
-      id: previewScaleId(`registration:${person.key}`),
+      id: previewScaleId(`${eventId}:registration:${person.key}`),
       userId: person.userId,
       status: cancelled ? "cancelled" : "registered",
       identityId:
@@ -103,14 +107,14 @@ export function buildPopulation({ attendees, speakers, seed, days }) {
       createdAt: registeredAt,
       cancelledAt: cancelled ? registeredAt : null,
       days: days.map((day) => ({
-        id: previewScaleId(`attendance:${person.key}:${day.date}`),
+        id: previewScaleId(`${eventId}:attendance:${person.key}:${day.date}`),
         dayId: day.id,
         dayDate: day.date,
         type: weighted(random, PRODUCTION_SHAPE.attendance),
       })),
       badge:
         random() < PRODUCTION_SHAPE.badgeShare
-          ? { id: previewScaleId(`badge:${person.key}`), credentialHash: badgeCredentialHash(seededBadgeCredential(person.key)) }
+          ? { id: previewScaleId(`${eventId}:badge:${person.key}`), credentialHash: badgeCredentialHash(seededBadgeCredential(`${eventId}:${person.key}`)) }
           : null,
     };
   });
@@ -146,9 +150,9 @@ export function buildSavedSessions({ registrations, sessions, seed }) {
 const SPONSOR_TIERS = ["Leader", "Leader", "Inspirator", "Inspirator", "Inspirator", "Innovator", "Innovator", "Innovator", "Ambassador", "Ambassador", "Ambassador", "Ambassador"];
 
 /** Twelve active event sponsorships drawn from the synthetic organizations. */
-export function buildSponsorships(organizations) {
+export function buildSponsorships(organizations, eventId) {
   return SPONSOR_TIERS.map((tier, index) => ({
-    id: previewScaleId(`sponsorship:${index + 1}`),
+    id: previewScaleId(`${eventId}:sponsorship:${index + 1}`),
     organizationId: organizations[index].id,
     tier,
   }));

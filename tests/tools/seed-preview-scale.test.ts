@@ -7,6 +7,7 @@ import { buildPersonas, dedupeRoster, PERSONA_ROLES } from "../../scripts/lib/pr
 import { insertStatements, MAX_STATEMENT_BYTES } from "../../scripts/lib/preview-scale/sql.mjs";
 import { seedStatements } from "../../scripts/lib/preview-scale/statements.mjs";
 import { seededBadgeCredential } from "../../scripts/lib/preview-scale/population.mjs";
+import { newEvent, newEventStatements } from "../../scripts/lib/preview-scale/event.mjs";
 import { badgeCredentialSchema } from "../../assets/shared/schemas/badge-credential";
 
 const context = {
@@ -88,7 +89,7 @@ describe("persona roster", () => {
   });
 
   it("creates one plus-addressed account per role", () => {
-    expect(buildPersonas(roster).map((persona: { email: string }) => persona.email)).toEqual(
+    expect(buildPersonas(roster, "event-1").map((persona: { email: string }) => persona.email)).toEqual(
       PERSONA_ROLES.map((role) => `test.member+${role.tag}@example.org`),
     );
   });
@@ -192,6 +193,36 @@ INSERT INTO event_agenda_rooms (id, event_id, name, capacity) VALUES ('existing-
     expect(count(db, "SELECT COUNT(*) AS count FROM event_agenda_rooms WHERE name = 'Room 1'")).toBe(1);
     expect(count(db, "SELECT COUNT(*) AS count FROM user_roles WHERE context_type = 'event'")).toBe(
       fewer.personas.filter((persona: { roleId: string | null }) => persona.roleId).length,
+    );
+  });
+
+  it("seeds a second, newly created event beside the first", () => {
+    const db = migratedDatabase();
+    const first = { ...context, rooms: [{ id: "existing-room", name: "Room 1" }] };
+    apply(db, seedStatements(first, buildPreviewScalePlan({ attendees: 300, speakers: 40, context: first, roster })));
+    const event = newEvent({
+      slug: "second-event",
+      name: "Second event",
+      start: "2027-03-02",
+      dayCount: 2,
+      timeZone: "America/Toronto",
+    });
+    const second = { ...event, roles: context.roles, actorUserId: "admin-1" };
+    const secondPlan = buildPreviewScalePlan({ attendees: 300, speakers: 40, context: second, roster });
+    for (let run = 0; run < 2; run += 1)
+      apply(db, [...newEventStatements(event), ...seedStatements(second, secondPlan)]);
+    expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    expect(count(db, "SELECT COUNT(*) AS count FROM event_days WHERE event_id = '" + event.eventId + "'")).toBe(2);
+    expect(count(db, "SELECT COUNT(DISTINCT event_id) AS count FROM registrations")).toBe(2);
+    expect(count(db, "SELECT COUNT(*) AS count FROM registrations WHERE event_id = '" + event.eventId + "'")).toBe(
+      secondPlan.population.registrations.length +
+        secondPlan.personas.filter((persona: { roleId: string | null }) => !persona.roleId).length,
+    );
+    expect(
+      count(db, "SELECT COUNT(*) AS count FROM event_agenda_occurrences WHERE event_id = '" + event.eventId + "'"),
+    ).toBe(secondPlan.sessions.length);
+    expect(secondPlan.sessions.find((session: { format: string }) => session.format === "keynote")?.startAt).toBe(
+      "2027-03-02T13:00:00.000Z",
     );
   });
 });

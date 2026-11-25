@@ -52,7 +52,8 @@ export function personaEmail(baseEmail, tag) {
 }
 
 /** Every persona account for the roster, with stable ids keyed by address. */
-export function buildPersonas(roster) {
+/** Persona accounts are shared by every event; their role and registration belong to `eventId`. */
+export function buildPersonas(roster, eventId) {
   return roster.flatMap((person) =>
     PERSONA_ROLES.map((role) => {
       const email = personaEmail(person.email, role.tag);
@@ -64,8 +65,8 @@ export function buildPersonas(roster) {
         lastName: person.lastName,
         userId: previewScaleId(`persona:${email}`),
         identityId: previewScaleId(`persona:${email}:individual`),
-        roleAssignmentId: previewScaleId(`persona:${email}:role`),
-        registrationId: previewScaleId(`persona:${email}:registration`),
+        roleAssignmentId: previewScaleId(`${eventId}:persona:${email}:role`),
+        registrationId: previewScaleId(`${eventId}:persona:${email}:registration`),
       };
     }),
   );

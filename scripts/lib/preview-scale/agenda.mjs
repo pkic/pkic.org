@@ -14,7 +14,7 @@ export const ROOMS = [
   { key: "main", name: "Main hall", capacity: 900 },
   { key: "auditorium", name: "Auditorium", capacity: 400 },
   ...Array.from({ length: 6 }, (_, index) => ({ key: `room-${index + 1}`, name: `Room ${index + 1}`, capacity: 120 })),
-].map((room) => ({ ...room, id: previewScaleId(`room:${room.key}`) }));
+];
 
 const KEYNOTE = { start: "08:00", end: "08:45" };
 const BREAKS = [
@@ -64,12 +64,12 @@ function assignSpeakers(sessions, speakers, random) {
 /**
  * The room, time and content of every slot come from `random` before any
  * speaker is assigned, so a different speaker count changes only who speaks.
- * @param {{ days: string[], timeZone: string, rooms: Array<{id:string}>, speakers: Array<{userId:string}>, random: () => number, fill?: number }} options
+ * @param {{ eventId: string, days: string[], timeZone: string, rooms: Array<{id:string}>, speakers: Array<{userId:string}>, random: () => number, fill?: number }} options
  */
-export function buildAgenda({ days, timeZone, rooms, speakers, random, fill = 0.55 }) {
+export function buildAgenda({ eventId, days, timeZone, rooms, speakers, random, fill = 0.55 }) {
   const at = (day, clock) => dateTimeLocalToIso(`${day}T${clock}`, timeZone);
   const sessions = [];
-  const add = (key, fields) => sessions.push({ id: previewScaleId(`occurrence:${key}`), speakerUserIds: [], ...fields });
+  const add = (key, fields) => sessions.push({ id: previewScaleId(`${eventId}:occurrence:${key}`), speakerUserIds: [], ...fields });
   days.forEach((day, dayIndex) => {
     add(`${day}:keynote`, {
       title: `${dayIndex === 0 ? "Opening keynote" : `Day ${dayIndex + 1} keynote`}: ${inventTitle(random)}`,
@@ -112,7 +112,11 @@ export function buildAgenda({ days, timeZone, rooms, speakers, random, fill = 0.
 }
 
 /** The seeded rooms, keeping the id of a room the event already has under the same name. */
-export function resolveRooms(existingRooms) {
+export function resolveRooms(eventId, existingRooms) {
   const byName = new Map(existingRooms.map((room) => [room.name, room.id]));
-  return ROOMS.map((room) => ({ ...room, id: byName.get(room.name) ?? room.id, existing: byName.has(room.name) }));
+  return ROOMS.map((room) => ({
+    ...room,
+    id: byName.get(room.name) ?? previewScaleId(`${eventId}:room:${room.key}`),
+    existing: byName.has(room.name),
+  }));
 }

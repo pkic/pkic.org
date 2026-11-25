@@ -9,6 +9,7 @@
 - 12 event sponsorships.
 - Test accounts: one per team member per role, at `first.last+<role>@pkic.org`. The roles are `organizer`, `committee`, `moderator`, `volunteer` and `studio`, plus `attendee`, which holds a registration. Each role is granted on the seeded event only, never site-wide.
 - The event's earlier agenda becomes private. It is kept, not deleted.
+- Several events can be seeded on one database. They share the invented people, organizations and test accounts; registrations, badges, agenda and roles belong to each event.
 
 ## Run it
 
@@ -16,6 +17,12 @@ Review first. This reads preview, writes nothing, and reports how many existing 
 
 ```sh
 pnpm seed:preview-scale --preview --sql-out /tmp/preview-scale.sql
+```
+
+To fill a fresh event instead of an existing one, which leaves the existing agenda alone:
+
+```sh
+pnpm seed:preview-scale --preview --event scale-test-event --create-event --name "Scale test event" --start 2027-03-02
 ```
 
 Then apply it. Every preview branch shares this database, so the owner must agree first:
@@ -27,6 +34,7 @@ pnpm seed:preview-scale --preview --apply
 Options:
 
 - `--event <slug>`: the event to fill (default `pqc-conference-amsterdam-nl`).
+- `--create-event --name <name> --start <YYYY-MM-DD>`: create the event first when no event has that slug. `--days <n>` (default 3) and `--timezone <IANA zone>` (default `Europe/Amsterdam`) shape it. The new event is invitation-only, so it stays off the public event list. Running it again reuses the event.
 - `--attendees <n>` and `--speakers <n>`: change the volume.
 - `--person <email>`: add a team member who has no account yet. Repeat it for each person.
 - `--roster target|production|none`: where to find the team. `target`, the default, reads accounts on the database being seeded. `production` reads them from production and copies only their names and addresses into preview. Use it only with the owner's approval.
