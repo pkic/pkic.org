@@ -81,14 +81,18 @@ export function buildPersonas(roster, eventId, sponsorships = []) {
   return roster.flatMap((person, index) =>
     PERSONA_ROLES.filter((role) => !role.sponsor || sponsorships.length > 0).map((role) => {
       const email = personaEmail(person.email, role.tag);
+      const sponsorship = role.sponsor ? sponsorships[index % sponsorships.length] : null;
       return {
         email,
         tag: role.tag,
         roleId: role.roleId,
         jobTitle: role.jobTitle,
         registers: role.registers === true,
-        sponsorship: role.sponsor ? sponsorships[index % sponsorships.length] : null,
-        organizationIdentityId: previewScaleId(`persona:${email}:organization`),
+        sponsorship,
+        // A sponsor account's identity is keyed by its sponsor, so a roster change that moves it to another sponsorship adds the new identity.
+        organizationIdentityId: previewScaleId(
+          sponsorship ? `persona:${email}:organization:${sponsorship.organizationId}` : `persona:${email}:organization`,
+        ),
         firstName: person.firstName,
         lastName: `${person.lastName} (${role.label})`,
         userId: previewScaleId(`persona:${email}`),

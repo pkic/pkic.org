@@ -227,6 +227,13 @@ function personaStatements(context, personas) {
 VALUES (${sqlString(persona.userId)}, ${email}, ${email}, ${sqlString(persona.firstName)}, ${sqlString(persona.lastName)}, 1, ${NOW}, 'magic_link', ${NOW}, ${NOW})
 ON CONFLICT(normalized_email) DO UPDATE SET first_name = excluded.first_name, last_name = excluded.last_name, updated_at = excluded.updated_at
 WHERE users.first_name IS NOT excluded.first_name OR users.last_name IS NOT excluded.last_name;`,
+      // A sponsor account that moved to another sponsorship stops speaking for the old sponsor.
+      ...(persona.sponsorship
+        ? [
+            `UPDATE identities SET ended_at = ${NOW}, is_default = 0, updated_at = ${NOW}
+WHERE user_id = ${userIdSql} AND source = 'organization_contact' AND ended_at IS NULL AND organization_id IS NOT ${sqlString(persona.sponsorship.organizationId)};`,
+          ]
+        : []),
       organizationIdentitySql(persona, userIdSql),
       individualIdentityFallbackSql(userIdSql, "staff").trim(),
       // An earlier run gave the account a personal identity; with two, every sign-in asks which to act as.
@@ -236,8 +243,12 @@ WHERE user_id = ${userIdSql} AND organization_id IS NULL AND source = 'staff' AN
     AND held.started_at IS NOT NULL AND held.ended_at IS NULL AND held.blocked_at IS NULL);`,
     ];
     if (persona.sponsorship)
-      statements.push(`UPDATE sponsorships SET contact_email = ${email}, updated_at = ${NOW}
-WHERE id = ${sqlString(persona.sponsorship.id)} AND contact_email IS NOT ${email};`);
+      statements.push(
+        `UPDATE sponsorships SET contact_email = NULL, updated_at = ${NOW}
+WHERE event_id = ${sqlString(context.eventId)} AND contact_email = ${email} AND id <> ${sqlString(persona.sponsorship.id)};`,
+        `UPDATE sponsorships SET contact_email = ${email}, updated_at = ${NOW}
+WHERE id = ${sqlString(persona.sponsorship.id)} AND contact_email IS NOT ${email};`,
+      );
     if (persona.roleId)
       statements.push(`INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
 SELECT ${sqlString(persona.roleAssignmentId)}, person.id, role.id, 'event', ${sqlString(context.eventId)}, role.single_holder_per_context, ${NOW}

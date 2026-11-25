@@ -161,11 +161,15 @@ export function buildSavedSessions({ registrations, sessions, seed, timeZone }) 
 
 const SPONSOR_TIERS = ["Leader", "Leader", "Inspirator", "Inspirator", "Inspirator", "Innovator", "Innovator", "Innovator", "Ambassador", "Ambassador", "Ambassador", "Ambassador"];
 
-/** Twelve active event sponsorships drawn from the synthetic organizations. */
-export function buildSponsorships(organizations, eventId) {
-  return SPONSOR_TIERS.map((tier, index) => ({
+/**
+ * Active event sponsorships drawn from the synthetic organizations: twelve, or
+ * one per sponsor account when the roster is larger, so each sponsor account is
+ * the contact of a sponsorship of its own.
+ */
+export function buildSponsorships(organizations, eventId, minimum = 0) {
+  return Array.from({ length: Math.max(SPONSOR_TIERS.length, minimum) }, (_, index) => ({
     id: previewScaleId(`${eventId}:sponsorship:${index + 1}`),
     organizationId: organizations[index].id,
-    tier,
+    tier: SPONSOR_TIERS[index % SPONSOR_TIERS.length],
   }));
 }

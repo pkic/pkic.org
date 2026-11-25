@@ -6,13 +6,13 @@ import { buildPreviewScalePlan } from "../../scripts/lib/preview-scale/plan.mjs"
 import { buildPersonas, dedupeRoster, PERSONA_ROLES } from "../../scripts/lib/preview-scale/personas.mjs";
 import { insertStatements, MAX_STATEMENT_BYTES } from "../../scripts/lib/preview-scale/sql.mjs";
 import { seedStatements } from "../../scripts/lib/preview-scale/statements.mjs";
-import { seededBadgeCredential } from "../../scripts/lib/preview-scale/population.mjs";
+import { buildSponsorships, seededBadgeCredential } from "../../scripts/lib/preview-scale/population.mjs";
 import { eventOwnerStatements, newEvent, newEventStatements } from "../../scripts/lib/preview-scale/event.mjs";
 import { badgeCredentialSchema } from "../../assets/shared/schemas/badge-credential";
 import { sponsorConsentSql } from "../../functions/_lib/services/event-participation/sponsor-consent";
 import { verifyAuthenticationResponse } from "@simplewebauthn/server";
 import { isoBase64URL } from "@simplewebauthn/server/helpers";
-import { mkdtempSync } from "node:fs";
+import { chmodSync, mkdtempSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import {
   assertOutsideRepository,
@@ -113,6 +113,19 @@ describe("persona roster", () => {
     expect(buildPersonas(roster, "event-1", sponsorships)[0].lastName).toBe("Member (Organizer)");
   });
 
+  it("gives every sponsor account a sponsorship of its own", () => {
+    const people = Array.from({ length: 13 }, (_, index) => ({
+      firstName: "Member",
+      lastName: `${index}`,
+      email: `member${index}@example.org`,
+    }));
+    const organizations = Array.from({ length: 20 }, (_, index) => ({ id: `organization-${index}` }));
+    const sponsorships = buildSponsorships(organizations, "event-1", people.length);
+    const sponsors = buildPersonas(people, "event-1", sponsorships).filter((persona: { tag: string }) => persona.tag === "sponsor");
+    expect(new Set(sponsors.map((persona: { sponsorship: { id: string } }) => persona.sponsorship.id)).size).toBe(13);
+    expect(buildSponsorships(organizations, "event-1").length).toBe(12);
+  });
+
   it("leaves out the sponsor account when the event has no sponsorships", () => {
     expect(buildPersonas(roster, "event-1").map((persona: { tag: string }) => persona.tag)).not.toContain("sponsor");
   });
@@ -143,6 +156,15 @@ describe("test passkeys", () => {
     expect(testOrigin("https://stable.preview.pkic.org/portal/")).toBe("https://stable.preview.pkic.org");
     expect(() => assertOutsideRepository(resolve("scripts/passkeys.json"), resolve("."))).toThrow();
     expect(() => assertOutsideRepository(join(tmpdir(), "passkeys.json"), resolve("."))).not.toThrow();
+    expect(() => assertOutsideRepository(resolve("..passkeys.json"), resolve("."))).toThrow();
+  });
+
+  it("narrows an existing key file to its owner", async () => {
+    const file = join(mkdtempSync(join(tmpdir(), "pkic-passkeys-")), "passkeys.json");
+    writeFileSync(file, `${JSON.stringify({ version: 1, credentials: {} })}\n`, { mode: 0o644 });
+    chmodSync(file, 0o644);
+    await ensurePasskeys(file, []);
+    expect(statSync(file).mode & 0o777).toBe(0o600);
   });
 });
 
@@ -338,6 +360,26 @@ INSERT INTO identities (id, user_id, source, show_on_organization_profile, invit
           WHERE ${sponsorConsentSql("reg")}`,
       ),
     ).toBe(fewer.leads.captured.length);
+    // A roster change moves the sponsor account to another sponsorship: it speaks for the new sponsor only.
+    const moved = {
+      ...fewer,
+      personas: buildPersonas(roster, schemaContext.eventId, fewer.sponsorships.slice(1)).filter(
+        (persona: { roleId: string | null }) => !persona.roleId || schemaContext.roles.has(persona.roleId),
+      ),
+    };
+    apply(db, seedStatements(schemaContext, moved));
+    expect(
+      db
+        .prepare(
+          `SELECT held.organization_id AS organizationId FROM identities held JOIN users person ON person.id = held.user_id
+            WHERE person.normalized_email = 'test.member+sponsor@example.org' AND held.ended_at IS NULL`,
+        )
+        .all(),
+    ).toEqual([{ organizationId: fewer.sponsorships[1].organizationId }]);
+    expect(
+      count(db, "SELECT COUNT(*) AS count FROM sponsorships WHERE contact_email = 'test.member+sponsor@example.org'"),
+    ).toBe(1);
+    apply(db, seedStatements(schemaContext, fewer));
     const store = await ensurePasskeys(
       join(mkdtempSync(join(tmpdir(), "pkic-passkeys-")), "passkeys.json"),
       fewer.personas.map((persona: { email: string }) => persona.email),

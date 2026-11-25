@@ -21,7 +21,8 @@ const DEVICE_NAME = "Preview test passkey";
 /** Refuses a key file inside the repository, where it could be committed. */
 export function assertOutsideRepository(file, repositoryRoot) {
   const relative = path.relative(path.resolve(repositoryRoot), path.resolve(file));
-  if (!relative.startsWith("..") && !path.isAbsolute(relative))
+  const escapes = relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+  if (!escapes)
     throw new Error(`Keep the passkey file outside the repository: ${file}`);
 }
 
@@ -41,6 +42,8 @@ export async function ensurePasskeys(file, emails) {
     ? JSON.parse(fs.readFileSync(file, "utf8"))
     : { version: KEY_FILE_VERSION, credentials: {} };
   if (store.version !== KEY_FILE_VERSION) throw new Error(`${file} is not a preview passkey file.`);
+  // Node applies the creation mode only to a new file; an existing key file is narrowed to its owner too.
+  if (fs.existsSync(file)) fs.chmodSync(file, 0o600);
   let added = 0;
   for (const email of emails)
     if (!store.credentials[email]) {

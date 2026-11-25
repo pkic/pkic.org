@@ -138,6 +138,9 @@ function readEventContext(options) {
   (SELECT json_group_array(occurrence.id) FROM event_agenda_occurrences occurrence WHERE occurrence.event_id = event.id AND occurrence.visibility <> 'private') AS visibleOccurrenceIds
 FROM (SELECT 1) LEFT JOIN events event ON event.slug = ${sqlString(options.event)}`,
   );
+  const ownerNeeded = !row.eventId || !row.ownerGroupId;
+  if (ownerNeeded && readRows(options.target, options.persistTo, `SELECT id FROM groups WHERE slug = ${sqlString(options.group)}`).length === 0)
+    throw new Error(`No group ${options.group} on the ${options.target} database; pass --group with an existing group slug.`);
   const shared = {
     adminUserId: row.adminUserId,
     roles: new Set(JSON.parse(row.roles)),
