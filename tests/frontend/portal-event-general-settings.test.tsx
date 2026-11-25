@@ -6,6 +6,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { EventDetail } from "../../assets/ts/member-flows/portal/sections/events/types";
 import { GeneralTab } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/GeneralTab";
+import { eventSponsorTiersReplaceSchema } from "../../assets/shared/schemas/sponsorship-management";
 import { SponsorTiersTab } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/SponsorTiersTab";
 import { controlFor, typeInto } from "./helpers/labeled-control";
 
@@ -371,7 +372,7 @@ describe("admin event general settings", () => {
       "fetch",
       vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
         if (init?.method === "PUT") {
-          const body = JSON.parse(String(init.body)) as { consortiumLeadTiers: string[] };
+          const body = eventSponsorTiersReplaceSchema.parse(JSON.parse(String(init.body)));
           puts.push(body);
           consortiumTiers = consortiumTiers.map((item) => ({
             ...item,

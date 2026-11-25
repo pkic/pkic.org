@@ -50,6 +50,10 @@ function activeConsortiumSponsorTerms(sponsorAlias: string): string[] {
 /** Consortium staff keep capturing, and uploading offline scans, this long after an admitting event ends. */
 const CONSORTIUM_CAPTURE_GRACE = "-2 days";
 
+function captureWindowOpenSql(eventAlias: string): string {
+  return `COALESCE(${eventAlias}.ends_at,'9999-12-31')>strftime('%Y-%m-%dT%H:%M:%fZ','now','${CONSORTIUM_CAPTURE_GRACE}')`;
+}
+
 /**
  * A sponsorship that can hold leads at some event: an active event sponsorship, or an active consortium
  * sponsorship whose tier at least one event admits for lead capture. For `capture`, that event must not have
@@ -64,7 +68,7 @@ export function activeLeadSponsorshipSql(sponsorAlias: string, purpose: "capture
       ? `EXISTS(SELECT 1 FROM event_consortium_lead_tiers any_lead_tier
           JOIN events capturing_event ON capturing_event.id=any_lead_tier.event_id
           WHERE any_lead_tier.tier=${sponsor}.tier
-            AND COALESCE(capturing_event.ends_at,'9999-12-31')>strftime('%Y-%m-%dT%H:%M:%fZ','now','${CONSORTIUM_CAPTURE_GRACE}'))`
+            AND ${captureWindowOpenSql("capturing_event")})`
       : `EXISTS(SELECT 1 FROM event_consortium_lead_tiers any_lead_tier WHERE any_lead_tier.tier=${sponsor}.tier)`;
   return `(${activeEventSponsorSql(sponsor)} OR ${allOf([...activeConsortiumSponsorTerms(sponsor), admitted])})`;
 }
@@ -72,7 +76,8 @@ export function activeLeadSponsorshipSql(sponsorAlias: string, purpose: "capture
 /**
  * The sponsorships that hold leads at one event: its own active event sponsorships, and the active consortium
  * sponsorships whose tier the event admits for lead capture. An organization that also sponsors the event
- * directly captures only as that event sponsor, so it scans into one lead list per event. For `read`, a
+ * directly captures only as that event sponsor, so it scans into one lead list per event. Consortium capture
+ * also closes two days after the event ends. For `read`, a
  * consortium sponsorship that already holds leads there stays readable, so those leads never disappear.
  * `eventColumn` is a column reference, never a placeholder, because the predicate repeats it.
  */
@@ -91,8 +96,13 @@ export function activeLeadSponsorOfEventSql(
   const noDirectSponsor = `NOT EXISTS(SELECT 1 FROM sponsorships direct_sponsor WHERE ${directSponsor})`;
   return `(${allOf([`${sponsor}.event_id=${eventColumn}`, ...activeEventSponsorTerms(sponsor)])} OR ${allOf([
     ...activeConsortiumSponsorTerms(sponsor),
-    `EXISTS(SELECT 1 FROM event_consortium_lead_tiers event_lead_tier
-      WHERE event_lead_tier.event_id=${eventColumn} AND event_lead_tier.tier=${sponsor}.tier)`,
+    purpose === "capture"
+      ? `EXISTS(SELECT 1 FROM event_consortium_lead_tiers event_lead_tier
+          JOIN events lead_tier_event ON lead_tier_event.id=event_lead_tier.event_id
+          WHERE event_lead_tier.event_id=${eventColumn} AND event_lead_tier.tier=${sponsor}.tier
+            AND ${captureWindowOpenSql("lead_tier_event")})`
+      : `EXISTS(SELECT 1 FROM event_consortium_lead_tiers event_lead_tier
+          WHERE event_lead_tier.event_id=${eventColumn} AND event_lead_tier.tier=${sponsor}.tier)`,
     purpose === "read"
       ? `(${noDirectSponsor} OR EXISTS(SELECT 1 FROM event_sponsor_leads held_lead
           WHERE held_lead.event_id=${eventColumn} AND held_lead.sponsor_id=${sponsor}.id))`

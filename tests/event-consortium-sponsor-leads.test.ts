@@ -14,6 +14,7 @@ import {
 } from "../assets/shared/schemas/event-participation-reporting";
 import {
   sponsorLeadConfirmationSchema,
+  sponsorLeadSponsorsSchema,
   sponsorLeadDetailSchema,
   sponsorLeadListSchema,
   sponsorLeadNoteResponseSchema,
@@ -47,6 +48,18 @@ async function sponsorship(type: "consortium" | "event", organizationId: string,
     .bind(id, type, eventId, organizationId, type === "consortium" ? "Titanium" : "Leader", now, now)
     .run();
   return id;
+}
+
+/** SQL for an instant `days` from the real clock, because the capture window reads SQLite's own `now`. */
+const fromNow = (days: number) => `strftime('%Y-%m-%dT%H:%M:%fZ','now','${days} days')`;
+
+/** `pqc-2026`, dated a week ahead of today so the consortium capture window stays open on every run. */
+async function seedUpcomingEvent() {
+  const seeded = await seedEventAndAdmin(env.DB);
+  await env.DB.prepare(`UPDATE events SET starts_at=${fromNow(6)},ends_at=${fromNow(8)} WHERE id=?`)
+    .bind(seeded.eventId)
+    .run();
+  return seeded;
 }
 
 async function admitTier(eventId: string, tier = "Titanium") {
@@ -84,7 +97,13 @@ async function consentingAttendee(eventId: string) {
   return credential;
 }
 
-async function capture(sponsorId: string, operatorUserId: string, token: string, credential: string) {
+async function capture(
+  sponsorId: string,
+  operatorUserId: string,
+  token: string,
+  credential: string,
+  slug = "pqc-2026",
+) {
   const input = leadCaptureRequestSchema.parse(
     withScannedInput({
       operatorUserId,
@@ -95,7 +114,7 @@ async function capture(sponsorId: string, operatorUserId: string, token: string,
       observedAt: now,
     }),
   );
-  const response = await call(`/pqc-2026/sponsors/${sponsorId}/leads`, token, {
+  const response = await call(`/${slug}/sponsors/${sponsorId}/leads`, token, {
     method: "POST",
     body: JSON.stringify(input),
   });
@@ -108,7 +127,7 @@ beforeEach(async () => {
 
 describe("consortium sponsor lead capture", () => {
   it("lets a consortium sponsor's staff scan only at events that admit its tier", async () => {
-    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { eventId } = await seedUpcomingEvent();
     await env.DB.prepare("UPDATE events SET visibility='invitation_only' WHERE id=?").bind(eventId).run();
     const representative = await insertOrgRepresentative(env.DB);
     const consortiumId = await sponsorship("consortium", representative.organizationId, null);
@@ -137,7 +156,7 @@ describe("consortium sponsor lead capture", () => {
   });
 
   it("scans as the organization's own event sponsorship when it also sponsors the event directly", async () => {
-    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { eventId } = await seedUpcomingEvent();
     const representative = await insertOrgRepresentative(env.DB);
     const consortiumId = await sponsorship("consortium", representative.organizationId, null);
     const eventSponsorId = await sponsorship("event", representative.organizationId, eventId);
@@ -158,7 +177,7 @@ async function secondEvent(slug: string) {
   const id = crypto.randomUUID();
   await env.DB.prepare(
     `INSERT INTO events(id,slug,name,timezone,starts_at,ends_at,source_path,capacity_in_person,registration_mode,invite_limit_attendee,settings_json,created_at,updated_at)
-     VALUES(?,?,'Second event','Europe/Amsterdam','2026-12-10T08:00:00.000Z','2026-12-11T18:00:00.000Z','content/events/second.md',1,'invite_or_open',5,'{}',?,?)`,
+     VALUES(?,?,'Second event','Europe/Amsterdam',${fromNow(15)},${fromNow(16)},'content/events/second.md',1,'invite_or_open',5,'{}',?,?)`,
   )
     .bind(id, slug, now, now)
     .run();
@@ -178,7 +197,7 @@ async function contactViewer(sponsorshipId: string) {
 
 describe("consortium sponsor lead boundaries", () => {
   it("keeps leads captured as a consortium sponsor readable after the organization sponsors the event directly", async () => {
-    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { eventId } = await seedUpcomingEvent();
     const representative = await insertOrgRepresentative(env.DB);
     const consortiumId = await sponsorship("consortium", representative.organizationId, null);
     await admitTier(eventId);
@@ -191,13 +210,18 @@ describe("consortium sponsor lead boundaries", () => {
     const detail = await call("/pqc-2026", token);
     const event = eventAudienceDetailSchema.parse(((await detail.json()) as { event: unknown }).event);
     expect(event.scannerAccess?.sponsors.map((sponsor) => sponsor.id)).toEqual([eventSponsorId]);
+    const discovered = await call("/pqc-2026/sponsors/leads", token);
+    expect(discovered.status, await discovered.clone().text()).toBe(200);
+    expect(sponsorLeadSponsorsSchema.parse(await discovered.json()).sponsors).toMatchObject([
+      { id: eventSponsorId, canCapture: true },
+    ]);
     const leads = await call(`/pqc-2026/sponsors/${consortiumId}/leads`, viewer);
     expect(leads.status, await leads.clone().text()).toBe(200);
     expect(sponsorLeadListSchema.parse(await leads.json()).leads).toMatchObject([{ name: "Alex Example" }]);
   });
 
   it("stops consortium capture two days after the admitting event ends, while its leads stay readable", async () => {
-    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { eventId } = await seedUpcomingEvent();
     const representative = await insertOrgRepresentative(env.DB);
     const consortiumId = await sponsorship("consortium", representative.organizationId, null);
     await admitTier(eventId);
@@ -207,18 +231,45 @@ describe("consortium sponsor lead boundaries", () => {
     ).toBe(200);
     const viewer = await contactViewer(consortiumId);
 
-    await env.DB.prepare("UPDATE events SET ends_at=strftime('%Y-%m-%dT%H:%M:%fZ','now','-3 days') WHERE id=?")
+    await env.DB.prepare(`UPDATE events SET ends_at=${fromNow(-3)} WHERE id=?`)
       .bind(eventId)
       .run();
     const late = await capture(consortiumId, representative.userId, token, await consentingAttendee(eventId));
     expect(late.response.status).toBe(403);
+    // A private event stays open to the sponsor's lead viewers after capture closes.
+    await env.DB.prepare("UPDATE events SET visibility='invitation_only' WHERE id=?").bind(eventId).run();
+    const detail = await call("/pqc-2026", viewer);
+    expect(detail.status, await detail.clone().text()).toBe(200);
     const leads = await call(`/pqc-2026/sponsors/${consortiumId}/leads`, viewer);
     expect(leads.status, await leads.clone().text()).toBe(200);
     expect(sponsorLeadListSchema.parse(await leads.json()).leads).toHaveLength(1);
   });
 
+  it("closes capture at an ended admitting event while another admitting event keeps the sponsor capturing", async () => {
+    const { eventId } = await seedUpcomingEvent();
+    const laterEventId = await secondEvent("pqc-2027");
+    const representative = await insertOrgRepresentative(env.DB);
+    const consortiumId = await sponsorship("consortium", representative.organizationId, null);
+    await admitTier(eventId);
+    const token = await sessionFor(representative);
+    await env.DB.prepare(`UPDATE events SET ends_at=${fromNow(-3)} WHERE id=?`)
+      .bind(eventId)
+      .run();
+
+    const ended = await capture(consortiumId, representative.userId, token, await consentingAttendee(eventId));
+    expect(ended.response.status).not.toBe(200);
+    const later = await capture(
+      consortiumId,
+      representative.userId,
+      token,
+      await consentingAttendee(laterEventId),
+      "pqc-2027",
+    );
+    expect(later.response.status, await later.response.clone().text()).toBe(200);
+  });
+
   it("keeps one consortium sponsorship's leads apart at each event that admits its tier", async () => {
-    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { eventId } = await seedUpcomingEvent();
     await secondEvent("pqc-2027");
     const representative = await insertOrgRepresentative(env.DB);
     const consortiumId = await sponsorship("consortium", representative.organizationId, null);
@@ -252,7 +303,7 @@ describe("consortium sponsor lead boundaries", () => {
 
 describe("sponsor lead notes", () => {
   it("lets the capturing operator and the sponsor's lead viewers keep one shared note", async () => {
-    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { eventId } = await seedUpcomingEvent();
     const representative = await insertOrgRepresentative(env.DB);
     const consortiumId = await sponsorship("consortium", representative.organizationId, null);
     await admitTier(eventId);
@@ -298,7 +349,7 @@ describe("sponsor lead notes", () => {
   });
 
   it("refuses the note when the session ends between sign-in and the write", async () => {
-    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { eventId } = await seedUpcomingEvent();
     const representative = await insertOrgRepresentative(env.DB);
     const consortiumId = await sponsorship("consortium", representative.organizationId, null);
     await admitTier(eventId);

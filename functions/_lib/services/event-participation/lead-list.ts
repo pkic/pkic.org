@@ -143,7 +143,12 @@ export async function listLeadSponsors(
   const search = query.q ? buildD1TextSearchFilter(query.q, [name]) : null;
   const permissions = ["agenda:leads_view", "agenda:leads_capture", "agenda:leads_export"] as const;
   const authority = permissions.map((permission) => sponsorLeadReadEvidence(actor, permission, "sponsor.id"));
-  const expressions = authority.map(({ sql }) => sql);
+  // A retained consortium sponsorship stays readable, but it captures only where the event still admits it.
+  const expressions = authority.map(({ sql }, index) =>
+    permissions[index] === "agenda:leads_capture"
+      ? `(${sql}) AND ${activeLeadSponsorOfEventSql("sponsor", "scoped_event.id")}`
+      : sql,
+  );
   const values = authority.flatMap(({ bindings }) => bindings);
   const canRemoveAll = actor.scopeRestricted ? "0" : sponsorLeadViewerPredicateSql("?", "sponsor");
   const removeBindings = canRemoveAll === "0" ? [] : [actor.id];

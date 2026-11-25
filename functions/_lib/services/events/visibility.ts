@@ -99,7 +99,7 @@ export function buildEventAudiencePredicate(
         UNION ALL
         SELECT permission.value AS permission, 'event_sponsor' AS context_type, sponsor_scope.id AS context_id
         FROM sponsorships sponsor_scope CROSS JOIN json_each(?) permission
-        WHERE ${activeLeadSponsorOfEventSql("sponsor_scope", `${eventAlias}.id`)}`,
+        WHERE ${activeLeadSponsorOfEventSql("sponsor_scope", `${eventAlias}.id`, "read")}`,
       bindings: [JSON.stringify(allowedEvents), JSON.stringify(allowedSponsors)],
     });
     return {
@@ -188,12 +188,12 @@ export function buildEventAudiencePredicate(
       )
       OR EXISTS (${eventRead.sql})
       OR EXISTS (SELECT 1 FROM sponsorships sponsor_scope
-        WHERE ${activeLeadSponsorOfEventSql("sponsor_scope", `${eventAlias}.id`)} AND EXISTS (${sponsorRead.sql}))
+        WHERE ${activeLeadSponsorOfEventSql("sponsor_scope", `${eventAlias}.id`, "read")} AND EXISTS (${sponsorRead.sql}))
       ${tokenAllowsPermission(actor, "agenda:leads_capture") ? `OR ${sponsorOrganizationCaptureExistsSql("?", undefined, `${eventAlias}.id`)}` : ""}
       ${
         tokenAllowsPermission(actor, "agenda:leads_view") || tokenAllowsPermission(actor, "agenda:leads_export")
           ? `OR EXISTS(SELECT 1 FROM sponsorships viewer_sponsor
-          WHERE ${activeLeadSponsorOfEventSql("viewer_sponsor", `${eventAlias}.id`)} AND ${sponsorLeadViewerPredicateSql("?", "viewer_sponsor")})`
+          WHERE ${activeLeadSponsorOfEventSql("viewer_sponsor", `${eventAlias}.id`, "read")} AND ${sponsorLeadViewerPredicateSql("?", "viewer_sponsor")})`
           : ""
       }
     )`,

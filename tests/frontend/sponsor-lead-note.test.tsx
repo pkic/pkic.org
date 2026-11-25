@@ -3,6 +3,7 @@ import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ScannerLeadNote } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/ScannerLeadNote";
+import { sponsorLeadNoteRequestSchema } from "../../assets/shared/schemas/event-sponsor-lead-list";
 import { controlFor, typeInto } from "./helpers/labeled-control";
 
 const leadId = "10000000-0000-4000-8000-000000000011";
@@ -44,7 +45,7 @@ describe("scanner lead note", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        requests.push({ url: String(input), body: JSON.parse(String(init?.body)) });
+        requests.push({ url: String(input), body: sponsorLeadNoteRequestSchema.parse(JSON.parse(String(init?.body))) });
         return new Response(JSON.stringify({ note: "Asked for a demo.", noteUpdatedAt: "2026-10-04T10:00:00.000Z" }), {
           status: 200,
           headers: { "content-type": "application/json" },
