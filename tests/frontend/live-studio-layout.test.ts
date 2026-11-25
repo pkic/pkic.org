@@ -144,6 +144,22 @@ describe("studio keyboard arrangement", () => {
   });
 });
 
+describe("the Livestream workspace", () => {
+  const livestream = defaultStudioLayouts().livestream;
+
+  it("shows only what is on air and the controls that change it, without Preview, Transition or LIVE", () => {
+    expect(livestream.map((panel) => panel.type).sort()).toEqual(
+      ["chat", "graphics", "message", "monitor", "polls", "questions", "speakers", "time"].sort(),
+    );
+    expect(livestream.flatMap((panel) => panel.outputs ?? [])).toEqual(["program"]);
+    expect(noOverlaps(livestream)).toBe(true);
+  });
+
+  it("fits a Full HD laptop: 18 rows, no panel below them", () => {
+    expect(Math.max(...livestream.map((panel) => panel.y + panel.h))).toBe(18);
+  });
+});
+
 describe("saved studio layouts", () => {
   it("moves a first-shape arrangement onto the grid once, in its own order, and drops the old entry", () => {
     const storage = memory({

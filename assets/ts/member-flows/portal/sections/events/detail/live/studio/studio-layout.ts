@@ -218,13 +218,17 @@ export function defaultStudioLayouts(): StudioLayouts {
       ["polls", { x: 4, y: 22, w: 4, h: 8 }],
       ["chat", { x: 8, y: 22, w: 4, h: 8 }],
     ]),
+    // OBS picks the scene, so the operator only chooses what is on air and sends it with PGM: Program and the
+    // controls, no Preview, Transition or LIVE, in four columns that fit a Full HD laptop without scrolling.
     livestream: seeded("livestream", [
-      ["monitor", { x: 0, y: 0, w: 8, h: 12 }, ["livestream"]],
-      ["questions", { x: 8, y: 0, w: 4, h: 12 }],
-      ["monitor", { x: 0, y: 12, w: 4, h: 7 }, ["program"]],
-      ["speakers", { x: 4, y: 12, w: 4, h: 7 }],
-      ["graphics", { x: 8, y: 12, w: 4, h: 7 }],
-      ["chat", { x: 0, y: 19, w: 12, h: 7 }],
+      ["monitor", { x: 0, y: 0, w: 3, h: 7 }, ["program"]],
+      ["speakers", { x: 0, y: 7, w: 3, h: 11 }],
+      ["questions", { x: 3, y: 0, w: 3, h: 18 }],
+      ["graphics", { x: 6, y: 0, w: 3, h: 11 }],
+      ["time", { x: 6, y: 11, w: 3, h: 7 }],
+      ["chat", { x: 9, y: 0, w: 3, h: 10 }],
+      ["message", { x: 9, y: 10, w: 3, h: 4 }],
+      ["polls", { x: 9, y: 14, w: 3, h: 4 }],
     ]),
     stage: seeded("stage", [
       ["monitor", { x: 0, y: 0, w: 6, h: 10 }, ["stage-display"]],
