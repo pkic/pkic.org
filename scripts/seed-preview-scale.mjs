@@ -207,7 +207,7 @@ async function publish(options, plan) {
     options.persistTo,
     `SELECT state.revision FROM event_agenda_state state JOIN events event ON event.id = state.event_id WHERE event.slug = ${sqlString(options.event)}`,
   );
-  const credential = ensurePasskeys(options.passkeys, []).credentials[organizer.email];
+  const credential = (await ensurePasskeys(options.passkeys, [])).credentials[organizer.email];
   const cookie = await signInWithPasskey(credential, options.base);
   await publishAgenda({ origin: options.base, cookie, eventSlug: options.event, revision: state.revision });
   console.log(`Published the agenda at revision ${state.revision} as ${organizer.email} through ${options.base}.`);
@@ -232,7 +232,7 @@ try {
   const context = readEventContext(options);
   const plan = buildPreviewScalePlan({ ...options, context, roster: readRoster(options) });
   const passkeys = options.passkeys
-    ? passkeyStatements(ensurePasskeys(options.passkeys, plan.personas.map((persona) => persona.email)), plan.personas)
+    ? passkeyStatements(await ensurePasskeys(options.passkeys, plan.personas.map((persona) => persona.email)), plan.personas)
     : [];
   const statements = [
     ...context.create,

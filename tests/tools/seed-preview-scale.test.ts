@@ -114,11 +114,11 @@ describe("persona roster", () => {
 describe("test passkeys", () => {
   it("signs an assertion the Worker's verifier accepts", async () => {
     const file = join(mkdtempSync(join(tmpdir(), "pkic-passkeys-")), "passkeys.json");
-    const credential = ensurePasskeys(file, ["a+organizer@pkic.org"]).credentials["a+organizer@pkic.org"];
+    const credential = (await ensurePasskeys(file, ["a+organizer@pkic.org"])).credentials["a+organizer@pkic.org"];
     const challenge = isoBase64URL.fromUTF8String("challenge-1");
     const origin = "https://stable.preview.pkic.org";
     const verification = await verifyAuthenticationResponse({
-      response: passkeyAssertion(credential, { challenge, origin, rpId: "preview.pkic.org" }),
+      response: await passkeyAssertion(credential, { challenge, origin, rpId: "preview.pkic.org" }),
       expectedChallenge: challenge,
       expectedOrigin: origin,
       expectedRPID: "preview.pkic.org",
@@ -126,7 +126,9 @@ describe("test passkeys", () => {
       requireUserVerification: true,
     });
     expect(verification.verified).toBe(true);
-    expect(ensurePasskeys(file, ["a+organizer@pkic.org"]).credentials["a+organizer@pkic.org"]).toEqual(credential);
+    expect((await ensurePasskeys(file, ["a+organizer@pkic.org"])).credentials["a+organizer@pkic.org"]).toEqual(
+      credential,
+    );
   });
 
   it("refuses production and a key file inside the repository", () => {
@@ -247,7 +249,7 @@ INSERT INTO organizations (id, name, normalized_name, created_at, updated_at)
 
   const count = (db: DatabaseSync, sql: string) => (db.prepare(sql).get() as { count: number }).count;
 
-  it("converges when run again with another speaker count", () => {
+  it("converges when run again with another speaker count", async () => {
     const db = migratedDatabase();
     const schemaContext = { ...context, rooms: [{ id: "existing-room", name: "Room 1" }] };
     apply(
@@ -300,7 +302,7 @@ INSERT INTO organizations (id, name, normalized_name, created_at, updated_at)
           WHERE sponsorship.contact_email = 'test.member+sponsor@example.org'`,
       ),
     ).toBe(1);
-    const store = ensurePasskeys(
+    const store = await ensurePasskeys(
       join(mkdtempSync(join(tmpdir(), "pkic-passkeys-")), "passkeys.json"),
       fewer.personas.map((persona: { email: string }) => persona.email),
     );
