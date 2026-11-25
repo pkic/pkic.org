@@ -8,7 +8,7 @@
 - A three-day agenda: 8 rooms, about 140 sessions and breaks, and 120 speakers with approved profiles and initials headshots. Titles run from two words to about 250 characters; abstracts and biographies come from a small hand-written pool and are sometimes empty. A room the event already has under the same name is reused.
 - 12 event sponsorships.
 - Test accounts: one per team member per role, at `first.last+<role>@pkic.org`. The roles are `organizer`, `committee`, `moderator`, `volunteer` and `studio`. Each role is granted on the seeded event only, never site-wide. `attendee` holds a registration. `sponsor` is the contact for one of the sponsorships and works at that sponsor.
-- Every test account already works at PKI Consortium (the sponsor account at its sponsor) and has a job title, so signing in asks nothing. Its name ends with the role, for example "Paul van Brouwershaven (Organizer)", so the account menu and profile say which account is signed in.
+- Every test account already works at PKI Consortium (the sponsor account at its sponsor) and has a job title, so signing in asks nothing. Its name ends with the role, for example "Paul van Brouwershaven Organizer", so the avatar shows PO and the account menu and profile say which account is signed in.
 - Sponsor leads: about 60% of the attendees accept the event's sponsor-data-sharing term, and every sponsor account starts with 30 captured leads. The summary prints badge codes a sponsor account can still type into the lead scanner.
 - The event's earlier agenda becomes private. It is kept, not deleted.
 - Several events can be seeded on one database. They share the invented people, organizations and test accounts; registrations, badges, agenda and roles belong to each event.

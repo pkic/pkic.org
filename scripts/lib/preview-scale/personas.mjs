@@ -5,8 +5,8 @@ import { previewScaleId } from "../seed-ids.mjs";
  * on the member's own mailbox (`first.last+volunteer@pkic.org`), so each sign-in
  * link reaches them and each account holds exactly one role. Roles are granted
  * on the seeded event only, never site-wide. The role's label follows the
- * person's name ("Paul van Brouwershaven (Organizer)"), so the header, the
- * profile and every list say which test account is signed in.
+ * person's name ("Paul van Brouwershaven Organizer", initials PO), so the avatar, the
+ * header, the profile and every list say which test account is signed in.
  *
  * The roster is read at run time (team accounts on the source database plus
  * any addresses passed with --person); no address is stored in the repository.
@@ -94,7 +94,7 @@ export function buildPersonas(roster, eventId, sponsorships = []) {
           sponsorship ? `persona:${email}:organization:${sponsorship.organizationId}` : `persona:${email}:organization`,
         ),
         firstName: person.firstName,
-        lastName: `${person.lastName} (${role.label})`,
+        lastName: `${person.lastName} ${role.label}`,
         userId: previewScaleId(`persona:${email}`),
         identityId: previewScaleId(`persona:${email}:individual`),
         roleAssignmentId: previewScaleId(`${eventId}:persona:${email}:role`),

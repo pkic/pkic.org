@@ -111,7 +111,7 @@ describe("persona roster", () => {
     expect(buildPersonas(roster, "event-1", sponsorships).map((persona: { email: string }) => persona.email)).toEqual(
       PERSONA_ROLES.map((role) => `test.member+${role.tag}@example.org`),
     );
-    expect(buildPersonas(roster, "event-1", sponsorships)[0].lastName).toBe("Member (Organizer)");
+    expect(buildPersonas(roster, "event-1", sponsorships)[0].lastName).toBe("Member Organizer");
   });
 
   it("gives every sponsor account a sponsorship of its own", () => {
@@ -371,7 +371,7 @@ INSERT INTO identities (id, user_id, source, show_on_organization_profile, invit
     expect(
       count(
         db,
-        "SELECT COUNT(*) AS count FROM users WHERE normalized_email = 'test.member+moderator@example.org' AND last_name = 'Member (Moderator)'",
+        "SELECT COUNT(*) AS count FROM users WHERE normalized_email = 'test.member+moderator@example.org' AND last_name = 'Member Moderator'",
       ),
     ).toBe(1);
     expect(fewer.leads.captured.length).toBeGreaterThan(0);
