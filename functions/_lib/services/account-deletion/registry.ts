@@ -383,6 +383,7 @@ export const ACCOUNT_DELETION_BLOCKING_RULES: readonly AccountDeletionBlockingRu
   authored("event_group_grants", "created_by_user_id"),
   authored("event_live_overlay_layouts", "updated_by_user_id"),
   authored("event_live_overlay_positions", "updated_by_user_id"),
+  authored("event_live_studio_setups", "updated_by_user_id"),
   authored("event_meeting_agenda_formats", "created_by"),
   authored("event_meeting_occurrence_agendas", "created_by"),
   authored("event_offline_admission_grants", "created_by"),

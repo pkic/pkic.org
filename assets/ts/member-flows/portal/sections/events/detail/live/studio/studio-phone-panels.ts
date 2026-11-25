@@ -1,9 +1,14 @@
 import { z } from "zod";
-import { studioPanelSchema, type StudioPanel, type StudioPanelType } from "./studio-layout";
+import {
+  STUDIO_MAX_PANELS,
+  studioPanelSchema,
+  type StudioPanel,
+  type StudioPanelType,
+} from "../../../../../../../../shared/schemas/live-studio-layout";
 
 /** The phone's own panels, apart from the desk's arrangement, in this browser. */
 export const STUDIO_PHONE_PANELS_STORAGE_KEY = "pkic.live-studio.phone.v1";
-const studioPhonePanelsSchema = z.array(studioPanelSchema).max(24);
+const studioPhonePanelsSchema = z.array(studioPanelSchema).max(STUDIO_MAX_PANELS);
 
 /**
  * One panel as a phone shows it: a whole view, so its place and size on the

@@ -6,45 +6,64 @@ import {
   LIVE_STAGE_PREVIEW_OUTPUT,
   liveOutputDetails,
   liveStudioOutputs,
-  type LiveAuxOutput,
   type LiveOutputDetails,
 } from "../../../../../../../../shared/live-room-outputs";
 import {
   LIVE_SPEAKER_OUTPUT_KEY,
   type LiveRoomOutput,
 } from "../../../../../../../../shared/schemas/live-room-output-setup";
-import { LIVE_HELD_OUTPUTS_MAX, liveAuxOutputSchema } from "../../../../../../../../shared/schemas/live-session-stage";
+import {
+  STUDIO_BUSES,
+  STUDIO_COLUMNS,
+  STUDIO_GRID_BOUNDS,
+  STUDIO_MAX_PANELS,
+  STUDIO_MIN_W,
+  STUDIO_OUTPUTS_MAX,
+  STUDIO_PANEL_TYPES,
+  STUDIO_WORKSPACES,
+  studioGridBounds,
+  studioLayoutsSchema,
+  studioOutputSchema,
+  withoutRetiredStudioPanels,
+  type StudioDefaultLayouts,
+  type StudioLayouts,
+  type StudioOutput,
+  type StudioPanel,
+  type StudioPanelType,
+  type StudioWorkspace,
+} from "../../../../../../../../shared/schemas/live-studio-layout";
 import { LIVE_OVERLAY_DEFAULT_LAYOUT } from "../../../../../../../../shared/schemas/live-overlay-layout";
-import { compactGrid, flowGrid, placeGridItem, type GridBounds, type GridRect } from "./studio-grid";
+import { compactGrid, flowGrid, placeGridItem, type GridRect } from "./studio-grid";
 
 /**
  * The control room's panel arrangement. Each workspace is a saved layout of
  * panels on a 12-column grid of fixed-height rows, each panel at an explicit
  * column, row, width and height. An operator moves, resizes, closes and adds
- * panels, and the arrangement is kept in their own browser.
+ * panels, and the arrangement is kept in their own browser; the event's
+ * saved default is where a new browser starts and what "Reset layout" puts
+ * back. The panel contract is shared (live-studio-layout).
  */
 
-export const STUDIO_WORKSPACES = ["show", "livestream", "stage"] as const;
-export type StudioWorkspace = (typeof STUDIO_WORKSPACES)[number];
+export {
+  STUDIO_COLUMNS,
+  STUDIO_GRID_BOUNDS,
+  STUDIO_PANEL_TYPES,
+  STUDIO_WORKSPACES,
+  studioGridBounds,
+  studioLayoutsSchema,
+  type StudioLayouts,
+  type StudioOutput,
+  type StudioPanel,
+  type StudioPanelType,
+  type StudioWorkspace,
+};
+
 export const STUDIO_WORKSPACE_LABELS: Record<StudioWorkspace, string> = {
   show: "Show",
   livestream: "Livestream",
   stage: "Stage",
 };
 
-export const STUDIO_PANEL_TYPES = [
-  "monitor",
-  "transition",
-  "speakers",
-  "graphics",
-  "questions",
-  "time",
-  "message",
-  "polls",
-  "chat",
-  "screens",
-] as const;
-export type StudioPanelType = (typeof STUDIO_PANEL_TYPES)[number];
 export const STUDIO_PANEL_LABELS: Record<StudioPanelType, string> = {
   monitor: "Monitor",
   transition: "Transition",
@@ -58,12 +77,6 @@ export const STUDIO_PANEL_LABELS: Record<StudioPanelType, string> = {
   screens: "Screens",
 };
 
-/** What a monitor can show besides the room's own outputs: the two switcher buses and the stream viewers see. */
-const STUDIO_BUSES = ["preview", "program", "livestream"] as const;
-/** A monitor's output: a switcher bus, the stream, or one of the room's outputs by its key. */
-export type StudioOutput = (typeof STUDIO_BUSES)[number] | LiveAuxOutput;
-const studioOutputSchema = z.union([z.enum(STUDIO_BUSES), liveAuxOutputSchema]);
-const STUDIO_OUTPUTS_MAX = STUDIO_BUSES.length + LIVE_HELD_OUTPUTS_MAX;
 const isBus = (output: StudioOutput) => (STUDIO_BUSES as readonly string[]).includes(output);
 
 /** Every output of a room in the studio's order: the buses, then the room's outputs in its own order, the stage preview after the speaker's screen. */
@@ -114,82 +127,7 @@ export function studioOutputDetails(room: readonly LiveRoomOutput[], output: Stu
   return liveOutputDetails(room, output);
 }
 
-export const STUDIO_COLUMNS = 12;
-/** The grid's row height in pixels (see StudioGrid.css); a panel's height is a whole number of rows. */
 export const STUDIO_ROW_PX = 32;
-export const STUDIO_MIN_W = 3;
-export const STUDIO_MIN_H = 4;
-export const STUDIO_MAX_H = 40;
-const STUDIO_MAX_ROW = 400;
-export const STUDIO_GRID_BOUNDS: GridBounds = {
-  columns: STUDIO_COLUMNS,
-  minW: STUDIO_MIN_W,
-  minH: STUDIO_MIN_H,
-  maxH: STUDIO_MAX_H,
-};
-/**
- * The Transition holds one button, so it may be one column wide and three rows
- * high; at two its name fits. A monitor scales its picture to any size, so it
- * may be as small.
- */
-const PANEL_GRID_BOUNDS: Partial<Record<StudioPanelType, GridBounds>> = {
-  transition: { ...STUDIO_GRID_BOUNDS, minW: 1, minH: 3 },
-  monitor: { ...STUDIO_GRID_BOUNDS, minW: 1, minH: 3 },
-};
-/** The smallest a panel of this type may be. */
-export function studioGridBounds(type: StudioPanelType): GridBounds {
-  return PANEL_GRID_BOUNDS[type] ?? STUDIO_GRID_BOUNDS;
-}
-
-export const studioPanelSchema = z
-  .object({
-    id: z.string().min(1).max(80),
-    type: z.enum(STUDIO_PANEL_TYPES),
-    x: z
-      .number()
-      .int()
-      .min(0)
-      .max(STUDIO_COLUMNS - 1),
-    y: z.number().int().min(0).max(STUDIO_MAX_ROW),
-    w: z.number().int().min(1).max(STUDIO_COLUMNS),
-    h: z.number().int().min(1).max(STUDIO_MAX_H),
-    outputs: z.array(studioOutputSchema).min(1).max(STUDIO_OUTPUTS_MAX).optional(),
-    /** The Transition's button shows its name beside the arrow. */
-    labeled: z.literal(true).optional(),
-    /** A Preview monitor shows the event's scenes under its picture unless the operator hid them. */
-    scenes: z.literal(false).optional(),
-  })
-  .strict()
-  .refine((panel) => panel.x + panel.w <= STUDIO_COLUMNS, "A panel stays within the grid's columns.")
-  .refine((panel) => {
-    const bounds = studioGridBounds(panel.type);
-    return panel.w >= bounds.minW && panel.h >= bounds.minH;
-  }, "A panel is at least its type's smallest size.");
-export type StudioPanel = z.infer<typeof studioPanelSchema>;
-/** Panel types the studio no longer has: the output links are on the event's live layouts settings. A saved one is dropped. */
-const RETIRED_PANEL_TYPES: ReadonlySet<unknown> = new Set(["sources"]);
-/** A saved monitor may still name a scene per tile, from when a tile could draw another scene than its screen. */
-const withoutTileScenes = (panel: unknown) => {
-  if (!panel || typeof panel !== "object" || !("layouts" in panel)) return panel;
-  const { layouts: _retired, ...rest } = panel;
-  return rest;
-};
-const withoutRetiredPanels = (panels: unknown) =>
-  Array.isArray(panels)
-    ? panels
-        .filter((panel: unknown) => !RETIRED_PANEL_TYPES.has((panel as { type?: unknown } | null)?.type))
-        .map(withoutTileScenes)
-    : panels;
-const studioWorkspaceSchema = z.preprocess(withoutRetiredPanels, z.array(studioPanelSchema).max(24));
-export const studioLayoutsSchema = z
-  .object(
-    Object.fromEntries(STUDIO_WORKSPACES.map((workspace) => [workspace, studioWorkspaceSchema])) as Record<
-      StudioWorkspace,
-      typeof studioWorkspaceSchema
-    >,
-  )
-  .strict();
-export type StudioLayouts = Record<StudioWorkspace, StudioPanel[]>;
 
 type Seed = [StudioPanelType, GridRect, StudioOutput[]?];
 function seeded(workspace: StudioWorkspace, seeds: Seed[]): StudioPanel[] {
@@ -203,8 +141,8 @@ function seeded(workspace: StudioWorkspace, seeds: Seed[]): StudioPanel[] {
   );
 }
 
-/** The arrangement each workspace starts from, and returns to on "Reset layout". */
-export function defaultStudioLayouts(): StudioLayouts {
+/** The arrangement each workspace has when the event saved none of its own. */
+export function builtInStudioLayouts(): StudioLayouts {
   return {
     show: seeded("show", [
       // Preview, the Transition, then the 2x2 multiview: the switcher's own order, Preview to Program.
@@ -241,6 +179,20 @@ export function defaultStudioLayouts(): StudioLayouts {
   };
 }
 
+/**
+ * The arrangement each workspace starts from in a new browser, and returns to
+ * on "Reset layout": the event's saved default, else the built-in one.
+ */
+export function defaultStudioLayouts(eventDefault: StudioDefaultLayouts = {}): StudioLayouts {
+  const builtIn = builtInStudioLayouts();
+  return Object.fromEntries(
+    STUDIO_WORKSPACES.map((workspace) => {
+      const saved = eventDefault[workspace];
+      return [workspace, saved ? compactGrid(saved) : builtIn[workspace]];
+    }),
+  ) as StudioLayouts;
+}
+
 const DEFAULT_SIZE: Record<StudioPanelType, { w: number; h: number }> = {
   monitor: { w: 4, h: 7 },
   transition: { w: 2, h: 4 },
@@ -256,7 +208,7 @@ const DEFAULT_SIZE: Record<StudioPanelType, { w: number; h: number }> = {
 
 /** The size a panel returns to: its place in the default layout, else its type's own size. */
 export function defaultStudioSize(workspace: StudioWorkspace, panel: StudioPanel): { w: number; h: number } {
-  const seed = defaultStudioLayouts()[workspace].find((entry) => entry.id === panel.id);
+  const seed = builtInStudioLayouts()[workspace].find((entry) => entry.id === panel.id);
   return seed ? { w: seed.w, h: seed.h } : DEFAULT_SIZE[panel.type];
 }
 
@@ -393,11 +345,14 @@ const studioPanelV1Schema = z.object({
 
 /** A first-shape arrangement laid on the grid in its own order; a workspace that does not read starts over. */
 export function migrateStudioLayoutsV1(saved: unknown): StudioLayouts {
-  const defaults = defaultStudioLayouts();
+  const defaults = builtInStudioLayouts();
   const record = typeof saved === "object" && saved !== null ? (saved as Record<string, unknown>) : {};
   return Object.fromEntries(
     STUDIO_WORKSPACES.map((workspace) => {
-      const parsed = z.array(studioPanelV1Schema).max(24).safeParse(withoutRetiredPanels(record[workspace]));
+      const parsed = z
+        .array(studioPanelV1Schema)
+        .max(STUDIO_MAX_PANELS)
+        .safeParse(withoutRetiredStudioPanels(record[workspace]));
       if (!parsed.success) return [workspace, defaults[workspace]];
       const placed = flowGrid(
         parsed.data,
@@ -423,9 +378,12 @@ function readJson(storage: Pick<Storage, "getItem">, key: string): unknown {
 /**
  * The operator's saved arrangement. A first-shape one moves onto the grid
  * once and its old entry is dropped; a missing or unreadable one falls back
- * to the defaults, and overlapping panels settle into place.
+ * to the event's default, and overlapping panels settle into place.
  */
-export function loadStudioLayouts(storage: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null): StudioLayouts {
+export function loadStudioLayouts(
+  storage: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null,
+  eventDefault: StudioDefaultLayouts = {},
+): StudioLayouts {
   try {
     if (storage) {
       const saved = studioLayoutsSchema.safeParse(readJson(storage, STUDIO_LAYOUT_STORAGE_KEY));
@@ -444,7 +402,19 @@ export function loadStudioLayouts(storage: Pick<Storage, "getItem" | "setItem" |
   } catch {
     // Storage can be blocked or hold something else; the defaults still work.
   }
-  return defaultStudioLayouts();
+  return defaultStudioLayouts(eventDefault);
+}
+
+/** Whether this browser keeps an arrangement of its own; until it does, the studio follows the event's default. */
+export function hasOwnStudioLayouts(storage: Pick<Storage, "getItem"> | null): boolean {
+  try {
+    return Boolean(
+      storage &&
+      (storage.getItem(STUDIO_LAYOUT_STORAGE_KEY) !== null || storage.getItem(STUDIO_LAYOUT_V1_STORAGE_KEY) !== null),
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function saveStudioLayouts(storage: Pick<Storage, "setItem"> | null, layouts: StudioLayouts): void {
