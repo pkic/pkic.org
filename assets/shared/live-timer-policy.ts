@@ -1,4 +1,5 @@
 import { anchorOverlayBox, scaleOverlayBox } from "./live-overlay-geometry";
+import { LIVE_OVERLAY_STANDARD_ELEMENTS } from "./live-overlay-layout-presets";
 import type { LiveOverlayElementPlacement } from "./schemas/live-overlay-layout";
 import {
   DEFAULT_LIVE_TIMER_AT_ZERO,
@@ -370,14 +371,18 @@ const PLACEMENT: Record<
 /**
  * Where the graphic sits on a source: the layout's timer box at the graphic's
  * size, or, when the graphic names its own position, that corner of the
- * title-safe area. Whether it shows stays the layout's choice.
+ * title-safe area at the standard timer's size. A timer with its own position
+ * is the operator's choice, so it stays the same in every scene, whatever
+ * else goes on air; only one left to the layout follows the scene's box.
+ * Whether it shows stays the layout's choice.
  */
 export function liveTimerLayout(
   graphic: Pick<LiveTimerGraphic, "placement" | "size">,
   timer: LiveOverlayElementPlacement,
 ): LiveOverlayElementPlacement {
-  const sized = scaleOverlayBox(timer, SIZE_FACTOR[graphic.size]);
-  return graphic.placement === "layout" ? sized : anchorOverlayBox(sized, PLACEMENT[graphic.placement]);
+  if (graphic.placement === "layout") return scaleOverlayBox(timer, SIZE_FACTOR[graphic.size]);
+  const sized = scaleOverlayBox(LIVE_OVERLAY_STANDARD_ELEMENTS.timer, SIZE_FACTOR[graphic.size]);
+  return anchorOverlayBox({ ...timer, w: sized.w, h: sized.h }, PLACEMENT[graphic.placement]);
 }
 
 /** Changes one timer's graphic while preserving every other timer and its position. */
