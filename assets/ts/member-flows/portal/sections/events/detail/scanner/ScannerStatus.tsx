@@ -41,28 +41,39 @@ export function useScannerStatus(status: ScannerStatus | undefined, fallback?: S
   };
 }
 
+/** The last few results, oldest to newest; tapping one says what happened, since phones have no hover. */
 export function ScannerResultTrail({ results }: { results: ScannerStatus[] }) {
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const selected = results.find((result) => result.key === selectedKey);
   return (
     <div class="pk-fast-scanner__results" data-scanner-help="results">
       {results.length > 0 && (
         <ol class="pk-fast-scanner__trail" aria-label="Recent scan results">
           {results.map((result) => (
-            <li
-              key={result.key}
-              data-tone={result.tone}
-              title={[result.title, result.detail].filter(Boolean).join(": ")}
-            >
-              <span aria-hidden="true">
-                <ScannerStatusIcon tone={result.tone} />
-              </span>
-              <span class="pk-sr-only">
-                {result.title}
-                {result.detail ? `: ${result.detail}` : ""}
-              </span>
+            <li key={result.key} data-tone={result.tone}>
+              <button
+                type="button"
+                aria-pressed={result.key === selectedKey}
+                onClick={() => setSelectedKey((current) => (current === result.key ? null : result.key))}
+              >
+                <span aria-hidden="true">
+                  <ScannerStatusIcon tone={result.tone} />
+                </span>
+                <span class="pk-sr-only">{describeResult(result)}</span>
+              </button>
             </li>
           ))}
         </ol>
       )}
+      {selected && (
+        <p class="pk-fast-scanner__trail-detail" role="status">
+          {describeResult(selected)}
+        </p>
+      )}
     </div>
   );
+}
+
+function describeResult(result: ScannerStatus): string {
+  return result.detail ? `${result.title}: ${result.detail}` : result.title;
 }

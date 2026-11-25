@@ -89,6 +89,16 @@ export function scanEligibilityLabel(result: EventScanResponse): string {
   return scanOutcomeLabels[result.outcome];
 }
 
+/** What a lead scan that saved nothing means for the operator; none when the label says it all. */
+export function scanFeedbackDetail(
+  result: EventScanResponse | null,
+  action: EventScanRequest["action"],
+): string | undefined {
+  if (action === "lead" && result?.reason === "consent_required")
+    return "No lead saved. This attendee did not agree to share their details with sponsors when they registered.";
+  return undefined;
+}
+
 /** Registration feedback is shared by manual and fullscreen scanning. */
 export function scanFeedbackLabel(result: EventScanResponse | null, action: EventScanRequest["action"]): string {
   if (!result) return "Ready to scan";

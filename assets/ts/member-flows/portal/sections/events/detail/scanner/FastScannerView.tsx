@@ -7,7 +7,7 @@ import { ScannerTaskNavigation, useScannerTaskSwipe } from "./ScannerTaskNavigat
 import { ScannerModeIcon } from "./ScannerModeIcon";
 import { ScannerPreparationStatus } from "./ScannerPreparationStatus";
 import type { ComponentChildren, ComponentProps } from "preact";
-import { scanFeedbackLabel, scanFeedbackOutcome } from "./scan-stream";
+import { scanFeedbackDetail, scanFeedbackLabel, scanFeedbackOutcome } from "./scan-stream";
 import "../../../../../../../design/tokens.scanner.generated.css";
 import "../../../../../../../design/tokens.event.generated.css";
 import { ScannerOperatorDrawer } from "./ScannerOperatorDrawer";
@@ -164,10 +164,14 @@ export function FastScannerView({
           key: scan.operationId,
           tone: scanFeedbackOutcome(scan, mode),
           title: scanFeedbackLabel(scan, mode),
+          detail: scanFeedbackDetail(scan, mode),
         }
       : undefined;
   const feedback = useScannerStatus(status ?? scanStatus(result), scanStatus(lastResult));
   const visibleStatus = helpOpen ? tourDemo : feedback.visible;
+  // Only a lead scan that saved nothing explains itself here; other results keep their own messages.
+  const leadDetail =
+    !helpOpen && !status && visibleStatus?.key === result?.operationId ? scanFeedbackDetail(result, mode) : undefined;
   const detail = visibleStatus?.detail || (helpOpen ? "" : message);
   const outcome = visibleStatus?.tone ?? (helpOpen ? "unverified" : scanFeedbackOutcome(result, mode));
   const readyLabel = collection
@@ -289,7 +293,9 @@ export function FastScannerView({
               {collection?.waiting && !helpOpen && (
                 <ScannerCollectionAttendee {...collection} saving={collection.saving || cooldown?.saving} />
               )}
+              {leadDetail && <p class="pk-fast-scanner__message">{leadDetail}</p>}
               {detail &&
+                detail !== leadDetail &&
                 detail !== "Ready to scan" &&
                 detail !== scannerStartMessage(true, false, mode) &&
                 detail !== visibleStatus?.title && <p class="pk-fast-scanner__message">{detail}</p>}
