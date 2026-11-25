@@ -16,21 +16,32 @@ export const liveTickerMessageSchema = z
     const message = validateOverlayTextTemplate(value.template);
     if (message) ctx.addIssue({ code: "custom", path: ["template"], message });
   });
-/** How fast the ticker scrolls: an operator's choice, read the same on every output. */
-export const LIVE_TICKER_SPEEDS = ["slow", "normal", "fast"] as const;
-export type LiveTickerSpeed = (typeof LIVE_TICKER_SPEEDS)[number];
 /**
- * How far each speed moves the ticker in a second, in pixels of the 1920 × 1080
- * frame, whatever the length of its messages. Normal is slow enough to read a
+ * How fast the ticker scrolls, in pixels of the 1920 × 1080 frame per second, whatever the length of its
+ * messages: an operator's choice, read the same on every output. The default is slow enough to read a
  * message through once as it crosses the frame.
  */
-export const LIVE_TICKER_PIXELS_PER_SECOND: Record<LiveTickerSpeed, number> = { slow: 60, normal: 90, fast: 130 };
+export const LIVE_TICKER_SPEED = { min: 40, max: 200, step: 10, default: 90 } as const;
+/** The speeds a ticker was saved with before it took pixels per second. */
+const RETIRED_TICKER_SPEEDS: Record<string, number> = { slow: 60, normal: 90, fast: 130 };
+export const liveTickerSpeedSchema = z
+  .preprocess(
+    // One saved with a named speed keeps its pace.
+    (value) => RETIRED_TICKER_SPEEDS[String(value)] ?? value,
+    z
+      .number()
+      .int()
+      .min(LIVE_TICKER_SPEED.min, `Choose at least ${LIVE_TICKER_SPEED.min} px/s.`)
+      .max(LIVE_TICKER_SPEED.max, `Choose at most ${LIVE_TICKER_SPEED.max} px/s.`)
+      .multipleOf(LIVE_TICKER_SPEED.step, `Choose a speed in steps of ${LIVE_TICKER_SPEED.step} px/s.`),
+  )
+  // A ticker saved before the speed existed scrolls at the default.
+  .default(LIVE_TICKER_SPEED.default);
 
 export const liveTickerConfigSchema = z
   .object({
     style: z.enum(["gradient", "accent", "neutral"]),
-    // A ticker saved before the speed existed scrolls at the normal speed.
-    speed: z.enum(LIVE_TICKER_SPEEDS).default("normal"),
+    speed: liveTickerSpeedSchema,
     messages: z.array(liveTickerMessageSchema).min(1).max(LIVE_TICKER_MESSAGES_MAX),
   })
   .strict()
@@ -83,7 +94,7 @@ export type LiveTickerContext = z.infer<typeof liveTickerContextSchema>;
 export const DEFAULT_LIVE_TICKER_CONTEXT: LiveTickerContext = { timeZone: "UTC", sponsorGroups: [] };
 export const DEFAULT_LIVE_TICKER_CONFIG: LiveTickerConfig = {
   style: "gradient",
-  speed: "normal",
+  speed: LIVE_TICKER_SPEED.default,
   messages: [
     { id: "greeting", prefix: "Welcome", template: "{{greeting}}", condition: "always" },
     {
@@ -125,7 +136,7 @@ export function readStoredLiveTicker(value: unknown): unknown {
   } else return null;
   return {
     style: "gradient",
-    speed: "normal",
+    speed: LIVE_TICKER_SPEED.default,
     messages: [{ id: "retained", prefix, template, condition: "always" }],
     segments: [],
   };

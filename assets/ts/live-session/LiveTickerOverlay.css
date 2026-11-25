@@ -58,7 +58,7 @@
     align-items: center;
     width: max-content;
     block-size: 100%;
-    /* The track sets one pass's time at the ticker's speed; until it has measured, the normal pace over the frame. */
+    /* The track sets one pass's time at the ticker's speed; until it has measured, the default pace over the frame. */
     animation: pk-live-ticker-scroll var(--pk-live-ticker-duration, 21s) linear infinite;
   }
   .pk-live-ticker__group {

@@ -4,7 +4,7 @@ import {
   liveTickerMessageSchema,
   DEFAULT_LIVE_TICKER_CONFIG,
   LIVE_TICKER_MESSAGES_MAX,
-  LIVE_TICKER_SPEEDS,
+  LIVE_TICKER_SPEED,
   liveTickerConfigOf,
   type LiveTickerConfig,
   type LiveTickerContext,
@@ -19,7 +19,7 @@ import { Button } from "../../../../../../ui/Button";
 import { Dialog } from "../../../../../../ui/Dialog";
 import { Field } from "../../../../../../ui/Field";
 import { ListDetail } from "../../../../../../ui/ListDetail";
-import { Select, TextInput } from "../../../../../../ui/TextControl";
+import { RangeInput, Select, TextInput } from "../../../../../../ui/TextControl";
 import { Alert } from "../../../../../../ui/Alert";
 import { LiveGraphicRow } from "./LiveGraphicRow";
 import { LIVE_SETTINGS_NOT_SENT, useLiveGraphicSettings } from "./live-graphic-settings";
@@ -35,11 +35,6 @@ const STYLE_LABELS: Record<LiveTickerConfig["style"], string> = {
   gradient: "Brand gradient",
   accent: "Accent",
   neutral: "Neutral",
-};
-const SPEED_LABELS: Record<LiveTickerConfig["speed"], string> = {
-  slow: "Slow",
-  normal: "Normal",
-  fast: "Fast",
 };
 
 /** The selected message's fields: its fixed label, its words with the agenda's placeholders, and when it shows. */
@@ -228,20 +223,18 @@ export function LiveTickerControls({ targets }: { targets: LiveTargets }) {
             </Field>
             <Field label="Speed" help="How fast the messages scroll across the frame." {...form.of("speed")}>
               {(control) => (
-                <Select
+                <RangeInput
                   {...control}
+                  min={LIVE_TICKER_SPEED.min}
+                  max={LIVE_TICKER_SPEED.max}
+                  step={LIVE_TICKER_SPEED.step}
                   value={draft.speed}
-                  onChange={(event) => {
-                    const parsed = liveTickerConfigSchema.shape.speed.unwrap().safeParse(event.currentTarget.value);
-                    if (parsed.success) edit((value) => ({ ...value, speed: parsed.data }));
+                  valueText={`${formatNumber(draft.speed)} px/s`}
+                  onInput={(event) => {
+                    const speed = event.currentTarget.valueAsNumber;
+                    edit((value) => ({ ...value, speed }));
                   }}
-                >
-                  {LIVE_TICKER_SPEEDS.map((speed) => (
-                    <option key={speed} value={speed}>
-                      {SPEED_LABELS[speed]}
-                    </option>
-                  ))}
-                </Select>
+                />
               )}
             </Field>
             <ListDetail

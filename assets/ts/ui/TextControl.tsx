@@ -46,3 +46,25 @@ export function Select({ class: className, children, ...rest }: SelectProps) {
     </select>
   );
 }
+
+export type RangeInputProps = Omit<JSX.InputHTMLAttributes<HTMLInputElement>, "type"> & {
+  /** The value as people read it, such as "90 px/s": shown beside the slider and spoken for it. */
+  valueText: string;
+};
+
+/** A slider over a bounded number, with its value read out beside it. */
+export function RangeInput({ class: className, valueText, ...rest }: RangeInputProps) {
+  return (
+    <span class="pk-range">
+      <input
+        {...rest}
+        type="range"
+        aria-valuetext={valueText}
+        class={join("pk-range__input", className as string | undefined)}
+      />
+      <span class="pk-range__value" aria-hidden="true">
+        {valueText}
+      </span>
+    </span>
+  );
+}

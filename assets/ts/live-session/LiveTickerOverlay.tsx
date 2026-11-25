@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from "preact/hooks";
-import { LIVE_TICKER_PIXELS_PER_SECOND, type LiveTicker } from "../../shared/schemas/live-session-ticker";
+import { LIVE_TICKER_SPEED, type LiveTicker } from "../../shared/schemas/live-session-ticker";
 import { renderOverlayInlineMarkdown } from "../../shared/overlay-text-template";
 import "./LiveTickerOverlay.css";
 
@@ -16,7 +16,7 @@ function useTickerTravel(ticker: LiveTicker | null) {
     const node = track.current;
     const pass = node?.firstElementChild;
     if (!node || !(pass instanceof HTMLElement)) return;
-    const pace = LIVE_TICKER_PIXELS_PER_SECOND[ticker?.speed ?? "normal"];
+    const pace = ticker?.speed ?? LIVE_TICKER_SPEED.default;
     const measure = () => {
       // Not laid out yet: the stylesheet's normal pace holds until it is.
       if (!pass.offsetWidth) return;

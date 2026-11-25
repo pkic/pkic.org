@@ -29,7 +29,7 @@ const message = (
   template: string,
   prefix = "Next",
   condition: "always" | "near-session-end" = "always",
-): LiveTickerConfig => ({ style: "gradient", speed: "normal", messages: [{ id: "one", prefix, template, condition }] });
+): LiveTickerConfig => ({ style: "gradient", speed: 90, messages: [{ id: "one", prefix, template, condition }] });
 const occurrence = (value: number, room: number, title: string, start: string, end: string) =>
   agendaOccurrenceSchema.parse({
     id: id(value),
@@ -91,7 +91,7 @@ describe("multi-message live ticker", () => {
     });
     const config: LiveTickerConfig = {
       style: "accent",
-      speed: "normal",
+      speed: 90,
       messages: [
         { id: "welcome", prefix: "Welcome", template: "{{greeting}}", condition: "always" },
         { id: "next", prefix: "Next", template: "{{next.title}}", condition: "near-session-end" },
@@ -146,10 +146,14 @@ describe("multi-message live ticker", () => {
     expect(retained.messages[0].template).toContain("literal");
     expect(retained.segments).toEqual([]);
   });
-  it("reads a ticker saved before the speed existed at the normal speed", () => {
+  it("reads a ticker saved before the speed existed, or with a named speed, at the same pace", () => {
     const { speed: _speed, ...saved } = message("Saved before");
-    expect(liveTickerConfigSchema.parse(saved).speed).toBe("normal");
-    expect(liveTickerConfigSchema.safeParse({ ...saved, speed: "warp" }).success).toBe(false);
+    expect(liveTickerConfigSchema.parse(saved).speed).toBe(90);
+    expect(liveTickerConfigSchema.parse({ ...saved, speed: "slow" }).speed).toBe(60);
+    expect(liveTickerConfigSchema.parse({ ...saved, speed: "normal" }).speed).toBe(90);
+    expect(liveTickerConfigSchema.parse({ ...saved, speed: "fast" }).speed).toBe(130);
+    for (const speed of ["warp", 30, 210, 95, 90.5])
+      expect(liveTickerConfigSchema.safeParse({ ...saved, speed }).success).toBe(false);
   });
   it("scrolls at the ticker's speed whatever the length of its messages", () => {
     const width = vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(2700);
@@ -170,10 +174,10 @@ describe("multi-message live ticker", () => {
       );
     const track = () => host.querySelector<HTMLElement>(".pk-live-ticker__track")!;
     try {
-      // One 2700 px pass at 60 px a second; faster at Normal.
-      draw("slow");
+      // One 2700 px pass at 60 px a second; faster at 90.
+      draw(60);
       expect(track().style.getPropertyValue("--pk-live-ticker-duration")).toBe("45.00s");
-      draw("normal");
+      draw(90);
       expect(track().style.getPropertyValue("--pk-live-ticker-duration")).toBe("30.00s");
     } finally {
       width.mockRestore();
@@ -301,12 +305,15 @@ describe("multi-message live ticker", () => {
           .find((item) => item.textContent?.includes("Edit ticker messages"))!
           .click(),
       );
-      const speed = controlFor<HTMLSelectElement>(document.body, "Speed");
-      expect(speed.value).toBe("normal");
+      const speed = controlFor<HTMLInputElement>(document.body, "Speed");
+      expect(speed.type).toBe("range");
+      expect(speed.value).toBe("90");
+      expect(speed.getAttribute("aria-valuetext")).toBe("90 px/s");
       void act(() => {
-        speed.value = "slow";
-        speed.dispatchEvent(new Event("change", { bubbles: true }));
+        speed.value = "150";
+        speed.dispatchEvent(new Event("input", { bubbles: true }));
       });
+      expect(speed.closest(".pk-range")?.textContent).toBe("150 px/s");
       void act(() =>
         Array.from(document.querySelectorAll("button"))
           .find((button) => button.textContent === "Done")!
@@ -319,7 +326,7 @@ describe("multi-message live ticker", () => {
       );
       const payload = send.mock.calls[0][0];
       if (payload.type !== "preview.set" || !payload.composition.ticker) throw new Error("Expected a ticker sequence");
-      expect(payload.composition.ticker.speed).toBe("slow");
+      expect(payload.composition.ticker.speed).toBe(150);
     } finally {
       void act(() => render(null, host));
       host.remove();
