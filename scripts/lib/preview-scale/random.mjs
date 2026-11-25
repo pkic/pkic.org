@@ -144,7 +144,7 @@ const LEGAL_FORMS = ["", "", "", "", " Inc.", " Ltd.", " GmbH", " B.V.", " S.A."
 
 const INSTITUTIONS = [
   "University of {place}", "{place} Institute of Technology", "Technische Universität {place}", "Université de {place}",
-  "{place} Ministry of Digital Affairs", "National Cyber Security Centre of {place}", "{place} Central Bank",
+  "{place} Ministry of Digital Affairs", "National Cyber Security Center of {place}", "{place} Central Bank",
   "Municipality of {place}", "{place} Hospital Group", "{place} Polytechnic",
 ];
 
@@ -190,7 +190,7 @@ const STANDALONE_TITLES = [
   "CISO", "CTO", "CEO & Co-founder", "Professor", "PhD candidate", "Head of Identity", "IT Director",
   "VP, Product Security", "Director, Cryptographic Engineering", "Founder", "Fellow",
   "Head of PKI & Certificate Lifecycle Management, Group Information Security",
-  "Programme Manager, Post-Quantum Cryptography Migration (EMEA)", "Researcher", "Student",
+  "Program Manager, Post-Quantum Cryptography Migration (EMEA)", "Researcher", "Student",
 ];
 
 /** A job title, from a one-word role to a long committee-style title. */
