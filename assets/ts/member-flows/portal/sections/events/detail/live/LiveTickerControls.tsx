@@ -16,6 +16,7 @@ import { useContractForm, type FieldPresentation } from "../../../../../../hooks
 import { MarkdownEditor } from "../../../../../../components/markdown-editor/MarkdownInput";
 import type { MarkdownEditorHandle } from "../../../../../../components/markdown-editor/MarkdownEditor";
 import { Button } from "../../../../../../ui/Button";
+import { Checkbox } from "../../../../../../ui/Checkbox";
 import { Dialog } from "../../../../../../ui/Dialog";
 import { Field } from "../../../../../../ui/Field";
 import { ListDetail } from "../../../../../../ui/ListDetail";
@@ -27,6 +28,14 @@ import type { LiveTargets } from "./live-output-targets";
 import "./LiveTickerControls.css";
 
 type Message = LiveTickerConfig["messages"][number];
+/** A room of the event's agenda a message can be limited to. */
+export interface LiveTickerRoom {
+  id: string;
+  name: string;
+}
+/** The names of the rooms a message is limited to, in the agenda's order; empty when it shows in every room. */
+const roomNames = (message: Message, rooms: readonly LiveTickerRoom[]) =>
+  rooms.filter((room) => message.roomIds?.includes(room.id)).map((room) => room.name);
 const CONDITION_LABELS: Record<Message["condition"], string> = {
   always: "Always",
   "near-session-end": "Last five minutes of the session",
@@ -46,7 +55,9 @@ function TickerMessageEditor({
   remove,
   canRemove,
   context,
+  rooms,
 }: {
+  rooms: readonly LiveTickerRoom[];
   message: Message;
   index: number;
   of: (path: string) => FieldPresentation;
@@ -123,6 +134,35 @@ function TickerMessageEditor({
           </Select>
         )}
       </Field>
+      {rooms.length > 1 ? (
+        <Field
+          group
+          label="Rooms"
+          help="Shows only during sessions in the rooms you choose. With no room chosen, it shows in every room."
+          {...of(`${path}.roomIds`)}
+        >
+          {() => (
+            <div class="pk-stack pk-stack--snug">
+              {rooms.map((room) => (
+                <Checkbox
+                  key={room.id}
+                  name={`${path}.roomIds`}
+                  value={room.id}
+                  label={room.name}
+                  checked={message.roomIds?.includes(room.id) ?? false}
+                  onChange={(event) => {
+                    const checked = event.currentTarget.checked;
+                    const roomIds = rooms
+                      .filter((each) => (each.id === room.id ? checked : message.roomIds?.includes(each.id)))
+                      .map((each) => each.id);
+                    update({ ...message, roomIds: roomIds.length ? roomIds : undefined });
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </Field>
+      ) : null}
     </>
   );
 }
@@ -141,7 +181,14 @@ function nextMessageId(messages: readonly Message[]): string {
  * so a long sequence stays easy to reorder and edit. Edits stay in the editor
  * until they validate, so every output gets a sequence the room accepts.
  */
-export function LiveTickerControls({ targets }: { targets: LiveTargets }) {
+export function LiveTickerControls({
+  targets,
+  rooms = [],
+}: {
+  targets: LiveTargets;
+  /** The event's agenda rooms, which a message can be limited to. */
+  rooms?: readonly LiveTickerRoom[];
+}) {
   const context = targets.state.tickerContext;
   const shown = targets.state.preview.ticker ?? targets.state.stage.ticker;
   // The row follows the ticker an output shows; saving its messages changes it there.
@@ -171,7 +218,9 @@ export function LiveTickerControls({ targets }: { targets: LiveTargets }) {
     : 0;
   const current = draft?.messages[index];
   const problem = (at: number) =>
-    ["prefix", "template", "condition"].map((field) => form.of(`messages.${at}.${field}`).message).find(Boolean);
+    ["prefix", "template", "condition", "roomIds"]
+      .map((field) => form.of(`messages.${at}.${field}`).message)
+      .find(Boolean);
   return (
     <LiveGraphicRow
       name="News ticker"
@@ -261,7 +310,9 @@ export function LiveTickerControls({ targets }: { targets: LiveTargets }) {
               items={draft.messages.map((message, at) => ({
                 id: message.id,
                 label: message.prefix.trim() || `Message ${formatNumber(at + 1)}`,
-                detail: `${message.template} · ${CONDITION_LABELS[message.condition]}`,
+                detail: [message.template, CONDITION_LABELS[message.condition], ...roomNames(message, rooms)].join(
+                  " · ",
+                ),
                 attention: problem(at),
               }))}
               addAction={
@@ -287,6 +338,7 @@ export function LiveTickerControls({ targets }: { targets: LiveTargets }) {
                   index={index}
                   canRemove={draft.messages.length > 1}
                   context={context}
+                  rooms={rooms}
                   of={form.of}
                   update={(next) =>
                     edit((value) => ({

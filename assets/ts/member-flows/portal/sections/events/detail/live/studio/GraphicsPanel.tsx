@@ -44,7 +44,10 @@ export const LIVE_GRAPHICS: ReadonlyArray<{
   Row: ComponentType<LiveGraphicContext>;
 }> = [
   { id: "session", Row: ({ targets }) => <LivePanelistControls targets={targets} /> },
-  { id: "ticker", Row: ({ targets }) => <LiveTickerControls targets={targets} /> },
+  {
+    id: "ticker",
+    Row: ({ targets, approvedAgenda }) => <LiveTickerControls targets={targets} rooms={approvedAgenda?.rooms} />,
+  },
   {
     id: "check-in",
     Row: ({ targets, slug, occurrenceId }) => (

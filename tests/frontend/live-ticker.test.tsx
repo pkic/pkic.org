@@ -121,6 +121,92 @@ describe("multi-message live ticker", () => {
     );
     expect(segments.map((segment) => segment.id)).toEqual(["greeting", "questions"]);
   });
+  it("shows a message limited to rooms only during sessions in one of them, and an unlimited one everywhere", () => {
+    const approved = agenda(),
+      now = Date.parse("2030-01-01T09:30:00.000Z");
+    const config: LiveTickerConfig = {
+      style: "accent",
+      speed: 90,
+      messages: [
+        { id: "everywhere", prefix: "", template: "Everywhere", condition: "always" },
+        { id: "room-b", prefix: "", template: "Room B only", condition: "always", roomIds: [id(2)] },
+        { id: "both", prefix: "", template: "Both rooms", condition: "always", roomIds: [id(1), id(2)] },
+      ],
+    };
+    const ids = (occurrenceId: string) =>
+      resolveTickerMessages(config, approved, occurrenceId, now).map((segment) => segment.id);
+    expect(ids(id(3))).toEqual(["everywhere", "both"]);
+    expect(ids(id(6))).toEqual(["everywhere", "room-b", "both"]);
+    // A session that also takes place in Room B shows its messages too.
+    approved.occurrences[0] = { ...approved.occurrences[0]!, additionalRoomIds: [id(2)] };
+    expect(ids(id(3))).toEqual(["everywhere", "room-b", "both"]);
+    expect(
+      liveTickerConfigSchema.safeParse({ ...config, messages: [{ ...config.messages[1], roomIds: [id(2), id(2)] }] })
+        .success,
+    ).toBe(false);
+  });
+  it("limits a message to the rooms chosen in its settings, and sends every room again with none chosen", () => {
+    const stage = liveSnapshot().stage,
+      host = document.createElement("div");
+    document.body.append(host);
+    const send = vi.fn((command: LiveRoomClientMessage) => command.type === "preview.set");
+    const rooms = agenda().rooms;
+    const sent = () => {
+      const payload = send.mock.calls.at(-1)![0];
+      if (payload.type !== "preview.set" || !payload.composition.ticker) throw new Error("Expected a ticker sequence");
+      return payload.composition.ticker.messages[0]!;
+    };
+    const edit = (choose: () => void) => {
+      void act(() => host.querySelector<HTMLButtonElement>('[aria-label="News ticker actions"]')!.click());
+      void act(() =>
+        [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+          .find((item) => item.textContent?.includes("Edit ticker messages"))!
+          .click(),
+      );
+      choose();
+      void act(() =>
+        Array.from(document.querySelectorAll("button"))
+          .find((button) => button.textContent === "Done")!
+          .click(),
+      );
+      void act(() =>
+        Array.from(host.querySelectorAll("button"))
+          .find((button) => button.textContent === "PVW")!
+          .click(),
+      );
+    };
+    const room = (name: string) =>
+      [...document.querySelectorAll<HTMLInputElement>('dialog[open] input[type="checkbox"]')].find((input) =>
+        input.closest("label")?.textContent?.includes(name),
+      )!;
+    const fresh = () => {
+      void act(() => render(null, host));
+      void act(() =>
+        render(<LiveTickerControls targets={tickerTargets(stage, { sendProgram: send })} rooms={rooms} />, host),
+      );
+    };
+    try {
+      fresh();
+      edit(() => {
+        expect(document.querySelector("dialog[open]")?.textContent).toContain("With no room chosen");
+        void act(() => room("Room B").click());
+        void act(() => room("Room A").click());
+        void act(() => room("Room A").click());
+      });
+      expect(
+        liveTickerConfigSchema.parse({ ...DEFAULT_LIVE_TICKER_CONFIG, messages: [sent()] }).messages[0]!.roomIds,
+      ).toEqual([id(2)]);
+      fresh();
+      edit(() => {
+        void act(() => room("Room B").click());
+        void act(() => room("Room B").click());
+      });
+      expect(sent().roomIds).toBeUndefined();
+    } finally {
+      void act(() => render(null, host));
+      host.remove();
+    }
+  });
   it("uses actual public tier keys for tier-specific sponsor messages and omits unknown tiers", () => {
     const context = {
       timeZone: "UTC",

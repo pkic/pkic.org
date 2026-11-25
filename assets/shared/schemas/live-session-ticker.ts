@@ -3,6 +3,8 @@ import { z } from "zod";
 import { validateOverlayTextTemplate } from "../overlay-text-template";
 /** The most messages one ticker sequence holds. */
 export const LIVE_TICKER_MESSAGES_MAX = 20;
+/** The most rooms one ticker message names. */
+export const LIVE_TICKER_ROOMS_MAX = 50;
 
 export const liveTickerMessageSchema = z
   .object({
@@ -10,6 +12,12 @@ export const liveTickerMessageSchema = z
     prefix: z.string().trim().max(40),
     template: z.string().trim().min(1).max(500),
     condition: z.enum(["always", "near-session-end"]),
+    /** The agenda rooms the message shows in; without any, it shows in every room. */
+    roomIds: z
+      .array(z.string().min(1).max(200))
+      .max(LIVE_TICKER_ROOMS_MAX)
+      .refine((ids) => new Set(ids).size === ids.length, "Choose each room once.")
+      .optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
