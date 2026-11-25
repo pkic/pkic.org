@@ -12,8 +12,19 @@ import "./LiveScheduleOverlay.css";
 export const LIVE_SCHEDULE_SPOTLIGHT_MIN = 3;
 /** How long each room stays forward. */
 export const LIVE_SCHEDULE_SPOTLIGHT_MS = 6000;
-/** Headshots a room shows before it counts the rest. */
-const SPEAKERS_SHOWN = 3;
+/** Faces a room shows before it counts the rest: a panel of six fits whole. */
+const FACES_SHOWN = 6;
+/** Names a room lists on its one line; a larger panel reads as the kind of session and a count. */
+const NAMES_SHOWN = 3;
+
+/**
+ * The line under a session's faces: who speaks, by name, the moderator
+ * marked; a panel too large to name on one line reads as a count instead.
+ */
+export function liveScheduleSpeakerLine(speakers: LiveScheduleRoom["speakers"]): string {
+  if (speakers.length > NAMES_SHOWN) return `Panel discussion · ${formatNumber(speakers.length)} speakers`;
+  return speakers.map((speaker) => (speaker.moderator ? `${speaker.name} (moderator)` : speaker.name)).join(", ");
+}
 
 /**
  * The width the graphic is set at before its layout box scales it: as wide as
@@ -58,30 +69,30 @@ function useSpotlight(count: number, animate: boolean): number | null {
   return cycling ? index % count : null;
 }
 
+/** Who speaks, under the session's title: their faces overlapping, then their names on one line. */
 function Speakers({ speakers }: { speakers: LiveScheduleRoom["speakers"] }) {
   if (!speakers.length) return null;
-  const more = speakers.length - SPEAKERS_SHOWN;
+  const more = speakers.length - FACES_SHOWN;
   return (
-    <ul class="pk-live-schedule__speakers">
-      {speakers.slice(0, SPEAKERS_SHOWN).map((speaker, index) => (
-        <li key={`${index}:${speaker.name}`} class="pk-live-schedule__speaker">
-          <Avatar name={speaker.name} src={speaker.photoUrl ?? undefined} size="lg" decoding="async" />
-          <span class="pk-live-schedule__speaker-name">
-            {speaker.name}
-            {speaker.moderator ? <span class="pk-live-schedule__role">Moderator</span> : null}
-          </span>
-        </li>
-      ))}
-      {more > 0 ? <li class="pk-live-schedule__more">+{formatNumber(more)}</li> : null}
-    </ul>
+    <div class="pk-live-schedule__speakers">
+      <ul class="pk-live-schedule__faces" aria-hidden="true">
+        {speakers.slice(0, FACES_SHOWN).map((speaker, index) => (
+          <li key={`${index}:${speaker.name}`} class="pk-live-schedule__face">
+            <Avatar name={speaker.name} src={speaker.photoUrl ?? undefined} size="lg" decoding="async" />
+          </li>
+        ))}
+        {more > 0 ? <li class="pk-live-schedule__more">+{formatNumber(more)}</li> : null}
+      </ul>
+      <p class="pk-live-schedule__names">{liveScheduleSpeakerLine(speakers)}</p>
+    </div>
   );
 }
 
 /**
  * What comes next in each room, from the approved public agenda, as a
- * broadcast graphic: the room and its start time lead, then the session and
- * its speakers with their headshots. With several rooms one room at a time
- * comes forward, its speakers named, while the others keep their place; with
+ * broadcast graphic: the room and its start time lead, then the session and,
+ * under it, its speakers' faces and names. With several rooms one room at a
+ * time comes forward while the others keep their place; with
  * no motion (a monitor whose viewer prefers reduced motion) every room stays as it is. It takes its colors from the
  * operator's theme and its width from the layout box it is drawn into.
  */

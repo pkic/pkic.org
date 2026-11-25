@@ -1,6 +1,6 @@
 /*
  * Up next, a broadcast graphic. Each room reads in one sweep: its accent and
- * start time first, then the room, the session and who speaks. Colors come
+ * start time first, then the room, the session and, under it, who speaks. Colors come
  * from the graphic's theme (LiveGraphicTheme.css); sizes are fixed on the
  * 1920 × 1080 frame and the layout box scales the whole graphic, so it is set
  * at one of three widths to suit the box it is drawn into.
@@ -8,7 +8,7 @@
 @layer components {
   .pk-live-schedule {
     --schedule-gap: 28px;
-    --schedule-room-block: 184px;
+    --schedule-room-block: 272px;
     --live-room-accent: var(--pk-palette-green);
     position: absolute;
     inset-block-start: 0;
@@ -64,15 +64,16 @@
     padding: 0;
     list-style: none;
   }
-  /* A room as a row: accent, start time, then the room over its session, and the speakers at the end. */
+  /* A room as a row: accent, start time, then the room over its session over who speaks. */
   .pk-live-schedule__room {
     position: relative;
     display: grid;
-    grid-template-columns: 10px 168px minmax(0, 1fr) auto;
+    grid-template-columns: 10px 168px minmax(0, 1fr);
     grid-template-areas:
-      "accent when room speakers"
-      "accent when title speakers";
-    grid-template-rows: auto 1fr;
+      "accent when room"
+      "accent when title"
+      "accent when speakers";
+    grid-template-rows: auto 1fr auto;
     column-gap: var(--schedule-gap);
     row-gap: 6px;
     box-sizing: border-box;
@@ -144,41 +145,30 @@
     -webkit-line-clamp: 2;
     line-clamp: 2;
   }
+  /* Who speaks: their faces overlapping like a cast list, then their names on one line. */
   .pk-live-schedule__speakers {
     display: flex;
     grid-area: speakers;
     align-items: center;
-    align-self: center;
+    gap: 18px;
+    min-inline-size: 0;
+  }
+  .pk-live-schedule__faces {
+    display: flex;
+    flex: none;
+    align-items: center;
     margin: 0;
     padding: 0;
     list-style: none;
   }
-  .pk-live-schedule__speaker {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    min-inline-size: 0;
+  .pk-live-schedule__face + .pk-live-schedule__face {
+    margin-inline-start: -12px;
   }
-  .pk-live-schedule__speaker + .pk-live-schedule__speaker {
-    margin-inline-start: -14px;
-  }
-  .pk-live-schedule__speaker .pk-avatar {
+  .pk-live-schedule__face .pk-avatar {
     flex: none;
-    inline-size: 72px;
-    block-size: 72px;
+    inline-size: 60px;
+    block-size: 60px;
     box-shadow: 0 0 0 4px var(--graphic-contrast);
-  }
-  .pk-live-schedule__speaker-name {
-    display: none;
-    flex-direction: column;
-    max-inline-size: 300px;
-    font-size: var(--pk-text-3xl);
-    font-weight: 600;
-  }
-  .pk-live-schedule__role {
-    color: var(--graphic-ink-muted);
-    font-size: var(--pk-text-2xl);
-    font-weight: 400;
   }
   .pk-live-schedule__more {
     margin-inline-start: 14px;
@@ -186,22 +176,14 @@
     font-size: var(--pk-text-3xl);
     font-variant-numeric: tabular-nums;
   }
-  /*
-   * Speakers are named where there is room to read them: the room brought
-   * forward, every room while nothing cycles, and every card. Elsewhere their
-   * faces stand in, overlapping like a cast list.
-   */
-  .pk-live-schedule:not([data-spotlight]) .pk-live-schedule__speaker,
-  .pk-live-schedule__room[data-active] .pk-live-schedule__speaker {
-    margin-inline-start: 0;
-  }
-  .pk-live-schedule:not([data-spotlight]) .pk-live-schedule__speaker + .pk-live-schedule__speaker,
-  .pk-live-schedule__room[data-active] .pk-live-schedule__speaker + .pk-live-schedule__speaker {
-    margin-inline-start: 28px;
-  }
-  .pk-live-schedule:not([data-spotlight]) .pk-live-schedule__speaker-name,
-  .pk-live-schedule__room[data-active] .pk-live-schedule__speaker-name {
-    display: flex;
+  .pk-live-schedule__names {
+    min-inline-size: 0;
+    margin: 0;
+    overflow: hidden;
+    font-size: var(--pk-text-3xl);
+    font-weight: 600;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
   /*
    * With several rooms one comes forward at a time: it lifts onto a light
@@ -263,38 +245,17 @@
     -webkit-line-clamp: 4;
     line-clamp: 4;
   }
+  /* A card is narrow: the names go under the faces. */
   .pk-live-schedule[data-arrangement="cards"] .pk-live-schedule__speakers {
     flex-direction: column;
     align-items: flex-start;
-    align-self: end;
     gap: 10px;
   }
-  .pk-live-schedule[data-arrangement="cards"] .pk-live-schedule__speaker,
-  .pk-live-schedule[data-arrangement="cards"] .pk-live-schedule__speaker + .pk-live-schedule__speaker {
-    margin-inline-start: 0;
-  }
-  .pk-live-schedule[data-arrangement="cards"] .pk-live-schedule__speaker-name {
-    display: flex;
+  .pk-live-schedule[data-arrangement="cards"] .pk-live-schedule__names {
+    max-inline-size: 100%;
     font-size: var(--pk-text-2xl);
   }
-  /* A card with a full panel shows its faces only, overlapping, so the session's title keeps its lines. */
-  .pk-live-schedule[data-arrangement="cards"]
-    .pk-live-schedule__speakers:has(> .pk-live-schedule__speaker:nth-child(3))
-    .pk-live-schedule__speaker-name {
-    display: none;
-  }
-  .pk-live-schedule[data-arrangement="cards"]
-    .pk-live-schedule__speakers:has(> .pk-live-schedule__speaker:nth-child(3)) {
-    flex-direction: row;
-    align-items: center;
-  }
-  .pk-live-schedule[data-arrangement="cards"]
-    .pk-live-schedule__speakers:has(> .pk-live-schedule__speaker:nth-child(3))
-    > .pk-live-schedule__speaker
-    + .pk-live-schedule__speaker {
-    margin-inline-start: -24px;
-  }
-  .pk-live-schedule[data-arrangement="cards"] .pk-live-schedule__speaker .pk-avatar {
+  .pk-live-schedule[data-arrangement="cards"] .pk-live-schedule__face .pk-avatar {
     inline-size: 56px;
     block-size: 56px;
   }
@@ -308,15 +269,15 @@
     background: color-mix(in srgb, var(--graphic-ink) 16%, transparent);
     transform: scale(1.03);
   }
-  /* Narrow: the time and room share a line over the session; the faces sit under it. */
+  /* Narrow: the time and room share a line over the session, and who speaks sits under it. */
   .pk-live-schedule[data-fit="narrow"] .pk-live-schedule__room {
-    grid-template-columns: 10px minmax(0, 1fr) auto;
+    grid-template-columns: 10px auto minmax(0, 1fr);
     grid-template-areas:
-      "accent when speakers"
-      "accent room speakers"
-      "accent title title";
-    grid-template-rows: auto auto 1fr;
-    block-size: 236px;
+      "accent when room"
+      "accent title title"
+      "accent speakers speakers";
+    grid-template-rows: auto 1fr auto;
+    block-size: 300px;
     column-gap: 22px;
   }
   @media (prefers-reduced-motion: reduce) {

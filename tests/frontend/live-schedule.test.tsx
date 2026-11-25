@@ -16,6 +16,7 @@ import {
   LiveScheduleOverlay,
   liveScheduleArrangement,
   liveScheduleFit,
+  liveScheduleSpeakerLine,
 } from "../../assets/ts/live-session/LiveScheduleOverlay";
 import { LIVE_GRAPHIC_THEMES } from "../../assets/shared/live-graphic-theme";
 import { LiveScheduleControls } from "../../assets/ts/member-flows/portal/sections/events/detail/live/LiveScheduleControls";
@@ -78,7 +79,7 @@ it.each(["cards", "list"] as const)(
       "Post-quantum deployment",
       "Certificate automation",
       "Historical speaker",
-      "Moderator",
+      "(moderator)",
     ])
       expect(host.textContent).toContain(name);
     expect(host.textContent).toContain("10:00");
@@ -123,8 +124,27 @@ it("sets itself for the box it is drawn into: cards for one wide row of rooms, r
 it("shows each speaker's public headshot", async () => {
   host = document.body.appendChild(document.createElement("div"));
   await act(() => render(<LiveScheduleOverlay schedule={frame()} animate />, host!));
-  const portraits = [...host.querySelectorAll<HTMLImageElement>(".pk-live-schedule__speaker img")];
+  const portraits = [...host.querySelectorAll<HTMLImageElement>(".pk-live-schedule__face img")];
   expect(portraits.map((image) => image.getAttribute("src"))).toEqual(["/approved-photo.jpg", "/approved-photo.jpg"]);
+});
+it("puts who speaks under the title: one speaker by name, a panel of six as its faces and a count", async () => {
+  const speaker = (name: string, moderator = false) => ({ name, moderator, photoUrl: null });
+  expect(liveScheduleSpeakerLine([speaker("Pat Panelist")])).toBe("Pat Panelist");
+  expect(liveScheduleSpeakerLine([speaker("Ana Example"), speaker("Fay Moderator", true)])).toBe(
+    "Ana Example, Fay Moderator (moderator)",
+  );
+  const panel = ["A", "B", "C", "D", "E", "F"].map((initial) => speaker(`${initial} Example`));
+  expect(liveScheduleSpeakerLine(panel)).toBe("Panel discussion · 6 speakers");
+  const schedule = frame();
+  schedule.rooms = [{ ...schedule.rooms[0]!, speakers: panel }];
+  host = document.body.appendChild(document.createElement("div"));
+  await act(() => render(<LiveScheduleOverlay schedule={schedule} animate />, host!));
+  // The speakers follow the title in the room's reading order, every face of the panel shown.
+  const room = host.querySelector(".pk-live-schedule__room")!;
+  expect(room.querySelector(".pk-live-schedule__title + .pk-live-schedule__speakers")).not.toBeNull();
+  expect(room.querySelectorAll(".pk-live-schedule__face")).toHaveLength(6);
+  expect(room.querySelector(".pk-live-schedule__more")).toBeNull();
+  expect(room.querySelector(".pk-live-schedule__names")?.textContent).toBe("Panel discussion · 6 speakers");
 });
 /** Four rooms in the next block: enough for the graphic to bring one card forward at a time. */
 function busyFrame() {
