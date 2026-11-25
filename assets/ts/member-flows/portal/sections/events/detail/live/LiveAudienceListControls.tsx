@@ -17,7 +17,7 @@ import { Dialog } from "../../../../../../ui/Dialog";
 import { Field } from "../../../../../../ui/Field";
 import { Select } from "../../../../../../ui/TextControl";
 import { LiveGraphicRow } from "./LiveGraphicRow";
-import { LIVE_SETTINGS_NOT_SENT, useLiveGraphicSettings } from "./live-graphic-settings";
+import { LIVE_SETTINGS_FOR_EVENT, useLiveGraphicSettings, type LiveStudioGraphicFor } from "./live-graphic-settings";
 import type { LiveLayer, LiveTargets } from "./live-output-targets";
 
 const range = ({ min, max }: { min: number; max: number }) =>
@@ -45,6 +45,7 @@ function AudienceListRow<Config extends { count: number }>({
   detail,
   layer,
   fields,
+  graphic,
 }: {
   targets: LiveTargets;
   name: string;
@@ -56,8 +57,10 @@ function AudienceListRow<Config extends { count: number }>({
   detail: (config: Config) => string;
   layer: (config: Config) => LiveLayer;
   fields: (draft: Config, change: (patch: Partial<Config>) => void, form: ContractForm<Config>) => ComponentChildren;
+  /** The list's entry in the event's setup. */
+  graphic: LiveStudioGraphicFor<Config>;
 }) {
-  const { settings: config, save } = useLiveGraphicSettings(targets, shown, initial, layer);
+  const { settings: config, save, saves } = useLiveGraphicSettings(targets, shown, initial, layer, graphic);
   const [draft, setDraft] = useState(config);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,12 +84,15 @@ function AudienceListRow<Config extends { count: number }>({
         <Dialog
           open
           title={name}
+          description={saves ? LIVE_SETTINGS_FOR_EVENT : undefined}
           confirmLabel="Save"
           onConfirm={() => {
             const checked = form.submit();
             if (!checked.data) return;
-            if (!save(checked.data)) return setError(LIVE_SETTINGS_NOT_SENT);
-            setOpen(false);
+            void save(checked.data).then((problem) => {
+              setError(problem);
+              if (!problem) setOpen(false);
+            });
           }}
           onCancel={() => setOpen(false)}
         >
@@ -148,6 +154,7 @@ export function LiveTopQuestionsControls({ targets }: { targets: LiveTargets }) 
       schema={liveTopQuestionsConfigSchema}
       shown={shown?.config ?? null}
       initial={DEFAULT_LIVE_TOP_QUESTIONS_CONFIG}
+      graphic="topQuestions"
       detail={({ count }) => `${formatNumber(count)} open, most votes first`}
       layer={(config) => ({ kind: "topQuestions", config })}
       fields={(draft, change, form) => (
@@ -174,6 +181,7 @@ export function LiveChatFeedControls({ targets }: { targets: LiveTargets }) {
       schema={liveChatFeedConfigSchema}
       shown={shown?.config ?? null}
       initial={DEFAULT_LIVE_CHAT_FEED_CONFIG}
+      graphic="chatFeed"
       detail={({ count, delaySeconds }) =>
         `Latest ${formatNumber(count)} messages · ${delaySeconds ? `${delayLabel(delaySeconds)} delay` : "no delay"}`
       }

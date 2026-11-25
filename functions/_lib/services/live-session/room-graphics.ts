@@ -29,6 +29,7 @@ import type { DatabaseLike } from "../../types";
 import type { LiveRoomStore } from "./room-store";
 import type { LiveRoomBroadcast } from "./room-broadcast";
 import { readLiveOverlayLayoutGeometries } from "./overlay-layouts";
+import { readEventLiveStudioSetup } from "./studio-setup";
 import { resolveLiveTicker } from "./room-ticker";
 import { resolveLiveCheckIn } from "../event-attendance-points/live-check-in";
 import type { AttendancePointSelection } from "../../../../assets/shared/attendance-points";
@@ -171,7 +172,7 @@ export class LiveRoomGraphics {
    */
   private comesOn(input: LiveCompositionInput): LiveSceneFill {
     const scene = resolveLiveSceneElements({ overlayLayouts: this.layouts }, input.scene);
-    return liveSceneFill(scene, input, { program: this.store.stage() });
+    return liveSceneFill(scene, input, { program: this.store.stage(), setup: this.basis.read().graphics });
   }
   /**
    * A screen draws the scene its room set up for it from the start, before
@@ -265,12 +266,13 @@ export class LiveRoomGraphics {
   private async refreshFromD1(): Promise<void> {
     const room = this.store.session();
     if (!room) return;
-    const [layouts, context, agenda] = await Promise.all([
+    const [layouts, context, agenda, setup] = await Promise.all([
       readLiveOverlayLayoutGeometries(this.db, room.eventId),
       readLiveTickerContext(this.db, room.eventId),
       readPublishedLiveAgenda(this.db, room.eventId),
+      readEventLiveStudioSetup(this.db, room.eventId),
     ]);
-    this.basis.save({ layouts, context, agenda });
+    this.basis.save({ layouts, context, agenda, graphics: setup.graphics });
     if (JSON.stringify(context) !== JSON.stringify(this.tickerContext)) {
       this.tickerContext = context;
       await this.broadcast.all({ type: "ticker.context.changed", context });

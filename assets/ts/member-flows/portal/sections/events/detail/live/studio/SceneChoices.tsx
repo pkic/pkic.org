@@ -12,6 +12,7 @@ import { formatConjunction } from "../../../../../../../../shared/format-list";
 import { overlayBoxPixels } from "../../../../../../../../shared/live-overlay-geometry";
 import { liveOverlayLayoutChoices } from "../../../../../../../../shared/live-overlay-layout-presets";
 import type { AgendaSnapshot } from "../../../../../../../../shared/schemas/event-agenda";
+import type { LiveStudioGraphicsSetup } from "../../../../../../../../shared/schemas/live-studio-setup";
 import {
   LIVE_OVERLAY_FRAME,
   type LiveOverlayElementPlacement,
@@ -29,6 +30,8 @@ export interface SceneSources {
   program: LiveRoomState | null;
   /** The approved agenda, which Up next and the ticker read; null before the first approval. */
   agenda: AgendaSnapshot | null;
+  /** The event's saved graphics setup, which a scene's graphics start from. */
+  setup?: LiveStudioGraphicsSetup;
   roomId: string;
   slug: string;
 }
@@ -43,10 +46,10 @@ const MINUTE = 60_000;
  */
 function useSceneThumbnails(sources: SceneSources, scenes: readonly string[]) {
   const last = useRef<{ room: LiveSceneThumbnailRoom; thumbnails: Map<string, LiveSceneThumbnail> } | null>(null);
-  const { preview, program, agenda } = sources;
+  const { preview, program, agenda, setup } = sources;
   // The session's own Program; the room on air is another session's while this one waits.
   const own = program?.session.occurrenceId === preview.session.occurrenceId ? program.stage : null;
-  const room: LiveSceneThumbnailRoom = { preview, program: own, agenda };
+  const room: LiveSceneThumbnailRoom = { preview, program: own, agenda, setup };
   if (!last.current || !sameLiveSceneThumbnailRoom(last.current.room, room))
     last.current = {
       room,

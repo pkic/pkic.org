@@ -22,7 +22,7 @@ import { ListDetail } from "../../../../../../ui/ListDetail";
 import { RangeInput, Select, TextInput } from "../../../../../../ui/TextControl";
 import { Alert } from "../../../../../../ui/Alert";
 import { LiveGraphicRow } from "./LiveGraphicRow";
-import { LIVE_SETTINGS_NOT_SENT, useLiveGraphicSettings } from "./live-graphic-settings";
+import { LIVE_SETTINGS_FOR_EVENT, useLiveGraphicSettings } from "./live-graphic-settings";
 import type { LiveTargets } from "./live-output-targets";
 import "./LiveTickerControls.css";
 
@@ -145,11 +145,16 @@ export function LiveTickerControls({ targets }: { targets: LiveTargets }) {
   const context = targets.state.tickerContext;
   const shown = targets.state.preview.ticker ?? targets.state.stage.ticker;
   // The row follows the ticker an output shows; saving its messages changes it there.
-  const { settings: config, save } = useLiveGraphicSettings<LiveTickerConfig>(
+  const {
+    settings: config,
+    save,
+    saves,
+  } = useLiveGraphicSettings<LiveTickerConfig>(
     targets,
     shown ? liveTickerConfigOf(shown) : null,
     DEFAULT_LIVE_TICKER_CONFIG,
     (settings) => ({ kind: "ticker", config: settings }),
+    "ticker",
   );
   const [draft, setDraft] = useState<LiveTickerConfig | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -187,13 +192,15 @@ export function LiveTickerControls({ targets }: { targets: LiveTargets }) {
           open
           size="wide"
           title="News ticker"
+          description={saves ? LIVE_SETTINGS_FOR_EVENT : undefined}
           confirmLabel="Done"
           onConfirm={() => {
             const checked = form.submit();
             if (!checked.data) return setError(checked.formMessage);
-            if (!save(checked.data)) return setError(LIVE_SETTINGS_NOT_SENT);
-            setDraft(null);
-            setError(null);
+            void save(checked.data).then((problem) => {
+              setError(problem);
+              if (!problem) setDraft(null);
+            });
           }}
           onCancel={() => setDraft(null)}
         >

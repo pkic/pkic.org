@@ -8,7 +8,7 @@ import { Dialog } from "../../../../../../ui/Dialog";
 import { Field } from "../../../../../../ui/Field";
 import { Select } from "../../../../../../ui/TextControl";
 import { LiveGraphicRow } from "./LiveGraphicRow";
-import { LIVE_SETTINGS_NOT_SENT, useLiveGraphicSettings } from "./live-graphic-settings";
+import { LIVE_SETTINGS_FOR_EVENT, useLiveGraphicSettings } from "./live-graphic-settings";
 import type { LiveTargets } from "./live-output-targets";
 
 const LAYOUT_LABELS: Record<LivePanelists["layout"], string> = {
@@ -22,7 +22,7 @@ const LAYOUT_LABELS: Record<LivePanelists["layout"], string> = {
 export function LivePanelistControls({ targets }: { targets: LiveTargets }) {
   const shown = targets.state.preview.panelists ?? (targets.programActive ? targets.state.stage.panelists : null);
   // The row follows the session graphic an output shows; saving its settings changes it there.
-  const { settings, save } = useLiveGraphicSettings<LivePanelists>(
+  const { settings, save, saves } = useLiveGraphicSettings<LivePanelists>(
     targets,
     shown,
     DEFAULT_LIVE_PANELISTS,
@@ -30,6 +30,7 @@ export function LivePanelistControls({ targets }: { targets: LiveTargets }) {
       kind: "panelists",
       panelists,
     }),
+    "panelists",
   );
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,12 +55,15 @@ export function LivePanelistControls({ targets }: { targets: LiveTargets }) {
         <Dialog
           open
           title="Session graphic"
+          description={saves ? LIVE_SETTINGS_FOR_EVENT : undefined}
           confirmLabel="Save"
           onConfirm={() => {
             const checked = form.submit();
             if (!checked.data) return;
-            if (!save(checked.data)) return setError(LIVE_SETTINGS_NOT_SENT);
-            setOpen(false);
+            void save(checked.data).then((problem) => {
+              setError(problem);
+              if (!problem) setOpen(false);
+            });
           }}
           onCancel={() => setOpen(false)}
         >

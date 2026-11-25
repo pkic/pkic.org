@@ -38,11 +38,14 @@ export function SelectedSessionDesk({
   onBrowse,
   eventPath,
   canProduce = true,
+  canSetUp = false,
 }: {
   /** The event's own page, which the phone studio links back to. */
   eventPath?: string;
   /** Whether this operator runs the studio, or only moderates beside it. */
   canProduce?: boolean;
+  /** Whether this operator sets up the live studio for the event. */
+  canSetUp?: boolean;
   slug: string;
   occurrenceId: string;
   roomId: string;
@@ -144,6 +147,7 @@ export function SelectedSessionDesk({
         activeOccurrenceId={activeId}
         eventPath={eventPath}
         canProduce={canProduce}
+        canSetUp={canSetUp}
       />
     </div>
   );
@@ -162,9 +166,12 @@ export function EventLiveControlRoom({
   eventPath,
   renderSession,
   canProduce = true,
+  canSetUp = false,
 }: {
   /** Whether this operator runs the studio, or only moderates beside it. */
   canProduce?: boolean;
+  /** Whether this operator sets up the live studio for the event. */
+  canSetUp?: boolean;
   slug: string;
   /** The URL-addressed session, if one is selected. */
   occurrenceId?: string;
@@ -380,6 +387,7 @@ export function EventLiveControlRoom({
           onBrowse={(id) => choose(id)}
           eventPath={eventPath}
           canProduce={canProduce}
+          canSetUp={canSetUp}
         />
       ) : null}
     </div>

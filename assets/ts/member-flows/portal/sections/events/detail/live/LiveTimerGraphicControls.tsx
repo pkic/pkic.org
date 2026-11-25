@@ -244,11 +244,11 @@ export function useLiveTimerGraphic(targets: LiveTargets, timerId: string) {
           .map((composition) => on(composition.timerGraphics))
           .find(Boolean))
       : undefined);
-  const { settings, save } = useLiveGraphicSettings<LiveTimerGraphic>(
+  const { settings, apply } = useLiveGraphicSettings<LiveTimerGraphic>(
     targets,
     shown ?? null,
     defaultLiveTimerGraphic(timerId),
     (graphic) => ({ kind: "timer", graphic }),
   );
-  return { graphic: settings, save };
+  return { graphic: settings, save: apply };
 }

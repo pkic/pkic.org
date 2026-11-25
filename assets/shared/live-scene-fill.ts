@@ -8,6 +8,7 @@ import { DEFAULT_LIVE_CHAT_FEED_CONFIG, DEFAULT_LIVE_TOP_QUESTIONS_CONFIG } from
 import type { LiveCompositionInput, LivePanelists, LiveStage } from "./schemas/live-session-room";
 import { DEFAULT_LIVE_SCHEDULE_CONFIG } from "./schemas/live-session-schedule";
 import { DEFAULT_LIVE_TICKER_CONFIG, liveTickerConfigOf } from "./schemas/live-session-ticker";
+import type { LiveStudioGraphicsSetup } from "./schemas/live-studio-setup";
 
 /**
  * What loading a scene switches on. A scene says, per graphic that fills
@@ -22,38 +23,45 @@ import { DEFAULT_LIVE_TICKER_CONFIG, liveTickerConfigOf } from "./schemas/live-s
 /** The session graphic's look when a scene brings it on and Program shows none: the title and its people in a row. */
 export const DEFAULT_LIVE_PANELISTS: LivePanelists = { layout: "panel" };
 
-/** What the fill reads from the room: how Program shows each graphic now. */
-export type LiveSceneFillRoom = { program: LiveStage };
+/** What the fill reads from the room: how Program shows each graphic now, and the event's saved setup. */
+export type LiveSceneFillRoom = { program: LiveStage; setup?: LiveStudioGraphicsSetup };
 
 /** The sources a scene switches on, as part of a composition. */
 export type LiveSceneFill = Partial<LiveCompositionInput>;
 
 /**
  * Each self-filling graphic's sources as a scene switches it on: the look
- * Program gives it now, else the standard one. Null when the composition
+ * Program gives it now, else the event's saved setup, else the standard one. Null when the composition
  * already has it on, or the room has nothing to fill it with.
  */
 const FILLS: Record<
   LiveSelfFillingElement,
   (input: LiveCompositionInput, room: LiveSceneFillRoom) => LiveSceneFill | null
 > = {
-  ticker: (input, { program }) =>
+  ticker: (input, { program, setup }) =>
     input.ticker
       ? null
       : {
-          ticker: program.ticker ? liveTickerConfigOf(program.ticker) : DEFAULT_LIVE_TICKER_CONFIG,
+          ticker: program.ticker ? liveTickerConfigOf(program.ticker) : (setup?.ticker ?? DEFAULT_LIVE_TICKER_CONFIG),
         },
   // Up next lists every room, as the studio's own switch puts it on.
-  schedule: (input, { program }) =>
+  schedule: (input, { program, setup }) =>
     input.schedule
       ? null
-      : { schedule: { ...(program.schedule?.config ?? DEFAULT_LIVE_SCHEDULE_CONFIG), scope: "all-rooms" } },
-  panelists: (input, { program }) =>
-    input.panelists ? null : { panelists: program.panelists ?? DEFAULT_LIVE_PANELISTS },
-  topQuestions: (input, { program }) =>
-    input.topQuestions ? null : { topQuestions: program.topQuestions?.config ?? DEFAULT_LIVE_TOP_QUESTIONS_CONFIG },
-  chat: (input, { program }) =>
-    input.chatFeed ? null : { chatFeed: program.chatFeed?.config ?? DEFAULT_LIVE_CHAT_FEED_CONFIG },
+      : {
+          schedule: {
+            ...(program.schedule?.config ?? setup?.schedule ?? DEFAULT_LIVE_SCHEDULE_CONFIG),
+            scope: "all-rooms",
+          },
+        },
+  panelists: (input, { program, setup }) =>
+    input.panelists ? null : { panelists: program.panelists ?? setup?.panelists ?? DEFAULT_LIVE_PANELISTS },
+  topQuestions: (input, { program, setup }) =>
+    input.topQuestions
+      ? null
+      : { topQuestions: program.topQuestions?.config ?? setup?.topQuestions ?? DEFAULT_LIVE_TOP_QUESTIONS_CONFIG },
+  chat: (input, { program, setup }) =>
+    input.chatFeed ? null : { chatFeed: program.chatFeed?.config ?? setup?.chatFeed ?? DEFAULT_LIVE_CHAT_FEED_CONFIG },
   reactions: (input) => (input.reactions ? null : { reactions: true }),
 };
 

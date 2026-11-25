@@ -536,6 +536,19 @@ describe("live room auxiliary outputs", () => {
     });
   });
 
+  it("brings a scene's graphics on in the event's saved setup when Program shows none", async () => {
+    const now = new Date().toISOString();
+    await env.DB.prepare(
+      "INSERT INTO event_live_studio_setups(event_id,setup_json,created_at,updated_at) VALUES(?,?,?,?)",
+    )
+      .bind(f.eventId, JSON.stringify({ graphics: { topQuestions: { count: 4 } }, layouts: {} }), now, now)
+      .run();
+    const operator = await f.connect({ person: "operator" });
+    operator.send({ type: "preview.set", composition: { ...EMPTY_COMPOSITION, scene: "questions" } });
+    const loaded = (await operator.next("preview.changed", (m) => m.composition.topQuestions !== null)).composition;
+    expect(loaded.topQuestions?.config).toEqual({ count: 4 });
+  });
+
   it("clears Preview to a blank frame in the Default scene, and a room screen to empty in its own scene", async () => {
     const operator = await f.connect({ person: "operator" });
     const full = { creditKey: `user:${f.users.speaker}`, timerGraphics: [GRAPHIC] };

@@ -19,6 +19,7 @@ import type {
 import type { LiveRoomState } from "../../../../../../live-session/live-room-state";
 import type { LiveProgramLayer } from "../../../../../../../shared/live-overlay-stacking";
 import { liveLayerUnseen } from "./live-layer-unseen";
+import type { LiveStudioSetupHandle } from "./live-studio-setup";
 import { liveCompositionInput, previewLiveStage, takeLiveStage } from "./live-stage-preview";
 
 type Send = (message: LiveRoomClientMessage) => boolean;
@@ -54,6 +55,8 @@ export interface LiveTargets {
   sendProgram: Send;
   /** Sends several commands in order as one change; without it each goes out on its own. */
   sendPrograms?: (messages: readonly LiveRoomClientMessage[]) => boolean;
+  /** The event's studio setup, which graphics start from; without it they start from the built-in one. */
+  setup?: LiveStudioSetupHandle;
 }
 
 /** Whether this operator may change what an output shows now. */

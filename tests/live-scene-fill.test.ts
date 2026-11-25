@@ -258,6 +258,22 @@ describe("loading a scene on a composition", () => {
     expect(liveSceneFill(preset("questions"), EMPTY, room(program))).toEqual({ topQuestions: { count: 3 } });
   });
 
+  it("gives a graphic the event's saved look when Program shows none, and Program's over it", () => {
+    const setup = {
+      panelists: { layout: "columns" as const },
+      topQuestions: { count: 4 },
+      schedule: { ...DEFAULT_LIVE_SCHEDULE_CONFIG, scope: "this-room" as const, layout: "list" as const },
+    };
+    expect(liveSceneFill(preset("panel"), EMPTY, { ...room(), setup })).toEqual({ panelists: { layout: "columns" } });
+    expect(liveSceneFill(preset("questions"), EMPTY, { ...room(), setup })).toEqual({ topQuestions: { count: 4 } });
+    // Up next still lists every room, as the studio's own switch puts it on.
+    expect(liveSceneFill(preset("break"), EMPTY, { ...room(), setup })).toEqual({
+      schedule: { ...setup.schedule, scope: "all-rooms" },
+    });
+    const program = room({ topQuestions: { config: { count: 2 }, questions: [] } });
+    expect(liveSceneFill(preset("questions"), EMPTY, { ...program, setup })).toEqual({ topQuestions: { count: 2 } });
+  });
+
   it("never touches a pick, and never switches on a graphic the scene only places", () => {
     for (const slug of LIVE_OVERLAY_PRESETS) {
       const fill = liveSceneFill(preset(slug), PICKED, room());
