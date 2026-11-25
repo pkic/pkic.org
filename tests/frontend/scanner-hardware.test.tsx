@@ -52,3 +52,23 @@ it("uses the latest scanner operation handler and stops capturing keys outside i
   await input("badge-three");
   expect(next).toHaveBeenCalledTimes(1);
 });
+
+it("leaves typing in a field, such as a lead note, to that field", async () => {
+  host = document.createElement("div");
+  document.body.append(host);
+  const onBadge = vi.fn();
+  const note = document.createElement("textarea");
+  document.body.append(note);
+  await act(() => render(<Harness enabled onBadge={onBadge} />, host));
+  const typed = [..."Asked for a demo", "Enter"].map((key) => {
+    const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+    note.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+  expect(typed.every((prevented) => !prevented)).toBe(true);
+  expect(onBadge).not.toHaveBeenCalled();
+  note.remove();
+  // Outside a field the scanner still reads the badge.
+  await input("badge-four");
+  expect(onBadge).toHaveBeenCalledExactlyOnceWith("badge-four");
+});
