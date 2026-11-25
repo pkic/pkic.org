@@ -214,7 +214,8 @@ FROM users person, (${organizationSql}) organization
 WHERE person.id = ${userIdSql} AND NOT EXISTS (
   SELECT 1 FROM identities held WHERE held.user_id = person.id AND held.organization_id = organization.id
     AND held.started_at IS NOT NULL AND held.ended_at IS NULL AND held.blocked_at IS NULL)
-ON CONFLICT DO NOTHING;`;
+ON CONFLICT(id) DO UPDATE SET ended_at = NULL, is_default = excluded.is_default, job_title = excluded.job_title, updated_at = excluded.updated_at
+WHERE identities.ended_at IS NOT NULL AND identities.blocked_at IS NULL AND identities.user_id = excluded.user_id;`;
 }
 
 /** Persona accounts resolve by address, so an account that already exists is reused. */

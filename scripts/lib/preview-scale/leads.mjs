@@ -18,7 +18,8 @@ const SCANNABLE_CODES = 5;
 function consentingRegistrations(eventId, registrations, seed) {
   return registrations.filter(
     (registration) =>
-      registration.status === "registered" && seededStream(seed, `${eventId}:sponsor-consent:${registration.id}`)() < CONSENT_SHARE,
+      registration.status === "registered" &&
+      seededStream(seed, `${eventId}:sponsor-consent:${registration.id}`)() < CONSENT_SHARE,
   );
 }
 
@@ -28,9 +29,10 @@ export function buildSponsorLeads({ eventId, registrations, personas, seed }) {
   const sponsors = personas.filter((persona) => persona.sponsorship);
   const badged = consenting.filter((registration) => registration.badge);
   const captured = sponsors.length > 0 ? badged.slice(0, CAPTURED_LEADS) : [];
-  const scannable = sponsors.length > 0
-    ? badged.slice(CAPTURED_LEADS, CAPTURED_LEADS + SCANNABLE_CODES).map((registration) => registration.badge.code)
-    : [];
+  const scannable =
+    sponsors.length > 0
+      ? badged.slice(CAPTURED_LEADS, CAPTURED_LEADS + SCANNABLE_CODES).map((registration) => registration.badge.code)
+      : [];
   return { consenting, sponsors, captured, scannable };
 }
 
@@ -41,7 +43,7 @@ export function sponsorLeadStatements(context, leads) {
 VALUES (${sqlString(previewScaleId(`${context.eventId}:term:${TERM_KEY}`))}, ${event}, 'attendee', '${TERM_KEY}', '${TERM_VERSION}', 0, 1,
   'Share my professional profile with the sponsors of this event.',
   'Sponsors whose staff scan your badge receive your name, organization, job title and email address.', ${NOW})
-ON CONFLICT DO NOTHING;`,
+ON CONFLICT(event_id, audience_type, term_key, version) DO UPDATE SET active = 1 WHERE event_terms.active = 0;`,
   ];
   for (const registration of leads.consenting)
     statements.push(`INSERT INTO consent_acceptances (id, registration_id, event_id, user_id, audience_type, term_key, term_version, accepted_at)

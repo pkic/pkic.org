@@ -404,7 +404,22 @@ INSERT INTO identities (id, user_id, source, show_on_organization_profile, invit
     expect(
       count(db, "SELECT COUNT(*) AS count FROM sponsorships WHERE contact_email = 'test.member+sponsor@example.org'"),
     ).toBe(1);
+    // Moving back restores the first sponsor's identity instead of leaving the account without one.
     apply(db, seedStatements(schemaContext, fewer));
+    expect(
+      db
+        .prepare(
+          `SELECT held.organization_id AS organizationId, held.source FROM identities held JOIN users person ON person.id = held.user_id
+            WHERE person.normalized_email = 'test.member+sponsor@example.org' AND held.ended_at IS NULL`,
+        )
+        .all(),
+    ).toEqual([{ organizationId: fewer.sponsorships[0].organizationId, source: "organization_contact" }]);
+    // An attendee term replaced by the event comes back active, so the seeded consents still count.
+    db.exec("UPDATE event_terms SET active = 0 WHERE term_key = 'sponsor-data-sharing'");
+    apply(db, seedStatements(schemaContext, fewer));
+    expect(
+      count(db, "SELECT COUNT(*) AS count FROM event_terms WHERE term_key = 'sponsor-data-sharing' AND active = 1"),
+    ).toBe(1);
     const store = await ensurePasskeys(
       join(mkdtempSync(join(tmpdir(), "pkic-passkeys-")), "passkeys.json"),
       fewer.personas.map((persona: { email: string }) => persona.email),
