@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildPreviewScalePlan } from "../../scripts/lib/preview-scale/plan.mjs";
 import { buildPersonas, dedupeRoster, PERSONA_ROLES } from "../../scripts/lib/preview-scale/personas.mjs";
 import { insertStatements, MAX_STATEMENT_BYTES } from "../../scripts/lib/preview-scale/sql.mjs";
@@ -19,6 +19,7 @@ import {
   ensurePasskeys,
   passkeyAssertion,
   passkeyStatements,
+  publishAgenda,
   testOrigin,
 } from "../../scripts/lib/preview-scale/passkeys.mjs";
 
@@ -167,6 +168,28 @@ describe("test passkeys", () => {
     chmodSync(file, 0o644);
     await ensurePasskeys(file, []);
     expect(statSync(file).mode & 0o777).toBe(0o600);
+  });
+
+  it("retries the publication while the database is busy after the import", async () => {
+    const replies = [
+      new Response(JSON.stringify({ error: { code: "DEPENDENCY_UNAVAILABLE" } }), { status: 503 }),
+      new Response(JSON.stringify({ revision: 4 }), { status: 200 }),
+    ];
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => replies.shift()!);
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      const published = await publishAgenda({
+        origin: "http://localhost:8787",
+        cookie: "session=1",
+        eventSlug: "tokyo",
+        revision: 4,
+        waits: [0],
+      });
+      expect(published).toEqual({ revision: 4 });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 });
 
