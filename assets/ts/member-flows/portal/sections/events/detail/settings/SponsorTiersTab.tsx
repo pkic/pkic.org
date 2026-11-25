@@ -28,7 +28,7 @@ export function SponsorTiersTab({
     tiers: [],
     consortiumTiers: [],
   });
-  const { value: settings, setValue: setSettings, loading, error, reload } = resource;
+  const { value: settings, setValue: setSettings, loading, error } = resource;
   const { tiers, consortiumTiers } = settings;
   const setTiers = (update: (current: typeof tiers) => typeof tiers) =>
     setSettings((current) => ({ ...current, tiers: update(current.tiers) }));
@@ -59,8 +59,8 @@ export function SponsorTiersTab({
     setSaving(true);
     setFailure("");
     try {
-      await putJson(endpoint, checked.data, eventSponsorTiersResponseSchema);
-      await reload();
+      // The save returns the stored settings, so the tab shows them without another read.
+      setSettings(await putJson(endpoint, checked.data, eventSponsorTiersResponseSchema));
       setEditing(false);
       setSaved(true);
     } catch (cause) {

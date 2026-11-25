@@ -27,7 +27,16 @@ export function SponsorLeadDetail({
 }) {
   const { live, epoch } = useLiveBrowserSession();
   if (!live) return <p role="status">Reconnect to view current consenting contacts.</p>;
-  return <LiveSponsorLeadDetail key={epoch} slug={slug} sponsorId={sponsorId} leadId={leadId} timeZone={timeZone} />;
+  return (
+    // Each lead keeps its own note state, so a note saved on one lead never carries to the next.
+    <LiveSponsorLeadDetail
+      key={`${epoch}:${sponsorId}:${leadId}`}
+      slug={slug}
+      sponsorId={sponsorId}
+      leadId={leadId}
+      timeZone={timeZone}
+    />
+  );
 }
 
 function LiveSponsorLeadDetail({

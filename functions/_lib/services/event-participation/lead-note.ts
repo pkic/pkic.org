@@ -3,7 +3,9 @@ import {
   type sponsorLeadNoteRequestSchema,
 } from "../../../../assets/shared/schemas/event-sponsor-lead-list";
 import type { z } from "zod";
+import { userSessionAuthorizationEvidence } from "../../auth/identity-capacities";
 import { activeLeadSponsorOfEventSql } from "../../auth/sponsor-organization-lead-access";
+import { guardAuthorizedDatabase } from "../../db/authorization-guard";
 import { batchFirst } from "../../db/pagination";
 import { AppError } from "../../errors";
 import type { DatabaseLike, UserBackedAuthAdmin } from "../../types";
@@ -18,16 +20,24 @@ const LEAD = "event_sponsor_leads";
 /**
  * Replaces the sponsor team's one note about a lead. The lead's sponsor contact may edit any lead; an operator
  * may edit only a lead they captured. Live sponsorship, consent, contact retention and scope are rechecked in the
- * write itself, and the audit row records the change without the note's text.
+ * write itself, together with the signed-in session, and the audit row records the change without the note's text.
  */
 export async function replaceSponsorLeadNote(
-  db: DatabaseLike,
+  sourceDb: DatabaseLike,
   eventId: string,
   sponsorId: string,
   leadId: string,
   actor: UserBackedAuthAdmin,
   input: z.infer<typeof sponsorLeadNoteRequestSchema>,
 ) {
+  if (!actor.sessionId)
+    throw new AppError(403, "HUMAN_SESSION_REQUIRED", "Sign in to the event app to write lead notes.");
+  // A session revoked or expired after authentication refuses the whole batch, so no note lands without it.
+  const db = guardAuthorizedDatabase(
+    sourceDb,
+    userSessionAuthorizationEvidence(actor.id, actor.sessionId),
+    () => new AppError(401, "AUTH_EXPIRED", "Your session has ended. Sign in again to save the note."),
+  );
   const all = sponsorLeadReadEvidence(actor, "agenda:leads_view", "sponsor.id");
   const mine = sponsorLeadReadEvidence(actor, "agenda:leads_capture", "sponsor.id");
   const note = input.note || null;
@@ -41,7 +51,7 @@ export async function replaceSponsorLeadNote(
             AND EXISTS(SELECT 1 FROM sponsorships sponsor
               JOIN registrations reg ON reg.event_id=${LEAD}.event_id AND reg.user_id=${LEAD}.user_id
               JOIN users attendee ON attendee.id=${LEAD}.user_id
-              WHERE sponsor.id=${LEAD}.sponsor_id AND ${activeLeadSponsorOfEventSql("sponsor", `${LEAD}.event_id`)}
+              WHERE sponsor.id=${LEAD}.sponsor_id AND ${activeLeadSponsorOfEventSql("sponsor", `${LEAD}.event_id`, "read")}
                 AND reg.status='registered' AND attendee.active=1 AND ${sponsorConsentSql("reg")}
                 AND ${eventContactAccessSql(`${LEAD}.event_id`)}
                 AND ((${all.sql}) OR ((${mine.sql}) AND EXISTS(SELECT 1 FROM event_scan_attempts own

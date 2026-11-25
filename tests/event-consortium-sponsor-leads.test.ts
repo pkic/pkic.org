@@ -19,6 +19,7 @@ import {
   sponsorLeadNoteResponseSchema,
 } from "../assets/shared/schemas/event-sponsor-lead-list";
 import { hashBadgeCredential } from "../functions/_lib/services/event-participation/badge-hash";
+import { replaceSponsorLeadNote } from "../functions/_lib/services/event-participation/lead-note";
 
 const now = "2026-10-04T10:00:00.000Z";
 
@@ -152,6 +153,103 @@ describe("consortium sponsor lead capture", () => {
   });
 });
 
+/** A second event that admits the same consortium tier. */
+async function secondEvent(slug: string) {
+  const id = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO events(id,slug,name,timezone,starts_at,ends_at,source_path,capacity_in_person,registration_mode,invite_limit_attendee,settings_json,created_at,updated_at)
+     VALUES(?,?,'Second event','Europe/Amsterdam','2026-12-10T08:00:00.000Z','2026-12-11T18:00:00.000Z','content/events/second.md',1,'invite_or_open',5,'{}',?,?)`,
+  )
+    .bind(id, slug, now, now)
+    .run();
+  await admitTier(id);
+  return id;
+}
+
+/** The sponsorship's verified contact mailbox, which reads every lead without scanning. */
+async function contactViewer(sponsorshipId: string) {
+  const viewerId = await insertUser(env.DB, "lead-contact@synthetic.test");
+  await env.DB.prepare("UPDATE users SET email_verified_at=? WHERE id=?").bind(now, viewerId).run();
+  await env.DB.prepare("UPDATE sponsorships SET contact_email='lead-contact@synthetic.test' WHERE id=?")
+    .bind(sponsorshipId)
+    .run();
+  return createAdminSession(env.DB, viewerId, crypto.randomUUID());
+}
+
+describe("consortium sponsor lead boundaries", () => {
+  it("keeps leads captured as a consortium sponsor readable after the organization sponsors the event directly", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const representative = await insertOrgRepresentative(env.DB);
+    const consortiumId = await sponsorship("consortium", representative.organizationId, null);
+    await admitTier(eventId);
+    const token = await sessionFor(representative);
+    const credential = await consentingAttendee(eventId);
+    expect((await capture(consortiumId, representative.userId, token, credential)).response.status).toBe(200);
+    const viewer = await contactViewer(consortiumId);
+
+    const eventSponsorId = await sponsorship("event", representative.organizationId, eventId);
+    const detail = await call("/pqc-2026", token);
+    const event = eventAudienceDetailSchema.parse(((await detail.json()) as { event: unknown }).event);
+    expect(event.scannerAccess?.sponsors.map((sponsor) => sponsor.id)).toEqual([eventSponsorId]);
+    const leads = await call(`/pqc-2026/sponsors/${consortiumId}/leads`, viewer);
+    expect(leads.status, await leads.clone().text()).toBe(200);
+    expect(sponsorLeadListSchema.parse(await leads.json()).leads).toMatchObject([{ name: "Alex Example" }]);
+  });
+
+  it("stops consortium capture two days after the admitting event ends, while its leads stay readable", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const representative = await insertOrgRepresentative(env.DB);
+    const consortiumId = await sponsorship("consortium", representative.organizationId, null);
+    await admitTier(eventId);
+    const token = await sessionFor(representative);
+    expect(
+      (await capture(consortiumId, representative.userId, token, await consentingAttendee(eventId))).response.status,
+    ).toBe(200);
+    const viewer = await contactViewer(consortiumId);
+
+    await env.DB.prepare("UPDATE events SET ends_at=strftime('%Y-%m-%dT%H:%M:%fZ','now','-3 days') WHERE id=?")
+      .bind(eventId)
+      .run();
+    const late = await capture(consortiumId, representative.userId, token, await consentingAttendee(eventId));
+    expect(late.response.status).toBe(403);
+    const leads = await call(`/pqc-2026/sponsors/${consortiumId}/leads`, viewer);
+    expect(leads.status, await leads.clone().text()).toBe(200);
+    expect(sponsorLeadListSchema.parse(await leads.json()).leads).toHaveLength(1);
+  });
+
+  it("keeps one consortium sponsorship's leads apart at each event that admits its tier", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    await secondEvent("pqc-2027");
+    const representative = await insertOrgRepresentative(env.DB);
+    const consortiumId = await sponsorship("consortium", representative.organizationId, null);
+    await admitTier(eventId);
+    const token = await sessionFor(representative);
+    const { operationId } = await capture(
+      consortiumId,
+      representative.userId,
+      token,
+      await consentingAttendee(eventId),
+    );
+    const { leadId } = sponsorLeadConfirmationSchema.parse(
+      await (await call(`/pqc-2026/sponsors/${consortiumId}/leads/confirmations/${operationId}`, token)).json(),
+    );
+    const viewer = await contactViewer(consortiumId);
+
+    const elsewhere = await call(`/pqc-2027/sponsors/${consortiumId}/leads`, viewer);
+    expect(elsewhere.status, await elsewhere.clone().text()).toBe(200);
+    expect(sponsorLeadListSchema.parse(await elsewhere.json()).leads).toEqual([]);
+    expect((await call(`/pqc-2027/sponsors/${consortiumId}/leads/${leadId}`, viewer)).status).toBe(404);
+    expect((await call(`/pqc-2027/sponsors/${consortiumId}/leads/confirmations/${operationId}`, token)).status).toBe(
+      404,
+    );
+    const note = await call(`/pqc-2027/sponsors/${consortiumId}/leads/${leadId}/note`, viewer, {
+      method: "PUT",
+      body: JSON.stringify({ note: "Wrong event" }),
+    });
+    expect(note.status).toBe(404);
+  });
+});
+
 describe("sponsor lead notes", () => {
   it("lets the capturing operator and the sponsor's lead viewers keep one shared note", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
@@ -185,12 +283,7 @@ describe("sponsor lead notes", () => {
     expect((await put(await sessionFor(colleague), "Not mine")).status).toBe(404);
 
     // The sponsorship's verified contact mailbox edits every lead's note, and an empty note removes it.
-    const viewerId = await insertUser(env.DB, "lead-contact@synthetic.test");
-    await env.DB.prepare("UPDATE users SET email_verified_at=? WHERE id=?").bind(now, viewerId).run();
-    await env.DB.prepare("UPDATE sponsorships SET contact_email='lead-contact@synthetic.test' WHERE id=?")
-      .bind(consortiumId)
-      .run();
-    const viewerToken = await createAdminSession(env.DB, viewerId, crypto.randomUUID());
+    const viewerToken = await contactViewer(consortiumId);
     const cleared = await put(viewerToken, "   ");
     expect(cleared.status, await cleared.clone().text()).toBe(200);
     expect(sponsorLeadNoteResponseSchema.parse(await cleared.json()).note).toBeNull();
@@ -202,5 +295,47 @@ describe("sponsor lead notes", () => {
     const details = audit.results.map((row) => JSON.parse(row.details_json) as { hasNote: { to: boolean } });
     expect(details.map((entry) => entry.hasNote.to).sort()).toEqual([false, true]);
     expect(audit.results.some((row) => row.details_json.includes("migration demo"))).toBe(false);
+  });
+
+  it("refuses the note when the session ends between sign-in and the write", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const representative = await insertOrgRepresentative(env.DB);
+    const consortiumId = await sponsorship("consortium", representative.organizationId, null);
+    await admitTier(eventId);
+    const token = await sessionFor(representative);
+    const { operationId } = await capture(
+      consortiumId,
+      representative.userId,
+      token,
+      await consentingAttendee(eventId),
+    );
+    const { leadId } = sponsorLeadConfirmationSchema.parse(
+      await (await call(`/pqc-2026/sponsors/${consortiumId}/leads/confirmations/${operationId}`, token)).json(),
+    );
+    const session = await env.DB.prepare("SELECT id FROM sessions WHERE user_id=?")
+      .bind(representative.userId)
+      .first<{ id: string }>();
+    const actor = { id: representative.userId, email: "rep@synthetic.test", identityType: "user" as const };
+
+    await env.DB.prepare("UPDATE sessions SET revoked_at=? WHERE id=?").bind(now, session!.id).run();
+    await expect(
+      replaceSponsorLeadNote(
+        env.DB,
+        eventId,
+        consortiumId,
+        leadId,
+        { ...actor, sessionId: session!.id },
+        { note: "Late" },
+      ),
+    ).rejects.toMatchObject({ status: 401 });
+    await expect(
+      replaceSponsorLeadNote(env.DB, eventId, consortiumId, leadId, actor, { note: "Late" }),
+    ).rejects.toMatchObject({
+      status: 403,
+    });
+    const lead = await env.DB.prepare("SELECT note FROM event_sponsor_leads WHERE id=?")
+      .bind(leadId)
+      .first<{ note: string | null }>();
+    expect(lead?.note).toBeNull();
   });
 });

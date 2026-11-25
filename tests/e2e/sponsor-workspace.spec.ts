@@ -99,7 +99,7 @@ test.describe("portal sponsor workspace", () => {
         method: "PUT",
         headers: { "content-type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ tiers: [{ tierName: "Leader", hasAttendeeDataAccess: true }] }),
+        body: JSON.stringify({ tiers: [{ tierName: "Leader", hasAttendeeDataAccess: true }], consortiumLeadTiers: [] }),
       });
       return res.status;
     }, EVENT_SLUG);

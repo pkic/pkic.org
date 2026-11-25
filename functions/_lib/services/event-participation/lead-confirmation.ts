@@ -41,7 +41,7 @@ function prepareSponsorLeadConfirmation(
     WHERE attempt.sponsor_id=? AND attempt.operator_user_id=? AND attempt.operation_id=?
       AND attempt.action='lead' AND attempt.outcome='eligible' AND reg.status='registered'
       AND person.active=1 AND person.pii_redacted_at IS NULL AND person.merged_into_user_id IS NULL
-      AND ${activeLeadSponsorOfEventSql("sponsor", "attempt.event_id")}
+      AND ${activeLeadSponsorOfEventSql("sponsor", "attempt.event_id", "read")}
       AND ${sponsorConsentSql("reg")} AND ${eventContactAccessSql("attempt.event_id")}
       AND (${sponsorLeadPermissionSql("agenda:leads_capture", "sponsor.id")})`)
     .bind(

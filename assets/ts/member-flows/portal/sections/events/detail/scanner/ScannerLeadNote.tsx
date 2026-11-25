@@ -48,18 +48,26 @@ export function ScannerLeadNote({
         {confirmation.note ? "Edit note" : "Add note"}
       </Button>
       {open && (
-        <SponsorLeadNoteDialog
-          slug={slug}
-          sponsorId={sponsorId}
-          leadId={confirmation.leadId}
-          name={confirmation.name}
-          note={confirmation.note}
-          onClose={close}
-          onSaved={(note) => {
-            onSaved(confirmation.leadId, note);
-            close();
+        // Escape closes only the note: the scanner around it exits on Escape too. The dialog still sees the key.
+        <div
+          class="pk-scanner-lead-note-dialog"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") event.stopPropagation();
           }}
-        />
+        >
+          <SponsorLeadNoteDialog
+            slug={slug}
+            sponsorId={sponsorId}
+            leadId={confirmation.leadId}
+            name={confirmation.name}
+            note={confirmation.note}
+            onClose={close}
+            onSaved={(note) => {
+              onSaved(confirmation.leadId, note);
+              close();
+            }}
+          />
+        </div>
       )}
     </div>
   );

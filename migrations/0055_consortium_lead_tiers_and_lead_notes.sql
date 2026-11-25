@@ -14,6 +14,7 @@ CREATE TABLE event_consortium_lead_tiers (
 CREATE INDEX event_consortium_lead_tiers_tier ON event_consortium_lead_tiers(tier, event_id);
 
 -- The sponsor team's one shared note about a lead. It lives and is removed with
--- the lead row, so retention purges, withdrawals and account deletion cover it.
+-- the lead row, so retention purges, capture removal and account deletion cover
+-- it. Withdrawn consent hides the lead and its note, as it hides the lead itself.
 ALTER TABLE event_sponsor_leads ADD COLUMN note TEXT;
 ALTER TABLE event_sponsor_leads ADD COLUMN note_updated_at TEXT;

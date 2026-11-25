@@ -107,4 +107,35 @@ describe("scanner lead note", () => {
     render(null, container);
     expect(onPause).toHaveBeenLastCalledWith(false);
   });
+
+  it("keeps Escape inside the open note so the scanner around it stays open", async () => {
+    const onExit = vi.fn();
+    const container = mount(
+      <div
+        onKeyDown={(event) => {
+          if (event.key === "Escape") onExit();
+        }}
+      >
+        <ScannerLeadNote
+          slug="pqc-2026"
+          sponsorId={sponsorId}
+          confirmation={{ leadId, name: null, title: null, organization: null, note: null }}
+          onPause={vi.fn()}
+          onSaved={vi.fn()}
+        />
+      </div>,
+    );
+    const escape = (target: Element) =>
+      act(() => {
+        target.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      });
+
+    await click(button(container, "Add note"));
+    await escape(controlFor<HTMLTextAreaElement>(document.body, "Note"));
+    expect(onExit).not.toHaveBeenCalled();
+
+    // With no note open, Escape still reaches the scanner.
+    await escape(button(container, "Add note"));
+    expect(onExit).toHaveBeenCalledOnce();
+  });
 });

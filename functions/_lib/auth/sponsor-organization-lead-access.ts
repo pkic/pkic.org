@@ -47,26 +47,40 @@ function activeConsortiumSponsorTerms(sponsorAlias: string): string[] {
   ];
 }
 
+/** Consortium staff keep capturing, and uploading offline scans, this long after an admitting event ends. */
+const CONSORTIUM_CAPTURE_GRACE = "-2 days";
+
 /**
  * A sponsorship that can hold leads at some event: an active event sponsorship, or an active consortium
- * sponsorship whose tier at least one event admits for lead capture. Pair it with
+ * sponsorship whose tier at least one event admits for lead capture. For `capture`, that event must not have
+ * ended beyond the grace period, so an admission never leaves the organization's staff capturing for good;
+ * reading keeps every admitting event, so leads stay reviewable after the event. Pair it with
  * {@link activeLeadSponsorOfEventSql} wherever the event is known.
  */
-export function activeLeadSponsorshipSql(sponsorAlias: string): string {
+export function activeLeadSponsorshipSql(sponsorAlias: string, purpose: "capture" | "read" = "read"): string {
   const sponsor = assertAlias(sponsorAlias);
-  return `(${activeEventSponsorSql(sponsor)} OR ${allOf([
-    ...activeConsortiumSponsorTerms(sponsor),
-    `EXISTS(SELECT 1 FROM event_consortium_lead_tiers any_lead_tier WHERE any_lead_tier.tier=${sponsor}.tier)`,
-  ])})`;
+  const admitted =
+    purpose === "capture"
+      ? `EXISTS(SELECT 1 FROM event_consortium_lead_tiers any_lead_tier
+          JOIN events capturing_event ON capturing_event.id=any_lead_tier.event_id
+          WHERE any_lead_tier.tier=${sponsor}.tier
+            AND COALESCE(capturing_event.ends_at,'9999-12-31')>strftime('%Y-%m-%dT%H:%M:%fZ','now','${CONSORTIUM_CAPTURE_GRACE}'))`
+      : `EXISTS(SELECT 1 FROM event_consortium_lead_tiers any_lead_tier WHERE any_lead_tier.tier=${sponsor}.tier)`;
+  return `(${activeEventSponsorSql(sponsor)} OR ${allOf([...activeConsortiumSponsorTerms(sponsor), admitted])})`;
 }
 
 /**
  * The sponsorships that hold leads at one event: its own active event sponsorships, and the active consortium
  * sponsorships whose tier the event admits for lead capture. An organization that also sponsors the event
- * directly scans only as that event sponsor, so each organization has one lead list per event.
+ * directly captures only as that event sponsor, so it scans into one lead list per event. For `read`, a
+ * consortium sponsorship that already holds leads there stays readable, so those leads never disappear.
  * `eventColumn` is a column reference, never a placeholder, because the predicate repeats it.
  */
-export function activeLeadSponsorOfEventSql(sponsorAlias: string, eventColumn: string): string {
+export function activeLeadSponsorOfEventSql(
+  sponsorAlias: string,
+  eventColumn: string,
+  purpose: "capture" | "read" = "capture",
+): string {
   const sponsor = assertAlias(sponsorAlias);
   if (!SQL_COLUMN.test(eventColumn)) throw new Error("Invalid event SQL column");
   const directSponsor = allOf([
@@ -74,17 +88,25 @@ export function activeLeadSponsorOfEventSql(sponsorAlias: string, eventColumn: s
     `direct_sponsor.event_id=${eventColumn}`,
     ...activeEventSponsorTerms("direct_sponsor"),
   ]);
+  const noDirectSponsor = `NOT EXISTS(SELECT 1 FROM sponsorships direct_sponsor WHERE ${directSponsor})`;
   return `(${allOf([`${sponsor}.event_id=${eventColumn}`, ...activeEventSponsorTerms(sponsor)])} OR ${allOf([
     ...activeConsortiumSponsorTerms(sponsor),
     `EXISTS(SELECT 1 FROM event_consortium_lead_tiers event_lead_tier
       WHERE event_lead_tier.event_id=${eventColumn} AND event_lead_tier.tier=${sponsor}.tier)`,
-    `NOT EXISTS(SELECT 1 FROM sponsorships direct_sponsor WHERE ${directSponsor})`,
+    purpose === "read"
+      ? `(${noDirectSponsor} OR EXISTS(SELECT 1 FROM event_sponsor_leads held_lead
+          WHERE held_lead.event_id=${eventColumn} AND held_lead.sponsor_id=${sponsor}.id))`
+      : noDirectSponsor,
   ])})`;
 }
 
-/** One active lead sponsorship at one event, by id; bind the sponsorship id, then the event id. */
+/** One active capturing lead sponsorship at one event, by id; bind the sponsorship id, then the event id. */
 export const LEAD_SPONSOR_OF_EVENT_SQL = `SELECT sponsor.id FROM events scoped_event JOIN sponsorships sponsor ON sponsor.id=?
   WHERE scoped_event.id=? AND ${activeLeadSponsorOfEventSql("sponsor", "scoped_event.id")}`;
+
+/** {@link LEAD_SPONSOR_OF_EVENT_SQL} for reading the leads it already holds. */
+export const LEAD_SPONSOR_READ_OF_EVENT_SQL = `SELECT sponsor.id FROM events scoped_event JOIN sponsorships sponsor ON sponsor.id=?
+  WHERE scoped_event.id=? AND ${activeLeadSponsorOfEventSql("sponsor", "scoped_event.id", "read")}`;
 
 /** Live, exact sponsor capture access for an active representative of its organization. */
 export function sponsorOrganizationCapturePredicateSql(identityAlias: string, sponsorAlias: string): string {
@@ -93,7 +115,7 @@ export function sponsorOrganizationCapturePredicateSql(identityAlias: string, sp
     `${identityAlias}.started_at IS NOT NULL`,
     `${identityAlias}.ended_at IS NULL`,
     `${identityAlias}.blocked_at IS NULL`,
-    activeLeadSponsorshipSql(sponsorAlias),
+    activeLeadSponsorshipSql(sponsorAlias, "capture"),
   ]);
 }
 

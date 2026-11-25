@@ -43,7 +43,7 @@ async function resolveSponsorLeadReadScope(
     db,
     `SELECT CASE WHEN (${all.sql}) THEN 'all' WHEN (${mine.sql}) THEN 'mine' END AS scope
      FROM events scoped_event JOIN sponsorships sponsor ON sponsor.id=?
-     WHERE scoped_event.id=? AND ${activeLeadSponsorOfEventSql("sponsor", "scoped_event.id")}`,
+     WHERE scoped_event.id=? AND ${activeLeadSponsorOfEventSql("sponsor", "scoped_event.id", "read")}`,
     [...all.bindings, ...mine.bindings, sponsorId, eventId],
   );
   if (!row) throw new AppError(404, "LEAD_SPONSOR_NOT_FOUND", "Active sponsorship not found in this event.");
@@ -91,7 +91,7 @@ export async function listSponsorLeads(
         JOIN registrations reg ON reg.event_id=lead.event_id AND reg.user_id=lead.user_id
         JOIN sponsorships sponsor ON sponsor.id=lead.sponsor_id
         WHERE lead.event_id=? AND lead.sponsor_id=? AND reg.status='registered' AND u.active=1
-        AND ${activeLeadSponsorOfEventSql("sponsor", "lead.event_id")}
+        AND ${activeLeadSponsorOfEventSql("sponsor", "lead.event_id", "read")}
         AND ${sponsorConsentSql("reg")} AND (${scope}) AND ${eventContactAccessSql("lead.event_id")}
         ${leadId ? "AND lead.id=?" : ""} ${search ? `AND ${search.sql}` : ""}`,
       bindings: [
@@ -160,7 +160,7 @@ export async function listLeadSponsors(
         (${expressions[0]}) AS canView,(${expressions[1]}) AS canCapture,(${expressions[2]}) AS canExport,
         (${canRemoveAll}) AS canRemoveAll`,
       fromSql: `FROM events scoped_event
-        JOIN sponsorships sponsor ON ${activeLeadSponsorOfEventSql("sponsor", "scoped_event.id")}
+        JOIN sponsorships sponsor ON ${activeLeadSponsorOfEventSql("sponsor", "scoped_event.id", "read")}
         LEFT JOIN organizations org ON org.id=sponsor.organization_id
         WHERE scoped_event.id=?
         ${query.sponsorId ? "AND sponsor.id=?" : ""}
@@ -217,7 +217,7 @@ export async function listSponsorLeadCaptures(
     JOIN registrations reg ON reg.event_id=lead.event_id AND reg.user_id=lead.user_id
     JOIN sponsorships sponsor ON sponsor.id=lead.sponsor_id
     WHERE lead.id=? AND lead.event_id=? AND lead.sponsor_id=? AND reg.status='registered' AND attendee.active=1
-    AND ${activeLeadSponsorOfEventSql("sponsor", "lead.event_id")} AND ${sponsorConsentSql("reg")}
+    AND ${activeLeadSponsorOfEventSql("sponsor", "lead.event_id", "read")} AND ${sponsorConsentSql("reg")}
     AND (${scope}) AND ${eventContactAccessSql("lead.event_id")}
     AND attempt.action='lead' AND attempt.outcome='eligible' ${ownOnly}`;
   const sourceBindings = [

@@ -6,7 +6,10 @@ import type { DatabaseLike } from "../../db/types";
 import { assertEventContactAccess, eventContactAccessSql } from "./evidence-retention";
 import { sponsorConsentSql } from "./sponsor-consent";
 import { sponsorLeadPermissionBindings, sponsorLeadPermissionSql } from "./lead-scope";
-import { activeLeadSponsorOfEventSql, LEAD_SPONSOR_OF_EVENT_SQL } from "../../auth/sponsor-organization-lead-access";
+import {
+  activeLeadSponsorOfEventSql,
+  LEAD_SPONSOR_READ_OF_EVENT_SQL,
+} from "../../auth/sponsor-organization-lead-access";
 import { activeSponsorLeadOriginSql } from "./sponsor-lead-active";
 
 export const SPONSOR_LEAD_EXPORT_PERMISSION_SQL = sponsorLeadPermissionSql("agenda:leads_export");
@@ -23,7 +26,7 @@ interface LeadExportRow {
 /** Live contacts are read only for an active sponsor export scope. */
 export async function exportSponsorLeads(db: DatabaseLike, eventId: string, sponsorId: string, operatorUserId: string) {
   const scopeValues = sponsorLeadPermissionBindings("agenda:leads_export", operatorUserId, sponsorId);
-  const sponsorship = await first(db, LEAD_SPONSOR_OF_EVENT_SQL, [sponsorId, eventId]);
+  const sponsorship = await first(db, LEAD_SPONSOR_READ_OF_EVENT_SQL, [sponsorId, eventId]);
   if (!sponsorship) throw new AppError(404, "LEAD_SPONSOR_NOT_FOUND", "Active sponsorship not found in this event.");
   if (!(await first(db, `SELECT 1 WHERE (${SPONSOR_LEAD_EXPORT_PERMISSION_SQL})`, scopeValues)))
     throw new AppError(403, "LEAD_EXPORT_SCOPE_REQUIRED", "An active sponsor-specific lead export grant is required.");
@@ -37,7 +40,7 @@ export async function exportSponsorLeads(db: DatabaseLike, eventId: string, spon
     JOIN registrations reg ON reg.event_id=lead.event_id AND reg.user_id=lead.user_id
     JOIN sponsorships sponsor ON sponsor.id=lead.sponsor_id
     WHERE lead.event_id=? AND lead.sponsor_id=? AND reg.status='registered' AND u.active=1
-    AND ${activeLeadSponsorOfEventSql("sponsor", "lead.event_id")}
+    AND ${activeLeadSponsorOfEventSql("sponsor", "lead.event_id", "read")}
     AND ${sponsorConsentSql("reg")}
     AND (${SPONSOR_LEAD_EXPORT_PERMISSION_SQL}) AND ${eventContactAccessSql("lead.event_id")}
     ORDER BY lead.observed_at,lead.user_id LIMIT 100001`,
