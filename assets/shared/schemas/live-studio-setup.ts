@@ -1,11 +1,12 @@
 import { z } from "zod";
 import { utcInstantSchema } from "./api-common";
 import { liveGraphicThemeSchema } from "../live-graphic-theme";
-import { liveCheckInTextSchema } from "./live-session-graphic-settings";
+import { liveCheckInTextSchema, liveLowerThirdMotionSchema } from "./live-session-graphic-settings";
 import { liveChatFeedConfigSchema, liveTopQuestionsConfigSchema } from "./live-session-on-screen";
 import { liveScheduleConfigSchema } from "./live-session-schedule";
 import { livePanelistsSchema } from "./live-session-stage";
 import { liveTickerConfigSchema } from "./live-session-ticker";
+import { liveTimerGraphicSchema } from "./live-session-timer";
 import { studioDefaultLayoutsSchema } from "./live-studio-layout";
 
 /**
@@ -20,6 +21,27 @@ import { studioDefaultLayoutsSchema } from "./live-studio-layout";
 export const liveCheckInSetupSchema = z.object({ theme: liveGraphicThemeSchema, text: liveCheckInTextSchema }).strict();
 export type LiveCheckInSetup = z.infer<typeof liveCheckInSetupSchema>;
 
+/**
+ * How a timer looks when it first goes on air. Its label and when it turns
+ * amber or red belong to each timer, so they are set on the timer itself.
+ */
+export const liveTimerLookSetupSchema = liveTimerGraphicSchema
+  .pick({
+    showLabel: true,
+    format: true,
+    customFormat: true,
+    direction: true,
+    presentation: true,
+    placement: true,
+    size: true,
+  })
+  .strict();
+export type LiveTimerLookSetup = z.infer<typeof liveTimerLookSetupSchema>;
+
+/** How lower thirds go on and off air in a room that has not chosen yet. */
+export const liveLowerThirdSetupSchema = z.object({ motion: liveLowerThirdMotionSchema }).strict();
+export type LiveLowerThirdSetup = z.infer<typeof liveLowerThirdSetupSchema>;
+
 export const liveStudioGraphicsSetupSchema = z
   .object({
     ticker: liveTickerConfigSchema.optional(),
@@ -28,6 +50,8 @@ export const liveStudioGraphicsSetupSchema = z
     chatFeed: liveChatFeedConfigSchema.optional(),
     panelists: livePanelistsSchema.optional(),
     checkIn: liveCheckInSetupSchema.optional(),
+    timer: liveTimerLookSetupSchema.optional(),
+    lowerThird: liveLowerThirdSetupSchema.optional(),
   })
   .strict();
 export type LiveStudioGraphicsSetup = z.infer<typeof liveStudioGraphicsSetupSchema>;

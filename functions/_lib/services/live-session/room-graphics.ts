@@ -250,7 +250,21 @@ export class LiveRoomGraphics {
   async initialize(): Promise<void> {
     if (!this.basis.ready) await this.refresh();
     else await this.refreshLocal();
+    await this.loadSetUpLowerThird();
     await this.loadSetUpScenes();
+  }
+
+  /**
+   * A fresh room puts lower thirds on and off air the way the event's setup
+   * says, before anyone sets Preview or Program. Once an operator has, the
+   * room keeps their choice.
+   */
+  private async loadSetUpLowerThird(): Promise<void> {
+    const motion = this.basis.read().graphics.lowerThird?.motion;
+    if (!motion || this.store.programStarted() || this.store.stage().lowerThirdMotion === motion) return;
+    const stage = { ...this.store.stage(), lowerThirdMotion: motion };
+    this.store.saveStage(stage);
+    await this.broadcast.all({ type: "stage.changed", stage });
   }
 
   async refresh(): Promise<void> {

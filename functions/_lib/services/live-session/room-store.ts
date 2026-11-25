@@ -380,6 +380,11 @@ export class LiveRoomStore {
     return saved ? liveAuxCompositionSchema.parse(saved) : EMPTY_LIVE_AUX_COMPOSITION;
   }
 
+  /** Whether anyone has set Preview or Program yet; a fresh room has neither. */
+  programStarted(): boolean {
+    return this.control("stage") !== null || this.control("preview") !== null;
+  }
+
   /** Whether anyone composed this output yet, a take or the room loading its starting scene. */
   composed(output: LiveAuxOutput): boolean {
     return this.control(`aux:${output}`) !== null;

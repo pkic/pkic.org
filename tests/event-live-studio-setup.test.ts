@@ -50,7 +50,20 @@ const ticker = {
 };
 const setup = (overrides: Partial<EventLiveStudioSetupPut> = {}): EventLiveStudioSetupPut => ({
   expectedUpdatedAt: null,
-  graphics: { ticker, topQuestions: { count: 3 } },
+  graphics: {
+    ticker,
+    topQuestions: { count: 3 },
+    lowerThird: { motion: "cut" },
+    timer: {
+      showLabel: true,
+      format: "clock",
+      customFormat: "{{minutes}}m",
+      direction: "remaining",
+      presentation: "tab",
+      placement: "top-right",
+      size: "medium",
+    },
+  },
   layouts: { stage: [{ id: "stage-time", type: "time", x: 0, y: 0, w: 6, h: 9 }] },
   ...overrides,
 });
@@ -114,6 +127,7 @@ describe("event studio setup", () => {
   it("refuses a setup the shared contract does not accept, and stores nothing", async () => {
     for (const body of [
       setup({ graphics: { ticker: { ...ticker, speed: 500 } } }),
+      { ...setup(), graphics: { timer: { ...setup().graphics.timer, timerId: "session" } } },
       setup({ layouts: { stage: [{ id: "x", type: "time", x: 10, y: 0, w: 6, h: 9 }] } }),
       { ...setup(), extra: true },
     ])

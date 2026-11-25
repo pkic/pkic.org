@@ -549,6 +549,23 @@ describe("live room auxiliary outputs", () => {
     expect(loaded.topQuestions?.config).toEqual({ count: 4 });
   });
 
+  it("starts a fresh room's lower thirds with the event's motion, and keeps an operator's choice after that", async () => {
+    const now = new Date().toISOString();
+    await env.DB.prepare(
+      "INSERT INTO event_live_studio_setups(event_id,setup_json,created_at,updated_at) VALUES(?,?,?,?)",
+    )
+      .bind(f.eventId, JSON.stringify({ graphics: { lowerThird: { motion: "cut" } }, layouts: {} }), now, now)
+      .run();
+    const operator = await f.connect({ person: "operator" });
+    const snapshot = await operator.next("room.snapshot");
+    expect(snapshot.stage.lowerThirdMotion).toBe("cut");
+    expect(snapshot.preview?.lowerThirdMotion).toBe("cut");
+    operator.send({ type: "preview.set", composition: { lowerThirdMotion: "animated" } });
+    await operator.next("preview.changed", (m) => m.composition.lowerThirdMotion === "animated");
+    const again = await f.connect({ person: "operator" });
+    expect((await again.next("room.snapshot")).preview?.lowerThirdMotion).toBe("animated");
+  });
+
   it("clears Preview to a blank frame in the Default scene, and a room screen to empty in its own scene", async () => {
     const operator = await f.connect({ person: "operator" });
     const full = { creditKey: `user:${f.users.speaker}`, timerGraphics: [GRAPHIC] };

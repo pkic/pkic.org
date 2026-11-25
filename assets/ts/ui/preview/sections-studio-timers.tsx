@@ -155,7 +155,7 @@ export const studioTimerSections: PreviewSection[] = [
   {
     id: "studio-timer-settings",
     title: "Studio: timer settings",
-    note: "One dialog from the row's menu: name and length, the warning with its chime and buzzer, where they play, what happens at zero, and the look.",
+    note: "One dialog from the row's menu: name and length, the warning with its chime and buzzer, where they play, what happens at zero, and the look, which someone who sets up the studio can keep for every timer of the event.",
     render: () => (
       <div data-density="compact">
         <LiveTimerDialog
@@ -164,6 +164,7 @@ export const studioTimerSections: PreviewSection[] = [
           graphic={defaultLiveTimerGraphic(pitchTimer.id)}
           send={send}
           saveGraphic={() => true}
+          saveLook={async () => null}
           onClose={() => undefined}
         />
       </div>

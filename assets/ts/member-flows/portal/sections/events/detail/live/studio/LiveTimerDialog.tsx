@@ -66,8 +66,11 @@ export function LiveTimerDialog({
   graphic,
   send,
   saveGraphic,
+  saveLook,
   onClose,
 }: {
+  /** Saves the look as the one every timer of the event starts from; only for someone who sets up the studio. */
+  saveLook?: (graphic: LiveTimerGraphic) => Promise<string | null>;
   timer: LiveTimer;
   clock: ClockZone;
   graphic: LiveTimerGraphic;
@@ -95,6 +98,7 @@ export function LiveTimerDialog({
   const [resetAfter, setResetAfter] = useState(String(timer.atZero.resetAfterSeconds));
   const [restart, setRestart] = useState(timer.atZero.restart);
   const [look, setLook] = useState(graphic);
+  const [forEvent, setForEvent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const warnAt = seconds(warning);
   const edit: Record<string, unknown> = { name };
@@ -154,7 +158,8 @@ export function LiveTimerDialog({
       return setError(LIVE_SETTINGS_NOT_SENT);
     const shown = mineOver(opened.graphic, next.graphic, graphic);
     if (!same(shown, graphic) && !saveGraphic(shown)) return setError(LIVE_SETTINGS_NOT_SENT);
-    onClose();
+    if (!forEvent || !saveLook) return onClose();
+    void saveLook(shown).then((problem) => (problem ? setError(problem) : onClose()));
   };
 
   return (
@@ -316,6 +321,14 @@ export function LiveTimerDialog({
               of={(field) => form.of(`graphic.${field}`)}
               update={(key, value) => setLook((previous) => ({ ...previous, [key]: value }))}
             />
+            {saveLook ? (
+              <Checkbox
+                checked={forEvent}
+                onChange={(event) => setForEvent(event.currentTarget.checked)}
+                label="Start every timer of the event with this look"
+                hint="Each timer keeps its own label and warning times."
+              />
+            ) : null}
           </FormSection>
           {error ? <Alert tone="danger">{error}</Alert> : null}
         </div>

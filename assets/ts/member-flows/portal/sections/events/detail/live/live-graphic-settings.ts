@@ -28,6 +28,7 @@ export function useLiveGraphicSettings<Settings>(
   targets: LiveTargets,
   /** The settings an output shows the graphic with now; null while it is off everywhere this row reads. */
   shown: Settings | null,
+  /** The settings without a saved setup; a change to them is followed like a change to the setup. */
   initial: Settings,
   layer: (settings: Settings) => LiveLayer,
   /** The graphic's entry in the event's setup; none for a graphic the setup does not hold. */
@@ -35,20 +36,21 @@ export function useLiveGraphicSettings<Settings>(
 ) {
   const setup = targets.setup;
   const saved = graphic ? (setup?.graphics[graphic] as Settings | undefined) : undefined;
-  const [settings, setSettings] = useState<Settings>(shown ?? saved ?? initial);
+  const start = saved ?? initial;
+  const [settings, setSettings] = useState<Settings>(shown ?? start);
   // When a scene or another operator changes what an output shows, this desk follows it; when the event's
   // setup loads or changes, the desk takes it unless an output shows the graphic. Taking the graphic off
   // air keeps the settings it had.
   const shownKey = shown ? JSON.stringify(shown) : null;
-  const savedKey = saved ? JSON.stringify(saved) : null;
+  const startKey = JSON.stringify(start);
   const showing = useRef(shownKey);
   showing.current = shownKey;
   useEffect(() => {
     if (shownKey) setSettings(JSON.parse(shownKey) as Settings);
   }, [shownKey]);
   useEffect(() => {
-    if (savedKey && !showing.current) setSettings(JSON.parse(savedKey) as Settings);
-  }, [savedKey]);
+    if (!showing.current) setSettings(JSON.parse(startKey) as Settings);
+  }, [startKey]);
   const saves = Boolean(graphic && setup?.canSave);
   /** Puts new settings on every output that shows the graphic, for this show only; whether every one took them. */
   const apply = (next: Settings): boolean => {
