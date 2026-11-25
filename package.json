@@ -69,6 +69,7 @@
     "migrate": "node scripts/apply-d1-migrations.mjs",
     "backup": "node scripts/backup-d1.mjs",
     "seed": "node scripts/seed.mjs",
+    "seed:preview-scale": "node --experimental-strip-types scripts/seed-preview-scale.mjs",
     "check:email-templates": "node scripts/seed-email-templates.mjs --check",
     "build:astro": "node --experimental-strip-types scripts/prepare-public.mjs && astro build --config astro.config.mjs",
     "check:astro": "astro check --tsconfig tsconfig.astro.json",
