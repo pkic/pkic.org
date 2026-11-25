@@ -49,9 +49,12 @@ function MessageButton({
  */
 export function StudioPhoneHome({
   targets,
+  messageDisabled = targets.disabled,
   send,
 }: {
   targets: LiveTargets;
+  /** The message to the speaker is a moderator's too, so it can stay on while the lower thirds are off. */
+  messageDisabled?: boolean;
   send: (message: LiveRoomClientMessage) => boolean;
 }) {
   const message = targets.state.speakerMessage;
@@ -64,7 +67,7 @@ export function StudioPhoneHome({
             key={preset.text}
             preset={preset}
             onStage={message?.text === preset.text}
-            disabled={targets.disabled}
+            disabled={messageDisabled}
             send={send}
           />
         ))}

@@ -39,10 +39,11 @@ async function attendeeContext(c: AdminContext, eventSlug: string) {
 
 export const AttendancePointsGet = openApiRoute(attendancePointsRouteSchema, async (c: AdminContext, data) => {
   markResponseSensitive(c);
-  // The codes carry no attendance, so the studio, which puts them on screen, lists them too.
+  // The codes carry no attendance, so the studio, which puts them on screen, and its moderators list them too.
   const { db, event, actor, context } = await requireAnyEventPermission(c, data.params.eventSlug, [
     "agenda:attendance_read",
     "agenda:live_studio",
+    "agenda:live_moderate",
   ]);
   const canReissue = hasPermission(actor, "agenda:write", context);
   return json(await listAttendancePoints(db, attendancePointSigningSecret(c.env), event, data.query, canReissue));
