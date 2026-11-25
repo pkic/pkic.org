@@ -123,7 +123,7 @@ export function AddTeamMemberPage({
               )}
             </Field>
             <Field label="Roles" group required {...form.of("roles")}>
-              {() => (
+              {(control) => (
                 <div class="pk-stack pk-stack--snug">
                   {EVENT_TEAM_ROLES.map((option) => {
                     const held = heldRoles.includes(option);
@@ -131,6 +131,9 @@ export function AddTeamMemberPage({
                       <Checkbox
                         key={option}
                         name="roles"
+                        // The group's refusal reaches every box; its id and required mark stay on the group.
+                        aria-invalid={control["aria-invalid"]}
+                        aria-describedby={control["aria-describedby"]}
                         value={option}
                         checked={held || roles.includes(option)}
                         disabled={held}

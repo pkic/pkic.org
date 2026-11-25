@@ -16,12 +16,12 @@ import { successResponseSchema } from "../../../../../../shared/schemas/api-comm
 import { fmt, fmtDate, toast } from "../../../ui";
 import {
   SYSTEM_ROLE_IDS,
+  isEventTeamRole,
   roleAssignmentsListResponseSchema,
   roleResponseEnvelopeSchema,
   type Role,
   type RoleAssignment,
 } from "../../../../../../shared/schemas/access-control";
-import { isEventTeamRole } from "../catalogs";
 import { RoleAssignForm } from "./RoleAssignForm";
 import { RoleEditForm } from "./RoleEditForm";
 import { RolePermissions } from "./RolePermissions";

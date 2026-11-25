@@ -691,6 +691,23 @@ describe("roles (Built-in and custom roles)", () => {
     expect([...(deputy?.permissions ?? [])].sort()).toEqual([...(lead?.permissions ?? [])].sort());
   });
 
+  it("leaves roles granted elsewhere out of the assignable list before paging", async () => {
+    const all = (await (await call(adminToken, "/api/v1/roles?limit=100")).json()) as {
+      roles: Array<{ id: string }>;
+      page: { total: number };
+    };
+    const assignable = (await (await call(adminToken, "/api/v1/roles?assignable=true&limit=100")).json()) as {
+      roles: Array<{ id: string }>;
+      page: { total: number };
+    };
+    const elsewhere = ["role-group_lead", "role-group_deputy_lead", "role-event_volunteer", "role-event_organizer"];
+    expect(all.roles.map((role) => role.id)).toEqual(expect.arrayContaining(elsewhere));
+    expect(assignable.roles.some((role) => elsewhere.includes(role.id))).toBe(false);
+    // The total counts only what the form can show.
+    expect(assignable.page.total).toBe(assignable.roles.length);
+    expect(assignable.page.total).toBeLessThan(all.page.total);
+  });
+
   it.each(["role-group_lead", "role-group_deputy_lead"])(
     "requires the group leadership resource to assign %s with an explicit Member capacity",
     async (roleId) => {

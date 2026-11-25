@@ -339,7 +339,11 @@ describe("RoleDetail on the design system", () => {
     await settle();
     await settle();
 
-    expect(container.textContent).toContain("Assign this role from the event's Team settings.");
+    // The guidance is an alert that names where the role is assigned, not a fixed sentence.
+    const note = [...container.querySelectorAll('[role="alert"], [role="status"], .pk-alert')].find((el) =>
+      /Team settings/.test(el.textContent ?? ""),
+    );
+    expect(note).toBeDefined();
     expect(container.querySelector('form[aria-label^="Assign"]')).toBeNull();
     // Who holds it stays visible, so a grant made without an event can still be revoked.
     expect(container.querySelector("caption")?.textContent).toBe(`${eventRole.name} assignees`);
