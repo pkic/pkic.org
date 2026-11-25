@@ -121,7 +121,9 @@ describe("persona roster", () => {
     }));
     const organizations = Array.from({ length: 20 }, (_, index) => ({ id: `organization-${index}` }));
     const sponsorships = buildSponsorships(organizations, "event-1", people.length);
-    const sponsors = buildPersonas(people, "event-1", sponsorships).filter((persona: { tag: string }) => persona.tag === "sponsor");
+    const sponsors = buildPersonas(people, "event-1", sponsorships).filter(
+      (persona: { tag: string }) => persona.tag === "sponsor",
+    );
     expect(new Set(sponsors.map((persona: { sponsorship: { id: string } }) => persona.sponsorship.id)).size).toBe(13);
     expect(buildSponsorships(organizations, "event-1").length).toBe(12);
   });
