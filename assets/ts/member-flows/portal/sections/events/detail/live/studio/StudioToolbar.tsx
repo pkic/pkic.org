@@ -26,7 +26,10 @@ export function StudioToolbar({
   toggleExpanded,
   touring,
   toggleTour,
+  saveAsDefault,
 }: {
+  /** Saves this workspace's arrangement as the event's default; only for someone who sets up the studio. */
+  saveAsDefault?: () => void;
   workspace: StudioWorkspace;
   selectWorkspace: (workspace: StudioWorkspace) => void;
   panels: readonly StudioPanel[];
@@ -74,6 +77,21 @@ export function StudioToolbar({
         >
           <IconLayoutReset />
         </Button>
+        {saveAsDefault ? (
+          <Menu
+            label="More layout actions"
+            heading="Layout"
+            align="end"
+            items={[
+              {
+                id: "save-default",
+                label: "Save as event default",
+                description: "Every studio of the event starts this workspace from this arrangement.",
+                onSelect: saveAsDefault,
+              },
+            ]}
+          />
+        ) : null}
         <Button
           icon
           data-tour-trigger

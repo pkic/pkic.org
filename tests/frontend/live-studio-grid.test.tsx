@@ -10,10 +10,17 @@ import {
   defaultStudioLayouts,
   studioLayoutsSchema,
 } from "../../assets/ts/member-flows/portal/sections/events/detail/live/studio/studio-layout";
+import type { StudioDefaultLayouts, StudioPanel } from "../../assets/shared/schemas/live-studio-layout";
 import { useStudioLayout } from "../../assets/ts/member-flows/portal/sections/events/detail/live/studio/useStudioLayout";
 
-function Harness() {
-  const layout = useStudioLayout();
+function Harness({
+  eventDefault,
+  saveAsDefault,
+}: {
+  eventDefault?: StudioDefaultLayouts;
+  saveAsDefault?: (panels: readonly StudioPanel[]) => void;
+}) {
+  const layout = useStudioLayout(eventDefault);
   return (
     <>
       <StudioToolbar
@@ -26,6 +33,7 @@ function Harness() {
         toggleExpanded={() => {}}
         touring={false}
         toggleTour={() => {}}
+        saveAsDefault={saveAsDefault ? () => saveAsDefault(layout.panels) : undefined}
       />
       <StudioGrid
         workspace={layout.workspace}
@@ -50,11 +58,11 @@ const memoryStorage = {
   removeItem: (key: string) => void stored.delete(key),
   clear: () => stored.clear(),
 };
-function mount() {
-  const node = document.createElement("div");
-  document.body.append(node);
+function mount(props: Parameters<typeof Harness>[0] = {}) {
+  const node = host ?? document.createElement("div");
+  if (!host) document.body.append(node);
   host = node;
-  void act(() => render(<Harness />, node));
+  void act(() => render(<Harness {...props} />, node));
 }
 const cell = (id: string) =>
   host!.querySelector(`section[aria-label$=" ${id}"]`)!.closest<HTMLElement>(".pk-studio-cell")!;
@@ -253,6 +261,34 @@ describe("studio grid", () => {
     ).toBe(true);
     void act(() => host!.querySelector<HTMLButtonElement>('button[aria-label="Reset layout"]')!.click());
     expect(savedShow()).toEqual(defaultStudioLayouts().show);
+  });
+
+  it("starts from the event's default until the operator changes the layout, and resets to it", () => {
+    const built = defaultStudioLayouts().show;
+    const eventDefault = { show: built.filter((panel) => panel.type !== "speakers") };
+    const ids = () => [...host!.querySelectorAll(".pk-studio-cell p")].map((node) => node.textContent);
+    mount();
+    expect(ids()).toEqual(built.map((panel) => panel.id));
+    // The event's default arrives after the studio opened, and a browser with no layout of its own takes it.
+    mount({ eventDefault });
+    expect(ids()).toEqual(defaultStudioLayouts(eventDefault).show.map((panel) => panel.id));
+    const saveAsDefault = vi.fn();
+    mount({ eventDefault, saveAsDefault });
+    void act(() => host!.querySelector<HTMLButtonElement>('button[aria-label="More layout actions"]')!.click());
+    void act(() =>
+      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+        .find((item) => item.textContent?.startsWith("Save as event default"))!
+        .click(),
+    );
+    expect(saveAsDefault).toHaveBeenCalledWith(defaultStudioLayouts(eventDefault).show);
+    // Once the operator changes it, the layout is theirs, and a later default leaves it alone.
+    void act(() => host!.querySelector<HTMLButtonElement>('button[aria-label="Add panel"]')!.click());
+    void act(() => menuItem("Speakers").click());
+    const own = ids();
+    mount({ eventDefault: { show: built.slice(0, 2) } });
+    expect(ids()).toEqual(own);
+    void act(() => host!.querySelector<HTMLButtonElement>('button[aria-label="Reset layout"]')!.click());
+    expect(savedShow()).toEqual(built.slice(0, 2));
   });
 
   it("switches workspace through the address and renders its panels in reading order", () => {

@@ -47,6 +47,7 @@ import { StudioTour } from "./studio/StudioTour";
 import { LiveAddTimerAction, TimePanel } from "./studio/TimePanel";
 import {
   STUDIO_PANEL_LABELS,
+  STUDIO_WORKSPACE_LABELS,
   setStudioPanelLabeled,
   type StudioOutput,
   type StudioPanel,
@@ -59,6 +60,7 @@ import { liveSceneName } from "./live-layer-unseen";
 import { Dialog } from "../../../../../../ui/Dialog";
 import { useStudioLayout } from "./studio/useStudioLayout";
 import { useLiveStudioSetup } from "./live-studio-setup";
+import { toast } from "../../../../ui";
 import { useStudioScreens } from "./studio/useStudioScreens";
 import "./LiveSessionDesk.css";
 
@@ -145,7 +147,7 @@ export function LiveSessionDesk({
   const live = room.status === "live";
   const now = useBoundaryClock(useCallback((at: number) => at + 30000, []));
   const setup = useLiveStudioSetup(slug, canSetUp);
-  const layout = useStudioLayout();
+  const layout = useStudioLayout(setup.layouts);
   const phone = useStudioPhone();
   const phonePanels = useStudioPhonePanels();
   const [phoneView] = useStudioPhoneView();
@@ -529,6 +531,21 @@ export function LiveSessionDesk({
             panels={layout.panels}
             change={layout.change}
             reset={layout.reset}
+            saveAsDefault={
+              setup.canSave
+                ? () =>
+                    void setup
+                      .saveLayout(layout.workspace, [...layout.panels])
+                      .then((problem) =>
+                        problem
+                          ? toast(problem, "error")
+                          : toast(
+                              `Saved the ${STUDIO_WORKSPACE_LABELS[layout.workspace]} layout as the event default.`,
+                              "success",
+                            ),
+                      )
+                : undefined
+            }
             expanded={fullscreen.expanded}
             toggleExpanded={fullscreen.toggle}
             touring={touring}
