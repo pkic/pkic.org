@@ -18,3 +18,8 @@ CREATE INDEX event_consortium_lead_tiers_tier ON event_consortium_lead_tiers(tie
 -- it. Withdrawn consent hides the lead and its note, as it hides the lead itself.
 ALTER TABLE event_sponsor_leads ADD COLUMN note TEXT;
 ALTER TABLE event_sponsor_leads ADD COLUMN note_updated_at TEXT;
+
+-- Event pages find the sponsorships whose contact mailbox is the viewer's own
+-- without reading every sponsorship.
+CREATE INDEX idx_sponsorships_contact_mailbox ON sponsorships(lower(trim(contact_email)))
+  WHERE contact_email IS NOT NULL;
