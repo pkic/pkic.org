@@ -35,6 +35,7 @@ const nextSession = {
   config: { scope: "this-room" as const, layout: "list" as const, theme: "white-on-black" as const },
   available: true,
   timeZone: "Europe/Amsterdam",
+  streamRoomId: "room",
   resolvedAt: at(0),
   rooms: [
     {
@@ -45,7 +46,7 @@ const nextSession = {
       title: "Crypto agility in HSMs",
       startAt: at(30 * MINUTE),
       endAt: at(60 * MINUTE),
-      speakers: [{ name: "Casey Demo", moderator: false, photoUrl: null }],
+      speakers: [{ name: "Casey Demo", moderator: false, photoUrl: null, organization: null }],
     },
   ],
 };
