@@ -96,7 +96,7 @@ export function prepareUserSessionClaimsBatch(db: DatabaseLike, slice: readonly 
         (SELECT count(*) FROM identities i WHERE i.user_id=u.id AND i.started_at IS NULL AND i.ended_at IS NULL AND i.blocked_at IS NULL) AS pending,
         (u.pii_redacted_at IS NULL AND ${EVENT_PARTICIPATION_SQL.replaceAll("user.id", "u.id")}) AS eventParticipation,
         (u.pii_redacted_at IS NULL AND u.merged_into_user_id IS NULL AND ${activeIdentityPredicate("u")}) AS affiliation
-        FROM users u JOIN json_each(?) requested ON requested.value=u.id
+        FROM json_each(?) requested CROSS JOIN users u ON u.id=requested.value
         WHERE u.active=1 AND u.pii_redacted_at IS NULL AND u.merged_into_user_id IS NULL`,
       )
       .bind(userIds),
@@ -112,8 +112,8 @@ export function prepareUserSessionClaimsBatch(db: DatabaseLike, slice: readonly 
     db
       .prepare(
         `WITH addresses(user_id,normalized_email) AS (
-        SELECT u.id,u.normalized_email FROM users u JOIN json_each(?) requested ON requested.value=u.id WHERE u.active=1
-        UNION SELECT u.id,ue.normalized_email FROM users u JOIN json_each(?) requested ON requested.value=u.id JOIN user_emails ue ON ue.user_id=u.id WHERE u.active=1 AND ue.verified_at IS NOT NULL)
+        SELECT u.id,u.normalized_email FROM json_each(?) requested CROSS JOIN users u ON u.id=requested.value WHERE u.active=1
+        UNION SELECT u.id,ue.normalized_email FROM json_each(?) requested CROSS JOIN users u ON u.id=requested.value JOIN user_emails ue ON ue.user_id=u.id WHERE u.active=1 AND ue.verified_at IS NOT NULL)
         SELECT addresses.user_id,s.id,s.event_id,e.slug AS event_slug,e.name AS event_name,s.tier,s.contact_email
         FROM addresses JOIN sponsorships s ON lower(trim(s.contact_email))=addresses.normalized_email JOIN events e ON e.id=s.event_id
         WHERE ${ACTIVE_EVENT_SPONSORSHIP_SQL} ORDER BY addresses.user_id,lower(COALESCE(e.name,e.slug)),lower(COALESCE(s.tier,'')),s.id`,
@@ -124,7 +124,7 @@ export function prepareUserSessionClaimsBatch(db: DatabaseLike, slice: readonly 
         `SELECT user_id,id,organization_id,organization_name,job_title,membership_category,membership_label FROM (
         SELECT identity.user_id,identity.id,identity.organization_id,organization.name AS organization_name,identity.job_title,${SESSION_ACTING_IDENTITY_MEMBERSHIP_COLUMNS_SQL},
         row_number() OVER (PARTITION BY identity.user_id ORDER BY ${SESSION_ACTING_IDENTITY_ORDER_SQL}) AS ordinal
-        FROM identities identity JOIN json_each(?) requested ON requested.value=identity.user_id LEFT JOIN organizations organization ON organization.id=identity.organization_id
+        FROM json_each(?) requested CROSS JOIN identities identity ON identity.user_id=requested.value LEFT JOIN organizations organization ON organization.id=identity.organization_id
         ${SESSION_ACTING_IDENTITY_MEMBERSHIP_JOIN_SQL}
         WHERE identity.started_at IS NOT NULL AND identity.ended_at IS NULL AND identity.blocked_at IS NULL)
         WHERE ordinal<=? ORDER BY user_id,ordinal`,

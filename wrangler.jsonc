@@ -169,6 +169,15 @@
       // above. Every binding the code reads is declared here against a preview
       // resource; never bind a production database, bucket, or namespace.
       "previews": {
+        // Without this, Previews write no Workers Logs, so their 503s are invisible.
+        "observability": {
+          "enabled": true,
+          "redact_query_string": true,
+          "traces": {
+            "enabled": true,
+            "head_sampling_rate": 0.05,
+          },
+        },
         "worker_loaders": [{ "binding": "LOADER" }],
         // The class is this Worker's own, so each Preview binds a namespace and
         // storage provisioned for that Preview, never production rooms.
