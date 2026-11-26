@@ -55,9 +55,11 @@ it("keeps a field's matches scrolled where the reader left them and drops the ca
   const viewport = Object.assign(new EventTarget(), { offsetTop: 0, offsetLeft: 0, width: 375, height: 400 });
   vi.stubGlobal("visualViewport", viewport);
   let scrollTop = 0;
+  let measured = 0;
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
     if (this.dataset.anchor) return rect(200, 40);
-    // Laid out without its cap the list no longer overflows, so the browser resets its offset.
+    measured += 1;
+    // Laid out without its cap the list inside no longer overflows, so the browser resets its offset.
     if (!this.style.maxHeight) scrollTop = 0;
     return rect(0, 300);
   });
@@ -68,21 +70,28 @@ it("keeps a field's matches scrolled where the reader left them and drops the ca
     return (
       <>
         <div ref={anchorRef} data-anchor="true" />
-        <div ref={popupRef} data-testid="popup" />
+        <div ref={popupRef} data-testid="popup">
+          <div data-testid="options" />
+        </div>
       </>
     );
   }
   await act(() => render(<Picker />, host));
   const popup = host.querySelector<HTMLElement>('[data-testid="popup"]')!;
+  const options = host.querySelector<HTMLElement>('[data-testid="options"]')!;
   expect(popup.style.maxHeight).toBe("188px");
   expect(popup.style.top).toBe("8px");
-  Object.defineProperty(popup, "scrollTop", {
+  Object.defineProperty(options, "scrollTop", {
     configurable: true,
     get: () => scrollTop,
     set: (value: number) => (scrollTop = value),
   });
   scrollTop = 120;
-  popup.dispatchEvent(new Event("scroll"));
+  const placements = measured;
+  options.dispatchEvent(new Event("scroll", { bubbles: false }));
+  expect(measured).toBe(placements);
+  document.dispatchEvent(new Event("scroll"));
+  expect(measured).toBe(placements + 1);
   expect(scrollTop).toBe(120);
   expect(popup.style.maxHeight).toBe("188px");
   viewport.height = 812;

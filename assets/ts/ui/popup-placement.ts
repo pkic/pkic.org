@@ -203,9 +203,9 @@ export function usePopupPlacement({
       "min-width",
       `${!matchAnchorWidth || side === "right" || side === "left" ? 0 : anchorRect.width}px`,
     );
-    // Measured at its natural height, not a cap from an earlier pass. The scroll that re-places the popup may be
-    // the reader's own scroll through it, and dropping the cap would reset that, so its position is kept.
-    const scrollTop = popup.scrollTop;
+    // Measured at its natural height, not a cap from an earlier pass. Dropping the cap grows the popup, or the
+    // list scrolling inside it, and clamps the reader's place in the matches, so every scrolled offset is kept.
+    const scrolled = keepAnchorVisible && popup.style.maxHeight ? scrolledWithin(popup) : [];
     if (keepAnchorVisible) popup.style.removeProperty("max-height");
     const position = measurePopupPosition(
       anchorRect,
@@ -217,7 +217,7 @@ export function usePopupPlacement({
     );
     if (!matchAnchorWidth) position.minWidth = 0;
     applyPopupPosition(popup, position);
-    if (popup.scrollTop !== scrollTop) popup.scrollTop = scrollTop;
+    for (const [element, scrollTop] of scrolled) if (element.scrollTop !== scrollTop) element.scrollTop = scrollTop;
     afterPlace?.();
   }, [
     align,
@@ -278,19 +278,34 @@ export function usePopupPlacement({
   // A fixed popup does not move with its anchor, so it is re-placed as the
   // page moves. Closing instead would mean any scroll momentum — unavoidable
   // on a touch screen — eats the popup on the way to it.
+  // Scrolling through the popup's own content leaves a fixed popup where it is, so only the page re-places it.
   useEffect(() => {
     if (!open) return;
+    const placeOnPageScroll = (event: Event): void => {
+      const target = event.target;
+      if (target instanceof Node && popupRef.current?.contains(target)) return;
+      place();
+    };
     window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
+    window.addEventListener("scroll", placeOnPageScroll, true);
     const viewport = window.visualViewport;
     viewport?.addEventListener("resize", place);
     viewport?.addEventListener("scroll", place);
     return () => {
       window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("scroll", placeOnPageScroll, true);
       viewport?.removeEventListener("resize", place);
       viewport?.removeEventListener("scroll", place);
     };
-  }, [open, place]);
+  }, [open, place, popupRef]);
   return place;
+}
+
+/** The popup and each element inside it that the reader has scrolled, with its offset. */
+function scrolledWithin(popup: HTMLElement): Array<[HTMLElement, number]> {
+  const scrolled: Array<[HTMLElement, number]> = [];
+  for (const element of [popup, ...popup.querySelectorAll<HTMLElement>("*")]) {
+    if (element.scrollTop > 0) scrolled.push([element, element.scrollTop]);
+  }
+  return scrolled;
 }

@@ -496,8 +496,11 @@ test("one recurring meeting and conference retain the same actors through organi
     });
     expect(withdrawn.status()).toBe(200);
     expect(registrationManageUpdateResponseSchema.parse(await withdrawn.json()).sponsorSharing.allowed).toBe(false);
-    expect(sponsorLeadListSchema.parse(await (await sponsor.request.get(leadsPath)).json()).leads).toHaveLength(0);
-    expect(await (await sponsor.request.get(`${leadsPath}.csv`)).text()).not.toContain(fixture.email);
+    // Portal sharing covers attendee lists; a lead the attendee allowed in person stays with the sponsor.
+    const retained = sponsorLeadListSchema.parse(await (await sponsor.request.get(leadsPath)).json());
+    expect(retained.leads).toHaveLength(1);
+    expect(retained.leads[0]?.email).toBe(fixture.email);
+    expect(await (await sponsor.request.get(`${leadsPath}.csv`)).text()).toContain(fixture.email);
     // Leave the full-screen sponsor scanner to review the live lead list.
     await sponsor
       .getByRole("dialog", { name: "Continuous badge scanner", exact: true })
@@ -505,7 +508,9 @@ test("one recurring meeting and conference retain the same actors through organi
       .click();
     await sponsor.reload();
     await expect(sponsor.getByRole("heading", { name: "Leads", exact: true })).toBeVisible();
-    await expect(sponsor.getByText("No leads match this search.", { exact: true })).toBeVisible();
+    await expect(
+      sponsor.getByRole("region", { name: "Sponsor leads", exact: true }).getByText(fixture.email, { exact: true }),
+    ).toBeVisible();
     await capturePilot(sponsor, info, "pilot-sharing-withdrawn");
 
     const finalSummaryResponse = await staff.request.get(summaryPath);
