@@ -7,7 +7,7 @@ import { prepareLiveRoomCopyErasureGuard } from "./room-erasure";
 import type { LivePollCopy } from "./room-poll-store";
 import type { LiveQuestionRow } from "./room-question-rows";
 import type { LiveQuestionCheckCopyRow } from "./room-question-checks";
-import type { LiveAnswerCopyRow, LiveRoomPendingCopy } from "./room-store";
+import type { LiveAnswerCopyRow, LiveRoomPendingCopy } from "./room-pending-copy";
 
 function prepareQuestionCopy(db: DatabaseLike, copy: LiveRoomPendingCopy, question: LiveQuestionRow, copiedAt: string) {
   // A question whose author was anonymized keeps its redaction: the copy never writes their words back.
