@@ -51,7 +51,14 @@ export function previewLiveStage(
   }
   if (message.type === "stage.schedule" || message.type === "stage.set")
     next.schedule = message.schedule
-      ? { config: message.schedule, available: false, timeZone: null, streamRoomId: null, resolvedAt: state.session.startAt, rooms: [] }
+      ? {
+          config: message.schedule,
+          available: false,
+          timeZone: null,
+          streamRoomId: null,
+          resolvedAt: state.session.startAt,
+          rooms: [],
+        }
       : null;
   if (message.type === "stage.panelists" || message.type === "stage.set") next.panelists = message.panelists;
   if (message.type === "stage.set")

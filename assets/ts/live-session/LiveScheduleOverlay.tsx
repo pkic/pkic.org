@@ -173,36 +173,36 @@ export function LiveScheduleOverlay({
       aria-label="Up next"
     >
       <div class="pk-live-schedule__card">
-      <header class="pk-live-schedule__header">
-        <SectionHeading level={2} class="pk-live-schedule__heading">
-          Up next
-        </SectionHeading>
-        {/* Viewers far away read whose clock the times are on. */}
-        {zone ? <span class="pk-live-schedule__zone">{formatClockName(zone)}</span> : null}
-      </header>
-      <ol class="pk-live-schedule__rooms">
-        {rooms.map((room, index) => {
-          // The stream's own room goes without saying; another room is named.
-          const elsewhere = room.roomId !== schedule.streamRoomId;
-          return (
-            <li
-              key={room.roomId}
-              class="pk-live-schedule__room"
-              data-accent={room.roomIndex % 6}
-              data-active={spotlight === index ? "" : undefined}
-            >
-              <p class="pk-live-schedule__when">
-                <time dateTime={room.startAt}>{zone ? formatClockInZone(room.startAt, zone) : ""}</time>
-              </p>
-              {elsewhere ? <p class="pk-live-schedule__room-name">{room.roomName}</p> : null}
-              <SectionHeading level={3} class="pk-live-schedule__title">
-                {room.title}
-              </SectionHeading>
-              <Speakers speakers={room.speakers} />
-            </li>
-          );
-        })}
-      </ol>
+        <header class="pk-live-schedule__header">
+          <SectionHeading level={2} class="pk-live-schedule__heading">
+            Up next
+          </SectionHeading>
+          {/* Viewers far away read whose clock the times are on. */}
+          {zone ? <span class="pk-live-schedule__zone">{formatClockName(zone)}</span> : null}
+        </header>
+        <ol class="pk-live-schedule__rooms">
+          {rooms.map((room, index) => {
+            // The stream's own room goes without saying; another room is named.
+            const elsewhere = room.roomId !== schedule.streamRoomId;
+            return (
+              <li
+                key={room.roomId}
+                class="pk-live-schedule__room"
+                data-accent={room.roomIndex % 6}
+                data-active={spotlight === index ? "" : undefined}
+              >
+                <p class="pk-live-schedule__when">
+                  <time dateTime={room.startAt}>{zone ? formatClockInZone(room.startAt, zone) : ""}</time>
+                </p>
+                {elsewhere ? <p class="pk-live-schedule__room-name">{room.roomName}</p> : null}
+                <SectionHeading level={3} class="pk-live-schedule__title">
+                  {room.title}
+                </SectionHeading>
+                <Speakers speakers={room.speakers} />
+              </li>
+            );
+          })}
+        </ol>
       </div>
     </section>
   );
