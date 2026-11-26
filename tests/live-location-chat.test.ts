@@ -341,7 +341,13 @@ it("lets a person post as soon as an event block is lifted, even after the sessi
   operator.send({ type: "participation.lift", item });
   await author.next("participation.access", (update) => update.restriction === null, { after: lifted });
   expect(await say("After the lift")).toBe("shown");
-  // The block's notice, older than the lift, arrives late: the chat keeps the newer lift.
+  // The chat reads D1 again and finds the lift; then the block's notice, older than both, arrives late.
+  await runInDurableObject(fixture.chatRoom(), async (instance) => {
+    const participation = Reflect.get(instance as object, "participation") as {
+      eventBlocksRead(checked: string[], blocked: Set<string>, readAt: number): Promise<void>;
+    };
+    await participation.eventBlocksRead([userId], new Set(), Date.now());
+  });
   const stale = { blocked: true, at: Date.now() - 60_000 };
   await fixture.chatRoom().locationChatAccessChanged(fixture.occurrenceId, userId, stale);
   expect(await say("After a late notice")).toBe("shown");

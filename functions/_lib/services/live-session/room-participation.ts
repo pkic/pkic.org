@@ -129,7 +129,8 @@ export class LiveRoomParticipation {
       const by = organizerSession(viewer, actor);
       if (!by || !(await blockEventParticipation(this.db, { eventId, userId, reason: input.reason, by, at })))
         return REFUSALS.forbidden;
-      eventDecision = { blocked: true, at: Date.parse(at) };
+      // Dated once D1 has it, so the time follows the order the writes landed in.
+      eventDecision = { blocked: true, at: Date.now() };
       this.decisions.decideEventBlock(userId, eventDecision);
     } else {
       if (moderation) {
@@ -177,7 +178,7 @@ export class LiveRoomParticipation {
       if (!eventId) return REFUSALS.missing;
       const by = organizerSession(viewer, actor);
       if (!by || !(await liftEventParticipationBlock(this.db, { eventId, userId, by, at }))) return REFUSALS.forbidden;
-      eventDecision = { blocked: false, at: Date.parse(at) };
+      eventDecision = { blocked: false, at: Date.now() };
       this.decisions.decideEventBlock(userId, eventDecision);
     }
     let sessionRestriction: LiveParticipationRestriction | null | undefined;
