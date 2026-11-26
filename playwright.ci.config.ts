@@ -20,6 +20,7 @@ const criticalJourneys = [
   "the toggle is reachable and operable from the keyboard alone",
   "the narrow drawer exposes the same authorized destinations as the desktop sidebar",
   "a read-only staff persona reads applications and cannot change one",
+  "one recurring meeting and conference retain the same actors through organizer, speaker, attendee and reporting workflows",
 ];
 const escapePattern = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -35,6 +36,7 @@ export default defineConfig({
     "public-navigation-smoke.spec.ts",
     "portal-mobile-navigation.spec.ts",
     "persona-authority.spec.ts",
+    "agenda-integrated-pilot.spec.ts",
   ],
   grep: new RegExp(`(?:^| )(${criticalJourneys.map(escapePattern).join("|")})$`),
 });

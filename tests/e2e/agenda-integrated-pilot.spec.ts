@@ -6,6 +6,7 @@ import { eventDetailResponseSchema } from "../../assets/shared/schemas/event-man
 import { eventFormsResponseSchema } from "../../assets/shared/schemas/forms";
 import { conferenceProgramSchema } from "../../assets/shared/schemas/conference-program";
 import {
+  type AgendaOccurrence,
   agendaRevisionSchema,
   agendaOccurrencePatchSchema,
   agendaSnapshotSchema,
@@ -25,6 +26,8 @@ import {
   eventScanResponseSchema,
 } from "../../assets/shared/schemas/event-participation-scanning";
 import {
+  scannerDeviceSessionEnrollmentSchema,
+  scannerDeviceSessionEnrollmentResponseSchema,
   scannerDeviceSessionClosingSchema,
   scannerDeviceSessionStatusSchema,
 } from "../../assets/shared/schemas/event-scanner-devices";
@@ -33,6 +36,7 @@ import {
   attendanceAttemptsResponseSchema,
   eventAttendancePeopleResponseSchema,
 } from "../../assets/shared/schemas/event-attendance-reporting";
+import { boundedScannedValue } from "../../assets/shared/schemas/scanner-attempt-capture";
 import { sponsorLeadSponsorsSchema, sponsorLeadListSchema } from "../../assets/shared/schemas/event-sponsor-lead-list";
 import {
   eventProposalProofIdentityPatchResponseSchema,
@@ -45,16 +49,23 @@ import { signInToPortal } from "./helpers/portal-auth";
 import { publishE2eSite } from "./helpers/site-publication";
 import { runAgendaAction } from "./helpers/agenda-actions";
 import { correctPilotAttendance } from "./helpers/attendance-correction";
-import { scannerStorage, reconnectScannerBrowser, openScannerSessionDetails } from "./helpers/scanner-recovery-storage";
+import {
+  scannerStorage,
+  reconnectScannerBrowser,
+  openScannerSessionDetails,
+  scannerBadgeCode,
+} from "./helpers/scanner-recovery-storage";
 import {
   prepareSponsorLiveFixture,
-  expectContactBadgeRejected,
   captureOfflineSponsorBadge,
-  prepareDoorScannerContext,
-  startNextDoorScannerContext,
   expectNoStoredSponsorContacts,
   sponsorEventSlug,
 } from "./helpers/sponsor-live-fixture";
+import {
+  expectContactBadgeRejected,
+  prepareDoorScannerContext,
+  startNextDoorScannerContext,
+} from "./helpers/door-scanner-context";
 import { captureDeviceConsole } from "./helpers/device-console";
 import {
   pilotAgendaApi,
@@ -73,7 +84,82 @@ import { preparePilotSpeaker } from "./helpers/agenda-integrated-pilot-speaker";
 
 test.use({ actionTimeout: 30_000 });
 
-async function closePilotScanner(page: Page, scan: ReturnType<typeof enrolledEventScanRequestSchema.parse>) {
+type PilotScannerSession = { epochId: string; deviceId: string; sequence: number; sponsorId?: string };
+const scannerSessionOf = (scan: ReturnType<typeof enrolledEventScanRequestSchema.parse>): PilotScannerSession => ({
+  ...scan.scannerSession,
+  deviceId: scan.deviceId,
+  ...(scan.sponsorId ? { sponsorId: scan.sponsorId } : {}),
+});
+
+/** Declare a scanner session closed through the API at its high-water sequence. */
+async function closeScannerSessionThroughApi(page: Page, scan: PilotScannerSession, highWater: number) {
+  const input = scannerDeviceSessionClosingSchema.parse({
+    operationId: randomUUID(),
+    highWaterSequence: highWater,
+    pendingCount: 0,
+    recoveryCount: 0,
+    sponsorId: scan.sponsorId,
+  });
+  const response = await page.request.post(
+    `/api/v1/events/${sponsorEventSlug}/scanner/devices/sessions/${scan.epochId}/closing`,
+    { data: input },
+  );
+  expect(response.status()).toBe(200);
+  const status = scannerDeviceSessionStatusSchema.parse(await response.json());
+  expect(status).toMatchObject({
+    epochId: scan.epochId,
+    deviceId: scan.deviceId,
+    closingOperationId: input.operationId,
+    highWaterSequence: highWater,
+    receivedCount: highWater,
+    missingCount: 0,
+  });
+  expect(status.closedAt).not.toBeNull();
+  return status;
+}
+
+/**
+ * Admit one badge from a separate gate device enrolled through the API.
+ *
+ * An operator who can record attendance is offered attendance on the screen, never an admission decision.
+ * The gate observes during the session, because a scan counts on the event day it is observed.
+ */
+async function admitThroughGateDevice(
+  page: Page,
+  input: {
+    badgeId: string;
+    occurrence: Pick<AgendaOccurrence, "id" | "roomId" | "startAt">;
+    operatorUserId: string;
+    publishedRevision: number;
+  },
+) {
+  const deviceId = randomUUID();
+  const enrolled = await page.request.post(`/api/v1/events/${sponsorEventSlug}/scanner/devices/sessions`, {
+    data: scannerDeviceSessionEnrollmentSchema.parse({ operationId: randomUUID(), deviceId }),
+  });
+  expect(enrolled.status(), await enrolled.text()).toBe(200);
+  const enrollment = scannerDeviceSessionEnrollmentResponseSchema.parse(await enrolled.json());
+  expect(enrollment).toMatchObject({ deviceId, operatorUserId: input.operatorUserId });
+  const admission = enrolledEventScanRequestSchema.parse({
+    ...boundedScannedValue(input.badgeId),
+    operationId: randomUUID(),
+    deviceId,
+    operatorUserId: input.operatorUserId,
+    scannerSession: { epochId: enrollment.epochId, sequence: 1 },
+    badgeId: input.badgeId,
+    action: "admission",
+    occurrenceId: input.occurrence.id,
+    roomId: input.occurrence.roomId,
+    capturePublicationRevision: input.publishedRevision,
+    observedAt: new Date(Date.parse(input.occurrence.startAt!) + 5 * 60_000).toISOString(),
+  });
+  const admitted = await page.request.post(`/api/v1/events/${sponsorEventSlug}/scans`, { data: admission });
+  expect(admitted.status(), await admitted.text()).toBe(200);
+  const receipt = eventScanResponseSchema.parse(await admitted.json());
+  return { admission, receipt };
+}
+
+async function closePilotScanner(page: Page, scan: PilotScannerSession) {
   await expect.poll(async () => (await scannerStorage(page)).pending.length).toBe(0);
   // Leave a door scanner's manual dialog before reaching its diagnostics.
   const manual = page.getByRole("dialog", { name: /^(Enter badge code|Review sponsor lead)$/ });
@@ -82,43 +168,19 @@ async function closePilotScanner(page: Page, scan: ReturnType<typeof enrolledEve
   // A refused entry is audited under its own device sequence, so the session closes at the highest one retained.
   const stored = await scannerStorage(page);
   const highWater = Math.max(
-    scan.scannerSession.sequence,
+    scan.sequence,
     ...[...stored.pending, ...stored.history].flatMap((row) => {
       const session = row.scan.scannerSession;
-      return session?.epochId === scan.scannerSession.epochId ? [session.sequence] : [];
+      return session?.epochId === scan.epochId ? [session.sequence] : [];
     }),
   );
-  if (scan.action === "lead") {
-    const input = scannerDeviceSessionClosingSchema.parse({
-      operationId: randomUUID(),
-      highWaterSequence: highWater,
-      pendingCount: 0,
-      recoveryCount: 0,
-      sponsorId: scan.sponsorId,
-    });
-    const response = await page.request.post(
-      `/api/v1/events/${sponsorEventSlug}/scanner/devices/sessions/${scan.scannerSession.epochId}/closing`,
-      { data: input },
-    );
-    expect(response.status()).toBe(200);
-    const status = scannerDeviceSessionStatusSchema.parse(await response.json());
-    expect(status).toMatchObject({
-      epochId: scan.scannerSession.epochId,
-      deviceId: scan.deviceId,
-      closingOperationId: input.operationId,
-      highWaterSequence: highWater,
-      receivedCount: highWater,
-      missingCount: 0,
-    });
-    expect(status.closedAt).not.toBeNull();
-    return status;
-  }
+  if (scan.sponsorId) return closeScannerSessionThroughApi(page, scan, highWater);
   const diagnostics = await openScannerSessionDetails(page);
   const closing = page
     .waitForResponse(
       (response) =>
         new URL(response.url()).pathname ===
-          `/api/v1/events/${sponsorEventSlug}/scanner/devices/sessions/${scan.scannerSession.epochId}/closing` &&
+          `/api/v1/events/${sponsorEventSlug}/scanner/devices/sessions/${scan.epochId}/closing` &&
         response.request().method() === "POST",
       { timeout: 30_000 },
     )
@@ -127,9 +189,9 @@ async function closePilotScanner(page: Page, scan: ReturnType<typeof enrolledEve
       const input = scannerDeviceSessionClosingSchema.parse(response.request().postDataJSON());
       const status = scannerDeviceSessionStatusSchema.parse(await response.json());
       expect(input.highWaterSequence).toBe(highWater);
-      expect(input.sponsorId).toBe(scan.sponsorId ?? undefined);
+      expect(input.sponsorId).toBeUndefined();
       expect(status).toMatchObject({
-        epochId: scan.scannerSession.epochId,
+        epochId: scan.epochId,
         deviceId: scan.deviceId,
         closingOperationId: input.operationId,
         highWaterSequence: input.highWaterSequence,
@@ -351,26 +413,14 @@ test("one recurring meeting and conference retain the same actors through organi
       eventRegistered: true,
       physicalDayEligible: true,
     });
-    await door.getByLabel("Scan mode", { exact: true }).selectOption("admission");
-    const receivingAdmission = door.waitForResponse(
-      (response) =>
-        new URL(response.url()).pathname === scansPath &&
-        response.request().method() === "POST" &&
-        response.request().postDataJSON()?.badgeId === fixture.consenting.badgeId,
-    );
-    await door.getByLabel("Badge code", { exact: true }).fill(fixture.consenting.badgeId);
-    await door.getByRole("button", { name: "Admission decision", exact: true }).click();
-    const admitted = await receivingAdmission;
-    expect(admitted.status()).toBe(200);
-    const admission = enrolledEventScanRequestSchema.parse(admitted.request().postDataJSON());
-    expect(admission).toMatchObject({
-      action: "admission",
+    await expectContactBadgeRejected(door, fixture.email, freeTextMarker);
+    await inspectDevice(door, doorConsole, "contact-payload-refused");
+    const { admission, receipt: admissionReceipt } = await admitThroughGateDevice(door, {
+      badgeId: fixture.consenting.badgeId,
+      occurrence: source,
       operatorUserId: meeting.member.userId,
-      occurrenceId: source.id,
-      roomId: source.roomId,
-      capturePublicationRevision: approved.publishedRevision,
+      publishedRevision: approved.publishedRevision!,
     });
-    const admissionReceipt = eventScanResponseSchema.parse(await admitted.json());
     expect(admissionReceipt).toMatchObject({
       operationId: admission.operationId,
       outcome: "eligible",
@@ -383,27 +433,17 @@ test("one recurring meeting and conference retain the same actors through organi
       beforePlanning.observed,
     );
     expect(afterAdmission.attempts.admissions - beforePlanning.attempts.admissions).toBe(1);
-    await expect
-      .poll(async () =>
-        (await scannerStorage(door)).history.some((row) => row.scan.operationId === admission.operationId),
-      )
-      .toBe(true);
     const replay = await door.request.post(scansPath, { data: admission });
     expect(eventScanResponseSchema.parse(await replay.json())).toEqual(admissionReceipt);
-    await expectContactBadgeRejected(door, fixture.email, freeTextMarker);
-    await inspectDevice(door, doorConsole, "admission-acknowledged-and-contact-payload-refused");
-    const manualClosed = await closePilotScanner(door, admission);
+    const gateClosed = await closeScannerSessionThroughApi(door, scannerSessionOf(admission), 1);
+    const manualClosed = await closePilotScanner(door, { ...manifest, sequence: 0 });
     await startNextDoorScannerContext(door, source, manifest);
     await doorContext.setOffline(true);
     let stored: Awaited<ReturnType<typeof scannerStorage>> | undefined;
     try {
-      await door.getByLabel("Badge code", { exact: true }).fill(fixture.consenting.badgeId);
+      await scannerBadgeCode(door).fill(fixture.consenting.badgeId);
       await door.getByRole("button", { name: "Record attendance", exact: true }).click();
-      await expect(
-        door
-          .getByRole("status", { name: "Scanner status", exact: true })
-          .getByText(/^1 awaiting upload(?: · syncing…)?$/),
-      ).toBeVisible();
+      await expect.poll(async () => (await scannerStorage(door)).pending.length).toBe(1);
       stored = await scannerStorage(door);
       expect(stored.pending).toHaveLength(1);
       const scan = enrolledEventScanRequestSchema.parse(stored.pending[0]!.scan);
@@ -423,14 +463,22 @@ test("one recurring meeting and conference retain the same actors through organi
     }
     if (!stored) throw new Error("The original offline capture must survive to reconciliation");
     const originalScan = enrolledEventScanRequestSchema.parse(stored.pending[0]!.scan);
-    await expect(
-      door.getByRole("status", { name: "Scanner status", exact: true }).getByText("All scans synced", { exact: true }),
-    ).toBeVisible();
+    await expect
+      .poll(async () =>
+        (await scannerStorage(door)).history.some((row) => row.scan.operationId === originalScan.operationId),
+      )
+      .toBe(true);
     const reconciled = await scannerStorage(door);
     expect(reconciled.pending).toHaveLength(0);
     const acknowledgment = reconciled.history.find((row) => row.scan.operationId === originalScan.operationId);
     expect(acknowledgment?.scan).toEqual(originalScan);
-    expect(acknowledgment?.receipt).toMatchObject({ outcome: "eligible", attendanceRecorded: true });
+    // The device stamps its own clock. Before the event the attendee has no in-person day yet, so the
+    // observation is recorded with that warning; from the event's start it is eligible.
+    expect(acknowledgment?.receipt).toMatchObject(
+      Date.now() < Date.parse(event.startsAt!)
+        ? { outcome: "warning", reason: "wrong_attendance_mode", attendanceRecorded: true }
+        : { outcome: "eligible", attendanceRecorded: true },
+    );
     const beforeAttendanceReplay = await readAttendance();
     expect(beforeAttendanceReplay.observed.originalObservations - beforePlanning.observed.originalObservations).toBe(1);
     expect(beforeAttendanceReplay.observed.uniquePeople - beforePlanning.observed.uniquePeople).toBe(1);
@@ -440,7 +488,7 @@ test("one recurring meeting and conference retain the same actors through organi
       beforeAttendanceReplay.observed,
     );
     await inspectDevice(door, doorConsole, "attendance-acknowledged");
-    const doorClosed = await closePilotScanner(door, originalScan);
+    const doorClosed = await closePilotScanner(door, scannerSessionOf(originalScan));
     await capturePilot(door, info, "pilot-reconciled-attendance");
 
     const reportBeforeLead = attendanceSummarySchema.parse(await (await staff.request.get(summaryPath)).json());
@@ -474,7 +522,7 @@ test("one recurring meeting and conference retain the same actors through organi
     const leadReplay = await sponsor.request.post(scansPath, { data: captured.request });
     expect(leadReplay.status()).toBe(200);
     expect(eventScanResponseSchema.parse(await leadReplay.json())).toEqual(captured.receipt);
-    const sponsorClosed = await closePilotScanner(sponsor, captured.request);
+    const sponsorClosed = await closePilotScanner(sponsor, scannerSessionOf(captured.request));
     const leadsPath = `${sponsorsPath}/${fixture.sponsorId}/leads`;
     const liveLeads = await sponsor.request.get(leadsPath);
     expect(liveLeads.headers()["cache-control"]).toContain("no-store");
@@ -524,8 +572,8 @@ test("one recurring meeting and conference retain the same actors through organi
         scope: "event",
         coverage: "from_event_creation",
         sourceState: "live",
-        knownEpochs: 3,
-        closedEpochs: 3,
+        knownEpochs: 4,
+        closedEpochs: 4,
         openEpochs: 0,
         closingEpochs: 0,
         unknownHighWaterEpochs: 0,
@@ -651,7 +699,7 @@ test("one recurring meeting and conference retain the same actors through organi
           publicationSnapshotIds: [release.snapshotId, finalRelease.snapshotId],
           operations: [admission.operationId, originalScan.operationId, captured.request.operationId],
           observed: reportBeforeLead.observed,
-          scannerClosures: [manualClosed, doorClosed, sponsorClosed],
+          scannerClosures: [gateClosed, manualClosed, doorClosed, sponsorClosed],
           scannerReconciliation: finalSummary.sync.scannerReconciliation,
           attendanceCompleteness: finalSummary.sync.completeness,
           correctedAttendance,

@@ -61,6 +61,10 @@ export async function readPilotAgenda(page: Page) {
 }
 
 export async function capturePilot(page: Page, info: TestInfo, phase: string) {
+  // A fullscreen scanner window cannot be resized; its dialog stays open in the page.
+  await page.evaluate(async () => {
+    if (document.fullscreenElement) await document.exitFullscreen();
+  });
   for (const [label, width, height] of [
     ["desktop", 1280, 900],
     ["phone", 390, 844],
