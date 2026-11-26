@@ -256,15 +256,15 @@ export class LiveRoomGraphics {
 
   /**
    * A room puts lower thirds on and off air the way the event's setup says,
-   * and follows a later change to the setup, until an operator sets Preview
-   * or chooses another motion. From then on the room keeps their choice.
+   * and follows a later change to the setup, until an operator chooses another
+   * motion on Program or Preview. From then on the room keeps their choice.
    */
   private async loadSetUpLowerThird(): Promise<void> {
     const motion = this.basis.read().graphics.lowerThird?.motion;
     if (!motion || this.store.stage().lowerThirdMotion === motion || !this.store.followsSetUpLowerThirdMotion()) return;
-    const stage = { ...this.store.stage(), lowerThirdMotion: motion };
-    this.store.saveSetUpLowerThirdMotion(stage);
-    await this.broadcast.all({ type: "stage.changed", stage });
+    if (this.store.saveSetUpLowerThirdMotion(motion))
+      await this.broadcast.all({ type: "preview.changed", composition: this.store.preview() });
+    await this.broadcast.all({ type: "stage.changed", stage: this.store.stage() });
   }
 
   async refresh(): Promise<void> {

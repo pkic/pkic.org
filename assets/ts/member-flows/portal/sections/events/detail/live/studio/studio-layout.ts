@@ -156,8 +156,8 @@ export function builtInStudioLayouts(): StudioLayouts {
       ["polls", { x: 4, y: 22, w: 4, h: 8 }],
       ["chat", { x: 8, y: 22, w: 4, h: 8 }],
     ]),
-    // OBS picks the scene, so the operator only chooses what is on air and sends it with PGM: Program and the
-    // controls, no Preview, Transition or LIVE, in four columns that fit a Full HD laptop without scrolling.
+    // The production software picks the scene, so the operator only chooses what is on air and sends it with PGM:
+    // Program and the controls, no Preview, Transition or LIVE, in four columns that fit a Full HD laptop.
     livestream: seeded("livestream", [
       ["monitor", { x: 0, y: 0, w: 3, h: 7 }, ["program"]],
       ["speakers", { x: 0, y: 7, w: 3, h: 11 }],
@@ -405,13 +405,16 @@ export function loadStudioLayouts(
   return defaultStudioLayouts(eventDefault);
 }
 
-/** Whether this browser keeps an arrangement of its own; until it does, the studio follows the event's default. */
+/**
+ * Whether this browser keeps an arrangement of its own that the studio can
+ * read, in the order `loadStudioLayouts` reads it; until it does, the studio
+ * follows the event's default.
+ */
 export function hasOwnStudioLayouts(storage: Pick<Storage, "getItem"> | null): boolean {
   try {
-    return Boolean(
-      storage &&
-      (storage.getItem(STUDIO_LAYOUT_STORAGE_KEY) !== null || storage.getItem(STUDIO_LAYOUT_V1_STORAGE_KEY) !== null),
-    );
+    if (!storage) return false;
+    if (studioLayoutsSchema.safeParse(readJson(storage, STUDIO_LAYOUT_STORAGE_KEY)).success) return true;
+    return readJson(storage, STUDIO_LAYOUT_V1_STORAGE_KEY) !== undefined;
   } catch {
     return false;
   }

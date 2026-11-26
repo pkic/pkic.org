@@ -304,6 +304,12 @@ describe("timers over a board", () => {
     const timer = { ...LIVE_OVERLAY_STANDARD_ELEMENTS.timer };
     expect(timerClearance(frame, [timer])).toEqual({ inline: expect.closeTo(0.2, 3), block: 0 });
     expect(timerClearance(column, [timer])).toEqual({ inline: 0, block: expect.closeTo(168 / 1080, 3) });
+    // Timers stacked under the corner timer count too, and a stack too tall to go under keeps its column clear.
+    const stacked = (index: number) => ({ ...timer, y: timer.y + index * (timer.h + 16 / 1080) });
+    const under = timerClearance(column, [stacked(0), stacked(1)]);
+    expect(under.block * column.h + column.y).toBeCloseTo(stacked(1).y + stacked(1).h, 3);
+    const tall = timerClearance(column, [stacked(0), stacked(1), stacked(2), stacked(3)]);
+    expect(tall).toEqual({ inline: expect.closeTo((column.x + column.w - timer.x) / column.w, 3), block: 0 });
     // A timer away from the corner, such as the column layout's own timer over the camera, needs no room.
     expect(timerClearance(column, [LIVE_OVERLAY_PRESET_LAYOUTS.questions.elements.timer])).toEqual({
       inline: 0,

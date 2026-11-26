@@ -1,4 +1,4 @@
-import type { LiveRoomClientMessage } from "../../assets/shared/schemas/live-session-room";
+import { liveRoomClientMessageSchema, type LiveRoomClientMessage } from "../../assets/shared/schemas/live-session-room";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -152,7 +152,8 @@ describe("multi-message live ticker", () => {
     const send = vi.fn((command: LiveRoomClientMessage) => command.type === "preview.set");
     const rooms = agenda().rooms;
     const sent = () => {
-      const payload = send.mock.calls.at(-1)![0];
+      // The room parses what the studio sends; so does the test, before it reads the rooms.
+      const payload = liveRoomClientMessageSchema.parse(send.mock.calls.at(-1)![0]);
       if (payload.type !== "preview.set" || !payload.composition.ticker) throw new Error("Expected a ticker sequence");
       return payload.composition.ticker.messages[0]!;
     };
@@ -193,9 +194,7 @@ describe("multi-message live ticker", () => {
         void act(() => room("Room A").click());
         void act(() => room("Room A").click());
       });
-      expect(
-        liveTickerConfigSchema.parse({ ...DEFAULT_LIVE_TICKER_CONFIG, messages: [sent()] }).messages[0]!.roomIds,
-      ).toEqual([id(2)]);
+      expect(sent().roomIds).toEqual([id(2)]);
       fresh();
       edit(() => {
         void act(() => room("Room B").click());
@@ -410,7 +409,7 @@ describe("multi-message live ticker", () => {
           .find((button) => button.textContent === "PVW")!
           .click(),
       );
-      const payload = send.mock.calls[0][0];
+      const payload = liveRoomClientMessageSchema.parse(send.mock.calls[0][0]);
       if (payload.type !== "preview.set" || !payload.composition.ticker) throw new Error("Expected a ticker sequence");
       expect(payload.composition.ticker.speed).toBe(150);
     } finally {

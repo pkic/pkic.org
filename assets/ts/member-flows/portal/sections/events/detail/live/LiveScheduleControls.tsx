@@ -5,12 +5,11 @@ import {
   type LiveScheduleConfig,
 } from "../../../../../../../shared/schemas/live-session-schedule";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
-import { Dialog } from "../../../../../../ui/Dialog";
 import { Field } from "../../../../../../ui/Field";
 import { Select } from "../../../../../../ui/TextControl";
-import { Alert } from "../../../../../../ui/Alert";
 import { LiveGraphicRow } from "./LiveGraphicRow";
-import { LIVE_SETTINGS_FOR_EVENT, useLiveGraphicSettings } from "./live-graphic-settings";
+import { LiveGraphicSettingsDialog } from "./LiveGraphicSettingsDialog";
+import { useLiveGraphicSettings } from "./live-graphic-settings";
 import { LiveGraphicThemeField } from "./LiveGraphicThemeField";
 import type { LiveTargets } from "./live-output-targets";
 
@@ -32,8 +31,7 @@ export function LiveScheduleControls({ targets, detail }: { targets: LiveTargets
     "schedule",
   );
   const [draft, setDraft] = useState(config),
-    [open, setOpen] = useState(false),
-    [error, setError] = useState<string | null>(null);
+    [open, setOpen] = useState(false);
   const form = useContractForm(liveScheduleConfigSchema, draft);
   return (
     <LiveGraphicRow
@@ -51,50 +49,33 @@ export function LiveScheduleControls({ targets, detail }: { targets: LiveTargets
       }}
     >
       {open && (
-        <Dialog
-          open
-          title="Up next"
-          description={saves ? LIVE_SETTINGS_FOR_EVENT : undefined}
-          confirmLabel="Save"
-          onCancel={() => setOpen(false)}
-          onConfirm={() => {
-            const checked = form.submit();
-            if (!checked.data) return setError(checked.formMessage);
-            void save(checked.data).then((problem) => {
-              setError(problem);
-              if (!problem) setOpen(false);
-            });
-          }}
-        >
-          <form noValidate {...form.handlers} class="pk-stack" onSubmit={(event) => event.preventDefault()}>
-            <Field label="Layout" {...form.of("layout")}>
-              {(control) => (
-                <Select
-                  {...control}
-                  name="layout"
-                  value={draft.layout}
-                  onChange={(event) => {
-                    const layout = liveScheduleConfigSchema.shape.layout.parse(event.currentTarget.value);
-                    setDraft((previous) => ({ ...previous, layout }));
-                  }}
-                >
-                  {liveScheduleConfigSchema.shape.layout.unwrap().options.map((layout) => (
-                    <option key={layout} value={layout}>
-                      {LAYOUT_LABELS[layout]}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </Field>
-            <LiveGraphicThemeField
-              name="theme"
-              value={draft.theme}
-              presentation={form.of("theme")}
-              onChange={(theme) => setDraft((previous) => ({ ...previous, theme }))}
-            />
-            {error ? <Alert tone="danger">{error}</Alert> : null}
-          </form>
-        </Dialog>
+        <LiveGraphicSettingsDialog title="Up next" saves={saves} form={form} save={save} onClose={() => setOpen(false)}>
+          <Field label="Layout" {...form.of("layout")}>
+            {(control) => (
+              <Select
+                {...control}
+                name="layout"
+                value={draft.layout}
+                onChange={(event) => {
+                  const layout = liveScheduleConfigSchema.shape.layout.parse(event.currentTarget.value);
+                  setDraft((previous) => ({ ...previous, layout }));
+                }}
+              >
+                {liveScheduleConfigSchema.shape.layout.unwrap().options.map((layout) => (
+                  <option key={layout} value={layout}>
+                    {LAYOUT_LABELS[layout]}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          <LiveGraphicThemeField
+            name="theme"
+            value={draft.theme}
+            presentation={form.of("theme")}
+            onChange={(theme) => setDraft((previous) => ({ ...previous, theme }))}
+          />
+        </LiveGraphicSettingsDialog>
       )}
     </LiveGraphicRow>
   );

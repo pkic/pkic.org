@@ -32,9 +32,11 @@ export function useStudioLayout(eventDefault: StudioDefaultLayouts = {}) {
   const defaults = useRef(eventDefault);
   defaults.current = eventDefault;
   // The event's default arrives after the studio opens; a browser without its own arrangement takes it.
+  // An arrangement changed on this page stays even where the browser cannot keep it.
+  const changed = useRef(false);
   const defaultKey = JSON.stringify(eventDefault);
   useEffect(() => {
-    if (hasOwnStudioLayouts(studioStorage())) return;
+    if (changed.current || hasOwnStudioLayouts(studioStorage())) return;
     const next = defaultStudioLayouts(JSON.parse(defaultKey) as StudioDefaultLayouts);
     latest.current = next;
     setLayouts(next);
@@ -51,6 +53,7 @@ export function useStudioLayout(eventDefault: StudioDefaultLayouts = {}) {
   }, []);
   const change = useCallback<StudioChange>(
     (update) => {
+      changed.current = true;
       const panels = update(latest.current[workspace]);
       const next = saveStudioWorkspace(studioStorage(), workspace, panels, latest.current);
       latest.current = next;

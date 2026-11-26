@@ -586,6 +586,28 @@ describe("live room auxiliary outputs", () => {
     expect(later.stage.lowerThirdMotion).toBe("cut");
   });
 
+  it("follows an event's first lower-third setup after operators composed with the default motion", async () => {
+    const operator = await f.connect({ person: "operator" });
+    await operator.next("room.snapshot");
+    // Operators compose Preview and Program before the event has a setup, keeping the default motion.
+    operator.send({ type: "preview.set", composition: { creditKey: `user:${f.users.speaker}` } });
+    await operator.next("preview.changed", (m) => m.composition.lowerThird !== null);
+    operator.send({ type: "stage.lowerThird", creditKey: `user:${f.users.speaker}` });
+    await operator.next("stage.changed", (m) => m.stage.lowerThird !== null);
+    const now = new Date().toISOString();
+    await env.DB.prepare(
+      "INSERT INTO event_live_studio_setups(event_id,setup_json,created_at,updated_at) VALUES(?,?,?,?)",
+    )
+      .bind(f.eventId, JSON.stringify({ graphics: { lowerThird: { motion: "cut" } }, layouts: {} }), now, now)
+      .run();
+    await runInDurableObject(f.room(), (room) =>
+      (room as unknown as { graphics: { refresh(): Promise<void> } }).graphics.refresh(),
+    );
+    const snapshot = await (await f.connect({ person: "operator" })).next("room.snapshot");
+    expect(snapshot.stage.lowerThirdMotion).toBe("cut");
+    expect(snapshot.preview?.lowerThirdMotion).toBe("cut");
+  });
+
   it("clears Preview to a blank frame in the Default scene, and a room screen to empty in its own scene", async () => {
     const operator = await f.connect({ person: "operator" });
     const full = { creditKey: `user:${f.users.speaker}`, timerGraphics: [GRAPHIC] };

@@ -35,7 +35,8 @@ const RETIRED_TICKER_SPEEDS: Record<string, number> = { slow: 60, normal: 90, fa
 export const liveTickerSpeedSchema = z
   .preprocess(
     // One saved with a named speed keeps its pace.
-    (value) => RETIRED_TICKER_SPEEDS[String(value)] ?? value,
+    (value) =>
+      typeof value === "string" && Object.hasOwn(RETIRED_TICKER_SPEEDS, value) ? RETIRED_TICKER_SPEEDS[value] : value,
     z
       .number()
       .int()

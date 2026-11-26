@@ -53,7 +53,7 @@ export const NO_TIMER_CLEARANCE: LiveOverlayTimerClearance = { inline: 0, block:
 
 /** The widest share of a board the timers' column may take; past it the board's top row goes under them. */
 const BESIDE_TIMERS = 0.25;
-/** The most of a board's height its top row moves down for timers. */
+/** The most of a board's height its top row moves down for timers; a taller stack keeps its column clear instead. */
 const UNDER_TIMERS = 0.4;
 
 export function timerClearance(
@@ -72,8 +72,18 @@ export function timerClearance(
   if (!covering.length || board.w <= 0 || board.h <= 0) return NO_TIMER_CLEARANCE;
   const inline = Math.max(...covering.map((timer) => (end - timer.x) / board.w));
   if (inline <= BESIDE_TIMERS) return { inline, block: 0 };
-  const block = Math.max(...covering.map((timer) => (timer.y + timer.h - board.y) / board.h));
-  return { inline: 0, block: Math.min(UNDER_TIMERS, block) };
+  // Under them the board keeps its full width, so every timer stacked in that column on the board counts.
+  const column = timers.filter(
+    (timer) =>
+      timer.x < corner.x + corner.w &&
+      timer.x + timer.w > corner.x &&
+      timer.y < board.y + board.h &&
+      timer.y + timer.h > board.y,
+  );
+  const block = Math.max(...column.map((timer) => (timer.y + timer.h - board.y) / board.h));
+  // A stack too tall to start the top row under keeps its column clear instead, so no line runs beneath a timer.
+  if (block > UNDER_TIMERS) return { inline: Math.max(...column.map((timer) => (end - timer.x) / board.w)), block: 0 };
+  return { inline: 0, block };
 }
 
 /**

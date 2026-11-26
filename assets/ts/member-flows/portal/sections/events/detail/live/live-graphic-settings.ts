@@ -52,9 +52,14 @@ export function useLiveGraphicSettings<Settings>(
     if (!showing.current) setSettings(JSON.parse(startKey) as Settings);
   }, [startKey]);
   const saves = Boolean(graphic && setup?.canSave);
+  // A save waits for the event's setup first; by then the outputs may show the graphic elsewhere, so the
+  // replacement reads the room as it is when it is sent, not as it was when the save started.
+  const latest = useRef(targets);
+  latest.current = targets;
   /** Puts new settings on every output that shows the graphic, for this show only; whether every one took them. */
   const apply = (next: Settings): boolean => {
-    if (!sendLivePrograms(targets, liveLayerReplacements(targets, layer(next)))) return false;
+    const now = latest.current;
+    if (!sendLivePrograms(now, liveLayerReplacements(now, layer(next)))) return false;
     setSettings(next);
     return true;
   };
@@ -67,4 +72,20 @@ export function useLiveGraphicSettings<Settings>(
     return apply(next) ? null : LIVE_SETTINGS_NOT_SENT;
   };
   return { settings, save, apply, saves };
+}
+
+/**
+ * Whether the dialog that started a save is still open when the save ends.
+ * An operator may cancel and open the dialog again meanwhile; the earlier
+ * save then neither reports into nor closes the newer one.
+ */
+export function useStillOpen(): { readonly current: boolean } {
+  const open = useRef(true);
+  useEffect(
+    () => () => {
+      open.current = false;
+    },
+    [],
+  );
+  return open;
 }

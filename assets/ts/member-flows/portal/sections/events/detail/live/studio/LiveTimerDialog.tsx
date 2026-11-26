@@ -26,7 +26,7 @@ import { DurationInput, durationFieldOf } from "../../../../../../../ui/Duration
 import { Field } from "../../../../../../../ui/Field";
 import { FormSection } from "../../../../../../../ui/FormSection";
 import { Select, TextInput } from "../../../../../../../ui/TextControl";
-import { LIVE_SETTINGS_NOT_SENT } from "../live-graphic-settings";
+import { LIVE_SETTINGS_NOT_SENT, useStillOpen } from "../live-graphic-settings";
 import { LiveTimerLookFields } from "../LiveTimerGraphicControls";
 import "./LiveTimerDialog.css";
 import { liveTimerNextInstant } from "./LiveTimerAddForm";
@@ -100,6 +100,7 @@ export function LiveTimerDialog({
   const [look, setLook] = useState(graphic);
   const [forEvent, setForEvent] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const open = useStillOpen();
   const warnAt = seconds(warning);
   const edit: Record<string, unknown> = { name };
   if (timer.kind === "duration") edit.durationSeconds = length;
@@ -159,7 +160,11 @@ export function LiveTimerDialog({
     const shown = mineOver(opened.graphic, next.graphic, graphic);
     if (!same(shown, graphic) && !saveGraphic(shown)) return setError(LIVE_SETTINGS_NOT_SENT);
     if (!forEvent || !saveLook) return onClose();
-    void saveLook(shown).then((problem) => (problem ? setError(problem) : onClose()));
+    void saveLook(shown).then((problem) => {
+      if (!open.current) return;
+      if (problem) setError(problem);
+      else onClose();
+    });
   };
 
   return (

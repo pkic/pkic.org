@@ -75,20 +75,21 @@ export function LiveCheckInControls({
   const shown = targets.state.preview.checkIn ?? (targets.programActive ? targets.state.stage.checkIn : null);
   const [chosen, setChosen] = useState<string | null>(shown ? keyOf(shown.selection) : null);
   // The look and instruction start from the event's setup; which code to show is picked per session.
-  const saved = targets.setup?.graphics.checkIn;
-  const [theme, setTheme] = useState<LiveGraphicTheme>(
-    shown?.theme ?? saved?.theme ?? LIVE_GRAPHIC_THEME_DEFAULTS.checkIn,
-  );
-  const [text, setText] = useState(shown?.text ?? saved?.text ?? DEFAULT_LIVE_CHECK_IN_TEXT);
-  const savedKey = saved ? JSON.stringify(saved) : null;
+  const start: LiveCheckInSetup = targets.setup?.graphics.checkIn ?? {
+    theme: LIVE_GRAPHIC_THEME_DEFAULTS.checkIn,
+    text: DEFAULT_LIVE_CHECK_IN_TEXT,
+  };
+  const [theme, setTheme] = useState<LiveGraphicTheme>(shown?.theme ?? start.theme);
+  const [text, setText] = useState(shown?.text ?? start.text);
+  const startKey = JSON.stringify(start);
   const showing = useRef(Boolean(shown));
   showing.current = Boolean(shown);
   useEffect(() => {
-    if (!savedKey || showing.current) return;
-    const next = JSON.parse(savedKey) as LiveCheckInSetup;
+    if (showing.current) return;
+    const next = JSON.parse(startKey) as LiveCheckInSetup;
     setTheme(next.theme);
     setText(next.text);
-  }, [savedKey]);
+  }, [startKey]);
   const saves = Boolean(targets.setup?.canSave);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);

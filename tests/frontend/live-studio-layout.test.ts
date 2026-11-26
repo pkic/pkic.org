@@ -13,6 +13,7 @@ import {
   STUDIO_LAYOUT_V1_STORAGE_KEY,
   STUDIO_WORKSPACES,
   defaultStudioLayouts,
+  hasOwnStudioLayouts,
   studioShownOutputs,
   loadStudioLayouts,
   moveStudioPanel,
@@ -200,6 +201,10 @@ describe("saved studio layouts", () => {
         },
       }),
     ).toEqual(defaultStudioLayouts());
+    // One the studio cannot read is not the browser's own, so the event's default still applies.
+    expect(hasOwnStudioLayouts({ getItem: () => "{not json" })).toBe(false);
+    expect(hasOwnStudioLayouts(memory({ [STUDIO_LAYOUT_STORAGE_KEY]: { show: [{ id: "x" }] } }))).toBe(false);
+    expect(hasOwnStudioLayouts(memory({ [STUDIO_LAYOUT_STORAGE_KEY]: defaultStudioLayouts() }))).toBe(true);
   });
 
   it("drops a saved Output links panel, now on the settings page, and keeps the rest of the arrangement", () => {

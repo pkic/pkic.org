@@ -46,10 +46,15 @@ export function useLiveStudioSetup(slug: string, canSave: boolean): LiveStudioSe
   const [current, setCurrent] = useState<EventLiveStudioSetupResponse>({ ...EMPTY_LIVE_STUDIO_SETUP, updatedAt: null });
   const latest = useRef(current);
   latest.current = current;
+  // A read that started before a save finished is older than what the save returned, so it is not shown.
+  const saves = useRef(0);
   const load = useCallback(async () => {
+    const started = saves.current;
     const read = await getJson(endpoint, eventLiveStudioSetupResponseSchema);
-    latest.current = read;
-    setCurrent(read);
+    if (saves.current === started) {
+      latest.current = read;
+      setCurrent(read);
+    }
     return read;
   }, [endpoint]);
   useEffect(() => {
@@ -65,6 +70,7 @@ export function useLiveStudioSetup(slug: string, canSave: boolean): LiveStudioSe
           { ...change(setup), expectedUpdatedAt: updatedAt },
           eventLiveStudioSetupResponseSchema,
         );
+        saves.current += 1;
         latest.current = saved;
         setCurrent(saved);
       };

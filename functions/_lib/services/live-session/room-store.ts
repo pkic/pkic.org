@@ -1,3 +1,4 @@
+import { DEFAULT_LIVE_LOWER_THIRD_MOTION, type LiveLowerThirdMotion } from "../../../../assets/shared/live-lower-third";
 import { readStoredLiveTicker } from "../../../../assets/shared/schemas/live-session-ticker";
 import {
   LIVE_ROOM_POLICY,
@@ -344,18 +345,26 @@ export class LiveRoomStore {
 
   /**
    * Whether the room still takes its lower-third motion from the event's
-   * setup: no operator has set Preview, and Program's motion is the room's
-   * own default or the one it last took from the setup.
+   * setup: Program and Preview both show the motion the room last took from
+   * the setup, or the default before it took any. Another motion is an
+   * operator's choice, which the room keeps.
    */
   followsSetUpLowerThirdMotion(): boolean {
-    if (this.control("preview") !== null) return false;
-    return this.control("stage") === null || this.stage().lowerThirdMotion === this.control("setup:lowerThirdMotion");
+    const expected = this.control("setup:lowerThirdMotion") ?? DEFAULT_LIVE_LOWER_THIRD_MOTION;
+    return this.stage().lowerThirdMotion === expected && this.preview().lowerThirdMotion === expected;
   }
 
-  /** Puts the setup's lower-third motion on Program and remembers it was the setup's. */
-  saveSetUpLowerThirdMotion(stage: LiveStage): void {
-    this.saveStage(stage);
-    this.saveControl("setup:lowerThirdMotion", stage.lowerThirdMotion);
+  /**
+   * Puts the setup's lower-third motion on Program, and on Preview when an
+   * operator set one, and remembers it was the setup's. Returns whether
+   * Preview changed.
+   */
+  saveSetUpLowerThirdMotion(motion: LiveLowerThirdMotion): boolean {
+    this.saveStage({ ...this.stage(), lowerThirdMotion: motion });
+    const preview = this.control("preview") !== null;
+    if (preview) this.savePreview({ ...this.preview(), lowerThirdMotion: motion });
+    this.saveControl("setup:lowerThirdMotion", motion);
+    return preview;
   }
 
   /** Whether anyone composed this output yet, a take or the room loading its starting scene. */

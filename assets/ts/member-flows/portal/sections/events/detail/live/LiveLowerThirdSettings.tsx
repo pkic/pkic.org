@@ -6,7 +6,7 @@ import { Radio } from "../../../../../../ui/Checkbox";
 import { Dialog } from "../../../../../../ui/Dialog";
 import { Field } from "../../../../../../ui/Field";
 import type { LiveTargets } from "./live-output-targets";
-import { LIVE_SETTINGS_NOT_SENT } from "./live-graphic-settings";
+import { LIVE_SETTINGS_NOT_SENT, useStillOpen } from "./live-graphic-settings";
 import { Alert } from "../../../../../../ui/Alert";
 
 const lowerThirdMotionSchema = liveCompositionInputSchema.pick({ lowerThirdMotion: true });
@@ -24,6 +24,7 @@ const MOTION_HINTS: Record<LiveStage["lowerThirdMotion"], string> = {
 export function LiveLowerThirdSettings({ targets, onClose }: { targets: LiveTargets; onClose: () => void }) {
   const [draft, setDraft] = useState({ lowerThirdMotion: targets.state.preview.lowerThirdMotion });
   const [error, setError] = useState<string | null>(null);
+  const open = useStillOpen();
   const form = useContractForm(lowerThirdMotionSchema, draft);
   // For someone who sets up the studio, the choice is also where every room of the event starts.
   const setup = targets.setup?.canSave ? targets.setup : undefined;
@@ -41,6 +42,7 @@ export function LiveLowerThirdSettings({ targets, onClose }: { targets: LiveTarg
         void (
           setup ? setup.saveGraphic("lowerThird", { motion: composition.lowerThirdMotion }) : Promise.resolve(null)
         ).then((problem) => {
+          if (!open.current) return;
           if (problem) return setError(problem);
           if (!targets.sendProgram({ type: "preview.set", composition })) return setError(LIVE_SETTINGS_NOT_SENT);
           onClose();
