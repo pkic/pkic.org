@@ -94,11 +94,14 @@ describe("community profile access", () => {
       expect(body.error.code).toBe("DEPENDENCY_UNAVAILABLE");
       const details = dependencyFailureSchema.parse(body.error.details);
       expect(details.capability).toBe("data");
+      // The read failed before any write, so the browser may repeat it.
+      expect(details.outcome).toBe("unchanged");
       expect(log).toHaveBeenCalledWith("DEPENDENCY_UNAVAILABLE", {
         reference: details.reference,
         dependency: "D1",
         operation: "batch",
         reason: "connection_lost",
+        outcome: "unchanged",
       });
       expect(response.headers.get("cache-control")).toContain("no-store");
       expect(read).toHaveBeenCalledOnce();

@@ -45,6 +45,7 @@ describe("dependency availability", () => {
       dependency: "D1",
       operation: "unknown",
       reason,
+      outcome: "unknown",
     });
   });
 
@@ -76,6 +77,8 @@ describe("dependency availability", () => {
         dependency: "D1",
         operation,
         reason: "connection_lost",
+        // `exec` runs arbitrary SQL, so it counts as a write; the rest only read.
+        outcome: operation === "exec" ? "unknown" : "unchanged",
       });
       expect(JSON.stringify(log.mock.calls)).not.toMatch(/SELECT|private_users|private@example/);
       expect(await handleError(failure).text()).not.toMatch(/SELECT|private_users|private@example/);
@@ -98,8 +101,72 @@ describe("dependency availability", () => {
       dependency: "R2",
       operation: "get",
       reason: "internal_error",
+      outcome: "unchanged",
       providerCode: "10001",
     });
+  });
+
+  it("reports a failure as unchanged only while the request has sent no write", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const statement = (query: string): StatementLike => {
+      const fail = async () => {
+        if (/^SELECT/.test(query)) throw new Error("D1 DB is overloaded");
+        return { results: [], success: true, meta: {} } as never;
+      };
+      return { bind: () => statement(query), first: fail, all: fail, run: fail };
+    };
+    const outcome = async (run: (db: Env["DB"]) => Promise<unknown>) => {
+      const db = withDependencyHandling({ ...env, DB: { prepare: statement, batch: async () => [] } }).DB;
+      try {
+        await run(db);
+      } catch (error) {
+        return dependencyFailureSchema.parse((error as AppError).details).outcome;
+      }
+      throw new Error("expected a dependency failure");
+    };
+
+    expect(await outcome((db) => db.prepare("SELECT 1").first())).toBe("unchanged");
+    expect(
+      await outcome(async (db) => {
+        await db.prepare("UPDATE users SET updated_at=? WHERE id=?").bind("now", "u").run();
+        return db.prepare("SELECT 1").first();
+      }),
+    ).toBe("unknown");
+    expect(
+      await outcome(async (db) => {
+        await db.batch([db.prepare("DELETE FROM sessions WHERE id=?").bind("s")]);
+        return db.prepare("SELECT updated_at, deleted_at FROM users").all();
+      }),
+    ).toBe("unknown");
+    expect(await outcome((db) => db.prepare("SELECT updated_at, deleted_at FROM users").all())).toBe("unchanged");
+  });
+
+  it("counts a write keyword in a read method and an R2 write as writes", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fail = async () => {
+      throw new Error("D1 DB is overloaded");
+    };
+    const failing: StatementLike = { bind: () => failing, first: fail, all: fail, run: fail };
+    const db = withDependencyHandling({ ...env, DB: { prepare: () => failing, batch: fail } }).DB;
+    const returning = await db
+      .prepare("INSERT INTO example(id) VALUES (?) RETURNING id")
+      .bind("x")
+      .first()
+      .catch((error: AppError) => error);
+    expect(dependencyFailureSchema.parse((returning as AppError).details).outcome).toBe("unknown");
+
+    const bucket = new Proxy(env.SPEAKER_UPLOADS_BUCKET!, {
+      get(target, property) {
+        if (property === "put" || property === "get")
+          return () => Promise.reject(new Error("R2 put: Internal Error (10001)"));
+        return Reflect.get(target, property, target);
+      },
+    });
+    const scoped = withDependencyHandling({ ...env, SPEAKER_UPLOADS_BUCKET: bucket });
+    const put = await scoped.SPEAKER_UPLOADS_BUCKET!.put("k", "v").catch((error: AppError) => error);
+    expect(dependencyFailureSchema.parse((put as AppError).details).outcome).toBe("unknown");
+    const get = await scoped.SPEAKER_UPLOADS_BUCKET!.get("k").catch((error: AppError) => error);
+    expect(dependencyFailureSchema.parse((get as AppError).details).outcome).toBe("unknown");
   });
 
   it("returns a scoped unavailable error from the mounted application while configured mode is normal", async () => {
@@ -176,6 +243,7 @@ describe("dependency availability", () => {
       dependency: "R2",
       operation: "unknown",
       reason: "provider_service_error",
+      outcome: "unknown",
       providerCode: String(code),
     });
   });

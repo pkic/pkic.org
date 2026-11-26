@@ -334,6 +334,90 @@ describe("shared API client", () => {
       ).rejects.toMatchObject({ message: "Upload failed" });
     });
   });
+  describe("brief database overload", () => {
+    const overloaded = (outcome: "unchanged" | "unknown") =>
+      Response.json(
+        {
+          error: {
+            code: "DEPENDENCY_UNAVAILABLE",
+            message: "Online data is temporarily unavailable.",
+            details: { capability: "data", reference: "6f1c8a52-3f0e-4c1e-9b7a-2d4e5f6a7b8c", outcome },
+          },
+        },
+        { status: 503 },
+      );
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    it("repeats a read that changed nothing and returns its answer", async () => {
+      const fetcher = vi
+        .fn()
+        .mockResolvedValueOnce(overloaded("unchanged"))
+        .mockResolvedValueOnce(Response.json({ success: true }));
+      vi.stubGlobal("fetch", fetcher);
+      const result = requestJson("/api/v1/example", successResponseSchema);
+      await vi.runAllTimersAsync();
+      await expect(result).resolves.toEqual({ success: true });
+      expect(fetcher).toHaveBeenCalledTimes(2);
+    });
+
+    it("stops after two repeats and shows the refusal", async () => {
+      const fetcher = vi.fn(async () => overloaded("unchanged"));
+      vi.stubGlobal("fetch", fetcher);
+      const result = requestJson("/api/v1/example", successResponseSchema).catch((error: unknown) => error);
+      await vi.runAllTimersAsync();
+      expect(await result).toMatchObject({ status: 503, code: "DEPENDENCY_UNAVAILABLE" });
+      expect(fetcher).toHaveBeenCalledTimes(3);
+    });
+
+    it("never repeats a write or a read whose changes are unknown", async () => {
+      const fetcher = vi.fn(async () => overloaded("unchanged"));
+      vi.stubGlobal("fetch", fetcher);
+      await expect(postJson("/api/v1/example", {}, successResponseSchema)).rejects.toMatchObject({ status: 503 });
+      expect(fetcher).toHaveBeenCalledOnce();
+
+      fetcher.mockImplementation(async () => overloaded("unknown"));
+      await expect(requestJson("/api/v1/example", successResponseSchema)).rejects.toMatchObject({ status: 503 });
+      expect(fetcher).toHaveBeenCalledTimes(2);
+    });
+
+    it("keeps one deadline across a read and its repeats", async () => {
+      const fetcher = vi.fn(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 27_000));
+        return overloaded("unchanged");
+      });
+      vi.stubGlobal("fetch", fetcher);
+      const started = Date.now();
+      const result = requestJson("/api/v1/example", successResponseSchema).catch((error: unknown) => error);
+      await vi.runAllTimersAsync();
+      expect(await result).toMatchObject({ status: 503, code: "DEPENDENCY_UNAVAILABLE" });
+      expect(fetcher).toHaveBeenCalledOnce();
+      expect(Date.now() - started).toBeLessThanOrEqual(30_000);
+    });
+
+    it("never repeats a HEAD request", async () => {
+      const fetcher = vi.fn(async () => overloaded("unchanged"));
+      vi.stubGlobal("fetch", fetcher);
+      await expect(requestJson("/api/v1/example", successResponseSchema, { method: "HEAD" })).rejects.toMatchObject({
+        status: 503,
+      });
+      expect(fetcher).toHaveBeenCalledOnce();
+    });
+
+    it("stops waiting when the caller cancels", async () => {
+      const fetcher = vi.fn(async () => overloaded("unchanged"));
+      vi.stubGlobal("fetch", fetcher);
+      const controller = new AbortController();
+      const result = requestJson("/api/v1/example", successResponseSchema, { signal: controller.signal }).catch(
+        (error: unknown) => error,
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      controller.abort();
+      expect(await result).toMatchObject({ name: "AbortError" });
+      expect(fetcher).toHaveBeenCalledOnce();
+    });
+  });
+
   it("reports a connection failure without retrying a potentially completed write", async () => {
     const fetcher = vi.fn(async () => {
       throw new TypeError("Failed to fetch");
