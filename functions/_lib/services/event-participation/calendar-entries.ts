@@ -22,8 +22,8 @@ export function preparePersonalCalendarEntries(db: DatabaseLike, selection: Even
   const now = nowIso();
   // Scope the published snapshots to this event once. Joining the unscoped JSON expansion re-parsed
   // every event's agenda per participation row and held the database for seconds.
-  const sessions = `s AS MATERIALIZED (SELECT * FROM (${publishedSessionsSql}) WHERE event_id=${event.sql})`;
-  const rooms = `room AS MATERIALIZED (SELECT * FROM (${publishedRoomsSql}) WHERE event_id=${event.sql})`;
+  const sessions = `s AS MATERIALIZED (SELECT event_id,id,title,start_at,end_at,room_id FROM (${publishedSessionsSql}) WHERE event_id=${event.sql})`;
+  const rooms = `room AS MATERIALIZED (SELECT event_id,id,name FROM (${publishedRoomsSql}) WHERE event_id=${event.sql})`;
   return [
     db
       .prepare(
