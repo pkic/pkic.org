@@ -227,6 +227,10 @@ export const constants = {
   "dur-shimmer": "1400ms",
   // How long a row without room shows each of a speaker's affiliations before the next.
   "dur-affiliation": "4s",
+  // A muted stream's sound button: it waits, settles from the middle into its corner, then beats slowly.
+  "dur-unmute-wait": "2s",
+  "dur-unmute-settle": "700ms",
+  "dur-unmute-beat": "1600ms",
   // The reduced-motion clamp. Named rather than inlined so the one place that
   // is allowed to shorten motion is visible in the token list.
   "dur-instant": "1ms",

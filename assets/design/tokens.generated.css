@@ -62,6 +62,9 @@
     --pk-dur-spin: 700ms;
     --pk-dur-shimmer: 1400ms;
     --pk-dur-affiliation: 4s;
+    --pk-dur-unmute-wait: 2s;
+    --pk-dur-unmute-settle: 700ms;
+    --pk-dur-unmute-beat: 1600ms;
     --pk-dur-instant: 1ms;
     --pk-icon-stroke: 1.25px;
     --pk-icon-stroke-strong: 1.75px;

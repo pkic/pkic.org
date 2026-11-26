@@ -111,7 +111,7 @@
     background: color-mix(in srgb, var(--pk-on-solid-ink) 72%, transparent);
     color: var(--pk-on-solid);
     backdrop-filter: blur(4px);
-    transition: opacity 0.3s ease;
+    transition: opacity var(--pk-dur) var(--pk-ease);
   }
 
   /* With sound on, nothing covers the stream until the pointer moves over it; a keyboard still finds the button. */
@@ -132,8 +132,9 @@
     /* Muted, the button opens large in the middle of the picture, settles in its corner, and keeps a slow beat. */
     .pk-virtual-room__unmute.pk-btn {
       animation:
-        pk-virtual-room-unmute-settle 0.7s ease-in-out 2s both,
-        pk-virtual-room-unmute-beat 1.6s ease-in-out 2.7s infinite;
+        pk-virtual-room-unmute-settle var(--pk-dur-unmute-settle) ease-in-out var(--pk-dur-unmute-wait) both,
+        pk-virtual-room-unmute-beat var(--pk-dur-unmute-beat) ease-in-out
+          calc(var(--pk-dur-unmute-wait) + var(--pk-dur-unmute-settle)) infinite;
     }
   }
 
