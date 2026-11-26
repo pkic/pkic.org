@@ -505,7 +505,7 @@ test("one recurring meeting and conference retain the same actors through organi
       .click();
     await sponsor.reload();
     await expect(sponsor.getByRole("heading", { name: "Leads", exact: true })).toBeVisible();
-    await expect(sponsor.getByText("No currently consenting leads match this search.", { exact: true })).toBeVisible();
+    await expect(sponsor.getByText("No leads match this search.", { exact: true })).toBeVisible();
     await capturePilot(sponsor, info, "pilot-sharing-withdrawn");
 
     const finalSummaryResponse = await staff.request.get(summaryPath);

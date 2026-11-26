@@ -239,7 +239,7 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
                 responseSchema={sponsorLeadListSchema}
                 resolve={(value) => value.leads}
                 resolvePage={(value) => value.page}
-                caption={current.canView ? "Consenting leads" : "My lead scans"}
+                caption={current.canView ? "Sponsor leads" : "My lead scans"}
                 paginate
                 createAction={
                   current.canCapture ? { label: "Scan leads", onSelect: () => setScanning(true) } : undefined
@@ -253,7 +253,7 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
                           items={[
                             {
                               id: "export",
-                              label: "Export consenting leads",
+                              label: "Export leads",
                               href: `${base}/${encodeURIComponent(current.id)}/leads.csv`,
                             },
                           ]}
@@ -274,11 +274,7 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
                     `/events/${encodeURIComponent(slug)}/leads/${encodeURIComponent(current.id)}/${encodeURIComponent(row.id)}`,
                   ),
                 })}
-                empty={
-                  current.canView
-                    ? "No currently consenting leads match this search."
-                    : "No saved scans with current contact sharing match this search."
-                }
+                empty={current.canView ? "No leads match this search." : "No saved scans match this search."}
                 columns={[
                   {
                     header: "Name",
@@ -339,7 +335,7 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
               />
             ) : (
               <div class="pk-stack">
-                <p role="status">Reconnect to view current consenting contacts.</p>
+                <p role="status">Reconnect to view leads.</p>
                 {current.canCapture && (
                   <Button aria-label="Scan leads" onClick={() => setScanning(true)}>
                     Scan leads
@@ -359,7 +355,7 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
                       items={[
                         {
                           id: "export",
-                          label: "Export consenting leads",
+                          label: "Export leads",
                           href: `${base}/${encodeURIComponent(current.id)}/leads.csv`,
                         },
                       ]}

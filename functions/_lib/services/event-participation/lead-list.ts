@@ -15,7 +15,6 @@ import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../db/types";
 import { AppError } from "../../errors";
 import { assertEventContactAccess, eventContactAccessSql } from "./evidence-retention";
-import { sponsorConsentSql } from "./sponsor-consent";
 import { sponsorLeadReadEvidence } from "./lead-scope";
 import {
   activeLeadSponsorOfEventSql,
@@ -52,7 +51,7 @@ async function resolveSponsorLeadReadScope(
   return row.scope;
 }
 
-/** Page and count recheck authorization and current consent in the same native D1 batch. */
+/** Page and count recheck authorization in the same native D1 batch. */
 export async function listSponsorLeads(
   db: DatabaseLike,
   eventId: string,
@@ -92,7 +91,7 @@ export async function listSponsorLeads(
         JOIN sponsorships sponsor ON sponsor.id=lead.sponsor_id
         WHERE lead.event_id=? AND lead.sponsor_id=? AND reg.status='registered' AND u.active=1
         AND ${activeLeadSponsorOfEventSql("sponsor", "lead.event_id", "read")}
-        AND ${sponsorConsentSql("reg")} AND (${scope}) AND ${eventContactAccessSql("lead.event_id")}
+        AND (${scope}) AND ${eventContactAccessSql("lead.event_id")}
         ${leadId ? "AND lead.id=?" : ""} ${search ? `AND ${search.sql}` : ""}`,
       bindings: [
         ...ownBindings,
@@ -118,7 +117,7 @@ export async function listSponsorLeads(
   });
 }
 
-/** Detail uses the same live consent and operator scope as the collection. */
+/** Detail uses the same live authorization and operator scope as the collection. */
 export async function getSponsorLead(
   db: DatabaseLike,
   eventId: string,
@@ -128,7 +127,7 @@ export async function getSponsorLead(
 ) {
   const result = await listSponsorLeads(db, eventId, sponsorId, actor, { limit: 1, offset: 0 }, leadId);
   const lead = result.leads[0];
-  if (!lead) throw new AppError(404, "LEAD_NOT_FOUND", "Current consenting lead not found.");
+  if (!lead) throw new AppError(404, "LEAD_NOT_FOUND", "Lead not found.");
   return sponsorLeadDetailSchema.parse({ lead, sponsorName: lead.sponsorName });
 }
 
@@ -201,7 +200,7 @@ import {
   type SponsorLeadCapture,
   type SponsorLeadCapturesQuery,
 } from "../../../../assets/shared/schemas/event-sponsor-lead-list";
-/** A consent withdrawal removes access to both live contacts and capture provenance. */
+/** Losing the sponsorship, the grant or contact retention removes access to both live contacts and capture provenance. */
 export async function listSponsorLeadCaptures(
   db: DatabaseLike,
   eventId: string,
@@ -222,7 +221,7 @@ export async function listSponsorLeadCaptures(
     JOIN registrations reg ON reg.event_id=lead.event_id AND reg.user_id=lead.user_id
     JOIN sponsorships sponsor ON sponsor.id=lead.sponsor_id
     WHERE lead.id=? AND lead.event_id=? AND lead.sponsor_id=? AND reg.status='registered' AND attendee.active=1
-    AND ${activeLeadSponsorOfEventSql("sponsor", "lead.event_id", "read")} AND ${sponsorConsentSql("reg")}
+    AND ${activeLeadSponsorOfEventSql("sponsor", "lead.event_id", "read")}
     AND (${scope}) AND ${eventContactAccessSql("lead.event_id")}
     AND attempt.action='lead' AND attempt.outcome='eligible' ${ownOnly}`;
   const sourceBindings = [
@@ -234,7 +233,7 @@ export async function listSponsorLeadCaptures(
   ];
   // Unknown, withdrawn, and another operator's lead expose no history.
   if (!(await first(db, `SELECT attempt.id ${source} LIMIT 1`, sourceBindings)))
-    throw new AppError(404, "LEAD_NOT_FOUND", "Current consenting lead not found.");
+    throw new AppError(404, "LEAD_NOT_FOUND", "Lead not found.");
   const name = "TRIM(COALESCE(operator.first_name,'') || ' ' || COALESCE(operator.last_name,''))";
   const search = query.q ? buildD1TextSearchFilter(query.q, [name]) : null;
   const { rows, total } = await queryPage<SponsorLeadCapture>(db, {

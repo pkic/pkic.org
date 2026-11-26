@@ -6,7 +6,7 @@ import { databaseIdSchema } from "./identifiers";
 export const sponsorLeadsExportRouteSchema = {
   ...requiresPermissions("agenda:leads_export"),
   tags: ["Events"],
-  summary: "Export consenting attendees captured by one sponsor",
+  summary: "Export the attendees one sponsor captured as leads",
   request: { params: eventSlugParamsSchema.extend({ sponsorId: databaseIdSchema }) },
   responses: {
     "200": { description: "Sponsor leads CSV", content: { "text/csv": { schema: z.string() } } },
@@ -36,11 +36,11 @@ export const sponsorLeadsRouteSchema = {
 export const sponsorLeadDetailRouteSchema = {
   ...requiresSession(),
   tags: ["Events"],
-  summary: "View one currently consenting sponsor lead within the caller's scope",
+  summary: "View one sponsor lead within the caller's scope",
   request: { params: eventSlugParamsSchema.extend({ sponsorId: databaseIdSchema, leadId: databaseIdSchema }) },
   responses: {
     ...ok("Current sponsor lead", sponsorLeadDetailSchema),
-    ...authErrors({ notFound: "Current consenting lead not found" }),
+    ...authErrors({ notFound: "Lead not found" }),
   },
 };
 const sponsorLeadRemovalParams = eventSlugParamsSchema.extend({
@@ -92,7 +92,7 @@ export const sponsorLeadCapturesRouteSchema = {
   },
   responses: {
     ...ok("Successful capture provenance without attendance implications", sponsorLeadCapturesSchema),
-    ...authErrors({ notFound: "Current consenting lead not found", badRequest: "Invalid page query" }),
+    ...authErrors({ notFound: "Lead not found", badRequest: "Invalid page query" }),
   },
 };
 export const sponsorLeadConfirmationRouteSchema = {
@@ -119,7 +119,7 @@ export const sponsorLeadNotePutRouteSchema = {
     ...ok("Saved lead note", sponsorLeadNoteResponseSchema),
     ...authErrors({
       badRequest: "Invalid note",
-      notFound: "Current consenting lead not found",
+      notFound: "Lead not found",
       conflict: "Lead changes are closed for this event",
     }),
   },

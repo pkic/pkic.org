@@ -23,7 +23,8 @@ function SponsorContactSharing({ initial, endpoint }: { initial: RegistrationSpo
     const confirmed = await confirmAction({
       title: "Withdraw sponsor contact sharing?",
       consequences: [
-        "Sponsors of this event no longer receive your contact details",
+        "Your contact details leave the attendee lists that sponsors of this event receive",
+        "A sponsor still gets them when you let it scan your badge",
         "Copies sponsors have already downloaded cannot be recalled",
       ],
       confirmLabel: "Withdraw sharing",
@@ -62,8 +63,9 @@ function SponsorContactSharing({ initial, endpoint }: { initial: RegistrationSpo
         />
       </div>
       <p class="pk-muted pk-small">
-        Withdrawing sharing stops future disclosure of your contact details to sponsors for this event. Copies sponsors
-        have already downloaded cannot be recalled.
+        Withdrawing sharing removes your contact details from the attendee lists that sponsors of this event receive. A
+        sponsor still gets them when you let it scan your badge. Copies sponsors have already downloaded cannot be
+        recalled.
       </p>
       {sharing.allowed && (
         <div class="pk-cluster">

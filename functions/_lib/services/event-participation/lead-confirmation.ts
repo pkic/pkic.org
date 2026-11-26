@@ -7,7 +7,6 @@ import { batchFirst } from "../../db/pagination";
 import { getEventBySlug } from "../events";
 import { registrationJobTitleSql, registrationOrganizationSql } from "../registrations/selected-identity";
 import { eventContactAccessSql } from "./evidence-retention";
-import { sponsorConsentSql } from "./sponsor-consent";
 import { sponsorLeadPermissionBindings, sponsorLeadPermissionSql } from "./lead-scope";
 import { activeLeadSponsorOfEventSql } from "../../auth/sponsor-organization-lead-access";
 
@@ -42,7 +41,7 @@ function prepareSponsorLeadConfirmation(
       AND attempt.action='lead' AND attempt.outcome='eligible' AND reg.status='registered'
       AND person.active=1 AND person.pii_redacted_at IS NULL AND person.merged_into_user_id IS NULL
       AND ${activeLeadSponsorOfEventSql("sponsor", "attempt.event_id", "read")}
-      AND ${sponsorConsentSql("reg")} AND ${eventContactAccessSql("attempt.event_id")}
+      AND ${eventContactAccessSql("attempt.event_id")}
       AND (${sponsorLeadPermissionSql("agenda:leads_capture", "sponsor.id")})`)
     .bind(
       eventSlug,

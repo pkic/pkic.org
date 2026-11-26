@@ -827,23 +827,23 @@ describe("sponsor live lead viewing through the mounted API", () => {
       listSponsorLeads(env.DB, eventId, sponsorId, restricted, sponsorLeadQuerySchema.parse({})),
     ).rejects.toMatchObject({ code: "SCOPE_REQUIRED" });
   });
-  it("excludes consent changes, inactive attendees and cancelled registrations on every refresh", async () => {
+  it("keeps leads after a portal sharing change and excludes inactive attendees and cancelled registrations", async () => {
     await env.DB.prepare(
       "UPDATE consent_acceptances SET term_version='old' WHERE user_id=(SELECT user_id FROM event_sponsor_leads ORDER BY observed_at LIMIT 1)",
     ).run();
     let result = sponsorLeadListSchema.parse(await (await request()).json());
-    expect(result.page.total).toBe(2);
+    expect(result.page.total).toBe(3);
     await env.DB.prepare(
       "UPDATE registrations SET status='cancelled' WHERE user_id=(SELECT user_id FROM event_sponsor_leads ORDER BY observed_at LIMIT 1 OFFSET 1)",
     ).run();
     result = sponsorLeadListSchema.parse(await (await request()).json());
-    expect(result.page.total).toBe(1);
+    expect(result.page.total).toBe(2);
     await env.DB.prepare(
       "UPDATE users SET active=0 WHERE id=(SELECT user_id FROM event_sponsor_leads ORDER BY observed_at LIMIT 1 OFFSET 2)",
     ).run();
     result = sponsorLeadListSchema.parse(await (await request()).json());
-    expect(result.leads).toEqual([]);
-    expect(result.page.total).toBe(0);
+    expect(result.leads).toHaveLength(1);
+    expect(result.page.total).toBe(1);
   });
   it("refuses foreign sponsors/events and inactive sponsorships even with explicit scope", async () => {
     await grant("agenda:leads_view", "event_sponsor", foreignSponsor);
@@ -860,7 +860,7 @@ describe("sponsor live lead viewing through the mounted API", () => {
     const discovery = sponsorLeadSponsorsSchema.parse(await (await request("/sponsors/leads")).json());
     expect(discovery.sponsors).toEqual([]);
   });
-  it("paginates capture history across operators and conceals it after consent withdrawal", async () => {
+  it("paginates capture history across operators and keeps it after portal sharing is withdrawn", async () => {
     const otherOperator = crypto.randomUUID();
     await env.DB.prepare("INSERT INTO users(id,email,normalized_email,first_name,last_name,active) VALUES(?,?,?,?,?,1)")
       .bind(otherOperator, "second@synthetic.test", "second@synthetic.test", "Jordan", "Scanner")
@@ -924,17 +924,18 @@ describe("sponsor live lead viewing through the mounted API", () => {
         .bind(lead!.user_id)
         .first<number>("COUNT(*)"),
     ).toBe(1);
-    expect((await request(path)).status).toBe(404);
-    expect((await request(path.replace(/\/captures$/, ""))).status).toBe(404);
+    // The person agreed in person when scanned; the portal choice governs only bulk attendee sharing.
+    expect((await request(path)).status).toBe(200);
+    expect((await request(path.replace(/\/captures$/, ""))).status).toBe(200);
     const email = await env.DB.prepare("SELECT email FROM users WHERE id=?").bind(lead!.user_id).first<string>("email");
     expect(
       sponsorLeadListSchema.parse(await (await request(undefined, `?q=${encodeURIComponent(email!)}`)).json()).page
         .total,
-    ).toBe(0);
+    ).toBe(1);
     await grant("agenda:leads_export");
     const csv = await request(`/sponsors/${sponsorId}/leads.csv`);
     expect(csv.status).toBe(200);
-    expect(await csv.text()).not.toContain(email!);
+    expect(await csv.text()).toContain(email!);
     expect(
       (await env.DB.prepare("SELECT COUNT(*) AS total FROM event_scan_attempts").first<{ total: number }>())?.total,
     ).toBe(2);

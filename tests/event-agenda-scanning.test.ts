@@ -447,11 +447,10 @@ describe("Event agenda scan evidence", () => {
       .bind(crypto.randomUUID(), registration!.id, eventId, userId, new Date().toISOString())
       .run();
   }
-  it("captures only consented sponsor-scoped leads without exposing attendee contact data", async () => {
+  it("captures a sponsor-scoped lead agreed in person without portal sharing or exposing contact data", async () => {
     const { sponsorshipId } = await sponsorFixture();
     const body = scanBody({ action: "lead", sponsorId: sponsorshipId, consentConfirmed: true, occurrenceId: null });
-    expect(await (await scan(body)).json()).toMatchObject({ outcome: "warning", recorded: true });
-    await leadConsent();
+    expect(await (await scan(body)).json()).toMatchObject({ outcome: "eligible", reason: "eligible", recorded: true });
     const accepted = scanBody({ action: "lead", sponsorId: sponsorshipId, consentConfirmed: true, occurrenceId: null });
     const init = {
       method: "POST",
@@ -476,7 +475,7 @@ describe("Event agenda scan evidence", () => {
       ).status,
     ).toBe(403);
   });
-  it("records sponsor capture context for refused and successful scans and preserves unavailable-history attempts", async () => {
+  it("records sponsor capture context for each lead scan and preserves unavailable-history attempts", async () => {
     const { sponsorshipId } = await sponsorFixture();
     const body = scanBody({
       action: "lead",
@@ -485,7 +484,7 @@ describe("Event agenda scan evidence", () => {
       occurrenceId: null,
       capturePublicationRevision: 0,
     });
-    expect(await (await scan(body)).json()).toMatchObject({ outcome: "warning", recorded: true });
+    expect(await (await scan(body)).json()).toMatchObject({ outcome: "eligible", recorded: true });
     expect(
       await env.DB.prepare(
         "SELECT capture_time_zone,capture_publication_revision,capture_context_source FROM event_scan_attempts WHERE operation_id=?",
@@ -497,7 +496,6 @@ describe("Event agenda scan evidence", () => {
       capture_publication_revision: 0,
       capture_context_source: "published_manifest",
     });
-    await leadConsent();
     const eligible = scanBody({
       action: "lead",
       sponsorId: sponsorshipId,
@@ -521,33 +519,27 @@ describe("Event agenda scan evidence", () => {
     expect(await env.DB.prepare("SELECT COUNT(*) AS total FROM event_sponsor_leads").first()).toEqual({ total: 1 });
     expect(await env.DB.prepare("SELECT COUNT(*) AS total FROM event_scan_attempts").first()).toEqual({ total: 3 });
   });
-  it("refuses historical sponsor consent after the active term version changes", async () => {
+  it("captures a lead agreed in person after the attendee withdrew portal sponsor sharing", async () => {
     const { sponsorshipId } = await sponsorFixture();
     await leadConsent();
-    await env.DB.prepare("UPDATE event_terms SET active=0 WHERE event_id=? AND term_key='sponsor-data-sharing'")
-      .bind(eventId)
-      .run();
-    await env.DB.prepare(
-      "INSERT INTO event_terms(id,event_id,audience_type,term_key,version,created_at) VALUES(?,?,'attendee','sponsor-data-sharing','2',?)",
-    )
-      .bind(crypto.randomUUID(), eventId, new Date().toISOString())
+    await env.DB.prepare("UPDATE consent_acceptances SET withdrawn_at=? WHERE event_id=? AND user_id=?")
+      .bind(new Date().toISOString(), eventId, userId)
       .run();
     const result = await (
       await scan(scanBody({ action: "lead", sponsorId: sponsorshipId, consentConfirmed: true, occurrenceId: null }))
     ).json();
     expect(result).toMatchObject({
-      outcome: "warning",
-      reason: "consent_required",
+      outcome: "eligible",
+      reason: "eligible",
       recorded: true,
       attendanceRecorded: false,
     });
     expect(
       (await env.DB.prepare("SELECT COUNT(*) AS total FROM event_sponsor_leads").first<{ total: number }>())?.total,
-    ).toBe(0);
+    ).toBe(1);
   });
   it("does not grant sponsor lead capture implicitly to global administrators", async () => {
     const { sponsorshipId, grantId } = await sponsorFixture();
-    await leadConsent();
     await env.DB.prepare("UPDATE permission_grants SET revoked_at=? WHERE id=?")
       .bind(new Date().toISOString(), grantId)
       .run();
@@ -566,7 +558,6 @@ describe("Event agenda scan evidence", () => {
   });
   it("rejects expired sponsor grants and a sponsorship belonging to another event", async () => {
     const { sponsorshipId, grantId } = await sponsorFixture();
-    await leadConsent();
     await env.DB.prepare("UPDATE permission_grants SET expires_at='2000-01-01T00:00:00.000Z' WHERE id=?")
       .bind(grantId)
       .run();

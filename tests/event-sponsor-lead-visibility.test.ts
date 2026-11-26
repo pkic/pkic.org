@@ -271,7 +271,8 @@ describe("sponsor lead event discovery", () => {
     await env.DB.prepare("UPDATE consent_acceptances SET withdrawn_at=? WHERE registration_id=?")
       .bind(now, registrationId)
       .run();
-    expect((await request(confirmationPath, token)).status).toBe(404);
+    // The person agreed in person when scanned, so withdrawing portal sponsor sharing leaves the lead in place.
+    expect((await request(confirmationPath, token)).status).toBe(200);
     await env.DB.prepare(
       "DELETE FROM permission_grants WHERE user_id=? AND context_id=? AND permission='agenda:leads_capture'",
     )
