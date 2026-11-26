@@ -9,7 +9,6 @@ import type { DatabaseLike, D1StatementResult } from "../../types";
 import { AppError } from "../../errors";
 import { nowIso } from "../../utils/time";
 import { eventContactAccessSql } from "./evidence-retention";
-import { sponsorConsentSql } from "./sponsor-consent";
 import {
   sponsorLeadPermissionSql,
   sponsorLeadPermissionBindings,
@@ -96,7 +95,11 @@ function decodeLeadCaptureAttempt(result: D1StatementResult, hash: string) {
     throw new AppError(409, "SCAN_OPERATION_REUSED", "Use a new operation ID for a different scan.");
   return attempt;
 }
-/** Explicit sponsor grants and consent are rechecked in the same batch as the immutable attempt. */
+/**
+ * Explicit sponsor grants are rechecked in the same batch as the immutable attempt. The operator asks each person
+ * for permission before scanning and confirms that in the request, so the portal's sponsor-sharing choice, which
+ * governs bulk attendee lists, does not gate a lead the person agreed to in person.
+ */
 export async function captureSponsorLead(
   sourceDb: DatabaseLike,
   eventId: string,
@@ -143,14 +146,13 @@ export async function captureSponsorLead(
   }
   const capture = basis.capture();
   const permission = sponsorLeadPermissionSql("agenda:leads_capture");
-  const consent = sponsorConsentSql("reg");
   const id = crypto.randomUUID();
   const results = await db.batch([
     db
       .prepare(
         `INSERT INTO event_scan_attempts (id,event_id,sponsor_id,badge_id,user_id,operator_user_id,device_id,operation_id,request_hash,outcome,reason,action,observed_at,created_at,capture_day_date,capture_time_zone,capture_publication_revision,capture_context_source)
-   SELECT ?,b.event_id,?,b.id,b.user_id,?,?,?,?,CASE WHEN NOT (${capture.sql}) THEN 'unverified' WHEN b.revoked_at IS NOT NULL OR (b.expires_at IS NOT NULL AND b.expires_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now')) OR COALESCE(reg.status,'')<>'registered' THEN 'denied' WHEN NOT (${eventContactAccessSql("b.event_id")}) THEN 'denied' WHEN ${consent} THEN 'eligible' ELSE 'warning' END,
-   CASE WHEN NOT (${capture.sql}) THEN 'verification_required' WHEN b.revoked_at IS NOT NULL THEN 'revoked_badge' WHEN b.expires_at IS NOT NULL AND b.expires_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now') THEN 'expired_badge' WHEN COALESCE(reg.status,'')<>'registered' THEN 'missing_registration' WHEN NOT (${eventContactAccessSql("b.event_id")}) THEN 'contact_retention_expired' WHEN ${consent} THEN 'eligible' ELSE 'consent_required' END,'lead',?,?,?,?,?,?
+   SELECT ?,b.event_id,?,b.id,b.user_id,?,?,?,?,CASE WHEN NOT (${capture.sql}) THEN 'unverified' WHEN b.revoked_at IS NOT NULL OR (b.expires_at IS NOT NULL AND b.expires_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now')) OR COALESCE(reg.status,'')<>'registered' THEN 'denied' WHEN NOT (${eventContactAccessSql("b.event_id")}) THEN 'denied' ELSE 'eligible' END,
+   CASE WHEN NOT (${capture.sql}) THEN 'verification_required' WHEN b.revoked_at IS NOT NULL THEN 'revoked_badge' WHEN b.expires_at IS NOT NULL AND b.expires_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now') THEN 'expired_badge' WHEN COALESCE(reg.status,'')<>'registered' THEN 'missing_registration' WHEN NOT (${eventContactAccessSql("b.event_id")}) THEN 'contact_retention_expired' ELSE 'eligible' END,'lead',?,?,?,?,?,?
    FROM event_badge_credentials b LEFT JOIN registrations reg ON reg.event_id=b.event_id AND reg.user_id=b.user_id
    WHERE b.id=? AND b.event_id=? AND (${permission}) AND EXISTS(SELECT 1 FROM sponsorships sp WHERE sp.id=? AND ${activeLeadSponsorOfEventSql("sp", "b.event_id")})
    ON CONFLICT(operation_id) DO NOTHING`,

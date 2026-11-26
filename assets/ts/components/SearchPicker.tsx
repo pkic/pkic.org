@@ -91,9 +91,18 @@ export function SearchPicker<Data, Row>({
    * The popup is `position: fixed` (see `ui/Menu.css`) so an ancestor with
    * `overflow: auto` cannot clip it, and the shared placement policy keeps it
    * in the viewport: below the field, flipped above it when there is no room
-   * below, and clamped either way. A picker low on a page stays usable.
+   * below, and clamped either way. A picker low on a page stays usable. When
+   * a phone keyboard leaves room on neither side, the matches scroll on the
+   * roomier side instead of covering the field being typed in.
    */
-  usePopupPlacement({ open: showResults, anchorRef, popupRef, revision: results.length, topLayer: true });
+  usePopupPlacement({
+    open: showResults,
+    anchorRef,
+    popupRef,
+    revision: results.length,
+    topLayer: true,
+    keepAnchorVisible: true,
+  });
 
   function cancelPendingSearch(): void {
     if (timerRef.current !== null) {

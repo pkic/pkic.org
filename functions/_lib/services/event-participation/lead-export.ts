@@ -4,7 +4,6 @@ import { encodeBoundedCsv } from "../../csv";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../db/types";
 import { assertEventContactAccess, eventContactAccessSql } from "./evidence-retention";
-import { sponsorConsentSql } from "./sponsor-consent";
 import { sponsorLeadPermissionBindings, sponsorLeadPermissionSql } from "./lead-scope";
 import {
   activeLeadSponsorOfEventSql,
@@ -41,7 +40,6 @@ export async function exportSponsorLeads(db: DatabaseLike, eventId: string, spon
     JOIN sponsorships sponsor ON sponsor.id=lead.sponsor_id
     WHERE lead.event_id=? AND lead.sponsor_id=? AND reg.status='registered' AND u.active=1
     AND ${activeLeadSponsorOfEventSql("sponsor", "lead.event_id", "read")}
-    AND ${sponsorConsentSql("reg")}
     AND (${SPONSOR_LEAD_EXPORT_PERMISSION_SQL}) AND ${eventContactAccessSql("lead.event_id")}
     ORDER BY lead.observed_at,lead.user_id LIMIT 100001`,
     [eventId, sponsorId, ...scopeValues],

@@ -26,7 +26,7 @@ export function SponsorLeadDetail({
   timeZone: ClockZone;
 }) {
   const { live, epoch } = useLiveBrowserSession();
-  if (!live) return <p role="status">Reconnect to view current consenting contacts.</p>;
+  if (!live) return <p role="status">Reconnect to view leads.</p>;
   return (
     // Each lead keeps its own note state, so a note saved on one lead never carries to the next.
     <LiveSponsorLeadDetail

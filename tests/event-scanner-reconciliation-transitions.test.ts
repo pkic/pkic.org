@@ -294,7 +294,7 @@ describe("Known offline scans reconciled after server state changes", () => {
   });
 
   it.each(["withdrawal", "replacement"] as const)(
-    "rechecks sharing %s before the first queued sponsor upload",
+    "keeps a queued lead agreed in person after a sharing %s before its upload",
     async (change) => {
       const { sponsorId, termId, consentId } = await sponsorWithConsent();
       const captured = await capture({
@@ -315,11 +315,11 @@ describe("Known offline scans reconciled after server state changes", () => {
           .run();
       }
       const receipt = await reconcile(captured, {
-        outcome: "warning",
-        reason: "consent_required",
+        outcome: "eligible",
+        reason: "eligible",
         attendanceRecorded: false,
       });
-      expect(await env.DB.prepare("SELECT COUNT(*) AS total FROM event_sponsor_leads").first()).toEqual({ total: 0 });
+      expect(await env.DB.prepare("SELECT COUNT(*) AS total FROM event_sponsor_leads").first()).toEqual({ total: 1 });
       expect(JSON.stringify(receipt)).not.toContain("example.test");
       expect(JSON.stringify(receipt)).not.toContain(fixture.userId);
       expect(JSON.stringify(receipt)).not.toContain(fixture.badgeId);

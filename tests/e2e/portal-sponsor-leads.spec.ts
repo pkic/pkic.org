@@ -56,6 +56,7 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
             {
               id: leadId,
               operatorName: "Demo operator",
+              note: null,
               observedAt: "2026-12-01T09:30:00.000Z",
               receivedAt: "2026-12-01T09:32:00.000Z",
             },
@@ -72,6 +73,7 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
               title: "Security engineer",
               capturedAt: "2026-12-01T09:30:00.000Z",
               operatorName: "Demo operator",
+              note: null,
             },
             sponsorName: "Example sponsor",
           })
@@ -88,6 +90,7 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
                     title: "Security engineer",
                     capturedAt: "2026-12-01T09:30:00.000Z",
                     operatorName: "Demo operator",
+                    note: null,
                   },
                 ],
                 page: pageInfo,
@@ -125,7 +128,7 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
   await expect(page.locator(".pk-event-hero").getByRole("heading")).toHaveText(event.name);
   await expect(page.getByRole("navigation", { name: "Event", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Open leads for Example sponsor" })).toHaveCount(0);
-  const contacts = page.getByRole("region", { name: "Consenting leads", exact: true });
+  const contacts = page.getByRole("region", { name: "Sponsor leads", exact: true });
   await expect(contacts.getByText("Synthetic attendee", { exact: true })).toBeVisible();
   await expect(contacts.getByText("Selected organization", { exact: true })).toBeVisible();
   await contacts.getByRole("button", { name: "Actions for Synthetic attendee" }).click();
@@ -152,7 +155,7 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
   await sponsorPicker.click();
   await page.getByRole("option", { name: "Second sponsor", exact: true }).click();
   await expect(sponsorPicker).toHaveValue("Second sponsor");
-  await expect(page.getByRole("region", { name: "Consenting leads", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Sponsor leads", exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Event app", exact: true })).toBeVisible();
   await page.screenshot({ path: info.outputPath("sponsor-lead-switcher-phone.png") });
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -162,8 +165,8 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
   multipleSponsors = false;
   await page.reload();
   await expect(page.getByRole("combobox", { name: "Sponsor", exact: true })).toHaveCount(0);
-  await page.getByRole("searchbox", { name: "Search consenting leads", exact: true }).fill("Synthetic");
-  await page.getByRole("searchbox", { name: "Search consenting leads", exact: true }).press("Enter");
+  await page.getByRole("searchbox", { name: "Search sponsor leads", exact: true }).fill("Synthetic");
+  await page.getByRole("searchbox", { name: "Search sponsor leads", exact: true }).press("Enter");
   await expect
     .poll(() =>
       requests.some(
@@ -187,7 +190,7 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
     window.dispatchEvent(new Event("offline"));
   });
   await expect(page.getByText("Synthetic attendee", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("Reconnect to view current consenting contacts.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Reconnect to view leads.", { exact: true })).toBeVisible();
   await page.screenshot({ path: `${artifacts}/sponsor-live-leads-offline-phone.png`, fullPage: true });
   await page.evaluate(() => {
     Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true });

@@ -269,13 +269,13 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
       name: `${fixture.firstName} ${fixture.lastName}`,
       organization: fixture.organization,
     });
-    const contacts = page.getByRole("region", { name: "Consenting leads", exact: true });
+    const contacts = page.getByRole("region", { name: "Sponsor leads", exact: true });
     await expect(contacts.getByText(fixture.email, { exact: true })).toBeVisible();
     const searched = page.waitForResponse((response) => {
       const url = new URL(response.url());
       return url.pathname === leadsPath && url.searchParams.get("q") === fixture.email;
     });
-    const search = page.getByRole("searchbox", { name: "Search consenting leads", exact: true });
+    const search = page.getByRole("searchbox", { name: "Search sponsor leads", exact: true });
     await search.fill(fixture.email);
     await search.press("Enter");
     const searchResponse = await searched;
@@ -302,7 +302,7 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
     const csvResponse = page.waitForResponse((response) => new URL(response.url()).pathname === csvPath);
     const downloading = page.waitForEvent("download");
     await page.getByRole("button", { name: "Sponsor actions", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Export consenting leads", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Export leads", exact: true }).click();
     const [csv, download] = await Promise.all([csvResponse, downloading]);
     expect(csv.status()).toBe(200);
     expect(csv.headers()["content-type"]).toContain("text/csv");
@@ -369,24 +369,27 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
     await attendee.reload();
     await expect(sharing.getByText("Sharing withdrawn", { exact: true })).toBeVisible();
 
+    // The attendee agreed in person when scanned; portal sharing governs only bulk attendee lists.
     await openSponsor();
-    await expect(page.getByText(fixture.email, { exact: true })).toHaveCount(0);
-    const concealed = await page.request.get(leadsPath);
-    expect(concealed.status()).toBe(200);
-    expect(sponsorLeadListSchema.parse(await concealed.json()).leads).toHaveLength(0);
-    const emptyCsv = await page.request.get(csvPath);
-    expect(emptyCsv.status()).toBe(200);
-    expect(await emptyCsv.text()).not.toContain(fixture.email);
-    expect((await page.request.get(capturesPath)).status()).toBe(404);
+    await expect(
+      page.getByRole("region", { name: "Sponsor leads", exact: true }).getByText(fixture.email, { exact: true }),
+    ).toBeVisible();
+    const retainedLeads = await page.request.get(leadsPath);
+    expect(retainedLeads.status()).toBe(200);
+    expect(sponsorLeadListSchema.parse(await retainedLeads.json()).leads).toHaveLength(1);
+    const retainedCsv = await page.request.get(csvPath);
+    expect(retainedCsv.status()).toBe(200);
+    expect(await retainedCsv.text()).toContain(fixture.email);
+    expect((await page.request.get(capturesPath)).status()).toBe(200);
     await captureSponsorViews(page, info, "withdrawn-live");
     await page.getByRole("button", { name: "Scan leads", exact: true }).click();
-    const noConsent = await captureSponsorBadge(
+    const inPerson = await captureSponsorBadge(
       page,
       fixture.consenting.badgeId,
       fixture.sponsorId,
       fixture.operator.userId,
     );
-    expect(noConsent.receipt).toMatchObject({ reason: "consent_required", outcome: "warning" });
+    expect(inPerson.receipt).toMatchObject({ reason: "eligible", outcome: "eligible" });
     const retained = await scannerStorage(page);
     for (const scan of [first, second, denied]) {
       expect(retained.history.find((row) => row.scan.operationId === scan.request.operationId)?.receipt).toEqual(

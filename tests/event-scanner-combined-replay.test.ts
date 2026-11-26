@@ -89,7 +89,7 @@ async function upload(record: OfflineScanRecord, token: string) {
 describe("Combined enrolled attendance and sponsor lead reconciliation", () => {
   beforeEach(fixture.setup);
 
-  it("reconciles two operators' original captures and repeated receipts without spending the last reserved place or bypassing consent and sponsor scope", async () => {
+  it("reconciles two operators' original captures and repeated receipts without spending the last reserved place or bypassing sponsor scope", async () => {
     const now = new Date().toISOString();
     const sessionStart = new Date(Date.now() + 86400000).toISOString();
     const roomId = crypto.randomUUID(),
@@ -323,11 +323,12 @@ describe("Combined enrolled attendance and sponsor lead reconciliation", () => {
     });
     expect(withdrawn.status, await withdrawn.clone().text()).toBe(200);
     expect(registrationManageUpdateResponseSchema.parse(await withdrawn.json()).sponsorSharing.allowed).toBe(false);
-    const refusedLead = await upload(consentChanged, secondToken);
-    expect(refusedLead).toMatchObject({
+    // The operator asked in person, so withdrawing portal sponsor sharing does not refuse the queued lead.
+    const lateLead = await upload(consentChanged, secondToken);
+    expect(lateLead).toMatchObject({
       recorded: true,
-      outcome: "warning",
-      reason: "consent_required",
+      outcome: "eligible",
+      reason: "eligible",
       attendanceRecorded: false,
     });
     await env.DB.prepare("UPDATE event_badge_credentials SET revoked_at=? WHERE event_id=? AND user_id=?")
@@ -350,7 +351,7 @@ describe("Combined enrolled attendance and sponsor lead reconciliation", () => {
     for (let replay = 0; replay < 2; replay++) {
       for (const [index, entry] of originals.entries())
         expect(await upload(entry, tokens[index]!)).toEqual(receipts[index]);
-      expect(await upload(consentChanged, secondToken)).toEqual(refusedLead);
+      expect(await upload(consentChanged, secondToken)).toEqual(lateLead);
       expect(await upload(badgeChanged, secondToken)).toEqual(refusedAttendance);
       expect(await ledger()).toEqual(finalLedger);
       expect(await allocation()).toEqual(originalAllocation);
@@ -358,13 +359,13 @@ describe("Combined enrolled attendance and sponsor lead reconciliation", () => {
     expect(
       [delayedAttendance, delayedLead, consentChanged, badgeChanged].map((entry) => JSON.stringify(entry)),
     ).toEqual(retained);
-    const hidden = await callApi(env, leadPath, { headers: headers(secondToken) });
-    expect(hidden.status).toBe(200);
-    expect(sponsorLeadListSchema.parse(await hidden.json())).toMatchObject({ leads: [], page: { total: 0 } });
-    const hiddenHistory = await callApi(env, `${leadPath}/${lead.leads[0]!.id}/captures`, {
+    const retainedLeads = await callApi(env, leadPath, { headers: headers(secondToken) });
+    expect(retainedLeads.status).toBe(200);
+    expect(sponsorLeadListSchema.parse(await retainedLeads.json())).toMatchObject({ page: { total: 1 } });
+    const retainedHistory = await callApi(env, `${leadPath}/${lead.leads[0]!.id}/captures`, {
       headers: headers(secondToken),
     });
-    expect(hiddenHistory.status).toBe(404);
+    expect(retainedHistory.status).toBe(200);
     const summary = await callApi(env, `${base}/attendance/summary`, { headers: headers(fixture.token) });
     expect(summary.status).toBe(200);
     expect(attendanceSummarySchema.parse(await summary.json())).toMatchObject({

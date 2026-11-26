@@ -3,7 +3,6 @@ import { act } from "preact/test-utils";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { FastScannerView } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/FastScannerView";
 import { BadgePdfActions } from "../../assets/ts/member-flows/portal/sections/events/detail/badges/BadgePdfActions";
-import { scanFeedbackDetail } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scan-stream";
 import type { ScannerStatus } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/ScannerStatus";
 
 let host: HTMLDivElement;
@@ -92,7 +91,7 @@ it("offers Open PDF when sharing is unavailable and after a share failure", asyn
 
 it("says what each recent result was when its mark is tapped, since phones have no hover", async () => {
   await show({ key: "a", tone: "eligible", title: "Lead captured" });
-  await show({ key: "b", tone: "warning", title: "Consent required", detail: "No lead saved." });
+  await show({ key: "b", tone: "warning", title: "Registration canceled", detail: "Send them to an organizer." });
   await show(undefined);
   const marks = [...host.querySelectorAll<HTMLButtonElement>(".pk-fast-scanner__trail button")];
   expect(marks).toHaveLength(2);
@@ -100,17 +99,11 @@ it("says what each recent result was when its mark is tapped, since phones have 
 
   await act(() => marks[1]!.click());
   expect(marks[1]!.getAttribute("aria-pressed")).toBe("true");
-  expect(host.querySelector(".pk-fast-scanner__trail-detail")?.textContent).toBe("Consent required: No lead saved.");
+  expect(host.querySelector(".pk-fast-scanner__trail-detail")?.textContent).toBe(
+    "Registration canceled: Send them to an organizer.",
+  );
 
   // A second tap puts the detail away again.
   await act(() => marks[1]!.click());
   expect(host.querySelector(".pk-fast-scanner__trail-detail")).toBeNull();
-});
-
-it("explains that a lead scan without consent saved nothing", () => {
-  const scan = { reason: "consent_required" } as Parameters<typeof scanFeedbackDetail>[0];
-  expect(scanFeedbackDetail(scan, "lead")).toBe(
-    "No lead saved. This attendee did not agree to share their details with sponsors when they registered.",
-  );
-  expect(scanFeedbackDetail(scan, "check")).toBeUndefined();
 });

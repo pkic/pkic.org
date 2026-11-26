@@ -73,7 +73,7 @@ describe("Live sponsor leads", () => {
   it("uses the shared list controls without offering empty row actions to a view-only reader", async () => {
     const { host } = await mount(true, false, false, false);
     expect(host.querySelector('input[placeholder="Search contacts…"]')).not.toBeNull();
-    expect(host.querySelector('button[title="Refresh consenting leads"]')).not.toBeNull();
+    expect(host.querySelector('button[title="Refresh sponsor leads"]')).not.toBeNull();
     expect(host.querySelector(".pk-panel__header")).toBeNull();
     expect(host.querySelector('[aria-label="Actions for Private person"]')).toBeNull();
   });
@@ -123,7 +123,7 @@ describe("Live sponsor leads", () => {
       return option!;
     });
     await act(() => second.click());
-    await vi.waitFor(() => expect(host.textContent).toContain("Consenting leads"));
+    await vi.waitFor(() => expect(host.textContent).toContain("Sponsor leads"));
     expect(selector.value).toBe("Second sponsor");
     expect(window.location.hash).toContain(`leadSponsor=${secondId}`);
     await act(() => render(null, host));
@@ -205,7 +205,7 @@ describe("Live sponsor leads", () => {
     const second = await mount(false, false, true);
     expect(second.requests.some((url) => url.includes(`/sponsors/${id}/leads`))).toBe(false);
     await openSponsorActions(second.host);
-    expect(second.host.querySelector('a[href$="leads.csv"]')?.textContent).toBe("Export consenting leads");
+    expect(second.host.querySelector('a[href$="leads.csv"]')?.textContent).toBe("Export leads");
     expect(second.host.textContent).not.toContain("Close sponsor");
   });
   it("fetches current contacts without caching and clears them when offline", async () => {
@@ -241,11 +241,11 @@ describe("Live sponsor leads", () => {
             page,
           }),
     );
-    const refresh = host.querySelector<HTMLButtonElement>('button[title="Refresh consenting leads"]')!;
+    const refresh = host.querySelector<HTMLButtonElement>('button[title="Refresh sponsor leads"]')!;
     await act(() => refresh.click());
     await settle();
     expect(host.textContent).not.toContain("Private person");
-    expect(host.textContent).toContain("No currently consenting leads");
+    expect(host.textContent).toContain("No leads match");
     expect(stored).not.toHaveBeenCalled();
     vi.restoreAllMocks();
   });

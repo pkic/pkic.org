@@ -167,7 +167,14 @@ export function ServerSearchSelect<Item, Response>({
   }, [optionCount]);
 
   /** One placement policy, and one lifetime for it — see `ui/popup-placement.ts`. */
-  usePopupPlacement({ open, anchorRef, popupRef, topLayer: true, revision: `${optionCount}:${collection.loading}` });
+  usePopupPlacement({
+    open,
+    anchorRef,
+    popupRef,
+    topLayer: true,
+    revision: `${optionCount}:${collection.loading}`,
+    keepAnchorVisible: true,
+  });
 
   // The highlight can sit past the listbox's scroll window; focus never
   // leaves the input, so the option is brought into view directly.

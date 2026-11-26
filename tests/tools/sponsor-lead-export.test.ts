@@ -80,29 +80,13 @@ describe("sponsor lead export", () => {
       sqlite.close();
     }
   });
-  it("excludes withdrawn consent, other audiences and cancelled registrations", async () => {
+  it("exports a lead without portal sponsor sharing and excludes cancelled registrations", async () => {
     const { sqlite, db } = fixture();
     try {
-      sqlite.exec("UPDATE consent_acceptances SET audience_type='speaker'");
-      expect(await exportSponsorLeads(db, "event", "sponsor", "operator")).not.toContain("attendee@example.test");
-      sqlite.exec(
-        "UPDATE consent_acceptances SET audience_type='attendee';UPDATE registrations SET status='cancelled'",
-      );
-      expect(await exportSponsorLeads(db, "event", "sponsor", "operator")).not.toContain("attendee@example.test");
-      sqlite.exec("UPDATE registrations SET status='registered';DELETE FROM consent_acceptances");
-      expect(await exportSponsorLeads(db, "event", "sponsor", "operator")).not.toContain("attendee@example.test");
-    } finally {
-      sqlite.close();
-    }
-  });
-  it("requires acceptance of the current active attendee consent version", async () => {
-    const { sqlite, db } = fixture();
-    try {
-      sqlite.exec("UPDATE event_terms SET version='2'");
-      expect(await exportSponsorLeads(db, "event", "sponsor", "operator")).not.toContain("attendee@example.test");
-      sqlite.exec("UPDATE consent_acceptances SET term_version='2'");
+      // The person agreed in person when scanned; the portal choice governs only bulk attendee sharing.
+      sqlite.exec("DELETE FROM consent_acceptances");
       expect(await exportSponsorLeads(db, "event", "sponsor", "operator")).toContain("attendee@example.test");
-      sqlite.exec("UPDATE event_terms SET active=0");
+      sqlite.exec("UPDATE registrations SET status='cancelled'");
       expect(await exportSponsorLeads(db, "event", "sponsor", "operator")).not.toContain("attendee@example.test");
     } finally {
       sqlite.close();
