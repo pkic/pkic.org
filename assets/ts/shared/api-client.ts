@@ -60,13 +60,15 @@ async function parseJson(response: Response, signal?: AbortSignal): Promise<unkn
 
 /** Pauses before repeating a read the server refused while it changed nothing; jitter spreads a crowd's repeats. */
 const READ_REPEAT_DELAYS_MS = [600, 1800] as const;
+const REQUEST_TIMEOUT_MS = 30_000;
+const MIN_REPEAT_TIME_MS = 5_000;
 
 function waitBeforeRepeat(delayMs: number, signal?: AbortSignal | null): Promise<void> {
   const abortReason = () =>
     signal?.reason instanceof Error ? signal.reason : new DOMException("The request was aborted.", "AbortError");
   return new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(abortReason());
-    const timer = setTimeout(done, delayMs * (1 + Math.random() * 0.5));
+    const timer = setTimeout(done, delayMs);
     function done() {
       signal?.removeEventListener("abort", abort);
       resolve();
@@ -150,9 +152,14 @@ async function sendJsonRequest<Schema extends z.ZodType>(
   if (!headers.has("content-type") && typeof requestInit.body === "string") {
     headers.set("content-type", "application/json");
   }
+  const method = (requestInit.method ?? "GET").toUpperCase();
+  // A read and its repeats share one deadline, so repeating never extends how long a read can take.
+  const readDeadline = method === "GET" ? Date.now() + REQUEST_TIMEOUT_MS : null;
   const send = async () => {
     try {
-      const timeout = AbortSignal.timeout(30_000);
+      const timeout = AbortSignal.timeout(
+        readDeadline === null ? REQUEST_TIMEOUT_MS : Math.max(0, readDeadline - Date.now()),
+      );
       const signal = requestInit.signal ? AbortSignal.any([requestInit.signal, timeout]) : timeout;
       return await fetch(url, { credentials: "same-origin", ...requestInit, headers, signal });
     } catch (error) {
@@ -191,10 +198,13 @@ async function sendJsonRequest<Schema extends z.ZodType>(
     const failure = response.status === 503 ? apiErrorPayloadSchema.safeParse(body) : null;
     if (
       !failure?.success ||
-      !isRepeatableDependencyFailure(requestInit.method ?? "GET", failure.data.error.code, failure.data.error.details)
+      !isRepeatableDependencyFailure(method, failure.data.error.code, failure.data.error.details)
     )
       break;
-    await waitBeforeRepeat(delayMs, requestInit.signal);
+    const waitMs = delayMs * (1 + Math.random() * 0.5);
+    // Report the overload rather than start a repeat the remaining time cannot complete.
+    if (readDeadline === null || readDeadline - Date.now() < waitMs + MIN_REPEAT_TIME_MS) break;
+    await waitBeforeRepeat(waitMs, requestInit.signal);
     response = await send();
     onHeaders?.(response.headers);
     body = await readBody(response);

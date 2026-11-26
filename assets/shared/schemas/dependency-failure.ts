@@ -13,9 +13,12 @@ export const dependencyFailureSchema = z.object({
   outcome: dependencyFailureOutcomeSchema,
 });
 
-/** A refusal a client may repeat automatically: a read that changed nothing before the dependency failed. */
+/**
+ * A refusal a client may repeat automatically: a GET that changed nothing before the dependency failed.
+ * HEAD is excluded because its refusal has no body to carry the outcome.
+ */
 export function isRepeatableDependencyFailure(method: string, code: string, details: unknown): boolean {
-  if (!["GET", "HEAD"].includes(method.toUpperCase()) || code !== DEPENDENCY_ERROR_CODE) return false;
+  if (method.toUpperCase() !== "GET" || code !== DEPENDENCY_ERROR_CODE) return false;
   const parsed = dependencyFailureSchema.safeParse(details);
   return parsed.success && parsed.data.outcome === "unchanged";
 }

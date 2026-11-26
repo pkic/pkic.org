@@ -381,6 +381,29 @@ describe("shared API client", () => {
       expect(fetcher).toHaveBeenCalledTimes(2);
     });
 
+    it("keeps one deadline across a read and its repeats", async () => {
+      const fetcher = vi.fn(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 27_000));
+        return overloaded("unchanged");
+      });
+      vi.stubGlobal("fetch", fetcher);
+      const started = Date.now();
+      const result = requestJson("/api/v1/example", successResponseSchema).catch((error: unknown) => error);
+      await vi.runAllTimersAsync();
+      expect(await result).toMatchObject({ status: 503, code: "DEPENDENCY_UNAVAILABLE" });
+      expect(fetcher).toHaveBeenCalledOnce();
+      expect(Date.now() - started).toBeLessThanOrEqual(30_000);
+    });
+
+    it("never repeats a HEAD request", async () => {
+      const fetcher = vi.fn(async () => overloaded("unchanged"));
+      vi.stubGlobal("fetch", fetcher);
+      await expect(requestJson("/api/v1/example", successResponseSchema, { method: "HEAD" })).rejects.toMatchObject({
+        status: 503,
+      });
+      expect(fetcher).toHaveBeenCalledOnce();
+    });
+
     it("stops waiting when the caller cancels", async () => {
       const fetcher = vi.fn(async () => overloaded("unchanged"));
       vi.stubGlobal("fetch", fetcher);
