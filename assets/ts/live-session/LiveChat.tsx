@@ -269,6 +269,21 @@ export function liveChatDividers(
 }
 
 /**
+ * What to call the session the location went on to, when nobody wrote in it yet: the feed ends with its line,
+ * so a reader sees that the messages above belong to the part before. Null while the latest message is from
+ * the session on, and where the view does not know which one that is.
+ */
+export function liveChatSessionStart(
+  messages: readonly LiveChatMessage[],
+  sessions: readonly { occurrenceId: string; title: string }[],
+  sessionOn: string | null | undefined,
+): string | null {
+  const latest = messages.at(-1);
+  if (sessionOn === undefined || !latest || (latest.occurrenceId ?? null) === sessionOn) return null;
+  return (sessionOn && sessions.find((session) => session.occurrenceId === sessionOn)?.title) || BETWEEN_SESSIONS;
+}
+
+/**
  * The live chat for attendees and the control room: dense rows rendered a
  * window at a time, a bounded history that pages back from the room on
  * request, and a composer. One parent owns the room connection.
@@ -281,9 +296,15 @@ export function LiveChat({
   channel = "attendee",
   visible = true,
   note,
+  sessionOn,
 }: {
   /** The composer's status line while nothing else needs saying. */
   note?: string;
+  /**
+   * The session the location is on now, null between sessions: the feed marks where it starts, and an earlier
+   * session's message is not turned into a question here. Undefined where the view does not know it.
+   */
+  sessionOn?: string | null;
   state: LiveChatView;
   disabled: boolean;
   send: (message: LiveRoomClientMessage) => boolean;
@@ -296,8 +317,11 @@ export function LiveChat({
   const viewer = useMemo(() => ({ ...state.viewer, participation: restriction }), [state.viewer, restriction]);
   const messages = liveChatChannel(state, channel);
   const dividers = useMemo(() => liveChatDividers(messages, state.scope.sessions), [messages, state.scope.sessions]);
+  const sessionStart = liveChatSessionStart(messages, state.scope.sessions, sessionOn);
   const list = useWindowedList(messages, (message) => message.id, { estimate: 52, overscan: 400, initial: 40 });
   const following = useRef(true);
+  /** Where the feed was scrolled to last, so a move up reads as the reader leaving the latest message. */
+  const scrolledTo = useRef(0);
   const [unseen, setUnseen] = useState(0);
   const [loading, setLoading] = useState(false);
   const [composing, setComposing] = useState<LiveChatComposing | null>(null);
@@ -412,7 +436,12 @@ export function LiveChat({
           aria-label={`${channel === "operator" ? "Operator" : "Attendee"} chat messages`}
           onScroll={(event) => {
             const node = event.currentTarget;
-            following.current = node.scrollHeight - node.scrollTop - node.clientHeight < FOLLOW_SLACK;
+            const distance = node.scrollHeight - node.scrollTop - node.clientHeight;
+            // Any move up leaves the latest message, however small: a wheel or trackpad goes up a few pixels at a
+            // time, and treating those as still following snapped the feed back down on its next render.
+            const up = node.scrollTop < scrolledTo.current;
+            scrolledTo.current = node.scrollTop;
+            following.current = distance < 2 || (!up && distance < FOLLOW_SLACK);
             if (following.current) {
               setUnseen(0);
               setReplyToMe(null);
@@ -450,6 +479,7 @@ export function LiveChat({
                   highlighted={highlighted === message.id}
                   pinned={state.chatPinned?.id === message.id}
                   removed={state.chatRemoved?.includes(message.id) ?? false}
+                  sessionOn={sessionOn}
                 />
               ))}
               {list.after ? (
@@ -458,6 +488,13 @@ export function LiveChat({
                   class="pk-live-chat__spacer"
                   ref={(node) => node?.style.setProperty("block-size", `${list.after}px`)}
                 />
+              ) : null}
+              {sessionStart !== null ? (
+                <li class="pk-live-chat__row">
+                  <p class="pk-live-chat__divider" role="separator">
+                    {sessionStart}
+                  </p>
+                </li>
               ) : null}
             </ol>
           ) : (

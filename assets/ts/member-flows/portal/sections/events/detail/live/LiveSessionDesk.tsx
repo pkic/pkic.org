@@ -24,6 +24,7 @@ import { Spinner } from "../../../../../../components/Spinner";
 import { Alert } from "../../../../../../ui/Alert";
 import { ControlTooltips } from "../../../../../../ui/ControlTooltips";
 import { LiveChatPanel } from "./LiveChatPanel";
+import { liveLocationChatStamp } from "../../../../../../../shared/live-location-chat";
 import { LocationChatJoining } from "../../../../../../live-session/LocationChat";
 import { useLocationChat } from "../../../../../../live-session/useLocationChat";
 
@@ -436,7 +437,18 @@ export function LiveSessionDesk({
         return {
           title,
           body: chat.state ? (
-            <LiveChatPanel studio state={chat.state} disabled={chat.status !== "live"} send={chat.send} />
+            <LiveChatPanel
+              studio
+              state={chat.state}
+              disabled={chat.status !== "live"}
+              send={chat.send}
+              // The session the chat dates messages by: the one loaded on Program, else the agenda's.
+              sessionOn={
+                activeOccurrenceId === undefined
+                  ? undefined
+                  : liveLocationChatStamp(now, chat.state.scope.sessions, activeOccurrenceId)
+              }
+            />
           ) : (
             <LocationChatJoining chat={chat} />
           ),

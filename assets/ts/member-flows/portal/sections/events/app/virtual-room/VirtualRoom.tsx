@@ -178,7 +178,7 @@ export function VirtualRoom({
         sponsors={<VirtualRoomSponsors sponsors={sponsors.display} />}
         partners={<ProductionPartners partners={streams.data?.productionPartners ?? []} />}
         questions={(askIn) => <VirtualRoomQuestions live={live} askIn={askIn} />}
-        chat={<VirtualRoomChat chat={chat} zone={viewerZone} />}
+        chat={<VirtualRoomChat chat={chat} zone={viewerZone} loadedId={room?.loadedOccurrenceId ?? null} />}
         agenda={agendaView(program, roomId)}
         eventHref={href(`/events/${encodeURIComponent(slug)}`)}
         panel={panel}
