@@ -98,6 +98,7 @@ export const eventScreenPairingCreateSchema = z
   })
   .strict();
 export type EventScreenPairingCreate = z.infer<typeof eventScreenPairingCreateSchema>;
+/** The 409 pairing or a replacement receives when the screen ID belongs to a screen that is signed in. */
 export const SCREEN_ID_IN_USE_CODE = "SCREEN_ID_IN_USE";
 
 // ── Staff records ──
@@ -164,14 +165,23 @@ export const screenDeviceReplacementSchema = z
   .object({
     expectedRevision: z.number().int().nonnegative(),
     newScreenId: screenIdSchema,
-    pairingCode: screenPairingCodeSchema,
+    /**
+     * The code the new device shows. Only a device that is already signed in
+     * under its screen ID, as one paired as a screen of its own, shows none,
+     * and it keeps its sign-in.
+     */
+    pairingCode: screenPairingCodeSchema.optional(),
+    /**
+     * Take over the screen that already has the new screen ID: it gives way,
+     * and this screen's name and assignment move onto its ID. Without it,
+     * such a replacement is refused: the ID may be mistyped.
+     */
+    replace: z.literal(true).optional(),
   })
   .strict();
 export type ScreenDeviceReplacement = z.infer<typeof screenDeviceReplacementSchema>;
-/** The 409 a replacement receives when the new device's screen ID already belongs to a screen. */
+/** The 409 a replacement receives when the new device's screen ID already belongs to a screen that is not signed in. */
 export const SCREEN_ID_TAKEN_CODE = "SCREEN_ID_TAKEN";
-/** The 409 a removal receives while the screen is signed in. */
-export const SCREEN_SIGNED_IN_CODE = "SCREEN_SIGNED_IN";
 
 export const SCREEN_LIST_SORTS = ["name", "lastSeenAt"] as const;
 export const eventScreensQuerySchema = listQuerySchema(SCREEN_LIST_SORTS).extend({

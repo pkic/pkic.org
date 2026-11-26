@@ -68,18 +68,6 @@ export const screenSessionCreateRouteSchema = {
   },
 };
 
-export const screenSessionDeleteRouteSchema = {
-  tags,
-  ...requiresPermissions(SCREEN_MANAGE_PERMISSION),
-  summary: "Revoke a screen's sign-in",
-  description: "The screen shows a new pairing code on its next request.",
-  request: { params: screenParamsSchema },
-  responses: {
-    ...noContent("Every sign-in of the screen is revoked."),
-    ...authErrors({ notFound: "Screen not found", conflict: "Your permission changed; try again." }),
-  },
-};
-
 export const screenGetRouteSchema = {
   tags,
   ...requiresAnyPermissions(...statusPermissions),
@@ -122,7 +110,9 @@ export const screenDeviceReplaceRouteSchema = {
   description:
     "Approves the pairing code a new device shows and moves the screen's name, event and assignment to the new " +
     "device's screen ID in one change. The old screen ID is removed with its sign-ins, so the old device shows a " +
-    "pairing code. The new device signs in with its challenge, as after pairing.",
+    "pairing code. The new device signs in with its challenge, as after pairing. With `replace`, a screen that " +
+    "already has the new screen ID gives way: it takes this screen's name and assignment, and a device signed in " +
+    "under that ID keeps its sign-in and needs no pairing code.",
   request: {
     params: screenParamsSchema,
     body: { required: true, content: { "application/json": { schema: screenDeviceReplacementSchema } } },
@@ -133,7 +123,7 @@ export const screenDeviceReplaceRouteSchema = {
       badRequest: "Invalid replacement",
       notFound: "Screen not found",
       conflict: "The screen changed, belongs to no event, or the new screen ID belongs to another screen",
-      unprocessable: "The new screen ID is the screen's own",
+      unprocessable: "The new screen ID is the screen's own, or the pairing code is missing",
     }),
   },
 };
@@ -141,14 +131,14 @@ export const screenDeviceReplaceRouteSchema = {
 export const screenDeleteRouteSchema = {
   tags,
   ...requiresPermissions(SCREEN_MANAGE_PERMISSION),
-  summary: "Remove a screen that is not signed in",
-  description: "Deletes the screen's record and its pairing approvals. A signed-in screen is revoked first.",
+  summary: "Remove a screen",
+  description: "Deletes the screen's record with its sign-ins and pairing approvals. Its device shows a pairing code.",
   request: { params: screenParamsSchema },
   responses: {
     ...noContent("The screen is removed."),
     ...authErrors({
       notFound: "Screen not found",
-      conflict: "The screen is signed in, changed since it was read, or your permission changed",
+      conflict: "The screen changed since it was read, or your permission changed",
     }),
   },
 };

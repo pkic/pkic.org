@@ -1,8 +1,5 @@
 import { screenSessionPollResponseSchema } from "../../../../../assets/shared/schemas/event-screens";
-import {
-  screenSessionCreateRouteSchema,
-  screenSessionDeleteRouteSchema,
-} from "../../../../../assets/shared/schemas/route-contracts-event-screens";
+import { screenSessionCreateRouteSchema } from "../../../../../assets/shared/schemas/route-contracts-event-screens";
 import {
   readScreenPairingChallenge,
   serializeExpiredScreenPairingCookie,
@@ -10,10 +7,9 @@ import {
 import { serializeScreenSessionCookie, signScreenSessionToken } from "../../../../_lib/auth/screen-session";
 import { markResponseSensitive, requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { AppError } from "../../../../_lib/errors";
-import { jsonPrivate, noContent } from "../../../../_lib/http";
+import { jsonPrivate } from "../../../../_lib/http";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { requireInternalSecret } from "../../../../_lib/request";
-import { revokeScreenSessions } from "../../../../_lib/services/event-screens/screen-changes";
 import { activateScreenSession } from "../../../../_lib/services/event-screens/screen-pairing";
 
 /** The pairing page's poll: signed in once staff approved the code its challenge proves. */
@@ -37,10 +33,4 @@ export const ScreenSessionPost = openApiRoute(screenSessionCreateRouteSchema, as
   response.headers.append("set-cookie", serializeScreenSessionCookie(token, c.req.raw));
   response.headers.append("set-cookie", serializeExpiredScreenPairingCookie(screenId, c.req.raw));
   return response;
-});
-
-export const ScreenSessionDelete = openApiRoute(screenSessionDeleteRouteSchema, async (c: AdminContext, data) => {
-  markResponseSensitive(c);
-  await revokeScreenSessions(requestDb(c), c.req.raw, c.env, data.params.screenId);
-  return noContent();
 });

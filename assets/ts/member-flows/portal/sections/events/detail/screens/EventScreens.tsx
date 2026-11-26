@@ -2,9 +2,8 @@
  * The event's screens: where each stands, what it shows and whether it is
  * online. With the monitor connected, a grid of cards shows each screen's
  * latest screenshot and last hour beside the list. Staff who manage screens
- * pair, edit, identify and reload them here, move one to a new device,
- * revoke one and remove one that is not signed in; room operators see the
- * same screens without those actions.
+ * pair, edit, identify and reload them here, move one to a new device and
+ * remove one; room operators see the same screens without those actions.
  */
 import { useRef, useState } from "preact/hooks";
 import { newestScreenSoftware } from "../../../../../../../shared/event-screen-software";
@@ -37,7 +36,7 @@ import {
 import { useScreenMonitorController, type ScreenMonitorFixture } from "./useScreenMonitorController";
 import { ScreenPairDialog } from "./ScreenPairDialog";
 import { ScreenReplaceDialog } from "./ScreenReplaceDialog";
-import { eventScreensPath, removeScreen, revokeScreenSession } from "./screen-requests";
+import { eventScreensPath, removeScreen } from "./screen-requests";
 import "../../../../../../ui/Content.css";
 
 /** Statuses read against a clock that moves each minute, so "Offline · 12 min" keeps counting. */
@@ -75,7 +74,7 @@ export function EventScreens({
   monitor: fixture,
 }: {
   slug: string;
-  /** Pair, edit and revoke; without it the list is read-only. */
+  /** Pair, edit, replace and remove; without it the list is read-only. */
   canManage: boolean;
   /** A fixed instant to read statuses against, for the gallery. */
   now?: number;
@@ -106,28 +105,13 @@ export function EventScreens({
     await actions.current?.reload();
   };
 
-  async function revoke(screen: ScreenRecord) {
-    const confirmed = await confirmAction({
-      title: `Revoke “${screen.name}”?`,
-      body: "The screen signs out and shows a pairing code again. Pair it to bring it back.",
-      confirmLabel: "Revoke screen",
-      tone: "danger",
-    });
-    if (!confirmed) return;
-    setError(null);
-    try {
-      await revokeScreenSession(screen.id);
-      toast(`“${screen.name}” revoked`, "success");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause : new Error("The screen could not be revoked."));
-    }
-    await reload();
-  }
-
   async function remove(screen: ScreenRecord) {
     const confirmed = await confirmAction({
       title: `Remove “${screen.name}”?`,
-      body: "Its name and assignment are deleted. Pair the device again to bring it back.",
+      body:
+        screen.session.state === "active"
+          ? "It signs out and shows a pairing code. Its name and assignment are deleted."
+          : "Its name and assignment are deleted. Pair the device again to bring it back.",
       confirmLabel: "Remove screen",
       tone: "danger",
     });
@@ -175,18 +159,10 @@ export function EventScreens({
           onSelect: () => setReplacing(screen),
         },
         {
-          id: "revoke",
-          label: "Revoke",
-          danger: true,
-          separatorBefore: true,
-          disabled: screen.session.state === "none",
-          onSelect: () => void revoke(screen),
-        },
-        {
           id: "remove",
           label: "Remove",
           danger: true,
-          disabled: screen.session.state === "active",
+          separatorBefore: true,
           onSelect: () => void remove(screen),
         },
       ]}

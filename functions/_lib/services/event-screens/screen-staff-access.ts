@@ -79,7 +79,7 @@ export function requireScreenTransfer(
     throw new AppError(
       403,
       "SCREEN_BELONGS_TO_ANOTHER_EVENT",
-      "This screen belongs to another event. Its organizers can revoke it there, or someone who manages both events can move it.",
+      "This screen belongs to another event. Its organizers can remove it there, or someone who manages both events can move it.",
     );
   }
   return [from];
