@@ -39,10 +39,8 @@ export async function connectLiveOccurrence(request: Request, parts: LiveOccurre
   if (refreshAt !== null) await parts.scheduleAlarm(refreshAt);
   const snapshot = await parts.broadcast.snapshot(server, admission.session);
   if (snapshot !== null && server.readyState === WebSocket.OPEN) server.send(snapshot);
-  if (admission.participant.role === "operator") {
-    await parts.broadcast.operatorsChanged();
-    parts.presence.greet(server, admission.participant);
-  }
+  if (admission.participant.role === "operator") await parts.broadcast.operatorsChanged();
+  parts.presence.joined(server, admission.participant);
   if (admission.participant.role === "overlay") await parts.broadcast.sourcesChanged();
   return new Response(null, {
     status: 101,

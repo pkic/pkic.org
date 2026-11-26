@@ -5,6 +5,7 @@ import type {
   LiveRoomServerMessage,
 } from "../../../../assets/shared/schemas/live-session-room";
 import type { LiveRoomParticipant } from "./room-admission";
+import { LiveRoomAudience, onLiveAttendeePage } from "./room-audience";
 import { serializeLiveRoomMessage } from "./room-projection";
 
 type Operator = { userId: string; name: string };
@@ -28,14 +29,20 @@ interface Pending {
  *
  * Every send uses the room's current local access lease; the background
  * refresh owns D1 revalidation, independently of the presence update rate.
+ *
+ * The room's audience, how many people have its attendee page open, is
+ * presence too: in memory only, and for operators only.
  */
 export class LiveRoomPresence {
   private readonly people = new Map<string, Pending>();
+  readonly audience: LiveRoomAudience;
 
   constructor(
     private readonly ctx: DurableObjectState,
     private readonly eligible: (sockets: WebSocket[]) => WebSocket[],
-  ) {}
+  ) {
+    this.audience = new LiveRoomAudience(ctx, eligible);
+  }
 
   update(operator: Operator, update: LivePresenceUpdate, now = Date.now()): void {
     const id = livePresenceKey(operator.userId);
@@ -59,8 +66,9 @@ export class LiveRoomPresence {
     else entry.timer = setTimeout(() => this.flush(id), wait);
   }
 
-  /** An operator's socket closed: their presence leaves every other screen. */
-  left(viewer: LiveRoomParticipant): void {
+  /** A socket closed: an operator's presence leaves every other screen; a person on the attendee page is counted again. */
+  left(viewer: LiveRoomParticipant, socket: WebSocket): void {
+    if (onLiveAttendeePage(viewer)) return this.audience.changed(socket);
     if (viewer.role !== "operator" || !viewer.userId) return;
     const id = livePresenceKey(viewer.userId);
     const entry = this.people.get(id);
@@ -69,9 +77,14 @@ export class LiveRoomPresence {
     this.fanOut({ type: "presence.left", id }, viewer.userId);
   }
 
-  /** A joining operator sees where everyone else already is. */
-  greet(socket: WebSocket, viewer: LiveRoomParticipant): void {
+  /**
+   * A socket opened: a joining operator sees where everyone else already is,
+   * and how many people are on the attendee page; a person there is counted.
+   */
+  joined(socket: WebSocket, viewer: LiveRoomParticipant): void {
+    if (onLiveAttendeePage(viewer)) return this.audience.changed();
     if (viewer.role !== "operator") return;
+    this.audience.greet(socket);
     for (const entry of this.people.values()) {
       if (entry.userId === viewer.userId) continue;
       this.sendTo(socket, serializeLiveRoomMessage({ type: "presence.changed", presence: entry.presence }));

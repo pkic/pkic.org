@@ -486,7 +486,18 @@ describe("live control room panels", () => {
     expect(pictured[0]!.closest(".pk-studio-row")?.textContent).toContain("Bea Attendee");
   });
 
-  it("keeps a message flashing until an operator stops it from the on-stage footer", () => {
+  it("shows operators how many people are in the virtual room once the room tells the desk", () => {
+    const { host, live } = mountDesk(liveSnapshot({ viewer: OPERATOR }));
+    expect(host.querySelector(".pk-studio-header__audience")).toBeNull();
+    void act(() => live.latest().deliver({ type: "audience.changed", people: 42 }));
+    const count = host.querySelector<HTMLElement>(".pk-studio-header__audience")!;
+    expect(count.textContent).toBe("Room 42");
+    expect(count.getAttribute("aria-label")).toBe("42 people in the virtual room now");
+    void act(() => live.latest().deliver({ type: "audience.changed", people: 1 }));
+    expect(count.getAttribute("aria-label")).toBe("1 person in the virtual room now");
+  });
+
+  it("keeps a message flashing until an operator stops it from the panel header", () => {
     const { host, live } = mountDesk(
       liveSnapshot({
         viewer: OPERATOR,
@@ -495,7 +506,7 @@ describe("live control room panels", () => {
       "stage",
     );
     const message = panel(host, "Message to speaker");
-    const stop = button(message, "Stop flashing");
+    const stop = labeled(message, "Stop flashing");
     expect(stop.getAttribute("aria-pressed")).toBe("true");
     void act(() => stop.click());
     expect(commands(live).map((sent) => liveRoomClientMessageSchema.parse(sent))).toEqual([
@@ -503,36 +514,41 @@ describe("live control room panels", () => {
     ]);
   });
 
-  it("keeps every composer change a draft until Send or Update, and acts on the stage only from its footer", () => {
+  it("keeps every composer change a draft until Send or Update, and acts on the stage only from its header", () => {
     const { host, live } = mountDesk(liveSnapshot({ viewer: OPERATOR }), "stage");
     const message = panel(host, "Message to speaker");
     const sent = () => commands(live).map((command) => liveRoomClientMessageSchema.parse(command));
-    void act(() => button(message, "Send to stage").click());
+    expect(message.querySelector(".pk-studio-panel__header")?.textContent).toContain("Off");
+    expect(message.querySelector("input[name=text]")?.getAttribute("aria-label") ?? "").toBe("");
+    expect(message.querySelector<HTMLInputElement>("input[name=text]")!.labels?.[0]?.textContent).toContain(
+      "Message to the speaker",
+    );
+    void act(() => button(message, "Send").click());
     expect(message.querySelector(".pk-field__message")?.textContent).toContain("Write a message for the speaker.");
-    // A ready-made message only fills the draft, with its tone.
-    void act(() => button(message, "Please wrap up").click());
+    // A ready-made message, on a short chip, only fills the draft with its full words and tone.
+    void act(() => button(message, "Wrap up").click());
     expect(message.querySelector<HTMLInputElement>("input[name=text]")!.value).toBe("Please wrap up");
     expect(sent()).toEqual([]);
     type(message.querySelector<HTMLInputElement>("input[name=text]")!, "Two more questions");
-    const flash = [...message.querySelectorAll<HTMLInputElement>("input[type=checkbox]")].find((box) =>
-      box.closest("label")?.textContent?.startsWith("Flash"),
-    )!;
+    const flash = labeled(message, "Flash");
     void act(() => flash.click());
-    void act(() => button(message, "Send to stage").click());
+    expect(flash.getAttribute("aria-pressed")).toBe("true");
+    void act(() => button(message, "Send").click());
     void act(() =>
       live.latest().deliver({
         type: "speaker.message.changed",
         speakerMessage: { text: "Two more questions", tone: "warning", flash: true, change: null },
       }),
     );
-    expect(message.textContent).toContain("On stage");
+    // The header shows what is on stage; its words put it back in the composer.
+    void act(() => labeled(message, "On stage, flashing: Two more questions. Edit").click());
     // A tone picked while a message shows waits for Update, like every other change in the composer.
-    void act(() => button(message, "Edit").click());
-    void act(() => button(message, "Urgent").click());
+    void act(() => labeled(message, "Tone: Warning").click());
+    void act(() => menuItem(document.body, "Urgent").click());
     expect(sent()).toHaveLength(1);
-    void act(() => button(message, "Update message").click());
-    void act(() => button(message, "Stop flashing").click());
-    void act(() => button(message, "Clear from stage").click());
+    void act(() => button(message, "Update").click());
+    void act(() => labeled(message, "Stop flashing").click());
+    void act(() => button(message, "Clear").click());
     expect(sent()).toEqual([
       { type: "speaker.message", text: "Two more questions", tone: "warning", flash: true },
       { type: "speaker.message", text: "Two more questions", tone: "urgent", flash: true },

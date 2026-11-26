@@ -11,7 +11,7 @@ import { MONITOR_SOURCES } from "./sections-studio-on-screen";
 const noCommand = () => true;
 
 function SessionBar({ opening }: { opening: LiveRoomOpening }) {
-  const state = { ...MONITOR_SOURCES.preview, opening };
+  const state = { ...MONITOR_SOURCES.preview, opening, audience: opening === "closed" ? 0 : 42 };
   return (
     <div class="pk-studio">
       <div class="pk-panel pk-studio__bar">
@@ -38,7 +38,7 @@ export const studioSessionBarSections: PreviewSection[] = [
   {
     id: "studio-session-bar",
     title: "Studio session bar: the virtual room",
-    note: "Beside Loaded, operators choose whether attendees take part in the session's virtual room: on schedule, open now (to test it, or to let a discussion run on) or closed. The choice holds until someone changes it or loads another session. The virtual room follows the loaded session.",
+    note: "Beside Loaded, operators choose whether attendees take part in the session's virtual room: on schedule, open now (to test it, or to let a discussion run on) or closed. The choice holds until someone changes it or loads another session. The virtual room follows the loaded session. Room and its number say how many people have the attendee page open now, each person once.",
     render: () => (
       <div class="pk-stack">
         <SessionBar opening="scheduled" />

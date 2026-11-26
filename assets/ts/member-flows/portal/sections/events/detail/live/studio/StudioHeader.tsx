@@ -1,5 +1,6 @@
 import type { ComponentChildren } from "preact";
 import { useEffect, useState } from "preact/hooks";
+import { formatNumber } from "../../../../../../../../shared/format-number";
 import { formatClockInZone, formatClockName, formatClockRangeInZone } from "../../../../../../../../shared/format-date";
 import type { ClockZone } from "../../../../../../../../shared/event-clock";
 import type { LiveRoomState } from "../../../../../../../live-session/live-room-state";
@@ -21,6 +22,25 @@ function StudioClock({ clock }: { clock: ClockZone }) {
     <time class="pk-studio-header__clock" dateTime={now} title={`Event time · ${formatClockName(clock)}`}>
       {formatClockInZone(now, clock)}
     </time>
+  );
+}
+
+/**
+ * How many people have the room's attendee page open now, each person once
+ * however many tabs they have. Shown once the room has told this desk.
+ */
+export function StudioAudience({ people }: { people: number | undefined }) {
+  if (people === undefined) return null;
+  const sentence = `${formatNumber(people)} ${people === 1 ? "person" : "people"} in the virtual room now`;
+  return (
+    <span
+      class="pk-studio-header__audience"
+      role="img"
+      aria-label={sentence}
+      title={`${sentence}\nPeople with this session's attendee page open, not livestream viewers.`}
+    >
+      Room {formatNumber(people)}
+    </span>
   );
 }
 
@@ -141,6 +161,7 @@ export function StudioHeader({
         <SessionTiming session={session} timer={sessionTimer} active={active} clock={clock} />
         <StudioNotice notice={notice} />
       </div>
+      <StudioAudience people={state.audience} />
       <LiveStudioOperators state={state} />
       <StudioClock clock={clock} />
     </div>

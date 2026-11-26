@@ -1,28 +1,10 @@
 @layer components {
-  /* The controls scroll; what is on stage stays as the panel's footer, with its Clear. */
-  /* The composer scrolls on its own; what is on stage stays below it, never over a control. */
+  /* Two rows: the ready-made messages, then the words with tone, flash and Send beside them. */
   .pk-studio-message {
     display: flex;
     flex-direction: column;
-    block-size: 100%;
-  }
-  .pk-studio-message__body {
-    display: flex;
-    flex: 1;
-    min-block-size: 0;
-    overflow: auto;
-    flex-direction: column;
     gap: var(--pk-2);
     padding: var(--pk-2) var(--pk-3);
-  }
-  .pk-studio-message__options {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--pk-2) var(--pk-3);
-  }
-  .pk-studio-message__tone-option {
-    gap: var(--pk-1);
   }
   /* The tone's own color pair, as the stage display draws it. */
   .pk-studio-message__swatch {
@@ -33,7 +15,7 @@
     border-radius: 50%;
     background: var(--speaker-tone);
   }
-  /* Ready-made messages as compact buttons, each with its tone's swatch, the same dot as the tone options. */
+  /* Ready-made messages as compact chips on one row, each with its tone's swatch; the full words are in the tooltip. */
   .pk-studio-message__presets {
     display: flex;
     flex-wrap: wrap;
@@ -42,6 +24,7 @@
   .pk-studio-message__preset {
     gap: var(--pk-1);
     border: 1px solid var(--pk-line);
+    white-space: nowrap;
   }
   .pk-studio-message__preset::before {
     content: "";
@@ -52,57 +35,54 @@
     border-radius: 50%;
     background: var(--speaker-tone);
   }
-  /* The words with Send or Update beside them: the one action that reaches the stage, always in view. */
+  /* The words take the room; tone, flash and Send keep their size beside them. */
   .pk-studio-message__group {
     display: flex;
-    gap: var(--pk-2);
+    gap: var(--pk-1);
     min-inline-size: 0;
   }
   .pk-studio-message__group > .pk-input {
     flex: 1;
     min-inline-size: 0;
   }
-  .pk-studio-message__group > .pk-btn {
+  .pk-studio-message__group > :not(.pk-input) {
     flex: none;
   }
-  .pk-studio-message__flashing {
-    color: var(--pk-ink-muted);
-    font-weight: 400;
+  /* The tone menu wears the secondary button's chrome: the plain trigger draws none of its own. */
+  .pk-menu__trigger.pk-studio-message__tone {
+    gap: var(--pk-1);
+    block-size: auto;
+    padding-inline: var(--pk-2);
+    border-color: var(--pk-line);
+    background: var(--pk-surface-raise);
   }
-  /* What is on stage, and the actions on it; the actions wrap under the words in a narrow panel. */
-  .pk-studio-message__live {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--pk-2);
-    min-block-size: 2.75rem;
-    padding: var(--pk-2) var(--pk-3);
-    border-block-start: 1px solid var(--pk-line-soft);
-    background: var(--pk-surface);
-    font-size: var(--pk-text-sm);
+  .pk-menu__trigger.pk-studio-message__tone:hover:not(:disabled) {
+    border-color: var(--pk-line-strong);
+    background: var(--pk-surface-sunk);
   }
-  /* "On stage" is the expected state of a sent message: words, with its tone as a small swatch. */
-  .pk-studio-message__state {
+  .pk-studio-message__tone-chevron {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+  }
+  /* What is on stage, in the header: muted Off, or the message's swatch and words, cut to fit, with Clear. */
+  .pk-studio-message__status {
     display: inline-flex;
-    flex: none;
     align-items: center;
     gap: var(--pk-1);
-    color: var(--pk-ink-muted);
-    font-size: var(--pk-text-xs);
-    font-weight: 600;
-  }
-  .pk-studio-message__state::before {
-    content: "";
-    inline-size: 0.6rem;
-    block-size: 0.6rem;
-    border: 1px solid var(--pk-line-strong);
-    border-radius: 50%;
-    background: var(--speaker-tone);
-  }
-  .pk-studio-message__text {
-    flex: 1 1 10rem;
     min-inline-size: 0;
-    overflow-wrap: anywhere;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+  }
+  .pk-studio-message__showing {
+    gap: var(--pk-1);
+    max-inline-size: 14rem;
+    min-inline-size: 0;
+    color: var(--pk-ink);
     font-weight: 600;
+  }
+  .pk-studio-message__showing-text {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
 }

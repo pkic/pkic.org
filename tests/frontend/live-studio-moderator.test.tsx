@@ -48,7 +48,7 @@ it("lets a moderator approve questions and create polls, with every on-air contr
 it("lets a moderator send the speaker a message", () => {
   const { host, live } = mountModeratorDesk("stage");
   const message = panel(host, "Message to speaker");
-  void act(() => button(message, "Please wrap up").click());
-  void act(() => button(message, "Send to stage").click());
+  void act(() => button(message, "Wrap up").click());
+  void act(() => button(message, "Send").click());
   expect(commands(live)).toEqual([{ type: "speaker.message", text: "Please wrap up", tone: "warning", flash: false }]);
 });
