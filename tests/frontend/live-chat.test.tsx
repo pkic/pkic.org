@@ -1,56 +1,12 @@
-import { LiveChatPanel } from "../../assets/ts/member-flows/portal/sections/events/detail/live/LiveChatPanel";
-import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
-import { render } from "preact";
 import { act } from "preact/test-utils";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { LIVE_CHAT_POLICY, LIVE_CHAT_REACTIONS } from "../../assets/shared/live-chat-policy";
-import {
-  liveRoomClientMessageSchema,
-  type LiveChatMessage,
-  type LiveLocationChatSnapshot,
-} from "../../assets/shared/schemas/live-session-room";
+import { liveRoomClientMessageSchema } from "../../assets/shared/schemas/live-session-room";
 import { LiveChat } from "../../assets/ts/live-session/LiveChat";
 import { liveChatMessageActions } from "../../assets/ts/live-session/LiveChatMessageRow";
-import { applyLocationChatMessage, type LiveLocationChatState } from "../../assets/ts/live-session/location-chat-state";
-import { LIVE_OCCURRENCE, liveChatMessage, liveLocationChatSnapshot } from "./helpers/live-room-socket";
-
-const hosts: HTMLElement[] = [];
-afterEach(() => {
-  for (const host of hosts.splice(0)) {
-    render(null, host);
-    host.remove();
-  }
-});
-
-const MESSAGE = "40000000-0000-4000-8000-000000000001";
-
-function chatMessage(overrides: Partial<LiveChatMessage> = {}): LiveChatMessage {
-  return liveChatMessage({ id: MESSAGE, ...overrides });
-}
-
-function stateWith(overrides: Partial<Omit<LiveLocationChatSnapshot, "type">> = {}): LiveLocationChatState {
-  const state = applyLocationChatMessage(null, liveLocationChatSnapshot({ chat: [chatMessage()], ...overrides }));
-  if (!state) throw new Error("No state");
-  return state;
-}
-
-function draw(node: preact.ComponentChild, host: HTMLElement) {
-  render(
-    <>
-      {node}
-      <ConfirmDialogHost />
-    </>,
-    host,
-  );
-}
-
-function mount(node: preact.ComponentChild) {
-  const host = document.createElement("div");
-  document.body.append(host);
-  hosts.push(host);
-  void act(() => draw(node, host));
-  return host;
-}
+import { applyLocationChatMessage } from "../../assets/ts/live-session/location-chat-state";
+import { chatMessage, draw, MESSAGE, mount, stateWith, submit, typeInto } from "./helpers/live-chat-harness";
+import { LIVE_OCCURRENCE } from "./helpers/live-room-socket";
 
 /** The commands a chat sent, read as the room reads them. */
 function sent(send: ReturnType<typeof vi.fn>) {
@@ -116,19 +72,14 @@ describe("live chat", () => {
     const send = vi.fn(() => true);
     const host = mount(<LiveChat state={stateWith()} disabled={false} send={send} />);
     const text = host.querySelector("textarea")!;
-    void act(() => {
-      text.value = "Good morning";
-      text.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+    typeInto(text, "Good morning");
     void act(() => {
       text.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
     });
     expect(sent(send)).toEqual([{ type: "chat.send", text: "Good morning", channel: "attendee" }]);
     // The words wait for the room's answer, and a second Send while they do sends nothing twice.
     expect(text.value).toBe("Good morning");
-    void act(() => {
-      host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    });
+    submit(host);
     expect(send).toHaveBeenCalledTimes(1);
   });
 
@@ -136,15 +87,8 @@ describe("live chat", () => {
     const send = vi.fn(() => true);
     const host = mount(<LiveChat state={stateWith()} disabled={false} send={send} />);
     const text = host.querySelector("textarea")!;
-    const submit = () =>
-      void act(() => {
-        host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-      });
-    void act(() => {
-      text.value = "Back again";
-      text.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    submit();
+    typeInto(text, "Back again");
+    submit(host);
     const refused = {
       ...stateWith(),
       refusal: {
@@ -157,7 +101,7 @@ describe("live chat", () => {
     const status = document.getElementById(text.getAttribute("aria-describedby")!)!;
     expect(status.textContent).toBe("You can't post right now. You can keep watching.");
     expect(text.value).toBe("Back again");
-    submit();
+    submit(host);
     expect(send).toHaveBeenCalledTimes(2);
   });
 
@@ -173,10 +117,7 @@ describe("live chat", () => {
     expect(send).not.toHaveBeenCalled();
     expect(text.getAttribute("aria-invalid")).toBeNull();
     expect(host.querySelector(".pk-field__message")).toBeNull();
-    void act(() => {
-      text.value = "x".repeat(LIVE_CHAT_POLICY.storedMessages);
-      text.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+    typeInto(text, "x".repeat(LIVE_CHAT_POLICY.storedMessages));
     const status = document.getElementById(text.getAttribute("aria-describedby")!)!;
     expect(status.closest(".pk-live-chat__composer")?.firstElementChild).toBe(status);
     expect(status.textContent).toContain("Keep your message under");
@@ -518,90 +459,4 @@ describe("live chat", () => {
     // A view that does not know the session on leaves the decision to the room.
     expect(liveChatMessageActions(during, operator).has("convert")).toBe(true);
   });
-});
-
-it("counts only new inactive-channel messages, lists what to review and restores the selected studio view from its URL", async () => {
-  window.history.replaceState(null, "", "#/events/pqc/live");
-  const reported = chatMessage({
-    id: "40000000-0000-4000-8000-000000000009",
-    moderation: {
-      hidden: null,
-      done: null,
-      held: false,
-      reports: 1,
-      reportReasons: { abuse: 1 },
-      questionId: null,
-      authorStaff: false,
-      authorRestriction: null,
-    },
-  });
-  const initial = stateWith({
-    viewer: { role: "operator", name: "Ada" },
-    chat: [chatMessage({ id: "40000000-0000-4000-8000-000000000002", channel: "operator", text: "Existing history" })],
-    chatReports: [reported],
-  });
-  const send = vi.fn(() => true);
-  const host = mount(<LiveChatPanel studio state={initial} disabled={false} send={send} />);
-  expect(host.querySelector("#studio-chat-operator")?.textContent).toBe("Operators");
-  expect(host.querySelector("#studio-chat-review")?.textContent).toBe("Review1");
-  const updated = {
-    ...initial,
-    chat: [...initial.chat, { ...initial.chat[0], id: "40000000-0000-4000-8000-000000000003", text: "New cue" }],
-  };
-  await act(async () => draw(<LiveChatPanel studio state={updated} disabled={false} send={send} />, host));
-  expect(host.querySelector("#studio-chat-operator")?.textContent).toContain("New");
-  await act(async () => host.querySelector<HTMLButtonElement>("#studio-chat-review")!.click());
-  expect(window.location.hash).toContain("chat=review");
-  expect(host.querySelector("#studio-chat-panel-review")?.textContent).toContain("1 report · Abuse");
-  await act(async () => host.querySelector<HTMLButtonElement>("#studio-chat-operator")!.click());
-  expect(host.querySelector("#studio-chat-operator")?.textContent).toBe("Operators");
-  window.history.replaceState(null, "", "#/");
-});
-
-it("keeps studio scrollback stable and follows new messages only while already at the latest message", async () => {
-  const at = (offset: number) => new Date(Date.now() + offset).toISOString();
-  const state = stateWith({ chat: [chatMessage({ id: "40000000-0000-4000-8000-000000000011", sentAt: at(0) })] });
-  const send = vi.fn(() => true);
-  const host = mount(<LiveChat compact state={state} disabled={false} send={send} />);
-  const feed = host.querySelector<HTMLElement>(".pk-live-chat")!;
-  Object.defineProperties(feed, {
-    clientHeight: { configurable: true, value: 100 },
-    scrollHeight: { configurable: true, value: 500 },
-  });
-  feed.scrollTop = 0;
-  feed.dispatchEvent(new Event("scroll"));
-  const second = {
-    ...state,
-    chat: [...state.chat, chatMessage({ id: "40000000-0000-4000-8000-000000000012", sentAt: at(1) })],
-  };
-  await act(async () => draw(<LiveChat compact state={second} disabled={false} send={send} />, host));
-  expect(feed.scrollTop).toBe(0);
-  expect(host.textContent).toContain("1 new message");
-  feed.scrollTop = 400;
-  feed.dispatchEvent(new Event("scroll"));
-  const third = {
-    ...second,
-    chat: [...second.chat, chatMessage({ id: "40000000-0000-4000-8000-000000000013", sentAt: at(2) })],
-  };
-  await act(async () => draw(<LiveChat compact state={third} disabled={false} send={send} />, host));
-  expect(feed.scrollTop).toBe(500);
-  expect(host.querySelectorAll(".pk-live-chat__row")).toHaveLength(3);
-});
-
-it("lets a wheel or trackpad leave the latest message with a small move up", async () => {
-  const state = stateWith();
-  const send = vi.fn(() => true);
-  const host = mount(<LiveChat compact state={state} disabled={false} send={send} />);
-  const feed = host.querySelector<HTMLElement>(".pk-live-chat")!;
-  Object.defineProperties(feed, {
-    clientHeight: { configurable: true, value: 100 },
-    scrollHeight: { configurable: true, value: 500 },
-  });
-  feed.scrollTop = 400;
-  feed.dispatchEvent(new Event("scroll"));
-  // One wheel step up, well within the slack that still counts as reading the latest message when moving down.
-  feed.scrollTop = 390;
-  feed.dispatchEvent(new Event("scroll"));
-  await act(async () => draw(<LiveChat compact state={{ ...state }} disabled={false} send={send} />, host));
-  expect(feed.scrollTop).toBe(390);
 });
