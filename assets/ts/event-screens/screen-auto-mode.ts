@@ -34,6 +34,7 @@ function upNext(
     config: { ...DEFAULT_LIVE_SCHEDULE_CONFIG, scope: "this-room" },
     available: true,
     timeZone: agenda.timeZone,
+    streamRoomId: room.id,
     resolvedAt: new Date(now).toISOString(),
     rooms: session
       ? [

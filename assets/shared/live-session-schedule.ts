@@ -1,4 +1,5 @@
 import { agendaOccurrenceRoomIds } from "./event-agenda-rooms";
+import { creditAffiliations } from "./agenda-speaker-affiliations";
 import { publicSessionCreditPhoto, publicSessionCreditRole, publicSessionCredits } from "./session-public-credits";
 import type { AgendaSnapshot, AgendaOccurrence } from "./schemas/event-agenda";
 import { utcInstantSchema } from "./schemas/api-common";
@@ -36,6 +37,7 @@ function scheduleSpeakers(session: TimedOccurrence) {
         name: credit.displayName,
         moderator: publicSessionCreditRole(session, credit) === "moderator",
         photoUrl: publicSessionCreditPhoto(credit),
+        organization: creditAffiliations(credit)[0]?.organizationName ?? null,
       });
       return checked.success ? [checked.data] : [];
     })
@@ -106,6 +108,7 @@ export function resolveUpcomingRooms(
     resolvedAt,
     available: true,
     timeZone: zone.data,
+    streamRoomId: selectedRoom ?? null,
     rooms: nextBlock(upcoming),
   });
 }

@@ -12,6 +12,7 @@ import { liveRoomClientMessageSchema, type LiveRoomClientMessage } from "../../a
 import { applyLiveRoomMessage } from "../../assets/ts/live-session/live-room-state";
 import { liveSnapshot, liveTargets } from "./helpers/live-room-socket";
 import {
+  LIVE_SCHEDULE_SPEAKER_TURN_MS,
   LIVE_SCHEDULE_SPOTLIGHT_MS,
   LiveScheduleOverlay,
   liveScheduleArrangement,
@@ -127,24 +128,69 @@ it("shows each speaker's public headshot", async () => {
   const portraits = [...host.querySelectorAll<HTMLImageElement>(".pk-live-schedule__face img")];
   expect(portraits.map((image) => image.getAttribute("src"))).toEqual(["/approved-photo.jpg", "/approved-photo.jpg"]);
 });
-it("puts who speaks under the title: one speaker by name, a panel of six as its faces and a count", async () => {
-  const speaker = (name: string, moderator = false) => ({ name, moderator, photoUrl: null });
+it("resolves each speaker's organization, and no stream room without a selected room", () => {
+  const snapshot = frame();
+  expect(snapshot.streamRoomId).toBeNull();
+  expect(snapshot.rooms[0]!.speakers.map((speaker) => speaker.organization)).toContain("Historical organization");
+});
+it("leaves the stream's own room unnamed and names any other room", async () => {
+  const schedule = { ...frame(), streamRoomId: "a" };
+  host = document.body.appendChild(document.createElement("div"));
+  await act(() => render(<LiveScheduleOverlay schedule={schedule} animate />, host!));
+  expect([...host.querySelectorAll(".pk-live-schedule__room-name")].map((room) => room.textContent)).toEqual([
+    "Green room",
+  ]);
+});
+const speaker = (name: string, moderator = false, organization: string | null = null) => ({
+  name,
+  moderator,
+  photoUrl: null,
+  organization,
+});
+it("names up to two speakers under the title on one line", async () => {
   expect(liveScheduleSpeakerLine([speaker("Pat Panelist")])).toBe("Pat Panelist");
   expect(liveScheduleSpeakerLine([speaker("Ana Example"), speaker("Fay Moderator", true)])).toBe(
     "Ana Example, Fay Moderator (moderator)",
   );
-  const panel = ["A", "B", "C", "D", "E", "F"].map((initial) => speaker(`${initial} Example`));
-  expect(liveScheduleSpeakerLine(panel)).toBe("Panel discussion · 6 speakers");
   const schedule = frame();
-  schedule.rooms = [{ ...schedule.rooms[0]!, speakers: panel }];
+  schedule.rooms = [{ ...schedule.rooms[0]!, speakers: [speaker("Ana Example"), speaker("Fay Moderator", true)] }];
   host = document.body.appendChild(document.createElement("div"));
   await act(() => render(<LiveScheduleOverlay schedule={schedule} animate />, host!));
-  // The speakers follow the title in the room's reading order, every face of the panel shown.
   const room = host.querySelector(".pk-live-schedule__room")!;
   expect(room.querySelector(".pk-live-schedule__title + .pk-live-schedule__speakers")).not.toBeNull();
-  expect(room.querySelectorAll(".pk-live-schedule__face")).toHaveLength(6);
-  expect(room.querySelector(".pk-live-schedule__more")).toBeNull();
-  expect(room.querySelector(".pk-live-schedule__names")?.textContent).toBe("Panel discussion · 6 speakers");
+  expect(room.querySelector(".pk-live-schedule__names")?.textContent).toBe("Ana Example, Fay Moderator (moderator)");
+  expect(room.querySelector("[data-turning]")).toBeNull();
+});
+it("names a larger panel one speaker at a time, with their organization, even without motion", async () => {
+  vi.useFakeTimers();
+  try {
+    const panel = ["A", "B", "C", "D", "E"].map((initial) => speaker(`${initial} Example`, false, `${initial} Org`));
+    panel.push(speaker("F Example", true, "F Org"));
+    const schedule = frame();
+    schedule.rooms = [{ ...schedule.rooms[0]!, speakers: panel }];
+    host = document.body.appendChild(document.createElement("div"));
+    await act(() => render(<LiveScheduleOverlay schedule={schedule} animate={false} />, host!));
+    const room = host.querySelector(".pk-live-schedule__room")!;
+    expect(room.querySelectorAll(".pk-live-schedule__face")).toHaveLength(6);
+    expect(room.querySelector(".pk-live-schedule__more")).toBeNull();
+    expect(room.querySelector(".pk-live-schedule__names")).toBeNull();
+    const named = () => [
+      room.querySelector(".pk-live-schedule__turn[data-active]")?.textContent,
+      [...room.querySelectorAll(".pk-live-schedule__face")].findIndex((face) => face.hasAttribute("data-active")),
+    ];
+    expect(named()).toEqual(["A ExampleA Org", 0]);
+    for (let turn = 1; turn < 6; turn++)
+      await act(() => {
+        vi.advanceTimersByTime(LIVE_SCHEDULE_SPEAKER_TURN_MS);
+      });
+    expect(named()).toEqual(["F ExampleModerator · F Org", 5]);
+    await act(() => {
+      vi.advanceTimersByTime(LIVE_SCHEDULE_SPEAKER_TURN_MS);
+    });
+    expect(named()).toEqual(["A ExampleA Org", 0]);
+  } finally {
+    vi.useRealTimers();
+  }
 });
 /** Four rooms in the next block: enough for the graphic to bring one card forward at a time. */
 function busyFrame() {

@@ -25,6 +25,8 @@ export const liveScheduleSpeakerSchema = z
     moderator: z.boolean(),
     /** The headshot the public agenda shows for this credit; null when it shows none. */
     photoUrl: publicSessionPortraitUrlSchema.nullable().default(null),
+    /** The organization of the speaker's primary affiliation on the public agenda; null when it names none. */
+    organization: z.string().trim().max(200).nullable().default(null),
   })
   .strict();
 export const liveScheduleRoomSchema = z
@@ -48,6 +50,8 @@ export const liveScheduleProjectionSchema = z
     available: z.boolean(),
     timeZone: timeZoneSchema.nullable(),
     resolvedAt: utcInstantSchema,
+    /** The room the graphic airs in, so its own room goes without saying; null when it airs for no one room. */
+    streamRoomId: agendaRoomSchema.shape.id.nullable().default(null),
     rooms: z.array(liveScheduleRoomSchema).max(LIVE_SCHEDULE_MAX_ROOMS),
   })
   .strict()
