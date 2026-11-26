@@ -19,7 +19,7 @@ import { liveOverlayLayoutChoices } from "../../../../../../../../shared/live-ov
 import { LiveOverlayPresentation } from "../../../../../../../live-session/LiveOverlayPresentation";
 import { Button } from "../../../../../../../ui/Button";
 import { Dialog } from "../../../../../../../ui/Dialog";
-import { StrokeIcon } from "../../../../../../../ui/MediaIcons";
+import { IconSound, StrokeIcon } from "../../../../../../../ui/MediaIcons";
 import { Menu } from "../../../../../../../ui/Menu";
 import { SectionHeading } from "../../../../../../../ui/SectionHeading";
 import { LiveDeskStream } from "../LiveDeskStream";
@@ -199,20 +199,6 @@ export function ExpandIcon() {
   );
 }
 
-/** The speaker, crossed out while muted. */
-function SoundIcon({ audible }: { audible: boolean }) {
-  return (
-    <StrokeIcon>
-      <path d="M2 6h2.5L8 3v10l-3.5-3H2z" />
-      {audible ? (
-        <path d="M10.5 5.5a3.5 3.5 0 0 1 0 5M12.5 3.5a6.4 6.4 0 0 1 0 9" />
-      ) : (
-        <path d="m10.5 6 4 4M14.5 6l-4 4" />
-      )}
-    </StrokeIcon>
-  );
-}
-
 /** Sound on the LIVE monitor: muted until the operator turns it on, and kept that way in their browser. */
 function LivestreamSoundToggle() {
   const audible = studioLivestreamAudible();
@@ -222,7 +208,7 @@ function LivestreamSoundToggle() {
     : "Livestream sound: off\nClick to hear the livestream in this browser.";
   return (
     <Button icon variant="ghost" aria-label={label} title={hint} onClick={() => setStudioLivestreamSound(!audible)}>
-      <SoundIcon audible={audible} />
+      <IconSound audible={audible} />
     </Button>
   );
 }

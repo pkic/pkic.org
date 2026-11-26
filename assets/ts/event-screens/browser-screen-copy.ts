@@ -15,7 +15,7 @@ export const BROWSER_SCREEN_ACTION_LABELS: Record<BrowserScreenAction, string> =
   resume: "Resume",
   fullscreen: "Full screen",
   share: "Share screen",
-  sound: "Turn on sound",
+  sound: "Turn sound on",
   awake: "Keep awake",
 };
 

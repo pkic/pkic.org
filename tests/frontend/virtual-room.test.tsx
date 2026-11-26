@@ -125,13 +125,14 @@ afterEach(() => {
   vi.mocked(Intl.DateTimeFormat.prototype.resolvedOptions).mockRestore();
 });
 
-async function open(away = false) {
+async function open(away = false, inPerson = false) {
   await act(async () => {
     render(
       <HeadingOutline titleLevel={1}>
         <VirtualRoom
           slug="summit"
           away={away}
+          inPerson={inPerson}
           agenda={(read) => <p>The event’s whole agenda, {read.data?.agenda?.occurrences.length} sessions</p>}
         />
       </HeadingOutline>,
@@ -151,11 +152,33 @@ const tabs = () => [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
 const tab = (label: string) => tabs().find((item) => item.textContent === label)!;
 
 describe("virtual room", () => {
+  it("waits for a click before playing the stream to someone in the hall, then plays it with sound", async () => {
+    await open(false, true);
+    expect(player()).toBeNull();
+    expect(host.textContent).toContain("Streams don't play by themselves for in-person attendees");
+    const watch = [...host.querySelectorAll("button")].find((button) => button.textContent === "Watch the stream")!;
+    await act(async () => watch.click());
+    expect(new URL(player()!.getAttribute("src")!).searchParams.get("mute")).toBeNull();
+    expect(host.querySelector(".pk-virtual-room__sound")?.getAttribute("aria-label")).toBe("Mute");
+  });
+
   it("plays the first location's stream in the privacy-enhanced player with the running session under it", async () => {
     await open();
     expect(player()?.getAttribute("src")).toMatch(
       new RegExp(`^https://www\\.youtube-nocookie\\.com/embed/${HALL_STREAM}\\?`),
     );
+    // It starts at once, muted as browsers require, inline on a phone, and without the provider's controls.
+    const query = new URL(player()!.getAttribute("src")!).searchParams;
+    expect(["autoplay", "mute", "playsinline", "controls"].map((name) => query.get(name))).toEqual([
+      "1",
+      "1",
+      "1",
+      "0",
+    ]);
+    expect(player()!.getAttribute("sandbox")).not.toContain("allow-popups");
+    const unmute = [...host.querySelectorAll("button")].find((button) => button.textContent === "Turn sound on")!;
+    await act(async () => unmute.click());
+    expect(host.querySelector(".pk-virtual-room__sound")?.getAttribute("aria-label")).toBe("Mute");
     expect(nowPlaying()).toContain("Opening keynote");
     // A dot marks the running session; its people sit as portraits at the end of the time line.
     expect(host.querySelector(".pk-virtual-room__live-dot")).not.toBeNull();

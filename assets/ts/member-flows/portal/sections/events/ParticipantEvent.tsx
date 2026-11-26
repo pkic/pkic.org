@@ -35,6 +35,7 @@ import { EventAppHero, EventHome } from "./app/EventHome";
 import { SectionHeading } from "../../../../ui/SectionHeading";
 import { EventTicket } from "./app/EventTicket";
 import { EventMore } from "./app/EventMore";
+import { attendanceStanding } from "../../../../shared/viewer-attendance";
 import { canInviteColleagues, eventRegistrationStanding } from "./app/event-app-model";
 import { hasEventProposals, hasEventPromotionMaterials, participantEventAppSubject } from "./app/event-app-tabs";
 
@@ -305,6 +306,7 @@ export function ParticipantEvent({
             <VirtualRoom
               slug={event.slug}
               away={!inRoom}
+              inPerson={"viewer" in event && event.viewer ? attendanceStanding(event.viewer).holdsInPersonSeat : false}
               motifUrl={event.motifUrl}
               agenda={(program, locationId) => (
                 <Suspense fallback={<Spinner />}>

@@ -53,10 +53,13 @@ function useVirtualRoomData(slug: string) {
 export function VirtualRoom({
   slug,
   away = false,
+  inPerson = false,
   motifUrl = null,
   agenda: agendaView,
 }: {
   slug: string;
+  /** The attendee holds an in-person seat: a stream waits for their click rather than playing in the hall. */
+  inPerson?: boolean;
   /** The event's own artwork, along the foot of a location held in the room only, as in the event's header. */
   motifUrl?: string | null;
   /**
@@ -158,6 +161,8 @@ export function VirtualRoom({
               stream={waiting ? null : stream}
               locationName={room.name}
               startsAt={waiting ? startsAt : undefined}
+              inPerson={inPerson}
+              motifUrl={motifUrl}
             />
           ) : (
             <VirtualRoomInRoom locationName={room.name} recordingPlanned={room.recordingPlanned} motifUrl={motifUrl} />

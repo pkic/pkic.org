@@ -44,6 +44,20 @@ export function StrokeIcon({
 
 // ── Media ───────────────────────────────────────────────────────────────────
 
+/** A speaker, with sound waves while audible and crossed out while muted. */
+export function IconSound({ audible, ...props }: SvgProps & { audible: boolean }) {
+  return (
+    <StrokeIcon {...props}>
+      <path d="M2 6h2.5L8 3v10l-3.5-3H2z" />
+      {audible ? (
+        <path d="M10.5 5.5a3.5 3.5 0 0 1 0 5M12.5 3.5a6.4 6.4 0 0 1 0 9" />
+      ) : (
+        <path d="m10.5 6 4 4M14.5 6l-4 4" />
+      )}
+    </StrokeIcon>
+  );
+}
+
 export function IconVideo(props: SvgProps) {
   return (
     <StrokeIcon {...props}>

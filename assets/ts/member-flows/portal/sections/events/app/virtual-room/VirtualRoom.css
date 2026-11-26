@@ -74,6 +74,91 @@
     border-radius: 0;
   }
 
+  /* The stream takes no clicks: the provider's own controls and links stay out of reach, and the room's sound button sits over it. */
+  .pk-virtual-room__stream {
+    position: relative;
+  }
+
+  .pk-virtual-room__stream-host iframe {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    border: 0;
+    pointer-events: none;
+  }
+
+  .pk-virtual-room__stream-status {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    margin: 0;
+    background: var(--pk-chrome-deep);
+  }
+
+  /* The sound control, in the picture's top-left corner: the one corner the room's own graphics leave free. */
+  .pk-virtual-room__sound.pk-btn,
+  .pk-virtual-room__sound.pk-btn:hover:not(:disabled),
+  .pk-virtual-room__unmute.pk-btn {
+    position: absolute;
+    inset-block-start: var(--pk-2);
+    inset-inline-start: var(--pk-2);
+  }
+
+  .pk-virtual-room__sound.pk-btn,
+  .pk-virtual-room__sound.pk-btn:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--pk-on-solid) 45%, transparent);
+    background: color-mix(in srgb, var(--pk-on-solid-ink) 72%, transparent);
+    color: var(--pk-on-solid);
+    backdrop-filter: blur(4px);
+    transition: opacity 0.3s ease;
+  }
+
+  /* With sound on, nothing covers the stream until the pointer moves over it; a keyboard still finds the button. */
+  .pk-virtual-room__sound--resting.pk-btn:not(:focus-visible) {
+    opacity: 0;
+  }
+
+  /* The event's orange stands out on any picture; dark ink keeps the label readable on it. */
+  .pk-virtual-room__unmute.pk-btn,
+  .pk-virtual-room__unmute.pk-btn:hover:not(:disabled) {
+    border-color: var(--pk-pqc-orange);
+    background: var(--pk-pqc-orange);
+    color: var(--pk-on-solid-ink);
+    box-shadow: var(--pk-shadow-2);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    /* Muted, the button opens large in the middle of the picture, settles in its corner, and keeps a slow beat. */
+    .pk-virtual-room__unmute.pk-btn {
+      animation:
+        pk-virtual-room-unmute-settle 0.7s ease-in-out 2s both,
+        pk-virtual-room-unmute-beat 1.6s ease-in-out 2.7s infinite;
+    }
+  }
+
+  @keyframes pk-virtual-room-unmute-settle {
+    from {
+      inset-block-start: 50%;
+      inset-inline-start: 50%;
+      translate: -50% -50%;
+      scale: 1.35;
+    }
+  }
+
+  @keyframes pk-virtual-room-unmute-beat {
+    0%,
+    100% {
+      scale: 1;
+    }
+    15% {
+      scale: 1.08;
+    }
+    30% {
+      scale: 1;
+    }
+  }
+
   .pk-virtual-room__player--idle {
     display: grid;
     align-items: center;
