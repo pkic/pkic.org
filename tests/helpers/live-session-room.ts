@@ -126,8 +126,47 @@ export function createLiveRoomFixture() {
       );
   }
 
-  function path(suffix = "") {
-    return `/api/v1/events/${EVENT_SLUG}/agenda/occurrences/${occurrenceId}/live${suffix}`;
+  /**
+   * Publishes a second session, "Next session", from 70 to 130 minutes from now: in the same physical room
+   * unless another one is named, which is then created.
+   */
+  async function addSession(sessionRoomId = roomId) {
+    const id = crypto.randomUUID(),
+      now = new Date().toISOString(),
+      start = new Date(Date.now() + 70 * 60000).toISOString(),
+      end = new Date(Date.now() + 130 * 60000).toISOString();
+    if (sessionRoomId !== roomId)
+      await env.DB.prepare("INSERT INTO event_agenda_rooms(id,event_id,name) VALUES (?,?,'Other physical room')")
+        .bind(sessionRoomId, eventId)
+        .run();
+    await env.DB.prepare(
+      "INSERT INTO event_agenda_occurrences(id,event_id,room_id,title,start_at,end_at) VALUES (?,?,?,'Next session',?,?)",
+    )
+      .bind(id, eventId, sessionRoomId, start, end)
+      .run();
+    await env.DB.prepare("UPDATE events SET ends_at=? WHERE id=?").bind(end, eventId).run();
+    const snapshot = await getAgenda(env.DB, eventId, EVENT_SLUG);
+    snapshot.revision = 2;
+    snapshot.publishedRevision = 2;
+    const json = JSON.stringify(snapshot);
+    await env.DB.prepare("UPDATE event_agenda_state SET revision=2,published_revision=2 WHERE event_id=?")
+      .bind(eventId)
+      .run();
+    await env.DB.prepare(
+      "INSERT INTO event_agenda_publications(id,event_id,revision,snapshot_json,created_by,created_at) VALUES(?,?,2,?,?,?)",
+    )
+      .bind(crypto.randomUUID(), eventId, json, users.operator, now)
+      .run();
+    await env.DB.prepare(
+      "INSERT INTO event_agenda_published_occurrences(event_id,revision,occurrence_id,payload_json) SELECT ?,2,json_extract(entry.value,'$.id'),entry.value FROM json_each(?,'$.occurrences') entry",
+    )
+      .bind(eventId, json)
+      .run();
+    return id;
+  }
+
+  function path(suffix = "", sessionId = occurrenceId) {
+    return `/api/v1/events/${EVENT_SLUG}/agenda/occurrences/${sessionId}/live${suffix}`;
   }
 
   /** A signed-in person, or a read-only source with its access and the output it draws. */
@@ -171,8 +210,9 @@ export function createLiveRoomFixture() {
   }
 
   /** An accepted socket that records every message the room sends it. */
-  async function connect(credential: Credential) {
-    return accept(await upgrade(credential), "room.snapshot");
+  /** A connection to the session's live room, or to another session's that `addSession` published. */
+  async function connect(credential: Credential, sessionId = occurrenceId) {
+    return accept(await upgrade(credential, {}, path("", sessionId)), "room.snapshot");
   }
 
   /** A signed-in person in the location's chat of the day, after its snapshot. */
@@ -283,6 +323,7 @@ export function createLiveRoomFixture() {
     connectChat,
     chatPath,
     connectSource,
+    addSession,
     get roomId() {
       return roomId;
     },

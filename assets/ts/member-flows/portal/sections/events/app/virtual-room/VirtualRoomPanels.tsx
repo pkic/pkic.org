@@ -10,7 +10,11 @@ import { liveRoomWindow } from "../../../../../../../shared/live-session-policy"
 import { LiveChatClosed } from "../../../../../../live-session/LiveChat";
 import { useLiveParticipation } from "../../../../../../live-session/LiveParticipationAlert";
 import { LiveReactionBar } from "../../../../../../live-session/LiveReactionBar";
-import { liveLocationChatOpen, liveLocationChatWindow } from "../../../../../../../shared/live-location-chat";
+import {
+  liveLocationChatOpen,
+  liveLocationChatStamp,
+  liveLocationChatWindow,
+} from "../../../../../../../shared/live-location-chat";
 import { LiveAttendeeChat } from "../../../../../../live-session/LocationChat";
 import type { LiveLocationChatConnection } from "../../../../../../live-session/useLocationChat";
 import { LiveAttendeeQuestions, LiveQuestionsClosed } from "../../../../../../live-session/SessionQuestions";
@@ -132,7 +136,16 @@ export function VirtualRoomQuestions({ live, askIn }: { live: RoomLive; askIn: H
  * The location's chat for the day, in a window that fills its panel. It opens shortly before the day's first
  * session there and closes a while after its last, whatever the studio does, unless the organizers end it.
  */
-export function VirtualRoomChat({ chat, zone }: { chat: LiveLocationChatConnection; zone: ClockZone }) {
+export function VirtualRoomChat({
+  chat,
+  zone,
+  loadedId,
+}: {
+  chat: LiveLocationChatConnection;
+  zone: ClockZone;
+  /** The session the studio has loaded in the location; the chat dates messages by it, else by the agenda. */
+  loadedId: string | null;
+}) {
   const now = useMinuteClock();
   const state = chat.state;
   if (!state) return <LiveAttendeeChat chat={chat} compact />;
@@ -152,7 +165,14 @@ export function VirtualRoomChat({ chat, zone }: { chat: LiveLocationChatConnecti
     return <LiveChatClosed note={note} />;
   }
   const closing = state.opening === "scheduled" && window.closesAt - now <= ENDING_NOTICE_MS;
-  return <LiveAttendeeChat chat={chat} compact note={closing ? `Chat closes at ${at(window.closesAt)}.` : undefined} />;
+  return (
+    <LiveAttendeeChat
+      chat={chat}
+      compact
+      sessionOn={liveLocationChatStamp(now, state.scope.sessions, loadedId)}
+      note={closing ? `Chat closes at ${at(window.closesAt)}.` : undefined}
+    />
+  );
 }
 
 /** The reaction bar, while the session is on air and the viewer may take part. */

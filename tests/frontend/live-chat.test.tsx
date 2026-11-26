@@ -10,6 +10,7 @@ import {
   type LiveLocationChatSnapshot,
 } from "../../assets/shared/schemas/live-session-room";
 import { LiveChat } from "../../assets/ts/live-session/LiveChat";
+import { liveChatMessageActions } from "../../assets/ts/live-session/LiveChatMessageRow";
 import { applyLocationChatMessage, type LiveLocationChatState } from "../../assets/ts/live-session/location-chat-state";
 import { LIVE_OCCURRENCE, liveChatMessage, liveLocationChatSnapshot } from "./helpers/live-room-socket";
 
@@ -450,6 +451,44 @@ describe("live chat", () => {
       ),
     ).toEqual(["", "Post-quantum migration", "", "Between sessions"]);
   });
+
+  it("ends the feed with the session the location went on to, before anyone writes in it", async () => {
+    const NEXT = "20000000-0000-4000-8000-000000000002";
+    const base = stateWith({ chat: [chatMessage({ occurrenceId: LIVE_OCCURRENCE })] });
+    const state = {
+      ...base,
+      scope: {
+        ...base.scope,
+        sessions: [
+          ...base.scope.sessions,
+          { ...base.scope.sessions[0]!, occurrenceId: NEXT, title: "Hybrid certificates" },
+        ],
+      },
+    };
+    const separators = (host: HTMLElement) =>
+      [...host.querySelectorAll('[role="separator"]')].map((separator) => separator.textContent);
+    const send = vi.fn(() => true);
+    const host = mount(<LiveChat state={state} disabled={false} send={send} sessionOn={LIVE_OCCURRENCE} />);
+    expect(separators(host)).toEqual(["Post-quantum migration"]);
+    await act(async () => draw(<LiveChat state={state} disabled={false} send={send} sessionOn={NEXT} />, host));
+    expect(separators(host)).toEqual(["Post-quantum migration", "Hybrid certificates"]);
+    await act(async () => draw(<LiveChat state={state} disabled={false} send={send} sessionOn={null} />, host));
+    expect(separators(host)).toEqual(["Post-quantum migration", "Between sessions"]);
+  });
+
+  it("turns only the session on's messages into questions, so none lands in a session that is over", () => {
+    const operator = { role: "operator" as const, name: "Rita", organizer: false };
+    const during = chatMessage({ occurrenceId: LIVE_OCCURRENCE });
+    const between = chatMessage();
+    const NEXT = "20000000-0000-4000-8000-000000000002";
+    expect(liveChatMessageActions(during, operator, false, LIVE_OCCURRENCE).has("convert")).toBe(true);
+    expect(liveChatMessageActions(during, operator, false, NEXT).has("convert")).toBe(false);
+    expect(liveChatMessageActions(during, operator, false, null).has("convert")).toBe(false);
+    // Written in the break before: it goes to the session on now.
+    expect(liveChatMessageActions(between, operator, false, NEXT).has("convert")).toBe(true);
+    // A view that does not know the session on leaves the decision to the room.
+    expect(liveChatMessageActions(during, operator).has("convert")).toBe(true);
+  });
 });
 
 it("counts only new inactive-channel messages, lists what to review and restores the selected studio view from its URL", async () => {
@@ -518,4 +557,22 @@ it("keeps studio scrollback stable and follows new messages only while already a
   await act(async () => draw(<LiveChat compact state={third} disabled={false} send={send} />, host));
   expect(feed.scrollTop).toBe(500);
   expect(host.querySelectorAll(".pk-live-chat__row")).toHaveLength(3);
+});
+
+it("lets a wheel or trackpad leave the latest message with a small move up", async () => {
+  const state = stateWith();
+  const send = vi.fn(() => true);
+  const host = mount(<LiveChat compact state={state} disabled={false} send={send} />);
+  const feed = host.querySelector<HTMLElement>(".pk-live-chat")!;
+  Object.defineProperties(feed, {
+    clientHeight: { configurable: true, value: 100 },
+    scrollHeight: { configurable: true, value: 500 },
+  });
+  feed.scrollTop = 400;
+  feed.dispatchEvent(new Event("scroll"));
+  // One wheel step up, well within the slack that still counts as reading the latest message when moving down.
+  feed.scrollTop = 390;
+  feed.dispatchEvent(new Event("scroll"));
+  await act(async () => draw(<LiveChat compact state={{ ...state }} disabled={false} send={send} />, host));
+  expect(feed.scrollTop).toBe(390);
 });
