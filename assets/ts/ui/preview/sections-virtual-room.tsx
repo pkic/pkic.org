@@ -210,7 +210,7 @@ function RoomSpecimen({
         inRoom ? (
           <VirtualRoomInRoom locationName="Room 2" recordingPlanned={false} motifUrl={null} />
         ) : (
-          <VirtualRoomPlayer stream={null} locationName="Main hall" />
+          <VirtualRoomPlayer stream={null} locationName="Main hall" sound={false} onSound={() => undefined} />
         )
       }
       streamed={!inRoom}

@@ -8,7 +8,7 @@ import { ONLINE_JOIN_LEAD_MS } from "../../../../../../../shared/event-agenda-me
  * running session comes from the published agenda compared with the browser clock at session boundaries.
  */
 import type { ComponentChildren } from "preact";
-import { useCallback, useEffect, useMemo, useRef } from "preact/hooks";
+import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import { agendaTimeZones } from "../../../../../../../shared/agenda-time-display";
 import { eventVirtualRoomRoute } from "../../../../../../../shared/event-participation-link";
@@ -74,6 +74,8 @@ export function VirtualRoom({
   agenda: (program: AgendaProgram, locationId: string | null) => ComponentChildren;
 }) {
   const [current] = useHashLocation();
+  // The viewer's sound choice outlasts the player, through a location without a stream and a visit elsewhere.
+  const [sound, setSound] = useState(inPerson);
   const shown = useRef(current);
   if (!away) shown.current = current;
   const location = shown.current;
@@ -163,6 +165,8 @@ export function VirtualRoom({
               startsAt={waiting ? startsAt : undefined}
               inPerson={inPerson}
               motifUrl={motifUrl}
+              sound={sound}
+              onSound={setSound}
             />
           ) : (
             <VirtualRoomInRoom locationName={room.name} recordingPlanned={room.recordingPlanned} motifUrl={motifUrl} />

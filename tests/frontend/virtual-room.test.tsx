@@ -194,6 +194,12 @@ describe("virtual room", () => {
     const captions = host.querySelector<HTMLButtonElement>('button[aria-label="Captions"]')!;
     await act(async () => captions.click());
     expect(captions.getAttribute("aria-pressed")).toBe("true");
+    // Away on another page of the event and back, the stream keeps the sound the viewer turned on.
+    await open(true);
+    expect(player()).toBeNull();
+    await open();
+    expect(new URL(player()!.getAttribute("src")!).searchParams.get("mute")).toBeNull();
+    expect(host.querySelector(".pk-virtual-room__sound")?.getAttribute("aria-label")).toBe("Mute");
     expect(nowPlaying()).toContain("Opening keynote");
     // A dot marks the running session; its people sit as portraits at the end of the time line.
     expect(host.querySelector(".pk-virtual-room__live-dot")).not.toBeNull();

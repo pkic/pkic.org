@@ -352,3 +352,26 @@ it("lets a person post as soon as an event block is lifted, even after the sessi
   await fixture.chatRoom().locationChatAccessChanged(fixture.occurrenceId, userId, stale);
   expect(await say("After a late notice")).toBe("shown");
 });
+
+it("lets a person post as soon as an event block is lifted while no session is on air", async () => {
+  await load(fixture.occurrenceId, 0);
+  const author = await join("attendee");
+  const operator = await join("operator");
+  author.send({ type: "chat.send", text: "Before the block" });
+  const sent = await author.next("chat.message", (message) => message.message.text === "Before the block");
+  operator.send({
+    type: "participation.block",
+    item: { kind: "chat", messageId: sent.message.id },
+    block: "event",
+    reason: "spam",
+    removePosts: false,
+  });
+  await author.next("location.chat.access", (update) => update.restriction?.block === "event");
+  await load(null, 1);
+  // The lift reaches the chat after the studio unloaded the session.
+  const lifted = author.received.length;
+  await fixture
+    .chatRoom()
+    .locationChatAccessChanged(fixture.occurrenceId, fixture.users.attendee, { blocked: false, at: Date.now() });
+  await author.next("location.chat.access", (update) => update.restriction === null, { after: lifted });
+});

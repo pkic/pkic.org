@@ -209,10 +209,10 @@ export class LiveLocationChatRoom {
     if (!store.state()) return;
     // The occurrence decided an event block in D1: the chat takes it now, not at its next access read.
     if (userId && decision) feed.decisions.decideEventBlock(userId, decision);
-    if (store.stamp(Date.now()) === occurrenceId) {
-      await this.syncAccess(userId);
-      this.onAirChanged();
-    }
+    const onAir = store.stamp(Date.now()) === occurrenceId;
+    // An event decision holds across sessions: the person's chat learns it even with no session on air.
+    if (onAir || (userId && decision)) await this.syncAccess(userId);
+    if (onAir) this.onAirChanged();
     if (userId) await chatActions.redeliver(chat.byAuthor(userId, LIVE_CHAT_POLICY.storedMessages, occurrenceId));
   }
 

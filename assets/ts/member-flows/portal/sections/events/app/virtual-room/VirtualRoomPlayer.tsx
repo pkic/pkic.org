@@ -33,6 +33,8 @@ export function VirtualRoomPlayer({
   startsAt,
   inPerson = false,
   motifUrl = null,
+  sound,
+  onSound,
 }: {
   stream: LiveStream | null;
   locationName: string;
@@ -41,10 +43,11 @@ export function VirtualRoomPlayer({
   motifUrl?: string | null;
   /** The attendee holds an in-person seat: the stream waits for a click rather than playing in the hall. */
   inPerson?: boolean;
+  /** The viewer's sound choice, held by the room so it outlasts this player; each stream starts with it. */
+  sound: boolean;
+  onSound: (sound: boolean) => void;
 }) {
   const [started, setStarted] = useState(!inPerson);
-  // The viewer's sound choice holds as they move between locations; each stream starts with it.
-  const [sound, setSound] = useState(inPerson);
   if (!stream) return <WaitingRoomPlayer locationName={locationName} startsAt={startsAt} />;
   // One provider today; another joins here as its own player when the stream union grows.
   if (!started)
@@ -70,7 +73,7 @@ export function VirtualRoomPlayer({
       videoId={stream.videoId}
       title={`${locationName} live stream`}
       sound={sound}
-      onSound={setSound}
+      onSound={onSound}
     />
   );
 }
