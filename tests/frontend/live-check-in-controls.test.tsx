@@ -116,3 +116,37 @@ it("saves the look and instruction for the event, and keeps the dialog open when
   await act(async () => button(dialog, "Save").click());
   expect(document.querySelector("dialog[open]")).toBeNull();
 });
+
+it("ignores a save the operator cancelled, so it neither reports into nor closes the dialog opened after it", async () => {
+  document.body.append(host);
+  const state = applyLiveRoomMessage(null, liveSnapshot({ viewer: { role: "operator", name: "Olga Operator" } }))!;
+  let finish: (problem: string | null) => void = () => undefined;
+  const saveGraphic = vi.fn(() => new Promise<string | null>((resolve) => (finish = resolve)));
+  const setup = { graphics: {}, layouts: {}, canSave: true, saveGraphic, saveLayout: vi.fn(async () => null) };
+  void act(() =>
+    render(
+      <LiveCheckInControls
+        slug="pqc-2026"
+        occurrenceId={LIVE_OCCURRENCE}
+        targets={{ state, programActive: true, disabled: false, sendProgram: () => true, setup }}
+      />,
+      host,
+    ),
+  );
+  const openSettings = () => {
+    void act(() => labeled(host, "Check-in code actions").click());
+    void act(() =>
+      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+        .find((item) => item.textContent?.includes("Check-in code settings"))!
+        .click(),
+    );
+    return document.querySelector<HTMLDialogElement>("dialog[open]")!;
+  };
+  const first = openSettings();
+  await act(async () => button(first, "Save").click());
+  void act(() => button(first, "Cancel").click());
+  const second = openSettings();
+  await act(async () => finish("The studio setup was not saved."));
+  expect(second.open).toBe(true);
+  expect(second.textContent).not.toContain("The studio setup was not saved.");
+});

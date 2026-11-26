@@ -61,8 +61,10 @@ export function useLiveStudioSetup(slug: string, canSave: boolean): LiveStudioSe
     // A studio that cannot read the setup still works from the built-in one.
     load().catch(() => undefined);
   }, [load]);
+  // Saves run one after another, so each starts from what the one before returned and none lands over a newer one.
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
   const save = useCallback(
-    async (change: Change): Promise<string | null> => {
+    (change: Change): Promise<string | null> => {
       const put = async (base: EventLiveStudioSetupResponse) => {
         const { updatedAt, ...setup } = base;
         const saved = await putJson(
@@ -74,17 +76,22 @@ export function useLiveStudioSetup(slug: string, canSave: boolean): LiveStudioSe
         latest.current = saved;
         setCurrent(saved);
       };
-      try {
+      const attempt = async (): Promise<string | null> => {
         try {
-          await put(latest.current);
+          try {
+            await put(latest.current);
+          } catch (cause) {
+            if (!(cause instanceof ApiClientError) || cause.status !== 409) throw cause;
+            await put(await load());
+          }
+          return null;
         } catch (cause) {
-          if (!(cause instanceof ApiClientError) || cause.status !== 409) throw cause;
-          await put(await load());
+          return cause instanceof ApiClientError && cause.status !== 0 ? cause.message : LIVE_STUDIO_SETUP_NOT_SAVED;
         }
-        return null;
-      } catch (cause) {
-        return cause instanceof ApiClientError && cause.status !== 0 ? cause.message : LIVE_STUDIO_SETUP_NOT_SAVED;
-      }
+      };
+      const run = queue.current.then(attempt);
+      queue.current = run;
+      return run;
     },
     [endpoint, load],
   );

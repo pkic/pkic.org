@@ -310,6 +310,9 @@ describe("timers over a board", () => {
     expect(under.block * column.h + column.y).toBeCloseTo(stacked(1).y + stacked(1).h, 3);
     const tall = timerClearance(column, [stacked(0), stacked(1), stacked(2), stacked(3)]);
     expect(tall).toEqual({ inline: expect.closeTo((column.x + column.w - timer.x) / column.w, 3), block: 0 });
+    // A tall stack reaching past the board's start keeps no more than half the board clear, so the text keeps room.
+    const wide = (index: number) => ({ ...stacked(index), x: column.x - 0.05, w: column.w + 0.1 });
+    expect(timerClearance(column, [0, 1, 2, 3].map(wide))).toEqual({ inline: 0.5, block: 0 });
     // A timer away from the corner, such as the column layout's own timer over the camera, needs no room.
     expect(timerClearance(column, [LIVE_OVERLAY_PRESET_LAYOUTS.questions.elements.timer])).toEqual({
       inline: 0,

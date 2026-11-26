@@ -93,6 +93,8 @@ export function LiveCheckInControls({
   const saves = Boolean(targets.setup?.canSave);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  // Each opening of the dialog counts; a save started by an earlier, cancelled one neither reports nor closes.
+  const opening = useRef(0);
   const options = codes.data ?? [];
   const current = options.find((code) => keyOf(code.selection) === chosen) ?? options[0] ?? null;
   const [draft, setDraft] = useState<Partial<LiveCheckInChoice>>({});
@@ -116,6 +118,7 @@ export function LiveCheckInControls({
         label: "Check-in code settings",
         disabled: options.length === 0,
         onOpen: () => {
+          opening.current += 1;
           setDraft({ checkIn: current?.selection, checkInTheme: theme, checkInText: text });
           form.reset();
           setError(null);
@@ -134,9 +137,11 @@ export function LiveCheckInControls({
             if (!checked.data) return;
             const { checkIn, checkInTheme, checkInText } = checked.data;
             const setup = saves ? targets.setup : undefined;
+            const started = opening.current;
             void (
               setup ? setup.saveGraphic("checkIn", { theme: checkInTheme, text: checkInText }) : Promise.resolve(null)
             ).then((problem) => {
+              if (opening.current !== started) return;
               setError(problem);
               if (problem) return;
               setChosen(keyOf(checkIn));
@@ -145,7 +150,10 @@ export function LiveCheckInControls({
               setOpen(false);
             });
           }}
-          onCancel={() => setOpen(false)}
+          onCancel={() => {
+            opening.current += 1;
+            setOpen(false);
+          }}
         >
           <form noValidate {...form.handlers} class="pk-stack" onSubmit={(event) => event.preventDefault()}>
             <Field label="Code to show" {...form.of("checkIn")}>

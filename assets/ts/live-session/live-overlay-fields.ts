@@ -55,6 +55,8 @@ export const NO_TIMER_CLEARANCE: LiveOverlayTimerClearance = { inline: 0, block:
 const BESIDE_TIMERS = 0.25;
 /** The most of a board's height its top row moves down for timers; a taller stack keeps its column clear instead. */
 const UNDER_TIMERS = 0.4;
+/** The most of a board's width a tall stack's column takes, so the board's text always keeps half of it. */
+const BESIDE_TALL_TIMERS = 0.5;
 
 export function timerClearance(
   board: LiveOverlayElementPlacement,
@@ -81,8 +83,14 @@ export function timerClearance(
       timer.y + timer.h > board.y,
   );
   const block = Math.max(...column.map((timer) => (timer.y + timer.h - board.y) / board.h));
-  // A stack too tall to start the top row under keeps its column clear instead, so no line runs beneath a timer.
-  if (block > UNDER_TIMERS) return { inline: Math.max(...column.map((timer) => (end - timer.x) / board.w)), block: 0 };
+  // A stack too tall to start the top row under keeps its column clear instead, so no line runs beneath a
+  // timer; a timer reaching past the board's start still leaves the text its half.
+  if (block > UNDER_TIMERS) {
+    return {
+      inline: Math.min(BESIDE_TALL_TIMERS, Math.max(...column.map((timer) => (end - timer.x) / board.w))),
+      block: 0,
+    };
+  }
   return { inline: 0, block };
 }
 
