@@ -149,7 +149,7 @@ it("turns a chat message into a question in the session the studio has loaded, a
 });
 
 it("keeps an earlier session's chat out of the next session's questions", async () => {
-  const next = await fixture.addSession();
+  const next = await fixture.addSession(undefined, { sameDay: true });
   await load(fixture.occurrenceId, 0);
   const attendee = await join("attendee");
   const operator = await join("operator");
