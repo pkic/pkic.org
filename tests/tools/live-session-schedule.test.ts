@@ -98,7 +98,12 @@ describe("independent approved room schedules", () => {
     expect(result.rooms[0]!.occurrenceId).toBe("approved");
     // The headshot is the one the public agenda shows for the approved appearance; nothing private comes along.
     expect(result.rooms[0]!.speakers).toEqual([
-      { name: "Historical speaker", moderator: true, photoUrl: "/approved-photo.jpg" },
+      {
+        name: "Historical speaker",
+        moderator: true,
+        organization: "Historical organization",
+        photoUrl: "/approved-photo.jpg",
+      },
     ]);
     expect(JSON.stringify(result)).not.toMatch(/biography|private|profileCandidate/);
   });
@@ -126,7 +131,7 @@ describe("independent approved room schedules", () => {
       }),
     ];
     const [room] = resolveUpcomingRooms(snapshot, null, Date.parse(time("09:30")), DEFAULT_LIVE_SCHEDULE_CONFIG).rooms;
-    expect(room!.speakers).toEqual([{ name: "Roster speaker", moderator: false, photoUrl: null }]);
+    expect(room!.speakers).toEqual([{ name: "Roster speaker", moderator: false, organization: null, photoUrl: null }]);
   });
   it("keeps stable start/id ties and a bounded room projection", () => {
     const snapshot = agenda();
