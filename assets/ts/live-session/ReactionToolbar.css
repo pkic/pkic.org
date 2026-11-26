@@ -24,6 +24,11 @@
   .pk-reaction-toolbar__button:active:not(:disabled) {
     transform: scale(0.88);
   }
+  @media (prefers-reduced-motion: reduce) {
+    .pk-reaction-toolbar__button:active:not(:disabled) {
+      transform: none;
+    }
+  }
   .pk-reaction-toolbar__button:hover:not(:disabled) {
     background: var(--pk-surface-sunk);
   }

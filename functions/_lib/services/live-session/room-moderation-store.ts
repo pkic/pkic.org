@@ -7,6 +7,7 @@ import {
   type LiveParticipationRestriction,
 } from "../../../../assets/shared/live-moderation-policy";
 import type { LiveRoomSql } from "./room-sql";
+import type { LiveEventBlockDecision } from "./room-occurrence-participation";
 
 export interface LiveRemovalRow {
   item_id: string;
@@ -174,13 +175,14 @@ export class LiveRoomModerationStore {
     this.sql.exec("DELETE FROM room_participation_blocks WHERE user_id = ?", userId);
   }
 
-  /** When this room last blocked or lifted someone for the event, so an older D1 read can't undo it. */
+  /** When the event decision this room holds for someone was made, so an older D1 read or notice can't undo it. */
   private readonly eventDecidedAt = new Map<string, number>();
 
-  /** An organizer's decision in this room, already written to D1. */
-  decideEventBlock(userId: string, blocked: boolean): void {
-    this.eventDecidedAt.set(userId, Date.now());
-    this.eventBlocked(userId, blocked);
+  /** An organizer's decision, already written to D1; one older than the decision held here is stale and ignored. */
+  decideEventBlock(userId: string, decision: LiveEventBlockDecision): void {
+    if ((this.eventDecidedAt.get(userId) ?? -Infinity) > decision.at) return;
+    this.eventDecidedAt.set(userId, decision.at);
+    this.eventBlocked(userId, decision.blocked);
   }
 
   private eventBlocked(userId: string, blocked: boolean): void {

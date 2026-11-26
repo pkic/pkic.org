@@ -6,7 +6,7 @@ import { LiveRoomModerationStore } from "./room-moderation-store";
 import { LiveRoomParticipation } from "./room-participation";
 import { LIVE_PARTICIPATION_REFUSAL, liveCommandParticipates } from "./room-participation-refusal";
 import { LiveOccurrenceChatAccess } from "./room-occurrence-chat-access";
-import type { LiveOccurrenceModerationChange } from "./room-occurrence-participation";
+import type { LiveEventBlockDecision, LiveOccurrenceModerationChange } from "./room-occurrence-participation";
 import { connectLiveOccurrence } from "./room-connection";
 import { LiveRoomQuestionCommands } from "./room-question-commands";
 import { operateLiveDesk, type LiveDesk } from "./room-desk";
@@ -245,7 +245,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       () => liveRoomChatScope(this.store, this.location)?.eventId ?? null,
       (occurrenceId) => this.locationChat.occurrenceModeration(occurrenceId),
       () => this.location.stamp(Date.now()),
-      (userId, eventBlocked) => this.occurrenceParticipation.notify(userId, eventBlocked),
+      (userId, decision) => this.occurrenceParticipation.notify(userId, decision),
     );
     this.occurrenceParticipation = new LiveOccurrenceChatAccess(
       ctx,
@@ -253,7 +253,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       this.sql,
       this.store,
       this.decisions,
-      (userId) => this.participation.changed(userId),
+      (userId, decision) => this.participation.changed(userId, undefined, undefined, decision),
       (at) => this.scheduleAlarm(at, true),
     );
     this.locationChat = new LiveLocationChatRoom({
@@ -340,8 +340,8 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     return this.occurrenceParticipation.change(userId, endsAt, change);
   }
 
-  async locationChatAccessChanged(occurrenceId: string, userId: string | null, eventBlocked?: boolean) {
-    return this.locationChat.accessChanged(occurrenceId, userId, eventBlocked);
+  async locationChatAccessChanged(occurrenceId: string, userId: string | null, decision?: LiveEventBlockDecision) {
+    return this.locationChat.accessChanged(occurrenceId, userId, decision);
   }
 
   async locationChatOnAir(occurrenceId: string, limit: number, options: LiveChatOnAirOptions) {

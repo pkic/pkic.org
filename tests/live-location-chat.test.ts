@@ -266,11 +266,13 @@ it("lets a person post again as soon as a pause, a session block or an event blo
   if (message?.type !== "chat.message") throw new Error("Expected a message");
   const item = { kind: "chat" as const, messageId: message.message.id };
   for (const block of ["paused", "session", "event"] as const) {
+    const blocked = author.received.length;
     operator.send({ type: "participation.block", item, block, reason: "spam", removePosts: true });
-    await author.next("participation.access", (update) => update.restriction?.block === block);
+    await author.next("participation.access", (update) => update.restriction?.block === block, { after: blocked });
     expect(await say(`While ${block}`)).toBe("LIVE_PARTICIPATION_BLOCKED");
+    const lifted = author.received.length;
     operator.send({ type: "participation.lift", item });
-    await author.next("participation.access", (update) => update.restriction === null);
+    await author.next("participation.access", (update) => update.restriction === null, { after: lifted });
     expect(await say(`After ${block}`)).toBe("shown");
   }
 });
@@ -339,4 +341,8 @@ it("lets a person post as soon as an event block is lifted, even after the sessi
   operator.send({ type: "participation.lift", item });
   await author.next("participation.access", (update) => update.restriction === null, { after: lifted });
   expect(await say("After the lift")).toBe("shown");
+  // The block's notice, older than the lift, arrives late: the chat keeps the newer lift.
+  const stale = { blocked: true, at: Date.now() - 60_000 };
+  await fixture.chatRoom().locationChatAccessChanged(fixture.occurrenceId, userId, stale);
+  expect(await say("After a late notice")).toBe("shown");
 });

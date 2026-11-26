@@ -27,6 +27,7 @@ import { serializeLiveRoomMessage } from "./room-projection";
 import { seesChatOccurrence } from "./room-chat-audience";
 import { LIVE_PARTICIPATION_REFUSAL } from "./room-participation-refusal";
 import type { LiveOccurrenceModerationChange } from "./room-occurrence-participation";
+import type { LiveEventBlockDecision } from "./room-occurrence-participation";
 
 /** The socket tag of a location chat's connections, beside each connection's role. */
 export const LIVE_LOCATION_CHAT_SOCKET_TAG = "location-chat";
@@ -203,11 +204,11 @@ export class LiveLocationChatRoom {
     this.onAirChanged();
   }
 
-  async accessChanged(occurrenceId: string, userId: string | null, eventBlocked?: boolean): Promise<void> {
+  async accessChanged(occurrenceId: string, userId: string | null, decision?: LiveEventBlockDecision): Promise<void> {
     const { store, chat, chatActions, feed } = this.parts;
     if (!store.state()) return;
     // The occurrence decided an event block in D1: the chat takes it now, not at its next access read.
-    if (userId && eventBlocked !== undefined) feed.decisions.decideEventBlock(userId, eventBlocked);
+    if (userId && decision) feed.decisions.decideEventBlock(userId, decision);
     if (store.stamp(Date.now()) === occurrenceId) {
       await this.syncAccess(userId);
       this.onAirChanged();

@@ -5,7 +5,11 @@ import { liveLocationChatName } from "./room-admission";
 import type { LiveRoomModerationStore } from "./room-moderation-store";
 import type { LiveRoomSql } from "./room-sql";
 import type { LiveRoomStore } from "./room-store";
-import type { LiveOccurrenceModerationChange, LiveOccurrenceParticipation } from "./room-occurrence-participation";
+import type {
+  LiveEventBlockDecision,
+  LiveOccurrenceModerationChange,
+  LiveOccurrenceParticipation,
+} from "./room-occurrence-participation";
 
 const MODERATION_PURGE_AT = "occurrence-moderation-purge-at";
 
@@ -17,7 +21,7 @@ export class LiveOccurrenceChatAccess {
     private readonly sql: LiveRoomSql,
     private readonly store: LiveRoomStore,
     private readonly decisions: LiveRoomModerationStore,
-    private readonly changed: (userId: string) => Promise<void>,
+    private readonly changed: (userId: string, decision?: LiveEventBlockDecision) => Promise<void>,
     private readonly scheduleAlarm: (at: number) => Promise<void>,
   ) {}
 
@@ -45,8 +49,8 @@ export class LiveOccurrenceChatAccess {
   ): Promise<LiveOccurrenceParticipation> {
     if (change.kind === "event") {
       if (!this.sql.holdsData()) return this.read(userId);
-      this.decisions.decideEventBlock(userId, change.blocked);
-      if (this.store.session()) this.ctx.waitUntil(this.changed(userId));
+      this.decisions.decideEventBlock(userId, change.decision);
+      if (this.store.session()) this.ctx.waitUntil(this.changed(userId, change.decision));
       return this.read(userId);
     }
     const current = this.read(userId);
@@ -67,7 +71,7 @@ export class LiveOccurrenceChatAccess {
   }
 
   /** Tells the occurrence's location chats; an event decision made here goes with it, so they need not wait for D1. */
-  notify(userId: string | null, eventBlocked?: boolean): void {
+  notify(userId: string | null, decision?: LiveEventBlockDecision): void {
     const room = this.store.session();
     const rooms = this.env.LIVE_SESSION_ROOMS;
     if (!room || !rooms) return;
@@ -77,7 +81,7 @@ export class LiveOccurrenceChatAccess {
       this.ctx.waitUntil(
         rooms
           .getByName(liveLocationChatName(room.eventId, roomId, day))
-          .locationChatAccessChanged(session.occurrenceId, userId, eventBlocked)
+          .locationChatAccessChanged(session.occurrenceId, userId, decision)
           .catch((error: unknown) => console.error("Live location chat access notice failed", error)),
       );
     }
