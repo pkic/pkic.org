@@ -43,6 +43,8 @@ export function VirtualRoomPlayer({
   inPerson?: boolean;
 }) {
   const [started, setStarted] = useState(!inPerson);
+  // The viewer's sound choice holds as they move between locations; each stream starts with it.
+  const [sound, setSound] = useState(inPerson);
   if (!stream) return <WaitingRoomPlayer locationName={locationName} startsAt={startsAt} />;
   // One provider today; another joins here as its own player when the stream union grows.
   if (!started)
@@ -67,7 +69,8 @@ export function VirtualRoomPlayer({
       key={stream.videoId}
       videoId={stream.videoId}
       title={`${locationName} live stream`}
-      sound={inPerson}
+      sound={sound}
+      onSound={setSound}
     />
   );
 }
@@ -82,13 +85,23 @@ const SOUND_CONTROL_SHOWN_MS = 3_000;
  * keeps beating until the sound is on; with sound, a small button there turns it off, shown only while the
  * pointer moves over the picture so nothing covers the stream.
  */
-function StreamPlayer({ videoId, title, sound: startWithSound }: { videoId: string; title: string; sound: boolean }) {
-  const [sound, setSoundOn] = useState(startWithSound);
+function StreamPlayer({
+  videoId,
+  title,
+  sound,
+  onSound,
+}: {
+  videoId: string;
+  title: string;
+  /** The viewer's choice: with sound unless they turned it off, or muted until they turn it on. */
+  sound: boolean;
+  onSound: (sound: boolean) => void;
+}) {
   const player = useLivestreamPlayer({ videoId, title, sound, keepLive: true, report: false });
   const audible = sound && !player.health.muted;
   const [controlShown, showControl] = useShownWhileActive(SOUND_CONTROL_SHOWN_MS);
   const toggle = () => {
-    setSoundOn(!audible);
+    onSound(!audible);
     player.setSound(!audible);
     showControl();
   };

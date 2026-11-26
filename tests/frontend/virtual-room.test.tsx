@@ -159,7 +159,15 @@ describe("virtual room", () => {
     const watch = [...host.querySelectorAll("button")].find((button) => button.textContent === "Watch the stream")!;
     await act(async () => watch.click());
     expect(new URL(player()!.getAttribute("src")!).searchParams.get("mute")).toBeNull();
-    expect(host.querySelector(".pk-virtual-room__sound")?.getAttribute("aria-label")).toBe("Mute");
+    const mute = host.querySelector<HTMLButtonElement>(".pk-virtual-room__sound")!;
+    expect(mute.getAttribute("aria-label")).toBe("Mute");
+    // Muted, the stream stays muted in the next location the attendee opens.
+    await act(async () => mute.click());
+    hashLocation.current = `/events/summit/virtual?room=${STUDIO}`;
+    await open(false, true);
+    expect(player()?.getAttribute("src")).toContain(STUDIO_STREAM);
+    expect(new URL(player()!.getAttribute("src")!).searchParams.get("mute")).toBe("1");
+    expect(host.querySelector(".pk-virtual-room__unmute")?.textContent).toBe("Turn sound on");
   });
 
   it("plays the first location's stream in the privacy-enhanced player with the running session under it", async () => {

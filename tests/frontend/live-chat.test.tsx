@@ -103,6 +103,14 @@ describe("live chat", () => {
     expect(text.value).toBe("Back again");
     submit(host);
     expect(send).toHaveBeenCalledTimes(2);
+    // The block reaches the chat and takes the composer away; when it lifts, the words come back.
+    const blocked = stateWith({
+      viewer: { role: "attendee", name: "Ada", participation: { block: "event", until: null } },
+    });
+    void act(() => draw(<LiveChat state={blocked} disabled={false} send={send} />, host));
+    expect(host.querySelector("textarea")).toBeNull();
+    void act(() => draw(<LiveChat state={stateWith()} disabled={false} send={send} />, host));
+    expect(host.querySelector("textarea")?.value).toBe("Back again");
   });
 
   it("keeps an empty composer at rest and reports a refusal on the status line above it", () => {

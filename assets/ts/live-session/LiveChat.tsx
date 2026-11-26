@@ -73,6 +73,7 @@ export function ChatComposer({
   note,
   composing = null,
   onComposed,
+  unsent,
 }: {
   channel: LiveChatChannel;
   compact: boolean;
@@ -88,8 +89,10 @@ export function ChatComposer({
   composing?: LiveChatComposing | null;
   /** The reply or edit was sent or set aside. */
   onComposed?: () => void;
+  /** Words not yet sent, per channel, kept by the chat while a block takes the composer away. */
+  unsent?: Partial<Record<LiveChatChannel, string>>;
 }) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(unsent?.[channel] ?? "");
   const [error, setError] = useState<string | null>(null);
   const statusId = useId();
   const formNode = useRef<HTMLFormElement>(null);
@@ -98,6 +101,8 @@ export function ChatComposer({
   const wasEditing = useRef(false);
   const replying = composing?.kind === "reply" ? composing.message : null;
   const editing = composing?.kind === "edit" ? composing.message : null;
+  // An edit's words belong to the message edited, not to a new one.
+  if (unsent && !editing) unsent[channel] = text;
   const sendForm = useContractForm(
     liveChatSendSchema,
     { type: "chat.send", text, channel, ...(replying ? { replyTo: replying.id } : {}) },
@@ -334,6 +339,7 @@ export function LiveChat({
   const [unseen, setUnseen] = useState(0);
   const [loading, setLoading] = useState(false);
   const [composing, setComposing] = useState<LiveChatComposing | null>(null);
+  const unsent = useRef<Partial<Record<LiveChatChannel, string>>>({});
   /** The message a reader followed a quote to, while earlier pages load until it is held. */
   const [seeking, setSeeking] = useState<string | null>(null);
   const [highlighted, setHighlighted] = useState<string | null>(null);
@@ -550,6 +556,7 @@ export function LiveChat({
             note={note}
             composing={composing}
             onComposed={() => setComposing(null)}
+            unsent={unsent.current}
           />
         ) : restriction && channel === "attendee" ? (
           <LiveParticipationAlert
