@@ -1,3 +1,4 @@
+import { Fragment } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import type { LiveScheduleProjection, LiveScheduleRoom } from "../../shared/schemas/live-session-schedule";
 import { formatClockInZone, formatClockName } from "../../shared/format-date";
@@ -138,6 +139,12 @@ function Speakers({ speakers }: { speakers: LiveScheduleRoom["speakers"] }) {
   );
 }
 
+/** The stream's own room leads; the other rooms keep their agenda order. */
+export function streamRoomFirst<Room extends { roomId: string }>(rooms: readonly Room[], streamRoomId?: string | null) {
+  const here = rooms.filter((room) => room.roomId === streamRoomId);
+  return [...here, ...rooms.filter((room) => room.roomId !== streamRoomId)];
+}
+
 /**
  * What comes next in each room, from the approved public agenda, as a
  * broadcast graphic: the room and its start time lead, then the session and,
@@ -157,7 +164,7 @@ export function LiveScheduleOverlay({
   /** Whether the rooms may move: always on air, and on a monitor unless its viewer prefers reduced motion. */
   animate: boolean;
 }) {
-  const rooms = schedule?.available ? schedule.rooms : [];
+  const rooms = schedule?.available ? streamRoomFirst(schedule.rooms, schedule.streamRoomId) : [];
   const spotlight = useSpotlight(rooms.length, animate);
   if (!schedule || !rooms.length) return null;
   const zone = schedule.timeZone;
@@ -182,24 +189,31 @@ export function LiveScheduleOverlay({
         </header>
         <ol class="pk-live-schedule__rooms">
           {rooms.map((room, index) => {
-            // The stream's own room goes without saying; another room is named.
-            const elsewhere = room.roomId !== schedule.streamRoomId;
+            const here = room.roomId === schedule.streamRoomId;
+            // The other rooms follow under their own label, after the stream's own room.
+            const split = !here && index > 0 && rooms[index - 1]!.roomId === schedule.streamRoomId;
             return (
-              <li
-                key={room.roomId}
-                class="pk-live-schedule__room"
-                data-accent={room.roomIndex % 6}
-                data-active={spotlight === index ? "" : undefined}
-              >
-                <p class="pk-live-schedule__when">
-                  <time dateTime={room.startAt}>{zone ? formatClockInZone(room.startAt, zone) : ""}</time>
-                </p>
-                {elsewhere ? <p class="pk-live-schedule__room-name">{room.roomName}</p> : null}
-                <SectionHeading level={3} class="pk-live-schedule__title">
-                  {room.title}
-                </SectionHeading>
-                <Speakers speakers={room.speakers} />
-              </li>
+              <Fragment key={room.roomId}>
+                {split ? <li class="pk-live-schedule__split">In other rooms</li> : null}
+                <li
+                  class="pk-live-schedule__room"
+                  data-accent={room.roomIndex % 6}
+                  data-here={here ? "" : undefined}
+                  data-active={spotlight === index ? "" : undefined}
+                >
+                  <p class="pk-live-schedule__when">
+                    <time dateTime={room.startAt}>{zone ? formatClockInZone(room.startAt, zone) : ""}</time>
+                  </p>
+                  {/* Alone, the stream's own room goes without saying. */}
+                  {here && rooms.length === 1 ? null : (
+                    <p class="pk-live-schedule__room-name">{here ? `This room (${room.roomName})` : room.roomName}</p>
+                  )}
+                  <SectionHeading level={3} class="pk-live-schedule__title">
+                    {room.title}
+                  </SectionHeading>
+                  <Speakers speakers={room.speakers} />
+                </li>
+              </Fragment>
             );
           })}
         </ol>

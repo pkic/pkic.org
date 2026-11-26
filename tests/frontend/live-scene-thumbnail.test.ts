@@ -86,6 +86,16 @@ function studio(
 
 const stageOf = (room: LiveSceneThumbnailRoom, scene: string) => liveSceneThumbnail(room, scene, NOW).state.stage;
 
+/** An event's own scene that brings the session graphic on, as no built-in scene does. */
+const PANEL_SCENE = {
+  slug: "session-panel",
+  name: "Session panel",
+  elements: {
+    ...LIVE_OVERLAY_PRESET_LAYOUTS["full-board"].elements,
+    panelists: { ...LIVE_OVERLAY_PRESET_LAYOUTS["full-board"].elements.panelists, comesOn: true },
+  },
+};
+
 const TICKER = { ...DEFAULT_LIVE_TICKER_CONFIG, segments: [{ id: "note", prefix: "Note", markdown: "On in Preview" }] };
 
 describe("scene thumbnails", () => {
@@ -93,13 +103,13 @@ describe("scene thumbnails", () => {
     ["an empty Preview", {}],
     ["a Preview with a lower third and the ticker on", { lowerThird: SPEAKER, ticker: TICKER }],
   ] as const)("add each scene's comes-on graphics, filled from the room, to %s", (_name, held) => {
-    const room = studio(held);
+    const room = studio(held, { overlayLayouts: [PANEL_SCENE] });
     const base = room.preview.stage;
 
     // Default brings nothing on: Preview as it is.
     expect(stageOf(room, "default")).toEqual({ ...base, scene: "default" });
 
-    // Q&A: the open questions with the most votes, most first; an anonymous author stays anonymous.
+    // Board right: the open questions with the most votes, most first; an anonymous author stays anonymous.
     expect(stageOf(room, "questions")).toEqual({
       ...base,
       scene: "questions",
@@ -113,8 +123,12 @@ describe("scene thumbnails", () => {
       },
     });
 
-    // Panel: the session's own credits, which the panel draws.
-    expect(stageOf(room, "panel")).toEqual({ ...base, scene: "panel", panelists: { layout: "panel" } });
+    // A scene that brings the session graphic on: the session's own credits, which the panel draws.
+    expect(stageOf(room, "session-panel")).toEqual({
+      ...base,
+      scene: "session-panel",
+      panelists: { layout: "panel" },
+    });
 
     // Break: Up next from the approved agenda, every room, as the room resolves it.
     const pause = stageOf(room, "break");
@@ -141,8 +155,8 @@ describe("scene thumbnails", () => {
     // Preview's own list stays exactly as it is.
     expect(stageOf(studio({ topQuestions: listed }), "questions").topQuestions).toBe(listed);
     // A session with one speaker still brings its session graphic on.
-    const solo = studio({}, { session: liveSnapshot().session });
-    expect(stageOf(solo, "panel").panelists).toEqual({ layout: "panel" });
+    const solo = studio({}, { session: liveSnapshot().session, overlayLayouts: [PANEL_SCENE] });
+    expect(stageOf(solo, "session-panel").panelists).toEqual({ layout: "panel" });
     // Another session is on air: the looks are the standard ones.
     expect(stageOf(studio({}, {}, { program: null }), "questions").topQuestions?.config).toEqual({ count: 3 });
   });
@@ -214,7 +228,7 @@ describe("scene thumbnails", () => {
 
   it("outline the scene's boxes only while the thumbnail holds no graphic", () => {
     const room = studio({}, { questions: [], session: liveSnapshot().session });
-    // Nothing comes on in Default, and Q&A has no open question to list: both show their boxes.
+    // Nothing comes on in Default, and Board right has no open question to list: both show their boxes.
     for (const scene of ["default", "questions"]) {
       const thumbnail = liveSceneThumbnail(room, scene, NOW);
       expect(liveSceneThumbnailEmpty(thumbnail.state.stage)).toBe(true);

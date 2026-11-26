@@ -40,7 +40,7 @@ import {
 import { SCENE_SOURCES } from "./studio-scenes-fixtures";
 
 const noCommand = () => undefined;
-/** The built-in Q&A scene as an event that never changed it lists it: one graphic comes on, others are picked or switched. */
+/** The built-in Board right scene as an event that never changed it lists it: one graphic comes on, others are picked or switched. */
 const BUILT_IN_QA: LiveOverlayLayout = {
   slug: "questions",
   ...LIVE_OVERLAY_PRESET_LAYOUTS.questions,
@@ -437,7 +437,7 @@ export const studioOnScreenSections: PreviewSection[] = [
   {
     id: "layout-editor-read-only",
     title: "A scene shown to someone who may not change it",
-    note: "Room operators load the event's scenes but only the people who set up the live studio change them: the built-in Q&A scene drawn with sample content, and its graphics listed with where each sits and what puts it on, with nothing to move, add, choose, save or delete.",
+    note: "Room operators load the event's scenes but only the people who set up the live studio change them: the built-in Board right scene drawn with sample content, and its graphics listed with where each sits and what puts it on, with nothing to move, add, choose, save or delete.",
     render: () => (
       <OverlayLayoutEditor
         endpoint="/api/v1/events/pqc-conference-2026/overlays/layouts/questions"
@@ -467,7 +467,7 @@ export const studioOnScreenSections: PreviewSection[] = [
   {
     id: "onscreen-lists-overlay",
     title: "Top questions beside the camera",
-    note: "Graphics on the left: the list fills a full-height column and the camera fills the rest. Each question shows up to three lines, clamped at the end of a line.",
+    note: "Board left: the list fills a full-height column and the camera fills the rest. Each question shows up to three lines, clamped at the end of a line.",
     render: () => (
       <LivestreamOverlay
         state={roomWith({}, LISTS)}

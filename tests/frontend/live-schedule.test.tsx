@@ -133,13 +133,24 @@ it("resolves each speaker's organization, and no stream room without a selected 
   expect(snapshot.streamRoomId).toBeNull();
   expect(snapshot.rooms[0]!.speakers.map((speaker) => speaker.organization)).toContain("Historical organization");
 });
-it("leaves the stream's own room unnamed and names any other room", async () => {
-  const schedule = { ...frame(), streamRoomId: "a" };
+it("leads with this room, by name, and sets the other rooms apart under their own label", async () => {
+  const base = frame();
+  const schedule = { ...base, streamRoomId: base.rooms[1]!.roomId };
   host = document.body.appendChild(document.createElement("div"));
   await act(() => render(<LiveScheduleOverlay schedule={schedule} animate />, host!));
-  expect([...host.querySelectorAll(".pk-live-schedule__room-name")].map((room) => room.textContent)).toEqual([
-    "Green room",
-  ]);
+  const names = [...host.querySelectorAll(".pk-live-schedule__room-name")].map((room) => room.textContent);
+  expect(names).toEqual([`This room (${base.rooms[1]!.roomName})`, base.rooms[0]!.roomName]);
+  const items = [...host.querySelectorAll(".pk-live-schedule__rooms > li")].map((item) => item.className);
+  expect(items).toEqual(["pk-live-schedule__room", "pk-live-schedule__split", "pk-live-schedule__room"]);
+  expect(host.querySelector(".pk-live-schedule__split")!.textContent).toBe("In other rooms");
+});
+it("leaves this room unnamed when it is the only room", async () => {
+  const base = frame();
+  const schedule = { ...base, rooms: [base.rooms[0]!], streamRoomId: base.rooms[0]!.roomId };
+  host = document.body.appendChild(document.createElement("div"));
+  await act(() => render(<LiveScheduleOverlay schedule={schedule} animate />, host!));
+  expect(host.querySelector(".pk-live-schedule__room-name")).toBeNull();
+  expect(host.querySelector(".pk-live-schedule__split")).toBeNull();
 });
 const speaker = (name: string, moderator = false, organization: string | null = null) => ({
   name,

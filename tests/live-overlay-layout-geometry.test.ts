@@ -99,19 +99,20 @@ describe("placing a graphic in its layout box", () => {
     const graphic = { placement: "top-right", size: "large" } as const;
     const frame = ({ x, y, w, h }: { x: number; y: number; w: number; h: number }) => ({ x, y, w, h });
     const standard = liveTimerLayout(graphic, LIVE_OVERLAY_PRESET_LAYOUTS.default.elements.timer);
-    // Break sets its own timer large in the bottom-right corner; a timer the operator placed keeps its corner.
+    // A timer the operator placed keeps its corner in every scene.
     for (const scene of ["break", "questions", "check-in"] as const)
       expect(frame(liveTimerLayout(graphic, LIVE_OVERLAY_PRESET_LAYOUTS[scene].elements.timer))).toEqual(
         frame(standard),
       );
     expect((standard.x + standard.w) * 1920).toBeCloseTo(1824);
-    // One left to the layout follows the scene's box.
+    // One left to the layout follows the scene's box: Break hangs it in the top-right corner, over Up next.
     const inBreak = liveTimerLayout(
       { placement: "layout", size: "large" },
       LIVE_OVERLAY_PRESET_LAYOUTS.break.elements.timer,
     );
-    expect(inBreak.vertical).toBe("bottom");
-    expect(inBreak.w * 1920).toBeCloseTo(480, 1);
+    expect(inBreak.vertical).toBe("top");
+    expect(inBreak.horizontal).toBe("right");
+    expect(inBreak.y + inBreak.h).toBeLessThanOrEqual(LIVE_OVERLAY_PRESET_LAYOUTS.break.elements.schedule.y);
   });
 });
 
@@ -125,13 +126,17 @@ describe("built-in layouts", () => {
     const saved = { slug: "keynote", name: "Keynote", elements: LIVE_OVERLAY_PRESET_LAYOUTS["break"].elements };
     expect(resolveLiveOverlayLayout([saved], "keynote")).toBe(saved.elements);
     expect(resolveLiveOverlayLayout([saved], "check-in").checkIn.visible).toBe(true);
-    expect(resolveLiveOverlayLayout([saved], "check-in").question.visible).toBe(false);
-    expect(liveOverlayLayoutChoices([saved, { ...saved, slug: "panel", name: "Our panel" }]).slice(-5)).toEqual([
-      { slug: "panel", name: "Our panel" },
-      { slug: "break", name: "Break" },
-      { slug: "check-in", name: "Check-in" },
+    // Board left holds any board, the question included.
+    expect(resolveLiveOverlayLayout([saved], "check-in").question.visible).toBe(true);
+    // A scene of the event's own named after a retired built-in is just one of its scenes.
+    expect(liveOverlayLayoutChoices([saved, { ...saved, slug: "panel", name: "Our panel" }])).toEqual([
+      { slug: "default", name: "Camera" },
+      { slug: "questions", name: "Board right" },
+      { slug: "check-in", name: "Board left" },
       { slug: "full-board", name: "Full board" },
+      { slug: "break", name: "Break" },
       { slug: "keynote", name: "Keynote" },
+      { slug: "panel", name: "Our panel" },
     ]);
   });
 });

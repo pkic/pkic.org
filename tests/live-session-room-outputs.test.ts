@@ -431,7 +431,7 @@ describe("live room auxiliary outputs", () => {
     });
     const set = (await operator.next("preview.changed", (m) => m.composition.lowerThird !== null)).composition;
 
-    // Q&A brings its top questions on, filled by the room; the lower third, the timer and reactions stay as set.
+    // Board right brings its top questions on, filled by the room; the lower third, the timer and reactions stay as set.
     operator.send({ type: "preview.set", composition: { scene: "questions" } });
     const questions = (await operator.next("preview.changed", (m) => m.composition.scene === "questions")).composition;
     expect(questions).toEqual({
@@ -446,18 +446,13 @@ describe("live room auxiliary outputs", () => {
     expect(pause.schedule?.config).toEqual({ ...DEFAULT_LIVE_SCHEDULE_CONFIG, scope: "all-rooms" });
     expect({ ...pause, schedule: null, scene: "questions" }).toEqual(questions);
 
-    // Panel brings the session graphic on, for a session with one speaker too.
-    operator.send({ type: "preview.set", composition: { scene: "panel" } });
-    const panel = (await operator.next("preview.changed", (m) => m.composition.scene === "panel")).composition;
-    expect(panel.panelists).toEqual({ layout: "panel" });
-
     // What the operator switched off stays off in every scene that only places it; a retired scene reads as Default.
     operator.send({
       type: "preview.set",
       composition: { schedule: null, topQuestions: null, panelists: null, timerGraphics: [] },
     });
     await operator.next("preview.changed", (m) => m.composition.schedule === null);
-    for (const scene of ["check-in", "full-board", "default", "talk"]) {
+    for (const scene of ["check-in", "full-board", "default", "panel"]) {
       operator.send({ type: "preview.set", composition: { scene } });
       const loaded = (await operator.next("preview.changed", (m) => m.composition.scene === scene)).composition;
       expect(liveCompositionInput(loaded), scene).toEqual({
@@ -614,7 +609,7 @@ describe("live room auxiliary outputs", () => {
     // The studio's Clear of Preview: the empty composition, which names no scene, so the Default one.
     const cleared = liveCompositionInput(EMPTY_LIVE_STAGE);
 
-    // Q&A's top questions came on with the scene; the clear takes them off and loads nothing back.
+    // Board right's top questions came on with the scene; the clear takes them off and loads nothing back.
     operator.send({ type: "preview.set", composition: { ...full, scene: "questions" } });
     const loaded = (await operator.next("preview.changed", (m) => m.composition.lowerThird !== null)).composition;
     expect(loaded.topQuestions).not.toBeNull();
@@ -624,7 +619,7 @@ describe("live room auxiliary outputs", () => {
     expect(preview.scene).toBeNull();
 
     // A room screen's clear is the studio's empty composition naming the screen's scene, which it keeps.
-    const screenCleared = { ...cleared, scene: "panel" };
+    const screenCleared = { ...cleared, scene: "full-board" };
     operator.send({ type: "aux.set", output: "projector", composition: { ...screenCleared, ...full } });
     await operator.next("aux.changed", (m) => m.composition.lowerThird !== null);
     operator.send({ type: "aux.set", output: "projector", composition: screenCleared });
@@ -690,7 +685,7 @@ describe("live room auxiliary outputs", () => {
       composition: { ...EMPTY_COMPOSITION, timerGraphics: [GRAPHIC] },
     });
     expect(held.scene).toBeNull();
-    // Q&A's top questions come on, as when the scene loads on Preview; the timer the screen held stays.
+    // Board right's top questions come on, as when the scene loads on Preview; the timer the screen held stays.
     const changed = await screenAfter(operator, { type: "aux.scene", output: "projector", scene: "questions" });
     expect(liveCompositionInput(changed)).toEqual({
       ...liveCompositionInput(EMPTY_LIVE_STAGE),
@@ -718,7 +713,7 @@ describe("live room auxiliary outputs", () => {
         .bind(f.eventId, f.roomId, key, name, code, role, scene, scene ? 1 : 0, position, now)
         .run();
 
-    // Nobody took anything to the projector: it is in its Q&A scene with the top questions that come on with it.
+    // Nobody took anything to the projector: it is in its Board right scene with the top questions that come on with it.
     const operator = await f.connect({ person: "operator" });
     const first = await operator.next("room.snapshot");
     expect(liveCompositionInput(first.outputs.projector)).toEqual({
@@ -755,12 +750,14 @@ describe("live room auxiliary outputs", () => {
     const foyer = await screenAfter(operator, {
       type: "aux.set",
       output: "foy",
-      composition: { ...EMPTY_COMPOSITION, scene: "panel" },
+      composition: { ...EMPTY_COMPOSITION, scene: "full-board" },
     });
     expect(foyer.scene).toBe("break");
     expect(foyer.schedule).toBeNull();
     // A scene change sent to a locked screen leaves it in its scene too.
-    expect((await screenAfter(operator, { type: "aux.scene", output: "foy", scene: "panel" })).scene).toBe("break");
+    expect((await screenAfter(operator, { type: "aux.scene", output: "foy", scene: "full-board" })).scene).toBe(
+      "break",
+    );
 
     // The room's settings give the projector another scene: the next join loads it on what the screen holds,
     // from the room's own storage.

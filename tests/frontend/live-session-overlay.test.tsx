@@ -302,11 +302,12 @@ describe("broadcast overlays", () => {
     expect(placed("--overlay-dx")).toBe("0px");
     expect(placed("--overlay-scale")).toBe("0.5");
     expect(host.querySelector(".pk-live-overlay__question-text")?.textContent).toBe("What about hybrid certificates?");
-    // An unknown scene, or one retired since, draws as Default: the speaker's name, no board and no background.
-    for (const scene of ["no-such-scene", "talk"]) {
+    // An unknown scene, or one retired since, draws as Default (Camera): the speaker's name and a board over the
+    // picture, with no background.
+    for (const scene of ["no-such-scene", "talk", "panel"]) {
       const unknown = mountOverlay("program", scene, [keynote]);
       expect(unknown.host.querySelector(".pk-live-overlay__name"), scene).not.toBeNull();
-      expect(unknown.host.querySelector(".pk-live-overlay__question-text"), scene).toBeNull();
+      expect(unknown.host.querySelector(".pk-live-overlay__question-text"), scene).not.toBeNull();
       expect(unknown.host.querySelector('[data-overlay-element="background"]'), scene).toBeNull();
     }
   });

@@ -149,7 +149,7 @@ describe("room screens", () => {
   const question = liveStageQuestionSchema.parse({ id: LIVE_QUESTION, text: "How do we migrate?", authorName: null });
   const layer = { kind: "question", id: LIVE_QUESTION } as const;
 
-  /** The projector in the Q&A scene, which includes a question; the Default scene holds no boards. */
+  /** The projector in the Board right scene, which includes a question. */
   const inQuestions = { ...EMPTY_LIVE_AUX_COMPOSITION, scene: "questions" };
 
   it("marks a screen as following while it shows Program's question, and as on when it holds one to stay", () => {
@@ -176,16 +176,21 @@ describe("room screens", () => {
     state.stage = { ...state.stage, question, lowerThird: credit, scene: "questions" };
     /** The projector with Program's graphics carried to it, in its own scene. */
     const carried = (scene: string | null) => ({ ...EMPTY_LIVE_AUX_COMPOSITION, question, lowerThird: credit, scene });
-    // Nobody took a scene to the projector: it draws Default, which places a lower third and no question.
+    // Nobody took a scene to the projector: it draws Default, which includes every graphic.
     state.outputs = { ...state.outputs, projector: carried(null) };
-    expect(liveScreens(liveTargets(state), layer).following).toEqual(["stage-display"]);
+    expect(liveScreens(liveTargets(state), layer).following).toEqual(["projector", "stage-display"]);
     expect(liveScreens(liveTargets(state), lowerThird).following).toEqual(["projector"]);
-    // In Q&A it draws both; in Panel, which names its people itself, neither the lower third.
+    // Break places neither a board nor a lower third; Full board places the question but no lower third.
+    state.outputs = { ...state.outputs, projector: carried("break") };
+    expect(liveScreens(liveTargets(state), layer).following).toEqual(["stage-display"]);
+    expect(liveScreens(liveTargets(state), lowerThird).following).toEqual([]);
+    state.outputs = { ...state.outputs, projector: carried("full-board") };
+    expect(liveScreens(liveTargets(state), layer).following).toEqual(["projector", "stage-display"]);
+    expect(liveScreens(liveTargets(state), lowerThird).following).toEqual([]);
+    // Board right draws both.
     state.outputs = { ...state.outputs, projector: carried("questions") };
     expect(liveScreens(liveTargets(state), layer).following).toEqual(["projector", "stage-display"]);
     expect(liveScreens(liveTargets(state), lowerThird).following).toEqual(["projector"]);
-    state.outputs = { ...state.outputs, projector: carried("panel") };
-    expect(liveScreens(liveTargets(state), lowerThird).following).toEqual([]);
     // The scene its room fixed for the screen wins over the one taken to it.
     state.session = {
       ...state.session,
@@ -193,7 +198,7 @@ describe("room screens", () => {
         { key: "projector", name: "Projector", code: "PRJ", role: "follow", scene: "break", sceneLocked: true },
       ],
     };
-    expect(liveScreens(liveTargets(state), lowerThird).following).toEqual(["projector"]);
+    expect(liveScreens(liveTargets(state), lowerThird).following).toEqual([]);
     expect(liveScreens(liveTargets(state), layer).following).toEqual([]);
   });
 

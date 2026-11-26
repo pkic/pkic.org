@@ -45,6 +45,18 @@ const PANEL = [
   ["Eli Specimen-Okafor", "Specimen Systems"],
   ["Fay Moderator", "PKI Consortium"],
 ] as const;
+/** Up next in Break across three rooms, streamed from the second. */
+function breakAcrossRooms(): LiveRoomState {
+  const state = breakWith(1);
+  const schedule = state.stage.schedule!;
+  const [room] = schedule.rooms;
+  const rooms = [
+    { name: "Main hall", title: "Migrating a national PKI to post-quantum certificates" },
+    { name: "Exhibition theater", title: "Hybrid certificates in practice" },
+    { name: "Room 104A", title: "Inventorying cryptography across a bank" },
+  ].map(({ name, title }, roomIndex) => ({ ...room!, roomId: `room-${roomIndex}`, roomName: name, roomIndex, title }));
+  return { ...state, stage: { ...state.stage, schedule: { ...schedule, streamRoomId: "room-1", rooms } } };
+}
 /** Up next in Break with this many speakers, the moderator last, and the session timer in its own top-right corner. */
 function breakWith(speakers: number): LiveRoomState {
   const schedule = ROOM.stage.schedule!;
@@ -148,7 +160,7 @@ export const studioBoardSections: PreviewSection[] = [
   {
     id: "onscreen-panelists-side-by-side",
     title: "Panelists beside the camera",
-    note: "In the Graphics on the left column the board turns tall and lists the people one under the other.",
+    note: "In the Board left column the board turns tall and lists the people one under the other.",
     render: () => (
       <LivestreamOverlay
         state={{ ...sessionWith(6), stage: { ...EMPTY_LIVE_AUX_COMPOSITION, panelists: { layout: "panel" } } }}
@@ -202,8 +214,8 @@ export const studioBoardSections: PreviewSection[] = [
   },
   {
     id: "onscreen-question-qa-column",
-    title: "Question in the Q&A column",
-    note: "The Q&A scene: the question in the column on the right, beside the camera, as the projector shows it.",
+    title: "Question in the Board right column",
+    note: "Board right: the question in the column on the right, beside the camera, as the projector shows it.",
     render: () => (
       <LivestreamOverlay
         state={roomWith({}, { question: NAMED_QUESTION })}
@@ -252,9 +264,17 @@ export const studioBoardSections: PreviewSection[] = [
     render: () => <LivestreamOverlay state={breakWith(6)} elements={presetWith("break", ["schedule", "timer"])} />,
   },
   {
+    id: "onscreen-up-next-rooms",
+    title: "Up next in Break, across rooms",
+    note: "This room leads, named in brackets; the other rooms follow under their own label, in agenda order, one brought forward at a time.",
+    render: () => (
+      <LivestreamOverlay state={breakAcrossRooms()} elements={presetWith("break", ["schedule", "timer"])} />
+    ),
+  },
+  {
     id: "onscreen-poll-side-by-side",
     title: "Poll beside the camera",
-    note: "The same poll board, scaled into the Graphics on the left column.",
+    note: "The same poll board, scaled into the Board left column.",
     render: () => (
       <LivestreamOverlay state={roomWith({}, ON_POLL)} elements={presetWith("check-in", ["background", "poll"])} />
     ),
@@ -262,14 +282,14 @@ export const studioBoardSections: PreviewSection[] = [
   {
     id: "onscreen-panel-question",
     title: "A question over the panel",
-    note: "The Panel layout: the question in the upper half, the panelists in the lower half, edge to edge.",
+    note: "Full board: the question and the panelists on air together draw as one board.",
     render: () => (
       <LivestreamOverlay
         state={{
           ...sessionWith(4),
           stage: { ...EMPTY_LIVE_AUX_COMPOSITION, panelists: { layout: "panel" }, question: NAMED_QUESTION },
         }}
-        elements={presetWith("panel", ["background", "panelists", "question"])}
+        elements={presetWith("full-board", ["background", "panelists", "question"])}
       />
     ),
   },

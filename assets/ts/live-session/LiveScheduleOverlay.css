@@ -9,7 +9,6 @@
 @layer components {
   .pk-live-schedule {
     --schedule-gap: 28px;
-    --schedule-room-block: 272px;
     --live-room-accent: var(--pk-palette-green);
     position: absolute;
     inset-block-start: 0;
@@ -95,11 +94,11 @@
     border-block-start: 2px solid var(--graphic-rule);
     overflow: hidden;
   }
-  /* Several rooms keep one height, so the graphic never changes size as each comes forward. */
-  .pk-live-schedule[data-rooms="many"] .pk-live-schedule__room {
-    grid-template-rows: auto 1fr auto;
-    block-size: var(--schedule-room-block);
-  }
+  /*
+   * Each row fits what it says, so the speakers sit right under a one-line
+   * title. Bringing a room forward changes no row's content, so the graphic
+   * keeps its size while the rooms take turns.
+   */
   /*
    * One room needs no accent to tell it apart. Its time stands in a column
    * of its own, set like the title's first line but quieter, so it reads as
@@ -185,15 +184,29 @@
     font-variant-numeric: tabular-nums;
     line-height: 1;
   }
+  /* The room's name in its bar's color, lifted toward white so a dark bar color still reads at a distance. */
   .pk-live-schedule__room-name {
     grid-area: meta;
     min-inline-size: 0;
     margin: 0;
     overflow: hidden;
-    color: var(--graphic-ink-muted);
-    font-weight: 500;
+    color: color-mix(in oklab, var(--live-room-accent) 70%, white);
+    font-weight: 600;
     white-space: nowrap;
     text-overflow: ellipsis;
+  }
+  /* The stream's own room leads; the label sets the other rooms apart under it. */
+  .pk-live-schedule__split {
+    padding-block: 20px 12px;
+    color: var(--graphic-ink-muted);
+    font-size: var(--pk-text-xl);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  /* Side by side, the room names already tell the rooms apart. */
+  .pk-live-schedule[data-arrangement="cards"] .pk-live-schedule__split {
+    display: none;
   }
   .pk-live-schedule__title {
     display: -webkit-box;

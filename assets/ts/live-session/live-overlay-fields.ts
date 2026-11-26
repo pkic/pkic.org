@@ -95,14 +95,17 @@ export function timerClearance(
 }
 
 /**
- * The one box a layout's question and panelists fill together when it stacks
- * them, edge to edge at the same width, so both on air draw as one board.
- * Null when they are apart, overlap or the scene leaves one out.
+ * The one box a layout's question and panelists fill together, so both on
+ * air draw as one board: the box they share, as on Full board or in a side
+ * column, or their two boxes joined when the layout stacks them edge to edge
+ * at the same width. Null when they are apart, overlap only in part, or the
+ * scene leaves one out.
  */
-export function stackedPanelBox(elements: LiveOverlayLayoutElements): LiveOverlayElementPlacement | null {
+export function joinedPanelBox(elements: LiveOverlayLayoutElements): LiveOverlayElementPlacement | null {
   const { question, panelists } = elements;
   if (!question.visible || !panelists.visible) return null;
   if (Math.abs(question.x - panelists.x) > EDGE || Math.abs(question.w - panelists.w) > EDGE) return null;
+  if (Math.abs(question.y - panelists.y) <= EDGE && Math.abs(question.h - panelists.h) <= EDGE) return question;
   const [top, bottom] = question.y <= panelists.y ? [question, panelists] : [panelists, question];
   if (Math.abs(top.y + top.h - bottom.y) > EDGE) return null;
   return { ...question, y: top.y, h: top.h + bottom.h, horizontal: "center", vertical: "middle" };

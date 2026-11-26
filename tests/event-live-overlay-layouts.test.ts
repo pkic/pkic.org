@@ -164,7 +164,7 @@ describe("event overlay layouts", () => {
     ).toBe(false);
     expect((await api("DELETE", "keynote")).status).toBe(404);
     await api("PUT", "break", put({ name: "Break" }));
-    for (const slug of ["break", "panel"]) {
+    for (const slug of ["break", "full-board"]) {
       const refused = await api("DELETE", slug);
       expect(refused.status).toBe(409);
       expect(((await refused.json()) as { error: { code: string } }).error.code).toBe("LIVE_OVERLAY_LAYOUT_BUILT_IN");
@@ -353,7 +353,7 @@ describe("shared element positions", () => {
     expect((await api("PUT", "keynote", put())).status).toBe(200);
     const moved = await moveShared(0.5);
     expect(moved.positions.saved).toBe(true);
-    for (const slug of ["default", "break", "panel", "keynote"]) expect((await lowerThirdOf(slug)).y, slug).toBe(0.5);
+    for (const slug of ["default", "break", "keynote"]) expect((await lowerThirdOf(slug)).y, slug).toBe(0.5);
     expect(await lowerThirdOf("questions")).toEqual(
       liveOverlayBoxOf(LIVE_OVERLAY_PRESET_LAYOUTS["questions"].elements.lowerThird),
     );
