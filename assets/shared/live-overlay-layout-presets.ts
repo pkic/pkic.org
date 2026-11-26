@@ -18,7 +18,7 @@ import {
  * pixels of the 1920 × 1080 frame and stored as fractions of it. The standard
  * boxes below are the event's shared positions until organizers move them,
  * and a built-in scene shares every element it places there; an element a
- * scene places differently (a column, the panel) is the scene's own.
+ * scene places differently (a side column, Break's Up next) is the scene's own.
  */
 
 type Anchor = Pick<LiveOverlayElementPlacement, "horizontal" | "vertical">;
@@ -34,7 +34,6 @@ const CENTER: Anchor = { horizontal: "center", vertical: "middle" };
 const CENTER_BOTTOM: Anchor = { horizontal: "center", vertical: "bottom" };
 const RIGHT_TOP: Anchor = { horizontal: "right", vertical: "top" };
 const RIGHT_MIDDLE: Anchor = { horizontal: "right", vertical: "middle" };
-const RIGHT_BOTTOM: Anchor = { horizontal: "right", vertical: "bottom" };
 
 /**
  * A board never floats in the frame: it fills the frame, or a full-height
@@ -148,6 +147,8 @@ const STAGE: readonly LiveOverlayElement[] = ["stageDisplay", "stageMessage"];
 const ALWAYS: readonly LiveOverlayElement[] = ["timer", "ticker", "reactions", ...STAGE];
 /** The boards a question round shows, one at a time in the same place. */
 const QUESTION_BOARDS: readonly LiveOverlayElement[] = ["question", "topQuestions", "poll"];
+/** Every board a side column holds, one at a time in the same place. */
+const SIDE_BOARDS: readonly LiveOverlayElement[] = [...QUESTION_BOARDS, "panelists", "checkIn", "chat", "schedule"];
 /**
  * A column of boards at one side, the camera beside it, with the background
  * in the column under them. The ticker keeps the full width and the boards
@@ -168,84 +169,40 @@ const column = (side: "left" | "right"): LiveOverlayLayoutElements => ({
  */
 const PRESETS: Record<LiveOverlayPreset, { name: string; elements: LiveOverlayLayoutElements }> = {
   /**
-   * The scene an output draws when it names no scene or was cleared: every
-   * graphic with a switch at its standard box, the boards included, with
-   * nothing coming on. Whatever the operator switches on shows here. Only
-   * the background and the QR code, which have no switch, are left out.
+   * The camera picture with every graphic that has a switch at its standard
+   * box, the boards included, and nothing coming on. Whatever the operator
+   * switches on shows here. Only the background and the QR code, which have
+   * no switch, are left out. Outputs that name no scene draw this one.
    */
   default: {
-    name: "Default",
+    name: "Camera",
     elements: only(
       FULL_FRAME,
       LIVE_OVERLAY_ELEMENTS.filter((element) => element !== "background" && element !== "qrCode"),
     ),
   },
   /**
-   * The top questions in a column on the right, on the background, coming on
-   * with the scene; a question or a poll takes their place when picked. The
-   * session graphic shows there too when the operator switches it on and no
-   * question board covers it. The speaker's name, the time and the ticker
-   * sit on the camera beside them.
+   * Any board in a column on the right, on the background, the camera
+   * beside it with the speaker's name, the time and the ticker. The top
+   * questions come on with the scene; a question, the poll, the check-in
+   * code, the chat or Up next takes their place when switched on.
    */
   questions: {
-    name: "Q&A",
-    elements: comingOn(
-      only(column("right"), ["background", "panelists", ...QUESTION_BOARDS, "lowerThird", ...ALWAYS]),
-      ["topQuestions"],
-    ),
-  },
-  /**
-   * A panel on stage, coming on with the scene: the panelists across the
-   * lower half, a picked question in the upper half, edge to edge, on one
-   * background over the whole frame. The time keeps its standard corner, and
-   * the background's logo steps aside for it. The panel names its people, so
-   * the scene places no lower third.
-   */
-  panel: {
-    name: "Panel",
-    elements: comingOn(
-      only(
-        {
-          ...FULL_FRAME,
-          panelists: box(0, 540, 1920, 540, CENTER_BOTTOM),
-          question: box(0, 0, 1920, 540, { horizontal: "center", vertical: "top" }),
-        },
-        ["background", "panelists", "question", ...ALWAYS],
-      ),
-      ["panelists"],
-    ),
-  },
-  /**
-   * A break, over the sponsors' clips or a holding slide: Up next at its
-   * standard place on the left, coming on with the scene, and the time until
-   * the program is back, large in the bottom-right corner above the ticker.
-   */
-  break: {
-    name: "Break",
-    elements: comingOn(
-      only({ ...FULL_FRAME, timer: box(1392, 758, 480, 172, RIGHT_BOTTOM) }, ["schedule", "lowerThird", ...ALWAYS]),
-      ["schedule"],
-    ),
-  },
-  /**
-   * The check-in code in a column on the left on the background, large
-   * enough to scan from the room, with Up next and the speaker's name on the
-   * camera beside it, above the lower third and under the time.
-   */
-  "check-in": {
-    name: "Check-in",
-    elements: only({ ...column("left"), schedule: box(816, 192, 1056, 432, LEFT_MIDDLE) }, [
-      "background",
-      "checkIn",
-      "schedule",
-      "lowerThird",
-      ...ALWAYS,
+    name: "Board right",
+    elements: comingOn(only(column("right"), ["background", ...SIDE_BOARDS, "lowerThird", ...ALWAYS]), [
+      "topQuestions",
     ]),
+  },
+  /** The same column on the left, for a second board beside the camera; nothing comes on with it. */
+  "check-in": {
+    name: "Board left",
+    elements: only(column("left"), ["background", ...SIDE_BOARDS, "lowerThird", ...ALWAYS]),
   },
   /**
    * One board over the whole frame on the background: a question, the top
-   * questions, the poll, the panel, the chat or Up next, one at a time. No
-   * camera picture shows, so the scene places no lower third.
+   * questions, the poll, the panel, the chat or Up next, one at a time; a
+   * question picked while the panel is on shows with the panel on one board.
+   * No camera picture shows, so the scene places no lower third.
    */
   "full-board": {
     name: "Full board",
@@ -258,12 +215,26 @@ const PRESETS: Record<LiveOverlayPreset, { name: string; elements: LiveOverlayLa
       ...ALWAYS,
     ]),
   },
+  /**
+   * A break over the sponsors' clips. The production places the clip whole,
+   * at 16:9, at 48, 48 and 1440 × 810 on its own background; the time until
+   * the program is back hangs in the top-right corner beside it, with Up next
+   * under it in the same column, coming on with the scene. The ticker, when
+   * switched on, runs under them all. Nothing here covers the clip.
+   */
+  break: {
+    name: "Break",
+    elements: comingOn(
+      only({ ...FULL_FRAME, schedule: box(1536, 192, 336, 666, RIGHT_TOP) }, ["schedule", ...ALWAYS]),
+      ["schedule"],
+    ),
+  },
 };
 
 /**
  * Every graphic with a switch at its standard box, the boards included:
  * what Add graphic and a new scene place a graphic at, and what previews and
- * tests place one in on its own. Default includes every one of them.
+ * tests place one in on its own. Camera includes all but the background and the QR code.
  */
 export const LIVE_OVERLAY_STANDARD_ELEMENTS: LiveOverlayLayoutElements = sharing(FULL_FRAME);
 

@@ -244,7 +244,7 @@ describe("scene editor", () => {
   it("draws a labeled box for each graphic the scene shows and says where the selected one sits", async () => {
     await mount();
     const drawn = () => [...root!.querySelectorAll<HTMLElement>("button[data-element]")].map((b) => b.dataset.element);
-    // Default leaves the QR code and the background out.
+    // Camera leaves the QR code and the background out.
     expect(drawn()).not.toContain("qrCode");
     expect(drawn()).not.toContain("background");
     expect(drawn()).not.toContain("stageDisplay");
@@ -303,16 +303,8 @@ describe("scene editor", () => {
     await mount();
     const add = button("Add graphic");
     await act(() => add.click());
-    // Only the Program graphics Default leaves out, the boards and the background among them; never the speaker's screen.
-    expect(menuItems()).toEqual([
-      "Background",
-      "Question",
-      "Poll results",
-      "Session",
-      "Top questions",
-      "Chat",
-      "QR code",
-    ]);
+    // Only the Program graphics Camera leaves out, the background and the QR code; never the speaker's screen.
+    expect(menuItems()).toEqual(["Background", "QR code"]);
     await act(() => add.click());
     await choose(add, "QR code");
     expect(rows()).toContain("qrCode");
@@ -331,7 +323,7 @@ describe("scene editor", () => {
     await mount();
     const scene = LIVE_OVERLAY_PRESET_LAYOUTS.questions.elements;
     const shown = rows() as LiveOverlayElement[];
-    // Q&A holds all three kinds: picked, filled from the room, and without a switch.
+    // Board right holds all three kinds: picked, filled from the room, and without a switch.
     expect(new Set(shown.map((element) => LIVE_OVERLAY_ELEMENT_SWITCHES[element])).size).toBe(3);
     for (const element of shown) {
       expect(switchOf(element).textContent).toBe(describeGraphicSwitch(element, scene[element]));
@@ -393,7 +385,7 @@ describe("scene editor", () => {
     expect(confirmations.asked[0]).toMatchObject({ title: "Reset Keynote?", confirmLabel: "Reset scene" });
     expect(written[0]!.body).toMatchObject({ name: base.name, preset: LIVE_OVERLAY_DEFAULT_LAYOUT });
     expect(written[0]!.body.elements[second].layer).toBe(base.elements[second].layer);
-    // Nothing comes on with the built-in Default, so the reset takes the choice back.
+    // Nothing comes on with the built-in Camera, so the reset takes the choice back.
     expect(written[0]!.body.elements.reactions.comesOn).toBeUndefined();
   });
 
@@ -427,9 +419,14 @@ describe("scene editor", () => {
     await mount();
     const canvas = root!.querySelector(".pk-layout-canvas")!;
     expect(canvas.querySelector(".pk-live-overlay__frame")).not.toBeNull();
-    expect(canvas.querySelector('[data-overlay-element="lowerThird"]')).not.toBeNull();
-    // Default holds no board: the sample's question is on, and the scene does not draw it.
-    expect(canvas.querySelector('[data-overlay-element="question"]')).toBeNull();
+    // Camera includes every graphic with a switch, boards too: the sample has them on, the front board covers the
+    // ones behind it, and the scene has no background to draw.
+    const drawn = [...canvas.querySelectorAll<HTMLElement>("[data-overlay-element]")].map(
+      (element) => element.dataset.overlayElement,
+    );
+    expect(drawn).toEqual(expect.arrayContaining(["poll", "timer", "ticker", "reactions"]));
+    expect(drawn).not.toContain("question");
+    expect(drawn).not.toContain("background");
   });
 
   it("lists the scene's graphics front first and saves one moved up the stack as the scene's order", async () => {
@@ -521,7 +518,7 @@ describe("scene editor", () => {
 
   it("renames the scene as part of its draft, under the same source name", async () => {
     await mount();
-    await choose(button("Actions for Default"), "Rename");
+    await choose(button("Actions for Camera"), "Rename");
     const name = controlFor(document.body, "Name");
     await typeInto(name, "Keynote");
     await act(async () => {

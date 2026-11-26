@@ -122,13 +122,13 @@ describe("live control room Transition", () => {
     // A title just written is the current one; the tooltip layer moves it into the hint a moment later.
     const hint = (output: string) => take(host, output).getAttribute("title") ?? take(host, output).dataset.tooltip;
     const timer = defaultLiveTimerGraphic("session");
-    // The Panel scene, its panel, a question and a timer wait on Preview only.
+    // The Full board scene, its panel, a question and a timer wait on Preview only.
     void act(() =>
       live.latest().deliver({
         type: "preview.changed",
         composition: {
           ...snapshot.preview,
-          scene: "panel",
+          scene: "full-board",
           panelists: { layout: "panel" },
           question: {
             id: LIVE_QUESTION,
@@ -147,7 +147,7 @@ describe("live control room Transition", () => {
       type: "aux.set",
       output: "projector",
       composition: {
-        scene: "panel",
+        scene: "full-board",
         panelists: { layout: "panel" },
         questionId: LIVE_QUESTION,
         timerGraphics: [timer],
@@ -169,7 +169,7 @@ describe("live control room Transition", () => {
     expect(liveRoomClientMessageSchema.parse(commands(live).at(-1))).toMatchObject(whole);
   });
 
-  it("clears the shared Preview from its monitor to a blank frame in the Default scene", () => {
+  it("clears the shared Preview from its monitor to a blank frame in the Camera scene", () => {
     const { host, live } = mountDesk();
     const snapshot = liveSnapshot({ viewer: OPERATOR });
     void act(() =>
@@ -186,7 +186,7 @@ describe("live control room Transition", () => {
     // The hint says what a click does: everything off, and back to the scene that brings nothing on.
     const clear = labeled(host, "Clear Preview");
     expect(clear.dataset.tooltip ?? clear.getAttribute("title")).toBe(
-      "Clear Preview\nTake everything off Preview and go back to the Default scene.",
+      "Clear Preview\nTake everything off Preview and go back to the Camera scene.",
     );
     void act(() => labeled(host, "Clear Preview").click());
     expect(commands(live)).toEqual([
@@ -230,21 +230,20 @@ describe("live control room Transition", () => {
     expect(strip).not.toBeNull();
     const scenes = [...strip!.querySelectorAll<HTMLButtonElement>("button")];
     expect(scenes.map((scene) => scene.querySelector(".pk-studio-scene__name")?.textContent)).toEqual([
-      "Default",
-      "Q&A",
-      "Panel",
-      "Break",
-      "Check-in",
+      "Camera",
+      "Board right",
+      "Board left",
       "Full board",
+      "Break",
     ]);
     expect(scenes.filter((scene) => scene.getAttribute("aria-pressed") === "true")).toHaveLength(1);
     // Each scene is drawn live, with the same renderer as the monitors.
     expect(scenes.every((scene) => scene.querySelector(".pk-studio-scene__picture .pk-live-overlay"))).toBe(true);
     // A scene lays out what Preview holds and adds only what comes on with it: no scene picks a lower third,
-    // and Default, which brings nothing on, shows an empty Preview as its faint boxes.
+    // and Camera, which brings nothing on, shows an empty Preview as its faint boxes.
     expect(scenes.some((scene) => scene.querySelector(".pk-live-overlay__name"))).toBe(false);
     expect(scenes[0]!.querySelector(".pk-studio-scene__outline rect")).not.toBeNull();
-    // Every output draws Default here, so Default carries a marker for each, Program's first.
+    // Every output draws Camera here, so Camera carries a marker for each, Program's first.
     expect(
       [...scenes[0]!.querySelectorAll(".pk-studio-scene__marker")].map((marker) => marker.getAttribute("aria-label")),
     ).toEqual(["On Program", "In Preview", "On Projector"]);

@@ -11,7 +11,7 @@ import {
 } from "../../assets/ts/member-flows/portal/sections/events/detail/live/studio/StudioPhone";
 import { LIVE_QUESTION, liveSnapshot } from "./helpers/live-room-socket";
 
-/** A room in Q&A with a question on air: a board the Default scene never draws. */
+/** A room in Board right with a question on air: a board that sits in the scene's column. */
 const room = applyLiveRoomMessage(
   null,
   liveSnapshot({
@@ -134,22 +134,25 @@ describe("the studio on a phone", () => {
     const { host, onScene } = mount();
     const scene = (tally: string) =>
       host.querySelector(`.pk-studio-phone__thumb[data-tally="${tally}"] .pk-studio-phone__thumb-scene`);
-    expect([scene("preview")?.textContent, scene("program")?.textContent]).toEqual(["PVWQ&A", "PGMQ&A"]);
+    expect([scene("preview")?.textContent, scene("program")?.textContent]).toEqual([
+      "PVWBoard right",
+      "PGMBoard right",
+    ]);
     // The scene is a name, not a control, until the picture is touched; Program offers no scenes at all.
     expect(scene("preview")?.querySelector("button")).toBeNull();
     void act(() => {
       button("Program").click();
     });
-    expect(button("Scene in Preview: Q&A")).toBeUndefined();
+    expect(button("Scene in Preview: Board right")).toBeUndefined();
     void act(() => {
       button("Preview").click();
     });
     void act(() => {
-      button("Scene in Preview: Q&A").click();
+      button("Scene in Preview: Board right").click();
     });
     const scenes = document.querySelector<HTMLElement>(".pk-studio-scene-popover")!;
     const names = [...scenes.querySelectorAll(".pk-studio-scene__name")].map((each) => each.textContent);
-    expect(names).toEqual(["Default", "Q&A", "Panel", "Break", "Check-in", "Full board"]);
+    expect(names).toEqual(["Camera", "Board right", "Board left", "Full board", "Break"]);
     void act(() => {
       [...scenes.querySelectorAll("button")].find((each) => each.textContent?.includes("Break"))!.click();
     });

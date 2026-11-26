@@ -38,7 +38,7 @@ export const studioOutputSections: PreviewSection[] = [
             subject="Up next"
             preview
             program
-            previewUnseen={{ reason: "scene", scene: "Panel" }}
+            previewUnseen={{ reason: "scene", scene: "Speaker close-up" }}
             programUnseen={{ reason: "covered", by: "Question" }}
             disabled={false}
             onToggle={() => undefined}

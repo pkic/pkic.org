@@ -14,7 +14,7 @@ import {
   type LiveRoomClientMessage,
 } from "../../assets/shared/schemas/live-session-room";
 import { LiveOverlayPresentation } from "../../assets/ts/live-session/LiveOverlayPresentation";
-import { stackedPanelBox, timerClearance } from "../../assets/ts/live-session/live-overlay-fields";
+import { joinedPanelBox, timerClearance } from "../../assets/ts/live-session/live-overlay-fields";
 import { applyLiveRoomMessage, type LiveRoomState } from "../../assets/ts/live-session/live-room-state";
 import {
   LiveReactionsControls,
@@ -222,12 +222,31 @@ describe("audience graphics on an output", () => {
     expect(host!.querySelector('[data-overlay-element="chat"]')).toBeNull();
   });
 
-  it("joins the question and panelists into one board only where a layout stacks them", () => {
-    const panel = LIVE_OVERLAY_PRESET_LAYOUTS.panel.elements;
-    expect(stackedPanelBox(panel)).toMatchObject({ x: 0, y: 0, w: 1, h: 1 });
-    expect(stackedPanelBox({ ...panel, question: { ...panel.question, visible: false } })).toBeNull();
-    // The standard boxes lay both over the whole frame: they overlap rather than stack.
-    expect(stackedPanelBox(LIVE_OVERLAY_STANDARD_ELEMENTS)).toBeNull();
+  it("joins the question and panelists into one board where a layout gives them one box or stacks them", () => {
+    // Full board and either column give both the same box, which they share as one board.
+    const full = LIVE_OVERLAY_PRESET_LAYOUTS["full-board"].elements;
+    expect(joinedPanelBox(full)).toMatchObject({ x: 0, y: 0, w: 1, h: 1 });
+    expect(joinedPanelBox(LIVE_OVERLAY_PRESET_LAYOUTS.questions.elements)).toMatchObject({
+      x: 0.6,
+      y: 0,
+      w: 0.4,
+      h: 1,
+    });
+    expect(joinedPanelBox(LIVE_OVERLAY_PRESET_LAYOUTS["check-in"].elements)).toMatchObject({
+      x: 0,
+      y: 0,
+      w: 0.4,
+      h: 1,
+    });
+    // Two boxes edge to edge at the same width join into one.
+    const top = { ...full.question, y: 0, h: 0.5 };
+    const bottom = { ...full.panelists, y: 0.5, h: 0.5 };
+    expect(joinedPanelBox({ ...full, question: top, panelists: bottom })).toMatchObject({ x: 0, y: 0, w: 1, h: 1 });
+    // Boxes that only overlap in part, or a scene that leaves one out, draw apart.
+    expect(joinedPanelBox({ ...full, question: top, panelists: { ...bottom, y: 0.3 } })).toBeNull();
+    expect(joinedPanelBox({ ...full, question: { ...full.question, visible: false } })).toBeNull();
+    // Break places neither.
+    expect(joinedPanelBox(LIVE_OVERLAY_PRESET_LAYOUTS.break.elements)).toBeNull();
   });
 
   it("reads a layout saved before the audience lists existed, with the lists at their usual place", () => {

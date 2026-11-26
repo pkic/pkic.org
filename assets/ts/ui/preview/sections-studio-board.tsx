@@ -160,7 +160,7 @@ export const studioBoardSections: PreviewSection[] = [
   {
     id: "onscreen-panelists-side-by-side",
     title: "Panelists beside the camera",
-    note: "In the Graphics on the left column the board turns tall and lists the people one under the other.",
+    note: "In the Board left column the board turns tall and lists the people one under the other.",
     render: () => (
       <LivestreamOverlay
         state={{ ...sessionWith(6), stage: { ...EMPTY_LIVE_AUX_COMPOSITION, panelists: { layout: "panel" } } }}
@@ -214,8 +214,8 @@ export const studioBoardSections: PreviewSection[] = [
   },
   {
     id: "onscreen-question-qa-column",
-    title: "Question in the Q&A column",
-    note: "The Q&A scene: the question in the column on the right, beside the camera, as the projector shows it.",
+    title: "Question in the Board right column",
+    note: "Board right: the question in the column on the right, beside the camera, as the projector shows it.",
     render: () => (
       <LivestreamOverlay
         state={roomWith({}, { question: NAMED_QUESTION })}
@@ -272,7 +272,7 @@ export const studioBoardSections: PreviewSection[] = [
   {
     id: "onscreen-poll-side-by-side",
     title: "Poll beside the camera",
-    note: "The same poll board, scaled into the Graphics on the left column.",
+    note: "The same poll board, scaled into the Board left column.",
     render: () => (
       <LivestreamOverlay state={roomWith({}, ON_POLL)} elements={presetWith("check-in", ["background", "poll"])} />
     ),
@@ -280,14 +280,14 @@ export const studioBoardSections: PreviewSection[] = [
   {
     id: "onscreen-panel-question",
     title: "A question over the panel",
-    note: "The Panel layout: the question in the upper half, the panelists in the lower half, edge to edge.",
+    note: "Full board: the question and the panelists on air together draw as one board.",
     render: () => (
       <LivestreamOverlay
         state={{
           ...sessionWith(4),
           stage: { ...EMPTY_LIVE_AUX_COMPOSITION, panelists: { layout: "panel" }, question: NAMED_QUESTION },
         }}
-        elements={presetWith("panel", ["background", "panelists", "question"])}
+        elements={presetWith("full-board", ["background", "panelists", "question"])}
       />
     ),
   },

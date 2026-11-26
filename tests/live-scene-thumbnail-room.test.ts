@@ -119,7 +119,7 @@ describe("scene thumbnails against the room", () => {
     await askQuestions(operator);
     const agenda = await studioAgenda();
     const filled: Record<string, string[]> = {};
-    for (const scene of ["default", "questions", "panel", "break"]) {
+    for (const scene of ["default", "questions", "full-board", "break"]) {
       // Each scene loads on the same starting Preview, in the Default scene.
       const reset = operator.received.length;
       operator.send({
@@ -149,6 +149,6 @@ describe("scene thumbnails against the room", () => {
       if (scene === "break") expect(thumbnail.state.stage.schedule?.rooms.map((room) => room.title)).toHaveLength(2);
     }
     // The scenes differ by what comes on with them, filled with the room's own content.
-    expect(filled).toEqual({ default: [], questions: ["topQuestions"], panel: ["panelists"], break: ["schedule"] });
+    expect(filled).toEqual({ default: [], questions: ["topQuestions"], "full-board": [], break: ["schedule"] });
   });
 });

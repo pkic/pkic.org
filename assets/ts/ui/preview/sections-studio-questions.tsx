@@ -150,7 +150,7 @@ const SCREENS_ROOM: LiveRoomState = {
   },
 };
 const SCREENS_TARGETS = { ...TARGETS, state: SCREENS_ROOM };
-/** The projector follows Program, so the room carried the question on air to it; its Q&A scene draws it. */
+/** The projector follows Program, so the room carried the question on air to it; its Board right scene draws it. */
 const CARRIED_TARGETS = {
   ...TARGETS,
   state: {

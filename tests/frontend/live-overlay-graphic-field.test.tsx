@@ -67,8 +67,8 @@ describe("the scene's background on an output", () => {
   });
 
   it("draws the background whenever its scene is on, with or without a board on it, and never twice", () => {
-    // Q&A and Check-in place it in their column; no board is on it here.
-    for (const layout of ["questions", "check-in", "panel", "full-board"]) {
+    // Board right and Board left place it in their column; no board is on it here.
+    for (const layout of ["questions", "check-in", "full-board"]) {
       const host = draw({ view: "program", layout, projection: room("lowerThird") });
       expect(fields(host), layout).toHaveLength(1);
       expect(marks(host), layout).toHaveLength(1);
@@ -91,19 +91,41 @@ describe("the scene's background on an output", () => {
       for (const element of drawn(host))
         expect(elements[element as keyof typeof elements].visible, `${layout}: ${element}`).toBe(true);
     }
-    // Break places no board and no check-in code: they stay on the output, undrawn, for a later scene.
+    // Break places no board, no check-in code and no lower third: they stay on the output, undrawn, for a later scene.
     const pause = drawn(draw({ view: "program", layout: "break", projection: EVERYTHING_ON }));
-    expect(pause).toEqual(expect.arrayContaining(["schedule", "lowerThird", "timer", "ticker", "reactions"]));
-    for (const left of ["question", "poll", "panelists", "topQuestions", "chat", "checkIn", "background", "qrCode"])
+    expect(pause).toEqual(expect.arrayContaining(["schedule", "timer", "ticker", "reactions"]));
+    for (const left of [
+      "question",
+      "poll",
+      "panelists",
+      "topQuestions",
+      "chat",
+      "checkIn",
+      "lowerThird",
+      "background",
+      "qrCode",
+    ])
       expect(pause, left).not.toContain(left);
   });
 
-  it("never draws a board in Default, only the graphics that sit over the picture", () => {
-    const host = draw({ view: "program", layout: "default", projection: EVERYTHING_ON });
-    expect([...new Set(drawn(host))]).toEqual(["schedule", "checkIn", "lowerThird", "timer", "ticker", "reactions"]);
-    for (const board of ["question", "poll", "panelists", "topQuestions", "chat", "background"])
-      expect(layer(host, board), board).toBeNull();
-    expect(host.querySelector(".pk-live-board")).toBeNull();
+  it("includes every switchable graphic in Default, boards too, and draws no background of its own", () => {
+    // Nothing comes on by itself: what the output has on draws, over the camera and with no field behind it.
+    const cards = draw({
+      view: "program",
+      layout: "default",
+      projection: room("schedule", "checkIn", "timerGraphics"),
+    });
+    expect([...new Set(drawn(cards))]).toEqual(expect.arrayContaining(["schedule", "checkIn", "timer"]));
+    const board = draw({ view: "program", layout: "default", projection: room("question") });
+    expect(layer(board, "question")).not.toBeNull();
+    expect(layer(board, "background")).toBeNull();
+    expect(fields(board)).toHaveLength(0);
+    // A board covered by one in front of it is left out; the background and the QR code are never drawn here.
+    const everything = draw({ view: "program", layout: "default", projection: EVERYTHING_ON });
+    expect(drawn(everything)).not.toContain("question");
+    expect(drawn(everything)).toEqual(expect.arrayContaining(["poll", "timer", "ticker", "reactions"]));
+    for (const left of ["background", "qrCode"]) expect(layer(everything, left), left).toBeNull();
+    expect(everything.querySelector(".pk-live-board--ground")).toBeNull();
   });
 
   it("shows the front one of two boards in the same spot, on the one background", () => {
@@ -121,14 +143,36 @@ describe("the scene's background on an output", () => {
     ]);
   });
 
-  it("draws the panel's question and panelists as one board on the background, clear of the timer", () => {
-    const host = draw({ view: "program", layout: "panel", projection: room("question", "panelists", "timerGraphics") });
+  it("draws the question and panelists as one board on the background, clear of the timer", () => {
+    const host = draw({
+      view: "program",
+      layout: "full-board",
+      projection: room("question", "panelists", "timerGraphics"),
+    });
     expect(fields(host)).toHaveLength(1);
     expect(marks(host)).toHaveLength(1);
     // The background has nothing to keep clear of the timer; the board on it does.
     expect(layer(host, "background")?.hasAttribute("data-timer-clearance")).toBe(false);
     expect(layer(host, "panelists")?.hasAttribute("data-timer-clearance")).toBe(true);
     expect(drawn(host).filter((element) => element === "panelists" || element === "question")).toEqual(["panelists"]);
+  });
+
+  it("hides the joined question and panelists board behind a poll in front of it", () => {
+    const host = draw({ view: "program", layout: "full-board", projection: room("question", "panelists", "poll") });
+    const boards = drawn(host).filter((element) => ["question", "panelists", "poll"].includes(element!));
+    expect(boards).toEqual(["poll"]);
+    expect(fields(host)).toHaveLength(1);
+  });
+
+  it("keeps the joined question and panelists board in front of the top questions in the same spot", () => {
+    const host = draw({
+      view: "program",
+      layout: "questions",
+      projection: room("question", "panelists", "topQuestions"),
+    });
+    const boards = drawn(host).filter((element) => ["question", "panelists", "topQuestions"].includes(element!));
+    expect(boards).toEqual(["panelists"]);
+    expect(fields(host)).toHaveLength(1);
   });
 
   it("draws Up next on the background it sits inside, without a card of its own, over the whole frame in Full board", () => {
@@ -140,13 +184,16 @@ describe("the scene's background on an output", () => {
   });
 
   it("keeps Up next's card outside a background, and the check-in code's card everywhere", () => {
-    // Break and Default have no background; in Check-in Up next sits beside the column, over the camera.
-    for (const layout of ["break", "default", "check-in"]) {
+    // Break and Default have no background, so Up next keeps its card there.
+    for (const layout of ["break", "default"]) {
       const host = draw({ view: "program", layout, projection: room("schedule", "checkIn") });
       expect(layer(host, "schedule"), layout).not.toBeNull();
       expect(layer(host, "schedule")?.hasAttribute("data-on-ground"), layout).toBe(false);
     }
-    // The check-in code keeps its card on Check-in's background, as it always did.
+    // Up next in Board left sits inside the column's background and drops its card.
+    const column = draw({ view: "program", layout: "check-in", projection: room("schedule") });
+    expect(layer(column, "schedule")?.hasAttribute("data-on-ground")).toBe(true);
+    // The check-in code keeps its card on Board left's background, as it always did.
     const code = draw({ view: "program", layout: "check-in", projection: room("checkIn") });
     expect(layer(code, "checkIn")).not.toBeNull();
     expect(code.querySelector("[data-on-ground]")).toBeNull();
