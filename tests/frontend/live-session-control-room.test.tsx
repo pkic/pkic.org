@@ -345,14 +345,15 @@ describe("live control room presence", () => {
 });
 
 describe("live control room panels", () => {
-  it("sets how lower thirds go on air from the Speakers panel's menu, not from Graphics", () => {
+  it("sets how lower thirds go on air from the Speakers panel's menu, not from Graphics", async () => {
     const { host, live } = mountDesk(liveSnapshot({ viewer: OPERATOR }));
     expect(panel(host, "Graphics").textContent).not.toContain("Lower third");
     void act(() => labeled(panel(host, "Speakers"), "Speakers panel").click());
     void act(() => button(host, "Lower third settings").click());
     const dialog = document.querySelector<HTMLElement>("dialog[open]")!;
     void act(() => dialog.querySelector<HTMLInputElement>('input[value="cut"]')!.click());
-    void act(() => button(dialog, "Save").click());
+    // The save settles before the studio sends it, so a setup save can come first.
+    await act(async () => button(dialog, "Save").click());
     expect(commands(live)).toEqual([{ type: "preview.set", composition: { lowerThirdMotion: "cut" } }]);
   });
 

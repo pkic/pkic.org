@@ -16,6 +16,7 @@ import type { JSX } from "preact";
 import { forwardRef } from "preact/compat";
 
 import "./Field.css";
+import "./RangeInput.css";
 
 function join(base: string, extra?: string | null): string {
   return extra ? `${base} ${extra}` : base;
