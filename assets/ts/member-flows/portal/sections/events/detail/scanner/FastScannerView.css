@@ -276,6 +276,13 @@
     margin-block: auto var(--pk-3);
     padding-top: var(--pk-3);
   }
+  /* A phone keeps the full toolbar (up to seven buttons on the lead scanner) on one row. */
+  @media (max-width: 26rem) {
+    .pk-fast-scanner__actions {
+      gap: var(--pk-1);
+      margin-inline: calc(-1 * var(--pk-3));
+    }
+  }
   .pk-fast-scanner__results {
     width: 100%;
     min-height: var(--pk-7);
