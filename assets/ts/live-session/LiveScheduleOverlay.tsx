@@ -194,11 +194,7 @@ export function LiveScheduleOverlay({
             const split = !here && index > 0 && rooms[index - 1]!.roomId === schedule.streamRoomId;
             return (
               <Fragment key={room.roomId}>
-                {split ? (
-                  <li class="pk-live-schedule__split">
-                    In other rooms
-                  </li>
-                ) : null}
+                {split ? <li class="pk-live-schedule__split">In other rooms</li> : null}
                 <li
                   class="pk-live-schedule__room"
                   data-accent={room.roomIndex % 6}

@@ -267,7 +267,9 @@ export const studioBoardSections: PreviewSection[] = [
     id: "onscreen-up-next-rooms",
     title: "Up next in Break, across rooms",
     note: "This room leads, named in brackets; the other rooms follow under their own label, in agenda order, one brought forward at a time.",
-    render: () => <LivestreamOverlay state={breakAcrossRooms()} elements={presetWith("break", ["schedule", "timer"])} />,
+    render: () => (
+      <LivestreamOverlay state={breakAcrossRooms()} elements={presetWith("break", ["schedule", "timer"])} />
+    ),
   },
   {
     id: "onscreen-poll-side-by-side",

@@ -755,7 +755,9 @@ describe("live room auxiliary outputs", () => {
     expect(foyer.scene).toBe("break");
     expect(foyer.schedule).toBeNull();
     // A scene change sent to a locked screen leaves it in its scene too.
-    expect((await screenAfter(operator, { type: "aux.scene", output: "foy", scene: "full-board" })).scene).toBe("break");
+    expect((await screenAfter(operator, { type: "aux.scene", output: "foy", scene: "full-board" })).scene).toBe(
+      "break",
+    );
 
     // The room's settings give the projector another scene: the next join loads it on what the screen holds,
     // from the room's own storage.
