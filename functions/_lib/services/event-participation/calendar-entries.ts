@@ -20,19 +20,24 @@ export function preparePersonalCalendarEntries(db: DatabaseLike, selection: Even
   const owner = userId ? " AND p.user_id=?" : "";
   const values = userId ? [...event.bindings, userId] : event.bindings;
   const now = nowIso();
+  // Scope the published snapshots to this event once. Joining the unscoped JSON expansion re-parsed
+  // every event's agenda per participation row and held the database for seconds.
+  const sessions = `s AS MATERIALIZED (SELECT event_id,id,title,start_at,end_at,room_id FROM (${publishedSessionsSql}) WHERE event_id=${event.sql})`;
+  const rooms = `room AS MATERIALIZED (SELECT event_id,id,name FROM (${publishedRoomsSql}) WHERE event_id=${event.sql})`;
   return [
     db
       .prepare(
-        `INSERT INTO agenda_calendar_entries(event_id,occurrence_id,user_id,sequence,revision,status,title,start_at,end_at,location,updated_at)
+        `WITH ${sessions}, ${rooms}
+    INSERT INTO agenda_calendar_entries(event_id,occurrence_id,user_id,sequence,revision,status,title,start_at,end_at,location,updated_at)
     SELECT p.event_id,p.occurrence_id,p.user_id,0,state.published_revision,
       CASE WHEN p.status='reserved' THEN 'confirmed'
         WHEN p.status='canceled' AND p.saved=0 THEN 'canceled'
         WHEN p.status='canceled' AND previous.status IN ('confirmed','released','canceled') THEN 'released'
         ELSE 'tentative' END,
       s.title,s.start_at,s.end_at,room.name,?
-    FROM agenda_session_participations p JOIN (${publishedSessionsSql}) s ON s.id=p.occurrence_id AND s.event_id=p.event_id
+    FROM agenda_session_participations p JOIN s ON s.id=p.occurrence_id AND s.event_id=p.event_id
     JOIN event_agenda_state state ON state.event_id=p.event_id
-    LEFT JOIN (${publishedRoomsSql}) room ON room.event_id=s.event_id AND p.attendance_mode='physical'
+    LEFT JOIN room ON room.event_id=s.event_id AND p.attendance_mode='physical'
       AND room.id=s.room_id
     LEFT JOIN agenda_calendar_entries previous ON previous.event_id=p.event_id AND previous.occurrence_id=p.occurrence_id AND previous.user_id=p.user_id
     WHERE p.event_id=${event.sql}${owner} AND (p.status<>'canceled' OR p.saved=1 OR previous.status IS NOT NULL)
@@ -41,13 +46,14 @@ export function preparePersonalCalendarEntries(db: DatabaseLike, selection: Even
     WHERE agenda_calendar_entries.status<>excluded.status OR (excluded.status<>'canceled' AND (agenda_calendar_entries.title<>excluded.title
       OR agenda_calendar_entries.start_at IS NOT excluded.start_at OR agenda_calendar_entries.end_at IS NOT excluded.end_at OR agenda_calendar_entries.location IS NOT excluded.location))`,
       )
-      .bind(now, ...values),
+      .bind(...event.bindings, ...event.bindings, now, ...values),
     db
       .prepare(
-        `UPDATE agenda_calendar_entries AS entry SET status='canceled',sequence=sequence+1,updated_at=?
-      WHERE event_id=${event.sql} ${userId ? "AND user_id=?" : ""} AND status<>'canceled' AND NOT EXISTS(SELECT 1 FROM (${publishedSessionsSql}) s WHERE s.id=entry.occurrence_id AND s.event_id=entry.event_id)`,
+        `WITH ${sessions}
+    UPDATE agenda_calendar_entries AS entry SET status='canceled',sequence=sequence+1,updated_at=?
+      WHERE event_id=${event.sql} ${userId ? "AND user_id=?" : ""} AND status<>'canceled' AND NOT EXISTS(SELECT 1 FROM s WHERE s.id=entry.occurrence_id AND s.event_id=entry.event_id)`,
       )
-      .bind(now, ...values),
+      .bind(...event.bindings, now, ...values),
   ];
 }
 export async function personalAgendaCalendar(

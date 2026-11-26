@@ -105,7 +105,7 @@ const programMark = timersRoomState([pitchTimer], [], {
   },
 });
 
-/** A break timer in its own top-right corner over the Q&A column, with a long audience question on air. */
+/** A break timer in its own top-right corner over the Board right column, with a long audience question on air. */
 const questionColumnTimer = timersRoomState([breakTimer], [], {
   stage: {
     ...timersRoomState([]).stage,
@@ -136,7 +136,7 @@ export const studioTimerSections: PreviewSection[] = [
   },
   {
     id: "program-timer-question-column",
-    title: "Program: a timer over the Q&A column",
+    title: "Program: a timer over the Board right column",
     note: "A timer in its own top-right corner over the column beside the camera: the eyebrow starts under it, and the question keeps the column's full width.",
     render: () => <ProgramTimers state={questionColumnTimer} layout="questions" />,
   },

@@ -281,7 +281,7 @@ export const liveOverlaySharedPositionsSchema = z.preprocess(
 export type LiveOverlaySharedPositions = z.infer<typeof liveOverlaySharedPositionsSchema>;
 
 /** The built-in layouts every event starts with; their data lives in `live-overlay-layout-presets.ts`. */
-export const LIVE_OVERLAY_PRESETS = ["default", "questions", "panel", "break", "check-in", "full-board"] as const;
+export const LIVE_OVERLAY_PRESETS = ["default", "questions", "check-in", "full-board", "break"] as const;
 export type LiveOverlayPreset = (typeof LIVE_OVERLAY_PRESETS)[number];
 /** The layout a browser source uses when it names none, or one the event does not have. */
 export const LIVE_OVERLAY_DEFAULT_LAYOUT: LiveOverlayPreset = "default";

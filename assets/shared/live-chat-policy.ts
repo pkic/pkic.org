@@ -110,6 +110,8 @@ export interface LiveChatActionSubject {
   flaggedByCheck?: boolean;
   reportedByMe: boolean;
   converted: boolean;
+  /** Sent during another session than the one on now: as a question it would land in that session, not this one. */
+  earlierSession?: boolean;
   /** Cleared from the studio queue. */
   done: boolean;
   /** The author operates this room, so no one blocks them. */
@@ -145,7 +147,7 @@ export function liveChatEditOpen(sentAt: string, now = Date.now()): boolean {
  * | remove     | no                  | others' shown         | others' shown         |
  * | keep       | no                  | held, reported or flagged | held, reported or flagged |
  * | done       | no                  | attendee messages     | attendee messages     | (reviewed, or back to review)
- * | convert    | no                  | attendee messages     | attendee messages     |
+ * | convert    | no                  | this session's attendee messages | this session's attendee messages |
  * | pause      | no                  | unrestricted authors  | unrestricted authors  |
  * | block      | no                  | not blocked yet       | not blocked yet       |
  * | blockEvent | no                  | no                    | not blocked for event |
@@ -180,7 +182,8 @@ export function liveChatActions(
   if (staff) {
     if (!message.mine && (!message.hidden || message.held)) actions.add("remove");
     if (message.hidden || message.reported || message.flaggedByCheck) actions.add("keep");
-    if (message.channel === "attendee" && !message.hidden && !message.converted) actions.add("convert");
+    if (message.channel === "attendee" && !message.hidden && !message.converted && !message.earlierSession)
+      actions.add("convert");
     if (message.channel === "attendee") actions.add("done");
     if (message.channel === "attendee" && !message.hidden) actions.add(message.pinned ? "unpin" : "pin");
   }

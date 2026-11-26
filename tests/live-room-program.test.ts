@@ -11,7 +11,6 @@ import { liveOverlayAccessResponseSchema } from "../assets/shared/schemas/live-o
 import { signLiveOverlayToken } from "../functions/_lib/auth/live-session-overlay-token";
 import { verifyUserSessionToken } from "../functions/_lib/auth/user-session-token";
 import { liveProgramName } from "../functions/_lib/services/live-session/room-program";
-import { getAgenda } from "../functions/_lib/services/event-agenda/read";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
@@ -31,40 +30,6 @@ async function token() {
   const response = await callApi(env, f.programPath("/overlays"), { method: "POST", headers: headers() });
   expect(response.status).toBe(201);
   return liveOverlayAccessResponseSchema.parse(await response.json()).token;
-}
-async function secondSession(roomId = f.roomId) {
-  const id = crypto.randomUUID(),
-    now = new Date().toISOString(),
-    start = new Date(Date.now() + 70 * 60000).toISOString(),
-    end = new Date(Date.now() + 130 * 60000).toISOString();
-  if (roomId !== f.roomId)
-    await env.DB.prepare("INSERT INTO event_agenda_rooms(id,event_id,name) VALUES (?,?,'Other physical room')")
-      .bind(roomId, f.eventId)
-      .run();
-  await env.DB.prepare(
-    "INSERT INTO event_agenda_occurrences(id,event_id,room_id,title,start_at,end_at) VALUES (?,?,?,'Next session',?,?)",
-  )
-    .bind(id, f.eventId, roomId, start, end)
-    .run();
-  await env.DB.prepare("UPDATE events SET ends_at=? WHERE id=?").bind(end, f.eventId).run();
-  const snapshot = await getAgenda(env.DB, f.eventId, f.eventSlug);
-  snapshot.revision = 2;
-  snapshot.publishedRevision = 2;
-  const json = JSON.stringify(snapshot);
-  await env.DB.prepare("UPDATE event_agenda_state SET revision=2,published_revision=2 WHERE event_id=?")
-    .bind(f.eventId)
-    .run();
-  await env.DB.prepare(
-    "INSERT INTO event_agenda_publications(id,event_id,revision,snapshot_json,created_by,created_at) VALUES(?,?,2,?,?,?)",
-  )
-    .bind(crypto.randomUUID(), f.eventId, json, f.users.operator, now)
-    .run();
-  await env.DB.prepare(
-    "INSERT INTO event_agenda_published_occurrences(event_id,revision,occurrence_id,payload_json) SELECT ?,2,json_extract(entry.value,'$.id'),entry.value FROM json_each(?,'$.occurrences') entry",
-  )
-    .bind(f.eventId, json)
-    .run();
-  return id;
 }
 async function programSocket(access: string) {
   const response = await callApi(env, f.programPath("/program"), {
@@ -100,7 +65,7 @@ describe("stable physical room broadcast sources", () => {
   beforeEach(() => f.setup());
   afterEach(() => vi.useRealTimers());
   it("keeps the lower third but clears the previous session's question", async () => {
-    const next = await secondSession();
+    const next = await f.addSession();
     expect((await select(f.occurrenceId, 0)).status).toBe(200);
     const operator = await f.connect({ person: "operator" });
     operator.send({ type: "stage.lowerThird", creditKey: `user:${f.users.speaker}` });
@@ -130,7 +95,7 @@ describe("stable physical room broadcast sources", () => {
   });
 
   it("moves the old session's attendees to the session loaded next and hands its opening back to the schedule", async () => {
-    const next = await secondSession();
+    const next = await f.addSession();
     expect((await select(f.occurrenceId, 0)).status).toBe(200);
     const operator = await f.connect({ person: "operator" });
     const attendee = await f.connect({ person: "attendee" });
@@ -153,7 +118,7 @@ describe("stable physical room broadcast sources", () => {
   });
 
   it("keeps the same signed source across sessions and stops old-session fanout after switching or clearing", async () => {
-    const next = await secondSession();
+    const next = await f.addSession();
     expect((await select(f.occurrenceId, 0)).status).toBe(200);
     const access = await token();
     const program = await programSocket(access);
@@ -198,7 +163,7 @@ describe("stable physical room broadcast sources", () => {
     nextOperator.webSocket!.close();
   });
   it("rejects a session in another physical room and concurrent stale revision overwrites", async () => {
-    const other = await secondSession(crypto.randomUUID());
+    const other = await f.addSession(crypto.randomUUID());
     expect((await select(other, 0)).status).toBe(409);
     const unknown = await select(crypto.randomUUID(), 0);
     expect(unknown.status).toBe(404);

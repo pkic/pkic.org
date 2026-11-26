@@ -225,7 +225,7 @@ describe("the studio's switcher, session bar and phone layout", () => {
         }),
       );
       const toast = () => host.querySelector(".pk-studio__toast");
-      expect(toast()?.textContent).toContain("Remote Rita took everything off air. Program is in the Default scene.");
+      expect(toast()?.textContent).toContain("Remote Rita took everything off air. Program is in the Camera scene.");
       void act(() => button(toast()!, "Undo").click());
       expect(commands(live)).toEqual([{ type: "program.restore", snapshotId }]);
       expect(toast()).toBeNull();
@@ -255,7 +255,7 @@ describe("the studio's switcher, session bar and phone layout", () => {
     });
     const show = (snapshotId: string) =>
       void act(() =>
-        render(<ProgramUndoToast undo={undo(snapshotId)} defaultScene="Default" onUndo={() => {}} />, host),
+        render(<ProgramUndoToast undo={undo(snapshotId)} defaultScene="Camera" onUndo={() => {}} />, host),
       );
     try {
       show("first");

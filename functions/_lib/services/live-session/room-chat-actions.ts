@@ -88,13 +88,8 @@ export class LiveRoomChatActions {
       /** The session a message sent now is dated by, in a location's chat; null in a session's room. */
       stamp: () => string | null;
       checkWrite: (viewer: LiveRoomParticipant, occurrenceId: string | null) => Promise<LiveRefusal | null>;
-      /** Asks a converted message in a session's room; answers the question's id or why it could not. */
-      ask: (
-        question: LiveChatQuestion,
-        by: Actor,
-        at: string,
-        sentDuring: string | null,
-      ) => Promise<string | LiveRefusal>;
+      /** Asks a converted message in the room of the session on; answers the question's id or why it could not. */
+      ask: (question: LiveChatQuestion, by: Actor, at: string) => Promise<string | LiveRefusal>;
       /** A moderator acted or a question was created; the durable copy, with its audit rows, is due. */
       audited: () => Promise<void>;
       /** An attendee message changed the chat counts; their durable copy is due. */
@@ -171,6 +166,7 @@ export class LiveRoomChatActions {
     const reports = this.feed.moderation.reportCount(row.id);
     const author = this.feed.people.people([row.author_user_id]).get(row.author_user_id);
     const converted = this.feed.moderation.questions([row.id]).has(row.id);
+    const sessionOn = this.hooks.stamp();
     return liveChatActions(liveChatCapacity(viewer), restricted, {
       channel: row.channel,
       mine: row.author_user_id === viewer.userId,
@@ -182,6 +178,7 @@ export class LiveRoomChatActions {
         viewer.userId && this.feed.moderation.reportedBy([row.id], [viewer.userId]).get(viewer.userId)?.has(row.id),
       ),
       converted,
+      earlierSession: row.occurrence_id !== null && row.occurrence_id !== sessionOn,
       done: this.feed.decisions.done([row.id]).has(row.id),
       authorStaff: author?.staff ?? false,
       authorRestriction: this.feed.decisions.restriction(row.author_user_id, Date.now())?.block ?? null,
@@ -469,7 +466,6 @@ export class LiveRoomChatActions {
       },
       actor,
       at,
-      row.occurrence_id ?? null,
     );
     if (typeof asked !== "string") return asked;
     this.feed.moderation.linkQuestion(row.id, asked);

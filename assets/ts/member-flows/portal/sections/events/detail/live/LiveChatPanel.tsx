@@ -22,19 +22,22 @@ export function LiveChatPanel({
   send,
   channel = "attendee",
   studio = false,
+  sessionOn,
 }: {
   state: LiveChatView;
+  /** The session the location is on now, null between sessions; undefined where the view does not know it. */
+  sessionOn?: string | null;
   channel?: "attendee" | "operator";
   studio?: boolean;
   disabled: boolean;
   send: Send;
 }) {
-  if (studio) return <LiveStudioChat state={state} disabled={disabled} send={send} />;
+  if (studio) return <LiveStudioChat state={state} disabled={disabled} send={send} sessionOn={sessionOn} />;
   return (
     <Panel class="pk-live-desk__chat-panel">
       <PanelHeader title={channel === "operator" ? "Operator chat" : "Attendee chat"} />
       <PanelBody>
-        <LiveChat state={state} disabled={disabled} send={send} channel={channel} compact />
+        <LiveChat state={state} disabled={disabled} send={send} channel={channel} sessionOn={sessionOn} compact />
       </PanelBody>
     </Panel>
   );
@@ -62,7 +65,14 @@ const REVIEW_MATCH: Record<ReviewFilter, (message: LiveChatMessage) => boolean> 
  * Messages waiting for a moderator: the ones the check removed or flagged and the ones people reported.
  * Removed ones lead, since their authors wait on a decision; Keep and Hide lead each row's menu.
  */
-function LiveChatReview({ state, disabled, send }: { state: LiveChatView; disabled: boolean; send: Send }) {
+interface StudioChatProps {
+  state: LiveChatView;
+  disabled: boolean;
+  send: Send;
+  sessionOn: string | null | undefined;
+}
+
+function LiveChatReview({ state, disabled, send, sessionOn }: StudioChatProps) {
   const [filter, setFilter] = useHashQueryParam("review", "all", REVIEW_FILTERS);
   const queue = state.chatReports ?? [];
   if (!queue.length)
@@ -98,6 +108,7 @@ function LiveChatReview({ state, disabled, send }: { state: LiveChatView; disabl
                   send={send}
                   disabled={disabled}
                   timeZone={state.scope.timeZone}
+                  sessionOn={sessionOn}
                   review
                 />
               ))}
@@ -116,7 +127,7 @@ function LiveChatReview({ state, disabled, send }: { state: LiveChatView; disabl
   );
 }
 
-function LiveStudioChat({ state, disabled, send }: { state: LiveChatView; disabled: boolean; send: Send }) {
+function LiveStudioChat({ state, disabled, send, sessionOn }: StudioChatProps) {
   const [view, setView] = useHashQueryParam("chat", "attendee", VIEWS);
   const known = useRef(new Set(state.chat.map((message) => message.id)));
   const [unread, setUnread] = useState({ attendee: 0, operator: 0 });
@@ -167,9 +178,17 @@ function LiveStudioChat({ state, disabled, send }: { state: LiveChatView; disabl
           class="pk-live-desk__chat-tabpanel"
         >
           {id === "review" ? (
-            <LiveChatReview state={state} disabled={disabled} send={send} />
+            <LiveChatReview state={state} disabled={disabled} send={send} sessionOn={sessionOn} />
           ) : (
-            <LiveChat state={state} disabled={disabled} send={send} channel={id} visible={view === id} compact />
+            <LiveChat
+              state={state}
+              disabled={disabled}
+              send={send}
+              channel={id}
+              visible={view === id}
+              sessionOn={sessionOn}
+              compact
+            />
           )}
         </div>
       ))}

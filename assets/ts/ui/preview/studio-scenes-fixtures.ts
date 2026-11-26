@@ -1,7 +1,7 @@
 /**
  * The studio as the scene thumbnails read it: questions with votes in the
  * room, a panel of three, later sessions on the approved agenda, Program on
- * Q&A, the projector on Panel and a lower third waiting in Preview.
+ * Board right, the projector on Full board and a lower third waiting in Preview.
  * Synthetic room; the later sessions are far ahead, so Up next always lists them.
  */
 import { agendaSnapshotSchema } from "../../../shared/schemas/event-agenda";
@@ -77,7 +77,7 @@ const AGENDA = agendaSnapshotSchema.parse({
 const lowerThird = ROOM.session.credits[0]!;
 const room: LiveRoomState = { ...ROOM, questions: QUESTIONS, outputs: {} };
 
-/** Program on Q&A with its top questions, and the projector on Panel. */
+/** Program on Board right with its top questions, and the projector on Full board. */
 const ON_AIR: LiveRoomState = {
   ...room,
   stage: {
@@ -89,7 +89,7 @@ const ON_AIR: LiveRoomState = {
       questions: QUESTIONS.map(({ id, text, authorName, votes }) => ({ id, text, authorName, votes })),
     },
   },
-  outputs: { projector: { ...EMPTY_LIVE_AUX_COMPOSITION, scene: "panel", panelists: { layout: "panel" } } },
+  outputs: { projector: { ...EMPTY_LIVE_AUX_COMPOSITION, scene: "full-board", panelists: { layout: "panel" } } },
 };
 
 /** What the monitors and the scene thumbnails draw from: a lower third in Preview, in the Default scene. */

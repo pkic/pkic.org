@@ -24,6 +24,7 @@ import { Spinner } from "../../../../../../components/Spinner";
 import { Alert } from "../../../../../../ui/Alert";
 import { ControlTooltips } from "../../../../../../ui/ControlTooltips";
 import { LiveChatPanel } from "./LiveChatPanel";
+import { liveLocationChatStamp } from "../../../../../../../shared/live-location-chat";
 import { LocationChatJoining } from "../../../../../../live-session/LocationChat";
 import { useLocationChat } from "../../../../../../live-session/useLocationChat";
 
@@ -38,7 +39,7 @@ import { GraphicsPanel, nextInRoom } from "./studio/GraphicsPanel";
 import { monitorPanelView } from "./studio/MonitorPanel";
 import { RoomOpeningMenu } from "./studio/RoomOpeningMenu";
 import { StudioScreensBody, StudioScreensConnection } from "./studio/ScreensPanel";
-import { SpeakerMessagePanel } from "./studio/SpeakerMessagePanel";
+import { SpeakerMessagePanel, SpeakerMessageStatus, useSpeakerMessageDraft } from "./studio/SpeakerMessagePanel";
 import { stageDisplaySettingsMenu } from "./studio/stage-display-settings-menu";
 import { StudioGrid, type StudioPanelView } from "./studio/StudioGrid";
 import { StudioHeader, type StudioNoticeContent } from "./studio/StudioHeader";
@@ -163,6 +164,8 @@ export function LiveSessionDesk({
   const [broadcasting, setBroadcasting] = useState(false);
   const [lowerThirdSettings, setLowerThirdSettings] = useState(false);
   const [releaseTimes, setReleaseTimes] = useState(false);
+  // The message panel's header and its composer share one draft.
+  const messageDraft = useSpeakerMessageDraft();
   // The output this operator's last take went to, for the spinner on its button.
   const [takenTo, setTakenTo] = useState<LiveTakeTarget>("program");
   const runningBroadcast = useRef(false);
@@ -420,12 +423,15 @@ export function LiveSessionDesk({
             />
           ),
         };
-      case "message":
+      case "message": {
+        const message = { message: state.speakerMessage, send: sendProgram, disabled: moderationDisabled };
         return {
           title,
+          actions: <SpeakerMessageStatus {...message} draft={messageDraft} />,
           menu: stageDisplaySettingsMenu(state.stageDisplaySettings, sendProgram, disabled),
-          body: <SpeakerMessagePanel message={state.speakerMessage} send={sendProgram} disabled={moderationDisabled} />,
+          body: <SpeakerMessagePanel {...message} draft={messageDraft} />,
         };
+      }
       case "polls":
         return {
           title,
@@ -436,7 +442,18 @@ export function LiveSessionDesk({
         return {
           title,
           body: chat.state ? (
-            <LiveChatPanel studio state={chat.state} disabled={chat.status !== "live"} send={chat.send} />
+            <LiveChatPanel
+              studio
+              state={chat.state}
+              disabled={chat.status !== "live"}
+              send={chat.send}
+              // The session the chat dates messages by: the one loaded on Program, else the agenda's.
+              sessionOn={
+                activeOccurrenceId === undefined
+                  ? undefined
+                  : liveLocationChatStamp(now, chat.state.scope.sessions, activeOccurrenceId)
+              }
+            />
           ) : (
             <LocationChatJoining chat={chat} />
           ),

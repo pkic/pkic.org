@@ -17,8 +17,11 @@ export function LiveAttendeeChat({
   chat,
   compact = false,
   note,
+  sessionOn,
 }: {
   chat: LiveLocationChatConnection;
+  /** The session the location is on now, null between sessions: the feed marks where it starts. */
+  sessionOn?: string | null;
   compact?: boolean;
   /** Said under the feed while nothing else is, such as when the chat closes. */
   note?: string;
@@ -37,6 +40,7 @@ export function LiveAttendeeChat({
         disabled={chat.status !== "live" || chat.state.sessionClosed === true}
         send={chat.send}
         compact={compact}
+        sessionOn={sessionOn}
         note={chat.state.sessionClosed ? "Chat is closed for the current session." : note}
       />
     </>

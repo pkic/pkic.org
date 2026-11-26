@@ -87,17 +87,21 @@ describe("what puts a graphic on an output", () => {
   });
 });
 
+/** The scenes laid out for their boards; Camera instead shows whatever is switched on, over the picture. */
+const BOARD_SCENES = LIVE_OVERLAY_PRESETS.filter((slug) => slug !== "default");
+
 describe("the built-in scenes", () => {
-  it("are Default, Q&A, Panel, Break, Check-in and Full board; a retired name reads as Default", () => {
+  it("are Camera, Board right, Board left, Full board and Break; a retired name reads as Camera", () => {
     expect(LIVE_OVERLAY_PRESETS.map((slug) => LIVE_OVERLAY_PRESET_LAYOUTS[slug].name)).toEqual([
-      "Default",
-      "Q&A",
-      "Panel",
-      "Break",
-      "Check-in",
+      "Camera",
+      "Board right",
+      "Board left",
       "Full board",
+      "Break",
     ]);
     expect(isLiveOverlayPreset("talk")).toBe(false);
+    expect(isLiveOverlayPreset("panel")).toBe(false);
+    expect(resolveLiveOverlayLayout([], "panel")).toBe(preset("default"));
     expect(resolveLiveOverlayLayout([], "talk")).toBe(preset("default"));
     expect(resolveLiveSceneElements({ overlayLayouts: [] }, "talk")).toBe(preset("default"));
     expect(resolveLiveSceneElements(null, null)).toBe(preset("default"));
@@ -107,7 +111,6 @@ describe("the built-in scenes", () => {
     expect(Object.fromEntries(LIVE_OVERLAY_PRESETS.map((slug) => [slug, liveSceneComesOn(preset(slug))]))).toEqual({
       default: [],
       questions: ["topQuestions"],
-      panel: ["panelists"],
       break: ["schedule"],
       "check-in": [],
       "full-board": [],
@@ -115,32 +118,24 @@ describe("the built-in scenes", () => {
     // Each still places the time, the ticker and reactions, so the studio can switch them in any scene.
     for (const slug of LIVE_OVERLAY_PRESETS)
       expect(included(preset(slug)), slug).toEqual(expect.arrayContaining(["timer", "ticker", "reactions"]));
-    // The lower third is placed where a camera picture shows: not over Panel's people, nor in Full board.
+    // The lower third is placed where a camera picture shows, not in Full board or Break.
     expect(LIVE_OVERLAY_PRESETS.filter((slug) => preset(slug).lowerThird.visible)).toEqual([
       "default",
       "questions",
-      "break",
       "check-in",
     ]);
   });
 
-  it("make Default the empty scene: only graphics that sit over the picture, no board and no background", () => {
+  it("make Camera show whatever is switched on: every graphic with a switch at its standard box, no background", () => {
     const elements = preset("default");
-    expect(included(elements)).toEqual([
-      "lowerThird",
-      "timer",
-      "ticker",
-      "schedule",
-      "checkIn",
-      "reactions",
-      "stageDisplay",
-      "stageMessage",
-    ]);
-    for (const board of [...FIELD_BOARDS, "background", "qrCode"] as const)
-      expect(elements[board].visible, board).toBe(false);
-    // The boards keep their standard places as data, for Add graphic and for a new scene.
+    expect(included(elements)).toEqual(
+      LIVE_OVERLAY_ELEMENTS.filter((element) => element !== "background" && element !== "qrCode"),
+    );
+    expect(elements.background.visible).toBe(false);
+    expect(elements.qrCode.visible).toBe(false);
+    // The boards sit at their standard places, the same data Add graphic and a new scene use.
     for (const board of FIELD_BOARDS) {
-      expect(LIVE_OVERLAY_STANDARD_ELEMENTS[board].visible, board).toBe(true);
+      expect(elements[board]).toEqual(LIVE_OVERLAY_STANDARD_ELEMENTS[board]);
       expect(LIVE_OVERLAY_DEFAULT_POSITIONS[board], board).toEqual({
         x: 0,
         y: 0,
@@ -152,7 +147,7 @@ describe("the built-in scenes", () => {
     }
   });
 
-  it("place the background where the scene's boards sit, and none in Default or Break", () => {
+  it("place the background where the scene's boards sit, and none in Camera or Break", () => {
     const background = (slug: (typeof LIVE_OVERLAY_PRESETS)[number]) => {
       const { visible, x, y, w, h } = preset(slug).background;
       return visible ? { x, y, w, h } : null;
@@ -161,13 +156,12 @@ describe("the built-in scenes", () => {
     expect(background("break")).toBeNull();
     expect(background("questions")).toEqual({ x: 0.6, y: 0, w: 0.4, h: 1 });
     expect(background("check-in")).toEqual({ x: 0, y: 0, w: 0.4, h: 1 });
-    expect(background("panel")).toEqual({ x: 0, y: 0, w: 1, h: 1 });
     expect(background("full-board")).toEqual({ x: 0, y: 0, w: 1, h: 1 });
     // Boards and cards the scene includes sit inside its background, or clear of it over the camera.
     expect(preset("questions").topQuestions).toMatchObject(background("questions")!);
     expect(preset("check-in").checkIn).toMatchObject(background("check-in")!);
-    // Every board a built-in scene includes lies inside that scene's background.
-    for (const slug of LIVE_OVERLAY_PRESETS)
+    // Every board a scene with boards includes lies inside that scene's background.
+    for (const slug of BOARD_SCENES)
       for (const board of FIELD_BOARDS.filter((each) => preset(slug)[each].visible)) {
         const ground = background(slug);
         const { x, y, w, h } = preset(slug)[board];
@@ -181,7 +175,7 @@ describe("the built-in scenes", () => {
 
   it("never overlap two boards by accident: they share one spot one at a time, or keep clear of each other", () => {
     const boards = [...FIELD_BOARDS, ...CARDS];
-    for (const slug of LIVE_OVERLAY_PRESETS) {
+    for (const slug of BOARD_SCENES) {
       const elements = preset(slug);
       const shown = boards.filter((board) => elements[board].visible);
       for (const [index, one] of shown.entries())
@@ -194,7 +188,7 @@ describe("the built-in scenes", () => {
   });
 
   it("keep the lower third clear of every board and the check-in code, and the timer clear of the cards", () => {
-    for (const slug of LIVE_OVERLAY_PRESETS) {
+    for (const slug of BOARD_SCENES) {
       const elements = preset(slug);
       if (elements.lowerThird.visible)
         for (const board of [...FIELD_BOARDS, "checkIn"] as const)
@@ -208,10 +202,10 @@ describe("the built-in scenes", () => {
           expect(meets(elements.timer, elements[card]), `${slug}: timer and ${card}`).toBe(false);
     }
     // The timer sits over a board only where the scene's background runs under it, whose logo steps aside for it.
-    const timerOnBoard = LIVE_OVERLAY_PRESETS.filter((slug) =>
+    const timerOnBoard = BOARD_SCENES.filter((slug) =>
       FIELD_BOARDS.some((board) => preset(slug)[board].visible && meets(preset(slug).timer, preset(slug)[board])),
     );
-    expect(timerOnBoard).toEqual(["panel", "full-board"]);
+    expect(timerOnBoard).toEqual(["full-board"]);
     for (const slug of timerOnBoard) expect(meets(preset(slug).timer, preset(slug).background), slug).toBe(true);
   });
 
@@ -238,6 +232,9 @@ describe("the built-in scenes", () => {
   });
 });
 
+/** An event's own scene with the session graphic coming on, as no built-in scene brings it on. */
+const panelScene = () => ({ ...preset("full-board"), panelists: { ...preset("full-board").panelists, comesOn: true } });
+
 describe("loading a scene on a composition", () => {
   it("switches on the scene's comes-on graphics, filled as the room would", () => {
     expect(liveSceneFill(preset("questions"), EMPTY, room())).toEqual({
@@ -246,7 +243,7 @@ describe("loading a scene on a composition", () => {
     expect(liveSceneFill(preset("break"), EMPTY, room())).toEqual({
       schedule: { ...DEFAULT_LIVE_SCHEDULE_CONFIG, scope: "all-rooms" },
     });
-    expect(liveSceneFill(preset("panel"), EMPTY, room())).toEqual({ panelists: { layout: "panel" } });
+    expect(liveSceneFill(panelScene(), EMPTY, room())).toEqual({ panelists: { layout: "panel" } });
   });
 
   it("gives a graphic the look Program shows it in", () => {
@@ -254,7 +251,7 @@ describe("loading a scene on a composition", () => {
       panelists: { layout: "columns" as const },
       topQuestions: { config: { count: 3 }, questions: [] },
     };
-    expect(liveSceneFill(preset("panel"), EMPTY, room(program))).toEqual({ panelists: { layout: "columns" } });
+    expect(liveSceneFill(panelScene(), EMPTY, room(program))).toEqual({ panelists: { layout: "columns" } });
     expect(liveSceneFill(preset("questions"), EMPTY, room(program))).toEqual({ topQuestions: { count: 3 } });
   });
 
@@ -264,7 +261,7 @@ describe("loading a scene on a composition", () => {
       topQuestions: { count: 4 },
       schedule: { ...DEFAULT_LIVE_SCHEDULE_CONFIG, scope: "this-room" as const, layout: "list" as const },
     };
-    expect(liveSceneFill(preset("panel"), EMPTY, { ...room(), setup })).toEqual({ panelists: { layout: "columns" } });
+    expect(liveSceneFill(panelScene(), EMPTY, { ...room(), setup })).toEqual({ panelists: { layout: "columns" } });
     expect(liveSceneFill(preset("questions"), EMPTY, { ...room(), setup })).toEqual({ topQuestions: { count: 4 } });
     // Up next still lists every room, as the studio's own switch puts it on.
     expect(liveSceneFill(preset("break"), EMPTY, { ...room(), setup })).toEqual({

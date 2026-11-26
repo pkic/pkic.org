@@ -297,28 +297,6 @@ describe("Editing a screen", () => {
   });
 });
 
-describe("Revoking a screen", () => {
-  it("signs the screen out only once the confirmation is accepted", async () => {
-    const requests = api(
-      () => [record()],
-      (request) => (request.method === "DELETE" ? new Response(null, { status: 204 }) : undefined),
-    );
-    const root = await mount(true);
-    const deletes = () => requests.filter((request) => request.method === "DELETE");
-
-    await rowCommand(root, "Foyer, by registration", "Revoke");
-    await act(() => confirmationButton("Cancel")!.click());
-    await settle();
-    expect(deletes()).toHaveLength(0);
-
-    await rowCommand(root, "Foyer, by registration", "Revoke");
-    await act(() => confirmationButton("Revoke screen")!.click());
-    await settle();
-    expect(deletes().map((request) => request.pathname)).toEqual(["/api/v1/screens/K7M2QA/session"]);
-    expect(listReads(requests)).toBe(2);
-  });
-});
-
 describe("Replacing a screen's device", () => {
   async function fillAndReplace(root: HTMLElement) {
     await rowCommand(root, "Foyer, by registration", "Replace device…");
@@ -385,23 +363,64 @@ describe("Replacing a screen's device", () => {
     expect(openDialog()).toBeNull();
   });
 
-  it("keeps the dialog open on the screen ID another screen has", async () => {
-    api(
+  it("keeps the dialog open on the screen ID another screen has, and replaces it only once confirmed", async () => {
+    const requests = api(
       () => [record()],
-      (request) =>
-        request.method === "PUT"
-          ? refusal(409, "SCREEN_ID_TAKEN", { fieldErrors: { newScreenId: ["“Spare” has this screen ID."] } })
-          : undefined,
+      (request) => {
+        if (request.method !== "PUT") return undefined;
+        return screenDeviceReplacementSchema.parse(request.body).replace
+          ? json(record({ id: "N3WD7V", revision: 4 }))
+          : refusal(409, "SCREEN_ID_TAKEN", { fieldErrors: { newScreenId: ["“Spare” has this screen ID."] } });
+      },
     );
     const root = await mount(true);
     const dialog = await fillAndReplace(root);
     expect(openDialog()).toBe(dialog);
     expect(controlFor(dialog, "Screen ID").getAttribute("aria-invalid")).toBe("true");
+    const replace = [...dialog.querySelectorAll("label")]
+      .find((label) => label.textContent?.startsWith("Replace the screen with this ID"))!
+      .querySelector<HTMLInputElement>("input[type=checkbox]")!;
+    expect(replace.checked).toBe(false);
+
+    await act(() => replace.click());
+    await act(() => button(dialog, "Replace device")!.click());
+    await settle();
+    const puts = requests.filter((request) => request.method === "PUT");
+    expect(screenDeviceReplacementSchema.parse(puts[1]!.body)).toMatchObject({ newScreenId: "N3WD7V", replace: true });
+    expect(openDialog()).toBeNull();
+  });
+
+  it("sends no pairing code when the screen with the new ID is signed in", async () => {
+    const requests = api(
+      () => [record()],
+      (request) => {
+        if (request.method !== "PUT") return undefined;
+        return screenDeviceReplacementSchema.parse(request.body).replace
+          ? json(record({ id: "N3WD7V", revision: 4 }))
+          : refusal(409, "SCREEN_ID_IN_USE", { fieldErrors: { newScreenId: ["“Spare” has this screen ID."] } });
+      },
+    );
+    const root = await mount(true);
+    await rowCommand(root, "Foyer, by registration", "Replace device…");
+    const dialog = openDialog()!;
+    await typeInto(controlFor(dialog, "Screen ID"), "n3wd7v");
+    await act(() => button(dialog, "Replace device")!.click());
+    await settle();
+    const replace = [...dialog.querySelectorAll("label")]
+      .find((label) => label.textContent?.startsWith("Replace the screen with this ID"))!
+      .querySelector<HTMLInputElement>("input[type=checkbox]")!;
+    await act(() => replace.click());
+    expect(controlFor(dialog, "Pairing code").required).toBe(false);
+    await act(() => button(dialog, "Replace device")!.click());
+    await settle();
+    const sent = screenDeviceReplacementSchema.parse(requests.filter((request) => request.method === "PUT")[1]!.body);
+    expect(sent).toEqual({ expectedRevision: 3, newScreenId: "N3WD7V", replace: true });
+    expect(openDialog()).toBeNull();
   });
 });
 
 describe("Removing a screen", () => {
-  it("offers removal once the screen is not signed in, and deletes it only once confirmed", async () => {
+  it("removes a signed-in screen only once confirmed", async () => {
     let screens = [record()];
     const requests = api(
       () => screens,
@@ -411,14 +430,14 @@ describe("Removing a screen", () => {
         return new Response(null, { status: 204 });
       },
     );
-    const signedIn = await mount(true);
-    expect((await rowMenuItem(signedIn, "Foyer, by registration", "Remove")).disabled).toBe(true);
-    await act(() => render(null, signedIn));
-    signedIn.remove();
-
-    screens = [record({ session: { state: "none", activatedAt: null, lastSeenAt: null, expiresAt: null } })];
     const root = await mount(true);
-    await rowCommand(root, "Foyer, by registration", "Remove");
+    const remove = await rowMenuItem(root, "Foyer, by registration", "Remove");
+    expect(remove.disabled).toBe(false);
+    expect([...document.querySelectorAll('[role="menuitem"]')].map((entry) => entry.textContent?.trim())).not.toContain(
+      "Revoke",
+    );
+    await act(() => remove.click());
+    await settle();
     await act(() => confirmationButton("Cancel")!.click());
     await settle();
     expect(requests.filter((request) => request.method === "DELETE")).toHaveLength(0);

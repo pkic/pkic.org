@@ -159,4 +159,27 @@ describe("live room sources", () => {
     projector.socket.close(1000, "done");
     await olga.next("sources.changed", (m) => m.sources.projector === undefined && m.sources.program === 1);
   });
+
+  it("tells operators how many people are on the attendee page, each person once", async () => {
+    const olga = await f.connect({ person: "operator" });
+    expect((await olga.next("audience.changed")).people).toBe(0);
+    const ada = await f.connect({ person: "attendee" });
+    await olga.next("audience.changed", (m) => m.people === 1);
+    // A second tab of the same person is the same person; changes within a second arrive together.
+    const adaAgain = await f.connect({ person: "attendee" });
+    await f.connect({ person: "speaker" });
+    await olga.next("audience.changed", (m) => m.people === 2);
+    const seen = olga.received.length;
+    adaAgain.socket.close(1000, "done");
+    ada.socket.close(1000, "done");
+    await olga.next("audience.changed", (m) => m.people === 1, { after: seen });
+    // The count is the desk's: an operator joining late gets it at once, and nobody else ever does.
+    const rita = await f.connect({ person: "secondOperator" });
+    expect((await rita.next("audience.changed")).people).toBe(1);
+    const before = olga.received.length;
+    const bea = await f.connect({ person: "secondAttendee" });
+    await olga.next("audience.changed", (m) => m.people === 2, { after: before });
+    expect(bea.received.some((message) => message.type === "audience.changed")).toBe(false);
+    expect(olga.received.filter((m) => m.type === "audience.changed").map((m) => m.people)).toEqual([0, 1, 2, 1, 2]);
+  });
 });

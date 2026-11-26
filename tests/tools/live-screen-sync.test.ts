@@ -59,7 +59,7 @@ describe("a screen that follows Program", () => {
     const own: LiveStage = { ...EMPTY_LIVE_STAGE, scene: "check-in", lowerThird: credit, topQuestions };
     const before: LiveStage = { ...EMPTY_LIVE_STAGE, lowerThird: credit, scene: "default" };
     // The lower third comes off Program, a question goes on, and Program moves to another scene.
-    const after: LiveStage = { ...EMPTY_LIVE_STAGE, question, scene: "panel" };
+    const after: LiveStage = { ...EMPTY_LIVE_STAGE, question, scene: "full-board" };
     expect(liveScreenAfterProgramChange(own, before, after)).toEqual({
       ...own,
       lowerThird: null,
@@ -100,7 +100,7 @@ describe("a screen that follows Program", () => {
 
   it("catches up with everything on Program, in its own scene, once it follows again", () => {
     const own: LiveStage = { ...EMPTY_LIVE_STAGE, scene: "check-in", topQuestions };
-    expect(liveScreenCaughtUp(own, { ...program, scene: "panel" })).toEqual({ ...program, scene: "check-in" });
+    expect(liveScreenCaughtUp(own, { ...program, scene: "full-board" })).toEqual({ ...program, scene: "check-in" });
   });
 
   it("is carried Program's changes by its role and its sync: never a screen you take to, the speaker's or the stage preview", () => {
@@ -160,7 +160,7 @@ describe("the speaker's screen synced with Program", () => {
 });
 
 describe("a take to a room screen", () => {
-  const shot: LiveStage = { ...program, panelists: { layout: "panel" }, topQuestions, scene: "panel" };
+  const shot: LiveStage = { ...program, panelists: { layout: "panel" }, topQuestions, scene: "full-board" };
 
   it("sends Preview exactly: scene, picks and switches", () => {
     expect(liveScreenTake("projector", shot)).toEqual({

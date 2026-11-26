@@ -53,8 +53,8 @@ describe("a room screen that follows Program", () => {
     // The room carried the lower third to the projector. Nobody took a scene to it, so it draws Default.
     expect(drawn(room(live, { lowerThird: CREDIT })).name).toBe("Sam Speaker");
     expect(drawn(room(live, { lowerThird: CREDIT, scene: "questions" })).name).toBe("Sam Speaker");
-    // Panel names its people itself and places none.
-    expect(drawn(room(live, { lowerThird: CREDIT, scene: "panel" })).name).toBeNull();
+    // Full board places no lower third.
+    expect(drawn(room(live, { lowerThird: CREDIT, scene: "full-board" })).name).toBeNull();
     // The scene its room locked the screen to is the one it draws, whatever scene was taken to it.
     const setUp = (scene: string, sceneLocked: boolean): Partial<LiveRoomState> => ({
       session: {
@@ -62,12 +62,12 @@ describe("a room screen that follows Program", () => {
         roomOutputs: [{ key: "projector", name: "Projector", code: "PRJ", role: "follow", scene, sceneLocked }],
       },
     });
-    expect(drawn(room(live, { lowerThird: CREDIT, scene: "questions" }, setUp("panel", true))).name).toBeNull();
-    expect(drawn(room(live, { lowerThird: CREDIT, scene: "panel" }, setUp("questions", true))).name).toBe(
+    expect(drawn(room(live, { lowerThird: CREDIT, scene: "questions" }, setUp("full-board", true))).name).toBeNull();
+    expect(drawn(room(live, { lowerThird: CREDIT, scene: "full-board" }, setUp("questions", true))).name).toBe(
       "Sam Speaker",
     );
     // A scene it only starts in gives way to the one taken to it.
-    expect(drawn(room(live, { lowerThird: CREDIT, scene: "questions" }, setUp("panel", false))).name).toBe(
+    expect(drawn(room(live, { lowerThird: CREDIT, scene: "questions" }, setUp("full-board", false))).name).toBe(
       "Sam Speaker",
     );
   });

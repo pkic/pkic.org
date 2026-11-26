@@ -16,6 +16,7 @@ export function ScreenCodeFields({
   fields,
   onPairingCode,
   onScreenId,
+  codeRequired = true,
   children,
 }: {
   pairingCode: string;
@@ -25,6 +26,8 @@ export function ScreenCodeFields({
   fields: (name: string) => FieldPresentation;
   onPairingCode: (value: string) => void;
   onScreenId: (value: string) => void;
+  /** False once the screen ID belongs to a device that is signed in and shows no code. */
+  codeRequired?: boolean;
   /** Said right below the screen ID, such as a choice its answer from the server opened. */
   children?: ComponentChildren;
 }) {
@@ -32,8 +35,12 @@ export function ScreenCodeFields({
     <>
       <Field
         label="Pairing code"
-        required
-        help={`The large code, ${String(SCREEN_PAIRING_CODE_LENGTH)} characters.`}
+        required={codeRequired}
+        help={
+          codeRequired
+            ? `The large code, ${String(SCREEN_PAIRING_CODE_LENGTH)} characters.`
+            : "Not needed: the device is signed in."
+        }
         {...fields("pairingCode")}
       >
         {(control) => (

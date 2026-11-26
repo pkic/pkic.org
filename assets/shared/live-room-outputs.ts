@@ -175,12 +175,19 @@ export const LIVE_SPEAKER_MESSAGE_TONE_LABELS: Record<LiveSpeakerMessageTone, st
   urgent: "Urgent",
 };
 
-/** Ready-made messages to the speaker, shown on the stage display, each in the tone it usually needs. */
-export const LIVE_SPEAKER_MESSAGE_PRESETS: ReadonlyArray<{ text: string; tone: LiveSpeakerMessageTone }> = [
-  { text: "5 minutes left", tone: "info" },
-  { text: "Please wrap up", tone: "warning" },
-  { text: "Time for questions", tone: "info" },
-  { text: "Please use the microphone", tone: "urgent" },
+/**
+ * Ready-made messages to the speaker, shown on the stage display, each in the
+ * tone it usually needs. `label` is the short name the studio's chip shows.
+ */
+export const LIVE_SPEAKER_MESSAGE_PRESETS: ReadonlyArray<{
+  label: string;
+  text: string;
+  tone: LiveSpeakerMessageTone;
+}> = [
+  { label: "5 min left", text: "5 minutes left", tone: "info" },
+  { label: "Wrap up", text: "Please wrap up", tone: "warning" },
+  { label: "Questions", text: "Time for questions", tone: "info" },
+  { label: "Microphone", text: "Please use the microphone", tone: "urgent" },
 ];
 
 export const LIVE_SPEAKER_MESSAGE_MAX_LENGTH = 120;

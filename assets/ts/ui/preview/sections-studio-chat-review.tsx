@@ -3,6 +3,7 @@ import { useEffect } from "preact/hooks";
 import type { LiveChatMessage } from "../../../shared/schemas/live-session-chat";
 import { LiveChatPanel } from "../../member-flows/portal/sections/events/detail/live/LiveChatPanel";
 import type { LiveChatView } from "../../live-session/location-chat-state";
+import { LiveChat } from "../../live-session/LiveChat";
 import type { PreviewSection } from "./PreviewShell";
 
 const START = "2025-12-01T09:00:00.000Z";
@@ -95,7 +96,46 @@ function ReviewSpecimen() {
   );
 }
 
+const EARLIER = "60000000-0000-4000-8000-000000000001";
+const NEXT = "60000000-0000-4000-8000-000000000002";
+const said = (id: number, authorName: string, text: string, minutes: number): LiveChatMessage => ({
+  ...message(id, authorName, text, minutes, {}),
+  occurrenceId: EARLIER,
+});
+
+/** The studio moved on to the next session and nobody wrote in it yet: the feed ends with its line. */
+const SESSION_START: LiveChatView = {
+  ...STATE,
+  scope: {
+    ...STATE.scope,
+    sessions: [
+      { occurrenceId: EARLIER, title: "Post-quantum migration", startAt: at(0), endAt: at(45) },
+      { occurrenceId: NEXT, title: "Hybrid certificates in practice", startAt: at(60), endAt: at(105) },
+    ],
+  },
+  chat: [
+    said(5, "Jordan Lee", "Will the slides be shared afterwards?", 38),
+    said(6, "Riley Example", "Great talk, thanks!", 44),
+  ],
+  chatReports: [],
+};
+
+/** The Attendees tab's feed on its own, since the gallery's review entry holds the tabs on Review. */
+function SessionStartSpecimen() {
+  return (
+    <div class="pk-live-desk__chat-panel">
+      <LiveChat state={SESSION_START} disabled={false} send={() => true} sessionOn={NEXT} compact />
+    </div>
+  );
+}
+
 export const studioChatReviewSections: PreviewSection[] = [
+  {
+    id: "studio-chat-session-start",
+    title: "Studio chat: a new session starts",
+    note: "Once the studio loads the next session, the feed ends with its title, as the room does, so the operator sees the messages above belong to the session before. Those messages no longer offer Turn into question: a question from them would land in a session that is over.",
+    render: () => <SessionStartSpecimen />,
+  },
   {
     id: "studio-chat-review",
     title: "Studio chat: review",

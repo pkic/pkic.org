@@ -1,7 +1,14 @@
-import { hasAuthenticationCredential } from "../../_lib/auth/session-cookies";
+import { hasAuthenticatedSessionCookie, hasAuthenticationCredential } from "../../_lib/auth/session-cookies";
+import { assertSameOriginRequest } from "../../_lib/request-origin";
 import { SANDBOXED_IMAGE_CONTENT_SECURITY_POLICY } from "../../_lib/services/image-response";
 
 const NO_STORE_CACHE_CONTROL = "no-store, max-age=0";
+const SAFE_REQUEST_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+function assertAuthenticatedMutationOrigin(request: Request): void {
+  if (SAFE_REQUEST_METHODS.has(request.method.toUpperCase()) || !hasAuthenticatedSessionCookie(request)) return;
+  assertSameOriginRequest(request, new URL(request.url).origin, "authenticated_api");
+}
 
 /**
  * Returns true for staff-only and signed integration routes that must never be
@@ -89,6 +96,7 @@ export async function onRequest(c: any, next?: () => Promise<void>): Promise<Res
     c.data = c.data ?? {};
     c.data.requestId = requestId;
   }
+  assertAuthenticatedMutationOrigin(request);
   const runNext =
     next ??
     (async () => {

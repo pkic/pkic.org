@@ -45,8 +45,16 @@ const EMOJI = Object.fromEntries(LIVE_CHAT_REACTIONS.map((reaction) => [reaction
   (typeof LIVE_CHAT_REACTIONS)[number]
 >;
 
-/** What the shared chat policy lets this viewer do with this message. */
-export function liveChatMessageActions(message: LiveChatMessage, viewer: Viewer, pinned = false): Set<LiveChatAction> {
+/**
+ * What the shared chat policy lets this viewer do with this message. `sessionOn` is the session the location is
+ * on now, null between sessions; undefined where the view does not know it, and the room decides alone.
+ */
+export function liveChatMessageActions(
+  message: LiveChatMessage,
+  viewer: Viewer,
+  pinned = false,
+  sessionOn?: string | null,
+): Set<LiveChatAction> {
   const moderation = message.moderation;
   return liveChatActions(liveChatCapacity(viewer), viewer.participation != null, {
     channel: message.channel,
@@ -57,6 +65,7 @@ export function liveChatMessageActions(message: LiveChatMessage, viewer: Viewer,
     flaggedByCheck: moderation?.classifier != null,
     reportedByMe: message.reportedByMe ?? false,
     converted: moderation?.questionId != null,
+    earlierSession: sessionOn !== undefined && message.occurrenceId !== undefined && message.occurrenceId !== sessionOn,
     done: moderation?.done != null,
     authorStaff: moderation?.authorStaff ?? false,
     authorRestriction: moderation?.authorRestriction?.block ?? null,
@@ -252,6 +261,7 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
   pinned = false,
   removed = false,
   review = false,
+  sessionOn,
 }: {
   message: LiveChatMessage;
   viewer: Viewer;
@@ -272,6 +282,8 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
   removed?: boolean;
   /** A review queue: the words stay readable, the reason has its own line and the menu opens on Keep and Hide. */
   review?: boolean;
+  /** The session the location is on now, null between sessions; an earlier session's message is not asked here. */
+  sessionOn?: string | null;
 }) {
   const [actionError, setActionError] = useState(false);
   if (removed)
@@ -285,7 +297,7 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
         <p class="pk-live-chat__trace">Message removed</p>
       </li>
     );
-  const actions = liveChatMessageActions(message, viewer, pinned);
+  const actions = liveChatMessageActions(message, viewer, pinned, sessionOn);
   const all = disabled
     ? []
     : menuItems(

@@ -17,7 +17,7 @@ import {
   type LiveOverlayGraphics,
 } from "./live-overlay-graphics";
 import { LiveOverlayLayer, useLiveSceneMove } from "./LiveOverlayLayer";
-import { BOARDS, meets, NO_TIMER_CLEARANCE, stackedPanelBox, timerClearance, within } from "./live-overlay-fields";
+import { BOARDS, meets, NO_TIMER_CLEARANCE, joinedPanelBox, timerClearance, within } from "./live-overlay-fields";
 import { LivePanelistsOverlay } from "./LivePanelistsOverlay";
 import { LivePanelQuestionOverlay } from "./LivePanelQuestionOverlay";
 import { LivePollOverlay } from "./LivePollOverlay";
@@ -426,7 +426,7 @@ export function LiveOverlayPresentation({
   // The stage display draws its timers itself, so its own layer decides whether they show.
   const timersShow = view === "stage-display" ? elements.stageDisplay.visible : elements.timer.visible;
   const panel =
-    state?.stage.question && state.stage.panelists && view !== "stage-display" ? stackedPanelBox(elements) : null;
+    state?.stage.question && state.stage.panelists && view !== "stage-display" ? joinedPanelBox(elements) : null;
   // The cards drawn now, which a timer never covers.
   const cardBoxes = state
     ? LIVE_PROGRAM_LAYER_ORDER.filter(
@@ -478,13 +478,14 @@ export function LiveOverlayPresentation({
               const box = joined ? panel : placement;
               // Of two graphics in one spot the front one that is on shows; the one behind it is left out, as the
               // studio's row says. The background always draws, and so does the layout editor's selected element.
+              // The panel joined with the question is one board at the question's place in the stack: only what
+              // covers the question covers both, and a board between the two sits behind it.
               const covered =
                 view !== "stage-display" &&
-                !joined &&
                 element !== focus &&
                 element !== "background" &&
                 isLiveProgramLayer(element) &&
-                liveOverlayCoveredBy(state.stage, elements, element) !== null;
+                liveOverlayCoveredBy(state.stage, elements, joined ? "question" : element) !== null;
               const content =
                 placement.visible && !covered ? draw(state, { placement, animate, panel, eventSlug }) : null;
               return content ? (

@@ -122,13 +122,13 @@ describe("live control room Transition", () => {
     // A title just written is the current one; the tooltip layer moves it into the hint a moment later.
     const hint = (output: string) => take(host, output).getAttribute("title") ?? take(host, output).dataset.tooltip;
     const timer = defaultLiveTimerGraphic("session");
-    // The Panel scene, its panel, a question and a timer wait on Preview only.
+    // The Full board scene, its panel, a question and a timer wait on Preview only.
     void act(() =>
       live.latest().deliver({
         type: "preview.changed",
         composition: {
           ...snapshot.preview,
-          scene: "panel",
+          scene: "full-board",
           panelists: { layout: "panel" },
           question: {
             id: LIVE_QUESTION,
@@ -147,7 +147,7 @@ describe("live control room Transition", () => {
       type: "aux.set",
       output: "projector",
       composition: {
-        scene: "panel",
+        scene: "full-board",
         panelists: { layout: "panel" },
         questionId: LIVE_QUESTION,
         timerGraphics: [timer],
@@ -169,7 +169,7 @@ describe("live control room Transition", () => {
     expect(liveRoomClientMessageSchema.parse(commands(live).at(-1))).toMatchObject(whole);
   });
 
-  it("clears the shared Preview from its monitor to a blank frame in the Default scene", () => {
+  it("clears the shared Preview from its monitor to a blank frame in the Camera scene", () => {
     const { host, live } = mountDesk();
     const snapshot = liveSnapshot({ viewer: OPERATOR });
     void act(() =>
@@ -186,7 +186,7 @@ describe("live control room Transition", () => {
     // The hint says what a click does: everything off, and back to the scene that brings nothing on.
     const clear = labeled(host, "Clear Preview");
     expect(clear.dataset.tooltip ?? clear.getAttribute("title")).toBe(
-      "Clear Preview\nTake everything off Preview and go back to the Default scene.",
+      "Clear Preview\nTake everything off Preview and go back to the Camera scene.",
     );
     void act(() => labeled(host, "Clear Preview").click());
     expect(commands(live)).toEqual([
@@ -230,21 +230,20 @@ describe("live control room Transition", () => {
     expect(strip).not.toBeNull();
     const scenes = [...strip!.querySelectorAll<HTMLButtonElement>("button")];
     expect(scenes.map((scene) => scene.querySelector(".pk-studio-scene__name")?.textContent)).toEqual([
-      "Default",
-      "Q&A",
-      "Panel",
-      "Break",
-      "Check-in",
+      "Camera",
+      "Board right",
+      "Board left",
       "Full board",
+      "Break",
     ]);
     expect(scenes.filter((scene) => scene.getAttribute("aria-pressed") === "true")).toHaveLength(1);
     // Each scene is drawn live, with the same renderer as the monitors.
     expect(scenes.every((scene) => scene.querySelector(".pk-studio-scene__picture .pk-live-overlay"))).toBe(true);
     // A scene lays out what Preview holds and adds only what comes on with it: no scene picks a lower third,
-    // and Default, which brings nothing on, shows an empty Preview as its faint boxes.
+    // and Camera, which brings nothing on, shows an empty Preview as its faint boxes.
     expect(scenes.some((scene) => scene.querySelector(".pk-live-overlay__name"))).toBe(false);
     expect(scenes[0]!.querySelector(".pk-studio-scene__outline rect")).not.toBeNull();
-    // Every output draws Default here, so Default carries a marker for each, Program's first.
+    // Every output draws Camera here, so Camera carries a marker for each, Program's first.
     expect(
       [...scenes[0]!.querySelectorAll(".pk-studio-scene__marker")].map((marker) => marker.getAttribute("aria-label")),
     ).toEqual(["On Program", "In Preview", "On Projector"]);
@@ -487,7 +486,18 @@ describe("live control room panels", () => {
     expect(pictured[0]!.closest(".pk-studio-row")?.textContent).toContain("Bea Attendee");
   });
 
-  it("keeps a message flashing until an operator stops it from the on-stage footer", () => {
+  it("shows operators how many people are in the virtual room once the room tells the desk", () => {
+    const { host, live } = mountDesk(liveSnapshot({ viewer: OPERATOR }));
+    expect(host.querySelector(".pk-studio-header__audience")).toBeNull();
+    void act(() => live.latest().deliver({ type: "audience.changed", people: 42 }));
+    const count = host.querySelector<HTMLElement>(".pk-studio-header__audience")!;
+    expect(count.textContent).toBe("Room 42");
+    expect(count.getAttribute("aria-label")).toBe("42 people in the virtual room now");
+    void act(() => live.latest().deliver({ type: "audience.changed", people: 1 }));
+    expect(count.getAttribute("aria-label")).toBe("1 person in the virtual room now");
+  });
+
+  it("keeps a message flashing until an operator stops it from the panel header", () => {
     const { host, live } = mountDesk(
       liveSnapshot({
         viewer: OPERATOR,
@@ -496,7 +506,7 @@ describe("live control room panels", () => {
       "stage",
     );
     const message = panel(host, "Message to speaker");
-    const stop = button(message, "Stop flashing");
+    const stop = labeled(message, "Stop flashing");
     expect(stop.getAttribute("aria-pressed")).toBe("true");
     void act(() => stop.click());
     expect(commands(live).map((sent) => liveRoomClientMessageSchema.parse(sent))).toEqual([
@@ -504,36 +514,41 @@ describe("live control room panels", () => {
     ]);
   });
 
-  it("keeps every composer change a draft until Send or Update, and acts on the stage only from its footer", () => {
+  it("keeps every composer change a draft until Send or Update, and acts on the stage only from its header", () => {
     const { host, live } = mountDesk(liveSnapshot({ viewer: OPERATOR }), "stage");
     const message = panel(host, "Message to speaker");
     const sent = () => commands(live).map((command) => liveRoomClientMessageSchema.parse(command));
-    void act(() => button(message, "Send to stage").click());
+    expect(message.querySelector(".pk-studio-panel__header")?.textContent).toContain("Off");
+    expect(message.querySelector("input[name=text]")?.getAttribute("aria-label") ?? "").toBe("");
+    expect(message.querySelector<HTMLInputElement>("input[name=text]")!.labels?.[0]?.textContent).toContain(
+      "Message to the speaker",
+    );
+    void act(() => button(message, "Send").click());
     expect(message.querySelector(".pk-field__message")?.textContent).toContain("Write a message for the speaker.");
-    // A ready-made message only fills the draft, with its tone.
-    void act(() => button(message, "Please wrap up").click());
+    // A ready-made message, on a short chip, only fills the draft with its full words and tone.
+    void act(() => button(message, "Wrap up").click());
     expect(message.querySelector<HTMLInputElement>("input[name=text]")!.value).toBe("Please wrap up");
     expect(sent()).toEqual([]);
     type(message.querySelector<HTMLInputElement>("input[name=text]")!, "Two more questions");
-    const flash = [...message.querySelectorAll<HTMLInputElement>("input[type=checkbox]")].find((box) =>
-      box.closest("label")?.textContent?.startsWith("Flash"),
-    )!;
+    const flash = labeled(message, "Flash");
     void act(() => flash.click());
-    void act(() => button(message, "Send to stage").click());
+    expect(flash.getAttribute("aria-pressed")).toBe("true");
+    void act(() => button(message, "Send").click());
     void act(() =>
       live.latest().deliver({
         type: "speaker.message.changed",
         speakerMessage: { text: "Two more questions", tone: "warning", flash: true, change: null },
       }),
     );
-    expect(message.textContent).toContain("On stage");
+    // The header shows what is on stage; its words put it back in the composer.
+    void act(() => labeled(message, "On stage, flashing: Two more questions. Edit").click());
     // A tone picked while a message shows waits for Update, like every other change in the composer.
-    void act(() => button(message, "Edit").click());
-    void act(() => button(message, "Urgent").click());
+    void act(() => labeled(message, "Tone: Warning").click());
+    void act(() => menuItem(document.body, "Urgent").click());
     expect(sent()).toHaveLength(1);
-    void act(() => button(message, "Update message").click());
-    void act(() => button(message, "Stop flashing").click());
-    void act(() => button(message, "Clear from stage").click());
+    void act(() => button(message, "Update").click());
+    void act(() => labeled(message, "Stop flashing").click());
+    void act(() => button(message, "Clear").click());
     expect(sent()).toEqual([
       { type: "speaker.message", text: "Two more questions", tone: "warning", flash: true },
       { type: "speaker.message", text: "Two more questions", tone: "urgent", flash: true },

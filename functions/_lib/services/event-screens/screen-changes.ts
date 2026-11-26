@@ -1,9 +1,5 @@
 import { SCREEN_MANAGE_PERMISSION } from "../../../../assets/shared/event-screen-permissions";
-import {
-  SCREEN_SIGNED_IN_CODE,
-  type ScreenRecord,
-  type ScreenUpdate,
-} from "../../../../assets/shared/schemas/event-screens";
+import type { ScreenRecord, ScreenUpdate } from "../../../../assets/shared/schemas/event-screens";
 import { batchFirst } from "../../db/pagination";
 import { AppError } from "../../errors";
 import type { DatabaseLike, Env } from "../../types";
@@ -11,7 +7,6 @@ import { nowIso } from "../../utils/time";
 import {
   isAuditChangeGuardFailure,
   prepareAuditLogAfterOneChange,
-  prepareAuditLogWhen,
   prepareScopedAuditLogAfterOneChange,
 } from "../audit";
 import {
@@ -21,7 +16,6 @@ import {
   screenRoomNotInEvent,
 } from "./screen-assignment";
 import { decodeScreenRecordRow, prepareScreenRecordRead, toScreenRecord, type ScreenRecordRow } from "./screen-record";
-import { SCREEN_LIVE_SIGN_IN, screenSignedIn } from "./screen-pairing";
 import {
   readScreenForStaff,
   screenPermissionContext,
@@ -106,47 +100,16 @@ export async function updateScreen(
   }
 }
 
-/** Revokes every sign-in of a screen, active and pending; it shows a new pairing code on its next request. */
-export async function revokeScreenSessions(
-  db: DatabaseLike,
-  request: Request,
-  env: StaffEnv,
-  screenId: string,
-): Promise<void> {
-  const { actor, row } = await readScreenForStaff(db, request, env, screenId, [SCREEN_MANAGE_PERMISSION]);
-  const context = screenPermissionContext(row);
-  const write = screenWriteDatabase(db, actor, SCREEN_MANAGE_PERMISSION, context);
-  const now = nowIso();
-  await write.batch([
-    write
-      .prepare("UPDATE screen_sessions SET revoked_at=? WHERE screen_id=? AND revoked_at IS NULL")
-      .bind(now, screenId),
-    // Only a revocation that ended a sign-in is recorded; repeating it changes nothing.
-    prepareAuditLogWhen(write, {
-      actorType: "user",
-      actorId: actor.id,
-      action: "screen.sessions_revoked",
-      entityType: "screen",
-      entityId: screenId,
-      details: { name: row.name },
-      conditionSql: "SELECT 1 FROM screen_sessions WHERE screen_id=? AND revoked_at=?",
-      conditionBindings: [screenId, now],
-      createdAt: now,
-      scope: context ?? null,
-    }),
-  ]);
-}
-
 /**
- * Removes a screen that is not signed in: one revoked, or approved and never
- * collected. Its pairing approvals cascade. The delete matches the screen's
- * event and revision as read, so a screen that signed in, moved or changed
- * since then deletes nothing and the audit row's guard rolls the batch back.
+ * Removes a screen, signed in or not. Its sign-ins and pairing approvals
+ * cascade, so its device shows a pairing code on its next request. The
+ * delete matches the screen's event and revision as read, so a screen that
+ * moved or changed since then deletes nothing and the audit row's guard rolls
+ * the batch back.
  */
 export async function removeScreen(db: DatabaseLike, request: Request, env: StaffEnv, screenId: string): Promise<void> {
   const { actor, row } = await readScreenForStaff(db, request, env, screenId, [SCREEN_MANAGE_PERMISSION]);
   const now = nowIso();
-  if (screenSignedIn(row, now)) throw screenSignedInRefusal();
   const context = screenPermissionContext(row);
   const write = screenWriteDatabase(db, actor, SCREEN_MANAGE_PERMISSION, context);
   const details = { name: row.name };
@@ -154,8 +117,8 @@ export async function removeScreen(db: DatabaseLike, request: Request, env: Staf
     await write.batch([
       // The screen as authorized: a move to another event or any other change since the read deletes nothing.
       write
-        .prepare(`DELETE FROM screens WHERE id=? AND event_id IS ? AND revision=? AND NOT ${SCREEN_LIVE_SIGN_IN}`)
-        .bind(screenId, row.event_id, row.revision, screenId, now),
+        .prepare("DELETE FROM screens WHERE id=? AND event_id IS ? AND revision=?")
+        .bind(screenId, row.event_id, row.revision),
       context
         ? prepareScopedAuditLogAfterOneChange(
             write,
@@ -171,12 +134,8 @@ export async function removeScreen(db: DatabaseLike, request: Request, env: Staf
         : prepareAuditLogAfterOneChange(write, "user", actor.id, "screen.removed", "screen", screenId, details, now),
     ]);
   } catch (error) {
-    // It signed in, moved or changed since the read: the list reloads and shows it as it stands.
+    // It moved or changed since the read: the list reloads and shows it as it stands.
     if (isAuditChangeGuardFailure(error)) throw screenRevisionConflict();
     throw error;
   }
-}
-
-function screenSignedInRefusal(): AppError {
-  return new AppError(409, SCREEN_SIGNED_IN_CODE, "This screen is signed in. Revoke it before removing it.");
 }

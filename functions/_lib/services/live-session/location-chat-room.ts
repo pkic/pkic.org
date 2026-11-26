@@ -152,12 +152,13 @@ export class LiveLocationChatRoom {
   }
 
   /**
-   * Asks a converted message in a session's room: the one the studio has loaded, else the one it was sent
-   * during, else the one on now. Between sessions with nothing loaded there is no room to ask it in.
+   * Asks a converted message in the room of the session on: the one the studio has loaded, else the agenda's.
+   * The chat policy keeps an earlier session's messages out, so a question never lands in a session that is
+   * over. Between sessions with nothing loaded there is no room to ask it in.
    */
-  async ask(question: LiveChatQuestion, by: Actor, at: string, sentDuring: string | null) {
+  async ask(question: LiveChatQuestion, by: Actor, at: string) {
     const state = this.parts.store.state();
-    const occurrenceId = sentDuring ?? this.sessionOn();
+    const occurrenceId = this.sessionOn();
     const rooms = this.parts.env.LIVE_SESSION_ROOMS;
     if (!state || !occurrenceId || !rooms) return REFUSALS.noSession;
     const id = await rooms.getByName(liveRoomName(state.eventId, occurrenceId)).questionFromChat(question, by, at);
