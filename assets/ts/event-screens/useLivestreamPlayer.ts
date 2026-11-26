@@ -92,6 +92,9 @@ export function useLivestreamPlayer({
   const edge = useRef(LIVESTREAM_AT_LIVE_EDGE);
   const playing = useRef(false);
   playing.current = health.status === "playing";
+  // What the viewer chose on this player: paused, and captions shown; a new player takes the captions choice.
+  const held = useRef(false);
+  const captions = useRef(false);
 
   useEffect(() => {
     lastError.current = null;
@@ -178,6 +181,7 @@ export function useLivestreamPlayer({
             onReady: ({ target }) => {
               if (stopped) return;
               ready.current = target;
+              if (captions.current) target.loadModule?.("captions");
               if (!withSound.current) {
                 target.mute();
                 target.playVideo();
@@ -207,8 +211,8 @@ export function useLivestreamPlayer({
                 played = true;
                 fellBack = false;
               }
-              // Nobody pauses a live monitor; carry on.
-              if (state === "paused") target.playVideo();
+              // Nobody pauses a live monitor; carry on, unless the viewer paused it.
+              if (state === "paused" && !held.current) target.playVideo();
               signal({ type: "state", state });
               // Sound asked for while buffering is confirmed once playback starts, not only by the click's check.
               if (isPlaying && withSound.current && livestreamSoundConfirmed(target)) signal({ type: "sound" });
@@ -265,5 +269,47 @@ export function useLivestreamPlayer({
     }
   }, []);
 
-  return { host, health, setSound };
+  /** Pauses the stream for the viewer, or plays it again at the live edge. */
+  const setPaused = useCallback(
+    (on: boolean) => {
+      held.current = on;
+      signal({ type: "held", held: on });
+      const player = ready.current;
+      if (!player) return;
+      try {
+        if (on) player.pauseVideo?.();
+        else {
+          const live = player.getDuration?.();
+          if (keepLive && live !== undefined && Number.isFinite(live)) player.seekTo?.(live, true);
+          player.playVideo();
+        }
+      } catch {
+        /* A player being replaced starts playing. */
+      }
+    },
+    [keepLive],
+  );
+
+  /** Shows or hides the stream's captions; a stream without a caption track shows nothing. */
+  const setCaptions = useCallback((on: boolean) => {
+    captions.current = on;
+    try {
+      if (on) ready.current?.loadModule?.("captions");
+      else ready.current?.unloadModule?.("captions");
+    } catch {
+      /* A player being replaced takes the choice when it is ready. */
+    }
+  }, []);
+
+  /** Whether the running stream has a caption track: true, false, or null while the player cannot tell yet. */
+  const hasCaptions = useCallback((): boolean | null => {
+    try {
+      const tracks = ready.current?.getOption?.("captions", "tracklist");
+      return Array.isArray(tracks) ? tracks.length > 0 : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  return { host, health, setSound, setPaused, setCaptions, hasCaptions };
 }

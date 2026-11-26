@@ -19,7 +19,7 @@ import { VirtualRoomSpeakerFaces } from "./VirtualRoomSpeakerFaces";
 import "../../../../../../ui/Content.css";
 import "./VirtualRoom.css";
 import { SectionHeading } from "../../../../../../ui/SectionHeading";
-import { IconSound, IconVirtual, IconVirtualOff } from "../../../../../../ui/MediaIcons";
+import { IconCaptions, IconPlayback, IconSound, IconVirtual, IconVirtualOff } from "../../../../../../ui/MediaIcons";
 import { Button } from "../../../../../../ui/Button";
 import { useLivestreamPlayer } from "../../../../../../event-screens/useLivestreamPlayer";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
@@ -75,15 +75,20 @@ export function VirtualRoomPlayer({
   );
 }
 
-/** How long the sound control stays in view after the pointer last moved over a stream that has sound. */
-const SOUND_CONTROL_SHOWN_MS = 3_000;
+/** How long the stream's controls stay in view after the pointer last moved over it. */
+const CONTROLS_SHOWN_MS = 3_000;
+/** How long the player has to find the stream's caption track once captions are asked for. */
+const CAPTIONS_CHECK_MS = 2_000;
+/** How long the player says a stream has no captions. */
+const NO_CAPTIONS_SHOWN_MS = 4_000;
 
 /**
  * The stream on the venue screens' player: no provider controls and no way out to the provider's site, so
  * attendees stay in the room. It plays at once, muted unless a click started it, and keeps to the live edge.
  * While muted, a labeled button opens in the middle of the picture, then settles in its top-left corner and
- * keeps beating until the sound is on; with sound, a small button there turns it off, shown only while the
- * pointer moves over the picture so nothing covers the stream.
+ * keeps beating until the sound is on; with sound, a small button there turns it off. Captions and pause
+ * follow it in the same corner. The small controls show only while the pointer moves over the picture, so
+ * nothing covers the stream; a paused stream keeps its play button in view.
  */
 function StreamPlayer({
   videoId,
@@ -99,12 +104,44 @@ function StreamPlayer({
 }) {
   const player = useLivestreamPlayer({ videoId, title, sound, keepLive: true, report: false });
   const audible = sound && !player.health.muted;
-  const [controlShown, showControl] = useShownWhileActive(SOUND_CONTROL_SHOWN_MS);
+  const [controlShown, showControl] = useShownWhileActive(CONTROLS_SHOWN_MS);
+  const [paused, setPaused] = useState(false);
+  const [captions, setCaptions] = useState(false);
+  const [noCaptions, setNoCaptions] = useState(false);
   const toggle = () => {
     onSound(!audible);
     player.setSound(!audible);
     showControl();
   };
+  const togglePause = () => {
+    setPaused(!paused);
+    player.setPaused(!paused);
+    showControl();
+  };
+  const toggleCaptions = () => {
+    setCaptions(!captions);
+    setNoCaptions(false);
+    player.setCaptions(!captions);
+    showControl();
+  };
+  // Asked for captions, a stream without a caption track says so instead of showing the button on.
+  const { hasCaptions, setCaptions: showCaptions } = player;
+  useEffect(() => {
+    if (!captions) return;
+    const check = setTimeout(() => {
+      if (hasCaptions() !== false) return;
+      setCaptions(false);
+      showCaptions(false);
+      setNoCaptions(true);
+    }, CAPTIONS_CHECK_MS);
+    return () => clearTimeout(check);
+  }, [captions, hasCaptions, showCaptions]);
+  useEffect(() => {
+    if (!noCaptions) return;
+    const hide = setTimeout(() => setNoCaptions(false), NO_CAPTIONS_SHOWN_MS);
+    return () => clearTimeout(hide);
+  }, [noCaptions]);
+  const resting = controlShown ? "" : " pk-virtual-room__control--resting";
   return (
     <div
       class="pk-virtual-room__player pk-virtual-room__stream"
@@ -117,23 +154,49 @@ function StreamPlayer({
           Reconnecting to the stream…
         </p>
       ) : null}
-      {audible ? (
+      <div class="pk-virtual-room__controls">
+        {audible ? (
+          <Button
+            icon
+            variant="ghost"
+            class={`pk-virtual-room__control pk-virtual-room__sound${resting}`}
+            aria-label="Mute"
+            title="Mute"
+            onClick={toggle}
+          >
+            <IconSound audible />
+          </Button>
+        ) : (
+          <Button variant="primary" class="pk-virtual-room__unmute" onClick={toggle}>
+            <IconSound audible={false} />
+            Turn sound on
+          </Button>
+        )}
         <Button
           icon
           variant="ghost"
-          class={`pk-virtual-room__sound${controlShown ? "" : " pk-virtual-room__sound--resting"}`}
-          aria-label="Mute"
-          title="Mute"
-          onClick={toggle}
+          class={`pk-virtual-room__control${captions ? " pk-virtual-room__control--on" : ""}${resting}`}
+          aria-label="Captions"
+          title="Captions"
+          aria-pressed={captions}
+          onClick={toggleCaptions}
         >
-          <IconSound audible />
+          <IconCaptions />
         </Button>
-      ) : (
-        <Button variant="primary" class="pk-virtual-room__unmute" onClick={toggle}>
-          <IconSound audible={false} />
-          Turn sound on
+        <Button
+          icon
+          variant="ghost"
+          class={`pk-virtual-room__control${paused ? "" : resting}`}
+          aria-label={paused ? "Play" : "Pause"}
+          title={paused ? "Play" : "Pause"}
+          onClick={togglePause}
+        >
+          <IconPlayback playing={!paused} />
         </Button>
-      )}
+        <p class={`pk-virtual-room__control-note${noCaptions ? "" : " pk-sr-only"}`} role="status">
+          {noCaptions ? "This stream has no captions" : ""}
+        </p>
+      </div>
     </div>
   );
 }

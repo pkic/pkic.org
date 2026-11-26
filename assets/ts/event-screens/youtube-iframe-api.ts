@@ -33,6 +33,11 @@ export interface YouTubePlayer {
   getCurrentTime?(): number;
   /** Moves the playhead; a live monitor uses it to return to the live edge. */
   seekTo?(seconds: number, allowSeekAhead: boolean): void;
+  pauseVideo?(): void;
+  /** The captions module: loaded, it shows the stream's caption track; unloaded, it hides it. */
+  loadModule?(module: "captions"): void;
+  unloadModule?(module: "captions"): void;
+  getOption?(module: "captions", option: "tracklist"): unknown;
   /** Not part of the documented API: `isLive` is read only when present. */
   getVideoData?(): { isLive?: unknown } | undefined;
 }
