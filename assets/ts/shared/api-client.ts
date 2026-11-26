@@ -5,6 +5,7 @@ import {
   publishedFormResourcesSchema,
 } from "../../shared/published-resource-url";
 import { AVAILABILITY_ERROR_CODE } from "../../shared/schemas/availability";
+import { isRepeatableDependencyFailure } from "../../shared/schemas/dependency-failure";
 import { publishAvailability, serviceAvailability } from "./availability-state";
 import { TURNSTILE_TOKEN_HEADER, turnstileChallengeSchema } from "../../shared/schemas/abuse-protection";
 import { z } from "zod";
@@ -54,6 +55,27 @@ async function parseJson(response: Response, signal?: AbortSignal): Promise<unkn
     )
       throw connectionError();
     return undefined;
+  });
+}
+
+/** Pauses before repeating a read the server refused while it changed nothing; jitter spreads a crowd's repeats. */
+const READ_REPEAT_DELAYS_MS = [600, 1800] as const;
+
+function waitBeforeRepeat(delayMs: number, signal?: AbortSignal | null): Promise<void> {
+  const abortReason = () =>
+    signal?.reason instanceof Error ? signal.reason : new DOMException("The request was aborted.", "AbortError");
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(abortReason());
+    const timer = setTimeout(done, delayMs * (1 + Math.random() * 0.5));
+    function done() {
+      signal?.removeEventListener("abort", abort);
+      resolve();
+    }
+    function abort() {
+      clearTimeout(timer);
+      reject(abortReason());
+    }
+    signal?.addEventListener("abort", abort, { once: true });
   });
 }
 
@@ -160,6 +182,19 @@ async function sendJsonRequest<Schema extends z.ZodType>(
     const token = await requestTurnstileToken(challenge, requestInit.signal);
     headers.set(TURNSTILE_TOKEN_HEADER, token);
     // The server's challenge refusal guarantees the handler has not run. Retry once only.
+    response = await send();
+    onHeaders?.(response.headers);
+    body = await readBody(response);
+  }
+  // A brief database overload is repeated for reads only, and only when the server changed nothing.
+  for (const delayMs of READ_REPEAT_DELAYS_MS) {
+    const failure = response.status === 503 ? apiErrorPayloadSchema.safeParse(body) : null;
+    if (
+      !failure?.success ||
+      !isRepeatableDependencyFailure(requestInit.method ?? "GET", failure.data.error.code, failure.data.error.details)
+    )
+      break;
+    await waitBeforeRepeat(delayMs, requestInit.signal);
     response = await send();
     onHeaders?.(response.headers);
     body = await readBody(response);

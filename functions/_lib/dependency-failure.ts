@@ -1,4 +1,8 @@
-import { DEPENDENCY_ERROR_CODE, dependencyFailureSchema } from "../../assets/shared/schemas/dependency-failure";
+import {
+  DEPENDENCY_ERROR_CODE,
+  dependencyFailureSchema,
+  type DependencyFailureOutcome,
+} from "../../assets/shared/schemas/dependency-failure";
 import { AppError } from "./errors";
 import type { z } from "zod";
 
@@ -34,6 +38,7 @@ export function dependencyFailure(
   error: unknown,
   provider?: "D1" | "R2",
   operation?: DependencyOperation,
+  outcome: DependencyFailureOutcome = "unknown",
 ): AppError | null {
   if (!(error instanceof Error) || error instanceof AppError) return null;
   const message = error.message;
@@ -47,7 +52,7 @@ export function dependencyFailure(
   const details: z.infer<typeof dependencyFailureSchema> = {
     capability: d1 ? "data" : "files",
     reference: crypto.randomUUID(),
-    outcome: "unknown",
+    outcome,
   };
   // Provider messages can include SQL, bound values, or object keys. Every diagnostic is bounded.
   console.error("DEPENDENCY_UNAVAILABLE", {
@@ -55,6 +60,7 @@ export function dependencyFailure(
     dependency: d1 ? "D1" : "R2",
     operation: operation ?? "unknown",
     reason: reason ?? "provider_service_error",
+    outcome,
     ...(r2ServiceCode ? { providerCode: r2ServiceCode } : {}),
   });
   return new AppError(
