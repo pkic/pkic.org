@@ -12,12 +12,11 @@ import {
   type LiveTopQuestionsConfig,
 } from "../../../../../../../shared/schemas/live-session-on-screen";
 import { useContractForm, type ContractForm, type FieldPresentation } from "../../../../../../hooks/useContractForm";
-import { Alert } from "../../../../../../ui/Alert";
-import { Dialog } from "../../../../../../ui/Dialog";
 import { Field } from "../../../../../../ui/Field";
 import { Select } from "../../../../../../ui/TextControl";
 import { LiveGraphicRow } from "./LiveGraphicRow";
-import { LIVE_SETTINGS_FOR_EVENT, useLiveGraphicSettings, type LiveStudioGraphicFor } from "./live-graphic-settings";
+import { LiveGraphicSettingsDialog } from "./LiveGraphicSettingsDialog";
+import { useLiveGraphicSettings, type LiveStudioGraphicFor } from "./live-graphic-settings";
 import type { LiveLayer, LiveTargets } from "./live-output-targets";
 
 const range = ({ min, max }: { min: number; max: number }) =>
@@ -63,7 +62,6 @@ function AudienceListRow<Config extends { count: number }>({
   const { settings: config, save, saves } = useLiveGraphicSettings(targets, shown, initial, layer, graphic);
   const [draft, setDraft] = useState(config);
   const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const form = useContractForm(schema, draft);
   return (
     <LiveGraphicRow
@@ -75,32 +73,14 @@ function AudienceListRow<Config extends { count: number }>({
         disabled: targets.disabled,
         onOpen: () => {
           setDraft(config);
-          setError(null);
           setOpen(true);
         },
       }}
     >
       {open && (
-        <Dialog
-          open
-          title={name}
-          description={saves ? LIVE_SETTINGS_FOR_EVENT : undefined}
-          confirmLabel="Save"
-          onConfirm={() => {
-            const checked = form.submit();
-            if (!checked.data) return;
-            void save(checked.data).then((problem) => {
-              setError(problem);
-              if (!problem) setOpen(false);
-            });
-          }}
-          onCancel={() => setOpen(false)}
-        >
-          <form noValidate {...form.handlers} class="pk-stack" onSubmit={(event) => event.preventDefault()}>
-            {fields(draft, (patch) => setDraft((previous) => ({ ...previous, ...patch })), form)}
-            {error ? <Alert tone="danger">{error}</Alert> : null}
-          </form>
-        </Dialog>
+        <LiveGraphicSettingsDialog title={name} saves={saves} form={form} save={save} onClose={() => setOpen(false)}>
+          {fields(draft, (patch) => setDraft((previous) => ({ ...previous, ...patch })), form)}
+        </LiveGraphicSettingsDialog>
       )}
     </LiveGraphicRow>
   );
