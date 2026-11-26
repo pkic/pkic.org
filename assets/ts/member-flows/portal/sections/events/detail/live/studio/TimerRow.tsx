@@ -80,7 +80,7 @@ export function TimerRow({
   const [dialog, setDialog] = useState(false);
   const reading = useLiveTimerReading(timer, session);
   const now = useContext(LiveClockContext)();
-  const { graphic, save } = useLiveTimerGraphic(targets, timer.id);
+  const { graphic, save, saveLook } = useLiveTimerGraphic(targets, timer.id);
   const layer = { kind: "timer", graphic } as const;
   const counts = liveTimerCounts(timer);
   const detail = timerDetail(timer, session, clock);
@@ -272,6 +272,7 @@ export function TimerRow({
           graphic={graphic}
           send={send}
           saveGraphic={save}
+          saveLook={saveLook}
           onClose={() => setDialog(false)}
         />
       ) : null}

@@ -152,8 +152,8 @@ describe("broadcast overlays", () => {
   it("shows the asker's photo, or their initials, beside their name when they asked by name", () => {
     const { host, live } = mountOverlay("program", "question-only", [savedLayout("question-only", ["question"])]);
     expect(host.querySelector(".pk-live-board-question__asker")).toBeNull();
-    // A board carries no logo: the frame's one logo is the background's, and this scene has none.
-    expect(host.querySelector(".pk-live-board__logo")).toBeNull();
+    // A board carries no mark: the frame's one mark is the background's, and this scene has none.
+    expect(host.querySelector(".pk-live-board__watermark")).toBeNull();
     const ask = (authorPhotoUrl: string | null) =>
       void act(() =>
         live.latest().deliver({
@@ -245,26 +245,28 @@ describe("broadcast overlays", () => {
   it("draws a scene's background whenever the scene includes it, once, and no board draws a field of its own", () => {
     const grounds = (scope: HTMLElement) =>
       scope.querySelectorAll('[data-overlay-element="background"] .pk-live-board--ground');
-    const logos = (scope: HTMLElement) => scope.querySelectorAll(".pk-live-board__logo");
-    // A scene without the background draws none, and the board on it brings no field or logo of its own.
+    const marks = (scope: HTMLElement) => scope.querySelectorAll(".pk-live-board__watermark");
+    // A scene without the background draws none, and the board on it brings no field or mark of its own.
     const plain = mountOverlay("program");
     expect(plain.host.querySelector(".pk-live-overlay__question-text")).not.toBeNull();
     expect(grounds(plain.host)).toHaveLength(0);
-    expect(logos(plain.host)).toHaveLength(0);
+    expect(marks(plain.host)).toHaveLength(0);
     // A scene with the background draws it under the question on air, and still once the question is off.
     const boards = savedLayout("boards", ["background", "question", "lowerThird"], { x: 0, y: 0, w: 1, h: 1 });
     const { host, live } = mountOverlay("program", "boards", [boards]);
     expect(grounds(host)).toHaveLength(1);
-    expect(logos(host)).toHaveLength(1);
+    expect(marks(host)).toHaveLength(1);
+    // Branding is the production's: the background carries no logo.
+    expect(host.querySelector("img")).toBeNull();
     void act(() => live.latest().deliver({ type: "stage.changed", stage: { ...ON_STAGE, question: null } }));
     expect(host.querySelector(".pk-live-overlay__question-text")).toBeNull();
     expect(grounds(host)).toHaveLength(1);
-    // A full-frame question beside a background in a column still draws only the one background and logo.
+    // A full-frame question beside a background in a column still draws only the one background and mark.
     const aside = savedLayout("aside", ["background", "question", "lowerThird"], { x: 0.6, y: 0, w: 0.4, h: 1 });
     const scene = mountOverlay("program", "aside", [aside]);
     expect(scene.host.querySelector(".pk-live-overlay__question-text")).not.toBeNull();
     expect(grounds(scene.host)).toHaveLength(1);
-    expect(logos(scene.host)).toHaveLength(1);
+    expect(marks(scene.host)).toHaveLength(1);
   });
 
   it("draws a scene's QR code to this session in the event app", () => {

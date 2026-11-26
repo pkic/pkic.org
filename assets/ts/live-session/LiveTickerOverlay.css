@@ -1,7 +1,5 @@
 @layer components {
   .pk-live-ticker {
-    /* Its own loop time: an output page loads the live tokens only, never the website's. */
-    --pk-live-ticker-duration: 30s;
     position: absolute;
     inset-inline: 0;
     bottom: 0;
@@ -60,7 +58,8 @@
     align-items: center;
     width: max-content;
     block-size: 100%;
-    animation: pk-live-ticker-scroll var(--pk-live-ticker-duration) linear infinite;
+    /* The track sets one pass's time at the ticker's speed; until it has measured, the default pace over the frame. */
+    animation: pk-live-ticker-scroll var(--pk-live-ticker-duration, 21s) linear infinite;
   }
   .pk-live-ticker__group {
     min-inline-size: 1920px;

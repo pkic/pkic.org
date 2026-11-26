@@ -3,6 +3,7 @@ import { selectLiveTopQuestions } from "../../shared/live-on-screen-lists";
 import { mergeLivePreview } from "../../shared/live-room-preview";
 import { resolveLiveSceneElements } from "../../shared/live-scene-elements";
 import { liveSceneFill, type LiveSceneFill } from "../../shared/live-scene-fill";
+import type { LiveStudioGraphicsSetup } from "../../shared/schemas/live-studio-setup";
 import { resolveUpcomingRooms } from "../../shared/live-session-schedule";
 import { LIVE_PROGRAM_LAYER_ORDER } from "../../shared/live-overlay-stacking";
 import { resolveTickerMessages } from "../../shared/live-ticker-content";
@@ -15,6 +16,7 @@ import {
 } from "../../shared/schemas/live-overlay-layout";
 import { EMPTY_LIVE_STAGE, type LiveStage } from "../../shared/schemas/live-session-stage";
 import type { LiveRoomState } from "./live-room-state";
+import { liveTickerConfigOf } from "../../shared/schemas/live-session-ticker";
 
 /**
  * A scene's thumbnail draws what Preview shows once the scene is loaded
@@ -33,6 +35,8 @@ export interface LiveSceneThumbnailRoom {
   program: LiveStage | null;
   /** The approved agenda Up next and the ticker read; null before the first approval. */
   agenda: AgendaSnapshot | null;
+  /** The event's saved graphics setup, which a scene's graphics start from when Program shows none. */
+  setup?: LiveStudioGraphicsSetup;
 }
 
 /** One scene's thumbnail. */
@@ -78,8 +82,7 @@ function ticker(
   now: number,
 ): LiveStage["ticker"] {
   const filled = held(room).find(
-    (composition) =>
-      composition.ticker && same({ style: composition.ticker.style, messages: composition.ticker.messages }, config),
+    (composition) => composition.ticker && same(liveTickerConfigOf(composition.ticker), config),
   );
   if (filled) return filled.ticker;
   const { session, tickerContext } = room.preview;
@@ -121,6 +124,7 @@ export function liveSceneThumbnail(room: LiveSceneThumbnailRoom, scene: string, 
   const { preview } = room;
   const fill = liveSceneFill(resolveLiveSceneElements(preview, scene), mergeLivePreview(preview.stage, { scene }), {
     program: room.program ?? EMPTY_LIVE_STAGE,
+    setup: room.setup,
   });
   const { stage, unfilled } = fillContent(fill, room, now);
   return { state: { ...preview, stage: { ...preview.stage, scene, ...stage }, burst: null }, unfilled };
@@ -141,7 +145,8 @@ export function sameLiveSceneThumbnailRoom(previous: LiveSceneThumbnailRoom, nex
     left.outputs === right.outputs &&
     left.tickerContext === right.tickerContext &&
     previous.program === next.program &&
-    previous.agenda === next.agenda
+    previous.agenda === next.agenda &&
+    previous.setup === next.setup
   );
 }
 

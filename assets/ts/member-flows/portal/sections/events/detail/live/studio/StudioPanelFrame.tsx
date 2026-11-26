@@ -4,9 +4,9 @@ import { CloseButton } from "../../../../../../../ui/CloseButton";
 import { Menu, type MenuItem } from "../../../../../../../ui/Menu";
 import { Panel } from "../../../../../../../ui/Panel";
 import { SectionHeading } from "../../../../../../../ui/SectionHeading";
+import { STUDIO_MAX_H } from "../../../../../../../../shared/schemas/live-studio-layout";
 import {
   STUDIO_COLUMNS,
-  STUDIO_MAX_H,
   canMoveStudioPanel,
   closeStudioPanel,
   moveStudioPanel,

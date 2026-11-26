@@ -47,6 +47,7 @@ import { StudioTour } from "./studio/StudioTour";
 import { LiveAddTimerAction, TimePanel } from "./studio/TimePanel";
 import {
   STUDIO_PANEL_LABELS,
+  STUDIO_WORKSPACE_LABELS,
   setStudioPanelLabeled,
   type StudioOutput,
   type StudioPanel,
@@ -58,6 +59,8 @@ import { ProgramUndoToast, TransitionControl, useTakeShortcut } from "./studio/S
 import { liveSceneName } from "./live-layer-unseen";
 import { Dialog } from "../../../../../../ui/Dialog";
 import { useStudioLayout } from "./studio/useStudioLayout";
+import { useLiveStudioSetup } from "./live-studio-setup";
+import { toast } from "../../../../ui";
 import { useStudioScreens } from "./studio/useStudioScreens";
 import "./LiveSessionDesk.css";
 
@@ -100,7 +103,10 @@ export function LiveSessionDesk({
   agendaNotice = null,
   eventPath,
   canProduce = true,
+  canSetUp = false,
 }: {
+  /** Whether this operator sets up the live studio: their graphic settings and workspace layouts save for the event. */
+  canSetUp?: boolean;
   /**
    * Whether this operator runs the studio. A moderator without it sees the whole desk and works questions,
    * polls, the message to the speaker and the chat, while every control that changes what is on air is off.
@@ -140,7 +146,8 @@ export function LiveSessionDesk({
   });
   const live = room.status === "live";
   const now = useBoundaryClock(useCallback((at: number) => at + 30000, []));
-  const layout = useStudioLayout();
+  const setup = useLiveStudioSetup(slug, canSetUp);
+  const layout = useStudioLayout(setup.layouts);
   const phone = useStudioPhone();
   const phonePanels = useStudioPhonePanels();
   const [phoneView] = useStudioPhoneView();
@@ -219,7 +226,7 @@ export function LiveSessionDesk({
   // Moderation pauses with the room; production also stays off for an operator who does not run the studio.
   const moderationDisabled = !live || broadcasting || switching;
   const disabled = moderationDisabled || !canProduce;
-  const targets: LiveTargets = { state, programActive, disabled, canProduce, sendProgram, sendPrograms };
+  const targets: LiveTargets = { state, programActive, disabled, canProduce, sendProgram, sendPrograms, setup };
   const moderation: LiveTargets = { ...targets, disabled: moderationDisabled };
   // Loaded or not, an operator decides here whether attendees take part in this session's virtual room.
   const status = (
@@ -275,6 +282,7 @@ export function LiveSessionDesk({
     preview,
     program,
     agenda,
+    setup: setup.graphics,
     connected: live,
     slug,
     roomId,
@@ -523,6 +531,21 @@ export function LiveSessionDesk({
             panels={layout.panels}
             change={layout.change}
             reset={layout.reset}
+            saveAsDefault={
+              setup.canSave
+                ? () =>
+                    void setup
+                      .saveLayout(layout.workspace, [...layout.panels])
+                      .then((problem) =>
+                        problem
+                          ? toast(problem, "error")
+                          : toast(
+                              `Saved the ${STUDIO_WORKSPACE_LABELS[layout.workspace]} layout as the event default.`,
+                              "success",
+                            ),
+                      )
+                : undefined
+            }
             expanded={fullscreen.expanded}
             toggleExpanded={fullscreen.toggle}
             touring={touring}

@@ -17,7 +17,7 @@ import {
   type LiveOverlayGraphics,
 } from "./live-overlay-graphics";
 import { LiveOverlayLayer, useLiveSceneMove } from "./LiveOverlayLayer";
-import { BOARDS, meets, stackedPanelBox, timerReserve, within } from "./live-overlay-fields";
+import { BOARDS, meets, NO_TIMER_CLEARANCE, stackedPanelBox, timerClearance, within } from "./live-overlay-fields";
 import { LivePanelistsOverlay } from "./LivePanelistsOverlay";
 import { LivePanelQuestionOverlay } from "./LivePanelQuestionOverlay";
 import { LivePollOverlay } from "./LivePollOverlay";
@@ -231,7 +231,7 @@ const PROGRAM_LAYERS: ReadonlyMap<LiveProgramLayer, Layer> = new Map(
     [
       {
         element: "background",
-        // The one field and logo of the frame: drawn whenever the scene includes it, with or without a board on it.
+        // The one field of the frame: drawn whenever the scene includes it, with or without a board on it.
         draw: (_state, { placement }) => <LiveBoardGround box={overlayBoxPixels(placement)} />,
       },
       {
@@ -495,7 +495,7 @@ export function LiveOverlayPresentation({
                   moving={moving}
                   on={!stack || !isLiveProgramLayer(element) || liveOverlayDrawn(state.stage, element)}
                   dimmed={focus !== null && focus !== element && !(joined && focus === "question")}
-                  timerReserve={BOARDS.has(element) ? timerReserve(box, timerBoxes) : 0}
+                  timerClearance={BOARDS.has(element) ? timerClearance(box, timerBoxes) : NO_TIMER_CLEARANCE}
                   onGround={element === "schedule" && ground !== null && within(box, ground)}
                   placement={box}
                 >

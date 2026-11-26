@@ -177,6 +177,7 @@ it("opens the panels on what is on air only once the room says which session tha
     config: { layout: "cards", scope: "all-rooms", theme: "white-on-black" },
     available: true,
     timeZone: null,
+    streamRoomId: null,
     resolvedAt: "2026-12-01T09:00:00.000Z",
     rooms: [],
   };

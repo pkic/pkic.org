@@ -4,7 +4,8 @@
  * Preview, Program and every auxiliary output, the projector included.
  */
 import { DEFAULT_LIVE_CHECK_IN_TEXT } from "../../../../../../../shared/schemas/live-session-graphic-settings";
-import { useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
+import type { LiveCheckInSetup } from "../../../../../../../shared/schemas/live-studio-setup";
 import {
   attendancePointSelectionSchema,
   type AttendancePointSelection,
@@ -17,6 +18,7 @@ import {
 import { useContractForm } from "../../../../../../hooks/useContractForm";
 import { useData } from "../../../../../../hooks/useData";
 import { getJson } from "../../../../../../shared/api-client";
+import { Alert } from "../../../../../../ui/Alert";
 import { Dialog } from "../../../../../../ui/Dialog";
 import { Field } from "../../../../../../ui/Field";
 import { Checkbox } from "../../../../../../ui/Checkbox";
@@ -72,9 +74,27 @@ export function LiveCheckInControls({
   const codes = useData(() => loadCodes(slug, occurrenceId), [slug, occurrenceId]);
   const shown = targets.state.preview.checkIn ?? (targets.programActive ? targets.state.stage.checkIn : null);
   const [chosen, setChosen] = useState<string | null>(shown ? keyOf(shown.selection) : null);
-  const [theme, setTheme] = useState<LiveGraphicTheme>(shown?.theme ?? LIVE_GRAPHIC_THEME_DEFAULTS.checkIn);
-  const [text, setText] = useState(shown?.text ?? DEFAULT_LIVE_CHECK_IN_TEXT);
+  // The look and instruction start from the event's setup; which code to show is picked per session.
+  const start: LiveCheckInSetup = targets.setup?.graphics.checkIn ?? {
+    theme: LIVE_GRAPHIC_THEME_DEFAULTS.checkIn,
+    text: DEFAULT_LIVE_CHECK_IN_TEXT,
+  };
+  const [theme, setTheme] = useState<LiveGraphicTheme>(shown?.theme ?? start.theme);
+  const [text, setText] = useState(shown?.text ?? start.text);
+  const startKey = JSON.stringify(start);
+  const showing = useRef(Boolean(shown));
+  showing.current = Boolean(shown);
+  useEffect(() => {
+    if (showing.current) return;
+    const next = JSON.parse(startKey) as LiveCheckInSetup;
+    setTheme(next.theme);
+    setText(next.text);
+  }, [startKey]);
+  const saves = Boolean(targets.setup?.canSave);
+  const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  // Each opening of the dialog counts; a save started by an earlier, cancelled one neither reports nor closes.
+  const opening = useRef(0);
   const options = codes.data ?? [];
   const current = options.find((code) => keyOf(code.selection) === chosen) ?? options[0] ?? null;
   const [draft, setDraft] = useState<Partial<LiveCheckInChoice>>({});
@@ -98,8 +118,10 @@ export function LiveCheckInControls({
         label: "Check-in code settings",
         disabled: options.length === 0,
         onOpen: () => {
+          opening.current += 1;
           setDraft({ checkIn: current?.selection, checkInTheme: theme, checkInText: text });
           form.reset();
+          setError(null);
           setOpen(true);
         },
       }}
@@ -108,17 +130,30 @@ export function LiveCheckInControls({
         <Dialog
           open
           title="Check-in code"
+          description={saves ? "Every room of the event starts from this look and instruction." : undefined}
           confirmLabel="Save"
           onConfirm={() => {
             const checked = form.submit();
-            if (checked.data) {
-              setChosen(keyOf(checked.data.checkIn));
-              setTheme(checked.data.checkInTheme);
-              setText(checked.data.checkInText);
+            if (!checked.data) return;
+            const { checkIn, checkInTheme, checkInText } = checked.data;
+            const setup = saves ? targets.setup : undefined;
+            const started = opening.current;
+            void (
+              setup ? setup.saveGraphic("checkIn", { theme: checkInTheme, text: checkInText }) : Promise.resolve(null)
+            ).then((problem) => {
+              if (opening.current !== started) return;
+              setError(problem);
+              if (problem) return;
+              setChosen(keyOf(checkIn));
+              setTheme(checkInTheme);
+              setText(checkInText);
               setOpen(false);
-            }
+            });
           }}
-          onCancel={() => setOpen(false)}
+          onCancel={() => {
+            opening.current += 1;
+            setOpen(false);
+          }}
         >
           <form noValidate {...form.handlers} class="pk-stack" onSubmit={(event) => event.preventDefault()}>
             <Field label="Code to show" {...form.of("checkIn")}>
@@ -176,6 +211,7 @@ export function LiveCheckInControls({
               help="The code takes these colors too. Black on white scans on every phone; a light code on a dark or transparent ground scans on current phones when the picture behind it is dark and calm."
               onChange={(checkInTheme) => setDraft((previous) => ({ ...previous, checkInTheme }))}
             />
+            {error ? <Alert tone="danger">{error}</Alert> : null}
           </form>
         </Dialog>
       )}

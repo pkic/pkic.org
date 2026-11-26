@@ -115,13 +115,20 @@
     filter: grayscale(1);
   }
   /*
-   * A timer on the top-right corner of the background or a board: each keeps
-   * the timers' column clear, with the board's gap before it, so the
-   * background's logo steps aside beside the timer and no line runs under it.
+   * A timer on the top-right corner of a board. A wide board keeps the
+   * timers' column clear, with the board's gap before it, so no line runs
+   * under a timer. A narrow one (a column beside the camera) starts its top
+   * row under the timer instead, so the eyebrow sits below it and every line
+   * keeps the board's full width.
    */
-  .pk-live-overlay__layer[data-logo-covered] .pk-live-board {
+  .pk-live-overlay__layer[data-timer-clearance="beside"] .pk-live-board {
     padding-inline-end: calc(
-      var(--board-width) * var(--overlay-timer-reserve, 0) * 1px + 32px * var(--board-frame-px, 1)
+      var(--board-width) * var(--overlay-timer-inline, 0) * 1px + 32px * var(--board-frame-px, 1)
+    );
+  }
+  .pk-live-overlay__layer[data-timer-clearance="below"] .pk-live-board {
+    padding-block-start: calc(
+      var(--board-height) * var(--overlay-timer-block, 0) * 1px + 32px * var(--board-frame-px, 1)
     );
   }
   /*

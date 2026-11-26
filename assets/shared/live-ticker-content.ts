@@ -29,6 +29,9 @@ export function resolveTickerMessages(
     .sort((a, b) => Date.parse(a.startAt!) - Date.parse(b.startAt!) || a.id.localeCompare(b.id));
   const current = scheduled.find((item) => item.id === occurrenceId),
     rooms = new Set([current?.roomId, ...(current?.additionalRoomIds ?? [])]);
+  // A message for chosen rooms shows where the session takes place, scheduled or not.
+  const own = agenda?.occurrences.find((item) => item.id === occurrenceId);
+  const here = new Set([own?.roomId, ...(own?.additionalRoomIds ?? [])].filter(Boolean));
   const upcoming = scheduled.filter(
     (item) =>
       item.id !== occurrenceId &&
@@ -82,6 +85,7 @@ export function resolveTickerMessages(
     chat: { latest: chat.join(" · ") },
   };
   return config.messages.flatMap((message) => {
+    if (message.roomIds?.length && !message.roomIds.some((id) => here.has(id))) return [];
     if (
       message.condition === "near-session-end" &&
       (!current?.startAt ||

@@ -77,11 +77,11 @@ function StageDisplay({ state }: { state: LiveRoomState }) {
 }
 
 /** Program with these timer graphics in the layout's corner, over a picture as on the stream. */
-function ProgramTimers({ state }: { state: LiveRoomState }) {
+function ProgramTimers({ state, layout }: { state: LiveRoomState; layout?: string }) {
   return (
     <Fixed>
       <div class="pk-preview__screen pk-preview__camera">
-        <LiveOverlayPresentation view="program" projection={state} />
+        <LiveOverlayPresentation view="program" layout={layout} projection={state} />
       </div>
     </Fixed>
   );
@@ -105,6 +105,22 @@ const programMark = timersRoomState([pitchTimer], [], {
   },
 });
 
+/** A break timer in its own top-right corner over the Q&A column, with a long audience question on air. */
+const questionColumnTimer = timersRoomState([breakTimer], [], {
+  stage: {
+    ...timersRoomState([]).stage,
+    question: {
+      id: "question-long",
+      text: "How long should a certificate issued for a conference be valid, and who should be able to revoke it once the event is over?",
+      authorName: null,
+      authorPhotoUrl: null,
+      authorAffiliation: null,
+      addressedTo: null,
+    },
+    timerGraphics: [{ ...defaultLiveTimerGraphic(breakTimer.id), placement: "top-right" }],
+  },
+});
+
 export const studioTimerSections: PreviewSection[] = [
   {
     id: "program-timer-mark",
@@ -117,6 +133,12 @@ export const studioTimerSections: PreviewSection[] = [
     title: "Program: timers in the corner",
     note: "Each timer on a plate in the event's colors, stacked down the top-right corner at full size: a pitch in its warning with the ring of time left, a countdown to lunch without a ring, and a pitch over time.",
     render: () => <ProgramTimers state={programTimers} />,
+  },
+  {
+    id: "program-timer-question-column",
+    title: "Program: a timer over the Q&A column",
+    note: "A timer in its own top-right corner over the column beside the camera: the eyebrow starts under it, and the question keeps the column's full width.",
+    render: () => <ProgramTimers state={questionColumnTimer} layout="questions" />,
   },
   {
     id: "studio-time-panel",
@@ -133,7 +155,7 @@ export const studioTimerSections: PreviewSection[] = [
   {
     id: "studio-timer-settings",
     title: "Studio: timer settings",
-    note: "One dialog from the row's menu: name and length, the warning with its chime and buzzer, where they play, what happens at zero, and the look.",
+    note: "One dialog from the row's menu: name and length, the warning with its chime and buzzer, where they play, what happens at zero, and the look, which someone who sets up the studio can keep for every timer of the event.",
     render: () => (
       <div data-density="compact">
         <LiveTimerDialog
@@ -142,6 +164,7 @@ export const studioTimerSections: PreviewSection[] = [
           graphic={defaultLiveTimerGraphic(pitchTimer.id)}
           send={send}
           saveGraphic={() => true}
+          saveLook={async () => null}
           onClose={() => undefined}
         />
       </div>

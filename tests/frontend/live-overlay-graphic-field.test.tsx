@@ -46,7 +46,7 @@ afterEach(() => {
 
 /** Every graphic an output can have on, all on at once. */
 const EVERYTHING_ON = room(...(Object.keys(EMPTY_LIVE_STAGE) as (keyof LiveStage)[]));
-const logos = (host: HTMLElement) => host.querySelectorAll(".pk-live-board__logo");
+const marks = (host: HTMLElement) => host.querySelectorAll(".pk-live-board__watermark");
 
 describe("the scene's background on an output", () => {
   it("draws a blank frame for a cleared output in the Default scene, and only the background in a scene that includes it", () => {
@@ -71,15 +71,16 @@ describe("the scene's background on an output", () => {
     for (const layout of ["questions", "check-in", "panel", "full-board"]) {
       const host = draw({ view: "program", layout, projection: room("lowerThird") });
       expect(fields(host), layout).toHaveLength(1);
-      expect(logos(host), layout).toHaveLength(1);
+      expect(marks(host), layout).toHaveLength(1);
     }
     // With everything on at once, every scene still draws at most one background and one logo.
     for (const layout of LIVE_OVERLAY_PRESETS) {
       const host = draw({ view: "program", layout, projection: EVERYTHING_ON });
       const included = LIVE_OVERLAY_PRESET_LAYOUTS[layout].elements.background.visible ? 1 : 0;
       expect(fields(host), layout).toHaveLength(included);
-      expect(logos(host), layout).toHaveLength(included);
-      expect(host.querySelectorAll(".pk-live-board__watermark"), layout).toHaveLength(included);
+      expect(marks(host), layout).toHaveLength(included);
+      // Branding is the production's: no scene draws a logo.
+      expect(host.querySelector(".pk-live-board img"), layout).toBeNull();
     }
   });
 
@@ -120,11 +121,13 @@ describe("the scene's background on an output", () => {
     ]);
   });
 
-  it("draws the panel's question and panelists as one board on the background, its logo beside the timer", () => {
+  it("draws the panel's question and panelists as one board on the background, clear of the timer", () => {
     const host = draw({ view: "program", layout: "panel", projection: room("question", "panelists", "timerGraphics") });
     expect(fields(host)).toHaveLength(1);
-    expect(logos(host)).toHaveLength(1);
-    expect(layer(host, "background")?.hasAttribute("data-logo-covered")).toBe(true);
+    expect(marks(host)).toHaveLength(1);
+    // The background has nothing to keep clear of the timer; the board on it does.
+    expect(layer(host, "background")?.hasAttribute("data-timer-clearance")).toBe(false);
+    expect(layer(host, "panelists")?.hasAttribute("data-timer-clearance")).toBe(true);
     expect(drawn(host).filter((element) => element === "panelists" || element === "question")).toEqual(["panelists"]);
   });
 
@@ -156,9 +159,9 @@ describe("the scene's background on an output", () => {
     const board = layer(host, "question")!.querySelector(".pk-live-board")!;
     expect(board.textContent).not.toBe("");
     expect(board.classList.contains("pk-live-board--ground")).toBe(false);
-    expect(board.querySelector(".pk-live-board__logo, .pk-live-board__watermark")).toBeNull();
+    expect(board.querySelector(".pk-live-board__watermark")).toBeNull();
     expect(fields(host)).toHaveLength(1);
-    expect(logos(host)).toHaveLength(1);
+    expect(marks(host)).toHaveLength(1);
   });
 
   it("no longer reads a board's old field flag: only the background graphic draws a field", () => {
@@ -167,7 +170,7 @@ describe("the scene's background on an output", () => {
     const host = draw({ view: "program", elements, projection: room("topQuestions") });
     expect(layer(host, "topQuestions")).not.toBeNull();
     expect(fields(host)).toHaveLength(0);
-    expect(logos(host)).toHaveLength(0);
+    expect(marks(host)).toHaveLength(0);
   });
 
   it("draws no field on the stage display", () => {

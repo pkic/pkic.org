@@ -1,4 +1,4 @@
-import type { LiveRoomClientMessage } from "../../assets/shared/schemas/live-session-room";
+import { liveRoomClientMessageSchema, type LiveRoomClientMessage } from "../../assets/shared/schemas/live-session-room";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -12,6 +12,7 @@ import {
 } from "../../assets/shared/schemas/live-session-ticker";
 import { agendaOccurrenceSchema, agendaRoomSchema } from "../../assets/shared/schemas/event-agenda";
 import { liveSnapshot, liveTargets } from "./helpers/live-room-socket";
+import { controlFor } from "./helpers/labeled-control";
 import { applyLiveRoomMessage } from "../../assets/ts/live-session/live-room-state";
 import type { LiveTargets } from "../../assets/ts/member-flows/portal/sections/events/detail/live/live-output-targets";
 
@@ -28,7 +29,7 @@ const message = (
   template: string,
   prefix = "Next",
   condition: "always" | "near-session-end" = "always",
-): LiveTickerConfig => ({ style: "gradient", messages: [{ id: "one", prefix, template, condition }] });
+): LiveTickerConfig => ({ style: "gradient", speed: 90, messages: [{ id: "one", prefix, template, condition }] });
 const occurrence = (value: number, room: number, title: string, start: string, end: string) =>
   agendaOccurrenceSchema.parse({
     id: id(value),
@@ -90,6 +91,7 @@ describe("multi-message live ticker", () => {
     });
     const config: LiveTickerConfig = {
       style: "accent",
+      speed: 90,
       messages: [
         { id: "welcome", prefix: "Welcome", template: "{{greeting}}", condition: "always" },
         { id: "next", prefix: "Next", template: "{{next.title}}", condition: "near-session-end" },
@@ -119,6 +121,91 @@ describe("multi-message live ticker", () => {
     );
     expect(segments.map((segment) => segment.id)).toEqual(["greeting", "questions"]);
   });
+  it("shows a message limited to rooms only during sessions in one of them, and an unlimited one everywhere", () => {
+    const approved = agenda(),
+      now = Date.parse("2030-01-01T09:30:00.000Z");
+    const config: LiveTickerConfig = {
+      style: "accent",
+      speed: 90,
+      messages: [
+        { id: "everywhere", prefix: "", template: "Everywhere", condition: "always" },
+        { id: "room-b", prefix: "", template: "Room B only", condition: "always", roomIds: [id(2)] },
+        { id: "both", prefix: "", template: "Both rooms", condition: "always", roomIds: [id(1), id(2)] },
+      ],
+    };
+    const ids = (occurrenceId: string) =>
+      resolveTickerMessages(config, approved, occurrenceId, now).map((segment) => segment.id);
+    expect(ids(id(3))).toEqual(["everywhere", "both"]);
+    expect(ids(id(6))).toEqual(["everywhere", "room-b", "both"]);
+    // A session that also takes place in Room B shows its messages too.
+    approved.occurrences[0] = { ...approved.occurrences[0]!, additionalRoomIds: [id(2)] };
+    expect(ids(id(3))).toEqual(["everywhere", "room-b", "both"]);
+    expect(
+      liveTickerConfigSchema.safeParse({ ...config, messages: [{ ...config.messages[1], roomIds: [id(2), id(2)] }] })
+        .success,
+    ).toBe(false);
+  });
+  it("limits a message to the rooms chosen in its settings, and sends every room again with none chosen", () => {
+    const stage = liveSnapshot().stage,
+      host = document.createElement("div");
+    document.body.append(host);
+    const send = vi.fn((command: LiveRoomClientMessage) => command.type === "preview.set");
+    const rooms = agenda().rooms;
+    const sent = () => {
+      // The room parses what the studio sends; so does the test, before it reads the rooms.
+      const payload = liveRoomClientMessageSchema.parse(send.mock.calls.at(-1)![0]);
+      if (payload.type !== "preview.set" || !payload.composition.ticker) throw new Error("Expected a ticker sequence");
+      return payload.composition.ticker.messages[0]!;
+    };
+    const edit = (choose: () => void) => {
+      void act(() => host.querySelector<HTMLButtonElement>('[aria-label="News ticker actions"]')!.click());
+      void act(() =>
+        [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+          .find((item) => item.textContent?.includes("Edit ticker messages"))!
+          .click(),
+      );
+      choose();
+      void act(() =>
+        Array.from(document.querySelectorAll("button"))
+          .find((button) => button.textContent === "Done")!
+          .click(),
+      );
+      void act(() =>
+        Array.from(host.querySelectorAll("button"))
+          .find((button) => button.textContent === "PVW")!
+          .click(),
+      );
+    };
+    const room = (name: string) =>
+      [...document.querySelectorAll<HTMLInputElement>('dialog[open] input[type="checkbox"]')].find((input) =>
+        input.closest("label")?.textContent?.includes(name),
+      )!;
+    const fresh = () => {
+      void act(() => render(null, host));
+      void act(() =>
+        render(<LiveTickerControls targets={tickerTargets(stage, { sendProgram: send })} rooms={rooms} />, host),
+      );
+    };
+    try {
+      fresh();
+      edit(() => {
+        expect(document.querySelector("dialog[open]")?.textContent).toContain("With no room chosen");
+        void act(() => room("Room B").click());
+        void act(() => room("Room A").click());
+        void act(() => room("Room A").click());
+      });
+      expect(sent().roomIds).toEqual([id(2)]);
+      fresh();
+      edit(() => {
+        void act(() => room("Room B").click());
+        void act(() => room("Room B").click());
+      });
+      expect(sent().roomIds).toBeUndefined();
+    } finally {
+      void act(() => render(null, host));
+      host.remove();
+    }
+  });
   it("uses actual public tier keys for tier-specific sponsor messages and omits unknown tiers", () => {
     const context = {
       timeZone: "UTC",
@@ -143,6 +230,45 @@ describe("multi-message live ticker", () => {
     );
     expect(retained.messages[0].template).toContain("literal");
     expect(retained.segments).toEqual([]);
+  });
+  it("reads a ticker saved before the speed existed, or with a named speed, at the same pace", () => {
+    const { speed: _speed, ...saved } = message("Saved before");
+    expect(liveTickerConfigSchema.parse(saved).speed).toBe(90);
+    expect(liveTickerConfigSchema.parse({ ...saved, speed: "slow" }).speed).toBe(60);
+    expect(liveTickerConfigSchema.parse({ ...saved, speed: "normal" }).speed).toBe(90);
+    expect(liveTickerConfigSchema.parse({ ...saved, speed: "fast" }).speed).toBe(130);
+    for (const speed of ["warp", 30, 210, 95, 90.5])
+      expect(liveTickerConfigSchema.safeParse({ ...saved, speed }).success).toBe(false);
+  });
+  it("scrolls at the ticker's speed whatever the length of its messages", () => {
+    const width = vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(2700);
+    const host = document.createElement("div");
+    document.body.append(host);
+    const draw = (speed: LiveTickerConfig["speed"]) =>
+      void act(() =>
+        render(
+          <LiveTickerOverlay
+            ticker={liveTickerSchema.parse({
+              ...message("A long message"),
+              speed,
+              segments: [{ id: "one", prefix: "Next", markdown: "A long message" }],
+            })}
+          />,
+          host,
+        ),
+      );
+    const track = () => host.querySelector<HTMLElement>(".pk-live-ticker__track")!;
+    try {
+      // One 2700 px pass at 60 px a second; faster at 90.
+      draw(60);
+      expect(track().style.getPropertyValue("--pk-live-ticker-duration")).toBe("45.00s");
+      draw(90);
+      expect(track().style.getPropertyValue("--pk-live-ticker-duration")).toBe("30.00s");
+    } finally {
+      width.mockRestore();
+      void act(() => render(null, host));
+      host.remove();
+    }
   });
   it("keeps all labels and messages in one track and renders Markdown without executing HTML", () => {
     const ticker = liveTickerSchema.parse({
@@ -246,6 +372,46 @@ describe("multi-message live ticker", () => {
       const payload = send.mock.calls[0][0];
       if (payload.type !== "preview.set" || !payload.composition.ticker) throw new Error("Expected a ticker sequence");
       expect(payload.composition.ticker.messages.at(-2)?.id).toBe("message-1");
+    } finally {
+      void act(() => render(null, host));
+      host.remove();
+    }
+  });
+  it("sets the ticker's speed in its settings and sends it with the messages", () => {
+    const stage = liveSnapshot().stage,
+      host = document.createElement("div");
+    document.body.append(host);
+    const send = vi.fn((command: LiveRoomClientMessage) => command.type === "preview.set");
+    try {
+      void act(() => render(<LiveTickerControls targets={tickerTargets(stage, { sendProgram: send })} />, host));
+      void act(() => host.querySelector<HTMLButtonElement>('[aria-label="News ticker actions"]')!.click());
+      void act(() =>
+        [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+          .find((item) => item.textContent?.includes("Edit ticker messages"))!
+          .click(),
+      );
+      const speed = controlFor<HTMLInputElement>(document.body, "Speed");
+      expect(speed.type).toBe("range");
+      expect(speed.value).toBe("90");
+      expect(speed.getAttribute("aria-valuetext")).toBe("90 px/s");
+      void act(() => {
+        speed.value = "150";
+        speed.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      expect(speed.closest(".pk-range")?.textContent).toBe("150 px/s");
+      void act(() =>
+        Array.from(document.querySelectorAll("button"))
+          .find((button) => button.textContent === "Done")!
+          .click(),
+      );
+      void act(() =>
+        Array.from(host.querySelectorAll("button"))
+          .find((button) => button.textContent === "PVW")!
+          .click(),
+      );
+      const payload = liveRoomClientMessageSchema.parse(send.mock.calls[0][0]);
+      if (payload.type !== "preview.set" || !payload.composition.ticker) throw new Error("Expected a ticker sequence");
+      expect(payload.composition.ticker.speed).toBe(150);
     } finally {
       void act(() => render(null, host));
       host.remove();

@@ -67,6 +67,7 @@ import {
   EventLiveOverlayPositionsDelete,
   EventLiveOverlayPositionsPut,
 } from "./live-overlay-layouts";
+import { EventLiveStudioSetupGet, EventLiveStudioSetupPut } from "./live-studio-setup";
 import { EventDaysGet, EventDaysPut } from "./days";
 import { registerTicketOrganizationRoutes } from "./ticket-organizations";
 import { registerTicketRoutes } from "./tickets";
@@ -282,6 +283,8 @@ openapi.put("/settings/live/layouts/:layoutSlug", EventLiveOverlayLayoutPut);
 openapi.delete("/settings/live/layouts/:layoutSlug", EventLiveOverlayLayoutDelete);
 openapi.put("/settings/live/positions", EventLiveOverlayPositionsPut);
 openapi.delete("/settings/live/positions", EventLiveOverlayPositionsDelete);
+openapi.get("/settings/live/studio", EventLiveStudioSetupGet);
+openapi.put("/settings/live/studio", EventLiveStudioSetupPut);
 openapi.get("/", publicReadRoute(EventDetailGet));
 app.all("/registrations", () => methodNotAllowed(["GET", "POST"]));
 

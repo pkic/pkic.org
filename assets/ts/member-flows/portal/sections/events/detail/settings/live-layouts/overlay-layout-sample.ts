@@ -125,6 +125,7 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
       pollChange: null,
       ticker: {
         style: "gradient",
+        speed: 90,
         messages: [{ id: "sample", prefix: "Next", template: "Sample", condition: "always" }],
         segments: [{ id: "sample", prefix: "Next", markdown: "Hybrid certificates in practice · Room B at 14:30" }],
       },
@@ -133,6 +134,7 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
         config: DEFAULT_LIVE_SCHEDULE_CONFIG,
         available: true,
         timeZone: "UTC",
+        streamRoomId: ROOM,
         resolvedAt: at(0),
         rooms: [
           {
@@ -143,7 +145,7 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
             title: "Hybrid certificates in practice",
             startAt: at(30),
             endAt: at(75),
-            speakers: [{ name: "Pat Panelist", moderator: false, photoUrl: null }],
+            speakers: [{ name: "Pat Panelist", moderator: false, photoUrl: null, organization: null }],
           },
         ],
       },

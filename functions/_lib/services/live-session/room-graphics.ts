@@ -29,11 +29,13 @@ import type { DatabaseLike } from "../../types";
 import type { LiveRoomStore } from "./room-store";
 import type { LiveRoomBroadcast } from "./room-broadcast";
 import { readLiveOverlayLayoutGeometries } from "./overlay-layouts";
+import { readEventLiveStudioSetup } from "./studio-setup";
 import { resolveLiveTicker } from "./room-ticker";
 import { resolveLiveCheckIn } from "../event-attendance-points/live-check-in";
 import type { AttendancePointSelection } from "../../../../assets/shared/attendance-points";
 import type { LiveGraphicTheme } from "../../../../assets/shared/live-graphic-theme";
 import type { LiveRoomOnScreenLists } from "./room-on-screen-lists";
+import { liveTickerConfigOf } from "../../../../assets/shared/schemas/live-session-ticker";
 
 /** A check-in code the room cannot show: its day, room or session is gone, or codes are unavailable. */
 const CHECK_IN_UNAVAILABLE = {
@@ -170,7 +172,7 @@ export class LiveRoomGraphics {
    */
   private comesOn(input: LiveCompositionInput): LiveSceneFill {
     const scene = resolveLiveSceneElements({ overlayLayouts: this.layouts }, input.scene);
-    return liveSceneFill(scene, input, { program: this.store.stage() });
+    return liveSceneFill(scene, input, { program: this.store.stage(), setup: this.basis.read().graphics });
   }
   /**
    * A screen draws the scene its room set up for it from the start, before
@@ -248,7 +250,21 @@ export class LiveRoomGraphics {
   async initialize(): Promise<void> {
     if (!this.basis.ready) await this.refresh();
     else await this.refreshLocal();
+    await this.loadSetUpLowerThird();
     await this.loadSetUpScenes();
+  }
+
+  /**
+   * A room puts lower thirds on and off air the way the event's setup says,
+   * and follows a later change to the setup, until an operator chooses another
+   * motion on Program or Preview. From then on the room keeps their choice.
+   */
+  private async loadSetUpLowerThird(): Promise<void> {
+    const motion = this.basis.read().graphics.lowerThird?.motion;
+    if (!motion || this.store.stage().lowerThirdMotion === motion || !this.store.followsSetUpLowerThirdMotion()) return;
+    if (this.store.saveSetUpLowerThirdMotion(motion))
+      await this.broadcast.all({ type: "preview.changed", composition: this.store.preview() });
+    await this.broadcast.all({ type: "stage.changed", stage: this.store.stage() });
   }
 
   async refresh(): Promise<void> {
@@ -264,12 +280,14 @@ export class LiveRoomGraphics {
   private async refreshFromD1(): Promise<void> {
     const room = this.store.session();
     if (!room) return;
-    const [layouts, context, agenda] = await Promise.all([
+    const [layouts, context, agenda, setup] = await Promise.all([
       readLiveOverlayLayoutGeometries(this.db, room.eventId),
       readLiveTickerContext(this.db, room.eventId),
       readPublishedLiveAgenda(this.db, room.eventId),
+      readEventLiveStudioSetup(this.db, room.eventId),
     ]);
-    this.basis.save({ layouts, context, agenda });
+    this.basis.save({ layouts, context, agenda, graphics: setup.graphics });
+    await this.loadSetUpLowerThird();
     if (JSON.stringify(context) !== JSON.stringify(this.tickerContext)) {
       this.tickerContext = context;
       await this.broadcast.all({ type: "ticker.context.changed", context });
@@ -304,7 +322,7 @@ export class LiveRoomGraphics {
         this.db,
         room.eventId,
         room.session.occurrenceId,
-        composition.ticker ? { style: composition.ticker.style, messages: composition.ticker.messages } : null,
+        composition.ticker ? liveTickerConfigOf(composition.ticker) : null,
         now,
         this.tickerContext,
         approved,

@@ -1,0 +1,40 @@
+/*
+ * The range control the Field component renders.
+ *
+ * Kept out of Field.css, which is in the design entry linked on every page:
+ * only a few studio settings use a slider, so its styles arrive with it.
+ */
+
+@layer components {
+  /* A slider fills the row at a control's height, its value read out at the end in a fixed width so it never moves. */
+  .pk-range {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-3);
+    inline-size: 100%;
+    min-inline-size: 0;
+    block-size: var(--pk-control-size);
+  }
+
+  .pk-range__input {
+    flex: 1;
+    min-inline-size: 0;
+    margin: 0;
+    accent-color: var(--pk-accent);
+  }
+
+  .pk-range__input:focus-visible {
+    border-radius: var(--pk-radius);
+    outline: none;
+    box-shadow: var(--pk-focus);
+  }
+
+  .pk-range__value {
+    flex: none;
+    min-inline-size: 5.5em;
+    color: var(--pk-ink);
+    font-size: var(--pk-control-text);
+    font-variant-numeric: tabular-nums;
+    text-align: end;
+  }
+}

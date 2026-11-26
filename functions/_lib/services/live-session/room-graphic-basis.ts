@@ -5,6 +5,7 @@ import {
   liveTickerContextSchema,
   DEFAULT_LIVE_TICKER_CONTEXT,
 } from "../../../../assets/shared/schemas/live-session-ticker";
+import { liveStudioGraphicsSetupSchema } from "../../../../assets/shared/schemas/live-studio-setup";
 import { parseJsonSafe } from "../../utils/json";
 import type { LiveRoomSql } from "./room-sql";
 
@@ -12,8 +13,11 @@ const basisSchema = z.object({
   layouts: liveOverlayLayoutGeometriesSchema,
   context: liveTickerContextSchema,
   agenda: storedAgendaSnapshotSchema.nullable(),
+  /** The event's saved graphics setup: the look a graphic a scene brings on starts from. A basis saved before it reads as none. */
+  graphics: liveStudioGraphicsSetupSchema.default({}),
 });
 type Basis = z.infer<typeof basisSchema>;
+type BasisInput = z.input<typeof basisSchema>;
 
 /** Public graphic inputs refresh off the control path and survive room hibernation. */
 export class LiveRoomGraphicBasis {
@@ -39,10 +43,11 @@ export class LiveRoomGraphicBasis {
           layouts: [],
           context: DEFAULT_LIVE_TICKER_CONTEXT,
           agenda: null,
+          graphics: {},
         });
   }
 
-  save(value: Basis): void {
+  save(value: BasisInput): void {
     const parsed = basisSchema.parse(value);
     this.sql.exec(
       "INSERT INTO room_controls(name,value_json) VALUES('graphicBasis',?) ON CONFLICT(name) DO UPDATE SET value_json=excluded.value_json",

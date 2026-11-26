@@ -8,6 +8,7 @@ import {
   liveTimerGraphicSchema,
   type LiveTimerGraphic,
 } from "../../../../../../../shared/schemas/live-session-timer";
+import type { LiveTimerLookSetup } from "../../../../../../../shared/schemas/live-studio-setup";
 import type { FieldPresentation } from "../../../../../../hooks/useContractForm";
 import { Checkbox } from "../../../../../../ui/Checkbox";
 import { ChoiceCard, ChoiceCards } from "../../../../../../ui/ChoiceCard";
@@ -226,9 +227,22 @@ export function LiveTimerLookFields({
   );
 }
 
+/** The part of a timer's graphic the event's setup holds. */
+function lookOf({
+  showLabel,
+  format,
+  customFormat,
+  direction,
+  presentation,
+  placement,
+  size,
+}: LiveTimerGraphic): LiveTimerLookSetup {
+  return { showLabel, format, customFormat, direction, presentation, placement, size };
+}
+
 /**
  * One timer's graphic as this desk sends it: what the outputs show, else the
- * defaults. Each output keeps the graphic it was sent, so Program can show
+ * event's timer look, else the defaults. Each output keeps the graphic it was sent, so Program can show
  * the session while the stage display shows another timer. Saving new
  * settings replaces the graphic on every destination that shows it now.
  */
@@ -244,11 +258,17 @@ export function useLiveTimerGraphic(targets: LiveTargets, timerId: string) {
           .map((composition) => on(composition.timerGraphics))
           .find(Boolean))
       : undefined);
-  const { settings, save } = useLiveGraphicSettings<LiveTimerGraphic>(
+  // A timer that shows nowhere yet starts from the event's timer look; its label and colors stay its own.
+  const look = targets.setup?.graphics.timer;
+  const { settings, apply } = useLiveGraphicSettings<LiveTimerGraphic>(
     targets,
     shown ?? null,
-    defaultLiveTimerGraphic(timerId),
+    { ...defaultLiveTimerGraphic(timerId), ...look },
     (graphic) => ({ kind: "timer", graphic }),
   );
-  return { graphic: settings, save };
+  const setup = targets.setup;
+  /** Saves this look as the one every timer of the event starts from; the problem to show, or null. */
+  const saveLook =
+    setup?.canSave === true ? (graphic: LiveTimerGraphic) => setup.saveGraphic("timer", lookOf(graphic)) : undefined;
+  return { graphic: settings, save: apply, saveLook };
 }

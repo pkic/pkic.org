@@ -425,6 +425,7 @@ export function GroupEventWorkspace({
                     sessionPath={(occurrenceId) => `${tabPath("live")}/${encodeURIComponent(occurrenceId)}`}
                     eventPath={tabPath(GROUP_EVENT_OVERVIEW_TAB)}
                     canProduce={hasEventAgendaPermission(event.id, "agenda:live_studio")}
+                    canSetUp={hasEventAgendaPermission(event.id, "agenda:live_setup")}
                   />
                 </Suspense>
               )}

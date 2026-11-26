@@ -27,12 +27,8 @@ export function meets(one: LiveOverlayElementPlacement, other: LiveOverlayElemen
   return one.x < other.x + other.w && one.x + one.w > other.x && one.y < other.y + other.h && one.y + one.h > other.y;
 }
 
-/**
- * The background, the boards and the cards: each keeps the timers' column
- * clear in its top-right corner, where the background carries the logo.
- */
+/** The boards and the cards: each keeps its lines clear of the timers on its top-right corner. */
 export const BOARDS: ReadonlySet<LiveOverlayElement> = new Set([
-  "background",
   "question",
   "poll",
   "panelists",
@@ -43,11 +39,29 @@ export const BOARDS: ReadonlySet<LiveOverlayElement> = new Set([
 ]);
 
 /**
- * How much of a board's width, from its end, the timers on its logo corner
- * (the right two fifths of its top fifth) take: the board keeps that column
- * clear, so no line of it runs under a timer. Zero when none sits there.
+ * How a board keeps its lines clear of the timers on its top-right corner
+ * (the right two fifths of its top fifth), in fractions of the board. A wide
+ * board keeps their column clear (`inline`, of its width from its end). One
+ * too narrow for that, such as a column beside the camera, starts its top
+ * row under them instead (`block`, of its height from its top) and keeps its
+ * full width below, so no line is squeezed into what is left beside a timer
+ * and no word breaks. Both zero when none sits there.
  */
-export function timerReserve(board: LiveOverlayElementPlacement, timers: readonly LiveOverlayElementPlacement[]) {
+export type LiveOverlayTimerClearance = { inline: number; block: number };
+
+export const NO_TIMER_CLEARANCE: LiveOverlayTimerClearance = { inline: 0, block: 0 };
+
+/** The widest share of a board the timers' column may take; past it the board's top row goes under them. */
+const BESIDE_TIMERS = 0.25;
+/** The most of a board's height its top row moves down for timers; a taller stack keeps its column clear instead. */
+const UNDER_TIMERS = 0.4;
+/** The most of a board's width a tall stack's column takes, so the board's text always keeps half of it. */
+const BESIDE_TALL_TIMERS = 0.5;
+
+export function timerClearance(
+  board: LiveOverlayElementPlacement,
+  timers: readonly LiveOverlayElementPlacement[],
+): LiveOverlayTimerClearance {
   const corner = { x: board.x + board.w * 0.6, y: board.y, w: board.w * 0.4, h: board.h * 0.2 };
   const end = board.x + board.w;
   const covering = timers.filter(
@@ -57,8 +71,27 @@ export function timerReserve(board: LiveOverlayElementPlacement, timers: readonl
       timer.y < corner.y + corner.h &&
       timer.y + timer.h > corner.y,
   );
-  if (!covering.length || board.w <= 0) return 0;
-  return Math.min(0.4, Math.max(...covering.map((timer) => (end - timer.x) / board.w)));
+  if (!covering.length || board.w <= 0 || board.h <= 0) return NO_TIMER_CLEARANCE;
+  const inline = Math.max(...covering.map((timer) => (end - timer.x) / board.w));
+  if (inline <= BESIDE_TIMERS) return { inline, block: 0 };
+  // Under them the board keeps its full width, so every timer stacked in that column on the board counts.
+  const column = timers.filter(
+    (timer) =>
+      timer.x < corner.x + corner.w &&
+      timer.x + timer.w > corner.x &&
+      timer.y < board.y + board.h &&
+      timer.y + timer.h > board.y,
+  );
+  const block = Math.max(...column.map((timer) => (timer.y + timer.h - board.y) / board.h));
+  // A stack too tall to start the top row under keeps its column clear instead, so no line runs beneath a
+  // timer; a timer reaching past the board's start still leaves the text its half.
+  if (block > UNDER_TIMERS) {
+    return {
+      inline: Math.min(BESIDE_TALL_TIMERS, Math.max(...column.map((timer) => (end - timer.x) / board.w))),
+      block: 0,
+    };
+  }
+  return { inline: 0, block };
 }
 
 /**

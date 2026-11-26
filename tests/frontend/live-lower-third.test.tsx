@@ -17,6 +17,8 @@ import { liveLowerThirdEmblemBox } from "../../assets/shared/live-lower-third";
 import { liveRoomClientMessageSchema, type LiveRoomClientMessage } from "../../assets/shared/schemas/live-session-room";
 import { applyLiveRoomMessage } from "../../assets/ts/live-session/live-room-state";
 import { sendLayerToggle } from "../../assets/ts/member-flows/portal/sections/events/detail/live/live-output-targets";
+import { LiveLowerThirdSettings } from "../../assets/ts/member-flows/portal/sections/events/detail/live/LiveLowerThirdSettings";
+import { button } from "./helpers/live-desk";
 import { liveSnapshot, liveTargets } from "./helpers/live-room-socket";
 
 const credit = (key: string, name: string): LiveCredit => ({
@@ -240,5 +242,33 @@ describe("the lower third's motion setting", () => {
     expect(program).toMatchObject({ type: "stage.lowerThird", motion: "cut" });
     expect(preview).toMatchObject({ type: "preview.set", composition: { lowerThirdMotion: "cut" } });
     expect(projector).toMatchObject({ type: "aux.set", output: "projector", composition: { lowerThirdMotion: "cut" } });
+  });
+});
+
+describe("the lower third's settings", () => {
+  it("saves the motion for every room of the event, then puts it on Preview", async () => {
+    const host = document.body.appendChild(document.createElement("div"));
+    const state = applyLiveRoomMessage(null, liveSnapshot({ viewer: { role: "operator", name: "Olga Operator" } }))!;
+    const sent: LiveRoomClientMessage[] = [];
+    const saveGraphic = vi.fn(async () => "The studio setup was not saved." as string | null);
+    const setup = { graphics: {}, layouts: {}, canSave: true, saveGraphic, saveLayout: vi.fn(async () => null) };
+    const onClose = vi.fn();
+    const targets = liveTargets(state, { setup, sendProgram: (message) => (sent.push(message), true) });
+    await act(() => render(<LiveLowerThirdSettings targets={targets} onClose={onClose} />, host));
+    const dialog = host.querySelector<HTMLDialogElement>("dialog")!;
+    expect(dialog.textContent).toContain("Every room of the event starts with this choice.");
+    await act(async () => dialog.querySelector<HTMLInputElement>('input[value="cut"]')!.click());
+    await act(async () => button(dialog, "Save").click());
+    expect(saveGraphic).toHaveBeenCalledWith("lowerThird", { motion: "cut" });
+    expect(sent).toEqual([]);
+    expect(dialog.textContent).toContain("The studio setup was not saved.");
+    saveGraphic.mockResolvedValueOnce(null);
+    await act(async () => button(dialog, "Save").click());
+    expect(sent.map((message) => liveRoomClientMessageSchema.parse(message))).toMatchObject([
+      { type: "preview.set", composition: { lowerThirdMotion: "cut" } },
+    ]);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    render(null, host);
+    host.remove();
   });
 });

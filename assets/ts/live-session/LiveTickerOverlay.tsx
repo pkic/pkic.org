@@ -1,12 +1,14 @@
 import { useLayoutEffect, useRef } from "preact/hooks";
-import type { LiveTicker } from "../../shared/schemas/live-session-ticker";
+import { LIVE_TICKER_SPEED, type LiveTicker } from "../../shared/schemas/live-session-ticker";
 import { renderOverlayInlineMarkdown } from "../../shared/overlay-text-template";
 import "./LiveTickerOverlay.css";
 
 /**
- * The width of one pass of the messages, on the track as `--pk-live-ticker-travel`. An output scrolls by
- * half its own track and never reads it; a small picture of the output scrolls by this length instead,
- * since it moves the track without a graphics layer (see StudioPhone.css).
+ * The width of one pass of the messages, on the track as `--pk-live-ticker-travel`, and the time that pass
+ * takes at the ticker's speed, as `--pk-live-ticker-duration`: the ticker moves at the same pace whatever
+ * the length of its messages. An output scrolls by half its own track and never reads the width; a small
+ * picture of the output scrolls by this length instead, since it moves the track without a graphics layer
+ * (see StudioPhone.css).
  */
 function useTickerTravel(ticker: LiveTicker | null) {
   const track = useRef<HTMLDivElement>(null);
@@ -14,14 +16,20 @@ function useTickerTravel(ticker: LiveTicker | null) {
     const node = track.current;
     const pass = node?.firstElementChild;
     if (!node || !(pass instanceof HTMLElement)) return;
-    const measure = () => node.style.setProperty("--pk-live-ticker-travel", `${pass.offsetWidth}px`);
+    const pace = ticker?.speed ?? LIVE_TICKER_SPEED.default;
+    const measure = () => {
+      // Not laid out yet: the stylesheet's normal pace holds until it is.
+      if (!pass.offsetWidth) return;
+      node.style.setProperty("--pk-live-ticker-travel", `${pass.offsetWidth}px`);
+      node.style.setProperty("--pk-live-ticker-duration", `${(pass.offsetWidth / pace).toFixed(2)}s`);
+    };
     measure();
     // Fonts arriving late change the length of a pass.
     if (typeof ResizeObserver !== "function") return;
     const observer = new ResizeObserver(measure);
     observer.observe(pass);
     return () => observer.disconnect();
-  }, [ticker?.segments]);
+  }, [ticker?.segments, ticker?.speed]);
   return track;
 }
 

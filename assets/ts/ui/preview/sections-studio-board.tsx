@@ -37,6 +37,43 @@ const NAMED_QUESTION = {
 };
 const ON_POLL: Partial<LiveStage> = { poll: ROOM.stage.poll };
 
+const PANEL = [
+  ["Ana Ramírez Example", "Example Trust Services"],
+  ["Benedikt Sampleton", "Sample Certification Authority"],
+  ["Chen Placeholder-Wu", "Placeholder Labs"],
+  ["Dana Demonstrova", "Demo Government PKI"],
+  ["Eli Specimen-Okafor", "Specimen Systems"],
+  ["Fay Moderator", "PKI Consortium"],
+] as const;
+/** Up next in Break with this many speakers, the moderator last, and the session timer in its own top-right corner. */
+function breakWith(speakers: number): LiveRoomState {
+  const schedule = ROOM.stage.schedule!;
+  const [room] = schedule.rooms;
+  return roomWith(
+    {},
+    {
+      schedule: {
+        ...schedule,
+        timeZone: "Europe/Amsterdam",
+        streamRoomId: room!.roomId,
+        rooms: [
+          {
+            ...room!,
+            title: "Migrating a national PKI to post-quantum certificates",
+            speakers: PANEL.slice(0, speakers).map(([name, organization], index) => ({
+              name: speakers === 1 ? "Pat Panelist" : name,
+              moderator: speakers > 1 && index === speakers - 1,
+              photoUrl: null,
+              organization,
+            })),
+          },
+        ],
+      },
+      timerGraphics: ROOM.stage.timerGraphics.map((graphic) => ({ ...graphic, placement: "top-right" as const })),
+    },
+  );
+}
+
 const ABSTRACT =
   "Most organizations know they must move to post-quantum cryptography, but few know where to start. This session walks through building a cryptographic inventory, choosing between hybrid and pure post-quantum certificates, and planning a migration that keeps existing clients working.";
 /** The sample session with an abstract and one speaker, or a full panel, showing the session graphic as the operator set it. */
@@ -195,6 +232,24 @@ export const studioBoardSections: PreviewSection[] = [
         elements={presetWith("full-board", ["background", "schedule"])}
       />
     ),
+  },
+  {
+    id: "onscreen-up-next-speaker",
+    title: "Up next in Break, one speaker",
+    note: "The speaker sits under the session's title: the face, then the name. The timer keeps the corner it was given.",
+    render: () => <LivestreamOverlay state={breakWith(1)} elements={presetWith("break", ["schedule", "timer"])} />,
+  },
+  {
+    id: "onscreen-up-next-three",
+    title: "Up next in Break, three speakers",
+    note: "From three speakers, one is named at a time with their organization, their face grown.",
+    render: () => <LivestreamOverlay state={breakWith(3)} elements={presetWith("break", ["schedule", "timer"])} />,
+  },
+  {
+    id: "onscreen-up-next-panel",
+    title: "Up next in Break, a panel of six",
+    note: "A larger panel names one speaker at a time, their face brought forward, with their organization.",
+    render: () => <LivestreamOverlay state={breakWith(6)} elements={presetWith("break", ["schedule", "timer"])} />,
   },
   {
     id: "onscreen-poll-side-by-side",

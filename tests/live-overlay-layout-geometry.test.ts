@@ -90,6 +90,28 @@ describe("placing a graphic in its layout box", () => {
     expect(cornered).toMatchObject({ horizontal: "left", vertical: "bottom", visible: true });
     expect(cornered.x).toBeCloseTo(0.05);
     expect(cornered.y + cornered.h).toBeCloseTo(0.95);
+    // Its own corner keeps the standard timer's size, not the layout box's.
+    expect(cornered.w * 1920).toBeCloseTo(336, 1);
+    expect(cornered.h * 1080).toBeCloseTo(120, 1);
+  });
+
+  it("keeps a timer with its own corner the same in every scene, whatever else goes on air", () => {
+    const graphic = { placement: "top-right", size: "large" } as const;
+    const frame = ({ x, y, w, h }: { x: number; y: number; w: number; h: number }) => ({ x, y, w, h });
+    const standard = liveTimerLayout(graphic, LIVE_OVERLAY_PRESET_LAYOUTS.default.elements.timer);
+    // Break sets its own timer large in the bottom-right corner; a timer the operator placed keeps its corner.
+    for (const scene of ["break", "questions", "check-in"] as const)
+      expect(frame(liveTimerLayout(graphic, LIVE_OVERLAY_PRESET_LAYOUTS[scene].elements.timer))).toEqual(
+        frame(standard),
+      );
+    expect((standard.x + standard.w) * 1920).toBeCloseTo(1824);
+    // One left to the layout follows the scene's box.
+    const inBreak = liveTimerLayout(
+      { placement: "layout", size: "large" },
+      LIVE_OVERLAY_PRESET_LAYOUTS.break.elements.timer,
+    );
+    expect(inBreak.vertical).toBe("bottom");
+    expect(inBreak.w * 1920).toBeCloseTo(480, 1);
   });
 });
 

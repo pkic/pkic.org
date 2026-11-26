@@ -4,6 +4,8 @@ import {
   liveTickerMessageSchema,
   DEFAULT_LIVE_TICKER_CONFIG,
   LIVE_TICKER_MESSAGES_MAX,
+  LIVE_TICKER_SPEED,
+  liveTickerConfigOf,
   type LiveTickerConfig,
   type LiveTickerContext,
 } from "../../../../../../../shared/schemas/live-session-ticker";
@@ -14,17 +16,25 @@ import { useContractForm, type FieldPresentation } from "../../../../../../hooks
 import { MarkdownEditor } from "../../../../../../components/markdown-editor/MarkdownInput";
 import type { MarkdownEditorHandle } from "../../../../../../components/markdown-editor/MarkdownEditor";
 import { Button } from "../../../../../../ui/Button";
-import { Dialog } from "../../../../../../ui/Dialog";
+import { Checkbox } from "../../../../../../ui/Checkbox";
 import { Field } from "../../../../../../ui/Field";
 import { ListDetail } from "../../../../../../ui/ListDetail";
-import { Select, TextInput } from "../../../../../../ui/TextControl";
-import { Alert } from "../../../../../../ui/Alert";
+import { RangeInput, Select, TextInput } from "../../../../../../ui/TextControl";
 import { LiveGraphicRow } from "./LiveGraphicRow";
-import { LIVE_SETTINGS_NOT_SENT, useLiveGraphicSettings } from "./live-graphic-settings";
+import { LiveGraphicSettingsDialog } from "./LiveGraphicSettingsDialog";
+import { useLiveGraphicSettings } from "./live-graphic-settings";
 import type { LiveTargets } from "./live-output-targets";
 import "./LiveTickerControls.css";
 
 type Message = LiveTickerConfig["messages"][number];
+/** A room of the event's agenda a message can be limited to. */
+export interface LiveTickerRoom {
+  id: string;
+  name: string;
+}
+/** The names of the rooms a message is limited to, in the agenda's order; empty when it shows in every room. */
+const roomNames = (message: Message, rooms: readonly LiveTickerRoom[]) =>
+  rooms.filter((room) => message.roomIds?.includes(room.id)).map((room) => room.name);
 const CONDITION_LABELS: Record<Message["condition"], string> = {
   always: "Always",
   "near-session-end": "Last five minutes of the session",
@@ -44,7 +54,9 @@ function TickerMessageEditor({
   remove,
   canRemove,
   context,
+  rooms,
 }: {
+  rooms: readonly LiveTickerRoom[];
   message: Message;
   index: number;
   of: (path: string) => FieldPresentation;
@@ -121,6 +133,35 @@ function TickerMessageEditor({
           </Select>
         )}
       </Field>
+      {rooms.length > 1 ? (
+        <Field
+          group
+          label="Rooms"
+          help="Shows only during sessions in the rooms you choose. With no room chosen, it shows in every room."
+          {...of(`${path}.roomIds`)}
+        >
+          {() => (
+            <div class="pk-stack pk-stack--snug">
+              {rooms.map((room) => (
+                <Checkbox
+                  key={room.id}
+                  name={`${path}.roomIds`}
+                  value={room.id}
+                  label={room.name}
+                  checked={message.roomIds?.includes(room.id) ?? false}
+                  onChange={(event) => {
+                    const checked = event.currentTarget.checked;
+                    const roomIds = rooms
+                      .filter((each) => (each.id === room.id ? checked : message.roomIds?.includes(each.id)))
+                      .map((each) => each.id);
+                    update({ ...message, roomIds: roomIds.length ? roomIds : undefined });
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </Field>
+      ) : null}
     </>
   );
 }
@@ -139,19 +180,30 @@ function nextMessageId(messages: readonly Message[]): string {
  * so a long sequence stays easy to reorder and edit. Edits stay in the editor
  * until they validate, so every output gets a sequence the room accepts.
  */
-export function LiveTickerControls({ targets }: { targets: LiveTargets }) {
+export function LiveTickerControls({
+  targets,
+  rooms = [],
+}: {
+  targets: LiveTargets;
+  /** The event's agenda rooms, which a message can be limited to. */
+  rooms?: readonly LiveTickerRoom[];
+}) {
   const context = targets.state.tickerContext;
   const shown = targets.state.preview.ticker ?? targets.state.stage.ticker;
   // The row follows the ticker an output shows; saving its messages changes it there.
-  const { settings: config, save } = useLiveGraphicSettings<LiveTickerConfig>(
+  const {
+    settings: config,
+    save,
+    saves,
+  } = useLiveGraphicSettings<LiveTickerConfig>(
     targets,
-    shown ? { style: shown.style, messages: shown.messages } : null,
+    shown ? liveTickerConfigOf(shown) : null,
     DEFAULT_LIVE_TICKER_CONFIG,
     (settings) => ({ kind: "ticker", config: settings }),
+    "ticker",
   );
   const [draft, setDraft] = useState<LiveTickerConfig | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const form = useContractForm(liveTickerConfigSchema, draft ?? config);
   const fromAgenda = config.messages.filter((message) => overlayTextTemplateTags(message.template).length > 0).length;
   const edit = (update: (current: LiveTickerConfig) => LiveTickerConfig) =>
@@ -164,7 +216,9 @@ export function LiveTickerControls({ targets }: { targets: LiveTargets }) {
     : 0;
   const current = draft?.messages[index];
   const problem = (at: number) =>
-    ["prefix", "template", "condition"].map((field) => form.of(`messages.${at}.${field}`).message).find(Boolean);
+    ["prefix", "template", "condition", "roomIds"]
+      .map((field) => form.of(`messages.${at}.${field}`).message)
+      .find(Boolean);
   return (
     <LiveGraphicRow
       name="News ticker"
@@ -176,110 +230,114 @@ export function LiveTickerControls({ targets }: { targets: LiveTargets }) {
         onOpen: () => {
           setDraft(config);
           setSelected(config.messages[0]?.id ?? null);
-          setError(null);
         },
       }}
     >
       {draft ? (
-        <Dialog
-          open
+        <LiveGraphicSettingsDialog
           size="wide"
           title="News ticker"
+          saves={saves}
           confirmLabel="Done"
-          onConfirm={() => {
-            const checked = form.submit();
-            if (!checked.data) return setError(checked.formMessage);
-            if (!save(checked.data)) return setError(LIVE_SETTINGS_NOT_SENT);
-            setDraft(null);
-            setError(null);
-          }}
-          onCancel={() => setDraft(null)}
+          formClass="pk-live-ticker-editor"
+          form={form}
+          save={save}
+          onClose={() => setDraft(null)}
         >
-          <form
-            class="pk-live-ticker-editor"
-            noValidate
-            {...form.handlers}
-            onSubmit={(event) => event.preventDefault()}
+          <Field label="Style" {...form.of("style")}>
+            {(control) => (
+              <Select
+                {...control}
+                value={draft.style}
+                onChange={(event) => {
+                  const parsed = liveTickerConfigSchema.shape.style.safeParse(event.currentTarget.value);
+                  if (parsed.success) edit((value) => ({ ...value, style: parsed.data }));
+                }}
+              >
+                {liveTickerConfigSchema.shape.style.options.map((style) => (
+                  <option key={style} value={style}>
+                    {STYLE_LABELS[style]}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          <Field label="Speed" help="How fast the messages scroll across the frame." {...form.of("speed")}>
+            {(control) => (
+              <RangeInput
+                {...control}
+                min={LIVE_TICKER_SPEED.min}
+                max={LIVE_TICKER_SPEED.max}
+                step={LIVE_TICKER_SPEED.step}
+                value={draft.speed}
+                valueText={`${formatNumber(draft.speed)} px/s`}
+                onInput={(event) => {
+                  const speed = event.currentTarget.valueAsNumber;
+                  edit((value) => ({ ...value, speed }));
+                }}
+              />
+            )}
+          </Field>
+          <ListDetail
+            listLabel="Ticker messages, in the order they scroll"
+            selectedId={current?.id ?? null}
+            onSelect={setSelected}
+            onMove={(id, direction) =>
+              edit((value) => {
+                const messages = [...value.messages];
+                const at = messages.findIndex((message) => message.id === id);
+                const to = at + direction;
+                if (at < 0 || to < 0 || to >= messages.length) return value;
+                [messages[at], messages[to]] = [messages[to]!, messages[at]!];
+                return { ...value, messages };
+              })
+            }
+            items={draft.messages.map((message, at) => ({
+              id: message.id,
+              label: message.prefix.trim() || `Message ${formatNumber(at + 1)}`,
+              detail: [message.template, CONDITION_LABELS[message.condition], ...roomNames(message, rooms)].join(" · "),
+              attention: problem(at),
+            }))}
+            addAction={
+              <Button
+                disabled={draft.messages.length >= LIVE_TICKER_MESSAGES_MAX}
+                onClick={() => {
+                  const id = nextMessageId(draft.messages);
+                  edit((value) => ({
+                    ...value,
+                    messages: [...value.messages, { id, prefix: "", template: "{{greeting}}", condition: "always" }],
+                  }));
+                  setSelected(id);
+                }}
+              >
+                Add message
+              </Button>
+            }
           >
-            <Field label="Style" {...form.of("style")}>
-              {(control) => (
-                <Select
-                  {...control}
-                  value={draft.style}
-                  onChange={(event) => {
-                    const parsed = liveTickerConfigSchema.shape.style.safeParse(event.currentTarget.value);
-                    if (parsed.success) edit((value) => ({ ...value, style: parsed.data }));
-                  }}
-                >
-                  {liveTickerConfigSchema.shape.style.options.map((style) => (
-                    <option key={style} value={style}>
-                      {STYLE_LABELS[style]}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </Field>
-            <ListDetail
-              listLabel="Ticker messages, in the order they scroll"
-              selectedId={current?.id ?? null}
-              onSelect={setSelected}
-              onMove={(id, direction) =>
-                edit((value) => {
-                  const messages = [...value.messages];
-                  const at = messages.findIndex((message) => message.id === id);
-                  const to = at + direction;
-                  if (at < 0 || to < 0 || to >= messages.length) return value;
-                  [messages[at], messages[to]] = [messages[to]!, messages[at]!];
-                  return { ...value, messages };
-                })
-              }
-              items={draft.messages.map((message, at) => ({
-                id: message.id,
-                label: message.prefix.trim() || `Message ${formatNumber(at + 1)}`,
-                detail: `${message.template} · ${CONDITION_LABELS[message.condition]}`,
-                attention: problem(at),
-              }))}
-              addAction={
-                <Button
-                  disabled={draft.messages.length >= LIVE_TICKER_MESSAGES_MAX}
-                  onClick={() => {
-                    const id = nextMessageId(draft.messages);
-                    edit((value) => ({
-                      ...value,
-                      messages: [...value.messages, { id, prefix: "", template: "{{greeting}}", condition: "always" }],
-                    }));
-                    setSelected(id);
-                  }}
-                >
-                  Add message
-                </Button>
-              }
-            >
-              {current ? (
-                <TickerMessageEditor
-                  key={current.id}
-                  message={current}
-                  index={index}
-                  canRemove={draft.messages.length > 1}
-                  context={context}
-                  of={form.of}
-                  update={(next) =>
-                    edit((value) => ({
-                      ...value,
-                      messages: value.messages.map((item) => (item.id === current.id ? next : item)),
-                    }))
-                  }
-                  remove={() => {
-                    const remaining = draft.messages.filter((item) => item.id !== current.id);
-                    setSelected(remaining[Math.min(index, remaining.length - 1)]?.id ?? null);
-                    edit((value) => ({ ...value, messages: value.messages.filter((item) => item.id !== current.id) }));
-                  }}
-                />
-              ) : null}
-            </ListDetail>
-            {error ? <Alert tone="danger">{error}</Alert> : null}
-          </form>
-        </Dialog>
+            {current ? (
+              <TickerMessageEditor
+                key={current.id}
+                message={current}
+                index={index}
+                canRemove={draft.messages.length > 1}
+                context={context}
+                rooms={rooms}
+                of={form.of}
+                update={(next) =>
+                  edit((value) => ({
+                    ...value,
+                    messages: value.messages.map((item) => (item.id === current.id ? next : item)),
+                  }))
+                }
+                remove={() => {
+                  const remaining = draft.messages.filter((item) => item.id !== current.id);
+                  setSelected(remaining[Math.min(index, remaining.length - 1)]?.id ?? null);
+                  edit((value) => ({ ...value, messages: value.messages.filter((item) => item.id !== current.id) }));
+                }}
+              />
+            ) : null}
+          </ListDetail>
+        </LiveGraphicSettingsDialog>
       ) : null}
     </LiveGraphicRow>
   );

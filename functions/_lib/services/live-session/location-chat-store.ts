@@ -12,7 +12,7 @@ import type { LiveLocationChatAdmission } from "./location-chat-admission";
 import { liveLocationChatName } from "./room-admission";
 import type { LiveRoomAccessScope } from "./room-command-read-scope";
 import type { LiveRoomSql } from "./room-sql";
-import type { LiveStaffActionRow } from "./room-store";
+import type { LiveStaffActionRow } from "./room-pending-copy";
 
 /** A location's chat as one room object holds it: its day, the session loaded there, and its opening. */
 export interface LiveLocationChatState {
