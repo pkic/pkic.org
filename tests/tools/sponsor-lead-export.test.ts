@@ -54,7 +54,7 @@ describe("sponsor lead export", () => {
       );
       const csv = await exportSponsorLeads(db, "event", "sponsor", "operator");
       expect(csv).toContain("attendee@example.test");
-      expect(csv.split("\r\n")[0]).toBe("Name,Email,Organization,Title,Captured at");
+      expect(csv.split("\r\n")[0]).toBe("Name,Email,Organization,Title,Captured at,Note");
       expect(csv).toContain(",Security engineer,");
       expect(csv).not.toContain("Attendee ID");
       expect(csv).not.toMatch(/(?:^|,)attendee(?:,|$)/m);

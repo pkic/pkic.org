@@ -473,7 +473,7 @@ test("the protected printed short code works through manual offline capture and 
       (await scannerStorage(page)).pending.find((row) => row.scan.operationId === queued.operationId)?.scan,
     ).toEqual(queued);
     await expect(
-      page.getByRole("list", { name: "Recent scan results" }).getByRole("listitem", {
+      page.getByRole("list", { name: "Recent scan results" }).getByRole("button", {
         name: "Registered · scan saved on device",
       }),
     ).toBeVisible();

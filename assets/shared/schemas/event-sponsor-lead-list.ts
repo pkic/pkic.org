@@ -2,6 +2,7 @@ import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { utcInstantSchema } from "./api-common";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { formatNumber } from "../format-number";
 
 export const sponsorLeadQuerySchema = listQuerySchema(["name", "email", "organization", "capturedAt"] as const, {
   maxLimit: 100,
@@ -15,6 +16,8 @@ export const sponsorLeadSchema = z.object({
   capturedAt: utcInstantSchema,
   operatorName: z.string(),
   sponsorName: z.string().optional(),
+  /** The sponsor team's shared note about this lead. */
+  note: z.string().nullable(),
 });
 export const sponsorLeadListSchema = paginatedResponseSchema("leads", sponsorLeadSchema);
 export const sponsorLeadDetailSchema = z.object({ lead: sponsorLeadSchema, sponsorName: z.string() });
@@ -50,7 +53,25 @@ export type SponsorLeadCapture = z.infer<typeof sponsorLeadCaptureSchema>;
 export type SponsorLeadCapturesQuery = z.infer<typeof sponsorLeadCapturesQuerySchema>;
 /** One operator's already captured badge, resolved online; no search or name inventory. */
 export const sponsorLeadConfirmationSchema = z.object({
+  leadId: databaseIdSchema,
   name: z.string().nullable(),
   title: z.string().nullable(),
   organization: z.string().nullable(),
+  note: z.string().nullable(),
+});
+
+export const SPONSOR_LEAD_NOTE_MAX_LENGTH = 1000;
+/** Replaces the sponsor team's note about one lead; an empty note removes it. */
+export const sponsorLeadNoteRequestSchema = z.object({
+  note: z
+    .string()
+    .trim()
+    .max(
+      SPONSOR_LEAD_NOTE_MAX_LENGTH,
+      `Keep the note to ${formatNumber(SPONSOR_LEAD_NOTE_MAX_LENGTH)} characters or fewer.`,
+    ),
+});
+export const sponsorLeadNoteResponseSchema = z.object({
+  note: z.string().nullable(),
+  noteUpdatedAt: utcInstantSchema.nullable(),
 });

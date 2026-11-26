@@ -1,4 +1,4 @@
-/** Event-specific sponsorship attendee-data entitlements. */
+/** Event-specific sponsor tier settings: attendee-data access and consortium lead capture. */
 import {
   eventSponsorTiersGetRouteSchema,
   eventSponsorTiersPutRouteSchema,
@@ -14,7 +14,7 @@ import { requireEventPermission } from "../authorization";
 
 export const EventSponsorTiersGet = openApiRoute(eventSponsorTiersGetRouteSchema, async (c: AdminContext, data) => {
   const { db, event } = await requireEventPermission(c, data.params.eventSlug, "events:read");
-  return json(eventSponsorTiersResponseSchema.parse({ tiers: await listEventSponsorTiers(db, event.id) }));
+  return json(eventSponsorTiersResponseSchema.parse(await listEventSponsorTiers(db, event.id)));
 });
 
 export const EventSponsorTiersPut = openApiRoute(eventSponsorTiersPutRouteSchema, async (c: AdminContext, data) => {
@@ -31,6 +31,7 @@ export const EventSponsorTiersPut = openApiRoute(eventSponsorTiersPutRouteSchema
       ),
   );
 
-  await replaceEventSponsorTiers(guardedDb, staff.id, event.id, data.body.tiers);
-  return json(eventSponsorTiersResponseSchema.parse({ tiers: await listEventSponsorTiers(db, event.id) }));
+  return json(
+    eventSponsorTiersResponseSchema.parse(await replaceEventSponsorTiers(guardedDb, staff.id, event.id, data.body)),
+  );
 });

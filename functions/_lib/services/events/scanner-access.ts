@@ -1,7 +1,8 @@
-import type { DatabaseLike } from "../../types";
+import type { AuthAdmin, DatabaseLike } from "../../types";
+import { isUserBackedAuthAdmin } from "../../auth/admin-identity";
 import { anyPermissionAuthorizationEvidenceForResource, tokenAllowsPermission } from "../../auth/permissions";
 import {
-  activeEventSponsorSql,
+  activeLeadSponsorOfEventSql,
   sponsorLeadViewerExistsSql,
   sponsorOrganizationCaptureExistsSql,
 } from "../../auth/sponsor-organization-lead-access";
@@ -19,6 +20,8 @@ export interface EventAudienceSponsorRow {
   id: string;
   event_id: string;
   name: string;
+  /** The sponsorship still captures at this event; a read-only row keeps its leads reachable. */
+  can_capture: number;
 }
 
 export function decodeEventAudienceAccess(
@@ -51,7 +54,7 @@ export function decodeEventAudienceAccess(
   }
   for (const sponsor of sponsors) {
     const value: EventAudienceAccess = access.get(sponsor.event_id) ?? { sponsorLeadAccess: false };
-    if (captureIds.has(sponsor.id)) {
+    if (sponsor.can_capture && captureIds.has(sponsor.id)) {
       value.scannerAccess ??= { canScan: false, sponsors: [] };
       value.scannerAccess.sponsors.push({ id: sponsor.id, name: sponsor.name });
     }
@@ -61,6 +64,8 @@ export function decodeEventAudienceAccess(
   return access;
 }
 
+const SPONSOR_LEAD_PERMISSIONS = ["agenda:leads_capture", "agenda:leads_view", "agenda:leads_export"] as const;
+
 /** Resolve only active sponsor names authorized for this subject and event selection, in the resource batch. */
 export function prepareEventAudienceSponsors(
   db: DatabaseLike,
@@ -68,11 +73,10 @@ export function prepareEventAudienceSponsors(
   selection: EventReadSelection,
 ) {
   const actor = viewer.admin ?? { identityType: "user" as const, id: viewer.userId ?? "", email: "" };
-  const authority = anyPermissionAuthorizationEvidenceForResource(
-    actor,
-    ["agenda:leads_capture", "agenda:leads_view", "agenda:leads_export"],
-    { type: "event_sponsor", idSql: "s.id" },
-  );
+  const authority = anyPermissionAuthorizationEvidenceForResource(actor, SPONSOR_LEAD_PERMISSIONS, {
+    type: "event_sponsor",
+    idSql: "s.id",
+  });
   const organizationCapture =
     viewer.userId && !viewer.admin?.scopeRestricted && tokenAllowsPermission(actor, "agenda:leads_capture")
       ? sponsorOrganizationCaptureExistsSql("?", "s.id")
@@ -84,25 +88,71 @@ export function prepareEventAudienceSponsors(
       ? sponsorLeadViewerExistsSql("?", "s.id")
       : null;
   const liveCapacitySql = `${organizationCapture ? ` OR ${organizationCapture}` : ""}${designatedContact ? ` OR ${designatedContact}` : ""}`;
-  const filter = eventReadSelectionSql("s.event_id", selection);
-  const withSql = filter.withSql
-    ? `WITH ${filter.withSql}, authorized_event_sponsors AS MATERIALIZED (SELECT s.id FROM sponsorships s WHERE ${activeEventSponsorSql("s")} AND (EXISTS(${authority.sql})${liveCapacitySql})) `
-    : "";
-  const authoritySql = filter.withSql
-    ? "s.id IN (SELECT id FROM authorized_event_sponsors)"
-    : `(EXISTS(${authority.sql})${liveCapacitySql})`;
-  const activeFilter = filter.withSql ? "" : ` AND ${activeEventSponsorSql("s")}`;
+  const filter = eventReadSelectionSql("audience_event.id", selection);
+  const candidates = viewerLeadSponsorCandidates(actor);
+  // The full sponsorship policy runs only on the viewer's few candidate sponsorships, never on every one.
+  const withSql = `WITH ${filter.withSql ? `${filter.withSql}, ` : ""}viewer_lead_sponsors AS MATERIALIZED (${candidates.sql}),
+    authorized_event_sponsors AS MATERIALIZED (SELECT s.id FROM viewer_lead_sponsors candidate
+      CROSS JOIN sponsorships s ON s.id=candidate.id
+      WHERE s.pipeline_stage='active' AND (EXISTS(${authority.sql})${liveCapacitySql})) `;
+  // Consortium sponsorships have no event of their own, so each event supplies the row's event. The join keeps
+  // every sponsorship that holds leads there, and `can_capture` says which may still scan; the join carries the
+  // full sponsorship policy; the authority CTE only narrows by stage to stay within D1's depth limit.
+  // CROSS JOIN keeps the few authorized sponsorships as the outer loop, so no other sponsorship is read.
+  const eventSource = filter.idsSql ? `(${filter.idsSql}) audience_event` : "events audience_event";
+  const eventFilter = filter.idsSql ? "" : `${filter.sql} AND `;
   return db
-    .prepare(`${withSql}SELECT s.id,s.event_id,COALESCE(o.name,s.non_member_name,'Sponsor') AS name
-    FROM sponsorships s LEFT JOIN organizations o ON o.id=s.organization_id
-    WHERE ${filter.sql}${activeFilter} AND ${authoritySql}
-    ORDER BY s.event_id,name,s.id`)
+    .prepare(`${withSql}SELECT s.id,audience_event.id AS event_id,COALESCE(o.name,s.non_member_name,'Sponsor') AS name,
+      (${activeLeadSponsorOfEventSql("s", "audience_event.id")}) AS can_capture
+    FROM authorized_event_sponsors authorized CROSS JOIN sponsorships s ON s.id=authorized.id
+    CROSS JOIN ${eventSource} ON ${activeLeadSponsorOfEventSql("s", "audience_event.id", "read")}
+    LEFT JOIN organizations o ON o.id=s.organization_id
+    WHERE ${eventFilter}1
+    ORDER BY audience_event.id,name,s.id`)
     .bind(
-      ...filter.bindings,
+      ...(filter.withSql ? filter.bindings : []),
+      ...candidates.bindings,
       ...authority.bindings,
       ...(organizationCapture ? [viewer.userId] : []),
       ...(designatedContact ? [viewer.userId] : []),
+      ...(filter.withSql ? [] : filter.bindings),
     );
+}
+
+/**
+ * Every sponsorship that could pass the lead policy for this viewer: one their own sponsor grant names, one of
+ * an organization they act for (staff and primary contacts), or one whose contact mailbox is theirs. A viewer
+ * with a lead grant over every sponsorship, and a non-user caller, keeps every active sponsorship. This is
+ * only a superset that keeps the policy off unrelated rows; the policy itself still decides each candidate.
+ */
+function viewerLeadSponsorCandidates(actor: AuthAdmin): { sql: string; bindings: unknown[] } {
+  if (!isUserBackedAuthAdmin(actor))
+    return { sql: "SELECT id FROM sponsorships WHERE pipeline_stage='active'", bindings: [] };
+  const permissions = JSON.stringify(SPONSOR_LEAD_PERMISSIONS);
+  // Unary `+` drops the column's TEXT affinity, which would otherwise keep the mailbox index from seeking.
+  const mailbox = "lower(trim(s.contact_email))";
+  return {
+    sql: `SELECT role.context_id AS id FROM user_roles role
+        WHERE role.user_id=? AND role.context_type='event_sponsor'
+      UNION SELECT grant_row.context_id FROM permission_grants grant_row
+        WHERE grant_row.user_id=? AND grant_row.context_type='event_sponsor'
+      UNION SELECT s.id FROM identities identity CROSS JOIN sponsorships s ON s.organization_id=identity.organization_id
+        WHERE identity.user_id=? AND identity.organization_id IS NOT NULL
+      UNION SELECT s.id FROM (
+          SELECT normalized_email FROM users WHERE id=? AND normalized_email IS NOT NULL
+          UNION SELECT normalized_email FROM user_emails WHERE user_id=?
+        ) mailbox CROSS JOIN sponsorships s
+        ON s.contact_email IS NOT NULL AND ${mailbox}=+mailbox.normalized_email
+      UNION SELECT s.id FROM (SELECT 1 WHERE
+          EXISTS(SELECT 1 FROM user_roles role JOIN role_permissions role_permission ON role_permission.role_id=role.role_id
+            WHERE role.user_id=? AND role.context_type IS NULL AND role.context_id IS NULL
+              AND role_permission.permission IN (SELECT value FROM json_each(?)))
+          OR EXISTS(SELECT 1 FROM permission_grants grant_row
+            WHERE grant_row.user_id=? AND grant_row.context_type IS NULL AND grant_row.context_id IS NULL
+              AND grant_row.permission IN (SELECT value FROM json_each(?)))
+        ) lead_grant_over_all CROSS JOIN sponsorships s WHERE s.pipeline_stage='active'`,
+    bindings: [actor.id, actor.id, actor.id, actor.id, actor.id, actor.id, permissions, actor.id, permissions],
+  };
 }
 
 export async function readEventAudienceAccess(db: DatabaseLike, viewer: EventAudienceViewer, eventIds: string[]) {

@@ -105,3 +105,22 @@ export const sponsorLeadConfirmationRouteSchema = {
     ...authErrors({ notFound: "Captured lead not found" }),
   },
 };
+
+import { sponsorLeadNoteRequestSchema, sponsorLeadNoteResponseSchema } from "./event-sponsor-lead-list";
+export const sponsorLeadNotePutRouteSchema = {
+  ...requiresSession(),
+  tags: ["Events"],
+  summary: "Replace the sponsor team's note about one lead within the caller's scope",
+  request: {
+    params: eventSlugParamsSchema.extend({ sponsorId: databaseIdSchema, leadId: databaseIdSchema }),
+    body: { content: { "application/json": { schema: sponsorLeadNoteRequestSchema } }, required: true },
+  },
+  responses: {
+    ...ok("Saved lead note", sponsorLeadNoteResponseSchema),
+    ...authErrors({
+      badRequest: "Invalid note",
+      notFound: "Current consenting lead not found",
+      conflict: "Lead changes are closed for this event",
+    }),
+  },
+};

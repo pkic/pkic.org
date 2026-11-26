@@ -354,7 +354,11 @@ describe("group event management routes", () => {
 
     const initial = await request(fixture.ownerLeaderToken, ownerPath);
     expect(initial.status, await initial.clone().text()).toBe(200);
-    expect(await initial.json()).toEqual({ tiers: [] });
+    const noConsortiumTiers = ["Diamond", "Titanium", "Platinum", "Gold", "Silver", "Bronze"].map((tier) => ({
+      tier,
+      capturesLeads: false,
+    }));
+    expect(await initial.json()).toEqual({ tiers: [], consortiumTiers: noConsortiumTiers });
 
     const denied = await request(fixture.granteeLeaderToken, granteePath);
     expect(denied.status).toBe(403);
@@ -366,6 +370,7 @@ describe("group event management routes", () => {
           { tierName: "Leader", hasAttendeeDataAccess: true },
           { tierName: "Supporter", hasAttendeeDataAccess: false },
         ],
+        consortiumLeadTiers: [],
       }),
     });
     expect(saved.status, await saved.clone().text()).toBe(200);
@@ -374,6 +379,7 @@ describe("group event management routes", () => {
         { tierName: "Leader", hasAttendeeDataAccess: true },
         { tierName: "Supporter", hasAttendeeDataAccess: false },
       ],
+      consortiumTiers: noConsortiumTiers,
     });
 
     await grantResourceToGroup(env.DB, fixture.administrator, fixture.ownerGroupId, "event", created.id, {
@@ -382,11 +388,12 @@ describe("group event management routes", () => {
     });
     const delegated = await request(fixture.granteeLeaderToken, granteePath, {
       method: "PUT",
-      body: JSON.stringify({ tiers: [{ tierName: "Partner", hasAttendeeDataAccess: true }] }),
+      body: JSON.stringify({ tiers: [{ tierName: "Partner", hasAttendeeDataAccess: true }], consortiumLeadTiers: [] }),
     });
     expect(delegated.status, await delegated.clone().text()).toBe(200);
     expect(await delegated.json()).toEqual({
       tiers: [{ tierName: "Partner", hasAttendeeDataAccess: true }],
+      consortiumTiers: noConsortiumTiers,
     });
   });
 

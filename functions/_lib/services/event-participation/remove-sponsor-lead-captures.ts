@@ -6,7 +6,10 @@ import { guardPermissionDatabase } from "../../auth/permissions";
 import { AppError } from "../../errors";
 import { nowIso } from "../../utils/time";
 import { auditActorIdentityId } from "../audit-actor";
-import { activeEventSponsorSql, sponsorLeadViewerPredicateSql } from "../../auth/sponsor-organization-lead-access";
+import {
+  activeLeadSponsorOfEventSql,
+  sponsorLeadViewerPredicateSql,
+} from "../../auth/sponsor-organization-lead-access";
 import { sponsorLeadPermissionBindings, sponsorLeadPermissionSql } from "./lead-scope";
 import { scannerCaptureOpenForEventSql } from "./scanner-upload-receipts";
 
@@ -48,8 +51,8 @@ export async function removeSponsorLeadCaptures(
         request_hash=lower(hex(randomblob(32)))
       WHERE id IN (SELECT attempt.id FROM event_scan_attempts attempt
       JOIN event_sponsor_leads lead ON lead.event_id=attempt.event_id AND lead.sponsor_id=attempt.sponsor_id AND lead.user_id=attempt.user_id
-      JOIN sponsorships sponsor ON sponsor.id=lead.sponsor_id AND sponsor.event_id=lead.event_id
-      WHERE lead.id=? AND lead.event_id=? AND lead.sponsor_id=? AND ${activeEventSponsorSql("sponsor")}
+      JOIN sponsorships sponsor ON sponsor.id=lead.sponsor_id
+      WHERE lead.id=? AND lead.event_id=? AND lead.sponsor_id=? AND ${activeLeadSponsorOfEventSql("sponsor", "lead.event_id", "read")}
       AND attempt.action='lead' AND attempt.outcome='eligible' AND ${scannerCaptureOpenForEventSql("lead.event_id")}
       AND (${scopeSql}) ${ownSql})`)
       .bind(leadId, eventId, sponsorId, ...scopeValues, ...(scope === "mine" ? [actorUserId] : [])),

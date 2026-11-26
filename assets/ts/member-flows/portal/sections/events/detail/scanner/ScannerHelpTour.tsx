@@ -101,7 +101,7 @@ export function ScannerHelpTour({
       id: "results",
       target: '[data-scanner-help="results"]',
       title: "Check the last few results",
-      body: "The last five results stay here as checks, warning marks, or crosses. Scanning resumes automatically; there is no Next button after a live scan.",
+      body: "Your last five scans, oldest on the left: a check means accepted, an i means it needs attention, and a cross means refused. Tap a mark to see what happened. After an accepted scan, scanning resumes on its own; after any other result, choose Next to scan the next badge.",
     },
     {
       id: "switch",

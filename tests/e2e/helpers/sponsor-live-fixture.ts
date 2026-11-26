@@ -105,9 +105,9 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
   expect(eventResponse.status()).toBe(200);
   const event = eventDetailResponseSchema.parse(await eventResponse.json()).event;
   if (!("ownerGroupId" in event) || !event.ownerGroupId) throw new Error("Seeded event must have a group workspace");
-  const tiers = await staff.request.put(`${eventApi}/sponsors/tiers`, {
-    data: eventSponsorTiersReplaceSchema.parse({ tiers: [{ tierName: "Leader", hasAttendeeDataAccess: true }] }),
-  });
+  const leader = { tierName: "Leader", hasAttendeeDataAccess: true };
+  const tierSettings = eventSponsorTiersReplaceSchema.parse({ tiers: [leader], consortiumLeadTiers: [] });
+  const tiers = await staff.request.put(`${eventApi}/sponsors/tiers`, { data: tierSettings });
   expect(tiers.status()).toBe(200);
   eventSponsorTiersResponseSchema.parse(await tiers.json());
   const created = await staff.request.post("/api/v1/sponsors", {

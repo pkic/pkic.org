@@ -311,6 +311,30 @@
   .pk-fast-scanner__trail li[data-tone="unknown"] {
     color: var(--pk-danger-ink);
   }
+  .pk-fast-scanner__trail button {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+  }
+  .pk-fast-scanner__trail button:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: var(--pk-1);
+  }
+  .pk-fast-scanner__trail button[aria-pressed="true"] {
+    background: color-mix(in oklab, currentColor 20%, transparent);
+  }
+  .pk-fast-scanner__trail-detail {
+    margin: 0 0 var(--pk-3);
+    text-align: center;
+    font-size: var(--pk-text-sm);
+  }
   .pk-fast-scanner__trail .pk-icon {
     --pk-icon-stroke: var(--pk-icon-stroke-strong);
   }

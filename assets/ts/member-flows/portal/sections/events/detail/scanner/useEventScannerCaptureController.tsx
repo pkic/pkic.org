@@ -192,6 +192,7 @@ export function useEventScannerCaptureController({
     confirmation: leadConfirmation,
     showReceipt,
     clearConfirmation,
+    updateConfirmationNote,
   } = useSponsorLeadConfirmation({
     action,
     slug,
@@ -511,6 +512,7 @@ export function useEventScannerCaptureController({
       captureStatus,
       failed,
       leadConfirmation,
+      updateConfirmationNote,
       form,
       busy,
       capture,

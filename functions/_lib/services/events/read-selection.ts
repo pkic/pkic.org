@@ -7,7 +7,7 @@ export type EventReadSelection = readonly string[] | { slug: string } | { pages:
 export function eventReadSelectionSql(
   column: string,
   selection: EventReadSelection,
-): { sql: string; bindings: unknown[]; withSql?: string } {
+): { sql: string; bindings: unknown[]; withSql?: string; idsSql?: string } {
   if ("pages" in selection) {
     const pages = selection.pages.map((page, index) => ({
       page,
@@ -20,6 +20,11 @@ export function eventReadSelectionSql(
       // into D1's expression-depth limit.
       withSql: pages.map(({ name, sql }) => `${name} AS MATERIALIZED (${sql.pageSql})`).join(", "),
       sql: pages.length ? `${column} IN (${pages.map(({ name }) => `SELECT id FROM ${name}`).join(" UNION ")})` : "0",
+      // The same page IDs as a row source. Reading them in FROM rather than through `IN` keeps a deep join
+      // condition from stacking on the page query's own depth.
+      idsSql: pages.length
+        ? pages.map(({ name }) => `SELECT id FROM ${name}`).join(" UNION ")
+        : "SELECT NULL AS id WHERE 0",
       bindings: pages.flatMap(({ page, sql }) => [...sql.bindings, page.limit, page.offset]),
     };
   }

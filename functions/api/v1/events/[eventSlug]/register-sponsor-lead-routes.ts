@@ -8,9 +8,10 @@ import {
   SponsorLeadDelete,
   SponsorLeadCapturesGet,
   SponsorLeadConfirmationGet,
+  SponsorLeadNotePut,
 } from "./lead-list";
 
-type SponsorLeadRouter = Pick<typeof import("./router").openapi, "get" | "post" | "delete">;
+type SponsorLeadRouter = Pick<typeof import("./router").openapi, "get" | "post" | "put" | "delete">;
 
 /** Sponsor lead capture, review and export, behind the event router's management middleware. */
 export function registerSponsorLeadRoutes(openapi: SponsorLeadRouter): void {
@@ -22,5 +23,6 @@ export function registerSponsorLeadRoutes(openapi: SponsorLeadRouter): void {
   openapi.delete("/sponsors/:sponsorId/leads/:leadId", SponsorLeadDelete);
   openapi.get("/sponsors/:sponsorId/leads/confirmations/:operationId", SponsorLeadConfirmationGet);
   openapi.get("/sponsors/:sponsorId/leads/:leadId/captures", SponsorLeadCapturesGet);
+  openapi.put("/sponsors/:sponsorId/leads/:leadId/note", SponsorLeadNotePut);
   openapi.post("/sponsors/:sponsorId/leads", EventSponsorLeadCreate);
 }

@@ -142,12 +142,32 @@ describe("admin event configuration OpenAPI boundaries", () => {
 
     const tiersPut = await call(token, "/api/v1/events/pqc-2026/sponsors/tiers", {
       method: "PUT",
-      body: JSON.stringify({ tiers: [{ tierName: "Leader", hasAttendeeDataAccess: true }] }),
+      body: JSON.stringify({
+        tiers: [{ tierName: "Leader", hasAttendeeDataAccess: true }],
+        consortiumLeadTiers: ["Titanium"],
+      }),
     });
     expect(tiersPut.status).toBe(200);
-    expect(eventSponsorTiersResponseSchema.parse(await tiersPut.json()).tiers).toEqual([
-      { tierName: "Leader", hasAttendeeDataAccess: true },
-    ]);
+    const savedTiers = eventSponsorTiersResponseSchema.parse(await tiersPut.json());
+    expect(savedTiers.tiers).toEqual([{ tierName: "Leader", hasAttendeeDataAccess: true }]);
+    expect(savedTiers.consortiumTiers).toEqual(
+      ["Diamond", "Titanium", "Platinum", "Gold", "Silver", "Bronze"].map((tier) => ({
+        tier,
+        capturesLeads: tier === "Titanium",
+      })),
+    );
+
+    const unknownTier = await call(token, "/api/v1/events/pqc-2026/sponsors/tiers", {
+      method: "PUT",
+      body: JSON.stringify({ tiers: [], consortiumLeadTiers: ["Unobtainium"] }),
+    });
+    expect(unknownTier.status).toBe(409);
+    expect(apiErrorPayloadSchema.parse(await unknownTier.json()).error.code).toBe("CONSORTIUM_TIER_UNAVAILABLE");
+    const unchanged = await call(token, "/api/v1/events/pqc-2026/sponsors/tiers");
+    expect(eventSponsorTiersResponseSchema.parse(await unchanged.json()).consortiumTiers).toContainEqual({
+      tier: "Titanium",
+      capturesLeads: true,
+    });
 
     const role = await call(token, "/api/v1/events/pqc-2026/roles", {
       method: "POST",
@@ -170,7 +190,10 @@ describe("admin event configuration OpenAPI boundaries", () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const reader = await createEventStaff("events:read", eventId);
     const writer = await createEventStaff("events:write", eventId);
-    const body = JSON.stringify({ tiers: [{ tierName: "Leader", hasAttendeeDataAccess: true }] });
+    const body = JSON.stringify({
+      tiers: [{ tierName: "Leader", hasAttendeeDataAccess: true }],
+      consortiumLeadTiers: [],
+    });
 
     expect((await call(reader.token, "/api/v1/events/pqc-2026/sponsors/tiers")).status).toBe(200);
     expect((await call(reader.token, "/api/v1/events/pqc-2026/sponsors/tiers", { method: "PUT", body })).status).toBe(
@@ -370,7 +393,10 @@ describe("admin event configuration OpenAPI boundaries", () => {
   it("rolls back event sponsor tiers and audit when the scoped write grant is revoked before commit", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const writer = await createEventStaff("events:write", eventId);
-    const originalBody = JSON.stringify({ tiers: [{ tierName: "Leader", hasAttendeeDataAccess: true }] });
+    const originalBody = JSON.stringify({
+      tiers: [{ tierName: "Leader", hasAttendeeDataAccess: true }],
+      consortiumLeadTiers: [],
+    });
     expect(
       (
         await call(writer.token, "/api/v1/events/pqc-2026/sponsors/tiers", {
@@ -395,7 +421,7 @@ describe("admin event configuration OpenAPI boundaries", () => {
     );
     const response = await callWithDatabase(writer.token, "/api/v1/events/pqc-2026/sponsors/tiers", racingDb, {
       method: "PUT",
-      body: JSON.stringify({ tiers: [{ tierName: "Partner", hasAttendeeDataAccess: false }] }),
+      body: JSON.stringify({ tiers: [{ tierName: "Partner", hasAttendeeDataAccess: false }], consortiumLeadTiers: [] }),
     });
     expect(response.status).toBe(409);
     expect(apiErrorPayloadSchema.parse(await response.json()).error.code).toBe(

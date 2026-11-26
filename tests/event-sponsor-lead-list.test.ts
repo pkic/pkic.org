@@ -734,7 +734,7 @@ describe("sponsor live lead viewing through the mounted API", () => {
     ]);
     await grant("agenda:leads_export");
     const csv = await (await request(`/sponsors/${sponsorId}/leads.csv`)).text();
-    expect(csv.split("\r\n")[0]).toBe("Name,Email,Organization,Title,Captured at");
+    expect(csv.split("\r\n")[0]).toBe("Name,Email,Organization,Title,Captured at,Note");
     expect(csv).toContain(",lead.person@gmail.com,Selected organization,,");
     expect(csv).not.toContain(person.id);
     expect(csv).not.toContain(operator);

@@ -460,11 +460,11 @@ test.describe("Portal management browser-verification pass", () => {
     const tierName = `E2E Verify Tier ${Date.now()}`;
 
     await page.goto(`/portal/#/events/${EVENT_SLUG}/settings/sponsors`);
-    await expect(page.getByText("Choose which sponsor tiers can access attendee data for this event.")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Sponsor tiers" })).toBeVisible();
     await expect(page.getByRole("textbox", { name: "Tier name" })).toHaveCount(0);
     async function editTiers() {
-      await page.getByRole("button", { name: "Sponsor tier actions" }).click();
-      await page.getByRole("menuitem", { name: "Edit settings" }).click();
+      await page.getByRole("button", { name: "Event sponsor actions" }).click();
+      await page.getByRole("menuitem", { name: "Edit sponsor tiers" }).click();
     }
     await editTiers();
     const tierRows = page.getByRole("group", { name: /^Tier \d+$/ });

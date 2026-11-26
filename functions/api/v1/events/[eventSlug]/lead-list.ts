@@ -77,3 +77,10 @@ export const SponsorLeadCapturesGet = openApiRoute(sponsorLeadCapturesRouteSchem
     await listSponsorLeadCaptures(db, event.id, data.params.sponsorId, data.params.leadId, actor, data.query),
   );
 });
+import { sponsorLeadNotePutRouteSchema } from "../../../../../assets/shared/schemas/route-contracts-sponsor-leads";
+import { replaceSponsorLeadNote } from "../../../../_lib/services/event-participation/lead-note";
+export const SponsorLeadNotePut = openApiRoute(sponsorLeadNotePutRouteSchema, async (c: AdminContext, data) => {
+  markResponseSensitive(c);
+  const { db, event, actor } = await sponsorLeadContext(c, data.params.eventSlug, data.params.sponsorId);
+  return json(await replaceSponsorLeadNote(db, event.id, data.params.sponsorId, data.params.leadId, actor, data.body));
+});

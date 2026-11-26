@@ -400,9 +400,17 @@ export const eventSponsorTierSchema = z.object({
   hasAttendeeDataAccess: z.boolean(),
 });
 
+/** A consortium tier the catalog offers, and whether its sponsors capture leads at this event. */
+export const eventConsortiumLeadTierSchema = z.object({
+  tier: z.string(),
+  capturesLeads: z.boolean(),
+});
+
 export const eventSponsorTiersReplaceSchema = z
   .object({
     tiers: z.array(eventSponsorTierSchema).max(50),
+    /** Consortium tiers whose active sponsors capture leads at this event; the rest do not. */
+    consortiumLeadTiers: z.array(trimmedString(1, 100)).max(20),
   })
   .superRefine((value, ctx) => {
     addDuplicateStringIssues(value.tiers, ctx, {
@@ -410,16 +418,23 @@ export const eventSponsorTiersReplaceSchema = z
       path: (index) => ["tiers", index, "tierName"],
       label: "Sponsor tier",
     });
+    addDuplicateStringIssues(value.consortiumLeadTiers, ctx, {
+      value: (tier) => tier,
+      path: (index) => ["consortiumLeadTiers", index],
+      label: "Consortium tier",
+    });
   });
 
 export const eventSponsorTiersResponseSchema = z.object({
   tiers: z.array(eventSponsorTierSchema),
+  /** Every active consortium tier, highest first, plus any tier this event still admits after the catalog dropped it. */
+  consortiumTiers: z.array(eventConsortiumLeadTierSchema),
 });
 
 export const eventSponsorTiersGetRouteSchema = {
   ...requiresPermissions("events:read"),
   tags: ["Sponsorships"],
-  summary: "View per-event sponsor attendee-data-access config",
+  summary: "View per-event sponsor attendee-data access and consortium lead capture",
   request: { params: eventSlugParamsSchema },
   responses: {
     "200": {
@@ -434,7 +449,7 @@ export const eventSponsorTiersGetRouteSchema = {
 export const eventSponsorTiersPutRouteSchema = {
   ...requiresPermissions("events:write"),
   tags: ["Sponsorships"],
-  summary: "Replace per-event sponsor attendee-data-access config",
+  summary: "Replace per-event sponsor attendee-data access and consortium lead capture",
   request: {
     params: eventSlugParamsSchema,
     body: { content: { "application/json": { schema: eventSponsorTiersReplaceSchema } }, required: true },
@@ -447,6 +462,7 @@ export const eventSponsorTiersPutRouteSchema = {
     "400": { description: "Invalid sponsor tier configuration." },
     "401": { description: "Staff authorization required." },
     "404": { description: "Event not found." },
+    "409": { description: "A chosen consortium tier is no longer offered." },
   },
 };
 

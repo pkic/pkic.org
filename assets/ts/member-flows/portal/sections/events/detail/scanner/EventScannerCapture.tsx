@@ -12,6 +12,7 @@ import type { EventScannerProps } from "./EventScanner";
 import { useEventScannerCaptureController } from "./useEventScannerCaptureController";
 import { useEffect } from "preact/hooks";
 import "./EventScanner.css";
+import { ScannerLeadNote } from "./ScannerLeadNote";
 
 export function EventScannerCapture(props: EventScannerProps) {
   const { workspace, captureState, deviceState, readiness, controls, status } = useEventScannerCaptureController(props);
@@ -39,6 +40,7 @@ export function EventScannerCapture(props: EventScannerProps) {
     captureStatus,
     failed,
     leadConfirmation,
+    updateConfirmationNote,
     form,
     busy,
     capture,
@@ -112,6 +114,17 @@ export function EventScannerCapture(props: EventScannerProps) {
   const leadSetup = action === "lead" && !fastMode && !leadRunStarted;
   const immersiveLeadSetup = leadSetup && !collectorContext && !offline;
   const leadStatusNeeded = action !== "lead" || (!result && (offline || pending > 0));
+  const shownLeadConfirmation = leadConfirmation?.operationId === result?.operationId ? leadConfirmation : null;
+  const leadNote =
+    shownLeadConfirmation && sponsorId ? (
+      <ScannerLeadNote
+        slug={slug}
+        sponsorId={sponsorId}
+        confirmation={shownLeadConfirmation}
+        onPause={capturePause.setPaused}
+        onSaved={updateConfirmationNote}
+      />
+    ) : null;
   useEffect(() => {
     if (immersiveLeadSetup) scannerShell.current?.querySelector<HTMLButtonElement>("button")?.focus();
   }, [immersiveLeadSetup, scannerShell]);
@@ -173,7 +186,8 @@ export function EventScannerCapture(props: EventScannerProps) {
                     message,
                     pending,
                     status: captureStatus,
-                    leadConfirmation: leadConfirmation?.operationId === result?.operationId ? leadConfirmation : null,
+                    leadConfirmation: shownLeadConfirmation,
+                    leadNote,
                   }
                 : undefined
             }
@@ -287,7 +301,8 @@ export function EventScannerCapture(props: EventScannerProps) {
           needsAdvance={needsAdvance}
           failed={failed}
           leadConsentConfirmed={consentConfirmed}
-          leadConfirmation={leadConfirmation?.operationId === result?.operationId ? leadConfirmation : null}
+          leadConfirmation={shownLeadConfirmation}
+          leadNote={leadNote}
           onNextBadge={nextCollectionAttendee}
           exceptionRequest={exceptionRequest}
           onExceptionConfirm={onExceptionConfirm}

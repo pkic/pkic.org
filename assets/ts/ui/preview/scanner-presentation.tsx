@@ -5,6 +5,7 @@ import { ScannerDestinationTiles } from "../../member-flows/portal/sections/even
 import "../../member-flows/portal/sections/events/detail/scanner/EventScanner.css";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { FastScannerView } from "../../member-flows/portal/sections/events/detail/scanner/FastScannerView";
+import { ScannerLeadNote } from "../../member-flows/portal/sections/events/detail/scanner/ScannerLeadNote";
 import { scannerImmersiveLifecycle } from "../../member-flows/portal/sections/events/detail/scanner/immersive-scanner";
 import { useHashQueryParam } from "../../hooks/useHashQueryParam";
 import type { PreviewSection } from "./PreviewShell";
@@ -52,6 +53,17 @@ function ScannerPresentationExample() {
         });
   const [preview, setPreview] = useState(false);
   const [recent, setRecent] = useState(false);
+  const [leadNote, setLeadNote] = useState<string | null>(null);
+  const leadConfirmation =
+    role === "lead" && feedback === "eligible"
+      ? {
+          leadId: "11111111-1111-4111-8111-000000000101",
+          name: "Alex Example",
+          title: "Security architect",
+          organization: "Aster Trust",
+          note: leadNote,
+        }
+      : null;
   const shell = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (presentation === "fullscreen" && shell.current)
@@ -98,6 +110,18 @@ function ScannerPresentationExample() {
         onExit={() => setPresentation("embedded")}
         onPresentation={() => setPresentation(presentation === "fullscreen" ? "embedded" : "fullscreen")}
         canRecordAttendance={role === "scan"}
+        leadConfirmation={leadConfirmation}
+        leadNote={
+          leadConfirmation && (
+            <ScannerLeadNote
+              slug="gallery"
+              sponsorId="11111111-1111-4111-8111-000000000102"
+              confirmation={leadConfirmation}
+              onPause={() => {}}
+              onSaved={(_leadId, note) => setLeadNote(note)}
+            />
+          )
+        }
       />
     </div>
   );

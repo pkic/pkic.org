@@ -6,6 +6,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { EventDetail } from "../../assets/ts/member-flows/portal/sections/events/types";
 import { GeneralTab } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/GeneralTab";
+import { eventSponsorTiersReplaceSchema } from "../../assets/shared/schemas/sponsorship-management";
 import { SponsorTiersTab } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/SponsorTiersTab";
 import { controlFor, typeInto } from "./helpers/labeled-control";
 
@@ -345,7 +346,9 @@ describe("admin event general settings", () => {
   it("keeps sponsor-tier actions hidden from an event reader", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => json({ tiers: [{ tierName: "Community", hasAttendeeDataAccess: false }] })),
+      vi.fn(async () =>
+        json({ tiers: [{ tierName: "Community", hasAttendeeDataAccess: false }], consortiumTiers: [] }),
+      ),
     );
 
     const container = mount(<SponsorTiersTab slug="portal-workshop" canWrite={false} />);
@@ -356,7 +359,72 @@ describe("admin event general settings", () => {
     expect(container.textContent).toContain("Community");
     expect(container.textContent).toContain("No attendee data access");
     expect(container.textContent).not.toContain("+ Add tier");
-    expect(container.textContent).not.toContain("Sponsor tier actions");
+    expect(container.querySelector('button[aria-label="Event sponsor actions"]')).toBeNull();
+  });
+
+  it("edits the sponsor tiers from the event sponsors panel", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) =>
+        String(input).startsWith("/api/v1/sponsors")
+          ? json({ sponsorships: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } })
+          : json({ tiers: [], consortiumTiers: [{ tier: "Titanium", capturesLeads: false }] }),
+      ),
+    );
+
+    const container = mount(<SponsorTiersTab slug="portal-workshop" eventId="event-1" canWrite />);
+    await settle();
+    await settle();
+    const header = container.querySelector(".pk-panel__header")!;
+    expect(header.textContent).toContain("Event sponsors");
+    expect(header.querySelector('button[aria-label="Event sponsor actions"]')).not.toBeNull();
+
+    await beginRecordEdit(container, "Event sponsor actions", "Edit sponsor tiers");
+    expect(container.querySelector('input[name="consortiumLeadTiers"][value="Titanium"]')).not.toBeNull();
+  });
+
+  it("saves the consortium tiers that scan leads with the attendee-data tiers", async () => {
+    const puts: unknown[] = [];
+    let consortiumTiers = [
+      { tier: "Diamond", capturesLeads: false },
+      { tier: "Titanium", capturesLeads: false },
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PUT") {
+          const body = eventSponsorTiersReplaceSchema.parse(JSON.parse(String(init.body)));
+          puts.push(body);
+          consortiumTiers = consortiumTiers.map((item) => ({
+            ...item,
+            capturesLeads: body.consortiumLeadTiers.includes(item.tier),
+          }));
+        }
+        return json({ tiers: [], consortiumTiers });
+      }),
+    );
+
+    const container = mount(<SponsorTiersTab slug="portal-workshop" canWrite />);
+    await settle();
+    await settle();
+    expect(container.textContent).toContain("Consortium lead scanningNo consortium tiers");
+
+    await beginRecordEdit(container, "Event sponsor actions", "Edit sponsor tiers");
+    const titanium = [...container.querySelectorAll<HTMLInputElement>('input[name="consortiumLeadTiers"]')].find(
+      (input) => input.value === "Titanium",
+    )!;
+    await act(async () => titanium.click());
+    const save = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Save sponsor tiers",
+    )!;
+    await act(async () => {
+      save.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await settle();
+
+    expect(puts).toEqual([{ tiers: [], consortiumLeadTiers: ["Titanium"] }]);
+    expect(container.textContent).toContain("Consortium lead scanningTitanium");
   });
 
   it("reports a refused sponsor-tier save as a failure, not as a mild caution", async () => {
@@ -369,7 +437,7 @@ describe("admin event general settings", () => {
             headers: { "content-type": "application/json" },
           });
         }
-        return json({ tiers: [{ tierName: "Community", hasAttendeeDataAccess: false }] });
+        return json({ tiers: [{ tierName: "Community", hasAttendeeDataAccess: false }], consortiumTiers: [] });
       }),
     );
 
@@ -377,7 +445,7 @@ describe("admin event general settings", () => {
     await settle();
     await settle();
 
-    await beginRecordEdit(container, "Sponsor tier actions");
+    await beginRecordEdit(container, "Event sponsor actions", "Edit sponsor tiers");
     // Each draft row's removal names the row it removes.
     expect([...container.querySelectorAll("button")].map((button) => button.textContent)).toContain("Remove tier 1");
     const save = [...container.querySelectorAll("button")].find(

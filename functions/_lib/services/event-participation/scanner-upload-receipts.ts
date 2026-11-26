@@ -12,6 +12,7 @@ import { nowIso } from "../../utils/time";
 import { hashBadgeCredential } from "./badge-hash";
 import { scanAttemptAcceptsCapturedValueSql } from "./scan-attempt-capture";
 import { eventReadIdSql, type EventReadSelection } from "../events/selection";
+import { LEAD_SPONSOR_OF_EVENT_SQL } from "../../auth/sponsor-organization-lead-access";
 
 interface ScannerUploadReceiptRow {
   request_hash: string;
@@ -143,7 +144,7 @@ export async function receiveScannerUpload(
     const unknownAttempt = db
       .prepare(
         `INSERT INTO event_scan_attempts(id,event_id,occurrence_id,room_id,sponsor_id,operator_user_id,device_id,operation_id,request_hash,outcome,reason,action,observed_at,created_at)
-      SELECT ?,?,(SELECT id FROM event_agenda_occurrences WHERE id=? AND event_id=?),(SELECT id FROM event_agenda_rooms WHERE id=? AND event_id=?),(SELECT id FROM sponsorships WHERE id=? AND event_id=?),?,?,?,?, 'unknown','unknown_credential',?,?,?
+      SELECT ?,?,(SELECT id FROM event_agenda_occurrences WHERE id=? AND event_id=?),(SELECT id FROM event_agenda_rooms WHERE id=? AND event_id=?),(${LEAD_SPONSOR_OF_EVENT_SQL}),?,?,?,?, 'unknown','unknown_credential',?,?,?
       WHERE NOT EXISTS(SELECT 1 FROM event_scan_attempts WHERE operation_id=?) ON CONFLICT(operation_id) DO NOTHING`,
       )
       .bind(
