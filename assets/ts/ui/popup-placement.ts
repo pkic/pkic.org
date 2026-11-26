@@ -27,6 +27,8 @@ export interface PopupPosition {
   top: number;
   left: number;
   minWidth: number;
+  /** Set only for a popup that keeps its anchor visible and fits on neither side: it scrolls on the roomier side. */
+  maxHeight?: number;
 }
 
 export function measurePopupPosition(
@@ -35,6 +37,7 @@ export function measurePopupPosition(
   align: "start" | "end" = "start",
   side: "bottom" | "top" | "right" | "left" = "bottom",
   spacing?: PopupSpacing,
+  keepAnchorVisible = false,
 ): PopupPosition {
   const horizontal = side === "right" || side === "left";
   const gap = spacing?.gap ?? (horizontal ? 8 : 4);
@@ -45,20 +48,35 @@ export function measurePopupPosition(
   const viewportBottom = viewportTop + (viewport?.height ?? window.innerHeight);
   const viewportRight = viewportLeft + (viewport?.width ?? window.innerWidth);
 
-  const fitsBelow = anchor.bottom + gap + popup.height <= viewportBottom - margin;
-  const fitsAbove = anchor.top - gap - popup.height >= viewportTop + margin;
-  const above = anchor.top - gap - popup.height;
+  const roomBelow = viewportBottom - margin - (anchor.bottom + gap);
+  const roomAbove = anchor.top - gap - (viewportTop + margin);
+  const fitsBelow = popup.height <= roomBelow;
+  const fitsAbove = popup.height <= roomAbove;
+  /*
+   * A phone keyboard leaves a short visible viewport, often too short for a field's matches on either side.
+   * Clamping them into the viewport laid them over the field, so the reader could no longer see what they
+   * typed. A popup that keeps its anchor visible takes the roomier side and scrolls there instead. Cards and
+   * tours that point at a large subject keep overlapping it: capped beside it they would shrink to nothing.
+   */
+  const maxHeight =
+    keepAnchorVisible && !horizontal && !fitsBelow && !fitsAbove ? Math.max(0, roomAbove, roomBelow) : undefined;
+  const height = maxHeight ?? popup.height;
+  const above = anchor.top - gap - height;
   const below = anchor.bottom + gap;
   // A popup that prefers the top opens above its anchor, as a reaction bar does, and drops below only without room.
   const top = horizontal
     ? anchor.top + (spacing?.crossAxis ?? 0)
-    : side === "top"
-      ? fitsAbove || !fitsBelow
+    : maxHeight !== undefined
+      ? roomAbove > roomBelow
         ? above
         : below
-      : !fitsBelow && fitsAbove
-        ? above
-        : below;
+      : side === "top"
+        ? fitsAbove || !fitsBelow
+          ? above
+          : below
+        : !fitsBelow && fitsAbove
+          ? above
+          : below;
 
   const preferred =
     side === "left"
@@ -75,9 +93,10 @@ export function measurePopupPosition(
   const left = Math.max(viewportLeft + margin, Math.min(preferred, viewportRight - popup.width - margin));
 
   return {
-    top: Math.max(viewportTop + margin, Math.min(top, viewportBottom - popup.height - margin)),
+    top: Math.max(viewportTop + margin, Math.min(top, viewportBottom - height - margin)),
     left,
     minWidth: horizontal ? 0 : anchor.width,
+    ...(maxHeight === undefined ? {} : { maxHeight }),
   };
 }
 
@@ -88,6 +107,13 @@ export function applyPopupPosition(popup: HTMLElement, position: PopupPosition):
   // Never narrower than what it hangs from, so a wide trigger does not
   // sprout a thin popup off one corner.
   popup.style.setProperty("min-width", `${position.minWidth}px`);
+  if (position.maxHeight === undefined) {
+    popup.style.removeProperty("max-height");
+    popup.style.removeProperty("overflow-y");
+  } else {
+    popup.style.setProperty("max-height", `${position.maxHeight}px`);
+    popup.style.setProperty("overflow-y", "auto");
+  }
 }
 
 /**
@@ -133,6 +159,7 @@ export function usePopupPlacement({
   beforePlace,
   afterPlace,
   matchAnchorWidth = true,
+  keepAnchorVisible = false,
 }: {
   open: boolean;
   anchorRef: RefObject<HTMLElement>;
@@ -157,6 +184,11 @@ export function usePopupPlacement({
   afterPlace?: () => void;
   /** Coach marks may point to a wide subject without becoming equally wide. */
   matchAnchorWidth?: boolean;
+  /**
+   * A field's matches never cover the field: without room on either side they scroll on the roomier side. Off
+   * for cards and tours, which may overlap a subject too large to sit beside.
+   */
+  keepAnchorVisible?: boolean;
 }): () => void {
   const gap = spacing?.gap;
   const crossAxis = spacing?.crossAxis;
@@ -171,11 +203,35 @@ export function usePopupPlacement({
       "min-width",
       `${!matchAnchorWidth || side === "right" || side === "left" ? 0 : anchorRect.width}px`,
     );
-    const position = measurePopupPosition(anchorRect, popup.getBoundingClientRect(), align, side, { gap, crossAxis });
+    // Measured at its natural height, not a cap from an earlier pass. The scroll that re-places the popup may be
+    // the reader's own scroll through it, and dropping the cap would reset that, so its position is kept.
+    const scrollTop = popup.scrollTop;
+    if (keepAnchorVisible) popup.style.removeProperty("max-height");
+    const position = measurePopupPosition(
+      anchorRect,
+      popup.getBoundingClientRect(),
+      align,
+      side,
+      { gap, crossAxis },
+      keepAnchorVisible,
+    );
     if (!matchAnchorWidth) position.minWidth = 0;
     applyPopupPosition(popup, position);
+    if (popup.scrollTop !== scrollTop) popup.scrollTop = scrollTop;
     afterPlace?.();
-  }, [align, anchorRef, popupRef, side, anchorPoint, gap, crossAxis, beforePlace, afterPlace, matchAnchorWidth]);
+  }, [
+    align,
+    anchorRef,
+    popupRef,
+    side,
+    anchorPoint,
+    gap,
+    crossAxis,
+    beforePlace,
+    afterPlace,
+    matchAnchorWidth,
+    keepAnchorVisible,
+  ]);
 
   useLayoutEffect(() => {
     if (!open) return;
