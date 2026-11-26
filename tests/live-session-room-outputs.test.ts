@@ -549,21 +549,41 @@ describe("live room auxiliary outputs", () => {
     expect(loaded.topQuestions?.config).toEqual({ count: 4 });
   });
 
-  it("starts a fresh room's lower thirds with the event's motion, and keeps an operator's choice after that", async () => {
+  it("starts a room's lower thirds with the event's motion, follows a later setup, and keeps an operator's choice after that", async () => {
     const now = new Date().toISOString();
-    await env.DB.prepare(
-      "INSERT INTO event_live_studio_setups(event_id,setup_json,created_at,updated_at) VALUES(?,?,?,?)",
-    )
-      .bind(f.eventId, JSON.stringify({ graphics: { lowerThird: { motion: "cut" } }, layouts: {} }), now, now)
-      .run();
+    const setUp = (motion: string) =>
+      env.DB.prepare(
+        "INSERT INTO event_live_studio_setups(event_id,setup_json,created_at,updated_at) VALUES(?,?,?,?) ON CONFLICT(event_id) DO UPDATE SET setup_json=excluded.setup_json",
+      )
+        .bind(f.eventId, JSON.stringify({ graphics: { lowerThird: { motion } }, layouts: {} }), now, now)
+        .run();
+    // The room reads the event's setup again on its periodic refresh.
+    const refreshRoom = () =>
+      runInDurableObject(f.room(), (room) =>
+        (room as unknown as { graphics: { refresh(): Promise<void> } }).graphics.refresh(),
+      );
+    await setUp("cut");
     const operator = await f.connect({ person: "operator" });
     const snapshot = await operator.next("room.snapshot");
     expect(snapshot.stage.lowerThirdMotion).toBe("cut");
     expect(snapshot.preview?.lowerThirdMotion).toBe("cut");
+    // The setup changes before anyone chose a motion here: the room follows it on its next refresh.
+    await setUp("animated");
+    await refreshRoom();
+    expect((await (await f.connect({ person: "operator" })).next("room.snapshot")).stage.lowerThirdMotion).toBe(
+      "animated",
+    );
+    await setUp("cut");
+    await refreshRoom();
     operator.send({ type: "preview.set", composition: { lowerThirdMotion: "animated" } });
     await operator.next("preview.changed", (m) => m.composition.lowerThirdMotion === "animated");
     const again = await f.connect({ person: "operator" });
     expect((await again.next("room.snapshot")).preview?.lowerThirdMotion).toBe("animated");
+    // Once an operator set Preview, a later setup no longer changes the room.
+    await setUp("animated");
+    await refreshRoom();
+    const later = await (await f.connect({ person: "operator" })).next("room.snapshot");
+    expect(later.stage.lowerThirdMotion).toBe("cut");
   });
 
   it("clears Preview to a blank frame in the Default scene, and a room screen to empty in its own scene", async () => {

@@ -380,9 +380,20 @@ export class LiveRoomStore {
     return saved ? liveAuxCompositionSchema.parse(saved) : EMPTY_LIVE_AUX_COMPOSITION;
   }
 
-  /** Whether anyone has set Preview or Program yet; a fresh room has neither. */
-  programStarted(): boolean {
-    return this.control("stage") !== null || this.control("preview") !== null;
+  /**
+   * Whether the room still takes its lower-third motion from the event's
+   * setup: no operator has set Preview, and Program's motion is the room's
+   * own default or the one it last took from the setup.
+   */
+  followsSetUpLowerThirdMotion(): boolean {
+    if (this.control("preview") !== null) return false;
+    return this.control("stage") === null || this.stage().lowerThirdMotion === this.control("setup:lowerThirdMotion");
+  }
+
+  /** Puts the setup's lower-third motion on Program and remembers it was the setup's. */
+  saveSetUpLowerThirdMotion(stage: LiveStage): void {
+    this.saveStage(stage);
+    this.saveControl("setup:lowerThirdMotion", stage.lowerThirdMotion);
   }
 
   /** Whether anyone composed this output yet, a take or the room loading its starting scene. */
