@@ -168,14 +168,17 @@ const column = (side: "left" | "right"): LiveOverlayLayoutElements => ({
  */
 const PRESETS: Record<LiveOverlayPreset, { name: string; elements: LiveOverlayLayoutElements }> = {
   /**
-   * The empty scene, drawn by an output that names no scene and by one that
-   * was cleared: the graphics that sit over a camera picture, each at its
-   * standard box, with nothing coming on. It holds no board and no
-   * background: a board that is on shows in a scene that includes it.
+   * The scene an output draws when it names no scene or was cleared: every
+   * graphic with a switch at its standard box, the boards included, with
+   * nothing coming on. Whatever the operator switches on shows here. Only
+   * the background and the QR code, which have no switch, are left out.
    */
   default: {
     name: "Default",
-    elements: only(FULL_FRAME, ["lowerThird", "schedule", "checkIn", ...ALWAYS]),
+    elements: only(
+      FULL_FRAME,
+      LIVE_OVERLAY_ELEMENTS.filter((element) => element !== "background" && element !== "qrCode"),
+    ),
   },
   /**
    * The top questions in a column on the right, on the background, coming on
@@ -260,7 +263,7 @@ const PRESETS: Record<LiveOverlayPreset, { name: string; elements: LiveOverlayLa
 /**
  * Every graphic with a switch at its standard box, the boards included:
  * what Add graphic and a new scene place a graphic at, and what previews and
- * tests place one in on its own. Default includes only some of them.
+ * tests place one in on its own. Default includes every one of them.
  */
 export const LIVE_OVERLAY_STANDARD_ELEMENTS: LiveOverlayLayoutElements = sharing(FULL_FRAME);
 

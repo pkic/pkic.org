@@ -45,6 +45,18 @@ const PANEL = [
   ["Eli Specimen-Okafor", "Specimen Systems"],
   ["Fay Moderator", "PKI Consortium"],
 ] as const;
+/** Up next in Break across three rooms, streamed from the second. */
+function breakAcrossRooms(): LiveRoomState {
+  const state = breakWith(1);
+  const schedule = state.stage.schedule!;
+  const [room] = schedule.rooms;
+  const rooms = [
+    { name: "Main hall", title: "Migrating a national PKI to post-quantum certificates" },
+    { name: "Exhibition theater", title: "Hybrid certificates in practice" },
+    { name: "Room 104A", title: "Inventorying cryptography across a bank" },
+  ].map(({ name, title }, roomIndex) => ({ ...room!, roomId: `room-${roomIndex}`, roomName: name, roomIndex, title }));
+  return { ...state, stage: { ...state.stage, schedule: { ...schedule, streamRoomId: "room-1", rooms } } };
+}
 /** Up next in Break with this many speakers, the moderator last, and the session timer in its own top-right corner. */
 function breakWith(speakers: number): LiveRoomState {
   const schedule = ROOM.stage.schedule!;
@@ -250,6 +262,12 @@ export const studioBoardSections: PreviewSection[] = [
     title: "Up next in Break, a panel of six",
     note: "A larger panel names one speaker at a time, their face brought forward, with their organization.",
     render: () => <LivestreamOverlay state={breakWith(6)} elements={presetWith("break", ["schedule", "timer"])} />,
+  },
+  {
+    id: "onscreen-up-next-rooms",
+    title: "Up next in Break, across rooms",
+    note: "This room leads, named in brackets; the other rooms follow under their own label, in agenda order, one brought forward at a time.",
+    render: () => <LivestreamOverlay state={breakAcrossRooms()} elements={presetWith("break", ["schedule", "timer"])} />,
   },
   {
     id: "onscreen-poll-side-by-side",
