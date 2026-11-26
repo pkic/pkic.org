@@ -556,6 +556,9 @@ export const featureTokenGroups = {
   event: [
     ...Object.keys(liveTokens),
     "dur-timer-warning",
+    "dur-unmute-wait",
+    "dur-unmute-settle",
+    "dur-unmute-beat",
     "pqc-ink",
     "pqc-ink-muted",
     "pqc-paper",
