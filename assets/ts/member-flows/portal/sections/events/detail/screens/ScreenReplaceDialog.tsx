@@ -3,11 +3,21 @@
  * new screen ID: staff read the pairing code and screen ID off the new
  * device, and the screen keeps its name and assignment there. The current
  * device is signed out; while it is online it stops showing the screen.
+ * When the new screen ID already belongs to a screen, as a reinstalled
+ * device paired as a screen of its own, staff confirm it gives way. A device
+ * signed in under that ID keeps its sign-in and shows no code to enter.
  */
 import { useState } from "preact/hooks";
-import { screenDeviceReplacementSchema, type ScreenRecord } from "../../../../../../../shared/schemas/event-screens";
+import {
+  SCREEN_ID_IN_USE_CODE,
+  SCREEN_ID_TAKEN_CODE,
+  screenDeviceReplacementSchema,
+  type ScreenRecord,
+} from "../../../../../../../shared/schemas/event-screens";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
+import { ApiClientError } from "../../../../../../shared/api-client";
 import { Alert } from "../../../../../../ui/Alert";
+import { Checkbox } from "../../../../../../ui/Checkbox";
 import { Dialog } from "../../../../../../ui/Dialog";
 import { ScreenCodeFields } from "./ScreenCodeFields";
 import { isScreenRevisionConflict, readScreenRecord, replaceScreenDevice } from "./screen-requests";
@@ -36,10 +46,15 @@ export function ScreenReplaceDialog({
   const [newScreenId, setNewScreenId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  /** The screen ID the server said another screen has, so replacing it is offered for that ID only. */
+  const [taken, setTaken] = useState<{ screenId: string; signedIn: boolean } | null>(null);
+  const [replace, setReplace] = useState(false);
+  const takenHere = taken !== null && taken.screenId === newScreenId ? taken : null;
   const form = useContractForm(screenDeviceReplacementSchema, {
     expectedRevision: screen.revision,
     newScreenId,
-    pairingCode,
+    pairingCode: pairingCode || undefined,
+    replace: replace && takenHere ? true : undefined,
   });
 
   async function submit() {
@@ -56,8 +71,16 @@ export function ScreenReplaceDialog({
       onClose();
       await onReplaced(replaced);
     } catch (cause) {
-      if (!isScreenRevisionConflict(cause)) setError(form.refuse(cause));
-      else {
+      if (!isScreenRevisionConflict(cause)) {
+        const message = form.refuse(cause);
+        if (
+          cause instanceof ApiClientError &&
+          (cause.code === SCREEN_ID_TAKEN_CODE || cause.code === SCREEN_ID_IN_USE_CODE)
+        ) {
+          // The screen ID field names the screen, and the choice to replace it opens below.
+          setTaken({ screenId: newScreenId, signedIn: cause.code === SCREEN_ID_IN_USE_CODE });
+        } else setError(message);
+      } else {
         // The next attempt starts from the screen as it stands now, so it can succeed.
         void onChanged();
         try {
@@ -107,8 +130,25 @@ export function ScreenReplaceDialog({
           idName="newScreenId"
           fields={form.of}
           onPairingCode={setPairingCode}
-          onScreenId={setNewScreenId}
-        />
+          onScreenId={(value) => {
+            setNewScreenId(value);
+            setReplace(false);
+          }}
+          codeRequired={!(takenHere?.signedIn && replace)}
+        >
+          {takenHere && (
+            <Checkbox
+              label="Replace the screen with this ID"
+              hint={
+                takenHere.signedIn
+                  ? "This screen's name and assignment take its place. Its device stays signed in."
+                  : "This screen's name and assignment take its place."
+              }
+              checked={replace}
+              onChange={(event) => setReplace(event.currentTarget.checked)}
+            />
+          )}
+        </ScreenCodeFields>
       </form>
       {error && <Alert tone="danger">{error}</Alert>}
     </Dialog>

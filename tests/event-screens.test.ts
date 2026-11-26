@@ -470,11 +470,11 @@ describe("a paired screen", () => {
     expect(row!.expires_at > aged).toBe(true);
   });
 
-  it("is signed out once staff revoke it, and its cookie never passes a staff guard", async () => {
+  it("is signed out once staff remove it, and its cookie never passes a staff guard", async () => {
     const { cookie } = await pair(assignment);
     for (const [method, path] of [
       ["PATCH", `/api/v1/screens/${SCREEN}`],
-      ["DELETE", `/api/v1/screens/${SCREEN}/session`],
+      ["DELETE", `/api/v1/screens/${SCREEN}`],
       ["GET", `/api/v1/events/${EVENT.slug}/screens`],
     ] as const) {
       const refused = await callApi(testEnv, path, {
@@ -485,19 +485,17 @@ describe("a paired screen", () => {
       expect(refused.status, `${method} ${path}`).toBe(401);
     }
 
-    const revoked = await callApi(
+    const removed = await callApi(
       testEnv,
-      `/api/v1/screens/${SCREEN}/session`,
+      `/api/v1/screens/${SCREEN}`,
       { method: "DELETE", headers: staff("manager") },
       { maxRoundTrips: 2 },
     );
-    expect(revoked.status).toBe(204);
-    expect(await auditCount("screen.sessions_revoked")).toBe(1);
+    expect(removed.status).toBe(204);
+    expect(await auditCount("screen.removed")).toBe(1);
     const refused = await readAsScreen(cookie);
     expect(refused.status).toBe(401);
-    expect(((await refused.json()) as { error: { code: string } }).error.code).toBe("SCREEN_SESSION_REVOKED");
-    await callApi(testEnv, `/api/v1/screens/${SCREEN}/session`, { method: "DELETE", headers: staff("manager") });
-    expect(await auditCount("screen.sessions_revoked")).toBe(1);
+    expect(((await refused.json()) as { error: { code: string } }).error.code).toBe("SCREEN_SESSION_MISSING");
   });
 });
 
@@ -518,8 +516,7 @@ describe("screen staff permissions", () => {
     expect((await approve("reader", { pairingCode: challenge.code })).status).toBe(403);
     expect((await patch("reader", { expectedRevision: 0, name: "Moved" })).status).toBe(403);
     expect(
-      (await callApi(testEnv, `/api/v1/screens/${SCREEN}/session`, { method: "DELETE", headers: staff("reader") }))
-        .status,
+      (await callApi(testEnv, `/api/v1/screens/${SCREEN}`, { method: "DELETE", headers: staff("reader") })).status,
     ).toBe(403);
     expect((await callApi(testEnv, `/api/v1/screens/${SCREEN}`, { headers: staff("reader") })).status).toBe(403);
     expect((await callApi(testEnv, `/api/v1/events/${EVENT.slug}/screens`, { headers: staff("reader") })).status).toBe(
@@ -527,7 +524,7 @@ describe("screen staff permissions", () => {
     );
   });
 
-  it("lets a room operator read status but not pair, change or revoke", async () => {
+  it("lets a room operator read status but not pair, change or remove", async () => {
     await pair(assignment);
     const read = await callApi(
       testEnv,
@@ -544,8 +541,7 @@ describe("screen staff permissions", () => {
     expect((await approve("moderator", { pairingCode: challenge.code })).status).toBe(403);
     expect((await patch("moderator", { expectedRevision: 0, name: "Moved" })).status).toBe(403);
     expect(
-      (await callApi(testEnv, `/api/v1/screens/${SCREEN}/session`, { method: "DELETE", headers: staff("moderator") }))
-        .status,
+      (await callApi(testEnv, `/api/v1/screens/${SCREEN}`, { method: "DELETE", headers: staff("moderator") })).status,
     ).toBe(403);
   });
 
@@ -794,9 +790,14 @@ describe("replacing a screen's device", () => {
     expect(same.status).toBe(422);
     expect(await fieldError(same)).toBeTruthy();
 
+    const noCode = await replace("manager", { newScreenId: NEW_SCREEN });
+    expect(noCode.status).toBe(422);
+    expect(((await noCode.json()) as { error: { code: string } }).error.code).toBe("SCREEN_PAIRING_CODE_REQUIRED");
+
     await addScreen("QRS567", "Spare by the door");
     const takenHere = await replace("manager", { newScreenId: "QRS567", pairingCode: code });
     expect(takenHere.status).toBe(409);
+    expect(((await takenHere.clone().json()) as { error: { code: string } }).error.code).toBe("SCREEN_ID_TAKEN");
     expect(await fieldError(takenHere)).toContain("Spare by the door");
     await addScreen("DEF567", "Elsewhere", OTHER_EVENT.id);
     const takenElsewhere = await replace("manager", { newScreenId: "DEF567", pairingCode: code });
@@ -807,6 +808,61 @@ describe("replacing a screen's device", () => {
     expect((await readAsScreen(old.cookie)).status).toBe(200);
     expect(await rows("screens", NEW_SCREEN)).toBe(0);
     expect(await audits("screen.replaced", SCREEN)).toBe(0);
+  });
+
+  it("takes over a signed-in screen with the new ID once confirmed, keeping its device signed in", async () => {
+    const old = await pair(assignment);
+    const device = await pair(undefined, NEW_SCREEN, { name: "Reinstalled" });
+    const unconfirmed = await replace("manager", { newScreenId: NEW_SCREEN });
+    expect(unconfirmed.status).toBe(409);
+    const refusal = (await unconfirmed.json()) as {
+      error: { code: string; details: { fieldErrors: { newScreenId: string[] } } };
+    };
+    expect(refusal.error.code).toBe("SCREEN_ID_IN_USE");
+    expect(refusal.error.details.fieldErrors.newScreenId[0]).toContain("Reinstalled");
+
+    const replaced = await replace("manager", { newScreenId: NEW_SCREEN, replace: true });
+    expect(replaced.status, await replaced.clone().text()).toBe(200);
+    expect(screenRecordSchema.parse(await replaced.json())).toMatchObject({
+      id: NEW_SCREEN,
+      name: "Foyer",
+      assignment: { roomId: EVENT.roomId, output: "projector" },
+      session: { state: "active" },
+    });
+    const shown = await readAsScreen(device.cookie, NEW_SCREEN);
+    expect(shown.status).toBe(200);
+    expect(((await shown.json()) as ScreenOwnView).screen).toMatchObject({ name: "Foyer" });
+    expect((await readAsScreen(old.cookie)).status).toBe(401);
+    expect([await rows("screens", SCREEN), await audits("screen.replaced", SCREEN)]).toEqual([0, 1]);
+  });
+
+  it("takes over a signed-out screen with the new ID with the device's code", async () => {
+    await pair(assignment);
+    await addScreen(NEW_SCREEN, "Spare by the door");
+    const noCode = await replace("manager", { newScreenId: NEW_SCREEN, replace: true });
+    expect(noCode.status).toBe(422);
+    const challenge = await startPairing(NEW_SCREEN);
+    const replaced = await replace("manager", { newScreenId: NEW_SCREEN, pairingCode: challenge.code, replace: true });
+    expect(replaced.status, await replaced.clone().text()).toBe(200);
+    expect(screenRecordSchema.parse(await replaced.json())).toMatchObject({
+      id: NEW_SCREEN,
+      name: "Foyer",
+      session: { state: "pending" },
+    });
+    expect((await poll(challenge.cookie, NEW_SCREEN)).status).toBe(201);
+    expect(await rows("screens", SCREEN)).toBe(0);
+  });
+
+  it("takes over another event's screen only for someone who manages that event too", async () => {
+    const old = await pair(assignment);
+    await addScreen(NEW_SCREEN, "Elsewhere", OTHER_EVENT.id);
+    const { code } = await startPairing(NEW_SCREEN);
+    const refused = await replace("manager", { newScreenId: NEW_SCREEN, pairingCode: code, replace: true });
+    expect(refused.status).toBe(403);
+    expect(((await refused.json()) as { error: { code: string } }).error.code).toBe("SCREEN_BELONGS_TO_ANOTHER_EVENT");
+    expect((await readAsScreen(old.cookie)).status).toBe(200);
+    const kept = await env.DB.prepare("SELECT name,event_id FROM screens WHERE id=?").bind(NEW_SCREEN).first();
+    expect(kept).toEqual({ name: "Elsewhere", event_id: OTHER_EVENT.id });
   });
 
   it("rolls back when the screen changes between the read and the write", async () => {
@@ -828,19 +884,13 @@ describe("replacing a screen's device", () => {
     expect([await audits("screen.paired", NEW_SCREEN), await audits("screen.replaced", SCREEN)]).toEqual([0, 0]);
   });
 
-  it("removes a screen only once it is not signed in, with its approvals", async () => {
-    await pair(assignment);
-    const signedIn = await remove("manager");
-    expect(signedIn.status).toBe(409);
-    expect(((await signedIn.json()) as { error: { code: string } }).error.code).toBe("SCREEN_SIGNED_IN");
-    expect(
-      (await callApi(testEnv, `/api/v1/screens/${SCREEN}/session`, { method: "DELETE", headers: staff("manager") }))
-        .status,
-    ).toBe(204);
+  it("removes a screen whether or not it is signed in, with its sign-ins and approvals", async () => {
+    const { cookie } = await pair(assignment);
     expect((await remove("moderator")).status).toBe(403);
     expect((await remove("manager")).status).toBe(204);
     expect([await rows("screens", SCREEN), await rows("screen_sessions", SCREEN)]).toEqual([0, 0]);
     expect(await audits("screen.removed", SCREEN)).toBe(1);
+    expect((await readAsScreen(cookie)).status).toBe(401);
     expect((await remove("manager")).status).toBe(404);
 
     // Approved but never collected: nothing ever signed in.
@@ -852,7 +902,6 @@ describe("replacing a screen's device", () => {
 
   it("removes nothing when the screen moved or changed after the read", async () => {
     await pair();
-    await callApi(testEnv, `/api/v1/screens/${SCREEN}/session`, { method: "DELETE", headers: staff("manager") });
     const db = mutateBeforeMatchingQuery(
       env.DB,
       (sql) => sql.startsWith("DELETE FROM screens"),

@@ -37,10 +37,6 @@ export async function readScreenRecord(screenId: string): Promise<ScreenRecord> 
   return (await getJson(screenPath(screenId), screenStaffViewSchema)).screen;
 }
 
-export async function revokeScreenSession(screenId: string): Promise<void> {
-  await requestJson(`${screenPath(screenId)}/session`, noContentResponseSchema, { method: "DELETE" });
-}
-
 /** Moves the screen to a new device; the record comes back under the new device's screen ID. */
 export function replaceScreenDevice(screenId: string, body: ScreenDeviceReplacement): Promise<ScreenRecord> {
   return putValidated(`${screenPath(screenId)}/device`, screenDeviceReplacementSchema, body, screenRecordSchema);

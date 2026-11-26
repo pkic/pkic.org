@@ -35,7 +35,7 @@ export const ScreenPatch = openApiRoute(screenUpdateRouteSchema, async (c: Admin
   return json(await updateScreen(requestDb(c), c.req.raw, c.env, data.params.screenId, data.body));
 });
 
-/** Staff remove a screen that is not signed in, such as one revoked after its device was replaced. */
+/** Staff remove a screen; its device signs out and shows a pairing code. */
 export const ScreenDelete = openApiRoute(screenDeleteRouteSchema, async (c: AdminContext, data) => {
   markResponseSensitive(c);
   await removeScreen(requestDb(c), c.req.raw, c.env, data.params.screenId);
