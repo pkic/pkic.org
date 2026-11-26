@@ -149,7 +149,7 @@ export function livePollResultsVisible(
 export const LIVE_STAGE_VIEWS = ["question", "lower-third", "poll"] as const;
 export type LiveStageView = (typeof LIVE_STAGE_VIEWS)[number];
 
-/** The moderation lifecycle. New questions wait for a moderator before others see them. */
+/** The moderation lifecycle. New questions wait for a moderator before others see them, unless their check passed. */
 export const LIVE_QUESTION_STATUSES = ["pending", "approved", "answered", "hidden"] as const;
 export type LiveQuestionStatus = (typeof LIVE_QUESTION_STATUSES)[number];
 

@@ -12,6 +12,8 @@ export interface LiveOccurrenceParticipation {
 
 export type LiveOccurrenceModerationChange =
   | { kind: "lift" }
+  /** An event block decided in D1 by another room; this room takes it at once rather than at its next read. */
+  | { kind: "event"; blocked: boolean }
   | {
       kind: "block";
       block: Exclude<LiveParticipationBlock, "event">;

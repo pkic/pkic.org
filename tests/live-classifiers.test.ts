@@ -257,6 +257,8 @@ describe("classifiers of live chat and questions", () => {
   it("refuses an edit of a question a moderator approved while it was being checked", async () => {
     const owner = await f.connect({ person: "attendee" });
     const moderator = await f.connect({ person: "operator" });
+    // Unchecked, the question waits for a moderator, and its author may still reword it.
+    model.run.mockRejectedValueOnce(new Error("model unavailable"));
     owner.send({ type: "question.ask", text: "Which certificates first?", anonymous: false });
     const { questionId } = await owner.next("question.accepted");
     const release = holdChecks();
@@ -313,6 +315,47 @@ describe("classifiers of live chat and questions", () => {
       flags: [{ id: "conduct", probabilityPercent: 75 }],
       answers: { conduct: { kind: "flag", probability: 0.75 }, spam: { kind: "flag", probability: 0.02 } },
     });
+  });
+
+  it("approves a question the check passes at once, and keeps an unchecked one for a moderator", async () => {
+    const author = await f.connect({ person: "attendee" });
+    const reader = await f.connect({ person: "secondAttendee" });
+    const passed = "How do we rotate intermediate certificates?";
+    author.send({ type: "question.ask", text: passed, anonymous: false });
+    const seen = await reader.next("question.changed", (message) => message.question.text === passed);
+    expect(seen.question.status).toBe("approved");
+
+    model.run.mockRejectedValueOnce(new Error("model unavailable"));
+    const unchecked = "What about short-lived certificates?";
+    author.send({ type: "question.ask", text: unchecked, anonymous: false });
+    const mine = await author.next("question.changed", (message) => message.question.text === unchecked);
+    expect(mine.question.status).toBe("pending");
+
+    // The durable copy names no person for the check's approval.
+    await runDurableObjectAlarm(f.room());
+    const stored = await env.DB.prepare(
+      "SELECT status, moderated_by, moderated_at FROM event_session_questions WHERE id = ?",
+    )
+      .bind(seen.question.id)
+      .first<{ status: string; moderated_by: string | null; moderated_at: string | null }>();
+    expect(stored).toMatchObject({ status: "approved", moderated_by: null, moderated_at: expect.any(String) });
+  });
+
+  it("checks the chat and questions of the people who run the session like everyone else's", async () => {
+    const staff = await f.connectChat("operator");
+    const reader = await f.connectChat("secondAttendee");
+    const spam = await say(staff, "Buy cheap certificates at example.test", reader);
+    expect(await reader.next("chat.removed", (update) => update.messageId === spam.id)).toMatchObject({
+      moderated: true,
+    });
+
+    const operator = await f.connect({ person: "operator" });
+    operator.send({ type: "question.ask", text: "Where can I buy cheap certificates?", anonymous: false });
+    expect((await operator.next("room.refused")).code).toBe("LIVE_QUESTION_REFUSED_BY_CHECK");
+    const passed = "How do we rotate intermediate certificates?";
+    operator.send({ type: "question.ask", text: passed, anonymous: false });
+    const asked = await operator.next("question.changed", (message) => message.question.text === passed);
+    expect(asked.question.status).toBe("approved");
   });
 
   it("lets chat and questions through unflagged when the model fails", async () => {

@@ -40,7 +40,8 @@ export function ReactionToolbar({
   toolbarRef?: Ref<HTMLDivElement>;
   /** Keys the toolbar does not use itself, such as Escape and Tab in a popover. */
   onKeyDown?: (event: JSX.TargetedKeyboardEvent<HTMLDivElement>) => void;
-  onChoose: (reaction: ReactionChoice, on: boolean) => void;
+  /** The pressed button comes along, so a caller can show the reaction leaving it. */
+  onChoose: (reaction: ReactionChoice, on: boolean, button: HTMLButtonElement) => void;
 }) {
   const [active, setActive] = useState(0);
   const [moved, setMoved] = useState(autoFocus);
@@ -99,7 +100,7 @@ export function ReactionToolbar({
             tabIndex={index === active ? 0 : -1}
             disabled={disabled}
             onFocus={() => setActive(index)}
-            onClick={() => onChoose(reaction, !on)}
+            onClick={(event) => onChoose(reaction, !on, event.currentTarget)}
           >
             <span aria-hidden="true">{reaction.emoji}</span>
           </button>

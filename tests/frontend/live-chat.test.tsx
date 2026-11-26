@@ -131,6 +131,35 @@ describe("live chat", () => {
     expect(send).toHaveBeenCalledTimes(1);
   });
 
+  it("says a post was refused for a block, and keeps the words to send again once it is lifted", () => {
+    const send = vi.fn(() => true);
+    const host = mount(<LiveChat state={stateWith()} disabled={false} send={send} />);
+    const text = host.querySelector("textarea")!;
+    const submit = () =>
+      void act(() => {
+        host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      });
+    void act(() => {
+      text.value = "Back again";
+      text.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    submit();
+    const refused = {
+      ...stateWith(),
+      refusal: {
+        code: "LIVE_PARTICIPATION_BLOCKED",
+        message: "You can't post right now. You can keep watching.",
+        sequence: 1,
+      },
+    };
+    void act(() => draw(<LiveChat state={refused} disabled={false} send={send} />, host));
+    const status = document.getElementById(text.getAttribute("aria-describedby")!)!;
+    expect(status.textContent).toBe("You can't post right now. You can keep watching.");
+    expect(text.value).toBe("Back again");
+    submit();
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
   it("keeps an empty composer at rest and reports a refusal on the status line above it", () => {
     const send = vi.fn(() => true);
     const host = mount(<LiveChat compact state={stateWith()} disabled={false} send={send} />);

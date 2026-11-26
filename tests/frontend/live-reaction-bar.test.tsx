@@ -70,6 +70,30 @@ describe("the session's reaction bar", () => {
     ]);
   });
 
+  it("shows each sent reaction rise from its button at once, and only a sent one", async () => {
+    const send = vi.fn(() => true);
+    host = document.body.appendChild(document.createElement("div"));
+    await act(() => render(<LiveReactionBar send={send} refusal={null} />, host!));
+    const sent = () => [...host!.querySelectorAll(".pk-live-reactions__sent")].map((node) => node.textContent);
+    const press = (label: string) =>
+      act(() => host!.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)!.click());
+    await press("Applause");
+    await press("Love");
+    const emoji = (id: string) => LIVE_REACTIONS.find((reaction) => reaction.id === id)!.emoji;
+    expect(sent()).toEqual([emoji("applause"), emoji("love")]);
+    // Decoration only: the reaction is not read out again.
+    for (const node of host.querySelectorAll(".pk-live-reactions__sent"))
+      expect(node.getAttribute("aria-hidden")).toBe("true");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(sent()).toEqual([]);
+    // A reaction the connection could not send does not pretend it went.
+    send.mockReturnValue(false);
+    await press("Applause");
+    expect(sent()).toEqual([]);
+  });
+
   it("is one tab stop that arrows, Home and End move through", async () => {
     const bar = await mountBar();
     const buttons = () => [...bar.toolbar().querySelectorAll<HTMLButtonElement>("button")];

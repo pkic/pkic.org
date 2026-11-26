@@ -18,6 +18,11 @@
     font-size: var(--pk-text-xl);
     line-height: 1;
     cursor: pointer;
+    transition: transform var(--pk-dur-fast) var(--pk-ease);
+  }
+  /* A press gives way under the pointer, so every click is felt before anything else answers it. */
+  .pk-reaction-toolbar__button:active:not(:disabled) {
+    transform: scale(0.88);
   }
   .pk-reaction-toolbar__button:hover:not(:disabled) {
     background: var(--pk-surface-sunk);

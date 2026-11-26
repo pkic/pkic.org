@@ -24,6 +24,7 @@ import type { LiveRoomStore } from "./room-store";
 import type { LiveChatQuestion } from "./location-chat-on-air";
 import type { LiveClassifierVerdict } from "../../../../assets/shared/schemas/live-session-moderation";
 import type { ClassifierRun } from "../classifiers/model";
+import { LIVE_CHAT_HELD_BY_CHECK } from "./room-chat-checks";
 
 type Handled = LiveRefusal | void;
 type Actor = { userId: string; name: string };
@@ -93,6 +94,13 @@ interface QuestionCheck {
   run: ClassifierRun | null;
 }
 const NOT_CHECKED: QuestionCheck = { flag: null, run: null };
+/** Who approves a question whose check found nothing; no person, so the durable copy names no user. */
+const APPROVED_BY_CHECK = { userId: "", name: LIVE_CHAT_HELD_BY_CHECK };
+
+/** A check that ran and raised nothing lets the question in; one that raised a concern or could not run waits. */
+function approvedByCheck(check: QuestionCheck): boolean {
+  return check.run?.verdict.outcome === "passed";
+}
 
 export class LiveRoomQuestions {
   constructor(
@@ -174,7 +182,8 @@ export class LiveRoomQuestions {
       return LIVE_PARTICIPATION_REFUSAL;
     if (this.store.questionCount() >= LIVE_ROOM_POLICY.maxQuestionsPerRoom) return REFUSALS.full;
     if (!this.hooks.allowed(actor.userId)) return REFUSALS.tooFast;
-    const check = viewer.role === "operator" ? NOT_CHECKED : await this.check(text);
+    // Every question is checked, the people who run the session's too.
+    const check = await this.check(text);
     if ("code" in check) return check;
     // The check yields: another invocation may have accepted this request meanwhile.
     const checked = replay();
@@ -193,6 +202,7 @@ export class LiveRoomQuestions {
     });
     if (check.flag) this.store.questionChecks.flag(id, check.flag);
     if (check.run) this.store.questionChecks.record(id, check.run, nowIso());
+    if (approvedByCheck(check)) this.store.moderate(id, "approved", APPROVED_BY_CHECK, nowIso());
     this.authors.recordQuestion(id, stamp);
     await this.broadcast.question(id);
     this.hooks.listed();
@@ -247,6 +257,8 @@ export class LiveRoomQuestions {
     if (input.type === "question.edit") {
       this.store.questionChecks.flag(question.id, check.flag);
       this.store.questionChecks.record(question.id, check.run, at);
+      // Still pending, as only a pending question takes new words: checked words that pass go in.
+      if (approvedByCheck(check)) this.store.moderate(question.id, "approved", APPROVED_BY_CHECK, at);
     }
     await this.broadcast.question(question.id);
     this.hooks.listed();
@@ -260,8 +272,8 @@ export class LiveRoomQuestions {
 
   /**
    * The classifier of a question's words before it is taken: a blocked question is refused with what the
-   * check's settings tell its author; an advised one is taken and flagged for moderators. Questions wait for a
-   * moderator in any case, so a check that cannot run lets the question in unflagged.
+   * check's settings tell its author; an advised one is taken and flagged for moderators. One the check passed
+   * is approved at once; one it could not check waits for a moderator, unflagged.
    */
   private async check(text: string): Promise<QuestionCheck | LiveRefusal> {
     const run = await this.hooks.checked(text);

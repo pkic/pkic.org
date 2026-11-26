@@ -226,7 +226,8 @@ export class LiveRoomChatActions {
     const row = this.chat.send(actor, text, Date.now(), channel, occurrenceId, replyTo);
     if (!row) return REFUSALS.tooFast;
     this.authors.recordMessage(row.id, stamp);
-    const run = channel === "attendee" && viewer.role !== "operator" ? this.markChecking(row) : null;
+    // Everyone in the attendee chat is checked, the people who run the session too.
+    const run = channel === "attendee" ? this.markChecking(row) : null;
     await this.deliver([row], { removeWhenHidden: false });
     if (run !== null) this.check(row, run);
     if (channel !== "attendee") return;
@@ -338,6 +339,8 @@ export class LiveRoomChatActions {
     const { blocks, windowMinutes } = LIVE_CHAT_POLICY.checkPause;
     const since = new Date(Date.parse(at) - windowMinutes * 60_000).toISOString();
     if (this.feed.moderation.checks.blockedSince(userId, since) < blocks) return;
+    // A pause does not reach the people who run the session; their blocked messages stay hidden all the same.
+    if (this.feed.people.people([userId]).get(userId)?.staff) return;
     if (this.feed.decisions.restriction(userId, Date.now())) return;
     this.feed.decisions.block(userId, "paused", "conduct", { userId: "", name: LIVE_CHAT_HELD_BY_CHECK }, at);
     await this.hooks.participationChanged(userId);

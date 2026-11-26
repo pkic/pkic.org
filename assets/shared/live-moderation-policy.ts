@@ -38,6 +38,8 @@ export const LIVE_PARTICIPATION_BLOCKS = ["paused", "session", "event"] as const
 export type LiveParticipationBlock = (typeof LIVE_PARTICIPATION_BLOCKS)[number];
 
 export const LIVE_PARTICIPATION_POLICY = { pauseMinutes: 10 } as const;
+/** The refusal code for every way a blocked person tries to post, vote or react. */
+export const LIVE_PARTICIPATION_BLOCKED_CODE = "LIVE_PARTICIPATION_BLOCKED";
 
 /** What a moderator removes or marks done from the room. */
 export const LIVE_MODERATION_TARGETS = ["chat", "question", "answer"] as const;

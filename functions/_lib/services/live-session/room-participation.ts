@@ -64,7 +64,8 @@ export class LiveRoomParticipation {
     private readonly eventId: () => string | null,
     private readonly chatModeration: (occurrenceId: string | null) => LiveOccurrenceModeration | null,
     private readonly currentChatOccurrence: () => string | null,
-    private readonly occurrenceChanged: (userId: string) => void,
+    /** Tells the occurrence's location chats; an event decision made here goes along. */
+    private readonly occurrenceChanged: (userId: string, eventBlocked?: boolean) => void,
   ) {}
 
   /** Who wrote the item, or null when it is gone. */
@@ -128,6 +129,7 @@ export class LiveRoomParticipation {
       if (!by || !(await blockEventParticipation(this.db, { eventId, userId, reason: input.reason, by, at })))
         return REFUSALS.forbidden;
       this.decisions.decideEventBlock(userId, true);
+      await this.shareEventDecision(userId, true, input.item);
     } else {
       if (moderation) {
         const { restriction } = await moderation.change(userId, {
@@ -173,6 +175,7 @@ export class LiveRoomParticipation {
       const by = organizerSession(viewer, actor);
       if (!by || !(await liftEventParticipationBlock(this.db, { eventId, userId, by, at }))) return REFUSALS.forbidden;
       this.decisions.decideEventBlock(userId, false);
+      await this.shareEventDecision(userId, false, item);
     }
     let sessionRestriction: LiveParticipationRestriction | null | undefined;
     const sessionLift = moderation !== null && current.block !== "event" && remote;
@@ -188,6 +191,19 @@ export class LiveRoomParticipation {
       at,
     );
     await this.changed(userId, sessionRestriction, sessionLift ? occurrenceId : undefined);
+  }
+
+  /**
+   * An event block this room just wrote to D1 reaches the rooms the person is in now, so none of them keeps
+   * refusing (or allowing) them until its own next read of D1: the location chat's sessions, or the session's
+   * location chats.
+   */
+  private async shareEventDecision(userId: string, blocked: boolean, item: LiveModerationItem): Promise<void> {
+    this.occurrenceChanged(userId, blocked);
+    const occurrences = new Set([this.chatOccurrence(item), this.currentChatOccurrence()]);
+    await Promise.all(
+      [...occurrences].map((id) => (id ? this.chatModeration(id)?.change(userId, { kind: "event", blocked }) : null)),
+    );
   }
 
   /** The access refresh read who is blocked for the event; tell everyone whose block started or ended. */

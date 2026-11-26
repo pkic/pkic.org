@@ -10,6 +10,7 @@ import {
   liveChatSendSchema,
   type LiveRoomClientMessage,
 } from "../../shared/schemas/live-session-room";
+import { LIVE_PARTICIPATION_BLOCKED_CODE } from "../../shared/live-moderation-policy";
 import type { LiveChatChannel, LiveChatMessage } from "../../shared/schemas/live-session-chat";
 import { liveChatChannel } from "./live-chat-state";
 import type { LiveChatView } from "./location-chat-state";
@@ -51,6 +52,14 @@ interface LiveChatUnanswered {
   mine: ReadonlySet<string>;
   /** The connection dropped meanwhile; if the room's next snapshot does not hold it, it is sent again by hand. */
   dropped: boolean;
+}
+
+/**
+ * The refusals the composer says out loud: the chat's own, and a block the room still holds, so a
+ * message the room turned away never leaves Send looking dead.
+ */
+function chatRefusal(code: string): boolean {
+  return code.startsWith("LIVE_CHAT") || code === LIVE_PARTICIPATION_BLOCKED_CODE;
 }
 
 export function ChatComposer({
@@ -394,7 +403,7 @@ export function LiveChat({
     return () => clearTimeout(timer);
   }, [highlighted]);
   const canSend = liveChatCanSend(liveChatCapacity(state.viewer), restriction !== null, channel);
-  const refusal = state.refusal?.code.startsWith("LIVE_CHAT") ? state.refusal.message : null;
+  const refusal = state.refusal && chatRefusal(state.refusal.code) ? state.refusal.message : null;
   const spoken = useLiveChatAnnouncement(latest, following, visible);
   return (
     <LiveAuthorProvider authors={state.authors} send={send}>

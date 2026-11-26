@@ -43,6 +43,12 @@ export class LiveOccurrenceChatAccess {
     endsAt: string,
     change: LiveOccurrenceModerationChange,
   ): Promise<LiveOccurrenceParticipation> {
+    if (change.kind === "event") {
+      if (!this.sql.holdsData()) return this.read(userId);
+      this.decisions.decideEventBlock(userId, change.blocked);
+      if (this.store.session()) this.ctx.waitUntil(this.changed(userId));
+      return this.read(userId);
+    }
     const current = this.read(userId);
     const purgeAt = liveRoomPurgeAt(endsAt);
     if (Date.now() >= purgeAt || (change.kind === "lift" && current.restriction?.block === "event")) return current;
@@ -60,7 +66,8 @@ export class LiveOccurrenceChatAccess {
     return this.read(userId);
   }
 
-  notify(userId: string | null): void {
+  /** Tells the occurrence's location chats; an event decision made here goes with it, so they need not wait for D1. */
+  notify(userId: string | null, eventBlocked?: boolean): void {
     const room = this.store.session();
     const rooms = this.env.LIVE_SESSION_ROOMS;
     if (!room || !rooms) return;
@@ -70,7 +77,7 @@ export class LiveOccurrenceChatAccess {
       this.ctx.waitUntil(
         rooms
           .getByName(liveLocationChatName(room.eventId, roomId, day))
-          .locationChatAccessChanged(session.occurrenceId, userId)
+          .locationChatAccessChanged(session.occurrenceId, userId, eventBlocked)
           .catch((error: unknown) => console.error("Live location chat access notice failed", error)),
       );
     }

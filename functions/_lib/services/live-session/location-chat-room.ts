@@ -202,9 +202,11 @@ export class LiveLocationChatRoom {
     this.onAirChanged();
   }
 
-  async accessChanged(occurrenceId: string, userId: string | null): Promise<void> {
-    const { store, chat, chatActions } = this.parts;
+  async accessChanged(occurrenceId: string, userId: string | null, eventBlocked?: boolean): Promise<void> {
+    const { store, chat, chatActions, feed } = this.parts;
     if (!store.state()) return;
+    // The occurrence decided an event block in D1: the chat takes it now, not at its next access read.
+    if (userId && eventBlocked !== undefined) feed.decisions.decideEventBlock(userId, eventBlocked);
     if (store.stamp(Date.now()) === occurrenceId) {
       await this.syncAccess(userId);
       this.onAirChanged();

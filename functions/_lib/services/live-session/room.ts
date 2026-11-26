@@ -245,7 +245,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       () => liveRoomChatScope(this.store, this.location)?.eventId ?? null,
       (occurrenceId) => this.locationChat.occurrenceModeration(occurrenceId),
       () => this.location.stamp(Date.now()),
-      (userId) => this.occurrenceParticipation.notify(userId),
+      (userId, eventBlocked) => this.occurrenceParticipation.notify(userId, eventBlocked),
     );
     this.occurrenceParticipation = new LiveOccurrenceChatAccess(
       ctx,
@@ -340,8 +340,8 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     return this.occurrenceParticipation.change(userId, endsAt, change);
   }
 
-  async locationChatAccessChanged(occurrenceId: string, userId: string | null) {
-    return this.locationChat.accessChanged(occurrenceId, userId);
+  async locationChatAccessChanged(occurrenceId: string, userId: string | null, eventBlocked?: boolean) {
+    return this.locationChat.accessChanged(occurrenceId, userId, eventBlocked);
   }
 
   async locationChatOnAir(occurrenceId: string, limit: number, options: LiveChatOnAirOptions) {
