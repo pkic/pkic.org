@@ -66,6 +66,7 @@ import * as stageDisplaySettings from "./live-stage-display-settings";
 import * as screenSync from "./live-screen-sync";
 import * as roomOpening from "./live-room-opening";
 import * as roomSources from "./live-room-sources";
+import { liveRoomAudienceChangedSchema } from "./live-room-audience";
 import { LIVE_GRAPHIC_THEME_DEFAULTS, liveGraphicThemeSchema } from "../live-graphic-theme";
 import { DEFAULT_LIVE_LOWER_THIRD_MOTION } from "../live-lower-third";
 import {
@@ -416,6 +417,7 @@ export const liveRoomServerMessageSchema = z.discriminatedUnion("type", [
   /** Operators only, never stored: another operator moved. */
   z.object({ type: z.literal("presence.changed"), presence: livePresenceSchema }).strict(),
   z.object({ type: z.literal("presence.left"), id: livePresenceSchema.shape.id }).strict(),
+  liveRoomAudienceChangedSchema,
   liveTimersChangedSchema,
   z.object({ type: z.literal("overlay.mode.changed"), mode: liveOverlayModeSchema }).strict(),
   stageDisplaySettings.liveStageDisplayNextChangedSchema(liveStageQuestionSchema),

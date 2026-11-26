@@ -22,6 +22,8 @@ export interface LiveRoomState extends Omit<LiveRoomSnapshot, "type">, LiveChatA
   programUndo?: { snapshotId: string; change: { operatorName: string; at: string } } | null;
   /** The latest refused action, numbered so a view can announce it once. */
   refusal: { sequence: number; code: string; message: string } | null;
+  /** Operators only: distinct people on the room's attendee page now, once the room has told this desk. */
+  audience?: number;
   /** Author cards the room answered, by handle; null when a handle resolved to no one. */
   authors?: Readonly<Record<string, LiveAuthorDetails | null>>;
 }
@@ -116,6 +118,8 @@ export function applyLiveRoomMessage(
       return { ...state, movedOn: message.movedOn };
     case "sources.changed":
       return { ...state, sources: message.sources };
+    case "audience.changed":
+      return { ...state, audience: message.people };
     case "program.cleared":
       return { ...state, programUndo: { snapshotId: message.snapshotId, change: message.change } };
     case "credits.added.changed":

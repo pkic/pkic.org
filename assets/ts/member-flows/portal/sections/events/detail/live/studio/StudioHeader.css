@@ -26,6 +26,14 @@
     color: var(--pk-ink-muted);
     font-size: var(--pk-text-sm);
   }
+  /* A count operators glance at, as plain muted text: an expected state, not a badge. */
+  .pk-studio-header__audience {
+    flex: none;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
   .pk-studio-header__range,
   .pk-studio-header__left {
     flex: none;

@@ -17,6 +17,7 @@ import { studioBoardSections } from "./sections-studio-board";
 import { studioQuestionSections } from "./sections-studio-questions";
 import { studioChatReviewSections } from "./sections-studio-chat-review";
 import { studioTimerSections } from "./sections-studio-timers";
+import { studioSpeakerMessageSections } from "./sections-studio-speaker-message";
 import { liveAnswerSections } from "./sections-live-answers";
 import { eventScreenBrowserSections } from "./sections-event-screens-browser";
 import { stageDisplaySections } from "./sections-stage-display";
@@ -39,6 +40,7 @@ export const liveProductionSections: PreviewSection[] = [
   ...studioQuestionSections,
   ...studioChatReviewSections,
   ...studioTimerSections,
+  ...studioSpeakerMessageSections,
   ...liveAnswerSections,
   ...eventScreenBrowserSections,
   ...stageDisplaySections,

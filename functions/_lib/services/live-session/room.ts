@@ -559,9 +559,9 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     // A socket the purge closed can report closing after the erase; telling the others must not recreate the room.
     if (!this.sql.holdsData() || !this.store.session()) return;
     if (viewer?.role === "overlay") return this.broadcast.sourcesChanged(socket);
-    if (viewer?.role !== "operator") return;
-    this.presence.left(viewer);
-    await this.broadcast.operatorsChanged(socket);
+    if (!viewer) return;
+    this.presence.left(viewer, socket);
+    if (viewer.role === "operator") await this.broadcast.operatorsChanged(socket);
   }
 
   private session(): LiveRoomSession {
