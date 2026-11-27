@@ -168,6 +168,44 @@ export function resizeBox(
   return { box: normalizeBox({ x: left, y: top, w: right - left, h: bottom - top }), guides };
 }
 
+/**
+ * A box resized by a corner, given the graphic's own shape (its width over
+ * its height in frame pixels): the graphic is drawn whole inside its box, so
+ * the box keeps that shape and stays the size of the graphic. The side the
+ * pointer changed most sets the size, the corner across from the handle stays
+ * put, and the box stays inside the frame.
+ */
+export function shapeBox(
+  resized: { box: Box; guides: SnapGuides },
+  start: Box,
+  handle: ResizeHandle,
+  shape: number,
+): { box: Box; guides: SnapGuides } {
+  const { width: W, height: H } = LIVE_OVERLAY_FRAME;
+  const fixedX = handle.includes("w") ? start.x + start.w : start.x;
+  const fixedY = handle.includes("n") ? start.y + start.h : start.y;
+  const roomW = handle.includes("w") ? fixedX : 1 - fixedX;
+  const roomH = handle.includes("n") ? fixedY : 1 - fixedY;
+  const byWidth = Math.abs(Math.log(resized.box.w / start.w)) >= Math.abs(Math.log(resized.box.h / start.h));
+  // In frame pixels, so the shape holds on the 16:9 frame.
+  let width = byWidth ? resized.box.w * W : resized.box.h * H * shape;
+  const smallest = Math.max(LIVE_OVERLAY_MIN_BOX * W, LIVE_OVERLAY_MIN_BOX * H * shape);
+  width = clamp(width, smallest, Math.min(roomW * W, roomH * H * shape));
+  const w = width / W;
+  const h = width / shape / H;
+  const box = {
+    x: handle.includes("w") ? fixedX - w : fixedX,
+    y: handle.includes("n") ? fixedY - h : fixedY,
+    w,
+    h,
+  };
+  // Only the side that set the size snapped; the other follows the shape.
+  const guides = byWidth
+    ? { vertical: resized.guides.vertical, horizontal: [] }
+    : { vertical: [], horizontal: resized.guides.horizontal };
+  return { box: normalizeBox(box), guides };
+}
+
 /** The box moved by whole frame pixels from the keyboard, kept inside the frame. */
 export function nudgeBox(start: Box, direction: "up" | "down" | "left" | "right", large: boolean): Box {
   const pixels = large ? LAYOUT_GRID_PX : NUDGE_PX;

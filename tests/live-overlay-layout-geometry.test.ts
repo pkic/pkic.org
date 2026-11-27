@@ -26,6 +26,7 @@ import {
   moveBox,
   nudgeBox,
   resizeBox,
+  shapeBox,
   snapTargets,
   type Box,
 } from "../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-editing";
@@ -177,6 +178,26 @@ describe("editing a box", () => {
     expect(fromLeft.w).toBeCloseTo(0.02);
     const snapped = resizeBox(box, "e", (955 - 500) / 1920, 0, snapping);
     expect((snapped.box.x + snapped.box.w) * 1920).toBeCloseTo(960, 0);
+  });
+
+  it("keeps a corner-resized box the shape of its graphic, so the graphic fills it", () => {
+    // A square card in a 400 × 200 box, dragged wider: the width the pointer set gives the height too.
+    const wider = shapeBox(resizeBox(box, "se", 200 / 1920, 10 / 1080, free), box, "se", 1).box;
+    expect(wider.w * 1920).toBeCloseTo(600, 0);
+    expect(wider.h * 1080).toBeCloseTo(600, 0);
+    expect(wider.x).toBeCloseTo(box.x, 3);
+    expect(wider.y).toBeCloseTo(box.y, 3);
+    // Dragged up from the top-left corner, the height sets the size and the bottom-right corner stays.
+    const taller = shapeBox(resizeBox(box, "nw", 0, -50 / 1080, free), box, "nw", 2).box;
+    expect(taller.h * 1080).toBeCloseTo(250, 0);
+    expect(taller.w * 1920).toBeCloseTo(500, 0);
+    expect((taller.x + taller.w) * 1920).toBeCloseTo(500, 0);
+    expect((taller.y + taller.h) * 1080).toBeCloseTo(300, 0);
+    // A full-frame graphic dragged past the frame stops at the frame, still its shape.
+    const full = shapeBox(resizeBox(box, "se", 2, 2, free), box, "se", 16 / 9).box;
+    expect(full.x + full.w).toBeLessThanOrEqual(1);
+    expect(full.y + full.h).toBeLessThanOrEqual(1);
+    expect((full.w * 1920) / (full.h * 1080)).toBeCloseTo(16 / 9, 2);
   });
 
   it("nudges by a pixel, or by a grid step with Shift", () => {

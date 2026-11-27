@@ -17,6 +17,7 @@ import {
   layoutSharingNote,
 } from "./overlay-layout-copy";
 import { LAYOUT_UNITS, fieldValue, fractionOf, type LayoutUnit } from "./overlay-layout-editing";
+import "./OverlayLayouts.css";
 
 type Change = (element: LiveOverlayElement, patch: Partial<LiveOverlayElementPlacement>) => void;
 

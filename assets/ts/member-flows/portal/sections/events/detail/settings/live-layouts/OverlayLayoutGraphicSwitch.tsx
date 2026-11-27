@@ -7,6 +7,7 @@ import {
 import { Button } from "../../../../../../../ui/Button";
 import { IconBolt, StrokeIcon } from "../../../../../../../ui/MediaIcons";
 import { LAYOUT_SWITCH_CHOICES, describeGraphicSwitch, layoutSwitchChoice } from "./overlay-layout-copy";
+import "./OverlayLayouts.css";
 
 /** A pointer on a list: the graphic comes on when someone picks one of its items in the studio. */
 function PickIcon() {
