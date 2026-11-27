@@ -1,0 +1,43 @@
+/*
+ * Preview unlocked for editing: the scene's canvas where the picture was,
+ * at 16:9 inside the monitor's frame, edged in the accent so it reads as
+ * being edited. The scene's actions sit in Preview's header; its sources
+ * list is the Graphics panel's In scene tab.
+ */
+@layer components {
+  .pk-studio-scene-editor {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: var(--pk-2);
+    min-block-size: 0;
+    block-size: 100%;
+  }
+  /* Full screen while editing: the whole Preview panel fills the window, header and all. */
+  .pk-studio-cell:has(.pk-studio-scene-editor[data-full]) {
+    position: fixed;
+    z-index: 20;
+    inset: var(--pk-2);
+  }
+  .pk-studio-scene-editor .pk-layout-canvas-figure {
+    display: grid;
+    place-items: center;
+    min-block-size: 0;
+    container-type: size;
+  }
+  .pk-studio-scene-editor .pk-layout-canvas {
+    inline-size: min(100cqi, 100cqb * 16 / 9);
+    border-color: var(--pk-accent);
+    border-radius: 0;
+  }
+  .pk-studio-scene-editor__actions {
+    display: inline-flex;
+    gap: var(--pk-1);
+  }
+  .pk-studio-scene-sources__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--pk-2);
+    padding: var(--pk-1) var(--pk-2);
+  }
+}

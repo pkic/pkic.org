@@ -137,13 +137,13 @@
     width: auto;
   }
   /*
-   * A graphic's row: its grip, its name and place, its moves and its menu on
-   * one line, and under the name what puts it on, as wide as the row so the
-   * words stay on one line beside nothing.
+   * A graphic's row on one line: its grip, its name and place, the icon for
+   * what puts it on, its moves and its menu.
    */
   .pk-scenes__graphics .pk-scenes__row {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-columns: auto minmax(0, 1fr) auto auto auto auto;
+    align-items: center;
     gap: 0 var(--pk-2);
   }
   .pk-scenes__graphics .pk-scenes__pick,
@@ -156,30 +156,36 @@
   .pk-scenes__graphics .pk-scenes__pick {
     grid-column: 2;
   }
+  /* What puts a graphic on, as an icon; its words are its tooltip. Muted unless it comes on with the scene. */
   .pk-scenes__switch {
-    grid-column: 2 / -1;
-    min-inline-size: 0;
-    padding-block-end: var(--pk-2);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: 1.5rem;
     color: var(--pk-ink-muted);
-    font-size: var(--pk-text-sm);
+  }
+  .pk-scenes__switch[data-on] {
+    color: var(--pk-accent-ink);
+  }
+  .pk-scenes__switch .pk-button[aria-pressed="false"] {
+    color: color-mix(in srgb, var(--pk-ink-muted) 70%, transparent);
   }
   /* Read by someone who may not change the scene: no grip, moves or menu, so the words take the whole row. */
   .pk-scenes__row:has(> .pk-scenes__label) {
     padding-inline: var(--pk-4);
   }
-  .pk-scenes__label,
-  .pk-scenes__label + .pk-scenes__switch {
-    grid-column: 1 / -1;
+  .pk-scenes__label {
+    grid-column: 1 / 3;
   }
-  /* The scene's choice for a graphic: its words and a chevron, opening the two choices. */
-  .pk-menu__trigger.pk-scenes__choice {
+  /* Boards that partly overlap: a plain line each under the list, in the warning ink. */
+  .pk-scenes__overlaps {
+    display: grid;
     gap: var(--pk-1);
-    /* Its words start under the graphic's name: the padding and the hairline border hang out to the left. */
-    margin-inline-start: calc(-1 * var(--pk-1) - 1px);
-    padding: 0.125rem var(--pk-1);
-    color: var(--pk-ink);
-    font: inherit;
-    text-align: start;
+    margin: 0;
+    padding: var(--pk-2) var(--pk-4);
+    list-style: none;
+    color: var(--pk-warn-ink);
+    font-size: var(--pk-text-sm);
   }
   .pk-scenes__empty {
     padding: var(--pk-4);

@@ -1,5 +1,9 @@
 import { LIVE_OVERLAY_SAFE_MARGIN } from "../../../../../../../../shared/live-overlay-geometry";
-import { LIVE_OVERLAY_FRAME, LIVE_OVERLAY_MIN_BOX } from "../../../../../../../../shared/schemas/live-overlay-layout";
+import {
+  LIVE_OVERLAY_FRAME,
+  LIVE_OVERLAY_MIN_BOX,
+  type LiveOverlayElement,
+} from "../../../../../../../../shared/schemas/live-overlay-layout";
 
 /**
  * The layout editor's geometry: moving, resizing and nudging an element's box
@@ -22,8 +26,11 @@ export const NUDGE_PX = 1;
 
 /** The edges a box can be dragged by: a side, or a corner (two sides). */
 export type ResizeHandle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
-/** The handles the scene editor draws on the selected box: its corners. */
-export const CORNER_HANDLES: readonly ResizeHandle[] = ["nw", "ne", "se", "sw"];
+/** The handles the scene editor draws on the selected box: its corners, and its sides to drag one edge alone. */
+export const BOX_HANDLES: readonly ResizeHandle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+
+/** The graphics drawn whole at a shape of their own, so a corner resize keeps it: the QR code. Others fill their box. */
+export const FIXED_SHAPE_ELEMENTS: ReadonlySet<LiveOverlayElement> = new Set<LiveOverlayElement>(["qrCode"]);
 
 /** The lines a box snaps to along one axis, and the ones a guide is drawn for. */
 export interface SnapTargets {
@@ -66,6 +73,20 @@ export function snapTargets(others: readonly Box[]): SnapTargets {
   };
 }
 
+/**
+ * The boxes a moving box snaps to: every other box but those in the very
+ * place it starts from, such as the graphics sharing its spot, whose edges
+ * would only pull it back where it was.
+ */
+export function snapPeers(start: Box, others: readonly Box[]): Box[] {
+  const samePlace = (box: Box) =>
+    Math.abs(box.x - start.x) < EPSILON &&
+    Math.abs(box.y - start.y) < EPSILON &&
+    Math.abs(box.w - start.w) < EPSILON &&
+    Math.abs(box.h - start.h) < EPSILON;
+  return others.filter((box) => !samePlace(box));
+}
+
 /** The nearest target to any of the candidate lines within the threshold, as the shift that lands on it. */
 function nearest(candidates: readonly number[], targets: readonly number[], threshold: number) {
   let best: { shift: number; line: number } | null = null;
@@ -80,6 +101,12 @@ function nearest(candidates: readonly number[], targets: readonly number[], thre
 
 const gridStep = { x: LAYOUT_GRID_PX / LIVE_OVERLAY_FRAME.width, y: LAYOUT_GRID_PX / LIVE_OVERLAY_FRAME.height };
 const toGrid = (value: number, step: number) => Math.round(value / step) * step;
+/**
+ * A snap that would put an edge back where it started, once the pointer took it past half the snap distance,
+ * is skipped: the edge follows the pointer. A smaller slip of the hand still snaps back.
+ */
+const keepsMoved = (snapped: number, value: number, start: number, threshold: number) =>
+  Math.abs(snapped - start) < EPSILON && Math.abs(value - start) > threshold / 2 ? value : snapped;
 
 export interface SnapOptions {
   targets: SnapTargets;
@@ -99,14 +126,21 @@ export function moveBox(start: Box, dx: number, dy: number, options: SnapOptions
   let y = clamp(start.y + dy, 0, 1 - start.h);
   const guides: SnapGuides = { vertical: [], horizontal: [] };
   if (options.snap) {
-    const along = (position: number, size: number, targets: number[], threshold: number, step: number) => {
+    const along = (
+      position: number,
+      from: number,
+      size: number,
+      targets: number[],
+      threshold: number,
+      step: number,
+    ) => {
       const hit = nearest([position, position + size / 2, position + size], targets, threshold);
-      return hit
-        ? { position: position + hit.shift, line: hit.line }
-        : { position: toGrid(position, step), line: null };
+      const snapped = hit ? position + hit.shift : toGrid(position, step);
+      const kept = keepsMoved(snapped, position, from, threshold);
+      return { position: kept, line: hit && kept === snapped ? hit.line : null };
     };
-    const horizontal = along(x, start.w, options.targets.vertical, options.threshold.x, gridStep.x);
-    const vertical = along(y, start.h, options.targets.horizontal, options.threshold.y, gridStep.y);
+    const horizontal = along(x, start.x, start.w, options.targets.vertical, options.threshold.x, gridStep.x);
+    const vertical = along(y, start.y, start.h, options.targets.horizontal, options.threshold.y, gridStep.y);
     x = clamp(horizontal.position, 0, 1 - start.w);
     y = clamp(vertical.position, 0, 1 - start.h);
     if (horizontal.line !== null) guides.vertical.push(horizontal.line);
@@ -132,40 +166,84 @@ export function resizeBox(
   let top = start.y;
   let bottom = start.y + start.h;
   const guides: SnapGuides = { vertical: [], horizontal: [] };
-  const edge = (value: number, targets: number[], threshold: number, step: number, axis: keyof SnapGuides) => {
+  const edge = (
+    value: number,
+    from: number,
+    targets: number[],
+    threshold: number,
+    step: number,
+    axis: keyof SnapGuides,
+  ) => {
     if (!options.snap) return value;
     const hit = nearest([value], targets, threshold);
-    if (hit) {
-      guides[axis].push(hit.line);
-      return value + hit.shift;
-    }
-    return toGrid(value, step);
+    const snapped = hit ? value + hit.shift : toGrid(value, step);
+    const kept = keepsMoved(snapped, value, from, threshold);
+    if (hit && kept === snapped) guides[axis].push(hit.line);
+    return kept;
   };
   if (handle.includes("w"))
     left = clamp(
-      edge(left + dx, options.targets.vertical, options.threshold.x, gridStep.x, "vertical"),
+      edge(left + dx, left, options.targets.vertical, options.threshold.x, gridStep.x, "vertical"),
       0,
       right - LIVE_OVERLAY_MIN_BOX,
     );
   if (handle.includes("e"))
     right = clamp(
-      edge(right + dx, options.targets.vertical, options.threshold.x, gridStep.x, "vertical"),
+      edge(right + dx, right, options.targets.vertical, options.threshold.x, gridStep.x, "vertical"),
       left + LIVE_OVERLAY_MIN_BOX,
       1,
     );
   if (handle.includes("n"))
     top = clamp(
-      edge(top + dy, options.targets.horizontal, options.threshold.y, gridStep.y, "horizontal"),
+      edge(top + dy, top, options.targets.horizontal, options.threshold.y, gridStep.y, "horizontal"),
       0,
       bottom - LIVE_OVERLAY_MIN_BOX,
     );
   if (handle.includes("s"))
     bottom = clamp(
-      edge(bottom + dy, options.targets.horizontal, options.threshold.y, gridStep.y, "horizontal"),
+      edge(bottom + dy, bottom, options.targets.horizontal, options.threshold.y, gridStep.y, "horizontal"),
       top + LIVE_OVERLAY_MIN_BOX,
       1,
     );
   return { box: normalizeBox({ x: left, y: top, w: right - left, h: bottom - top }), guides };
+}
+
+/**
+ * A box resized by a corner, given the graphic's own shape (its width over
+ * its height in frame pixels): the graphic is drawn whole inside its box, so
+ * the box keeps that shape and stays the size of the graphic. The side the
+ * pointer changed most sets the size, the corner across from the handle stays
+ * put, and the box stays inside the frame.
+ */
+export function shapeBox(
+  resized: { box: Box; guides: SnapGuides },
+  start: Box,
+  handle: ResizeHandle,
+  shape: number,
+): { box: Box; guides: SnapGuides } {
+  const { width: W, height: H } = LIVE_OVERLAY_FRAME;
+  const fixedX = handle.includes("w") ? start.x + start.w : start.x;
+  const fixedY = handle.includes("n") ? start.y + start.h : start.y;
+  const roomW = handle.includes("w") ? fixedX : 1 - fixedX;
+  const roomH = handle.includes("n") ? fixedY : 1 - fixedY;
+  const byWidth = Math.abs(Math.log(resized.box.w / start.w)) >= Math.abs(Math.log(resized.box.h / start.h));
+  // In frame pixels, so the shape holds on the 16:9 frame.
+  let width = byWidth ? resized.box.w * W : resized.box.h * H * shape;
+  const smallest = Math.max(LIVE_OVERLAY_MIN_BOX * W, LIVE_OVERLAY_MIN_BOX * H * shape);
+  width = clamp(width, smallest, Math.min(roomW * W, roomH * H * shape));
+  const w = width / W;
+  const h = width / shape / H;
+  const box = {
+    x: handle.includes("w") ? fixedX - w : fixedX,
+    y: handle.includes("n") ? fixedY - h : fixedY,
+    w,
+    h,
+  };
+  // Only the side that set the size snapped; the other follows the shape.
+  const guides = byWidth
+    ? { vertical: resized.guides.vertical, horizontal: [] }
+    : { vertical: [], horizontal: resized.guides.horizontal };
+  return { box: normalizeBox(box), guides };
 }
 
 /** The box moved by whole frame pixels from the keyboard, kept inside the frame. */

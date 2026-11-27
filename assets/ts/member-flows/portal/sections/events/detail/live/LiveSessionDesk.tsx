@@ -20,8 +20,6 @@ import { liveRoomOpenFailure } from "../../../../../../live-session/live-room-co
 import type { LiveRoomState } from "../../../../../../live-session/live-room-state";
 import { useLiveRoom } from "../../../../../../live-session/useLiveRoom";
 import type { LiveSocketFactory } from "../../../../../../live-session/useLiveSocket";
-import { Spinner } from "../../../../../../components/Spinner";
-import { Alert } from "../../../../../../ui/Alert";
 import { ControlTooltips } from "../../../../../../ui/ControlTooltips";
 import { LiveChatPanel } from "./LiveChatPanel";
 import { liveLocationChatStamp } from "../../../../../../../shared/live-location-chat";
@@ -36,7 +34,11 @@ import type { LiveTargets } from "./live-output-targets";
 import { createLivePresence, livePresenceFocusAt, LivePresenceContext } from "./presence/live-presence";
 import { LivePanelPresence } from "./presence/LivePresenceTag";
 import { GraphicsPanel, nextInRoom } from "./studio/GraphicsPanel";
+import { SceneEditingProvider, duplicatePreviewScene, leavePreviewScene } from "./studio/PreviewSceneEditor";
 import { monitorPanelView } from "./studio/MonitorPanel";
+import { useStudioSpotTurns } from "../../../../../../live-session/useLiveSpotTurns";
+import { LeaveFullscreenDialog } from "./studio/LeaveFullscreenDialog";
+import { StudioJoining } from "./studio/StudioJoining";
 import { RoomOpeningMenu } from "./studio/RoomOpeningMenu";
 import { StudioScreensBody, StudioScreensConnection } from "./studio/ScreensPanel";
 import { SpeakerMessagePanel, SpeakerMessageStatus, useSpeakerMessageDraft } from "./studio/SpeakerMessagePanel";
@@ -58,7 +60,6 @@ import { StudioPhoneHome } from "./studio/StudioPhoneHome";
 import { useStudioFullscreen } from "./studio/useStudioFullscreen";
 import { ProgramUndoToast, TransitionControl, useTakeShortcut } from "./studio/StudioSwitcher";
 import { liveSceneName } from "./live-layer-unseen";
-import { Dialog } from "../../../../../../ui/Dialog";
 import { useStudioLayout } from "./studio/useStudioLayout";
 import { useLiveStudioSetup } from "./live-studio-setup";
 import { toast } from "../../../../ui";
@@ -212,16 +213,8 @@ export function LiveSessionDesk({
     sendProgram(liveScreenTake(target, current.preview));
   };
   useTakeShortcut(() => take("program"), canProduce && live && !broadcasting);
-  if (!state)
-    return room.admissionRefusal ? (
-      <Alert tone="danger">{liveRoomOpenFailure(room.admissionRefusal, "operator")}</Alert>
-    ) : room.status === "offline" ? (
-      <Alert tone={room.serverFault ? "danger" : "warn"}>
-        {liveRoomOpenFailure(null, "operator", room.serverFault)}
-      </Alert>
-    ) : (
-      <Spinner label="Joining the live room…" />
-    );
+  const turnsAt = useStudioSpotTurns(state);
+  if (!state) return <StudioJoining room={room} />;
   // Moving to another session keeps the last one on screen, paused, until the next one's room answers.
   const shownId = state.session.occurrenceId;
   const switching = shownId !== occurrenceId;
@@ -229,7 +222,16 @@ export function LiveSessionDesk({
   // Moderation pauses with the room; production also stays off for an operator who does not run the studio.
   const moderationDisabled = !live || broadcasting || switching;
   const disabled = moderationDisabled || !canProduce;
-  const targets: LiveTargets = { state, programActive, disabled, canProduce, sendProgram, sendPrograms, setup };
+  const targets: LiveTargets = {
+    state,
+    programActive,
+    disabled,
+    canProduce,
+    sendProgram,
+    sendPrograms,
+    setup,
+    turnsAt,
+  };
   const moderation: LiveTargets = { ...targets, disabled: moderationDisabled };
   // Loaded or not, an operator decides here whether attendees take part in this session's virtual room.
   const status = (
@@ -259,7 +261,7 @@ export function LiveSessionDesk({
       output === "program"
         ? clearProgram()
         : output === "preview"
-          ? sendProgram({ type: "preview.set", composition: empty })
+          ? leavePreviewScene(() => sendProgram({ type: "preview.set", composition: empty }))
           : output === "livestream"
             ? undefined
             : sendProgram({
@@ -269,9 +271,16 @@ export function LiveSessionDesk({
               }),
     screenSync: state.screenSync,
     sync: (output: LiveSyncedScreen, sync: boolean) => sendProgram({ type: "screen.sync", output, sync }),
-    previewScene: (scene: string) => sendProgram({ type: "preview.set", composition: { scene } }),
+    // Leaving a scene being edited asks first to save or discard its changes.
+    previewScene: (scene: string) =>
+      leavePreviewScene(() => sendProgram({ type: "preview.set", composition: { scene } })),
     screenScene: (output: LiveAuxOutput, scene: string) => sendProgram({ type: "aux.scene", output, scene }),
     disabled,
+    canEditScenes: canSetUp,
+    duplicateScene: canSetUp
+      ? () =>
+          duplicatePreviewScene(slug, preview, (scene) => sendProgram({ type: "preview.set", composition: { scene } }))
+      : undefined,
   };
   /** A room's state when it is of the session on air. */
   const onAirState = (candidate: LiveRoomState | null) =>
@@ -495,101 +504,93 @@ export function LiveSessionDesk({
   const reportFocus = (event: Event) => presence.focus(livePresenceFocusAt(event.target as Element | null));
   return (
     <LivePresenceContext.Provider value={presence}>
-      <div
-        ref={studio}
-        class="pk-studio"
-        data-phone={phone ? "" : undefined}
-        data-expanded={fullscreen.expanded ? "true" : undefined}
-        onPointerOver={reportFocus}
-        onFocusIn={reportFocus}
-        onPointerLeave={() => presence.focus(livePresenceFocusAt(document.activeElement))}
-        onFocusOut={(event) => {
-          if (!event.relatedTarget) presence.focus(null);
-        }}
-      >
-        <ControlTooltips scope={studio} />
-        {phone ? (
-          <StudioPhone
-            state={state}
-            sources={sources}
-            clock={clock ?? state.session.timeZone}
-            active={programActive}
-            sessionStatus={status}
-            roomControl={roomControl}
-            transition={transition}
-            disabled={disabled}
-            onClear={switcher.clear}
-            onScene={switcher.previewScene}
-            notice={notice}
-            eventPath={eventPath}
-            home={
-              <StudioPhoneHome
-                key={shownId}
-                targets={targets}
-                messageDisabled={moderationDisabled}
-                send={sendProgram}
-              />
-            }
-            panel={(type) => render(phonePanels.panel(type))}
+      <SceneEditingProvider slug={slug} preview={preview} canEdit={canSetUp}>
+        <div
+          ref={studio}
+          class="pk-studio"
+          data-phone={phone ? "" : undefined}
+          data-expanded={fullscreen.expanded ? "true" : undefined}
+          onPointerOver={reportFocus}
+          onFocusIn={reportFocus}
+          onPointerLeave={() => presence.focus(livePresenceFocusAt(document.activeElement))}
+          onFocusOut={(event) => {
+            if (!event.relatedTarget) presence.focus(null);
+          }}
+        >
+          <ControlTooltips scope={studio} />
+          {phone ? (
+            <StudioPhone
+              state={state}
+              sources={sources}
+              clock={clock ?? state.session.timeZone}
+              active={programActive}
+              sessionStatus={status}
+              roomControl={roomControl}
+              transition={transition}
+              disabled={disabled}
+              onClear={switcher.clear}
+              onScene={switcher.previewScene}
+              notice={notice}
+              eventPath={eventPath}
+              home={
+                <StudioPhoneHome
+                  key={shownId}
+                  targets={targets}
+                  messageDisabled={moderationDisabled}
+                  send={sendProgram}
+                />
+              }
+              panel={(type) => render(phonePanels.panel(type))}
+            />
+          ) : null}
+          <div class="pk-panel pk-studio__bar" hidden={phone}>
+            <StudioHeader
+              state={state}
+              clock={clock ?? state.session.timeZone}
+              roomControl={roomControl}
+              sessionStatus={status}
+              active={programActive}
+              notice={notice}
+            />
+            <StudioToolbar
+              workspace={layout.workspace}
+              selectWorkspace={layout.selectWorkspace}
+              panels={layout.panels}
+              change={layout.change}
+              reset={layout.reset}
+              saveAsDefault={
+                setup.canSave
+                  ? () =>
+                      void setup
+                        .saveLayout(layout.workspace, [...layout.panels])
+                        .then((problem) =>
+                          problem
+                            ? toast(problem, "error")
+                            : toast(
+                                `Saved the ${STUDIO_WORKSPACE_LABELS[layout.workspace]} layout as the event default.`,
+                                "success",
+                              ),
+                        )
+                  : undefined
+              }
+              expanded={fullscreen.expanded}
+              toggleExpanded={fullscreen.toggle}
+              touring={touring}
+              toggleTour={() => setTouring(!touring)}
+            />
+          </div>
+          {phone ? null : (
+            <StudioGrid workspace={layout.workspace} panels={layout.panels} change={layout.change} render={render} />
+          )}
+          {touring && !phone ? <StudioTour scope={studio} onClose={() => setTouring(false)} /> : null}
+          <ProgramUndoToast
+            undo={state.programUndo}
+            defaultScene={liveSceneName(state, null)}
+            onUndo={(snapshotId) => sendProgram({ type: "program.restore", snapshotId })}
           />
-        ) : null}
-        <div class="pk-panel pk-studio__bar" hidden={phone}>
-          <StudioHeader
-            state={state}
-            clock={clock ?? state.session.timeZone}
-            roomControl={roomControl}
-            sessionStatus={status}
-            active={programActive}
-            notice={notice}
-          />
-          <StudioToolbar
-            workspace={layout.workspace}
-            selectWorkspace={layout.selectWorkspace}
-            panels={layout.panels}
-            change={layout.change}
-            reset={layout.reset}
-            saveAsDefault={
-              setup.canSave
-                ? () =>
-                    void setup
-                      .saveLayout(layout.workspace, [...layout.panels])
-                      .then((problem) =>
-                        problem
-                          ? toast(problem, "error")
-                          : toast(
-                              `Saved the ${STUDIO_WORKSPACE_LABELS[layout.workspace]} layout as the event default.`,
-                              "success",
-                            ),
-                      )
-                : undefined
-            }
-            expanded={fullscreen.expanded}
-            toggleExpanded={fullscreen.toggle}
-            touring={touring}
-            toggleTour={() => setTouring(!touring)}
-          />
+          <LeaveFullscreenDialog fullscreen={fullscreen} />
         </div>
-        {phone ? null : (
-          <StudioGrid workspace={layout.workspace} panels={layout.panels} change={layout.change} render={render} />
-        )}
-        {touring && !phone ? <StudioTour scope={studio} onClose={() => setTouring(false)} /> : null}
-        <ProgramUndoToast
-          undo={state.programUndo}
-          defaultScene={liveSceneName(state, null)}
-          onUndo={(snapshotId) => sendProgram({ type: "program.restore", snapshotId })}
-        />
-        {fullscreen.confirmingExit ? (
-          <Dialog
-            open
-            title="Leave full screen?"
-            description="The studio goes back into the portal page. Nothing on air changes."
-            confirmLabel="Leave full screen"
-            cancelLabel="Stay in full screen"
-            onConfirm={fullscreen.confirmExit}
-            onCancel={fullscreen.stay}
-          />
-        ) : null}
-      </div>
+      </SceneEditingProvider>
     </LivePresenceContext.Provider>
   );
 }

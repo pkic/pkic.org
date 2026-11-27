@@ -43,7 +43,8 @@ import { LiveStillPictures } from "./live-still-pictures";
 import { LiveStageDisplay, LiveStageDisplayBanner } from "./LiveStageDisplay";
 import { isLiveAuxOutput, liveOutputProjection, liveOutputScene, liveOutputView } from "./live-output-projection";
 import "../../design/tokens.event.generated.css";
-import { liveOverlayCoveredBy, liveOverlayDrawn } from "../../shared/live-overlay-cover";
+import { liveOverlayCoveredBy, liveOverlayDrawn, liveOverlayWaitsForTurn } from "../../shared/live-overlay-cover";
+import { useLiveSpotTurns } from "./useLiveSpotTurns";
 import {
   LIVE_PROGRAM_LAYER_ORDER,
   isLiveProgramLayer,
@@ -156,6 +157,12 @@ function markBox(plate: LiveOverlayElementPlacement): LiveOverlayElementPlacemen
  * reads as digits on the plate's footprint instead. A tab is the first timer
  * of its stack run on to the frame's edge; the next one sits under its plate.
  */
+/** The timers as this scene shows them: in the scene's look when it sets one, else each in its own. */
+function sceneTimerLook(graphics: readonly LiveTimerGraphic[], box: LiveOverlayElementPlacement) {
+  const look = box.timerLook;
+  return look ? graphics.map((graphic) => ({ ...graphic, presentation: look })) : graphics;
+}
+
 function timerSlots(
   graphics: readonly LiveTimerGraphic[],
   box: LiveOverlayElementPlacement,
@@ -306,8 +313,12 @@ const PROGRAM_LAYERS: ReadonlyMap<LiveProgramLayer, Layer> = new Map(
       },
       {
         element: "qrCode",
-        draw: (state, { eventSlug }) => (
-          <LiveQrCodeOverlay eventSlug={eventSlug} occurrenceId={state.session.occurrenceId} />
+        draw: (state, { eventSlug, placement }) => (
+          <LiveQrCodeOverlay
+            eventSlug={eventSlug}
+            occurrenceId={state.session.occurrenceId}
+            look={placement.qrLook ?? "card"}
+          />
         ),
       },
       {
@@ -416,6 +427,8 @@ export function LiveOverlayPresentation({
     allowed,
     view !== "stage-display" && state !== null && allowed.ticker.visible && liveOverlayDrawn(state.stage, "ticker"),
   );
+  // A spot whose boards take turns shows one at a time, the same one on every output.
+  const now = useLiveSpotTurns(elements);
   const cropped = liveOverlayCropElement(graphics, view === "stage-display" ? "stage-display" : "program");
   // The stage display stacks its layers as listed; Program's keep their own order and the scene stacks them.
   const speaker = view === "stage-display" ? projection : null;
@@ -443,7 +456,7 @@ export function LiveOverlayPresentation({
   const ground = view !== "stage-display" && elements.background.visible ? elements.background : null;
   const timers =
     state && view !== "stage-display" && elements.timer.visible
-      ? timerSlots(state.stage.timerGraphics, elements.timer, cardBoxes)
+      ? timerSlots(sceneTimerLook(state.stage.timerGraphics, elements.timer), elements.timer, cardBoxes)
       : [];
   const timerBoxes = timers.map(({ slot }) => slot);
   const sounding =
@@ -481,8 +494,8 @@ export function LiveOverlayPresentation({
               const placement = elements[element];
               const joined = element === "panelists" && panel !== null;
               const box = joined ? panel : placement;
-              // Of two graphics in one spot the front one that is on shows; the one behind it is left out, as the
-              // studio's row says. The background always draws, and so does the layout editor's selected element.
+              // A board covered by one in front, or waiting for its turn in a spot, is left out, as the studio's row
+              // says. The background always draws, and so does the layout editor's selected element.
               // The panel joined with the question is one board at the question's place in the stack: only what
               // covers the question covers both, and a board between the two sits behind it.
               const covered =
@@ -490,7 +503,8 @@ export function LiveOverlayPresentation({
                 element !== focus &&
                 element !== "background" &&
                 isLiveProgramLayer(element) &&
-                liveOverlayCoveredBy(state.stage, elements, joined ? "question" : element) !== null;
+                (liveOverlayCoveredBy(state.stage, elements, joined ? "question" : element) !== null ||
+                  liveOverlayWaitsForTurn(state.stage, elements, joined ? "question" : element, now));
               const content =
                 placement.visible && !covered ? draw(state, { placement, animate, panel, eventSlug }) : null;
               return content ? (

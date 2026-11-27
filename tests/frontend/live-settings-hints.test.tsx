@@ -75,11 +75,11 @@ it("leaves no native title on the page, in a menu or in a dialog, and hints the 
   const choice = root.querySelector<HTMLButtonElement>(
     '.pk-scenes__row[data-element="topQuestions"] .pk-scenes__switch button',
   )!;
-  expect(choice.dataset.tooltip).toMatch(/^Top questions: .+\n.+ Open to change it\.$/);
+  // The switch is a toggle whose hint says what it does now and what a click does.
+  expect(choice.dataset.tooltip).toMatch(/^Comes on with the scene\n.+\nClick: switched in the studio\.$/);
   await act(() => choice.click());
-  expect(document.querySelector("[role=menuitemradio]")).not.toBeNull();
+  expect(choice.getAttribute("aria-pressed")).toBe("false");
   expect(nativeTitles()).toEqual([]);
-  await act(async () => void document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
   await act(() => labeled("Actions for Top questions").click());
   // A menu item whose effect its label does not say carries a hint; a plain one such as Remove does not.
   const hints = Object.fromEntries(

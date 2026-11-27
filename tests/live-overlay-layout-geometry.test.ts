@@ -26,11 +26,13 @@ import {
   moveBox,
   nudgeBox,
   resizeBox,
+  shapeBox,
+  snapPeers,
   snapTargets,
   type Box,
 } from "../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-editing";
 import { layoutSlugFor } from "../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-slug";
-import { layoutLabelSides } from "../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-labels";
+import { layoutLabelPlaces } from "../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-labels";
 import { LIVE_OVERLAY_ELEMENT_LABELS } from "../assets/shared/schemas/live-overlay-layout";
 
 /** Every graphic at its standard box, all shown. */
@@ -162,6 +164,20 @@ describe("editing a box", () => {
     expect(moveBox(box, 37 / 1920, 0, free).box.x * 1920).toBeCloseTo(137, 0);
   });
 
+  it("does not snap back to the graphics sharing the spot it starts from", () => {
+    const spot = px(1152, 0, 768, 1000);
+    const peers = snapPeers(spot, [spot, { ...spot }, other]);
+    expect(peers).toEqual([other]);
+    // The studio's small canvas: 8 screen pixels are about 28 of the frame's.
+    const options = { snap: true, threshold: { x: 28 / 1920, y: 28 / 1080 }, targets: snapTargets(peers) };
+    // A small resize stays where it was dropped, on the grid, not back at the spot's edge.
+    expect(resizeBox(spot, "w", -20 / 1920, 0, options).box.x * 1920).toBeCloseTo(1128, 0);
+    // Its right edge left the frame's edge on purpose, so the frame does not pull it back; a slip of the hand does not move it.
+    const moved = moveBox(spot, -20 / 1920, 5 / 1080, options).box;
+    expect(moved.x * 1920).toBeCloseTo(1132, 0);
+    expect(moved.y).toBe(0);
+  });
+
   it("keeps a moved box inside the frame", () => {
     const moved = moveBox(box, 5, -5, free).box;
     expect(moved.x + moved.w).toBeCloseTo(1);
@@ -179,6 +195,50 @@ describe("editing a box", () => {
     expect((snapped.box.x + snapped.box.w) * 1920).toBeCloseTo(960, 0);
   });
 
+  it("moves only a side handle's edge, with snapping on, and never the edges across from it", () => {
+    for (const [handle, dx, dy] of [
+      ["n", 0, -37 / 1080],
+      ["s", 0, 41 / 1080],
+      ["e", 53 / 1920, 0],
+      ["w", -29 / 1920, 0],
+    ] as const) {
+      const after = resizeBox(box, handle, dx, dy, snapping).box;
+      const edges = (b: typeof box) => ({ left: b.x, right: b.x + b.w, top: b.y, bottom: b.y + b.h });
+      const was = edges(box);
+      const now = edges(after);
+      const kept = {
+        n: ["left", "right", "bottom"],
+        s: ["left", "right", "top"],
+        e: ["left", "top", "bottom"],
+        w: ["right", "top", "bottom"],
+      }[handle] as Array<keyof typeof was>;
+      for (const edge of kept) expect(now[edge]).toBeCloseTo(was[edge], 3);
+      // The dragged edge itself moves the way the pointer went.
+      const moved = { n: "top", s: "bottom", e: "right", w: "left" }[handle] as keyof typeof was;
+      expect(Math.sign(now[moved] - was[moved])).toBe(Math.sign(dx + dy));
+    }
+  });
+
+  it("keeps a corner-resized box the shape of its graphic, so the graphic fills it", () => {
+    // A square card in a 400 × 200 box, dragged wider: the width the pointer set gives the height too.
+    const wider = shapeBox(resizeBox(box, "se", 200 / 1920, 10 / 1080, free), box, "se", 1).box;
+    expect(wider.w * 1920).toBeCloseTo(600, 0);
+    expect(wider.h * 1080).toBeCloseTo(600, 0);
+    expect(wider.x).toBeCloseTo(box.x, 3);
+    expect(wider.y).toBeCloseTo(box.y, 3);
+    // Dragged up from the top-left corner, the height sets the size and the bottom-right corner stays.
+    const taller = shapeBox(resizeBox(box, "nw", 0, -50 / 1080, free), box, "nw", 2).box;
+    expect(taller.h * 1080).toBeCloseTo(250, 0);
+    expect(taller.w * 1920).toBeCloseTo(500, 0);
+    expect((taller.x + taller.w) * 1920).toBeCloseTo(500, 0);
+    expect((taller.y + taller.h) * 1080).toBeCloseTo(300, 0);
+    // A full-frame graphic dragged past the frame stops at the frame, still its shape.
+    const full = shapeBox(resizeBox(box, "se", 2, 2, free), box, "se", 16 / 9).box;
+    expect(full.x + full.w).toBeLessThanOrEqual(1);
+    expect(full.y + full.h).toBeLessThanOrEqual(1);
+    expect((full.w * 1920) / (full.h * 1080)).toBeCloseTo(16 / 9, 2);
+  });
+
   it("nudges by a pixel, or by a grid step with Shift", () => {
     expect(nudgeBox(box, "right", false).x * 1920).toBeCloseTo(101, 0);
     expect(nudgeBox(box, "up", true).y * 1080).toBeCloseTo(76, 0);
@@ -192,9 +252,23 @@ describe("editing a box", () => {
     expect(fractionOf("", "x", "percent")).toBeNaN();
   });
 
-  it("moves a box's label to its bottom edge when it would cover another box's label", () => {
-    const sides = layoutLabelSides(STANDARD, ["reactions", "timer", "ticker"], LIVE_OVERLAY_ELEMENT_LABELS);
-    expect(sides).toEqual({ reactions: "top", timer: "bottom", ticker: "top" });
+  it("moves a box's name to its bottom edge when it would cover another box's name", () => {
+    const places = layoutLabelPlaces(STANDARD, ["reactions", "timer", "ticker"], LIVE_OVERLAY_ELEMENT_LABELS);
+    expect(places).toEqual({
+      reactions: { side: "top", along: 0 },
+      timer: { side: "bottom", along: 0 },
+      ticker: { side: "top", along: 0 },
+    });
+  });
+
+  it("moves a third name along the edge when boxes share one place", () => {
+    const frame = { visible: true, shared: false, x: 0, y: 0, w: 1, h: 1 };
+    const elements = { ...STANDARD, poll: frame, question: frame, topQuestions: frame } as typeof STANDARD;
+    const places = layoutLabelPlaces(elements, ["poll", "question", "topQuestions"], LIVE_OVERLAY_ELEMENT_LABELS);
+    expect(places.poll).toEqual({ side: "top", along: 0 });
+    expect(places.question).toEqual({ side: "bottom", along: 0 });
+    expect(places.topQuestions.side).toBe("top");
+    expect(places.topQuestions.along).toBeGreaterThan(0);
   });
 
   it("names a new layout for source links, numbered when the name is taken", () => {

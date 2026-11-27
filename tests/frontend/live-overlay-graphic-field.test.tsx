@@ -91,20 +91,14 @@ describe("the scene's background on an output", () => {
       for (const element of drawn(host))
         expect(elements[element as keyof typeof elements].visible, `${layout}: ${element}`).toBe(true);
     }
-    // Break places no board, no check-in code and no lower third: they stay on the output, undrawn, for a later scene.
+    // Break's column is one spot where Up next, the chat and the top questions take turns: one of them shows.
+    // It places no other board, no check-in code and no lower third: they stay on the output, undrawn, for a later scene.
     const pause = drawn(draw({ view: "program", layout: "break", projection: EVERYTHING_ON }));
-    expect(pause).toEqual(expect.arrayContaining(["schedule", "timer", "ticker", "reactions"]));
-    for (const left of [
-      "question",
-      "poll",
-      "panelists",
-      "topQuestions",
-      "chat",
-      "checkIn",
-      "lowerThird",
-      "background",
-      "qrCode",
-    ])
+    expect(pause).toEqual(expect.arrayContaining(["timer", "ticker", "reactions"]));
+    expect(pause.filter((element) => element && ["schedule", "chat", "topQuestions"].includes(element))).toHaveLength(
+      1,
+    );
+    for (const left of ["question", "poll", "panelists", "checkIn", "lowerThird", "background", "qrCode"])
       expect(pause, left).not.toContain(left);
   });
 

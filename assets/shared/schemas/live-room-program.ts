@@ -17,6 +17,7 @@ export type LiveProgramSelection = z.infer<typeof liveProgramSelectionSchema>;
 export const liveProgramSelectSchema = z
   .object({ occurrenceId: databaseIdSchema.nullable(), expectedRevision: z.number().int().nonnegative() })
   .strict();
+export type LiveProgramSelect = z.infer<typeof liveProgramSelectSchema>;
 export const liveProgramMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("program.snapshot"), selection: liveProgramSelectionSchema }).strict(),
   z.object({ type: z.literal("program.changed"), selection: liveProgramSelectionSchema }).strict(),

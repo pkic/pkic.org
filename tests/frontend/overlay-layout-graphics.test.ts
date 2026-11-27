@@ -1,7 +1,20 @@
-import { describe, expect, it } from "vitest";
-import { LIVE_OVERLAY_ELEMENTS, LIVE_OVERLAY_ELEMENT_SWITCHES } from "../../assets/shared/schemas/live-overlay-layout";
+import { describe, expect, it, vi } from "vitest";
+import { liveOverlayDrawn } from "../../assets/shared/live-overlay-cover";
+import { LIVE_OVERLAY_PRESET_LAYOUTS } from "../../assets/shared/live-overlay-layout-presets";
+import {
+  LIVE_OVERLAY_ELEMENTS,
+  LIVE_OVERLAY_ELEMENT_SWITCHES,
+  LIVE_QR_LOOKS,
+} from "../../assets/shared/schemas/live-overlay-layout";
+import { LIVE_TIMER_PRESENTATIONS } from "../../assets/shared/schemas/live-session-timer";
 import { describeGraphicSwitch } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-copy";
+import { graphicActions } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-graphic-actions";
 import { describeGraphicPosition } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-graphics";
+import { layoutElementsChanged } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-sharing";
+import {
+  sampleOverlayRoom,
+  withSampleGraphic,
+} from "../../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-sample";
 
 describe("where a graphic sits, in words", () => {
   const at = (x: number, y: number, w: number, h: number) => describeGraphicPosition({ x, y, w, h });
@@ -31,5 +44,90 @@ describe("what puts a graphic on, in words", () => {
       expect(off).toBe(by === "room" ? "Switched in the studio" : NO_CHOICE[by]);
       expect(unset).toBe(off);
     }
+  });
+});
+
+describe("a graphic's menu", () => {
+  const elements = LIVE_OVERLAY_PRESET_LAYOUTS.default.elements;
+  const handlers = { onShow: vi.fn(), onSharing: vi.fn(), onTurns: vi.fn(), onLook: vi.fn() };
+  it("offers the QR code's looks, the card checked until another is picked, and none for other graphics", () => {
+    const looks = (qrLook?: "white-on-black") =>
+      graphicActions({ ...elements, qrCode: { ...elements.qrCode, qrLook } }, "qrCode", false, handlers).filter(
+        (item) => item.id.startsWith("look-"),
+      );
+    const checked = (qrLook?: "white-on-black") =>
+      looks(qrLook)
+        .filter((item) => item.checked)
+        .map((item) => item.id);
+    expect(
+      looks()
+        .map((item) => item.id)
+        .sort(),
+    ).toEqual(LIVE_QR_LOOKS.map((look) => `look-${look}`).sort());
+    expect(checked()).toEqual(["look-card"]);
+    expect(checked("white-on-black")).toEqual(["look-white-on-black"]);
+    looks().find((item) => item.id === "look-black-on-clear")!.onSelect!();
+    expect(handlers.onLook).toHaveBeenCalledWith({ qrLook: "black-on-clear" });
+    expect(graphicActions(elements, "lowerThird", false, handlers).some((item) => item.id.startsWith("look-"))).toBe(
+      false,
+    );
+  });
+
+  it("offers the timers' looks on Auto until the scene picks one, and Auto puts back each timer's own", () => {
+    const looks = (timerLook?: "ring") =>
+      graphicActions({ ...elements, timer: { ...elements.timer, timerLook } }, "timer", false, handlers).filter(
+        (item) => item.id.startsWith("look-"),
+      );
+    const checked = (timerLook?: "ring") =>
+      looks(timerLook)
+        .filter((item) => item.checked)
+        .map((item) => item.id);
+    expect(
+      looks()
+        .map((item) => item.id)
+        .sort(),
+    ).toEqual(["auto", ...LIVE_TIMER_PRESENTATIONS].map((look) => `look-${look}`).sort());
+    expect(checked()).toEqual(["look-auto"]);
+    expect(checked("ring")).toEqual(["look-ring"]);
+    looks("ring").find((item) => item.id === "look-tab")!.onSelect!();
+    expect(handlers.onLook).toHaveBeenCalledWith({ timerLook: "tab" });
+    looks("ring").find((item) => item.id === "look-auto")!.onSelect!();
+    expect(handlers.onLook).toHaveBeenLastCalledWith({ timerLook: undefined });
+  });
+});
+
+describe("sample content for a graphic that is off", () => {
+  it("fills only the picked graphic from the sample, so the others stay as the room has them", () => {
+    const now = Date.parse("2026-11-27T10:00:00.000Z");
+    const empty = {
+      ...sampleOverlayRoom(now),
+      stage: { ...sampleOverlayRoom(now).stage, timerGraphics: [], poll: null },
+    };
+    const timer = withSampleGraphic(empty, "timer", now);
+    expect(liveOverlayDrawn(timer.stage, "timer")).toBe(true);
+    expect(liveOverlayDrawn(timer.stage, "poll")).toBe(false);
+    expect(withSampleGraphic(empty, "qrCode", now)).toBe(empty);
+  });
+
+  it("keeps the room's people while the panelists are on air, and samples them only when nothing else draws them", () => {
+    const now = Date.parse("2026-11-27T10:00:00.000Z");
+    const room = sampleOverlayRoom(now);
+    const ours = [{ ...room.session.credits[0]!, name: "On air now" }];
+    const onAir = { ...room, session: { ...room.session, credits: ours } };
+    expect(liveOverlayDrawn(onAir.stage, "panelists")).toBe(true);
+    expect(withSampleGraphic(onAir, "speakerWelcome", now).session.credits).toEqual(ours);
+    const off = { ...onAir, stage: { ...onAir.stage, panelists: null } };
+    expect(withSampleGraphic(off, "speakerWelcome", now).session.credits).toEqual(room.session.credits);
+  });
+});
+
+describe("what a scene saves for a shared graphic", () => {
+  it("counts a new look as the scene's change, and a shared move as the positions' alone", () => {
+    const elements = LIVE_OVERLAY_PRESET_LAYOUTS.default.elements;
+    const shared = { ...elements, timer: { ...elements.timer, shared: true } };
+    expect(layoutElementsChanged(shared, { ...shared, timer: { ...shared.timer, timerLook: "ring" } })).toBe(true);
+    expect(layoutElementsChanged(shared, { ...shared, timer: { ...shared.timer, x: shared.timer.x + 0.1 } })).toBe(
+      false,
+    );
   });
 });

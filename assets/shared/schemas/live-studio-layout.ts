@@ -56,11 +56,13 @@ export const STUDIO_GRID_BOUNDS: StudioPanelBounds = {
 /**
  * The Transition holds one button, so it may be one column wide and three rows
  * high; at two its name fits. A monitor scales its picture to any size, so it
- * may be as small.
+ * may be as small. The message to the speaker is one line and its buttons, so
+ * it may be as short as that.
  */
 const PANEL_GRID_BOUNDS: Partial<Record<StudioPanelType, StudioPanelBounds>> = {
   transition: { ...STUDIO_GRID_BOUNDS, minW: 1, minH: 3 },
   monitor: { ...STUDIO_GRID_BOUNDS, minW: 1, minH: 3 },
+  message: { ...STUDIO_GRID_BOUNDS, minH: 3 },
 };
 /** The smallest a panel of this type may be. */
 export function studioGridBounds(type: StudioPanelType): StudioPanelBounds {

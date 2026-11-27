@@ -33,6 +33,30 @@ export function changeLayoutElement(
   return { elements, positions: { ...drafts.positions, [element]: liveOverlayBoxOf(placement) } };
 }
 
+/**
+ * The drafts once the event's shared positions changed under them, from `before` to `after`. A shared position
+ * the draft moved stays the draft's; every other one takes the saved position, and the shared graphics in the
+ * draft move with it, so both drafts agree on every shared box. The scene's own fields stay as they are.
+ */
+export function rebaseSharedPositions(
+  drafts: LayoutDrafts,
+  before: LiveOverlaySharedPositions,
+  after: LiveOverlaySharedPositions,
+): LayoutDrafts {
+  const moved = (element: LiveOverlayElement) =>
+    JSON.stringify(drafts.positions[element]) !== JSON.stringify(before[element]);
+  const positions = Object.fromEntries(
+    LIVE_OVERLAY_ELEMENTS.map((element) => [element, moved(element) ? drafts.positions[element] : after[element]]),
+  ) as LiveOverlaySharedPositions;
+  const elements = Object.fromEntries(
+    LIVE_OVERLAY_ELEMENTS.map((element) => {
+      const placement = drafts.elements[element];
+      return [element, placement.shared ? { ...placement, ...positions[element] } : placement];
+    }),
+  ) as LiveOverlayLayoutElements;
+  return { elements, positions };
+}
+
 /** "Place differently on this layout": the element keeps where it is now, as this layout's own position. */
 export function unlinkLayoutElement(drafts: LayoutDrafts, element: LiveOverlayElement): LayoutDrafts {
   return { ...drafts, elements: { ...drafts.elements, [element]: { ...drafts.elements[element], shared: false } } };
@@ -55,12 +79,19 @@ export function applyLayoutElementToAll(drafts: LayoutDrafts, element: LiveOverl
 
 /**
  * What the layout itself saves for an element: a shared one only by its flag, whether the scene includes it, its
- * place in the stack and whether it comes on with the scene.
+ * place in the stack, whether it comes on with the scene, its spot's turns, whether it is locked and its look.
  */
 function ownedBy(placement: LiveOverlayElementPlacement) {
+  const flags = {
+    comesOn: placement.comesOn === true,
+    turns: placement.turns ?? null,
+    locked: placement.locked === true,
+    qrLook: placement.qrLook ?? null,
+    timerLook: placement.timerLook ?? null,
+  };
   return placement.shared
-    ? { visible: placement.visible, shared: true, layer: placement.layer, comesOn: placement.comesOn === true }
-    : { ...placement, comesOn: placement.comesOn === true };
+    ? { visible: placement.visible, shared: true, layer: placement.layer, ...flags }
+    : { ...placement, ...flags };
 }
 
 /** Whether the layout's own part changed; a shared element's move is the shared positions' change, not the layout's. */

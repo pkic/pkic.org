@@ -19,7 +19,7 @@ import { liveOverlayLayoutChoices } from "../../../../../../../../shared/live-ov
 import { LiveOverlayPresentation } from "../../../../../../../live-session/LiveOverlayPresentation";
 import { Button } from "../../../../../../../ui/Button";
 import { Dialog } from "../../../../../../../ui/Dialog";
-import { IconSound, StrokeIcon } from "../../../../../../../ui/MediaIcons";
+import { IconExpand, IconSound, StrokeIcon } from "../../../../../../../ui/MediaIcons";
 import { Menu } from "../../../../../../../ui/Menu";
 import { SectionHeading } from "../../../../../../../ui/SectionHeading";
 import { LiveDeskStream } from "../LiveDeskStream";
@@ -45,6 +45,13 @@ import { SourceCount, SyncToggle } from "./MonitorOutputStatus";
 import { liveSceneName } from "../live-layer-unseen";
 import { clearHint } from "./StudioSwitcher";
 import { usePictureInView } from "./use-picture-in-view";
+import {
+  PreviewSceneCanvas,
+  PreviewSceneLock,
+  PreviewSceneSave,
+  lockPreviewScene,
+  previewSceneEditing,
+} from "./PreviewSceneEditor";
 import "./MonitorPanel.css";
 
 /** The switcher's actions the Preview and Program monitors offer with their controls. */
@@ -59,6 +66,10 @@ export interface MonitorSwitcher {
   /** Changes the scene one of the room's screens draws, at once and for everyone. */
   screenScene: (output: LiveAuxOutput, scene: string) => void;
   disabled: boolean;
+  /** Whether this operator sets up the live studio, and so may edit the event's scenes from Preview. */
+  canEditScenes?: boolean;
+  /** Copies the scene on Preview and unlocks the copy; absent for someone who may not change scenes. */
+  duplicateScene?: () => void;
 }
 
 /** What the monitors show: the operators' shared Preview, and the room as it is on air. */
@@ -191,14 +202,6 @@ export function ClearIcon() {
   );
 }
 
-export function ExpandIcon() {
-  return (
-    <StrokeIcon>
-      <path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" />
-    </StrokeIcon>
-  );
-}
-
 /** Sound on the LIVE monitor: muted until the operator turns it on, and kept that way in their browser. */
 function LivestreamSoundToggle() {
   const audible = studioLivestreamAudible();
@@ -278,8 +281,20 @@ export function LayoutIcon() {
   );
 }
 
-/** What an operator does with one monitor's output, at the end of its header: its sync chip, then clear it, and full screen. */
-function MonitorActions({ output, context }: { output: StudioOutput; context: MonitorContext }) {
+/**
+ * What an operator does with one monitor's output, at the end of its header:
+ * its sync chip, then clear it, and full screen. Preview's scene open to edit
+ * fills the window as the whole panel instead, its canvas and Save in it.
+ */
+function MonitorActions({
+  output,
+  context,
+  editing = false,
+}: {
+  output: StudioOutput;
+  context: MonitorContext;
+  editing?: boolean;
+}) {
   const { panel, switcher, room } = context;
   const details = studioOutputDetails(room, output);
   const role = isBusOutput(output) ? null : liveOutputRole(room, output);
@@ -306,15 +321,19 @@ function MonitorActions({ output, context }: { output: StudioOutput; context: Mo
           <ClearIcon />
         </Button>
       )}
-      <Button
-        icon
-        variant="ghost"
-        aria-label={`Full screen ${details.label}`}
-        title={`Full screen ${details.label}\nShow this monitor large. Double-clicking its picture does the same.`}
-        onClick={() => (enlarged.value = enlargedKey(panel.id, output))}
-      >
-        <ExpandIcon />
-      </Button>
+      {editing ? null : (
+        <Button
+          icon
+          variant="ghost"
+          aria-label={`Full screen ${details.label}`}
+          title={`Full screen ${details.label}\nShow this monitor large. Double-clicking its picture does the same.`}
+          onClick={() => (enlarged.value = enlargedKey(panel.id, output))}
+        >
+          <IconExpand />
+        </Button>
+      )}
+      {/* Editing, the scene's own full screen, Discard and Save end the header. */}
+      {output === "preview" && switcher.canEditScenes ? <PreviewSceneSave /> : null}
     </span>
   );
 }
@@ -464,9 +483,9 @@ export function multiviewGrid(count: number): { columns: number; rows: number } 
 }
 
 /**
- * A monitor shows one output, or several as a multiview. The panel's header
- * holds the one output selector; a single monitor's controls sit beside it,
- * and each output of a multiview carries its own in its card.
+ * A monitor shows one output, or several as a multiview. The panel's header holds the one output selector; a single
+ * monitor's controls sit beside it, and each output of a multiview carries its own in its card. Preview's scene is
+ * edited on its own monitor, so another output joining it locks the scene first, its changes settled.
  */
 export function monitorPanelView(
   panel: StudioPanel,
@@ -479,6 +498,7 @@ export function monitorPanelView(
   const single = outputs.length === 1 ? outputs[0]! : null;
   const title = single ? studioOutputDetails(room, single).label : "Monitors";
   const context: MonitorContext = { panel, room, sources, switcher, change };
+  const editing = single === "preview" && switcher.canEditScenes && previewSceneEditing.value;
   const heading = (
     <SectionHeading level={3} class="pk-studio-panel__title">
       <Menu
@@ -494,7 +514,10 @@ export function monitorPanelView(
           multiple: true,
           keepOpen: true,
           disabled: outputs.length === 1 && outputs[0] === output,
-          onSelect: () => change((panels) => toggleStudioOutput(panels, panel.id, output, room)),
+          onSelect: () => {
+            const go = () => change((panels) => toggleStudioOutput(panels, panel.id, output, room));
+            return single === "preview" ? lockPreviewScene(go) : go();
+          },
         }))}
       >
         {single ? <OutputName output={single} room={room} /> : title}
@@ -510,10 +533,11 @@ export function monitorPanelView(
       heading: (
         <span class="pk-studio-monitor__heading">
           {heading}
+          {single === "preview" && switcher.canEditScenes ? <PreviewSceneLock disabled={switcher.disabled} /> : null}
           <LayoutPicker output={single} context={context} />
         </span>
       ),
-      actions: <MonitorActions output={single} context={context} />,
+      actions: <MonitorActions output={single} context={context} editing={editing} />,
       menu:
         single === "preview"
           ? [
@@ -523,14 +547,29 @@ export function monitorPanelView(
                 tooltip: "The scene thumbnails under Preview. The scene picker in the header stays either way.",
                 onSelect: () => change((panels) => setStudioPanelScenes(panels, panel.id, !scenesShown)),
               },
+              ...(switcher.duplicateScene
+                ? [
+                    {
+                      id: "duplicate-scene",
+                      label: "Duplicate scene",
+                      tooltip: "Copy the scene on Preview and edit the copy. The original stays as it is.",
+                      disabled: switcher.disabled,
+                      onSelect: switcher.duplicateScene,
+                    },
+                  ]
+                : []),
             ]
           : undefined,
       body: (
         <div class="pk-studio-monitor-stack">
           <div class="pk-studio-monitor-frame">
-            <div class="pk-studio-monitor" data-single="" {...liveTallyAttributes(room, single)}>
-              <MonitorScreen output={single} context={context} />
-            </div>
+            {editing ? (
+              <PreviewSceneCanvas />
+            ) : (
+              <div class="pk-studio-monitor" data-single="" {...liveTallyAttributes(room, single)}>
+                <MonitorScreen output={single} context={context} />
+              </div>
+            )}
           </div>
           {single === "preview" && scenesShown ? (
             <SceneStrip sources={sources} disabled={switcher.disabled} onScene={switcher.previewScene} />

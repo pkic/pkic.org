@@ -18,6 +18,8 @@ import { LIVE_GRAPHIC_THEME_DEFAULTS } from "../../../../../../../../shared/live
 import { DEFAULT_LIVE_SCHEDULE_CONFIG } from "../../../../../../../../shared/schemas/live-session-schedule";
 import { DEFAULT_LIVE_TICKER_CONTEXT } from "../../../../../../../../shared/schemas/live-session-ticker";
 import { defaultLiveTimerGraphic } from "../../../../../../../../shared/schemas/live-session-timer";
+import { liveOverlayDrawn } from "../../../../../../../../shared/live-overlay-cover";
+import type { LiveProgramLayer } from "../../../../../../../../shared/live-overlay-stacking";
 import type { LiveRoomState } from "../../../../../../../live-session/live-room-state";
 import { NO_LIVE_ROOM_SOURCES } from "../../../../../../../../shared/schemas/live-room-sources";
 
@@ -203,4 +205,53 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
   };
   // The stage display shows the same room, so its elements have something to draw too.
   return { ...room, outputs: { ...EMPTY_LIVE_OUTPUTS, "stage-display": room.stage } };
+}
+
+/** The stage fields that put each graphic on, as the sample has them. */
+const SAMPLE_FIELDS: Record<LiveProgramLayer, ReadonlyArray<keyof LiveRoomState["stage"]>> = {
+  background: [],
+  qrCode: [],
+  panelists: ["panelists"],
+  schedule: ["schedule"],
+  checkIn: ["checkIn"],
+  question: ["question"],
+  lowerThird: ["lowerThird"],
+  speakerWelcome: ["speakerWelcome"],
+  poll: ["poll"],
+  topQuestions: ["topQuestions"],
+  chat: ["chatFeed"],
+  timer: ["timerGraphics"],
+  ticker: ["ticker"],
+  reactions: ["reactions", "reactionsGraphic"],
+};
+
+/**
+ * The room with one graphic filled from the sample, for a graphic that has
+ * nothing on air yet: the scene editor draws it so its size and place can be
+ * judged. Only the drawing changes; nothing is sent to the room.
+ */
+export function withSampleGraphic(room: LiveRoomState, element: LiveProgramLayer, now: number): LiveRoomState {
+  const fields = SAMPLE_FIELDS[element];
+  if (fields.length === 0) return room;
+  const sample = sampleOverlayRoom(now);
+  const stage = { ...room.stage, ...Object.fromEntries(fields.map((field) => [field, sample.stage[field]])) };
+  // The sample room keeps the welcome off; sampled on its own, it is on.
+  if (element === "speakerWelcome") stage.speakerWelcome = true;
+  return {
+    ...room,
+    // The panelists and the welcome draw the session's credits; the lower third draws its own from the stage.
+    // While the other of the two is on air, its people stay, so sampling one never changes the other.
+    session:
+      element === "panelists" || element === "speakerWelcome"
+        ? {
+            ...room.session,
+            credits: liveOverlayDrawn(room.stage, element === "panelists" ? "speakerWelcome" : "panelists")
+              ? room.session.credits
+              : sample.session.credits,
+          }
+        : room.session,
+    stage,
+    polls: element === "poll" ? [...room.polls, ...sample.polls] : room.polls,
+    timers: element === "timer" ? sample.timers : room.timers,
+  };
 }

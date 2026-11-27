@@ -38,16 +38,21 @@ export const OUTPUT_TARGET_HINTS = {
 /** Why nobody sees it there, and what shows it, after the output's own state. */
 function unseenHint(destination: "preview" | "program", unseen: LiveLayerUnseen): string {
   const lead = `${destination === "preview" ? "In Preview" : "On air"} · ${liveLayerUnseenWords(unseen)}`;
+  const sees = destination === "preview" ? "would see" : "sees";
   const why =
     unseen.reason === "covered"
-      ? `${unseen.by} is drawn over it, so nobody ${destination === "preview" ? "would see" : "sees"} it.`
-      : `The ${unseen.scene} scene does not show it, so nobody ${destination === "preview" ? "would see" : "sees"} it.`;
+      ? `${unseen.by} is drawn over it, so nobody ${sees} it.`
+      : unseen.reason === "waiting"
+        ? `It takes turns with the other graphics in its spot, ${unseen.turns} seconds each.`
+        : `The ${unseen.scene} scene does not show it, so nobody ${sees} it.`;
   const next =
     destination === "preview"
       ? "Click to take it out of Preview."
       : unseen.reason === "covered"
         ? `Take ${unseen.by} off air to show it, or click to take this off air.`
-        : "Load a scene that shows it and transition, or click to take it off air.";
+        : unseen.reason === "waiting"
+          ? "Click to take it off air."
+          : "Load a scene that shows it and transition, or click to take it off air.";
   return `${lead}\n${why} ${next}`;
 }
 

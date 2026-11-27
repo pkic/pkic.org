@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { eventSlugParamsSchema, slugPattern, utcInstantSchema } from "./api-common";
+import { LIVE_TIMER_PRESENTATIONS } from "./live-session-timer";
 
 /**
  * Broadcast overlay layouts. An output (Program, Projector, Stage preview,
@@ -227,6 +228,14 @@ function withoutRetiredPlacementFields(value: unknown): unknown {
  * bottom first; without it the graphic keeps its built-in place
  * (`live-overlay-stacking.ts`).
  */
+/**
+ * How the QR code looks in a scene: on its card in the event's colors with
+ * the line to scan (`card`), or the code alone, black on white, white on
+ * black, or black with a clear quiet zone for a calm, light picture behind it.
+ */
+export const LIVE_QR_LOOKS = ["card", "black-on-white", "white-on-black", "black-on-clear"] as const;
+export type LiveQrLook = (typeof LIVE_QR_LOOKS)[number];
+
 export const liveOverlayElementPlacementSchema = insideFrame(
   z
     .object({
@@ -244,6 +253,17 @@ export const liveOverlayElementPlacementSchema = insideFrame(
        * places it and it is switched in the studio.
        */
       comesOn: z.boolean().optional(),
+      /**
+       * In a spot (boards in one box, `live-overlay-spots.ts`): the boards that are on take turns, each for this
+       * many seconds. Absent on every board of the spot, only its front board that is on shows.
+       */
+      turns: z.number().int().min(5).max(300).optional(),
+      /** Held in place in the scene editor: its box is not dragged on the canvas, so a press reaches the box behind. */
+      locked: z.boolean().optional(),
+      /** The QR code's look in this scene (`LIVE_QR_LOOKS`); absent, its card. Only the QR code reads it. */
+      qrLook: z.enum(LIVE_QR_LOOKS).optional(),
+      /** Every timer's look in this scene (`LIVE_TIMER_PRESENTATIONS`); absent, each timer's own. Only the timer reads it. */
+      timerLook: z.enum(LIVE_TIMER_PRESENTATIONS).optional(),
       ...boxShape,
     })
     .strict(),
@@ -300,7 +320,9 @@ export const liveOverlayLayoutSlugSchema = z
   .min(1)
   .max(40)
   .regex(slugPattern, "Use lowercase letters, digits and hyphens.");
-export const liveOverlayLayoutNameSchema = z.string().trim().min(1, "Enter a name.").max(60);
+/** The longest a scene's name may be. */
+export const LIVE_OVERLAY_LAYOUT_NAME_MAX = 60;
+export const liveOverlayLayoutNameSchema = z.string().trim().min(1, "Enter a name.").max(LIVE_OVERLAY_LAYOUT_NAME_MAX);
 
 /** What a live room carries for each saved layout: its name, for the operators' pickers, and the geometry its outputs draw. */
 export const liveOverlayLayoutGeometrySchema = z

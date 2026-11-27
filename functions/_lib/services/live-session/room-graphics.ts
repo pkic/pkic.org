@@ -48,6 +48,9 @@ type Actor = { userId: string; name: string };
 /** Event geometry and computed ticker text refresh together; neither replaces the persisted source config. */
 export class LiveRoomGraphics {
   private refreshing: Promise<void> | undefined;
+  private following: Promise<void> | undefined;
+  /** The Preview and room-screen changes under way, so each lands in the order the operators sent them. */
+  private selecting: Promise<unknown> = Promise.resolve();
   layouts: LiveOverlayLayoutGeometry[] = [];
   tickerContext: LiveTickerContext = DEFAULT_LIVE_TICKER_CONTEXT;
   /** The attendee chat lines a chat ticker may show now. */
@@ -133,7 +136,9 @@ export class LiveRoomGraphics {
     // A screen its room locked to a scene keeps that scene, whatever scene a shot names.
     const scene = liveOutputFixedScene(liveRoomOutputs(session), message.output) ?? message.composition.scene;
     const composition = { ...message.composition, scene };
-    return this.outputs.setAux(actor, session, message.output, await this.resolve(session, composition, at), at);
+    return this.inTurn(async () =>
+      this.outputs.setAux(actor, session, message.output, await this.resolve(session, composition, at), at),
+    );
   }
   /**
    * Changes the scene a room screen draws, as loading a scene does on
@@ -148,9 +153,12 @@ export class LiveRoomGraphics {
     at: string,
   ): Promise<LiveControlOutcome> {
     const scene = liveOutputFixedScene(liveRoomOutputs(session), message.output) ?? message.scene;
-    const held = { ...liveCompositionInput(this.store.aux(message.output)), scene };
-    const composition = { ...held, ...this.comesOn(held) };
-    return this.outputs.setAux(actor, session, message.output, await this.resolve(session, composition, at), at);
+    return this.inTurn(async () => {
+      await this.knowScene(scene);
+      const held = { ...liveCompositionInput(this.store.aux(message.output)), scene };
+      const composition = { ...held, ...this.comesOn(held) };
+      return this.outputs.setAux(actor, session, message.output, await this.resolve(session, composition, at), at);
+    });
   }
   async setPreview(
     actor: Actor,
@@ -158,12 +166,33 @@ export class LiveRoomGraphics {
     message: Extract<LiveRoomClientMessage, { type: "preview.set" }>,
     at: string,
   ): Promise<LiveControlOutcome> {
-    const merged = mergeLivePreview(this.store.preview(), message.composition);
-    // Loading a scene switches on the graphics that come on with it, in the same one write. A layer the
-    // change itself names stays as the operator set it.
-    const loaded = "scene" in message.composition ? this.comesOn(merged) : {};
-    const patch = { ...loaded, ...message.composition };
-    return this.preview.set(actor, session, patch, await this.resolve(session, { ...merged, ...patch }, at), at);
+    return this.inTurn(async () => {
+      await this.knowScene(message.composition.scene);
+      const merged = mergeLivePreview(this.store.preview(), message.composition);
+      // Loading a scene switches on the graphics that come on with it, in the same one write. A layer the
+      // change itself names stays as the operator set it.
+      const loaded = "scene" in message.composition ? this.comesOn(merged) : {};
+      const patch = { ...loaded, ...message.composition };
+      return this.preview.set(actor, session, patch, await this.resolve(session, { ...merged, ...patch }, at), at);
+    });
+  }
+  /**
+   * Runs one Preview or room-screen change after the ones before it, so a
+   * change that waits for the scenes to be read never lands after a later one.
+   */
+  private inTurn<T>(change: () => Promise<T>): Promise<T> {
+    const turn = this.selecting.then(change);
+    this.selecting = turn.catch(() => undefined);
+    return turn;
+  }
+  /**
+   * A scene saved since the room last read the event's scenes, such as a copy
+   * just made: read them again first. A failed read still lets the change
+   * through, drawn as the scenes the room knows draw it.
+   */
+  private async knowScene(scene: string | null | undefined): Promise<void> {
+    if (!scene || this.layouts.some((layout) => layout.slug === scene)) return;
+    await this.refresh().catch(() => undefined);
   }
   /**
    * What loading its scene switches on for a composition, on Preview or a
@@ -203,7 +232,10 @@ export class LiveRoomGraphics {
     }
   }
   async takePreview(actor: Actor, session: LiveRoomSession, at: string): Promise<LiveControlOutcome> {
-    return this.preview.take(actor, session, await this.resolve(session, this.preview.sources(), at), at);
+    // A take waits for the Preview changes sent before it, so it puts on Program what Preview holds by then.
+    return this.inTurn(async () =>
+      this.preview.take(actor, session, await this.resolve(session, this.preview.sources(), at), at),
+    );
   }
   /** What a composition names, resolved: ticker and schedule from the approved agenda, its lists from the room. */
   private async resolve(
@@ -276,6 +308,20 @@ export class LiveRoomGraphics {
     } finally {
       this.refreshing = undefined;
     }
+  }
+
+  /**
+   * Reads again after the event's scenes changed: one read that starts after
+   * any read already under way, so it sees the change, shared by the changes
+   * that arrive before it starts.
+   */
+  refreshAfterChange(): Promise<void> {
+    this.following ??= (async () => {
+      await this.refreshing?.catch(() => undefined);
+      this.following = undefined;
+      await this.refresh();
+    })();
+    return this.following;
   }
 
   private async refreshFromD1(): Promise<void> {

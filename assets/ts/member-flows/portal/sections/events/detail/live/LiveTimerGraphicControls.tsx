@@ -3,6 +3,7 @@ import {
   LIVE_TIMER_FORMATS,
   LIVE_TIMER_PLACEMENTS,
   LIVE_TIMER_PRESENTATIONS,
+  LIVE_TIMER_PRESENTATION_LABELS,
   LIVE_TIMER_SIZES,
   defaultLiveTimerGraphic,
   liveTimerGraphicSchema,
@@ -26,12 +27,6 @@ const FORMAT_LABELS: Record<LiveTimerGraphic["format"], string> = {
 const DIRECTION_LABELS: Record<LiveTimerGraphic["direction"], string> = {
   remaining: "Time left",
   elapsed: "Time elapsed",
-};
-const PRESENTATION_LABELS: Record<LiveTimerGraphic["presentation"], string> = {
-  digital: "White plate",
-  bare: "No background",
-  tab: "Tab from the edge",
-  ring: "In the logo",
 };
 const PLACEMENT_LABELS: Record<LiveTimerGraphic["placement"], string> = {
   layout: "As the source's layout",
@@ -106,7 +101,7 @@ function LookPicker({
           checked={draft.presentation === look}
           onChange={() => update(look)}
           picture={<LiveTimerLookSample look={look} label={label} />}
-          title={PRESENTATION_LABELS[look]}
+          title={LIVE_TIMER_PRESENTATION_LABELS[look]}
           pointTone="neutral"
         />
       ))}

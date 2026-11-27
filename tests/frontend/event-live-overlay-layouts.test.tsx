@@ -167,6 +167,11 @@ const rows = () =>
 /** What a graphic's row says puts it on, and the control that changes it, if it has one. */
 const switchOf = (element: string) =>
   root!.querySelector<HTMLElement>(`.pk-scenes__row[data-element="${element}"] .pk-scenes__switch`)!;
+/** The words of a graphic's switch icon: the first line of its hint. */
+function switchWords(element: string) {
+  const icon = switchOf(element).querySelector<HTMLElement>("button") ?? switchOf(element);
+  return (icon.getAttribute("title") ?? icon.dataset.tooltip ?? "").split("\n")[0];
+}
 const QA_URL = "/portal/#/events/conference/settings/live?layout=questions";
 /** The canvas's boxes in drawing order, back first. */
 const drawnOrder = () =>
@@ -231,7 +236,7 @@ describe("scene editor", () => {
     void act(() => box("lowerThird").click());
     expect(
       [...box("lowerThird").querySelectorAll("[data-handle]")].map((handle) => handle.getAttribute("data-handle")),
-    ).toEqual(["nw", "ne", "se", "sw"]);
+    ).toEqual(["nw", "n", "ne", "e", "se", "s", "sw", "w"]);
     const handle = box("lowerThird").querySelector('[data-handle="se"]')!;
     // The right edge starts at 1296 px of the frame; dropped at 1816, it lands on the 1824 px safe line.
     pointer(handle, "pointerdown", 648, 513);
@@ -250,7 +255,7 @@ describe("scene editor", () => {
     expect(drawn()).not.toContain("stageDisplay");
     expect(drawn().sort()).toEqual([...rows()].sort());
     void act(() => box("ticker").click());
-    expect(box("ticker").textContent).toBe("News tickerBottom bar");
+    expect(box("ticker").textContent).toBe("News ticker · Bottom bar");
     expect(box("ticker").getAttribute("aria-pressed")).toBe("true");
     const row = root!.querySelector(".pk-scenes__row[data-selected]")!;
     expect(row.textContent).toContain("News ticker");
@@ -326,7 +331,7 @@ describe("scene editor", () => {
     // Board right holds all three kinds: picked, filled from the room, and without a switch.
     expect(new Set(shown.map((element) => LIVE_OVERLAY_ELEMENT_SWITCHES[element])).size).toBe(3);
     for (const element of shown) {
-      expect(switchOf(element).textContent).toBe(describeGraphicSwitch(element, scene[element]));
+      expect(switchWords(element)).toBe(describeGraphicSwitch(element, scene[element]));
       expect(switchOf(element).querySelector("button") !== null).toBe(
         LIVE_OVERLAY_ELEMENT_SWITCHES[element] === "room",
       );
@@ -342,13 +347,14 @@ describe("scene editor", () => {
     await mount();
     const submit = () => root!.querySelector<HTMLButtonElement>('form.pk-scenes__editor button[type="submit"]')!;
     expect(submit().disabled).toBe(true);
-    await act(() => button("Top questions: Comes on with the scene").click());
-    expect(menuItems()).toEqual(["Comes on with the scene", "Switched in the studio"]);
-    expect(document.querySelector('[role=menuitemradio][aria-checked="true"]')!.textContent).toContain("Loading this");
-    await act(() => button("Top questions: Comes on with the scene").click());
-    await choose(button("Top questions: Comes on with the scene"), "Switched in the studio");
-    await choose(button("News ticker: Switched in the studio"), "Comes on with the scene");
-    expect(switchOf("topQuestions").textContent).toBe("Switched in the studio");
+    // The switch is a toggle: pressed, the graphic comes on with the scene, and its hint says what that does.
+    const topQuestions = button("Top questions: Comes on with the scene");
+    expect(topQuestions.getAttribute("aria-pressed")).toBe("true");
+    expect(topQuestions.getAttribute("title") ?? topQuestions.dataset.tooltip).toContain("Loading this");
+    await act(() => topQuestions.click());
+    await act(() => button("News ticker: Comes on with the scene").click());
+    expect(switchWords("topQuestions")).toBe("Switched in the studio");
+    expect(button("Top questions: Comes on with the scene").getAttribute("aria-pressed")).toBe("false");
     expect(submit().disabled).toBe(false);
     expect(root!.textContent).toContain("Discard changes");
     await save();
@@ -356,7 +362,7 @@ describe("scene editor", () => {
     expect(written[0]!.body.elements.topQuestions.comesOn).toBe(false);
     expect(written[0]!.body.elements.ticker.comesOn).toBe(true);
     expect(written[0]!.body.elements.lowerThird.comesOn).toBeUndefined();
-    expect(switchOf("ticker").textContent).toBe("Comes on with the scene");
+    expect(switchWords("ticker")).toBe("Comes on with the scene");
     expect(submit().disabled).toBe(true);
   });
 
@@ -371,7 +377,7 @@ describe("scene editor", () => {
     });
     const second = rows()[1] as "ticker";
     await act(() => button(`Move ${LIVE_OVERLAY_ELEMENT_LABELS[second]} up`).click());
-    await choose(button("Reactions: Switched in the studio"), "Comes on with the scene");
+    await act(() => button("Reactions: Comes on with the scene").click());
     await act(() => button(`Actions for ${base.name}`).click());
     // A built-in scene is reset, never deleted.
     expect(menuItems()).toContain("Reset scene");
@@ -471,7 +477,7 @@ describe("scene editor", () => {
     expect(root!.querySelector('.pk-scenes__row[data-element="background"]')!.textContent).toContain("Full frame");
     expect(button("Move Background down").disabled).toBe(true);
     // It has no switch: its row says so, with nothing to choose.
-    expect(switchOf("background").textContent).toBe("On whenever this scene is on");
+    expect(switchWords("background")).toBe("On whenever this scene is on");
     expect(switchOf("background").querySelector("button")).toBeNull();
     const behind = rows().at(-2)!;
     await act(() => button("Move Background up").click());
@@ -567,10 +573,8 @@ describe("scenes for someone who may not change them", () => {
     const scene = LIVE_OVERLAY_PRESET_LAYOUTS.questions.elements;
     expect(rows().slice(0, 3)).toEqual(["reactions", "ticker", "timer"]);
     for (const element of rows() as LiveOverlayElement[])
-      expect(switchOf(element).textContent).toBe(describeGraphicSwitch(element, scene[element]));
-    expect(switchOf("topQuestions").parentElement!.textContent).toBe(
-      "Top questionsRight columnComes on with the scene",
-    );
+      expect(switchWords(element)).toBe(describeGraphicSwitch(element, scene[element]));
+    expect(switchOf("topQuestions").parentElement!.textContent).toBe("Top questionsRight column · Behind in its spot");
     expect(root!.querySelector(".pk-scenes__graphics :is(button, [aria-haspopup], .pk-scenes__grip)")).toBeNull();
     expect(root!.querySelector(".pk-layout-inspector")).toBeNull();
     expect(root!.querySelector(".pk-layout-canvas__boxes")).toBeNull();

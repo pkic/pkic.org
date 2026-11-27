@@ -12,6 +12,7 @@ import {
   type LiveOverlayLayoutGeometry,
   type LiveOverlayPreset,
 } from "./schemas/live-overlay-layout";
+import { LIVE_SPOT_TURN_SECONDS } from "./live-overlay-spots";
 
 /**
  * The built-in scenes, as shared reference data. Boxes are authored in
@@ -161,6 +162,12 @@ const column = (side: "left" | "right"): LiveOverlayLayoutElements => ({
   ticker: FULL_FRAME.ticker,
 });
 
+/** Break's column beside the clip, under the time: one spot whose boards take turns. */
+const BREAK_SPOT: LiveOverlayElementPlacement = {
+  ...box(1376, 192, 496, 666, RIGHT_TOP),
+  turns: LIVE_SPOT_TURN_SECONDS,
+};
+
 /**
  * The scenes every event starts with, in the studio's order. A scene says
  * where each graphic it includes sits, and which of the graphics that fill
@@ -219,15 +226,23 @@ const PRESETS: Record<LiveOverlayPreset, { name: string; elements: LiveOverlayLa
   },
   /**
    * A break over the sponsors' clips. The production places the clip whole,
-   * at 16:9, at 48, 48 and 1440 × 810 on its own background; the time until
-   * the program is back hangs in the top-right corner beside it, with Up next
-   * under it in the same column, coming on with the scene. The ticker, when
-   * switched on, runs under them all. Nothing here covers the clip.
+   * at 16:9, at 48, 48 and 1280 × 720 on its own background; beside it, a
+   * column from 1376 to the title-safe edge holds the time until the program
+   * is back in its top-right corner and, under it, one spot where Up next,
+   * the chat and the top questions take turns, 15 seconds each. Up next comes
+   * on with the scene; the chat and the top questions join it when switched
+   * on. The ticker, when switched on, runs under them all. Nothing here
+   * covers the clip.
    */
   break: {
     name: "Break",
     elements: comingOn(
-      only({ ...FULL_FRAME, schedule: box(1536, 192, 336, 666, RIGHT_TOP) }, ["schedule", ...ALWAYS]),
+      only({ ...FULL_FRAME, schedule: BREAK_SPOT, chat: BREAK_SPOT, topQuestions: BREAK_SPOT }, [
+        "schedule",
+        "chat",
+        "topQuestions",
+        ...ALWAYS,
+      ]),
       ["schedule"],
     ),
   },
@@ -257,6 +272,17 @@ export function resolveLiveOverlayElements(
       const placement = elements[element];
       return [element, placement.shared ? { ...placement, ...positions[element] } : placement];
     }),
+  ) as LiveOverlayLayoutElements;
+}
+
+/** A scene's graphics with the shared ones placed where the event shares them, then made the scene's own. */
+export function detachLiveOverlayElements(
+  elements: LiveOverlayLayoutElements,
+  positions: LiveOverlaySharedPositions,
+): LiveOverlayLayoutElements {
+  const resolved = resolveLiveOverlayElements(elements, positions);
+  return Object.fromEntries(
+    LIVE_OVERLAY_ELEMENTS.map((element) => [element, { ...resolved[element], shared: false }]),
   ) as LiveOverlayLayoutElements;
 }
 

@@ -1,5 +1,10 @@
 import type { ComponentChildren } from "preact";
 import { useRef, useState } from "preact/hooks";
+import {
+  liveOverlayPartialOverlaps,
+  liveOverlaySpotOf,
+  liveOverlaySpotTurns,
+} from "../../../../../../../../shared/live-overlay-spots";
 import type { LiveProgramLayer } from "../../../../../../../../shared/live-overlay-stacking";
 import {
   LIVE_OVERLAY_ELEMENT_LABELS,
@@ -11,16 +16,49 @@ import { usePointerDragSession } from "../../../../../../../hooks/usePointerDrag
 import { Button } from "../../../../../../../ui/Button";
 import { buttonClasses } from "../../../../../../../ui/button-classes";
 import { EmptyState } from "../../../../../../../ui/EmptyState";
-import { Menu, type MenuItem } from "../../../../../../../ui/Menu";
+import { Menu } from "../../../../../../../ui/Menu";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../../ui/Panel";
-import { IconChevron } from "../../../../../../../ui/MediaIcons";
+import { IconChevron, StrokeIcon } from "../../../../../../../ui/MediaIcons";
 import { RowActions } from "../../../../../../../ui/RowActions";
 import { OverlayLayoutGraphicSwitch } from "./OverlayLayoutGraphicSwitch";
+import { graphicActions, graphicNames, type GraphicActionHandlers } from "./overlay-layout-graphic-actions";
 import { LAYOUT_GRAPHIC_DESCRIPTIONS } from "./overlay-layout-copy";
 import { addableGraphics, describeGraphicPosition, sceneGraphics } from "./overlay-layout-graphics";
+import "./OverlayLayouts.css";
 
-/** What a row's menu does to a graphic's position: see `overlay-layout-sharing.ts`. */
-export type LayoutSharingAction = "unlink" | "relink" | "apply";
+/** A padlock, open while what it holds can be changed: Preview's scene, or a graphic's box on the canvas. */
+export function LockIcon({ open }: { open: boolean }) {
+  return (
+    <StrokeIcon>
+      <rect x="3" y="7" width="10" height="7" rx="1" />
+      <path d={open ? "M5.5 7V4.8a2.5 2.5 0 0 1 4.9-.7" : "M5.5 7V4.8a2.5 2.5 0 0 1 5 0V7"} />
+    </StrokeIcon>
+  );
+}
+
+/** How a graphic's spot shows its boards, in a few words for its row; null when it has its box to itself. */
+function spotWords(elements: LiveOverlayLayoutElements, element: LiveProgramLayer): string | null {
+  const spot = liveOverlaySpotOf(elements, element);
+  if (!spot) return null;
+  const turns = liveOverlaySpotTurns(elements, spot);
+  return turns ? `Takes turns, ${turns} s` : spot[0] === element ? "Shows in front" : "Behind in its spot";
+}
+
+/** Two boards that partly overlap, said once under the list: put them in one spot, or apart. */
+function OverlapNote({ elements }: { elements: LiveOverlayLayoutElements }) {
+  const overlaps = liveOverlayPartialOverlaps(elements);
+  if (overlaps.length === 0) return null;
+  return (
+    <ul class="pk-scenes__overlaps" aria-label="Graphics that partly overlap">
+      {overlaps.map(([front, back]) => (
+        <li key={`${front}:${back}`}>
+          {graphicNames([front])} partly covers {graphicNames([back])}. Drop it on {graphicNames([back])} to share one
+          spot, or move it apart.
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 /** A press on a grip becomes a drag once the pointer travels this far. */
 const DRAG_THRESHOLD_PX = 3;
@@ -115,12 +153,16 @@ function GraphicsPanel({
   );
 }
 
-/** A graphic's name and where it sits on the frame. */
+/** A graphic's name, where it sits on the frame, and how its spot shows it when it shares one. */
 function GraphicLabel({ element, elements }: { element: LiveProgramLayer; elements: LiveOverlayLayoutElements }) {
+  const spot = spotWords(elements, element);
   return (
     <>
       <span class="pk-scenes__name">{LIVE_OVERLAY_ELEMENT_LABELS[element]}</span>
-      <span class="pk-scenes__meta">{describeGraphicPosition(elements[element])}</span>
+      <span class="pk-scenes__meta">
+        {describeGraphicPosition(elements[element])}
+        {spot ? ` · ${spot}` : null}
+      </span>
     </>
   );
 }
@@ -148,6 +190,37 @@ export function OverlayLayoutGraphicsSummary({ elements }: { elements: LiveOverl
   );
 }
 
+/** Adds one of the Program graphics the scene does not show yet, at its shared position. */
+export function AddGraphicMenu({
+  elements,
+  disabled,
+  onShow,
+}: {
+  elements: LiveOverlayLayoutElements;
+  disabled: boolean;
+  onShow: (element: LiveOverlayElement, visible: boolean) => void;
+}) {
+  const addable = addableGraphics(elements);
+  return (
+    <Menu
+      label="Add graphic"
+      variant="plain"
+      align="end"
+      triggerClass={buttonClasses({ variant: "secondary" }, undefined)}
+      disabled={disabled || addable.length === 0}
+      items={addable.map((element) => ({
+        id: element,
+        label: LIVE_OVERLAY_ELEMENT_LABELS[element],
+        description: LAYOUT_GRAPHIC_DESCRIPTIONS[element],
+        onSelect: () => onShow(element, true),
+      }))}
+    >
+      <IconPlus />
+      Add graphic
+    </Menu>
+  );
+}
+
 /**
  * The scene's graphics, front first, the background among them: each row
  * picks its box on the canvas, says where it sits and what puts it on, and
@@ -165,58 +238,33 @@ export function OverlayLayoutGraphics({
   onComesOn,
   onReorder,
   onSharing,
+  onTurns,
+  onLock,
+  onLook,
+  framed = true,
 }: {
   elements: LiveOverlayLayoutElements;
   selected: LiveOverlayElement | null;
   disabled: boolean;
+  /** In its own Graphics panel with Add graphic; without, only the rows, for a host that has its own toolbar. */
+  framed?: boolean;
   onSelect: (element: LiveOverlayElement) => void;
   /** Shows a graphic in the scene, or removes it. */
   onShow: (element: LiveOverlayElement, visible: boolean) => void;
   /** Sets whether a graphic that fills itself from the room comes on with the scene. */
   onComesOn: (element: LiveOverlayElement, comesOn: boolean) => void;
   onReorder: (element: LiveProgramLayer, to: number) => void;
-  onSharing: (element: LiveOverlayElement, action: LayoutSharingAction) => void;
+  onSharing: GraphicActionHandlers["onSharing"];
+  /** Lets the graphic's spot take turns every `turns` seconds, or show only its front graphic (null). */
+  onTurns: GraphicActionHandlers["onTurns"];
+  onLook: GraphicActionHandlers["onLook"];
+  /** Holds the graphic's box in place on the canvas, or frees it. */
+  onLock: (element: LiveOverlayElement, locked: boolean) => void;
 }) {
   const list = useRef<HTMLUListElement>(null);
   const graphics = sceneGraphics(elements);
-  const addable = addableGraphics(elements);
   const drag = useRowDrag(() => [...(list.current?.children ?? [])] as HTMLElement[], onReorder);
-  const actions = (element: LiveProgramLayer): MenuItem[] => [
-    ...(elements[element].shared
-      ? [
-          {
-            id: "unlink",
-            label: "Place differently on this scene",
-            tooltip: "Gives this scene its own position for the graphic. The other scenes keep the shared one.",
-            disabled,
-            onSelect: () => onSharing(element, "unlink"),
-          },
-        ]
-      : [
-          {
-            id: "relink",
-            label: "Use shared position",
-            tooltip: "Drops this scene's own position and takes the one the scenes share.",
-            disabled,
-            onSelect: () => onSharing(element, "relink"),
-          },
-          {
-            id: "apply",
-            label: "Apply this position to all scenes",
-            tooltip: "Makes this position the shared one, so every scene that shares it follows.",
-            disabled,
-            onSelect: () => onSharing(element, "apply"),
-          },
-        ]),
-    {
-      id: "remove",
-      label: "Remove from scene",
-      danger: true,
-      separatorBefore: true,
-      disabled,
-      onSelect: () => onShow(element, false),
-    },
-  ];
+  const handlers = { onShow, onSharing, onTurns, onLook };
   // While a row is dragged, the line shows where it lands: above the row now at that place, or below the last.
   const dropAt = (index: number) => {
     const shown = drag.shown;
@@ -226,93 +274,102 @@ export function OverlayLayoutGraphics({
     if (shown.target === index && shown.target > from) return "after";
     return undefined;
   };
+  const rows = (
+    <ul class="pk-scenes__rows" ref={list} aria-label="Graphics in this scene">
+      {graphics.map((element, index) => {
+        const label = LIVE_OVERLAY_ELEMENT_LABELS[element];
+        return (
+          <li
+            key={element}
+            class="pk-scenes__row"
+            data-element={element}
+            data-selected={element === selected ? "" : undefined}
+            data-dragging={drag.shown?.element === element ? "" : undefined}
+            data-drop={dropAt(index)}
+          >
+            <span
+              class="pk-scenes__grip"
+              aria-hidden="true"
+              title={"Drag to reorder\nThe top of the list is drawn in front."}
+              {...drag.grip(element, index)}
+            >
+              ⠿
+            </span>
+            <button
+              type="button"
+              class="pk-scenes__pick"
+              aria-pressed={element === selected}
+              onClick={() => onSelect(element)}
+            >
+              <GraphicLabel element={element} elements={elements} />
+            </button>
+            <OverlayLayoutGraphicSwitch
+              element={element}
+              placement={elements[element]}
+              disabled={disabled}
+              onComesOn={(comesOn) => onComesOn(element, comesOn)}
+            />
+            <span class="pk-scenes__moves">
+              <Button
+                icon
+                variant="ghost"
+                aria-label={`Move ${label} up`}
+                title={`Move ${label} up\nOne step toward the front.`}
+                disabled={disabled || index === 0}
+                onClick={() => onReorder(element, index - 1)}
+              >
+                <IconChevron pointing="up" />
+              </Button>
+              <Button
+                icon
+                variant="ghost"
+                aria-label={`Move ${label} down`}
+                title={`Move ${label} down\nOne step toward the back.`}
+                disabled={disabled || index === graphics.length - 1}
+                onClick={() => onReorder(element, index + 1)}
+              >
+                <IconChevron pointing="down" />
+              </Button>
+            </span>
+            <Button
+              icon
+              variant="ghost"
+              aria-pressed={elements[element].locked === true}
+              aria-label={elements[element].locked ? `Unlock ${label}` : `Lock ${label}`}
+              title={
+                elements[element].locked
+                  ? `Unlock ${label}\nLets you drag it on the canvas again.`
+                  : `Lock ${label}\nHolds it in place on the canvas, so a press reaches the graphic behind it.`
+              }
+              disabled={disabled}
+              onClick={() => onLock(element, !elements[element].locked)}
+            >
+              <LockIcon open={!elements[element].locked} />
+            </Button>
+            <RowActions
+              subject={label}
+              hint="Share or keep its position across scenes, set how its spot shows it, or remove it."
+              actions={graphicActions(elements, element, disabled, handlers)}
+            />
+          </li>
+        );
+      })}
+    </ul>
+  );
+  if (!framed)
+    return (
+      <>
+        {rows}
+        <OverlapNote elements={elements} />
+      </>
+    );
   return (
     <GraphicsPanel
       empty={graphics.length === 0}
-      toolbar={
-        <Menu
-          label="Add graphic"
-          variant="plain"
-          align="end"
-          triggerClass={buttonClasses({ variant: "secondary" }, undefined)}
-          disabled={disabled || addable.length === 0}
-          items={addable.map((element) => ({
-            id: element,
-            label: LIVE_OVERLAY_ELEMENT_LABELS[element],
-            description: LAYOUT_GRAPHIC_DESCRIPTIONS[element],
-            onSelect: () => onShow(element, true),
-          }))}
-        >
-          <IconPlus />
-          Add graphic
-        </Menu>
-      }
+      toolbar={<AddGraphicMenu elements={elements} disabled={disabled} onShow={onShow} />}
     >
-      <ul class="pk-scenes__rows" ref={list} aria-label="Graphics in this scene">
-        {graphics.map((element, index) => {
-          const label = LIVE_OVERLAY_ELEMENT_LABELS[element];
-          return (
-            <li
-              key={element}
-              class="pk-scenes__row"
-              data-element={element}
-              data-selected={element === selected ? "" : undefined}
-              data-dragging={drag.shown?.element === element ? "" : undefined}
-              data-drop={dropAt(index)}
-            >
-              <span
-                class="pk-scenes__grip"
-                aria-hidden="true"
-                title={"Drag to reorder\nThe top of the list is drawn in front."}
-                {...drag.grip(element, index)}
-              >
-                ⠿
-              </span>
-              <button
-                type="button"
-                class="pk-scenes__pick"
-                aria-pressed={element === selected}
-                onClick={() => onSelect(element)}
-              >
-                <GraphicLabel element={element} elements={elements} />
-              </button>
-              <span class="pk-scenes__moves">
-                <Button
-                  icon
-                  variant="ghost"
-                  aria-label={`Move ${label} up`}
-                  title={`Move ${label} up\nOne step toward the front.`}
-                  disabled={disabled || index === 0}
-                  onClick={() => onReorder(element, index - 1)}
-                >
-                  <IconChevron pointing="up" />
-                </Button>
-                <Button
-                  icon
-                  variant="ghost"
-                  aria-label={`Move ${label} down`}
-                  title={`Move ${label} down\nOne step toward the back.`}
-                  disabled={disabled || index === graphics.length - 1}
-                  onClick={() => onReorder(element, index + 1)}
-                >
-                  <IconChevron pointing="down" />
-                </Button>
-              </span>
-              <RowActions
-                subject={label}
-                hint="Share or keep its position across scenes, or remove it from this scene."
-                actions={actions(element)}
-              />
-              <OverlayLayoutGraphicSwitch
-                element={element}
-                placement={elements[element]}
-                disabled={disabled}
-                onComesOn={(comesOn) => onComesOn(element, comesOn)}
-              />
-            </li>
-          );
-        })}
-      </ul>
+      {rows}
+      <OverlapNote elements={elements} />
     </GraphicsPanel>
   );
 }

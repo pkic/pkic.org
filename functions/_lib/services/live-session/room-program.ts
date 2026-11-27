@@ -5,6 +5,7 @@ import {
   liveProgramMessageSchema,
   liveProgramSelectionSchema,
   liveProgramSelectSchema,
+  type LiveProgramSelect,
   type LiveProgramSelection,
   type LiveProgramSelectResult,
 } from "../../../../assets/shared/schemas/live-room-program";
@@ -121,7 +122,7 @@ export class LiveRoomProgram {
   async selectResult(
     eventId: string,
     roomId: string,
-    input: z.infer<typeof liveProgramSelectSchema>,
+    input: LiveProgramSelect,
     claims: UserSessionTokenClaims,
   ): Promise<LiveProgramSelectResult> {
     try {
@@ -138,7 +139,7 @@ export class LiveRoomProgram {
   async select(
     eventId: string,
     roomId: string,
-    input: z.infer<typeof liveProgramSelectSchema>,
+    input: LiveProgramSelect,
     claims: UserSessionTokenClaims,
   ): Promise<LiveProgramSelection> {
     input = liveProgramSelectSchema.parse(input);

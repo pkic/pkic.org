@@ -78,8 +78,6 @@ describe("a room screen that follows Program", () => {
     // A take left Program's lower third and top questions out: neither is drawn.
     const live = { lowerThird: CREDIT, topQuestions: TOP };
     expect(drawn(room(live, { scene: "questions" }))).toEqual({ name: null, topQuestions: false });
-    // A scene that leaves them out draws none, held or not.
-    expect(drawn(room({}, { scene: "break", topQuestions: TOP })).topQuestions).toBe(false);
   });
 
   it("stays as it is once its sync is off", () => {

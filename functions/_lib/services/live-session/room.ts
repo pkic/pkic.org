@@ -17,11 +17,10 @@ import { liveChatTickerLines } from "./room-ticker";
 import { LiveRoomProgram, LIVE_PROGRAM_SOCKET_TAG, closeLiveRoomProgramSources } from "./room-program";
 import type {
   LiveProgramSelection,
+  LiveProgramSelect,
   LiveProgramSelectResult,
 } from "../../../../assets/shared/schemas/live-room-program";
 import type { UserSessionTokenClaims } from "../../auth/user-session-token";
-import type { z } from "zod";
-import type { liveProgramSelectSchema } from "../../../../assets/shared/schemas/live-room-program";
 import { LiveRoomChat, type LiveChatArchiveRow } from "./room-chat";
 import { liveChatErasable, purgeLiveRoom } from "./room-purge";
 import { LiveRoomClassifiers } from "./room-classifiers";
@@ -35,6 +34,7 @@ import { LiveRoomQuestions } from "./room-questions";
 import { DurableObject } from "cloudflare:workers";
 import { LIVE_ROOM_POLICY } from "../../../../assets/shared/live-session-policy";
 import {
+  liveRoomRefusalCloseCode,
   type LiveRoomClientMessage,
   type LiveRoomSession,
   type LiveStage,
@@ -43,7 +43,6 @@ import type { Env, LiveSessionRoomRpc } from "../../types";
 import { LiveRoomAccessLease } from "./room-access-lease";
 import { runLiveRoomAlarm } from "./room-alarm";
 import { closeLiveRoomSocket } from "./room-socket-close";
-import { liveRoomRefusalCloseCode } from "../../../../assets/shared/schemas/live-session-room";
 import { nowIso } from "../../utils/time";
 import type { LiveRoomParticipant } from "./room-admission";
 import { LiveRoomBroadcast } from "./room-broadcast";
@@ -324,6 +323,10 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       await this.broadcast.all(message);
   }
 
+  async scenesChanged(): Promise<void> {
+    if (this.store.session()) await this.graphics.refreshAfterChange();
+  }
+
   async locationChatLoaded(occurrenceId: string | null): Promise<void> {
     this.locationChat.loaded(occurrenceId);
   }
@@ -371,7 +374,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
   async selectProgram(
     eventId: string,
     roomId: string,
-    input: z.infer<typeof liveProgramSelectSchema>,
+    input: LiveProgramSelect,
     claims: UserSessionTokenClaims,
   ): Promise<LiveProgramSelectResult> {
     return this.program.selectResult(eventId, roomId, input, claims);
@@ -417,10 +420,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     if (message && viewer.role !== "overlay") {
       if (!this.store.session() && !this.location.state()) return;
       const authorized = await this.access.authorize([socket]);
-      if (!authorized.length) {
-        await this.left(socket);
-        return;
-      }
+      if (!authorized.length) return this.left(socket);
       viewer = socket.deserializeAttachment() as LiveRoomParticipant;
     }
     if (

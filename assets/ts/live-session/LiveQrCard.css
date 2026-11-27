@@ -47,4 +47,31 @@
   .pk-live-qr-card[data-graphic-theme="event"] .pk-qr-graphic__modules {
     fill: var(--pk-pqc-ink);
   }
+  /* The code alone: no card, stripe or line under it, only the code and its quiet zone in the scene's colors. */
+  .pk-live-qr-card:not([data-look="card"]) .pk-qr-graphic {
+    border-radius: 0;
+    background: none;
+    text-shadow: none;
+  }
+  .pk-live-qr-card:not([data-look="card"]) .pk-qr-graphic__plate {
+    padding: 0;
+  }
+  .pk-live-qr-card:not([data-look="card"]) .pk-qr-graphic::after {
+    content: none;
+  }
+  .pk-live-qr-card:is([data-look="black-on-white"], [data-look="black-on-clear"]) .pk-qr-graphic__modules {
+    fill: var(--pk-pqc-ink);
+  }
+  .pk-live-qr-card[data-look="black-on-white"] .pk-qr-graphic__ground {
+    fill: var(--pk-pqc-paper);
+  }
+  .pk-live-qr-card[data-look="white-on-black"] .pk-qr-graphic__ground {
+    fill: var(--pk-pqc-ink);
+  }
+  .pk-live-qr-card[data-look="white-on-black"] .pk-qr-graphic__modules {
+    fill: var(--pk-pqc-paper);
+  }
+  .pk-live-qr-card[data-look="black-on-clear"] .pk-qr-graphic__ground {
+    fill: transparent;
+  }
 }

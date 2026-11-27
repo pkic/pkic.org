@@ -177,6 +177,13 @@ export const LIVE_TIMER_SIZES = ["small", "medium", "large"] as const;
  * bottom edge (`tab`), or the time in the consortium emblem (`ring`).
  */
 export const LIVE_TIMER_PRESENTATIONS = ["digital", "bare", "tab", "ring"] as const;
+export type LiveTimerPresentation = (typeof LIVE_TIMER_PRESENTATIONS)[number];
+export const LIVE_TIMER_PRESENTATION_LABELS: Record<LiveTimerPresentation, string> = {
+  digital: "White plate",
+  bare: "No background",
+  tab: "Tab from the edge",
+  ring: "In the logo",
+};
 
 export const liveTimerGraphicSchema = z
   .object({

@@ -54,6 +54,21 @@ export function StudioToolbar({
         items={STUDIO_WORKSPACES.map((id) => ({ id, label: STUDIO_WORKSPACE_LABELS[id] }))}
       />
       <div class="pk-studio-toolbar__end">
+        {saveAsDefault ? (
+          <Menu
+            label="More layout actions"
+            heading="Layout"
+            align="end"
+            items={[
+              {
+                id: "save-default",
+                label: "Save as event default",
+                description: "Every studio of the event starts this workspace from this arrangement.",
+                onSelect: saveAsDefault,
+              },
+            ]}
+          />
+        ) : null}
         <Menu
           variant="plain"
           label="Add panel"
@@ -77,21 +92,6 @@ export function StudioToolbar({
         >
           <IconLayoutReset />
         </Button>
-        {saveAsDefault ? (
-          <Menu
-            label="More layout actions"
-            heading="Layout"
-            align="end"
-            items={[
-              {
-                id: "save-default",
-                label: "Save as event default",
-                description: "Every studio of the event starts this workspace from this arrangement.",
-                onSelect: saveAsDefault,
-              },
-            ]}
-          />
-        ) : null}
         <Button
           icon
           data-tour-trigger
