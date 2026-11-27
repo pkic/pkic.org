@@ -15,7 +15,6 @@
     --welcome-title: 44px;
     --welcome-organization: 40px;
     --welcome-session: 62px;
-    --welcome-initials: 120px;
     --welcome-role: 22px;
     position: absolute;
     inset-block-start: 0;
@@ -161,7 +160,6 @@
     --pk-avatar-size: 412px;
     box-sizing: border-box;
     border: 8px solid var(--welcome-ring);
-    font-size: var(--welcome-initials);
   }
   [data-ring="0"] {
     --welcome-ring: var(--pk-pqc-orange);
@@ -192,7 +190,6 @@
     --welcome-title: 38px;
     --welcome-organization: 36px;
     --welcome-session: 56px;
-    --welcome-initials: 72px;
   }
   .pk-live-welcome[data-arrangement="stack"] .pk-live-welcome__title {
     margin-block-start: 12px;
@@ -227,7 +224,6 @@
     --welcome-title: 28px;
     --welcome-organization: 26px;
     --welcome-session: var(--pk-live-board-headline-type-compact);
-    --welcome-initials: 52px;
   }
   .pk-live-welcome[data-arrangement="grid"] .pk-live-welcome__name {
     line-height: 1.08;
