@@ -27,6 +27,19 @@ const ARROWS: Record<string, "up" | "down" | "left" | "right"> = {
 
 const percent = (value: number) => `${Math.round(value * 1000) / 10}%`;
 
+/** The frame's edges a box lies on, so its handles there are drawn inside the frame, where they can be grabbed. */
+function frameEdgesTouched(box: Box): string {
+  const near = (value: number) => value <= 0.001;
+  return [
+    near(box.y) && "top",
+    near(1 - box.y - box.h) && "bottom",
+    near(box.x) && "left",
+    near(1 - box.x - box.w) && "right",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
 /** A graphic's box on the canvas, labeled and kept at its place through custom properties, never an inline style. */
 function LayoutBox({
   element,
@@ -83,6 +96,7 @@ function LayoutBox({
       data-off={off ? "" : undefined}
       data-locked={locked ? "" : undefined}
       data-label-side={labelPlace.side}
+      data-touches={frameEdgesTouched(box) || undefined}
       aria-pressed={selected}
       aria-label={`${label}${off ? " (off)" : ""}, ${position}: ${percent(box.x)} from left, ${percent(box.y)} from top, ${percent(box.w)} wide, ${percent(box.h)} high`}
       aria-describedby={describedBy}

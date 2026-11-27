@@ -204,8 +204,21 @@
     z-index: 3;
     inline-size: 1.5rem;
     block-size: 1.5rem;
-    translate: -50% -50%;
+    translate: var(--handle-x, -50%) var(--handle-y, -50%);
     touch-action: none;
+  }
+  /* On a box that lies on the frame's edge, the handles there move inside it, as the frame cuts off what is outside. */
+  .pk-layout-canvas__box[data-touches~="top"] > .pk-layout-canvas__handle[data-handle*="n"] {
+    --handle-y: 0%;
+  }
+  .pk-layout-canvas__box[data-touches~="bottom"] > .pk-layout-canvas__handle[data-handle*="s"] {
+    --handle-y: -100%;
+  }
+  .pk-layout-canvas__box[data-touches~="left"] > .pk-layout-canvas__handle[data-handle*="w"] {
+    --handle-x: 0%;
+  }
+  .pk-layout-canvas__box[data-touches~="right"] > .pk-layout-canvas__handle[data-handle*="e"] {
+    --handle-x: -100%;
   }
   .pk-layout-canvas__handle::after {
     content: "";
@@ -252,6 +265,11 @@
     inset-inline-start: 0;
     inset-block-start: 50%;
     cursor: ew-resize;
+  }
+  /* Snap on: the magnet in the accent, on a tint, so on and off read apart at a glance. */
+  .pk-layout-snap.pk-btn[aria-pressed="true"] {
+    background: var(--pk-accent-soft);
+    color: var(--pk-accent);
   }
   /* The line a dragged box snapped to, shown only while it holds there. */
   .pk-layout-canvas__guide {

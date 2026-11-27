@@ -36,6 +36,7 @@ export function LayoutSnapToggle() {
     <Button
       icon
       variant="ghost"
+      class="pk-layout-snap"
       aria-pressed={on}
       aria-label="Snap"
       title={`Snap: ${on ? "on" : "off"}\nEdges snap to the grid, the safe areas and other graphics. Hold Alt while dragging to do the opposite.`}
