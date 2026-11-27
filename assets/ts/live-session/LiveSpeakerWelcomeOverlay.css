@@ -1,0 +1,263 @@
+/*
+ * The speaker welcome: a full 1080p frame on the scene's background, set in
+ * pixels of the frame (a fixed canvas its layout box scales whole). The
+ * event's name sits top left, where a production may place its own logo
+ * instead; the text runs down the left; one speaker's headshot sits large
+ * on the right in a ring with a soft halo, and several speakers stack, each
+ * beside a smaller one. The event stripe runs along the foot.
+ */
+@layer components {
+  .pk-live-welcome {
+    --welcome-edge: 108px;
+    /* Type sizes for one speaker; the stack and the grid set their own. */
+    --welcome-eyebrow: 30px;
+    --welcome-name: 136px;
+    --welcome-title: 44px;
+    --welcome-organization: 40px;
+    --welcome-session: 62px;
+    --welcome-initials: 120px;
+    --welcome-role: 22px;
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    inline-size: 1920px;
+    block-size: 1080px;
+    padding: 84px var(--welcome-edge) 96px;
+    overflow: hidden;
+    color: var(--graphic-ink);
+    text-align: start;
+  }
+  /* It comes on in steps: the text rises in, the headshot settles into its ring after it, the rule draws. */
+  .pk-live-welcome__head,
+  .pk-live-welcome__body {
+    animation: pk-live-board-in var(--pk-dur-slow) var(--pk-ease) both;
+  }
+  @keyframes pk-live-welcome-portrait-in {
+    from {
+      opacity: 0;
+      transform: scale(0.94);
+    }
+  }
+  @keyframes pk-live-welcome-rule-in {
+    from {
+      transform: scaleX(0);
+    }
+  }
+  /* A screen people use may still the motion; the broadcast always animates. */
+  @media (prefers-reduced-motion: reduce) {
+    :root:not(:has([data-live-broadcast-source])) :is(.pk-live-welcome__head, .pk-live-welcome__body, .pk-live-welcome__portrait, .pk-live-welcome__rule) {
+      animation: none;
+    }
+  }
+  .pk-live-welcome p {
+    margin: 0;
+  }
+  .pk-live-welcome__head {
+    display: flex;
+    align-items: center;
+    gap: 44px;
+    block-size: 72px;
+  }
+  .pk-live-welcome__event {
+    line-height: 72px;
+    color: var(--graphic-ink-muted);
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-live-board-eyebrow-type);
+    font-weight: 500;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+  }
+  .pk-live-welcome__body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    justify-content: center;
+    max-inline-size: 1040px;
+  }
+  .pk-live-welcome__eyebrow,
+  .pk-live-welcome__when {
+    font-family: var(--pk-font-mono);
+    font-size: var(--welcome-eyebrow);
+    font-weight: 500;
+    letter-spacing: 0.24em;
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+  .pk-live-welcome__eyebrow {
+    color: var(--pk-pqc-orange);
+  }
+  .pk-live-welcome__people {
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+    margin: 28px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  /* The name's size for the arrangement, set on the card; its length scales it down from there. */
+  .pk-live-welcome__name {
+    font-size: var(--welcome-name);
+    font-weight: 900;
+    line-height: 1.05;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+  .pk-live-welcome__name[data-fit="long"] {
+    font-size: calc(var(--welcome-name) * 0.8);
+  }
+  .pk-live-welcome__given,
+  .pk-live-welcome__family {
+    display: block;
+  }
+  .pk-live-welcome__family {
+    font-size: 0.66em;
+    font-weight: 700;
+  }
+  .pk-live-welcome__title {
+    margin-block-start: 28px;
+    font-size: var(--welcome-title);
+    font-weight: 500;
+    line-height: 1.2;
+  }
+  .pk-live-welcome__organization {
+    color: var(--graphic-ink-muted);
+    font-size: var(--welcome-organization);
+    font-weight: 300;
+    line-height: 1.25;
+  }
+  .pk-live-welcome__rule {
+    inline-size: 160px;
+    block-size: 8px;
+    margin-block: 64px 36px;
+    background: var(--pk-pqc-stripe);
+    transform-origin: left center;
+    animation: pk-live-welcome-rule-in var(--pk-dur-slow) var(--pk-ease) 200ms both;
+  }
+  .pk-live-welcome__session {
+    margin-block-start: 16px;
+    font-size: var(--welcome-session);
+    font-weight: 700;
+    line-height: 1.12;
+    text-wrap: balance;
+  }
+
+  /* One speaker: the headshot large on the right, in its ring and halo. */
+  .pk-live-welcome__portrait {
+    position: absolute;
+    inset-block-start: 280px;
+    inset-inline-end: 100px;
+    display: grid;
+    place-items: center;
+    inline-size: 548px;
+    block-size: 548px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--graphic-ink) 8%, transparent);
+    animation: pk-live-welcome-portrait-in var(--pk-dur-slow) var(--pk-ease) 120ms both;
+  }
+  .pk-live-welcome__headshot {
+    --pk-avatar-size: 412px;
+    box-sizing: border-box;
+    border: 8px solid var(--welcome-ring);
+    font-size: var(--welcome-initials);
+  }
+  [data-ring="0"] {
+    --welcome-ring: var(--pk-pqc-orange);
+  }
+  [data-ring="1"] {
+    --welcome-ring: var(--pk-pqc-blue);
+  }
+  [data-ring="2"] {
+    --welcome-ring: var(--pk-pqc-green);
+  }
+
+  /* Several speakers: each beside a smaller headshot, the session under them all. */
+  .pk-live-welcome[data-arrangement="stack"] .pk-live-welcome__body {
+    max-inline-size: none;
+  }
+  .pk-live-welcome[data-arrangement="stack"] .pk-live-welcome__person {
+    display: flex;
+    align-items: center;
+    gap: 56px;
+  }
+  .pk-live-welcome[data-arrangement="stack"] .pk-live-welcome__headshot {
+    --pk-avatar-size: 220px;
+    flex: none;
+    border-width: 6px;
+  }
+  .pk-live-welcome[data-arrangement="stack"] {
+    --welcome-name: 80px;
+    --welcome-title: 38px;
+    --welcome-organization: 36px;
+    --welcome-session: 56px;
+    --welcome-initials: 72px;
+  }
+  .pk-live-welcome[data-arrangement="stack"] .pk-live-welcome__title {
+    margin-block-start: 12px;
+  }
+  .pk-live-welcome[data-arrangement="stack"] .pk-live-welcome__rule {
+    margin-block: 48px 28px;
+  }
+
+  /* A panel: a grid three across, each person beside a small headshot. */
+  .pk-live-welcome[data-arrangement="grid"] .pk-live-welcome__body {
+    max-inline-size: none;
+  }
+  .pk-live-welcome[data-arrangement="grid"] .pk-live-welcome__people {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 44px 48px;
+    margin-block-start: 36px;
+  }
+  /* Names start level across a row, however many lines a title takes. */
+  .pk-live-welcome[data-arrangement="grid"] .pk-live-welcome__person {
+    display: flex;
+    align-items: flex-start;
+    gap: 28px;
+  }
+  .pk-live-welcome[data-arrangement="grid"] .pk-live-welcome__headshot {
+    --pk-avatar-size: 148px;
+    flex: none;
+    border-width: 5px;
+  }
+  .pk-live-welcome[data-arrangement="grid"] {
+    --welcome-name: 44px;
+    --welcome-title: 28px;
+    --welcome-organization: 26px;
+    --welcome-session: var(--pk-live-board-headline-type-compact);
+    --welcome-initials: 52px;
+  }
+  .pk-live-welcome[data-arrangement="grid"] .pk-live-welcome__name {
+    line-height: 1.08;
+  }
+  .pk-live-welcome[data-arrangement="grid"] .pk-live-welcome__title {
+    margin-block-start: 8px;
+  }
+  .pk-live-welcome[data-arrangement="grid"] .pk-live-welcome__rule {
+    margin-block: 48px 28px;
+  }
+  .pk-live-welcome__role {
+    margin-block-start: 10px;
+    color: var(--pk-pqc-orange);
+    font-family: var(--pk-font-mono);
+    font-size: var(--welcome-role);
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+
+  /* The background's faint mark would sit behind the headshot's halo. */
+  .pk-live-overlay__stack:has(.pk-live-welcome) .pk-live-board__watermark {
+    opacity: 0;
+  }
+
+  .pk-live-welcome__stripe {
+    position: absolute;
+    inset-inline: 0;
+    inset-block-end: 0;
+    block-size: 12px;
+    background: var(--pk-pqc-stripe);
+  }
+}

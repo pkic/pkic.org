@@ -106,6 +106,18 @@ export function liveQuestionAddressees<Credit extends AddressableCredit>(credits
   return credits.filter((credit) => credit.moderator || !liveCreditHasRole(credit));
 }
 
+/** The most people the speaker welcome seats: a panel's six, two rows of three. */
+export const LIVE_WELCOME_SEATS = 6;
+
+/** Whom the speaker welcome greets: the session's speakers, then its moderator; its hosts are not welcomed. */
+export function liveWelcomedSpeakers<Credit extends AddressableCredit>(credits: readonly Credit[]): Credit[] {
+  const people = liveQuestionAddressees(credits);
+  return [...people.filter((credit) => !credit.moderator), ...people.filter((credit) => credit.moderator)].slice(
+    0,
+    LIVE_WELCOME_SEATS,
+  );
+}
+
 /** The name of the person a question is for, read from the session's credits; null when it is for everyone. */
 export function liveQuestionAddresseeName(credits: readonly AddressableCredit[], key: string | null): string | null {
   if (key === null) return null;

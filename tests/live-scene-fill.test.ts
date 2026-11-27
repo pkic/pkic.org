@@ -62,7 +62,7 @@ describe("what puts a graphic on an output", () => {
   it("declares one way per graphic: a pick, the room, or the scene alone", () => {
     const by = (kind: string) =>
       LIVE_OVERLAY_ELEMENTS.filter((element) => LIVE_OVERLAY_ELEMENT_SWITCHES[element] === kind);
-    expect(by("pick")).toEqual(["lowerThird", "question", "poll", "timer", "checkIn"]);
+    expect(by("pick")).toEqual(["lowerThird", "question", "poll", "timer", "speakerWelcome", "checkIn"]);
     expect(by("room")).toEqual(["ticker", "schedule", "panelists", "topQuestions", "chat", "reactions"]);
     expect(by("scene")).toEqual(["background", "qrCode", "stageDisplay", "stageMessage"]);
   });

@@ -13,6 +13,34 @@ import {
 import type { LiveRoomState } from "../../live-session/live-room-state";
 import { LivestreamOverlay, presetWith, ROOM, roomWith } from "./studio-on-screen-fixtures";
 
+/** A name long enough that the welcome sets the family name under the given name. */
+const LONG_NAME = "Alexandra van Placeholder-Smith";
+
+/** The speaker welcome on Program's Full board background, as the broadcast draws it. */
+function WelcomeFrame({ speakers, longName = false }: { speakers: 1 | 2 | 6; longName?: boolean }) {
+  const [first, second] = ROOM.session.credits;
+  const long = { ...second!, name: LONG_NAME };
+  const people = (speakers === 1 ? [second!] : speakers === 2 ? [second!, first!] : sessionWith(6).session.credits).map(
+    (person, index) => (longName && index === 0 ? long : person),
+  );
+  const state = roomWith({}, { speakerWelcome: true });
+  return (
+    <LivestreamOverlay
+      state={{
+        ...state,
+        session: {
+          ...state.session,
+          eventName: "Sample PQC Conference",
+          title: "Migrating a national PKI to post-quantum certificates",
+          credits: people,
+          sessionType: speakers === 6 ? "Panel discussion" : "Keynote",
+        },
+      }}
+      elements={presetWith("full-board", ["background", "speakerWelcome"])}
+    />
+  );
+}
+
 /** The sample session with these speakers, the moderator last as the room lists them. */
 function sessionWith(count: number): LiveRoomState {
   const [first, second, moderator] = ROOM.session.credits;
@@ -99,6 +127,36 @@ function sessionGraphic(panelists: LivePanelists, people: 1 | 6 = 1): LiveRoomSt
 }
 
 export const studioBoardSections: PreviewSection[] = [
+  {
+    id: "onscreen-speaker-welcome",
+    title: "Speaker welcome, one speaker",
+    note: "Full frame on the Full board background: the event name, the speaker from their identity, and the session. No logo: the production places its own.",
+    render: () => <WelcomeFrame speakers={1} />,
+  },
+  {
+    id: "onscreen-speaker-welcome-two",
+    title: "Speaker welcome, two speakers",
+    note: "Several speakers stack, each beside their own headshot, the session under them.",
+    render: () => <WelcomeFrame speakers={2} />,
+  },
+  {
+    id: "onscreen-speaker-welcome-long-name",
+    title: "Speaker welcome, a long name",
+    note: "A long name sets smaller; a very long one keeps the given name large and sets the rest under it.",
+    render: () => <WelcomeFrame speakers={1} longName />,
+  },
+  {
+    id: "onscreen-speaker-welcome-panel-long-name",
+    title: "Speaker welcome, a panel with a long name",
+    note: "The same rule at the grid's size.",
+    render: () => <WelcomeFrame speakers={6} longName />,
+  },
+  {
+    id: "onscreen-speaker-welcome-panel",
+    title: "Speaker welcome, a panel of six",
+    note: "From three people they sit in a grid, three across, the moderator last.",
+    render: () => <WelcomeFrame speakers={6} />,
+  },
   {
     id: "onscreen-lower-third-identities",
     title: "Lower third for a speaker with two identities",

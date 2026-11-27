@@ -20,6 +20,7 @@ const BOARDS: ReadonlySet<LiveProgramLayer> = new Set([
   "poll",
   "topQuestions",
   "chat",
+  "speakerWelcome",
 ]);
 
 /** How much of a graphic a board must cover before it reads as hidden. */
@@ -51,6 +52,8 @@ export function liveOverlayDrawn(stage: LiveStage, layer: LiveProgramLayer): boo
       return (stage.ticker?.segments.length ?? 0) > 0;
     case "reactions":
       return stage.reactions;
+    case "speakerWelcome":
+      return stage.speakerWelcome;
   }
 }
 

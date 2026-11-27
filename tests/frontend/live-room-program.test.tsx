@@ -81,6 +81,7 @@ describe("continuous physical-room source", () => {
             chatFeed: null,
             reactions: false,
             reactionsGraphic: { showCount: false },
+            speakerWelcome: false,
             scene: null,
           },
         }),

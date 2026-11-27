@@ -62,6 +62,7 @@ const ON_STAGE = {
   chatFeed: null,
   reactions: false,
   reactionsGraphic: { showCount: false },
+  speakerWelcome: false,
   scene: null,
 };
 const SESSION_TIMER = liveSnapshot().timers[0]!;

@@ -87,6 +87,7 @@ const FULL_FRAME: LiveOverlayLayoutElements = {
   // so they can show together.
   schedule: box(96, 168, 1248, 504, LEFT_MIDDLE),
   panelists: FILL,
+  speakerWelcome: { visible: true, ...LIVE_OVERLAY_ADDED_ELEMENT_BOXES.speakerWelcome, shared: true },
   checkIn: box(1392, 216, 480, 648, RIGHT_MIDDLE),
   topQuestions: { visible: true, ...LIVE_OVERLAY_ADDED_ELEMENT_BOXES.topQuestions, shared: true },
   chat: { visible: true, ...LIVE_OVERLAY_ADDED_ELEMENT_BOXES.chat, shared: true },
@@ -200,7 +201,7 @@ const PRESETS: Record<LiveOverlayPreset, { name: string; elements: LiveOverlayLa
   },
   /**
    * One board over the whole frame on the background: a question, the top
-   * questions, the poll, the panel, the chat or Up next, one at a time; a
+   * questions, the poll, the panel, the speaker welcome, the chat or Up next, one at a time; a
    * question picked while the panel is on shows with the panel on one board.
    * No camera picture shows, so the scene places no lower third.
    */
@@ -210,6 +211,7 @@ const PRESETS: Record<LiveOverlayPreset, { name: string; elements: LiveOverlayLa
       "background",
       ...QUESTION_BOARDS,
       "panelists",
+      "speakerWelcome",
       "chat",
       "schedule",
       ...ALWAYS,
