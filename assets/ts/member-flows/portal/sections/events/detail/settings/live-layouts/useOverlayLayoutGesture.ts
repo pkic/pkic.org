@@ -56,8 +56,11 @@ export function useOverlayLayoutGesture(
   boxes: Readonly<Record<LiveOverlayElement, Box>>,
   /** The other elements drawn with the one being moved, whose edges it snaps to. */
   peers: (element: LiveOverlayElement) => Box[],
-  /** Commits the dropped box; `joinsSpot` unless Alt was held, so a board dropped over another may take its box. */
-  commit: (element: LiveOverlayElement, box: Box, joinsSpot: boolean) => void,
+  /**
+   * Commits the dropped box; `joinsSpot` unless Alt was held, so a board dropped over another may take its box.
+   * False when the change is refused, so the box goes back to where it started.
+   */
+  commit: (element: LiveOverlayElement, box: Box, joinsSpot: boolean) => boolean | void,
 ) {
   const canvas = useRef<HTMLDivElement>(null);
   const verticalGuide = useRef<HTMLDivElement>(null);
@@ -116,7 +119,8 @@ export function useOverlayLayoutGesture(
     if (save && changed) {
       // The box stays where it was dropped until the committed layout redraws it there.
       if (node) placeLayoutBox(node, active.box);
-      latest.current.commit(active.element, active.box, !active.alt);
+      if (latest.current.commit(active.element, active.box, !active.alt) === false && node)
+        placeLayoutBox(node, active.start);
     } else if (node) placeLayoutBox(node, active.start);
   };
 

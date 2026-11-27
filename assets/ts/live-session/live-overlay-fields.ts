@@ -1,3 +1,4 @@
+import { sameLiveBox } from "../../shared/live-overlay-spots";
 import type {
   LiveOverlayElement,
   LiveOverlayElementPlacement,
@@ -104,8 +105,9 @@ export function timerClearance(
 export function joinedPanelBox(elements: LiveOverlayLayoutElements): LiveOverlayElementPlacement | null {
   const { question, panelists } = elements;
   if (!question.visible || !panelists.visible) return null;
+  // The box they share is the spot they share, by the spots' own measure, so they take their turns as one board.
+  if (sameLiveBox(question, panelists)) return question;
   if (Math.abs(question.x - panelists.x) > EDGE || Math.abs(question.w - panelists.w) > EDGE) return null;
-  if (Math.abs(question.y - panelists.y) <= EDGE && Math.abs(question.h - panelists.h) <= EDGE) return question;
   const [top, bottom] = question.y <= panelists.y ? [question, panelists] : [panelists, question];
   if (Math.abs(top.y + top.h - bottom.y) > EDGE) return null;
   return { ...question, y: top.y, h: top.h + bottom.h, horizontal: "center", vertical: "middle" };

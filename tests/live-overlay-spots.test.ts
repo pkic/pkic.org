@@ -9,6 +9,7 @@ import {
   liveOverlaySpotTurns,
   liveOverlayTurnHolder,
 } from "../assets/shared/live-overlay-spots";
+import { joinedPanelBox } from "../assets/ts/live-session/live-overlay-fields";
 import type { LiveOverlayLayoutElements } from "../assets/shared/schemas/live-overlay-layout";
 import { EMPTY_LIVE_STAGE, type LiveStage } from "../assets/shared/schemas/live-session-room";
 import {
@@ -81,6 +82,14 @@ describe("taking turns", () => {
     expect(liveOverlayCoveredBy(all, front, first!)).toBeNull();
     for (const board of behind) expect(liveOverlayCoveredBy(all, front, board)).not.toBeNull();
     expect(liveOverlayWaitsForTurn(all, front, "chat", 0)).toBe(false);
+  });
+
+  it("joins the question and panelists into one board wherever the spots count them as one", () => {
+    const spot = { x: BREAK.chat.x, y: BREAK.chat.y, w: BREAK.chat.w, h: BREAK.chat.h, visible: true };
+    const near = { ...spot, x: spot.x + 0.0015, h: spot.h - 0.0015 };
+    const scene = { ...BREAK, question: { ...BREAK.question, ...spot }, panelists: { ...BREAK.panelists, ...near } };
+    expect(liveOverlaySpotOf(scene, "question")).toContain("panelists");
+    expect(joinedPanelBox(scene)).not.toBeNull();
   });
 
   it("gives the question and panelists on air in one spot one turn, as the one board they draw", () => {
