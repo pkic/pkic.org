@@ -232,7 +232,10 @@ export class LiveRoomGraphics {
     }
   }
   async takePreview(actor: Actor, session: LiveRoomSession, at: string): Promise<LiveControlOutcome> {
-    return this.preview.take(actor, session, await this.resolve(session, this.preview.sources(), at), at);
+    // A take waits for the Preview changes sent before it, so it puts on Program what Preview holds by then.
+    return this.inTurn(async () =>
+      this.preview.take(actor, session, await this.resolve(session, this.preview.sources(), at), at),
+    );
   }
   /** What a composition names, resolved: ticker and schedule from the approved agenda, its lists from the room. */
   private async resolve(
