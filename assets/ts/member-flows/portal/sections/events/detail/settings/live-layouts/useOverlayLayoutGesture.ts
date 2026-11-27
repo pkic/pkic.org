@@ -8,10 +8,12 @@ import {
   moveBox,
   resizeBox,
   shapeBox,
+  FIXED_SHAPE_ELEMENTS,
   snapTargets,
   type Box,
   type ResizeHandle,
   type SnapGuides,
+  type SnapOptions,
 } from "./overlay-layout-editing";
 
 /** A press becomes a drag once the pointer travels this far, so a click on a box stays a selection. */
@@ -37,13 +39,15 @@ interface Gesture {
   x: number;
   y: number;
   alt: boolean;
+  /** Shift held: the box keeps its shape. */
+  shift: boolean;
   started: boolean;
   frame: number | null;
   canvas: DOMRect;
   start: Box;
   others: Box[];
   box: Box;
-  /** The graphic's own shape, its width over its height, which a corner resize keeps; null when none is drawn. */
+  /** The shape a corner resize keeps, its width over its height: a code's own shape; null for any other graphic. */
   shape: number | null;
 }
 
@@ -53,8 +57,8 @@ interface Gesture {
  * re-renders: one animation frame per pointer move snaps the box, moves it
  * (and the graphic drawn for it) with a transform or sizes it, and shows the
  * guides it snapped to. The box is committed once, on release; Escape puts it
- * back. Hold Alt to place it freely. A corner keeps the graphic's own shape,
- * since the graphic is drawn whole inside its box.
+ * back. Hold Alt to place it freely. A corner keeps a code's own shape, since
+ * the code is drawn whole inside its box; Shift keeps any box's shape.
  */
 export function useOverlayLayoutGesture(
   boxes: Readonly<Record<LiveOverlayElement, Box>>,
@@ -71,6 +75,7 @@ export function useOverlayLayoutGesture(
   const horizontalGuide = useRef<HTMLDivElement>(null);
   const nodes = useRef(new Map<LiveOverlayElement, HTMLElement>());
   const gesture = useRef<Gesture | null>(null);
+  const dragged = useRef(false);
   const latest = useRef({ boxes, peers, commit });
   latest.current = { boxes, peers, commit };
 
@@ -151,12 +156,7 @@ export function useOverlayLayoutGesture(
       threshold: { x: SNAP_PX / active.canvas.width, y: SNAP_PX / active.canvas.height },
       snap: !active.alt,
     };
-    const result =
-      active.kind === "move"
-        ? moveBox(active.start, dx, dy, options)
-        : active.shape
-          ? shapeBox(resizeBox(active.start, active.kind, dx, dy, options), active.start, active.kind, active.shape)
-          : resizeBox(active.start, active.kind, dx, dy, options);
+    const result = active.kind === "move" ? moveBox(active.start, dx, dy, options) : resized(active, dx, dy, options);
     active.box = result.box;
     if (active.kind === "move") {
       const shiftX = result.box.x - active.start.x;
@@ -188,6 +188,7 @@ export function useOverlayLayoutGesture(
     if (event.button !== 0 || !area || gesture.current) return;
     const handle = event.currentTarget as Element;
     const start = latest.current.boxes[element];
+    dragged.current = false;
     gesture.current = {
       kind,
       element,
@@ -198,13 +199,14 @@ export function useOverlayLayoutGesture(
       x: event.clientX,
       y: event.clientY,
       alt: event.altKey,
+      shift: event.shiftKey,
       started: false,
       frame: null,
       canvas: area.getBoundingClientRect(),
       start,
       others: latest.current.peers(element),
       box: start,
-      shape: kind === "move" ? null : graphicShape(element),
+      shape: kind !== "move" && FIXED_SHAPE_ELEMENTS.has(element) ? graphicShape(element) : null,
     };
     handle.setPointerCapture?.(event.pointerId);
     if (kind !== "move") {
@@ -221,9 +223,11 @@ export function useOverlayLayoutGesture(
     active.x = event.clientX;
     active.y = event.clientY;
     active.alt = event.altKey;
+    active.shift = event.shiftKey;
     if (!active.started) {
       if (Math.hypot(active.x - active.startX, active.y - active.startY) < DRAG_THRESHOLD_PX) return;
       active.started = true;
+      dragged.current = true;
       nodes.current.get(active.element)?.setAttribute("data-gesture", active.kind === "move" ? "move" : "resize");
       canvas.current?.setAttribute("data-gesture", "");
     }
@@ -240,5 +244,17 @@ export function useOverlayLayoutGesture(
     onLostPointerCapture: cancel,
   });
 
-  return { canvas, register, verticalGuide, horizontalGuide, handlers };
+  /** Whether the last press became a drag, so the click that ends it picks nothing. */
+  const wasDragged = () => dragged.current;
+
+  return { canvas, register, verticalGuide, horizontalGuide, handlers, wasDragged };
+}
+
+/** A box resized by a corner: free, or keeping the code's own shape, or with Shift the box's shape. */
+function resized(active: Gesture, dx: number, dy: number, options: SnapOptions) {
+  const kind = active.kind as ResizeHandle;
+  const free = resizeBox(active.start, kind, dx, dy, options);
+  const { width, height } = LIVE_OVERLAY_FRAME;
+  const shape = active.shape ?? (active.shift ? (active.start.w * width) / (active.start.h * height) : null);
+  return shape ? shapeBox(free, active.start, kind, shape) : free;
 }

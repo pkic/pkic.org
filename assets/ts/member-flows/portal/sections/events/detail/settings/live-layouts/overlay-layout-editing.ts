@@ -1,5 +1,9 @@
 import { LIVE_OVERLAY_SAFE_MARGIN } from "../../../../../../../../shared/live-overlay-geometry";
-import { LIVE_OVERLAY_FRAME, LIVE_OVERLAY_MIN_BOX } from "../../../../../../../../shared/schemas/live-overlay-layout";
+import {
+  LIVE_OVERLAY_FRAME,
+  LIVE_OVERLAY_MIN_BOX,
+  type LiveOverlayElement,
+} from "../../../../../../../../shared/schemas/live-overlay-layout";
 
 /**
  * The layout editor's geometry: moving, resizing and nudging an element's box
@@ -24,6 +28,9 @@ export const NUDGE_PX = 1;
 export type ResizeHandle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 /** The handles the scene editor draws on the selected box: its corners. */
 export const CORNER_HANDLES: readonly ResizeHandle[] = ["nw", "ne", "se", "sw"];
+
+/** The graphics drawn whole at a shape of their own, so a corner resize keeps it: the QR code. Others fill their box. */
+export const FIXED_SHAPE_ELEMENTS: ReadonlySet<LiveOverlayElement> = new Set<LiveOverlayElement>(["qrCode"]);
 
 /** The lines a box snaps to along one axis, and the ones a guide is drawn for. */
 export interface SnapTargets {

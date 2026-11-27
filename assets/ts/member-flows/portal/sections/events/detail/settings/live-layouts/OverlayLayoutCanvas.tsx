@@ -37,6 +37,8 @@ function LayoutBox({
   describedBy,
   cell,
   handlers,
+  heldBelow,
+  wasDragged,
   onSelect,
   onNudge,
 }: {
@@ -52,6 +54,9 @@ function LayoutBox({
   describedBy: string;
   cell: (node: HTMLElement | null) => void;
   handlers: ReturnType<typeof useOverlayLayoutGesture>["handlers"];
+  /** The selected box when it lies under this one and can move: a drag from here moves it instead. */
+  heldBelow: { element: LiveOverlayElement; box: Box } | null;
+  wasDragged: () => boolean;
   onSelect: () => void;
   onNudge: (box: Box) => void;
 }) {
@@ -86,7 +91,9 @@ function LayoutBox({
           : `${label} · ${position}\nDrag to move it, or a corner to resize it. The arrow keys move it too.`
       }
       onFocus={onSelect}
-      onClick={onSelect}
+      onClick={() => {
+        if (!wasDragged()) onSelect();
+      }}
       onKeyDown={(event) => {
         const direction = ARROWS[event.key];
         if (!direction || locked) return;
@@ -95,6 +102,13 @@ function LayoutBox({
       }}
       {...move}
       onPointerDown={(event: PointerEvent) => {
+        // A drag inside the selected box moves it, even where this box lies in front; a click still picks this one.
+        if (heldBelow && pressedInside(event, heldBelow.box)) {
+          // Not focused either, which would pick this box before the drag shows it was not meant.
+          event.preventDefault();
+          handlers("move", heldBelow.element).onPointerDown(event);
+          return;
+        }
         // Pressing a box picks it, so the list and the exact position follow the box being dragged.
         onSelect();
         move.onPointerDown(event);
@@ -260,6 +274,12 @@ export function OverlayLayoutCanvas({
                 describedBy={help}
                 cell={gesture.register(element)}
                 handlers={gesture.handlers}
+                heldBelow={
+                  selected && selected !== element && shown.includes(selected) && !elements[selected].locked
+                    ? { element: selected, box: elements[selected] }
+                    : null
+                }
+                wasDragged={gesture.wasDragged}
                 onSelect={() => onSelect(element)}
                 onNudge={(box) => onChange(element, box)}
               />
@@ -306,4 +326,13 @@ function smallestBoxAt(x: number, y: number): HTMLElement | null {
     .elementsFromPoint(x, y)
     .filter((node): node is HTMLElement => node instanceof HTMLElement && node.matches("[data-element]"));
   return boxes.reduce<HTMLElement | null>((best, box) => (!best || area(box) < area(best) ? box : best), null);
+}
+
+/** Whether a press on a box falls inside another box, both as fractions of the canvas the boxes sit on. */
+function pressedInside(event: PointerEvent, box: Box): boolean {
+  const area = (event.currentTarget as HTMLElement).parentElement?.getBoundingClientRect();
+  if (!area || area.width === 0 || area.height === 0) return false;
+  const x = (event.clientX - area.left) / area.width;
+  const y = (event.clientY - area.top) / area.height;
+  return x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h;
 }
