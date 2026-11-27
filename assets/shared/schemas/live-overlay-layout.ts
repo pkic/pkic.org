@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { eventSlugParamsSchema, slugPattern, utcInstantSchema } from "./api-common";
+import { LIVE_TIMER_PRESENTATIONS } from "./live-session-timer";
 
 /**
  * Broadcast overlay layouts. An output (Program, Projector, Stage preview,
@@ -261,6 +262,8 @@ export const liveOverlayElementPlacementSchema = insideFrame(
       locked: z.boolean().optional(),
       /** The QR code's look in this scene (`LIVE_QR_LOOKS`); absent, its card. Only the QR code reads it. */
       qrLook: z.enum(LIVE_QR_LOOKS).optional(),
+      /** Every timer's look in this scene (`LIVE_TIMER_PRESENTATIONS`); absent, each timer's own. Only the timer reads it. */
+      timerLook: z.enum(LIVE_TIMER_PRESENTATIONS).optional(),
       ...boxShape,
     })
     .strict(),

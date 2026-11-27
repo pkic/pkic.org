@@ -287,7 +287,7 @@ export function OverlayLayoutEditor({
           onSharing={draft.share}
           onTurns={draft.spotTurns}
           onLock={draft.lock}
-          onQrLook={draft.qrLook}
+          onLook={draft.look}
         />
       </form>
       {renaming ? (

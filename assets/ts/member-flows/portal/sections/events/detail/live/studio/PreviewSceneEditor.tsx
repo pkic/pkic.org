@@ -437,7 +437,7 @@ export function SceneSourcesList({ draft }: { draft: SceneDraft }) {
         onSharing={draft.share}
         onTurns={draft.spotTurns}
         onLock={draft.lock}
-        onQrLook={draft.qrLook}
+        onLook={draft.look}
       />
     </div>
   );

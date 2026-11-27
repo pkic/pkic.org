@@ -8,12 +8,11 @@ import {
   type LiveOverlayElementPlacement,
   type LiveOverlayLayout,
   type LiveOverlayPositions,
-  type LiveQrLook,
 } from "../../../../../../../../shared/schemas/live-overlay-layout";
 import type { LiveProgramLayer } from "../../../../../../../../shared/live-overlay-stacking";
 import { useContractForm } from "../../../../../../../hooks/useContractForm";
 import { putJson } from "../../../../../../../shared/api-client";
-import type { LayoutSharingAction } from "./overlay-layout-graphic-actions";
+import type { GraphicLook, LayoutSharingAction } from "./overlay-layout-graphic-actions";
 import type { Box } from "./overlay-layout-editing";
 import { reorderSceneGraphic, sceneGraphics } from "./overlay-layout-graphics";
 import { snapIntoSpot, spotTurnsFor, withSpotTurns } from "./overlay-layout-spots";
@@ -202,8 +201,8 @@ export function useSceneDraft({
       update({ ...drafts, elements: withSpotTurns(elements, element, turns) }),
     /** Holds a graphic's box in place on the canvas, or frees it. */
     lock: (element: LiveOverlayElement, locked: boolean) => change(element, { locked: locked || undefined }),
-    /** The QR code's look in this scene; the card is the default, so it is not stored. */
-    qrLook: (look: LiveQrLook) => change("qrCode", { qrLook: look === "card" ? undefined : look }),
+    /** The QR code's or the timers' look in this scene; undefined puts back the default. */
+    look: (look: GraphicLook) => change("qrLook" in look ? "qrCode" : "timer", look),
     share: (element: LiveOverlayElement, action: LayoutSharingAction) => update(SHARING[action](drafts, element)),
     /** Adds a graphic at its shared position, where the event's other scenes put it, or takes it out. */
     show: (element: LiveOverlayElement, visible: boolean) => {

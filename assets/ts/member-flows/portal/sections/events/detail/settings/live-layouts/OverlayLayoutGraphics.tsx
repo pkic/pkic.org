@@ -240,7 +240,7 @@ export function OverlayLayoutGraphics({
   onSharing,
   onTurns,
   onLock,
-  onQrLook,
+  onLook,
   framed = true,
 }: {
   elements: LiveOverlayLayoutElements;
@@ -257,14 +257,14 @@ export function OverlayLayoutGraphics({
   onSharing: GraphicActionHandlers["onSharing"];
   /** Lets the graphic's spot take turns every `turns` seconds, or show only its front graphic (null). */
   onTurns: GraphicActionHandlers["onTurns"];
-  onQrLook: GraphicActionHandlers["onQrLook"];
+  onLook: GraphicActionHandlers["onLook"];
   /** Holds the graphic's box in place on the canvas, or frees it. */
   onLock: (element: LiveOverlayElement, locked: boolean) => void;
 }) {
   const list = useRef<HTMLUListElement>(null);
   const graphics = sceneGraphics(elements);
   const drag = useRowDrag(() => [...(list.current?.children ?? [])] as HTMLElement[], onReorder);
-  const handlers = { onShow, onSharing, onTurns, onQrLook };
+  const handlers = { onShow, onSharing, onTurns, onLook };
   // While a row is dragged, the line shows where it lands: above the row now at that place, or below the last.
   const dropAt = (index: number) => {
     const shown = drag.shown;

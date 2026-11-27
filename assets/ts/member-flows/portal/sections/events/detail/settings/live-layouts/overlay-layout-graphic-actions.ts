@@ -8,10 +8,18 @@ import { isLiveProgramLayer, type LiveProgramLayer } from "../../../../../../../
 import {
   LIVE_OVERLAY_ELEMENT_LABELS,
   type LiveOverlayElement,
+  type LiveOverlayElementPlacement,
   type LiveOverlayLayoutElements,
   type LiveQrLook,
 } from "../../../../../../../../shared/schemas/live-overlay-layout";
+import {
+  LIVE_TIMER_PRESENTATIONS,
+  LIVE_TIMER_PRESENTATION_LABELS,
+} from "../../../../../../../../shared/schemas/live-session-timer";
 import type { MenuItem } from "../../../../../../../ui/Menu";
+
+/** A graphic's look in one scene: the QR code's, or every timer's; undefined puts back the default. */
+export type GraphicLook = Pick<LiveOverlayElementPlacement, "qrLook"> | Pick<LiveOverlayElementPlacement, "timerLook">;
 
 /** What a row's menu does to a graphic's position: see `overlay-layout-sharing.ts`. */
 export type LayoutSharingAction = "unlink" | "relink" | "apply";
@@ -21,8 +29,8 @@ export interface GraphicActionHandlers {
   onShow: (element: LiveOverlayElement, visible: boolean) => void;
   onSharing: (element: LiveOverlayElement, action: LayoutSharingAction) => void;
   onTurns: (element: LiveProgramLayer, turns: number | null) => void;
-  /** Sets the QR code's look in this scene. */
-  onQrLook: (look: LiveQrLook) => void;
+  /** Sets the QR code's or the timers' look in this scene. */
+  onLook: (look: GraphicLook) => void;
 }
 
 export const graphicNames = (elements: readonly LiveOverlayElement[]) =>
@@ -76,24 +84,42 @@ function spotActions(
   ];
 }
 
-/** The QR code's looks, picked straight from its menu. */
+/** Auto leaves each timer in the look set for it; any other look is every timer's in this scene. */
+const TIMER_LOOKS = [
+  { look: undefined, label: "Auto", description: "Each timer as set in the Timers panel." },
+  ...LIVE_TIMER_PRESENTATIONS.map((look) => ({
+    look,
+    label: LIVE_TIMER_PRESENTATION_LABELS[look],
+    description: undefined,
+  })),
+];
+
+/** The QR code's and the timers' looks, picked straight from the graphic's menu. */
 function lookActions(
   elements: LiveOverlayLayoutElements,
   element: LiveProgramLayer,
   disabled: boolean,
-  { onQrLook }: GraphicActionHandlers,
+  { onLook }: GraphicActionHandlers,
 ): MenuItem[] {
-  if (element !== "qrCode") return [];
-  const current = elements.qrCode.qrLook ?? "card";
-  return QR_LOOKS.map(({ look, label, description }, index) => ({
-    id: `look-${look}`,
-    label,
-    description,
-    checked: current === look,
-    separatorBefore: index === 0,
-    disabled,
-    onSelect: () => onQrLook(look),
-  }));
+  const choices =
+    element === "qrCode"
+      ? QR_LOOKS.map(({ look, label, description }) => ({
+          id: `look-${look}`,
+          label,
+          description,
+          checked: (elements.qrCode.qrLook ?? "card") === look,
+          onSelect: () => onLook({ qrLook: look === "card" ? undefined : look }),
+        }))
+      : element === "timer"
+        ? TIMER_LOOKS.map(({ look, label, description }) => ({
+            id: `look-${look ?? "auto"}`,
+            label,
+            description,
+            checked: elements.timer.timerLook === look,
+            onSelect: () => onLook({ timerLook: look }),
+          }))
+        : [];
+  return choices.map((item, index) => ({ ...item, separatorBefore: index === 0, disabled }));
 }
 
 /**
@@ -157,12 +183,12 @@ interface DraftForActions {
   show: GraphicActionHandlers["onShow"];
   share: GraphicActionHandlers["onSharing"];
   spotTurns: GraphicActionHandlers["onTurns"];
-  qrLook: GraphicActionHandlers["onQrLook"];
+  look: GraphicActionHandlers["onLook"];
 }
 
 /** A graphic's menu on the canvas, for the draft's scene; the same choices as its row in the list. */
 export function draftGraphicActions(draft: DraftForActions) {
-  const handlers = { onShow: draft.show, onSharing: draft.share, onTurns: draft.spotTurns, onQrLook: draft.qrLook };
+  const handlers = { onShow: draft.show, onSharing: draft.share, onTurns: draft.spotTurns, onLook: draft.look };
   return (element: LiveOverlayElement): MenuItem[] =>
     isLiveProgramLayer(element) ? graphicActions(draft.elements, element, draft.busy, handlers) : [];
 }

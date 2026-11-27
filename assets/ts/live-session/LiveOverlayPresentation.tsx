@@ -157,6 +157,12 @@ function markBox(plate: LiveOverlayElementPlacement): LiveOverlayElementPlacemen
  * reads as digits on the plate's footprint instead. A tab is the first timer
  * of its stack run on to the frame's edge; the next one sits under its plate.
  */
+/** The timers as this scene shows them: in the scene's look when it sets one, else each in its own. */
+function sceneTimerLook(graphics: readonly LiveTimerGraphic[], box: LiveOverlayElementPlacement) {
+  const look = box.timerLook;
+  return look ? graphics.map((graphic) => ({ ...graphic, presentation: look })) : graphics;
+}
+
 function timerSlots(
   graphics: readonly LiveTimerGraphic[],
   box: LiveOverlayElementPlacement,
@@ -450,7 +456,7 @@ export function LiveOverlayPresentation({
   const ground = view !== "stage-display" && elements.background.visible ? elements.background : null;
   const timers =
     state && view !== "stage-display" && elements.timer.visible
-      ? timerSlots(state.stage.timerGraphics, elements.timer, cardBoxes)
+      ? timerSlots(sceneTimerLook(state.stage.timerGraphics, elements.timer), elements.timer, cardBoxes)
       : [];
   const timerBoxes = timers.map(({ slot }) => slot);
   const sounding =
