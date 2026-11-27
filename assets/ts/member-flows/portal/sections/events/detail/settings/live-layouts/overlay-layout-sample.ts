@@ -215,6 +215,7 @@ const SAMPLE_FIELDS: Record<LiveProgramLayer, ReadonlyArray<keyof LiveRoomState[
   checkIn: ["checkIn"],
   question: ["question"],
   lowerThird: ["lowerThird"],
+  speakerWelcome: ["speakerWelcome"],
   poll: ["poll"],
   topQuestions: ["topQuestions"],
   chat: ["chatFeed"],
@@ -233,10 +234,15 @@ export function withSampleGraphic(room: LiveRoomState, element: LiveProgramLayer
   if (fields.length === 0) return room;
   const sample = sampleOverlayRoom(now);
   const stage = { ...room.stage, ...Object.fromEntries(fields.map((field) => [field, sample.stage[field]])) };
+  // The sample room keeps the welcome off; sampled on its own, it is on.
+  if (element === "speakerWelcome") stage.speakerWelcome = true;
   return {
     ...room,
-    // The panelists draw the session's credits; the lower third draws its own credit from the stage.
-    session: element === "panelists" ? { ...room.session, credits: sample.session.credits } : room.session,
+    // The panelists and the welcome draw the session's credits; the lower third draws its own from the stage.
+    session:
+      element === "panelists" || element === "speakerWelcome"
+        ? { ...room.session, credits: sample.session.credits }
+        : room.session,
     stage,
     polls: element === "poll" ? [...room.polls, ...sample.polls] : room.polls,
     timers: element === "timer" ? sample.timers : room.timers,
