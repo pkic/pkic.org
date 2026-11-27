@@ -1,4 +1,5 @@
 import { LIVE_CHAT_POLICY } from "../../../../assets/shared/live-chat-policy";
+import type { LiveParticipationRestriction } from "../../../../assets/shared/live-moderation-policy";
 import { liveLocationChatOpen } from "../../../../assets/shared/live-location-chat";
 import {
   LIVE_INTERACTION_BROADCAST_MILLISECONDS,
@@ -240,10 +241,23 @@ export class LiveLocationChatRoom {
         sessionClosed: !allowed || policy?.opening === "closed",
         restriction:
           feed.decisions.restriction(viewer.userId, Date.now()) ??
-          (allowed ? restrictions?.[viewer.userId] : null) ??
-          null,
+          (allowed ? this.sessionRestriction(viewer.userId, restrictions?.[viewer.userId]) : null),
       };
     }, null);
+  }
+
+  /**
+   * The session room's restriction for someone, as the chat shows it. An event block there is that room's copy,
+   * refreshed only on its own reads: once the chat holds its own event decision, the chat's decision stands.
+   */
+  private sessionRestriction(
+    userId: string | null,
+    restriction: LiveParticipationRestriction | null | undefined,
+  ): LiveParticipationRestriction | null {
+    if (!restriction) return null;
+    return restriction.block === "event" && userId && this.parts.feed.decisions.knowsEventDecision(userId)
+      ? null
+      : restriction;
   }
 
   private snapshot(socket: WebSocket): Promise<string | null> {
@@ -268,7 +282,8 @@ export class LiveLocationChatRoom {
           participation:
             viewer.role === "operator"
               ? null
-              : (feed.decisions.restriction(viewer.userId, Date.now()) ?? policy?.restriction ?? null),
+              : (feed.decisions.restriction(viewer.userId, Date.now()) ??
+                this.sessionRestriction(viewer.userId, policy?.restriction)),
         },
         scope: {
           ...state.scope,

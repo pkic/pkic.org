@@ -188,6 +188,11 @@ export class LiveRoomModerationStore {
     this.eventBlocked(userId, decision.blocked);
   }
 
+  /** Whether the room holds its own event decision for someone, which outranks another room's copy of it. */
+  knowsEventDecision(userId: string): boolean {
+    return this.eventKnownAt.has(userId);
+  }
+
   private eventBlocked(userId: string, blocked: boolean): void {
     if (blocked) this.sql.exec("INSERT OR IGNORE INTO room_event_blocks(user_id) VALUES (?)", userId);
     else this.sql.exec("DELETE FROM room_event_blocks WHERE user_id = ?", userId);

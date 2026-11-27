@@ -182,23 +182,26 @@ export function useLivestreamPlayer({
               if (stopped) return;
               ready.current = target;
               if (captions.current) target.loadModule?.("captions");
-              if (!withSound.current) {
-                target.mute();
-                target.playVideo();
+              if (withSound.current) {
+                target.unMute();
+                target.setVolume(100);
+              } else target.mute();
+              // Paused by the viewer before the player was ready: it waits for their play.
+              if (held.current) {
+                target.pauseVideo?.();
                 return;
               }
-              target.unMute();
-              target.setVolume(100);
               target.playVideo();
+              if (!withSound.current) return;
               // The browser may refuse to start with sound; muted is better than the reconnecting card.
               refusal = setTimeout(() => {
-                if (!stopped && !played) startMuted(target);
+                if (!stopped && !played && !held.current) startMuted(target);
               }, AUTOPLAY_WITH_SOUND_MS);
             },
             // The browser said so at once, at the start or on resuming after a pause: no need to wait.
             // Muted once; still blocked after that, the screen's sound control is the way back.
             onAutoplayBlocked: ({ target }) => {
-              if (stopped || isPlaying || fellBack || !withSound.current) return;
+              if (stopped || isPlaying || fellBack || !withSound.current || held.current) return;
               clearTimeout(refusal);
               startMuted(target);
             },

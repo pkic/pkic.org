@@ -374,3 +374,23 @@ it("lets a person post as soon as an event block is lifted while no session is o
     .locationChatAccessChanged(fixture.occurrenceId, fixture.users.attendee, { blocked: false, at: Date.now() });
   await author.next("location.chat.access", (update) => update.restriction === null, { after: lifted });
 });
+
+it("keeps an event block that another session lifted, over the session on's older copy", async () => {
+  await load(fixture.occurrenceId, 0);
+  const author = await join("attendee");
+  const userId = fixture.users.attendee;
+  // The session on still holds the event block from its last read of D1.
+  await runInDurableObject(fixture.room(), async (instance) => {
+    const participation = Reflect.get(instance as object, "participation") as {
+      eventBlocksRead(checked: string[], blocked: Set<string>, readAt: number): Promise<void>;
+    };
+    await participation.eventBlocksRead([userId], new Set([userId]), Date.now());
+  });
+  // Another session's room lifts it.
+  const lifted = author.received.length;
+  await fixture
+    .chatRoom()
+    .locationChatAccessChanged(crypto.randomUUID(), userId, { blocked: false, at: Date.now() + 1 });
+  const access = await author.next("location.chat.access", () => true, { after: lifted });
+  expect(access.restriction).toBeNull();
+});
