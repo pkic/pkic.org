@@ -71,6 +71,23 @@ describe("live session room admission", () => {
     }
   });
 
+  it("names the session's type as the event's session types label it, for the speaker welcome", async () => {
+    await env.DB.prepare(
+      "UPDATE events SET settings_json=json_set(COALESCE(settings_json,'{}'),'$.proposal.sessionTypes',json(?)) WHERE id=?",
+    )
+      .bind(JSON.stringify([{ label: "panel", name: "Panel discussion", requiresPresentation: false }]), f.eventId)
+      .run();
+    await env.DB.prepare(
+      "UPDATE event_agenda_published_occurrences SET payload_json=json_set(payload_json,'$.format','panel') WHERE event_id=?",
+    )
+      .bind(f.eventId)
+      .run();
+    const client = await f.connect({ person: "operator" });
+    const snapshot = await client.next("room.snapshot");
+    expect(snapshot.session).toMatchObject({ sessionType: "Panel discussion", eventName: "Live room test" });
+    client.socket.close(1000, "done");
+  });
+
   it("refuses plain requests, anonymous and unregistered callers, and cross-site pages", async () => {
     expect((await callApi(env, f.path(), { headers: { authorization: `Bearer ${f.tokens.attendee}` } })).status).toBe(
       426,

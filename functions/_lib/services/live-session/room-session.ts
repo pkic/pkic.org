@@ -13,6 +13,8 @@ import { liveSessionAbstract } from "../../../../assets/shared/live-session-abst
 import { decodeLiveRoomOutputs, liveRoomOutputsJsonSql } from "./room-output-setup";
 import { z } from "zod";
 import { agendaDisplayRoleShiftSchema } from "../../../../assets/shared/schemas/event-agenda";
+import { agendaSessionFormatContent, agendaSessionFormatOptions } from "../../../../assets/shared/event-agenda-format";
+import { resolveSessionTypes } from "../event-presentation";
 import {
   LIVE_MODERATOR_ROLE_LABEL,
   liveSessionHosts,
@@ -41,10 +43,19 @@ export type LiveRoomSessionRow = {
   timezone: string;
   event_name: string;
   room_outputs_json: string | null;
+  /** The event's proposal settings, whose session types name the session's format. */
+  proposal_settings_json?: string | null;
 };
 
 /** The outputs the session's own physical room sets up, in order, read with the session. */
 const ROOM_OUTPUTS_JSON = liveRoomOutputsJsonSql("json_extract(approved.payload_json,'$.roomId')");
+
+/** The session's type as the agenda labels it, from the event's session types, or null when it has none. */
+function sessionTypeLabel(proposalSettingsJson: string | null, format: string | null | undefined): string | null {
+  const proposal = parseJsonSafe<{ sessionTypes?: unknown[] } | null>(proposalSettingsJson, null);
+  const formats = agendaSessionFormatOptions(resolveSessionTypes({ proposal }));
+  return agendaSessionFormatContent(formats, format)?.label ?? null;
+}
 
 function unavailable() {
   return new AppError(404, "LIVE_SESSION_NOT_FOUND", "This session is not on the approved agenda.");
@@ -81,7 +92,7 @@ export function prepareLiveRoomSessionRead(
 ) {
   const statement = db
     .prepare(
-      `SELECT approved.payload_json,event.timezone,event.name AS event_name,(${ROOM_OUTPUTS_JSON}) AS room_outputs_json FROM event_agenda_state state
+      `SELECT approved.payload_json,event.timezone,event.name AS event_name,(${ROOM_OUTPUTS_JSON}) AS room_outputs_json,json_extract(event.settings_json,'$.proposal') AS proposal_settings_json FROM event_agenda_state state
      JOIN event_agenda_published_occurrences approved ON approved.event_id=state.event_id AND approved.revision=state.published_revision
      JOIN events event ON event.id=state.event_id
      WHERE state.event_id=? AND approved.occurrence_id=?`,
@@ -161,6 +172,7 @@ export function prepareLiveRoomSessionRead(
           startAt: occurrence.startAt,
           endAt: occurrence.endAt,
           timeZone: row.timezone,
+          sessionType: sessionTypeLabel(row.proposal_settings_json ?? null, occurrence.format),
           roomId: occurrence.roomId,
           credits: [...credits, ...hosts].slice(0, LIVE_ROOM_SESSION_CREDITS_MAX),
           abstract: liveSessionAbstract(occurrence.description),

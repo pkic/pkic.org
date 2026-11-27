@@ -45,6 +45,7 @@ const GRAPHICS = {
   topQuestions: ["topQuestions"],
   chatFeed: ["chatFeed"],
   reactions: ["reactions", "reactionsGraphic"],
+  speakerWelcome: ["speakerWelcome"],
 } as const satisfies Record<string, ReadonlyArray<keyof LiveStage>>;
 export type LiveScreenGraphic = keyof typeof GRAPHICS;
 
@@ -61,7 +62,7 @@ const EVERY_GRAPHIC = Object.keys(GRAPHICS) as LiveScreenGraphic[];
  */
 const SPEAKER_SCREEN = {
   follows: ["question", "poll", "timerGraphics", "schedule"],
-  neverDraws: ["lowerThird", "ticker", "panelists", "topQuestions", "chatFeed"],
+  neverDraws: ["lowerThird", "ticker", "panelists", "topQuestions", "chatFeed", "speakerWelcome"],
 } as const satisfies Record<string, readonly LiveScreenGraphic[]>;
 
 /** The graphics a screen of each role shows from Program while it syncs and holds none of its own. */
@@ -153,6 +154,7 @@ const PICKS = {
   topQuestions: ["topQuestions"],
   chatFeed: ["chatFeed"],
   reactions: ["reactions", "reactionsGraphic"],
+  speakerWelcome: ["speakerWelcome"],
 } as const satisfies Record<LiveScreenGraphic, ReadonlyArray<keyof LiveCompositionInput>>;
 
 /** Whether an operator's change to Program changed this graphic: which one it shows, or how one it shows looks. */

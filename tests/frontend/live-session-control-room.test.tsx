@@ -209,6 +209,7 @@ describe("live control room Transition", () => {
           chatFeed: null,
           reactions: false,
           reactionsGraphic: { showCount: false },
+          speakerWelcome: false,
           // No scene is the Default one: every graphic off, in the scene that brings nothing on.
           scene: null,
         },

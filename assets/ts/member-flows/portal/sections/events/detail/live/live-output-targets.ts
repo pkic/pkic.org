@@ -37,7 +37,8 @@ export type LiveLayer =
   | { kind: "checkIn"; checkIn: LiveCheckInOnAir }
   | { kind: "topQuestions"; config: LiveTopQuestionsConfig }
   | { kind: "chatFeed"; config: LiveChatFeedConfig }
-  | { kind: "reactions" };
+  | { kind: "reactions" }
+  | { kind: "speakerWelcome" };
 
 /** Everything the output controls read and send, assembled once by the control room. */
 export interface LiveTargets {
@@ -105,6 +106,8 @@ export function liveLayerShown(stage: LiveStage, layer: LiveLayer): boolean {
       return stage.chatFeed !== null;
     case "reactions":
       return stage.reactions;
+    case "speakerWelcome":
+      return stage.speakerWelcome;
   }
 }
 
@@ -149,6 +152,8 @@ export function liveLayerToggle(
       return { ...takeLiveStage(stage), chatFeed: shown ? null : layer.config };
     case "reactions":
       return { ...takeLiveStage(stage), reactions: !shown };
+    case "speakerWelcome":
+      return { ...takeLiveStage(stage), speakerWelcome: !shown };
   }
 }
 
@@ -204,6 +209,8 @@ export function livePreviewToggle(
         return { chatFeed: shown ? null : layer.config };
       case "reactions":
         return { reactions: !shown };
+      case "speakerWelcome":
+        return { speakerWelcome: !shown };
     }
   })();
   return { type: "preview.set", composition };

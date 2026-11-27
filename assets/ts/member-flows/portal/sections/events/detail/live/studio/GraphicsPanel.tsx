@@ -7,6 +7,7 @@ import { LiveChatFeedControls, LiveReactionsControls, LiveTopQuestionsControls }
 import { LiveCheckInControls } from "../LiveCheckInControls";
 import { LivePanelistControls } from "../LivePanelistControls";
 import { LiveScheduleControls } from "../LiveScheduleControls";
+import { LiveSpeakerWelcomeControls } from "../LiveSpeakerWelcomeControls";
 import { LiveTickerControls } from "../LiveTickerControls";
 import type { LiveTargets } from "../live-output-targets";
 
@@ -44,6 +45,7 @@ export const LIVE_GRAPHICS: ReadonlyArray<{
   Row: ComponentType<LiveGraphicContext>;
 }> = [
   { id: "session", Row: ({ targets }) => <LivePanelistControls targets={targets} /> },
+  { id: "speaker-welcome", Row: ({ targets }) => <LiveSpeakerWelcomeControls targets={targets} /> },
   {
     id: "ticker",
     Row: ({ targets, approvedAgenda }) => <LiveTickerControls targets={targets} rooms={approvedAgenda?.rooms} />,

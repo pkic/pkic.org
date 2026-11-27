@@ -28,6 +28,7 @@ export type ResolvedComposition = {
   chatFeed: LiveStage["chatFeed"];
   reactions: boolean;
   reactionsGraphic: LiveStage["reactionsGraphic"];
+  speakerWelcome: boolean;
   scene: LiveStage["scene"];
 };
 
@@ -114,6 +115,7 @@ export function composeLiveStage(
     chatFeed: input.chatFeed,
     reactions: input.reactions,
     reactionsGraphic: input.reactionsGraphic,
+    speakerWelcome: input.speakerWelcome,
     scene: input.scene,
   };
 }

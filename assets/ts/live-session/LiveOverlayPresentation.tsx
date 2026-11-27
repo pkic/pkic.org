@@ -17,6 +17,7 @@ import {
   type LiveOverlayGraphics,
 } from "./live-overlay-graphics";
 import { LiveOverlayLayer, useLiveSceneMove } from "./LiveOverlayLayer";
+import { LiveSpeakerWelcomeOverlay } from "./LiveSpeakerWelcomeOverlay";
 import { BOARDS, meets, NO_TIMER_CLEARANCE, joinedPanelBox, timerClearance, within } from "./live-overlay-fields";
 import { LivePanelistsOverlay } from "./LivePanelistsOverlay";
 import { LivePanelQuestionOverlay } from "./LivePanelQuestionOverlay";
@@ -298,6 +299,10 @@ const PROGRAM_LAYERS: ReadonlyMap<LiveProgramLayer, Layer> = new Map(
           state.stage.chatFeed?.messages.length ? (
             <LiveChatFeedOverlay list={state.stage.chatFeed} box={overlayBoxPixels(placement)} />
           ) : null,
+      },
+      {
+        element: "speakerWelcome",
+        draw: (state) => (state.stage.speakerWelcome ? <LiveSpeakerWelcomeOverlay session={state.session} /> : null),
       },
       {
         element: "qrCode",

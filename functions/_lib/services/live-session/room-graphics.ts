@@ -227,6 +227,7 @@ export class LiveRoomGraphics {
       chatFeed: input.chatFeed && (await this.lists.chatFeed(input.chatFeed)),
       reactions: input.reactions,
       reactionsGraphic: input.reactionsGraphic,
+      speakerWelcome: input.speakerWelcome,
       scene: input.scene,
       ticker: await resolveLiveTicker(
         this.db,

@@ -45,9 +45,13 @@ import { liveRoomOutputKeySchema, liveRoomOutputsSchema } from "./live-room-outp
 import { eventSlugParamsSchema, utcInstantSchema } from "./api-common";
 import { LIVE_ROOM_POLICY, LIVE_STAGE_VIEWS } from "../live-session-policy";
 import { liveChangeSchema, livePersonNameSchema } from "./live-session-change";
+import {
+  liveSpeakerMessageSchema,
+  liveSpeakerMessageTextSchema,
+  liveSpeakerMessageToneSchema,
+} from "./live-speaker-message";
 import { liveReactionBurstSchema, liveReactionCountsSchema, liveReactionSendSchema } from "./live-session-reaction";
 import { liveChatFeedConfigSchema, liveTopQuestionsConfigSchema } from "./live-session-on-screen";
-import { LIVE_SPEAKER_MESSAGE_MAX_LENGTH, LIVE_SPEAKER_MESSAGE_TONES } from "../live-room-outputs";
 import { livePollClientMessageSchemas, livePollSchema, livePollServerMessageSchemas } from "./live-session-poll";
 import {
   livePreparedQuestionClientMessageSchemas,
@@ -214,27 +218,13 @@ import {
   EMPTY_LIVE_OUTPUTS,
 } from "./live-session-stage";
 
-/** A short message an operator shows the speaker on the stage display. */
-export const liveSpeakerMessageTextSchema = z
-  .string()
-  .trim()
-  .min(1, "Write a message for the speaker.")
-  .max(LIVE_SPEAKER_MESSAGE_MAX_LENGTH, `Keep the message under ${LIVE_SPEAKER_MESSAGE_MAX_LENGTH} characters.`);
-export const liveSpeakerMessageToneSchema = z.enum(LIVE_SPEAKER_MESSAGE_TONES);
-export const liveSpeakerMessageSchema = z
-  .object({
-    text: liveSpeakerMessageTextSchema,
-    tone: liveSpeakerMessageToneSchema.default("neutral"),
-    /** The stage display pulses the message until an operator stops it, to catch the speaker's eye. */
-    flash: z.boolean().default(false),
-    change: liveChangeSchema.nullable(),
-  })
-  .strict();
-export type LiveSpeakerMessage = z.infer<typeof liveSpeakerMessageSchema>;
-/** The message editor's contract. */
-export const liveSpeakerMessageInputSchema = z
-  .object({ text: liveSpeakerMessageTextSchema, tone: liveSpeakerMessageToneSchema, flash: z.boolean() })
-  .strict();
+export {
+  liveSpeakerMessageInputSchema,
+  liveSpeakerMessageSchema,
+  liveSpeakerMessageTextSchema,
+  liveSpeakerMessageToneSchema,
+  type LiveSpeakerMessage,
+} from "./live-speaker-message";
 
 /** A cleared Program the room keeps for an Undo, named so any operator can restore exactly that one. */
 export const liveProgramSnapshotIdSchema = z.uuid();
@@ -274,6 +264,8 @@ export const liveRoomSessionSchema = z
     startAt: utcInstantSchema,
     endAt: utcInstantSchema,
     timeZone: z.string().min(1),
+    /** The session's type as the agenda names it, such as "Panel discussion"; null when it has none, absent for a room admitted before it. */
+    sessionType: z.string().min(1).max(80).nullable().optional(),
     /** The location the session takes place in, whose chat it shows on air; a room admitted before this field has none. */
     roomId: databaseIdSchema.nullable().optional(),
     credits: z.array(liveCreditSchema).max(50),
@@ -479,6 +471,8 @@ export const liveCompositionInputSchema = z
     chatFeed: liveChatFeedConfigSchema.nullable().default(null),
     reactions: z.boolean().default(false),
     reactionsGraphic: liveReactionsGraphicSchema.default(DEFAULT_LIVE_REACTIONS_GRAPHIC),
+    /** The full-frame welcome for the session's speakers. */
+    speakerWelcome: z.boolean().default(false),
     /** The scene to draw the composition in; null for the event's default. */
     scene: liveOverlayLayoutSlugSchema.nullable().default(null),
   })
@@ -515,6 +509,7 @@ export const livePreviewSetSchema = z
         chatFeed: liveChatFeedConfigSchema.nullable(),
         reactions: z.boolean(),
         reactionsGraphic: liveReactionsGraphicSchema,
+        speakerWelcome: z.boolean(),
         scene: liveOverlayLayoutSlugSchema.nullable(),
       })
       .partial()

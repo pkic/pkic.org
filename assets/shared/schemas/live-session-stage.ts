@@ -83,6 +83,8 @@ export const liveStageSchema = z
     /** Viewers' reactions float up over the output while this is on. */
     reactions: z.boolean().default(false),
     reactionsGraphic: liveReactionsGraphicSchema.default(DEFAULT_LIVE_REACTIONS_GRAPHIC),
+    /** The full-frame welcome for the session's speakers, drawn from their identities and the agenda. */
+    speakerWelcome: z.boolean().default(false),
     /**
      * The scene the output draws its graphics in; null for the event's default.
      * A Take carries it, so Program shows exactly what Preview did.
@@ -110,6 +112,7 @@ export const EMPTY_LIVE_STAGE: LiveStage = {
   chatFeed: null,
   reactions: false,
   reactionsGraphic: DEFAULT_LIVE_REACTIONS_GRAPHIC,
+  speakerWelcome: false,
   scene: null,
 };
 

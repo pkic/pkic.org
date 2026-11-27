@@ -28,6 +28,7 @@ export const LIVE_PROGRAM_LAYER_ORDER = [
   "question",
   "lowerThird",
   "poll",
+  "speakerWelcome",
   "qrCode",
   "timer",
   "ticker",

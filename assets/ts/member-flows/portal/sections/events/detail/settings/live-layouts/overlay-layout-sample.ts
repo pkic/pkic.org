@@ -180,6 +180,7 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
       },
       reactions: true,
       reactionsGraphic: { showCount: true },
+      speakerWelcome: false,
       scene: null,
     },
     outputs: EMPTY_LIVE_OUTPUTS,
