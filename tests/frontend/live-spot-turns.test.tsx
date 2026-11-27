@@ -6,8 +6,8 @@ import { LIVE_OVERLAY_PRESET_LAYOUTS } from "../../assets/shared/live-overlay-la
 import type { LiveOverlayLayoutElements } from "../../assets/shared/schemas/live-overlay-layout";
 import { useLiveSpotTurns } from "../../assets/ts/live-session/useLiveSpotTurns";
 
-function Clock({ elements }: { elements: LiveOverlayLayoutElements }) {
-  return <output>{useLiveSpotTurns(elements)}</output>;
+function Clock({ elements, also }: { elements: LiveOverlayLayoutElements; also?: LiveOverlayLayoutElements }) {
+  return <output>{useLiveSpotTurns(elements, ...(also ? [also] : []))}</output>;
 }
 
 const host = document.createElement("div");
@@ -30,5 +30,13 @@ describe("the clock a scene's spots take turns by", () => {
     expect(shown()).toBe(1_120_000);
     await act(() => void vi.advanceTimersByTime(15_000));
     expect(Math.floor(shown() / 15_000)).toBe(Math.floor(1_135_000 / 15_000));
+  });
+
+  it("wakes for Preview's turns while Program's scene takes none", async () => {
+    vi.useFakeTimers({ now: 1_000_000 });
+    const program = LIVE_OVERLAY_PRESET_LAYOUTS.default.elements;
+    await act(() => render(<Clock elements={program} also={LIVE_OVERLAY_PRESET_LAYOUTS.break.elements} />, host));
+    await act(() => void vi.advanceTimersByTime(15_000));
+    expect(Math.floor(shown() / 15_000)).toBe(Math.floor(1_015_000 / 15_000));
   });
 });
