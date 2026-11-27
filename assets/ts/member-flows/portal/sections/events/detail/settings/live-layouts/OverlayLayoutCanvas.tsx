@@ -11,9 +11,10 @@ import {
   type LiveOverlayLayoutElements,
 } from "../../../../../../../../shared/schemas/live-overlay-layout";
 import { LAYOUT_CANVAS_LABEL } from "./overlay-layout-copy";
-import { CORNER_HANDLES, nudgeBox, type Box } from "./overlay-layout-editing";
+import { BOX_HANDLES, nudgeBox, type Box } from "./overlay-layout-editing";
 import { describeGraphicPosition } from "./overlay-layout-graphics";
 import { sampleOverlayRoom } from "./overlay-layout-sample";
+import { LayoutSnapToggle } from "./LayoutSnapToggle";
 import { placeLayoutBox, useOverlayLayoutGesture } from "./useOverlayLayoutGesture";
 import "./OverlayLayoutCanvas.css";
 
@@ -88,7 +89,7 @@ function LayoutBox({
       title={
         locked
           ? `${label} · ${position}\nLocked. Unlock it in the graphics list to move it here.`
-          : `${label} · ${position}\nDrag to move it, or a corner to resize it. The arrow keys move it too.`
+          : `${label} · ${position}\nDrag to move it, or a corner or side to resize it. The arrow keys move it too.`
       }
       onFocus={onSelect}
       onClick={() => {
@@ -119,7 +120,7 @@ function LayoutBox({
         {selected ? <span class="pk-layout-canvas__detail"> · {position}</span> : null}
       </span>
       {selected && !locked
-        ? CORNER_HANDLES.map((handle) => (
+        ? BOX_HANDLES.map((handle) => (
             <span
               key={handle}
               class="pk-layout-canvas__handle"
@@ -171,8 +172,9 @@ function BoxActions({
  * sample room that has every graphic on, whatever puts it on in the studio,
  * and a box over each graphic the scene includes. Boxes are stacked
  * as the outputs draw them, so a graphic in front covers the ones behind it.
- * Drag a box to move it, a corner to resize it; it snaps to the grid, the
- * title-safe area and the other boxes, with guides while it does. The arrow
+ * Drag a box to move it, a corner or side to resize it; while snapping is
+ * on it snaps to the grid, the title-safe area and the other boxes, with
+ * guides while it does. The arrow
  * keys move the selected box. Without `canEdit` the scene is only drawn: no
  * boxes to move or resize.
  */
@@ -229,13 +231,14 @@ export function OverlayLayoutCanvas({
       {bar ? (
         <div class="pk-layout-canvas__bar">
           <p class="pk-small pk-muted">
-            {canEdit ? "1920 × 1080 · drag to move, drag a corner to resize" : "1920 × 1080"}
+            {canEdit ? "1920 × 1080 · drag to move, drag a corner or side to resize" : "1920 × 1080"}
           </p>
           <Checkbox
             label="Show safe areas"
             checked={safeAreas}
             onChange={(event) => onSafeAreas(event.currentTarget.checked)}
           />
+          {canEdit ? <LayoutSnapToggle /> : null}
         </div>
       ) : null}
       <div class="pk-layout-canvas" ref={gesture.canvas}>
@@ -311,8 +314,8 @@ export function OverlayLayoutCanvas({
       ) : null}
       {canEdit ? (
         <p id={help} class="pk-sr-only">
-          Arrow keys move the selected box by one pixel, Shift and an arrow key by 24. Hold Alt while dragging to place
-          it without snapping.
+          Arrow keys move the selected box by one pixel, Shift and an arrow key by 24. Snap turns snapping on or off;
+          hold Alt while dragging to do the opposite.
         </p>
       ) : null}
     </figure>

@@ -236,7 +236,7 @@ describe("scene editor", () => {
     void act(() => box("lowerThird").click());
     expect(
       [...box("lowerThird").querySelectorAll("[data-handle]")].map((handle) => handle.getAttribute("data-handle")),
-    ).toEqual(["nw", "ne", "se", "sw"]);
+    ).toEqual(["nw", "n", "ne", "e", "se", "s", "sw", "w"]);
     const handle = box("lowerThird").querySelector('[data-handle="se"]')!;
     // The right edge starts at 1296 px of the frame; dropped at 1816, it lands on the 1824 px safe line.
     pointer(handle, "pointerdown", 648, 513);

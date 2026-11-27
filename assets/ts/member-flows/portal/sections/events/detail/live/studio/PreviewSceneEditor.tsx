@@ -27,6 +27,7 @@ import { Button } from "../../../../../../../ui/Button";
 import { Dialog } from "../../../../../../../ui/Dialog";
 import { IconExpand, StrokeIcon } from "../../../../../../../ui/MediaIcons";
 import type { LiveRoomState } from "../../../../../../../live-session/live-room-state";
+import { LayoutSnapToggle } from "../../settings/live-layouts/LayoutSnapToggle";
 import { OverlayLayoutCanvas } from "../../settings/live-layouts/OverlayLayoutCanvas";
 import { AddGraphicMenu, LockIcon, OverlayLayoutGraphics } from "../../settings/live-layouts/OverlayLayoutGraphics";
 import { draftGraphicActions } from "../../settings/live-layouts/overlay-layout-graphic-actions";
@@ -303,7 +304,7 @@ function SaveOrDiscard({ draft }: { draft: SceneDraft }) {
 }
 
 /**
- * The scene's full screen, Discard and Save, as icons in Preview's header
+ * The scene's Snap, full screen, Discard and Save, as icons in Preview's header
  * while it is unlocked; the words are their tooltips. Full screen fills the
  * window with the whole panel, so Save stays beside the canvas.
  */
@@ -326,6 +327,7 @@ export function PreviewSceneSave() {
   const { draft } = editing;
   return (
     <span class="pk-studio-scene-editor__actions">
+      <LayoutSnapToggle />
       <Button
         icon
         variant="ghost"

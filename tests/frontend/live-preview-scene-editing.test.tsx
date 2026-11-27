@@ -231,6 +231,24 @@ describe("editing the scene on Preview", () => {
     expect(reads).toBe(2);
   });
 
+  it("drags a box freely with Snap off, remembers the choice, and draws a handle on every corner and side", async () => {
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 960, 540));
+    vi.stubGlobal("requestAnimationFrame", (frame: FrameRequestCallback) => (frame(0), 1));
+    const { preview } = await editedPreview();
+    const snap = labeled(preview, "Snap");
+    expect(snap.getAttribute("aria-pressed")).toBe("true");
+    await act(() => snap.click());
+    expect(snap.getAttribute("aria-pressed")).toBe("false");
+    expect(localStorage.getItem("pkic.live-layouts.snap")).toBe("off");
+    const box = preview.querySelector<HTMLElement>(".pk-studio-scene-editor .pk-layout-canvas__box[data-selected]")!;
+    expect(box.querySelectorAll(".pk-layout-canvas__handle")).toHaveLength(8);
+    const x = Number(box.style.getPropertyValue("--box-x"));
+    // Seven screen pixels on a 960-wide canvas are 14 of the frame's, off the 24-pixel grid.
+    await drag(box, [200, 450], [207, 450]);
+    expect(Number(box.style.getPropertyValue("--box-x")) * 1920).toBeCloseTo(x * 1920 + 14, 0);
+    await act(() => snap.click());
+  });
+
   it("puts a box dragged or resized while the scene saves back where it was, and edits again once saved", async () => {
     // The canvas has a size to drag across, and each drag frame draws at once.
     vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 960, 540));

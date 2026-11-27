@@ -180,6 +180,27 @@ describe("editing a box", () => {
     expect((snapped.box.x + snapped.box.w) * 1920).toBeCloseTo(960, 0);
   });
 
+  it("moves only a side handle's edge, with snapping on, and never the edges across from it", () => {
+    for (const [handle, dx, dy] of [
+      ["n", 0, -37 / 1080],
+      ["s", 0, 41 / 1080],
+      ["e", 53 / 1920, 0],
+      ["w", -29 / 1920, 0],
+    ] as const) {
+      const after = resizeBox(box, handle, dx, dy, snapping).box;
+      const edges = (b: typeof box) => ({ left: b.x, right: b.x + b.w, top: b.y, bottom: b.y + b.h });
+      const was = edges(box);
+      const now = edges(after);
+      const kept = {
+        n: ["left", "right", "bottom"],
+        s: ["left", "right", "top"],
+        e: ["left", "top", "bottom"],
+        w: ["right", "top", "bottom"],
+      }[handle] as Array<keyof typeof was>;
+      for (const edge of kept) expect(now[edge]).toBeCloseTo(was[edge], 3);
+    }
+  });
+
   it("keeps a corner-resized box the shape of its graphic, so the graphic fills it", () => {
     // A square card in a 400 × 200 box, dragged wider: the width the pointer set gives the height too.
     const wider = shapeBox(resizeBox(box, "se", 200 / 1920, 10 / 1080, free), box, "se", 1).box;

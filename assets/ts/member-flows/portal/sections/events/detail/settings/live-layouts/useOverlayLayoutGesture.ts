@@ -15,6 +15,7 @@ import {
   type SnapGuides,
   type SnapOptions,
 } from "./overlay-layout-editing";
+import { layoutSnapping } from "./LayoutSnapToggle";
 
 /** A press becomes a drag once the pointer travels this far, so a click on a box stays a selection. */
 const DRAG_THRESHOLD_PX = 3;
@@ -57,7 +58,7 @@ interface Gesture {
  * re-renders: one animation frame per pointer move snaps the box, moves it
  * (and the graphic drawn for it) with a transform or sizes it, and shows the
  * guides it snapped to. The box is committed once, on release; Escape puts it
- * back. Hold Alt to place it freely. A corner keeps a code's own shape, since
+ * back. It snaps while snapping is on; Alt held does the opposite. A corner keeps a code's own shape, since
  * the code is drawn whole inside its box; Shift keeps any box's shape.
  */
 export function useOverlayLayoutGesture(
@@ -137,7 +138,7 @@ export function useOverlayLayoutGesture(
     if (save && changed) {
       // The box stays where it was dropped until the committed layout redraws it there.
       if (node) placeLayoutBox(node, active.box);
-      const joinsSpot = active.kind === "move" && !active.alt;
+      const joinsSpot = active.kind === "move" && snaps(active);
       if (latest.current.commit(active.element, active.box, joinsSpot) === false && node)
         placeLayoutBox(node, active.start);
     } else if (node) placeLayoutBox(node, active.start);
@@ -154,7 +155,7 @@ export function useOverlayLayoutGesture(
     const options = {
       targets: snapTargets(active.others),
       threshold: { x: SNAP_PX / active.canvas.width, y: SNAP_PX / active.canvas.height },
-      snap: !active.alt,
+      snap: snaps(active),
     };
     const result = active.kind === "move" ? moveBox(active.start, dx, dy, options) : resized(active, dx, dy, options);
     active.box = result.box;
@@ -250,7 +251,10 @@ export function useOverlayLayoutGesture(
   return { canvas, register, verticalGuide, horizontalGuide, handlers, wasDragged };
 }
 
-/** A box resized by a corner: free, or keeping the code's own shape, or with Shift the box's shape. */
+/** Whether the gesture snaps: as the viewer set it, the other way round while Alt is held. */
+const snaps = (active: Gesture) => layoutSnapping.peek() !== active.alt;
+
+/** A box resized by a corner or a side: free, or keeping the code's own shape, or with Shift the box's shape. */
 function resized(active: Gesture, dx: number, dy: number, options: SnapOptions) {
   const kind = active.kind as ResizeHandle;
   const free = resizeBox(active.start, kind, dx, dy, options);

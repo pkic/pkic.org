@@ -26,8 +26,8 @@ export const NUDGE_PX = 1;
 
 /** The edges a box can be dragged by: a side, or a corner (two sides). */
 export type ResizeHandle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
-/** The handles the scene editor draws on the selected box: its corners. */
-export const CORNER_HANDLES: readonly ResizeHandle[] = ["nw", "ne", "se", "sw"];
+/** The handles the scene editor draws on the selected box: its corners, and its sides to drag one edge alone. */
+export const BOX_HANDLES: readonly ResizeHandle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
 
 /** The graphics drawn whole at a shape of their own, so a corner resize keeps it: the QR code. Others fill their box. */
 export const FIXED_SHAPE_ELEMENTS: ReadonlySet<LiveOverlayElement> = new Set<LiveOverlayElement>(["qrCode"]);

@@ -21,6 +21,7 @@
   }
   .pk-layout-canvas__bar > p {
     margin: 0;
+    margin-inline-end: auto;
   }
   .pk-layout-canvas {
     position: relative;
@@ -231,6 +232,26 @@
     inset-inline-start: 0;
     inset-block-start: 100%;
     cursor: nesw-resize;
+  }
+  .pk-layout-canvas__handle[data-handle="n"] {
+    inset-inline-start: 50%;
+    inset-block-start: 0;
+    cursor: ns-resize;
+  }
+  .pk-layout-canvas__handle[data-handle="s"] {
+    inset-inline-start: 50%;
+    inset-block-start: 100%;
+    cursor: ns-resize;
+  }
+  .pk-layout-canvas__handle[data-handle="e"] {
+    inset-inline-start: 100%;
+    inset-block-start: 50%;
+    cursor: ew-resize;
+  }
+  .pk-layout-canvas__handle[data-handle="w"] {
+    inset-inline-start: 0;
+    inset-block-start: 50%;
+    cursor: ew-resize;
   }
   /* The line a dragged box snapped to, shown only while it holds there. */
   .pk-layout-canvas__guide {
