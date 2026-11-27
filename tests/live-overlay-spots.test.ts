@@ -164,4 +164,16 @@ describe("editing a spot", () => {
     };
     expect(snapIntoSpot(scene, "question", chat)).toEqual(chat);
   });
+
+  it("draws the question and panelists apart when they match each other but the spots put them apart", () => {
+    const spot = { x: BREAK.chat.x, y: BREAK.chat.y, w: BREAK.chat.w, h: BREAK.chat.h, turns: 15, visible: true };
+    const scene = {
+      ...BREAK,
+      poll: { ...BREAK.poll, ...spot },
+      question: { ...BREAK.question, ...spot, x: spot.x - 0.0015 },
+      panelists: { ...BREAK.panelists, ...spot, x: spot.x - 0.003 },
+    };
+    expect(liveOverlaySpotOf(scene, "question")).not.toContain("panelists");
+    expect(joinedPanelBox(scene)).toBeNull();
+  });
 });

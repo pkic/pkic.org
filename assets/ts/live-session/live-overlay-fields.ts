@@ -1,4 +1,4 @@
-import { sameLiveBox } from "../../shared/live-overlay-spots";
+import { liveOverlaySpotOf, sameLiveBox } from "../../shared/live-overlay-spots";
 import type {
   LiveOverlayElement,
   LiveOverlayElementPlacement,
@@ -106,7 +106,9 @@ export function joinedPanelBox(elements: LiveOverlayLayoutElements): LiveOverlay
   const { question, panelists } = elements;
   if (!question.visible || !panelists.visible) return null;
   // The box they share is the spot they share, by the spots' own measure, so they take their turns as one board.
-  if (sameLiveBox(question, panelists)) return question;
+  // Each near a third board's box can still sit in different spots; then they draw apart.
+  if (sameLiveBox(question, panelists))
+    return liveOverlaySpotOf(elements, "question")?.includes("panelists") ? question : null;
   if (Math.abs(question.x - panelists.x) > EDGE || Math.abs(question.w - panelists.w) > EDGE) return null;
   const [top, bottom] = question.y <= panelists.y ? [question, panelists] : [panelists, question];
   if (Math.abs(top.y + top.h - bottom.y) > EDGE) return null;
