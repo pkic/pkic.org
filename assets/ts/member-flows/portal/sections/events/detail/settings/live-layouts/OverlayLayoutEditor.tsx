@@ -68,9 +68,9 @@ export function OverlayLayoutEditor({
     endpoints: { layouts: endpoint, positions: positionsEndpoint },
     layout,
     positions: savedPositions,
-    onSaved: (saved) => {
+    onSaved: (saved, done) => {
       onSaved(saved);
-      toast("Scene saved. Every room shows the change.", "success");
+      if (done) toast("Scene saved. Every room shows the change.", "success");
     },
     onDirty,
   });

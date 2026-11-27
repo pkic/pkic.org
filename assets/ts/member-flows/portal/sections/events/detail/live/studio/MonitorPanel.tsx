@@ -283,8 +283,20 @@ export function LayoutIcon() {
   );
 }
 
-/** What an operator does with one monitor's output, at the end of its header: its sync chip, then clear it, and full screen. */
-function MonitorActions({ output, context }: { output: StudioOutput; context: MonitorContext }) {
+/**
+ * What an operator does with one monitor's output, at the end of its header:
+ * its sync chip, then clear it, and full screen. Preview's scene open to edit
+ * has no full screen: its canvas stands in for the picture.
+ */
+function MonitorActions({
+  output,
+  context,
+  editing = false,
+}: {
+  output: StudioOutput;
+  context: MonitorContext;
+  editing?: boolean;
+}) {
   const { panel, switcher, room } = context;
   const details = studioOutputDetails(room, output);
   const role = isBusOutput(output) ? null : liveOutputRole(room, output);
@@ -312,15 +324,17 @@ function MonitorActions({ output, context }: { output: StudioOutput; context: Mo
           <ClearIcon />
         </Button>
       )}
-      <Button
-        icon
-        variant="ghost"
-        aria-label={`Full screen ${details.label}`}
-        title={`Full screen ${details.label}\nShow this monitor large. Double-clicking its picture does the same.`}
-        onClick={() => (enlarged.value = enlargedKey(panel.id, output))}
-      >
-        <ExpandIcon />
-      </Button>
+      {editing ? null : (
+        <Button
+          icon
+          variant="ghost"
+          aria-label={`Full screen ${details.label}`}
+          title={`Full screen ${details.label}\nShow this monitor large. Double-clicking its picture does the same.`}
+          onClick={() => (enlarged.value = enlargedKey(panel.id, output))}
+        >
+          <ExpandIcon />
+        </Button>
+      )}
     </span>
   );
 }
@@ -510,6 +524,7 @@ export function monitorPanelView(
   );
   // Preview shows the scenes under its picture unless the operator hid them.
   const scenesShown = panel.scenes !== false;
+  const editing = single === "preview" && switcher.canEditScenes && previewSceneEditing.value;
   if (single)
     return {
       title,
@@ -520,7 +535,7 @@ export function monitorPanelView(
           <LayoutPicker output={single} context={context} />
         </span>
       ),
-      actions: <MonitorActions output={single} context={context} />,
+      actions: <MonitorActions output={single} context={context} editing={editing} />,
       menu:
         single === "preview"
           ? [
@@ -546,7 +561,7 @@ export function monitorPanelView(
       body: (
         <div class="pk-studio-monitor-stack">
           <div class="pk-studio-monitor-frame">
-            {single === "preview" && switcher.canEditScenes && previewSceneEditing.value ? (
+            {editing ? (
               <PreviewSceneCanvas />
             ) : (
               <div class="pk-studio-monitor" data-single="" {...liveTallyAttributes(room, single)}>

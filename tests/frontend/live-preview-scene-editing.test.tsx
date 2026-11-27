@@ -162,12 +162,16 @@ describe("editing the scene on Preview", () => {
   it("locks at once when nothing changed", async () => {
     const desk = mountDesk(liveSnapshot({ viewer: OPERATOR }), "show", undefined, true, true);
     const preview = panel(desk.host, "Preview");
+    expect(preview.querySelector('[aria-label^="Full screen"]')).not.toBeNull();
     await act(() => labeled(preview, "Unlock scene").click());
     // The studio stays mounted as Preview unlocks: the same panel now offers to lock.
     expect(preview.isConnected).toBe(true);
+    // The canvas stands in for the picture, so there is no picture to show full screen.
+    expect(preview.querySelector('[aria-label^="Full screen"]')).toBeNull();
     await act(() => labeled(preview, "Lock scene").click());
     expect(dialog()).toBeNull();
     expect(previewSceneEditing.value).toBe(false);
+    expect(preview.querySelector('[aria-label^="Full screen"]')).not.toBeNull();
   });
 
   it("asks to save or discard before following another operator's scene on Preview", async () => {

@@ -45,7 +45,9 @@ export interface SceneEndpoints {
  * before the event, and Preview in the live studio. Every change stays a
  * draft until `save` writes the scene through the overlay-layout contract,
  * the shared positions first; `discard` puts the saved scene back. A save
- * hands back the stored scenes, and the draft starts again from them.
+ * hands back the stored scenes, and the draft starts again from them. When
+ * the positions save and the scene then fails, the saved positions are
+ * handed back unfinished (`done` false), and the scene's changes stay a draft.
  */
 export function useSceneDraft({
   endpoints,
@@ -57,7 +59,7 @@ export function useSceneDraft({
   endpoints: SceneEndpoints;
   layout: LiveOverlayLayout;
   positions: LiveOverlayPositions;
-  onSaved: (layouts: EventLiveOverlayLayoutsResponse) => void;
+  onSaved: (layouts: EventLiveOverlayLayoutsResponse, done: boolean) => void;
   onDirty?: (dirty: boolean) => void;
 }) {
   const [name, setName] = useState(layout.name);
@@ -74,8 +76,16 @@ export function useSceneDraft({
   const [problem, setProblem] = useState<string | null>(null);
   const latest = useRef({ layout, savedPositions });
   latest.current = { layout, savedPositions };
+  const draftedFrom = useRef({ slug: layout.slug, updatedAt: layout.updatedAt });
   useEffect(() => {
     const current = latest.current;
+    const from = draftedFrom.current;
+    draftedFrom.current = { slug: current.layout.slug, updatedAt: current.layout.updatedAt };
+    if (from.slug === current.layout.slug && from.updatedAt === current.layout.updatedAt) {
+      // Only the shared positions changed: the scene's own changes stay a draft.
+      setDrafts((drafts) => ({ ...drafts, positions: current.savedPositions.elements }));
+      return;
+    }
     setName(current.layout.name);
     setDrafts({ elements: current.layout.elements, positions: current.savedPositions.elements });
     setDraftOf(current.layout.slug);
@@ -120,9 +130,9 @@ export function useSceneDraft({
       return false;
     }
     setBusy(true);
+    let saved: EventLiveOverlayLayoutsResponse | null = null;
     try {
       // The shared positions first: the scene's shared graphics take them, so a failed scene save loses nothing.
-      let saved: EventLiveOverlayLayoutsResponse | null = null;
       if (positionsChanged(drafts))
         saved = await putJson(
           endpoints.positions,
@@ -139,10 +149,12 @@ export function useSceneDraft({
           eventLiveOverlayLayoutsResponseSchema,
         );
       form.reset();
-      if (saved) onSaved(saved);
+      if (saved) onSaved(saved, true);
       onDirty?.(false);
       return true;
     } catch (cause) {
+      // Positions saved before the scene failed are the new baseline, so the next save sends their version.
+      if (saved) onSaved(saved, false);
       setProblem(form.refuse(cause));
       return false;
     } finally {

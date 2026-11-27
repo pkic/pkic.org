@@ -176,4 +176,16 @@ describe("editing a spot", () => {
     expect(liveOverlaySpotOf(scene, "question")).not.toContain("panelists");
     expect(joinedPanelBox(scene)).toBeNull();
   });
+
+  it("stacks the question and panelists into one board only when neither is in a spot", () => {
+    const full = LIVE_OVERLAY_PRESET_LAYOUTS["full-board"].elements;
+    const top = { ...full.question, x: 0.1, y: 0.1, w: 0.3, h: 0.2 };
+    const bottom = { ...full.panelists, x: 0.1, y: 0.3, w: 0.3, h: 0.2 };
+    const alone = { ...BREAK, question: top, panelists: bottom };
+    expect(joinedPanelBox(alone)).not.toBeNull();
+    // A poll in the question's box puts the question in a spot, with that spot's turns.
+    const spotted = { ...alone, poll: { ...BREAK.poll, ...top, visible: true } };
+    expect(liveOverlaySpotOf(spotted, "question")).toContain("poll");
+    expect(joinedPanelBox(spotted)).toBeNull();
+  });
 });

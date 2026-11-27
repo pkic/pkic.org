@@ -307,7 +307,9 @@ export const liveOverlayLayoutSlugSchema = z
   .min(1)
   .max(40)
   .regex(slugPattern, "Use lowercase letters, digits and hyphens.");
-export const liveOverlayLayoutNameSchema = z.string().trim().min(1, "Enter a name.").max(60);
+/** The longest a scene's name may be. */
+export const LIVE_OVERLAY_LAYOUT_NAME_MAX = 60;
+export const liveOverlayLayoutNameSchema = z.string().trim().min(1, "Enter a name.").max(LIVE_OVERLAY_LAYOUT_NAME_MAX);
 
 /** What a live room carries for each saved layout: its name, for the operators' pickers, and the geometry its outputs draw. */
 export const liveOverlayLayoutGeometrySchema = z

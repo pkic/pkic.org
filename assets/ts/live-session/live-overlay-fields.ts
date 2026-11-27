@@ -109,6 +109,8 @@ export function joinedPanelBox(elements: LiveOverlayLayoutElements): LiveOverlay
   // Each near a third board's box can still sit in different spots; then they draw apart.
   if (sameLiveBox(question, panelists))
     return liveOverlaySpotOf(elements, "question")?.includes("panelists") ? question : null;
+  // Stacked, they join only on their own: a board in a spot takes that spot's turns.
+  if (liveOverlaySpotOf(elements, "question") || liveOverlaySpotOf(elements, "panelists")) return null;
   if (Math.abs(question.x - panelists.x) > EDGE || Math.abs(question.w - panelists.w) > EDGE) return null;
   const [top, bottom] = question.y <= panelists.y ? [question, panelists] : [panelists, question];
   if (Math.abs(top.y + top.h - bottom.y) > EDGE) return null;

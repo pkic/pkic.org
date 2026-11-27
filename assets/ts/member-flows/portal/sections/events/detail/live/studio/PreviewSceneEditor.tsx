@@ -6,9 +6,11 @@ import { liveOverlayDrawn } from "../../../../../../../../shared/live-overlay-co
 import {
   LIVE_OVERLAY_DEFAULT_POSITIONS,
   LIVE_OVERLAY_STANDARD_ELEMENTS,
+  detachLiveOverlayElements,
 } from "../../../../../../../../shared/live-overlay-layout-presets";
 import { isLiveProgramLayer } from "../../../../../../../../shared/live-overlay-stacking";
 import {
+  LIVE_OVERLAY_LAYOUT_NAME_MAX,
   eventLiveOverlayLayoutsResponseSchema,
   type EventLiveOverlayLayoutsResponse,
   type LiveOverlayElement,
@@ -141,9 +143,9 @@ export function SceneEditingProvider({
     endpoints,
     layout: layout ?? NOT_LOADED.layout,
     positions: (saved ?? NOT_LOADED.saved).positions,
-    onSaved: (next) => {
+    onSaved: (next, done) => {
       setSaved(next);
-      toast("Scene saved. Every room shows the change.", "success");
+      if (done) toast("Scene saved. Every room shows the change.", "success");
     },
   });
   useEffect(() => {
@@ -186,13 +188,20 @@ export function SceneEditingProvider({
   );
 }
 
-/** The first free name for a copy of a scene: "Copy of Camera", then "Copy of Camera 2". */
-function copyName(name: string, layouts: readonly LiveOverlayLayout[]) {
+/**
+ * The first free name for a copy of a scene: "Copy of Camera", then "Copy of
+ * Camera 2". A long name is cut short so the copy's name, number included,
+ * still fits a scene name.
+ */
+export function copyName(name: string, layouts: readonly LiveOverlayLayout[]) {
   const taken = new Set(layouts.map((layout) => layout.name));
-  const base = `Copy of ${name}`;
-  let candidate = base;
-  for (let count = 2; taken.has(candidate); count += 1) candidate = `${base} ${count}`;
-  return candidate;
+  const named = (count: number) => {
+    const suffix = count > 1 ? ` ${count}` : "";
+    return `${`Copy of ${name}`.slice(0, LIVE_OVERLAY_LAYOUT_NAME_MAX - suffix.length).trimEnd()}${suffix}`;
+  };
+  let count = 1;
+  while (taken.has(named(count))) count += 1;
+  return named(count);
 }
 
 /**
@@ -206,7 +215,7 @@ export function duplicatePreviewScene(slug: string, preview: LiveRoomState, onPr
 async function copyPreviewScene(slug: string, preview: LiveRoomState, onPreviewScene: (scene: string) => void) {
   const endpoint = endpointsOf(slug).layouts;
   try {
-    const { layouts } = await getJson(endpoint, eventLiveOverlayLayoutsResponseSchema);
+    const { layouts, positions } = await getJson(endpoint, eventLiveOverlayLayoutsResponseSchema);
     const { current } = previewSceneOf(preview);
     const from = layouts.find((layout) => layout.slug === current.slug);
     if (!from) throw new Error("The scene on Preview is no longer there.");
@@ -214,7 +223,13 @@ async function copyPreviewScene(slug: string, preview: LiveRoomState, onPreviewS
     const created = layoutSlugFor(name, new Set(layouts.map((layout) => layout.slug)));
     await putJson(
       `${endpoint}/${encodeURIComponent(created)}`,
-      { expectedUpdatedAt: null, name, preset: from.preset, elements: from.elements },
+      // The copy's graphics have places of their own, so moving one never moves it in the original.
+      {
+        expectedUpdatedAt: null,
+        name,
+        preset: from.preset,
+        elements: detachLiveOverlayElements(from.elements, positions.elements),
+      },
       eventLiveOverlayLayoutsResponseSchema,
     );
     onPreviewScene(created);

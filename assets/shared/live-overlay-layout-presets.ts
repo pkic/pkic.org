@@ -275,6 +275,17 @@ export function resolveLiveOverlayElements(
   ) as LiveOverlayLayoutElements;
 }
 
+/** A scene's graphics with the shared ones placed where the event shares them, then made the scene's own. */
+export function detachLiveOverlayElements(
+  elements: LiveOverlayLayoutElements,
+  positions: LiveOverlaySharedPositions,
+): LiveOverlayLayoutElements {
+  const resolved = resolveLiveOverlayElements(elements, positions);
+  return Object.fromEntries(
+    LIVE_OVERLAY_ELEMENTS.map((element) => [element, { ...resolved[element], shared: false }]),
+  ) as LiveOverlayLayoutElements;
+}
+
 export function isLiveOverlayPreset(slug: string): slug is LiveOverlayPreset {
   return (LIVE_OVERLAY_PRESETS as readonly string[]).includes(slug);
 }
