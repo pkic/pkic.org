@@ -22,6 +22,7 @@ import { liveAnswerSections } from "./sections-live-answers";
 import { eventScreenBrowserSections } from "./sections-event-screens-browser";
 import { stageDisplaySections } from "./sections-stage-display";
 import { liveReactionsSections } from "./sections-live-reactions";
+import { liveCardColorSections } from "./sections-live-card-colors";
 import { liveSceneSwitchSections } from "./sections-live-scene-switch";
 import { roomScreensSections } from "./sections-room-screens";
 import { virtualRoomSections } from "./sections-virtual-room";
@@ -45,6 +46,7 @@ export const liveProductionSections: PreviewSection[] = [
   ...eventScreenBrowserSections,
   ...stageDisplaySections,
   ...liveReactionsSections,
+  ...liveCardColorSections,
   ...liveSceneSwitchSections,
   ...virtualRoomSections,
 ];

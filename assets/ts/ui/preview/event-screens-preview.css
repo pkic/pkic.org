@@ -21,6 +21,10 @@
   .pk-preview__camera {
     background: linear-gradient(135deg, var(--pk-chrome-raised), var(--pk-chrome-deep) 60%);
   }
+  /* The conference field a production can put behind the overlay, for judging a card color on it. */
+  .pk-preview__field {
+    background: var(--pk-pqc-field);
+  }
   /* An attendee's view of the stream, as wide as the virtual room's player on a laptop. */
   .pk-preview__watch {
     max-inline-size: 48rem;

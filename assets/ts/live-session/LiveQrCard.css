@@ -14,10 +14,11 @@
     overflow: hidden;
     border-radius: var(--graphic-radius);
     background: var(--graphic-plate);
+    box-shadow: var(--graphic-edge);
     color: var(--graphic-ink);
     text-shadow: var(--graphic-halo);
   }
-  /* The event theme's stripe along the card's foot, as under the lower third's name. */
+  /* The theme's stripe along the card's foot, as under the lower third's name. */
   .pk-live-qr-card .pk-qr-graphic::after {
     content: "";
     position: absolute;
@@ -38,13 +39,21 @@
     font-weight: 500;
   }
   /*
-   * In the event's colors the card is the event's field and the code stays
-   * black on white, its quiet zone included, so any phone camera reads it.
+   * In the event's colors, or on a see-through card, the code stays black on
+   * white, its quiet zone included, so any phone camera reads it.
    */
-  .pk-live-qr-card[data-graphic-theme="event"] .pk-qr-graphic__ground {
+  .pk-live-qr-card[data-graphic-theme="event"] .pk-qr-graphic__ground,
+  .pk-live-qr-card[data-graphic-theme="navy-glass"] .pk-qr-graphic__ground,
+  .pk-live-qr-card[data-graphic-theme="smoked-glass"] .pk-qr-graphic__ground,
+  .pk-live-qr-card[data-graphic-theme="frosted-glass"] .pk-qr-graphic__ground,
+  .pk-live-qr-card[data-graphic-theme="deep-blue"] .pk-qr-graphic__ground {
     fill: var(--pk-pqc-paper);
   }
-  .pk-live-qr-card[data-graphic-theme="event"] .pk-qr-graphic__modules {
+  .pk-live-qr-card[data-graphic-theme="event"] .pk-qr-graphic__modules,
+  .pk-live-qr-card[data-graphic-theme="navy-glass"] .pk-qr-graphic__modules,
+  .pk-live-qr-card[data-graphic-theme="smoked-glass"] .pk-qr-graphic__modules,
+  .pk-live-qr-card[data-graphic-theme="frosted-glass"] .pk-qr-graphic__modules,
+  .pk-live-qr-card[data-graphic-theme="deep-blue"] .pk-qr-graphic__modules {
     fill: var(--pk-pqc-ink);
   }
   /* The code alone: no card, stripe or line under it, only the code and its quiet zone in the scene's colors. */

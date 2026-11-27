@@ -1,6 +1,7 @@
 /*
  * A broadcast graphic's theme: white type on the event's field, or white or
- * black type on a transparent, black or white ground. Each themed graphic reads these four properties and nothing
+ * black type on a transparent, black or white ground, or a see-through card.
+ * Each themed graphic reads these properties and nothing
  * else for its colors, so every graphic agrees on what a theme means. The
  * values are the fixed broadcast tokens, never the portal's light or dark
  * surfaces: an output looks the same in any operator's theme.
@@ -13,8 +14,10 @@
  * - `--graphic-plate`: the ground as a background, the event's field in the
  *   event theme (a gradient, so SVG fills read `--graphic-ground` instead);
  * - `--graphic-stripe`: a band along the graphic's foot, the event's stripe
- *   in the event theme and none in the others;
- * - `--graphic-radius`: the plate's corners, square like the event's boards.
+ *   in the event theme and on the see-through cards, none on the others;
+ * - `--graphic-radius`: the plate's corners, square like the event's boards;
+ * - `--graphic-edge`: a thin light line around a see-through card, none on
+ *   the others.
  */
 @layer components {
   [data-graphic-theme] {
@@ -28,6 +31,7 @@
     --graphic-plate: var(--graphic-ground);
     --graphic-stripe: none;
     --graphic-radius: var(--pk-radius-card);
+    --graphic-edge: none;
   }
   [data-graphic-theme="event"] {
     --graphic-ink: var(--pk-pqc-on-field);
@@ -37,6 +41,38 @@
     --graphic-plate: var(--pk-pqc-light), var(--pk-pqc-field);
     --graphic-stripe: var(--pk-pqc-stripe);
     --graphic-radius: 0;
+  }
+  /* See-through cards: the event's stripe along the foot, as under the lower third's name. */
+  [data-graphic-theme="navy-glass"],
+  [data-graphic-theme="smoked-glass"],
+  [data-graphic-theme="frosted-glass"],
+  [data-graphic-theme="deep-blue"] {
+    --graphic-stripe: var(--pk-pqc-stripe);
+  }
+  /* White type on navy, smoke or deep blue, with a thin light edge; black type on frost. */
+  [data-graphic-theme="navy-glass"],
+  [data-graphic-theme="smoked-glass"],
+  [data-graphic-theme="deep-blue"] {
+    --graphic-contrast: var(--pk-chrome-deep);
+    --graphic-ink-muted: color-mix(in srgb, var(--graphic-ink) 82%, transparent);
+    --graphic-plate: var(--graphic-ground);
+    --graphic-edge: inset 0 0 0 1px var(--pk-live-plate-edge);
+  }
+  [data-graphic-theme="navy-glass"] {
+    --graphic-ground: var(--pk-live-plate-navy);
+  }
+  [data-graphic-theme="smoked-glass"] {
+    --graphic-ground: var(--pk-live-plate-smoke);
+    --graphic-edge: inset 0 0 0 1px var(--pk-live-plate-edge-strong);
+  }
+  [data-graphic-theme="deep-blue"] {
+    --graphic-ground: var(--pk-live-plate-blue);
+  }
+  [data-graphic-theme="frosted-glass"] {
+    --graphic-ink: var(--pk-pqc-ink);
+    --graphic-contrast: var(--pk-pqc-paper);
+    --graphic-ground: var(--pk-live-plate-frost);
+    --graphic-ink-muted: var(--pk-pqc-ink-muted);
   }
   [data-graphic-theme="white-on-transparent"] {
     --graphic-ground: transparent;

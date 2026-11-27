@@ -30,11 +30,12 @@
     padding: 40px 48px 32px;
     border-radius: var(--graphic-radius);
     background: var(--graphic-plate);
+    box-shadow: var(--graphic-edge);
   }
   .pk-live-schedule[data-arrangement="cards"] .pk-live-schedule__card {
     inline-size: 100%;
   }
-  /* The event theme's stripe along the foot, as under the lower third's name; none in the other themes. */
+  /* The theme's stripe along the foot, as under the lower third's name; none in the themes without one. */
   .pk-live-schedule__card::after {
     content: "";
     position: absolute;

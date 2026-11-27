@@ -143,6 +143,7 @@
     --graphic-halo: none;
     --graphic-plate: none;
     --graphic-stripe: none;
+    --graphic-edge: none;
   }
   .pk-live-overlay__surface {
     position: relative;
