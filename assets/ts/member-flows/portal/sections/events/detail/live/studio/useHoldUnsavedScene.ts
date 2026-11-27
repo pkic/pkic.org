@@ -1,4 +1,4 @@
-import { useEffect } from "preact/hooks";
+import { useLayoutEffect } from "preact/hooks";
 import { splitHash } from "../../../../../../../ui/url-query";
 
 /**
@@ -9,32 +9,44 @@ import { splitHash } from "../../../../../../../ui/url-query";
  * studio's own address query, such as a tab, is not leaving.
  */
 export function useHoldUnsavedScene(unsaved: boolean, ask: (go: () => void) => void): void {
-  useEffect(() => {
+  // Held as soon as the change draws, not a frame later, so an immediate Back still asks.
+  useLayoutEffect(() => {
     if (!unsaved) return;
     const path = splitHash().path;
     let here = location.href;
     let leaving = false;
     const unload = (event: BeforeUnloadEvent) => event.preventDefault();
-    const moved = () => {
+    const moved = (event: Event) => {
       if (leaving) return;
       if (splitHash().path === path) {
         here = location.href;
         return;
       }
       const to = location.href;
+      // Back, Forward and the address bar say popstate; a portal link says only hashchange.
+      const traversed = event.type === "popstate";
       // The portal reads the address as it redraws, so the studio stays until the changes are settled.
-      history.replaceState(history.state, "", here);
+      // After Back or Forward the studio goes on top, so the page gone to keeps its own place in history.
+      if (traversed) history.pushState(null, "", here);
+      else history.replaceState(history.state, "", here);
       ask(() => {
         leaving = true;
+        if (traversed) {
+          history.back();
+          return;
+        }
         history.pushState(null, "", to);
         dispatchEvent(new HashChangeEvent("hashchange", { oldURL: here, newURL: to }));
       });
     };
+    // Back and Forward say popstate before hashchange, and the portal redraws from either. The browser
+    // redraws between one listener and the next, so the studio listens first, in the capture phase.
+    const moves = ["popstate", "hashchange"] as const;
     addEventListener("beforeunload", unload);
-    addEventListener("hashchange", moved);
+    for (const event of moves) addEventListener(event, moved, true);
     return () => {
       removeEventListener("beforeunload", unload);
-      removeEventListener("hashchange", moved);
+      for (const event of moves) removeEventListener(event, moved, true);
     };
   }, [unsaved, ask]);
 }

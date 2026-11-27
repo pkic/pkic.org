@@ -237,6 +237,16 @@ describe("editing the scene on Preview", () => {
     expect(dialog()?.textContent).toContain("Saving changes this scene in every room of the event.");
     await act(() => button(dialog()!, "Keep editing").click());
     expect(location.hash).toBe(`${studio}?graphics=other`);
+    // Back says popstate first, and the portal redraws from it before any hashchange.
+    const entries = history.length;
+    await act(() => {
+      history.replaceState(null, "", "#/home");
+      dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(location.hash).toBe(`${studio}?graphics=other`);
+    // The studio goes on top, so the page Back went to keeps its place.
+    expect(history.length).toBe(entries + 1);
+    await act(() => button(dialog()!, "Keep editing").click());
     await act(() => go("#/events/pqc-2026"));
     await act(() => button(dialog()!, "Discard changes").click());
     expect(location.hash).toBe("#/events/pqc-2026");
