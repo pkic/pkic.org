@@ -10,6 +10,11 @@
     block-size: 100%;
     padding: var(--pk-2) var(--pk-3);
   }
+  /* In a studio panel the buttons run nearly side to side, a small margin each side, as Preview's scenes do. */
+  .pk-studio-panel__body > .pk-studio-transition {
+    justify-content: stretch;
+    padding-inline: var(--pk-2);
+  }
   /* A 44px target wherever it sits, desk or phone, solid in the tally color of the output it goes to.
      Scoped under the Transition so it wins over the shared Button's variant, whatever order the styles load in. */
   .pk-studio-transition > .pk-btn.pk-studio-transition__take {
