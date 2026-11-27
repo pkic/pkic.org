@@ -1,0 +1,16 @@
+/*
+ * The Graphics panel: In scene and Other graphics as tabs over one list.
+ * A row on Other graphics names the scenes that show it, under its controls.
+ */
+@layer components {
+  .pk-studio-graphics {
+    display: grid;
+    align-content: start;
+    gap: var(--pk-1);
+  }
+  .pk-studio-graphics__scenes {
+    margin: 0;
+    padding-inline: var(--pk-2);
+    padding-block-end: var(--pk-1);
+  }
+}

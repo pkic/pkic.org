@@ -148,6 +148,37 @@ export function OverlayLayoutGraphicsSummary({ elements }: { elements: LiveOverl
   );
 }
 
+/** Adds one of the Program graphics the scene does not show yet, at its shared position. */
+export function AddGraphicMenu({
+  elements,
+  disabled,
+  onShow,
+}: {
+  elements: LiveOverlayLayoutElements;
+  disabled: boolean;
+  onShow: (element: LiveOverlayElement, visible: boolean) => void;
+}) {
+  const addable = addableGraphics(elements);
+  return (
+    <Menu
+      label="Add graphic"
+      variant="plain"
+      align="end"
+      triggerClass={buttonClasses({ variant: "secondary" }, undefined)}
+      disabled={disabled || addable.length === 0}
+      items={addable.map((element) => ({
+        id: element,
+        label: LIVE_OVERLAY_ELEMENT_LABELS[element],
+        description: LAYOUT_GRAPHIC_DESCRIPTIONS[element],
+        onSelect: () => onShow(element, true),
+      }))}
+    >
+      <IconPlus />
+      Add graphic
+    </Menu>
+  );
+}
+
 /**
  * The scene's graphics, front first, the background among them: each row
  * picks its box on the canvas, says where it sits and what puts it on, and
@@ -165,10 +196,13 @@ export function OverlayLayoutGraphics({
   onComesOn,
   onReorder,
   onSharing,
+  framed = true,
 }: {
   elements: LiveOverlayLayoutElements;
   selected: LiveOverlayElement | null;
   disabled: boolean;
+  /** In its own Graphics panel with Add graphic; without, only the rows, for a host that has its own toolbar. */
+  framed?: boolean;
   onSelect: (element: LiveOverlayElement) => void;
   /** Shows a graphic in the scene, or removes it. */
   onShow: (element: LiveOverlayElement, visible: boolean) => void;
@@ -179,7 +213,6 @@ export function OverlayLayoutGraphics({
 }) {
   const list = useRef<HTMLUListElement>(null);
   const graphics = sceneGraphics(elements);
-  const addable = addableGraphics(elements);
   const drag = useRowDrag(() => [...(list.current?.children ?? [])] as HTMLElement[], onReorder);
   const actions = (element: LiveProgramLayer): MenuItem[] => [
     ...(elements[element].shared
@@ -226,93 +259,80 @@ export function OverlayLayoutGraphics({
     if (shown.target === index && shown.target > from) return "after";
     return undefined;
   };
+  const rows = (
+    <ul class="pk-scenes__rows" ref={list} aria-label="Graphics in this scene">
+      {graphics.map((element, index) => {
+        const label = LIVE_OVERLAY_ELEMENT_LABELS[element];
+        return (
+          <li
+            key={element}
+            class="pk-scenes__row"
+            data-element={element}
+            data-selected={element === selected ? "" : undefined}
+            data-dragging={drag.shown?.element === element ? "" : undefined}
+            data-drop={dropAt(index)}
+          >
+            <span
+              class="pk-scenes__grip"
+              aria-hidden="true"
+              title={"Drag to reorder\nThe top of the list is drawn in front."}
+              {...drag.grip(element, index)}
+            >
+              ⠿
+            </span>
+            <button
+              type="button"
+              class="pk-scenes__pick"
+              aria-pressed={element === selected}
+              onClick={() => onSelect(element)}
+            >
+              <GraphicLabel element={element} elements={elements} />
+            </button>
+            <OverlayLayoutGraphicSwitch
+              element={element}
+              placement={elements[element]}
+              disabled={disabled}
+              onComesOn={(comesOn) => onComesOn(element, comesOn)}
+            />
+            <span class="pk-scenes__moves">
+              <Button
+                icon
+                variant="ghost"
+                aria-label={`Move ${label} up`}
+                title={`Move ${label} up\nOne step toward the front.`}
+                disabled={disabled || index === 0}
+                onClick={() => onReorder(element, index - 1)}
+              >
+                <IconChevron pointing="up" />
+              </Button>
+              <Button
+                icon
+                variant="ghost"
+                aria-label={`Move ${label} down`}
+                title={`Move ${label} down\nOne step toward the back.`}
+                disabled={disabled || index === graphics.length - 1}
+                onClick={() => onReorder(element, index + 1)}
+              >
+                <IconChevron pointing="down" />
+              </Button>
+            </span>
+            <RowActions
+              subject={label}
+              hint="Share or keep its position across scenes, or remove it from this scene."
+              actions={actions(element)}
+            />
+          </li>
+        );
+      })}
+    </ul>
+  );
+  if (!framed) return rows;
   return (
     <GraphicsPanel
       empty={graphics.length === 0}
-      toolbar={
-        <Menu
-          label="Add graphic"
-          variant="plain"
-          align="end"
-          triggerClass={buttonClasses({ variant: "secondary" }, undefined)}
-          disabled={disabled || addable.length === 0}
-          items={addable.map((element) => ({
-            id: element,
-            label: LIVE_OVERLAY_ELEMENT_LABELS[element],
-            description: LAYOUT_GRAPHIC_DESCRIPTIONS[element],
-            onSelect: () => onShow(element, true),
-          }))}
-        >
-          <IconPlus />
-          Add graphic
-        </Menu>
-      }
+      toolbar={<AddGraphicMenu elements={elements} disabled={disabled} onShow={onShow} />}
     >
-      <ul class="pk-scenes__rows" ref={list} aria-label="Graphics in this scene">
-        {graphics.map((element, index) => {
-          const label = LIVE_OVERLAY_ELEMENT_LABELS[element];
-          return (
-            <li
-              key={element}
-              class="pk-scenes__row"
-              data-element={element}
-              data-selected={element === selected ? "" : undefined}
-              data-dragging={drag.shown?.element === element ? "" : undefined}
-              data-drop={dropAt(index)}
-            >
-              <span
-                class="pk-scenes__grip"
-                aria-hidden="true"
-                title={"Drag to reorder\nThe top of the list is drawn in front."}
-                {...drag.grip(element, index)}
-              >
-                ⠿
-              </span>
-              <button
-                type="button"
-                class="pk-scenes__pick"
-                aria-pressed={element === selected}
-                onClick={() => onSelect(element)}
-              >
-                <GraphicLabel element={element} elements={elements} />
-              </button>
-              <span class="pk-scenes__moves">
-                <Button
-                  icon
-                  variant="ghost"
-                  aria-label={`Move ${label} up`}
-                  title={`Move ${label} up\nOne step toward the front.`}
-                  disabled={disabled || index === 0}
-                  onClick={() => onReorder(element, index - 1)}
-                >
-                  <IconChevron pointing="up" />
-                </Button>
-                <Button
-                  icon
-                  variant="ghost"
-                  aria-label={`Move ${label} down`}
-                  title={`Move ${label} down\nOne step toward the back.`}
-                  disabled={disabled || index === graphics.length - 1}
-                  onClick={() => onReorder(element, index + 1)}
-                >
-                  <IconChevron pointing="down" />
-                </Button>
-              </span>
-              <RowActions
-                subject={label}
-                hint="Share or keep its position across scenes, or remove it from this scene."
-                actions={actions(element)}
-              />
-              <OverlayLayoutGraphicSwitch
-                element={element}
-                placement={elements[element]}
-                disabled={disabled}
-                onComesOn={(comesOn) => onComesOn(element, comesOn)}
-              />
-            </li>
-          );
-        })}
-      </ul>
+      {rows}
     </GraphicsPanel>
   );
 }

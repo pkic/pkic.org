@@ -71,10 +71,14 @@
     border-style: dotted;
     border-color: color-mix(in srgb, var(--pk-on-solid) 25%, transparent);
   }
-  /* Each name sits inside its own margin, on a plate so it reads over the sample graphics: title safe at the top left, action safe at the top right. */
+  /*
+   * Each name sits inside its own line, on a plate so it reads over the
+   * sample graphics, on the right where boxes keep their names on the left:
+   * action safe at the top, title safe at the bottom.
+   */
   .pk-layout-canvas__safe > span {
     position: absolute;
-    inset: 0 auto auto 0;
+    inset: auto 0 0 auto;
     padding: 0 var(--pk-1);
     background: color-mix(in srgb, var(--pk-chrome-deep) 85%, transparent);
     color: color-mix(in srgb, var(--pk-on-solid) 80%, transparent);
@@ -93,7 +97,7 @@
     --box-y: 0;
     --box-w: 0;
     --box-h: 0;
-    --label-shift: 0;
+    --label-along: 0;
     position: absolute;
     inset-inline-start: calc(var(--box-x) * 100%);
     inset-block-start: calc(var(--box-y) * 100%);
@@ -143,43 +147,50 @@
     transition: none;
   }
   /*
-   * The graphic's name in the middle of its box, on a plate so it reads over
-   * the drawn graphic, shown for the box pointed at, focused or selected. It
-   * moves a line or more when it would cover another box's name and draws
-   * above every box.
+   * Every box's name, always shown while the scene is edited: a plate inside
+   * its top edge, like the safe areas' names, or inside its bottom edge where
+   * the top would cover another box's name, moved along the edge past any
+   * name in the way. The selected box adds its place.
    */
   .pk-layout-canvas__label {
     position: absolute;
     z-index: 2;
-    inset-inline: 0;
-    inset-block-start: calc(50% - 0.8em + var(--label-shift) * 1.6em);
-    display: grid;
-    justify-items: center;
-    overflow: hidden;
-    padding-inline: var(--pk-1);
-    font-size: var(--pk-text-xs);
-    line-height: 1.6;
-    visibility: hidden;
-    pointer-events: none;
-  }
-  .pk-layout-canvas__box:hover > .pk-layout-canvas__label,
-  .pk-layout-canvas__box:focus-visible > .pk-layout-canvas__label,
-  .pk-layout-canvas__box[data-selected] > .pk-layout-canvas__label {
-    visibility: visible;
-  }
-  .pk-layout-canvas__box[data-selected] > .pk-layout-canvas__label {
-    z-index: 3;
-  }
-  .pk-layout-canvas__name,
-  .pk-layout-canvas__detail {
-    padding-inline: var(--pk-1);
-    background: color-mix(in srgb, var(--pk-chrome-deep) 85%, transparent);
+    inset-block-start: 0;
+    inset-inline-start: calc(var(--label-along) * 100%);
+    display: flex;
     max-inline-size: 100%;
     overflow: hidden;
+    padding-inline: var(--pk-1);
+    background: color-mix(in srgb, var(--pk-chrome-deep) 85%, transparent);
+    color: color-mix(in srgb, var(--pk-on-solid) 85%, transparent);
+    font-size: var(--pk-text-2xs);
+    line-height: 1.6;
     white-space: nowrap;
-    text-overflow: ellipsis;
+    pointer-events: none;
+  }
+  .pk-layout-canvas__box[data-label-side="bottom"] > .pk-layout-canvas__label {
+    inset-block: auto 0;
+  }
+  .pk-layout-canvas__box:hover > .pk-layout-canvas__label,
+  .pk-layout-canvas__box[data-selected] > .pk-layout-canvas__label {
+    z-index: 3;
+    color: var(--pk-on-solid);
+  }
+  /* The selected box's name takes its outline's color, as one piece with it, over the safe areas' names. */
+  .pk-layout-canvas__box[data-selected] > .pk-layout-canvas__label {
+    z-index: 5;
+    background: var(--pk-accent);
+  }
+  .pk-layout-canvas__box[data-selected] .pk-layout-canvas__detail {
+    color: color-mix(in srgb, var(--pk-on-solid) 85%, transparent);
+  }
+  .pk-layout-canvas__name {
+    flex: none;
   }
   .pk-layout-canvas__detail {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     color: color-mix(in srgb, var(--pk-on-solid) 70%, transparent);
   }
   /* A 24px target around a small visible square, centered on the box's corner or side. */

@@ -1,4 +1,13 @@
 import type { ComponentType } from "preact";
+import { useState } from "preact/hooks";
+import { formatConjunction } from "../../../../../../../../shared/format-list";
+import { liveOverlayLayoutChoices } from "../../../../../../../../shared/live-overlay-layout-presets";
+import type { LiveProgramLayer } from "../../../../../../../../shared/live-overlay-stacking";
+import { resolveLiveSceneElements } from "../../../../../../../../shared/live-scene-elements";
+import { TabList } from "../../../../../../../ui/TabList";
+import { sceneGraphics } from "../../settings/live-layouts/overlay-layout-graphics";
+import { SceneSourcesList, useSceneEditing } from "./PreviewSceneEditor";
+import "./GraphicsPanel.css";
 import { formatClockInZone } from "../../../../../../../../shared/format-date";
 import { resolveUpcomingRooms } from "../../../../../../../../shared/live-session-schedule";
 import type { AgendaSnapshot } from "../../../../../../../../shared/schemas/event-agenda";
@@ -41,23 +50,32 @@ export interface LiveGraphicContext {
  */
 export const LIVE_GRAPHICS: ReadonlyArray<{
   id: string;
+  /** The scene graphic this row puts on and off. */
+  element: LiveProgramLayer;
   applies?: (context: LiveGraphicContext) => boolean;
   Row: ComponentType<LiveGraphicContext>;
 }> = [
-  { id: "session", Row: ({ targets }) => <LivePanelistControls targets={targets} /> },
-  { id: "speaker-welcome", Row: ({ targets }) => <LiveSpeakerWelcomeControls targets={targets} /> },
+  { id: "session", element: "panelists", Row: ({ targets }) => <LivePanelistControls targets={targets} /> },
+  {
+    id: "speaker-welcome",
+    element: "speakerWelcome",
+    Row: ({ targets }) => <LiveSpeakerWelcomeControls targets={targets} />,
+  },
   {
     id: "ticker",
+    element: "ticker",
     Row: ({ targets, approvedAgenda }) => <LiveTickerControls targets={targets} rooms={approvedAgenda?.rooms} />,
   },
   {
     id: "check-in",
+    element: "checkIn",
     Row: ({ targets, slug, occurrenceId }) => (
       <LiveCheckInControls targets={targets} slug={slug} occurrenceId={occurrenceId} />
     ),
   },
   {
     id: "up-next",
+    element: "schedule",
     Row: ({ targets, approvedAgenda, occurrenceId, roomId, now }) => {
       const next = nextInRoom(approvedAgenda, occurrenceId, roomId, now);
       return (
@@ -70,18 +88,74 @@ export const LIVE_GRAPHICS: ReadonlyArray<{
       );
     },
   },
-  { id: "top-questions", Row: ({ targets }) => <LiveTopQuestionsControls targets={targets} /> },
-  { id: "chat", Row: ({ targets }) => <LiveChatFeedControls targets={targets} /> },
-  { id: "reactions", Row: ({ targets }) => <LiveReactionsControls targets={targets} /> },
+  {
+    id: "top-questions",
+    element: "topQuestions",
+    Row: ({ targets }) => <LiveTopQuestionsControls targets={targets} />,
+  },
+  { id: "chat", element: "chat", Row: ({ targets }) => <LiveChatFeedControls targets={targets} /> },
+  { id: "reactions", element: "reactions", Row: ({ targets }) => <LiveReactionsControls targets={targets} /> },
 ];
 
-/** The room's graphics beyond people and questions, each with its own outputs. */
+type GraphicsTab = "scene" | "other";
+
+/**
+ * The room's graphics beyond people and questions, each with its own
+ * outputs, linked to the scene on Preview: In scene lists the ones it
+ * shows, front first; Other graphics holds the rest, each saying which
+ * scenes show it, so one can still be prepared. A graphic's on and off is
+ * the room's and stays across scenes; the scene only decides whether, and
+ * where, it shows. While Preview is unlocked, In scene is the scene's
+ * sources list.
+ */
 export function GraphicsPanel(context: LiveGraphicContext) {
+  const [tab, setTab] = useState<GraphicsTab>("scene");
+  const editing = useSceneEditing();
+  const { state } = context.targets;
+  const elements = resolveLiveSceneElements(state, state.preview.scene);
+  const applying = LIVE_GRAPHICS.filter((graphic) => graphic.applies?.(context) ?? true);
+  const order = sceneGraphics(elements);
+  const inScene = order.flatMap((element) => applying.filter((graphic) => graphic.element === element));
+  const other = applying.filter((graphic) => !elements[graphic.element].visible);
+  const scenes = liveOverlayLayoutChoices(state.overlayLayouts);
+  const showsIn = (element: LiveProgramLayer) => {
+    const names = scenes
+      .filter((scene) => resolveLiveSceneElements(state, scene.slug)[element].visible)
+      .map((scene) => scene.name);
+    return names.length ? `Shows in: ${formatConjunction(names)}` : "No scene shows it";
+  };
   return (
-    <div>
-      {LIVE_GRAPHICS.filter((graphic) => graphic.applies?.(context) ?? true).map(({ id, Row }) => (
-        <Row key={id} {...context} />
-      ))}
+    <div class="pk-studio-graphics">
+      <TabList
+        label="Graphics"
+        idPrefix="studio-graphics"
+        activeId={tab}
+        onSelect={(id) => setTab(id as GraphicsTab)}
+        items={[
+          { id: "scene", panelId: "studio-graphics-list", label: "In scene" },
+          { id: "other", panelId: "studio-graphics-list", label: "Other graphics" },
+        ]}
+      />
+      <div role="tabpanel" id="studio-graphics-list">
+        {tab === "scene" ? (
+          editing?.status === "ready" ? (
+            <SceneSourcesList draft={editing.draft} />
+          ) : inScene.length ? (
+            inScene.map(({ id, Row }) => <Row key={id} {...context} />)
+          ) : (
+            <p class="pk-small pk-muted">This scene shows none of these graphics.</p>
+          )
+        ) : other.length ? (
+          other.map(({ id, element, Row }) => (
+            <div key={id}>
+              <Row {...context} />
+              <p class="pk-studio-graphics__scenes pk-small pk-muted">{showsIn(element)}</p>
+            </div>
+          ))
+        ) : (
+          <p class="pk-small pk-muted">The scene on Preview shows every graphic.</p>
+        )}
+      </div>
     </div>
   );
 }

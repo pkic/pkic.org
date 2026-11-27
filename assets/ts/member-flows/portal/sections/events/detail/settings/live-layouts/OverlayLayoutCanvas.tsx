@@ -1,7 +1,9 @@
+import type { ComponentChildren } from "preact";
 import { useId, useLayoutEffect, useMemo, useRef } from "preact/hooks";
 import { LiveOverlayPresentation } from "../../../../../../../live-session/LiveOverlayPresentation";
+import type { LiveRoomState } from "../../../../../../../live-session/live-room-state";
 import { Checkbox } from "../../../../../../../ui/Checkbox";
-import { layoutLabelShifts } from "./overlay-layout-labels";
+import { SAFE_AREA_LABELS, layoutLabelPlaces, type LabelPlace } from "./overlay-layout-labels";
 import {
   LIVE_OVERLAY_ELEMENT_LABELS,
   type LiveOverlayElement,
@@ -28,7 +30,8 @@ function LayoutBox({
   element,
   box,
   selected,
-  labelShift,
+  off,
+  labelPlace,
   describedBy,
   cell,
   handlers,
@@ -38,8 +41,10 @@ function LayoutBox({
   element: LiveOverlayElement;
   box: Box;
   selected: boolean;
-  /** How many label lines the label moves down (or up) so it never covers another box's label. */
-  labelShift: number;
+  /** The graphic is in the scene but has nothing on air: its box is an outline with its name. */
+  off: boolean;
+  /** Where its name sits along its top or bottom edge, clear of every other name. */
+  labelPlace: LabelPlace;
   describedBy: string;
   cell: (node: HTMLElement | null) => void;
   handlers: ReturnType<typeof useOverlayLayoutGesture>["handlers"];
@@ -50,8 +55,8 @@ function LayoutBox({
   useLayoutEffect(() => {
     if (!node.current) return;
     placeLayoutBox(node.current, box);
-    node.current.style.setProperty("--label-shift", String(labelShift));
-  }, [box, labelShift]);
+    node.current.style.setProperty("--label-along", String(labelPlace.along));
+  }, [box, labelPlace.along]);
   const label = LIVE_OVERLAY_ELEMENT_LABELS[element];
   const position = describeGraphicPosition(box);
   const move = handlers("move", element);
@@ -65,8 +70,10 @@ function LayoutBox({
       class="pk-layout-canvas__box"
       data-element={element}
       data-selected={selected ? "" : undefined}
+      data-off={off ? "" : undefined}
+      data-label-side={labelPlace.side}
       aria-pressed={selected}
-      aria-label={`${label}, ${position}: ${percent(box.x)} from left, ${percent(box.y)} from top, ${percent(box.w)} wide, ${percent(box.h)} high`}
+      aria-label={`${label}${off ? " (off)" : ""}, ${position}: ${percent(box.x)} from left, ${percent(box.y)} from top, ${percent(box.w)} wide, ${percent(box.h)} high`}
       aria-describedby={describedBy}
       title={`${label} · ${position}\nDrag to move it, or a corner to resize it. The arrow keys move it too.`}
       onFocus={onSelect}
@@ -86,7 +93,7 @@ function LayoutBox({
     >
       <span class="pk-layout-canvas__label" aria-hidden="true">
         <span class="pk-layout-canvas__name">{label}</span>
-        {selected ? <span class="pk-layout-canvas__detail">{position}</span> : null}
+        {selected ? <span class="pk-layout-canvas__detail"> · {position}</span> : null}
       </span>
       {selected
         ? CORNER_HANDLES.map((handle) => (
@@ -118,6 +125,10 @@ export function OverlayLayoutCanvas({
   shown,
   selected,
   canEdit = true,
+  projection,
+  off,
+  bar = true,
+  caption,
   safeAreas,
   onSafeAreas,
   onSelect,
@@ -129,6 +140,14 @@ export function OverlayLayoutCanvas({
   selected: LiveOverlayElement | null;
   /** Whether the boxes are drawn, to move and resize the graphics. */
   canEdit?: boolean;
+  /** The room to draw: the studio's Preview. Without it, a sample room with every graphic on. */
+  projection?: LiveRoomState;
+  /** Which of the scene's graphics have nothing on air, drawn as outlines; none in the sample room. */
+  off?: (element: LiveOverlayElement) => boolean;
+  /** Whether the hint and the safe-area switch sit above the canvas. */
+  bar?: boolean;
+  /** What the canvas says under it; the sample room's note when it draws one. */
+  caption?: ComponentChildren;
   /** Whether the action-safe and title-safe guides are drawn. */
   safeAreas: boolean;
   onSafeAreas: (shown: boolean) => void;
@@ -136,25 +155,28 @@ export function OverlayLayoutCanvas({
   onChange: (element: LiveOverlayElement, box: Box) => void;
 }) {
   const help = useId();
-  const room = useMemo(() => sampleOverlayRoom(Date.now()), []);
+  const sample = useMemo(() => (projection ? null : sampleOverlayRoom(Date.now())), [projection]);
+  const room = projection ?? sample!;
   const gesture = useOverlayLayoutGesture(
     elements,
     (moving) => shown.filter((element) => element !== moving).map((element) => elements[element]),
     onChange,
   );
-  const shifts = layoutLabelShifts(elements, shown, LIVE_OVERLAY_ELEMENT_LABELS);
+  const places = layoutLabelPlaces(elements, shown, LIVE_OVERLAY_ELEMENT_LABELS, safeAreas ? SAFE_AREA_LABELS : []);
   return (
     <figure class="pk-layout-canvas-figure">
-      <div class="pk-layout-canvas__bar">
-        <p class="pk-small pk-muted">
-          {canEdit ? "1920 × 1080 · drag to move, drag a corner to resize" : "1920 × 1080"}
-        </p>
-        <Checkbox
-          label="Show safe areas"
-          checked={safeAreas}
-          onChange={(event) => onSafeAreas(event.currentTarget.checked)}
-        />
-      </div>
+      {bar ? (
+        <div class="pk-layout-canvas__bar">
+          <p class="pk-small pk-muted">
+            {canEdit ? "1920 × 1080 · drag to move, drag a corner to resize" : "1920 × 1080"}
+          </p>
+          <Checkbox
+            label="Show safe areas"
+            checked={safeAreas}
+            onChange={(event) => onSafeAreas(event.currentTarget.checked)}
+          />
+        </div>
+      ) : null}
       <div class="pk-layout-canvas" ref={gesture.canvas}>
         <span class="pk-layout-canvas__camera" aria-hidden="true">
           Camera
@@ -171,7 +193,8 @@ export function OverlayLayoutCanvas({
                 element={element}
                 box={elements[element]}
                 selected={element === selected}
-                labelShift={shifts[element] ?? 0}
+                off={off?.(element) ?? false}
+                labelPlace={places[element] ?? { side: "top", along: 0 }}
                 describedBy={help}
                 cell={gesture.register(element)}
                 handlers={gesture.handlers}
@@ -193,10 +216,14 @@ export function OverlayLayoutCanvas({
           </>
         ) : null}
       </div>
-      <figcaption class="pk-small pk-muted">
-        Sample content with every graphic on. Where graphics share a spot, the front one shows. Graphics keep clear of
-        the ticker while it is on; with the ticker off, they use the full height.
-      </figcaption>
+      {caption === undefined ? (
+        <figcaption class="pk-small pk-muted">
+          Sample content with every graphic on. Where graphics share a spot, the front one shows. Graphics keep clear of
+          the ticker while it is on; with the ticker off, they use the full height.
+        </figcaption>
+      ) : caption ? (
+        <figcaption class="pk-small pk-muted">{caption}</figcaption>
+      ) : null}
       {canEdit ? (
         <p id={help} class="pk-sr-only">
           Arrow keys move the selected box by one pixel, Shift and an arrow key by 24. Hold Alt while dragging to place

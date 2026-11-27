@@ -45,6 +45,7 @@ import { SourceCount, SyncToggle } from "./MonitorOutputStatus";
 import { liveSceneName } from "../live-layer-unseen";
 import { clearHint } from "./StudioSwitcher";
 import { usePictureInView } from "./use-picture-in-view";
+import { PreviewSceneCanvas, PreviewSceneLock, PreviewSceneSave, previewSceneEditing } from "./PreviewSceneEditor";
 import "./MonitorPanel.css";
 
 /** The switcher's actions the Preview and Program monitors offer with their controls. */
@@ -59,6 +60,10 @@ export interface MonitorSwitcher {
   /** Changes the scene one of the room's screens draws, at once and for everyone. */
   screenScene: (output: LiveAuxOutput, scene: string) => void;
   disabled: boolean;
+  /** Whether this operator sets up the live studio, and so may edit the event's scenes from Preview. */
+  canEditScenes?: boolean;
+  /** Copies the scene on Preview and unlocks the copy; absent for someone who may not change scenes. */
+  duplicateScene?: () => void;
 }
 
 /** What the monitors show: the operators' shared Preview, and the room as it is on air. */
@@ -288,6 +293,7 @@ function MonitorActions({ output, context }: { output: StudioOutput; context: Mo
       {/* The sync chip leads, so the count and the icons keep the same place on every monitor. */}
       {role === "follow" || role === "speaker" ? <SyncToggle output={output} room={room} switcher={switcher} /> : null}
       <SourceCount output={output} room={room} sources={context.sources} />
+      {output === "preview" && switcher.canEditScenes ? <PreviewSceneSave /> : null}
       {output === "livestream" ? (
         <LivestreamSoundToggle />
       ) : (
@@ -510,6 +516,7 @@ export function monitorPanelView(
       heading: (
         <span class="pk-studio-monitor__heading">
           {heading}
+          {single === "preview" && switcher.canEditScenes ? <PreviewSceneLock disabled={switcher.disabled} /> : null}
           <LayoutPicker output={single} context={context} />
         </span>
       ),
@@ -523,14 +530,29 @@ export function monitorPanelView(
                 tooltip: "The scene thumbnails under Preview. The scene picker in the header stays either way.",
                 onSelect: () => change((panels) => setStudioPanelScenes(panels, panel.id, !scenesShown)),
               },
+              ...(switcher.duplicateScene
+                ? [
+                    {
+                      id: "duplicate-scene",
+                      label: "Duplicate scene",
+                      tooltip: "Copy the scene on Preview and edit the copy. The original stays as it is.",
+                      disabled: switcher.disabled,
+                      onSelect: switcher.duplicateScene,
+                    },
+                  ]
+                : []),
             ]
           : undefined,
       body: (
         <div class="pk-studio-monitor-stack">
           <div class="pk-studio-monitor-frame">
-            <div class="pk-studio-monitor" data-single="" {...liveTallyAttributes(room, single)}>
-              <MonitorScreen output={single} context={context} />
-            </div>
+            {single === "preview" && switcher.canEditScenes && previewSceneEditing.value ? (
+              <PreviewSceneCanvas />
+            ) : (
+              <div class="pk-studio-monitor" data-single="" {...liveTallyAttributes(room, single)}>
+                <MonitorScreen output={single} context={context} />
+              </div>
+            )}
           </div>
           {single === "preview" && scenesShown ? (
             <SceneStrip sources={sources} disabled={switcher.disabled} onScene={switcher.previewScene} />

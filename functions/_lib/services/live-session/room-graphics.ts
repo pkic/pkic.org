@@ -148,6 +148,7 @@ export class LiveRoomGraphics {
     at: string,
   ): Promise<LiveControlOutcome> {
     const scene = liveOutputFixedScene(liveRoomOutputs(session), message.output) ?? message.scene;
+    await this.knowScene(scene);
     const held = { ...liveCompositionInput(this.store.aux(message.output)), scene };
     const composition = { ...held, ...this.comesOn(held) };
     return this.outputs.setAux(actor, session, message.output, await this.resolve(session, composition, at), at);
@@ -158,12 +159,17 @@ export class LiveRoomGraphics {
     message: Extract<LiveRoomClientMessage, { type: "preview.set" }>,
     at: string,
   ): Promise<LiveControlOutcome> {
+    await this.knowScene(message.composition.scene);
     const merged = mergeLivePreview(this.store.preview(), message.composition);
     // Loading a scene switches on the graphics that come on with it, in the same one write. A layer the
     // change itself names stays as the operator set it.
     const loaded = "scene" in message.composition ? this.comesOn(merged) : {};
     const patch = { ...loaded, ...message.composition };
     return this.preview.set(actor, session, patch, await this.resolve(session, { ...merged, ...patch }, at), at);
+  }
+  /** A scene saved since the room last read the event's scenes, such as a copy just made: read them again first. */
+  private async knowScene(scene: string | null | undefined): Promise<void> {
+    if (scene && !this.layouts.some((layout) => layout.slug === scene)) await this.refresh();
   }
   /**
    * What loading its scene switches on for a composition, on Preview or a

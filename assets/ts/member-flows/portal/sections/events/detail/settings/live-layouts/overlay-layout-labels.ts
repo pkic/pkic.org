@@ -25,68 +25,57 @@ const byArea = (elements: LiveOverlayLayoutElements, shown: readonly LiveOverlay
 /** A label's width on the canvas: its characters, at least six, never wider than its box. */
 const labelWidth = (box: Rect, label: string) => Math.min(box.w, Math.max(6, label.length) * LABEL_CHAR);
 
-/**
- * Where each box's label goes: at its top edge, unless that would cover the
- * label of a box placed before it, in which case at its bottom edge. Larger
- * boxes come first, as the canvas stacks them.
- */
-export function layoutLabelSides(
-  elements: LiveOverlayLayoutElements,
-  shown: readonly LiveOverlayElement[],
-  labels: Partial<Record<LiveOverlayElement, string>> = {},
-): Record<LiveOverlayElement, Side> {
-  const placed: Rect[] = [];
-  const sides = {} as Record<LiveOverlayElement, Side>;
-  for (const element of byArea(elements, shown)) {
-    const box = elements[element];
-    const width = labelWidth(box, labels[element] ?? element);
-    const at = (side: Side) => ({
-      x: box.x,
-      y: side === "top" ? box.y : box.y + box.h - LABEL_HEIGHT,
-      w: width,
-      h: LABEL_HEIGHT,
-    });
-    const clashes = (rect: Rect) => placed.some((other) => overlaps(rect, other));
-    const side: Side = clashes(at("top")) && !clashes(at("bottom")) ? "bottom" : "top";
-    sides[element] = side;
-    placed.push(at(side));
-  }
-  return sides;
+/** Where a box's name sits: inside its top or bottom edge, so far along it as a fraction of the box's width. */
+export interface LabelPlace {
+  side: Side;
+  along: number;
 }
 
-/** How far a centered label may move, in label lines, before it gives up and overlaps. */
-const MAX_SHIFT = 4;
+/** The safe areas' names, at the canvas's top right (action safe) and bottom right (title safe), which box names keep clear of. */
+export const SAFE_AREA_LABELS: readonly Rect[] = [
+  { x: 0.965 - 11 * LABEL_CHAR, y: 0.035, w: 11 * LABEL_CHAR, h: LABEL_HEIGHT },
+  { x: 0.95 - 10 * LABEL_CHAR, y: 0.95 - LABEL_HEIGHT, w: 10 * LABEL_CHAR, h: LABEL_HEIGHT },
+];
 
 /**
- * Where each box's centered label goes: at the box's center, or as many
- * label lines below or above it as it takes not to cover the label of a box
- * drawn before it, while it stays inside its box. Larger boxes come first, as
- * the canvas stacks them, so boxes that share one place list their names.
+ * Where each box's name goes: inside its top edge at the left, else inside
+ * its bottom edge, else further along either edge, past the names that are
+ * in the way, so no name covers another or a name in `reserved`. Larger boxes
+ * come first, as the canvas stacks them; a name with no free place keeps the
+ * top left.
  */
-export function layoutLabelShifts(
+export function layoutLabelPlaces(
   elements: LiveOverlayLayoutElements,
   shown: readonly LiveOverlayElement[],
   labels: Partial<Record<LiveOverlayElement, string>> = {},
-): Partial<Record<LiveOverlayElement, number>> {
-  const placed: Rect[] = [];
-  const shifts: Partial<Record<LiveOverlayElement, number>> = {};
+  reserved: readonly Rect[] = [],
+): Record<LiveOverlayElement, LabelPlace> {
+  const placed: Rect[] = [...reserved];
+  const places = {} as Record<LiveOverlayElement, LabelPlace>;
   for (const element of byArea(elements, shown)) {
     const box = elements[element];
     const width = labelWidth(box, labels[element] ?? element);
-    const at = (shift: number) => ({
-      x: box.x + (box.w - width) / 2,
-      y: box.y + box.h / 2 - LABEL_HEIGHT / 2 + shift * LABEL_HEIGHT,
-      w: width,
-      h: LABEL_HEIGHT,
-    });
-    const fits = (rect: Rect) => rect.y >= box.y && rect.y + rect.h <= box.y + box.h;
+    const top = (side: Side) => (side === "top" ? box.y : box.y + box.h - LABEL_HEIGHT);
+    const at = (side: Side, x: number) => ({ x, y: top(side), w: width, h: LABEL_HEIGHT });
     const clashes = (rect: Rect) => placed.some((other) => overlaps(rect, other));
-    const candidates = [0, ...Array.from({ length: MAX_SHIFT }, (_, index) => [index + 1, -(index + 1)]).flat()];
-    const shift = candidates.find((candidate) => fits(at(candidate)) && !clashes(at(candidate))) ?? 0;
-    shifts[element] = shift;
-    placed.push(at(shift));
+    // Along an edge: its left end, then just past each name already on that line.
+    const stops = (side: Side) =>
+      placed
+        .filter((other) => overlaps({ x: box.x, y: top(side), w: box.w, h: LABEL_HEIGHT }, other))
+        .map((other) => other.x + other.w + LABEL_CHAR / 2)
+        .filter((x) => x > box.x && x + width <= box.x + box.w)
+        .sort((a, b) => a - b);
+    const candidates: Array<[Side, number]> = [
+      ["top", box.x],
+      ["bottom", box.x],
+      ...stops("top").map((x): [Side, number] => ["top", x]),
+      ...stops("bottom").map((x): [Side, number] => ["bottom", x]),
+    ];
+    const [side, x] = candidates.find(([side, x]) => !clashes(at(side, x))) ?? ["top", box.x];
+    places[element] = { side, along: box.w > 0 ? (x - box.x) / box.w : 0 };
+    placed.push(at(side, x));
   }
-  return shifts;
+  return places;
 }
 
 const SAFE_AREAS_KEY = "pkic.live-layouts.safe-areas";

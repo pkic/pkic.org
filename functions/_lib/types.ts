@@ -65,6 +65,8 @@ export interface LiveSessionRoomRpc extends Rpc.DurableObjectBranded {
   /** The studio loaded this session in its physical room. */
   enterProgram(): Promise<void>;
   readProgram(eventId: string, roomId: string): Promise<LiveProgramSelection>;
+  /** The event's scenes changed: the loaded session reads them again and every screen redraws. */
+  scenesChanged(): Promise<void>;
   /** The session loaded in a physical room, for the virtual room; null for none. */
   loadedProgram(eventId: string, roomId: string): Promise<string | null>;
   /** A location's chat: the studio loaded a session in its location, or none; later messages are dated by it. */

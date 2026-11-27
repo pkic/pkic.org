@@ -30,7 +30,7 @@ import {
   type Box,
 } from "../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-editing";
 import { layoutSlugFor } from "../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-slug";
-import { layoutLabelSides } from "../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-labels";
+import { layoutLabelPlaces } from "../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-labels";
 import { LIVE_OVERLAY_ELEMENT_LABELS } from "../assets/shared/schemas/live-overlay-layout";
 
 /** Every graphic at its standard box, all shown. */
@@ -192,9 +192,23 @@ describe("editing a box", () => {
     expect(fractionOf("", "x", "percent")).toBeNaN();
   });
 
-  it("moves a box's label to its bottom edge when it would cover another box's label", () => {
-    const sides = layoutLabelSides(STANDARD, ["reactions", "timer", "ticker"], LIVE_OVERLAY_ELEMENT_LABELS);
-    expect(sides).toEqual({ reactions: "top", timer: "bottom", ticker: "top" });
+  it("moves a box's name to its bottom edge when it would cover another box's name", () => {
+    const places = layoutLabelPlaces(STANDARD, ["reactions", "timer", "ticker"], LIVE_OVERLAY_ELEMENT_LABELS);
+    expect(places).toEqual({
+      reactions: { side: "top", along: 0 },
+      timer: { side: "bottom", along: 0 },
+      ticker: { side: "top", along: 0 },
+    });
+  });
+
+  it("moves a third name along the edge when boxes share one place", () => {
+    const frame = { visible: true, shared: false, x: 0, y: 0, w: 1, h: 1 };
+    const elements = { ...STANDARD, poll: frame, question: frame, topQuestions: frame } as typeof STANDARD;
+    const places = layoutLabelPlaces(elements, ["poll", "question", "topQuestions"], LIVE_OVERLAY_ELEMENT_LABELS);
+    expect(places.poll).toEqual({ side: "top", along: 0 });
+    expect(places.question).toEqual({ side: "bottom", along: 0 });
+    expect(places.topQuestions.side).toBe("top");
+    expect(places.topQuestions.along).toBeGreaterThan(0);
   });
 
   it("names a new layout for source links, numbered when the name is taken", () => {
