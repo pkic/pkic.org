@@ -82,6 +82,24 @@ describe("taking turns", () => {
     for (const board of behind) expect(liveOverlayCoveredBy(all, front, board)).not.toBeNull();
     expect(liveOverlayWaitsForTurn(all, front, "chat", 0)).toBe(false);
   });
+
+  it("gives the question and panelists on air in one spot one turn, as the one board they draw", () => {
+    const spot = { x: BREAK.chat.x, y: BREAK.chat.y, w: BREAK.chat.w, h: BREAK.chat.h, turns: 15, visible: true };
+    const scene = { ...BREAK, question: { ...BREAK.question, ...spot }, panelists: { ...BREAK.panelists, ...spot } };
+    const question = { id: "q1" } as unknown as LiveStage["question"];
+    const panelists = { people: [] } as unknown as LiveStage["panelists"];
+    const all = onAir({ schedule, question, panelists });
+    for (const now of [0, 15_000, 30_000, 45_000]) {
+      expect(liveOverlayWaitsForTurn(all, scene, "panelists", now)).toBe(
+        liveOverlayWaitsForTurn(all, scene, "question", now),
+      );
+      // The joined board and Up next take turns: one of the two waits at every moment.
+      expect([
+        liveOverlayWaitsForTurn(all, scene, "question", now),
+        liveOverlayWaitsForTurn(all, scene, "schedule", now),
+      ]).toContain(false);
+    }
+  });
 });
 
 describe("editing a spot", () => {
@@ -103,5 +121,14 @@ describe("editing a spot", () => {
     const apart = { ...near, x: BREAK.chat.x - BREAK.chat.w * 0.6 };
     expect(snapIntoSpot(scene, "poll", apart)).toEqual(apart);
     expect(snapIntoSpot(scene, "timer", near)).toEqual(near);
+  });
+
+  it("drops a board right onto a spot into that spot, not into a board that covers less of it", () => {
+    const chat = { x: BREAK.chat.x, y: BREAK.chat.y, w: BREAK.chat.w, h: BREAK.chat.h };
+    const scene: LiveOverlayLayoutElements = {
+      ...BREAK,
+      poll: { ...BREAK.poll, ...chat, x: chat.x + chat.w * 0.25, visible: true },
+    };
+    expect(snapIntoSpot(scene, "question", chat)).toEqual(chat);
   });
 });

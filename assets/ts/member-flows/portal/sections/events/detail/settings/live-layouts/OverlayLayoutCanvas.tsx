@@ -160,7 +160,8 @@ export function OverlayLayoutCanvas({
   safeAreas: boolean;
   onSafeAreas: (shown: boolean) => void;
   onSelect: (element: LiveOverlayElement) => void;
-  onChange: (element: LiveOverlayElement, box: Box) => void;
+  /** A box moved: dropped (`joinsSpot` unless Alt was held) or nudged by the arrow keys, which never join a spot. */
+  onChange: (element: LiveOverlayElement, box: Box, joinsSpot?: boolean) => void;
 }) {
   const help = useId();
   const sample = useMemo(() => (projection ? null : sampleOverlayRoom(Date.now())), [projection]);

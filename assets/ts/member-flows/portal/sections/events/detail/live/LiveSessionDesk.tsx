@@ -36,8 +36,7 @@ import { LivePanelPresence } from "./presence/LivePresenceTag";
 import { GraphicsPanel, nextInRoom } from "./studio/GraphicsPanel";
 import { SceneEditingProvider, duplicatePreviewScene, leavePreviewScene } from "./studio/PreviewSceneEditor";
 import { monitorPanelView } from "./studio/MonitorPanel";
-import { resolveLiveSceneElements } from "../../../../../../../shared/live-scene-elements";
-import { useLiveSpotTurns } from "../../../../../../live-session/useLiveSpotTurns";
+import { useStudioSpotTurns } from "../../../../../../live-session/useLiveSpotTurns";
 import { LeaveFullscreenDialog } from "./studio/LeaveFullscreenDialog";
 import { StudioJoining } from "./studio/StudioJoining";
 import { RoomOpeningMenu } from "./studio/RoomOpeningMenu";
@@ -214,8 +213,7 @@ export function LiveSessionDesk({
     sendProgram(liveScreenTake(target, current.preview));
   };
   useTakeShortcut(() => take("program"), canProduce && live && !broadcasting);
-  // Rows say which graphic of a spot on Program is next in turn, read again as each turn starts.
-  const turnsAt = useLiveSpotTurns(resolveLiveSceneElements(state, state?.stage.scene));
+  const turnsAt = useStudioSpotTurns(state);
   if (!state) return <StudioJoining room={room} />;
   // Moving to another session keeps the last one on screen, paused, until the next one's room answers.
   const shownId = state.session.occurrenceId;

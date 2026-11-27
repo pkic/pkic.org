@@ -87,10 +87,9 @@ export function liveOverlayWaitsForTurn(
   const spot = liveOverlaySpotOf(elements, layer);
   const turns = spot ? liveOverlaySpotTurns(elements, spot) : null;
   if (!spot || turns === null) return false;
-  const holder = liveOverlayTurnHolder(
-    spot.filter((board) => liveOverlayDrawn(stage, board)),
-    turns,
-    now,
-  );
-  return holder !== layer;
+  const drawn = spot.filter((board) => liveOverlayDrawn(stage, board));
+  // The question and panelists on air in one spot draw as one board, so they take one turn, as the question.
+  const joined = drawn.includes("question") && drawn.includes("panelists");
+  const holder = liveOverlayTurnHolder(joined ? drawn.filter((board) => board !== "panelists") : drawn, turns, now);
+  return holder !== (joined && layer === "panelists" ? "question" : layer);
 }

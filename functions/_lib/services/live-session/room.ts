@@ -324,7 +324,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
   }
 
   async scenesChanged(): Promise<void> {
-    if (this.store.session()) await this.graphics.refresh();
+    if (this.store.session()) await this.graphics.refreshAfterChange();
   }
 
   async locationChatLoaded(occurrenceId: string | null): Promise<void> {

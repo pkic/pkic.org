@@ -430,7 +430,7 @@ export const studioOnScreenSections: PreviewSection[] = [
     note: "Top questions, Chat and Reactions are graphics like the others: placed and sized per scene. Each fills itself from the room, so its row carries the scene's choice: Comes on with the scene, or Switched in the studio. The background has no switch and says so.",
     render: () => (
       <OverlayLayoutEditor
-        endpoint="/api/v1/events/pqc-conference-2026/overlays/layouts/projector-qa"
+        endpoint="/api/v1/events/pqc-conference-2026/overlays/layouts"
         positionsEndpoint="/api/v1/events/pqc-conference-2026/overlays/positions"
         layout={QA_LAYOUT}
         layouts={[QA_LAYOUT]}
@@ -448,7 +448,7 @@ export const studioOnScreenSections: PreviewSection[] = [
     note: "Break's column beside the clip is one spot: Up next, Chat and Top questions share its box and take turns, 15 seconds each, as their rows say. A row's menu sets how the spot shows them: the front one, or turns every 10, 15, 30 or 60 seconds. A board dropped mostly over another takes its box and joins its spot. The padlock holds a graphic in place on the canvas.",
     render: () => (
       <OverlayLayoutEditor
-        endpoint="/api/v1/events/pqc-conference-2026/overlays/layouts/break"
+        endpoint="/api/v1/events/pqc-conference-2026/overlays/layouts"
         positionsEndpoint="/api/v1/events/pqc-conference-2026/overlays/positions"
         layout={BUILT_IN_BREAK}
         layouts={[BUILT_IN_BREAK]}
@@ -466,7 +466,7 @@ export const studioOnScreenSections: PreviewSection[] = [
     note: "Room operators load the event's scenes but only the people who set up the live studio change them: the built-in Board right scene drawn with sample content, and its graphics listed with where each sits and what puts it on, with nothing to move, add, choose, save or delete.",
     render: () => (
       <OverlayLayoutEditor
-        endpoint="/api/v1/events/pqc-conference-2026/overlays/layouts/questions"
+        endpoint="/api/v1/events/pqc-conference-2026/overlays/layouts"
         positionsEndpoint="/api/v1/events/pqc-conference-2026/overlays/positions"
         layout={BUILT_IN_QA}
         layouts={[BUILT_IN_QA]}

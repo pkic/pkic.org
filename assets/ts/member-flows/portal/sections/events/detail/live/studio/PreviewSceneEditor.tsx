@@ -175,6 +175,14 @@ export function SceneEditingProvider({
     },
     [],
   );
+  const unsaved = value?.status === "ready" && draft.dirty;
+  useEffect(() => {
+    if (!unsaved) return;
+    // Closing or reloading the page would drop the changes: the browser asks first.
+    const ask = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", ask);
+    return () => window.removeEventListener("beforeunload", ask);
+  }, [unsaved]);
   return (
     <SceneEditingContext.Provider value={value}>
       {children}

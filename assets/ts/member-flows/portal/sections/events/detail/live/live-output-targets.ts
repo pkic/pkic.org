@@ -58,7 +58,7 @@ export interface LiveTargets {
   sendPrograms?: (messages: readonly LiveRoomClientMessage[]) => boolean;
   /** The event's studio setup, which graphics start from; without it they start from the built-in one. */
   setup?: LiveStudioSetupHandle;
-  /** The clock Program's spots take turns by, so a row says which graphic is next in turn; without it, the time now. */
+  /** The clock Program's and Preview's spots take turns by, so a row says which graphic is next in turn; without it, the time now. */
   turnsAt?: number;
 }
 

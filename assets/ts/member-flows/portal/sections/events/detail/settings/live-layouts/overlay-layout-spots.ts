@@ -2,7 +2,6 @@ import {
   LIVE_OVERLAY_BOARDS,
   liveOverlaySpotOf,
   liveOverlaySpotTurns,
-  sameLiveBox,
 } from "../../../../../../../../shared/live-overlay-spots";
 import { isLiveProgramLayer, type LiveProgramLayer } from "../../../../../../../../shared/live-overlay-stacking";
 import type {
@@ -41,7 +40,6 @@ export function snapIntoSpot(elements: LiveOverlayLayoutElements, element: LiveO
   const others = [...LIVE_OVERLAY_BOARDS]
     .filter((board) => board !== element && elements[board].visible)
     .map((board) => elements[board])
-    .filter((other) => !sameLiveBox(other, box))
     .map((other) => ({ other, covered: share(box, other) }))
     .filter(({ covered }) => covered >= SPOT_SNAP)
     .sort((a, b) => b.covered - a.covered);

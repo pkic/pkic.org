@@ -48,6 +48,7 @@ type Actor = { userId: string; name: string };
 /** Event geometry and computed ticker text refresh together; neither replaces the persisted source config. */
 export class LiveRoomGraphics {
   private refreshing: Promise<void> | undefined;
+  private following: Promise<void> | undefined;
   layouts: LiveOverlayLayoutGeometry[] = [];
   tickerContext: LiveTickerContext = DEFAULT_LIVE_TICKER_CONTEXT;
   /** The attendee chat lines a chat ticker may show now. */
@@ -282,6 +283,20 @@ export class LiveRoomGraphics {
     } finally {
       this.refreshing = undefined;
     }
+  }
+
+  /**
+   * Reads again after the event's scenes changed: one read that starts after
+   * any read already under way, so it sees the change, shared by the changes
+   * that arrive before it starts.
+   */
+  refreshAfterChange(): Promise<void> {
+    this.following ??= (async () => {
+      await this.refreshing?.catch(() => undefined);
+      this.following = undefined;
+      await this.refresh();
+    })();
+    return this.following;
   }
 
   private async refreshFromD1(): Promise<void> {

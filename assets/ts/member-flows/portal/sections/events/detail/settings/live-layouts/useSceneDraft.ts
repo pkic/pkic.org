@@ -96,6 +96,8 @@ export function useSceneDraft({
     nextName !== layout.name || layoutElementsChanged(next.elements, layout.elements);
   const dirty = layoutChanged(drafts) || positionsChanged(drafts);
   const update = (next: LayoutDrafts) => {
+    // While a save is under way, the draft holds what it sends.
+    if (busy) return;
     setDrafts(next);
     setProblem(null);
     onDirty?.(layoutChanged(next) || positionsChanged(next));
@@ -103,8 +105,9 @@ export function useSceneDraft({
   const change = (element: LiveOverlayElement, patch: Partial<LiveOverlayElementPlacement>) =>
     update(changeLayoutElement(drafts, element, patch));
   // A board dropped mostly over another joins its spot and takes the spot's turns; one left on its own takes none.
-  const place = (element: LiveOverlayElement, box: Box) => {
-    const placed = changeLayoutElement(drafts, element, snapIntoSpot(drafts.elements, element, box));
+  // A nudge, or a drop with Alt held, keeps the box where it was put, so a board can move out of its spot.
+  const place = (element: LiveOverlayElement, box: Box, joinsSpot = false) => {
+    const placed = changeLayoutElement(drafts, element, joinsSpot ? snapIntoSpot(drafts.elements, element, box) : box);
     update(changeLayoutElement(placed, element, { turns: spotTurnsFor(placed.elements, element) }));
   };
 
