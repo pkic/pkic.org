@@ -22,12 +22,14 @@ import { Menu } from "../../../../../../../ui/Menu";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../../ui/Panel";
 import { OverlayLayoutCanvas } from "./OverlayLayoutCanvas";
 import { OverlayLayoutGraphics, OverlayLayoutGraphicsSummary } from "./OverlayLayoutGraphics";
+import { draftGraphicActions } from "./overlay-layout-graphic-actions";
 import { OverlayLayoutInspector } from "./OverlayLayoutInspector";
 import { OverlayLayoutRenameDialog } from "./OverlayLayoutRenameDialog";
 import { layoutElementsChanged, layoutsSharing } from "./overlay-layout-sharing";
 import { LAYOUT_UNITS } from "./overlay-layout-editing";
 import { readSafeAreasPreference, saveSafeAreasPreference } from "./overlay-layout-labels";
 import { useSceneDraft } from "./useSceneDraft";
+import "./OverlayLayouts.css";
 
 /**
  * One scene's editor: the canvas with the selected graphic's exact position
@@ -256,6 +258,7 @@ export function OverlayLayoutEditor({
               }}
               onSelect={draft.select}
               onChange={draft.place}
+              actions={draftGraphicActions(draft)}
             />
             {selected ? (
               <OverlayLayoutInspector
@@ -284,6 +287,7 @@ export function OverlayLayoutEditor({
           onSharing={draft.share}
           onTurns={draft.spotTurns}
           onLock={draft.lock}
+          onQrLook={draft.qrLook}
         />
       </form>
       {renaming ? (

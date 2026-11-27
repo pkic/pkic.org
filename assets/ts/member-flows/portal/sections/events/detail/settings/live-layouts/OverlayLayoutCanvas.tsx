@@ -3,6 +3,7 @@ import { useId, useLayoutEffect, useMemo, useRef } from "preact/hooks";
 import { LiveOverlayPresentation } from "../../../../../../../live-session/LiveOverlayPresentation";
 import type { LiveRoomState } from "../../../../../../../live-session/live-room-state";
 import { Checkbox } from "../../../../../../../ui/Checkbox";
+import { Menu, type MenuHandle, type MenuItem } from "../../../../../../../ui/Menu";
 import { SAFE_AREA_LABELS, layoutLabelPlaces, type LabelPlace } from "./overlay-layout-labels";
 import {
   LIVE_OVERLAY_ELEMENT_LABELS,
@@ -119,6 +120,39 @@ function LayoutBox({
 }
 
 /**
+ * The selected graphic's menu, at its box's top right corner; a right click on
+ * any box picks it and opens this menu at the pointer.
+ */
+function BoxActions({
+  element,
+  box,
+  items,
+  menu,
+}: {
+  element: LiveOverlayElement;
+  box: Box;
+  items: readonly MenuItem[];
+  menu: { current: MenuHandle | null };
+}) {
+  const node = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    if (node.current) placeLayoutBox(node.current, box);
+  }, [box]);
+  const label = LIVE_OVERLAY_ELEMENT_LABELS[element];
+  return (
+    <span class="pk-layout-canvas__actions" ref={node}>
+      <Menu
+        label={`${label} actions`}
+        title={`${label} actions\nRight-click a graphic for these too.`}
+        align="end"
+        items={items}
+        menuRef={menu}
+      />
+    </span>
+  );
+}
+
+/**
  * The scene on a 16:9 canvas, drawn by the renderer the outputs use with a
  * sample room that has every graphic on, whatever puts it on in the studio,
  * and a box over each graphic the scene includes. Boxes are stacked
@@ -141,6 +175,7 @@ export function OverlayLayoutCanvas({
   onSafeAreas,
   onSelect,
   onChange,
+  actions,
 }: {
   elements: LiveOverlayLayoutElements;
   /** The graphics the scene shows, front first. */
@@ -162,7 +197,10 @@ export function OverlayLayoutCanvas({
   onSelect: (element: LiveOverlayElement) => void;
   /** A box moved: dropped (`joinsSpot` unless Alt was held) or nudged by the arrow keys, which never join a spot. */
   onChange: (element: LiveOverlayElement, box: Box, joinsSpot?: boolean) => boolean | void;
+  /** A graphic's menu, on its box and on a right click; without it, neither. */
+  actions?: (element: LiveOverlayElement) => readonly MenuItem[];
 }) {
+  const menu = useRef<MenuHandle>(null);
   const help = useId();
   const sample = useMemo(() => (projection ? null : sampleOverlayRoom(Date.now())), [projection]);
   const room = projection ?? sample!;
@@ -194,7 +232,21 @@ export function OverlayLayoutCanvas({
         <div class="pk-layout-canvas__guide" data-axis="vertical" ref={gesture.verticalGuide} aria-hidden="true" />
         <div class="pk-layout-canvas__guide" data-axis="horizontal" ref={gesture.horizontalGuide} aria-hidden="true" />
         {canEdit ? (
-          <div class="pk-layout-canvas__boxes" role="group" aria-label={LAYOUT_CANVAS_LABEL}>
+          <div
+            class="pk-layout-canvas__boxes"
+            role="group"
+            aria-label={LAYOUT_CANVAS_LABEL}
+            onContextMenu={(event) => {
+              // The smallest graphic under the pointer, so one inside a large box is still reachable.
+              const box = smallestBoxAt(event.clientX, event.clientY);
+              const element = box?.dataset.element as LiveOverlayElement | undefined;
+              // Shift keeps the browser's own menu.
+              if (!actions || !box || !element || event.shiftKey) return;
+              event.preventDefault();
+              onSelect(element);
+              menu.current?.openAt({ x: event.clientX, y: event.clientY }, box);
+            }}
+          >
             {/* Back to front, as the outputs stack them; the selected box's outline and corners draw over every box. */}
             {[...shown].reverse().map((element) => (
               <LayoutBox
@@ -212,6 +264,9 @@ export function OverlayLayoutCanvas({
                 onNudge={(box) => onChange(element, box)}
               />
             ))}
+            {actions && selected && shown.includes(selected) ? (
+              <BoxActions element={selected} box={elements[selected]} items={actions(selected)} menu={menu} />
+            ) : null}
           </div>
         ) : null}
         {/* Over the graphics and their boxes, so the margins show wherever something reaches into them. */}
@@ -242,4 +297,13 @@ export function OverlayLayoutCanvas({
       ) : null}
     </figure>
   );
+}
+
+/** The smallest layout box under a point, or null. */
+function smallestBoxAt(x: number, y: number): HTMLElement | null {
+  const area = (box: HTMLElement) => box.offsetWidth * box.offsetHeight;
+  const boxes = document
+    .elementsFromPoint(x, y)
+    .filter((node): node is HTMLElement => node instanceof HTMLElement && node.matches("[data-element]"));
+  return boxes.reduce<HTMLElement | null>((best, box) => (!best || area(box) < area(best) ? box : best), null);
 }

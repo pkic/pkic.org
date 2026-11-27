@@ -19,7 +19,7 @@ import { liveOverlayLayoutChoices } from "../../../../../../../../shared/live-ov
 import { LiveOverlayPresentation } from "../../../../../../../live-session/LiveOverlayPresentation";
 import { Button } from "../../../../../../../ui/Button";
 import { Dialog } from "../../../../../../../ui/Dialog";
-import { IconSound, StrokeIcon } from "../../../../../../../ui/MediaIcons";
+import { IconExpand, IconSound, StrokeIcon } from "../../../../../../../ui/MediaIcons";
 import { Menu } from "../../../../../../../ui/Menu";
 import { SectionHeading } from "../../../../../../../ui/SectionHeading";
 import { LiveDeskStream } from "../LiveDeskStream";
@@ -196,14 +196,6 @@ export function ClearIcon() {
   );
 }
 
-export function ExpandIcon() {
-  return (
-    <StrokeIcon>
-      <path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" />
-    </StrokeIcon>
-  );
-}
-
 /** Sound on the LIVE monitor: muted until the operator turns it on, and kept that way in their browser. */
 function LivestreamSoundToggle() {
   const audible = studioLivestreamAudible();
@@ -286,7 +278,7 @@ export function LayoutIcon() {
 /**
  * What an operator does with one monitor's output, at the end of its header:
  * its sync chip, then clear it, and full screen. Preview's scene open to edit
- * has no full screen: its canvas stands in for the picture.
+ * fills the window as the whole panel instead, its canvas and Save in it.
  */
 function MonitorActions({
   output,
@@ -305,7 +297,6 @@ function MonitorActions({
       {/* The sync chip leads, so the count and the icons keep the same place on every monitor. */}
       {role === "follow" || role === "speaker" ? <SyncToggle output={output} room={room} switcher={switcher} /> : null}
       <SourceCount output={output} room={room} sources={context.sources} />
-      {output === "preview" && switcher.canEditScenes ? <PreviewSceneSave /> : null}
       {output === "livestream" ? (
         <LivestreamSoundToggle />
       ) : (
@@ -332,9 +323,11 @@ function MonitorActions({
           title={`Full screen ${details.label}\nShow this monitor large. Double-clicking its picture does the same.`}
           onClick={() => (enlarged.value = enlargedKey(panel.id, output))}
         >
-          <ExpandIcon />
+          <IconExpand />
         </Button>
       )}
+      {/* Editing, the scene's own full screen, Discard and Save end the header. */}
+      {output === "preview" && switcher.canEditScenes ? <PreviewSceneSave /> : null}
     </span>
   );
 }

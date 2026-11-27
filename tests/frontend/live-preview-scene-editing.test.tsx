@@ -166,12 +166,31 @@ describe("editing the scene on Preview", () => {
     await act(() => labeled(preview, "Unlock scene").click());
     // The studio stays mounted as Preview unlocks: the same panel now offers to lock.
     expect(preview.isConnected).toBe(true);
-    // The canvas stands in for the picture, so there is no picture to show full screen.
-    expect(preview.querySelector('[aria-label^="Full screen"]')).toBeNull();
     await act(() => labeled(preview, "Lock scene").click());
     expect(dialog()).toBeNull();
     expect(previewSceneEditing.value).toBe(false);
     expect(preview.querySelector('[aria-label^="Full screen"]')).not.toBeNull();
+  });
+
+  it("fills the window with Preview's whole panel while editing, and goes back on Escape", async () => {
+    const { preview } = await editedPreview();
+    const full = labeled(preview, "Full screen Preview");
+    const cell = () => preview.closest(".pk-studio-cell")!;
+    expect(preview.querySelector(".pk-studio-scene-editor[data-full]")).toBeNull();
+    await act(() => full.click());
+    expect(full.getAttribute("aria-pressed")).toBe("true");
+    expect(cell().querySelector(".pk-studio-scene-editor[data-full]")).not.toBeNull();
+    // Save stays in the same panel as the canvas.
+    expect(labeled(preview, "Save scene").disabled).toBe(false);
+    await act(
+      () =>
+        void document.body.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+        ),
+    );
+    expect(preview.querySelector(".pk-studio-scene-editor[data-full]")).toBeNull();
+    // Escape went to the scene, not to the studio's own full screen.
+    expect(dialog()).toBeNull();
   });
 
   it("asks to save or discard before following another operator's scene on Preview", async () => {
@@ -194,6 +213,8 @@ describe("editing the scene on Preview", () => {
       expect(preview.querySelector(".pk-studio-scene-editor .pk-layout-canvas__box")).not.toBeNull(),
     );
     expect(preview.textContent).not.toContain("no longer saved");
+    // Found, the copy is not read for again.
+    expect(reads).toBe(2);
   });
 
   it("puts a box dragged or resized while the scene saves back where it was, and edits again once saved", async () => {

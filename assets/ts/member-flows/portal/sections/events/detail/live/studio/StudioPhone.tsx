@@ -10,14 +10,14 @@ import { ActionTile, ActionTiles } from "../../../../../../../ui/ActionTile";
 import { BottomSheet } from "../../../../../../../ui/BottomSheet";
 import { Button } from "../../../../../../../ui/Button";
 import { Dialog } from "../../../../../../../ui/Dialog";
-import { IconDemo } from "../../../../../../../ui/MediaIcons";
+import { IconDemo, IconExpand } from "../../../../../../../ui/MediaIcons";
 import { Menu } from "../../../../../../../ui/Menu";
 import { SectionHeading } from "../../../../../../../ui/SectionHeading";
 import { splitHash } from "../../../../../../../ui/url-query";
 import { usePressOutside } from "../../../../../../../ui/use-press-outside";
 import { AppTabBar, isPlainPress } from "../../../../../shell/AppTabBar";
 import type { ClockZone } from "../../../../../../../../shared/event-clock";
-import { ClearIcon, ExpandIcon, LayoutIcon, StudioOutputScreen, type MonitorSources } from "./MonitorPanel";
+import { ClearIcon, LayoutIcon, StudioOutputScreen, type MonitorSources } from "./MonitorPanel";
 import { previewSceneOf } from "./SceneChoices";
 import { ScenePicker, ScenePopover } from "./ScenePicker";
 import type { StudioPanelView } from "./StudioGrid";
@@ -231,7 +231,7 @@ function Thumbnail({
                 setEnlarged(true);
               }}
             >
-              <ExpandIcon />
+              <IconExpand />
             </Button>
           </div>
         ) : null}

@@ -227,6 +227,14 @@ function withoutRetiredPlacementFields(value: unknown): unknown {
  * bottom first; without it the graphic keeps its built-in place
  * (`live-overlay-stacking.ts`).
  */
+/**
+ * How the QR code looks in a scene: on its card in the event's colors with
+ * the line to scan (`card`), or the code alone, black on white, white on
+ * black, or black with a clear quiet zone for a calm, light picture behind it.
+ */
+export const LIVE_QR_LOOKS = ["card", "black-on-white", "white-on-black", "black-on-clear"] as const;
+export type LiveQrLook = (typeof LIVE_QR_LOOKS)[number];
+
 export const liveOverlayElementPlacementSchema = insideFrame(
   z
     .object({
@@ -251,6 +259,8 @@ export const liveOverlayElementPlacementSchema = insideFrame(
       turns: z.number().int().min(5).max(300).optional(),
       /** Held in place in the scene editor: its box is not dragged on the canvas, so a press reaches the box behind. */
       locked: z.boolean().optional(),
+      /** The QR code's look in this scene (`LIVE_QR_LOOKS`); absent, its card. Only the QR code reads it. */
+      qrLook: z.enum(LIVE_QR_LOOKS).optional(),
       ...boxShape,
     })
     .strict(),

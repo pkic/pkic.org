@@ -240,6 +240,24 @@
     background: var(--pk-accent-strong);
     pointer-events: none;
   }
+  /* The selected graphic's menu, just inside its box's top right corner, clear of the corner handle. */
+  .pk-layout-canvas__actions {
+    --box-x: 0;
+    --box-y: 0;
+    --box-w: 0;
+    position: absolute;
+    z-index: 6;
+    inset-inline-start: calc((var(--box-x) + var(--box-w)) * 100%);
+    inset-block-start: calc(var(--box-y) * 100%);
+    translate: calc(-100% - var(--pk-3)) var(--pk-3);
+  }
+  .pk-layout-canvas__actions .pk-menu__trigger {
+    background: var(--pk-surface);
+    box-shadow: var(--pk-shadow-1);
+  }
+  .pk-layout-canvas[data-gesture] .pk-layout-canvas__actions {
+    visibility: hidden;
+  }
   .pk-layout-canvas__guide[data-active] {
     display: block;
   }

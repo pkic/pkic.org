@@ -478,3 +478,12 @@ export function IconContrast(props: SvgProps) {
     </StrokeIcon>
   );
 }
+
+/** Full screen: four corners pointing out. */
+export function IconExpand(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" />
+    </StrokeIcon>
+  );
+}

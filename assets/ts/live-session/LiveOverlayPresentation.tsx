@@ -307,8 +307,12 @@ const PROGRAM_LAYERS: ReadonlyMap<LiveProgramLayer, Layer> = new Map(
       },
       {
         element: "qrCode",
-        draw: (state, { eventSlug }) => (
-          <LiveQrCodeOverlay eventSlug={eventSlug} occurrenceId={state.session.occurrenceId} />
+        draw: (state, { eventSlug, placement }) => (
+          <LiveQrCodeOverlay
+            eventSlug={eventSlug}
+            occurrenceId={state.session.occurrenceId}
+            look={placement.qrLook ?? "card"}
+          />
         ),
       },
       {

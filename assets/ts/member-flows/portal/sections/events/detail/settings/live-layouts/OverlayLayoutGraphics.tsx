@@ -1,8 +1,6 @@
 import type { ComponentChildren } from "preact";
 import { useRef, useState } from "preact/hooks";
 import {
-  LIVE_SPOT_TURN_CHOICES,
-  LIVE_SPOT_TURN_SECONDS,
   liveOverlayPartialOverlaps,
   liveOverlaySpotOf,
   liveOverlaySpotTurns,
@@ -18,16 +16,15 @@ import { usePointerDragSession } from "../../../../../../../hooks/usePointerDrag
 import { Button } from "../../../../../../../ui/Button";
 import { buttonClasses } from "../../../../../../../ui/button-classes";
 import { EmptyState } from "../../../../../../../ui/EmptyState";
-import { Menu, type MenuItem } from "../../../../../../../ui/Menu";
+import { Menu } from "../../../../../../../ui/Menu";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../../ui/Panel";
 import { IconChevron, StrokeIcon } from "../../../../../../../ui/MediaIcons";
 import { RowActions } from "../../../../../../../ui/RowActions";
 import { OverlayLayoutGraphicSwitch } from "./OverlayLayoutGraphicSwitch";
+import { graphicActions, graphicNames, type GraphicActionHandlers } from "./overlay-layout-graphic-actions";
 import { LAYOUT_GRAPHIC_DESCRIPTIONS } from "./overlay-layout-copy";
 import { addableGraphics, describeGraphicPosition, sceneGraphics } from "./overlay-layout-graphics";
-
-/** What a row's menu does to a graphic's position: see `overlay-layout-sharing.ts`. */
-export type LayoutSharingAction = "unlink" | "relink" | "apply";
+import "./OverlayLayouts.css";
 
 /** A padlock, open while what it holds can be changed: Preview's scene, or a graphic's box on the canvas. */
 export function LockIcon({ open }: { open: boolean }) {
@@ -38,9 +35,6 @@ export function LockIcon({ open }: { open: boolean }) {
     </StrokeIcon>
   );
 }
-
-const names = (elements: readonly LiveOverlayElement[]) =>
-  elements.map((element) => LIVE_OVERLAY_ELEMENT_LABELS[element]).join(", ");
 
 /** How a graphic's spot shows its boards, in a few words for its row; null when it has its box to itself. */
 function spotWords(elements: LiveOverlayLayoutElements, element: LiveProgramLayer): string | null {
@@ -58,8 +52,8 @@ function OverlapNote({ elements }: { elements: LiveOverlayLayoutElements }) {
     <ul class="pk-scenes__overlaps" aria-label="Graphics that partly overlap">
       {overlaps.map(([front, back]) => (
         <li key={`${front}:${back}`}>
-          {names([front])} partly covers {names([back])}. Drop it on {names([back])} to share one spot, or move it
-          apart.
+          {graphicNames([front])} partly covers {graphicNames([back])}. Drop it on {graphicNames([back])} to share one
+          spot, or move it apart.
         </li>
       ))}
     </ul>
@@ -246,6 +240,7 @@ export function OverlayLayoutGraphics({
   onSharing,
   onTurns,
   onLock,
+  onQrLook,
   framed = true,
 }: {
   elements: LiveOverlayLayoutElements;
@@ -259,83 +254,17 @@ export function OverlayLayoutGraphics({
   /** Sets whether a graphic that fills itself from the room comes on with the scene. */
   onComesOn: (element: LiveOverlayElement, comesOn: boolean) => void;
   onReorder: (element: LiveProgramLayer, to: number) => void;
-  onSharing: (element: LiveOverlayElement, action: LayoutSharingAction) => void;
+  onSharing: GraphicActionHandlers["onSharing"];
   /** Lets the graphic's spot take turns every `turns` seconds, or show only its front graphic (null). */
-  onTurns: (element: LiveProgramLayer, turns: number | null) => void;
+  onTurns: GraphicActionHandlers["onTurns"];
+  onQrLook: GraphicActionHandlers["onQrLook"];
   /** Holds the graphic's box in place on the canvas, or frees it. */
   onLock: (element: LiveOverlayElement, locked: boolean) => void;
 }) {
   const list = useRef<HTMLUListElement>(null);
   const graphics = sceneGraphics(elements);
   const drag = useRowDrag(() => [...(list.current?.children ?? [])] as HTMLElement[], onReorder);
-  // A spot's boards show the front one, or take turns; the choice is the spot's, set on each of its boards.
-  const spotActions = (element: LiveProgramLayer): MenuItem[] => {
-    const spot = liveOverlaySpotOf(elements, element);
-    if (!spot) return [];
-    const turns = liveOverlaySpotTurns(elements, spot);
-    return [
-      {
-        id: "spot",
-        label: "Spot",
-        description: `Shared with ${names(spot.filter((board) => board !== element))}`,
-        children: [
-          {
-            id: "front",
-            label: "Show the front one",
-            description: "Only the highest one in the list that is on shows.",
-            checked: turns === null,
-            disabled,
-            onSelect: () => onTurns(element, null),
-          },
-          ...LIVE_SPOT_TURN_CHOICES.map((seconds) => ({
-            id: `turns-${seconds}`,
-            label: `Take turns every ${seconds} s`,
-            description: seconds === LIVE_SPOT_TURN_SECONDS ? "Each graphic that is on shows in turn." : undefined,
-            checked: turns === seconds,
-            disabled,
-            onSelect: () => onTurns(element, seconds),
-          })),
-        ],
-      },
-    ];
-  };
-  const actions = (element: LiveProgramLayer): MenuItem[] => [
-    ...spotActions(element),
-    ...(elements[element].shared
-      ? [
-          {
-            id: "unlink",
-            label: "Place differently on this scene",
-            tooltip: "Gives this scene its own position for the graphic. The other scenes keep the shared one.",
-            disabled,
-            onSelect: () => onSharing(element, "unlink"),
-          },
-        ]
-      : [
-          {
-            id: "relink",
-            label: "Use shared position",
-            tooltip: "Drops this scene's own position and takes the one the scenes share.",
-            disabled,
-            onSelect: () => onSharing(element, "relink"),
-          },
-          {
-            id: "apply",
-            label: "Apply this position to all scenes",
-            tooltip: "Makes this position the shared one, so every scene that shares it follows.",
-            disabled,
-            onSelect: () => onSharing(element, "apply"),
-          },
-        ]),
-    {
-      id: "remove",
-      label: "Remove from scene",
-      danger: true,
-      separatorBefore: true,
-      disabled,
-      onSelect: () => onShow(element, false),
-    },
-  ];
+  const handlers = { onShow, onSharing, onTurns, onQrLook };
   // While a row is dragged, the line shows where it lands: above the row now at that place, or below the last.
   const dropAt = (index: number) => {
     const shown = drag.shown;
@@ -420,7 +349,7 @@ export function OverlayLayoutGraphics({
             <RowActions
               subject={label}
               hint="Share or keep its position across scenes, set how its spot shows it, or remove it."
-              actions={actions(element)}
+              actions={graphicActions(elements, element, disabled, handlers)}
             />
           </li>
         );

@@ -1,7 +1,7 @@
 import { signal } from "@preact/signals";
 import type { ComponentChildren } from "preact";
 import { createContext } from "preact";
-import { useContext, useEffect, useState } from "preact/hooks";
+import { useContext, useEffect, useRef, useState } from "preact/hooks";
 import { liveOverlayDrawn } from "../../../../../../../../shared/live-overlay-cover";
 import {
   LIVE_OVERLAY_DEFAULT_POSITIONS,
@@ -10,6 +10,7 @@ import {
 } from "../../../../../../../../shared/live-overlay-layout-presets";
 import { isLiveProgramLayer } from "../../../../../../../../shared/live-overlay-stacking";
 import {
+  LIVE_OVERLAY_ELEMENT_LABELS,
   LIVE_OVERLAY_LAYOUT_NAME_MAX,
   eventLiveOverlayLayoutsResponseSchema,
   type EventLiveOverlayLayoutsResponse,
@@ -24,10 +25,12 @@ import { toast } from "../../../../../ui";
 import { Alert } from "../../../../../../../ui/Alert";
 import { Button } from "../../../../../../../ui/Button";
 import { Dialog } from "../../../../../../../ui/Dialog";
-import { StrokeIcon } from "../../../../../../../ui/MediaIcons";
+import { IconExpand, StrokeIcon } from "../../../../../../../ui/MediaIcons";
 import type { LiveRoomState } from "../../../../../../../live-session/live-room-state";
 import { OverlayLayoutCanvas } from "../../settings/live-layouts/OverlayLayoutCanvas";
 import { AddGraphicMenu, LockIcon, OverlayLayoutGraphics } from "../../settings/live-layouts/OverlayLayoutGraphics";
+import { draftGraphicActions } from "../../settings/live-layouts/overlay-layout-graphic-actions";
+import { withSampleGraphic } from "../../settings/live-layouts/overlay-layout-sample";
 import { layoutSlugFor } from "../../settings/live-layouts/overlay-layout-slug";
 import { useSceneDraft, type SceneDraft, type SceneEndpoints } from "../../settings/live-layouts/useSceneDraft";
 import { previewSceneOf } from "./SceneChoices";
@@ -36,6 +39,8 @@ import "./PreviewSceneEditor.css";
 
 /** Whether Preview is unlocked to edit its scene, in this browser; one Preview at a time across the studio. */
 export const previewSceneEditing = signal(false);
+/** Whether Preview's unlocked scene fills the studio window, for more room to edit; unlocking starts it in place. */
+const previewSceneFull = signal(false);
 
 /** An arrow turning back: put the saved scene back. */
 function UndoIcon() {
@@ -129,12 +134,16 @@ export function SceneEditingProvider({
   const layout = saved?.layouts.find((candidate) => candidate.slug === sceneSlug);
   // A scene copied since the scenes loaded is read again, never stood in for by another.
   const missing = saved && !layout ? sceneSlug : "";
+  // The last scene read again for; found, it stays, so finding it does not read the scenes once more.
+  const soughtRef = useRef("");
+  if (missing) soughtRef.current = missing;
+  const sought = soughtRef.current;
   const loaded = useData(
     () =>
       editing
-        ? getJson(endpoints.layouts, eventLiveOverlayLayoutsResponseSchema).then((read) => ({ read, missing }))
+        ? getJson(endpoints.layouts, eventLiveOverlayLayoutsResponseSchema).then((read) => ({ read, missing: sought }))
         : Promise.resolve(null),
-    [slug, editing, missing],
+    [slug, editing, sought],
   );
   useEffect(() => {
     if (loaded.data) setSaved(loaded.data.read);
@@ -284,13 +293,40 @@ function SaveOrDiscard({ draft }: { draft: SceneDraft }) {
   );
 }
 
-/** The scene's Discard and Save, as icons in Preview's header while it is unlocked; the words are their tooltips. */
+/**
+ * The scene's full screen, Discard and Save, as icons in Preview's header
+ * while it is unlocked; the words are their tooltips. Full screen fills the
+ * window with the whole panel, so Save stays beside the canvas.
+ */
 export function PreviewSceneSave() {
   const editing = useSceneEditing();
+  const full = previewSceneFull.value;
+  // Escape goes back from full screen first, ahead of the studio's own full screen.
+  useEffect(() => {
+    if (!full) return;
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented || document.querySelector("dialog[open], [role='menu']"))
+        return;
+      event.preventDefault();
+      previewSceneFull.value = false;
+    };
+    document.addEventListener("keydown", escape, true);
+    return () => document.removeEventListener("keydown", escape, true);
+  }, [full]);
   if (editing?.status !== "ready") return null;
   const { draft } = editing;
   return (
     <span class="pk-studio-scene-editor__actions">
+      <Button
+        icon
+        variant="ghost"
+        aria-pressed={full}
+        aria-label="Full screen Preview"
+        title={"Full screen Preview\nEdit the scene across the whole window. Press again or Escape to go back."}
+        onClick={() => (previewSceneFull.value = !full)}
+      >
+        <IconExpand />
+      </Button>
       <Button
         icon
         variant="ghost"
@@ -332,6 +368,7 @@ export function PreviewSceneLock({ disabled }: { disabled: boolean }) {
       }
       disabled={disabled}
       onClick={() => {
+        previewSceneFull.value = false;
         if (!open) previewSceneEditing.value = true;
         else leavePreviewScene(() => (previewSceneEditing.value = false));
       }}
@@ -353,20 +390,25 @@ export function PreviewSceneCanvas() {
   const { draft, preview } = editing;
   // A graphic the scene includes that has nothing on air in Preview is drawn as its outline.
   const off = (element: LiveOverlayElement) => isLiveProgramLayer(element) && !liveOverlayDrawn(preview.stage, element);
+  // The selected one is drawn with sample content all the same, so its size and place can be judged.
+  const sampled = draft.selected && isLiveProgramLayer(draft.selected) && off(draft.selected) ? draft.selected : null;
   return (
-    <div class="pk-studio-scene-editor">
+    <div class="pk-studio-scene-editor" data-full={previewSceneFull.value ? "" : undefined}>
       <OverlayLayoutCanvas
         elements={draft.elements}
         shown={draft.graphics}
         selected={draft.selected}
-        projection={preview}
+        projection={sampled ? withSampleGraphic(preview, sampled, Date.now()) : preview}
         off={off}
         bar={false}
-        caption={null}
+        caption={
+          sampled ? `${LIVE_OVERLAY_ELEMENT_LABELS[sampled]} is off, so it shows sample content to place it by.` : null
+        }
         safeAreas
         onSafeAreas={() => undefined}
         onSelect={draft.select}
         onChange={draft.place}
+        actions={draftGraphicActions(draft)}
       />
       {draft.problem ? <Alert tone="danger">{draft.problem}</Alert> : null}
     </div>
@@ -395,6 +437,7 @@ export function SceneSourcesList({ draft }: { draft: SceneDraft }) {
         onSharing={draft.share}
         onTurns={draft.spotTurns}
         onLock={draft.lock}
+        onQrLook={draft.qrLook}
       />
     </div>
   );

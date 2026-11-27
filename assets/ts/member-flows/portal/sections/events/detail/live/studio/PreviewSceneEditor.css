@@ -12,6 +12,12 @@
     min-block-size: 0;
     block-size: 100%;
   }
+  /* Full screen while editing: the whole Preview panel fills the window, header and all. */
+  .pk-studio-cell:has(.pk-studio-scene-editor[data-full]) {
+    position: fixed;
+    z-index: 20;
+    inset: var(--pk-2);
+  }
   .pk-studio-scene-editor .pk-layout-canvas-figure {
     display: grid;
     place-items: center;
