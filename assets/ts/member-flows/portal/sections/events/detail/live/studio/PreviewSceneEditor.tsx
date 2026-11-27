@@ -155,7 +155,7 @@ export function SceneEditingProvider({
     ? null
     : loaded.error
       ? { status: "failed", error: loaded.error }
-      : !saved || loaded.loading
+      : !saved || loaded.loading || (layout && draft.draftOf !== layout.slug)
         ? { status: "loading" }
         : layout
           ? { status: "ready", draft, layout, preview }

@@ -63,6 +63,8 @@ export function useSceneDraft({
   const [name, setName] = useState(layout.name);
   const initial = (): LayoutDrafts => ({ elements: layout.elements, positions: savedPositions.elements });
   const [drafts, setDrafts] = useState<LayoutDrafts>(initial);
+  // The scene the drafts were last taken from, which runs one render behind a newly loaded one.
+  const [draftOf, setDraftOf] = useState(layout.slug);
   const { elements } = drafts;
   const graphics = sceneGraphics(elements);
   const [picked, setPicked] = useState<LiveOverlayElement | null>(null);
@@ -76,6 +78,7 @@ export function useSceneDraft({
     const current = latest.current;
     setName(current.layout.name);
     setDrafts({ elements: current.layout.elements, positions: current.savedPositions.elements });
+    setDraftOf(current.layout.slug);
   }, [layout.slug, layout.updatedAt, savedPositions.updatedAt]);
   const scene = { expectedUpdatedAt: layout.updatedAt, name, preset: layout.preset, elements };
   const [revealed, setRevealed] = useState(false);
@@ -173,6 +176,8 @@ export function useSceneDraft({
     problem,
     setProblem,
     dirty,
+    /** The scene the drafts hold, once they are taken from it. */
+    draftOf,
     change,
     place,
     /** Lets a spot's boards take turns every `turns` seconds, or shows only its front one (null). */
