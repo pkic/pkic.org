@@ -80,10 +80,8 @@ export function VirtualRoomPlayer({
 
 /** How long the stream's controls stay in view after the pointer last moved over it. */
 const CONTROLS_SHOWN_MS = 3_000;
-/** How often the player looks for the stream's caption track once captions are asked for. */
+/** How often the player looks for the stream's caption track once captions are asked for, until it can tell. */
 const CAPTIONS_CHECK_MS = 2_000;
-/** How many times it looks while the player cannot tell yet, as while it is still starting. */
-const CAPTIONS_CHECKS = 5;
 /** How long the player says a stream has no captions. */
 const NO_CAPTIONS_SHOWN_MS = 4_000;
 
@@ -131,14 +129,14 @@ function StreamPlayer({
   };
   // Asked for captions, a stream without a caption track says so instead of showing the button on.
   const { hasCaptions, setCaptions: showCaptions } = player;
-  // A player still starting cannot tell yet, so it looks again a few times.
+  // A player still starting cannot tell yet, so it looks again for as long as captions stay on.
   useEffect(() => {
     if (!captions) return;
     let check: ReturnType<typeof setTimeout>;
-    const look = (checks: number) => {
+    const look = () => {
       const found = hasCaptions();
-      if (found === null && checks < CAPTIONS_CHECKS) {
-        check = setTimeout(() => look(checks + 1), CAPTIONS_CHECK_MS);
+      if (found === null) {
+        check = setTimeout(look, CAPTIONS_CHECK_MS);
         return;
       }
       if (found !== false) return;
@@ -146,7 +144,7 @@ function StreamPlayer({
       showCaptions(false);
       setNoCaptions(true);
     };
-    check = setTimeout(() => look(1), CAPTIONS_CHECK_MS);
+    check = setTimeout(look, CAPTIONS_CHECK_MS);
     return () => clearTimeout(check);
   }, [captions, hasCaptions, showCaptions]);
   useEffect(() => {

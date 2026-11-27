@@ -75,9 +75,9 @@ describe("the virtual room player", () => {
 
   it("says a stream has no captions once a player that was still starting can tell", async () => {
     await act(async () => button("Captions").click());
-    // The player cannot tell yet at the first look, then finds no caption track.
+    // The player cannot tell yet for a while, however long it takes to start, then finds no caption track.
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(2_000);
+      await vi.advanceTimersByTimeAsync(12_000);
     });
     expect(button("Captions").getAttribute("aria-pressed")).toBe("true");
     await ready();
