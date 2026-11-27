@@ -159,14 +159,7 @@ function StreamPlayer({
       ) : null}
       <div class="pk-virtual-room__controls">
         {audible ? (
-          <Button
-            icon
-            variant="ghost"
-            class="pk-virtual-room__control"
-            aria-label="Mute"
-            title="Mute"
-            onClick={toggle}
-          >
+          <Button icon variant="ghost" class="pk-virtual-room__control" aria-label="Mute" title="Mute" onClick={toggle}>
             <IconSound audible />
           </Button>
         ) : (
