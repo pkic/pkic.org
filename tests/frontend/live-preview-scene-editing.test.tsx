@@ -216,4 +216,26 @@ describe("editing the scene on Preview", () => {
     await act(() => void box.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true })));
     await vi.waitFor(() => expect(labeled(preview, "Save scene").disabled).toBe(false));
   });
+
+  it("puts the studio's address back and asks to save or discard before going to another portal page", async () => {
+    const go = (hash: string) => {
+      const oldURL = location.href;
+      history.pushState(null, "", hash);
+      dispatchEvent(new HashChangeEvent("hashchange", { oldURL, newURL: location.href }));
+    };
+    await editedPreview();
+    const studio = location.hash.split("?", 1)[0]!;
+    // A tab in the studio's own address is not leaving.
+    await act(() => go(`${studio}?graphics=other`));
+    expect(dialog()).toBeNull();
+    await act(() => go("#/events/pqc-2026"));
+    expect(location.hash).toBe(`${studio}?graphics=other`);
+    expect(dialog()?.textContent).toContain("Saving changes this scene in every room of the event.");
+    await act(() => button(dialog()!, "Keep editing").click());
+    expect(location.hash).toBe(`${studio}?graphics=other`);
+    await act(() => go("#/events/pqc-2026"));
+    await act(() => button(dialog()!, "Discard changes").click());
+    expect(location.hash).toBe("#/events/pqc-2026");
+    expect(saves).toEqual([]);
+  });
 });

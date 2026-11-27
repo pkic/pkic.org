@@ -29,6 +29,7 @@ import { AddGraphicMenu, LockIcon, OverlayLayoutGraphics } from "../../settings/
 import { layoutSlugFor } from "../../settings/live-layouts/overlay-layout-slug";
 import { useSceneDraft, type SceneDraft, type SceneEndpoints } from "../../settings/live-layouts/useSceneDraft";
 import { previewSceneOf } from "./SceneChoices";
+import { useHoldUnsavedScene } from "./useHoldUnsavedScene";
 import "./PreviewSceneEditor.css";
 
 /** Whether Preview is unlocked to edit its scene, in this browser; one Preview at a time across the studio. */
@@ -176,13 +177,7 @@ export function SceneEditingProvider({
     [],
   );
   const unsaved = value?.status === "ready" && draft.dirty;
-  useEffect(() => {
-    if (!unsaved) return;
-    // Closing or reloading the page would drop the changes: the browser asks first.
-    const ask = (event: BeforeUnloadEvent) => event.preventDefault();
-    window.addEventListener("beforeunload", ask);
-    return () => window.removeEventListener("beforeunload", ask);
-  }, [unsaved]);
+  useHoldUnsavedScene(unsaved, leavePreviewScene);
   return (
     <SceneEditingContext.Provider value={value}>
       {children}
