@@ -159,6 +159,20 @@ describe("editing the scene on Preview", () => {
     expect(saves.length).toBeGreaterThan(0);
   });
 
+  it("asks to save or discard before another output joins Preview's monitor, then locks the scene", async () => {
+    const { preview } = await editedPreview();
+    await act(() => labeled(preview, "Outputs on Preview").click());
+    const program = [...document.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]')].find((item) =>
+      item.textContent?.includes("Program"),
+    )!;
+    await act(() => program.click());
+    expect(dialog()?.textContent).toContain("Saving changes this scene in every room of the event.");
+    expect(previewSceneEditing.value).toBe(true);
+    await act(() => button(dialog()!, "Discard changes").click());
+    expect(previewSceneEditing.value).toBe(false);
+    expect(saves).toEqual([]);
+  });
+
   it("locks at once when nothing changed", async () => {
     const desk = mountDesk(liveSnapshot({ viewer: OPERATOR }), "show", undefined, true, true);
     const preview = panel(desk.host, "Preview");

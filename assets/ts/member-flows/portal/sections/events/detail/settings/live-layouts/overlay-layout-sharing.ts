@@ -33,6 +33,30 @@ export function changeLayoutElement(
   return { elements, positions: { ...drafts.positions, [element]: liveOverlayBoxOf(placement) } };
 }
 
+/**
+ * The drafts once the event's shared positions changed under them, from `before` to `after`. A shared position
+ * the draft moved stays the draft's; every other one takes the saved position, and the shared graphics in the
+ * draft move with it, so both drafts agree on every shared box. The scene's own fields stay as they are.
+ */
+export function rebaseSharedPositions(
+  drafts: LayoutDrafts,
+  before: LiveOverlaySharedPositions,
+  after: LiveOverlaySharedPositions,
+): LayoutDrafts {
+  const moved = (element: LiveOverlayElement) =>
+    JSON.stringify(drafts.positions[element]) !== JSON.stringify(before[element]);
+  const positions = Object.fromEntries(
+    LIVE_OVERLAY_ELEMENTS.map((element) => [element, moved(element) ? drafts.positions[element] : after[element]]),
+  ) as LiveOverlaySharedPositions;
+  const elements = Object.fromEntries(
+    LIVE_OVERLAY_ELEMENTS.map((element) => {
+      const placement = drafts.elements[element];
+      return [element, placement.shared ? { ...placement, ...positions[element] } : placement];
+    }),
+  ) as LiveOverlayLayoutElements;
+  return { elements, positions };
+}
+
 /** "Place differently on this layout": the element keeps where it is now, as this layout's own position. */
 export function unlinkLayoutElement(drafts: LayoutDrafts, element: LiveOverlayElement): LayoutDrafts {
   return { ...drafts, elements: { ...drafts.elements, [element]: { ...drafts.elements[element], shared: false } } };

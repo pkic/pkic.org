@@ -11,10 +11,13 @@ import {
 import {
   LIVE_OVERLAY_LAYOUT_NAME_MAX,
   LIVE_OVERLAY_PRESETS,
+  eventLiveOverlayLayoutPutSchema,
   eventLiveOverlayLayoutsResponseSchema,
+  eventLiveOverlayPositionsPutSchema,
   type EventLiveOverlayLayoutsResponse,
 } from "../../assets/shared/schemas/live-overlay-layout";
 import { copyName } from "../../assets/ts/member-flows/portal/sections/events/detail/live/studio/PreviewSceneEditor";
+import { rebaseSharedPositions } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-sharing";
 import {
   useSceneDraft,
   type SceneDraft,
@@ -64,13 +67,16 @@ beforeEach(() => {
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      const body = JSON.parse(String(init?.body)) as { expectedUpdatedAt: string | null; elements: unknown };
-      puts.push({ url, body });
-      if (url === "/api/positions")
+      const sent: unknown = JSON.parse(String(init?.body));
+      if (url === "/api/positions") {
+        const body = eventLiveOverlayPositionsPutSchema.parse(sent);
+        puts.push({ url, body });
         return json({
           ...LAYOUTS,
           positions: { elements: body.elements, saved: true, updatedAt: POSITIONS_SAVED_AT },
         });
+      }
+      puts.push({ url, body: eventLiveOverlayLayoutPutSchema.parse(sent) });
       if (refuseScene) return json({ error: { message: "The scene could not be saved." } }, 500);
       return json(LAYOUTS);
     }),
@@ -101,6 +107,37 @@ describe("saving a scene", () => {
     await act(async () => void (await draft.save()));
     expect(puts.map(({ url }) => url)).toEqual(["/api/layouts/" + LAYOUTS.layouts[0]!.slug]);
     expect(finished).toEqual([false, true]);
+  });
+});
+
+describe("taking the event's shared positions saved elsewhere", () => {
+  it("moves the scene's shared graphics with them and keeps a shared move the draft made", () => {
+    const before = LIVE_OVERLAY_DEFAULT_POSITIONS;
+    const elements = LAYOUTS.layouts[0]!.elements;
+    const movedByDraft = { ...before.lowerThird, y: 0.1 };
+    const drafts = {
+      elements: {
+        ...elements,
+        lowerThird: { ...elements.lowerThird, ...movedByDraft, shared: true },
+        chat: { ...elements.chat, ...before.chat, shared: true },
+        ticker: { ...elements.ticker, ...before.ticker, shared: false },
+      },
+      positions: { ...before, lowerThird: movedByDraft },
+    };
+    const after = {
+      ...before,
+      lowerThird: { ...before.lowerThird, y: 0.6 },
+      chat: { ...before.chat, x: 0.2 },
+      ticker: { ...before.ticker, x: 0.3 },
+    };
+    const next = rebaseSharedPositions(drafts, before, after);
+    expect(next.positions.lowerThird).toEqual(movedByDraft);
+    expect(next.elements.lowerThird.y).toBe(0.1);
+    expect(next.positions.chat).toEqual(after.chat);
+    expect(next.elements.chat.x).toBe(0.2);
+    // A graphic the scene places itself keeps its own box; every graphic keeps the scene's own fields.
+    expect(next.elements.ticker).toEqual(drafts.elements.ticker);
+    expect(next.elements.chat.visible).toBe(drafts.elements.chat.visible);
   });
 });
 

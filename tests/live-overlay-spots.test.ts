@@ -102,11 +102,12 @@ describe("taking turns", () => {
       expect(liveOverlayWaitsForTurn(all, scene, "panelists", now)).toBe(
         liveOverlayWaitsForTurn(all, scene, "question", now),
       );
-      // The joined board and Up next take turns: one of the two waits at every moment.
-      expect([
+      // The joined board and Up next take turns: exactly one of the two waits at every moment.
+      const waiting = [
         liveOverlayWaitsForTurn(all, scene, "question", now),
         liveOverlayWaitsForTurn(all, scene, "schedule", now),
-      ]).toContain(false);
+      ];
+      expect(waiting.filter(Boolean)).toHaveLength(1);
     }
   });
 

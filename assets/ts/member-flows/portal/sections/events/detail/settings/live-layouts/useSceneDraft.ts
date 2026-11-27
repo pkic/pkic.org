@@ -20,6 +20,7 @@ import {
   applyLayoutElementToAll,
   changeLayoutElement,
   layoutElementsChanged,
+  rebaseSharedPositions,
   relinkLayoutElement,
   unlinkLayoutElement,
   type LayoutDrafts,
@@ -76,14 +77,22 @@ export function useSceneDraft({
   const [problem, setProblem] = useState<string | null>(null);
   const latest = useRef({ layout, savedPositions });
   latest.current = { layout, savedPositions };
-  const draftedFrom = useRef({ slug: layout.slug, updatedAt: layout.updatedAt });
+  const draftedFrom = useRef({
+    slug: layout.slug,
+    updatedAt: layout.updatedAt,
+    positions: savedPositions.elements,
+  });
   useEffect(() => {
     const current = latest.current;
     const from = draftedFrom.current;
-    draftedFrom.current = { slug: current.layout.slug, updatedAt: current.layout.updatedAt };
+    draftedFrom.current = {
+      slug: current.layout.slug,
+      updatedAt: current.layout.updatedAt,
+      positions: current.savedPositions.elements,
+    };
     if (from.slug === current.layout.slug && from.updatedAt === current.layout.updatedAt) {
-      // Only the shared positions changed: the scene's own changes stay a draft.
-      setDrafts((drafts) => ({ ...drafts, positions: current.savedPositions.elements }));
+      // Only the shared positions changed: the scene's own changes stay a draft, its shared graphics follow.
+      setDrafts((drafts) => rebaseSharedPositions(drafts, from.positions, current.savedPositions.elements));
       return;
     }
     setName(current.layout.name);

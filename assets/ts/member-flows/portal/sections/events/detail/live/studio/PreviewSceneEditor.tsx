@@ -78,6 +78,15 @@ export function leavePreviewScene(go: () => void): void {
   leavingDraft.value = (leave) => leave && go();
 }
 
+/** Locks Preview's scene again, once its changes are saved or discarded, then goes on. */
+export function lockPreviewScene(go: () => void = () => {}): void {
+  leavePreviewScene(() => {
+    previewSceneFull.value = false;
+    previewSceneEditing.value = false;
+    go();
+  });
+}
+
 const endpointsOf = (slug: string): SceneEndpoints => {
   const event = `/api/v1/events/${encodeURIComponent(slug)}/settings/live`;
   return { layouts: `${event}/layouts`, positions: `${event}/positions` };
@@ -368,9 +377,9 @@ export function PreviewSceneLock({ disabled }: { disabled: boolean }) {
       }
       disabled={disabled}
       onClick={() => {
+        if (open) return lockPreviewScene();
         previewSceneFull.value = false;
-        if (!open) previewSceneEditing.value = true;
-        else leavePreviewScene(() => (previewSceneEditing.value = false));
+        previewSceneEditing.value = true;
       }}
     >
       <LockIcon open={open} />

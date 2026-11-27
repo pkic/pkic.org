@@ -235,10 +235,8 @@ export function withSampleGraphic(room: LiveRoomState, element: LiveProgramLayer
   const stage = { ...room.stage, ...Object.fromEntries(fields.map((field) => [field, sample.stage[field]])) };
   return {
     ...room,
-    session:
-      element === "panelists" || element === "lowerThird"
-        ? { ...room.session, credits: sample.session.credits }
-        : room.session,
+    // The panelists draw the session's credits; the lower third draws its own credit from the stage.
+    session: element === "panelists" ? { ...room.session, credits: sample.session.credits } : room.session,
     stage,
     polls: element === "poll" ? [...room.polls, ...sample.polls] : room.polls,
     timers: element === "timer" ? sample.timers : room.timers,

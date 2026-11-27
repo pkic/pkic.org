@@ -45,7 +45,13 @@ import { SourceCount, SyncToggle } from "./MonitorOutputStatus";
 import { liveSceneName } from "../live-layer-unseen";
 import { clearHint } from "./StudioSwitcher";
 import { usePictureInView } from "./use-picture-in-view";
-import { PreviewSceneCanvas, PreviewSceneLock, PreviewSceneSave, previewSceneEditing } from "./PreviewSceneEditor";
+import {
+  PreviewSceneCanvas,
+  PreviewSceneLock,
+  PreviewSceneSave,
+  lockPreviewScene,
+  previewSceneEditing,
+} from "./PreviewSceneEditor";
 import "./MonitorPanel.css";
 
 /** The switcher's actions the Preview and Program monitors offer with their controls. */
@@ -477,9 +483,9 @@ export function multiviewGrid(count: number): { columns: number; rows: number } 
 }
 
 /**
- * A monitor shows one output, or several as a multiview. The panel's header
- * holds the one output selector; a single monitor's controls sit beside it,
- * and each output of a multiview carries its own in its card.
+ * A monitor shows one output, or several as a multiview. The panel's header holds the one output selector; a single
+ * monitor's controls sit beside it, and each output of a multiview carries its own in its card. Preview's scene is
+ * edited on its own monitor, so another output joining it locks the scene first, its changes settled.
  */
 export function monitorPanelView(
   panel: StudioPanel,
@@ -492,6 +498,7 @@ export function monitorPanelView(
   const single = outputs.length === 1 ? outputs[0]! : null;
   const title = single ? studioOutputDetails(room, single).label : "Monitors";
   const context: MonitorContext = { panel, room, sources, switcher, change };
+  const editing = single === "preview" && switcher.canEditScenes && previewSceneEditing.value;
   const heading = (
     <SectionHeading level={3} class="pk-studio-panel__title">
       <Menu
@@ -507,7 +514,10 @@ export function monitorPanelView(
           multiple: true,
           keepOpen: true,
           disabled: outputs.length === 1 && outputs[0] === output,
-          onSelect: () => change((panels) => toggleStudioOutput(panels, panel.id, output, room)),
+          onSelect: () => {
+            const go = () => change((panels) => toggleStudioOutput(panels, panel.id, output, room));
+            return editing ? lockPreviewScene(go) : go();
+          },
         }))}
       >
         {single ? <OutputName output={single} room={room} /> : title}
@@ -517,7 +527,6 @@ export function monitorPanelView(
   );
   // Preview shows the scenes under its picture unless the operator hid them.
   const scenesShown = panel.scenes !== false;
-  const editing = single === "preview" && switcher.canEditScenes && previewSceneEditing.value;
   if (single)
     return {
       title,
