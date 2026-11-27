@@ -284,6 +284,10 @@ it("sends independent config-only Preview/Program commands and does not clear an
   });
   const colors = controlFor<HTMLSelectElement>(document, "Colors");
   expect([...colors.options].map((option) => option.textContent)).toEqual([
+    "Navy glass",
+    "Smoked glass",
+    "Frosted glass",
+    "Deep blue",
     "Event colors",
     "White on transparent",
     "White on black",

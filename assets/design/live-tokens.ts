@@ -29,6 +29,13 @@ export const liveTokens = {
   "live-on-picture-text-shadow": "0 2px 4px rgba(0, 0, 0, 0.55), 0 0 24px rgba(0, 0, 0, 0.45)",
   "live-on-picture-label-shadow": "0 2px 12px rgba(0, 0, 0, 0.6)",
   "live-plate-shadow": "0 8px 30px rgba(0, 0, 0, 0.35)",
+  // A card's see-through plate over the production's own background (a photo or the brand gradient), and its thin edge.
+  "live-plate-navy": "rgba(13, 27, 42, 0.78)",
+  "live-plate-smoke": "rgba(10, 14, 18, 0.72)",
+  "live-plate-frost": "rgba(248, 249, 250, 0.9)",
+  "live-plate-blue": "rgba(18, 44, 78, 0.88)",
+  "live-plate-edge": "rgba(255, 255, 255, 0.14)",
+  "live-plate-edge-strong": "rgba(255, 255, 255, 0.26)",
   // The pitch mark's seats still to fill, and the glare on the fill's leading edge.
   "live-mark-track": "rgba(255, 255, 255, 0.28)",
   "live-mark-glare": "rgba(255, 255, 255, 0.85)",
