@@ -73,6 +73,20 @@ export function snapTargets(others: readonly Box[]): SnapTargets {
   };
 }
 
+/**
+ * The boxes a moving box snaps to: every other box but those in the very
+ * place it starts from, such as the graphics sharing its spot, whose edges
+ * would only pull it back where it was.
+ */
+export function snapPeers(start: Box, others: readonly Box[]): Box[] {
+  const samePlace = (box: Box) =>
+    Math.abs(box.x - start.x) < EPSILON &&
+    Math.abs(box.y - start.y) < EPSILON &&
+    Math.abs(box.w - start.w) < EPSILON &&
+    Math.abs(box.h - start.h) < EPSILON;
+  return others.filter((box) => !samePlace(box));
+}
+
 /** The nearest target to any of the candidate lines within the threshold, as the shift that lands on it. */
 function nearest(candidates: readonly number[], targets: readonly number[], threshold: number) {
   let best: { shift: number; line: number } | null = null;
@@ -87,6 +101,12 @@ function nearest(candidates: readonly number[], targets: readonly number[], thre
 
 const gridStep = { x: LAYOUT_GRID_PX / LIVE_OVERLAY_FRAME.width, y: LAYOUT_GRID_PX / LIVE_OVERLAY_FRAME.height };
 const toGrid = (value: number, step: number) => Math.round(value / step) * step;
+/**
+ * A snap that would put an edge back where it started, once the pointer took it past half the snap distance,
+ * is skipped: the edge follows the pointer. A smaller slip of the hand still snaps back.
+ */
+const keepsMoved = (snapped: number, value: number, start: number, threshold: number) =>
+  Math.abs(snapped - start) < EPSILON && Math.abs(value - start) > threshold / 2 ? value : snapped;
 
 export interface SnapOptions {
   targets: SnapTargets;
@@ -106,14 +126,21 @@ export function moveBox(start: Box, dx: number, dy: number, options: SnapOptions
   let y = clamp(start.y + dy, 0, 1 - start.h);
   const guides: SnapGuides = { vertical: [], horizontal: [] };
   if (options.snap) {
-    const along = (position: number, size: number, targets: number[], threshold: number, step: number) => {
+    const along = (
+      position: number,
+      from: number,
+      size: number,
+      targets: number[],
+      threshold: number,
+      step: number,
+    ) => {
       const hit = nearest([position, position + size / 2, position + size], targets, threshold);
-      return hit
-        ? { position: position + hit.shift, line: hit.line }
-        : { position: toGrid(position, step), line: null };
+      const snapped = hit ? position + hit.shift : toGrid(position, step);
+      const kept = keepsMoved(snapped, position, from, threshold);
+      return { position: kept, line: hit && kept === snapped ? hit.line : null };
     };
-    const horizontal = along(x, start.w, options.targets.vertical, options.threshold.x, gridStep.x);
-    const vertical = along(y, start.h, options.targets.horizontal, options.threshold.y, gridStep.y);
+    const horizontal = along(x, start.x, start.w, options.targets.vertical, options.threshold.x, gridStep.x);
+    const vertical = along(y, start.y, start.h, options.targets.horizontal, options.threshold.y, gridStep.y);
     x = clamp(horizontal.position, 0, 1 - start.w);
     y = clamp(vertical.position, 0, 1 - start.h);
     if (horizontal.line !== null) guides.vertical.push(horizontal.line);
@@ -139,36 +166,42 @@ export function resizeBox(
   let top = start.y;
   let bottom = start.y + start.h;
   const guides: SnapGuides = { vertical: [], horizontal: [] };
-  const edge = (value: number, targets: number[], threshold: number, step: number, axis: keyof SnapGuides) => {
+  const edge = (
+    value: number,
+    from: number,
+    targets: number[],
+    threshold: number,
+    step: number,
+    axis: keyof SnapGuides,
+  ) => {
     if (!options.snap) return value;
     const hit = nearest([value], targets, threshold);
-    if (hit) {
-      guides[axis].push(hit.line);
-      return value + hit.shift;
-    }
-    return toGrid(value, step);
+    const snapped = hit ? value + hit.shift : toGrid(value, step);
+    const kept = keepsMoved(snapped, value, from, threshold);
+    if (hit && kept === snapped) guides[axis].push(hit.line);
+    return kept;
   };
   if (handle.includes("w"))
     left = clamp(
-      edge(left + dx, options.targets.vertical, options.threshold.x, gridStep.x, "vertical"),
+      edge(left + dx, left, options.targets.vertical, options.threshold.x, gridStep.x, "vertical"),
       0,
       right - LIVE_OVERLAY_MIN_BOX,
     );
   if (handle.includes("e"))
     right = clamp(
-      edge(right + dx, options.targets.vertical, options.threshold.x, gridStep.x, "vertical"),
+      edge(right + dx, right, options.targets.vertical, options.threshold.x, gridStep.x, "vertical"),
       left + LIVE_OVERLAY_MIN_BOX,
       1,
     );
   if (handle.includes("n"))
     top = clamp(
-      edge(top + dy, options.targets.horizontal, options.threshold.y, gridStep.y, "horizontal"),
+      edge(top + dy, top, options.targets.horizontal, options.threshold.y, gridStep.y, "horizontal"),
       0,
       bottom - LIVE_OVERLAY_MIN_BOX,
     );
   if (handle.includes("s"))
     bottom = clamp(
-      edge(bottom + dy, options.targets.horizontal, options.threshold.y, gridStep.y, "horizontal"),
+      edge(bottom + dy, bottom, options.targets.horizontal, options.threshold.y, gridStep.y, "horizontal"),
       top + LIVE_OVERLAY_MIN_BOX,
       1,
     );

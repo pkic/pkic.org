@@ -9,6 +9,7 @@ import {
   resizeBox,
   shapeBox,
   FIXED_SHAPE_ELEMENTS,
+  snapPeers,
   snapTargets,
   type Box,
   type ResizeHandle,
@@ -205,7 +206,7 @@ export function useOverlayLayoutGesture(
       frame: null,
       canvas: area.getBoundingClientRect(),
       start,
-      others: latest.current.peers(element),
+      others: snapPeers(start, latest.current.peers(element)),
       box: start,
       shape: kind !== "move" && FIXED_SHAPE_ELEMENTS.has(element) ? graphicShape(element) : null,
     };

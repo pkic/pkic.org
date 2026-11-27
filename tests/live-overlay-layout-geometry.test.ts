@@ -27,6 +27,7 @@ import {
   nudgeBox,
   resizeBox,
   shapeBox,
+  snapPeers,
   snapTargets,
   type Box,
 } from "../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-editing";
@@ -161,6 +162,20 @@ describe("editing a box", () => {
     expect((gridded.box.x * 1920) % 24).toBeCloseTo(0, 0);
     expect(gridded.guides).toEqual({ vertical: [], horizontal: [] });
     expect(moveBox(box, 37 / 1920, 0, free).box.x * 1920).toBeCloseTo(137, 0);
+  });
+
+  it("does not snap back to the graphics sharing the spot it starts from", () => {
+    const spot = px(1152, 0, 768, 1000);
+    const peers = snapPeers(spot, [spot, { ...spot }, other]);
+    expect(peers).toEqual([other]);
+    // The studio's small canvas: 8 screen pixels are about 28 of the frame's.
+    const options = { snap: true, threshold: { x: 28 / 1920, y: 28 / 1080 }, targets: snapTargets(peers) };
+    // A small resize stays where it was dropped, on the grid, not back at the spot's edge.
+    expect(resizeBox(spot, "w", -20 / 1920, 0, options).box.x * 1920).toBeCloseTo(1128, 0);
+    // Its right edge left the frame's edge on purpose, so the frame does not pull it back; a slip of the hand does not move it.
+    const moved = moveBox(spot, -20 / 1920, 5 / 1080, options).box;
+    expect(moved.x * 1920).toBeCloseTo(1132, 0);
+    expect(moved.y).toBe(0);
   });
 
   it("keeps a moved box inside the frame", () => {
