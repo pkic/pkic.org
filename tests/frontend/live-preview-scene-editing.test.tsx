@@ -1,0 +1,160 @@
+// @vitest-environment jsdom
+import { act } from "preact/test-utils";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  LIVE_OVERLAY_DEFAULT_POSITIONS,
+  LIVE_OVERLAY_PRESET_LAYOUTS,
+} from "../../assets/shared/live-overlay-layout-presets";
+import {
+  LIVE_OVERLAY_PRESETS,
+  eventLiveOverlayLayoutsResponseSchema,
+} from "../../assets/shared/schemas/live-overlay-layout";
+import { previewSceneEditing } from "../../assets/ts/member-flows/portal/sections/events/detail/live/studio/PreviewSceneEditor";
+import { liveSnapshot } from "./helpers/live-room-socket";
+import {
+  OPERATOR,
+  button,
+  commands,
+  labeled,
+  mountDesk,
+  panel,
+  resetDeskStorage,
+  unmountDesks,
+} from "./helpers/live-desk";
+
+const LAYOUTS = eventLiveOverlayLayoutsResponseSchema.parse({
+  layouts: LIVE_OVERLAY_PRESETS.map((preset) => ({
+    slug: preset,
+    ...LIVE_OVERLAY_PRESET_LAYOUTS[preset],
+    preset,
+    builtIn: true,
+    saved: false,
+    updatedAt: null,
+  })),
+  positions: { elements: LIVE_OVERLAY_DEFAULT_POSITIONS, saved: false, updatedAt: null },
+});
+const json = (value: unknown, status = 200) =>
+  new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
+/** The scenes another operator's copy adds, read once the studio asks again. */
+const COPIED = eventLiveOverlayLayoutsResponseSchema.parse({
+  ...LAYOUTS,
+  layouts: [
+    ...LAYOUTS.layouts,
+    { ...LAYOUTS.layouts[0]!, slug: "copy-of-camera", name: "Copy of Camera", builtIn: false },
+  ],
+});
+let saves: string[] = [];
+let reads = 0;
+
+beforeEach(() => {
+  resetDeskStorage();
+  saves = [];
+  reads = 0;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/settings/live/layouts") || url.includes("/settings/live/positions")) {
+        if (init?.method === "PUT") saves.push(url);
+        else if (url.endsWith("/layouts")) reads += 1;
+        return json(reads > 1 ? COPIED : LAYOUTS);
+      }
+      return json({ error: { message: "Not here" } }, 404);
+    }),
+  );
+});
+afterEach(() => {
+  previewSceneEditing.value = false;
+  unmountDesks();
+});
+
+/** Mounts the studio for someone who sets it up, with Preview's scene unlocked and a graphic moved. */
+async function editedPreview() {
+  const desk = mountDesk(liveSnapshot({ viewer: OPERATOR }), "show", undefined, true, true);
+  const preview = panel(desk.host, "Preview");
+  await act(() => labeled(preview, "Unlock scene").click());
+  const box = await vi.waitFor(() => {
+    const found = preview.querySelector<HTMLElement>(
+      '.pk-studio-scene-editor .pk-layout-canvas__box[data-element="lowerThird"]',
+    );
+    if (!found) throw new Error("No box on Preview yet");
+    return found;
+  });
+  await act(() => void box.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true })));
+  await vi.waitFor(() => expect(labeled(preview, "Save scene").disabled).toBe(false));
+  return { ...desk, preview };
+}
+const sceneButton = (preview: HTMLElement, name: string) =>
+  [...preview.querySelectorAll<HTMLButtonElement>('[aria-label="Load a scene into Preview"] button')].find(
+    (scene) => scene.querySelector(".pk-studio-scene__name")?.textContent === name,
+  )!;
+const previewSets = (live: Parameters<typeof commands>[0]) =>
+  commands(live).filter((message) => message.type === "preview.set");
+/** Another operator puts this scene on the shared Preview. */
+const previewElsewhere = (live: Parameters<typeof commands>[0], scene: string) => {
+  const snapshot = liveSnapshot({ viewer: OPERATOR });
+  // The room knows every saved scene, the copy included, as soon as it is saved.
+  const overlayLayouts = COPIED.layouts.map(({ slug, name, preset, elements }) => ({ slug, name, preset, elements }));
+  return act(() => live.latest().deliver({ ...snapshot, overlayLayouts, preview: { ...snapshot.preview, scene } }));
+};
+const dialog = () => document.querySelector<HTMLDialogElement>("dialog[open]");
+
+describe("editing the scene on Preview", () => {
+  it("asks to save or discard unsaved changes before Preview loads another scene, and stays on Keep editing", async () => {
+    const { preview, live } = await editedPreview();
+    const before = previewSets(live).length;
+    await act(() => sceneButton(preview, "Full board").click());
+    expect(dialog()?.textContent).toContain("Saving changes this scene in every room of the event.");
+    expect(previewSets(live)).toHaveLength(before);
+    await act(() => button(dialog()!, "Keep editing").click());
+    expect(dialog()).toBeNull();
+    expect(previewSets(live)).toHaveLength(before);
+    expect(previewSceneEditing.value).toBe(true);
+    // Discarded, Preview goes on to the scene, and nothing is saved.
+    await act(() => sceneButton(preview, "Full board").click());
+    await act(() => button(dialog()!, "Discard changes").click());
+    expect(previewSets(live).at(-1)).toMatchObject({ composition: { scene: "full-board" } });
+    expect(saves).toEqual([]);
+  });
+
+  it("saves the changes for every room before it locks the scene", async () => {
+    const { preview } = await editedPreview();
+    await act(() => labeled(preview, "Lock scene").click());
+    await act(async () => button(dialog()!, "Save scene").click());
+    await vi.waitFor(() => expect(previewSceneEditing.value).toBe(false));
+    expect(saves.length).toBeGreaterThan(0);
+  });
+
+  it("locks at once when nothing changed", async () => {
+    const desk = mountDesk(liveSnapshot({ viewer: OPERATOR }), "show", undefined, true, true);
+    const preview = panel(desk.host, "Preview");
+    await act(() => labeled(preview, "Unlock scene").click());
+    // The studio stays mounted as Preview unlocks: the same panel now offers to lock.
+    expect(preview.isConnected).toBe(true);
+    await act(() => labeled(preview, "Lock scene").click());
+    expect(dialog()).toBeNull();
+    expect(previewSceneEditing.value).toBe(false);
+  });
+
+  it("asks to save or discard before following another operator's scene on Preview", async () => {
+    const { live } = await editedPreview();
+    await previewElsewhere(live, "full-board");
+    expect(dialog()?.textContent).toContain("Saving changes this scene in every room of the event.");
+    await act(() => button(dialog()!, "Discard changes").click());
+    expect(dialog()).toBeNull();
+    expect(saves).toEqual([]);
+  });
+
+  it("reads the scenes again for a scene copied since they loaded, and edits that one", async () => {
+    const desk = mountDesk(liveSnapshot({ viewer: OPERATOR }), "show", undefined, true, true);
+    const preview = panel(desk.host, "Preview");
+    await act(() => labeled(preview, "Unlock scene").click());
+    await vi.waitFor(() => expect(reads).toBe(1));
+    await previewElsewhere(desk.live, "copy-of-camera");
+    await vi.waitFor(() => expect(reads).toBe(2));
+    await vi.waitFor(() =>
+      expect(preview.querySelector(".pk-studio-scene-editor .pk-layout-canvas__box")).not.toBeNull(),
+    );
+    expect(preview.textContent).not.toContain("no longer saved");
+  });
+});

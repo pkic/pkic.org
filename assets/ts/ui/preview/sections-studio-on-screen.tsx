@@ -49,6 +49,14 @@ const BUILT_IN_QA: LiveOverlayLayout = {
   saved: false,
   updatedAt: null,
 };
+const BUILT_IN_BREAK: LiveOverlayLayout = {
+  slug: "break",
+  ...LIVE_OVERLAY_PRESET_LAYOUTS.break,
+  preset: "break",
+  builtIn: true,
+  saved: false,
+  updatedAt: null,
+};
 const noHandlers = {
   onPointerDown: noCommand,
   onPointerMove: noCommand,
@@ -426,6 +434,24 @@ export const studioOnScreenSections: PreviewSection[] = [
         positionsEndpoint="/api/v1/events/pqc-conference-2026/overlays/positions"
         layout={QA_LAYOUT}
         layouts={[QA_LAYOUT]}
+        positions={{ elements: LIVE_OVERLAY_DEFAULT_POSITIONS, saved: false, updatedAt: null }}
+        canEdit
+        onSaved={noCommand}
+        onDuplicate={noCommand}
+        onDirty={noCommand}
+      />
+    ),
+  },
+  {
+    id: "layout-editor-spot",
+    title: "Graphics that take turns in one spot",
+    note: "Break's column beside the clip is one spot: Up next, Chat and Top questions share its box and take turns, 15 seconds each, as their rows say. A row's menu sets how the spot shows them: the front one, or turns every 10, 15, 30 or 60 seconds. A board dropped mostly over another takes its box and joins its spot. The padlock holds a graphic in place on the canvas.",
+    render: () => (
+      <OverlayLayoutEditor
+        endpoint="/api/v1/events/pqc-conference-2026/overlays/layouts/break"
+        positionsEndpoint="/api/v1/events/pqc-conference-2026/overlays/positions"
+        layout={BUILT_IN_BREAK}
+        layouts={[BUILT_IN_BREAK]}
         positions={{ elements: LIVE_OVERLAY_DEFAULT_POSITIONS, saved: false, updatedAt: null }}
         canEdit
         onSaved={noCommand}

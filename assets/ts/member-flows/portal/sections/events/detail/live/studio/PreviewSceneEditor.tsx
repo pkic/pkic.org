@@ -3,6 +3,10 @@ import type { ComponentChildren } from "preact";
 import { createContext } from "preact";
 import { useContext, useEffect, useState } from "preact/hooks";
 import { liveOverlayDrawn } from "../../../../../../../../shared/live-overlay-cover";
+import {
+  LIVE_OVERLAY_DEFAULT_POSITIONS,
+  LIVE_OVERLAY_STANDARD_ELEMENTS,
+} from "../../../../../../../../shared/live-overlay-layout-presets";
 import { isLiveProgramLayer } from "../../../../../../../../shared/live-overlay-stacking";
 import {
   eventLiveOverlayLayoutsResponseSchema,
@@ -17,10 +21,11 @@ import { getJson, putJson } from "../../../../../../../shared/api-client";
 import { toast } from "../../../../../ui";
 import { Alert } from "../../../../../../../ui/Alert";
 import { Button } from "../../../../../../../ui/Button";
+import { Dialog } from "../../../../../../../ui/Dialog";
 import { StrokeIcon } from "../../../../../../../ui/MediaIcons";
 import type { LiveRoomState } from "../../../../../../../live-session/live-room-state";
 import { OverlayLayoutCanvas } from "../../settings/live-layouts/OverlayLayoutCanvas";
-import { AddGraphicMenu, OverlayLayoutGraphics } from "../../settings/live-layouts/OverlayLayoutGraphics";
+import { AddGraphicMenu, LockIcon, OverlayLayoutGraphics } from "../../settings/live-layouts/OverlayLayoutGraphics";
 import { layoutSlugFor } from "../../settings/live-layouts/overlay-layout-slug";
 import { useSceneDraft, type SceneDraft, type SceneEndpoints } from "../../settings/live-layouts/useSceneDraft";
 import { previewSceneOf } from "./SceneChoices";
@@ -28,16 +33,6 @@ import "./PreviewSceneEditor.css";
 
 /** Whether Preview is unlocked to edit its scene, in this browser; one Preview at a time across the studio. */
 export const previewSceneEditing = signal(false);
-
-/** A padlock, open while Preview is unlocked for editing. */
-export function LockIcon({ open }: { open: boolean }) {
-  return (
-    <StrokeIcon>
-      <rect x="3" y="7" width="10" height="7" rx="1" />
-      <path d={open ? "M5.5 7V4.8a2.5 2.5 0 0 1 4.9-.7" : "M5.5 7V4.8a2.5 2.5 0 0 1 5 0V7"} />
-    </StrokeIcon>
-  );
-}
 
 /** An arrow turning back: put the saved scene back. */
 function UndoIcon() {
@@ -59,6 +54,22 @@ function SaveIcon() {
   );
 }
 
+/** The draft open on Preview, read when someone leaves it; held outside render so leaving never redraws it. */
+const openDraft: { current: SceneDraft | null } = { current: null };
+/** Asks to save or discard the open draft; answered with whether Preview may leave it. */
+const leavingDraft = signal<((leave: boolean) => void) | null>(null);
+
+/**
+ * Leaves the scene Preview is editing (locked, another scene, or cleared),
+ * then goes on: at once without unsaved changes; with them, once someone
+ * saved or discarded them. Kept editing, it does not go on.
+ */
+export function leavePreviewScene(go: () => void): void {
+  if (!previewSceneEditing.value || !openDraft.current?.dirty) return go();
+  leavingDraft.value?.(false);
+  leavingDraft.value = (leave) => leave && go();
+}
+
 const endpointsOf = (slug: string): SceneEndpoints => {
   const event = `/api/v1/events/${encodeURIComponent(slug)}/settings/live`;
   return { layouts: `${event}/layouts`, positions: `${event}/positions` };
@@ -75,31 +86,100 @@ const SceneEditingContext = createContext<SceneEditing | null>(null);
 /** The scene being edited on Preview, for Preview's canvas and the Graphics panel; null while Preview is locked. */
 export const useSceneEditing = () => useContext(SceneEditingContext);
 
+/** What the draft holds before the scene loads: nothing an operator sees, never saved. */
+const NOT_LOADED: { layout: LiveOverlayLayout; saved: EventLiveOverlayLayoutsResponse } = {
+  layout: {
+    slug: "",
+    name: "",
+    preset: null,
+    builtIn: false,
+    saved: false,
+    updatedAt: null,
+    elements: LIVE_OVERLAY_STANDARD_ELEMENTS,
+  },
+  saved: { layouts: [], positions: { elements: LIVE_OVERLAY_DEFAULT_POSITIONS, saved: false, updatedAt: null } },
+};
+
 /**
  * Holds the one draft of the scene on Preview while it is unlocked, so
  * Preview's canvas and the Graphics panel's sources list edit the same
- * scene. Locked, it holds nothing and loads nothing.
+ * scene. Locked, it holds nothing and loads nothing. The studio under it
+ * stays mounted as Preview locks and unlocks: only what it provides changes.
  */
 export function SceneEditingProvider({
   slug,
   preview,
   canEdit,
-  onScenesSaved,
   children,
 }: {
   slug: string;
   preview: LiveRoomState;
   canEdit: boolean;
-  /** Tells this room the event's scenes were saved, so it shows the saved scene at once. */
-  onScenesSaved: () => void;
   children: ComponentChildren;
 }) {
-  if (!canEdit || !previewSceneEditing.value)
-    return <SceneEditingContext.Provider value={null}>{children}</SceneEditingContext.Provider>;
+  const editing = canEdit && previewSceneEditing.value;
+  const endpoints = endpointsOf(slug);
+  const { current } = previewSceneOf(preview);
+  // The scene the draft edits: Preview's, except while changes to the one before wait to be saved or discarded.
+  const [sceneSlug, setSceneSlug] = useState(current.slug);
+  const [saved, setSaved] = useState<EventLiveOverlayLayoutsResponse | null>(null);
+  const layout = saved?.layouts.find((candidate) => candidate.slug === sceneSlug);
+  // A scene copied since the scenes loaded is read again, never stood in for by another.
+  const missing = saved && !layout ? sceneSlug : "";
+  const loaded = useData(
+    () =>
+      editing
+        ? getJson(endpoints.layouts, eventLiveOverlayLayoutsResponseSchema).then((read) => ({ read, missing }))
+        : Promise.resolve(null),
+    [slug, editing, missing],
+  );
+  useEffect(() => {
+    if (loaded.data) setSaved(loaded.data.read);
+  }, [loaded.data]);
+  const draft = useSceneDraft({
+    endpoints,
+    layout: layout ?? NOT_LOADED.layout,
+    positions: (saved ?? NOT_LOADED.saved).positions,
+    onSaved: (next) => {
+      setSaved(next);
+      toast("Scene saved. Every room shows the change.", "success");
+    },
+  });
+  useEffect(() => {
+    if (current.slug === sceneSlug) return;
+    if (!draft.dirty) return setSceneSlug(current.slug);
+    // Someone put another scene on Preview: this one's changes are saved or discarded first.
+    leavingDraft.value ??= (leave) => leave && setSceneSlug(current.slug);
+  }, [current.slug, sceneSlug, draft.dirty]);
+  const value: SceneEditing | null = !editing
+    ? null
+    : loaded.error
+      ? { status: "failed", error: loaded.error }
+      : !saved || loaded.loading
+        ? { status: "loading" }
+        : layout
+          ? { status: "ready", draft, layout, preview }
+          : loaded.data?.missing === sceneSlug
+            ? { status: "failed", error: "This scene is no longer saved for the event." }
+            : { status: "loading" };
+  openDraft.current = value?.status === "ready" ? draft : null;
+  useEffect(() => {
+    if (value?.status === "ready") return;
+    // Locked or not loaded: nothing waits to be saved.
+    leavingDraft.value?.(false);
+    leavingDraft.value = null;
+  }, [value?.status]);
+  useEffect(
+    () => () => {
+      openDraft.current = null;
+    },
+    [],
+  );
   return (
-    <LoadedSceneEditing slug={slug} preview={preview} onScenesSaved={onScenesSaved}>
+    <SceneEditingContext.Provider value={value}>
       {children}
-    </LoadedSceneEditing>
+      {value?.status === "ready" && leavingDraft.value ? <SaveOrDiscard draft={draft} /> : null}
+    </SceneEditingContext.Provider>
   );
 }
 
@@ -116,11 +196,11 @@ function copyName(name: string, layouts: readonly LiveOverlayLayout[]) {
  * Copy, then edit: saves the scene on Preview as a new scene, puts the copy
  * on Preview and unlocks it, so the original stays as it is in every room.
  */
-export async function duplicatePreviewScene(
-  slug: string,
-  preview: LiveRoomState,
-  onPreviewScene: (scene: string) => void,
-) {
+export function duplicatePreviewScene(slug: string, preview: LiveRoomState, onPreviewScene: (scene: string) => void) {
+  leavePreviewScene(() => void copyPreviewScene(slug, preview, onPreviewScene));
+}
+
+async function copyPreviewScene(slug: string, preview: LiveRoomState, onPreviewScene: (scene: string) => void) {
   const endpoint = endpointsOf(slug).layouts;
   try {
     const { layouts } = await getJson(endpoint, eventLiveOverlayLayoutsResponseSchema);
@@ -142,68 +222,47 @@ export async function duplicatePreviewScene(
   }
 }
 
-function LoadedSceneEditing({
-  slug,
-  preview,
-  onScenesSaved,
-  children,
-}: {
-  slug: string;
-  preview: LiveRoomState;
-  onScenesSaved: () => void;
-  children: ComponentChildren;
-}) {
-  const endpoints = endpointsOf(slug);
-  const loaded = useData(() => getJson(endpoints.layouts, eventLiveOverlayLayoutsResponseSchema), [slug]);
-  const [saved, setSaved] = useState<EventLiveOverlayLayoutsResponse | null>(null);
-  useEffect(() => {
-    if (loaded.data) setSaved(loaded.data);
-  }, [loaded.data]);
-  const value: SceneEditing | null = loaded.error
-    ? { status: "failed", error: loaded.error }
-    : saved
-      ? null
-      : { status: "loading" };
-  if (value || !saved) return <SceneEditingContext.Provider value={value}>{children}</SceneEditingContext.Provider>;
-  const { current } = previewSceneOf(preview);
-  const layout = saved.layouts.find((candidate) => candidate.slug === current.slug) ?? saved.layouts[0]!;
+/** Save or discard the scene's changes before Preview leaves it; Keep editing stays. */
+function SaveOrDiscard({ draft }: { draft: SceneDraft }) {
+  const settle = (leave: boolean) => {
+    leavingDraft.value?.(leave);
+    leavingDraft.value = null;
+  };
   return (
-    <ReadySceneEditing
-      endpoints={endpoints}
-      saved={saved}
-      layout={layout}
-      preview={preview}
-      onSaved={(next) => {
-        setSaved(next);
-        onScenesSaved();
-        toast("Scene saved. Every room shows the change.", "success");
-      }}
+    <Dialog
+      open
+      title={`Save changes to ${draft.name}?`}
+      description="Saving changes this scene in every room of the event."
+      confirmLabel="Save scene"
+      onConfirm={() => undefined}
+      onCancel={() => settle(false)}
+      footerActions={
+        <>
+          <Button variant="ghost" disabled={draft.busy} onClick={() => settle(false)}>
+            Keep editing
+          </Button>
+          <Button
+            variant="ghost"
+            disabled={draft.busy}
+            onClick={() => {
+              draft.discard();
+              settle(true);
+            }}
+          >
+            Discard changes
+          </Button>
+          <Button
+            variant="primary"
+            loading={draft.busy}
+            onClick={() => void draft.save().then((saved) => saved && settle(true))}
+          >
+            Save scene
+          </Button>
+        </>
+      }
     >
-      {children}
-    </ReadySceneEditing>
-  );
-}
-
-function ReadySceneEditing({
-  endpoints,
-  saved,
-  layout,
-  preview,
-  onSaved,
-  children,
-}: {
-  endpoints: SceneEndpoints;
-  saved: EventLiveOverlayLayoutsResponse;
-  layout: LiveOverlayLayout;
-  preview: LiveRoomState;
-  onSaved: (next: EventLiveOverlayLayoutsResponse) => void;
-  children: ComponentChildren;
-}) {
-  const draft = useSceneDraft({ endpoints, layout, positions: saved.positions, onSaved });
-  return (
-    <SceneEditingContext.Provider value={{ status: "ready", draft, layout, preview }}>
-      {children}
-    </SceneEditingContext.Provider>
+      {draft.problem ? <Alert tone="danger">{draft.problem}</Alert> : null}
+    </Dialog>
   );
 }
 
@@ -254,7 +313,10 @@ export function PreviewSceneLock({ disabled }: { disabled: boolean }) {
           : "Unlock to edit this scene\nMove and resize its graphics on Preview. Program is not touched."
       }
       disabled={disabled}
-      onClick={() => (previewSceneEditing.value = !open)}
+      onClick={() => {
+        if (!open) previewSceneEditing.value = true;
+        else leavePreviewScene(() => (previewSceneEditing.value = false));
+      }}
     >
       <LockIcon open={open} />
     </Button>
@@ -296,7 +358,7 @@ export function PreviewSceneCanvas() {
 /** The scene's sources while Preview is unlocked: add, take out, reorder, and how each takes its position. */
 export function SceneSourcesList({ draft }: { draft: SceneDraft }) {
   return (
-    <div class="pk-studio-scene-sources pk-scenes__graphics">
+    <div class="pk-scenes__graphics">
       <div class="pk-studio-scene-sources__bar">
         <span class="pk-small pk-muted" title="Saving changes this scene in every room of the event.">
           {draft.dirty ? `${draft.name} · unsaved` : draft.name}
@@ -313,6 +375,8 @@ export function SceneSourcesList({ draft }: { draft: SceneDraft }) {
         onComesOn={(element, comesOn) => draft.change(element, { comesOn })}
         onReorder={draft.reorder}
         onSharing={draft.share}
+        onTurns={draft.spotTurns}
+        onLock={draft.lock}
       />
     </div>
   );

@@ -12,7 +12,7 @@ export const OPERATOR = { role: "operator" as const, name: "Olga Operator" };
 type Broadcast = ComponentProps<typeof LiveSessionDesk>["broadcast"];
 
 /** Mounts the desk on a fake room socket that has not opened yet. */
-export function mountClosedDesk(broadcast?: Broadcast, canProduce = true) {
+export function mountClosedDesk(broadcast?: Broadcast, canProduce = true, canSetUp = false) {
   const live = fakeLiveSockets();
   const host = document.createElement("div");
   document.body.append(host);
@@ -26,6 +26,7 @@ export function mountClosedDesk(broadcast?: Broadcast, canProduce = true) {
         createSocket={live.factory}
         broadcast={broadcast}
         canProduce={canProduce}
+        canSetUp={canSetUp}
       />,
       host,
     );
@@ -39,9 +40,10 @@ export function mountDesk(
   workspace = "show",
   broadcast?: Broadcast,
   canProduce = true,
+  canSetUp = false,
 ) {
   history.replaceState(null, "", workspace === "show" ? "/#/live" : `/#/live?studio=${workspace}`);
-  const desk = mountClosedDesk(broadcast, canProduce);
+  const desk = mountClosedDesk(broadcast, canProduce, canSetUp);
   void act(() => {
     desk.live.latest().open();
     desk.live.latest().deliver(snapshot);

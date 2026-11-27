@@ -1,5 +1,5 @@
 import type { ComponentType } from "preact";
-import { useState } from "preact/hooks";
+import { useHashQueryParam } from "../../../../../../../hooks/useHashQueryParam";
 import { formatConjunction } from "../../../../../../../../shared/format-list";
 import { liveOverlayLayoutChoices } from "../../../../../../../../shared/live-overlay-layout-presets";
 import type { LiveProgramLayer } from "../../../../../../../../shared/live-overlay-stacking";
@@ -97,7 +97,8 @@ export const LIVE_GRAPHICS: ReadonlyArray<{
   { id: "reactions", element: "reactions", Row: ({ targets }) => <LiveReactionsControls targets={targets} /> },
 ];
 
-type GraphicsTab = "scene" | "other";
+const GRAPHICS_TABS = ["scene", "other"] as const;
+type GraphicsTab = (typeof GRAPHICS_TABS)[number];
 
 /**
  * The room's graphics beyond people and questions, each with its own
@@ -109,7 +110,7 @@ type GraphicsTab = "scene" | "other";
  * sources list.
  */
 export function GraphicsPanel(context: LiveGraphicContext) {
-  const [tab, setTab] = useState<GraphicsTab>("scene");
+  const [tab, setTab] = useHashQueryParam<GraphicsTab>("graphics", "scene", GRAPHICS_TABS);
   const editing = useSceneEditing();
   const { state } = context.targets;
   const elements = resolveLiveSceneElements(state, state.preview.scene);

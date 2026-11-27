@@ -67,9 +67,6 @@ export async function operateLiveDesk(
       return desk.graphics.setAuxScene(actor, session, message, at);
     case "preview.set":
       return desk.graphics.setPreview(actor, session, message, at);
-    case "scenes.reload":
-      await desk.graphics.refresh();
-      return { messages: [] };
     case "preview.take":
       return desk.graphics.takePreview(actor, session, at);
     case "speaker.message":

@@ -52,6 +52,8 @@ export const NODE_UNIT_TEST_FILES = [
   "tests/form-field-rules.test.ts",
   "tests/live-overlay-layout-geometry.test.ts",
   "tests/live-scene-fill.test.ts",
+  "tests/live-overlay-spots.test.ts",
+  "tests/live-scenes-changed.test.ts",
   "tests/live-session-poll-field.test.ts",
   "tests/live-session-prepared-question-policy.test.ts",
   "tests/form-submission-window.test.ts",

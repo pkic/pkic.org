@@ -160,8 +160,9 @@ describe("the built-in scenes", () => {
     // Boards and cards the scene includes sit inside its background, or clear of it over the camera.
     expect(preset("questions").topQuestions).toMatchObject(background("questions")!);
     expect(preset("check-in").checkIn).toMatchObject(background("check-in")!);
-    // Every board a scene with boards includes lies inside that scene's background.
-    for (const slug of BOARD_SCENES)
+    // Every board a scene with boards includes lies inside that scene's background. Break's boards sit on the
+    // production's own background beside the clip.
+    for (const slug of BOARD_SCENES.filter((each) => each !== "break"))
       for (const board of FIELD_BOARDS.filter((each) => preset(slug)[each].visible)) {
         const ground = background(slug);
         const { x, y, w, h } = preset(slug)[board];

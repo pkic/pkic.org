@@ -1,4 +1,5 @@
-import { liveOverlayCoveredBy } from "../../../../../../../shared/live-overlay-cover";
+import { liveOverlayCoveredBy, liveOverlayWaitsForTurn } from "../../../../../../../shared/live-overlay-cover";
+import { liveOverlaySpotOf, liveOverlaySpotTurns } from "../../../../../../../shared/live-overlay-spots";
 import { liveOverlayLayoutChoices } from "../../../../../../../shared/live-overlay-layout-presets";
 import { resolveLiveSceneElements } from "../../../../../../../shared/live-scene-elements";
 import type { LiveProgramLayer } from "../../../../../../../shared/live-overlay-stacking";
@@ -8,10 +9,14 @@ import type { LiveRoomState } from "../../../../../../live-session/live-room-sta
 
 /**
  * Why a composition that holds a graphic does not show it: a board drawn
- * over it, such as Up next under a full-screen question, or a scene that
- * leaves it out. Named as the studio names them.
+ * over it, such as Up next under a full-screen question, its spot's turn
+ * held by another board, or a scene that leaves it out. Named as the studio
+ * names them.
  */
-export type LiveLayerUnseen = { reason: "covered"; by: string } | { reason: "scene"; scene: string };
+export type LiveLayerUnseen =
+  | { reason: "covered"; by: string }
+  | { reason: "waiting"; turns: number }
+  | { reason: "scene"; scene: string };
 
 /** A scene's name as the operators picked it; an unknown one is drawn as the event's default. */
 export function liveSceneName(state: Pick<LiveRoomState, "overlayLayouts">, slug: string | null): string {
@@ -24,16 +29,24 @@ export function liveLayerUnseen(
   state: Pick<LiveRoomState, "overlayLayouts">,
   stage: LiveStage,
   layer: LiveProgramLayer,
+  now = Date.now(),
 ): LiveLayerUnseen | null {
   const elements = resolveLiveSceneElements(state, stage.scene);
   if (!elements[layer].visible) return { reason: "scene", scene: liveSceneName(state, stage.scene) };
   const board = liveOverlayCoveredBy(stage, elements, layer);
-  return board ? { reason: "covered", by: LIVE_OVERLAY_ELEMENT_LABELS[board] } : null;
+  if (board) return { reason: "covered", by: LIVE_OVERLAY_ELEMENT_LABELS[board] };
+  if (!liveOverlayWaitsForTurn(stage, elements, layer, now)) return null;
+  const spot = liveOverlaySpotOf(elements, layer);
+  return { reason: "waiting", turns: (spot && liveOverlaySpotTurns(elements, spot)) ?? 0 };
 }
 
-/** The short words for it after the output's own state: "covered by Question", "not in this scene". */
+/** The short words for it after the output's own state: "covered by Question", "next in turn", "not in this scene". */
 export const liveLayerUnseenWords = (unseen: LiveLayerUnseen) =>
-  unseen.reason === "covered" ? `covered by ${unseen.by}` : "not in this scene";
+  unseen.reason === "covered"
+    ? `covered by ${unseen.by}`
+    : unseen.reason === "waiting"
+      ? "next in turn"
+      : "not in this scene";
 
 /**
  * The one line a graphic's row says when an output holds it unseen,

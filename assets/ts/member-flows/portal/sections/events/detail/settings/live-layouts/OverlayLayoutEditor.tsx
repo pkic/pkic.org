@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
 import {
   LIVE_OVERLAY_PRESET_LAYOUTS,
   resolveLiveOverlayElements,
@@ -7,16 +7,12 @@ import {
   LIVE_OVERLAY_DEFAULT_LAYOUT,
   eventLiveOverlayLayoutPutSchema,
   eventLiveOverlayLayoutsResponseSchema,
-  eventLiveOverlayPositionsPutSchema,
   type EventLiveOverlayLayoutsResponse,
-  type LiveOverlayElement,
-  type LiveOverlayElementPlacement,
   type LiveOverlayLayout,
   type LiveOverlayPositions,
 } from "../../../../../../../../shared/schemas/live-overlay-layout";
 import { confirmAction } from "../../../../../../../components/ConfirmDialog";
 import { IconLayoutReset } from "../../../../../../../components/icons";
-import { useContractForm } from "../../../../../../../hooks/useContractForm";
 import { useHashQueryParam } from "../../../../../../../hooks/useHashQueryParam";
 import { deleteJson, putJson } from "../../../../../../../shared/api-client";
 import { toast } from "../../../../../ui";
@@ -25,29 +21,13 @@ import { Button } from "../../../../../../../ui/Button";
 import { Menu } from "../../../../../../../ui/Menu";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../../ui/Panel";
 import { OverlayLayoutCanvas } from "./OverlayLayoutCanvas";
-import { OverlayLayoutGraphics, OverlayLayoutGraphicsSummary, type LayoutSharingAction } from "./OverlayLayoutGraphics";
+import { OverlayLayoutGraphics, OverlayLayoutGraphicsSummary } from "./OverlayLayoutGraphics";
 import { OverlayLayoutInspector } from "./OverlayLayoutInspector";
 import { OverlayLayoutRenameDialog } from "./OverlayLayoutRenameDialog";
-import {
-  applyLayoutElementToAll,
-  changeLayoutElement,
-  layoutElementsChanged,
-  layoutsSharing,
-  relinkLayoutElement,
-  unlinkLayoutElement,
-  type LayoutDrafts,
-} from "./overlay-layout-sharing";
-import { LAYOUT_UNITS, type Box } from "./overlay-layout-editing";
-import { reorderSceneGraphic, sceneGraphics } from "./overlay-layout-graphics";
+import { layoutElementsChanged, layoutsSharing } from "./overlay-layout-sharing";
+import { LAYOUT_UNITS } from "./overlay-layout-editing";
 import { readSafeAreasPreference, saveSafeAreasPreference } from "./overlay-layout-labels";
-
-const same = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
-
-const SHARING: Record<LayoutSharingAction, (drafts: LayoutDrafts, element: LiveOverlayElement) => LayoutDrafts> = {
-  unlink: unlinkLayoutElement,
-  relink: relinkLayoutElement,
-  apply: applyLayoutElementToAll,
-};
+import { useSceneDraft } from "./useSceneDraft";
 
 /**
  * One scene's editor: the canvas with the selected graphic's exact position
@@ -84,100 +64,23 @@ export function OverlayLayoutEditor({
   onDuplicate: () => void;
   onDirty: (dirty: boolean) => void;
 }) {
-  const [name, setName] = useState(layout.name);
-  const initial = (): LayoutDrafts => ({ elements: layout.elements, positions: savedPositions.elements });
-  const [drafts, setDrafts] = useState<LayoutDrafts>(initial);
-  const { elements } = drafts;
-  const graphics = sceneGraphics(elements);
-  const [picked, setPicked] = useState<LiveOverlayElement | null>(null);
-  // The graphic picked, while the scene still shows it; else the one in front.
-  const selected = picked && graphics.some((element) => element === picked) ? picked : (graphics[0] ?? null);
+  const draft = useSceneDraft({
+    endpoints: { layouts: endpoint, positions: positionsEndpoint },
+    layout,
+    positions: savedPositions,
+    onSaved: (saved) => {
+      onSaved(saved);
+      toast("Scene saved. Every room shows the change.", "success");
+    },
+    onDirty,
+  });
+  const { name, elements, graphics, selected, form, busy, setBusy, problem, setProblem, dirty } = draft;
   const [unit, setUnit] = useHashQueryParam("units", "percent", LAYOUT_UNITS);
-  const [exact, setExact] = useState(false);
   const [safeAreas, setSafeAreas] = useState(readSafeAreasPreference);
   const [renaming, setRenaming] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-  // A save hands back the stored scene; the draft starts again from it.
-  const latestLayout = useRef({ layout, savedPositions });
-  latestLayout.current = { layout, savedPositions };
-  useEffect(() => {
-    const current = latestLayout.current;
-    setName(current.layout.name);
-    setDrafts({ elements: current.layout.elements, positions: current.savedPositions.elements });
-  }, [layout.slug, layout.updatedAt, savedPositions.updatedAt]);
-  const scene = { expectedUpdatedAt: layout.updatedAt, name, preset: layout.preset, elements };
-  const form = useContractForm(eventLiveOverlayLayoutPutSchema, scene, {
-    // A refused box opens the exact position of its graphic, so the field that says why is in view.
-    revealField: (path) => {
-      const element = /^elements\.([^.]+)\./.exec(path)?.[1] as LiveOverlayElement | undefined;
-      if (!element) return;
-      setPicked(element);
-      setExact(true);
-    },
-  });
-  const positionsChanged = (next: LayoutDrafts) => !same(next.positions, savedPositions.elements);
-  const layoutChanged = (next: LayoutDrafts, nextName = name) =>
-    nextName !== layout.name || layoutElementsChanged(next.elements, layout.elements);
-  const dirty = layoutChanged(drafts) || positionsChanged(drafts);
   const preset = layout.preset ? LIVE_OVERLAY_PRESET_LAYOUTS[layout.preset] : null;
-  const presetElements = preset ? resolveLiveOverlayElements(preset.elements, drafts.positions) : null;
-  const update = (next: LayoutDrafts) => {
-    setDrafts(next);
-    setProblem(null);
-    onDirty(layoutChanged(next) || positionsChanged(next));
-  };
-  const change = (element: LiveOverlayElement, patch: Partial<LiveOverlayElementPlacement>) =>
-    update(changeLayoutElement(drafts, element, patch));
-  const place = (element: LiveOverlayElement, box: Box) => change(element, box);
-  const share = (element: LiveOverlayElement, action: LayoutSharingAction) => update(SHARING[action](drafts, element));
-  // An added graphic starts at its shared position, where the event's other scenes put it.
-  const show = (element: LiveOverlayElement, visible: boolean) => {
-    if (!visible) {
-      change(element, { visible });
-      return;
-    }
-    update(changeLayoutElement(relinkLayoutElement(drafts, element), element, { visible }));
-    setPicked(element);
-  };
+  const presetElements = preset ? resolveLiveOverlayElements(preset.elements, draft.drafts.positions) : null;
 
-  async function save(event?: SubmitEvent) {
-    event?.preventDefault();
-    if (busy || !canEdit) return;
-    const checked = form.submit();
-    if (!checked.data) {
-      setProblem(checked.formMessage);
-      return;
-    }
-    setBusy(true);
-    try {
-      // The shared positions first: the scene's shared graphics take them, so a failed scene save loses nothing.
-      let saved: EventLiveOverlayLayoutsResponse | null = null;
-      if (positionsChanged(drafts))
-        saved = await putJson(
-          positionsEndpoint,
-          eventLiveOverlayPositionsPutSchema.parse({
-            expectedUpdatedAt: savedPositions.updatedAt,
-            elements: drafts.positions,
-          }),
-          eventLiveOverlayLayoutsResponseSchema,
-        );
-      if (layoutChanged(drafts))
-        saved = await putJson(
-          `${endpoint}/${encodeURIComponent(layout.slug)}`,
-          checked.data,
-          eventLiveOverlayLayoutsResponseSchema,
-        );
-      form.reset();
-      if (saved) onSaved(saved);
-      onDirty(false);
-      toast("Scene saved. Browser sources using it update within 30 seconds.", "success");
-    } catch (cause) {
-      setProblem(form.refuse(cause));
-    } finally {
-      setBusy(false);
-    }
-  }
   async function remove() {
     const confirmed = await confirmAction({
       title: `Delete ${name}?`,
@@ -203,7 +106,7 @@ export function OverlayLayoutEditor({
     if (!preset || !presetElements) return;
     const confirmed = await confirmAction({
       title: `Reset ${name}?`,
-      body: `It goes back to the built-in ${preset.name} scene: its name, its graphics and their order. Browser sources using it update within 30 seconds.`,
+      body: `It goes back to the built-in ${preset.name} scene: its name, its graphics and their order. Every room shows it at once.`,
       confirmLabel: "Reset scene",
       tone: "danger",
     });
@@ -248,14 +151,6 @@ export function OverlayLayoutEditor({
       setBusy(false);
     }
   }
-  function discard() {
-    setName(layout.name);
-    setDrafts(initial());
-    form.reset();
-    setProblem(null);
-    onDirty(false);
-  }
-
   if (!canEdit)
     return (
       <div class="pk-scenes__editor" data-read-only="">
@@ -272,8 +167,8 @@ export function OverlayLayoutEditor({
                 setSafeAreas(shown);
                 saveSafeAreasPreference(shown);
               }}
-              onSelect={setPicked}
-              onChange={place}
+              onSelect={draft.select}
+              onChange={draft.place}
             />
           </PanelBody>
         </Panel>
@@ -282,7 +177,15 @@ export function OverlayLayoutEditor({
     );
   return (
     <>
-      <form noValidate class="pk-scenes__editor" {...form.handlers} onSubmit={(event) => void save(event)}>
+      <form
+        noValidate
+        class="pk-scenes__editor"
+        {...form.handlers}
+        onSubmit={(event) => {
+          event.preventDefault();
+          void draft.save();
+        }}
+      >
         <Panel>
           <PanelHeader
             title={name}
@@ -332,7 +235,7 @@ export function OverlayLayoutEditor({
             }
           >
             {dirty ? (
-              <Button variant="ghost" disabled={busy} onClick={discard}>
+              <Button variant="ghost" disabled={busy} onClick={draft.discard}>
                 Discard changes
               </Button>
             ) : null}
@@ -351,8 +254,8 @@ export function OverlayLayoutEditor({
                 setSafeAreas(shown);
                 saveSafeAreasPreference(shown);
               }}
-              onSelect={setPicked}
-              onChange={place}
+              onSelect={draft.select}
+              onChange={draft.place}
             />
             {selected ? (
               <OverlayLayoutInspector
@@ -362,10 +265,10 @@ export function OverlayLayoutEditor({
                 disabled={busy}
                 form={form}
                 sharing={layoutsSharing(layouts, selected)}
-                open={exact}
-                onOpen={setExact}
+                open={draft.revealed}
+                onOpen={draft.setRevealed}
                 onUnit={setUnit}
-                onChange={change}
+                onChange={draft.change}
               />
             ) : null}
           </PanelBody>
@@ -374,23 +277,23 @@ export function OverlayLayoutEditor({
           elements={elements}
           selected={selected}
           disabled={busy}
-          onSelect={setPicked}
-          onShow={show}
-          onComesOn={(element, comesOn) => change(element, { comesOn })}
-          onReorder={(element, to) => update({ ...drafts, elements: reorderSceneGraphic(elements, element, to) })}
-          onSharing={share}
+          onSelect={draft.select}
+          onShow={draft.show}
+          onComesOn={(element, comesOn) => draft.change(element, { comesOn })}
+          onReorder={draft.reorder}
+          onSharing={draft.share}
+          onTurns={draft.spotTurns}
+          onLock={draft.lock}
         />
       </form>
       {renaming ? (
         <OverlayLayoutRenameDialog
-          scene={scene}
+          scene={draft.scene}
           slug={layout.slug}
           onCancel={() => setRenaming(false)}
           onRename={(next) => {
             setRenaming(false);
-            setName(next);
-            setProblem(null);
-            onDirty(layoutChanged(drafts, next) || positionsChanged(drafts));
+            draft.rename(next);
           }}
         />
       ) : null}

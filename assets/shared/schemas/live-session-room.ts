@@ -545,8 +545,6 @@ export const liveRoomClientMessageSchema = z.discriminatedUnion("type", [
   liveAuxSetSchema,
   liveAuxSceneSchema,
   livePreviewSetSchema,
-  /** The event's scenes were saved: the room reads them again, so a new or changed scene is on every screen at once. */
-  z.object({ type: z.literal("scenes.reload") }).strict(),
   /** Puts the shared Preview on Program; Preview keeps its contents. */
   z.object({ type: z.literal("preview.take") }).strict(),
   /** Takes every graphic off Program at once; the room keeps what was there for an Undo. */

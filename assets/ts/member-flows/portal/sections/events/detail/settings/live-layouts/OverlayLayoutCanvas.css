@@ -140,6 +140,10 @@
     border: 2px solid var(--pk-accent);
     pointer-events: none;
   }
+  /* A locked box keeps its outline and name; presses pass through it to the box behind. */
+  .pk-layout-canvas__box[data-locked] {
+    pointer-events: none;
+  }
   /* A box being dragged draws in front until it lands. */
   .pk-layout-canvas__box[data-gesture] {
     z-index: 3;

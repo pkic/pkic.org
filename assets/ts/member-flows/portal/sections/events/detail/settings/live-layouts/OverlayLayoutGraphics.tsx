@@ -1,5 +1,12 @@
 import type { ComponentChildren } from "preact";
 import { useRef, useState } from "preact/hooks";
+import {
+  LIVE_SPOT_TURN_CHOICES,
+  LIVE_SPOT_TURN_SECONDS,
+  liveOverlayPartialOverlaps,
+  liveOverlaySpotOf,
+  liveOverlaySpotTurns,
+} from "../../../../../../../../shared/live-overlay-spots";
 import type { LiveProgramLayer } from "../../../../../../../../shared/live-overlay-stacking";
 import {
   LIVE_OVERLAY_ELEMENT_LABELS,
@@ -13,7 +20,7 @@ import { buttonClasses } from "../../../../../../../ui/button-classes";
 import { EmptyState } from "../../../../../../../ui/EmptyState";
 import { Menu, type MenuItem } from "../../../../../../../ui/Menu";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../../ui/Panel";
-import { IconChevron } from "../../../../../../../ui/MediaIcons";
+import { IconChevron, StrokeIcon } from "../../../../../../../ui/MediaIcons";
 import { RowActions } from "../../../../../../../ui/RowActions";
 import { OverlayLayoutGraphicSwitch } from "./OverlayLayoutGraphicSwitch";
 import { LAYOUT_GRAPHIC_DESCRIPTIONS } from "./overlay-layout-copy";
@@ -21,6 +28,43 @@ import { addableGraphics, describeGraphicPosition, sceneGraphics } from "./overl
 
 /** What a row's menu does to a graphic's position: see `overlay-layout-sharing.ts`. */
 export type LayoutSharingAction = "unlink" | "relink" | "apply";
+
+/** A padlock, open while what it holds can be changed: Preview's scene, or a graphic's box on the canvas. */
+export function LockIcon({ open }: { open: boolean }) {
+  return (
+    <StrokeIcon>
+      <rect x="3" y="7" width="10" height="7" rx="1" />
+      <path d={open ? "M5.5 7V4.8a2.5 2.5 0 0 1 4.9-.7" : "M5.5 7V4.8a2.5 2.5 0 0 1 5 0V7"} />
+    </StrokeIcon>
+  );
+}
+
+const names = (elements: readonly LiveOverlayElement[]) =>
+  elements.map((element) => LIVE_OVERLAY_ELEMENT_LABELS[element]).join(", ");
+
+/** How a graphic's spot shows its boards, in a few words for its row; null when it has its box to itself. */
+function spotWords(elements: LiveOverlayLayoutElements, element: LiveProgramLayer): string | null {
+  const spot = liveOverlaySpotOf(elements, element);
+  if (!spot) return null;
+  const turns = liveOverlaySpotTurns(elements, spot);
+  return turns ? `Takes turns, ${turns} s` : spot[0] === element ? "Shows in front" : "Behind in its spot";
+}
+
+/** Two boards that partly overlap, said once under the list: put them in one spot, or apart. */
+function OverlapNote({ elements }: { elements: LiveOverlayLayoutElements }) {
+  const overlaps = liveOverlayPartialOverlaps(elements);
+  if (overlaps.length === 0) return null;
+  return (
+    <ul class="pk-scenes__overlaps" aria-label="Graphics that partly overlap">
+      {overlaps.map(([front, back]) => (
+        <li key={`${front}:${back}`}>
+          {names([front])} partly covers {names([back])}. Drop it on {names([back])} to share one spot, or move it
+          apart.
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 /** A press on a grip becomes a drag once the pointer travels this far. */
 const DRAG_THRESHOLD_PX = 3;
@@ -115,12 +159,16 @@ function GraphicsPanel({
   );
 }
 
-/** A graphic's name and where it sits on the frame. */
+/** A graphic's name, where it sits on the frame, and how its spot shows it when it shares one. */
 function GraphicLabel({ element, elements }: { element: LiveProgramLayer; elements: LiveOverlayLayoutElements }) {
+  const spot = spotWords(elements, element);
   return (
     <>
       <span class="pk-scenes__name">{LIVE_OVERLAY_ELEMENT_LABELS[element]}</span>
-      <span class="pk-scenes__meta">{describeGraphicPosition(elements[element])}</span>
+      <span class="pk-scenes__meta">
+        {describeGraphicPosition(elements[element])}
+        {spot ? ` · ${spot}` : null}
+      </span>
     </>
   );
 }
@@ -196,6 +244,8 @@ export function OverlayLayoutGraphics({
   onComesOn,
   onReorder,
   onSharing,
+  onTurns,
+  onLock,
   framed = true,
 }: {
   elements: LiveOverlayLayoutElements;
@@ -210,11 +260,47 @@ export function OverlayLayoutGraphics({
   onComesOn: (element: LiveOverlayElement, comesOn: boolean) => void;
   onReorder: (element: LiveProgramLayer, to: number) => void;
   onSharing: (element: LiveOverlayElement, action: LayoutSharingAction) => void;
+  /** Lets the graphic's spot take turns every `turns` seconds, or show only its front graphic (null). */
+  onTurns: (element: LiveProgramLayer, turns: number | null) => void;
+  /** Holds the graphic's box in place on the canvas, or frees it. */
+  onLock: (element: LiveOverlayElement, locked: boolean) => void;
 }) {
   const list = useRef<HTMLUListElement>(null);
   const graphics = sceneGraphics(elements);
   const drag = useRowDrag(() => [...(list.current?.children ?? [])] as HTMLElement[], onReorder);
+  // A spot's boards show the front one, or take turns; the choice is the spot's, set on each of its boards.
+  const spotActions = (element: LiveProgramLayer): MenuItem[] => {
+    const spot = liveOverlaySpotOf(elements, element);
+    if (!spot) return [];
+    const turns = liveOverlaySpotTurns(elements, spot);
+    return [
+      {
+        id: "spot",
+        label: "Spot",
+        description: `Shared with ${names(spot.filter((board) => board !== element))}`,
+        children: [
+          {
+            id: "front",
+            label: "Show the front one",
+            description: "Only the highest one in the list that is on shows.",
+            checked: turns === null,
+            disabled,
+            onSelect: () => onTurns(element, null),
+          },
+          ...LIVE_SPOT_TURN_CHOICES.map((seconds) => ({
+            id: `turns-${seconds}`,
+            label: `Take turns every ${seconds} s`,
+            description: seconds === LIVE_SPOT_TURN_SECONDS ? "Each graphic that is on shows in turn." : undefined,
+            checked: turns === seconds,
+            disabled,
+            onSelect: () => onTurns(element, seconds),
+          })),
+        ],
+      },
+    ];
+  };
   const actions = (element: LiveProgramLayer): MenuItem[] => [
+    ...spotActions(element),
     ...(elements[element].shared
       ? [
           {
@@ -316,9 +402,24 @@ export function OverlayLayoutGraphics({
                 <IconChevron pointing="down" />
               </Button>
             </span>
+            <Button
+              icon
+              variant="ghost"
+              aria-pressed={elements[element].locked === true}
+              aria-label={elements[element].locked ? `Unlock ${label}` : `Lock ${label}`}
+              title={
+                elements[element].locked
+                  ? `Unlock ${label}\nLets you drag it on the canvas again.`
+                  : `Lock ${label}\nHolds it in place on the canvas, so a press reaches the graphic behind it.`
+              }
+              disabled={disabled}
+              onClick={() => onLock(element, !elements[element].locked)}
+            >
+              <LockIcon open={!elements[element].locked} />
+            </Button>
             <RowActions
               subject={label}
-              hint="Share or keep its position across scenes, or remove it from this scene."
+              hint="Share or keep its position across scenes, set how its spot shows it, or remove it."
               actions={actions(element)}
             />
           </li>
@@ -326,13 +427,20 @@ export function OverlayLayoutGraphics({
       })}
     </ul>
   );
-  if (!framed) return rows;
+  if (!framed)
+    return (
+      <>
+        {rows}
+        <OverlapNote elements={elements} />
+      </>
+    );
   return (
     <GraphicsPanel
       empty={graphics.length === 0}
       toolbar={<AddGraphicMenu elements={elements} disabled={disabled} onShow={onShow} />}
     >
       {rows}
+      <OverlapNote elements={elements} />
     </GraphicsPanel>
   );
 }

@@ -31,6 +31,7 @@ function LayoutBox({
   box,
   selected,
   off,
+  locked,
   labelPlace,
   describedBy,
   cell,
@@ -43,6 +44,8 @@ function LayoutBox({
   selected: boolean;
   /** The graphic is in the scene but has nothing on air: its box is an outline with its name. */
   off: boolean;
+  /** Held in place: it is not moved here, and a press passes through it to the box behind. */
+  locked: boolean;
   /** Where its name sits along its top or bottom edge, clear of every other name. */
   labelPlace: LabelPlace;
   describedBy: string;
@@ -71,16 +74,21 @@ function LayoutBox({
       data-element={element}
       data-selected={selected ? "" : undefined}
       data-off={off ? "" : undefined}
+      data-locked={locked ? "" : undefined}
       data-label-side={labelPlace.side}
       aria-pressed={selected}
       aria-label={`${label}${off ? " (off)" : ""}, ${position}: ${percent(box.x)} from left, ${percent(box.y)} from top, ${percent(box.w)} wide, ${percent(box.h)} high`}
       aria-describedby={describedBy}
-      title={`${label} · ${position}\nDrag to move it, or a corner to resize it. The arrow keys move it too.`}
+      title={
+        locked
+          ? `${label} · ${position}\nLocked. Unlock it in the graphics list to move it here.`
+          : `${label} · ${position}\nDrag to move it, or a corner to resize it. The arrow keys move it too.`
+      }
       onFocus={onSelect}
       onClick={onSelect}
       onKeyDown={(event) => {
         const direction = ARROWS[event.key];
-        if (!direction) return;
+        if (!direction || locked) return;
         event.preventDefault();
         onNudge(nudgeBox(box, direction, event.shiftKey));
       }}
@@ -95,7 +103,7 @@ function LayoutBox({
         <span class="pk-layout-canvas__name">{label}</span>
         {selected ? <span class="pk-layout-canvas__detail"> · {position}</span> : null}
       </span>
-      {selected
+      {selected && !locked
         ? CORNER_HANDLES.map((handle) => (
             <span
               key={handle}
@@ -194,6 +202,7 @@ export function OverlayLayoutCanvas({
                 box={elements[element]}
                 selected={element === selected}
                 off={off?.(element) ?? false}
+                locked={elements[element].locked === true}
                 labelPlace={places[element] ?? { side: "top", along: 0 }}
                 describedBy={help}
                 cell={gesture.register(element)}
@@ -218,8 +227,8 @@ export function OverlayLayoutCanvas({
       </div>
       {caption === undefined ? (
         <figcaption class="pk-small pk-muted">
-          Sample content with every graphic on. Where graphics share a spot, the front one shows. Graphics keep clear of
-          the ticker while it is on; with the ticker off, they use the full height.
+          Sample content with every graphic on. Where graphics share a spot, the front one shows, or they take turns.
+          Graphics keep clear of the ticker while it is on; with the ticker off, they use the full height.
         </figcaption>
       ) : caption ? (
         <figcaption class="pk-small pk-muted">{caption}</figcaption>

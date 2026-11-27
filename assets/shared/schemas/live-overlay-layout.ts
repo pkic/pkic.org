@@ -244,6 +244,13 @@ export const liveOverlayElementPlacementSchema = insideFrame(
        * places it and it is switched in the studio.
        */
       comesOn: z.boolean().optional(),
+      /**
+       * In a spot (boards in one box, `live-overlay-spots.ts`): the boards that are on take turns, each for this
+       * many seconds. Absent on every board of the spot, only its front board that is on shows.
+       */
+      turns: z.number().int().min(5).max(300).optional(),
+      /** Held in place in the scene editor: its box is not dragged on the canvas, so a press reaches the box behind. */
+      locked: z.boolean().optional(),
       ...boxShape,
     })
     .strict(),
