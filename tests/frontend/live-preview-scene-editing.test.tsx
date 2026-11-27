@@ -45,18 +45,28 @@ const COPIED = eventLiveOverlayLayoutsResponseSchema.parse({
 });
 let saves: string[] = [];
 let reads = 0;
+/** While set, a save waits for it before the server answers. */
+let held: Promise<void> | null = null;
 
 beforeEach(() => {
   resetDeskStorage();
   saves = [];
   reads = 0;
+  held = null;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.includes("/settings/live/layouts") || url.includes("/settings/live/positions")) {
-        if (init?.method === "PUT") saves.push(url);
-        else if (url.endsWith("/layouts")) reads += 1;
+        if (init?.method === "PUT") {
+          saves.push(url);
+          await held;
+          // The server answers with what it saved, so the saved positions are the ones sent.
+          if (url.endsWith("/positions")) {
+            const { elements } = JSON.parse(String(init.body)) as { elements: typeof LAYOUTS.positions.elements };
+            return json({ ...LAYOUTS, positions: { ...LAYOUTS.positions, elements, saved: true } });
+          }
+        } else if (url.endsWith("/layouts")) reads += 1;
         return json(reads > 1 ? COPIED : LAYOUTS);
       }
       return json({ error: { message: "Not here" } }, 404);
@@ -66,6 +76,8 @@ beforeEach(() => {
 afterEach(() => {
   previewSceneEditing.value = false;
   unmountDesks();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 /** Mounts the studio for someone who sets it up, with Preview's scene unlocked and a graphic moved. */
@@ -98,6 +110,28 @@ const previewElsewhere = (live: Parameters<typeof commands>[0], scene: string) =
   return act(() => live.latest().deliver({ ...snapshot, overlayLayouts, preview: { ...snapshot.preview, scene } }));
 };
 const dialog = () => document.querySelector<HTMLDialogElement>("dialog[open]");
+const pointer = (target: Element, type: string, clientX: number, clientY: number) => {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  for (const [key, value] of Object.entries({
+    pointerId: 1,
+    isPrimary: true,
+    button: 0,
+    altKey: false,
+    clientX,
+    clientY,
+  }))
+    Object.defineProperty(event, key, { value });
+  target.dispatchEvent(event);
+};
+/** Drags from one point of the canvas to another and lets go. */
+const drag = (target: Element, [x, y]: [number, number], [toX, toY]: [number, number]) =>
+  act(() => {
+    pointer(target, "pointerdown", x, y);
+    pointer(target, "pointermove", toX, toY);
+    pointer(target, "pointerup", toX, toY);
+  });
+const boxAt = (box: HTMLElement) =>
+  ["--box-x", "--box-y", "--box-w", "--box-h"].map((key) => box.style.getPropertyValue(key));
 
 describe("editing the scene on Preview", () => {
   it("asks to save or discard unsaved changes before Preview loads another scene, and stays on Keep editing", async () => {
@@ -156,5 +190,30 @@ describe("editing the scene on Preview", () => {
       expect(preview.querySelector(".pk-studio-scene-editor .pk-layout-canvas__box")).not.toBeNull(),
     );
     expect(preview.textContent).not.toContain("no longer saved");
+  });
+
+  it("puts a box dragged or resized while the scene saves back where it was, and edits again once saved", async () => {
+    // The canvas has a size to drag across, and each drag frame draws at once.
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 960, 540));
+    vi.stubGlobal("requestAnimationFrame", (frame: FrameRequestCallback) => (frame(0), 1));
+    const { preview } = await editedPreview();
+    let answer!: () => void;
+    held = new Promise((resolve) => (answer = resolve));
+    await act(() => labeled(preview, "Save scene").click());
+    await vi.waitFor(() => expect(saves.length).toBeGreaterThan(0));
+    const box = preview.querySelector<HTMLElement>(
+      '.pk-studio-scene-editor .pk-layout-canvas__box[data-element="lowerThird"]',
+    )!;
+    const before = boxAt(box);
+    await drag(box, [200, 450], [400, 300]);
+    expect(boxAt(box)).toEqual(before);
+    const corner = box.querySelector(".pk-layout-canvas__handle")!;
+    await drag(corner, [200, 450], [120, 380]);
+    expect(boxAt(box)).toEqual(before);
+    await act(async () => answer());
+    await vi.waitFor(() => expect(labeled(preview, "Save scene").disabled).toBe(true));
+    // Saved, the scene takes changes again.
+    await act(() => void box.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true })));
+    await vi.waitFor(() => expect(labeled(preview, "Save scene").disabled).toBe(false));
   });
 });

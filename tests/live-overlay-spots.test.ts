@@ -109,6 +109,30 @@ describe("taking turns", () => {
       ]).toContain(false);
     }
   });
+
+  it("keeps the question and panelists apart when each is in the spot but too far from the other to join", () => {
+    const spot = { x: BREAK.chat.x, y: BREAK.chat.y, w: BREAK.chat.w, h: BREAK.chat.h, turns: 15, visible: true };
+    const scene = {
+      ...BREAK,
+      // A front poll in the box holds the spot, so the question and panelists each join it.
+      poll: { ...BREAK.poll, ...spot },
+      question: { ...BREAK.question, ...spot, x: spot.x - 0.0015 },
+      panelists: { ...BREAK.panelists, ...spot, x: spot.x + 0.0015 },
+    };
+    expect(liveOverlaySpotOf(scene, "question")).toEqual(expect.arrayContaining(["question", "panelists"]));
+    expect(joinedPanelBox(scene)).toBeNull();
+    const question = { id: "q1" } as unknown as LiveStage["question"];
+    const panelists = { people: [] } as unknown as LiveStage["panelists"];
+    const all = onAir({ schedule, question, panelists });
+    const turns = [0, 15_000, 30_000, 45_000, 60_000, 75_000].map((now) => [
+      liveOverlayWaitsForTurn(all, scene, "question", now),
+      liveOverlayWaitsForTurn(all, scene, "panelists", now),
+    ]);
+    // Drawn as two boards, they take their own turns: never both on at once, and each gets one.
+    expect(turns.every(([q, p]) => q || p)).toBe(true);
+    expect(turns.some(([q]) => !q)).toBe(true);
+    expect(turns.some(([, p]) => !p)).toBe(true);
+  });
 });
 
 describe("editing a spot", () => {

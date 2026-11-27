@@ -6,6 +6,7 @@ import {
   liveOverlaySpotOf,
   liveOverlaySpotTurns,
   liveOverlayTurnHolder,
+  sameLiveBox,
 } from "./live-overlay-spots";
 import { liveOverlayClearOfTicker, liveProgramLayers, type LiveProgramLayer } from "./live-overlay-stacking";
 
@@ -88,8 +89,9 @@ export function liveOverlayWaitsForTurn(
   const turns = spot ? liveOverlaySpotTurns(elements, spot) : null;
   if (!spot || turns === null) return false;
   const drawn = spot.filter((board) => liveOverlayDrawn(stage, board));
-  // The question and panelists on air in one spot draw as one board, so they take one turn, as the question.
-  const joined = drawn.includes("question") && drawn.includes("panelists");
+  // The question and panelists on air in one box draw as one board, so they take one turn, as the question.
+  const joined =
+    drawn.includes("question") && drawn.includes("panelists") && sameLiveBox(elements.question, elements.panelists);
   const holder = liveOverlayTurnHolder(joined ? drawn.filter((board) => board !== "panelists") : drawn, turns, now);
   return holder !== (joined && layer === "panelists" ? "question" : layer);
 }
