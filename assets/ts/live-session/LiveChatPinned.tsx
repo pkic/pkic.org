@@ -7,8 +7,9 @@ import { Markdown } from "../ui/Markdown";
 import { IconChevron, IconPin, IconRemove } from "../ui/MediaIcons";
 
 /**
- * The message a moderator pinned, on one line above the chat: its author and words, the whole of it on
- * request, and Unpin for moderators.
+ * The message a moderator pinned, on one line above the chat: its author and words, and Unpin for
+ * moderators. A message longer than the line shows all of it over the feed while hovered, and stays open
+ * once clicked; the chevron does the same from the keyboard.
  */
 export function LiveChatPinned({
   message,
@@ -21,52 +22,76 @@ export function LiveChatPinned({
   send: (message: LiveRoomClientMessage) => boolean;
   disabled: boolean;
 }) {
+  // Open stays until clicked again; hovered shows the whole message only while the pointer rests on it.
   const [open, setOpen] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const [cut, setCut] = useState(false);
+  // The one-line bar's height, which its place keeps while the whole message lies over the feed.
+  const [lineHeight, setLineHeight] = useState<number | null>(null);
+  const shown = open || (hovered && cut);
   const line = useRef<HTMLDivElement>(null);
   // Show all is offered only when the words run past the line.
   useLayoutEffect(() => {
     const node = line.current;
-    if (!node || open) return;
-    const measure = () => setCut(node.scrollWidth > node.clientWidth + 1);
+    // A shown message wraps, so the line is measured only while it is one line.
+    if (!node || shown) return;
+    const measure = () => {
+      setCut(node.scrollWidth > node.clientWidth + 1);
+      setLineHeight(node.parentElement?.offsetHeight ?? null);
+    };
     measure();
     if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(measure);
     observer.observe(node);
     return () => observer.disconnect();
-  }, [message.text, open]);
+  }, [message.text, shown]);
   const moderator = liveChatCapacity(viewer) !== "participant";
   return (
-    <section class="pk-live-chat__pinned" data-open={open ? "" : undefined} aria-label="Pinned message">
-      <IconPin class="pk-live-chat__pinned-icon" />
-      <div ref={line} class="pk-live-chat__pinned-text">
-        <span class="pk-live-chat__pinned-author">{message.authorName}</span>{" "}
-        <Markdown markdown={message.text} profile="chat" className="pk-live-chat__text" />
-      </div>
-      {cut || open ? (
-        <Button
-          variant="ghost"
-          icon
-          aria-expanded={open ? "true" : "false"}
-          aria-label={open ? "Show less" : "Show all"}
-          title={open ? "Show less" : "Show all"}
-          onClick={() => setOpen(!open)}
-        >
-          <IconChevron pointing={open ? "up" : "down"} />
-        </Button>
-      ) : null}
-      {moderator ? (
-        <Button
-          variant="ghost"
-          icon
-          aria-label="Unpin message"
-          title="Unpin message"
-          disabled={disabled}
-          onClick={() => send({ type: "chat.unpin" })}
-        >
-          <IconRemove />
-        </Button>
-      ) : null}
-    </section>
+    <div
+      class="pk-live-chat__pinned-slot"
+      data-open={shown ? "" : undefined}
+      style={lineHeight === null ? undefined : { "--pk-pinned-line": `${lineHeight}px` }}
+    >
+      <section
+        class="pk-live-chat__pinned"
+        data-open={shown ? "" : undefined}
+        data-cut={cut ? "" : undefined}
+        aria-label="Pinned message"
+        onPointerEnter={(event) => setHovered(event.pointerType === "mouse")}
+        onPointerLeave={() => setHovered(false)}
+      >
+        <IconPin class="pk-live-chat__pinned-icon" />
+        <div ref={line} class="pk-live-chat__pinned-text">
+          <span class="pk-live-chat__pinned-author">{message.authorName}</span>{" "}
+          <Markdown markdown={message.text} profile="chat" className="pk-live-chat__text" />
+        </div>
+        {cut || shown ? (
+          // Its hit area spans the bar, so a click on the words keeps them open too.
+          <Button
+            variant="ghost"
+            icon
+            class="pk-live-chat__pinned-toggle"
+            aria-expanded={open ? "true" : "false"}
+            aria-label={open ? "Show less" : "Show all"}
+            title={open ? "Show less" : "Show all"}
+            onClick={() => setOpen(!open)}
+          >
+            <IconChevron pointing={open ? "up" : "down"} />
+          </Button>
+        ) : null}
+        {moderator ? (
+          <Button
+            variant="ghost"
+            icon
+            aria-label="Unpin message"
+            title="Unpin message"
+            disabled={disabled}
+            onClick={() => send({ type: "chat.unpin" })}
+          >
+            <IconRemove />
+          </Button>
+        ) : null}
+      </section>
+    </div>
   );
 }

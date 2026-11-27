@@ -125,7 +125,7 @@ export function ChatComposer({
       setText(edited.text);
     } else if (wasEditing.current) setText(draft.current);
     wasEditing.current = edited !== null;
-    if (composing) formNode.current?.querySelector("textarea")?.focus();
+    if (composing) formNode.current?.querySelector("textarea")?.focus({ preventScroll: true });
   }, [composing]);
   const unanswered = useRef<LiveChatUnanswered | null>(null);
   /** What was sent arrived: its words leave the composer, unless the reader already typed on. */
