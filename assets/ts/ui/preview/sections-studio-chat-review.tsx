@@ -148,7 +148,7 @@ const PINNED: LiveChatView = {
 /** The studio's chat cell as the grid lays it out: a short cell, a long pinned message, the composer at its foot. */
 function PinnedSpecimen() {
   return (
-    <div data-density="compact" style={{ display: "flex", blockSize: "22rem" }}>
+    <div data-density="compact" class="pk-preview__studio-cell">
       <section class="pk-studio-panel" aria-label="Chat">
         <header class="pk-studio-panel__header">
           <h3 class="pk-studio-panel__title">Chat</h3>

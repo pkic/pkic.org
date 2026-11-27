@@ -26,8 +26,6 @@ export function LiveChatPinned({
   const [open, setOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [cut, setCut] = useState(false);
-  // The one-line bar's height, which its place keeps while the whole message lies over the feed.
-  const [lineHeight, setLineHeight] = useState<number | null>(null);
   const shown = open || (hovered && cut);
   const line = useRef<HTMLDivElement>(null);
   // Show all is offered only when the words run past the line.
@@ -37,7 +35,9 @@ export function LiveChatPinned({
     if (!node || shown) return;
     const measure = () => {
       setCut(node.scrollWidth > node.clientWidth + 1);
-      setLineHeight(node.parentElement?.offsetHeight ?? null);
+      // The one-line bar's height, which its place keeps while the whole message lies over the feed.
+      const bar = node.parentElement;
+      bar?.parentElement?.style.setProperty("--pk-pinned-line", `${bar.offsetHeight}px`);
     };
     measure();
     if (typeof ResizeObserver === "undefined") return;
@@ -47,11 +47,7 @@ export function LiveChatPinned({
   }, [message.text, shown]);
   const moderator = liveChatCapacity(viewer) !== "participant";
   return (
-    <div
-      class="pk-live-chat__pinned-slot"
-      data-open={shown ? "" : undefined}
-      style={lineHeight === null ? undefined : { "--pk-pinned-line": `${lineHeight}px` }}
-    >
+    <div class="pk-live-chat__pinned-slot" data-open={shown ? "" : undefined}>
       <section
         class="pk-live-chat__pinned"
         data-open={shown ? "" : undefined}
