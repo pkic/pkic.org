@@ -390,6 +390,20 @@ describe("Replacing a screen's device", () => {
     expect(openDialog()).toBeNull();
   });
 
+  it("says a refused field's reason on the field only, not again in an alert", async () => {
+    api(
+      () => [record()],
+      (request) =>
+        request.method === "PUT"
+          ? refusal(422, "SCREEN_PAIRING_CODE_INVALID", { fieldErrors: { pairingCode: ["This code has expired."] } })
+          : undefined,
+    );
+    const root = await mount(true);
+    const dialog = await fillAndReplace(root);
+    expect(controlFor(dialog, "Pairing code").getAttribute("aria-invalid")).toBe("true");
+    expect(dialog.textContent?.split("This code has expired.").length).toBe(2);
+  });
+
   it("sends no pairing code when the screen with the new ID is signed in", async () => {
     const requests = api(
       () => [record()],

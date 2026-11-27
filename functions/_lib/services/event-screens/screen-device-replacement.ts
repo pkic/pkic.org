@@ -33,6 +33,8 @@ type StaffEnv = Pick<Env, "ADMIN_API_KEY" | "INTERNAL_SIGNING_SECRET">;
  * ID keeps its sign-in, so it needs no pairing code. Moving it out of another
  * event needs the right there too.
  *
+ * A device reinstalled under the screen's own ID pairs again in place.
+ *
  * Each write is a compare-and-set on the revisions read; the audit row after
  * it aborts the batch when it changed nothing.
  */
@@ -43,37 +45,28 @@ export async function replaceScreenDevice(
   screenId: string,
   input: ScreenDeviceReplacement,
 ): Promise<ScreenRecord> {
-  if (input.newScreenId === screenId) {
-    throw fieldRefusal(
-      422,
-      "SCREEN_ID_UNCHANGED",
-      "newScreenId",
-      "This is the screen's current ID. Enter the ID shown on the new device.",
-    );
-  }
+  const sameId = input.newScreenId === screenId;
   const { actor, row, extra } = await readScreenForStaff(
     db,
     request,
     env,
     screenId,
     [SCREEN_MANAGE_PERMISSION],
-    [prepareScreenRecordRead(db, input.newScreenId)],
+    sameId ? [] : [prepareScreenRecordRead(db, input.newScreenId)],
   );
   if (row.revision !== input.expectedRevision) throw screenRevisionConflict();
   const context = screenPermissionContext(row);
   if (!context) throw new AppError(409, "SCREEN_EVENT_REQUIRED", "Pair this screen for an event before replacing it.");
   const now = nowIso();
+  if (sameId) {
+    if (!input.pairingCode) throw pairingCodeRequired();
+    const write = screenWriteDatabase(db, actor, SCREEN_MANAGE_PERMISSION, context);
+    return pairSameScreenId(write, context, actor.id, row, input.pairingCode, now);
+  }
   const taken = decodeScreenRecordRow(extra[0]);
   const takenSignedIn = taken !== null && screenSignedIn(taken, now);
   if (taken && !input.replace) throw screenIdTaken(taken.event_id === row.event_id ? taken.name : null, takenSignedIn);
-  if (!input.pairingCode && !takenSignedIn) {
-    throw fieldRefusal(
-      422,
-      "SCREEN_PAIRING_CODE_REQUIRED",
-      "pairingCode",
-      "Enter the pairing code shown on the new device.",
-    );
-  }
+  if (!input.pairingCode && !takenSignedIn) throw pairingCodeRequired();
   const takenFrom = taken ? requireScreenTransfer(actor, SCREEN_MANAGE_PERMISSION, taken, context.id) : [];
   const write = screenWriteDatabase(db, actor, SCREEN_MANAGE_PERMISSION, context, takenFrom);
   const approval: StatementLike[] = input.pairingCode
@@ -152,6 +145,50 @@ export async function replaceScreenDevice(
 }
 
 /**
+ * A device reinstalled with its old screen ID, as one that derives the ID
+ * from its hardware: the screen keeps its record, and one atomic batch holds
+ * a pending sign-in for the new device's code. Its earlier sign-ins end when
+ * the new device signs in. The revision bump is the compare-and-set the audit
+ * row guards.
+ */
+async function pairSameScreenId(
+  write: DatabaseLike,
+  context: { type: string; id: string },
+  actorId: string,
+  row: ScreenRecordRow,
+  pairingCode: string,
+  now: string,
+): Promise<ScreenRecord> {
+  try {
+    const results = await write.batch([
+      write.prepare("UPDATE screens SET revision=revision+1 WHERE id=? AND revision=?").bind(row.id, row.revision),
+      prepareScopedAuditLogAfterOneChange(
+        write,
+        context,
+        "user",
+        actorId,
+        "screen.paired",
+        "screen",
+        row.id,
+        { name: row.name, reinstalled: true },
+        now,
+      ),
+      write
+        .prepare(
+          "UPDATE screen_sessions SET revoked_at=? WHERE screen_id=? AND activated_at IS NULL AND revoked_at IS NULL",
+        )
+        .bind(now, row.id),
+      await prepareScreenPairingApproval(write, row.id, pairingCode, actorId, now),
+      prepareScreenRecordRead(write, row.id),
+    ]);
+    return toScreenRecord(decodeScreenRecordRow(results.at(-1)!) as ScreenRecordRow);
+  } catch (error) {
+    if (isAuditChangeGuardFailure(error)) throw screenRevisionConflict();
+    throw error;
+  }
+}
+
+/**
  * The new device's screen ID already names a screen. A screen of this event
  * is named so staff can find it; another event's stays anonymous. A signed-in
  * one is most likely the new device itself, paired as a screen of its own.
@@ -165,6 +202,15 @@ function screenIdTaken(name: string | null, signedIn: boolean): AppError {
     signedIn
       ? `${holder} has this screen ID and is signed in. Check the ID, or replace it.`
       : `${holder} has this screen ID. Check the ID, or replace it.`,
+  );
+}
+
+function pairingCodeRequired(): AppError {
+  return fieldRefusal(
+    422,
+    "SCREEN_PAIRING_CODE_REQUIRED",
+    "pairingCode",
+    "Enter the pairing code shown on the new device.",
   );
 }
 

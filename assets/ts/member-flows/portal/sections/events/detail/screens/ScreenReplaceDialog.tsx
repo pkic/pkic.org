@@ -6,6 +6,7 @@
  * When the new screen ID already belongs to a screen, as a reinstalled
  * device paired as a screen of its own, staff confirm it gives way. A device
  * signed in under that ID keeps its sign-in and shows no code to enter.
+ * A device reinstalled under this screen's own ID pairs again in place.
  */
 import { useState } from "preact/hooks";
 import {
@@ -16,6 +17,7 @@ import {
 } from "../../../../../../../shared/schemas/event-screens";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
 import { ApiClientError } from "../../../../../../shared/api-client";
+import { normalizeValidation } from "../../../../../../shared/form/validation-map";
 import { Alert } from "../../../../../../ui/Alert";
 import { Checkbox } from "../../../../../../ui/Checkbox";
 import { Dialog } from "../../../../../../ui/Dialog";
@@ -79,7 +81,10 @@ export function ScreenReplaceDialog({
         ) {
           // The screen ID field names the screen, and the choice to replace it opens below.
           setTaken({ screenId: newScreenId, signedIn: cause.code === SCREEN_ID_IN_USE_CODE });
-        } else setError(message);
+        } else if (Object.keys(normalizeValidation(cause).fields).length === 0) {
+          // A field's own message already says why; the alert is for the rest.
+          setError(message);
+        }
       } else {
         // The next attempt starts from the screen as it stands now, so it can succeed.
         void onChanged();

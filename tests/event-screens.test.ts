@@ -777,7 +777,7 @@ describe("replacing a screen's device", () => {
     });
   });
 
-  it("refuses a stale revision, the screen's own ID and an ID another screen has, changing nothing", async () => {
+  it("refuses a stale revision and an ID another screen has, changing nothing", async () => {
     const old = await pair(assignment);
     const { code } = await startPairing(NEW_SCREEN);
     const stale = await replace("manager", { expectedRevision: 3, newScreenId: NEW_SCREEN, pairingCode: code });
@@ -786,10 +786,6 @@ describe("replacing a screen's device", () => {
     const fieldError = async (response: Response) =>
       apiValidationErrorDetailsSchema.parse(((await response.json()) as { error: { details: unknown } }).error.details)
         .fieldErrors?.newScreenId?.[0];
-    const same = await replace("manager", { newScreenId: SCREEN, pairingCode: code }, 0);
-    expect(same.status).toBe(422);
-    expect(await fieldError(same)).toBeTruthy();
-
     const noCode = await replace("manager", { newScreenId: NEW_SCREEN });
     expect(noCode.status).toBe(422);
     expect(((await noCode.json()) as { error: { code: string } }).error.code).toBe("SCREEN_PAIRING_CODE_REQUIRED");
@@ -808,6 +804,32 @@ describe("replacing a screen's device", () => {
     expect((await readAsScreen(old.cookie)).status).toBe(200);
     expect(await rows("screens", NEW_SCREEN)).toBe(0);
     expect(await audits("screen.replaced", SCREEN)).toBe(0);
+  });
+
+  it("pairs a device reinstalled under the screen's own ID in place, keeping its name and assignment", async () => {
+    const old = await pair(assignment);
+    const noCode = await replace("manager", { newScreenId: SCREEN });
+    expect(noCode.status).toBe(422);
+    expect(((await noCode.json()) as { error: { code: string } }).error.code).toBe("SCREEN_PAIRING_CODE_REQUIRED");
+
+    const challenge = await startPairing(SCREEN);
+    const repaired = await replace("manager", { newScreenId: SCREEN.toLowerCase(), pairingCode: challenge.code });
+    expect(repaired.status, await repaired.clone().text()).toBe(200);
+    expect(screenRecordSchema.parse(await repaired.json())).toMatchObject({
+      id: SCREEN,
+      name: "Foyer",
+      assignment: { roomId: EVENT.roomId, output: "projector" },
+      revision: 1,
+    });
+    expect(await audits("screen.replaced", SCREEN)).toBe(0);
+    expect((await replace("manager", { newScreenId: SCREEN, pairingCode: challenge.code })).status).toBe(409);
+
+    const activated = await poll(challenge.cookie, SCREEN);
+    expect(activated.status, await activated.clone().text()).toBe(201);
+    expect((await readAsScreen(`pkic_screen_session=${cookieValue(activated, "pkic_screen_session")}`)).status).toBe(
+      200,
+    );
+    expect((await readAsScreen(old.cookie)).status).toBe(401);
   });
 
   it("takes over a signed-in screen with the new ID once confirmed, keeping its device signed in", async () => {
