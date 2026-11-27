@@ -128,13 +128,15 @@ export function createLiveRoomFixture() {
 
   /**
    * Publishes a second session, "Next session", from 70 to 130 minutes from now: in the same physical room
-   * unless another one is named, which is then created.
+   * unless another one is named, which is then created. `sameDay` starts it with the first session instead,
+   * so it shares that session's event day, and its chat, whatever the time of day.
    */
-  async function addSession(sessionRoomId = roomId) {
+  async function addSession(sessionRoomId = roomId, { sameDay = false } = {}) {
     const id = crypto.randomUUID(),
       now = new Date().toISOString(),
-      start = new Date(Date.now() + 70 * 60000).toISOString(),
-      end = new Date(Date.now() + 130 * 60000).toISOString();
+      startMs = sameDay ? Date.parse(startAt) : Date.now() + 70 * 60000,
+      start = new Date(startMs).toISOString(),
+      end = new Date(startMs + 60 * 60000).toISOString();
     if (sessionRoomId !== roomId)
       await env.DB.prepare("INSERT INTO event_agenda_rooms(id,event_id,name) VALUES (?,?,'Other physical room')")
         .bind(sessionRoomId, eventId)

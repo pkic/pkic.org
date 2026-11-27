@@ -34,7 +34,8 @@ function prepareQuestionCopy(db: DatabaseLike, copy: LiveRoomPendingCopy, questi
       question.votes,
       question.asked_at,
       question.answered_at,
-      question.author_withdrawn ? null : question.moderated_by_user_id,
+      // A question the check approved names no person.
+      question.author_withdrawn ? null : question.moderated_by_user_id || null,
       question.author_withdrawn ? null : question.moderated_at,
       question.rewrite_text,
       question.rewritten_by_user_id,

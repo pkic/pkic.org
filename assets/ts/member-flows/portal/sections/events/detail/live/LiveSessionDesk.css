@@ -52,11 +52,13 @@
     white-space: nowrap;
     text-overflow: ellipsis;
   }
+  /* The chat fills its cell and never scrolls it: the feed scrolls, and the composer stays at the foot. */
   .pk-live-desk__chat-panel {
     display: flex;
     flex-direction: column;
     block-size: 100%;
     min-block-size: 0;
+    overflow: clip;
   }
   .pk-live-desk__chat-tabpanel {
     display: flex;

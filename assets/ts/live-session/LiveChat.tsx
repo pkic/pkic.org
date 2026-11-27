@@ -10,6 +10,7 @@ import {
   liveChatSendSchema,
   type LiveRoomClientMessage,
 } from "../../shared/schemas/live-session-room";
+import { LIVE_PARTICIPATION_BLOCKED_CODE } from "../../shared/live-moderation-policy";
 import type { LiveChatChannel, LiveChatMessage } from "../../shared/schemas/live-session-chat";
 import { liveChatChannel } from "./live-chat-state";
 import type { LiveChatView } from "./location-chat-state";
@@ -53,6 +54,14 @@ interface LiveChatUnanswered {
   dropped: boolean;
 }
 
+/**
+ * The refusals the composer says out loud: the chat's own, and a block the room still holds, so a
+ * message the room turned away never leaves Send looking dead.
+ */
+function chatRefusal(code: string): boolean {
+  return code.startsWith("LIVE_CHAT") || code === LIVE_PARTICIPATION_BLOCKED_CODE;
+}
+
 export function ChatComposer({
   channel,
   compact,
@@ -64,6 +73,7 @@ export function ChatComposer({
   note,
   composing = null,
   onComposed,
+  unsent,
 }: {
   channel: LiveChatChannel;
   compact: boolean;
@@ -79,8 +89,10 @@ export function ChatComposer({
   composing?: LiveChatComposing | null;
   /** The reply or edit was sent or set aside. */
   onComposed?: () => void;
+  /** Words not yet sent, per channel, kept by the chat while a block takes the composer away. */
+  unsent?: Partial<Record<LiveChatChannel, string>>;
 }) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(unsent?.[channel] ?? "");
   const [error, setError] = useState<string | null>(null);
   const statusId = useId();
   const formNode = useRef<HTMLFormElement>(null);
@@ -89,6 +101,8 @@ export function ChatComposer({
   const wasEditing = useRef(false);
   const replying = composing?.kind === "reply" ? composing.message : null;
   const editing = composing?.kind === "edit" ? composing.message : null;
+  // An edit's words belong to the message edited, not to a new one.
+  if (unsent && !editing) unsent[channel] = text;
   const sendForm = useContractForm(
     liveChatSendSchema,
     { type: "chat.send", text, channel, ...(replying ? { replyTo: replying.id } : {}) },
@@ -111,7 +125,7 @@ export function ChatComposer({
       setText(edited.text);
     } else if (wasEditing.current) setText(draft.current);
     wasEditing.current = edited !== null;
-    if (composing) formNode.current?.querySelector("textarea")?.focus();
+    if (composing) formNode.current?.querySelector("textarea")?.focus({ preventScroll: true });
   }, [composing]);
   const unanswered = useRef<LiveChatUnanswered | null>(null);
   /** What was sent arrived: its words leave the composer, unless the reader already typed on. */
@@ -325,6 +339,7 @@ export function LiveChat({
   const [unseen, setUnseen] = useState(0);
   const [loading, setLoading] = useState(false);
   const [composing, setComposing] = useState<LiveChatComposing | null>(null);
+  const unsent = useRef<Partial<Record<LiveChatChannel, string>>>({});
   /** The message a reader followed a quote to, while earlier pages load until it is held. */
   const [seeking, setSeeking] = useState<string | null>(null);
   const [highlighted, setHighlighted] = useState<string | null>(null);
@@ -418,7 +433,7 @@ export function LiveChat({
     return () => clearTimeout(timer);
   }, [highlighted]);
   const canSend = liveChatCanSend(liveChatCapacity(state.viewer), restriction !== null, channel);
-  const refusal = state.refusal?.code.startsWith("LIVE_CHAT") ? state.refusal.message : null;
+  const refusal = state.refusal && chatRefusal(state.refusal.code) ? state.refusal.message : null;
   const spoken = useLiveChatAnnouncement(latest, following, visible);
   return (
     <LiveAuthorProvider authors={state.authors} send={send}>
@@ -541,6 +556,7 @@ export function LiveChat({
             note={note}
             composing={composing}
             onComposed={() => setComposing(null)}
+            unsent={unsent.current}
           />
         ) : restriction && channel === "attendee" ? (
           <LiveParticipationAlert

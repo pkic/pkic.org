@@ -69,6 +69,17 @@ describe("a livestream screen's player health", () => {
     expect(run([{ type: "tick", at: 500_000 }], resumed)).toBe(resumed);
   });
 
+  it("never counts a viewer's pause as a stall, and counts again once they play", () => {
+    const held = run([
+      { type: "state", state: "playing", at: 0 },
+      { type: "held", held: true, at: 1_000 },
+      { type: "state", state: "paused", at: 1_100 },
+    ]);
+    expect(run([{ type: "tick", at: 1_000 + 10 * LIVESTREAM_HEALTH_POLICY.stallMs }], held).reconnecting).toBe(false);
+    const resumed = run([{ type: "held", held: false, at: 5_000 }], held);
+    expect(run([{ type: "tick", at: 5_000 + LIVESTREAM_HEALTH_POLICY.stallMs }], resumed).reconnecting).toBe(true);
+  });
+
   it("never recreates a player that plays the same video, and starts afresh for another", () => {
     const playing = run([{ type: "state", state: "playing", at: 0 }]);
     expect(run([{ type: "video", videoId: "first-video", at: 10 }], playing)).toBe(playing);

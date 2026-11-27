@@ -10,6 +10,7 @@ import { LiveChat } from "../../../../../../live-session/LiveChat";
 import { LiveChatMessageRow } from "../../../../../../live-session/LiveChatMessageRow";
 import { LiveAuthorProvider } from "../../../../../../live-session/LiveAuthor";
 import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
+import "./LiveSessionDesk.css";
 
 type Send = (message: LiveRoomClientMessage) => boolean;
 const VIEWS = ["attendee", "operator", "review"] as const;

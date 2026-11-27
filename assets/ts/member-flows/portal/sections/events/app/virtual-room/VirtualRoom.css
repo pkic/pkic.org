@@ -74,6 +74,117 @@
     border-radius: 0;
   }
 
+  /* The stream takes no clicks: the provider's own controls and links stay out of reach, and the room's controls sit over it. */
+  .pk-virtual-room__stream {
+    position: relative;
+    container-type: inline-size;
+  }
+
+  .pk-virtual-room__stream-host iframe {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    border: 0;
+    pointer-events: none;
+  }
+
+  .pk-virtual-room__stream-status {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    margin: 0;
+    background: var(--pk-chrome-deep);
+  }
+
+  /* The stream's controls, along the picture's foot from its left corner, where a player keeps them. */
+  .pk-virtual-room__controls {
+    position: absolute;
+    inset-block-end: var(--pk-2);
+    inset-inline-start: var(--pk-2);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-1);
+  }
+
+  .pk-virtual-room__control.pk-btn,
+  .pk-virtual-room__control.pk-btn:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--pk-on-solid) 45%, transparent);
+    background: color-mix(in srgb, var(--pk-on-solid-ink) 72%, transparent);
+    color: var(--pk-on-solid);
+    backdrop-filter: blur(4px);
+    transition: opacity var(--pk-dur) var(--pk-ease);
+  }
+
+  /* Captions on: the button stays lit, as a pressed toggle. */
+  .pk-virtual-room__control--on.pk-btn,
+  .pk-virtual-room__control--on.pk-btn:hover:not(:disabled) {
+    border-color: var(--pk-on-solid);
+    background: var(--pk-on-solid);
+    color: var(--pk-on-solid-ink);
+  }
+
+  /* Nothing but the sound button covers the stream until the pointer is over it; a keyboard still finds them. */
+  .pk-virtual-room__control--resting.pk-btn:not(:focus-visible) {
+    opacity: 0;
+  }
+
+  @media (hover: hover) {
+    .pk-virtual-room__stream:hover .pk-virtual-room__control--resting.pk-btn {
+      opacity: 1;
+    }
+  }
+
+  .pk-virtual-room__control-note {
+    margin: 0;
+    padding: var(--pk-1) var(--pk-2);
+    border-radius: var(--pk-radius);
+    background: color-mix(in srgb, var(--pk-on-solid-ink) 72%, transparent);
+    color: var(--pk-on-solid);
+    font-size: var(--pk-text-sm);
+  }
+
+  /* The event's orange stands out on any picture; dark ink keeps the label readable on it. */
+  .pk-virtual-room__unmute.pk-btn,
+  .pk-virtual-room__unmute.pk-btn:hover:not(:disabled) {
+    border-color: var(--pk-pqc-orange);
+    background: var(--pk-pqc-orange);
+    color: var(--pk-on-solid-ink);
+    box-shadow: var(--pk-shadow-2);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    /* Muted, the button opens large in the middle of the picture, settles in its corner, and keeps a slow beat. */
+    .pk-virtual-room__unmute.pk-btn {
+      animation:
+        pk-virtual-room-unmute-settle var(--pk-dur-unmute-settle) ease-in-out var(--pk-dur-unmute-wait) both,
+        pk-virtual-room-unmute-beat var(--pk-dur-unmute-beat) ease-in-out
+          calc(var(--pk-dur-unmute-wait) + var(--pk-dur-unmute-settle)) infinite;
+    }
+  }
+
+  @keyframes pk-virtual-room-unmute-settle {
+    /* The middle of a 16:9 picture, from the corner the button settles in. */
+    from {
+      translate: calc(50cqi - 50% - var(--pk-2)) calc(50% + var(--pk-2) - 28.125cqi);
+      scale: 1.35;
+    }
+  }
+
+  @keyframes pk-virtual-room-unmute-beat {
+    0%,
+    100% {
+      scale: 1;
+    }
+    15% {
+      scale: 1.08;
+    }
+    30% {
+      scale: 1;
+    }
+  }
+
   .pk-virtual-room__player--idle {
     display: grid;
     align-items: center;

@@ -129,12 +129,50 @@ function SessionStartSpecimen() {
   );
 }
 
+const PINNED: LiveChatView = {
+  ...SESSION_START,
+  chat: [
+    ...SESSION_START.chat,
+    said(7, "Morgan Sample", "Is the hybrid draft stable enough to deploy?", 50),
+    said(8, "Taylor Test", "Which libraries support it today?", 52),
+  ],
+  chatPinned: message(
+    9,
+    "PKIC Admin",
+    "We are having a break until 11:00. Coffee is served in the foyer, and the next session starts in this room.",
+    48,
+    {},
+  ),
+};
+
+/** The studio's chat cell as the grid lays it out: a short cell, a long pinned message, the composer at its foot. */
+function PinnedSpecimen() {
+  return (
+    <div data-density="compact" class="pk-preview__studio-cell">
+      <section class="pk-studio-panel" aria-label="Chat">
+        <header class="pk-studio-panel__header">
+          <h3 class="pk-studio-panel__title">Chat</h3>
+        </header>
+        <div class="pk-studio-panel__body">
+          <LiveChatPanel state={PINNED} disabled={false} send={() => true} studio />
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export const studioChatReviewSections: PreviewSection[] = [
   {
     id: "studio-chat-session-start",
     title: "Studio chat: a new session starts",
-    note: "Once the studio loads the next session, the feed ends with its title, as the room does, so the operator sees the messages above belong to the session before. Those messages no longer offer Turn into question: a question from them would land in a session that is over.",
+    note: "Once the studio loads the next session, the feed ends with its title, as the room does, so the operator sees the messages above belong to the session before. Turn into question on those messages asks it in the session on now.",
     render: () => <SessionStartSpecimen />,
+  },
+  {
+    id: "studio-chat-pinned",
+    title: "Studio chat: a pinned message",
+    note: "A pinned message takes one line above the feed. Hovering it shows all of it; clicking it keeps it open until clicked again. Only the feed scrolls, so the composer stays at the cell's foot.",
+    render: () => <PinnedSpecimen />,
   },
   {
     id: "studio-chat-review",

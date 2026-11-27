@@ -44,6 +44,37 @@ export function StrokeIcon({
 
 // ── Media ───────────────────────────────────────────────────────────────────
 
+/** A speaker, with sound waves while audible and crossed out while muted. */
+export function IconSound({ audible, ...props }: SvgProps & { audible: boolean }) {
+  return (
+    <StrokeIcon {...props}>
+      <path d="M2 6h2.5L8 3v10l-3.5-3H2z" />
+      {audible ? (
+        <path d="M10.5 5.5a3.5 3.5 0 0 1 0 5M12.5 3.5a6.4 6.4 0 0 1 0 9" />
+      ) : (
+        <path d="m10.5 6 4 4M14.5 6l-4 4" />
+      )}
+    </StrokeIcon>
+  );
+}
+
+/** Two bars while it plays, to pause it; a triangle while paused, to play it again. */
+export function IconPlayback({ playing, ...props }: SvgProps & { playing: boolean }) {
+  return (
+    <StrokeIcon {...props}>{playing ? <path d="M5.5 3.5v9M10.5 3.5v9" /> : <path d="M5 3l8 5-8 5z" />}</StrokeIcon>
+  );
+}
+
+/** A screen with two lines of text along its foot. */
+export function IconCaptions(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <rect x="1.5" y="3" width="13" height="10" rx="2" />
+      <path d="M4 8.5h3M9 8.5h3M4 10.5h5M11 10.5h1" />
+    </StrokeIcon>
+  );
+}
+
 export function IconVideo(props: SvgProps) {
   return (
     <StrokeIcon {...props}>

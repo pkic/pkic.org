@@ -21,7 +21,7 @@ import type { LiveRoomPeople } from "./room-people";
 import { serializeLiveRoomMessage } from "./room-projection";
 import type { LiveRoomQuestions } from "./room-questions";
 import type { LiveRoomStore } from "./room-store";
-import type { LiveOccurrenceModeration } from "./room-occurrence-participation";
+import type { LiveEventBlockDecision, LiveOccurrenceModeration } from "./room-occurrence-participation";
 
 const REFUSALS = {
   missing: { code: "LIVE_MODERATION_NOT_FOUND", message: "This post is no longer available." },
@@ -64,7 +64,8 @@ export class LiveRoomParticipation {
     private readonly eventId: () => string | null,
     private readonly chatModeration: (occurrenceId: string | null) => LiveOccurrenceModeration | null,
     private readonly currentChatOccurrence: () => string | null,
-    private readonly occurrenceChanged: (userId: string) => void,
+    /** Tells the occurrence's location chats; an event decision made here goes along. */
+    private readonly occurrenceChanged: (userId: string, decision?: LiveEventBlockDecision) => void,
   ) {}
 
   /** Who wrote the item, or null when it is gone. */
@@ -119,6 +120,7 @@ export class LiveRoomParticipation {
     const at = nowIso();
     const eventId = this.eventId();
     let sessionRestriction: LiveParticipationRestriction | undefined;
+    let eventDecision: LiveEventBlockDecision | undefined;
     const moderation = input.block === "event" ? null : this.moderationFor(input.item);
     // A session's decision covers that session's posts; an event or location decision covers the whole chat.
     const scope = moderation ? this.chatOccurrence(input.item) : undefined;
@@ -127,7 +129,9 @@ export class LiveRoomParticipation {
       const by = organizerSession(viewer, actor);
       if (!by || !(await blockEventParticipation(this.db, { eventId, userId, reason: input.reason, by, at })))
         return REFUSALS.forbidden;
-      this.decisions.decideEventBlock(userId, true);
+      // Dated once D1 has it, so the time follows the order the writes landed in.
+      eventDecision = { blocked: true, at: Date.now() };
+      this.decisions.decideEventBlock(userId, eventDecision);
     } else {
       if (moderation) {
         const { restriction } = await moderation.change(userId, {
@@ -151,7 +155,8 @@ export class LiveRoomParticipation {
       at,
     );
     if (input.removePosts) await this.removePosts(viewer, actor, userId, input.reason, at, input.item, scope);
-    await this.changed(userId, sessionRestriction, scope);
+    await this.changed(userId, sessionRestriction, scope, eventDecision);
+    if (eventDecision) await this.shareEventDecision(userId, eventDecision, input.item);
   }
 
   async lift(viewer: LiveRoomParticipant, actor: Actor, item: LiveModerationItem): Promise<LiveRefusal | void> {
@@ -168,11 +173,13 @@ export class LiveRoomParticipation {
       return REFUSALS.forbidden;
     const at = nowIso();
     const eventId = this.eventId();
+    let eventDecision: LiveEventBlockDecision | undefined;
     if (current.block === "event") {
       if (!eventId) return REFUSALS.missing;
       const by = organizerSession(viewer, actor);
       if (!by || !(await liftEventParticipationBlock(this.db, { eventId, userId, by, at }))) return REFUSALS.forbidden;
-      this.decisions.decideEventBlock(userId, false);
+      eventDecision = { blocked: false, at: Date.now() };
+      this.decisions.decideEventBlock(userId, eventDecision);
     }
     let sessionRestriction: LiveParticipationRestriction | null | undefined;
     const sessionLift = moderation !== null && current.block !== "event" && remote;
@@ -187,7 +194,27 @@ export class LiveRoomParticipation {
       { userId, block: current.block },
       at,
     );
-    await this.changed(userId, sessionRestriction, sessionLift ? occurrenceId : undefined);
+    await this.changed(userId, sessionRestriction, sessionLift ? occurrenceId : undefined, eventDecision);
+    if (eventDecision) await this.shareEventDecision(userId, eventDecision, item);
+  }
+
+  /**
+   * An event block this room just wrote to D1 reaches the rooms the person is in now, so none of them keeps
+   * refusing (or allowing) them until its own next read of D1: the location chat's sessions, or the session's
+   * location chats. It runs once this room's own work is done, and a room it can't reach takes the decision at
+   * its next read of D1, so a failed notice is logged rather than undoing the moderation here.
+   */
+  private async shareEventDecision(
+    userId: string,
+    decision: LiveEventBlockDecision,
+    item: LiveModerationItem,
+  ): Promise<void> {
+    const occurrences = new Set([this.chatOccurrence(item), this.currentChatOccurrence()]);
+    const notices = await Promise.allSettled(
+      [...occurrences].map((id) => (id ? this.chatModeration(id)?.change(userId, { kind: "event", decision }) : null)),
+    );
+    for (const notice of notices)
+      if (notice.status === "rejected") console.error("Live event block notice failed", notice.reason);
   }
 
   /** The access refresh read who is blocked for the event; tell everyone whose block started or ended. */
@@ -234,8 +261,9 @@ export class LiveRoomParticipation {
     userId: string,
     restriction = this.decisions.restriction(userId, Date.now()),
     occurrenceId?: string,
+    eventDecision?: LiveEventBlockDecision,
   ): Promise<void> {
-    this.occurrenceChanged(userId);
+    this.occurrenceChanged(userId, eventDecision);
     const message = serializeLiveRoomMessage({ type: "participation.access", restriction });
     for (const socket of this.ctx.getWebSockets()) {
       const viewer = socket.deserializeAttachment() as LiveRoomParticipant | null;

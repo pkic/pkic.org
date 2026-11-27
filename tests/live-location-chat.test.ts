@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { runDurableObjectAlarm } from "cloudflare:test";
+import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { callApi } from "./helpers/app";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
@@ -148,8 +148,8 @@ it("turns a chat message into a question in the session the studio has loaded, a
   studio.socket.close();
 });
 
-it("keeps an earlier session's chat out of the next session's questions", async () => {
-  const next = await fixture.addSession();
+it("asks an earlier session's chat message in the session on now, never in the session that is over", async () => {
+  const next = await fixture.addSession(undefined, { sameDay: true });
   await load(fixture.occurrenceId, 0);
   const attendee = await join("attendee");
   const operator = await join("operator");
@@ -157,17 +157,16 @@ it("keeps an earlier session's chat out of the next session's questions", async 
   const earlier = await operator.next("chat.message", (message) => message.message.text.startsWith("Will the slides"));
   expect(earlier.message.occurrenceId).toBe(fixture.occurrenceId);
 
-  // The studio moves on: the earlier session's message would land in a session that is over.
+  // The studio moves on: a question the earlier session had no time for goes to the session on now.
   await load(next, 1);
-  const before = operator.received.length;
+  const studio = await fixture.connect({ person: "operator" }, next);
+  clients.push(studio);
   operator.send({ type: "chat.convert", messageId: earlier.message.id });
-  expect((await operator.next("room.refused", () => true, { after: before })).code).toBe("LIVE_CHAT_NOT_ALLOWED");
+  await studio.next("question.changed", (message) => message.question.text.startsWith("Will the slides"));
 
   attendee.send({ type: "chat.send", text: "Is this talk recorded for later?" });
   const current = await operator.next("chat.message", (message) => message.message.text.startsWith("Is this talk"));
   expect(current.message.occurrenceId).toBe(next);
-  const studio = await fixture.connect({ person: "operator" }, next);
-  clients.push(studio);
   operator.send({ type: "chat.convert", messageId: current.message.id });
   await studio.next("question.changed", (message) => message.question.text.startsWith("Is this talk"));
 });
@@ -230,6 +229,8 @@ it("removes a blocked person's posts from the whole chat for the event, and the 
   await reader.next("chat.removed", (update) => update.messageId === inBreak.id);
   operator.send({ type: "participation.lift", item: { kind: "chat", messageId: during.id } });
   await author.next("participation.access", (update) => update.restriction === null);
+  // Once lifted, they take part again in the session and in the chat around it.
+  await say("Back after the lift");
 
   // An event block removes everything the person said in this chat, in or between sessions.
   await load(null, 1);
@@ -239,4 +240,157 @@ it("removes a blocked person's posts from the whole chat for the event, and the 
   block(later.id, "event");
   await reader.next("chat.removed", (update) => update.messageId === later.id);
   await reader.next("chat.removed", (update) => update.messageId === nextBreak.id);
+});
+
+it("lets a person post again as soon as a pause, a session block or an event block is lifted", async () => {
+  await load(fixture.occurrenceId, 0);
+  const author = await join("attendee");
+  const reader = await join("secondAttendee");
+  const operator = await join("operator");
+  const say = async (text: string) => {
+    const after = author.received.length;
+    author.send({ type: "chat.send", text });
+    const outcome = await Promise.race([
+      Promise.all([
+        reader.next("chat.message", (message) => message.message.text === text),
+        author.next("chat.message", (message) => message.message.text === text && message.message.mine, { after }),
+      ]).then(() => "shown"),
+      author.next("room.refused", () => true, { after }).then((refusal) => refusal.code),
+    ]);
+    return outcome;
+  };
+  const sent = await say("Before any block");
+  expect(sent).toBe("shown");
+  const message = [...reader.received].reverse().find((update) => update.type === "chat.message");
+  if (message?.type !== "chat.message") throw new Error("Expected a message");
+  const item = { kind: "chat" as const, messageId: message.message.id };
+  for (const block of ["paused", "session", "event"] as const) {
+    const blocked = author.received.length;
+    operator.send({ type: "participation.block", item, block, reason: "spam", removePosts: true });
+    await author.next("participation.access", (update) => update.restriction?.block === block, { after: blocked });
+    expect(await say(`While ${block}`)).toBe("LIVE_PARTICIPATION_BLOCKED");
+    const lifted = author.received.length;
+    operator.send({ type: "participation.lift", item });
+    await author.next("participation.access", (update) => update.restriction === null, { after: lifted });
+    expect(await say(`After ${block}`)).toBe("shown");
+  }
+});
+
+it("tells a person who stays in the chat at once when the studio blocks them over a question, and lets them post when it lifts", async () => {
+  await load(fixture.occurrenceId, 0);
+  const author = await join("attendee");
+  const reader = await join("secondAttendee");
+  const asker = await fixture.connect({ person: "attendee" });
+  const studio = await fixture.connect({ person: "operator" });
+  clients.push(asker, studio);
+  const say = async (text: string) => {
+    const after = author.received.length;
+    author.send({ type: "chat.send", text });
+    return Promise.race([
+      reader.next("chat.message", (message) => message.message.text === text).then(() => "shown"),
+      author.next("room.refused", () => true, { after }).then((refusal) => refusal.code),
+    ]);
+  };
+  expect(await say("Hello from the chat")).toBe("shown");
+  asker.send({ type: "question.ask", text: "Is this on topic?", anonymous: false });
+  const question = await studio.next("question.changed", (message) => message.question.text === "Is this on topic?");
+  const item = { kind: "question" as const, questionId: question.question.id };
+  for (const block of ["session", "event"] as const) {
+    const after = author.received.length;
+    studio.send({ type: "participation.block", item, block, reason: "spam", removePosts: false });
+    // The chat the person never left learns it from the studio, without a reconnect.
+    await author.next("location.chat.access", (update) => update.restriction?.block === block, { after });
+    expect(await say(`While ${block}`)).toBe("LIVE_PARTICIPATION_BLOCKED");
+    const lifted = author.received.length;
+    studio.send({ type: "participation.lift", item });
+    await author.next("location.chat.access", (update) => update.restriction === null, { after: lifted });
+    expect(await say(`After ${block}`)).toBe("shown");
+  }
+});
+
+it("lets a person post as soon as an event block is lifted, even after the session's room read the block", async () => {
+  await load(fixture.occurrenceId, 0);
+  const author = await join("attendee");
+  const reader = await join("secondAttendee");
+  const operator = await join("operator");
+  const say = async (text: string) => {
+    const after = author.received.length;
+    author.send({ type: "chat.send", text });
+    return Promise.race([
+      reader.next("chat.message", (message) => message.message.text === text).then(() => "shown"),
+      author.next("room.refused", () => true, { after }).then((refusal) => refusal.code),
+    ]);
+  };
+  expect(await say("Before the block")).toBe("shown");
+  const sent = [...reader.received].reverse().find((update) => update.type === "chat.message");
+  if (sent?.type !== "chat.message") throw new Error("Expected a message");
+  const item = { kind: "chat" as const, messageId: sent.message.id };
+  operator.send({ type: "participation.block", item, block: "event", reason: "spam", removePosts: false });
+  await author.next("participation.access", (update) => update.restriction?.block === "event");
+  // The session's own room refreshes its access from D1 and finds the event block there.
+  const userId = fixture.users.attendee;
+  await runInDurableObject(fixture.room(), async (instance) => {
+    const participation = Reflect.get(instance as object, "participation") as {
+      eventBlocksRead(checked: string[], blocked: Set<string>, readAt: number): Promise<void>;
+    };
+    await participation.eventBlocksRead([userId], new Set([userId]), Date.now());
+  });
+  expect(await say("While blocked")).toBe("LIVE_PARTICIPATION_BLOCKED");
+  const lifted = author.received.length;
+  operator.send({ type: "participation.lift", item });
+  await author.next("participation.access", (update) => update.restriction === null, { after: lifted });
+  expect(await say("After the lift")).toBe("shown");
+  // The chat reads D1 again and finds the lift; then the block's notice, older than both, arrives late.
+  await runInDurableObject(fixture.chatRoom(), async (instance) => {
+    const participation = Reflect.get(instance as object, "participation") as {
+      eventBlocksRead(checked: string[], blocked: Set<string>, readAt: number): Promise<void>;
+    };
+    await participation.eventBlocksRead([userId], new Set(), Date.now());
+  });
+  const stale = { blocked: true, at: Date.now() - 60_000 };
+  await fixture.chatRoom().locationChatAccessChanged(fixture.occurrenceId, userId, stale);
+  expect(await say("After a late notice")).toBe("shown");
+});
+
+it("lets a person post as soon as an event block is lifted while no session is on air", async () => {
+  await load(fixture.occurrenceId, 0);
+  const author = await join("attendee");
+  const operator = await join("operator");
+  author.send({ type: "chat.send", text: "Before the block" });
+  const sent = await author.next("chat.message", (message) => message.message.text === "Before the block");
+  operator.send({
+    type: "participation.block",
+    item: { kind: "chat", messageId: sent.message.id },
+    block: "event",
+    reason: "spam",
+    removePosts: false,
+  });
+  await author.next("location.chat.access", (update) => update.restriction?.block === "event");
+  await load(null, 1);
+  // The lift reaches the chat after the studio unloaded the session.
+  const lifted = author.received.length;
+  await fixture
+    .chatRoom()
+    .locationChatAccessChanged(fixture.occurrenceId, fixture.users.attendee, { blocked: false, at: Date.now() });
+  await author.next("location.chat.access", (update) => update.restriction === null, { after: lifted });
+});
+
+it("keeps an event block that another session lifted, over the session on's older copy", async () => {
+  await load(fixture.occurrenceId, 0);
+  const author = await join("attendee");
+  const userId = fixture.users.attendee;
+  // The session on still holds the event block from its last read of D1.
+  await runInDurableObject(fixture.room(), async (instance) => {
+    const participation = Reflect.get(instance as object, "participation") as {
+      eventBlocksRead(checked: string[], blocked: Set<string>, readAt: number): Promise<void>;
+    };
+    await participation.eventBlocksRead([userId], new Set([userId]), Date.now());
+  });
+  // Another session's room lifts it.
+  const lifted = author.received.length;
+  await fixture
+    .chatRoom()
+    .locationChatAccessChanged(crypto.randomUUID(), userId, { blocked: false, at: Date.now() + 1 });
+  const access = await author.next("location.chat.access", () => true, { after: lifted });
+  expect(access.restriction).toBeNull();
 });

@@ -8,6 +8,7 @@ import { liveLocationChatSnapshot } from "./helpers/live-room-socket";
 
 const hosts: HTMLElement[] = [];
 afterEach(() => {
+  vi.restoreAllMocks();
   for (const host of hosts.splice(0)) {
     render(null, host);
     host.remove();
@@ -56,6 +57,40 @@ describe("pinned chat message", () => {
     const moderator = mount(stateWith({ viewer: OPERATOR, chatPinned: pinnedMessage() }), send);
     await act(async () => moderator.querySelector<HTMLButtonElement>('button[aria-label="Unpin message"]')!.click());
     expect(send).toHaveBeenCalledWith({ type: "chat.unpin" });
+  });
+
+  it("shows a message longer than its line on hover, and keeps it shown once clicked", async () => {
+    // jsdom lays nothing out: the pinned line reports words wider than itself.
+    const cut = (property: "scrollWidth" | "clientWidth", width: number) =>
+      vi.spyOn(HTMLElement.prototype, property, "get").mockImplementation(function (this: HTMLElement) {
+        return this.classList.contains("pk-live-chat__pinned-text") ? width : 0;
+      });
+    cut("scrollWidth", 600);
+    cut("clientWidth", 200);
+    const host = mount(stateWith({ chatPinned: pinnedMessage() }));
+    const pinned = bar(host)!;
+    const point = (type: string, pointerType = "mouse") =>
+      act(() => {
+        pinned.dispatchEvent(Object.assign(new Event(type), { pointerType }));
+      });
+    const shown = () => pinned.hasAttribute("data-open");
+
+    expect(shown()).toBe(false);
+    await point("pointerenter");
+    expect(shown()).toBe(true);
+    await point("pointerleave");
+    expect(shown()).toBe(false);
+    // A tap does not count as resting on it.
+    await point("pointerenter", "touch");
+    expect(shown()).toBe(false);
+
+    await point("pointerenter");
+    const toggle = host.querySelector<HTMLButtonElement>('button[aria-label="Show all"]')!;
+    await act(async () => toggle.click());
+    await point("pointerleave");
+    expect(shown()).toBe(true);
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Show less"]')!.click());
+    expect(shown()).toBe(false);
   });
 
   it("shows nothing above the chat while no message is pinned", () => {

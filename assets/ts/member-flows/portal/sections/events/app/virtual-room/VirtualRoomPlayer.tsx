@@ -5,12 +5,11 @@ import { formatDuration } from "../../../../../../../shared/format-date";
 import { clockTimeZone, type ClockZone } from "../../../../../../../shared/event-clock";
 import { instantToCalendarDate } from "../../../../../../../shared/timezone";
 /**
- * The location's live player and what is on it: YouTube's privacy-enhanced player for the day's stream, then
+ * The location's live player and what is on it: the venue screens' player for the day's stream, then
  * the running session's title and speakers, which follow the published agenda as sessions change.
  */
 import type { ComponentChildren } from "preact";
 import type { LiveStream } from "../../../../../../../shared/schemas/event-live-stream";
-import { youtubePrivacyEmbedUrl } from "../../../../../../../shared/youtube-video";
 import { eventSessionRoute } from "../../../../../../../shared/event-participation-link";
 import { usePortalHashLocation } from "../../../../hash-location";
 import { JoinSessionMeeting } from "../../detail/participation/JoinSessionMeeting";
@@ -20,7 +19,10 @@ import { VirtualRoomSpeakerFaces } from "./VirtualRoomSpeakerFaces";
 import "../../../../../../ui/Content.css";
 import "./VirtualRoom.css";
 import { SectionHeading } from "../../../../../../ui/SectionHeading";
-import { IconVirtualOff } from "../../../../../../ui/MediaIcons";
+import { IconCaptions, IconPlayback, IconSound, IconVirtual, IconVirtualOff } from "../../../../../../ui/MediaIcons";
+import { Button } from "../../../../../../ui/Button";
+import { useLivestreamPlayer } from "../../../../../../event-screens/useLivestreamPlayer";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import "../../../../../../../design/tokens.event.generated.css";
 import "../EventHero.css";
 import { useEventHeroMotif } from "../EventHero";
@@ -29,26 +31,194 @@ export function VirtualRoomPlayer({
   stream,
   locationName,
   startsAt,
+  inPerson = false,
+  motifUrl = null,
+  sound,
+  onSound,
 }: {
   stream: LiveStream | null;
   locationName: string;
   startsAt?: string;
+  /** The event's own artwork, along the foot of the card an in-person attendee starts the stream from. */
+  motifUrl?: string | null;
+  /** The attendee holds an in-person seat: the stream waits for a click rather than playing in the hall. */
+  inPerson?: boolean;
+  /** The viewer's sound choice, held by the room so it outlasts this player; each stream starts with it. */
+  sound: boolean;
+  onSound: (sound: boolean) => void;
 }) {
+  const [started, setStarted] = useState(!inPerson);
   if (!stream) return <WaitingRoomPlayer locationName={locationName} startsAt={startsAt} />;
   // One provider today; another joins here as its own player when the stream union grows.
+  if (!started)
+    return (
+      <VirtualRoomCard
+        motifUrl={motifUrl}
+        eyebrow={
+          <>
+            <IconVirtual width={12} height={12} />
+            {locationName} · Streamed
+          </>
+        }
+        title="Streams don't play by themselves for in-person attendees"
+      >
+        <div class="pk-event-hero__actions">
+          <Button onClick={() => setStarted(true)}>Watch the stream</Button>
+        </div>
+      </VirtualRoomCard>
+    );
   return (
-    <div class="pk-virtual-room__player">
-      <iframe
-        key={stream.videoId}
-        class="pk-embed"
-        src={youtubePrivacyEmbedUrl(stream.videoId)}
-        title={`${locationName} live stream`}
-        allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-        allowFullScreen
-        referrerPolicy="strict-origin-when-cross-origin"
-      />
+    <StreamPlayer
+      key={stream.videoId}
+      videoId={stream.videoId}
+      title={`${locationName} live stream`}
+      sound={sound}
+      onSound={onSound}
+    />
+  );
+}
+
+/** How long the stream's controls stay in view after the pointer last moved over it. */
+const CONTROLS_SHOWN_MS = 3_000;
+/** How often the player looks for the stream's caption track once captions are asked for, until it can tell. */
+const CAPTIONS_CHECK_MS = 2_000;
+/** How long the player says a stream has no captions. */
+const NO_CAPTIONS_SHOWN_MS = 4_000;
+
+/**
+ * The stream on the venue screens' player: no provider controls and no way out to the provider's site, so
+ * attendees stay in the room. It plays at once, muted unless a click started it, and keeps to the live edge.
+ * While muted, a labeled button opens in the middle of the picture, then settles in its bottom-left corner
+ * and keeps beating until the sound is on; with sound, a small button there turns it off and stays in view.
+ * Captions and pause follow it along the foot, shown only while the pointer is over the picture or a touch
+ * woke them, so nothing else covers the stream; a paused stream keeps its play button in view.
+ */
+function StreamPlayer({
+  videoId,
+  title,
+  sound,
+  onSound,
+}: {
+  videoId: string;
+  title: string;
+  /** The viewer's choice: with sound unless they turned it off, or muted until they turn it on. */
+  sound: boolean;
+  onSound: (sound: boolean) => void;
+}) {
+  const player = useLivestreamPlayer({ videoId, title, sound, keepLive: true, report: false });
+  const audible = sound && !player.health.muted;
+  const [controlShown, showControl] = useShownWhileActive(CONTROLS_SHOWN_MS);
+  const [paused, setPaused] = useState(false);
+  const [captions, setCaptions] = useState(false);
+  const [noCaptions, setNoCaptions] = useState(false);
+  const toggle = () => {
+    onSound(!audible);
+    player.setSound(!audible);
+    showControl();
+  };
+  const togglePause = () => {
+    setPaused(!paused);
+    player.setPaused(!paused);
+    showControl();
+  };
+  const toggleCaptions = () => {
+    setCaptions(!captions);
+    setNoCaptions(false);
+    player.setCaptions(!captions);
+    showControl();
+  };
+  // Asked for captions, a stream without a caption track says so instead of showing the button on.
+  const { hasCaptions, setCaptions: showCaptions } = player;
+  // A player still starting cannot tell yet, so it looks again for as long as captions stay on.
+  useEffect(() => {
+    if (!captions) return;
+    let check: ReturnType<typeof setTimeout>;
+    const look = () => {
+      const found = hasCaptions();
+      if (found === null) {
+        check = setTimeout(look, CAPTIONS_CHECK_MS);
+        return;
+      }
+      if (found !== false) return;
+      setCaptions(false);
+      showCaptions(false);
+      setNoCaptions(true);
+    };
+    check = setTimeout(look, CAPTIONS_CHECK_MS);
+    return () => clearTimeout(check);
+  }, [captions, hasCaptions, showCaptions]);
+  useEffect(() => {
+    if (!noCaptions) return;
+    const hide = setTimeout(() => setNoCaptions(false), NO_CAPTIONS_SHOWN_MS);
+    return () => clearTimeout(hide);
+  }, [noCaptions]);
+  const resting = controlShown ? "" : " pk-virtual-room__control--resting";
+  return (
+    <div
+      class="pk-virtual-room__player pk-virtual-room__stream"
+      onPointerMove={showControl}
+      onPointerDown={showControl}
+    >
+      <div ref={player.host} class="pk-embed pk-virtual-room__stream-host" />
+      {player.health.reconnecting ? (
+        <p class="pk-virtual-room__stream-status" role="status">
+          Reconnecting to the stream…
+        </p>
+      ) : null}
+      <div class="pk-virtual-room__controls">
+        {audible ? (
+          <Button icon variant="ghost" class="pk-virtual-room__control" aria-label="Mute" title="Mute" onClick={toggle}>
+            <IconSound audible />
+          </Button>
+        ) : (
+          <Button variant="primary" class="pk-virtual-room__unmute" onClick={toggle}>
+            <IconSound audible={false} />
+            Turn sound on
+          </Button>
+        )}
+        <Button
+          icon
+          variant="ghost"
+          class={`pk-virtual-room__control${captions ? " pk-virtual-room__control--on" : ""}${resting}`}
+          aria-label="Captions"
+          title="Captions"
+          aria-pressed={captions}
+          onClick={toggleCaptions}
+        >
+          <IconCaptions />
+        </Button>
+        <Button
+          icon
+          variant="ghost"
+          class={`pk-virtual-room__control${paused ? "" : resting}`}
+          aria-label={paused ? "Play" : "Pause"}
+          title={paused ? "Play" : "Pause"}
+          onClick={togglePause}
+        >
+          <IconPlayback playing={!paused} />
+        </Button>
+        <p class={`pk-virtual-room__control-note${noCaptions ? "" : " pk-sr-only"}`} role="status">
+          {noCaptions ? "This stream has no captions" : ""}
+        </p>
+      </div>
     </div>
   );
+}
+
+/** Whether a control is in view: shown on activity, then hidden again once nothing has happened for `ms`. */
+function useShownWhileActive(ms: number): [boolean, () => void] {
+  const [shown, setShown] = useState(true);
+  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const show = useCallback(() => {
+    setShown(true);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setShown(false), ms);
+  }, [ms]);
+  useEffect(() => {
+    show();
+    return () => clearTimeout(timer.current);
+  }, [show]);
+  return [shown, show];
 }
 
 function WaitingRoomPlayer({ locationName, startsAt }: { locationName: string; startsAt?: string }) {
@@ -87,17 +257,41 @@ export function VirtualRoomInRoom({
   recordingPlanned: boolean;
   motifUrl: string | null;
 }) {
+  return (
+    <VirtualRoomCard
+      motifUrl={motifUrl}
+      eyebrow={
+        <>
+          <IconVirtualOff width={12} height={12} />
+          {locationName} · {recordingPlanned ? "Not streamed · Recording planned" : "Not streamed"}
+        </>
+      }
+      title="Ask questions and chat here during its sessions"
+    />
+  );
+}
+
+/** The event app's header field where the stream would stand, with the event's own motif along its foot. */
+function VirtualRoomCard({
+  motifUrl,
+  eyebrow,
+  title,
+  children,
+}: {
+  motifUrl: string | null;
+  eyebrow: ComponentChildren;
+  title: string;
+  children?: ComponentChildren;
+}) {
   const motif = useEventHeroMotif(motifUrl);
   return (
     <div class="pk-event-hero pk-event-hero--compact pk-virtual-room__in-room">
       <div class="pk-event-hero__field">
         <span class="pk-event-hero__houses" aria-hidden="true" ref={motif} />
         <div class="pk-event-hero__subject">
-          <p class="pk-event-hero__eyebrow">
-            <IconVirtualOff width={12} height={12} />
-            {locationName} · {recordingPlanned ? "Not streamed · Recording planned" : "Not streamed"}
-          </p>
-          <p class="pk-virtual-room__in-room-title">Ask questions and chat here during its sessions</p>
+          <p class="pk-event-hero__eyebrow">{eyebrow}</p>
+          <p class="pk-virtual-room__in-room-title">{title}</p>
+          {children}
         </div>
       </div>
     </div>

@@ -29,6 +29,9 @@
     --pk-dur-live-mark-beat: 700ms;
     --pk-dur-live-mark-ripple: 900ms;
     --pk-dur-timer-warning: 1s;
+    --pk-dur-unmute-wait: 2s;
+    --pk-dur-unmute-settle: 700ms;
+    --pk-dur-unmute-beat: 1600ms;
     --pk-pqc-ink: #0b0d0c;
     --pk-pqc-ink-muted: #4a524f;
     --pk-pqc-paper: #ffffff;

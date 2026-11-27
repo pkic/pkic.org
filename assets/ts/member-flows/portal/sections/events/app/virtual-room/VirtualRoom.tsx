@@ -8,7 +8,7 @@ import { ONLINE_JOIN_LEAD_MS } from "../../../../../../../shared/event-agenda-me
  * running session comes from the published agenda compared with the browser clock at session boundaries.
  */
 import type { ComponentChildren } from "preact";
-import { useCallback, useEffect, useMemo, useRef } from "preact/hooks";
+import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import { agendaTimeZones } from "../../../../../../../shared/agenda-time-display";
 import { eventVirtualRoomRoute } from "../../../../../../../shared/event-participation-link";
@@ -53,10 +53,13 @@ function useVirtualRoomData(slug: string) {
 export function VirtualRoom({
   slug,
   away = false,
+  inPerson = false,
   motifUrl = null,
   agenda: agendaView,
 }: {
   slug: string;
+  /** The attendee holds an in-person seat: a stream waits for their click rather than playing in the hall. */
+  inPerson?: boolean;
   /** The event's own artwork, along the foot of a location held in the room only, as in the event's header. */
   motifUrl?: string | null;
   /**
@@ -71,6 +74,8 @@ export function VirtualRoom({
   agenda: (program: AgendaProgram, locationId: string | null) => ComponentChildren;
 }) {
   const [current] = useHashLocation();
+  // The viewer's sound choice outlasts the player, through a location without a stream and a visit elsewhere.
+  const [sound, setSound] = useState(inPerson);
   const shown = useRef(current);
   if (!away) shown.current = current;
   const location = shown.current;
@@ -158,6 +163,10 @@ export function VirtualRoom({
               stream={waiting ? null : stream}
               locationName={room.name}
               startsAt={waiting ? startsAt : undefined}
+              inPerson={inPerson}
+              motifUrl={motifUrl}
+              sound={sound}
+              onSound={setSound}
             />
           ) : (
             <VirtualRoomInRoom locationName={room.name} recordingPlanned={room.recordingPlanned} motifUrl={motifUrl} />

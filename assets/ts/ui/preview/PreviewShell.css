@@ -255,4 +255,9 @@
     grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
     gap: var(--pk-4);
   }
+  /* A studio grid cell at a fixed height, for panels whose layout depends on the cell's size. */
+  .pk-preview__studio-cell {
+    display: flex;
+    block-size: 22rem;
+  }
 }

@@ -1,4 +1,5 @@
 import { LIVE_CHAT_POLICY } from "../../../../assets/shared/live-chat-policy";
+import type { LiveParticipationRestriction } from "../../../../assets/shared/live-moderation-policy";
 import { liveLocationChatOpen } from "../../../../assets/shared/live-location-chat";
 import {
   LIVE_INTERACTION_BROADCAST_MILLISECONDS,
@@ -27,6 +28,7 @@ import { serializeLiveRoomMessage } from "./room-projection";
 import { seesChatOccurrence } from "./room-chat-audience";
 import { LIVE_PARTICIPATION_REFUSAL } from "./room-participation-refusal";
 import type { LiveOccurrenceModerationChange } from "./room-occurrence-participation";
+import type { LiveEventBlockDecision } from "./room-occurrence-participation";
 
 /** The socket tag of a location chat's connections, beside each connection's role. */
 export const LIVE_LOCATION_CHAT_SOCKET_TAG = "location-chat";
@@ -153,8 +155,8 @@ export class LiveLocationChatRoom {
 
   /**
    * Asks a converted message in the room of the session on: the one the studio has loaded, else the agenda's.
-   * The chat policy keeps an earlier session's messages out, so a question never lands in a session that is
-   * over. Between sessions with nothing loaded there is no room to ask it in.
+   * A message from an earlier session asks there too, so a question never lands in a session that is over.
+   * Between sessions with nothing loaded there is no room to ask it in.
    */
   async ask(question: LiveChatQuestion, by: Actor, at: string) {
     const state = this.parts.store.state();
@@ -203,13 +205,15 @@ export class LiveLocationChatRoom {
     this.onAirChanged();
   }
 
-  async accessChanged(occurrenceId: string, userId: string | null): Promise<void> {
-    const { store, chat, chatActions } = this.parts;
+  async accessChanged(occurrenceId: string, userId: string | null, decision?: LiveEventBlockDecision): Promise<void> {
+    const { store, chat, chatActions, feed } = this.parts;
     if (!store.state()) return;
-    if (store.stamp(Date.now()) === occurrenceId) {
-      await this.syncAccess(userId);
-      this.onAirChanged();
-    }
+    // The occurrence decided an event block in D1: the chat takes it now, not at its next access read.
+    if (userId && decision) feed.decisions.decideEventBlock(userId, decision);
+    const onAir = store.stamp(Date.now()) === occurrenceId;
+    // An event decision holds across sessions: the person's chat learns it even with no session on air.
+    if (onAir || (userId && decision)) await this.syncAccess(userId);
+    if (onAir) this.onAirChanged();
     if (userId) await chatActions.redeliver(chat.byAuthor(userId, LIVE_CHAT_POLICY.storedMessages, occurrenceId));
   }
 
@@ -237,10 +241,23 @@ export class LiveLocationChatRoom {
         sessionClosed: !allowed || policy?.opening === "closed",
         restriction:
           feed.decisions.restriction(viewer.userId, Date.now()) ??
-          (allowed ? restrictions?.[viewer.userId] : null) ??
-          null,
+          (allowed ? this.sessionRestriction(viewer.userId, restrictions?.[viewer.userId]) : null),
       };
     }, null);
+  }
+
+  /**
+   * The session room's restriction for someone, as the chat shows it. An event block there is that room's copy,
+   * refreshed only on its own reads: once the chat holds its own event decision, the chat's decision stands.
+   */
+  private sessionRestriction(
+    userId: string | null,
+    restriction: LiveParticipationRestriction | null | undefined,
+  ): LiveParticipationRestriction | null {
+    if (!restriction) return null;
+    return restriction.block === "event" && userId && this.parts.feed.decisions.knowsEventDecision(userId)
+      ? null
+      : restriction;
   }
 
   private snapshot(socket: WebSocket): Promise<string | null> {
@@ -265,7 +282,8 @@ export class LiveLocationChatRoom {
           participation:
             viewer.role === "operator"
               ? null
-              : (feed.decisions.restriction(viewer.userId, Date.now()) ?? policy?.restriction ?? null),
+              : (feed.decisions.restriction(viewer.userId, Date.now()) ??
+                this.sessionRestriction(viewer.userId, policy?.restriction)),
         },
         scope: {
           ...state.scope,

@@ -31,6 +31,8 @@ export interface LivestreamHealth {
   reconnecting: boolean;
   /** Since when the player has not been playing; null while it plays or after a fault. */
   stalledSince: number | null;
+  /** The viewer paused it: not playing is their choice, not a stall. */
+  held: boolean;
   /** Faults since the player last played, for the backoff. */
   faults: number;
   /** When to recreate the player after a fault. */
@@ -50,6 +52,8 @@ export type LivestreamHealthEvent =
   | { type: "unmuted"; at: number }
   /** A click allowed sound, and the player unmuted. */
   | { type: "sound"; at: number }
+  /** The viewer paused the stream, or played it again. */
+  | { type: "held"; held: boolean; at: number }
   | { type: "tick"; at: number };
 
 /** An event as its source reports it, before the screen stamps the time. */
@@ -72,6 +76,7 @@ export function startLivestreamHealth(videoId: string, at: number, generation = 
     muted: false,
     reconnecting: false,
     stalledSince: at,
+    held: false,
     faults: 0,
     retryAt: null,
     generation,
@@ -108,6 +113,11 @@ export function nextLivestreamHealth(health: LivestreamHealth, event: Livestream
     case "unmuted":
     case "sound":
       return health.muted ? { ...health, muted: false, changedAt: event.at } : health;
+    case "held":
+      // Played again, it counts toward a stall until it plays, as a new start does.
+      return event.held === health.held
+        ? health
+        : { ...health, held: event.held, stalledSince: event.held ? null : event.at, changedAt: event.at };
     case "tick":
       if (health.retryAt !== null)
         return event.at < health.retryAt
@@ -126,6 +136,8 @@ export function nextLivestreamHealth(health: LivestreamHealth, event: Livestream
     case "state": {
       // A player waiting to be recreated is no longer listened to.
       if (health.retryAt !== null) return health;
+      // Paused by the viewer, the player is doing what they asked.
+      if (health.held && event.state !== "playing") return health;
       if (event.state === "ended") return fault(health, event.at);
       if (event.state === "playing")
         return { ...withStatus(health, "playing", event.at), reconnecting: false, stalledSince: null, faults: 0 };

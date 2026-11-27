@@ -92,6 +92,9 @@ export function useLivestreamPlayer({
   const edge = useRef(LIVESTREAM_AT_LIVE_EDGE);
   const playing = useRef(false);
   playing.current = health.status === "playing";
+  // What the viewer chose on this player: paused, and captions shown; a new player takes the captions choice.
+  const held = useRef(false);
+  const captions = useRef(false);
 
   useEffect(() => {
     lastError.current = null;
@@ -178,23 +181,27 @@ export function useLivestreamPlayer({
             onReady: ({ target }) => {
               if (stopped) return;
               ready.current = target;
-              if (!withSound.current) {
-                target.mute();
-                target.playVideo();
+              if (captions.current) target.loadModule?.("captions");
+              if (withSound.current) {
+                target.unMute();
+                target.setVolume(100);
+              } else target.mute();
+              // Paused by the viewer before the player was ready: it waits for their play.
+              if (held.current) {
+                target.pauseVideo?.();
                 return;
               }
-              target.unMute();
-              target.setVolume(100);
               target.playVideo();
+              if (!withSound.current) return;
               // The browser may refuse to start with sound; muted is better than the reconnecting card.
               refusal = setTimeout(() => {
-                if (!stopped && !played) startMuted(target);
+                if (!stopped && !played && !held.current) startMuted(target);
               }, AUTOPLAY_WITH_SOUND_MS);
             },
             // The browser said so at once, at the start or on resuming after a pause: no need to wait.
             // Muted once; still blocked after that, the screen's sound control is the way back.
             onAutoplayBlocked: ({ target }) => {
-              if (stopped || isPlaying || fellBack || !withSound.current) return;
+              if (stopped || isPlaying || fellBack || !withSound.current || held.current) return;
               clearTimeout(refusal);
               startMuted(target);
             },
@@ -207,8 +214,8 @@ export function useLivestreamPlayer({
                 played = true;
                 fellBack = false;
               }
-              // Nobody pauses a live monitor; carry on.
-              if (state === "paused") target.playVideo();
+              // Nobody pauses a live monitor; carry on, unless the viewer paused it.
+              if (state === "paused" && !held.current) target.playVideo();
               signal({ type: "state", state });
               // Sound asked for while buffering is confirmed once playback starts, not only by the click's check.
               if (isPlaying && withSound.current && livestreamSoundConfirmed(target)) signal({ type: "sound" });
@@ -265,5 +272,47 @@ export function useLivestreamPlayer({
     }
   }, []);
 
-  return { host, health, setSound };
+  /** Pauses the stream for the viewer, or plays it again at the live edge. */
+  const setPaused = useCallback(
+    (on: boolean) => {
+      held.current = on;
+      signal({ type: "held", held: on });
+      const player = ready.current;
+      if (!player) return;
+      try {
+        if (on) player.pauseVideo?.();
+        else {
+          const live = player.getDuration?.();
+          if (keepLive && live !== undefined && Number.isFinite(live)) player.seekTo?.(live, true);
+          player.playVideo();
+        }
+      } catch {
+        /* A player being replaced starts playing. */
+      }
+    },
+    [keepLive],
+  );
+
+  /** Shows or hides the stream's captions; a stream without a caption track shows nothing. */
+  const setCaptions = useCallback((on: boolean) => {
+    captions.current = on;
+    try {
+      if (on) ready.current?.loadModule?.("captions");
+      else ready.current?.unloadModule?.("captions");
+    } catch {
+      /* A player being replaced takes the choice when it is ready. */
+    }
+  }, []);
+
+  /** Whether the running stream has a caption track: true, false, or null while the player cannot tell yet. */
+  const hasCaptions = useCallback((): boolean | null => {
+    try {
+      const tracks = ready.current?.getOption?.("captions", "tracklist");
+      return Array.isArray(tracks) ? tracks.length > 0 : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  return { host, health, setSound, setPaused, setCaptions, hasCaptions };
 }

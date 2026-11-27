@@ -7,6 +7,7 @@ import {
   type LiveParticipationRestriction,
 } from "../../../../assets/shared/live-moderation-policy";
 import type { LiveRoomSql } from "./room-sql";
+import type { LiveEventBlockDecision } from "./room-occurrence-participation";
 
 export interface LiveRemovalRow {
   item_id: string;
@@ -174,13 +175,22 @@ export class LiveRoomModerationStore {
     this.sql.exec("DELETE FROM room_participation_blocks WHERE user_id = ?", userId);
   }
 
-  /** When this room last blocked or lifted someone for the event, so an older D1 read can't undo it. */
-  private readonly eventDecidedAt = new Map<string, number>();
+  /**
+   * As of when the room's event decision for someone holds: the decision's time, or the D1 read that last
+   * confirmed it. A notice or a read older than that is stale and leaves the room's decision as it is.
+   */
+  private readonly eventKnownAt = new Map<string, number>();
 
-  /** An organizer's decision in this room, already written to D1. */
-  decideEventBlock(userId: string, blocked: boolean): void {
-    this.eventDecidedAt.set(userId, Date.now());
-    this.eventBlocked(userId, blocked);
+  /** An organizer's decision, already written to D1; one older than what the room already knows is ignored. */
+  decideEventBlock(userId: string, decision: LiveEventBlockDecision): void {
+    if ((this.eventKnownAt.get(userId) ?? -Infinity) > decision.at) return;
+    this.eventKnownAt.set(userId, decision.at);
+    this.eventBlocked(userId, decision.blocked);
+  }
+
+  /** Whether the room holds its own event decision for someone, which outranks another room's copy of it. */
+  knowsEventDecision(userId: string): boolean {
+    return this.eventKnownAt.has(userId);
   }
 
   private eventBlocked(userId: string, blocked: boolean): void {
@@ -193,8 +203,8 @@ export class LiveRoomModerationStore {
    * asked about. Returns everyone whose event block started or ended.
    */
   refreshEventBlocks(checked: readonly string[], blocked: ReadonlySet<string>, readAt: number): string[] {
-    for (const [userId, at] of this.eventDecidedAt) if (at < readAt) this.eventDecidedAt.delete(userId);
-    checked = checked.filter((userId) => !this.eventDecidedAt.has(userId));
+    checked = checked.filter((userId) => (this.eventKnownAt.get(userId) ?? -Infinity) < readAt);
+    for (const userId of checked) this.eventKnownAt.set(userId, readAt);
     if (!checked.length) return [];
     const before = new Set(
       this.sql

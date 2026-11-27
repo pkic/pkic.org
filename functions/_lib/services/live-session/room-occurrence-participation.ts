@@ -10,8 +10,16 @@ export interface LiveOccurrenceParticipation {
   restriction: LiveParticipationRestriction | null;
 }
 
+/** An organizer's event block or lift, already in D1, and when it was decided, so an older notice can't undo it. */
+export interface LiveEventBlockDecision {
+  blocked: boolean;
+  at: number;
+}
+
 export type LiveOccurrenceModerationChange =
   | { kind: "lift" }
+  /** An event block decided in D1 by another room; this room takes it at once rather than at its next read. */
+  | { kind: "event"; decision: LiveEventBlockDecision }
   | {
       kind: "block";
       block: Exclude<LiveParticipationBlock, "event">;
