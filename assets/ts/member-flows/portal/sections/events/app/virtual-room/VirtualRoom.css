@@ -97,10 +97,10 @@
     background: var(--pk-chrome-deep);
   }
 
-  /* The stream's controls, in the picture's top-left corner: the one corner the room's own graphics leave free. */
+  /* The stream's controls, along the picture's foot from its left corner, where a player keeps them. */
   .pk-virtual-room__controls {
     position: absolute;
-    inset-block-start: var(--pk-2);
+    inset-block-end: var(--pk-2);
     inset-inline-start: var(--pk-2);
     display: flex;
     flex-wrap: wrap;
@@ -125,9 +125,15 @@
     color: var(--pk-on-solid-ink);
   }
 
-  /* Nothing covers the stream until the pointer moves over it; a keyboard still finds the buttons. */
+  /* Nothing but the sound button covers the stream until the pointer is over it; a keyboard still finds them. */
   .pk-virtual-room__control--resting.pk-btn:not(:focus-visible) {
     opacity: 0;
+  }
+
+  @media (hover: hover) {
+    .pk-virtual-room__stream:hover .pk-virtual-room__control--resting.pk-btn {
+      opacity: 1;
+    }
   }
 
   .pk-virtual-room__control-note {
@@ -161,7 +167,7 @@
   @keyframes pk-virtual-room-unmute-settle {
     /* The middle of a 16:9 picture, from the corner the button settles in. */
     from {
-      translate: calc(50cqi - 50% - var(--pk-2)) calc(28.125cqi - 50% - var(--pk-2));
+      translate: calc(50cqi - 50% - var(--pk-2)) calc(50% + var(--pk-2) - 28.125cqi);
       scale: 1.35;
     }
   }

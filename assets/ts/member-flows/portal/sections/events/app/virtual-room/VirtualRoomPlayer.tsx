@@ -88,10 +88,10 @@ const NO_CAPTIONS_SHOWN_MS = 4_000;
 /**
  * The stream on the venue screens' player: no provider controls and no way out to the provider's site, so
  * attendees stay in the room. It plays at once, muted unless a click started it, and keeps to the live edge.
- * While muted, a labeled button opens in the middle of the picture, then settles in its top-left corner and
- * keeps beating until the sound is on; with sound, a small button there turns it off. Captions and pause
- * follow it in the same corner. The small controls show only while the pointer moves over the picture, so
- * nothing covers the stream; a paused stream keeps its play button in view.
+ * While muted, a labeled button opens in the middle of the picture, then settles in its bottom-left corner
+ * and keeps beating until the sound is on; with sound, a small button there turns it off and stays in view.
+ * Captions and pause follow it along the foot, shown only while the pointer is over the picture or a touch
+ * woke them, so nothing else covers the stream; a paused stream keeps its play button in view.
  */
 function StreamPlayer({
   videoId,
@@ -162,7 +162,7 @@ function StreamPlayer({
           <Button
             icon
             variant="ghost"
-            class={`pk-virtual-room__control pk-virtual-room__sound${resting}`}
+            class="pk-virtual-room__control"
             aria-label="Mute"
             title="Mute"
             onClick={toggle}

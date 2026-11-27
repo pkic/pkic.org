@@ -159,7 +159,7 @@ describe("virtual room", () => {
     const watch = [...host.querySelectorAll("button")].find((button) => button.textContent === "Watch the stream")!;
     await act(async () => watch.click());
     expect(new URL(player()!.getAttribute("src")!).searchParams.get("mute")).toBeNull();
-    const mute = host.querySelector<HTMLButtonElement>(".pk-virtual-room__sound")!;
+    const mute = host.querySelector<HTMLButtonElement>('button[aria-label="Mute"]')!;
     expect(mute.getAttribute("aria-label")).toBe("Mute");
     // Muted, the stream stays muted in the next location the attendee opens.
     await act(async () => mute.click());
@@ -186,7 +186,7 @@ describe("virtual room", () => {
     expect(player()!.getAttribute("sandbox")).not.toContain("allow-popups");
     const unmute = [...host.querySelectorAll("button")].find((button) => button.textContent === "Turn sound on")!;
     await act(async () => unmute.click());
-    expect(host.querySelector(".pk-virtual-room__sound")?.getAttribute("aria-label")).toBe("Mute");
+    expect(host.querySelector('button[aria-label="Mute"]')).not.toBeNull();
     // The room's own buttons pause the stream and turn captions on, so nobody leaves for the provider's page.
     const pause = host.querySelector<HTMLButtonElement>('button[aria-label="Pause"]')!;
     await act(async () => pause.click());
@@ -199,7 +199,7 @@ describe("virtual room", () => {
     expect(player()).toBeNull();
     await open();
     expect(new URL(player()!.getAttribute("src")!).searchParams.get("mute")).toBeNull();
-    expect(host.querySelector(".pk-virtual-room__sound")?.getAttribute("aria-label")).toBe("Mute");
+    expect(host.querySelector('button[aria-label="Mute"]')).not.toBeNull();
     expect(nowPlaying()).toContain("Opening keynote");
     // A dot marks the running session; its people sit as portraits at the end of the time line.
     expect(host.querySelector(".pk-virtual-room__live-dot")).not.toBeNull();
