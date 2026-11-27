@@ -79,13 +79,15 @@ export function applyLayoutElementToAll(drafts: LayoutDrafts, element: LiveOverl
 
 /**
  * What the layout itself saves for an element: a shared one only by its flag, whether the scene includes it, its
- * place in the stack, whether it comes on with the scene, its spot's turns and whether it is locked.
+ * place in the stack, whether it comes on with the scene, its spot's turns, whether it is locked and its look.
  */
 function ownedBy(placement: LiveOverlayElementPlacement) {
   const flags = {
     comesOn: placement.comesOn === true,
     turns: placement.turns ?? null,
     locked: placement.locked === true,
+    qrLook: placement.qrLook ?? null,
+    timerLook: placement.timerLook ?? null,
   };
   return placement.shared
     ? { visible: placement.visible, shared: true, layer: placement.layer, ...flags }

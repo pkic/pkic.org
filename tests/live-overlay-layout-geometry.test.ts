@@ -198,6 +198,9 @@ describe("editing a box", () => {
         w: ["right", "top", "bottom"],
       }[handle] as Array<keyof typeof was>;
       for (const edge of kept) expect(now[edge]).toBeCloseTo(was[edge], 3);
+      // The dragged edge itself moves the way the pointer went.
+      const moved = { n: "top", s: "bottom", e: "right", w: "left" }[handle] as keyof typeof was;
+      expect(Math.sign(now[moved] - was[moved])).toBe(Math.sign(dx + dy));
     }
   });
 

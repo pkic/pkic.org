@@ -117,7 +117,9 @@ export function GraphicsPanel(context: LiveGraphicContext) {
   const applying = LIVE_GRAPHICS.filter((graphic) => graphic.applies?.(context) ?? true);
   const order = sceneGraphics(elements);
   const inScene = order.flatMap((element) => applying.filter((graphic) => graphic.element === element));
-  const other = applying.filter((graphic) => !elements[graphic.element].visible);
+  // Unlocked, the open draft decides what the scene shows, so a graphic added or taken out moves between the tabs.
+  const showing = editing?.status === "ready" ? editing.draft.elements : elements;
+  const other = applying.filter((graphic) => !showing[graphic.element].visible);
   const scenes = liveOverlayLayoutChoices(state.overlayLayouts);
   const showsIn = (element: LiveProgramLayer) => {
     const names = scenes
@@ -137,7 +139,7 @@ export function GraphicsPanel(context: LiveGraphicContext) {
           { id: "other", panelId: "studio-graphics-list", label: "Other graphics" },
         ]}
       />
-      <div role="tabpanel" id="studio-graphics-list">
+      <div role="tabpanel" id="studio-graphics-list" aria-labelledby={`studio-graphics-${tab}`}>
         {tab === "scene" ? (
           editing?.status === "ready" ? (
             <SceneSourcesList draft={editing.draft} />

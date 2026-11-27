@@ -75,31 +75,37 @@ export function useSceneDraft({
   const selected = picked && graphics.some((element) => element === picked) ? picked : (graphics[0] ?? null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  const latest = useRef({ layout, savedPositions });
-  latest.current = { layout, savedPositions };
-  const draftedFrom = useRef({
-    slug: layout.slug,
-    updatedAt: layout.updatedAt,
-    positions: savedPositions.elements,
-  });
+  const latest = useRef({ layout, savedPositions, drafts, name });
+  latest.current = { layout, savedPositions, drafts, name };
+  // The saved scene the draft started from; its version goes with the save, so a newer save is refused, not lost.
+  const [base, setBase] = useState(layout);
+  const draftedFrom = useRef({ layout, positions: savedPositions.elements });
+  // This draft's own save just stored the scenes: the draft starts again from them.
+  const ownSave = useRef(false);
   useEffect(() => {
     const current = latest.current;
     const from = draftedFrom.current;
+    const differs = (scene: LiveOverlayLayout) =>
+      current.name !== scene.name || layoutElementsChanged(current.drafts.elements, scene.elements);
+    const sameScene = from.layout.slug === current.layout.slug;
+    // Someone else saved this scene while it has changes of its own: they stay, and saving them is refused.
+    const kept = !ownSave.current && sameScene && differs(from.layout) && differs(current.layout);
+    ownSave.current = false;
     draftedFrom.current = {
-      slug: current.layout.slug,
-      updatedAt: current.layout.updatedAt,
+      layout: sameScene && (kept || from.layout.updatedAt === current.layout.updatedAt) ? from.layout : current.layout,
       positions: current.savedPositions.elements,
     };
-    if (from.slug === current.layout.slug && from.updatedAt === current.layout.updatedAt) {
-      // Only the shared positions changed: the scene's own changes stay a draft, its shared graphics follow.
+    if (sameScene && (kept || from.layout.updatedAt === current.layout.updatedAt)) {
+      // The scene's own changes stay a draft; its shared graphics follow the shared positions.
       setDrafts((drafts) => rebaseSharedPositions(drafts, from.positions, current.savedPositions.elements));
       return;
     }
+    setBase(current.layout);
     setName(current.layout.name);
     setDrafts({ elements: current.layout.elements, positions: current.savedPositions.elements });
     setDraftOf(current.layout.slug);
   }, [layout.slug, layout.updatedAt, savedPositions.updatedAt]);
-  const scene = { expectedUpdatedAt: layout.updatedAt, name, preset: layout.preset, elements };
+  const scene = { expectedUpdatedAt: base.updatedAt, name, preset: layout.preset, elements };
   const [revealed, setRevealed] = useState(false);
   const form = useContractForm(eventLiveOverlayLayoutPutSchema, scene, {
     // A refused box opens the exact position of its graphic, so the field that says why is in view.
@@ -158,12 +164,16 @@ export function useSceneDraft({
           eventLiveOverlayLayoutsResponseSchema,
         );
       form.reset();
+      ownSave.current = true;
       if (saved) onSaved(saved, true);
       onDirty?.(false);
       return true;
     } catch (cause) {
       // Positions saved before the scene failed are the new baseline, so the next save sends their version.
-      if (saved) onSaved(saved, false);
+      if (saved) {
+        ownSave.current = true;
+        onSaved(saved, false);
+      }
       setProblem(form.refuse(cause));
       return false;
     } finally {
@@ -171,6 +181,8 @@ export function useSceneDraft({
     }
   }
   function discard() {
+    draftedFrom.current = { layout, positions: savedPositions.elements };
+    setBase(layout);
     setName(layout.name);
     setDrafts(initial());
     form.reset();
@@ -219,7 +231,9 @@ export function useSceneDraft({
         change(element, { visible });
         return;
       }
-      update(changeLayoutElement(relinkLayoutElement(drafts, element), element, { visible }));
+      // Back in a spot, it takes the spot's turns, as a board placed there does.
+      const shown = changeLayoutElement(relinkLayoutElement(drafts, element), element, { visible });
+      update(changeLayoutElement(shown, element, { turns: spotTurnsFor(shown.elements, element) }));
       setPicked(element);
     },
     reorder: (element: LiveProgramLayer, to: number) =>

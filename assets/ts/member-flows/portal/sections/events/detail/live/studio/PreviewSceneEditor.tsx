@@ -79,9 +79,13 @@ export function leavePreviewScene(go: () => void): void {
   leavingDraft.value = (leave) => leave && go();
 }
 
+/** Counts each time Preview locks, so a change started before it never unlocks Preview again. */
+let previewLocks = 0;
+
 /** Locks Preview's scene again, once its changes are saved or discarded, then goes on. */
 export function lockPreviewScene(go: () => void = () => {}): void {
   leavePreviewScene(() => {
+    previewLocks += 1;
     previewSceneFull.value = false;
     previewSceneEditing.value = false;
     go();
@@ -167,11 +171,20 @@ export function SceneEditingProvider({
       if (done) toast("Scene saved. Every room shows the change.", "success");
     },
   });
+  // The question asked because someone put another scene on Preview, apart from a lock or leaving the studio.
+  const sceneAsked = useRef<((leave: boolean) => void) | null>(null);
   useEffect(() => {
-    if (current.slug === sceneSlug) return;
+    if (current.slug === sceneSlug) {
+      // Preview is back on the draft's scene: that question no longer needs an answer.
+      if (sceneAsked.current && leavingDraft.value === sceneAsked.current) leavingDraft.value = null;
+      sceneAsked.current = null;
+      return;
+    }
     if (!draft.dirty) return setSceneSlug(current.slug);
+    if (leavingDraft.value) return;
     // Someone put another scene on Preview: this one's changes are saved or discarded first.
-    leavingDraft.value ??= (leave) => leave && setSceneSlug(current.slug);
+    sceneAsked.current = (leave) => leave && setSceneSlug(current.slug);
+    leavingDraft.value = sceneAsked.current;
   }, [current.slug, sceneSlug, draft.dirty]);
   const value: SceneEditing | null = !editing
     ? null
@@ -233,6 +246,7 @@ export function duplicatePreviewScene(slug: string, preview: LiveRoomState, onPr
 
 async function copyPreviewScene(slug: string, preview: LiveRoomState, onPreviewScene: (scene: string) => void) {
   const endpoint = endpointsOf(slug).layouts;
+  const locks = previewLocks;
   try {
     const { layouts, positions } = await getJson(endpoint, eventLiveOverlayLayoutsResponseSchema);
     const { current } = previewSceneOf(preview);
@@ -251,6 +265,8 @@ async function copyPreviewScene(slug: string, preview: LiveRoomState, onPreviewS
       },
       eventLiveOverlayLayoutsResponseSchema,
     );
+    // Preview locked while the copy was made, such as for another output: the copy is saved, Preview stays as it is.
+    if (locks !== previewLocks) return toast(`${name} is saved. Load it on Preview to edit it.`, "success");
     onPreviewScene(created);
     previewSceneEditing.value = true;
     toast(`${name} is on Preview to edit.`, "success");
@@ -261,9 +277,12 @@ async function copyPreviewScene(slug: string, preview: LiveRoomState, onPreviewS
 
 /** Save or discard the scene's changes before Preview leaves it; Keep editing stays. */
 function SaveOrDiscard({ draft }: { draft: SceneDraft }) {
-  const settle = (leave: boolean) => {
-    leavingDraft.value?.(leave);
+  // Answers the question asked, and only while it is still the one open: a save that ends after it was
+  // answered or replaced settles nothing.
+  const settle = (leave: boolean, asked = leavingDraft.value) => {
+    if (!asked || leavingDraft.value !== asked) return;
     leavingDraft.value = null;
+    asked(leave);
   };
   return (
     <Dialog
@@ -272,7 +291,7 @@ function SaveOrDiscard({ draft }: { draft: SceneDraft }) {
       description="Saving changes this scene in every room of the event."
       confirmLabel="Save scene"
       onConfirm={() => undefined}
-      onCancel={() => settle(false)}
+      onCancel={() => !draft.busy && settle(false)}
       footerActions={
         <>
           <Button variant="ghost" disabled={draft.busy} onClick={() => settle(false)}>
@@ -291,7 +310,10 @@ function SaveOrDiscard({ draft }: { draft: SceneDraft }) {
           <Button
             variant="primary"
             loading={draft.busy}
-            onClick={() => void draft.save().then((saved) => saved && settle(true))}
+            onClick={() => {
+              const asked = leavingDraft.value;
+              void draft.save().then((saved) => saved && settle(true, asked));
+            }}
           >
             Save scene
           </Button>

@@ -516,7 +516,7 @@ export function monitorPanelView(
           disabled: outputs.length === 1 && outputs[0] === output,
           onSelect: () => {
             const go = () => change((panels) => toggleStudioOutput(panels, panel.id, output, room));
-            return editing ? lockPreviewScene(go) : go();
+            return single === "preview" ? lockPreviewScene(go) : go();
           },
         }))}
       >

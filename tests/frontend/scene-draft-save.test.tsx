@@ -35,6 +35,7 @@ const LAYOUTS = eventLiveOverlayLayoutsResponseSchema.parse({
   positions: { elements: LIVE_OVERLAY_DEFAULT_POSITIONS, saved: false, updatedAt: null },
 });
 const POSITIONS_SAVED_AT = "2026-11-27T10:00:00.000Z";
+const SCENE_SAVED_AT = "2026-11-27T10:05:00.000Z";
 const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
 
@@ -76,9 +77,15 @@ beforeEach(() => {
           positions: { elements: body.elements, saved: true, updatedAt: POSITIONS_SAVED_AT },
         });
       }
-      puts.push({ url, body: eventLiveOverlayLayoutPutSchema.parse(sent) });
+      const body = eventLiveOverlayLayoutPutSchema.parse(sent);
+      puts.push({ url, body });
       if (refuseScene) return json({ error: { message: "The scene could not be saved." } }, 500);
-      return json(LAYOUTS);
+      // The scene as stored: what the save sent, in a newer version.
+      const [first, ...rest] = LAYOUTS.layouts;
+      return json({
+        ...LAYOUTS,
+        layouts: [{ ...first!, name: body.name, elements: body.elements, updatedAt: SCENE_SAVED_AT }, ...rest],
+      });
     }),
   );
   host = document.createElement("div");
@@ -106,7 +113,10 @@ describe("saving a scene", () => {
     puts = [];
     await act(async () => void (await draft.save()));
     expect(puts.map(({ url }) => url)).toEqual(["/api/layouts/" + LAYOUTS.layouts[0]!.slug]);
+    expect(puts[0]!.body).toMatchObject({ name: "Camera close" });
     expect(finished).toEqual([false, true]);
+    expect(draft.name).toBe("Camera close");
+    expect(draft.dirty).toBe(false);
   });
 });
 

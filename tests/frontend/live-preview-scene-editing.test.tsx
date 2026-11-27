@@ -40,7 +40,17 @@ const COPIED = eventLiveOverlayLayoutsResponseSchema.parse({
   ...LAYOUTS,
   layouts: [
     ...LAYOUTS.layouts,
-    { ...LAYOUTS.layouts[0]!, slug: "copy-of-camera", name: "Copy of Camera", builtIn: false },
+    {
+      ...LAYOUTS.layouts[0]!,
+      slug: "copy-of-camera",
+      name: "Copy of Camera",
+      builtIn: false,
+      // A lower third placed for the copy alone, so the canvas shows which scene it edits.
+      elements: {
+        ...LAYOUTS.layouts[0]!.elements,
+        lowerThird: { ...LAYOUTS.layouts[0]!.elements.lowerThird, shared: false, x: 0.25, y: 0.5, w: 0.5, h: 0.25 },
+      },
+    },
   ],
 });
 let saves: string[] = [];
@@ -224,7 +234,9 @@ describe("editing the scene on Preview", () => {
     await previewElsewhere(desk.live, "copy-of-camera");
     await vi.waitFor(() => expect(reads).toBe(2));
     await vi.waitFor(() =>
-      expect(preview.querySelector(".pk-studio-scene-editor .pk-layout-canvas__box")).not.toBeNull(),
+      expect(
+        preview.querySelector(".pk-studio-scene-editor [data-element='lowerThird']")?.getAttribute("aria-label"),
+      ).toContain("25% from left, 50% from top, 50% wide, 25% high"),
     );
     expect(preview.textContent).not.toContain("no longer saved");
     // Found, the copy is not read for again.

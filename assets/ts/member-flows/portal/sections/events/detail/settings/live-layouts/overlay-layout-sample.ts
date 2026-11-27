@@ -18,6 +18,7 @@ import { LIVE_GRAPHIC_THEME_DEFAULTS } from "../../../../../../../../shared/live
 import { DEFAULT_LIVE_SCHEDULE_CONFIG } from "../../../../../../../../shared/schemas/live-session-schedule";
 import { DEFAULT_LIVE_TICKER_CONTEXT } from "../../../../../../../../shared/schemas/live-session-ticker";
 import { defaultLiveTimerGraphic } from "../../../../../../../../shared/schemas/live-session-timer";
+import { liveOverlayDrawn } from "../../../../../../../../shared/live-overlay-cover";
 import type { LiveProgramLayer } from "../../../../../../../../shared/live-overlay-stacking";
 import type { LiveRoomState } from "../../../../../../../live-session/live-room-state";
 import { NO_LIVE_ROOM_SOURCES } from "../../../../../../../../shared/schemas/live-room-sources";
@@ -239,9 +240,15 @@ export function withSampleGraphic(room: LiveRoomState, element: LiveProgramLayer
   return {
     ...room,
     // The panelists and the welcome draw the session's credits; the lower third draws its own from the stage.
+    // While the other of the two is on air, its people stay, so sampling one never changes the other.
     session:
       element === "panelists" || element === "speakerWelcome"
-        ? { ...room.session, credits: sample.session.credits }
+        ? {
+            ...room.session,
+            credits: liveOverlayDrawn(room.stage, element === "panelists" ? "speakerWelcome" : "panelists")
+              ? room.session.credits
+              : sample.session.credits,
+          }
         : room.session,
     stage,
     polls: element === "poll" ? [...room.polls, ...sample.polls] : room.polls,
