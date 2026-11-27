@@ -148,7 +148,7 @@ it("turns a chat message into a question in the session the studio has loaded, a
   studio.socket.close();
 });
 
-it("keeps an earlier session's chat out of the next session's questions", async () => {
+it("asks an earlier session's chat message in the session on now, never in the session that is over", async () => {
   const next = await fixture.addSession(undefined, { sameDay: true });
   await load(fixture.occurrenceId, 0);
   const attendee = await join("attendee");
@@ -157,17 +157,16 @@ it("keeps an earlier session's chat out of the next session's questions", async 
   const earlier = await operator.next("chat.message", (message) => message.message.text.startsWith("Will the slides"));
   expect(earlier.message.occurrenceId).toBe(fixture.occurrenceId);
 
-  // The studio moves on: the earlier session's message would land in a session that is over.
+  // The studio moves on: a question the earlier session had no time for goes to the session on now.
   await load(next, 1);
-  const before = operator.received.length;
+  const studio = await fixture.connect({ person: "operator" }, next);
+  clients.push(studio);
   operator.send({ type: "chat.convert", messageId: earlier.message.id });
-  expect((await operator.next("room.refused", () => true, { after: before })).code).toBe("LIVE_CHAT_NOT_ALLOWED");
+  await studio.next("question.changed", (message) => message.question.text.startsWith("Will the slides"));
 
   attendee.send({ type: "chat.send", text: "Is this talk recorded for later?" });
   const current = await operator.next("chat.message", (message) => message.message.text.startsWith("Is this talk"));
   expect(current.message.occurrenceId).toBe(next);
-  const studio = await fixture.connect({ person: "operator" }, next);
-  clients.push(studio);
   operator.send({ type: "chat.convert", messageId: current.message.id });
   await studio.next("question.changed", (message) => message.question.text.startsWith("Is this talk"));
 });

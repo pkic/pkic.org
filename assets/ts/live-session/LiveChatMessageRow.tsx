@@ -65,7 +65,7 @@ export function liveChatMessageActions(
     flaggedByCheck: moderation?.classifier != null,
     reportedByMe: message.reportedByMe ?? false,
     converted: moderation?.questionId != null,
-    earlierSession: sessionOn !== undefined && message.occurrenceId !== undefined && message.occurrenceId !== sessionOn,
+    noSessionOn: sessionOn === null,
     done: moderation?.done != null,
     authorStaff: moderation?.authorStaff ?? false,
     authorRestriction: moderation?.authorRestriction?.block ?? null,

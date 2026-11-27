@@ -137,7 +137,8 @@ export class LiveRoomChatActions {
       case "chat.moderate":
         return refuse(command.decision) ?? this.moderate(actor, row, command.decision, command.reason ?? null, at);
       case "chat.convert":
-        return refuse("convert") ?? this.convert(actor, row, at);
+        // With no session on, the room's own refusal says a session has to be loaded first.
+        return (this.hooks.stamp() === null ? null : refuse("convert")) ?? this.convert(actor, row, at);
       case "chat.pin":
         return refuse("pin") ?? this.pin(actor, row, at);
     }
@@ -178,7 +179,7 @@ export class LiveRoomChatActions {
         viewer.userId && this.feed.moderation.reportedBy([row.id], [viewer.userId]).get(viewer.userId)?.has(row.id),
       ),
       converted,
-      earlierSession: row.occurrence_id !== null && row.occurrence_id !== sessionOn,
+      noSessionOn: sessionOn === null,
       done: this.feed.decisions.done([row.id]).has(row.id),
       authorStaff: author?.staff ?? false,
       authorRestriction: this.feed.decisions.restriction(row.author_user_id, Date.now())?.block ?? null,

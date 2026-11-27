@@ -154,8 +154,8 @@ export class LiveLocationChatRoom {
 
   /**
    * Asks a converted message in the room of the session on: the one the studio has loaded, else the agenda's.
-   * The chat policy keeps an earlier session's messages out, so a question never lands in a session that is
-   * over. Between sessions with nothing loaded there is no room to ask it in.
+   * A message from an earlier session asks there too, so a question never lands in a session that is over.
+   * Between sessions with nothing loaded there is no room to ask it in.
    */
   async ask(question: LiveChatQuestion, by: Actor, at: string) {
     const state = this.parts.store.state();

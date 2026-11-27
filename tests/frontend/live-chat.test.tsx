@@ -454,13 +454,15 @@ describe("live chat", () => {
     expect(separators(host)).toEqual(["Post-quantum migration", "Between sessions"]);
   });
 
-  it("turns only the session on's messages into questions, so none lands in a session that is over", () => {
+  it("turns any message into a question for the session on, so none lands in a session that is over", () => {
     const operator = { role: "operator" as const, name: "Rita", organizer: false };
     const during = chatMessage({ occurrenceId: LIVE_OCCURRENCE });
     const between = chatMessage();
     const NEXT = "20000000-0000-4000-8000-000000000002";
     expect(liveChatMessageActions(during, operator, false, LIVE_OCCURRENCE).has("convert")).toBe(true);
-    expect(liveChatMessageActions(during, operator, false, NEXT).has("convert")).toBe(false);
+    // Written during an earlier session: it is asked in the session on now.
+    expect(liveChatMessageActions(during, operator, false, NEXT).has("convert")).toBe(true);
+    // Between sessions there is no session to ask it in.
     expect(liveChatMessageActions(during, operator, false, null).has("convert")).toBe(false);
     // Written in the break before: it goes to the session on now.
     expect(liveChatMessageActions(between, operator, false, NEXT).has("convert")).toBe(true);
