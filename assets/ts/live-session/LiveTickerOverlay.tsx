@@ -13,7 +13,8 @@ const TITLE_SAFE_FOOT = 54;
 
 /**
  * The ticker's own geometry for its box: its width, the inset its text keeps
- * from the sides (the boards' inset, so its words line up with theirs) and,
+ * from the sides when it stands still (the boards' inset, so its words line up
+ * with theirs; scrolling text runs the box's whole width) and,
  * when the box runs on to the frame's foot, the glass it extends below the
  * text so the text stays title-safe.
  */
