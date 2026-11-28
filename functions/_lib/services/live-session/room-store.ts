@@ -56,6 +56,15 @@ import { LiveQuestionCheckStore } from "./room-question-checks";
 
 const EMPTY_QUEUE: LiveQueue = { question: [], "lower-third": [], poll: [], change: null };
 
+/**
+ * A saved composition with its ticker in the form the schema reads now. Program, Preview, every auxiliary
+ * output and the Undo each keep one, and any of them may have been saved before the ticker's form changed.
+ */
+function storedComposition(saved: unknown): unknown {
+  if (saved === null || typeof saved !== "object" || !("ticker" in saved)) return saved;
+  return { ...saved, ticker: readStoredLiveTicker((saved as { ticker?: unknown }).ticker) };
+}
+
 /** The room's session, questions, reactions, controls and the bookkeeping of its durable copy. */
 export class LiveRoomStore {
   readonly questionChecks: LiveQuestionCheckStore;
@@ -329,8 +338,7 @@ export class LiveRoomStore {
     // A stage saved before polls existed carries no poll fields yet.
     const saved = this.control("stage");
     if (!saved) return EMPTY_LIVE_STAGE;
-    const stage = { ...EMPTY_LIVE_STAGE, ...(saved as object) };
-    return liveStageSchema.parse({ ...stage, ticker: readStoredLiveTicker(stage.ticker) });
+    return liveStageSchema.parse(storedComposition({ ...EMPTY_LIVE_STAGE, ...(saved as object) }));
   }
 
   saveStage(stage: LiveStage): void {
@@ -340,7 +348,7 @@ export class LiveRoomStore {
   /** One auxiliary output's composition; an output nobody composed yet shows nothing. */
   aux(output: LiveAuxOutput): LiveAuxComposition {
     const saved = this.control(`aux:${output}`);
-    return saved ? liveAuxCompositionSchema.parse(saved) : EMPTY_LIVE_AUX_COMPOSITION;
+    return saved ? liveAuxCompositionSchema.parse(storedComposition(saved)) : EMPTY_LIVE_AUX_COMPOSITION;
   }
 
   /**
@@ -394,7 +402,7 @@ export class LiveRoomStore {
    */
   preview(): LiveAuxComposition {
     const saved = this.control("preview");
-    if (saved) return liveAuxCompositionSchema.parse(saved);
+    if (saved) return liveAuxCompositionSchema.parse(storedComposition(saved));
     return this.stage();
   }
 
@@ -469,7 +477,7 @@ export class LiveRoomStore {
   programUndo(): { id: string; stage: LiveStage } | null {
     const saved = this.control("programUndo") as { id?: unknown; stage?: unknown } | null;
     if (!saved || typeof saved.id !== "string") return null;
-    const stage = liveStageSchema.safeParse(saved.stage);
+    const stage = liveStageSchema.safeParse(storedComposition(saved.stage));
     return stage.success ? { id: saved.id, stage: stage.data } : null;
   }
 
