@@ -475,7 +475,7 @@ test("one recurring meeting and conference retain the same actors through organi
     // The device stamps its own clock. Before the event the attendee has no in-person day yet, so the
     // observation is recorded with that warning; from the event's start it is eligible.
     expect(acknowledgment?.receipt).toMatchObject(
-      Date.now() < Date.parse(event.startsAt!)
+      Date.parse(originalScan.observedAt) < Date.parse(event.startsAt!)
         ? { outcome: "warning", reason: "wrong_attendance_mode", attendanceRecorded: true }
         : { outcome: "eligible", attendanceRecorded: true },
     );
