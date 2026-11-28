@@ -18,12 +18,12 @@ export const LIVE_SCHEDULE_SPOTLIGHT_MS = 6000;
 /** Faces a room shows before it counts the rest: a panel of six fits whole. */
 const FACES_SHOWN = 6;
 /**
- * Speakers a room names on its one line, all at once. A larger panel names
- * one speaker at a time instead, their face brought forward, so every name
- * is read in full rather than cut short.
+ * Speakers a room names on its one line. Two or more take turns instead, one
+ * name at a time with their face brought forward, so every name is read in
+ * full at a size a stream can read, rather than cut short.
  */
-export const LIVE_SCHEDULE_NAMES_SHOWN = 2;
-/** How long each speaker of a larger panel stays named. */
+export const LIVE_SCHEDULE_NAMES_SHOWN = 1;
+/** How long each speaker stays named when they take turns. */
 export const LIVE_SCHEDULE_SPEAKER_TURN_MS = 3500;
 
 /** Who speaks, by name, the moderator marked, on one line. */
@@ -75,9 +75,9 @@ function useSpotlight(count: number, animate: boolean): number | null {
 }
 
 /**
- * The speaker named now, or null when the room names them all at once. A
- * larger panel always takes turns: the graphic is made for the stream, where
- * no viewer's motion preference applies.
+ * The speaker named now, or null when the room has one speaker to name. More
+ * always take turns: the graphic is made for the stream, where no viewer's
+ * motion preference applies.
  */
 function useSpeakerTurn(count: number): number | null {
   const turning = count > LIVE_SCHEDULE_NAMES_SHOWN;
@@ -98,8 +98,8 @@ function speakerDetail(speaker: LiveScheduleRoom["speakers"][number]): string {
 
 /**
  * Who speaks, under the session's title: their faces overlapping, then their
- * names on one line; a larger panel names one speaker at a time, their face
- * brought forward, and every name holds the same place so the graphic keeps its size.
+ * name; two or more are named one at a time, their face brought forward, and
+ * every name holds the same place so the graphic keeps its size.
  */
 function Speakers({ speakers }: { speakers: LiveScheduleRoom["speakers"] }) {
   const turn = useSpeakerTurn(speakers.length);

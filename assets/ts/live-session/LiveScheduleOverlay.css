@@ -259,12 +259,13 @@
       filter var(--pk-dur-slow) var(--pk-ease);
   }
   /*
-   * A larger panel names one speaker at a time. Their face lifts out of the
+   * Two or more speakers are named one at a time. Their face lifts out of the
    * stack, a little larger and in front, with a ring, while the others step
    * back; it settles into the stack again when the next speaker is named.
    */
+  /* Room on every side for the lifted face and its ring, so the room's edge never cuts them. */
   .pk-live-schedule__speakers[data-turning] .pk-live-schedule__faces {
-    padding-block: 16px;
+    padding: 16px 18px;
   }
   .pk-live-schedule__speakers[data-turning] .pk-live-schedule__face {
     filter: brightness(0.8);
@@ -478,7 +479,7 @@
     grid-template-areas:
       "meta meta"
       "when title"
-      ". speakers";
+      "speakers speakers";
     grid-template-rows: auto auto auto;
     column-gap: 16px;
     row-gap: 0;
@@ -494,14 +495,29 @@
     font-size: var(--pk-live-card-title-type);
     font-weight: 700;
   }
+  /* One room's speakers go under the title at the board's full width, each name under the faces, so it fits whole. */
   .pk-live-schedule[data-on-ground][data-rooms="one"] .pk-live-schedule__speakers {
-    gap: 10px;
-    margin-block-start: 6px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    margin-block-start: 16px;
   }
+  .pk-live-schedule[data-on-ground][data-rooms="one"] .pk-live-schedule__turns,
+  .pk-live-schedule[data-on-ground][data-rooms="one"] .pk-live-schedule__names {
+    align-self: stretch;
+    max-inline-size: 100%;
+    margin-inline-start: 0;
+  }
+  /* One room's speakers are read from across the room: their faces and the name named now stand larger than a line. */
   .pk-live-schedule[data-on-ground] .pk-live-schedule__face .pk-avatar {
-    inline-size: 32px;
-    block-size: 32px;
+    inline-size: 44px;
+    block-size: 44px;
     box-shadow: 0 0 0 2px var(--graphic-ink);
+  }
+  .pk-live-schedule[data-on-ground][data-rooms="one"] .pk-live-schedule__face .pk-avatar {
+    inline-size: 64px;
+    block-size: 64px;
+    box-shadow: 0 0 0 3px var(--graphic-ink);
   }
   .pk-live-schedule[data-on-ground] .pk-live-schedule__names,
   .pk-live-schedule[data-on-ground] .pk-live-schedule__turn-name,
@@ -510,6 +526,16 @@
   }
   .pk-live-schedule[data-on-ground] .pk-live-schedule__turn-detail {
     font-size: var(--pk-live-card-eyebrow-type);
+  }
+  .pk-live-schedule[data-on-ground][data-rooms="one"] .pk-live-schedule__names,
+  .pk-live-schedule[data-on-ground][data-rooms="one"] .pk-live-schedule__turn-name {
+    /* A step under the session's bold title, in a lighter weight, so a name never reads as a second title. */
+    font-size: calc(var(--pk-live-card-title-type) * 0.75);
+    font-weight: 500;
+    line-height: 1.2;
+  }
+  .pk-live-schedule[data-on-ground][data-rooms="one"] .pk-live-schedule__turn-detail {
+    font-size: var(--pk-live-card-type);
   }
   @media (prefers-reduced-motion: reduce) {
     :root:not(:has([data-live-broadcast-source])) .pk-live-schedule__room,

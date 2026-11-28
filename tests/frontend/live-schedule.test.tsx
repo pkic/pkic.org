@@ -160,19 +160,21 @@ const speaker = (name: string, moderator = false, organization: string | null = 
   photoUrl: null,
   organization,
 });
-it("names up to two speakers under the title on one line", async () => {
+it("names one speaker under the title on one line, and two take turns", async () => {
   expect(liveScheduleSpeakerLine([speaker("Pat Panelist")])).toBe("Pat Panelist");
-  expect(liveScheduleSpeakerLine([speaker("Ana Example"), speaker("Fay Moderator", true)])).toBe(
-    "Ana Example, Fay Moderator (moderator)",
-  );
   const schedule = frame();
-  schedule.rooms = [{ ...schedule.rooms[0]!, speakers: [speaker("Ana Example"), speaker("Fay Moderator", true)] }];
+  schedule.rooms = [{ ...schedule.rooms[0]!, speakers: [speaker("Pat Panelist")] }];
   host = document.body.appendChild(document.createElement("div"));
   await act(() => render(<LiveScheduleOverlay schedule={schedule} animate />, host!));
   const room = host.querySelector(".pk-live-schedule__room")!;
   expect(room.querySelector(".pk-live-schedule__title + .pk-live-schedule__speakers")).not.toBeNull();
-  expect(room.querySelector(".pk-live-schedule__names")?.textContent).toBe("Ana Example, Fay Moderator (moderator)");
+  expect(room.querySelector(".pk-live-schedule__names")?.textContent).toBe("Pat Panelist");
   expect(room.querySelector("[data-turning]")).toBeNull();
+  schedule.rooms = [{ ...schedule.rooms[0]!, speakers: [speaker("Ana Example"), speaker("Fay Moderator", true)] }];
+  await act(() => render(<LiveScheduleOverlay schedule={{ ...schedule }} animate />, host!));
+  expect(room.querySelector("[data-turning]")).not.toBeNull();
+  expect(room.querySelector(".pk-live-schedule__names")).toBeNull();
+  expect(room.querySelector(".pk-live-schedule__turn[data-active]")?.textContent).toBe("Ana Example");
 });
 it("names a larger panel one speaker at a time, with their organization, even without motion", async () => {
   vi.useFakeTimers();
