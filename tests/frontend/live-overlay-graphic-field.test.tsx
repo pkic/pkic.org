@@ -169,6 +169,17 @@ describe("the scene's background on an output", () => {
     const covering = { ...talk, poll: camera.poll };
     const host = draw({ view: "program", elements: covering, projection: room("question", "poll") });
     expect(box(host, "background")).toBe(box(host, "poll"));
+    // A list grown into its empty partner's half: the background takes the whole column it draws in.
+    const top = { x: 0.6, y: 0.05, w: 0.35, h: 0.45, horizontal: "left", vertical: "top" } as const;
+    const bottom = { ...top, y: 0.5 };
+    const column = {
+      ...talk,
+      topQuestions: { ...camera.topQuestions, ...top, visible: true },
+      chat: { ...camera.chat, ...bottom, visible: true },
+    };
+    const alone = draw({ view: "program", elements: column, projection: room("chatFeed") });
+    expect(fields(alone)).toHaveLength(1);
+    expect(box(alone, "background")).toBe(box(alone, "chat"));
   });
 
   it("shows the front one of two boards in the same spot, on the one background", () => {

@@ -38,11 +38,13 @@ const CARDS: ReadonlySet<LiveOverlayElement> = new Set(["schedule", "checkIn"]);
  * air, under the frontmost one and in its box, so a question in a band under
  * the picture and a poll in the slides' place each get the scene's one
  * background, and the picture stays clear until one comes. A card, such as Up
- * next, keeps its own plate instead.
+ * next, keeps its own plate instead. `boxOf` gives the box a board draws in
+ * now, such as a list grown into its empty partner's half.
  */
 export function liveSceneGround(
   elements: LiveOverlayLayoutElements,
   onAir: (board: LiveOverlayElement) => boolean,
+  boxOf: (board: LiveOverlayElement) => LiveOverlayElementPlacement = (board) => elements[board],
 ): LiveOverlayElementPlacement | null {
   const background = elements.background;
   if (!background.visible) return null;
@@ -53,7 +55,7 @@ export function liveSceneGround(
       (top, board) => (top === null || (elements[board].layer ?? 0) > (elements[top].layer ?? 0) ? board : top),
       null,
     );
-  return front === null ? null : { ...background, ...liveOverlayBoxOf(elements[front]) };
+  return front === null ? null : { ...background, ...liveOverlayBoxOf(boxOf(front)) };
 }
 
 /** The boards and the cards: each keeps its lines clear of the timers on its top-right corner. */

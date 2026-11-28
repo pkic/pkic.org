@@ -473,8 +473,10 @@ export function LiveOverlayPresentation({
   // The scene's background: the frame's one field. No board draws a field of its own, inside it or outside, and
   // Up next inside it drops its card's plate, so nothing reads as a card on a card.
   // A background that waits for a board shows only under the front one that shows: on air, neither covered nor
-  // waiting for its turn, or selected in the layout editor. In the box the scene places it, before the ticker moves
-  // it clear.
+  // waiting for its turn, or selected in the layout editor. It takes the box that board draws in now (the panel
+  // joined with the question, or a list grown into its empty partner's half), before the ticker moves it clear.
+  const drawnOnAir = (other: LiveOverlayElement) =>
+    state !== null && isLiveProgramLayer(other) && liveOverlayDrawn(state.stage, other);
   const ground =
     view !== "stage-display" && state
       ? liveSceneGround(
@@ -485,6 +487,8 @@ export function LiveOverlayPresentation({
               liveOverlayDrawn(state.stage, board) &&
               liveOverlayCoveredBy(state.stage, elements, board) === null &&
               !liveOverlayWaitsForTurn(state.stage, elements, board, now)),
+          (board) =>
+            (board === "panelists" || board === "question") && panel ? panel : liveListBox(allowed, board, drawnOnAir),
         )
       : null;
   const timers =
@@ -526,11 +530,7 @@ export function LiveOverlayPresentation({
                 ));
               const joined = element === "panelists" && panel !== null;
               // An audience list takes its stacked partner's half too while the partner has nothing to show.
-              const listed = liveListBox(
-                elements,
-                element,
-                (other) => isLiveProgramLayer(other) && liveOverlayDrawn(state.stage, other),
-              );
+              const listed = liveListBox(elements, element, drawnOnAir);
               // A background that waits for a board sits in the box of the board on it.
               const placement = element === "background" && ground !== null ? ground : listed;
               const box = joined ? panel : placement;
