@@ -230,6 +230,24 @@ it("names the speakers in turn when the room holding the list cuts it short", as
     clipped.mockRestore();
   }
 });
+it("measures the list again when a box on a background moves to the frame's edge", async () => {
+  const schedule = frame();
+  schedule.rooms = [{ ...schedule.rooms[0]!, speakers: [speaker("Ana Example"), speaker("Fay Moderator", true)] }];
+  const inside = { x: 200, y: 200, width: 560, height: 500 };
+  const edge = { ...inside, x: 0, y: 0 };
+  host = document.body.appendChild(document.createElement("div"));
+  await act(() => render(<LiveScheduleOverlay schedule={schedule} box={inside} onGround animate />, host!));
+  expect(host.querySelector(".pk-live-schedule__list")).not.toBeNull();
+  // At the edge the frame's safe area widens the inset, so the same list no longer fits the card.
+  const cut = overflowing(".pk-live-schedule__card");
+  try {
+    await act(() => render(<LiveScheduleOverlay schedule={schedule} box={edge} onGround animate />, host!));
+    expect(host.querySelector(".pk-live-schedule__list")).toBeNull();
+    expect(host.querySelector("[data-turning]")).not.toBeNull();
+  } finally {
+    cut.mockRestore();
+  }
+});
 it("names the speakers in turn when, off a background, the list would make the box shrink the graphic", async () => {
   const schedule = frame();
   schedule.rooms = [{ ...schedule.rooms[0]!, speakers: [speaker("Ana Example"), speaker("Fay Moderator", true)] }];
