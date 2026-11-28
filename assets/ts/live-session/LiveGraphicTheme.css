@@ -44,6 +44,7 @@
   }
   /* See-through cards: the event's stripe along the foot, as under the lower third's name. */
   [data-graphic-theme="navy-glass"],
+  [data-graphic-theme="navy"],
   [data-graphic-theme="smoked-glass"],
   [data-graphic-theme="frosted-glass"],
   [data-graphic-theme="deep-blue"] {
@@ -51,6 +52,7 @@
   }
   /* White type on navy, smoke or deep blue, with a thin light edge; black type on frost. */
   [data-graphic-theme="navy-glass"],
+  [data-graphic-theme="navy"],
   [data-graphic-theme="smoked-glass"],
   [data-graphic-theme="deep-blue"] {
     --graphic-contrast: var(--pk-chrome-deep);
@@ -60,6 +62,9 @@
   }
   [data-graphic-theme="navy-glass"] {
     --graphic-ground: var(--pk-live-plate-navy);
+  }
+  [data-graphic-theme="navy"] {
+    --graphic-ground: var(--pk-live-plate-navy-solid);
   }
   [data-graphic-theme="smoked-glass"] {
     --graphic-ground: var(--pk-live-plate-smoke);

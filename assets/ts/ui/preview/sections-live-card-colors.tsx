@@ -19,7 +19,7 @@ import type { PreviewSection } from "./PreviewShell";
 import "./event-screens-preview.css";
 
 const ROOM = sampleOverlayRoom(Date.parse("2026-11-30T10:00:00.000Z"));
-const CARD_COLORS: LiveGraphicTheme[] = ["navy-glass", "smoked-glass", "frosted-glass", "deep-blue", "event"];
+const CARD_COLORS: LiveGraphicTheme[] = ["navy-glass", "navy", "smoked-glass", "frosted-glass", "deep-blue", "event"];
 
 function cards(theme: LiveGraphicTheme): LiveRoomState {
   const { schedule, checkIn } = ROOM.stage;

@@ -134,9 +134,9 @@ describe("a graphic's menu", () => {
       ).filter((item) => item.id.startsWith("shows-"));
     expect(shows().map((item) => [item.label, item.checked])).toEqual([
       ["Always", true],
-      ["With a board on it", false],
+      ["Under the board on air", false],
     ]);
-    expect(shows(true).find((item) => item.checked)!.label).toBe("With a board on it");
+    expect(shows(true).find((item) => item.checked)!.label).toBe("Under the board on air");
     expect(shows()[0]!.separatorBefore).toBe(true);
     shows()[1]!.onSelect!();
     expect(handlers.onLook).toHaveBeenLastCalledWith({ withBoardOnly: true });

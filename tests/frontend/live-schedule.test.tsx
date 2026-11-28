@@ -287,6 +287,7 @@ it("sends independent config-only Preview/Program commands and does not clear an
   const colors = controlFor<HTMLSelectElement>(document, "Colors");
   expect([...colors.options].map((option) => option.textContent)).toEqual([
     "Navy glass",
+    "Navy",
     "Smoked glass",
     "Frosted glass",
     "Deep blue",

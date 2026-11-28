@@ -107,21 +107,25 @@ const TIMER_LOOKS = [
   })),
 ];
 
-/** The background's colors: the event's field, or a see-through panel the boards on it read on. */
+const FIELD_LOOK_NOTES: Partial<Record<(typeof LIVE_FIELD_THEMES)[number], string>> = {
+  event: "The conference field with its dots.",
+  navy: "Solid: covers the slides or camera under it.",
+};
+
+/** The background's colors: the event's field, a solid navy panel, or a see-through one the boards on it read on. */
 const FIELD_LOOKS = LIVE_FIELD_THEMES.map((theme) => ({
   theme,
   label: LIVE_GRAPHIC_THEME_LABELS[theme],
-  description:
-    theme === "event" ? "The conference field with its dots." : "See-through: the production's background shows.",
+  description: FIELD_LOOK_NOTES[theme] ?? "See-through: the production's background shows.",
 }));
 
-/** When the background shows: with the scene, or only under a board, so the picture stays clear until one comes. */
+/** When the background shows: with the scene, or only under the board on air, so the picture stays clear until one comes. */
 const GROUND_SHOWS = [
   { withBoardOnly: undefined, label: "Always", description: "Whenever the scene is on." },
   {
     withBoardOnly: true,
-    label: "With a board on it",
-    description: "Only while a question, poll or other board inside it is on air.",
+    label: "Under the board on air",
+    description: "Only while a question, poll or other board is on air, in that board's place.",
   },
 ] as const;
 

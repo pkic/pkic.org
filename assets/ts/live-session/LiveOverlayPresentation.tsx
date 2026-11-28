@@ -251,7 +251,7 @@ const PROGRAM_LAYERS: ReadonlyMap<LiveProgramLayer, Layer> = new Map(
     [
       {
         element: "background",
-        // The one field of the frame: drawn whenever the scene includes it, or only with a board on it when it waits for one.
+        // The one field of the frame: drawn whenever the scene includes it, or, when it waits for a board, under the one on air.
         draw: (_state, { placement }) => (
           <LiveBoardGround box={overlayBoxPixels(placement)} theme={placement.fieldTheme ?? LIVE_FIELD_THEME_DEFAULT} />
         ),
@@ -474,9 +474,9 @@ export function LiveOverlayPresentation({
     : [];
   // The scene's background: the frame's one field. No board draws a field of its own, inside it or outside, and
   // Up next inside it drops its card's plate, so nothing reads as a card on a card.
-  // A background that waits for a board shows only while one filling it shows: on air, neither covered nor waiting
-  // for its turn, or selected in the layout editor. Matched by the boxes the scene places, before the ticker moves
-  // the boards clear of it.
+  // A background that waits for a board shows only under the front one that shows: on air, neither covered nor
+  // waiting for its turn, or selected in the layout editor. In the box the scene places it, before the ticker moves
+  // it clear.
   const ground =
     view !== "stage-display" && state
       ? liveSceneGround(
@@ -528,11 +528,13 @@ export function LiveOverlayPresentation({
                 ));
               const joined = element === "panelists" && panel !== null;
               // An audience list takes its stacked partner's half too while the partner has nothing to show.
-              const placement = liveListBox(
+              const listed = liveListBox(
                 elements,
                 element,
                 (other) => isLiveProgramLayer(other) && liveOverlayDrawn(state.stage, other),
               );
+              // A background that waits for a board sits in the box of the board on it.
+              const placement = element === "background" && ground !== null ? ground : listed;
               const box = joined ? panel : placement;
               // A board covered by one in front, or waiting for its turn in a spot, is left out, as the studio's row
               // says. The background always draws, and so does the layout editor's selected element.

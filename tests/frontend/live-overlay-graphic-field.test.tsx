@@ -37,6 +37,9 @@ const fields = (host: HTMLElement) =>
   host.querySelectorAll('[data-overlay-element="background"] .pk-live-board--ground');
 const layer = (host: HTMLElement, element: string) =>
   host.querySelector<HTMLElement>(`[data-overlay-element="${element}"]`);
+/** Where a graphic sits on the frame, as its surface's style places it. */
+const box = (host: HTMLElement, element: string) =>
+  layer(host, element)!.querySelector<HTMLElement>(".pk-live-overlay__surface")!.getAttribute("style");
 const drawn = (host: HTMLElement) =>
   [...host.querySelectorAll<HTMLElement>("[data-overlay-element]")].map((each) => each.dataset.overlayElement);
 
@@ -135,7 +138,7 @@ describe("the scene's background on an output", () => {
     expect(fields(everything)).toHaveLength(1);
   });
 
-  it("brings a waiting background on only under a board that fills it, as in a talk scene over the slides", () => {
+  it("brings a waiting background on only under the board on air, in that board's box", () => {
     const slides = { x: 0.3, y: 0.0444, w: 0.6667, h: 0.6667, horizontal: "center", vertical: "middle" } as const;
     const camera = LIVE_OVERLAY_PRESET_LAYOUTS.default.elements;
     const talk = {
@@ -153,9 +156,19 @@ describe("the scene's background on an output", () => {
       expect(fields(host), board).toHaveLength(1);
       expect(layer(host, board), board).not.toBeNull();
     }
-    // A question covered by a poll over the whole frame shows nothing on the slides, so they get no bare glass.
+    // The background sits in the box of the board on air: in the band under a question, in the slides' place under a poll.
+    const band = { x: 0.0333, y: 0.7407, w: 0.9333, h: 0.2148, horizontal: "center", vertical: "bottom" } as const;
+    const split = { ...talk, question: { ...camera.question, ...band } };
+    for (const board of ["question", "poll"] as const) {
+      const host = draw({ view: "program", elements: split, projection: room(board) });
+      expect(fields(host), board).toHaveLength(1);
+      expect(box(host, board), board).toMatch(/\S/);
+      expect(box(host, "background"), board).toBe(box(host, board));
+    }
+    // A question covered by a poll over the whole frame: the background goes under the poll, not on the slides.
     const covering = { ...talk, poll: camera.poll };
-    expect(fields(draw({ view: "program", elements: covering, projection: room("question", "poll") }))).toHaveLength(0);
+    const host = draw({ view: "program", elements: covering, projection: room("question", "poll") });
+    expect(box(host, "background")).toBe(box(host, "poll"));
   });
 
   it("shows the front one of two boards in the same spot, on the one background", () => {

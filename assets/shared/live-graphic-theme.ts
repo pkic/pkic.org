@@ -13,6 +13,7 @@ import { z } from "zod";
  */
 export const LIVE_GRAPHIC_THEMES = [
   "navy-glass",
+  "navy",
   "smoked-glass",
   "frosted-glass",
   "deep-blue",
@@ -27,6 +28,7 @@ export const liveGraphicThemeSchema = z.enum(LIVE_GRAPHIC_THEMES);
 
 export const LIVE_GRAPHIC_THEME_LABELS: Record<LiveGraphicTheme, string> = {
   "navy-glass": "Navy glass",
+  navy: "Navy",
   "smoked-glass": "Smoked glass",
   "frosted-glass": "Frosted glass",
   "deep-blue": "Deep blue",
@@ -59,6 +61,7 @@ export const LIVE_GRAPHIC_THEME_DEFAULTS = {
  */
 export const LIVE_FIELD_THEMES = [
   "navy-glass",
+  "navy",
   "smoked-glass",
   "deep-blue",
   "event",

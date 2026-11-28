@@ -81,18 +81,31 @@
   .pk-live-board[data-shape="tall"] .pk-live-overlay__question-text[data-fit="longest"] {
     --question-lines: 13;
   }
-  /* A thin strip holds fewer lines at each size. */
+  /*
+   * A thin strip under the picture holds the question alone, in two to four lines set over twice as large, so it
+   * reads on a phone where a whole board scaled down to the strip would not; whom it is for and who asked stay
+   * on the boards that have the room.
+   */
+  .pk-live-board[data-shape="strip"] .pk-live-board-question__body {
+    --question-scale: 2.6;
+    gap: 0;
+  }
+  .pk-live-board-question[data-shape="strip"] .pk-live-board__eyebrow {
+    font-size: calc(var(--pk-live-board-eyebrow-type) * 3);
+  }
+  .pk-live-board[data-shape="strip"] .pk-live-board-question__addressee,
+  .pk-live-board[data-shape="strip"] .pk-live-overlay__question-asker {
+    display: none;
+  }
   .pk-live-board[data-shape="strip"] .pk-live-overlay__question-text {
+    --question-lines: 2;
+  }
+  .pk-live-board[data-shape="strip"] .pk-live-overlay__question-text[data-fit="long"],
+  .pk-live-board[data-shape="strip"] .pk-live-overlay__question-text[data-fit="longer"] {
     --question-lines: 3;
   }
-  .pk-live-board[data-shape="strip"] .pk-live-overlay__question-text[data-fit="long"] {
-    --question-lines: 4;
-  }
-  .pk-live-board[data-shape="strip"] .pk-live-overlay__question-text[data-fit="longer"] {
-    --question-lines: 5;
-  }
   .pk-live-board[data-shape="strip"] .pk-live-overlay__question-text[data-fit="longest"] {
-    --question-lines: 6;
+    --question-lines: 4;
   }
   .pk-live-board-question .pk-live-overlay__question-asker {
     display: flex;

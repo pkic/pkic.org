@@ -55,7 +55,7 @@ export function describeGraphicSwitch(
   placement: Pick<LiveOverlayElementPlacement, "comesOn" | "withBoardOnly">,
 ): string {
   const by: LiveOverlayElementSwitch = LIVE_OVERLAY_ELEMENT_SWITCHES[element];
-  if (placement.withBoardOnly) return "With a board on it";
+  if (placement.withBoardOnly) return "Under the board on air";
   return by === "room" ? layoutSwitchChoice(placement).label : LAYOUT_SWITCH_NOTES[by];
 }
 

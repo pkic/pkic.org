@@ -44,6 +44,7 @@
    */
   .pk-live-qr-card[data-graphic-theme="event"] .pk-qr-graphic__ground,
   .pk-live-qr-card[data-graphic-theme="navy-glass"] .pk-qr-graphic__ground,
+  .pk-live-qr-card[data-graphic-theme="navy"] .pk-qr-graphic__ground,
   .pk-live-qr-card[data-graphic-theme="smoked-glass"] .pk-qr-graphic__ground,
   .pk-live-qr-card[data-graphic-theme="frosted-glass"] .pk-qr-graphic__ground,
   .pk-live-qr-card[data-graphic-theme="deep-blue"] .pk-qr-graphic__ground {
@@ -51,6 +52,7 @@
   }
   .pk-live-qr-card[data-graphic-theme="event"] .pk-qr-graphic__modules,
   .pk-live-qr-card[data-graphic-theme="navy-glass"] .pk-qr-graphic__modules,
+  .pk-live-qr-card[data-graphic-theme="navy"] .pk-qr-graphic__modules,
   .pk-live-qr-card[data-graphic-theme="smoked-glass"] .pk-qr-graphic__modules,
   .pk-live-qr-card[data-graphic-theme="frosted-glass"] .pk-qr-graphic__modules,
   .pk-live-qr-card[data-graphic-theme="deep-blue"] .pk-qr-graphic__modules {

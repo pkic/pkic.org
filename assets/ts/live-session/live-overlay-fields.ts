@@ -1,3 +1,4 @@
+import { liveOverlayBoxOf } from "../../shared/live-overlay-layout-presets";
 import { liveOverlaySpotOf, sameLiveBox } from "../../shared/live-overlay-spots";
 import type {
   LiveOverlayElement,
@@ -28,11 +29,16 @@ export function meets(one: LiveOverlayElementPlacement, other: LiveOverlayElemen
   return one.x < other.x + other.w && one.x + one.w > other.x && one.y < other.y + other.h && one.y + one.h > other.y;
 }
 
+/** The cards: they carry a plate of their own, so the background never follows one. */
+const CARDS: ReadonlySet<LiveOverlayElement> = new Set(["schedule", "checkIn"]);
+
 /**
- * The scene's background as it draws now: none when the scene leaves it out,
- * and none while it waits for a board (`withBoardOnly`) and no board that
- * fills it is on air, so the picture under it stays clear until one comes.
- * A card in a corner of it, such as Up next, keeps its own plate instead.
+ * The scene's background as it draws now: none when the scene leaves it out.
+ * One that waits for a board (`withBoardOnly`) draws only while a board is on
+ * air, under the frontmost one and in its box, so a question in a band under
+ * the picture and a poll in the slides' place each get the scene's one
+ * background, and the picture stays clear until one comes. A card, such as Up
+ * next, keeps its own plate instead.
  */
 export function liveSceneGround(
   elements: LiveOverlayLayoutElements,
@@ -41,10 +47,13 @@ export function liveSceneGround(
   const background = elements.background;
   if (!background.visible) return null;
   if (!background.withBoardOnly) return background;
-  const carried = [...BOARDS].some(
-    (board) => elements[board].visible && sameLiveBox(elements[board], background) && onAir(board),
-  );
-  return carried ? background : null;
+  const front = [...BOARDS]
+    .filter((board) => !CARDS.has(board) && elements[board].visible && onAir(board))
+    .reduce<LiveOverlayElement | null>(
+      (top, board) => (top === null || (elements[board].layer ?? 0) > (elements[top].layer ?? 0) ? board : top),
+      null,
+    );
+  return front === null ? null : { ...background, ...liveOverlayBoxOf(elements[front]) };
 }
 
 /** The boards and the cards: each keeps its lines clear of the timers on its top-right corner. */

@@ -252,7 +252,7 @@ describe("scene editor", () => {
     // Camera leaves the QR code out; its background waits for a board.
     expect(drawn()).not.toContain("qrCode");
     expect(drawn()).toContain("background");
-    expect(switchWords("background")).toBe("With a board on it");
+    expect(switchWords("background")).toBe("Under the board on air");
     expect(drawn()).not.toContain("stageDisplay");
     expect(drawn().sort()).toEqual([...rows()].sort());
     void act(() => box("ticker").click());
