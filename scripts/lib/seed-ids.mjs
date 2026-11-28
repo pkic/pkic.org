@@ -32,3 +32,8 @@ function stableId(namespace, key) {
 export function memberProfileId(key) {
   return stableId("pkic-seed-member-profiles", key);
 }
+
+/** Ids for the production-scale preview seed, so a re-run updates the same rows. */
+export function previewScaleId(key) {
+  return stableId("pkic-seed-preview-scale", key);
+}
