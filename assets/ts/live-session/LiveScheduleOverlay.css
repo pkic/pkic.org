@@ -442,7 +442,7 @@
   .pk-live-schedule[data-on-ground] {
     inline-size: calc(var(--schedule-width) * 1px);
     block-size: calc(var(--schedule-height) * 1px);
-    font-size: 20px;
+    font-size: var(--pk-live-card-type);
   }
   .pk-live-schedule[data-on-ground] .pk-live-schedule__card {
     inline-size: 100%;
@@ -458,14 +458,14 @@
   .pk-live-schedule[data-on-ground] .pk-live-schedule__heading {
     color: var(--graphic-ink-muted);
     font-family: var(--pk-font-mono);
-    font-size: 18px;
+    font-size: var(--pk-live-card-eyebrow-type);
     font-weight: 500;
     letter-spacing: 0.12em;
     line-height: 1.2;
     text-transform: uppercase;
   }
   .pk-live-schedule[data-on-ground] .pk-live-schedule__zone {
-    font-size: 16px;
+    font-size: var(--pk-live-card-note-type);
   }
   .pk-live-schedule[data-on-ground] .pk-live-schedule__room {
     block-size: auto;
@@ -487,11 +487,11 @@
   }
   .pk-live-schedule[data-on-ground] .pk-live-schedule__when,
   .pk-live-schedule[data-on-ground][data-rooms="one"] .pk-live-schedule__when {
-    font-size: 32px;
+    font-size: var(--pk-live-card-title-type);
     line-height: 1.15;
   }
   .pk-live-schedule[data-on-ground] .pk-live-schedule__title {
-    font-size: 32px;
+    font-size: var(--pk-live-card-title-type);
     font-weight: 700;
   }
   .pk-live-schedule[data-on-ground][data-rooms="one"] .pk-live-schedule__speakers {
@@ -506,10 +506,10 @@
   .pk-live-schedule[data-on-ground] .pk-live-schedule__names,
   .pk-live-schedule[data-on-ground] .pk-live-schedule__turn-name,
   .pk-live-schedule[data-on-ground] .pk-live-schedule__more {
-    font-size: 20px;
+    font-size: var(--pk-live-card-type);
   }
   .pk-live-schedule[data-on-ground] .pk-live-schedule__turn-detail {
-    font-size: 18px;
+    font-size: var(--pk-live-card-eyebrow-type);
   }
   @media (prefers-reduced-motion: reduce) {
     :root:not(:has([data-live-broadcast-source])) .pk-live-schedule__room,

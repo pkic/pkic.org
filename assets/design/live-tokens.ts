@@ -24,6 +24,14 @@ export const liveTokens = {
   "live-timer-label-type-large": "24px",
   "live-timer-type-large": "72px",
   "live-timer-mark-label-type": "22px",
+  // A card set on a panel at the frame's own pixels (Up next): its body, eyebrow, small note and session title.
+  "live-card-type": "20px",
+  "live-card-eyebrow-type": "18px",
+  "live-card-note-type": "16px",
+  "live-card-title-type": "32px",
+  // The ticker's scrolling messages and their eyebrow-style label.
+  "live-ticker-type": "30px",
+  "live-ticker-label-type": "20px",
   // White graphics straight on the camera picture: a tight edge, and a soft halo for digits.
   "live-on-picture-edge": "0 2px 4px rgba(0, 0, 0, 0.55)",
   "live-on-picture-text-shadow": "0 2px 4px rgba(0, 0, 0, 0.55), 0 0 24px rgba(0, 0, 0, 0.45)",
@@ -34,6 +42,8 @@ export const liveTokens = {
   "live-plate-smoke": "rgba(10, 14, 18, 0.72)",
   "live-plate-frost": "rgba(248, 249, 250, 0.9)",
   "live-plate-blue": "rgba(18, 44, 78, 0.88)",
+  // The navy glass made solid: a board that takes the slides' place covers them.
+  "live-plate-navy-solid": "rgb(13, 27, 42)",
   "live-plate-edge": "rgba(255, 255, 255, 0.14)",
   "live-plate-edge-strong": "rgba(255, 255, 255, 0.26)",
   // The pitch mark's seats still to fill, and the glare on the fill's leading edge.
