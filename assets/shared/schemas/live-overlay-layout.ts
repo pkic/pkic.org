@@ -237,6 +237,14 @@ function withoutRetiredPlacementFields(value: unknown): unknown {
 export const LIVE_QR_LOOKS = ["card", "black-on-white", "white-on-black", "black-on-clear"] as const;
 export type LiveQrLook = (typeof LIVE_QR_LOOKS)[number];
 
+/**
+ * How Up next shows one room's speakers in a scene: each on a row with their
+ * face (`list`), or their faces together with one name at a time (`turns`). A
+ * list that does not fit its box, or more than one room, takes turns.
+ */
+export const LIVE_SCHEDULE_SPEAKER_LOOKS = ["list", "turns"] as const;
+export type LiveScheduleSpeakerLook = (typeof LIVE_SCHEDULE_SPEAKER_LOOKS)[number];
+
 /** The boards whose text a scene can set larger or smaller than their box gives them (`textSize`). */
 export const LIVE_TEXT_SIZE_ELEMENTS: ReadonlySet<LiveOverlayElement> = new Set([
   "question",
@@ -276,6 +284,8 @@ export const liveOverlayElementPlacementSchema = insideFrame(
       qrLook: z.enum(LIVE_QR_LOOKS).optional(),
       /** Every timer's look in this scene (`LIVE_TIMER_PRESENTATIONS`); absent, each timer's own. Only the timer reads it. */
       timerLook: z.enum(LIVE_TIMER_PRESENTATIONS).optional(),
+      /** How Up next shows its speakers in this scene (`LIVE_SCHEDULE_SPEAKER_LOOKS`); absent, a list. Only Up next reads it. */
+      speakersLook: z.enum(LIVE_SCHEDULE_SPEAKER_LOOKS).optional(),
       /** The background's colors in this scene (`LIVE_FIELD_THEMES`); absent, navy glass. Only the background reads it. */
       fieldTheme: liveFieldThemeSchema.optional(),
       /**

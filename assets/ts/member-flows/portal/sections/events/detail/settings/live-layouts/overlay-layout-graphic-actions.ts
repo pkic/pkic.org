@@ -17,6 +17,7 @@ import {
   type LiveOverlayElementPlacement,
   type LiveOverlayLayoutElements,
   type LiveQrLook,
+  type LiveScheduleSpeakerLook,
 } from "../../../../../../../../shared/schemas/live-overlay-layout";
 import {
   LIVE_TIMER_PRESENTATIONS,
@@ -25,19 +26,28 @@ import {
 import type { MenuItem } from "../../../../../../../ui/Menu";
 
 /**
- * A graphic's look in one scene: the QR code's, every timer's, the background's, or a board's text size;
+ * A graphic's look in one scene: the QR code's, every timer's, Up next's speakers, the background's, or a board's text size;
  * undefined puts back the default.
  */
 export type GraphicLook =
   | Pick<LiveOverlayElementPlacement, "qrLook">
   | Pick<LiveOverlayElementPlacement, "timerLook">
+  | Pick<LiveOverlayElementPlacement, "speakersLook">
   | Pick<LiveOverlayElementPlacement, "fieldTheme">
   | Pick<LiveOverlayElementPlacement, "withBoardOnly">
   | ({ element: LiveOverlayElement } & Pick<LiveOverlayElementPlacement, "textSize">);
 
 /** The graphic each look belongs to. */
 export const graphicLookElement = (look: GraphicLook): LiveOverlayElement =>
-  "element" in look ? look.element : "qrLook" in look ? "qrCode" : "timerLook" in look ? "timer" : "background";
+  "element" in look
+    ? look.element
+    : "qrLook" in look
+      ? "qrCode"
+      : "timerLook" in look
+        ? "timer"
+        : "speakersLook" in look
+          ? "schedule"
+          : "background";
 
 /** What a look changes on its graphic's placement. */
 export const graphicLookChange = (look: GraphicLook): Partial<LiveOverlayElementPlacement> =>
@@ -81,7 +91,7 @@ export interface GraphicActionHandlers {
   onShow: (element: LiveOverlayElement, visible: boolean) => void;
   onSharing: (element: LiveOverlayElement, action: LayoutSharingAction) => void;
   onTurns: (element: LiveProgramLayer, turns: number | null) => void;
-  /** Sets the QR code's, the timers' or the background's look, or a board's text size, in this scene. */
+  /** Sets the QR code's, the timers', Up next's speakers' or the background's look, or a board's text size, in this scene. */
   onLook: (look: GraphicLook) => void;
 }
 
@@ -146,6 +156,16 @@ const TIMER_LOOKS = [
   })),
 ];
 
+/** Up next's speakers: a list by default, or one name at a time. */
+const SPEAKER_LOOKS: ReadonlyArray<{ look: LiveScheduleSpeakerLook; label: string; description: string }> = [
+  {
+    look: "list",
+    label: "List",
+    description: "Each speaker on a row with their face. Takes turns when the list does not fit.",
+  },
+  { look: "turns", label: "One at a time", description: "Their faces together, each name shown in turn." },
+];
+
 const FIELD_LOOK_NOTES: Partial<Record<(typeof LIVE_FIELD_THEMES)[number], string>> = {
   event: "The conference field with its dots.",
   navy: "Solid: covers the slides or camera under it.",
@@ -168,7 +188,7 @@ const GROUND_SHOWS = [
   },
 ] as const;
 
-/** The QR code's, the timers' and the background's looks, picked straight from the graphic's menu. */
+/** The QR code's, the timers', Up next's speakers' and the background's looks, picked straight from the graphic's menu. */
 function lookActions(
   elements: LiveOverlayLayoutElements,
   element: LiveProgramLayer,
@@ -192,15 +212,23 @@ function lookActions(
             checked: elements.timer.timerLook === look,
             onSelect: () => onLook({ timerLook: look }),
           }))
-        : element === "background"
-          ? FIELD_LOOKS.map(({ theme, label, description }) => ({
-              id: `look-${theme}`,
+        : element === "schedule"
+          ? SPEAKER_LOOKS.map(({ look, label, description }) => ({
+              id: `look-${look}`,
               label,
               description,
-              checked: (elements.background.fieldTheme ?? LIVE_FIELD_THEME_DEFAULT) === theme,
-              onSelect: () => onLook({ fieldTheme: theme === LIVE_FIELD_THEME_DEFAULT ? undefined : theme }),
+              checked: (elements.schedule.speakersLook ?? "list") === look,
+              onSelect: () => onLook({ speakersLook: look === "list" ? undefined : look }),
             }))
-          : [];
+          : element === "background"
+            ? FIELD_LOOKS.map(({ theme, label, description }) => ({
+                id: `look-${theme}`,
+                label,
+                description,
+                checked: (elements.background.fieldTheme ?? LIVE_FIELD_THEME_DEFAULT) === theme,
+                onSelect: () => onLook({ fieldTheme: theme === LIVE_FIELD_THEME_DEFAULT ? undefined : theme }),
+              }))
+            : [];
   const shows =
     element === "background"
       ? GROUND_SHOWS.map(({ withBoardOnly, label, description }) => ({

@@ -160,21 +160,51 @@ const speaker = (name: string, moderator = false, organization: string | null = 
   photoUrl: null,
   organization,
 });
-it("names one speaker under the title on one line, and two take turns", async () => {
+it("lists one room's speakers, each with their face, and names them in turn when the scene asks", async () => {
+  const schedule = frame();
+  const pair = [speaker("Ana Example", false, "Example Org"), speaker("Fay Moderator", true)];
+  schedule.rooms = [{ ...schedule.rooms[0]!, speakers: pair }];
+  host = document.body.appendChild(document.createElement("div"));
+  await act(() => render(<LiveScheduleOverlay schedule={schedule} animate />, host!));
+  const room = host.querySelector(".pk-live-schedule__room")!;
+  const listed = [...room.querySelectorAll(".pk-live-schedule__listed")].map((row) => [
+    row.querySelector(".pk-avatar") !== null,
+    row.querySelector(".pk-live-schedule__turn-name")?.textContent,
+    row.querySelector(".pk-live-schedule__turn-detail")?.textContent ?? null,
+  ]);
+  expect(listed).toEqual([
+    [true, "Ana Example", "Example Org"],
+    [true, "Fay Moderator", "Moderator"],
+  ]);
+  expect(room.querySelector("[data-turning]")).toBeNull();
+  await act(() => render(<LiveScheduleOverlay schedule={schedule} speakersLook="turns" animate />, host!));
+  expect(room.querySelector(".pk-live-schedule__list")).toBeNull();
+  expect(room.querySelector("[data-turning]")).not.toBeNull();
+  expect(room.querySelector(".pk-live-schedule__turn[data-active]")?.textContent).toBe("Ana ExampleExample Org");
+});
+it("names one speaker on one line under the title when they take turns", async () => {
   expect(liveScheduleSpeakerLine([speaker("Pat Panelist")])).toBe("Pat Panelist");
   const schedule = frame();
   schedule.rooms = [{ ...schedule.rooms[0]!, speakers: [speaker("Pat Panelist")] }];
   host = document.body.appendChild(document.createElement("div"));
-  await act(() => render(<LiveScheduleOverlay schedule={schedule} animate />, host!));
+  await act(() => render(<LiveScheduleOverlay schedule={schedule} speakersLook="turns" animate />, host!));
   const room = host.querySelector(".pk-live-schedule__room")!;
   expect(room.querySelector(".pk-live-schedule__title + .pk-live-schedule__speakers")).not.toBeNull();
   expect(room.querySelector(".pk-live-schedule__names")?.textContent).toBe("Pat Panelist");
   expect(room.querySelector("[data-turning]")).toBeNull();
+});
+it("names the speakers in turn when a list runs past the card's foot", async () => {
+  const schedule = frame();
   schedule.rooms = [{ ...schedule.rooms[0]!, speakers: [speaker("Ana Example"), speaker("Fay Moderator", true)] }];
-  await act(() => render(<LiveScheduleOverlay schedule={{ ...schedule }} animate />, host!));
-  expect(room.querySelector("[data-turning]")).not.toBeNull();
-  expect(room.querySelector(".pk-live-schedule__names")).toBeNull();
-  expect(room.querySelector(".pk-live-schedule__turn[data-active]")?.textContent).toBe("Ana Example");
+  const tall = vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(400);
+  try {
+    host = document.body.appendChild(document.createElement("div"));
+    await act(() => render(<LiveScheduleOverlay schedule={schedule} onGround animate />, host!));
+    expect(host.querySelector(".pk-live-schedule__list")).toBeNull();
+    expect(host.querySelector("[data-turning]")).not.toBeNull();
+  } finally {
+    tall.mockRestore();
+  }
 });
 it("names a larger panel one speaker at a time, with their organization, even without motion", async () => {
   vi.useFakeTimers();
@@ -184,7 +214,7 @@ it("names a larger panel one speaker at a time, with their organization, even wi
     const schedule = frame();
     schedule.rooms = [{ ...schedule.rooms[0]!, speakers: panel }];
     host = document.body.appendChild(document.createElement("div"));
-    await act(() => render(<LiveScheduleOverlay schedule={schedule} animate={false} />, host!));
+    await act(() => render(<LiveScheduleOverlay schedule={schedule} speakersLook="turns" animate={false} />, host!));
     const room = host.querySelector(".pk-live-schedule__room")!;
     expect(room.querySelectorAll(".pk-live-schedule__face")).toHaveLength(6);
     expect(room.querySelector(".pk-live-schedule__more")).toBeNull();
