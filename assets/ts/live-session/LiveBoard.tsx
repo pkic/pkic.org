@@ -25,7 +25,7 @@ export const LIVE_BOARD_MIN_HEIGHT = 640;
 export type LiveBoardShape = "strip" | "wide" | "medium" | "tall";
 
 /** The board's own size: its box's shape, at least the minimum width and height. */
-export function liveBoardSize(box: Pick<OverlayRect, "width" | "height">): {
+export function liveBoardSize(box: Pick<OverlayRect, "width" | "height"> & { textSize?: number }): {
   width: number;
   height: number;
   shape: LiveBoardShape;
