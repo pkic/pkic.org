@@ -1,5 +1,6 @@
 import { AppError, isAppError } from "../errors";
 import { handleError } from "../http";
+import { validationFaultFields } from "../logging";
 import { assertSameOriginRequest } from "../request-origin";
 import { LIVE_ROOM_FAULT_CLOSE_CODE, liveRoomRefusalCloseCode } from "../../../assets/shared/schemas/live-session-room";
 export function assertLiveSocketHandshake(request: Request, protocol: string): void {
@@ -34,6 +35,8 @@ export function failedLiveSocket(request: Request, error: unknown, protocol: str
   const upgrade = request.method === "GET" && request.headers.get("upgrade")?.toLowerCase() === "websocket";
   if (!upgrade || (isAppError(error) && error.status < 500)) return handleError(error);
   const reference = request.headers.get("cf-ray") ?? crypto.randomUUID();
-  console.error(`[live socket] Fault, reference ${reference}:`, error);
+  const fields = validationFaultFields(error);
+  if (fields) console.error(`[live socket] Fault, reference ${reference}:`, error, JSON.stringify(fields));
+  else console.error(`[live socket] Fault, reference ${reference}:`, error);
   return closedLiveSocket(LIVE_ROOM_FAULT_CLOSE_CODE, reference, protocol);
 }

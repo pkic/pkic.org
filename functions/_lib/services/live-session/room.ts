@@ -44,6 +44,7 @@ import { LiveRoomAccessLease } from "./room-access-lease";
 import { runLiveRoomAlarm } from "./room-alarm";
 import { closeLiveRoomSocket } from "./room-socket-close";
 import { nowIso } from "../../utils/time";
+import { validationFaultFields } from "../../logging";
 import type { LiveRoomParticipant } from "./room-admission";
 import { LiveRoomBroadcast } from "./room-broadcast";
 import { LiveRoomControls, type LiveControlOutcome, type LiveRefusal } from "./room-controls";
@@ -384,6 +385,17 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     const path = new URL(request.url).pathname;
     if (path === "/program/connect") return this.program.connect(request);
     if (path === "/chat/connect") return this.locationChat.connect(request);
+    try {
+      return await this.connectOccurrence(request);
+    } catch (error) {
+      // The Worker only sees "ZodError" once this crosses the boundary, so the room names the fields here.
+      const fields = validationFaultFields(error);
+      if (fields) console.error("[live room] Connect failed on stored or admitted data:", JSON.stringify(fields));
+      throw error;
+    }
+  }
+
+  private connectOccurrence(request: Request): Promise<Response> {
     return connectLiveOccurrence(request, {
       ctx: this.ctx,
       store: this.store,
