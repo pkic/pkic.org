@@ -263,6 +263,50 @@ describe("POST /api/v1/members/applications", () => {
     },
   );
 
+  it.each([undefined, "not a website"])(
+    "refuses an organization application with a missing or invalid website (%j)",
+    async (website) => {
+      const applicant = await organizationApplicant(
+        "alice@example-corp.test",
+        await insertOrganization(env.DB, "Example Corp"),
+      );
+      const answers: Record<string, unknown> = {
+        ...validPayload.answers,
+        ...membershipApplicationDescriptionAnswers("A"),
+        organization_website: website,
+      };
+      if (website === undefined) delete answers.organization_website;
+      const response = await callApi(makeEnv(), await organizationApplicationRequest(applicant, answers));
+      expect(response.status).toBe(422);
+      expect(await response.json()).toMatchObject({
+        error: { details: { fieldErrors: { organization_website: [expect.any(String)] } } },
+      });
+      expect(await queryAll(env.DB, "SELECT id FROM member_applications")).toHaveLength(0);
+      expect(await queryAll(env.DB, "SELECT id FROM form_submissions")).toHaveLength(0);
+    },
+  );
+
+  it("stores a bare organization website with HTTPS", async () => {
+    const applicant = await organizationApplicant(
+      "alice@example-corp.test",
+      await insertOrganization(env.DB, "Example Corp"),
+    );
+    const response = await callApi(
+      makeEnv(),
+      await organizationApplicationRequest(applicant, {
+        ...validPayload.answers,
+        ...membershipApplicationDescriptionAnswers("A"),
+        organization_website: "  example.test/about  ",
+      }),
+    );
+    expect(response.status, await response.clone().text()).toBe(201);
+    const answers = await queryAll<{ data_json: string }>(
+      env.DB,
+      "SELECT data_json FROM form_submission_answers WHERE field_key = 'organization_website'",
+    );
+    expect(answers).toEqual([{ data_json: JSON.stringify("https://example.test/about") }]);
+  });
+
   it("refuses a direct individual submission with omitted descriptions", async () => {
     const verified = await verifiedMemberApplicationPayload({
       ...individualPayload,

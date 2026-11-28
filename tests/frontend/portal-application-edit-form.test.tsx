@@ -262,7 +262,7 @@ describe("membership-application edit form, end to end", () => {
     communications: [],
   };
 
-  function stub(bodies: unknown[], failSave = false) {
+  function stub(bodies: unknown[], failSave = false, answers: Record<string, unknown> = {}) {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -283,7 +283,7 @@ describe("membership-application edit form, end to end", () => {
             });
           }
         }
-        return json(detail);
+        return json({ ...detail, answers });
       }),
     );
   }
@@ -324,15 +324,24 @@ describe("membership-application edit form, end to end", () => {
       organizationName: "Example Organization",
       membershipCategory: "F",
     });
-    expect(parsed.answers).toMatchObject({
-      job_title: null,
-      linkedin: null,
-      organization_website: null,
-      about_yourself: null,
-      about_organization: null,
-      reason: null,
-    });
+    expect(parsed.answers).toEqual({});
     // A successful save closes the editor and returns to the summary.
+    expect(buttonNames(page)).not.toContain("Save");
+  });
+
+  it("saves an unrelated correction while leaving a legacy website untouched", async () => {
+    const bodies: unknown[] = [];
+    stub(bodies, false, { organization_website: "Legacy website text" });
+    const page = await openEditor();
+    await typeInto(controlFor(page, "Applicant name"), "Corrected Applicant");
+    await act(() => {
+      page.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await settle();
+    expect(bodies).toHaveLength(1);
+    const parsed = applicationUpdateSchema.parse(bodies[0]);
+    expect(parsed.applicantName).toBe("Corrected Applicant");
+    expect(parsed.answers).not.toHaveProperty("organization_website");
     expect(buttonNames(page)).not.toContain("Save");
   });
 

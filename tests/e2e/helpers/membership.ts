@@ -152,6 +152,7 @@ export async function applyAsOrganizationIdentity(
       answers: {
         reason: "This browser journey exercises the membership review workflow.",
         about_organization: "We build PKI services.",
+        organization_website: "https://example.test",
         agrees_bylaws: true,
         agrees_code_of_conduct: true,
         agrees_ipr_policy: true,

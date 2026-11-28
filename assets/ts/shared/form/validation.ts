@@ -7,7 +7,7 @@ import {
 } from "./validation-map";
 import { applyFieldState, type FieldState } from "../../ui/field-state";
 import { normalizedEmailSchema } from "../../../shared/schemas/api-common";
-import { httpUrlSchema } from "../../../shared/schemas/urls";
+import { httpUrlInputSchema, httpUrlSchema } from "../../../shared/schemas/urls";
 
 function applyEmailValidity(field: HTMLInputElement): void {
   if (field.type !== "email") {
@@ -37,15 +37,16 @@ function applyEmailValidity(field: HTMLInputElement): void {
 }
 
 /**
- * A `type="url"` control is held to the shared link contract — HTTP(S) only,
- * no userinfo — not merely to the browser's looser idea of a URL, so the
- * field says the same thing the server will.
+ * Dynamic website inputs use the shared answer contract and a text control
+ * so native URL validation does not reject bare domains. Other URL controls
+ * retain their absolute-link contract.
  */
 function applyUrlValidity(field: HTMLInputElement): void {
-  if (field.type !== "url") return;
+  const schema = field.dataset.urlInput === "true" ? httpUrlInputSchema : httpUrlSchema;
+  if (field.type !== "url" && field.dataset.urlInput !== "true") return;
 
   const value = field.value.trim();
-  const result = value.length === 0 ? null : httpUrlSchema.safeParse(value);
+  const result = value.length === 0 ? null : schema.safeParse(value);
   if (result === null || result.success) {
     if (field.dataset.urlFormatError === "true") {
       field.setCustomValidity("");
@@ -196,12 +197,11 @@ export function clearStatus(target: HTMLElement): void {
 }
 
 export function validateBeforeSubmit(form: HTMLFormElement, _statusEl: HTMLElement): boolean {
-  if (form.checkValidity() && validateNativeFields(form)) {
+  if (validateNativeFields(form) && form.checkValidity()) {
     return true;
   }
 
   form.classList.add("was-validated");
-  validateNativeFields(form);
   // Inline [data-field-error] messages handle per-field feedback; the first
   // one may be far above the submit button, so take the person to it.
   focusFirstInvalidField(

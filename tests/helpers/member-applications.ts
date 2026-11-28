@@ -40,7 +40,11 @@ export function membershipApplicationDescriptionAnswers(membershipCategory: stri
   return {
     about_yourself: "I work on PKI interoperability.",
     ...(!isIndividualMembershipCategory(membershipCategory)
-      ? { job_title: "Representative", about_organization: "We build PKI services." }
+      ? {
+          job_title: "Representative",
+          about_organization: "We build PKI services.",
+          organization_website: "https://example.test",
+        }
       : {}),
   };
 }

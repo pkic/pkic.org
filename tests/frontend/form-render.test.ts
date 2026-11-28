@@ -569,3 +569,22 @@ describe("frontend field rendering", () => {
     expect(emailError.textContent).toBe("Use an organization email address.");
   });
 });
+
+it("validates dynamic URL controls with the answer contract instead of native URL syntax", () => {
+  const host = document.createElement("form");
+  document.body.append(host);
+  try {
+    renderCustomFields(host, [{ ...base("website", "Website"), fieldType: "url" }]);
+    const control = host.querySelector<HTMLInputElement>('[name="custom.website"]')!;
+    control.value = "example.test";
+    expect(validateBeforeSubmit(host, document.createElement("p"))).toBe(true);
+    control.value = "https://Acme";
+    expect(validateBeforeSubmit(host, document.createElement("p"))).toBe(false);
+    expect(control.validationMessage).not.toBe("");
+    control.value = "https://192.0.2.1";
+    expect(validateBeforeSubmit(host, document.createElement("p"))).toBe(true);
+  } finally {
+    render(null, host);
+    host.remove();
+  }
+});

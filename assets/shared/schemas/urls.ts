@@ -42,6 +42,28 @@ export const httpUrlSchema = z
   .max(MAX_URL_LENGTH, `Use at most ${String(MAX_URL_LENGTH)} characters.`)
   .refine(isHttpUrl, URL_MESSAGE);
 
+/** Public website inputs may omit the scheme; explicit schemes still have to be HTTP(S). */
+export const httpUrlInputSchema = z
+  .string()
+  .trim()
+  .transform((value) => {
+    if (!value || /^[a-z][a-z0-9+.-]*:(?!\d)/i.test(value)) return value;
+    return value.startsWith("//") ? `https:${value}` : `https://${value}`;
+  })
+  .pipe(httpUrlSchema)
+  .pipe(
+    z
+      .string()
+      .refine((value) => {
+        const hostname = new URL(value).hostname.replace(/\.$/, "");
+        // WHATWG has already validated and normalized IP literals and IDNs.
+        if (hostname.startsWith("[")) return true;
+        const labels = hostname.split(".");
+        return labels.length > 1 && labels.every((label) => /^[a-z0-9_](?:[a-z0-9_-]*[a-z0-9_])?$/i.test(label));
+      }, URL_MESSAGE)
+      .transform((value) => new URL(value).href),
+  );
+
 /** Generated signed links can legitimately exceed the user-supplied URL limit. */
 export const httpCapabilityUrlSchema = z
   .string()

@@ -1,3 +1,4 @@
+import { httpUrlInputSchema } from "./schemas/urls";
 import type { FormFieldType } from "./schemas/forms";
 import { formFieldOptionValues, isAllowedProfileUrl, type FormFieldRules } from "./schemas/form-field-rules";
 
@@ -98,6 +99,10 @@ export function normalizeFormAnswer(
       return toNumberValue(value);
     case "multi_select":
       return toStringArray(value);
+    case "url": {
+      const parsed = httpUrlInputSchema.safeParse(value);
+      return parsed.success ? parsed.data : typeof value === "string" ? value.trim() : undefined;
+    }
     default:
       return typeof value === "string" ? value.trim() : undefined;
   }
@@ -136,15 +141,21 @@ function selectionProblems(field: AnswerableFormField, value: Primitive[], rules
   return problems;
 }
 
-function textProblems(field: AnswerableFormField, value: string, rules: FormFieldRules): string[] {
+function textProblems(field: AnswerableFormField, value: string, rules: FormFieldRules, rawValue: unknown): string[] {
   const problems: string[] = [];
-  if (rules.minLength !== undefined && value.length < rules.minLength)
+  if (field.fieldType === "url") {
+    const parsed = httpUrlInputSchema.safeParse(value);
+    if (!parsed.success) problems.push(parsed.error.issues[0].message);
+  }
+  // Authored length and pattern rules govern the trimmed response, before URL normalization.
+  const text = field.fieldType === "url" && typeof rawValue === "string" ? rawValue.trim() : value;
+  if (rules.minLength !== undefined && text.length < rules.minLength)
     problems.push(`${field.label} must be at least ${rules.minLength} characters`);
-  if (rules.maxLength !== undefined && value.length > rules.maxLength)
+  if (rules.maxLength !== undefined && text.length > rules.maxLength)
     problems.push(`${field.label} must be at most ${rules.maxLength} characters`);
   if (rules.pattern) {
     try {
-      if (!new RegExp(rules.pattern).test(value))
+      if (!new RegExp(rules.pattern).test(text))
         problems.push(rules.patternMessage ?? `${field.label} has invalid format`);
     } catch {
       problems.push(`${field.label} has invalid validation pattern configuration`);
@@ -168,6 +179,7 @@ export function formAnswerProblems(
   field: AnswerableFormField,
   value: CustomAnswerValue | undefined,
   rules: FormFieldRules,
+  rawValue?: unknown,
 ): string[] {
   if (isEmptyFormAnswer(value)) return field.required ? [`${field.label} is required`] : [];
   if (typeof value === "boolean") return rules.requireTrue && value !== true ? [`${field.label} must be accepted`] : [];
@@ -177,6 +189,6 @@ export function formAnswerProblems(
     if (!isDateString(value.start) || !isDateString(value.end)) return [`${field.label} must contain valid dates`];
     return value.start > value.end ? [`${field.label} start date must be before end date`] : [];
   }
-  if (typeof value === "string") return textProblems(field, value, rules);
+  if (typeof value === "string") return textProblems(field, value, rules, rawValue);
   return [];
 }

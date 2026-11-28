@@ -35,3 +35,62 @@ describe("the answer contract generated from form fields", () => {
     });
   });
 });
+
+describe("web address answers", () => {
+  const contract = formAnswersContract([{ key: "website", label: "Website", fieldType: "url", required: true }]);
+
+  it.each([
+    ["example.com", "https://example.com/"],
+    ["  www.example.com/about?x=1#team  ", "https://www.example.com/about?x=1#team"],
+    ["//example.com", "https://example.com/"],
+    ["http://example.com", "http://example.com/"],
+    ["https://example.com", "https://example.com/"],
+    ["example.com:8080", "https://example.com:8080/"],
+    ["www.example.com:8443/apply", "https://www.example.com:8443/apply"],
+    ["https:example.com", "https://example.com/"],
+    ["https:/example.com", "https://example.com/"],
+    ["https://192.0.2.1", "https://192.0.2.1/"],
+    ["https://[2001:db8::1]", "https://[2001:db8::1]/"],
+    ["https://пример.рф", "https://xn--e1afmkfd.xn--p1ai/"],
+    ["пример.рф", "https://xn--e1afmkfd.xn--p1ai/"],
+    ["https://example.com./", "https://example.com./"],
+    ["https://some_host.example/", "https://some_host.example/"],
+  ])("normalizes %s before storing it", (website, expected) => {
+    expect(contract.parse({ website })).toEqual({ website: expected });
+  });
+
+  it.each([
+    undefined,
+    null,
+    "",
+    "  ",
+    "not a website",
+    "Acme",
+    "https://Acme",
+    "javascript:1",
+    "/about",
+    "person@example.com",
+    "javascript:alert(1)",
+    "ftp://example.com",
+    "https://user:password@example.com",
+  ])("refuses an absent or invalid web address (%j) under its field key", (website) => {
+    const checked = contract.safeParse({ website });
+    expect(checked.success).toBe(false);
+    expect(checked.error?.issues).toEqual(expect.arrayContaining([expect.objectContaining({ path: ["website"] })]));
+  });
+});
+
+it("applies URL length and pattern rules to the trimmed response", () => {
+  const contract = formAnswersContract([
+    {
+      key: "website",
+      label: "Website",
+      fieldType: "url",
+      required: true,
+      validation: { minLength: 11, maxLength: 11, pattern: "^example\\.com$" },
+    },
+  ]);
+  expect(contract.parse({ website: "  example.com  " })).toEqual({ website: "https://example.com/" });
+  expect(contract.safeParse({ website: "a.test" }).success).toBe(false);
+  expect(contract.safeParse({ website: "long.example.com" }).success).toBe(false);
+});

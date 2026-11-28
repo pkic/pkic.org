@@ -257,6 +257,7 @@ describe("canonical organization affiliations", () => {
           answers: {
             reason: "Apply after the speaking affiliation",
             about_organization: "We build PKI services.",
+            organization_website: "https://example.test",
             ...requiredMembershipApplicationAnswers,
           },
         }),

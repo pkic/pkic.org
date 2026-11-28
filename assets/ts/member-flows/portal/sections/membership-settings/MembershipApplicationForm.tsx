@@ -111,6 +111,8 @@ export function MembershipApplicationForm({ canWrite }: { canWrite: boolean }) {
                   mode="edit"
                   detail={detail}
                   purposes={["application"]}
+                  requestSchema={membershipApplicationFormDefinitionUpdateSchema}
+                  requestFields={{ expectedUpdatedAt: updatedAt }}
                   onSave={(payload) => save(payload as FormDefinitionUpdateInput)}
                   onSaved={() => setEditing(false)}
                   onCancel={() => setEditing(false)}

@@ -354,15 +354,11 @@ export async function updateMembershipApplication(
 
   if (input.answers) {
     const currentAnswers = await getApplicationAnswers(db, application.form_submission_id);
-    const mergedAnswers = { ...currentAnswers };
     for (const key of applicationEditableAnswersSchema.keyof().options) {
       if (input.answers[key] === undefined) continue;
       const nextValue = input.answers[key] ?? null;
       if (JSON.stringify(nextValue) !== JSON.stringify(currentAnswers[key] ?? null)) {
         changedFields.push(`answers.${key}`);
-        if (nextValue === null || (typeof nextValue === "string" && nextValue.trim().length === 0))
-          delete mergedAnswers[key];
-        else mergedAnswers[key] = nextValue;
       }
     }
 
@@ -372,13 +368,23 @@ export async function updateMembershipApplication(
         throw new AppError(500, "APPLICATION_FORM_MISSING", "No active membership application form is configured");
       }
       requireMembershipApplicationPolicyFields(form.fields);
-      // An earlier answer stays editable, but only an organization's application must name the applicant's job title.
+      // Corrections validate only the changed answers. Submission requirements
+      // must not prevent staff from repairing an older application.
       form.fields = applicationFieldRulesForApplicantKind(
         form.fields,
         nextIsIndividual ? "individual" : "organization",
       );
-      const normalizedAnswers = await validateCustomAnswersAgainstForm(form, {
-        customAnswers: mergedAnswers,
+      const answerChanges = Object.fromEntries(
+        Object.entries(input.answers).filter(([key]) => changedFields.includes(`answers.${key}`)),
+      );
+      const correctionForm = {
+        ...form,
+        fields: form.fields
+          .filter((field) => Object.hasOwn(answerChanges, field.key))
+          .map((field) => (field.key === "organization_website" ? { ...field, required: false } : field)),
+      };
+      const normalizedAnswers = await validateCustomAnswersAgainstForm(correctionForm, {
+        customAnswers: answerChanges,
         errorStatus: 422,
       });
       let formSubmissionId = application.form_submission_id;
@@ -398,7 +404,7 @@ export async function updateMembershipApplication(
         const answerMutations = Object.fromEntries(
           applicationEditableAnswersSchema
             .keyof()
-            .options.filter((key) => input.answers?.[key] !== undefined)
+            .options.filter((key) => Object.hasOwn(answerChanges, key))
             .map((key) => [key, normalizedAnswers[key]]),
         );
         dependentStatements.push(...prepareUpdateFormSubmission(db, form, formSubmissionId, answerMutations, now));

@@ -8,7 +8,7 @@ import { databaseIdSchema } from "./identifiers";
 import { normalizedEmailSchema } from "./api-common";
 import { membershipCategorySchema, applicationStageSchema, onHoldSubtypeSchema } from "./member-applications";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
-import { httpUrlSchema } from "./urls";
+import { httpUrlInputSchema } from "./urls";
 import { groupIdSchema, groupLabelSchema } from "./groups";
 import { requiresPermissions } from "./route-contract";
 /** Allowlisted sort columns for GET /api/v1/members/applications — see listMembershipApplications. */
@@ -259,8 +259,8 @@ export const applicationApproveRouteSchema = {
 
 export const applicationEditableAnswersSchema = z.object({
   job_title: z.string().trim().max(200).nullable().optional(),
-  linkedin: httpUrlSchema.nullable().optional(),
-  organization_website: httpUrlSchema.nullable().optional(),
+  linkedin: httpUrlInputSchema.nullable().optional(),
+  organization_website: httpUrlInputSchema.nullable().optional(),
   about_yourself: z.string().trim().max(5000).nullable().optional(),
   about_organization: z.string().trim().max(5000).nullable().optional(),
   reason: z.string().trim().max(5000).nullable().optional(),

@@ -38,7 +38,8 @@ export function formAnswersContract(
       .optional()
       .transform((value, issue) => {
         const normalized = normalizeFormAnswer(field, value, rules);
-        for (const message of formAnswerProblems(field, normalized, rules)) issue.addIssue({ code: "custom", message });
+        for (const message of formAnswerProblems(field, normalized, rules, value))
+          issue.addIssue({ code: "custom", message });
         // An unanswered question is null here and left out of the answers below.
         return isEmptyFormAnswer(normalized) ? null : (normalized as CustomAnswerValue);
       });

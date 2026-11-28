@@ -53,9 +53,22 @@ describe("shared portal-managed form answer contract", () => {
     // The membership application asks for them: its answers create the applicant's identity.
     expect(
       membershipApplicationFormDefinitionUpdateSchema.safeParse({
-        fields,
+        fields: [...fields, { key: "organization_website", label: "Organization website", fieldType: "url" }],
         expectedUpdatedAt: "2026-01-01T00:00:00.000Z",
       }).success,
     ).toBe(true);
   });
+});
+
+it.each([
+  { fieldType: "text" },
+  { validation: { format: "date_range" } },
+  { validation: { showWhen: { dayAttendanceIn: ["remote"] } } },
+])("refuses weakening the organization website question (%j)", (changes) => {
+  const checked = membershipApplicationFormDefinitionUpdateSchema.safeParse({
+    expectedUpdatedAt: "2026-01-01T00:00:00.000Z",
+    fields: [{ key: "organization_website", label: "Organization website", fieldType: "url", ...changes }],
+  });
+  expect(checked.success).toBe(false);
+  expect(checked.error?.issues).toEqual(expect.arrayContaining([expect.objectContaining({ path: ["fields", 0] })]));
 });
