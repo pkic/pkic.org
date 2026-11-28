@@ -184,8 +184,8 @@ const PRESETS: Record<LiveOverlayPreset, { name: string; elements: LiveOverlayLa
   /**
    * The camera picture with every graphic that has a switch at its standard
    * box, the boards included, and nothing coming on. Whatever the operator
-   * switches on shows here; a board over the whole frame brings the
-   * background with it, so no board reads bare on the picture. Only the QR
+   * switches on shows here; the board on air brings the background with
+   * it, in its own box, so no board reads bare on the picture. Only the QR
    * code, which has no switch, is left out. Outputs that name no scene draw this one.
    */
   default: {

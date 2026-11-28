@@ -114,9 +114,13 @@ describe("studio monitor layouts", () => {
     document.body.append(host);
     void act(() => render(<Harness />, host!));
     const screen = () => host!.querySelector(".pk-studio-monitor__screen")!;
-    // A room that names no scene draws Camera: the speaker's name and the question over the picture, no background.
+    // A room that names no scene draws Camera: the speaker's name and the question over the picture, the background
+    // only in the question's box under it.
     expect(screen().querySelector(".pk-live-overlay__name")).not.toBeNull();
-    expect(screen().querySelector('[data-overlay-element="background"]')).toBeNull();
+    const surface = (element: string) =>
+      screen().querySelector(`[data-overlay-element="${element}"] .pk-live-overlay__surface`)?.getAttribute("style");
+    expect(surface("question")).toMatch(/\S/);
+    expect(surface("background")).toBe(surface("question"));
     const picker = host.querySelector<HTMLButtonElement>('button[aria-label="Scene in Preview: Camera"]')!;
     expect(picker.textContent).toContain("Camera");
     expect(picker.getAttribute("aria-haspopup")).toBe("dialog");
