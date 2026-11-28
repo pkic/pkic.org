@@ -4,6 +4,8 @@ import { liveCompositionInput } from "../assets/shared/live-room-preview";
 import { LIVE_SESSION_TIMER_ID } from "../assets/shared/live-timer-policy";
 import { EMPTY_LIVE_STAGE } from "../assets/shared/schemas/live-session-room";
 import { defaultLiveTimerGraphic } from "../assets/shared/schemas/live-session-timer";
+import { DEFAULT_LIVE_TICKER_CONFIG } from "../assets/shared/schemas/live-session-ticker";
+import { LIVE_FIELD_THEME_DEFAULT } from "../assets/shared/live-graphic-theme";
 import { LiveRoomSql } from "../functions/_lib/services/live-session/room-sql";
 import { LiveRoomStore } from "../functions/_lib/services/live-session/room-store";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
@@ -256,6 +258,33 @@ describe("live room timers", () => {
       expect(store.aux("stage-display").panelists).toEqual({ layout: "list" });
       expect(state.storage.sql.exec("SELECT 1 FROM room_controls WHERE name='aux:stage-timer'").toArray()).toEqual([]);
     });
+  });
+  it("reads a ticker saved with a style on Program, Preview, an output and the Undo", async () => {
+    await f.connect({ person: "operator" });
+    await runInDurableObject(f.room(), (_room, state) => {
+      const { theme: _theme, ...config } = DEFAULT_LIVE_TICKER_CONFIG;
+      const prior = { ...EMPTY_LIVE_STAGE, ticker: { ...config, style: "gradient", segments: [] } };
+      for (const [name, value] of [
+        ["stage", prior],
+        ["preview", prior],
+        ["aux:projector", prior],
+        ["programUndo", { id: "saved", stage: prior }],
+      ] as const)
+        state.storage.sql.exec(
+          "INSERT INTO room_controls(name,value_json) VALUES(?,?) ON CONFLICT(name) DO UPDATE SET value_json=excluded.value_json",
+          name,
+          JSON.stringify(value),
+        );
+      const store = new LiveRoomStore(new LiveRoomSql(state.storage));
+      const ticker = { ...config, theme: LIVE_FIELD_THEME_DEFAULT, segments: [] };
+      expect(store.stage().ticker).toEqual(ticker);
+      expect(store.preview().ticker).toEqual(ticker);
+      expect(store.aux("projector").ticker).toEqual(ticker);
+      expect(store.programUndo()?.stage.ticker).toEqual(ticker);
+    });
+    // The room opens again for a desk that connects after the ticker's form changed.
+    const operator = await f.connect({ person: "secondOperator" });
+    expect((await operator.next("room.snapshot")).preview.ticker).toMatchObject({ theme: LIVE_FIELD_THEME_DEFAULT });
   });
   it("moves stored minute and hour formats to the clock and a stored session timer onto the agenda, once", async () => {
     await f.connect({ person: "operator" });
