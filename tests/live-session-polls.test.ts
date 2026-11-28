@@ -10,6 +10,9 @@ import { queryAll } from "./helpers/context";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
 import { LiveRoomSql } from "../functions/_lib/services/live-session/room-sql";
 import { LiveRoomStore } from "../functions/_lib/services/live-session/room-store";
+import { LiveRoomPolls } from "../functions/_lib/services/live-session/room-polls";
+import { LivePollStore } from "../functions/_lib/services/live-session/room-poll-store";
+import type { LiveRoomControls } from "../functions/_lib/services/live-session/room-controls";
 
 const f = createLiveRoomFixture();
 type Client = Awaited<ReturnType<typeof f.connect>>;
@@ -539,19 +542,32 @@ describe("live session question rewrite", () => {
   });
 });
 
-it("keeps no write of a room command that fails part way, so a poll reset is all or nothing", async () => {
+it("keeps every write of a poll reset whose audit fails, so a reset is all or nothing", async () => {
   const f = createLiveRoomFixture();
   await f.setup();
+  const operator = await f.connect({ person: "operator" });
+  const poll = await preparePoll(operator);
+  operator.send({ type: "poll.status", pollId: poll.id, status: "open" });
+  const voter = await f.connect({ person: "attendee" });
+  voter.send({ type: "poll.vote", pollId: poll.id, answer: "Root CA" });
+  await voter.next("poll.changed", (message) => message.poll.myAnswer !== null);
   await runInDurableObject(f.room(), async (_room, state) => {
-    const store = new LiveRoomStore(new LiveRoomSql(state.storage));
-    const actions = () => new LiveRoomSql(state.storage).rows("SELECT action FROM staff_actions").length;
-    const before = actions();
+    const sql = new LiveRoomSql(state.storage);
+    const snapshot = () => ({
+      ballots: sql.rows("SELECT user_id, answer_json FROM session_poll_ballots WHERE poll_id = ?", poll.id),
+      poll: sql.rows("SELECT * FROM session_polls WHERE id = ?", poll.id),
+      audit: sql.rows("SELECT action FROM staff_actions"),
+    });
+    const before = snapshot();
+    expect(before.ballots).toHaveLength(1);
+    const store = new LiveRoomStore(sql);
+    vi.spyOn(store, "recordStaffAction").mockImplementation(() => {
+      throw new Error("the audit write failed");
+    });
+    const polls = new LiveRoomPolls(store, new LivePollStore(sql), {} as LiveRoomControls);
     expect(() =>
-      store.atomically(() => {
-        store.recordStaffAction("someone", "live_session.poll.reset", {}, new Date().toISOString());
-        throw new Error("a later write failed");
-      }),
-    ).toThrow("a later write failed");
-    expect(actions()).toBe(before);
+      polls.resetResults({ userId: "operator", name: "Olga Operator" }, poll.id, new Date().toISOString()),
+    ).toThrow("the audit write failed");
+    expect(snapshot()).toEqual(before);
   });
 });
