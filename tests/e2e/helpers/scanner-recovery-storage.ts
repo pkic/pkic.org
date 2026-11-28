@@ -3,7 +3,15 @@ import { randomUUID } from "node:crypto";
 import { basename } from "node:path";
 import { definitionFor } from "./definition-list";
 import { uploadThroughControl } from "./file-upload";
-import { expect, type Page, type APIResponse, type BrowserContext, type Request, type Route } from "@playwright/test";
+import {
+  expect,
+  type Page,
+  type Locator,
+  type APIResponse,
+  type BrowserContext,
+  type Request,
+  type Route,
+} from "@playwright/test";
 import { z } from "zod";
 import { userAuthLogoutRequestSchema, userAuthLogoutResponseSchema } from "../../../assets/shared/schemas/user-auth";
 import { scannerQueueRecordSchema } from "../../../assets/shared/schemas/event-scanner-offline-queue";
@@ -91,8 +99,13 @@ export async function closeScannerDiagnostics(page: Page): Promise<void> {
   await expect(diagnostics).not.toBeVisible();
 }
 
+/** Door operators may also search attendees; a sponsor enters only the printed code. */
+export function scannerBadgeCode(scope: Page | Locator): Locator {
+  return scope.getByRole("textbox", { name: /^Badge code(?: or attendee)?$/ });
+}
+
 export async function openScannerManualEntry(page: Page): Promise<void> {
-  const code = page.getByRole("textbox", { name: /^Badge code(?: or attendee)?$/ });
+  const code = scannerBadgeCode(page);
   if (!(await code.isVisible())) {
     await closeScannerDiagnostics(page);
     const continuous = page.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
@@ -313,6 +326,8 @@ export async function addSyntheticPreparedScannerEvent(
   const syntheticKey = await page.evaluate(
     async ({ originalSlug, eventId, epochId, slug, version }) => {
       const opening = indexedDB.open("pkic-scanner-outbox", version);
+      // Never create the scanner's database: an empty one at its version would skip the app's own upgrade.
+      opening.onupgradeneeded = () => opening.transaction?.abort();
       const db = await new Promise<IDBDatabase>((resolve, reject) => {
         opening.onsuccess = () => resolve(opening.result);
         opening.onerror = () => reject(opening.error ?? new Error("Could not open scanner storage"));
@@ -370,6 +385,8 @@ export async function removeSyntheticPreparedScannerEvent(page: Page, key: strin
   await page.evaluate(
     async ({ key, version }) => {
       const opening = indexedDB.open("pkic-scanner-outbox", version);
+      // Never create the scanner's database: an empty one at its version would skip the app's own upgrade.
+      opening.onupgradeneeded = () => opening.transaction?.abort();
       const db = await new Promise<IDBDatabase>((resolve, reject) => {
         opening.onsuccess = () => resolve(opening.result);
         opening.onerror = () => reject(opening.error ?? new Error("Could not open scanner storage"));

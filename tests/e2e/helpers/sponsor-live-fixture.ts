@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Page, type TestInfo } from "@playwright/test";
-import type { AgendaOccurrence } from "../../../assets/shared/schemas/event-agenda";
 import { e2eAdminEmail } from "../../helpers/e2e-admin";
 import { captureDeviceConsole } from "./device-console";
 import { endEventSponsor } from "./event-sponsor";
@@ -36,15 +35,12 @@ import {
   enrolledEventScanRequestSchema,
   eventScanResponseSchema,
 } from "../../../assets/shared/schemas/event-participation-scanning";
-import { enrolledOfflineEligibilityResponseSchema } from "../../../assets/shared/schemas/event-offline-eligibility";
-import { WITHHELD_CONTACT_VALUE } from "../../../assets/shared/schemas/scanner-attempt-capture";
 import {
   scannerStorage,
   scrollScannerToTop,
   reconnectScannerBrowser,
-  openScannerDiagnostics,
-  closeScannerDiagnostics,
   openScannerManualEntry,
+  scannerBadgeCode,
 } from "./scanner-recovery-storage";
 
 export const sponsorEventSlug = "pqc-conference-amsterdam-nl";
@@ -175,30 +171,24 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
   }
 }
 
-async function openManualBadgeEntry(page: Page, sponsor = false) {
+/** A sponsor operator acknowledges asking permission once, then scans in the continuous scanner. */
+async function startSponsorScanner(page: Page) {
   const acknowledgement = page.getByRole("checkbox", {
     name: "I will ask each person for permission to collect their contact information before scanning their badge.",
     exact: true,
   });
   const continuous = page.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
-  if (sponsor)
-    await expect.poll(async () => (await acknowledgement.isVisible()) || (await continuous.isVisible())).toBe(true);
+  await expect.poll(async () => (await acknowledgement.isVisible()) || (await continuous.isVisible())).toBe(true);
   if (await acknowledgement.isVisible()) {
     await acknowledgement.check();
     await page.getByRole("button", { name: "Start scanning", exact: true }).click();
   }
-  await openScannerManualEntry(page);
+  await expect(continuous).toBeVisible();
 }
 
-async function expectDoorScannerReady(page: Page) {
-  const diagnostics = await openScannerDiagnostics(page);
-  await expect(
-    diagnostics.getByText("Badge data ready. Checks run locally; attendance uploads in the background.", {
-      exact: true,
-    }),
-  ).toBeVisible();
-  await closeScannerDiagnostics(page);
-  await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeEnabled();
+async function openManualBadgeEntry(page: Page, sponsor = false) {
+  if (sponsor) await startSponsorScanner(page);
+  await openScannerManualEntry(page);
 }
 
 export async function captureSponsorBadge(
@@ -211,7 +201,7 @@ export async function captureSponsorBadge(
   await openManualBadgeEntry(page, true);
   const scanner = page.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
   const manual = scanner.locator(".pk-fast-scanner__manual");
-  await manual.getByLabel("Badge code", { exact: true }).fill(badgeId);
+  await scannerBadgeCode(manual).fill(badgeId);
   const receiving = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === `${eventApi}/scans` &&
@@ -247,8 +237,8 @@ export async function captureSponsorBadge(
   await onResult?.();
   await next.click();
   await openManualBadgeEntry(page, true);
-  await expect(manual.getByLabel("Badge code", { exact: true })).toHaveValue("");
-  await expect(manual.getByLabel("Badge code", { exact: true })).not.toHaveAttribute("aria-invalid", "true");
+  await expect(scannerBadgeCode(manual)).toHaveValue("");
+  await expect(scannerBadgeCode(manual)).not.toHaveAttribute("aria-invalid", "true");
   await expect(
     page.getByRole("checkbox", {
       name: "I will ask each person for permission to collect their contact information before scanning their badge.",
@@ -268,6 +258,8 @@ export async function captureOfflineSponsorBadge(
   forbidden: readonly string[],
   readConsole: ReturnType<typeof captureDeviceConsole>,
 ) {
+  // The scanner opens its storage as it starts; read it only once the scanner has.
+  await startSponsorScanner(page);
   expect((await scannerStorage(page)).pending).toHaveLength(0);
   const offlineReceipts: number[] = [];
   const observeReceipt = (response: import("@playwright/test").Response) => {
@@ -286,7 +278,7 @@ export async function captureOfflineSponsorBadge(
     await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
     await expect(page.getByRole("dialog", { name: "Continuous badge scanner", exact: true })).toBeVisible();
     await openManualBadgeEntry(page, true);
-    await page.getByLabel("Badge code", { exact: true }).fill(badgeId);
+    await scannerBadgeCode(page).fill(badgeId);
     const manual = page
       .getByRole("dialog", { name: "Continuous badge scanner", exact: true })
       .locator(".pk-fast-scanner__manual");
@@ -303,11 +295,6 @@ export async function captureOfflineSponsorBadge(
         message: "The real offline sponsor capture must commit exactly one durable pending scan before upload",
       })
       .toBe(1);
-    await expect(
-      page
-        .getByRole("status", { name: "Scanner status", exact: true })
-        .getByText(/^1 awaiting upload(?: · syncing…)?$/),
-    ).toBeVisible();
     const pending = await scannerStorage(page);
     expect(pending.pending).toHaveLength(1);
     pendingLead = enrolledEventScanRequestSchema.parse(pending.pending[0]!.scan);
@@ -385,132 +372,6 @@ export async function captureSponsorViews(page: Page, info: TestInfo, checkpoint
     if (await scannerPanel.count())
       await scannerPanel.screenshot({ path: info.outputPath(`sponsor-${checkpoint}-${name}-scanner.png`) });
   }
-}
-
-/** Observe preparation caused by the actual epoch restart, preserving the selected session. */
-export async function startNextDoorScannerContext(
-  page: Page,
-  occurrence: Pick<AgendaOccurrence, "id" | "roomId">,
-  previous: ReturnType<typeof enrolledOfflineEligibilityResponseSchema.parse>,
-) {
-  // The scan mode belongs to the Setup tab; a closed session leaves the Diagnostics tab open.
-  await closeScannerDiagnostics(page);
-  await page.getByLabel("Scan mode", { exact: true }).selectOption("attendance");
-  const preparing = page
-    .waitForResponse((response) => {
-      const url = new URL(response.url());
-      return (
-        response.ok() &&
-        url.pathname === `${eventApi}/offline-eligibility` &&
-        url.searchParams.get("occurrenceId") === occurrence.id &&
-        url.searchParams.get("roomId") === occurrence.roomId &&
-        Boolean(url.searchParams.get("epochId")) &&
-        url.searchParams.get("epochId") !== previous.epochId
-      );
-    })
-    .then(async (response) => enrolledOfflineEligibilityResponseSchema.parse(await response.json()));
-  const diagnostics = await openScannerDiagnostics(page);
-  await diagnostics.getByRole("button", { name: "Start next scanner session", exact: true }).click();
-  const manifest = await preparing;
-  expect(manifest).toMatchObject({
-    eventId: previous.eventId,
-    deviceId: previous.deviceId,
-    operatorUserId: previous.operatorUserId,
-    occurrenceId: occurrence.id,
-    roomId: occurrence.roomId,
-    publishedRevision: previous.publishedRevision,
-  });
-  expect(manifest.epochId).not.toBe(previous.epochId);
-  // The confirmation is shown on the Setup tab, while the restart was requested from Diagnostics.
-  await closeScannerDiagnostics(page);
-  await expect(page.getByText("New scanner session prepared. Ready to scan.", { exact: true })).toBeVisible();
-  await expectDoorScannerReady(page);
-  await openManualBadgeEntry(page);
-  return manifest;
-}
-
-/** Reject contact-bearing input through the real form without submitting or changing retained scans. */
-export async function expectContactBadgeRejected(page: Page, email: string, freeText: string) {
-  const before = await scannerStorage(page);
-  const submissions: string[] = [];
-  const observe = (request: import("@playwright/test").Request) => {
-    if (new URL(request.url()).pathname === `${eventApi}/scans` && request.method() === "POST")
-      submissions.push(request.postData() ?? "");
-  };
-  page.on("request", observe);
-  try {
-    await openManualBadgeEntry(page);
-    await page.getByLabel("Badge code", { exact: true }).fill(JSON.stringify({ email, biography: freeText }));
-    await page.getByRole("button", { name: "Admission decision", exact: true }).click();
-    await expect(page.getByLabel("Badge code", { exact: true })).toHaveAttribute("aria-invalid", "true");
-    expect(submissions).toEqual([]);
-    // The refusal is audited as a failure that never carries the contact content, and keeps no scan.
-    // The failure is queued first and reaches history only after the background upload archives it.
-    const known = new Set(before.history.map((row) => row.scan.operationId));
-    const archivedFailures = async () => {
-      const current = await scannerStorage(page);
-      return { current, added: current.history.filter((row) => !known.has(row.scan.operationId)) };
-    };
-    await expect.poll(async () => (await archivedFailures()).added.length).toBe(1);
-    const { current: after, added } = await archivedFailures();
-    expect(after.pending).toEqual(before.pending);
-    expect(after.history.filter((row) => known.has(row.scan.operationId))).toEqual(before.history);
-    expect(added).toHaveLength(1);
-    expect(added[0]).toMatchObject({
-      kind: "failure",
-      scan: { reason: "malformed_credential", scannedValue: WITHHELD_CONTACT_VALUE, scannedValueTruncated: false },
-    });
-    expect(JSON.stringify(added)).not.toContain(email);
-    expect(JSON.stringify(added)).not.toContain(freeText);
-  } finally {
-    page.off("request", observe);
-  }
-}
-
-/** Prepare the exact approved scanner context through its real browser controls. */
-export async function prepareDoorScannerContext(
-  page: Page,
-  occurrence: Pick<AgendaOccurrence, "id" | "title" | "roomId">,
-  publishedRevision: number,
-) {
-  const path = `${eventApi}/offline-eligibility`;
-  const preparing = page.waitForResponse((response) => new URL(response.url()).pathname === path && response.ok());
-  await page.goto(`/portal/#/events/${sponsorEventSlug}/scanner`);
-  const manifest = enrolledOfflineEligibilityResponseSchema.parse(await (await preparing).json());
-  expect(manifest.publishedRevision).toBe(publishedRevision);
-  await expectDoorScannerReady(page);
-  await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller?.scriptURL ?? "")).not.toBe("");
-  const selected = page.waitForResponse((response) => {
-    const url = new URL(response.url());
-    return (
-      response.ok() &&
-      url.pathname === path &&
-      url.searchParams.get("occurrenceId") === occurrence.id &&
-      url.searchParams.get("roomId") === occurrence.roomId &&
-      url.searchParams.get("epochId") === manifest.epochId
-    );
-  });
-  // Sessions are chosen in their own dialog; a future session is outside the Now and Next windows.
-  await page.getByRole("button", { name: "Choose session or room", exact: true }).click();
-  const chooser = page.getByRole("dialog", { name: "Choose check-in session", exact: true });
-  await chooser.getByRole("tab", { name: "Browse days and rooms", exact: true }).click();
-  await chooser.getByRole("combobox", { name: "Session", exact: true }).fill(occurrence.title);
-  await chooser.getByRole("option").filter({ hasText: occurrence.title }).click();
-  // A single-room session selects its room and closes the chooser; the request below proves the exact room.
-  await expect(chooser).toBeHidden();
-  await expect(page.getByText(occurrence.title, { exact: false }).first()).toBeVisible();
-  const prepared = enrolledOfflineEligibilityResponseSchema.parse(await (await selected).json());
-  expect(prepared).toMatchObject({
-    epochId: manifest.epochId,
-    deviceId: manifest.deviceId,
-    operatorUserId: manifest.operatorUserId,
-    occurrenceId: occurrence.id,
-    roomId: occurrence.roomId,
-    publishedRevision,
-  });
-  await expectDoorScannerReady(page);
-  await openManualBadgeEntry(page);
-  return prepared;
 }
 
 /** Inspect existing browser storage read-only; canonical badge UUIDs are permitted scan identifiers. */

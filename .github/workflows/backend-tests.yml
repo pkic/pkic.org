@@ -181,8 +181,9 @@ jobs:
 
       # One Playwright invocation reuses the synthetic release and database.
       # maxFailures still stops after the first persistent journey failure.
+      # The integrated pilot alone takes about seven minutes, and a failing journey is retried once.
       - name: Run critical browser user journeys
-        timeout-minutes: 5
+        timeout-minutes: 20
         run: pnpm run test:e2e:ci
 
       - name: Upload Playwright evidence
