@@ -467,19 +467,15 @@ describe("group event workspace", () => {
     expect(container.textContent).not.toContain("Edit event");
   });
 
-  it("opens the event app from the workspace header without leaving the portal", async () => {
-    const event = baseEvent({ capabilities: ["view", "manage"] });
+  it("opens the event app from the workspace header when the server says the caller can open it", async () => {
+    const event = baseEvent({ capabilities: ["view", "manage"], eventAppAccess: true });
     const container = await mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} />);
 
     expect(container.querySelector(`a[href="${eventAppHref(event.slug)}"]`)).not.toBeNull();
   });
 
-  it("offers no event app for a meeting series, which the Events list leaves out too", async () => {
-    const event = baseEvent({
-      capabilities: ["view", "manage"],
-      seriesId: "20000000-0000-4000-8000-000000000001",
-      profileKey: "meeting",
-    });
+  it("offers no event app link the caller would be refused", async () => {
+    const event = baseEvent({ capabilities: ["view", "manage"], eventAppAccess: false });
     const container = await mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} />);
 
     expect(container.querySelector(`a[href="${eventAppHref(event.slug)}"]`)).toBeNull();

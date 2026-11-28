@@ -58,6 +58,8 @@ interface GroupEventRow {
   manager_access: number;
   /** On the event's team without joining the group; only the event read resolves it. */
   team_access?: number;
+  /** Whether the caller can open the event app; only the event read resolves it. */
+  event_app_access?: number;
 }
 
 const NEXT_OCCURRENCE_CTE = `next_occurrence AS (
@@ -127,6 +129,7 @@ function mapGroupEvent(row: GroupEventRow, groupId: string): GroupEvent {
         ? effectiveCapabilities.filter((capability) => capability !== "register")
         : effectiveCapabilities,
     proposalAccess: null,
+    ...(row.event_app_access === undefined ? {} : { eventAppAccess: row.event_app_access === 1 }),
   });
 }
 
@@ -246,7 +249,9 @@ export function prepareGroupEventRead(db: DatabaseLike, viewer: GroupResourceVie
         WHERE owned.id = ? AND owned.owner_group_id = ? AND EXISTS (${team.sql})
      )
      ${EVENT_SELECT}, MAX(accessible.member_access) AS member_access,
-       MAX(accessible.manager_access) AS manager_access, MAX(accessible.team_access) AS team_access
+       MAX(accessible.manager_access) AS manager_access, MAX(accessible.team_access) AS team_access,
+       -- The event app reads the event through this same audience; the Events list leaves series out of it.
+       CASE WHEN series.id IS NULL AND ${audience.sql} THEN 1 ELSE 0 END AS event_app_access
        FROM event_access accessible
        JOIN events event ON event.id = accessible.resource_id
        LEFT JOIN event_series series ON series.event_id = event.id
@@ -256,7 +261,16 @@ export function prepareGroupEventRead(db: DatabaseLike, viewer: GroupResourceVie
         AND (accessible.manager_access = 1 OR accessible.team_access = 1 OR ${audience.sql})
      GROUP BY event.id`,
     )
-    .bind(...accessibleEvents.bindings, eventId, groupId, ...team.bindings, groupId, eventId, ...audience.bindings);
+    .bind(
+      ...accessibleEvents.bindings,
+      eventId,
+      groupId,
+      ...team.bindings,
+      ...audience.bindings,
+      groupId,
+      eventId,
+      ...audience.bindings,
+    );
   const proposalCallRead = prepareEventProposalCall(db, eventId);
   return {
     statements: [eventRead, proposalCallRead.statement],

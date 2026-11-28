@@ -86,6 +86,11 @@ export const groupEventSchema = eventResourceCoreSchema.extend({
   capabilities: z.array(eventGroupGrantSchemas.capabilitySchema).max(eventGroupGrantSchemas.capabilities.length),
   /** Event-scoped proposal authority; never implies a generic event or group grant. */
   proposalAccess: proposalAccessSchema.nullable().default(null),
+  /**
+   * Event detail only, like `proposalCall`: whether this caller can open the event's attendee app. The app admits
+   * the event's audience, which group access alone does not grant, and a meeting series has no app.
+   */
+  eventAppAccess: z.boolean().optional(),
 });
 export type GroupEvent = z.infer<typeof groupEventSchema>;
 

@@ -5,7 +5,7 @@ import { computeGrantsForUser } from "../functions/_lib/auth/permissions";
 import { listVisibleEvents } from "../functions/_lib/services/events/catalog";
 import type { DatabaseLike, UserBackedAuthAdmin } from "../functions/_lib/types";
 import { eventDetailResponseSchema, eventsListResponseSchema } from "../assets/shared/schemas/event-management";
-import { groupEventsListResponseSchema } from "../assets/shared/schemas/group-events";
+import { groupEventDetailResponseSchema, groupEventsListResponseSchema } from "../assets/shared/schemas/group-events";
 import { createGroupEventInvitationFixture } from "./helpers/group-event-invitations";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { resetDb } from "./helpers/reset-db";
@@ -181,6 +181,43 @@ describe("live event-read authorization", () => {
         .run();
     });
     expect((await request(`/api/v1/groups/${groupId}/events/${eventId}`, reader.token, db)).status).toBe(200);
+  });
+
+  it("offers the event app on group detail exactly when the event app itself admits the caller", async () => {
+    const { reader, grantId, groupId, eventId, eventSlug } = await fixture();
+    await env.DB.prepare(
+      "INSERT INTO permission_grants (id, user_id, permission, created_at) VALUES (?, ?, 'groups:write', ?)",
+    )
+      .bind(crypto.randomUUID(), reader.userId, new Date().toISOString())
+      .run();
+    const groupDetail = async () =>
+      groupEventDetailResponseSchema.parse(
+        await (await request(`/api/v1/groups/${groupId}/events/${eventId}`, reader.token)).json(),
+      ).event.eventAppAccess;
+    const eventApp = async () => (await request(`/api/v1/events/${eventSlug}`, reader.token)).status;
+
+    expect(await groupDetail()).toBe(true);
+    expect(await eventApp()).toBe(200);
+
+    // Group management alone opens the workspace of an invitation-only event, but not its attendee app.
+    await env.DB.prepare("DELETE FROM permission_grants WHERE id = ?").bind(grantId).run();
+    expect(await groupDetail()).toBe(false);
+    expect(await eventApp()).toBe(404);
+  });
+
+  it("offers no event app for a meeting series", async () => {
+    const { reader, groupId, eventId } = await fixture();
+    const now = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO event_series (id, event_id, starts_at, recurrence_rule, timezone, duration_minutes,
+                                 active, created_at, updated_at)
+       VALUES (?, ?, ?, 'FREQ=WEEKLY', 'UTC', 60, 1, ?, ?)`,
+    )
+      .bind(crypto.randomUUID(), eventId, now, now, now)
+      .run();
+    const response = await request(`/api/v1/groups/${groupId}/events/${eventId}`, reader.token);
+    expect(response.status).toBe(200);
+    expect(groupEventDetailResponseSchema.parse(await response.json()).event.eventAppAccess).toBe(false);
   });
 
   it("enforces scope ceilings in audience SQL and preserves explicit service authority", async () => {

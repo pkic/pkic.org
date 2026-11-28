@@ -247,8 +247,10 @@ export function GroupEventWorkspace({
               </>
             }
             // The event app's own header offers "Manage event" back here, so organizers move between the two
-            // inside the portal. A meeting series has no event app, as the Events list leaves series out.
-            actions={event.seriesId ? undefined : <ButtonLink href={eventDestination(event)}>Event app</ButtonLink>}
+            // inside the portal. The server says whether this caller can open the app at all.
+            actions={
+              event.eventAppAccess ? <ButtonLink href={eventDestination(event)}>Event app</ButtonLink> : undefined
+            }
           />
         )}
 
