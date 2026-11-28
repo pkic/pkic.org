@@ -16,7 +16,7 @@ type Client = Awaited<ReturnType<typeof f.connect>>;
 
 /** A ticker whose words do not change with the clock. */
 const TICKER = {
-  style: "gradient" as const,
+  theme: "navy-glass" as const,
   messages: [{ id: "note", prefix: "Note", template: "Raise your questions", condition: "always" as const }],
 };
 

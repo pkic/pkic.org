@@ -56,16 +56,20 @@
   .pk-live-qr-card[data-graphic-theme="deep-blue"] .pk-qr-graphic__modules {
     fill: var(--pk-pqc-ink);
   }
-  /* The code alone: no card, stripe or line under it, only the code and its quiet zone in the scene's colors. */
-  .pk-live-qr-card:not([data-look="card"]) .pk-qr-graphic {
+  /*
+   * The QR code alone: no card, stripe or line under it, only the code and its
+   * quiet zone in the scene's colors. Only the scene's QR code picks a look; the
+   * check-in code always keeps its card.
+   */
+  .pk-live-qr-card[data-look]:not([data-look="card"]) .pk-qr-graphic {
     border-radius: 0;
     background: none;
     text-shadow: none;
   }
-  .pk-live-qr-card:not([data-look="card"]) .pk-qr-graphic__plate {
+  .pk-live-qr-card[data-look]:not([data-look="card"]) .pk-qr-graphic__plate {
     padding: 0;
   }
-  .pk-live-qr-card:not([data-look="card"]) .pk-qr-graphic::after {
+  .pk-live-qr-card[data-look]:not([data-look="card"]) .pk-qr-graphic::after {
     content: none;
   }
   .pk-live-qr-card:is([data-look="black-on-white"], [data-look="black-on-clear"]) .pk-qr-graphic__modules {

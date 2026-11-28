@@ -20,7 +20,9 @@ import { Checkbox } from "../../../../../../ui/Checkbox";
 import { Field } from "../../../../../../ui/Field";
 import { ListDetail } from "../../../../../../ui/ListDetail";
 import { RangeInput, Select, TextInput } from "../../../../../../ui/TextControl";
+import { LIVE_FIELD_THEMES } from "../../../../../../../shared/live-graphic-theme";
 import { LiveGraphicRow } from "./LiveGraphicRow";
+import { LiveGraphicThemeField } from "./LiveGraphicThemeField";
 import { LiveGraphicSettingsDialog } from "./LiveGraphicSettingsDialog";
 import { useLiveGraphicSettings } from "./live-graphic-settings";
 import type { LiveTargets } from "./live-output-targets";
@@ -38,11 +40,6 @@ const roomNames = (message: Message, rooms: readonly LiveTickerRoom[]) =>
 const CONDITION_LABELS: Record<Message["condition"], string> = {
   always: "Always",
   "near-session-end": "Last five minutes of the session",
-};
-const STYLE_LABELS: Record<LiveTickerConfig["style"], string> = {
-  gradient: "Brand gradient",
-  accent: "Accent",
-  neutral: "Neutral",
 };
 
 /** The selected message's fields: its fixed label, its words with the agenda's placeholders, and when it shows. */
@@ -244,24 +241,13 @@ export function LiveTickerControls({
           save={save}
           onClose={() => setDraft(null)}
         >
-          <Field label="Style" {...form.of("style")}>
-            {(control) => (
-              <Select
-                {...control}
-                value={draft.style}
-                onChange={(event) => {
-                  const parsed = liveTickerConfigSchema.shape.style.safeParse(event.currentTarget.value);
-                  if (parsed.success) edit((value) => ({ ...value, style: parsed.data }));
-                }}
-              >
-                {liveTickerConfigSchema.shape.style.options.map((style) => (
-                  <option key={style} value={style}>
-                    {STYLE_LABELS[style]}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </Field>
+          <LiveGraphicThemeField
+            name="theme"
+            value={draft.theme}
+            themes={LIVE_FIELD_THEMES}
+            presentation={form.of("theme")}
+            onChange={(theme) => edit((value) => ({ ...value, theme }))}
+          />
           <Field label="Speed" help="How fast the messages scroll across the frame." {...form.of("speed")}>
             {(control) => (
               <RangeInput

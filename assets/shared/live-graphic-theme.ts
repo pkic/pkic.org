@@ -49,3 +49,20 @@ export const LIVE_GRAPHIC_THEME_DEFAULTS = {
   schedule: "navy-glass",
   checkIn: "navy-glass",
 } as const satisfies Record<string, LiveGraphicTheme>;
+
+/**
+ * The colors a scene's background can take: the field every board in the
+ * scene sits on. The boards set white type, so the field takes only the
+ * colors white type reads on: the event's field, or a navy, smoked or deep
+ * blue see-through panel that lets the production's own background show.
+ * Navy glass when a scene has not chosen.
+ */
+export const LIVE_FIELD_THEMES = [
+  "navy-glass",
+  "smoked-glass",
+  "deep-blue",
+  "event",
+] as const satisfies readonly LiveGraphicTheme[];
+export type LiveFieldTheme = (typeof LIVE_FIELD_THEMES)[number];
+export const liveFieldThemeSchema = z.enum(LIVE_FIELD_THEMES);
+export const LIVE_FIELD_THEME_DEFAULT: LiveFieldTheme = "navy-glass";

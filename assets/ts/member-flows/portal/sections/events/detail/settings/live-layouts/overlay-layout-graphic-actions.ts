@@ -4,6 +4,11 @@ import {
   liveOverlaySpotOf,
   liveOverlaySpotTurns,
 } from "../../../../../../../../shared/live-overlay-spots";
+import {
+  LIVE_FIELD_THEMES,
+  LIVE_FIELD_THEME_DEFAULT,
+  LIVE_GRAPHIC_THEME_LABELS,
+} from "../../../../../../../../shared/live-graphic-theme";
 import { isLiveProgramLayer, type LiveProgramLayer } from "../../../../../../../../shared/live-overlay-stacking";
 import {
   LIVE_OVERLAY_ELEMENT_LABELS,
@@ -18,8 +23,16 @@ import {
 } from "../../../../../../../../shared/schemas/live-session-timer";
 import type { MenuItem } from "../../../../../../../ui/Menu";
 
-/** A graphic's look in one scene: the QR code's, or every timer's; undefined puts back the default. */
-export type GraphicLook = Pick<LiveOverlayElementPlacement, "qrLook"> | Pick<LiveOverlayElementPlacement, "timerLook">;
+/** A graphic's look in one scene: the QR code's, every timer's or the background's; undefined puts back the default. */
+export type GraphicLook =
+  | Pick<LiveOverlayElementPlacement, "qrLook">
+  | Pick<LiveOverlayElementPlacement, "timerLook">
+  | Pick<LiveOverlayElementPlacement, "fieldTheme">
+  | Pick<LiveOverlayElementPlacement, "withBoardOnly">;
+
+/** The graphic each look belongs to. */
+export const graphicLookElement = (look: GraphicLook): LiveOverlayElement =>
+  "qrLook" in look ? "qrCode" : "timerLook" in look ? "timer" : "background";
 
 /** What a row's menu does to a graphic's position: see `overlay-layout-sharing.ts`. */
 export type LayoutSharingAction = "unlink" | "relink" | "apply";
@@ -29,7 +42,7 @@ export interface GraphicActionHandlers {
   onShow: (element: LiveOverlayElement, visible: boolean) => void;
   onSharing: (element: LiveOverlayElement, action: LayoutSharingAction) => void;
   onTurns: (element: LiveProgramLayer, turns: number | null) => void;
-  /** Sets the QR code's or the timers' look in this scene. */
+  /** Sets the QR code's, the timers' or the background's look in this scene. */
   onLook: (look: GraphicLook) => void;
 }
 
@@ -94,7 +107,25 @@ const TIMER_LOOKS = [
   })),
 ];
 
-/** The QR code's and the timers' looks, picked straight from the graphic's menu. */
+/** The background's colors: the event's field, or a see-through panel the boards on it read on. */
+const FIELD_LOOKS = LIVE_FIELD_THEMES.map((theme) => ({
+  theme,
+  label: LIVE_GRAPHIC_THEME_LABELS[theme],
+  description:
+    theme === "event" ? "The conference field with its dots." : "See-through: the production's background shows.",
+}));
+
+/** When the background shows: with the scene, or only under a board, so the picture stays clear until one comes. */
+const GROUND_SHOWS = [
+  { withBoardOnly: undefined, label: "Always", description: "Whenever the scene is on." },
+  {
+    withBoardOnly: true,
+    label: "With a board on it",
+    description: "Only while a question, poll or other board inside it is on air.",
+  },
+] as const;
+
+/** The QR code's, the timers' and the background's looks, picked straight from the graphic's menu. */
 function lookActions(
   elements: LiveOverlayLayoutElements,
   element: LiveProgramLayer,
@@ -118,8 +149,28 @@ function lookActions(
             checked: elements.timer.timerLook === look,
             onSelect: () => onLook({ timerLook: look }),
           }))
-        : [];
-  return choices.map((item, index) => ({ ...item, separatorBefore: index === 0, disabled }));
+        : element === "background"
+          ? FIELD_LOOKS.map(({ theme, label, description }) => ({
+              id: `look-${theme}`,
+              label,
+              description,
+              checked: (elements.background.fieldTheme ?? LIVE_FIELD_THEME_DEFAULT) === theme,
+              onSelect: () => onLook({ fieldTheme: theme === LIVE_FIELD_THEME_DEFAULT ? undefined : theme }),
+            }))
+          : [];
+  const shows =
+    element === "background"
+      ? GROUND_SHOWS.map(({ withBoardOnly, label, description }) => ({
+          id: `shows-${withBoardOnly ? "with-board" : "always"}`,
+          label,
+          description,
+          checked: (elements.background.withBoardOnly ?? undefined) === withBoardOnly,
+          onSelect: () => onLook({ withBoardOnly }),
+        }))
+      : [];
+  return [choices, shows].flatMap((group) =>
+    group.map((item, index) => ({ ...item, separatorBefore: index === 0, disabled })),
+  );
 }
 
 /**

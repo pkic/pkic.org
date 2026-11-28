@@ -432,6 +432,85 @@
     block-size: 300px;
     column-gap: 22px;
   }
+  /*
+   * On a panel (the scene's background): drawn at its box's own size, in
+   * pixels of the frame, so it is never scaled smaller than the boards beside
+   * it. A board's inset keeps it from the panel's edges, and the heading is a
+   * board's eyebrow with the clock's name after it. The session's title
+   * leads; the start time stands before it, quieter.
+   */
+  .pk-live-schedule[data-on-ground] {
+    inline-size: calc(var(--schedule-width) * 1px);
+    block-size: calc(var(--schedule-height) * 1px);
+    font-size: 20px;
+  }
+  .pk-live-schedule[data-on-ground] .pk-live-schedule__card {
+    inline-size: 100%;
+    block-size: 100%;
+    padding: calc(var(--schedule-inset-block) * 1px) calc(var(--schedule-inset-inline) * 1px);
+    overflow: hidden;
+  }
+  .pk-live-schedule[data-on-ground] .pk-live-schedule__header {
+    justify-content: flex-start;
+    gap: 16px;
+    margin-block-end: 8px;
+  }
+  .pk-live-schedule[data-on-ground] .pk-live-schedule__heading {
+    color: var(--graphic-ink-muted);
+    font-family: var(--pk-font-mono);
+    font-size: 18px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+  .pk-live-schedule[data-on-ground] .pk-live-schedule__zone {
+    font-size: 16px;
+  }
+  .pk-live-schedule[data-on-ground] .pk-live-schedule__room {
+    block-size: auto;
+    row-gap: 6px;
+    padding: 12px 0;
+  }
+  /* One room: the time before the title, who speaks under the title, at any width. */
+  .pk-live-schedule[data-on-ground][data-rooms="one"] .pk-live-schedule__room {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "meta meta"
+      "when title"
+      ". speakers";
+    grid-template-rows: auto auto auto;
+    column-gap: 16px;
+    row-gap: 0;
+    padding: 0;
+    border: 0;
+  }
+  .pk-live-schedule[data-on-ground] .pk-live-schedule__when,
+  .pk-live-schedule[data-on-ground][data-rooms="one"] .pk-live-schedule__when {
+    font-size: 32px;
+    line-height: 1.15;
+  }
+  .pk-live-schedule[data-on-ground] .pk-live-schedule__title {
+    font-size: 32px;
+    font-weight: 700;
+  }
+  .pk-live-schedule[data-on-ground][data-rooms="one"] .pk-live-schedule__speakers {
+    gap: 10px;
+    margin-block-start: 6px;
+  }
+  .pk-live-schedule[data-on-ground] .pk-live-schedule__face .pk-avatar {
+    inline-size: 32px;
+    block-size: 32px;
+    box-shadow: 0 0 0 2px var(--graphic-ink);
+  }
+  .pk-live-schedule[data-on-ground] .pk-live-schedule__names,
+  .pk-live-schedule[data-on-ground] .pk-live-schedule__turn-name,
+  .pk-live-schedule[data-on-ground] .pk-live-schedule__more {
+    font-size: 20px;
+  }
+  .pk-live-schedule[data-on-ground] .pk-live-schedule__turn-detail {
+    font-size: 18px;
+  }
   @media (prefers-reduced-motion: reduce) {
     :root:not(:has([data-live-broadcast-source])) .pk-live-schedule__room,
     :root:not(:has([data-live-broadcast-source])) .pk-live-schedule[data-spotlight] .pk-live-schedule__room {

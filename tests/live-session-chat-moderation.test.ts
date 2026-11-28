@@ -329,7 +329,7 @@ describe("live chat reactions, reports and moderation", () => {
     studio.send({
       type: "stage.ticker",
       ticker: {
-        style: "neutral",
+        theme: "smoked-glass",
         messages: [{ id: "chat", prefix: "Chat", template: "{{chat.latest}}", condition: "always" }],
       },
     });

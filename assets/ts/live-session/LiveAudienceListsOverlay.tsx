@@ -1,9 +1,8 @@
 import { formatNumber } from "../../shared/format-number";
-import type { OverlayRect } from "../../shared/live-overlay-geometry";
 import type { LiveChatFeedOnAir, LiveTopQuestionsOnAir } from "../../shared/schemas/live-session-on-screen";
 import { useNumericCssProperties } from "../hooks/useNumericCssProperties";
 import { Avatar } from "../ui/Avatar";
-import { LiveBoard } from "./LiveBoard";
+import { LiveBoard, type LiveBoardBox } from "./LiveBoard";
 import "./LiveAudienceListsOverlay.css";
 import { LiveScreenText } from "./LiveScreenText";
 
@@ -15,7 +14,7 @@ import { LiveScreenText } from "./LiveScreenText";
  * something.
  */
 
-type Box = Pick<OverlayRect, "width" | "height">;
+type Box = LiveBoardBox;
 
 /** One question with its votes, and a bar of its votes against the leading question's. */
 function TopQuestion({ question, lead }: { question: LiveTopQuestionsOnAir["questions"][number]; lead: number }) {
@@ -51,13 +50,20 @@ export function LiveTopQuestionsOverlay({ list, box }: { list: LiveTopQuestionsO
   );
 }
 
-/** The latest attendee messages, newest at the bottom as in the chat itself. */
+/**
+ * The latest attendee messages from the top under the eyebrow, newest last as
+ * in the chat itself. Once they outgrow the board, the oldest leave whole:
+ * no message is ever cut through.
+ */
 export function LiveChatFeedOverlay({ list, box }: { list: LiveChatFeedOnAir; box: Box }) {
+  // Newest first in the markup: the stylesheet stacks them from the bottom up and wraps whole messages that do not
+  // fit out of view, so the newest always show and the oldest leave first.
+  const newestFirst = [...list.messages].reverse();
   return (
     <LiveBoard box={box} class="pk-live-lists" label="Live chat" eyebrow="Live chat">
-      <ol class="pk-live-lists__items" data-list="chat" data-count={list.messages.length}>
-        {list.messages.map((message) => (
-          <li key={message.id} class="pk-live-lists__message">
+      <ol class="pk-live-lists__items" data-list="chat" data-count={list.messages.length} reversed>
+        {newestFirst.map((message, index) => (
+          <li key={message.id} class="pk-live-lists__message" data-newest={index === 0 ? "" : undefined}>
             <Avatar class="pk-live-lists__author" name={message.authorName} size="lg" />
             <div class="pk-live-lists__body">
               <p class="pk-live-lists__byline">{message.authorName}</p>

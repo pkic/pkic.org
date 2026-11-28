@@ -8,7 +8,10 @@ import {
 } from "../../assets/shared/live-overlay-layout-presets";
 import { LIVE_OVERLAY_PRESETS } from "../../assets/shared/schemas/live-overlay-layout";
 import { EMPTY_LIVE_STAGE, type LiveStage } from "../../assets/shared/schemas/live-session-room";
+import { overlayBoxPixels } from "../../assets/shared/live-overlay-geometry";
+import { liveBoardInset, liveGroundShowsMark } from "../../assets/ts/live-session/LiveBoard";
 import { LiveOverlayPresentation } from "../../assets/ts/live-session/LiveOverlayPresentation";
+import { liveListBox } from "../../assets/ts/live-session/live-overlay-fields";
 import type { LiveRoomState } from "../../assets/ts/live-session/live-room-state";
 import { sampleOverlayRoom } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-sample";
 
@@ -52,7 +55,9 @@ describe("the scene's background on an output", () => {
   it("draws a blank frame for a cleared output in the Default scene, and only the background in a scene that includes it", () => {
     for (const layout of LIVE_OVERLAY_PRESETS) {
       const host = draw({ view: "program", layout, projection: room() });
-      const included = LIVE_OVERLAY_PRESET_LAYOUTS[layout].elements.background.visible;
+      // A background that waits for a board stays out of a cleared output.
+      const { visible, withBoardOnly } = LIVE_OVERLAY_PRESET_LAYOUTS[layout].elements.background;
+      const included = visible && !withBoardOnly;
       // A scene's lower third stays mounted, empty, so it can animate in; nothing else is drawn.
       expect(
         drawn(host).filter((element) => element !== "lowerThird"),
@@ -67,18 +72,24 @@ describe("the scene's background on an output", () => {
   });
 
   it("draws the background whenever its scene is on, with or without a board on it, and never twice", () => {
-    // Board right and Board left place it in their column; no board is on it here.
-    for (const layout of ["questions", "check-in", "full-board"]) {
+    // Board right and Board left place it in their column; no board is on it here. Only the whole frame's
+    // background carries the faint mark: a panel in a column goes without, so several panels never repeat it.
+    for (const [layout, mark] of [
+      ["questions", 0],
+      ["check-in", 0],
+      ["full-board", 1],
+    ] as const) {
       const host = draw({ view: "program", layout, projection: room("lowerThird") });
       expect(fields(host), layout).toHaveLength(1);
-      expect(marks(host), layout).toHaveLength(1);
+      expect(marks(host), layout).toHaveLength(mark);
     }
-    // With everything on at once, every scene still draws at most one background and one logo.
+    // With everything on at once, every scene still draws at most one background and one mark.
     for (const layout of LIVE_OVERLAY_PRESETS) {
       const host = draw({ view: "program", layout, projection: EVERYTHING_ON });
-      const included = LIVE_OVERLAY_PRESET_LAYOUTS[layout].elements.background.visible ? 1 : 0;
+      const ground = LIVE_OVERLAY_PRESET_LAYOUTS[layout].elements.background;
+      const included = ground.visible ? 1 : 0;
       expect(fields(host), layout).toHaveLength(included);
-      expect(marks(host), layout).toHaveLength(included);
+      expect(marks(host), layout).toHaveLength(included && liveGroundShowsMark(overlayBoxPixels(ground)) ? 1 : 0);
       // Branding is the production's: no scene draws a logo.
       expect(host.querySelector(".pk-live-board img"), layout).toBeNull();
     }
@@ -102,24 +113,49 @@ describe("the scene's background on an output", () => {
       expect(pause, left).not.toContain(left);
   });
 
-  it("includes every switchable graphic in Default, boards too, and draws no background of its own", () => {
-    // Nothing comes on by itself: what the output has on draws, over the camera and with no field behind it.
+  it("includes every switchable graphic in Default, boards too, with the background only under a whole-frame board", () => {
+    // Nothing comes on by itself: the cards in their corners draw over the camera on their own plates.
     const cards = draw({
       view: "program",
       layout: "default",
       projection: room("schedule", "checkIn", "timerGraphics"),
     });
     expect([...new Set(drawn(cards))]).toEqual(expect.arrayContaining(["schedule", "checkIn", "timer"]));
+    expect(fields(cards)).toHaveLength(0);
+    expect(layer(cards, "schedule")!.hasAttribute("data-on-ground")).toBe(false);
+    // A question over the whole frame brings the background with it, so it never reads bare on the camera.
     const board = draw({ view: "program", layout: "default", projection: room("question") });
     expect(layer(board, "question")).not.toBeNull();
-    expect(layer(board, "background")).toBeNull();
-    expect(fields(board)).toHaveLength(0);
-    // A board covered by one in front of it is left out; the background and the QR code are never drawn here.
+    expect(fields(board)).toHaveLength(1);
+    // A board covered by one in front of it is left out; the QR code is never drawn here.
     const everything = draw({ view: "program", layout: "default", projection: EVERYTHING_ON });
     expect(drawn(everything)).not.toContain("question");
-    expect(drawn(everything)).toEqual(expect.arrayContaining(["poll", "timer", "ticker", "reactions"]));
-    for (const left of ["background", "qrCode"]) expect(layer(everything, left), left).toBeNull();
-    expect(everything.querySelector(".pk-live-board--ground")).toBeNull();
+    expect(drawn(everything)).toEqual(expect.arrayContaining(["poll", "timer", "ticker", "reactions", "background"]));
+    expect(layer(everything, "qrCode")).toBeNull();
+    expect(fields(everything)).toHaveLength(1);
+  });
+
+  it("brings a waiting background on only under a board that fills it, as in a talk scene over the slides", () => {
+    const slides = { x: 0.3, y: 0.0444, w: 0.6667, h: 0.6667, horizontal: "center", vertical: "middle" } as const;
+    const camera = LIVE_OVERLAY_PRESET_LAYOUTS.default.elements;
+    const talk = {
+      ...camera,
+      background: { ...camera.background, ...slides, visible: true, withBoardOnly: true },
+      question: { ...camera.question, ...slides },
+      poll: { ...camera.poll, ...slides },
+    };
+    // Nothing on, or only a card that sits in a corner: the slides stay clear.
+    expect(fields(draw({ view: "program", elements: talk, projection: room() }))).toHaveLength(0);
+    expect(fields(draw({ view: "program", elements: talk, projection: room("schedule") }))).toHaveLength(0);
+    // A question or a poll over the slides comes on the glass, also while the ticker moves it clear.
+    for (const board of ["question", "poll"] as const) {
+      const host = draw({ view: "program", elements: talk, projection: room(board, "ticker") });
+      expect(fields(host), board).toHaveLength(1);
+      expect(layer(host, board), board).not.toBeNull();
+    }
+    // A question covered by a poll over the whole frame shows nothing on the slides, so they get no bare glass.
+    const covering = { ...talk, poll: camera.poll };
+    expect(fields(draw({ view: "program", elements: covering, projection: room("question", "poll") }))).toHaveLength(0);
   });
 
   it("shows the front one of two boards in the same spot, on the one background", () => {
@@ -177,7 +213,34 @@ describe("the scene's background on an output", () => {
     expect(surface.style.getPropertyValue("--overlay-scale")).toBe("1");
   });
 
-  it("keeps Up next's card outside a background, and the check-in code's card everywhere", () => {
+  it("keeps a board's lines in the frame's safe margin, and only a panel's inset well inside the frame", () => {
+    // The whole frame, or a box without a position: the broadcast safe margin.
+    expect(liveBoardInset({ x: 0, y: 0, width: 1920, height: 1080 })).toEqual({ inline: 96, block: 64 });
+    expect(liveBoardInset({ width: 1040, height: 640 })).toEqual({ inline: 96, block: 64 });
+    // A column 48 from the frame's edge keeps the rest of the safe margin on both sides, never lopsided.
+    expect(liveBoardInset({ x: 48, y: 48, width: 640, height: 858 })).toEqual({ inline: 48, block: 32 });
+    // A panel well inside the frame keeps only the panel's own inset.
+    expect(liveBoardInset({ x: 720, y: 728, width: 840, height: 178 })).toEqual({ inline: 40, block: 32 });
+  });
+
+  it("draws Up next on a panel at its box's own size, headed like a board, without a card", () => {
+    const strip = { ...LIVE_OVERLAY_STANDARD_ELEMENTS.background, visible: true, x: 0.375, y: 0.674, w: 0.6, h: 0.165 };
+    const upNext = {
+      ...LIVE_OVERLAY_STANDARD_ELEMENTS.schedule,
+      visible: true,
+      x: 0.375,
+      y: 0.674,
+      w: 0.4375,
+      h: 0.165,
+    };
+    const elements = { ...LIVE_OVERLAY_STANDARD_ELEMENTS, background: strip, schedule: upNext };
+    const host = draw({ view: "program", elements, projection: room("schedule") });
+    const graphic = layer(host, "schedule")!.querySelector<HTMLElement>(".pk-live-schedule")!;
+    expect(graphic.dataset).toMatchObject({ onGround: "", arrangement: "rows" });
+    expect(marks(host)).toHaveLength(0);
+  });
+
+  it("keeps Up next's and the check-in code's cards outside a background, and drops them inside one", () => {
     // Break and Default have no background, so Up next keeps its card there.
     for (const layout of ["break", "default"]) {
       const host = draw({ view: "program", layout, projection: room("schedule", "checkIn") });
@@ -187,10 +250,43 @@ describe("the scene's background on an output", () => {
     // Up next in Board left sits inside the column's background and drops its card.
     const column = draw({ view: "program", layout: "check-in", projection: room("schedule") });
     expect(layer(column, "schedule")?.hasAttribute("data-on-ground")).toBe(true);
-    // The check-in code keeps its card on Board left's background, as it always did.
+    // So does the check-in code: no card on a card. Its quiet zone stays white for any phone camera.
     const code = draw({ view: "program", layout: "check-in", projection: room("checkIn") });
-    expect(layer(code, "checkIn")).not.toBeNull();
-    expect(code.querySelector("[data-on-ground]")).toBeNull();
+    expect(layer(code, "checkIn")?.hasAttribute("data-on-ground")).toBe(true);
+    // In Default, with no background, it keeps its card.
+    const corner = draw({ view: "program", layout: "default", projection: room("checkIn") });
+    expect(layer(corner, "checkIn")).not.toBeNull();
+    expect(layer(corner, "checkIn")?.hasAttribute("data-on-ground")).toBe(false);
+  });
+
+  it("gives the chat the whole column while the top questions above it have none to show", () => {
+    const column = { x: 0, w: 0.4, visible: true, horizontal: "left", vertical: "middle", shared: false } as const;
+    const elements = {
+      ...LIVE_OVERLAY_STANDARD_ELEMENTS,
+      topQuestions: { ...LIVE_OVERLAY_STANDARD_ELEMENTS.topQuestions, ...column, y: 0, h: 0.5 },
+      chat: { ...LIVE_OVERLAY_STANDARD_ELEMENTS.chat, ...column, y: 0.5, h: 0.5 },
+    };
+    const chatFeed = {
+      config: { count: 4, delaySeconds: 0 },
+      messages: [
+        { id: "m-1", authorName: "Ada", text: "Hello from the back row" },
+        { id: "m-2", authorName: "Lin", text: "Slides are great" },
+      ],
+    };
+    const withChat = (on: LiveRoomState): LiveRoomState => ({ ...on, stage: { ...on.stage, chatFeed } });
+    // An empty list counts as not drawn: the chat fills its own box and the empty one above it.
+    expect(liveListBox(elements, "chat", () => true)).toMatchObject({ y: 0.5, h: 0.5 });
+    expect(liveListBox(elements, "chat", () => false)).toMatchObject({ x: 0, y: 0, w: 0.4, h: 1 });
+    expect(liveListBox(elements, "topQuestions", () => false)).toMatchObject({ y: 0, h: 1 });
+    // A list apart from its partner keeps its own box.
+    const apart = { ...elements, chat: { ...elements.chat, x: 0.6 } };
+    expect(liveListBox(apart, "chat", () => false)).toMatchObject({ x: 0.6, y: 0.5, h: 0.5 });
+    const alone = draw({ view: "program", elements, projection: withChat(room()) });
+    expect(drawn(alone)).toContain("chat");
+    // Newest first in the markup, marked, so the newest always shows and the oldest leave whole.
+    const messages = alone.querySelectorAll<HTMLElement>(".pk-live-lists__message");
+    expect(messages[0]?.hasAttribute("data-newest")).toBe(true);
+    expect([...messages].filter((message) => message.hasAttribute("data-newest"))).toHaveLength(1);
   });
 
   it("draws a board outside the background with its content and no field, mark or logo of its own", () => {
@@ -202,7 +298,8 @@ describe("the scene's background on an output", () => {
     expect(board.classList.contains("pk-live-board--ground")).toBe(false);
     expect(board.querySelector(".pk-live-board__watermark")).toBeNull();
     expect(fields(host)).toHaveLength(1);
-    expect(marks(host)).toHaveLength(1);
+    // A column's panel goes without the mark.
+    expect(marks(host)).toHaveLength(0);
   });
 
   it("no longer reads a board's old field flag: only the background graphic draws a field", () => {

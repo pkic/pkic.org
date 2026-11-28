@@ -226,18 +226,15 @@ describe("audience graphics on an output", () => {
     // Full board and either column give both the same box, which they share as one board.
     const full = LIVE_OVERLAY_PRESET_LAYOUTS["full-board"].elements;
     expect(joinedPanelBox(full)).toMatchObject({ x: 0, y: 0, w: 1, h: 1 });
-    expect(joinedPanelBox(LIVE_OVERLAY_PRESET_LAYOUTS.questions.elements)).toMatchObject({
-      x: 0.6,
-      y: 0,
-      w: 0.4,
-      h: 1,
+    // The side panel on the grid: 640 px wide, 48 px in from the frame, ending a gutter above the ticker.
+    const panel = (x: number) => ({
+      x: expect.closeTo(x / 1920, 3),
+      y: expect.closeTo(48 / 1080, 3),
+      w: expect.closeTo(640 / 1920, 3),
+      h: expect.closeTo(858 / 1080, 3),
     });
-    expect(joinedPanelBox(LIVE_OVERLAY_PRESET_LAYOUTS["check-in"].elements)).toMatchObject({
-      x: 0,
-      y: 0,
-      w: 0.4,
-      h: 1,
-    });
+    expect(joinedPanelBox(LIVE_OVERLAY_PRESET_LAYOUTS.questions.elements)).toMatchObject(panel(1232));
+    expect(joinedPanelBox(LIVE_OVERLAY_PRESET_LAYOUTS["check-in"].elements)).toMatchObject(panel(48));
     // Two boxes edge to edge at the same width join into one.
     const top = { ...full.question, y: 0, h: 0.5 };
     const bottom = { ...full.panelists, y: 0.5, h: 0.5 };
@@ -301,9 +298,9 @@ describe("timers over a board", () => {
     await draw(topRight, LIVE_OVERLAY_PRESET_LAYOUTS.questions.elements);
     const layer = host!.querySelector<HTMLElement>('[data-overlay-element="question"]')!;
     const surface = layer.querySelector<HTMLElement>(".pk-live-overlay__surface")!;
-    // The eyebrow goes under the timer, which ends 174 px down the 1080 px column, on the title-safe line.
+    // The eyebrow goes under the timer, which ends 174 px down the frame, 126 px into the 858 px panel at 48.
     expect(layer.dataset.timerClearance).toBe("below");
-    expect(Number(surface.style.getPropertyValue("--overlay-timer-block"))).toBeCloseTo(174 / 1080, 3);
+    expect(Number(surface.style.getPropertyValue("--overlay-timer-block"))).toBeCloseTo((174 - 48) / 858, 3);
     // No column is kept clear beside the timer, so the question keeps the column's full width.
     expect(Number(surface.style.getPropertyValue("--overlay-timer-inline"))).toBe(0);
     // The background has nothing to keep clear of it.
@@ -322,13 +319,14 @@ describe("timers over a board", () => {
     const column = { ...LIVE_OVERLAY_PRESET_LAYOUTS.questions.elements.question };
     const timer = { ...LIVE_OVERLAY_STANDARD_ELEMENTS.timer };
     expect(timerClearance(frame, [timer])).toEqual({ inline: expect.closeTo(0.2, 3), block: 0 });
-    expect(timerClearance(column, [timer])).toEqual({ inline: 0, block: expect.closeTo(168 / 1080, 3) });
+    expect(timerClearance(column, [timer])).toEqual({ inline: 0, block: expect.closeTo((168 - 48) / 858, 3) });
     // Timers stacked under the corner timer count too, and a stack too tall to go under keeps its column clear.
     const stacked = (index: number) => ({ ...timer, y: timer.y + index * (timer.h + 16 / 1080) });
     const under = timerClearance(column, [stacked(0), stacked(1)]);
     expect(under.block * column.h + column.y).toBeCloseTo(stacked(1).y + stacked(1).h, 3);
     const tall = timerClearance(column, [stacked(0), stacked(1), stacked(2), stacked(3)]);
-    expect(tall).toEqual({ inline: expect.closeTo((column.x + column.w - timer.x) / column.w, 3), block: 0 });
+    const beside = Math.min(0.5, (column.x + column.w - timer.x) / column.w);
+    expect(tall).toEqual({ inline: expect.closeTo(beside, 3), block: 0 });
     // A tall stack reaching past the board's start keeps no more than half the board clear, so the text keeps room.
     const wide = (index: number) => ({ ...stacked(index), x: column.x - 0.05, w: column.w + 0.1 });
     expect(timerClearance(column, [0, 1, 2, 3].map(wide))).toEqual({ inline: 0.5, block: 0 });

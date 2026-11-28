@@ -1,9 +1,8 @@
 import { formatNumber } from "../../shared/format-number";
-import type { OverlayRect } from "../../shared/live-overlay-geometry";
 import type { LivePoll } from "../../shared/schemas/live-session-poll";
 import type { LiveStage } from "../../shared/schemas/live-session-room";
 import { FormFieldStatChart } from "../components/forms/FormResponseStats";
-import { LiveBoard } from "./LiveBoard";
+import { LiveBoard, type LiveBoardBox } from "./LiveBoard";
 import "./LivePollOverlay.css";
 
 /**
@@ -18,7 +17,7 @@ export function LivePollOverlay({
 }: {
   stage: LiveStage;
   polls: readonly LivePoll[];
-  box: Pick<OverlayRect, "width" | "height">;
+  box: LiveBoardBox;
 }) {
   const poll = stage.poll ? polls.find((entry) => entry.id === stage.poll?.id) : undefined;
   if (!poll) return null;

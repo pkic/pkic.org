@@ -1,6 +1,7 @@
 import { publicPageSlugSchema } from "./public-page-slug";
 import { z } from "zod";
 import { validateOverlayTextTemplate } from "../overlay-text-template";
+import { LIVE_FIELD_THEME_DEFAULT, liveFieldThemeSchema } from "../live-graphic-theme";
 /** The most messages one ticker sequence holds. */
 export const LIVE_TICKER_MESSAGES_MAX = 20;
 /** The most rooms one ticker message names. */
@@ -49,7 +50,8 @@ export const liveTickerSpeedSchema = z
 
 export const liveTickerConfigSchema = z
   .object({
-    style: z.enum(["gradient", "accent", "neutral"]),
+    /** The bar's colors: the same see-through glass, or the event's field, as a scene's background. */
+    theme: liveFieldThemeSchema.default(LIVE_FIELD_THEME_DEFAULT),
     speed: liveTickerSpeedSchema,
     messages: z.array(liveTickerMessageSchema).min(1).max(LIVE_TICKER_MESSAGES_MAX),
   })
@@ -61,7 +63,7 @@ export const liveTickerConfigSchema = z
 export type LiveTickerConfig = z.infer<typeof liveTickerConfigSchema>;
 /** The settings of a resolved ticker, without the content the room resolved for them. */
 export function liveTickerConfigOf(ticker: LiveTickerConfig): LiveTickerConfig {
-  return { style: ticker.style, speed: ticker.speed, messages: ticker.messages };
+  return { theme: ticker.theme, speed: ticker.speed, messages: ticker.messages };
 }
 export const liveTickerSegmentSchema = z
   .object({
@@ -102,7 +104,7 @@ export const liveTickerContextSchema = z
 export type LiveTickerContext = z.infer<typeof liveTickerContextSchema>;
 export const DEFAULT_LIVE_TICKER_CONTEXT: LiveTickerContext = { timeZone: "UTC", sponsorGroups: [] };
 export const DEFAULT_LIVE_TICKER_CONFIG: LiveTickerConfig = {
-  style: "gradient",
+  theme: LIVE_FIELD_THEME_DEFAULT,
   speed: LIVE_TICKER_SPEED.default,
   messages: [
     { id: "greeting", prefix: "Welcome", template: "{{greeting}}", condition: "always" },
@@ -129,7 +131,13 @@ export const DEFAULT_LIVE_TICKER_CONFIG: LiveTickerConfig = {
 };
 /** One-time storage normalization only; HTTP accepts exclusively the sequence config above. */
 export function readStoredLiveTicker(value: unknown): unknown {
-  if (value === null || typeof value !== "object" || !("source" in value)) return value;
+  if (value === null || typeof value !== "object") return value;
+  // A ticker saved with a style, before it took the panels' colors, takes the default colors.
+  if (!("source" in value)) {
+    if (!("style" in value)) return value;
+    const { style: _style, ...rest } = value as Record<string, unknown>;
+    return { ...rest, theme: LIVE_FIELD_THEME_DEFAULT };
+  }
   const previous = value as { source: unknown; customText?: unknown };
   let prefix = "";
   let template: string;
@@ -144,7 +152,7 @@ export function readStoredLiveTicker(value: unknown): unknown {
     template = "Have a question? Submit it in the event app.";
   } else return null;
   return {
-    style: "gradient",
+    theme: LIVE_FIELD_THEME_DEFAULT,
     speed: LIVE_TICKER_SPEED.default,
     messages: [{ id: "retained", prefix, template, condition: "always" }],
     segments: [],

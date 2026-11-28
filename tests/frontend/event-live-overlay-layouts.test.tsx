@@ -249,9 +249,10 @@ describe("scene editor", () => {
   it("draws a labeled box for each graphic the scene shows and says where the selected one sits", async () => {
     await mount();
     const drawn = () => [...root!.querySelectorAll<HTMLElement>("button[data-element]")].map((b) => b.dataset.element);
-    // Camera leaves the QR code and the background out.
+    // Camera leaves the QR code out; its background waits for a board.
     expect(drawn()).not.toContain("qrCode");
-    expect(drawn()).not.toContain("background");
+    expect(drawn()).toContain("background");
+    expect(switchWords("background")).toBe("With a board on it");
     expect(drawn()).not.toContain("stageDisplay");
     expect(drawn().sort()).toEqual([...rows()].sort());
     void act(() => box("ticker").click());
@@ -308,8 +309,8 @@ describe("scene editor", () => {
     await mount();
     const add = button("Add graphic");
     await act(() => add.click());
-    // Only the Program graphics Camera leaves out, the background and the QR code; never the speaker's screen.
-    expect(menuItems()).toEqual(["Background", "QR code"]);
+    // Only the Program graphic Camera leaves out, the QR code; never the speaker's screen.
+    expect(menuItems()).toEqual(["QR code"]);
     await act(() => add.click());
     await choose(add, "QR code");
     expect(rows()).toContain("qrCode");
@@ -426,13 +427,12 @@ describe("scene editor", () => {
     const canvas = root!.querySelector(".pk-layout-canvas")!;
     expect(canvas.querySelector(".pk-live-overlay__frame")).not.toBeNull();
     // Camera includes every graphic with a switch, boards too: the sample has them on, the front board covers the
-    // ones behind it, and the scene has no background to draw.
+    // ones behind it, and the poll over the whole frame brings the background with it.
     const drawn = [...canvas.querySelectorAll<HTMLElement>("[data-overlay-element]")].map(
       (element) => element.dataset.overlayElement,
     );
-    expect(drawn).toEqual(expect.arrayContaining(["poll", "timer", "ticker", "reactions"]));
+    expect(drawn).toEqual(expect.arrayContaining(["poll", "timer", "ticker", "reactions", "background"]));
     expect(drawn).not.toContain("question");
-    expect(drawn).not.toContain("background");
   });
 
   it("lists the scene's graphics front first and saves one moved up the stack as the scene's order", async () => {
@@ -468,6 +468,7 @@ describe("scene editor", () => {
   });
 
   it("adds the background as its own graphic at the back, and moves it in front of a board", async () => {
+    history.replaceState(null, "", "/portal/#/events/conference/settings/live?layout=break");
     await mount();
     await choose(button("Add graphic"), "Background");
     // It starts behind everything, at the full frame, and is placed like any other graphic.

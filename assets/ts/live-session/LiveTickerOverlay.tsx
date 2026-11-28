@@ -1,7 +1,30 @@
 import { useLayoutEffect, useRef } from "preact/hooks";
+import type { OverlayRect } from "../../shared/live-overlay-geometry";
+import { LIVE_OVERLAY_FRAME } from "../../shared/schemas/live-overlay-layout";
 import { LIVE_TICKER_SPEED, type LiveTicker } from "../../shared/schemas/live-session-ticker";
 import { renderOverlayInlineMarkdown } from "../../shared/overlay-text-template";
+import { useNumericCssProperties } from "../hooks/useNumericCssProperties";
+import { liveBoardInset } from "./LiveBoard";
+import "./LiveGraphicTheme.css";
 import "./LiveTickerOverlay.css";
+
+/** The broadcast title-safe margin at the frame's foot, in pixels of the frame. */
+const TITLE_SAFE_FOOT = 54;
+
+/**
+ * The ticker's own geometry for its box: its width, the inset its text keeps
+ * from the sides (the boards' inset, so its words line up with theirs) and,
+ * when the box runs on to the frame's foot, the glass it extends below the
+ * text so the text stays title-safe.
+ */
+export function liveTickerGeometry(box: Pick<OverlayRect, "x" | "y" | "width" | "height">) {
+  const below = LIVE_OVERLAY_FRAME.height - box.y - box.height;
+  return {
+    width: Math.round(box.width),
+    inset: liveBoardInset(box).inline,
+    foot: Math.max(0, TITLE_SAFE_FOOT - Math.max(0, below)),
+  };
+}
 
 /**
  * The width of one pass of the messages, on the track as `--pk-live-ticker-travel`, and the time that pass
@@ -33,12 +56,32 @@ function useTickerTravel(ticker: LiveTicker | null) {
   return track;
 }
 
-/** One uninterrupted track: every label and message travels through the same loop. */
-export function LiveTickerOverlay({ ticker }: { ticker: LiveTicker | null }) {
+/**
+ * One uninterrupted track: every label and message travels through the same
+ * loop, on a see-through bar as wide as its box, like the panels it sits with.
+ */
+export function LiveTickerOverlay({
+  ticker,
+  box,
+}: {
+  ticker: LiveTicker | null;
+  box: Pick<OverlayRect, "x" | "y" | "width" | "height">;
+}) {
   const track = useTickerTravel(ticker);
+  const geometry = liveTickerGeometry(box);
+  const bar = useNumericCssProperties({
+    "--ticker-width": geometry.width,
+    "--ticker-inset": geometry.inset,
+    "--ticker-foot": geometry.foot,
+  });
   if (!ticker?.segments.length) return null;
   return (
-    <div class={`pk-live-ticker pk-live-ticker--${ticker.style}`} aria-label="News ticker">
+    <div
+      class="pk-live-ticker"
+      aria-label="News ticker"
+      data-graphic-theme={ticker.theme}
+      data-numeric-css-properties={bar}
+    >
       <div class="pk-live-ticker__window">
         <div class="pk-live-ticker__track" ref={track}>
           {[false, true].map((duplicate) => (

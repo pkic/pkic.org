@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { LIVE_FIELD_THEMES, LIVE_FIELD_THEME_DEFAULT } from "../../assets/shared/live-graphic-theme";
 import { liveOverlayDrawn } from "../../assets/shared/live-overlay-cover";
 import { LIVE_OVERLAY_PRESET_LAYOUTS } from "../../assets/shared/live-overlay-layout-presets";
 import {
@@ -8,7 +9,10 @@ import {
 } from "../../assets/shared/schemas/live-overlay-layout";
 import { LIVE_TIMER_PRESENTATIONS } from "../../assets/shared/schemas/live-session-timer";
 import { describeGraphicSwitch } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-copy";
-import { graphicActions } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-graphic-actions";
+import {
+  graphicActions,
+  graphicLookElement,
+} from "../../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-graphic-actions";
 import { describeGraphicPosition } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-graphics";
 import { layoutElementsChanged } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-sharing";
 import {
@@ -93,6 +97,58 @@ describe("a graphic's menu", () => {
     expect(handlers.onLook).toHaveBeenCalledWith({ timerLook: "tab" });
     looks("ring").find((item) => item.id === "look-auto")!.onSelect!();
     expect(handlers.onLook).toHaveBeenLastCalledWith({ timerLook: undefined });
+  });
+
+  it("offers the background's colors on navy glass until the scene picks one, and navy glass clears the choice", () => {
+    const looks = (fieldTheme?: "event") =>
+      graphicActions(
+        { ...elements, background: { ...elements.background, fieldTheme } },
+        "background",
+        false,
+        handlers,
+      ).filter((item) => item.id.startsWith("look-"));
+    const checked = (fieldTheme?: "event") =>
+      looks(fieldTheme)
+        .filter((item) => item.checked)
+        .map((item) => item.id);
+    expect(
+      looks()
+        .map((item) => item.id)
+        .sort(),
+    ).toEqual(LIVE_FIELD_THEMES.map((theme) => `look-${theme}`).sort());
+    expect(checked()).toEqual([`look-${LIVE_FIELD_THEME_DEFAULT}`]);
+    expect(checked("event")).toEqual(["look-event"]);
+    looks().find((item) => item.id === "look-event")!.onSelect!();
+    expect(handlers.onLook).toHaveBeenLastCalledWith({ fieldTheme: "event" });
+    looks("event").find((item) => item.id === `look-${LIVE_FIELD_THEME_DEFAULT}`)!.onSelect!();
+    expect(handlers.onLook).toHaveBeenLastCalledWith({ fieldTheme: undefined });
+  });
+
+  it("lets the background wait for a board, and Always clears the choice", () => {
+    const shows = (withBoardOnly?: true) =>
+      graphicActions(
+        { ...elements, background: { ...elements.background, withBoardOnly } },
+        "background",
+        false,
+        handlers,
+      ).filter((item) => item.id.startsWith("shows-"));
+    expect(shows().map((item) => [item.label, item.checked])).toEqual([
+      ["Always", true],
+      ["With a board on it", false],
+    ]);
+    expect(shows(true).find((item) => item.checked)!.label).toBe("With a board on it");
+    expect(shows()[0]!.separatorBefore).toBe(true);
+    shows()[1]!.onSelect!();
+    expect(handlers.onLook).toHaveBeenLastCalledWith({ withBoardOnly: true });
+    shows(true)[0]!.onSelect!();
+    expect(handlers.onLook).toHaveBeenLastCalledWith({ withBoardOnly: undefined });
+    expect(graphicLookElement({ withBoardOnly: true })).toBe("background");
+  });
+
+  it("files each look under its own graphic", () => {
+    expect(graphicLookElement({ qrLook: "card" })).toBe("qrCode");
+    expect(graphicLookElement({ timerLook: undefined })).toBe("timer");
+    expect(graphicLookElement({ fieldTheme: "event" })).toBe("background");
   });
 });
 

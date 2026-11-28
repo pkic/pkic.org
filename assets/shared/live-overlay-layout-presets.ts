@@ -37,21 +37,27 @@ const RIGHT_TOP: Anchor = { horizontal: "right", vertical: "top" };
 const RIGHT_MIDDLE: Anchor = { horizontal: "right", vertical: "middle" };
 
 /**
- * A board never floats in the frame: it fills the frame, or a full-height
- * column at one side with the camera beside it, so no strip of the camera
- * shows around it.
+ * The panel grid every scene shares: a 48 px margin and gutter in the frame,
+ * a 640 px glass panel at one side, the picture beside it, and the panel
+ * ending a gutter above the ticker's row. A board that does not fill the
+ * frame sits on that panel, so the picture shows around it as in Break.
  */
-const BOARD_COLUMN_WIDTH = 768;
+const GRID = 48;
+const PANEL_WIDTH = 640;
+const PANEL_GUTTER = 32;
+/** The top of the ticker's 72 px row, above the title-safe line at the foot. */
+const TICKER_TOP = 938;
 const FILL = box(0, 0, 1920, 1080, CENTER);
 
-/** A layout with every board in one full-height column at a side of the frame, the camera filling the rest. */
+/** A layout with every board in one glass panel at a side of the frame on the grid, the picture beside it. */
 function boardColumn(side: "left" | "right"): Partial<LiveOverlayLayoutElements> {
   const left = side === "left";
-  const column = box(left ? 0 : 1920 - BOARD_COLUMN_WIDTH, 0, BOARD_COLUMN_WIDTH, 1080, {
+  const panelX = left ? GRID : 1920 - GRID - PANEL_WIDTH;
+  const column = box(panelX, GRID, PANEL_WIDTH, TICKER_TOP - PANEL_GUTTER - GRID, {
     horizontal: side,
-    vertical: "middle",
+    vertical: "top",
   });
-  const camera = left ? BOARD_COLUMN_WIDTH : 0;
+  const picture = left ? panelX + PANEL_WIDTH + PANEL_GUTTER : GRID;
   return {
     background: column,
     question: column,
@@ -61,9 +67,8 @@ function boardColumn(side: "left" | "right"): Partial<LiveOverlayLayoutElements>
     chat: column,
     schedule: column,
     checkIn: column,
-    lowerThird: box(camera + 48, 738, 1056, 288, LEFT_BOTTOM),
-    timer: box(left ? 1536 : 1920 - BOARD_COLUMN_WIDTH - 384, 48, 336, 120, RIGHT_TOP),
-    ticker: box(camera, 954, 1920 - BOARD_COLUMN_WIDTH, 126, CENTER_BOTTOM),
+    lowerThird: box(picture, 738, 1056, 288, LEFT_BOTTOM),
+    timer: box(left ? 1536 : panelX - PANEL_GUTTER - 336, GRID, 336, 120, RIGHT_TOP),
     // Over the camera, at the side away from the column.
     reactions: box(left ? 1492 : 48, 48, 380, 760, left ? RIGHT_MIDDLE : LEFT_MIDDLE),
   };
@@ -83,10 +88,11 @@ const FULL_FRAME: LiveOverlayLayoutElements = {
   question: FILL,
   poll: FILL,
   timer: box(1536, 48, 336, 120, RIGHT_TOP),
-  ticker: box(0, 954, 1920, 126, CENTER_BOTTOM),
+  // On the panel grid: 48 from the sides, its 72px row of text above the title-safe line at the foot.
+  ticker: box(GRID, TICKER_TOP, 1920 - 2 * GRID, 72, CENTER_BOTTOM),
   // Up next on the left, clear of the check-in code and ending above the lower third as it sits over the ticker,
   // so they can show together.
-  schedule: box(96, 168, 1248, 504, LEFT_MIDDLE),
+  schedule: box(96, 168, 1248, 488, LEFT_MIDDLE),
   panelists: FILL,
   speakerWelcome: { visible: true, ...LIVE_OVERLAY_ADDED_ELEMENT_BOXES.speakerWelcome, shared: true },
   checkIn: box(1392, 216, 480, 648, RIGHT_MIDDLE),
@@ -159,7 +165,6 @@ const SIDE_BOARDS: readonly LiveOverlayElement[] = [...QUESTION_BOARDS, "panelis
 const column = (side: "left" | "right"): LiveOverlayLayoutElements => ({
   ...FULL_FRAME,
   ...boardColumn(side),
-  ticker: FULL_FRAME.ticker,
 });
 
 /** Break's column beside the clip, under the time: one spot whose boards take turns. */
@@ -179,14 +184,15 @@ const PRESETS: Record<LiveOverlayPreset, { name: string; elements: LiveOverlayLa
   /**
    * The camera picture with every graphic that has a switch at its standard
    * box, the boards included, and nothing coming on. Whatever the operator
-   * switches on shows here. Only the background and the QR code, which have
-   * no switch, are left out. Outputs that name no scene draw this one.
+   * switches on shows here; a board over the whole frame brings the
+   * background with it, so no board reads bare on the picture. Only the QR
+   * code, which has no switch, is left out. Outputs that name no scene draw this one.
    */
   default: {
     name: "Camera",
     elements: only(
-      FULL_FRAME,
-      LIVE_OVERLAY_ELEMENTS.filter((element) => element !== "background" && element !== "qrCode"),
+      { ...FULL_FRAME, background: { ...FILL, visible: true, withBoardOnly: true } },
+      LIVE_OVERLAY_ELEMENTS.filter((element) => element !== "qrCode"),
     ),
   },
   /**

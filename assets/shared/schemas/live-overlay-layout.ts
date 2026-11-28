@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { eventSlugParamsSchema, slugPattern, utcInstantSchema } from "./api-common";
+import { liveFieldThemeSchema } from "../live-graphic-theme";
 import { LIVE_TIMER_PRESENTATIONS } from "./live-session-timer";
 
 /**
@@ -264,6 +265,13 @@ export const liveOverlayElementPlacementSchema = insideFrame(
       qrLook: z.enum(LIVE_QR_LOOKS).optional(),
       /** Every timer's look in this scene (`LIVE_TIMER_PRESENTATIONS`); absent, each timer's own. Only the timer reads it. */
       timerLook: z.enum(LIVE_TIMER_PRESENTATIONS).optional(),
+      /** The background's colors in this scene (`LIVE_FIELD_THEMES`); absent, navy glass. Only the background reads it. */
+      fieldTheme: liveFieldThemeSchema.optional(),
+      /**
+       * The background shows only while a board inside it is on air, so a picture stays clear until a question or
+       * poll comes over it; absent, it shows whenever the scene is on. Only the background reads it.
+       */
+      withBoardOnly: z.boolean().optional(),
       ...boxShape,
     })
     .strict(),

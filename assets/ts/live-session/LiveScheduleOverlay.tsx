@@ -4,7 +4,9 @@ import type { LiveScheduleProjection, LiveScheduleRoom } from "../../shared/sche
 import { formatClockInZone, formatClockName } from "../../shared/format-date";
 import { formatNumber } from "../../shared/format-number";
 import type { OverlayRect } from "../../shared/live-overlay-geometry";
+import { useNumericCssProperties } from "../hooks/useNumericCssProperties";
 import { Avatar } from "../ui/Avatar";
+import { liveBoardInset, type LiveBoardBox } from "./LiveBoard";
 import { SectionHeading } from "../ui/SectionHeading";
 import "./LiveGraphicTheme.css";
 import "./LiveScheduleOverlay.css";
@@ -155,17 +157,30 @@ export function streamRoomFirst<Room extends { roomId: string }>(rooms: readonly
  */
 export function LiveScheduleOverlay({
   schedule,
-  box = { width: 1680 },
+  box = { width: 1680, height: 945 },
+  onGround = false,
   animate,
 }: {
   schedule: LiveScheduleProjection | null;
   /** The layout box in frame pixels, so the graphic is set for its shape; a full-frame box by default. */
-  box?: Pick<OverlayRect, "width">;
+  box?: LiveBoardBox;
+  /**
+   * On the scene's background, a panel: drawn at its box's own size rather than scaled, its lines kept from
+   * the panel's edges by a board's inset and headed by a board's eyebrow, so it reads as one of the boards.
+   */
+  onGround?: boolean;
   /** Whether the rooms may move: always on air, and on a monitor unless its viewer prefers reduced motion. */
   animate: boolean;
 }) {
   const rooms = schedule?.available ? streamRoomFirst(schedule.rooms, schedule.streamRoomId) : [];
   const spotlight = useSpotlight(rooms.length, animate);
+  const inset = liveBoardInset(box);
+  const panel = useNumericCssProperties({
+    "--schedule-width": box.width,
+    "--schedule-height": box.height,
+    "--schedule-inset-inline": inset.inline,
+    "--schedule-inset-block": inset.block,
+  });
   if (!schedule || !rooms.length) return null;
   const zone = schedule.timeZone;
   const fit = liveScheduleFit(box);
@@ -173,8 +188,10 @@ export function LiveScheduleOverlay({
     <section
       class="pk-live-schedule"
       data-graphic-theme={schedule.config.theme}
-      data-arrangement={liveScheduleArrangement(schedule.config.layout, fit, rooms.length)}
+      data-arrangement={onGround ? "rows" : liveScheduleArrangement(schedule.config.layout, fit, rooms.length)}
       data-fit={fit}
+      data-on-ground={onGround ? "" : undefined}
+      data-numeric-css-properties={onGround ? panel : undefined}
       data-spotlight={spotlight === null ? undefined : ""}
       data-rooms={rooms.length > 1 ? "many" : "one"}
       aria-label="Up next"

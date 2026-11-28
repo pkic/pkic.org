@@ -126,12 +126,11 @@ describe("the built-in scenes", () => {
     ]);
   });
 
-  it("make Camera show whatever is switched on: every graphic with a switch at its standard box, no background", () => {
+  it("make Camera show whatever is switched on: every graphic with a switch at its standard box, glass only under a board", () => {
     const elements = preset("default");
-    expect(included(elements)).toEqual(
-      LIVE_OVERLAY_ELEMENTS.filter((element) => element !== "background" && element !== "qrCode"),
-    );
-    expect(elements.background.visible).toBe(false);
+    expect(included(elements)).toEqual(LIVE_OVERLAY_ELEMENTS.filter((element) => element !== "qrCode"));
+    // The background waits for a board over the whole frame, so a question never reads bare on the camera.
+    expect(elements.background).toMatchObject({ visible: true, withBoardOnly: true, x: 0, y: 0, w: 1, h: 1 });
     expect(elements.qrCode.visible).toBe(false);
     // The boards sit at their standard places, the same data Add graphic and a new scene use.
     for (const board of FIELD_BOARDS) {
@@ -147,15 +146,22 @@ describe("the built-in scenes", () => {
     }
   });
 
-  it("place the background where the scene's boards sit, and none in Camera or Break", () => {
+  it("place the background where the scene's boards sit, under a board only in Camera, and none in Break", () => {
     const background = (slug: (typeof LIVE_OVERLAY_PRESETS)[number]) => {
       const { visible, x, y, w, h } = preset(slug).background;
       return visible ? { x, y, w, h } : null;
     };
-    expect(background("default")).toBeNull();
+    expect(background("default")).toEqual({ x: 0, y: 0, w: 1, h: 1 });
     expect(background("break")).toBeNull();
-    expect(background("questions")).toEqual({ x: 0.6, y: 0, w: 0.4, h: 1 });
-    expect(background("check-in")).toEqual({ x: 0, y: 0, w: 0.4, h: 1 });
+    // The side panel on the grid: 640 px wide, 48 px in from the frame, ending a gutter above the ticker.
+    const panel = (x: number) => ({
+      x: expect.closeTo(x / 1920, 3),
+      y: expect.closeTo(48 / 1080, 3),
+      w: expect.closeTo(640 / 1920, 3),
+      h: expect.closeTo(858 / 1080, 3),
+    });
+    expect(background("questions")).toEqual(panel(1232));
+    expect(background("check-in")).toEqual(panel(48));
     expect(background("full-board")).toEqual({ x: 0, y: 0, w: 1, h: 1 });
     // Boards and cards the scene includes sit inside its background, or clear of it over the camera.
     expect(preset("questions").topQuestions).toMatchObject(background("questions")!);

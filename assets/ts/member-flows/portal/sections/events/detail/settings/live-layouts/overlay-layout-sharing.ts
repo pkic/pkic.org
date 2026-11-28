@@ -88,6 +88,8 @@ function ownedBy(placement: LiveOverlayElementPlacement) {
     locked: placement.locked === true,
     qrLook: placement.qrLook ?? null,
     timerLook: placement.timerLook ?? null,
+    fieldTheme: placement.fieldTheme ?? null,
+    withBoardOnly: placement.withBoardOnly === true,
   };
   return placement.shared
     ? { visible: placement.visible, shared: true, layer: placement.layer, ...flags }

@@ -335,6 +335,7 @@ describe("stacking a scene's graphics", () => {
       ...STANDARD,
       topQuestions: placement(px(0, 0, 1920, 1080)),
       reactions: placement(px(0, 0, 1920, 1080)),
+      background: placement(px(0, 0, 1920, 1080)),
     };
     const clear = liveOverlayClearOfTicker(scene, true);
     // A board that runs to the bottom edge meets the ticker flush, so its background has no seam.
@@ -344,6 +345,8 @@ describe("stacking a scene's graphics", () => {
     expect(clear.lowerThird.h).toBe(scene.lowerThird.h);
     // Reactions float over everything, the ticker included.
     expect(clear.reactions).toEqual(scene.reactions);
+    // The background runs on under the ticker's glass bar, so the field never ends in a strip of bare frame.
+    expect(clear.background).toEqual(scene.background);
     // A graphic beside the ticker, not above it, keeps its box.
     const beside = {
       ...scene,

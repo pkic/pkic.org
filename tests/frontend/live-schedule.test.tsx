@@ -116,7 +116,9 @@ it("sets itself for the box it is drawn into: cards for one wide row of rooms, r
   expect(liveScheduleArrangement("cards", "narrow", 6)).toBe("rows");
   expect(liveScheduleArrangement("list", "wide", 6)).toBe("rows");
   host = document.body.appendChild(document.createElement("div"));
-  await act(() => render(<LiveScheduleOverlay schedule={busyFrame()} box={{ width: 560 }} animate />, host!));
+  await act(() =>
+    render(<LiveScheduleOverlay schedule={busyFrame()} box={{ width: 560, height: 315 }} animate />, host!),
+  );
   expect(host.querySelector<HTMLElement>(".pk-live-schedule")!.dataset).toMatchObject({
     fit: "narrow",
     arrangement: "rows",

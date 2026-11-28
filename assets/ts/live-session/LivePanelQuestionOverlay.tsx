@@ -1,6 +1,5 @@
-import type { OverlayRect } from "../../shared/live-overlay-geometry";
 import type { LiveRoomSession, LiveStage } from "../../shared/schemas/live-session-room";
-import { LiveBoard, liveBoardSize } from "./LiveBoard";
+import { LiveBoard, liveBoardSize, type LiveBoardBox } from "./LiveBoard";
 import { LivePanelistsCredits } from "./LivePanelistsOverlay";
 import { LiveQuestionBody } from "./LiveQuestionOverlay";
 import "./LivePanelQuestionOverlay.css";
@@ -18,7 +17,7 @@ export function LivePanelQuestionOverlay({
 }: {
   stage: LiveStage;
   session: LiveRoomSession;
-  box: Pick<OverlayRect, "width" | "height">;
+  box: LiveBoardBox;
 }) {
   const { question, panelists } = stage;
   if (!question || !panelists) return null;

@@ -126,7 +126,7 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
       poll: { id: POLL, presentation: { chart: "bar" } },
       pollChange: null,
       ticker: {
-        style: "gradient",
+        theme: "navy-glass",
         speed: 90,
         messages: [{ id: "sample", prefix: "Next", template: "Sample", condition: "always" }],
         segments: [{ id: "sample", prefix: "Next", markdown: "Hybrid certificates in practice · Room B at 14:30" }],

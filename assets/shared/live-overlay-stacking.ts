@@ -88,8 +88,12 @@ export function moveLiveProgramLayer(
 const EDGE = 0.001;
 /** The breathing room a floating graphic keeps from the ticker: 24 pixels on a 1080-pixel frame. */
 const TICKER_GAP = 24 / 1080;
-/** Graphics that never give way to the ticker: the ticker itself, and reactions floating over everything. */
-const OVER_THE_TICKER: ReadonlySet<LiveOverlayElement> = new Set(["ticker", "reactions"]);
+/**
+ * Graphics that never give way to the ticker: the ticker itself, reactions
+ * floating over everything, and the background, which the ticker's glass bar
+ * reads on like any board, so the field never ends in a strip of bare frame.
+ */
+const OVER_THE_TICKER: ReadonlySet<LiveOverlayElement> = new Set(["ticker", "reactions", "background"]);
 
 /**
  * A box kept clear of the ticker. A board that runs to the frame's edge under

@@ -44,7 +44,7 @@ async function read(person: "operator" | "secondOperator" = "operator") {
   return eventLiveStudioSetupResponseSchema.parse(await response.json());
 }
 const ticker = {
-  style: "accent" as const,
+  theme: "smoked-glass" as const,
   speed: 120,
   messages: [{ id: "wifi", prefix: "Wi-Fi", template: "PKIC-guest", condition: "always" as const }],
 };

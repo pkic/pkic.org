@@ -23,13 +23,14 @@ function tickerTargets(stage: ReturnType<typeof liveSnapshot>["stage"], override
   return liveTargets(state, { programActive: false, ...overrides });
 }
 import { LiveTickerControls } from "../../assets/ts/member-flows/portal/sections/events/detail/live/LiveTickerControls";
-import { LiveTickerOverlay } from "../../assets/ts/live-session/LiveTickerOverlay";
+import { LiveTickerOverlay, liveTickerGeometry } from "../../assets/ts/live-session/LiveTickerOverlay";
+const BOX = { x: 48, y: 938, width: 1824, height: 72 };
 const id = (value: number) => `20000000-0000-4000-8000-${String(value).padStart(12, "0")}`;
 const message = (
   template: string,
   prefix = "Next",
   condition: "always" | "near-session-end" = "always",
-): LiveTickerConfig => ({ style: "gradient", speed: 90, messages: [{ id: "one", prefix, template, condition }] });
+): LiveTickerConfig => ({ theme: "navy-glass", speed: 90, messages: [{ id: "one", prefix, template, condition }] });
 const occurrence = (value: number, room: number, title: string, start: string, end: string) =>
   agendaOccurrenceSchema.parse({
     id: id(value),
@@ -90,7 +91,7 @@ describe("multi-message live ticker", () => {
       startAt: "2030-01-01T09:58:00.000Z",
     });
     const config: LiveTickerConfig = {
-      style: "accent",
+      theme: "smoked-glass",
       speed: 90,
       messages: [
         { id: "welcome", prefix: "Welcome", template: "{{greeting}}", condition: "always" },
@@ -125,7 +126,7 @@ describe("multi-message live ticker", () => {
     const approved = agenda(),
       now = Date.parse("2030-01-01T09:30:00.000Z");
     const config: LiveTickerConfig = {
-      style: "accent",
+      theme: "smoked-glass",
       speed: 90,
       messages: [
         { id: "everywhere", prefix: "", template: "Everywhere", condition: "always" },
@@ -231,6 +232,22 @@ describe("multi-message live ticker", () => {
     expect(retained.messages[0].template).toContain("literal");
     expect(retained.segments).toEqual([]);
   });
+  it("reads a ticker saved with a style in the panels' default colors, keeping its messages", () => {
+    const { theme: _theme, ...rest } = message("Saved with a style");
+    const saved = liveTickerConfigSchema.parse(readStoredLiveTicker({ ...rest, style: "accent" }));
+    expect(saved.theme).toBe("navy-glass");
+    expect(saved.messages[0].template).toBe("Saved with a style");
+  });
+  it("draws as wide as its box, its text at the boards' inset and title-safe on the frame's foot", () => {
+    // On the panel grid: 48 from the sides and clear of the foot, so no glass below the text.
+    expect(liveTickerGeometry({ x: 48, y: 938, width: 1824, height: 72 })).toEqual({ width: 1824, inset: 48, foot: 0 });
+    // Across the whole frame on its foot: the safe margin at the sides and glass below the text.
+    expect(liveTickerGeometry({ x: 0, y: 954, width: 1920, height: 126 })).toEqual({
+      width: 1920,
+      inset: 96,
+      foot: 54,
+    });
+  });
   it("reads a ticker saved before the speed existed, or with a named speed, at the same pace", () => {
     const { speed: _speed, ...saved } = message("Saved before");
     expect(liveTickerConfigSchema.parse(saved).speed).toBe(90);
@@ -248,6 +265,7 @@ describe("multi-message live ticker", () => {
       void act(() =>
         render(
           <LiveTickerOverlay
+            box={BOX}
             ticker={liveTickerSchema.parse({
               ...message("A long message"),
               speed,
@@ -278,7 +296,7 @@ describe("multi-message live ticker", () => {
     const host = document.createElement("div");
     document.body.append(host);
     try {
-      void act(() => render(<LiveTickerOverlay ticker={ticker} />, host));
+      void act(() => render(<LiveTickerOverlay ticker={ticker} box={BOX} />, host));
       expect(host.querySelector(".pk-live-ticker__label")?.textContent).toBe("Next");
       expect(host.querySelector(".pk-live-ticker__track .pk-live-ticker__label")?.textContent).toBe("Next");
       expect(host.querySelector(".pk-live-ticker__message strong")?.textContent).toBe("Safe");
@@ -300,7 +318,7 @@ describe("multi-message live ticker", () => {
       ],
     });
     try {
-      void act(() => render(<LiveTickerOverlay ticker={ticker} />, host));
+      void act(() => render(<LiveTickerOverlay ticker={ticker} box={BOX} />, host));
       const track = host.querySelector(".pk-live-ticker__track");
       const accessible = host.querySelector(".pk-live-ticker__group:not([aria-hidden])")!;
       expect(accessible.textContent).toContain("NewsFirstNextSecond");
@@ -309,7 +327,7 @@ describe("multi-message live ticker", () => {
       });
       expect(host.querySelector(".pk-live-ticker__track")).toBe(track);
       ticker.segments[0].markdown = "Updated";
-      void act(() => render(<LiveTickerOverlay ticker={{ ...ticker }} />, host));
+      void act(() => render(<LiveTickerOverlay ticker={{ ...ticker }} box={BOX} />, host));
       expect(host.querySelector(".pk-live-ticker__track")).toBe(track);
       expect(accessible.textContent).toContain("NewsUpdatedNextSecond");
     } finally {
