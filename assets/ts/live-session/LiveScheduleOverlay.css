@@ -289,6 +289,11 @@
   .pk-live-schedule__speakers[data-turning] .pk-live-schedule__face[data-active]::before {
     opacity: 1;
   }
+  /* A speaker past the faces shown is named in turn too, the count of the others standing in for their face. */
+  .pk-live-schedule__speakers[data-turning] .pk-live-schedule__more[data-active] {
+    color: var(--graphic-ink);
+    font-weight: 700;
+  }
   /*
    * Listed, each speaker has a row: their face, then their name over their
    * part and organization, in a lighter weight than the session's title. The

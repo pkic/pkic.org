@@ -89,21 +89,22 @@ function useSpeakerTurn(count: number, listed: boolean): number | null {
     const step = setInterval(() => setIndex((current) => current + 1), LIVE_SCHEDULE_SPEAKER_TURN_MS);
     return () => clearInterval(step);
   }, [turning, count]);
-  return turning ? index % Math.min(count, FACES_SHOWN) : null;
+  return turning ? index % count : null;
 }
 
 /**
  * Whether one room's speakers show as a list: when the scene asks for one and
- * the list fits the card, measured once for each box and cast; a list that
- * runs past the card's foot takes turns instead, so no face or name is cut.
+ * the list fits, measured once for each box, background and cast; a list that
+ * runs past the foot of the card or of the room holding it takes turns
+ * instead, so no face or name is cut.
  */
 function useSpeakerListFits(wanted: boolean, cast: string) {
   const ref = useRef<HTMLElement>(null);
   const [overflowed, setOverflowed] = useState<string | null>(null);
   const fits = wanted && overflowed !== cast;
   useLayoutEffect(() => {
-    const card = ref.current?.querySelector<HTMLElement>(".pk-live-schedule__card");
-    if (fits && card && card.scrollHeight > card.clientHeight + 1) setOverflowed(cast);
+    const clips = ref.current?.querySelectorAll<HTMLElement>(".pk-live-schedule__card, .pk-live-schedule__room") ?? [];
+    if (fits && [...clips].some((box) => box.scrollHeight > box.clientHeight + 1)) setOverflowed(cast);
   }, [fits, cast]);
   return { ref, fits };
 }
@@ -156,13 +157,17 @@ function Speakers({ speakers, listed }: { speakers: LiveScheduleRoom["speakers"]
             <Avatar name={speaker.name} src={speaker.photoUrl ?? undefined} size="lg" decoding="async" />
           </li>
         ))}
-        {more > 0 ? <li class="pk-live-schedule__more">+{formatNumber(more)}</li> : null}
+        {more > 0 ? (
+          <li class="pk-live-schedule__more" data-active={turn !== null && turn >= FACES_SHOWN ? "" : undefined}>
+            +{formatNumber(more)}
+          </li>
+        ) : null}
       </ul>
       {turn === null ? (
         <p class="pk-live-schedule__names">{liveScheduleSpeakerLine(speakers)}</p>
       ) : (
         <ul class="pk-live-schedule__turns">
-          {shown.map((speaker, index) => (
+          {speakers.map((speaker, index) => (
             <li
               key={`${index}:${speaker.name}`}
               class="pk-live-schedule__turn"
@@ -224,7 +229,7 @@ export function LiveScheduleOverlay({
   });
   const listed = useSpeakerListFits(
     speakersLook === "list" && rooms.length === 1,
-    `${box.width}x${box.height}:${rooms[0]?.title}:${rooms[0]?.speakers.map((speaker) => speaker.name).join("|")}`,
+    `${box.width}x${box.height}:${onGround ? "ground" : "card"}:${rooms[0]?.title}:${rooms[0]?.speakers.map((speaker) => speaker.name).join("|")}`,
   );
   if (!schedule || !rooms.length) return null;
   const zone = schedule.timeZone;
