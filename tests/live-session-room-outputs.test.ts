@@ -507,7 +507,7 @@ describe("live room auxiliary outputs", () => {
     const operator = await f.connect({ person: "operator" });
     await operator.next("room.snapshot");
     await runInDurableObject(f.room(), (_room, state) => {
-      const sql = new LiveRoomSql(state.storage.sql);
+      const sql = new LiveRoomSql(state.storage);
       const current = new LiveRoomGraphicBasis(sql).read();
       expect(current.layouts.map((layout) => layout.slug)).toEqual([...LIVE_OVERLAY_PRESETS]);
       // A room that hibernated before Talk was retired, and a board's own field flag with it.

@@ -1,6 +1,6 @@
 import { storedAgendaSnapshotSchema } from "../assets/shared/schemas/event-agenda-stored";
 import { env } from "cloudflare:workers";
-import { runDurableObjectAlarm } from "cloudflare:test";
+import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
 import { liveOverlayAccessResponseSchema } from "../assets/shared/schemas/live-overlay-access";
 import { livePollResultsResponseSchema } from "../assets/shared/schemas/live-session-poll-results";
@@ -8,6 +8,8 @@ import { livePollDraftSchema, livePollFieldSchema, type LivePoll } from "../asse
 import { callApi } from "./helpers/app";
 import { queryAll } from "./helpers/context";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
+import { LiveRoomSql } from "../functions/_lib/services/live-session/room-sql";
+import { LiveRoomStore } from "../functions/_lib/services/live-session/room-store";
 
 const f = createLiveRoomFixture();
 type Client = Awaited<ReturnType<typeof f.connect>>;
@@ -534,5 +536,22 @@ describe("live session question rewrite", () => {
       [f.occurrenceId],
     );
     expect(audit).toHaveLength(1);
+  });
+});
+
+it("keeps no write of a room command that fails part way, so a poll reset is all or nothing", async () => {
+  const f = createLiveRoomFixture();
+  await f.setup();
+  await runInDurableObject(f.room(), async (_room, state) => {
+    const store = new LiveRoomStore(new LiveRoomSql(state.storage));
+    const actions = () => new LiveRoomSql(state.storage).rows("SELECT action FROM staff_actions").length;
+    const before = actions();
+    expect(() =>
+      store.atomically(() => {
+        store.recordStaffAction("someone", "live_session.poll.reset", {}, new Date().toISOString());
+        throw new Error("a later write failed");
+      }),
+    ).toThrow("a later write failed");
+    expect(actions()).toBe(before);
   });
 });

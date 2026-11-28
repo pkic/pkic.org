@@ -198,7 +198,7 @@ describe("live room timers", () => {
           name,
           JSON.stringify(value),
         );
-      const store = new LiveRoomStore(new LiveRoomSql(state.storage.sql));
+      const store = new LiveRoomStore(new LiveRoomSql(state.storage));
       expect(store.stage()).toMatchObject({
         lowerThirdMotion: "cut",
         timerGraphics: [{ timerId: "session", format: "clock" }],
@@ -210,7 +210,7 @@ describe("live room timers", () => {
         .exec("SELECT value_json FROM room_controls WHERE name='stage'")
         .toArray()[0]!.value_json;
       expect(JSON.parse(String(saved))).not.toHaveProperty("timer");
-      new LiveRoomStore(new LiveRoomSql(state.storage.sql)).stage();
+      new LiveRoomStore(new LiveRoomSql(state.storage)).stage();
       expect(
         state.storage.sql.exec("SELECT value_json FROM room_controls WHERE name='stage'").toArray()[0]!.value_json,
       ).toBe(saved);
@@ -251,7 +251,7 @@ describe("live room timers", () => {
         panelists: { layout: "list" },
       });
       upsert("overlayMode", "obs");
-      const store = new LiveRoomStore(new LiveRoomSql(state.storage.sql));
+      const store = new LiveRoomStore(new LiveRoomSql(state.storage));
       expect(store.overlayMode()).toBe("switcher");
       expect(store.aux("stage-display").panelists).toEqual({ layout: "list" });
       expect(state.storage.sql.exec("SELECT 1 FROM room_controls WHERE name='aux:stage-timer'").toArray()).toEqual([]);
@@ -292,7 +292,7 @@ describe("live room timers", () => {
           heldMs: 60_000,
         },
       ]);
-      const store = new LiveRoomStore(new LiveRoomSql(state.storage.sql));
+      const store = new LiveRoomStore(new LiveRoomSql(state.storage));
       expect(store.stage().timerGraphics.map((graphic) => graphic.format)).toEqual(["clock", "clock"]);
       expect(store.aux("stage-display").timerGraphics.map((graphic) => graphic.format)).toEqual(["ss"]);
       expect(store.timers()).toMatchObject([
@@ -300,7 +300,7 @@ describe("live room timers", () => {
         { id: "pitch", followsAgenda: false, heldMs: 60_000, sound: { warningSeconds: null, zero: false } },
       ]);
       const saved = state.storage.sql.exec("SELECT value_json FROM room_controls WHERE name='timers'").toArray()[0]!;
-      new LiveRoomStore(new LiveRoomSql(state.storage.sql)).timers();
+      new LiveRoomStore(new LiveRoomSql(state.storage)).timers();
       expect(
         state.storage.sql.exec("SELECT value_json FROM room_controls WHERE name='timers'").toArray()[0]!.value_json,
       ).toBe(saved.value_json);

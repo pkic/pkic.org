@@ -519,6 +519,11 @@ export class LiveRoomStore {
   }
 
   /** A staff action waits here until the durable copy writes its audit row. */
+  /** Runs a command's writes, its staff action included, as one: if any of them fails, none is kept. */
+  atomically<T>(write: () => T): T {
+    return this.sql.atomically(write);
+  }
+
   recordStaffAction(actorUserId: string, action: string, details: Record<string, unknown>, at: string): void {
     this.sql.exec(
       "INSERT INTO staff_actions(actor_user_id, action, details_json, occurred_at) VALUES (?, ?, ?, ?)",

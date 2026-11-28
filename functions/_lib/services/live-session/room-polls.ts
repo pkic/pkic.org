@@ -126,13 +126,15 @@ export class LiveRoomPolls {
     const poll = this.polls.poll(pollId);
     if (!poll) return REFUSALS.missing;
     if (poll.status === "draft") return REFUSALS.draft;
-    this.polls.resetResults(pollId, operator, at);
-    this.store.recordStaffAction(
-      operator.userId,
-      "live_session.poll.reset",
-      { pollId, removedAnswers: poll.respondents },
-      at,
-    );
+    this.store.atomically(() => {
+      this.polls.resetResults(pollId, operator, at);
+      this.store.recordStaffAction(
+        operator.userId,
+        "live_session.poll.reset",
+        { pollId, removedAnswers: poll.respondents },
+        at,
+      );
+    });
     return { messages: [], polls: [pollId] };
   }
 

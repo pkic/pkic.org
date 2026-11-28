@@ -11,7 +11,7 @@ it("opts into replicas and resumes the room cursor after hibernation without cop
   const f = createLiveRoomFixture();
   await f.setup();
   await runInDurableObject(f.room(), async (_room, state) => {
-    const store = new LiveRoomStore(new LiveRoomSql(state.storage.sql));
+    const store = new LiveRoomStore(new LiveRoomSql(state.storage));
     const constraints: string[] = [];
     let batches = 0;
     // Local D1 has no replicas; simulate bookmark transport while executing
@@ -46,7 +46,7 @@ it("opts into replicas and resumes the room cursor after hibernation without cop
     await restarted.prepare("SELECT 3").all();
     expect(constraints).toEqual(["admitted-cursor", "opaque-cursor-2"]);
     expect(store.d1ReadBookmark()).toBe("opaque-cursor-3");
-    expect(new LiveRoomSql(state.storage.sql).rows("SELECT change_seq,copied_seq FROM copy_state")).toEqual([
+    expect(new LiveRoomSql(state.storage).rows("SELECT change_seq,copied_seq FROM copy_state")).toEqual([
       { change_seq: 0, copied_seq: 0 },
     ]);
   });
@@ -56,7 +56,7 @@ it("starts unconstrained and retains a first-use write bookmark for the next rea
   const f = createLiveRoomFixture();
   await f.setup();
   await runInDurableObject(f.room(), async (_room, state) => {
-    const store = new LiveRoomStore(new LiveRoomSql(state.storage.sql));
+    const store = new LiveRoomStore(new LiveRoomSql(state.storage));
     const constraints: string[] = [];
     let batches = 0;
     const source: DatabaseLike = {

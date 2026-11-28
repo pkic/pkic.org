@@ -297,7 +297,7 @@ describe("live chat reactions, reports and moderation", () => {
     await f.connectChat("operator");
     const total = LIVE_CHAT_POLICY.snapshotMessages + 10;
     await runInDurableObject(f.chatRoom(), (_room, state) => {
-      const chat = new LiveRoomChat(new LiveRoomSql(state.storage.sql));
+      const chat = new LiveRoomChat(new LiveRoomSql(state.storage));
       const now = Date.now();
       for (let index = 0; index < total; index++)
         chat.send({ userId: crypto.randomUUID(), name: "Synthetic author" }, `History ${index}`, now + index);
