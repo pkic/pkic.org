@@ -205,21 +205,6 @@ describe("live event-read authorization", () => {
     expect(await eventApp()).toBe(404);
   });
 
-  it("offers no event app for a meeting series", async () => {
-    const { reader, groupId, eventId } = await fixture();
-    const now = new Date().toISOString();
-    await env.DB.prepare(
-      `INSERT INTO event_series (id, event_id, starts_at, recurrence_rule, timezone, duration_minutes,
-                                 active, created_at, updated_at)
-       VALUES (?, ?, ?, 'FREQ=WEEKLY', 'UTC', 60, 1, ?, ?)`,
-    )
-      .bind(crypto.randomUUID(), eventId, now, now, now)
-      .run();
-    const response = await request(`/api/v1/groups/${groupId}/events/${eventId}`, reader.token);
-    expect(response.status).toBe(200);
-    expect(groupEventDetailResponseSchema.parse(await response.json()).event.eventAppAccess).toBe(false);
-  });
-
   it("enforces scope ceilings in audience SQL and preserves explicit service authority", async () => {
     const { reader, eventSlug } = await fixture();
     const admin: UserBackedAuthAdmin = {

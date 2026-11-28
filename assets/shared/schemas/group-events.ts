@@ -88,7 +88,7 @@ export const groupEventSchema = eventResourceCoreSchema.extend({
   proposalAccess: proposalAccessSchema.nullable().default(null),
   /**
    * Event detail only, like `proposalCall`: whether this caller can open the event's attendee app. The app admits
-   * the event's audience, which group access alone does not grant, and a meeting series has no app.
+   * the event's audience, which group access alone does not grant.
    */
   eventAppAccess: z.boolean().optional(),
 });

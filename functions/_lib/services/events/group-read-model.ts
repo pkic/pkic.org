@@ -250,8 +250,8 @@ export function prepareGroupEventRead(db: DatabaseLike, viewer: GroupResourceVie
      )
      ${EVENT_SELECT}, MAX(accessible.member_access) AS member_access,
        MAX(accessible.manager_access) AS manager_access, MAX(accessible.team_access) AS team_access,
-       -- The event app reads the event through this same audience; the Events list leaves series out of it.
-       CASE WHEN series.id IS NULL AND ${audience.sql} THEN 1 ELSE 0 END AS event_app_access
+       -- The event app admits exactly this audience, so the workspace offers it only to them.
+       CASE WHEN ${audience.sql} THEN 1 ELSE 0 END AS event_app_access
        FROM event_access accessible
        JOIN events event ON event.id = accessible.resource_id
        LEFT JOIN event_series series ON series.event_id = event.id
