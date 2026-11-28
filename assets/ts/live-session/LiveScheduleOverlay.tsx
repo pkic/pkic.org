@@ -94,18 +94,25 @@ function useSpeakerTurn(count: number, listed: boolean): number | null {
 
 /**
  * Whether one room's speakers show as a list: when the scene asks for one and
- * the list fits, measured once for each box, background and cast; a list that
+ * the list fits, measured once for each box, background and cast. A list that
  * runs past the foot of the card or of the room holding it takes turns
- * instead, so no face or name is cut.
+ * instead, so no face or name is cut; so does one that, off a background,
+ * makes the graphic taller than its box allows at its width, since the box
+ * would then shrink all of its type to fit.
  */
-function useSpeakerListFits(wanted: boolean, cast: string) {
+function useSpeakerListFits(wanted: boolean, cast: string, box: LiveBoardBox, onGround: boolean) {
   const ref = useRef<HTMLElement>(null);
   const [overflowed, setOverflowed] = useState<string | null>(null);
   const fits = wanted && overflowed !== cast;
   useLayoutEffect(() => {
-    const clips = ref.current?.querySelectorAll<HTMLElement>(".pk-live-schedule__card, .pk-live-schedule__room") ?? [];
-    if (fits && [...clips].some((box) => box.scrollHeight > box.clientHeight + 1)) setOverflowed(cast);
-  }, [fits, cast]);
+    const graphic = ref.current;
+    if (!fits || !graphic) return;
+    const clips = graphic.querySelectorAll<HTMLElement>(".pk-live-schedule__card, .pk-live-schedule__room");
+    const cut = [...clips].some((clip) => clip.scrollHeight > clip.clientHeight + 1);
+    // Off a background the box scales the whole graphic; at its width's scale the graphic fits this height.
+    const tall = !onGround && graphic.offsetHeight > (box.height * graphic.offsetWidth) / box.width + 1;
+    if (cut || tall) setOverflowed(cast);
+  }, [fits, cast, box.width, box.height, onGround]);
   return { ref, fits };
 }
 
@@ -229,7 +236,9 @@ export function LiveScheduleOverlay({
   });
   const listed = useSpeakerListFits(
     speakersLook === "list" && rooms.length === 1,
-    `${box.width}x${box.height}:${onGround ? "ground" : "card"}:${rooms[0]?.title}:${rooms[0]?.speakers.map((speaker) => speaker.name).join("|")}`,
+    `${box.width}x${box.height}:${inset.inline}x${inset.block}:${onGround ? "ground" : "card"}:${rooms[0]?.title}:${rooms[0]?.speakers.map((speaker) => speaker.name).join("|")}`,
+    box,
+    onGround,
   );
   if (!schedule || !rooms.length) return null;
   const zone = schedule.timeZone;

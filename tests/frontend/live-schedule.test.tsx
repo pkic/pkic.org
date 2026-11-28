@@ -230,6 +230,27 @@ it("names the speakers in turn when the room holding the list cuts it short", as
     clipped.mockRestore();
   }
 });
+it("names the speakers in turn when, off a background, the list would make the box shrink the graphic", async () => {
+  const schedule = frame();
+  schedule.rooms = [{ ...schedule.rooms[0]!, speakers: [speaker("Ana Example"), speaker("Fay Moderator", true)] }];
+  // Set 1680 wide in a 1680 × 945 box, the graphic keeps its size up to 945 high.
+  const wide = vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(1680);
+  const high = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(1200);
+  try {
+    host = document.body.appendChild(document.createElement("div"));
+    await act(() => render(<LiveScheduleOverlay schedule={schedule} animate />, host!));
+    expect(host.querySelector(".pk-live-schedule__list")).toBeNull();
+    expect(host.querySelector("[data-turning]")).not.toBeNull();
+    high.mockReturnValue(900);
+    await act(() =>
+      render(<LiveScheduleOverlay schedule={schedule} box={{ width: 1680, height: 946 }} animate />, host!),
+    );
+    expect(host.querySelector(".pk-live-schedule__list")).not.toBeNull();
+  } finally {
+    wide.mockRestore();
+    high.mockRestore();
+  }
+});
 it("names every speaker in turn past the six faces, the count standing in for the others' faces", async () => {
   vi.useFakeTimers();
   try {
