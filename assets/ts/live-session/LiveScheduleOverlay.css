@@ -289,6 +289,47 @@
   .pk-live-schedule__speakers[data-turning] .pk-live-schedule__face[data-active]::before {
     opacity: 1;
   }
+  /* A speaker past the faces shown is named in turn too, the count of the others standing in for their face. */
+  .pk-live-schedule__speakers[data-turning] .pk-live-schedule__more[data-active] {
+    color: var(--graphic-ink);
+    font-weight: 700;
+  }
+  /*
+   * Listed, each speaker has a row: their face, then their name over their
+   * part and organization, in a lighter weight than the session's title. The
+   * list keeps a little room on every side, so the room's edge never cuts a
+   * face's ring.
+   */
+  .pk-live-schedule__list {
+    display: flex;
+    grid-area: speakers;
+    flex-direction: column;
+    gap: 14px;
+    min-inline-size: 0;
+    margin: 12px 0 0;
+    padding: 4px;
+    list-style: none;
+  }
+  .pk-live-schedule__listed {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    min-inline-size: 0;
+  }
+  .pk-live-schedule__listed .pk-avatar {
+    flex: none;
+    inline-size: 60px;
+    block-size: 60px;
+    box-shadow: 0 0 0 3px var(--graphic-ink);
+  }
+  .pk-live-schedule__listed-text {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+  .pk-live-schedule__listed .pk-live-schedule__turn-name {
+    font-weight: 500;
+  }
   /* Every name holds the same place, so the graphic never moves; a name too long for it ends in an ellipsis. */
   .pk-live-schedule__turns {
     display: grid;
@@ -536,6 +577,24 @@
   }
   .pk-live-schedule[data-on-ground][data-rooms="one"] .pk-live-schedule__turn-detail {
     font-size: var(--pk-live-card-type);
+  }
+  .pk-live-schedule[data-on-ground] .pk-live-schedule__list {
+    gap: 12px;
+  }
+  .pk-live-schedule[data-on-ground] .pk-live-schedule__listed {
+    gap: 16px;
+  }
+  .pk-live-schedule[data-on-ground] .pk-live-schedule__listed .pk-avatar {
+    inline-size: 56px;
+    block-size: 56px;
+    box-shadow: 0 0 0 2px var(--graphic-ink);
+  }
+  .pk-live-schedule[data-on-ground] .pk-live-schedule__listed .pk-live-schedule__turn-name {
+    font-size: var(--pk-live-card-type);
+    line-height: 1.2;
+  }
+  .pk-live-schedule[data-on-ground] .pk-live-schedule__listed .pk-live-schedule__turn-detail {
+    font-size: var(--pk-live-card-note-type);
   }
   @media (prefers-reduced-motion: reduce) {
     :root:not(:has([data-live-broadcast-source])) .pk-live-schedule__room,

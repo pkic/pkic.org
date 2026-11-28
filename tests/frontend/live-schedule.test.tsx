@@ -160,21 +160,135 @@ const speaker = (name: string, moderator = false, organization: string | null = 
   photoUrl: null,
   organization,
 });
-it("names one speaker under the title on one line, and two take turns", async () => {
+it("lists one room's speakers, each with their face, and names them in turn when the scene asks", async () => {
+  const schedule = frame();
+  const pair = [speaker("Ana Example", false, "Example Org"), speaker("Fay Moderator", true)];
+  schedule.rooms = [{ ...schedule.rooms[0]!, speakers: pair }];
+  host = document.body.appendChild(document.createElement("div"));
+  await act(() => render(<LiveScheduleOverlay schedule={schedule} animate />, host!));
+  const room = host.querySelector(".pk-live-schedule__room")!;
+  const listed = [...room.querySelectorAll(".pk-live-schedule__listed")].map((row) => [
+    row.querySelector(".pk-avatar") !== null,
+    row.querySelector(".pk-live-schedule__turn-name")?.textContent,
+    row.querySelector(".pk-live-schedule__turn-detail")?.textContent ?? null,
+  ]);
+  expect(listed).toEqual([
+    [true, "Ana Example", "Example Org"],
+    [true, "Fay Moderator", "Moderator"],
+  ]);
+  expect(room.querySelector("[data-turning]")).toBeNull();
+  await act(() => render(<LiveScheduleOverlay schedule={schedule} speakersLook="turns" animate />, host!));
+  expect(room.querySelector(".pk-live-schedule__list")).toBeNull();
+  expect(room.querySelector("[data-turning]")).not.toBeNull();
+  expect(room.querySelector(".pk-live-schedule__turn[data-active]")?.textContent).toBe("Ana ExampleExample Org");
+});
+it("names one speaker on one line under the title when they take turns", async () => {
   expect(liveScheduleSpeakerLine([speaker("Pat Panelist")])).toBe("Pat Panelist");
   const schedule = frame();
   schedule.rooms = [{ ...schedule.rooms[0]!, speakers: [speaker("Pat Panelist")] }];
   host = document.body.appendChild(document.createElement("div"));
-  await act(() => render(<LiveScheduleOverlay schedule={schedule} animate />, host!));
+  await act(() => render(<LiveScheduleOverlay schedule={schedule} speakersLook="turns" animate />, host!));
   const room = host.querySelector(".pk-live-schedule__room")!;
   expect(room.querySelector(".pk-live-schedule__title + .pk-live-schedule__speakers")).not.toBeNull();
   expect(room.querySelector(".pk-live-schedule__names")?.textContent).toBe("Pat Panelist");
   expect(room.querySelector("[data-turning]")).toBeNull();
+});
+const overflowing = (selector: string) =>
+  vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockImplementation(function (this: HTMLElement) {
+    return this.matches(selector) ? 400 : 0;
+  });
+it("names the speakers in turn when a list runs past the card's foot, and lists them again when it fits", async () => {
+  const schedule = frame();
   schedule.rooms = [{ ...schedule.rooms[0]!, speakers: [speaker("Ana Example"), speaker("Fay Moderator", true)] }];
-  await act(() => render(<LiveScheduleOverlay schedule={{ ...schedule }} animate />, host!));
-  expect(room.querySelector("[data-turning]")).not.toBeNull();
-  expect(room.querySelector(".pk-live-schedule__names")).toBeNull();
-  expect(room.querySelector(".pk-live-schedule__turn[data-active]")?.textContent).toBe("Ana Example");
+  host = document.body.appendChild(document.createElement("div"));
+  await act(() => render(<LiveScheduleOverlay schedule={schedule} animate />, host!));
+  expect(host.querySelector(".pk-live-schedule__list")).not.toBeNull();
+  // A background sets the card at its box's size: the same cast in the same box no longer fits.
+  const tall = overflowing(".pk-live-schedule__card");
+  try {
+    await act(() => render(<LiveScheduleOverlay schedule={schedule} onGround animate />, host!));
+    expect(host.querySelector(".pk-live-schedule__list")).toBeNull();
+    expect(host.querySelector("[data-turning]")).not.toBeNull();
+  } finally {
+    tall.mockRestore();
+  }
+  await act(() => render(<LiveScheduleOverlay schedule={schedule} animate />, host!));
+  expect(host.querySelector(".pk-live-schedule__list")).not.toBeNull();
+});
+it("names the speakers in turn when the room holding the list cuts it short", async () => {
+  const schedule = frame();
+  schedule.rooms = [{ ...schedule.rooms[0]!, speakers: [speaker("Ana Example"), speaker("Fay Moderator", true)] }];
+  const clipped = overflowing(".pk-live-schedule__room");
+  try {
+    host = document.body.appendChild(document.createElement("div"));
+    await act(() =>
+      render(<LiveScheduleOverlay schedule={schedule} box={{ width: 560, height: 315 }} animate />, host!),
+    );
+    expect(host.querySelector(".pk-live-schedule__list")).toBeNull();
+    expect(host.querySelector("[data-turning]")).not.toBeNull();
+  } finally {
+    clipped.mockRestore();
+  }
+});
+it("measures the list again when a box on a background moves to the frame's edge", async () => {
+  const schedule = frame();
+  schedule.rooms = [{ ...schedule.rooms[0]!, speakers: [speaker("Ana Example"), speaker("Fay Moderator", true)] }];
+  const inside = { x: 200, y: 200, width: 560, height: 500 };
+  const edge = { ...inside, x: 0, y: 0 };
+  host = document.body.appendChild(document.createElement("div"));
+  await act(() => render(<LiveScheduleOverlay schedule={schedule} box={inside} onGround animate />, host!));
+  expect(host.querySelector(".pk-live-schedule__list")).not.toBeNull();
+  // At the edge the frame's safe area widens the inset, so the same list no longer fits the card.
+  const cut = overflowing(".pk-live-schedule__card");
+  try {
+    await act(() => render(<LiveScheduleOverlay schedule={schedule} box={edge} onGround animate />, host!));
+    expect(host.querySelector(".pk-live-schedule__list")).toBeNull();
+    expect(host.querySelector("[data-turning]")).not.toBeNull();
+  } finally {
+    cut.mockRestore();
+  }
+});
+it("names the speakers in turn when, off a background, the list would make the box shrink the graphic", async () => {
+  const schedule = frame();
+  schedule.rooms = [{ ...schedule.rooms[0]!, speakers: [speaker("Ana Example"), speaker("Fay Moderator", true)] }];
+  // Set 1680 wide in a 1680 × 945 box, the graphic keeps its size up to 945 high.
+  const wide = vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(1680);
+  const high = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(1200);
+  try {
+    host = document.body.appendChild(document.createElement("div"));
+    await act(() => render(<LiveScheduleOverlay schedule={schedule} animate />, host!));
+    expect(host.querySelector(".pk-live-schedule__list")).toBeNull();
+    expect(host.querySelector("[data-turning]")).not.toBeNull();
+    high.mockReturnValue(900);
+    await act(() =>
+      render(<LiveScheduleOverlay schedule={schedule} box={{ width: 1680, height: 946 }} animate />, host!),
+    );
+    expect(host.querySelector(".pk-live-schedule__list")).not.toBeNull();
+  } finally {
+    wide.mockRestore();
+    high.mockRestore();
+  }
+});
+it("names every speaker in turn past the six faces, the count standing in for the others' faces", async () => {
+  vi.useFakeTimers();
+  try {
+    const panel = ["A", "B", "C", "D", "E", "F", "G"].map((initial) => speaker(`${initial} Example`));
+    const schedule = frame();
+    schedule.rooms = [{ ...schedule.rooms[0]!, speakers: panel }];
+    host = document.body.appendChild(document.createElement("div"));
+    await act(() => render(<LiveScheduleOverlay schedule={schedule} speakersLook="turns" animate />, host!));
+    const room = host.querySelector(".pk-live-schedule__room")!;
+    expect(room.querySelectorAll(".pk-live-schedule__face")).toHaveLength(6);
+    for (let turn = 1; turn < 7; turn++)
+      await act(() => {
+        vi.advanceTimersByTime(LIVE_SCHEDULE_SPEAKER_TURN_MS);
+      });
+    expect(room.querySelector(".pk-live-schedule__turn[data-active]")?.textContent).toBe("G Example");
+    expect(room.querySelector(".pk-live-schedule__face[data-active]")).toBeNull();
+    expect(room.querySelector(".pk-live-schedule__more")?.hasAttribute("data-active")).toBe(true);
+  } finally {
+    vi.useRealTimers();
+  }
 });
 it("names a larger panel one speaker at a time, with their organization, even without motion", async () => {
   vi.useFakeTimers();
@@ -184,7 +298,7 @@ it("names a larger panel one speaker at a time, with their organization, even wi
     const schedule = frame();
     schedule.rooms = [{ ...schedule.rooms[0]!, speakers: panel }];
     host = document.body.appendChild(document.createElement("div"));
-    await act(() => render(<LiveScheduleOverlay schedule={schedule} animate={false} />, host!));
+    await act(() => render(<LiveScheduleOverlay schedule={schedule} speakersLook="turns" animate={false} />, host!));
     const room = host.querySelector(".pk-live-schedule__room")!;
     expect(room.querySelectorAll(".pk-live-schedule__face")).toHaveLength(6);
     expect(room.querySelector(".pk-live-schedule__more")).toBeNull();

@@ -279,6 +279,7 @@ const PROGRAM_LAYERS: ReadonlyMap<LiveProgramLayer, Layer> = new Map(
               schedule={state.stage.schedule}
               box={overlayBoxPixels(placement)}
               onGround={onGround}
+              speakersLook={placement.speakersLook ?? "list"}
               animate={animate}
             />
           ) : null,

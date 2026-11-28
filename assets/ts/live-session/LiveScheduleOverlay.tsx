@@ -1,6 +1,7 @@
 import { Fragment } from "preact";
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { LiveScheduleProjection, LiveScheduleRoom } from "../../shared/schemas/live-session-schedule";
+import type { LiveScheduleSpeakerLook } from "../../shared/schemas/live-overlay-layout";
 import { formatClockInZone, formatClockName } from "../../shared/format-date";
 import { formatNumber } from "../../shared/format-number";
 import type { OverlayRect } from "../../shared/live-overlay-geometry";
@@ -79,8 +80,8 @@ function useSpotlight(count: number, animate: boolean): number | null {
  * always take turns: the graphic is made for the stream, where no viewer's
  * motion preference applies.
  */
-function useSpeakerTurn(count: number): number | null {
-  const turning = count > LIVE_SCHEDULE_NAMES_SHOWN;
+function useSpeakerTurn(count: number, listed: boolean): number | null {
+  const turning = !listed && count > LIVE_SCHEDULE_NAMES_SHOWN;
   const [index, setIndex] = useState(0);
   useEffect(() => {
     setIndex(0);
@@ -88,7 +89,31 @@ function useSpeakerTurn(count: number): number | null {
     const step = setInterval(() => setIndex((current) => current + 1), LIVE_SCHEDULE_SPEAKER_TURN_MS);
     return () => clearInterval(step);
   }, [turning, count]);
-  return turning ? index % Math.min(count, FACES_SHOWN) : null;
+  return turning ? index % count : null;
+}
+
+/**
+ * Whether one room's speakers show as a list: when the scene asks for one and
+ * the list fits, measured once for each box, background and cast. A list that
+ * runs past the foot of the card or of the room holding it takes turns
+ * instead, so no face or name is cut; so does one that, off a background,
+ * makes the graphic taller than its box allows at its width, since the box
+ * would then shrink all of its type to fit.
+ */
+function useSpeakerListFits(wanted: boolean, cast: string, box: LiveBoardBox, onGround: boolean) {
+  const ref = useRef<HTMLElement>(null);
+  const [overflowed, setOverflowed] = useState<string | null>(null);
+  const fits = wanted && overflowed !== cast;
+  useLayoutEffect(() => {
+    const graphic = ref.current;
+    if (!fits || !graphic) return;
+    const clips = graphic.querySelectorAll<HTMLElement>(".pk-live-schedule__card, .pk-live-schedule__room");
+    const cut = [...clips].some((clip) => clip.scrollHeight > clip.clientHeight + 1);
+    // Off a background the box scales the whole graphic; at its width's scale the graphic fits this height.
+    const tall = !onGround && graphic.offsetHeight > (box.height * graphic.offsetWidth) / box.width + 1;
+    if (cut || tall) setOverflowed(cast);
+  }, [fits, cast, box.width, box.height, onGround]);
+  return { ref, fits };
 }
 
 /** The second line of a speaker named in turn: their part on the panel and their organization. */
@@ -96,14 +121,35 @@ function speakerDetail(speaker: LiveScheduleRoom["speakers"][number]): string {
   return [speaker.moderator ? "Moderator" : null, speaker.organization].filter(Boolean).join(" · ");
 }
 
+/** Every speaker on a row of their own: their face, then their name over their part and organization. */
+function SpeakerList({ speakers }: { speakers: LiveScheduleRoom["speakers"] }) {
+  return (
+    <ul class="pk-live-schedule__list">
+      {speakers.map((speaker, index) => (
+        <li key={`${index}:${speaker.name}`} class="pk-live-schedule__listed">
+          <Avatar name={speaker.name} src={speaker.photoUrl ?? undefined} size="lg" decoding="async" />
+          <span class="pk-live-schedule__listed-text">
+            <span class="pk-live-schedule__turn-name">{speaker.name}</span>
+            {speakerDetail(speaker) ? (
+              <span class="pk-live-schedule__turn-detail">{speakerDetail(speaker)}</span>
+            ) : null}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /**
- * Who speaks, under the session's title: their faces overlapping, then their
- * name; two or more are named one at a time, their face brought forward, and
- * every name holds the same place so the graphic keeps its size.
+ * Who speaks, under the session's title. Listed, each on a row with their
+ * face. Otherwise their faces overlapping, then their name; two or more are
+ * named one at a time, their face brought forward, and every name holds the
+ * same place so the graphic keeps its size.
  */
-function Speakers({ speakers }: { speakers: LiveScheduleRoom["speakers"] }) {
-  const turn = useSpeakerTurn(speakers.length);
+function Speakers({ speakers, listed }: { speakers: LiveScheduleRoom["speakers"]; listed: boolean }) {
+  const turn = useSpeakerTurn(speakers.length, listed);
   if (!speakers.length) return null;
+  if (listed) return <SpeakerList speakers={speakers} />;
   const shown = speakers.slice(0, FACES_SHOWN);
   const more = speakers.length - FACES_SHOWN;
   return (
@@ -118,13 +164,17 @@ function Speakers({ speakers }: { speakers: LiveScheduleRoom["speakers"] }) {
             <Avatar name={speaker.name} src={speaker.photoUrl ?? undefined} size="lg" decoding="async" />
           </li>
         ))}
-        {more > 0 ? <li class="pk-live-schedule__more">+{formatNumber(more)}</li> : null}
+        {more > 0 ? (
+          <li class="pk-live-schedule__more" data-active={turn !== null && turn >= FACES_SHOWN ? "" : undefined}>
+            +{formatNumber(more)}
+          </li>
+        ) : null}
       </ul>
       {turn === null ? (
         <p class="pk-live-schedule__names">{liveScheduleSpeakerLine(speakers)}</p>
       ) : (
         <ul class="pk-live-schedule__turns">
-          {shown.map((speaker, index) => (
+          {speakers.map((speaker, index) => (
             <li
               key={`${index}:${speaker.name}`}
               class="pk-live-schedule__turn"
@@ -159,6 +209,7 @@ export function LiveScheduleOverlay({
   schedule,
   box = { width: 1680, height: 945 },
   onGround = false,
+  speakersLook = "list",
   animate,
 }: {
   schedule: LiveScheduleProjection | null;
@@ -169,6 +220,8 @@ export function LiveScheduleOverlay({
    * the panel's edges by a board's inset and headed by a board's eyebrow, so it reads as one of the boards.
    */
   onGround?: boolean;
+  /** How one room's speakers show: a list, or one name at a time. More than one room always takes turns. */
+  speakersLook?: LiveScheduleSpeakerLook;
   /** Whether the rooms may move: always on air, and on a monitor unless its viewer prefers reduced motion. */
   animate: boolean;
 }) {
@@ -181,11 +234,18 @@ export function LiveScheduleOverlay({
     "--schedule-inset-inline": inset.inline,
     "--schedule-inset-block": inset.block,
   });
+  const listed = useSpeakerListFits(
+    speakersLook === "list" && rooms.length === 1,
+    `${box.width}x${box.height}:${inset.inline}x${inset.block}:${onGround ? "ground" : "card"}:${rooms[0]?.title}:${rooms[0]?.speakers.map((speaker) => speaker.name).join("|")}`,
+    box,
+    onGround,
+  );
   if (!schedule || !rooms.length) return null;
   const zone = schedule.timeZone;
   const fit = liveScheduleFit(box);
   return (
     <section
+      ref={listed.ref}
       class="pk-live-schedule"
       data-graphic-theme={schedule.config.theme}
       data-arrangement={onGround ? "rows" : liveScheduleArrangement(schedule.config.layout, fit, rooms.length)}
@@ -228,7 +288,7 @@ export function LiveScheduleOverlay({
                   <SectionHeading level={3} class="pk-live-schedule__title">
                     {room.title}
                   </SectionHeading>
-                  <Speakers speakers={room.speakers} />
+                  <Speakers speakers={room.speakers} listed={listed.fits} />
                 </li>
               </Fragment>
             );

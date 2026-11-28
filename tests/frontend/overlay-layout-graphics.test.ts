@@ -165,10 +165,28 @@ describe("a graphic's menu", () => {
     expect(graphicActions(elements, "lowerThird", false, handlers).some((item) => item.id === "text-size")).toBe(false);
   });
 
+  it("offers Up next's speakers as a list or one at a time, the list checked until the other is picked", () => {
+    const looks = (speakersLook?: "turns") =>
+      graphicActions(
+        { ...elements, schedule: { ...elements.schedule, speakersLook } },
+        "schedule",
+        false,
+        handlers,
+      ).filter((item) => item.id.startsWith("look-"));
+    expect(looks().map((item) => [item.id, item.checked])).toEqual([
+      ["look-list", true],
+      ["look-turns", false],
+    ]);
+    expect(looks("turns").find((item) => item.checked)?.id).toBe("look-turns");
+    looks("turns").find((item) => item.id === "look-list")!.onSelect!();
+    expect(handlers.onLook).toHaveBeenLastCalledWith({ speakersLook: undefined });
+  });
+
   it("files each look under its own graphic", () => {
     expect(graphicLookElement({ qrLook: "card" })).toBe("qrCode");
     expect(graphicLookElement({ timerLook: undefined })).toBe("timer");
     expect(graphicLookElement({ fieldTheme: "event" })).toBe("background");
+    expect(graphicLookElement({ speakersLook: "turns" })).toBe("schedule");
   });
 });
 
