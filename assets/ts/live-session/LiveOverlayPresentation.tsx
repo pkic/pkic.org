@@ -246,6 +246,12 @@ function prefersReducedMotion(): boolean {
  * a board hides; that order reaches each layer as its `order`, never as its
  * place in the document, so a scene change leaves every graphic's node alone.
  */
+/** A board's box on the frame, with the scene's text size for it. */
+const boardBox = (placement: LiveOverlayElementPlacement) => ({
+  ...overlayBoxPixels(placement),
+  textSize: placement.textSize,
+});
+
 const PROGRAM_LAYERS: ReadonlyMap<LiveProgramLayer, Layer> = new Map(
   (
     [
@@ -260,13 +266,9 @@ const PROGRAM_LAYERS: ReadonlyMap<LiveProgramLayer, Layer> = new Map(
         element: "panelists",
         draw: (state, { placement, panel }) =>
           panel ? (
-            <LivePanelQuestionOverlay stage={state.stage} session={state.session} box={overlayBoxPixels(panel)} />
+            <LivePanelQuestionOverlay stage={state.stage} session={state.session} box={boardBox(panel)} />
           ) : state.stage.panelists ? (
-            <LivePanelistsOverlay
-              session={state.session}
-              panelists={state.stage.panelists}
-              box={overlayBoxPixels(placement)}
-            />
+            <LivePanelistsOverlay session={state.session} panelists={state.stage.panelists} box={boardBox(placement)} />
           ) : null,
       },
       {
@@ -289,11 +291,7 @@ const PROGRAM_LAYERS: ReadonlyMap<LiveProgramLayer, Layer> = new Map(
         element: "question",
         draw: (state, { placement, panel }) =>
           state.stage.question && !panel ? (
-            <LiveQuestionOverlay
-              stage={state.stage}
-              credits={state.session.credits}
-              box={overlayBoxPixels(placement)}
-            />
+            <LiveQuestionOverlay stage={state.stage} credits={state.session.credits} box={boardBox(placement)} />
           ) : null,
       },
       {
@@ -309,21 +307,21 @@ const PROGRAM_LAYERS: ReadonlyMap<LiveProgramLayer, Layer> = new Map(
         element: "poll",
         draw: (state, { placement }) =>
           state.stage.poll ? (
-            <LivePollOverlay stage={state.stage} polls={state.polls} box={overlayBoxPixels(placement)} />
+            <LivePollOverlay stage={state.stage} polls={state.polls} box={boardBox(placement)} />
           ) : null,
       },
       {
         element: "topQuestions",
         draw: (state, { placement }) =>
           state.stage.topQuestions?.questions.length ? (
-            <LiveTopQuestionsOverlay list={state.stage.topQuestions} box={overlayBoxPixels(placement)} />
+            <LiveTopQuestionsOverlay list={state.stage.topQuestions} box={boardBox(placement)} />
           ) : null,
       },
       {
         element: "chat",
         draw: (state, { placement }) =>
           state.stage.chatFeed?.messages.length ? (
-            <LiveChatFeedOverlay list={state.stage.chatFeed} box={overlayBoxPixels(placement)} />
+            <LiveChatFeedOverlay list={state.stage.chatFeed} box={boardBox(placement)} />
           ) : null,
       },
       {

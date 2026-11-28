@@ -114,6 +114,9 @@ it("sits two speakers or a full panel in one row across a wide board and lists t
   const column = liveBoardSize({ width: 560, height: 520 }).shape;
   const strip = liveBoardSize({ width: 1728, height: 512 });
   expect([wide, column, strip.shape]).toEqual(["wide", "tall", "strip"]);
+  // A larger text size lays the same box out smaller, in the same shape, so it scales up into the box.
+  const larger = liveBoardSize({ ...BOX, textSize: 1.5 });
+  expect(larger).toEqual({ width: Math.round(BOX.width / 1.5), height: Math.round(BOX.height / 1.5), shape: "wide" });
   // A thin band is set at least the minimum height, so a heading and a row of people still fit.
   expect(strip).toMatchObject({ width: 2160, height: 640 });
   expect(livePanelistsArrangement("panel", "strip", 6)).toBe("row");

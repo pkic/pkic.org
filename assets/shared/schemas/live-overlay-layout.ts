@@ -237,6 +237,17 @@ function withoutRetiredPlacementFields(value: unknown): unknown {
 export const LIVE_QR_LOOKS = ["card", "black-on-white", "white-on-black", "black-on-clear"] as const;
 export type LiveQrLook = (typeof LIVE_QR_LOOKS)[number];
 
+/** The boards whose text a scene can set larger or smaller than their box gives them (`textSize`). */
+export const LIVE_TEXT_SIZE_ELEMENTS: ReadonlySet<LiveOverlayElement> = new Set([
+  "question",
+  "poll",
+  "panelists",
+  "topQuestions",
+  "chat",
+]);
+/** How far a scene can set a board's text from the size its box gives it. */
+export const LIVE_TEXT_SIZE_RANGE = { min: 0.5, max: 2 } as const;
+
 export const liveOverlayElementPlacementSchema = insideFrame(
   z
     .object({
@@ -272,6 +283,11 @@ export const liveOverlayElementPlacementSchema = insideFrame(
        * poll comes over it; absent, it shows whenever the scene is on. Only the background reads it.
        */
       withBoardOnly: z.boolean().optional(),
+      /**
+       * The board's text in this scene, as a share of the size it takes from its box (1); absent, that size. Only the
+       * boards in `LIVE_TEXT_SIZE_ELEMENTS` read it: a larger size sets the same board in larger type, with less room.
+       */
+      textSize: z.number().min(LIVE_TEXT_SIZE_RANGE.min).max(LIVE_TEXT_SIZE_RANGE.max).optional(),
       ...boxShape,
     })
     .strict(),

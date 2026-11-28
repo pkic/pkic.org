@@ -11,6 +11,7 @@ import { LIVE_TIMER_PRESENTATIONS } from "../../assets/shared/schemas/live-sessi
 import { describeGraphicSwitch } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-copy";
 import {
   graphicActions,
+  graphicLookChange,
   graphicLookElement,
 } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-graphic-actions";
 import { describeGraphicPosition } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-graphics";
@@ -145,6 +146,25 @@ describe("a graphic's menu", () => {
     expect(graphicLookElement({ withBoardOnly: true })).toBe("background");
   });
 
+  it("offers a board's text size at Standard until the scene picks one, and Standard follows the box again", () => {
+    const sizes = (textSize?: number) =>
+      graphicActions({ ...elements, question: { ...elements.question, textSize } }, "question", false, handlers).find(
+        (item) => item.id === "text-size",
+      )!;
+    expect(sizes().description).toBe("Standard");
+    expect(sizes().children!.map((item) => item.label)).toEqual(["80%", "90%", "Standard", "115%", "130%", "150%"]);
+    expect(sizes(1.3).description).toBe("130%");
+    expect(sizes(1.3).children!.find((item) => item.checked)!.label).toBe("130%");
+    sizes().children!.find((item) => item.label === "150%")!.onSelect!();
+    expect(handlers.onLook).toHaveBeenLastCalledWith({ element: "question", textSize: 1.5 });
+    sizes(1.5).children!.find((item) => item.label === "Standard")!.onSelect!();
+    expect(handlers.onLook).toHaveBeenLastCalledWith({ element: "question", textSize: undefined });
+    expect(graphicLookElement({ element: "poll", textSize: 1.15 })).toBe("poll");
+    expect(graphicLookChange({ element: "poll", textSize: 1.15 })).toEqual({ textSize: 1.15 });
+    // Graphics that are not boards size their text with their box alone.
+    expect(graphicActions(elements, "lowerThird", false, handlers).some((item) => item.id === "text-size")).toBe(false);
+  });
+
   it("files each look under its own graphic", () => {
     expect(graphicLookElement({ qrLook: "card" })).toBe("qrCode");
     expect(graphicLookElement({ timerLook: undefined })).toBe("timer");
@@ -182,6 +202,8 @@ describe("what a scene saves for a shared graphic", () => {
     const elements = LIVE_OVERLAY_PRESET_LAYOUTS.default.elements;
     const shared = { ...elements, timer: { ...elements.timer, shared: true } };
     expect(layoutElementsChanged(shared, { ...shared, timer: { ...shared.timer, timerLook: "ring" } })).toBe(true);
+    const board = { ...elements, poll: { ...elements.poll, shared: true } };
+    expect(layoutElementsChanged(board, { ...board, poll: { ...board.poll, textSize: 1.3 } })).toBe(true);
     expect(layoutElementsChanged(shared, { ...shared, timer: { ...shared.timer, x: shared.timer.x + 0.1 } })).toBe(
       false,
     );

@@ -31,7 +31,10 @@ export function liveBoardSize(box: Pick<OverlayRect, "width" | "height">): {
   shape: LiveBoardShape;
 } {
   const aspect = box.width > 0 && box.height > 0 ? box.width / box.height : 16 / 9;
-  const width = Math.round(Math.max(box.width, LIVE_BOARD_MIN_WIDTH, LIVE_BOARD_MIN_HEIGHT * aspect));
+  // A larger text size lays the board out smaller, so it is scaled up more into the same box.
+  const width = Math.round(
+    Math.max(box.width, LIVE_BOARD_MIN_WIDTH, LIVE_BOARD_MIN_HEIGHT * aspect) / (box.textSize ?? 1),
+  );
   return {
     width,
     height: Math.round(width / aspect),
@@ -40,7 +43,11 @@ export function liveBoardSize(box: Pick<OverlayRect, "width" | "height">): {
 }
 
 /** A board's box: its size, and where it sits on the frame when the caller knows. */
-export type LiveBoardBox = Pick<OverlayRect, "width" | "height"> & Partial<Pick<OverlayRect, "x" | "y">>;
+export type LiveBoardBox = Pick<OverlayRect, "width" | "height"> &
+  Partial<Pick<OverlayRect, "x" | "y">> & {
+    /** The scene's text size for the board (`textSize`); absent, the size the box gives it. */
+    textSize?: number;
+  };
 
 /** The frame's graphics-safe margins, in pixels of the frame: from the top and bottom, and from the sides. */
 const FRAME_SAFE = { block: 64, inline: 96 };

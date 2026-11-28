@@ -12,6 +12,7 @@ import {
 import { isLiveProgramLayer, type LiveProgramLayer } from "../../../../../../../../shared/live-overlay-stacking";
 import {
   LIVE_OVERLAY_ELEMENT_LABELS,
+  LIVE_TEXT_SIZE_ELEMENTS,
   type LiveOverlayElement,
   type LiveOverlayElementPlacement,
   type LiveOverlayLayoutElements,
@@ -23,16 +24,54 @@ import {
 } from "../../../../../../../../shared/schemas/live-session-timer";
 import type { MenuItem } from "../../../../../../../ui/Menu";
 
-/** A graphic's look in one scene: the QR code's, every timer's or the background's; undefined puts back the default. */
+/**
+ * A graphic's look in one scene: the QR code's, every timer's, the background's, or a board's text size;
+ * undefined puts back the default.
+ */
 export type GraphicLook =
   | Pick<LiveOverlayElementPlacement, "qrLook">
   | Pick<LiveOverlayElementPlacement, "timerLook">
   | Pick<LiveOverlayElementPlacement, "fieldTheme">
-  | Pick<LiveOverlayElementPlacement, "withBoardOnly">;
+  | Pick<LiveOverlayElementPlacement, "withBoardOnly">
+  | ({ element: LiveOverlayElement } & Pick<LiveOverlayElementPlacement, "textSize">);
 
 /** The graphic each look belongs to. */
 export const graphicLookElement = (look: GraphicLook): LiveOverlayElement =>
-  "qrLook" in look ? "qrCode" : "timerLook" in look ? "timer" : "background";
+  "element" in look ? look.element : "qrLook" in look ? "qrCode" : "timerLook" in look ? "timer" : "background";
+
+/** What a look changes on its graphic's placement. */
+export const graphicLookChange = (look: GraphicLook): Partial<LiveOverlayElementPlacement> =>
+  "element" in look ? { textSize: look.textSize } : look;
+
+/** A board's text sizes: the size its box gives it, or a share of it. */
+const TEXT_SIZES = [0.8, 0.9, 1, 1.15, 1.3, 1.5] as const;
+const textSizeLabel = (size: number) => (size === 1 ? "Standard" : `${Math.round(size * 100)}%`);
+
+/** A board's text size in this scene, from its menu; Standard follows its box. */
+function textSizeActions(
+  elements: LiveOverlayLayoutElements,
+  element: LiveProgramLayer,
+  disabled: boolean,
+  { onLook }: GraphicActionHandlers,
+): MenuItem[] {
+  if (!LIVE_TEXT_SIZE_ELEMENTS.has(element)) return [];
+  const current = elements[element].textSize ?? 1;
+  return [
+    {
+      id: "text-size",
+      label: "Text size",
+      description: textSizeLabel(current),
+      children: TEXT_SIZES.map((size) => ({
+        id: `text-size-${size}`,
+        label: textSizeLabel(size),
+        description: size === 1 ? "Grows and shrinks with the box." : undefined,
+        checked: current === size,
+        disabled,
+        onSelect: () => onLook({ element, textSize: size === 1 ? undefined : size }),
+      })),
+    },
+  ];
+}
 
 /** What a row's menu does to a graphic's position: see `overlay-layout-sharing.ts`. */
 export type LayoutSharingAction = "unlink" | "relink" | "apply";
@@ -42,7 +81,7 @@ export interface GraphicActionHandlers {
   onShow: (element: LiveOverlayElement, visible: boolean) => void;
   onSharing: (element: LiveOverlayElement, action: LayoutSharingAction) => void;
   onTurns: (element: LiveProgramLayer, turns: number | null) => void;
-  /** Sets the QR code's, the timers' or the background's look in this scene. */
+  /** Sets the QR code's, the timers' or the background's look, or a board's text size, in this scene. */
   onLook: (look: GraphicLook) => void;
 }
 
@@ -215,7 +254,10 @@ export function graphicActions(
         },
       ];
   const spot = spotActions(elements, element, disabled, handlers);
-  const looks = lookActions(elements, element, disabled, handlers);
+  const looks = [
+    ...lookActions(elements, element, disabled, handlers),
+    ...textSizeActions(elements, element, disabled, handlers),
+  ];
   return [
     ...spot,
     ...looks,
