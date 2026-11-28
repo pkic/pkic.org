@@ -556,10 +556,12 @@ it("keeps every write of a poll reset whose audit fails, so a reset is all or no
     const snapshot = () => ({
       ballots: sql.rows("SELECT user_id, answer_json FROM session_poll_ballots WHERE poll_id = ?", poll.id),
       poll: sql.rows("SELECT * FROM session_polls WHERE id = ?", poll.id),
+      tallies: sql.rows("SELECT value, votes FROM session_poll_tallies WHERE poll_id = ? ORDER BY value", poll.id),
       audit: sql.rows("SELECT action FROM staff_actions"),
     });
     const before = snapshot();
     expect(before.ballots).toHaveLength(1);
+    expect(before.tallies).toContainEqual({ value: "Root CA", votes: 1 });
     const store = new LiveRoomStore(sql);
     vi.spyOn(store, "recordStaffAction").mockImplementation(() => {
       throw new Error("the audit write failed");
