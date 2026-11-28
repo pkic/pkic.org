@@ -10,7 +10,6 @@ import {
   type EventLiveChatSettings,
 } from "../../../../../../../shared/live-chat-retention";
 import { eventSettingsUpdateSchema, type EventDetail } from "../../../../../../../shared/schemas/event-management";
-import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
 import { Alert } from "../../../../../../ui/Alert";
 import { Radio } from "../../../../../../ui/Checkbox";
@@ -18,11 +17,7 @@ import { DescriptionList } from "../../../../../../ui/DescriptionList";
 import { EditActions } from "../../../../../../ui/EditActions";
 import { Field } from "../../../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
-import { Spinner } from "../../../../../../ui/Spinner";
-import { useEventSettingsSave } from "./useEventSettingsSave";
-import { useLoadedEventSettings, type EventSettingsSectionProps } from "./useLoadedEventSettings";
-import { hasEventAgendaPermission } from "../../event-agenda-access";
-import { LiveChatArchive } from "./LiveChatArchive";
+import { useEventSettingsSave, type EventSettingsGroupTarget } from "./useEventSettingsSave";
 
 type KeepDays = EventLiveChatSettings["keepDays"];
 
@@ -34,26 +29,7 @@ const CHOICES: Record<KeepDays, { label: string; hint: string }> = {
   },
 };
 
-export function LiveChatRetentionSettings({ slug, groupId, canEdit }: EventSettingsSectionProps) {
-  const { event: current, error, onUpdated, groupTarget } = useLoadedEventSettings(slug, groupId);
-  if (error) return <ErrorAlert error={error} />;
-  if (!current) return <Spinner label="Loading chat settings…" />;
-  // The kept chat is downloaded and erased beside the choice of how long it is kept, by the event's organizers.
-  return (
-    <>
-      <LiveChatRetentionPanel
-        key={current.updatedAt}
-        event={current}
-        canEdit={canEdit}
-        onUpdated={onUpdated}
-        groupTarget={groupTarget}
-      />
-      {hasEventAgendaPermission(current.id, "events:write") ? <LiveChatArchive slug={slug} /> : null}
-    </>
-  );
-}
-
-function LiveChatRetentionPanel({
+export function LiveChatRetentionPanel({
   event,
   canEdit,
   onUpdated,
@@ -62,7 +38,7 @@ function LiveChatRetentionPanel({
   event: EventDetail;
   canEdit: boolean;
   onUpdated: (event: EventDetail) => void;
-  groupTarget?: Parameters<typeof useEventSettingsSave>[3];
+  groupTarget?: EventSettingsGroupTarget;
 }) {
   const saved = eventLiveChatSettings(event.settings).keepDays;
   const [keepDays, setKeepDays] = useState<KeepDays>(saved);

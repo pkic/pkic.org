@@ -118,7 +118,6 @@ export function GeneralTab({
   );
   const [mode, setMode] = useState(event.registrationPolicy);
   const [visibility, setVisibility] = useState<EventVisibility>(event.visibility);
-  const [retentionDays, setRetentionDays] = useState(event.userRetentionDays ? String(event.userRetentionDays) : "");
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
   const [outcome, setOutcome] = useState<SaveOutcome | null>(null);
@@ -154,12 +153,11 @@ export function GeneralTab({
       ? {}
       : { proposalFormKey: proposalFormMode === "none" ? null : proposalFormKey.trim() || null }),
   };
-  if (retentionDays.trim()) draft.userRetentionDays = Number(retentionDays);
   const sectionFields =
     section === "session-types"
       ? ["sessionTypes"]
       : section === "registration"
-        ? ["visibility", "registrationPolicy", "registrationFormKey", "proposalFormKey", "userRetentionDays"]
+        ? ["visibility", "registrationPolicy", "registrationFormKey", "proposalFormKey"]
         : section === "location"
           ? ["timezone", "startsAt", "endsAt", "venue", "city", "country"]
           : ["name", "slug", "heroImageUrl"];
@@ -268,7 +266,6 @@ export function GeneralTab({
     setProposalFormMode(nextProposalLink === undefined ? "unset" : nextProposalLink === null ? "none" : "explicit");
     setMode(event.registrationPolicy);
     setVisibility(event.visibility);
-    setRetentionDays(event.userRetentionDays ? String(event.userRetentionDays) : "");
   }, [event]);
   useEffect(() => {
     resetDraft();
@@ -499,18 +496,6 @@ export function GeneralTab({
                       )}
                     </Field>
                   )}
-                  <Field {...form.of("userRetentionDays")} label="User retention (days)">
-                    {(control) => (
-                      <TextInput
-                        {...control}
-                        name="userRetentionDays"
-                        type="number"
-                        value={retentionDays}
-                        placeholder="No policy"
-                        onInput={(inputEvent) => setRetentionDays((inputEvent.target as HTMLInputElement).value)}
-                      />
-                    )}
-                  </Field>
                 </div>
 
                 {/* The form pickers still carry their own column width from the
