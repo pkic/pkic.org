@@ -18,6 +18,7 @@ import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Tabs } from "../../../../components/Tabs";
 import { BreadcrumbBranch } from "../../../../ui/BreadcrumbScope";
 import { ProfileHeader } from "../../../../ui/ProfileHeader";
+import { ButtonLink } from "../../../../ui/Button";
 import { lazy, Suspense } from "preact/compat";
 import { Spinner } from "../../../../components/Spinner";
 const PromotionMaterialsDialog = lazy(() =>
@@ -243,6 +244,12 @@ export function GroupEventWorkspace({
                     without a start of its own falls back to its next meeting. */}
                 {groupEventWhenAndWhere(event, event.startsAt ?? event.nextOccurrenceAt)}
               </>
+            }
+            // The event app's own header offers "Manage event" back here, so organizers move between the two inside the portal.
+            actions={
+              <ButtonLink href={usePortalHashLocation.hrefs(`/events/${encodeURIComponent(event.slug)}`)}>
+                Event app
+              </ButtonLink>
             }
           />
         )}

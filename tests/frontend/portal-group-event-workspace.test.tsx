@@ -465,6 +465,16 @@ describe("group event workspace", () => {
     expect(container.textContent).not.toContain("Edit event");
   });
 
+  it("opens the event app from the workspace header without leaving the portal", async () => {
+    const event = baseEvent({ capabilities: ["view", "manage"] });
+    const container = await mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} />);
+
+    const app = Array.from(container.querySelectorAll(".pk-profile-header a")).find(
+      (anchor) => anchor.textContent === "Event app",
+    );
+    expect(app?.getAttribute("href")).toBe(`#/events/${encodeURIComponent(event.slug)}`);
+  });
+
   it("falls back to the default tab for an unrecognized tab key", async () => {
     const event = baseEvent({ capabilities: ["view", "manage"] });
     const container = await mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="not-a-real-tab" />);
