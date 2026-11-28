@@ -1,4 +1,4 @@
-import type { EventAudienceDetail, EventManagementSummary } from "../../../../../shared/schemas/event-management";
+import type { EventAudienceDetail } from "../../../../../shared/schemas/event-management";
 import { usePortalHashLocation } from "../../hash-location";
 import { portalSectionEnabled } from "../../shell/portal-navigation";
 import type { PortalSession } from "../../types";
@@ -8,9 +8,9 @@ import type { PortalSession } from "../../types";
  * the caller's own registration, agenda, proposals, and scanner tabs from the
  * caller-scoped projection, so no role decides a different home; the owning
  * group's workspace stays one explicit row action away for those who can
- * open it (see `canOpenGroupWorkspace`).
+ * open it (see `canOpenGroupWorkspace`), and that workspace links back here.
  */
-export function eventDestination(event: EventAudienceDetail | EventManagementSummary): string {
+export function eventDestination(event: Pick<EventAudienceDetail, "slug">): string {
   return usePortalHashLocation.hrefs(`/events/${encodeURIComponent(event.slug)}`);
 }
 

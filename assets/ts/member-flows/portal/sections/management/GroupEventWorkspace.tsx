@@ -19,6 +19,7 @@ import { Tabs } from "../../../../components/Tabs";
 import { BreadcrumbBranch } from "../../../../ui/BreadcrumbScope";
 import { ProfileHeader } from "../../../../ui/ProfileHeader";
 import { ButtonLink } from "../../../../ui/Button";
+import { eventDestination } from "../events/event-destination";
 import { lazy, Suspense } from "preact/compat";
 import { Spinner } from "../../../../components/Spinner";
 const PromotionMaterialsDialog = lazy(() =>
@@ -245,12 +246,9 @@ export function GroupEventWorkspace({
                 {groupEventWhenAndWhere(event, event.startsAt ?? event.nextOccurrenceAt)}
               </>
             }
-            // The event app's own header offers "Manage event" back here, so organizers move between the two inside the portal.
-            actions={
-              <ButtonLink href={usePortalHashLocation.hrefs(`/events/${encodeURIComponent(event.slug)}`)}>
-                Event app
-              </ButtonLink>
-            }
+            // The event app's own header offers "Manage event" back here, so organizers move between the two
+            // inside the portal. A meeting series has no event app, as the Events list leaves series out.
+            actions={event.seriesId ? undefined : <ButtonLink href={eventDestination(event)}>Event app</ButtonLink>}
           />
         )}
 

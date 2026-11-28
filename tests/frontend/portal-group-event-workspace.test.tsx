@@ -85,6 +85,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+const eventAppHref = (slug: string) => `#/events/${encodeURIComponent(slug)}`;
+
 describe("group event workspace", () => {
   it("keeps sponsor leads in the event app even for a sponsor contact with organizer access", () => {
     const previous = portalSession.value;
@@ -469,10 +471,18 @@ describe("group event workspace", () => {
     const event = baseEvent({ capabilities: ["view", "manage"] });
     const container = await mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} />);
 
-    const app = Array.from(container.querySelectorAll(".pk-profile-header a")).find(
-      (anchor) => anchor.textContent === "Event app",
-    );
-    expect(app?.getAttribute("href")).toBe(`#/events/${encodeURIComponent(event.slug)}`);
+    expect(container.querySelector(`a[href="${eventAppHref(event.slug)}"]`)).not.toBeNull();
+  });
+
+  it("offers no event app for a meeting series, which the Events list leaves out too", async () => {
+    const event = baseEvent({
+      capabilities: ["view", "manage"],
+      seriesId: "20000000-0000-4000-8000-000000000001",
+      profileKey: "meeting",
+    });
+    const container = await mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} />);
+
+    expect(container.querySelector(`a[href="${eventAppHref(event.slug)}"]`)).toBeNull();
   });
 
   it("falls back to the default tab for an unrecognized tab key", async () => {
