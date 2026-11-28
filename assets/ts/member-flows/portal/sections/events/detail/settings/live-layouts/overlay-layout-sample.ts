@@ -162,8 +162,6 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
         {
           ...defaultLiveTimerGraphic(LIVE_SESSION_TIMER_ID),
           presentation: "digital",
-          showLabel: true,
-          label: "Time left",
         },
       ],
       topQuestions: {
