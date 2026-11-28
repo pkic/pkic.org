@@ -146,6 +146,13 @@
     --graphic-stripe: none;
     --graphic-edge: none;
   }
+  /* The field's light type never reaches the code: on a background it is black on its white quiet zone in every theme. */
+  .pk-live-overlay__layer[data-on-ground] .pk-live-qr-card:is(:not([data-look]), [data-look="card"]) .pk-qr-graphic__ground {
+    fill: var(--pk-pqc-paper);
+  }
+  .pk-live-overlay__layer[data-on-ground] .pk-live-qr-card:is(:not([data-look]), [data-look="card"]) .pk-qr-graphic__modules {
+    fill: var(--pk-pqc-ink);
+  }
   .pk-live-overlay__surface {
     position: relative;
     inline-size: 1920px;

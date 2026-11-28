@@ -322,6 +322,18 @@ describe("stacking a scene's graphics", () => {
     expect(forward.slice(0, 2)).toEqual(["panelists", "background"]);
   });
 
+  it("lets a background in front hide a board, unless it waits for a board and so sits under the one on air", () => {
+    const onAir = { ...EMPTY_LIVE_STAGE, question: { id: "q1" } } as unknown as LiveStage;
+    const shown = { ...STANDARD, background: { ...STANDARD.background, visible: true, x: 0, y: 0, w: 1, h: 1 } };
+    const inFront = Array.from({ length: 20 }).reduce<typeof STANDARD>(
+      (scene) => moveLiveProgramLayer(scene, "background", -1),
+      shown,
+    );
+    expect(liveOverlayCoveredBy(onAir, inFront, "question")).toBe("background");
+    const waiting = { ...inFront, background: { ...inFront.background, withBoardOnly: true } };
+    expect(liveOverlayCoveredBy(onAir, waiting, "question")).toBeNull();
+  });
+
   it("lets a board drawn in front hide a graphic only from where the scene stacks it", () => {
     const onAir = { ...EMPTY_LIVE_STAGE, schedule: { config: {} }, question: { id: "q1" } } as unknown as LiveStage;
     // Up next starts four places behind the question: the check-in code and the two lists sit between them.
