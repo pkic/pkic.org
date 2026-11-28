@@ -37,9 +37,9 @@ const EventClassifiers = lazy(() =>
 const EventRecordings = lazy(() =>
   import("../events/detail/settings/EventRecordings").then((module) => ({ default: module.EventRecordings })),
 );
-const LiveChatRetentionSettings = lazy(() =>
-  import("../events/detail/settings/LiveChatRetentionSettings").then((module) => ({
-    default: module.LiveChatRetentionSettings,
+const EventRetentionSettings = lazy(() =>
+  import("../events/detail/settings/EventRetentionSettings").then((module) => ({
+    default: module.EventRetentionSettings,
   })),
 );
 const EventLiveSettings = lazy(() =>
@@ -246,7 +246,7 @@ export function GroupEventSettingsTab({
       ) : detailId === "retention" && canManage ? (
         <Suspense fallback={<Spinner />}>
           <div class="pk-stack">
-            <LiveChatRetentionSettings slug={event.slug} groupId={groupId} canEdit={canManage} />
+            <EventRetentionSettings slug={event.slug} groupId={groupId} canEdit={canManage} />
             <RawEvidenceRetentionPolicy event={event} />
           </div>
         </Suspense>
