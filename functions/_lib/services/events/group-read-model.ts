@@ -58,6 +58,8 @@ interface GroupEventRow {
   manager_access: number;
   /** On the event's team without joining the group; only the event read resolves it. */
   team_access?: number;
+  /** Whether the caller can open the event app; only the event read resolves it. */
+  event_app_access?: number;
 }
 
 const NEXT_OCCURRENCE_CTE = `next_occurrence AS (
@@ -127,6 +129,7 @@ function mapGroupEvent(row: GroupEventRow, groupId: string): GroupEvent {
         ? effectiveCapabilities.filter((capability) => capability !== "register")
         : effectiveCapabilities,
     proposalAccess: null,
+    ...(row.event_app_access === undefined ? {} : { eventAppAccess: row.event_app_access === 1 }),
   });
 }
 
@@ -244,19 +247,32 @@ export function prepareGroupEventRead(db: DatabaseLike, viewer: GroupResourceVie
        UNION ALL
        SELECT owned.id, 0, 0, 1 FROM events owned
         WHERE owned.id = ? AND owned.owner_group_id = ? AND EXISTS (${team.sql})
-     )
+     ),
+     -- The event's audience, evaluated once: it admits the reader here and is exactly whom the event app admits.
+     event_audience(event_id) AS (SELECT event.id FROM events event WHERE event.id = ? AND ${audience.sql})
      ${EVENT_SELECT}, MAX(accessible.member_access) AS member_access,
-       MAX(accessible.manager_access) AS manager_access, MAX(accessible.team_access) AS team_access
+       MAX(accessible.manager_access) AS manager_access, MAX(accessible.team_access) AS team_access,
+       MAX(audience.event_id IS NOT NULL) AS event_app_access
        FROM event_access accessible
        JOIN events event ON event.id = accessible.resource_id
        LEFT JOIN event_series series ON series.event_id = event.id
        LEFT JOIN next_occurrence ON next_occurrence.series_id = series.id
        LEFT JOIN event_group_grants grant_row ON grant_row.event_id = event.id AND grant_row.group_id = ?
+       LEFT JOIN event_audience audience ON audience.event_id = event.id
       WHERE event.id = ? AND event.owner_group_id IS NOT NULL
-        AND (accessible.manager_access = 1 OR accessible.team_access = 1 OR ${audience.sql})
+        AND (accessible.manager_access = 1 OR accessible.team_access = 1 OR audience.event_id IS NOT NULL)
      GROUP BY event.id`,
     )
-    .bind(...accessibleEvents.bindings, eventId, groupId, ...team.bindings, groupId, eventId, ...audience.bindings);
+    .bind(
+      ...accessibleEvents.bindings,
+      eventId,
+      groupId,
+      ...team.bindings,
+      eventId,
+      ...audience.bindings,
+      groupId,
+      eventId,
+    );
   const proposalCallRead = prepareEventProposalCall(db, eventId);
   return {
     statements: [eventRead, proposalCallRead.statement],

@@ -5,7 +5,7 @@ import { computeGrantsForUser } from "../functions/_lib/auth/permissions";
 import { listVisibleEvents } from "../functions/_lib/services/events/catalog";
 import type { DatabaseLike, UserBackedAuthAdmin } from "../functions/_lib/types";
 import { eventDetailResponseSchema, eventsListResponseSchema } from "../assets/shared/schemas/event-management";
-import { groupEventsListResponseSchema } from "../assets/shared/schemas/group-events";
+import { groupEventDetailResponseSchema, groupEventsListResponseSchema } from "../assets/shared/schemas/group-events";
 import { createGroupEventInvitationFixture } from "./helpers/group-event-invitations";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { resetDb } from "./helpers/reset-db";
@@ -181,6 +181,28 @@ describe("live event-read authorization", () => {
         .run();
     });
     expect((await request(`/api/v1/groups/${groupId}/events/${eventId}`, reader.token, db)).status).toBe(200);
+  });
+
+  it("offers the event app on group detail exactly when the event app itself admits the caller", async () => {
+    const { reader, grantId, groupId, eventId, eventSlug } = await fixture();
+    await env.DB.prepare(
+      "INSERT INTO permission_grants (id, user_id, permission, created_at) VALUES (?, ?, 'groups:write', ?)",
+    )
+      .bind(crypto.randomUUID(), reader.userId, new Date().toISOString())
+      .run();
+    const groupDetail = async () =>
+      groupEventDetailResponseSchema.parse(
+        await (await request(`/api/v1/groups/${groupId}/events/${eventId}`, reader.token)).json(),
+      ).event.eventAppAccess;
+    const eventApp = async () => (await request(`/api/v1/events/${eventSlug}`, reader.token)).status;
+
+    expect(await groupDetail()).toBe(true);
+    expect(await eventApp()).toBe(200);
+
+    // Group management alone opens the workspace of an invitation-only event, but not its attendee app.
+    await env.DB.prepare("DELETE FROM permission_grants WHERE id = ?").bind(grantId).run();
+    expect(await groupDetail()).toBe(false);
+    expect(await eventApp()).toBe(404);
   });
 
   it("enforces scope ceilings in audience SQL and preserves explicit service authority", async () => {

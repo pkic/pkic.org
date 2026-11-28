@@ -85,6 +85,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+const eventAppHref = (slug: string) => `#/events/${encodeURIComponent(slug)}`;
+
 describe("group event workspace", () => {
   it("keeps sponsor leads in the event app even for a sponsor contact with organizer access", () => {
     const previous = portalSession.value;
@@ -463,6 +465,20 @@ describe("group event workspace", () => {
     // A meeting inside a series is not standalone, so it offers no inline
     // editor beside the series link.
     expect(container.textContent).not.toContain("Edit event");
+  });
+
+  it("opens the event app from the workspace header when the server says the caller can open it", async () => {
+    const event = baseEvent({ capabilities: ["view", "manage"], eventAppAccess: true });
+    const container = await mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} />);
+
+    expect(container.querySelector(`a[href="${eventAppHref(event.slug)}"]`)).not.toBeNull();
+  });
+
+  it("offers no event app link the caller would be refused", async () => {
+    const event = baseEvent({ capabilities: ["view", "manage"], eventAppAccess: false });
+    const container = await mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} />);
+
+    expect(container.querySelector(`a[href="${eventAppHref(event.slug)}"]`)).toBeNull();
   });
 
   it("falls back to the default tab for an unrecognized tab key", async () => {
