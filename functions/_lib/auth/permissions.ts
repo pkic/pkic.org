@@ -1,12 +1,9 @@
 import { activeOauthAuthorizationSql, oauthPermissionCeilingSql } from "./oauth/authorization-ceiling-query";
 import { scannerCapabilities } from "../../../assets/shared/event-scanner-permissions";
 import { eventTeamScannerRoleScopeSql } from "./event-team-scanner-scope";
-import {
-  sponsorLeadCapacityForRequirements,
-  sponsorLeadViewerPredicateSql,
-  sponsorOrganizationCapturePredicateSql,
-} from "./sponsor-organization-lead-access";
+import { sponsorLeadCapacityForRequirements } from "./sponsor-organization-lead-access";
 import { all } from "../db/queries";
+import { contextGrantSelection } from "./context-grant-selection";
 /**
  * Context-aware permission checking.
  *
@@ -53,41 +50,6 @@ interface GrantRow {
 export interface ContextGrantRow extends GrantRow {
   request_index: number;
   member_id: string | null;
-}
-
-/** One canonical live grant policy; callers only vary the prepared context input. */
-function contextGrantSelection(requested: string, bindings: unknown[]) {
-  return {
-    sql: `WITH requested AS (${requested})
-     SELECT requested.request_index,requested.member_id,rp.permission,ur.context_type,ur.context_id
-     FROM requested JOIN user_roles ur ON ur.user_id=requested.user_id
-     JOIN role_permissions rp ON rp.role_id=ur.role_id
-     WHERE ur.revoked_at IS NULL
-       AND ${eventTeamScannerRoleScopeSql("ur", "rp")}
-       AND (ur.expires_at IS NULL OR ur.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-       AND (ur.member_id IS NULL OR (ur.member_id=requested.member_id AND ur.context_type='group'
-         AND EXISTS(SELECT 1 FROM group_memberships gm WHERE gm.group_id=ur.context_id
-           AND gm.user_id=ur.user_id AND gm.member_id=ur.member_id AND gm.left_at IS NULL)))
-     UNION ALL
-     SELECT requested.request_index,requested.member_id,pg.permission,pg.context_type,pg.context_id
-     FROM requested JOIN permission_grants pg ON pg.user_id=requested.user_id
-     WHERE pg.revoked_at IS NULL
-       AND (pg.expires_at IS NULL OR pg.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-     UNION ALL
-     SELECT DISTINCT requested.request_index,requested.member_id,'agenda:leads_capture','event_sponsor',sponsor.id
-     FROM requested JOIN identities linked_identity ON linked_identity.user_id=requested.user_id
-     JOIN users linked_operator ON linked_operator.id=linked_identity.user_id
-     JOIN sponsorships sponsor ON sponsor.organization_id=linked_identity.organization_id
-     WHERE linked_operator.active=1 AND linked_operator.pii_redacted_at IS NULL
-       AND linked_operator.merged_into_user_id IS NULL
-       AND ${sponsorOrganizationCapturePredicateSql("linked_identity", "sponsor")}
-     UNION ALL
-     SELECT DISTINCT requested.request_index,requested.member_id,lead_permission.value,'event_sponsor',sponsor.id
-     FROM requested JOIN sponsorships sponsor
-       ON ${sponsorLeadViewerPredicateSql("requested.user_id", "sponsor")}
-     JOIN json_each('["agenda:leads_view","agenda:leads_export"]') lead_permission`,
-    bindings,
-  };
 }
 
 function contextGrantStatement(db: DatabaseLike, requested: string, bindings: unknown[]) {

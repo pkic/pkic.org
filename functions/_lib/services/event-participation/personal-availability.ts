@@ -1,7 +1,13 @@
 import { batchRows } from "../../db/pagination";
 import type { D1StatementResult } from "../../types";
 import type { DatabaseLike } from "../../types";
-import { publishedSessionIds, type PublishedSessionSelection, publishedSessionsSql } from "./published-schedule";
+import {
+  publishedRoomsSql,
+  publishedSessionIds,
+  type PublishedSessionSelection,
+  publishedSessionsSql,
+} from "./published-schedule";
+import { liveOperationalPeopleSql } from "../event-agenda/operational-people";
 import { physicalOccupiedSql, remoteOccupiedSql } from "./capacity-accounting";
 import { operationalAllocationCompatibleSql, physicalPoolCapacitySql } from "./session-allocation";
 import { registrationSessionDayOptionsSql, registrationSessionAttendance } from "./session-access";
@@ -13,6 +19,13 @@ import type { ParticipationAvailability } from "../../../../assets/shared/schema
 import type { AgendaAdmissionPolicy } from "../../../../assets/shared/schemas/event-agenda";
 import { eventReadIdSql, type EventReadSelection } from "../events/selection";
 import { nowIso } from "../../utils/time";
+/**
+ * The published rooms and the operational people of the event, each read once for the whole page of
+ * sessions: read per session, the published agenda is parsed again and every earlier revision's people
+ * are read again for each of them.
+ */
+const POOL_ROOMS = "SELECT event_id,id,capacity FROM pool_rooms";
+const LIVE_PEOPLE = "SELECT occurrence_id,user_id,attendance_mode,room_id FROM live_people";
 interface AvailabilityRow {
   id: string;
   policy: AgendaAdmissionPolicy;
@@ -69,16 +82,18 @@ export function preparePersonalAvailabilitySelection(
   const event = eventReadIdSql(eventSelection);
   const statements = [
     db
-      .prepare(`WITH target AS(SELECT ? AS user_id),page AS(${selection.sql}),sessions AS(SELECT approved.id,approved.event_id,approved.room_id,approved.additional_room_ids_json,approved.admission_policy,approved.access_policy,approved.booking_opens_at,approved.booking_closes_at,approved.capacity,approved.remote_capacity,approved.start_at,approved.timezone FROM (${publishedSessionsSql}) approved JOIN page ON page.id=approved.id WHERE approved.event_id=${event.sql})
+      .prepare(`WITH target AS(SELECT ? AS user_id),scope AS MATERIALIZED(SELECT ${event.sql} AS event_id),page AS(${selection.sql}),sessions AS MATERIALIZED(SELECT approved.id,approved.event_id,approved.room_id,approved.additional_room_ids_json,approved.admission_policy,approved.access_policy,approved.booking_opens_at,approved.booking_closes_at,approved.capacity,approved.remote_capacity,approved.start_at,approved.timezone FROM (${publishedSessionsSql}) approved JOIN page ON page.id=approved.id WHERE approved.event_id=(SELECT event_id FROM scope)),
+ pool_rooms AS MATERIALIZED(SELECT event_id,id,capacity FROM (${publishedRoomsSql}) WHERE event_id=(SELECT event_id FROM scope)),
+ live_people AS MATERIALIZED(${liveOperationalPeopleSql} WHERE person.event_id=(SELECT event_id FROM scope))
  SELECT s.id,s.admission_policy AS policy,s.access_policy='invitation' AS invitation_required,EXISTS(SELECT 1 FROM agenda_session_invitations invite WHERE invite.occurrence_id=s.id AND invite.user_id=target.user_id AND invite.revoked_at IS NULL) AS invited,registration.id IS NOT NULL AS registered,
  ${registrationSessionDayOptionsSql("registration", "s")} AS registration_days_json,s.start_at AS startAt,s.timezone AS timeZone,
  s.booking_opens_at AS opens_at,s.booking_closes_at AS closes_at,
- s.capacity AS physical_capacity,${physicalOccupiedSql("s.id", "target.user_id")} AS physical_occupied,${physicalPoolCapacitySql("s")} AS pool_capacity,
- s.remote_capacity,${remoteOccupiedSql("s.id", "target.user_id")} AS remote_occupied,
- ${operationalAllocationCompatibleSql("s.id", "target.user_id", "'physical'")} AS physical_compatible,
- ${operationalAllocationCompatibleSql("s.id", "target.user_id", "'remote'")} AS remote_compatible
+ s.capacity AS physical_capacity,${physicalOccupiedSql("s.id", "target.user_id", undefined, LIVE_PEOPLE)} AS physical_occupied,${physicalPoolCapacitySql("s", POOL_ROOMS)} AS pool_capacity,
+ s.remote_capacity,${remoteOccupiedSql("s.id", "target.user_id", undefined, LIVE_PEOPLE)} AS remote_occupied,
+ ${operationalAllocationCompatibleSql("s.id", "target.user_id", "'physical'", undefined, LIVE_PEOPLE)} AS physical_compatible,
+ ${operationalAllocationCompatibleSql("s.id", "target.user_id", "'remote'", undefined, LIVE_PEOPLE)} AS remote_compatible
  FROM sessions s CROSS JOIN target LEFT JOIN registrations registration ON registration.event_id=s.event_id AND registration.user_id=target.user_id AND registration.status='registered' ORDER BY s.id LIMIT 200`)
-      .bind(userId, ...selection.bindings, ...event.bindings),
+      .bind(userId, ...event.bindings, ...selection.bindings),
   ];
   return {
     statements,

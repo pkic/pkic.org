@@ -42,27 +42,41 @@ const NOW = "strftime('%Y-%m-%dT%H:%M:%fZ','now')";
  * organization (and whether that organization, or the person, is a member),
  * the organizer role of this event, credits on this event's published agenda,
  * duties the agenda shows, and leadership of groups that publish it.
+ *
+ * It continues a WITH clause that defines `input(event_id,user_id,identity_id)`.
+ * `input` leads every join and each person is reached by key, so the cost
+ * follows the authors asked for and never the size of a table. Credits and
+ * leadership are the same for every identity a person acts as: they are read
+ * once per statement instead of once per row. The organizer check keeps only
+ * the person index usable, which holds the few roles one person has.
  */
-const STAMP_SQL = `SELECT input.user_id, input.identity_id AS selected_identity_id,
+const STAMP_SQL = `, credits(event_id, user_id, role) AS MATERIALIZED (
+    SELECT state.event_id, json_extract(credit.value, '$.userId'), COALESCE(json_extract(credit.value, '$.role'), 'speaker')
+      FROM event_agenda_state state
+      JOIN event_agenda_published_occurrences approved ON approved.event_id = state.event_id AND approved.revision = state.published_revision,
+           json_each(approved.payload_json, '$.speakers') credit
+     WHERE state.event_id IN (SELECT event_id FROM input)
+       AND json_extract(credit.value, '$.userId') IN (SELECT user_id FROM input)
+  ), leaders(user_id, role_id) AS MATERIALIZED (
+    SELECT ur.user_id, ur.role_id ${PUBLIC_LEADERSHIP_SOURCE_SQL}
+      AND ur.user_id IN (SELECT user_id FROM input) AND ${ACTIVE_LEADERSHIP_PREDICATE_SQL}
+  )
+  SELECT input.user_id, input.identity_id AS selected_identity_id,
   (SELECT ${identityJobTitleSql("acting.id")}) AS title,
   current.name AS organization, current.id AS organization_id, current.logo_r2_key AS logo,
   EXISTS(SELECT 1 FROM members member WHERE member.status = 'active' AND (
       (acting.organization_id IS NOT NULL AND member.member_type = 'organization' AND member.organization_id = acting.organization_id)
       OR (acting.organization_id IS NULL AND member.member_type = 'individual' AND member.identity_id = acting.id))) AS member,
-  EXISTS(SELECT 1 FROM user_roles organizer WHERE organizer.user_id = person.id AND organizer.role_id = 'role-event_organizer'
-      AND organizer.context_type = 'event' AND organizer.context_id = input.event_id AND organizer.revoked_at IS NULL
+  EXISTS(SELECT 1 FROM user_roles organizer WHERE organizer.user_id = person.id AND +organizer.role_id = 'role-event_organizer'
+      AND +organizer.context_type = 'event' AND +organizer.context_id = input.event_id AND organizer.revoked_at IS NULL
       AND (organizer.expires_at IS NULL OR organizer.expires_at > ${NOW})) AS organizer,
-  (SELECT json_group_array(DISTINCT COALESCE(json_extract(credit.value, '$.role'), 'speaker'))
-     FROM event_agenda_state state
-     JOIN event_agenda_published_occurrences approved ON approved.event_id = state.event_id AND approved.revision = state.published_revision,
-          json_each(approved.payload_json, '$.speakers') credit
-    WHERE state.event_id = input.event_id AND json_extract(credit.value, '$.userId') = person.id) AS credit_roles,
+  (SELECT json_group_array(DISTINCT credit.role) FROM credits credit
+    WHERE credit.event_id = input.event_id AND credit.user_id = person.id) AS credit_roles,
   (SELECT json_group_array(DISTINCT duty.name) FROM event_agenda_assignments assignment
      JOIN event_agenda_staffing_roles duty ON duty.event_id = assignment.event_id AND duty.id = assignment.role
     WHERE assignment.event_id = input.event_id AND assignment.user_id = person.id AND duty.show_on_agenda = 1) AS duties,
-  (SELECT json_group_array(DISTINCT ur.role_id) ${PUBLIC_LEADERSHIP_SOURCE_SQL}
-      AND ur.user_id = person.id AND ${ACTIVE_LEADERSHIP_PREDICATE_SQL}) AS leadership
-  FROM input JOIN users person ON person.id=input.user_id
+  (SELECT json_group_array(DISTINCT leader.role_id) FROM leaders leader WHERE leader.user_id = person.id) AS leadership
+  FROM input CROSS JOIN users person ON person.id=input.user_id
   LEFT JOIN identities acting ON acting.id = input.identity_id AND acting.user_id = person.id AND acting.ended_at IS NULL
        AND acting.blocked_at IS NULL AND acting.hidden_from_public_profile = 0
   LEFT JOIN organizations named ON named.id = acting.organization_id
@@ -91,7 +105,7 @@ export function prepareLiveAuthorStampCandidates(db: DatabaseLike, eventId: stri
     candidates AS (
       SELECT identity.user_id,identity.id,
         row_number() OVER (PARTITION BY identity.user_id ORDER BY ${SESSION_ACTING_IDENTITY_ORDER_SQL}) AS ordinal
-      FROM identities identity JOIN requested ON requested.user_id=identity.user_id
+      FROM requested CROSS JOIN identities identity ON identity.user_id=requested.user_id
       LEFT JOIN organizations organization ON organization.id=identity.organization_id
       WHERE ${ownedIdentityLifecycleSql("identity", null)}
     ), input(event_id,user_id,identity_id) AS (

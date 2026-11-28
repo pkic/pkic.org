@@ -159,7 +159,13 @@ function verifiedSponsorMailboxSql(userAlias: string, sponsorAlias: string): str
   ))`;
 }
 
-/** Only the verified sponsorship mailbox or its member organization's active primary contact sees all leads. */
+/**
+ * Only the verified sponsorship mailbox or its member organization's active primary contact sees all leads.
+ *
+ * The contact's identity and the member are both pinned to the sponsor's organization, so the member capacity
+ * `identity_member_capacities` would report for them is exactly that member having a category. Joining the view
+ * instead reads every identity each time the policy is asked.
+ */
 export function sponsorLeadViewerPredicateSql(userExpression: string, sponsorAlias: string): string {
   return `${activeLeadSponsorshipSql(sponsorAlias)}
     AND EXISTS(SELECT 1 FROM users viewer WHERE ${allOf([
@@ -175,8 +181,7 @@ export function sponsorLeadViewerPredicateSql(userExpression: string, sponsorAli
             AND role.role_id='${REPRESENTATIVE_ROLE_IDS.primaryContact}' AND role.user_id=viewer.id
           JOIN identities identity ON identity.id=role.identity_id AND identity.user_id=viewer.id
             AND identity.organization_id=${sponsorAlias}.organization_id
-          JOIN identity_member_capacities capacity
-            ON capacity.identity_id=identity.id AND capacity.member_id=member.id
+          JOIN member_category_assignments capacity ON capacity.member_id=member.id
           WHERE member.organization_id=${sponsorAlias}.organization_id AND member.status='active'
             AND ${organizationContactRoleActivePredicate(
               "role",
