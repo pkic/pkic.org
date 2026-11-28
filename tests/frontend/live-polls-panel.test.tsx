@@ -10,6 +10,11 @@ import { applyLiveRoomMessage, type LiveRoomState } from "../../assets/ts/live-s
 import { liveSnapshot, livePoll, livePollResults, liveTargets } from "./helpers/live-room-socket";
 import { menuItemLabel } from "./helpers/live-desk";
 
+const confirm = vi.hoisted(() =>
+  vi.fn(async (_request: { title: string; body: string; confirmLabel: string }) => true),
+);
+vi.mock("../../assets/ts/components/ConfirmDialog", () => ({ confirmAction: confirm }));
+
 const hosts: HTMLElement[] = [];
 afterEach(() => {
   for (const host of hosts.splice(0)) {
@@ -56,7 +61,13 @@ it("shows one compact row per poll with its state, answers and leading answer, o
   expect(rows[1].textContent).toContain("Prepared");
   const items = await menu(rows[0]);
   // The room's screens come first in the row's menu, then the poll's own actions.
-  expect(items.map(menuItemLabel)).toEqual(["Projector", "Stage display", "Results and settings", "Reopen voting"]);
+  expect(items.map(menuItemLabel)).toEqual([
+    "Projector",
+    "Stage display",
+    "Results and settings",
+    "Reopen voting",
+    "Reset results",
+  ]);
   await act(async () => items[3].click());
   expect(send.mock.calls.map(([message]) => liveRoomClientMessageSchema.parse(message))).toEqual([
     { type: "poll.status", pollId: closed.id, status: "open" },
@@ -68,6 +79,26 @@ it("shows one compact row per poll with its state, answers and leading answer, o
     pollId: DRAFT,
     status: "open",
   });
+});
+
+it("resets an answered poll's results after the operator confirms, and offers no reset before any answer", async () => {
+  const answered = livePoll({ status: "closed", results: livePollResults({ "Root CA": 3, "TLS endpoints": 1 }) });
+  const { host, send } = panel(stateWith([answered]));
+  const items = await menu(host.querySelector(".pk-studio-row")!);
+  await act(async () => items.find((item) => menuItemLabel(item) === "Reset results")!.click());
+  expect(confirm).toHaveBeenCalledWith(
+    expect.objectContaining({ title: "Reset this poll's results?", confirmLabel: "Reset results", tone: "danger" }),
+  );
+  expect(confirm.mock.calls[0][0].body).toContain("All 4 answers");
+  await vi.waitFor(() =>
+    expect(send.mock.calls.map(([message]) => liveRoomClientMessageSchema.parse(message))).toEqual([
+      { type: "poll.reset", pollId: answered.id },
+    ]),
+  );
+
+  const unanswered = panel(stateWith([livePoll({ status: "open", results: livePollResults({}) })]));
+  const plain = await menu(unanswered.host.querySelector(".pk-studio-row")!);
+  expect(plain.map(menuItemLabel)).not.toContain("Reset results");
 });
 
 it("opens a new poll from the panel header's create button", async () => {

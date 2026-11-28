@@ -186,6 +186,13 @@ export class LivePollStore {
     // Retain ballots until room erasure/purge so reopening preserves one answer per participant.
   }
 
+  /** Deletes every answer to a poll and recounts, so the empty tallies go out as the poll's next change. */
+  resetResults(id: string, by: Operator, at: string): void {
+    this.sql.exec("DELETE FROM session_poll_ballots WHERE poll_id = ?", id);
+    this.sql.exec("UPDATE session_polls SET changed_by_name = ?, changed_at = ? WHERE id = ?", by.name, at, id);
+    this.recount(id);
+  }
+
   /** This person's answer in each open poll. */
   answers(userId: string): Map<string, CustomAnswerValue> {
     return new Map(

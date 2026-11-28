@@ -20,6 +20,7 @@ const MODERATION_CONTROLS = new Set<LiveRoomClientMessage["type"]>([
   "poll.save",
   "poll.delete",
   "poll.status",
+  "poll.reset",
   "question.rewrite",
   "question.prepare",
   "question.prepared.delete",

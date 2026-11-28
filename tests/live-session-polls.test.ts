@@ -110,6 +110,37 @@ describe("live session polls", () => {
     );
   });
 
+  it("resets an opened poll's results to zero for a rehearsal, keeps its status and lets everyone answer again", async () => {
+    const operator = await f.connect({ person: "operator" });
+    const poll = await preparePoll(operator);
+    operator.send({ type: "poll.reset", pollId: poll.id });
+    expect((await operator.next("room.refused")).code).toBe("LIVE_POLL_DRAFT");
+
+    operator.send({ type: "poll.status", pollId: poll.id, status: "open" });
+    const voter = await f.connect({ person: "attendee" });
+    voter.send({ type: "poll.vote", pollId: poll.id, answer: "Root CA" });
+    await operator.next("poll.changed", (message) => message.poll.results?.totalAnswers === 1);
+
+    voter.send({ type: "poll.reset", pollId: poll.id });
+    expect((await voter.next("room.refused")).code).toBe("LIVE_ROOM_STUDIO_REQUIRED");
+
+    const sent = { operator: operator.received.length, voter: voter.received.length };
+    operator.send({ type: "poll.reset", pollId: poll.id });
+    const reset = await operator.next("poll.changed", (message) => message.poll.results?.totalAnswers === 0, {
+      after: sent.operator,
+    });
+    expect(reset.poll.status).toBe("open");
+    expect(counts(reset.poll)).toEqual({ "Root CA": 0, "TLS endpoints": 0, "Code signing": 0 });
+    // The voter's answer is gone, so they may answer again.
+    const cleared = await voter.next("poll.changed", () => true, { after: sent.voter });
+    expect(cleared.poll.myAnswer).toBeNull();
+    voter.send({ type: "poll.vote", pollId: poll.id, answer: "TLS endpoints" });
+    const again = await operator.next("poll.changed", (message) => message.poll.results?.totalAnswers === 1, {
+      after: sent.operator,
+    });
+    expect(counts(again.poll)).toEqual({ "Root CA": 0, "TLS endpoints": 1, "Code signing": 0 });
+  });
+
   it("counts each choice of a multiple choice and each score of a rating", async () => {
     const operator = await f.connect({ person: "operator" });
     const many = await preparePoll(operator, "Which do you run?", true, choiceField("", "multi_select"));
@@ -237,7 +268,7 @@ describe("live session polls", () => {
     operator.send({
       type: "stage.ticker",
       ticker: {
-        style: "gradient",
+        theme: "navy-glass",
         messages: [{ id: "custom", prefix: "", template: "Next session: Trust & <questions>", condition: "always" }],
       },
     });
@@ -255,7 +286,7 @@ describe("live session polls", () => {
       pollId: null,
       pollPresentation: { chart: "bar" },
       ticker: {
-        style: "gradient",
+        theme: "navy-glass",
         messages: [{ id: "custom", prefix: "", template: "Raise your questions", condition: "always" }],
       },
       panelists: null,
@@ -292,7 +323,7 @@ describe("live session polls", () => {
     operator.send({
       type: "stage.ticker",
       ticker: {
-        style: "gradient",
+        theme: "navy-glass",
         messages: [{ id: "next", prefix: "Next", template: "{{next.title}}", condition: "always" }],
       },
     });
