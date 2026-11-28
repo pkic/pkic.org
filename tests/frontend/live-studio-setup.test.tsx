@@ -27,7 +27,7 @@ afterEach(() => {
 });
 
 const ticker = {
-  style: "accent" as const,
+  theme: "smoked-glass" as const,
   speed: 90,
   messages: [{ id: "wifi", prefix: "Wi-Fi", template: "PKIC-guest", condition: "always" as const }],
 };

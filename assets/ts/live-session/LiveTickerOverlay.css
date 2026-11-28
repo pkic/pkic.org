@@ -1,57 +1,59 @@
 @layer components {
+  /*
+   * The ticker: a see-through bar in the panels' glass, as wide as its box, so
+   * on the panel grid it lines up with the panels above it. It carries no
+   * stripe: the production's background already runs one along the frame's
+   * foot. Its text keeps the boards' inset from the sides, where it fades in
+   * and out, and the 72px row of text stays title-safe: a bar on the frame's
+   * foot extends its glass below the row.
+   */
   .pk-live-ticker {
     position: absolute;
-    inset-inline: 0;
+    inset-inline-start: 0;
     bottom: 0;
     display: flex;
     align-items: stretch;
-    inline-size: 1920px;
-    /* Solid to the frame's foot; the text keeps to the 72px row above the 54px title-safe margin. */
     box-sizing: border-box;
-    block-size: 126px;
-    padding-block-end: 54px;
-    color: var(--pk-on-solid);
-    background: var(--pk-on-solid-ink);
+    inline-size: calc(var(--ticker-width, 1920) * 1px);
+    block-size: calc((72 + var(--ticker-foot, 54)) * 1px);
+    padding-block-end: calc(var(--ticker-foot, 54) * 1px);
+    color: var(--graphic-ink);
+    background: var(--graphic-plate);
+    box-shadow: var(--graphic-edge);
     overflow: hidden;
-    box-shadow: var(--pk-shadow-2);
-  }
-  .pk-live-ticker::before {
-    content: "";
-    position: absolute;
-    inset-inline: 0;
-    top: 0;
-    block-size: var(--pk-1);
-    background: var(--pk-ink-muted);
-  }
-  .pk-live-ticker--gradient::before {
-    background: var(--pk-grad-brand);
-  }
-  .pk-live-ticker--accent::before {
-    background: var(--pk-accent);
   }
   .pk-live-ticker__repeat {
     display: inline-flex;
     align-items: center;
     flex-shrink: 0;
+    gap: 16px;
     block-size: 100%;
+    padding-inline-end: 48px;
   }
+  /* A message's label reads as the boards' eyebrow: small capitals in the muted ink, never a colored box. */
   .pk-live-ticker__label {
-    display: flex;
-    align-items: center;
     flex-shrink: 0;
-    padding: var(--pk-3) var(--pk-4);
-    background: var(--pk-accent-deep);
-    color: var(--pk-on-solid);
-    font-size: var(--pk-text-3xl);
+    color: var(--graphic-ink-muted);
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-live-ticker-label-type);
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
     overflow-wrap: anywhere;
   }
-  .pk-live-ticker--neutral .pk-live-ticker__label {
-    background: var(--pk-ink-muted);
-  }
   .pk-live-ticker__window {
+    --fade-from: calc(var(--ticker-inset, 96) * 1px);
     flex: 1;
     min-width: 0;
     overflow: hidden;
+    /* Nothing shows within the inset; the words fade in over 64px past it and out the same way at the other side. */
+    mask-image: linear-gradient(
+      90deg,
+      transparent var(--fade-from),
+      var(--pk-on-solid) calc(var(--fade-from) + 64px),
+      var(--pk-on-solid) calc(100% - var(--fade-from) - 64px),
+      transparent calc(100% - var(--fade-from))
+    );
   }
   .pk-live-ticker__track {
     display: flex;
@@ -62,7 +64,7 @@
     animation: pk-live-ticker-scroll var(--pk-live-ticker-duration, 21s) linear infinite;
   }
   .pk-live-ticker__group {
-    min-inline-size: 1920px;
+    min-inline-size: calc(var(--ticker-width, 1920) * 1px);
     display: flex;
     align-items: center;
     block-size: 100%;
@@ -70,9 +72,9 @@
   .pk-live-ticker .pk-live-ticker__message {
     display: inline-block;
     white-space: nowrap;
-    padding: var(--pk-3) var(--pk-6);
     color: inherit;
-    font-size: var(--pk-text-3xl);
+    font-size: var(--pk-live-ticker-type);
+    font-weight: 600;
   }
   @keyframes pk-live-ticker-scroll {
     to {
@@ -82,7 +84,8 @@
   @media (prefers-reduced-motion: reduce) {
     /* Text that stands still keeps to the title-safe area at both sides, as it does at the foot. */
     :root:not(:has([data-live-broadcast-source])) .pk-live-ticker__window {
-      padding-inline: 96px;
+      padding-inline: calc(var(--ticker-inset, 96) * 1px);
+      mask-image: none;
     }
     :root:not(:has([data-live-broadcast-source])) .pk-live-ticker__track {
       animation: none;

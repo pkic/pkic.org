@@ -119,6 +119,12 @@ export interface RoomSqlStorage {
   exec(query: string, ...bindings: unknown[]): { toArray(): Row[] };
 }
 
+/** The Durable Object's storage: its SQL, and the transaction that makes several writes one. */
+export interface RoomStorage {
+  readonly sql: RoomSqlStorage;
+  transactionSync<T>(write: () => T): T;
+}
+
 /**
  * The room's SQL access. The schema is created on first use, so a purged
  * room stays empty until something writes to it again.
@@ -126,7 +132,17 @@ export interface RoomSqlStorage {
 export class LiveRoomSql {
   private ready = false;
 
-  constructor(private readonly sql: RoomSqlStorage) {}
+  private readonly sql: RoomSqlStorage;
+
+  constructor(private readonly storage: RoomStorage) {
+    this.sql = storage.sql;
+  }
+
+  /** Runs several writes as one: if any of them fails, none is kept. */
+  atomically<T>(write: () => T): T {
+    this.ensure();
+    return this.storage.transactionSync(write);
+  }
 
   private ensure(): RoomSqlStorage {
     if (!this.ready) {

@@ -262,12 +262,13 @@ describe("broadcast overlays", () => {
     void act(() => live.latest().deliver({ type: "stage.changed", stage: { ...ON_STAGE, question: null } }));
     expect(host.querySelector(".pk-live-overlay__question-text")).toBeNull();
     expect(grounds(host)).toHaveLength(1);
-    // A full-frame question beside a background in a column still draws only the one background and mark.
+    // A full-frame question beside a background in a column still draws only the one background, and a
+    // column's panel carries no mark.
     const aside = savedLayout("aside", ["background", "question", "lowerThird"], { x: 0.6, y: 0, w: 0.4, h: 1 });
     const scene = mountOverlay("program", "aside", [aside]);
     expect(scene.host.querySelector(".pk-live-overlay__question-text")).not.toBeNull();
     expect(grounds(scene.host)).toHaveLength(1);
-    expect(marks(scene.host)).toHaveLength(1);
+    expect(marks(scene.host)).toHaveLength(0);
   });
 
   it("draws a scene's QR code to this session in the event app", () => {
@@ -304,12 +305,12 @@ describe("broadcast overlays", () => {
     expect(placed("--overlay-scale")).toBe("0.5");
     expect(host.querySelector(".pk-live-overlay__question-text")?.textContent).toBe("What about hybrid certificates?");
     // An unknown scene, or one retired since, draws as Default (Camera): the speaker's name and a board over the
-    // picture, with no background.
+    // picture, on the background the question brings with it.
     for (const scene of ["no-such-scene", "talk", "panel"]) {
       const unknown = mountOverlay("program", scene, [keynote]);
       expect(unknown.host.querySelector(".pk-live-overlay__name"), scene).not.toBeNull();
       expect(unknown.host.querySelector(".pk-live-overlay__question-text"), scene).not.toBeNull();
-      expect(unknown.host.querySelector('[data-overlay-element="background"]'), scene).toBeNull();
+      expect(unknown.host.querySelector('[data-overlay-element="background"]'), scene).not.toBeNull();
     }
   });
 

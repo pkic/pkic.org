@@ -7,8 +7,9 @@
  * layout box scales them whole. Everything that must be read sits from the
  * top down, so a seated panel in front of the projector covers only the
  * bottom of it. The margins are set in pixels of the frame, whatever the
- * scale: 64 from the top and bottom and 96 from the sides, inside the
- * broadcast graphics-safe area. The graphic starts under the eyebrow's
+ * scale: on the whole frame 64 from the top and bottom and 96 from the
+ * sides, inside the broadcast graphics-safe area; in a panel inside the
+ * frame, only the panel's own inset. The graphic starts under the eyebrow's
  * row, the same on every board.
  */
 @layer components {
@@ -24,7 +25,9 @@
     gap: 28px;
     inline-size: calc(var(--board-width) * 1px);
     block-size: calc(var(--board-height) * 1px);
-    padding: calc(64px * var(--board-frame-px, 1)) calc(96px * var(--board-frame-px, 1));
+    /* The inset in pixels of the frame (`liveBoardInset`): the safe margin on the whole frame, less in a panel. */
+    padding: calc(var(--board-inset-block, 64) * 1px * var(--board-frame-px, 1))
+      calc(var(--board-inset-inline, 96) * 1px * var(--board-frame-px, 1));
     overflow: hidden;
     isolation: isolate;
     color: var(--pk-pqc-on-field);
@@ -35,6 +38,20 @@
   .pk-live-board--ground {
     background: var(--pk-pqc-light), var(--pk-pqc-field);
     animation-name: pk-live-ground-in;
+  }
+  /*
+   * A see-through panel instead of the event's field: the theme's plate and
+   * thin light edge, so the production's own background shows through. It
+   * keeps the field's square corners and the faint mark, but not the dots.
+   * It carries no stripe: a surface that holds boards is not a graphic, and
+   * the boards on it mark their own items.
+   */
+  .pk-live-board--ground:not([data-graphic-theme="event"]) {
+    background: var(--graphic-plate);
+    box-shadow: var(--graphic-edge);
+  }
+  .pk-live-board--ground:not([data-graphic-theme="event"])::before {
+    content: none;
   }
   /* The dots fade out toward the bottom, where the field carries a board on its own. */
   .pk-live-board--ground::before {

@@ -159,6 +159,8 @@ export const livePollClientMessageSchemas = [
     .strict(),
   z.object({ type: z.literal("poll.delete"), pollId: databaseIdSchema }).strict(),
   z.object({ type: z.literal("poll.status"), pollId: databaseIdSchema, status: z.enum(["open", "closed"]) }).strict(),
+  /** Deletes every answer to an opened poll, so a poll tried out in a rehearsal starts again at zero. */
+  z.object({ type: z.literal("poll.reset"), pollId: databaseIdSchema }).strict(),
   z.object({ type: z.literal("poll.vote"), pollId: databaseIdSchema, answer: formAnswerValueSchema }).strict(),
 ] as const;
 

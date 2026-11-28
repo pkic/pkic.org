@@ -1,6 +1,6 @@
 import { storedAgendaSnapshotSchema } from "../assets/shared/schemas/event-agenda-stored";
 import { env } from "cloudflare:workers";
-import { runDurableObjectAlarm } from "cloudflare:test";
+import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
 import { liveOverlayAccessResponseSchema } from "../assets/shared/schemas/live-overlay-access";
 import { livePollResultsResponseSchema } from "../assets/shared/schemas/live-session-poll-results";
@@ -8,6 +8,11 @@ import { livePollDraftSchema, livePollFieldSchema, type LivePoll } from "../asse
 import { callApi } from "./helpers/app";
 import { queryAll } from "./helpers/context";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
+import { LiveRoomSql } from "../functions/_lib/services/live-session/room-sql";
+import { LiveRoomStore } from "../functions/_lib/services/live-session/room-store";
+import { LiveRoomPolls } from "../functions/_lib/services/live-session/room-polls";
+import { LivePollStore } from "../functions/_lib/services/live-session/room-poll-store";
+import type { LiveRoomControls } from "../functions/_lib/services/live-session/room-controls";
 
 const f = createLiveRoomFixture();
 type Client = Awaited<ReturnType<typeof f.connect>>;
@@ -108,6 +113,37 @@ describe("live session polls", () => {
     expect((await speaker.next("room.refused", (message) => message.code !== "LIVE_POLL_ANSWER")).code).toBe(
       "LIVE_POLL_CLOSED",
     );
+  });
+
+  it("resets an opened poll's results to zero for a rehearsal, keeps its status and lets everyone answer again", async () => {
+    const operator = await f.connect({ person: "operator" });
+    const poll = await preparePoll(operator);
+    operator.send({ type: "poll.reset", pollId: poll.id });
+    expect((await operator.next("room.refused")).code).toBe("LIVE_POLL_DRAFT");
+
+    operator.send({ type: "poll.status", pollId: poll.id, status: "open" });
+    const voter = await f.connect({ person: "attendee" });
+    voter.send({ type: "poll.vote", pollId: poll.id, answer: "Root CA" });
+    await operator.next("poll.changed", (message) => message.poll.results?.totalAnswers === 1);
+
+    voter.send({ type: "poll.reset", pollId: poll.id });
+    expect((await voter.next("room.refused")).code).toBe("LIVE_ROOM_STUDIO_REQUIRED");
+
+    const sent = { operator: operator.received.length, voter: voter.received.length };
+    operator.send({ type: "poll.reset", pollId: poll.id });
+    const reset = await operator.next("poll.changed", (message) => message.poll.results?.totalAnswers === 0, {
+      after: sent.operator,
+    });
+    expect(reset.poll.status).toBe("open");
+    expect(counts(reset.poll)).toEqual({ "Root CA": 0, "TLS endpoints": 0, "Code signing": 0 });
+    // The voter's answer is gone, so they may answer again.
+    const cleared = await voter.next("poll.changed", () => true, { after: sent.voter });
+    expect(cleared.poll.myAnswer).toBeNull();
+    voter.send({ type: "poll.vote", pollId: poll.id, answer: "TLS endpoints" });
+    const again = await operator.next("poll.changed", (message) => message.poll.results?.totalAnswers === 1, {
+      after: sent.operator,
+    });
+    expect(counts(again.poll)).toEqual({ "Root CA": 0, "TLS endpoints": 1, "Code signing": 0 });
   });
 
   it("counts each choice of a multiple choice and each score of a rating", async () => {
@@ -237,7 +273,7 @@ describe("live session polls", () => {
     operator.send({
       type: "stage.ticker",
       ticker: {
-        style: "gradient",
+        theme: "navy-glass",
         messages: [{ id: "custom", prefix: "", template: "Next session: Trust & <questions>", condition: "always" }],
       },
     });
@@ -255,7 +291,7 @@ describe("live session polls", () => {
       pollId: null,
       pollPresentation: { chart: "bar" },
       ticker: {
-        style: "gradient",
+        theme: "navy-glass",
         messages: [{ id: "custom", prefix: "", template: "Raise your questions", condition: "always" }],
       },
       panelists: null,
@@ -292,7 +328,7 @@ describe("live session polls", () => {
     operator.send({
       type: "stage.ticker",
       ticker: {
-        style: "gradient",
+        theme: "navy-glass",
         messages: [{ id: "next", prefix: "Next", template: "{{next.title}}", condition: "always" }],
       },
     });
@@ -503,5 +539,37 @@ describe("live session question rewrite", () => {
       [f.occurrenceId],
     );
     expect(audit).toHaveLength(1);
+  });
+});
+
+it("keeps every write of a poll reset whose audit fails, so a reset is all or nothing", async () => {
+  const f = createLiveRoomFixture();
+  await f.setup();
+  const operator = await f.connect({ person: "operator" });
+  const poll = await preparePoll(operator);
+  operator.send({ type: "poll.status", pollId: poll.id, status: "open" });
+  const voter = await f.connect({ person: "attendee" });
+  voter.send({ type: "poll.vote", pollId: poll.id, answer: "Root CA" });
+  await voter.next("poll.changed", (message) => message.poll.myAnswer !== null);
+  await runInDurableObject(f.room(), async (_room, state) => {
+    const sql = new LiveRoomSql(state.storage);
+    const snapshot = () => ({
+      ballots: sql.rows("SELECT user_id, answer_json FROM session_poll_ballots WHERE poll_id = ?", poll.id),
+      poll: sql.rows("SELECT * FROM session_polls WHERE id = ?", poll.id),
+      tallies: sql.rows("SELECT value, votes FROM session_poll_tallies WHERE poll_id = ? ORDER BY value", poll.id),
+      audit: sql.rows("SELECT action FROM staff_actions"),
+    });
+    const before = snapshot();
+    expect(before.ballots).toHaveLength(1);
+    expect(before.tallies).toContainEqual({ value: "Root CA", votes: 1 });
+    const store = new LiveRoomStore(sql);
+    vi.spyOn(store, "recordStaffAction").mockImplementation(() => {
+      throw new Error("the audit write failed");
+    });
+    const polls = new LiveRoomPolls(store, new LivePollStore(sql), {} as LiveRoomControls);
+    expect(() =>
+      polls.resetResults({ userId: "operator", name: "Olga Operator" }, poll.id, new Date().toISOString()),
+    ).toThrow("the audit write failed");
+    expect(snapshot()).toEqual(before);
   });
 });

@@ -40,27 +40,49 @@ function rowMenu(poll: LivePoll, send: Send, onOpen: () => void): MenuItem[] {
       ? { id: "close", label: "Close voting", onSelect: status("closed") }
       : { id: "open", label: poll.status === "draft" ? "Open voting" : "Reopen voting", onSelect: status("open") },
   ];
+  const answers = poll.results?.totalAnswers ?? 0;
   if (poll.status === "draft")
     items.push({
       id: "delete",
       label: "Delete poll",
       danger: true,
       separatorBefore: true,
-      onSelect: () => {
-        void (async () => {
-          const confirmed = await confirmAction({
-            title: "Delete this poll?",
-            body: `“${poll.field.label}” is removed for every operator.`,
-            confirmLabel: "Delete poll",
-            tone: "danger",
-          });
-          if (confirmed) send({ type: "poll.delete", pollId: poll.id });
-        })().catch((error: unknown) =>
-          toast(error instanceof Error ? error.message : "Could not complete the action.", "error"),
-        );
-      },
+      onSelect: confirmed(
+        {
+          title: "Delete this poll?",
+          body: `“${poll.field.label}” is removed for every operator.`,
+          confirmLabel: "Delete poll",
+        },
+        () => send({ type: "poll.delete", pollId: poll.id }),
+      ),
+    });
+  else if (answers > 0)
+    items.push({
+      id: "reset",
+      label: "Reset results",
+      danger: true,
+      separatorBefore: true,
+      onSelect: confirmed(
+        {
+          title: "Reset this poll's results?",
+          body: `${answers === 1 ? "The 1 answer" : `All ${formatNumber(answers)} answers`} to “${poll.field.label}” ${answers === 1 ? "is" : "are"} deleted and the count starts at 0. Everyone can answer again. This can't be undone.`,
+          confirmLabel: "Reset results",
+        },
+        () => send({ type: "poll.reset", pollId: poll.id }),
+      ),
     });
   return items;
+}
+
+/** A menu action that runs only once the operator confirms it in a danger dialog. */
+function confirmed(dialog: { title: string; body: string; confirmLabel: string }, run: () => void) {
+  return () => {
+    void (async () => {
+      if (await confirmAction({ ...dialog, tone: "danger" })) run();
+    })().catch((error: unknown) =>
+      toast(error instanceof Error ? error.message : "Could not complete the action.", "error"),
+    );
+  };
 }
 
 /** The leading answer and its share, "Yes · 62%", as the running tallies have it; nothing before any answer. */

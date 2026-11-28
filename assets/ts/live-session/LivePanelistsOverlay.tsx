@@ -1,9 +1,8 @@
 import { formatClockRangeInZone } from "../../shared/format-date";
-import type { OverlayRect } from "../../shared/live-overlay-geometry";
 import type { LiveCredit, LivePanelists, LiveRoomSession } from "../../shared/schemas/live-session-room";
 import { SectionHeading } from "../ui/SectionHeading";
 import { Avatar } from "../ui/Avatar";
-import { LiveBoard, liveBoardSize, type LiveBoardShape } from "./LiveBoard";
+import { LiveBoard, liveBoardSize, type LiveBoardShape, type LiveBoardBox } from "./LiveBoard";
 import { LiveCreditTitles } from "./LiveCreditTitles";
 import "./LivePanelistsOverlay.css";
 
@@ -107,7 +106,7 @@ export function LivePanelistsOverlay({
 }: {
   session: LiveRoomSession;
   panelists: LivePanelists | null;
-  box: Pick<OverlayRect, "width" | "height">;
+  box: LiveBoardBox;
 }) {
   if (!panelists) return null;
   return (

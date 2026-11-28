@@ -275,7 +275,7 @@ describe("live interaction stays local to its Durable Object", () => {
     operator.send({
       type: "stage.ticker",
       ticker: {
-        style: "gradient",
+        theme: "navy-glass",
         messages: [{ id: "local", prefix: "", template: "Local ticker", condition: "always" }],
       },
     });
@@ -286,7 +286,7 @@ describe("live interaction stays local to its Durable Object", () => {
       type: "preview.set",
       composition: {
         ticker: {
-          style: "gradient",
+          theme: "navy-glass",
           messages: [{ id: "preview", prefix: "", template: "Local preview", condition: "always" }],
         },
       },

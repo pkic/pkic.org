@@ -1,9 +1,8 @@
 import { liveQuestionFit } from "../../shared/live-stage-display";
-import type { OverlayRect } from "../../shared/live-overlay-geometry";
 import { liveQuestionAddresseeName } from "../../shared/live-room-credits";
 import type { LiveCredit, LiveStage } from "../../shared/schemas/live-session-room";
 import { Avatar } from "../ui/Avatar";
-import { LiveBoard } from "./LiveBoard";
+import { LiveBoard, type LiveBoardBox } from "./LiveBoard";
 import "./LiveQuestionOverlay.css";
 import { LiveScreenText } from "./LiveScreenText";
 
@@ -56,7 +55,7 @@ export function LiveQuestionOverlay({
 }: {
   stage: LiveStage;
   credits: readonly LiveCredit[];
-  box: Pick<OverlayRect, "width" | "height">;
+  box: LiveBoardBox;
 }) {
   const question = stage.question;
   if (!question) return null;

@@ -118,7 +118,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    this.sql = new LiveRoomSql(ctx.storage.sql);
+    this.sql = new LiveRoomSql(ctx.storage);
     this.store = new LiveRoomStore(this.sql);
     this.location = new LiveLocationChatStore(this.sql);
     this.databaseSession = new LiveRoomDatabaseSession(env.DB, this.store);

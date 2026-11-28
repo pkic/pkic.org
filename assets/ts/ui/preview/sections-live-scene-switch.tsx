@@ -59,7 +59,7 @@ export const SCENE_SWITCH_CLOSE = scene(
   {
     background: COLUMN,
     topQuestions: COLUMN,
-    ticker: liveOverlayPixelBox(0, 0, 1920, 126, { horizontal: "center", vertical: "top" }),
+    ticker: liveOverlayPixelBox(48, 48, 1824, 72, { horizontal: "center", vertical: "top" }),
     lowerThird: liveOverlayPixelBox(48, 738, 1056, 288, { horizontal: "left", vertical: "bottom" }),
     timer: liveOverlayPixelBox(768, 174, 336, 120, { horizontal: "right", vertical: "top" }),
     reactions: liveOverlayPixelBox(48, 48, 380, 984, { horizontal: "left", vertical: "middle" }),

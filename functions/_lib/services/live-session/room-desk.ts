@@ -41,6 +41,8 @@ export async function operateLiveDesk(
       return desk.polls.remove(actor, message.pollId, at);
     case "poll.status":
       return desk.polls.setStatus(actor, message.pollId, message.status, at);
+    case "poll.reset":
+      return desk.polls.resetResults(actor, message.pollId, at);
     case "question.prepare":
       return desk.preparedQuestions.prepare(actor, session, message, at);
     case "question.prepared.delete":

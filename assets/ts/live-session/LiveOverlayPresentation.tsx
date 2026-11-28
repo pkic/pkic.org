@@ -3,6 +3,7 @@ import { LiveTickerOverlay } from "./LiveTickerOverlay";
 import type { LiveOverlayView, LiveTimerGraphic } from "../../shared/schemas/live-session-room";
 import type { ComponentChildren } from "preact";
 import { useContext } from "preact/hooks";
+import { LIVE_FIELD_THEME_DEFAULT } from "../../shared/live-graphic-theme";
 import { liveTimerLayout } from "../../shared/live-timer-policy";
 import type { LiveRoomState } from "./live-room-state";
 import { useLiveTimerGraphicReading } from "./useLiveCountdown";
@@ -18,7 +19,16 @@ import {
 } from "./live-overlay-graphics";
 import { LiveOverlayLayer, useLiveSceneMove } from "./LiveOverlayLayer";
 import { LiveSpeakerWelcomeOverlay } from "./LiveSpeakerWelcomeOverlay";
-import { BOARDS, meets, NO_TIMER_CLEARANCE, joinedPanelBox, timerClearance, within } from "./live-overlay-fields";
+import {
+  BOARDS,
+  joinedPanelBox,
+  liveListBox,
+  meets,
+  NO_TIMER_CLEARANCE,
+  timerClearance,
+  within,
+  liveSceneGround,
+} from "./live-overlay-fields";
 import { LivePanelistsOverlay } from "./LivePanelistsOverlay";
 import { LivePanelQuestionOverlay } from "./LivePanelQuestionOverlay";
 import { LivePollOverlay } from "./LivePollOverlay";
@@ -102,7 +112,7 @@ function TimerOverlay({
   );
 }
 
-/** The cards with colors of their own, which a timer never covers. */
+/** The cards with colors of their own, which a timer never covers; inside the background they drop them and read on it. */
 const CARD_BOARDS: ReadonlySet<LiveOverlayElement> = new Set(["schedule", "checkIn"]);
 
 /** The space between timers stacked in the layout's timer box, in fractions of the frame's height. */
@@ -215,6 +225,8 @@ type DrawContext = {
   panel: LiveOverlayElementPlacement | null;
   /** The event the output belongs to, for links its graphics carry; none on a sample. */
   eventSlug: string | null;
+  /** The graphic sits inside the scene's background, and reads on it. */
+  onGround: boolean;
 };
 
 type Layer = {
@@ -234,32 +246,41 @@ function prefersReducedMotion(): boolean {
  * a board hides; that order reaches each layer as its `order`, never as its
  * place in the document, so a scene change leaves every graphic's node alone.
  */
+/** A board's box on the frame, with the scene's text size for it. */
+const boardBox = (placement: LiveOverlayElementPlacement) => ({
+  ...overlayBoxPixels(placement),
+  textSize: placement.textSize,
+});
+
 const PROGRAM_LAYERS: ReadonlyMap<LiveProgramLayer, Layer> = new Map(
   (
     [
       {
         element: "background",
-        // The one field of the frame: drawn whenever the scene includes it, with or without a board on it.
-        draw: (_state, { placement }) => <LiveBoardGround box={overlayBoxPixels(placement)} />,
+        // The one field of the frame: drawn whenever the scene includes it, or, when it waits for a board, under the one on air.
+        draw: (_state, { placement }) => (
+          <LiveBoardGround box={overlayBoxPixels(placement)} theme={placement.fieldTheme ?? LIVE_FIELD_THEME_DEFAULT} />
+        ),
       },
       {
         element: "panelists",
         draw: (state, { placement, panel }) =>
           panel ? (
-            <LivePanelQuestionOverlay stage={state.stage} session={state.session} box={overlayBoxPixels(panel)} />
+            <LivePanelQuestionOverlay stage={state.stage} session={state.session} box={boardBox(panel)} />
           ) : state.stage.panelists ? (
-            <LivePanelistsOverlay
-              session={state.session}
-              panelists={state.stage.panelists}
-              box={overlayBoxPixels(placement)}
-            />
+            <LivePanelistsOverlay session={state.session} panelists={state.stage.panelists} box={boardBox(placement)} />
           ) : null,
       },
       {
         element: "schedule",
-        draw: (state, { placement, animate }) =>
+        draw: (state, { placement, animate, onGround }) =>
           state.stage.schedule ? (
-            <LiveScheduleOverlay schedule={state.stage.schedule} box={overlayBoxPixels(placement)} animate={animate} />
+            <LiveScheduleOverlay
+              schedule={state.stage.schedule}
+              box={overlayBoxPixels(placement)}
+              onGround={onGround}
+              animate={animate}
+            />
           ) : null,
       },
       {
@@ -270,11 +291,7 @@ const PROGRAM_LAYERS: ReadonlyMap<LiveProgramLayer, Layer> = new Map(
         element: "question",
         draw: (state, { placement, panel }) =>
           state.stage.question && !panel ? (
-            <LiveQuestionOverlay
-              stage={state.stage}
-              credits={state.session.credits}
-              box={overlayBoxPixels(placement)}
-            />
+            <LiveQuestionOverlay stage={state.stage} credits={state.session.credits} box={boardBox(placement)} />
           ) : null,
       },
       {
@@ -290,21 +307,21 @@ const PROGRAM_LAYERS: ReadonlyMap<LiveProgramLayer, Layer> = new Map(
         element: "poll",
         draw: (state, { placement }) =>
           state.stage.poll ? (
-            <LivePollOverlay stage={state.stage} polls={state.polls} box={overlayBoxPixels(placement)} />
+            <LivePollOverlay stage={state.stage} polls={state.polls} box={boardBox(placement)} />
           ) : null,
       },
       {
         element: "topQuestions",
         draw: (state, { placement }) =>
           state.stage.topQuestions?.questions.length ? (
-            <LiveTopQuestionsOverlay list={state.stage.topQuestions} box={overlayBoxPixels(placement)} />
+            <LiveTopQuestionsOverlay list={state.stage.topQuestions} box={boardBox(placement)} />
           ) : null,
       },
       {
         element: "chat",
         draw: (state, { placement }) =>
           state.stage.chatFeed?.messages.length ? (
-            <LiveChatFeedOverlay list={state.stage.chatFeed} box={overlayBoxPixels(placement)} />
+            <LiveChatFeedOverlay list={state.stage.chatFeed} box={boardBox(placement)} />
           ) : null,
       },
       {
@@ -327,8 +344,10 @@ const PROGRAM_LAYERS: ReadonlyMap<LiveProgramLayer, Layer> = new Map(
       },
       {
         element: "ticker",
-        draw: (state) =>
-          state.stage.ticker?.segments.length ? <LiveTickerOverlay ticker={state.stage.ticker} /> : null,
+        draw: (state, { placement }) =>
+          state.stage.ticker?.segments.length ? (
+            <LiveTickerOverlay ticker={state.stage.ticker} box={overlayBoxPixels(placement)} />
+          ) : null,
       },
       // Reactions float only while an operator has them on for this output.
       {
@@ -453,7 +472,25 @@ export function LiveOverlayPresentation({
     : [];
   // The scene's background: the frame's one field. No board draws a field of its own, inside it or outside, and
   // Up next inside it drops its card's plate, so nothing reads as a card on a card.
-  const ground = view !== "stage-display" && elements.background.visible ? elements.background : null;
+  // A background that waits for a board shows only under the front one that shows: on air, neither covered nor
+  // waiting for its turn, or selected in the layout editor. It takes the box that board draws in now (the panel
+  // joined with the question, or a list grown into its empty partner's half), before the ticker moves it clear.
+  const drawnOnAir = (other: LiveOverlayElement) =>
+    state !== null && isLiveProgramLayer(other) && liveOverlayDrawn(state.stage, other);
+  const ground =
+    view !== "stage-display" && state
+      ? liveSceneGround(
+          allowed,
+          (board) =>
+            board === focus ||
+            (isLiveProgramLayer(board) &&
+              liveOverlayDrawn(state.stage, board) &&
+              liveOverlayCoveredBy(state.stage, elements, board) === null &&
+              !liveOverlayWaitsForTurn(state.stage, elements, board, now)),
+          (board) =>
+            (board === "panelists" || board === "question") && panel ? panel : liveListBox(allowed, board, drawnOnAir),
+        )
+      : null;
   const timers =
     state && view !== "stage-display" && elements.timer.visible
       ? timerSlots(sceneTimerLook(state.stage.timerGraphics, elements.timer), elements.timer, cardBoxes)
@@ -491,8 +528,11 @@ export function LiveOverlayPresentation({
                     />
                   </LiveOverlayLayer>
                 ));
-              const placement = elements[element];
               const joined = element === "panelists" && panel !== null;
+              // An audience list takes its stacked partner's half too while the partner has nothing to show.
+              const listed = liveListBox(elements, element, drawnOnAir);
+              // A background that waits for a board sits in the box of the board on it.
+              const placement = element === "background" && ground !== null ? ground : listed;
               const box = joined ? panel : placement;
               // A board covered by one in front, or waiting for its turn in a spot, is left out, as the studio's row
               // says. The background always draws, and so does the layout editor's selected element.
@@ -505,8 +545,12 @@ export function LiveOverlayPresentation({
                 isLiveProgramLayer(element) &&
                 (liveOverlayCoveredBy(state.stage, elements, joined ? "question" : element) !== null ||
                   liveOverlayWaitsForTurn(state.stage, elements, joined ? "question" : element, now));
+              const onGround = CARD_BOARDS.has(element) && ground !== null && within(box, ground);
+              const waiting = element === "background" && ground === null && element !== focus;
               const content =
-                placement.visible && !covered ? draw(state, { placement, animate, panel, eventSlug }) : null;
+                placement.visible && !covered && !waiting
+                  ? draw(state, { placement, animate, panel, eventSlug, onGround })
+                  : null;
               return content ? (
                 <LiveOverlayLayer
                   key={joined ? "panel" : element}
@@ -516,7 +560,7 @@ export function LiveOverlayPresentation({
                   on={!stack || !isLiveProgramLayer(element) || liveOverlayDrawn(state.stage, element)}
                   dimmed={focus !== null && focus !== element && !(joined && focus === "question")}
                   timerClearance={BOARDS.has(element) ? timerClearance(box, timerBoxes) : NO_TIMER_CLEARANCE}
-                  onGround={element === "schedule" && ground !== null && within(box, ground)}
+                  onGround={onGround}
                   placement={box}
                 >
                   {content}

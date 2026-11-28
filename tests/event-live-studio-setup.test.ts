@@ -44,7 +44,7 @@ async function read(person: "operator" | "secondOperator" = "operator") {
   return eventLiveStudioSetupResponseSchema.parse(await response.json());
 }
 const ticker = {
-  style: "accent" as const,
+  theme: "smoked-glass" as const,
   speed: 120,
   messages: [{ id: "wifi", prefix: "Wi-Fi", template: "PKIC-guest", condition: "always" as const }],
 };
@@ -175,5 +175,19 @@ describe("event studio setup", () => {
       )
       .run();
     expect(await read()).toEqual({ graphics: { ticker }, layouts: { stage: setup().layouts.stage }, updatedAt: now });
+  });
+
+  it("restores a ticker saved in its earlier, source-shaped form", async () => {
+    const now = new Date().toISOString();
+    await env.DB.prepare(
+      "INSERT INTO event_live_studio_setups(event_id,setup_json,created_at,updated_at) VALUES(?,?,?,?)",
+    )
+      .bind(f.eventId, JSON.stringify({ graphics: { ticker: { source: "next" } }, layouts: {} }), now, now)
+      .run();
+    const restored = (await read()).graphics.ticker;
+    expect(restored?.messages).toEqual([
+      { id: "retained", prefix: "Next", template: "{{next.title}}", condition: "always" },
+    ]);
+    expect(restored).not.toHaveProperty("segments");
   });
 });

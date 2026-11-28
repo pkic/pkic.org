@@ -4,6 +4,7 @@ import {
   type EventLiveStudioSetupResponse,
   type LiveStudioSetup,
 } from "../../../../assets/shared/schemas/live-studio-setup";
+import { readStoredLiveTicker } from "../../../../assets/shared/schemas/live-session-ticker";
 import { first } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
@@ -11,6 +12,14 @@ import { persistedUtcInstant } from "../../utils/time";
 
 const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+
+/** A saved ticker as the studio keeps it: the stored form normalized, without the stage's generated segments. */
+function readStudioTicker(value: unknown): unknown {
+  const ticker = readStoredLiveTicker(value);
+  if (ticker === null || typeof ticker !== "object" || !("segments" in ticker)) return ticker;
+  const { segments: _segments, ...config } = ticker as Record<string, unknown>;
+  return config;
+}
 
 /**
  * A stored setup, read part by part: a graphic or workspace that no longer
@@ -25,7 +34,8 @@ export function readLiveStudioSetupJson(json: string): LiveStudioSetup {
     graphics: Object.fromEntries(
       (Object.keys(shape) as Array<keyof typeof shape>).flatMap((graphic) => {
         if (graphics[graphic] === undefined) return [];
-        const parsed = shape[graphic].safeParse(graphics[graphic]);
+        const saved = graphic === "ticker" ? readStudioTicker(graphics[graphic]) : graphics[graphic];
+        const parsed = shape[graphic].safeParse(saved);
         return parsed.success && parsed.data !== undefined ? [[graphic, parsed.data]] : [];
       }),
     ),

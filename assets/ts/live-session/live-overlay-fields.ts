@@ -1,3 +1,4 @@
+import { liveOverlayBoxOf } from "../../shared/live-overlay-layout-presets";
 import { liveOverlaySpotOf, sameLiveBox } from "../../shared/live-overlay-spots";
 import type {
   LiveOverlayElement,
@@ -26,6 +27,35 @@ export function within(inner: LiveOverlayElementPlacement, outer: LiveOverlayEle
 /** Whether two boxes of the frame meet. */
 export function meets(one: LiveOverlayElementPlacement, other: LiveOverlayElementPlacement) {
   return one.x < other.x + other.w && one.x + one.w > other.x && one.y < other.y + other.h && one.y + one.h > other.y;
+}
+
+/** The cards: they carry a plate of their own, so the background never follows one. */
+const CARDS: ReadonlySet<LiveOverlayElement> = new Set(["schedule", "checkIn"]);
+
+/**
+ * The scene's background as it draws now: none when the scene leaves it out.
+ * One that waits for a board (`withBoardOnly`) draws only while a board is on
+ * air, under the frontmost one and in its box, so a question in a band under
+ * the picture and a poll in the slides' place each get the scene's one
+ * background, and the picture stays clear until one comes. A card, such as Up
+ * next, keeps its own plate instead. `boxOf` gives the box a board draws in
+ * now, such as a list grown into its empty partner's half.
+ */
+export function liveSceneGround(
+  elements: LiveOverlayLayoutElements,
+  onAir: (board: LiveOverlayElement) => boolean,
+  boxOf: (board: LiveOverlayElement) => LiveOverlayElementPlacement = (board) => elements[board],
+): LiveOverlayElementPlacement | null {
+  const background = elements.background;
+  if (!background.visible) return null;
+  if (!background.withBoardOnly) return background;
+  const front = [...BOARDS]
+    .filter((board) => !CARDS.has(board) && elements[board].visible && onAir(board))
+    .reduce<LiveOverlayElement | null>(
+      (top, board) => (top === null || (elements[board].layer ?? 0) > (elements[top].layer ?? 0) ? board : top),
+      null,
+    );
+  return front === null ? null : { ...background, ...liveOverlayBoxOf(boxOf(front)) };
 }
 
 /** The boards and the cards: each keeps its lines clear of the timers on its top-right corner. */
@@ -111,8 +141,39 @@ export function joinedPanelBox(elements: LiveOverlayLayoutElements): LiveOverlay
     return liveOverlaySpotOf(elements, "question")?.includes("panelists") ? question : null;
   // Stacked, they join only on their own: a board in a spot takes that spot's turns.
   if (liveOverlaySpotOf(elements, "question") || liveOverlaySpotOf(elements, "panelists")) return null;
-  if (Math.abs(question.x - panelists.x) > EDGE || Math.abs(question.w - panelists.w) > EDGE) return null;
-  const [top, bottom] = question.y <= panelists.y ? [question, panelists] : [panelists, question];
+  const stacked = stackedBox(question, panelists);
+  return stacked && { ...question, ...stacked, horizontal: "center", vertical: "middle" };
+}
+
+/** Two boxes stacked edge to edge at the same width, joined into one; null when they are not. */
+function stackedBox(one: LiveOverlayElementPlacement, other: LiveOverlayElementPlacement) {
+  if (Math.abs(one.x - other.x) > EDGE || Math.abs(one.w - other.w) > EDGE) return null;
+  const [top, bottom] = one.y <= other.y ? [one, other] : [other, one];
   if (Math.abs(top.y + top.h - bottom.y) > EDGE) return null;
-  return { ...question, y: top.y, h: top.h + bottom.h, horizontal: "center", vertical: "middle" };
+  return { y: top.y, h: top.h + bottom.h };
+}
+
+/** The audience lists that share a column: each is the other's partner. */
+const LIST_PARTNERS: Partial<Record<LiveOverlayElement, LiveOverlayElement>> = {
+  topQuestions: "chat",
+  chat: "topQuestions",
+};
+
+/**
+ * The box an audience list fills: its own, or its own and its partner's
+ * joined when the layout stacks the two edge to edge and the partner has
+ * nothing to show, so a break with no questions yet gives the chat the whole
+ * column instead of leaving half of it empty. `drawn` says whether a graphic
+ * has something on air.
+ */
+export function liveListBox(
+  elements: LiveOverlayLayoutElements,
+  element: LiveOverlayElement,
+  drawn: (element: LiveOverlayElement) => boolean,
+): LiveOverlayElementPlacement {
+  const own = elements[element];
+  const partner = LIST_PARTNERS[element];
+  if (!partner || !elements[partner].visible || drawn(partner)) return own;
+  const stacked = stackedBox(own, elements[partner]);
+  return stacked ? { ...own, ...stacked } : own;
 }

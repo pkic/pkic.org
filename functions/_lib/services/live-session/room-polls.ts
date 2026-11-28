@@ -14,6 +14,7 @@ type Operator = { userId: string; name: string };
 const REFUSALS = {
   missing: { code: "LIVE_POLL_NOT_FOUND", message: "That poll is no longer available." },
   notDraft: { code: "LIVE_POLL_NOT_DRAFT", message: "Only a poll that has not opened yet can be deleted." },
+  draft: { code: "LIVE_POLL_DRAFT", message: "This poll has not opened yet, so it has no results to reset." },
   answersRemoved: {
     code: "LIVE_POLL_ANSWERS_REMOVED",
     message: "Removing a choice deletes the answers it received. Confirm to remove it.",
@@ -113,6 +114,27 @@ export class LiveRoomPolls {
       { pollId },
       at,
     );
+    return { messages: [], polls: [pollId] };
+  }
+
+  /**
+   * Deletes every answer to an opened or closed poll and keeps its status, so
+   * a poll tried out in a rehearsal counts from zero on the day. Everyone who
+   * answered may answer again.
+   */
+  resetResults(operator: Operator, pollId: string, at: string): LiveControlOutcome {
+    const poll = this.polls.poll(pollId);
+    if (!poll) return REFUSALS.missing;
+    if (poll.status === "draft") return REFUSALS.draft;
+    this.store.atomically(() => {
+      this.polls.resetResults(pollId, operator, at);
+      this.store.recordStaffAction(
+        operator.userId,
+        "live_session.poll.reset",
+        { pollId, removedAnswers: poll.respondents },
+        at,
+      );
+    });
     return { messages: [], polls: [pollId] };
   }
 

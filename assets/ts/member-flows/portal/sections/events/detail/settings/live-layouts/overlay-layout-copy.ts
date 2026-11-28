@@ -52,9 +52,10 @@ export function layoutSwitchChoice(placement: Pick<LiveOverlayElementPlacement, 
  */
 export function describeGraphicSwitch(
   element: LiveOverlayElement,
-  placement: Pick<LiveOverlayElementPlacement, "comesOn">,
+  placement: Pick<LiveOverlayElementPlacement, "comesOn" | "withBoardOnly">,
 ): string {
   const by: LiveOverlayElementSwitch = LIVE_OVERLAY_ELEMENT_SWITCHES[element];
+  if (placement.withBoardOnly) return "Under the board on air";
   return by === "room" ? layoutSwitchChoice(placement).label : LAYOUT_SWITCH_NOTES[by];
 }
 

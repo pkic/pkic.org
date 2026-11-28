@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { LIVE_FIELD_THEMES, LIVE_FIELD_THEME_DEFAULT } from "../../assets/shared/live-graphic-theme";
 import { liveOverlayDrawn } from "../../assets/shared/live-overlay-cover";
 import { LIVE_OVERLAY_PRESET_LAYOUTS } from "../../assets/shared/live-overlay-layout-presets";
 import {
@@ -8,7 +9,11 @@ import {
 } from "../../assets/shared/schemas/live-overlay-layout";
 import { LIVE_TIMER_PRESENTATIONS } from "../../assets/shared/schemas/live-session-timer";
 import { describeGraphicSwitch } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-copy";
-import { graphicActions } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-graphic-actions";
+import {
+  graphicActions,
+  graphicLookChange,
+  graphicLookElement,
+} from "../../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-graphic-actions";
 import { describeGraphicPosition } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-graphics";
 import { layoutElementsChanged } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-sharing";
 import {
@@ -94,6 +99,77 @@ describe("a graphic's menu", () => {
     looks("ring").find((item) => item.id === "look-auto")!.onSelect!();
     expect(handlers.onLook).toHaveBeenLastCalledWith({ timerLook: undefined });
   });
+
+  it("offers the background's colors on navy glass until the scene picks one, and navy glass clears the choice", () => {
+    const looks = (fieldTheme?: "event") =>
+      graphicActions(
+        { ...elements, background: { ...elements.background, fieldTheme } },
+        "background",
+        false,
+        handlers,
+      ).filter((item) => item.id.startsWith("look-"));
+    const checked = (fieldTheme?: "event") =>
+      looks(fieldTheme)
+        .filter((item) => item.checked)
+        .map((item) => item.id);
+    expect(
+      looks()
+        .map((item) => item.id)
+        .sort(),
+    ).toEqual(LIVE_FIELD_THEMES.map((theme) => `look-${theme}`).sort());
+    expect(checked()).toEqual([`look-${LIVE_FIELD_THEME_DEFAULT}`]);
+    expect(checked("event")).toEqual(["look-event"]);
+    looks().find((item) => item.id === "look-event")!.onSelect!();
+    expect(handlers.onLook).toHaveBeenLastCalledWith({ fieldTheme: "event" });
+    looks("event").find((item) => item.id === `look-${LIVE_FIELD_THEME_DEFAULT}`)!.onSelect!();
+    expect(handlers.onLook).toHaveBeenLastCalledWith({ fieldTheme: undefined });
+  });
+
+  it("lets the background wait for a board, and Always clears the choice", () => {
+    const shows = (withBoardOnly?: true) =>
+      graphicActions(
+        { ...elements, background: { ...elements.background, withBoardOnly } },
+        "background",
+        false,
+        handlers,
+      ).filter((item) => item.id.startsWith("shows-"));
+    expect(shows().map((item) => [item.label, item.checked])).toEqual([
+      ["Always", true],
+      ["Under the board on air", false],
+    ]);
+    expect(shows(true).find((item) => item.checked)!.label).toBe("Under the board on air");
+    expect(shows()[0]!.separatorBefore).toBe(true);
+    shows()[1]!.onSelect!();
+    expect(handlers.onLook).toHaveBeenLastCalledWith({ withBoardOnly: true });
+    shows(true)[0]!.onSelect!();
+    expect(handlers.onLook).toHaveBeenLastCalledWith({ withBoardOnly: undefined });
+    expect(graphicLookElement({ withBoardOnly: true })).toBe("background");
+  });
+
+  it("offers a board's text size at Standard until the scene picks one, and Standard follows the box again", () => {
+    const sizes = (textSize?: number) =>
+      graphicActions({ ...elements, question: { ...elements.question, textSize } }, "question", false, handlers).find(
+        (item) => item.id === "text-size",
+      )!;
+    expect(sizes().description).toBe("Standard");
+    expect(sizes().children!.map((item) => item.label)).toEqual(["80%", "90%", "Standard", "115%", "130%", "150%"]);
+    expect(sizes(1.3).description).toBe("130%");
+    expect(sizes(1.3).children!.find((item) => item.checked)!.label).toBe("130%");
+    sizes().children!.find((item) => item.label === "150%")!.onSelect!();
+    expect(handlers.onLook).toHaveBeenLastCalledWith({ element: "question", textSize: 1.5 });
+    sizes(1.5).children!.find((item) => item.label === "Standard")!.onSelect!();
+    expect(handlers.onLook).toHaveBeenLastCalledWith({ element: "question", textSize: undefined });
+    expect(graphicLookElement({ element: "poll", textSize: 1.15 })).toBe("poll");
+    expect(graphicLookChange({ element: "poll", textSize: 1.15 })).toEqual({ textSize: 1.15 });
+    // Graphics that are not boards size their text with their box alone.
+    expect(graphicActions(elements, "lowerThird", false, handlers).some((item) => item.id === "text-size")).toBe(false);
+  });
+
+  it("files each look under its own graphic", () => {
+    expect(graphicLookElement({ qrLook: "card" })).toBe("qrCode");
+    expect(graphicLookElement({ timerLook: undefined })).toBe("timer");
+    expect(graphicLookElement({ fieldTheme: "event" })).toBe("background");
+  });
 });
 
 describe("sample content for a graphic that is off", () => {
@@ -126,6 +202,8 @@ describe("what a scene saves for a shared graphic", () => {
     const elements = LIVE_OVERLAY_PRESET_LAYOUTS.default.elements;
     const shared = { ...elements, timer: { ...elements.timer, shared: true } };
     expect(layoutElementsChanged(shared, { ...shared, timer: { ...shared.timer, timerLook: "ring" } })).toBe(true);
+    const board = { ...elements, poll: { ...elements.poll, shared: true } };
+    expect(layoutElementsChanged(board, { ...board, poll: { ...board.poll, textSize: 1.3 } })).toBe(true);
     expect(layoutElementsChanged(shared, { ...shared, timer: { ...shared.timer, x: shared.timer.x + 0.1 } })).toBe(
       false,
     );

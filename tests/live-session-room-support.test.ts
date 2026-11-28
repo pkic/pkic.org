@@ -135,7 +135,7 @@ describe("live room configured controls and participant chat", () => {
     const joined = await f.connectChat("attendee");
     expect((await joined.next("location.chat.snapshot")).chat).toEqual([]);
     await runInDurableObject(f.chatRoom(), (_room, state) => {
-      const chat = new LiveRoomChat(new LiveRoomSql(state.storage.sql));
+      const chat = new LiveRoomChat(new LiveRoomSql(state.storage));
       for (const channel of ["attendee", "operator"] as const)
         expect(chat.page(channel, { before: null, limit: 10, shownOnly: false, occurrenceIds: null }).rows).toEqual([]);
     });
@@ -207,7 +207,7 @@ describe("live room configured controls and participant chat", () => {
   it("bounds the stored feed independently of the number of authors", async () => {
     await f.connectChat("operator");
     await runInDurableObject(f.chatRoom(), (_room, state) => {
-      const chat = new LiveRoomChat(new LiveRoomSql(state.storage.sql));
+      const chat = new LiveRoomChat(new LiveRoomSql(state.storage));
       const now = Date.now();
       for (let index = 0; index < LIVE_CHAT_POLICY.storedMessages + 1; index++)
         chat.send({ userId: crypto.randomUUID(), name: "Synthetic author" }, `Stored ${index}`, now + index);

@@ -64,8 +64,9 @@ export function liveOverlayCoveredBy(
   return (
     above.find(
       (board) =>
-        // The background covers like a board when a scene stacks it in front.
-        (LIVE_OVERLAY_BOARDS.has(board) || board === "background") &&
+        // The background covers like a board when a scene stacks it in front, unless it waits for a board: then it
+        // only ever sits under the board on air, so it hides nothing.
+        (LIVE_OVERLAY_BOARDS.has(board) || (board === "background" && elements.background.withBoardOnly !== true)) &&
         elements[board].visible &&
         liveOverlayDrawn(stage, board) &&
         (spot?.includes(board) ? !takesTurns : liveBoxCovers(elements[board], elements[layer])),

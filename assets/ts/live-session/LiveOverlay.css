@@ -132,11 +132,12 @@
     );
   }
   /*
-   * Up next inside the scene's background reads on it: the field's type, no
-   * plate or stripe of its own, so it never looks like a card on a card.
-   * Outside a background it keeps its card.
+   * Up next and the check-in code inside the scene's background read on it:
+   * the field's type, no plate or stripe of their own, so neither looks like a
+   * card on a card. The code keeps its white quiet zone for any phone camera.
+   * Outside a background each keeps its card.
    */
-  .pk-live-overlay__layer[data-on-ground] .pk-live-schedule {
+  .pk-live-overlay__layer[data-on-ground] :is(.pk-live-schedule, .pk-live-qr-card) {
     --graphic-ink: var(--pk-pqc-on-field);
     --graphic-ink-muted: var(--pk-pqc-on-field-muted);
     --graphic-contrast: var(--pk-pqc-forest);
@@ -144,6 +145,13 @@
     --graphic-plate: none;
     --graphic-stripe: none;
     --graphic-edge: none;
+  }
+  /* The field's light type never reaches the code: on a background it is black on its white quiet zone in every theme. */
+  .pk-live-overlay__layer[data-on-ground] .pk-live-qr-card:is(:not([data-look]), [data-look="card"]) .pk-qr-graphic__ground {
+    fill: var(--pk-pqc-paper);
+  }
+  .pk-live-overlay__layer[data-on-ground] .pk-live-qr-card:is(:not([data-look]), [data-look="card"]) .pk-qr-graphic__modules {
+    fill: var(--pk-pqc-ink);
   }
   .pk-live-overlay__surface {
     position: relative;

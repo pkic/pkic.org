@@ -2,10 +2,10 @@
  * Audience lists on the conference board. Top questions lead with their
  * votes in a fixed column and a bar of their votes against the leader's, in
  * the event stripe; chat sets each message on a light panel beside its
- * author's initials, the newest last and marked with the stripe. Each
- * question or message shows up to three lines, clamped at the end of a line
- * so a cut never strands a word. Type steps down as a list grows, so a full
- * list still fits its board.
+ * author's initials, from the top under the eyebrow, the newest last and
+ * marked with the stripe. Each question or message shows up to three lines,
+ * clamped at the end of a line so a cut never strands a word. Type steps
+ * down as a list grows, so a full list still fits its board.
  */
 @layer components {
   .pk-live-lists__items {
@@ -108,27 +108,32 @@
     border-inline-start: 8px solid color-mix(in srgb, var(--pk-pqc-on-field) 24%, transparent);
     background: color-mix(in srgb, var(--pk-pqc-on-field) 10%, transparent);
   }
-  .pk-live-lists__message:last-child {
+  .pk-live-lists__message[data-newest] {
     border-image: linear-gradient(180deg, var(--pk-pqc-green), var(--pk-pqc-blue), var(--pk-pqc-orange)) 1;
     background: color-mix(in srgb, var(--pk-pqc-on-field) 18%, transparent);
   }
   /*
-   * Chat: the list fills the board from the bottom, newest last; when the
-   * messages outgrow it, the oldest slide off the top under a fade, as in the
-   * chat itself.
+   * Chat: the list starts under the eyebrow, like every board, newest last.
+   * The markup lists the newest first and the column runs bottom to top, so
+   * when the messages outgrow the board, the oldest wrap whole into a second
+   * column outside it: none is cut through, and a short chat never leaves a
+   * gap under its eyebrow.
    */
   .pk-live-lists__items[data-list="chat"] {
     --text-type: 38px;
     display: flex;
     flex: 1;
-    flex-direction: column;
+    flex-direction: column-reverse;
+    flex-wrap: wrap;
+    align-content: flex-start;
     justify-content: flex-end;
     gap: 16px;
+    min-block-size: 0;
     overflow: hidden;
-    mask-image: linear-gradient(180deg, transparent 0, var(--pk-pqc-on-field) 96px);
   }
   .pk-live-lists__items[data-list="chat"] > .pk-live-lists__message {
     flex: none;
+    inline-size: 100%;
   }
   .pk-live-lists__items[data-list="chat"]:is([data-count="5"], [data-count="6"]) {
     --text-type: 28px;
