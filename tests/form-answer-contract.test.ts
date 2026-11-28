@@ -35,3 +35,35 @@ describe("the answer contract generated from form fields", () => {
     });
   });
 });
+
+describe("web address answers", () => {
+  const contract = formAnswersContract([{ key: "website", label: "Website", fieldType: "url", required: true }]);
+
+  it.each([
+    ["example.com", "https://example.com"],
+    ["  www.example.com/about?x=1#team  ", "https://www.example.com/about?x=1#team"],
+    ["//example.com", "https://example.com"],
+    ["http://example.com", "http://example.com"],
+    ["https://example.com", "https://example.com"],
+  ])("normalizes %s before storing it", (website, expected) => {
+    expect(contract.parse({ website })).toEqual({ website: expected });
+  });
+
+  it.each([
+    undefined,
+    null,
+    "",
+    "  ",
+    "not a website",
+    "Acme",
+    "/about",
+    "person@example.com",
+    "javascript:alert(1)",
+    "ftp://example.com",
+    "https://user:password@example.com",
+  ])("refuses an absent or invalid web address (%j) under its field key", (website) => {
+    const checked = contract.safeParse({ website });
+    expect(checked.success).toBe(false);
+    expect(checked.error?.issues).toEqual(expect.arrayContaining([expect.objectContaining({ path: ["website"] })]));
+  });
+});

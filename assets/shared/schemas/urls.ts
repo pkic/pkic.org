@@ -42,6 +42,17 @@ export const httpUrlSchema = z
   .max(MAX_URL_LENGTH, `Use at most ${String(MAX_URL_LENGTH)} characters.`)
   .refine(isHttpUrl, URL_MESSAGE);
 
+/** Public website inputs may omit the scheme; explicit schemes still have to be HTTP(S). */
+export const httpUrlInputSchema = z
+  .string()
+  .trim()
+  .transform((value) => {
+    if (!value || /^[a-z][a-z0-9+.-]*:/i.test(value)) return value;
+    return value.startsWith("//") ? `https:${value}` : `https://${value}`;
+  })
+  .pipe(httpUrlSchema)
+  .pipe(z.url({ hostname: z.regexes.domain, error: URL_MESSAGE }));
+
 /** Generated signed links can legitimately exceed the user-supplied URL limit. */
 export const httpCapabilityUrlSchema = z
   .string()

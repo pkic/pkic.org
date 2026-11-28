@@ -1,3 +1,4 @@
+import { httpUrlInputSchema } from "./schemas/urls";
 import type { FormFieldType } from "./schemas/forms";
 import { formFieldOptionValues, isAllowedProfileUrl, type FormFieldRules } from "./schemas/form-field-rules";
 
@@ -98,6 +99,10 @@ export function normalizeFormAnswer(
       return toNumberValue(value);
     case "multi_select":
       return toStringArray(value);
+    case "url": {
+      const parsed = httpUrlInputSchema.safeParse(value);
+      return parsed.success ? parsed.data : typeof value === "string" ? value.trim() : undefined;
+    }
     default:
       return typeof value === "string" ? value.trim() : undefined;
   }
@@ -138,6 +143,10 @@ function selectionProblems(field: AnswerableFormField, value: Primitive[], rules
 
 function textProblems(field: AnswerableFormField, value: string, rules: FormFieldRules): string[] {
   const problems: string[] = [];
+  if (field.fieldType === "url") {
+    const parsed = httpUrlInputSchema.safeParse(value);
+    if (!parsed.success) problems.push(parsed.error.issues[0].message);
+  }
   if (rules.minLength !== undefined && value.length < rules.minLength)
     problems.push(`${field.label} must be at least ${rules.minLength} characters`);
   if (rules.maxLength !== undefined && value.length > rules.maxLength)

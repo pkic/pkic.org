@@ -72,7 +72,7 @@ test("an individual applicant is offered only the org-less categories", async ({
   await expect(page.getByLabel("Organization name")).toBeHidden();
 });
 
-test("an organization applicant submits in a category other than the default", async ({ page }) => {
+test("an organization applicant submits in a category other than the default", async ({ page }, testInfo) => {
   const suffix = uniqueSuffix();
   const email = `category-a-${suffix}@category-a-${suffix}.test`;
 
@@ -109,6 +109,13 @@ test("an organization applicant submits in a category other than the default", a
   await page.getByLabel("About your organization", { exact: false }).fill("   ");
   await page.getByRole("button", { name: "Submit membership application" }).click();
   await expect(page.locator("#custom-about_organization-error")).toContainText("required");
+  await expect(page.locator("#custom-organization_website-error")).toContainText("required");
+  const website = page.getByLabel("Organization website", { exact: false });
+  await website.fill("not a website");
+  await page.getByRole("button", { name: "Submit membership application" }).click();
+  await expect(page.locator("#custom-organization_website-error")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("invalid-organization-website.png"), fullPage: true });
+  await website.fill("example.test");
   await expect(reason).toHaveValue("We want to contribute to the PKI community.");
   await page.getByLabel("About your organization", { exact: false }).fill("We build PKI services.");
   const submission = page.waitForResponse(

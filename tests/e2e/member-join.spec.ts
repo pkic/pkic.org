@@ -70,7 +70,8 @@ test("signs in with an organization email before submitting the D1-backed member
   await page.getByLabel(/F —/).check();
   // Checking the later agreements must not leave focus below earlier unanswered fields.
   await page.getByRole("button", { name: "Submit membership application", exact: true }).click();
-  await expect(page.getByLabel("About your organization", { exact: false })).toBeFocused();
+  await expect(page.getByLabel("Organization website", { exact: false })).toBeFocused();
+  await page.getByLabel("Organization website", { exact: false }).fill("example.test");
   await page.locator('[name="custom.reason"]').fill("We want to contribute to the PKI community.");
 
   const legalFields = page.locator("[data-membership-legal-field]");
