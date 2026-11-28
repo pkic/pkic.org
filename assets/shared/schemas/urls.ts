@@ -47,11 +47,22 @@ export const httpUrlInputSchema = z
   .string()
   .trim()
   .transform((value) => {
-    if (!value || /^[a-z][a-z0-9+.-]*:/i.test(value)) return value;
+    if (!value || /^[a-z][a-z0-9+.-]*:(?!\d)/i.test(value)) return value;
     return value.startsWith("//") ? `https:${value}` : `https://${value}`;
   })
   .pipe(httpUrlSchema)
-  .pipe(z.url({ hostname: z.regexes.domain, error: URL_MESSAGE }));
+  .pipe(
+    z
+      .string()
+      .refine((value) => {
+        const hostname = new URL(value).hostname.replace(/\.$/, "");
+        // WHATWG has already validated and normalized IP literals and IDNs.
+        if (hostname.startsWith("[")) return true;
+        const labels = hostname.split(".");
+        return labels.length > 1 && labels.every((label) => /^[a-z0-9_](?:[a-z0-9_-]*[a-z0-9_])?$/i.test(label));
+      }, URL_MESSAGE)
+      .transform((value) => new URL(value).href),
+  );
 
 /** Generated signed links can legitimately exceed the user-supplied URL limit. */
 export const httpCapabilityUrlSchema = z

@@ -213,6 +213,36 @@ describe("PATCH /api/v1/members/applications/:id (Fix 3 — edit application fie
     });
   });
 
+  it.each([null, "", "Legacy website text"])(
+    "corrects an answer without revalidating the legacy website (%j)",
+    async (website) => {
+      const formSubmissionId = await createApplicationFormSubmission({ organization_website: website });
+      const { id } = await createApplication({ form_submission_id: formSubmissionId });
+      const response = await call(adminToken, `/api/v1/members/applications/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ answers: { reason: "Corrected reason" } }),
+      });
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect(await response.json()).toMatchObject({
+        answers: { reason: "Corrected reason", organization_website: website },
+      });
+    },
+  );
+
+  it("lets staff correct or clear the website using the shared URL input contract", async () => {
+    const formSubmissionId = await createApplicationFormSubmission({ organization_website: "Legacy website text" });
+    const { id } = await createApplication({ form_submission_id: formSubmissionId });
+    for (const website of ["example.test", null]) {
+      const response = await call(adminToken, `/api/v1/members/applications/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ answers: { organization_website: website } }),
+      });
+      expect(response.status, await response.clone().text()).toBe(200);
+      const detail = (await response.json()) as { answers: Record<string, unknown> };
+      expect(detail.answers.organization_website ?? null).toBe(website === null ? null : "https://example.test/");
+    }
+  });
+
   it("edits top-level fields and answers, without transitioning stage", async () => {
     const formSubmissionId = await createApplicationFormSubmission({
       job_title: "Engineer",

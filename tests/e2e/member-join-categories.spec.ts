@@ -113,7 +113,7 @@ test("an organization applicant submits in a category other than the default", a
   const website = page.getByLabel("Organization website", { exact: false });
   await website.fill("not a website");
   await page.getByRole("button", { name: "Submit membership application" }).click();
-  await expect(page.locator("#custom-organization_website-error")).toBeVisible();
+  await expect(page.locator("#custom-organization_website-error")).toContainText("Enter a full web address");
   await page.screenshot({ path: testInfo.outputPath("invalid-organization-website.png"), fullPage: true });
   await website.fill("example.test");
   await expect(reason).toHaveValue("We want to contribute to the PKI community.");

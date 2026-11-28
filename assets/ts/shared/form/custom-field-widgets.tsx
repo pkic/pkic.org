@@ -495,13 +495,14 @@ function TextInput({ field, rules }: { field: FormField; rules: FieldRules }) {
   if (field.fieldType === "number") type = "number";
   else if (field.fieldType === "date") type = "date";
   else if (field.fieldType === "email") type = "email";
-  else if (field.fieldType === "url") type = "url";
   else if (rules.format === "phone") type = "tel";
 
   return (
     <input
       ref={validationRef as preact.RefObject<HTMLInputElement>}
       type={type}
+      inputMode={field.fieldType === "url" ? "url" : undefined}
+      data-url-input={field.fieldType === "url" ? "true" : undefined}
       name={`custom.${field.key}`}
       class="pk-input"
       id={`custom-${field.key}`}

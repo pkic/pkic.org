@@ -30,8 +30,12 @@ export interface ApplicationEditFormValue {
   extraAnswers?: z.infer<typeof applicationEditableAnswersSchema>;
 }
 
-export function applicationEditPayload(form: ApplicationEditFormValue, individual: boolean) {
-  return {
+export function applicationEditPayload(
+  form: ApplicationEditFormValue,
+  individual: boolean,
+  initial?: ApplicationEditFormValue,
+): z.input<typeof applicationUpdateSchema> {
+  const payload: z.input<typeof applicationUpdateSchema> = {
     applicantName: form.applicantName,
     applicantEmail: form.applicantEmail,
     organizationName: individual ? null : form.organizationName || null,
@@ -46,6 +50,15 @@ export function applicationEditPayload(form: ApplicationEditFormValue, individua
       reason: form.reason || null,
     },
   };
+  if (initial) {
+    const original = applicationEditPayload(initial, individual).answers ?? {};
+    payload.answers = Object.fromEntries(
+      Object.entries(payload.answers ?? {}).filter(
+        ([key, value]) => JSON.stringify(value) !== JSON.stringify(original[key as keyof typeof original]),
+      ),
+    );
+  }
+  return payload;
 }
 
 export function ApplicationEditForm({
@@ -71,11 +84,12 @@ export function ApplicationEditForm({
   onCancel: () => void;
   saving: boolean;
 }) {
+  const [initial] = useState(form);
   const selectedCategory = categories.find((category) => category.code === form.membershipCategory);
 
   const contract = useContractForm(
     applicationUpdateSchema,
-    applicationEditPayload(form, selectedCategory?.isIndividual === true),
+    applicationEditPayload(form, selectedCategory?.isIndividual === true, initial),
   );
   const [validationError, setValidationError] = useState("");
   async function submit(event: Event) {

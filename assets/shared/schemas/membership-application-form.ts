@@ -29,18 +29,10 @@ export function isMembershipApplicationPolicyFieldKey(key: string): key is Membe
 
 /**
  * Asked only of someone applying on behalf of an organization, and always
- * required of them: reviewers need organization background, and approval
+ * required of them: reviewers need a website and organization background, and approval
  * creates their organization identity, which always includes a job title.
  */
-export const MEMBERSHIP_ORGANIZATION_REQUIRED_FIELD_KEYS = [
-  "organization_website",
-  "job_title",
-  "about_organization",
-] as const;
-const membershipOrganizationRequiredFieldKeys = new Set<string>(MEMBERSHIP_ORGANIZATION_REQUIRED_FIELD_KEYS);
-
-/** Questions that describe an organization or the applicant's role there, and do not apply to an individual applicant. */
-export const MEMBERSHIP_ORGANIZATION_FIELD_KEYS = MEMBERSHIP_ORGANIZATION_REQUIRED_FIELD_KEYS;
+export const MEMBERSHIP_ORGANIZATION_FIELD_KEYS = ["organization_website", "job_title", "about_organization"] as const;
 const membershipOrganizationFieldKeys = new Set<string>(MEMBERSHIP_ORGANIZATION_FIELD_KEYS);
 
 export function isMembershipOrganizationFieldKey(key: string): boolean {
@@ -59,7 +51,7 @@ export function applicationFieldRulesForApplicantKind<T extends { key: string; r
   return fields.map((field) =>
     field.key === "about_yourself"
       ? { ...field, required: true }
-      : membershipOrganizationRequiredFieldKeys.has(field.key)
+      : isMembershipOrganizationFieldKey(field.key)
         ? { ...field, required: applicantKind === "organization" }
         : field,
   );
