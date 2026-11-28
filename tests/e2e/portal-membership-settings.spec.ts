@@ -131,6 +131,20 @@ test("a permitted staff identity reads and updates membership settings through t
   await page.goto("/portal/#/settings/membership-categories/H8");
   await expect(page.getByLabel("Name")).toHaveValue(updatedLabel);
   expect(removedAdminRequests).toEqual([]);
+
+  await page.goto("/portal/#/settings/membership-application-form");
+  await expect(page.getByRole("heading", { name: "Membership application form" })).toBeVisible();
+  await page.getByRole("button", { name: "Application form actions" }).click();
+  await page.getByRole("menuitem", { name: "Edit form", exact: true }).click();
+  await page.locator("button.pk-formq").filter({ hasText: "Organization website" }).click();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByRole("button", { name: "Save form", exact: true }).click();
+  await expect(page.locator("form")).toContainText("Keep the organization website question");
+  await page.screenshot({ path: test.info().outputPath("website-question-required.png") });
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByRole("list", { name: "Membership application form fields" })).toContainText(
+    "Organization website",
+  );
 });
 
 test("creates organization and individual categories and removes unused categories", async ({ page }) => {

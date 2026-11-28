@@ -1,3 +1,4 @@
+import type { z } from "zod";
 import { useHashQueryParam } from "../../hooks/useHashQueryParam";
 import { useEffect, useRef, useState } from "preact/hooks";
 import {
@@ -115,6 +116,8 @@ export function FormDefinitionEditor({
   onSaved,
   onCancel,
   onError,
+  requestSchema,
+  requestFields,
 }: {
   mode: "create" | "edit";
   detail: EditableFormDetail | null;
@@ -123,11 +126,14 @@ export function FormDefinitionEditor({
   onSaved: (key: string) => void;
   onCancel: () => void;
   onError?: (message: string) => void;
+  requestSchema?: z.ZodType<FormDefinitionCreateInput | FormDefinitionUpdateInput>;
+  requestFields?: Record<string, unknown>;
 }) {
   const [draft, setDraft] = useState<FormDraft>(() => detailToDraft(detail, purposes));
   const body = draftBody(draft, mode);
-  const schema = mode === "create" ? formDefinitionCreateSchema : formDefinitionUpdateSchema;
-  const form = useContractForm<typeof schema>(schema, body.payload);
+  const schema = requestSchema ?? (mode === "create" ? formDefinitionCreateSchema : formDefinitionUpdateSchema);
+  const requestBody = { ...body.payload, ...requestFields };
+  const form = useContractForm<typeof schema>(schema, requestBody);
   /** A question's parts as the form contract judges them, addressed from the card's own index. */
   const questionPath = (index: number) => {
     const position = body.positions.indexOf(index);
@@ -201,7 +207,7 @@ export function FormDefinitionEditor({
     const checked = form.submit();
     if (!checked.data) {
       // The first refused question opens, so its refusal is in view.
-      const refused = schema.safeParse(body.payload);
+      const refused = schema.safeParse(requestBody);
       const first = refused.success ? undefined : refused.error.issues.find((issue) => issue.path[0] === "fields");
       if (first) setOpenIndex(body.positions[Number(first.path[1])] ?? -1);
       const formWide = ["key", "title", "description", "status", "purpose"].flatMap((name) => form.errorsWithin(name));

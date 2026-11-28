@@ -259,6 +259,27 @@ describe("membership application form definition", () => {
     });
   });
 
+  it("refuses an edit that removes the organization website question without changing the form", async () => {
+    const initial = membershipApplicationFormDefinitionResponseSchema.parse(
+      await (await call(adminToken, DEFINITION_PATH)).json(),
+    );
+    const response = await call(adminToken, DEFINITION_PATH, {
+      method: "PATCH",
+      body: JSON.stringify({
+        expectedUpdatedAt: initial.form.updatedAt,
+        fields: toFieldInputs(initial.fields.filter((field) => field.key !== "organization_website")),
+      }),
+    });
+    expect(response.status).toBe(400);
+    const after = membershipApplicationFormDefinitionResponseSchema.parse(
+      await (await call(adminToken, DEFINITION_PATH)).json(),
+    );
+    expect(after).toEqual(initial);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'membership_application_form_updated'"),
+    ).toHaveLength(0);
+  });
+
   it("fails closed when a workflow policy field is deleted or weakened in D1", async () => {
     const [policy] = await queryAll<{ id: string }>(
       env.DB,

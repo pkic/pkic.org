@@ -143,6 +143,21 @@ export const membershipApplicationFormDefinitionUpdateSchema = formDefinitionUpd
   .superRefine(({ expectedUpdatedAt: _expectedUpdatedAt, fields, ...changes }, context) => {
     addDuplicateFormFieldIssues({ fields }, context);
     if (fields) {
+      // This question must survive form edits so organizations cannot bypass
+      // their submission requirement by removing or hiding its validator.
+      const websiteIndex = fields.findIndex((field) => field.key === "organization_website");
+      if (websiteIndex < 0) {
+        context.addIssue({ code: "custom", path: ["fields"], message: "Keep the organization website question" });
+      } else {
+        const website = fields[websiteIndex];
+        if (website.fieldType !== "url" || website.validation?.format || website.validation?.showWhen) {
+          context.addIssue({
+            code: "custom",
+            path: ["fields", websiteIndex],
+            message: "The organization website question must remain an always-visible URL field",
+          });
+        }
+      }
       fields.forEach((field, index) => {
         if (!isMembershipApplicationPolicyFieldKey(field.key)) return;
         context.addIssue({

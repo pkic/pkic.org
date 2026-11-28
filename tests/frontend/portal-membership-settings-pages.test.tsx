@@ -80,6 +80,19 @@ const applicationForm = {
       updatedAt: NOW,
       archivedAt: null,
     },
+    {
+      id: "10000000-0000-4000-8000-000000000007",
+      key: "organization_website",
+      label: "Organization website",
+      fieldType: "url",
+      required: false,
+      sortOrder: 20,
+      options: [],
+      optionSource: null,
+      validation: {},
+      updatedAt: NOW,
+      archivedAt: null,
+    },
   ],
   policyFields: ["agrees_bylaws", "agrees_code_of_conduct", "agrees_ipr_policy", "warranted_authority"].map(
     (key, index) => ({
@@ -321,12 +334,26 @@ describe("membership application form page", () => {
     expect(mutation?.path).toBe(FORM_DEFINITION_API);
     const update = membershipApplicationFormDefinitionUpdateSchema.parse(mutation?.body);
     expect(update.expectedUpdatedAt).toBe(NOW);
-    expect(update.fields).toMatchObject([{ key: "interest", label: "How will you contribute?" }]);
+    expect(update.fields).toEqual(
+      expect.arrayContaining([expect.objectContaining({ key: "interest", label: "How will you contribute?" })]),
+    );
     expect(page.querySelectorAll("input, textarea")).toHaveLength(0);
     expect(page.querySelector('[aria-label="Application form actions"]')).not.toBeNull();
     // The workflow-owned consent fields are never resubmitted as editable ones.
     expect(update.fields?.map((field) => field.key)).not.toContain("agrees_bylaws");
     expect(requests.some((request) => request.path.startsWith("/api/v1/admin/forms"))).toBe(false);
+  });
+
+  it("explains why the website question cannot be removed before sending an update", async () => {
+    const requests = stubApi((url) => (url.pathname === FORM_DEFINITION_API ? json(applicationForm) : null));
+    const page = mount(<MembershipApplicationForm canWrite />);
+    await settle();
+    await beginRecordEdit(page, "Application form actions", "Edit form");
+    openQuestion(page, "Organization website");
+    await act(async () => buttonNamed(page, "Delete").click());
+    await act(async () => buttonNamed(page, "Save form").click());
+    expect(requests.filter((request) => request.method === "PATCH")).toEqual([]);
+    expect(page.querySelector("form")?.textContent).toContain("Keep the organization website question");
   });
 
   it("names the mandatory consent fields as a list, with Required as a word", async () => {
