@@ -9,6 +9,7 @@ import type { LiveRoomGraphics } from "./room-graphics";
 import type { LiveRoomPresence } from "./room-presence";
 import type { LiveRoomStore } from "./room-store";
 import { LIVE_TICKER_REFRESH_MS } from "./room-ticker";
+import { validationFaultFields } from "../../logging";
 
 interface LiveOccurrenceConnection {
   ctx: DurableObjectState;
@@ -21,8 +22,22 @@ interface LiveOccurrenceConnection {
   scheduleAlarm(at: number): Promise<void>;
 }
 
-/** Opens the occurrence socket and sends its first authorized snapshot. */
+/**
+ * Opens the occurrence socket and sends its first authorized snapshot. A
+ * validation fault is logged with the fields it rejected before it leaves the
+ * room: the Worker only receives a bare "ZodError".
+ */
 export async function connectLiveOccurrence(request: Request, parts: LiveOccurrenceConnection): Promise<Response> {
+  try {
+    return await openLiveOccurrence(request, parts);
+  } catch (error) {
+    const fields = validationFaultFields(error);
+    if (fields) console.error("[live room] Connect failed on stored or admitted data:", JSON.stringify(fields));
+    throw error;
+  }
+}
+
+async function openLiveOccurrence(request: Request, parts: LiveOccurrenceConnection): Promise<Response> {
   if (request.headers.get("upgrade")?.toLowerCase() !== "websocket")
     return new Response("Expected a WebSocket upgrade", { status: 426 });
   const admission = liveRoomAdmissionSchema.parse(JSON.parse(request.headers.get(LIVE_ROOM_ADMISSION_HEADER) ?? ""));
