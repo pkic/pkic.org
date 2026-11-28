@@ -3,8 +3,8 @@
    * The ticker: a see-through bar in the panels' glass, as wide as its box, so
    * on the panel grid it lines up with the panels above it. It carries no
    * stripe: the production's background already runs one along the frame's
-   * foot. Its text keeps the boards' inset from the sides, where it fades in
-   * and out, and the 72px row of text stays title-safe: a bar on the frame's
+   * foot. Its text scrolls across the box's whole width, fading in and out
+   * at its edges, and the 72px row of text stays title-safe: a bar on the frame's
    * foot extends its glass below the row.
    */
   .pk-live-ticker {
@@ -42,17 +42,20 @@
     overflow-wrap: anywhere;
   }
   .pk-live-ticker__window {
-    --fade-from: calc(var(--ticker-inset, 96) * 1px);
     flex: 1;
     min-width: 0;
     overflow: hidden;
-    /* Nothing shows within the inset; the words fade in over 64px past it and out the same way at the other side. */
+    /*
+     * The words run the box's whole width: the box set in the editor is where
+     * they come in and go out, softened over its outer 48px, so a full-width
+     * box scrolls from frame edge to frame edge.
+     */
     mask-image: linear-gradient(
       90deg,
-      transparent var(--fade-from),
-      var(--pk-on-solid) calc(var(--fade-from) + 64px),
-      var(--pk-on-solid) calc(100% - var(--fade-from) - 64px),
-      transparent calc(100% - var(--fade-from))
+      transparent,
+      var(--pk-on-solid) 48px,
+      var(--pk-on-solid) calc(100% - 48px),
+      transparent
     );
   }
   .pk-live-ticker__track {
