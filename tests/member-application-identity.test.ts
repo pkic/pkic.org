@@ -71,6 +71,7 @@ async function applyAs(
   answers = {},
   db: DatabaseLike = env.DB,
 ) {
+  const website = membershipApplicationDescriptionAnswers(membershipCategory).organization_website;
   const token = await createMemberSession(env.DB, userId, `session-${crypto.randomUUID()}`, undefined, identityId);
   return callApi({ ...testEnv, DB: db }, "/api/v1/members/applications", {
     method: "POST",
@@ -79,7 +80,12 @@ async function applyAs(
       memberApplicationCreateAsIdentitySchema.parse({
         identityId,
         membershipCategory,
-        answers: { reason: "I contribute to PKI.", ...requiredMembershipApplicationAnswers, ...answers },
+        answers: {
+          reason: "I contribute to PKI.",
+          ...(website ? { organization_website: website } : {}),
+          ...requiredMembershipApplicationAnswers,
+          ...answers,
+        },
       }),
     ),
   });
